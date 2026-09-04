@@ -150,7 +150,7 @@ const SAMPLE_INTRO = {
 };
 
 function resetStores() {
-  useGalleryStore.setState({ isOpen: true, unwatchedCount: 0 });
+  useGalleryStore.setState({ unwatchedCount: 0 });
   useProfileStore.setState({ profiles: [{ id: 'p1', isCurrent: true }], currentProfileId: 'p1' });
   useIntroCardStore.setState({ cards: [] });
 }
@@ -180,7 +180,7 @@ describe('DownloadsPanel intro-playback fetch + composite mount (T6700 / T6710)'
     it('fetches intro-playback and mounts IntroStoryPlayer with a non-null intro', async () => {
       mockApiFetch(SAMPLE_INTRO);
 
-      render(<DownloadsPanel onOpenProject={() => {}} />);
+      render(<DownloadsPanel active onOpenProject={() => {}} />);
       expect(capturedRenderCard).toBeTruthy();
 
       await clickPlayOnFirstReel();
@@ -203,7 +203,7 @@ describe('DownloadsPanel intro-playback fetch + composite mount (T6700 / T6710)'
     it('mounts IntroStoryPlayer with intro=null when intro-playback returns intro: null', async () => {
       mockApiFetch(null);
 
-      render(<DownloadsPanel onOpenProject={() => {}} />);
+      render(<DownloadsPanel active onOpenProject={() => {}} />);
       await clickPlayOnFirstReel();
 
       await waitFor(() => {
@@ -216,7 +216,7 @@ describe('DownloadsPanel intro-playback fetch + composite mount (T6700 / T6710)'
     it('does not leave a stale intro on reopen when the second play has no intro', async () => {
       mockApiFetch(SAMPLE_INTRO);
 
-      render(<DownloadsPanel onOpenProject={() => {}} />);
+      render(<DownloadsPanel active onOpenProject={() => {}} />);
       await clickPlayOnFirstReel();
       await waitFor(() => expect(screen.getByTestId('intro-story-player').dataset.hasIntro).toBe('true'));
 
@@ -241,7 +241,7 @@ describe('DownloadsPanel intro-playback fetch + composite mount (T6700 / T6710)'
       mockApiFetch(null);
       useIntroCardStore.setState({ cards: [{ id: 1, name: 'Kept card' }] });
 
-      render(<DownloadsPanel onOpenProject={() => {}} />);
+      render(<DownloadsPanel active onOpenProject={() => {}} />);
       const before = useIntroCardStore.getState().deleteRevision;
 
       // What deleteCard does after a successful DELETE: the surviving library
@@ -263,7 +263,7 @@ describe('DownloadsPanel intro-playback fetch + composite mount (T6700 / T6710)'
     it('fetches /api/collections/intro-playback and passes a non-null intro to IntroStoryPlayer', async () => {
       mockApiFetch(SAMPLE_INTRO);
 
-      render(<DownloadsPanel onOpenProject={() => {}} />);
+      render(<DownloadsPanel active onOpenProject={() => {}} />);
       expect(capturedOnPlayCollection).toBeTruthy();
 
       capturedOnPlayCollection(

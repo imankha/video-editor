@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { ProjectManager } from '../components/ProjectManager';
-import { DownloadsPanel } from '../components/DownloadsPanel';
 import { InsufficientCreditsModal } from '../components/InsufficientCreditsModal';
 import { useGameUpload } from '../hooks/useGameUpload';
 import { useProjectLoader } from '../hooks/useProjectLoader';
@@ -137,25 +136,12 @@ export function ProjectsScreen({
   // Project loading
   const { loadProject } = useProjectLoader();
 
-  // Gallery store for downloads panel
-  const openGallery = useGalleryStore(state => state.open);
   // My Reels badge = count of NEW (unwatched) published reels, not the total.
   // Clears as the user watches reels (gesture-based, see useDownloads.markWatched).
   const unseenReelsCount = useGalleryStore(state => state.unwatchedCount);
 
   // Local UI state
   const [loadingProjectId, setLoadingProjectId] = useState(null);
-  // T8360: the Build Highlight Reel button now lives on DownloadsPanel, but the
-  // GameClipSelectorModal it opens stays owned by ProjectManager (design doc
-  // Sec 8 ownership note, option b -- smaller diff, modal already sits in
-  // ProjectManager's tree). Lifted to this common parent so both siblings can
-  // read/trigger it without duplicating the flag.
-  const [showAssemblyModal, setShowAssemblyModal] = useState(false);
-  // T8470 (Part C): the drawer's "find them on the Clips tab" link asks
-  // ProjectManager (which owns the tab state) to switch. Lifted here the same way
-  // as the assembly modal -- an incrementing nonce so each click is a distinct
-  // request, even when the Clips tab is already the target.
-  const [clipsTabRequest, setClipsTabRequest] = useState(0);
 
   // Export store for global export state (uses new activeExports system)
   // Note: useExportRecovery in App.jsx handles syncing with server on startup
@@ -461,7 +447,6 @@ export function ProjectsScreen({
           onLoadGame={handleLoadGame}
           onDeleteGame={deleteGame}
           onFetchGames={fetchGames}
-          onOpenDownloads={openGallery}
           // Pending uploads props
           pendingUploads={pendingUploads}
           onResumeUpload={handleResumeUpload}
@@ -471,25 +456,6 @@ export function ProjectsScreen({
           onClickActiveUpload={handleClickActiveUpload}
           onCancelActiveUpload={cancelUpload}
           // Pending game IDs for blocking project cards
-          pendingGameIds={pendingGameIds}
-          // T8360: the assembly modal's open state is lifted here so DownloadsPanel's
-          // relocated Build button can trigger it
-          showNewProjectModal={showAssemblyModal}
-          onCloseNewProjectModal={() => setShowAssemblyModal(false)}
-          clipsTabRequest={clipsTabRequest}
-        />
-
-        {/* Downloads Panel */}
-        <DownloadsPanel
-          onOpenProject={(projectId) => {
-            handleSelectProjectWithMode(projectId, { mode: 'framing' });
-          }}
-          onOpenAssembly={() => setShowAssemblyModal(true)}
-          onSelectProject={handleSelectProject}
-          onSelectProjectWithMode={handleSelectProjectWithMode}
-          onDeleteProject={deleteProject}
-          onViewClips={() => setClipsTabRequest((n) => n + 1)}
-          exportingProject={activeExportingProject}
           pendingGameIds={pendingGameIds}
         />
 

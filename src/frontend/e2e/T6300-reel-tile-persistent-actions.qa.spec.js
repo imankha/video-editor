@@ -41,10 +41,10 @@ const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 async function openMyReelsAndExpand(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
-  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
+  await page.getByRole('button', { name: /^Highlights/ }).first().click();
+  await expect(page.getByTestId('highlights-tab-panel').first())
     .toBeVisible({ timeout: 15000 });
-  const panel = page.locator('.animate-slide-in-right');
+  const panel = page.getByTestId('highlights-tab-panel');
   const alreadyShown = await panel.getByTestId('reel-card').first().isVisible().catch(() => false);
   if (!alreadyShown) {
     const headers = panel.getByTestId('collapsible-group-header');

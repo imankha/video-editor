@@ -106,7 +106,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, move to Highlight Reels, 
   await page.waitForLoadState('domcontentloaded').catch(() => {});
 
   // --- open Highlight Reels --------------------------------------------------------
-  const myReelsBtn = page.getByRole('button', { name: /Highlight Reels/i }).first();
+  const myReelsBtn = page.getByRole('button', { name: /^Highlights/ }).first();
   await myReelsBtn.click({ timeout: 30000 }).catch(() => note('Highlight Reels button not clickable'));
   // The collections tab / game groups render inside the slide-out panel.
   await page.getByText('Game Highlights').first().waitFor({ timeout: 30000 }).catch(() => note('no Game Highlights card rendered'));
@@ -186,7 +186,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, move to Highlight Reels, 
   // --- reload and re-check --------------------------------------------------
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded').catch(() => {});
-  await page.getByRole('button', { name: /Highlight Reels/i }).first().click({ timeout: 30000 }).catch(() => {});
+  await page.getByRole('button', { name: /^Highlights/ }).first().click({ timeout: 30000 }).catch(() => {});
   await page.getByText('Game Highlights').first().waitFor({ timeout: 30000 }).catch(() => note('post-reload: no Game Highlights card'));
   await countGameHighlightsCards('after-reload');
   await summarizeGame6('after-reload');

@@ -28,7 +28,11 @@ Vocabulary collision: "Add Clip" exists on Annotate AND inside the reel-building
 
 **Naming, user-approved 2026-08-31 (refined same day): Plays -> Clips -> Highlight
 Reels.** UI strings only; no identifier, event-name, or schema renames (greppability
-rule; analytics vocabulary untouched).
+rule; analytics vocabulary untouched). **Superseded in part 2026-09-04:** the assembly
+button's name approved at filing time was renamed to "Create Highlight Reel" by
+[T8545](../first-reel-funnel/T8545-highlight-reels-third-tab-and-rename.md), which also
+promoted the Highlight Reels surface from a drawer to a third peer tab. This table is
+updated in place below to reflect the current name as the authoritative record.
 
 "New Clip" was explicitly REJECTED for the assembly button: it implies uploading a clip
 and editing it directly (a real future feature - T7860's direct-clip path must keep that
@@ -39,14 +43,14 @@ assembles selected clips into a highlight video.
 |---|---|---|
 | Annotate create action | "Add Clip" / unlabeled "+" | **"Add Play"** |
 | Home drafts tab (`displayNames.js` DRAFTS) | "Reel Drafts" | **"Clips"** |
-| Assembly button (`ProjectManager.jsx:1213`) | "New Reel" | **"Build Highlight Reel"** |
+| Assembly button (`ProjectManager.jsx:1213`) | "New Reel" | **"Create Highlight Reel"** |
 | Assembly button location | Reel Drafts tab | **moves to the Highlight Reels surface** |
 | Published surface | "My Reels" | **"Highlight Reels"** (houses the build button; visually separate from Clips) |
 | Reel-building picker (`ClipSelectorSidebar.jsx`) | "Add Clip" | **"Add Play"** or clip-consistent label (settle in step 1) |
 
 IA note: the separation the user wants is Clips (per-clip work) vs Highlight Reels
 (assembled videos). Default proposal: the existing My Reels surface becomes the
-"Highlight Reels" tab and gains the Build Highlight Reel button; the old Reel Drafts tab
+"Highlight Reels" tab and gains the Create Highlight Reel button; the old Reel Drafts tab
 becomes "Clips". If implementation reveals drafts are multi-clip assemblies rather than
 per-clip work items, STOP and re-confirm the tab mapping with the user before renaming.
 

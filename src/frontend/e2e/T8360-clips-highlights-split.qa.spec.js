@@ -9,12 +9,15 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
  * drafts (both auto-created and manually-assembled) exercise the split without
  * needing to fabricate fixtures.
  *
- * Acceptance-criterion map (T8360-design.md):
+ * Acceptance-criterion map (T8360-design.md, T8545 supersedes the entry-point +
+ * naming ACs below — see T8545's own e2e file for the tab-bar/rename coverage):
  *   AC1 Clips tab (Home) shows ONLY is_auto_created===true projects,
- *       never a multi-clip "N clips" badge, no Build Highlight Reel button here
- *   AC2 Highlight Reels surface (DownloadsPanel) shows a Highlights (in-progress)
- *       section with ONLY is_auto_created===false projects, above the published list
- *   AC3 Build Highlight Reel button lives on the Highlight Reels surface, not on Home
+ *       never a multi-clip "N clips" badge, no Create Highlight Reel button here
+ *   AC2 Highlights tab (DownloadsPanel, inline since T8545) shows a Highlights
+ *       (in-progress) section with ONLY is_auto_created===false projects, above
+ *       the published list
+ *   AC3 Create Highlight Reel button lives on the Highlights tab, not on the
+ *       Clips tab
  *   AC4 no surface renders stale "Reel Drafts" terminology
  *   AC5 responsive (375px mobile + desktop) — no horizontal overflow on either surface
  *
@@ -29,7 +32,7 @@ test.beforeEach(async ({ context }) => {
   await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
 });
 
-test('AC1/AC3/AC4: Clips tab shows only single-clip auto-drafts, no Build button, no stale naming', async ({ page }) => {
+test('AC1/AC3/AC4: Clips tab shows only single-clip auto-drafts, no Create button, no stale naming', async ({ page }) => {
   await page.goto('/home/reels');
   await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Clips/ }) });
 
@@ -52,8 +55,8 @@ test('AC1/AC3/AC4: Clips tab shows only single-clip auto-drafts, no Build button
   await expect(tab).toBeVisible();
   // AC4: no stale "Reel Drafts" copy anywhere on this tab.
   await expect(page.locator('body')).not.toContainText('Reel Drafts');
-  // AC3: Build Highlight Reel does not live on Home anymore.
-  await expect(page.getByRole('button', { name: 'Build Highlight Reel' })).toHaveCount(0);
+  // AC3: Create Highlight Reel does not live on Home anymore.
+  await expect(page.getByRole('button', { name: 'Create Highlight Reel' })).toHaveCount(0);
 
   if (autoDrafts.length === 0 && !hasClips) {
     // Real, provable state for a fully empty account: the dead-end guard must
@@ -83,9 +86,9 @@ test('AC1/AC3/AC4: Clips tab shows only single-clip auto-drafts, no Build button
   await responsiveSweep(page);
 });
 
-test('AC2/AC3/AC4: Highlight Reels surface shows Highlights (in-progress) above published, with the Build button', async ({ page }) => {
-  await page.goto('/home');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: /Highlight Reels/i }) });
+test('AC2/AC3/AC4: Highlights tab shows Highlights (in-progress) above published, with the Create button', async ({ page }) => {
+  await page.goto('/home/highlights');
+  await waitForAppReady(page, { ready: page.getByTestId('highlights-tab-panel') });
 
   const projects = await page.evaluate(async () => {
     const r = await fetch('/api/projects', { credentials: 'include' });
@@ -93,18 +96,18 @@ test('AC2/AC3/AC4: Highlight Reels surface shows Highlights (in-progress) above 
   });
   const autoDrafts = projects.filter((p) => p.is_auto_created);
 
-  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
-  await expect(page.getByText('Highlights', { exact: true })).toBeVisible({ timeout: 10000 });
+  const panel = page.getByTestId('highlights-tab-panel');
+  await expect(panel.getByText('Highlights', { exact: true })).toBeVisible({ timeout: 10000 });
 
-  // AC3: the relocated Build Highlight Reel button lives here.
-  await expect(page.getByRole('button', { name: 'Build Highlight Reel' })).toBeVisible();
+  // AC3: the relocated Create Highlight Reel button lives here.
+  await expect(page.getByRole('button', { name: 'Create Highlight Reel' })).toBeVisible();
   // AC4: no stale "Reel Drafts" copy on this surface either.
-  await expect(page.locator('.animate-slide-in-right, [role="dialog"]').first()).not.toContainText('Reel Drafts');
+  await expect(panel).not.toContainText('Reel Drafts');
 
   // AC2: the Highlights section sits ABOVE the published reel cards (CollectionsTab
   // has no separate section heading of its own -- `data-testid="reel-card"` is the
   // published list's own real content, not the panel's shared top header).
-  const highlightsY = await page.getByText('Highlights', { exact: true }).boundingBox();
+  const highlightsY = await panel.getByText('Highlights', { exact: true }).boundingBox();
   const publishedReel = page.getByTestId('reel-card').first();
   if (await publishedReel.count() > 0) {
     const publishedY = await publishedReel.boundingBox();
@@ -114,7 +117,6 @@ test('AC2/AC3/AC4: Highlight Reels surface shows Highlights (in-progress) above 
   }
 
   // AC1 cross-check: no single-clip auto-draft id renders inside the Highlights section.
-  const panel = page.locator('.animate-slide-in-right, [role="dialog"]').first();
   const cardIds = await panel.locator('[data-testid="project-card"] img').evaluateAll(
     (els) => els.map((el) => el.src.match(/\/projects\/(\d+)\/poster\.jpg/)?.[1]).filter(Boolean)
   );

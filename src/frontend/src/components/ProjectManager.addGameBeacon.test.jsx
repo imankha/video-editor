@@ -76,6 +76,9 @@ vi.mock('./ProfileSportButton', () => ({ ProfileSportButton: () => <div />, defa
 vi.mock('./ProfileDropdown', () => ({ ProfileDropdown: () => <div /> }));
 vi.mock('./GameTile', () => ({ GameTile: () => <div data-testid="game-tile" /> }));
 vi.mock('./DraftTile', () => ({ DraftTile: () => <div data-testid="draft-tile" />, default: () => <div /> }));
+// T8545: DownloadsPanel is now always mounted (Highlights tab body) — stub it,
+// irrelevant to this file's Add Game gesture.
+vi.mock('./DownloadsPanel', () => ({ DownloadsPanel: () => <div /> }));
 
 import { ProjectManager } from './ProjectManager';
 

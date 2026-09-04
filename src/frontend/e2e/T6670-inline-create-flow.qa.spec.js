@@ -31,15 +31,15 @@ const NEW_CARD = 'Create new Athlete Intro Card';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
-  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
+  await page.getByRole('button', { name: /^Highlights/ }).first().click();
+  await expect(page.getByTestId('highlights-tab-panel').first())
     .toBeVisible({ timeout: 15000 });
 }
 
 async function expandFirstGroup(page) {
   const alreadyShown = await page.getByTestId('reel-card').first().isVisible().catch(() => false);
   if (alreadyShown) return true;
-  const headers = page.locator('.animate-slide-in-right').getByTestId('collapsible-group-header');
+  const headers = page.getByTestId('highlights-tab-panel').getByTestId('collapsible-group-header');
   await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   const n = await headers.count();
   for (let i = 0; i < n; i++) {
@@ -165,7 +165,7 @@ test.describe('T6670 inline create-and-return (real account)', () => {
     expect(after.cards.length, 'exactly one new card was created').toBe(beforeCount + 1);
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /Highlight Reels/i }).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('button', { name: /^Highlights/ }).first()).toBeVisible({ timeout: 20000 });
     const dl = await (await page.request.get('/api/downloads')).json();
     const reel = dl.downloads.find((d) => d.intro_card_id === created.id);
     expect(reel, 'a reel carries the new card id after reload').toBeTruthy();

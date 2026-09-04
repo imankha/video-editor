@@ -3,13 +3,18 @@ import { loginAsRealUser } from './helpers/realAuth.js';
 import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './helpers/qa.js';
 
 /**
- * T5673 (drawer desktop width) — live QA on the REAL account.
+ * T5673 (Highlights tab desktop width) — live QA on the REAL account.
  *
- * The Highlight Reels drawer holds poster tiles now, so max-w-md (448px) is cramped on
- * desktop. This change widens it at lg+ (lg:max-w-2xl 672px, xl:max-w-3xl 768px)
- * while leaving mobile (w-full, capped at 448) untouched. The tile carousels are
- * flex overflow-x rows of fixed-width tiles, so a wider panel shows MORE tiles
- * per row with no per-tile / grid change needed.
+ * The Highlights tab body holds poster tiles, so max-w-md (448px) is cramped on
+ * desktop. It widens at lg+ (lg:max-w-2xl 672px, xl:max-w-3xl 768px) while leaving
+ * mobile (w-full, capped at 448) untouched. The tile carousels are flex overflow-x
+ * rows of fixed-width tiles, so a wider panel shows MORE tiles per row with no
+ * per-tile / grid change needed.
+ *
+ * T8545: the panel moved from a right-docked drawer to inline, centered tab
+ * content -- its x-position changed, but the SAME width breakpoints were
+ * deliberately preserved (so CollectionsTab/CardCarousel's tuned grid density
+ * is unaffected), so every width assertion below still holds.
  *
  * Evidence:
  *   width-c1  desktop 1315px: panel is substantially wider than 448px (xl bucket)
@@ -21,15 +26,12 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
 const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const REAL_PROFILE = process.env.E2E_PROFILE_ID || '9fa7378c';
 
-const PANEL = '.animate-slide-in-right';
+const PANEL = '[data-testid="highlights-tab-panel"]';
 
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /Highlight Reels/i }).first().click();
-  await expect(page.getByRole('heading', { name: /Highlight Reels|Library/i }).first())
-    .toBeVisible({ timeout: 15000 });
-  // The panel is the stable width anchor.
+  await page.getByRole('button', { name: /^Highlights/ }).first().click();
   await expect(page.locator(PANEL)).toBeVisible({ timeout: 15000 });
 }
 

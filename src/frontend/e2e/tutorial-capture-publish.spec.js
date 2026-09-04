@@ -93,12 +93,12 @@ test('capture publish tutorial footage @tutorial-capture', async ({ browser }) =
 
   // --- line 4: in Highlight Reels under the game name ---------------------------------------
   await mark(4);
-  step('Highlight Reels drawer (auto-opens on publish)');
-  const drawerHeading = page.getByRole('heading', { name: 'Highlight Reels', exact: true }).first();
+  step('Highlights tab (auto-switches on publish)');
+  const drawerHeading = page.getByTestId('highlights-tab-panel').first();
   try {
     await drawerHeading.waitFor({ timeout: 5000 });
   } catch {
-    await page.getByRole('button', { name: /^Highlight Reels/ }).first().click();
+    await page.getByRole('button', { name: /^Highlights/ }).first().click();
     await drawerHeading.waitFor();
   }
   await dwell(1.2);

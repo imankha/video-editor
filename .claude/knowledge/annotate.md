@@ -1,5 +1,45 @@
 ---
 domain: annotate
+updated: 2026-09-04 (T8545 Highlight Reels becomes a third peer tab + rename Create Highlight
+Reel: `ProjectManager.jsx`'s segmented tab bar goes from two peers (`games`/`projects`) to three
+(`games`/`projects`/`highlights`); the top-right icon-button/drawer entry point (`onOpenDownloads`)
+is DELETED, not hidden. `DownloadsPanel` (the Highlight Reels surface) is now ALWAYS mounted
+inside `ProjectManager` as a sibling to the games/projects content ternary, gating its own render
+on a new `active` prop (`activeTab === 'highlights'`) instead of the old `isOpen`/`close` it used
+to read from `galleryStore` — the drawer chrome (backdrop, fixed right-docked shell, header/X
+button, slide-in animation) is deleted outright; its content div carries
+`data-testid="highlights-tab-panel"` as the new stable e2e scoping anchor (the drawer had none).
+Staying mounted-but-inactive (rather than conditionally rendered) matters: `DownloadsPanel`'s own
+story-player/share-modal state survives a tab switch, exactly like the old drawer survived being
+closed without unmounting. **`galleryStore.isOpen`/`.open()` is repurposed, not removed** — it
+used to flip a drawer visible; `ProjectManager` now reacts to it turning true (a `useEffect`,
+fire-once via an immediate `close()`, same pattern as the pre-existing `clipsTabRequest` nonce) by
+switching `activeTab` to `'highlights'`. This is the ACTUAL mechanism behind "publish a draft ->
+land on the Highlights tab" (T8400) — `usePublishProject.js`'s `publish({openGallery: true})` (used
+by `DraftTile`'s "Publish to My Reels" action) calls `galleryStore.open()` directly, never through
+a prop ProjectManager receives; this call path is easy to miss by grepping for `onOpenDownloads`
+alone. **The App.jsx-level second `<DownloadsPanel>` mount (global, alongside Annotate/Focus/
+Overlay) is DELETED** — it existed to let the drawer float over an editor screen, but every real
+opener (`DraftTile`'s publish action) only ever renders inside Home-scoped components
+(`ProjectManager`/`DownloadsPanel` itself), so that mount's chrome was unreachable in practice; a
+floating "Highlights" surface over an editor screen is not a concept this architecture has anymore
+— reaching Highlights from Focus/Overlay now means navigating Home first, same as the Clips tab
+already required. `clipsTabRequest`/`showNewProjectModal`/`onCloseNewProjectModal` collapsed from
+ProjectsScreen-lifted props into `ProjectManager`-local state now that `DownloadsPanel` is a CHILD
+of `ProjectManager` rather than a sibling needing a common parent to coordinate through. New
+`HIGHLIGHT` color token (`themeColors.js`, violet-600/700) for the tab's active/badge styling.
+**Tab-button DOM-order landmine:** the responsive tab button (`SegmentedTabButton`, stacked
+icon-over-label below `sm`, single row at `sm`+) renders its count badge in TWO places (mobile
+corner badge + desktop inline pill, each hidden per breakpoint via CSS) — the label span MUST come
+before the icon+badge span in DOM order (a CSS `order-first` class visually moves the icon in
+front) or the button's accessible name reads badge-digit-first ("1Clips1" instead of "Clips1"),
+breaking both screen readers and `getByRole('button', {name: /^Clips/})`-style test locators; this
+is a real regression the T8545 implementation shipped and fixed in the same commit. **Known gap:**
+this task discovered ~37 e2e spec files across the My-Reels/Downloads QA history hard-depend on the
+removed drawer's navigation button (`/Highlight Reels/i`), its now-deleted header, or its
+`.animate-slide-in-right` class as a scoping selector — all were mechanically repointed to the
+Highlights tab / `highlights-tab-panel` testid in the same commit, but none were run live (no dev
+server in the implementing container); a live QA pass against a real account is still owed.)
 updated: 2026-09-03 (T8490 star-scale caption + glyph labels + Keeper Save rename: the 5-entry
 `RATING_NOTATION`/`RATING_ADJECTIVES` maps had FOUR duplicate local copies —
 `AnnotateFullscreenOverlay.jsx`, `ClipRegionLayer.jsx`, `useAnnotate.js` (dead — returned from the
@@ -83,7 +123,7 @@ to fail on the pre-fix code). See Landmines "Add Play CTA must gate on isEditMod
 prior_update: 2026-09-02 (T8360 split single-clip vs multi-clip drafts: the Home "Reel Drafts"
 tab is renamed "Clips" (`SECTION_NAMES.CLIPS`, still tab id `projects` / URL `/home/reels`)
 and now shows ONLY single-clip auto-drafts, routed by `is_auto_created` (NOT `clip_count`).
-The "Build Highlight Reel" assembly button and the multi-clip drafts it produces (`is_auto_created
+The "Create Highlight Reel" assembly button and the multi-clip drafts it produces (`is_auto_created
 === false`) moved OFF this tab entirely onto the Highlight Reels surface (`DownloadsPanel.jsx`)
 as a new "Highlights (in-progress)" section above the published list. This SUPERSEDES the
 T8130 entry below, which said the rename/relocation was deliberately deferred pending this
@@ -108,7 +148,7 @@ renamed by this (T8130) task (would misrepresent its mixed single/multi-clip con
 T8360) nor was the assembly button relocated off it by T8130 (no valid destination surface
 pre-T8360). **T8360 has since shipped the rename + relocation** (see the entry above) -
 this note describes T8130-era state, not current state.
-"Highlight Reels"/"Build Highlight Reel" renames elsewhere are UI-string-only, zero
+"Highlight Reels"/"Create Highlight Reel" renames elsewhere are UI-string-only, zero
 identifier/event-name changes (see Landmines "Add Play CTA must gate on isEditMode
 (T8130)")
 updated: 2026-08-31 (T8180 ghost annotate session: the T7470 only_if_empty cleanup was necessary but

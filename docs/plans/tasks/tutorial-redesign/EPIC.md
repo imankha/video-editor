@@ -89,7 +89,7 @@ this epic builds what the button opens). Requirements:
    swap, not a rewrite.
 
 Naming alignment: step copy uses the approved vocabulary - "Add Play", "Clips",
-"Build Highlight Reel" (see first-clip-funnel epic decisions).
+"Create Highlight Reel" (see first-clip-funnel epic decisions).
 
 ## Design constraints
 

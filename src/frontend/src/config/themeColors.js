@@ -35,3 +35,9 @@ export const REEL = {
   borderSubtle: 'border-cyan-500/50',
   shadow: 'shadow-cyan-900/30',
 };
+
+// T8545: the Highlight Reels home tab (was a separate top-right icon/drawer).
+export const HIGHLIGHT = {
+  bg: 'bg-violet-600',
+  bgDark: 'bg-violet-700',
+};

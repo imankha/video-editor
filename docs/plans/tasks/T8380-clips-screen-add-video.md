@@ -15,7 +15,7 @@ Once T8370 makes uploaded files become clips, users need an entry point where th
 naturally look for it. The user named it: an **"Add Video" button on the Clips screen**
 (the Home tab that T8360 - currently in flight - renames from "Reel Drafts" to "Clips",
 single-clip surface). Today that tab has NO action button at all after T8360 relocates
-"Build Highlight Reel" to the Highlight Reels panel, and its empty/dead-end states
+"Create Highlight Reel" to the Highlight Reels panel, and its empty/dead-end states
 assume clips can only be born in Annotate.
 
 ## Interplay with T8360 (in flight - coordinate, do not collide)

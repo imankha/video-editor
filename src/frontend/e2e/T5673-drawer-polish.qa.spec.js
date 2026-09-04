@@ -30,31 +30,31 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 
-// Panel scope: DownloadsPanel has no data-testid. Its bare `fixed right-0 top-0`
-// classes ALSO matched ConnectionStatus's "Connecting to server..." banner
-// (`fixed top-0 left-0 right-0`), which stays mounted longer under heavy backend
-// load and stole the locator (T7740). Scope to `animate-slide-in-right` — a class
-// unique to this slide-in drawer on the whole page — so only the drawer matches.
-// CRITICAL: the home screen BEHIND the drawer renders its OWN CollapsibleGroup
-// rows / reel tiles with the SAME data-testids (drafts list), so an UNSCOPED
-// content locator matches both — verified live: an unscoped click landed on the
-// home screen's row (behind the panel's backdrop), which made every subsequent
-// click "intercepted by the backdrop" and the test hang until timeout. All
-// panel-content locators below are scoped through `panel`.
-const PANEL_SELECTOR = '.fixed.right-0.top-0.animate-slide-in-right';
+// Panel scope: T8545 turned the drawer into ProjectManager's inline Highlights
+// tab body, carrying its own `data-testid="highlights-tab-panel"` (no more bare
+// `fixed right-0 top-0` classes to collide with ConnectionStatus's banner,
+// T7740's original problem). The Games/Clips tab content is a ternary that
+// renders null while Highlights is active, so there is no more "home screen
+// behind the drawer" duplicate-testid risk either -- scoping through `panel`
+// below is now defense-in-depth rather than a hard requirement, kept for
+// resilience against a future surface reusing the same testids.
+const PANEL_SELECTOR = '[data-testid="highlights-tab-panel"]';
 
 async function openMyReels(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
+  // T8545: galleryStore.open() is still the "land on the Highlights tab" signal
+  // (ProjectManager now reacts to it by switching activeTab, was the drawer's
+  // open() directly) -- this in-page trigger is unchanged.
   await page.evaluate(async () => {
     const { useGalleryStore } = await import('/src/stores/galleryStore.js');
     useGalleryStore.getState().open();
   });
   const panel = page.locator(PANEL_SELECTOR);
   await panel.waitFor({ state: 'visible' });
-  // animate-slide-in-right + /api/collections/summary fetch settle. Measured
-  // live against the real account: groups render between 1-2s, NOT ~800ms —
-  // wait for the group headers to actually appear instead of a fixed sleep.
+  // /api/collections/summary fetch settle. Measured live against the real
+  // account: groups render between 1-2s, NOT ~800ms — wait for the group
+  // headers to actually appear instead of a fixed sleep.
   await panel.locator('[data-testid="collapsible-group-header"]').first()
     .waitFor({ state: 'visible', timeout: 15000 });
   await page.waitForTimeout(300); // let the rest of the groups finish rendering

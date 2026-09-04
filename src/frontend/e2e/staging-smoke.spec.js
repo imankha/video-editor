@@ -37,6 +37,6 @@ test.describe('staging smoke @staging-gate @gate-a', () => {
     await page.goto('/');
     await waitForAppReady(page); // app shell mounted into #root (deterministic, no networkidle)
     // A logged-in home renders the primary nav (Highlight Reels button is always present).
-    await expect(page.getByRole('button', { name: /Highlight Reels/ }).first()).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole('button', { name: /^Highlights/ }).first()).toBeVisible({ timeout: 30000 });
   });
 });

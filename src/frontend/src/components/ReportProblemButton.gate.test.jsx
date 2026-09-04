@@ -7,9 +7,6 @@ import { ReportProblemButton } from './ReportProblemButton';
 vi.mock('../stores/authStore', () => ({
   useAuthStore: (sel) => sel({ email: 'tester@example.com' }),
 }));
-vi.mock('../stores/galleryStore', () => ({
-  useGalleryStore: (sel) => sel({ isOpen: false }),
-}));
 vi.mock('../utils/clientLogger', () => ({
   getClientLogs: () => [],
   clearClientLogs: vi.fn(),
