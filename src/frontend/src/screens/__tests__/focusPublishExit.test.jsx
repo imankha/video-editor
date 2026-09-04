@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { useState, useCallback } from 'react';
 import { FocusPublishActionBar } from '../../components/FocusPublishActionBar';
 import { FOCUS_PUBLISH_LATER_TOAST } from '../../config/displayNames';
+import { usePublishIntentStore } from '../../stores/publishIntentStore';
 
 // T8390: FocusScreen is a very large screen that cannot be mounted in isolation
 // (dozens of stores/hooks/contexts). This test harness reproduces the post-export
@@ -12,14 +13,21 @@ import { FOCUS_PUBLISH_LATER_TOAST } from '../../config/displayNames';
 // the WIRING CONTRACT: which store call, toast, and navigation each choice fires,
 // and that the render trigger is deferred. The action bar render (labels,
 // data-tutorial-target) is real (FocusPublishActionBar, not reproduced).
+//
+// Publish-intent staking goes through the REAL usePublishIntentStore (not a
+// spy) because the re-entrancy guard + timeout-expiry Reviewer flagged (T8390
+// review) are conditional on the store's actual current value — a spy can't
+// exercise that branch.
+
+const PUBLISH_INTENT_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
  * Mirrors FocusScreen's post-export preview + publish-exit action bar. `deps`
  * injects the same store actions FocusScreen calls through getState(), so we
  * can spy on them.
  */
-function FocusPublishExitHarness({ deps, startOpen = false, isAutoCreated = false }) {
-  const { setEditorMode, recordAchievement, goToProjectManager, triggerExport, stakePublishIntent, toastSuccess } = deps;
+function FocusPublishExitHarness({ deps, startOpen = false, isAutoCreated = false, projectId = 42 }) {
+  const { setEditorMode, recordAchievement, goToProjectManager, triggerExport, toastSuccess } = deps;
   const [showExportCompletePreview, setShowExportCompletePreview] = useState(startOpen);
 
   // The gesture-driven completion callback (export finished).
@@ -30,28 +38,35 @@ function FocusPublishExitHarness({ deps, startOpen = false, isAutoCreated = fals
 
   const handleAddSpotlight = useCallback(() => {
     setShowExportCompletePreview(false);
+    if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     setEditorMode('overlay');
-  }, [setEditorMode]);
+  }, [setEditorMode, projectId]);
 
   const handleAddSpotlightLater = useCallback(() => {
     setShowExportCompletePreview(false);
+    if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     recordAchievement('overlay_deferred');
     const copy = isAutoCreated ? FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP : FOCUS_PUBLISH_LATER_TOAST.MULTI_CLIP;
     toastSuccess(copy.title, { message: copy.message, duration: 10000 });
     goToProjectManager();
-  }, [recordAchievement, goToProjectManager, toastSuccess, isAutoCreated]);
+  }, [recordAchievement, goToProjectManager, toastSuccess, isAutoCreated, projectId]);
 
   const handlePublish = useCallback(() => {
+    if (usePublishIntentStore.getState().projectId === projectId) return;
     setShowExportCompletePreview(false);
     recordAchievement('overlay_declined');
-    stakePublishIntent();
+    usePublishIntentStore.getState().set(projectId);
+    setTimeout(() => {
+      if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
+    }, PUBLISH_INTENT_TIMEOUT_MS);
     setEditorMode('overlay');
     setTimeout(() => triggerExport(), 500);
-  }, [recordAchievement, stakePublishIntent, setEditorMode, triggerExport]);
+  }, [recordAchievement, setEditorMode, triggerExport, projectId]);
 
   const handleRefocus = useCallback(() => {
     setShowExportCompletePreview(false);
-  }, []);
+    if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
+  }, [projectId]);
 
   return (
     <>
@@ -76,7 +91,6 @@ function makeDeps() {
     recordAchievement: vi.fn(),
     goToProjectManager: vi.fn(),
     triggerExport: vi.fn(),
-    stakePublishIntent: vi.fn(),
     toastSuccess: vi.fn(),
   };
 }
@@ -84,10 +98,12 @@ function makeDeps() {
 describe('T8390 post-export preview + publish-exit action bar', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    usePublishIntentStore.getState().clear();
   });
   afterEach(() => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
+    usePublishIntentStore.getState().clear();
   });
 
   it('on completion: shows the preview, records overlay_offered once, and does NOT switch editorMode', () => {
@@ -127,7 +143,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     expect(deps.recordAchievement).not.toHaveBeenCalled();
     expect(deps.goToProjectManager).not.toHaveBeenCalled();
     expect(deps.triggerExport).not.toHaveBeenCalled();
-    expect(deps.stakePublishIntent).not.toHaveBeenCalled();
+    expect(usePublishIntentStore.getState().projectId).toBeNull();
     expect(deps.toastSuccess).not.toHaveBeenCalled();
   });
 
@@ -175,13 +191,13 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
 
   it('"Publish" records overlay_declined, stakes the publish intent, switches to overlay, and triggers the render after the timer', () => {
     const deps = makeDeps();
-    render(<FocusPublishExitHarness deps={deps} startOpen />);
+    render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
 
     expect(deps.recordAchievement).toHaveBeenCalledTimes(1);
     expect(deps.recordAchievement).toHaveBeenCalledWith('overlay_declined');
-    expect(deps.stakePublishIntent).toHaveBeenCalledTimes(1);
+    expect(usePublishIntentStore.getState().projectId).toBe(42);
     expect(deps.setEditorMode).toHaveBeenCalledWith('overlay');
     // Render is deferred until the overlay export button mounts.
     expect(deps.triggerExport).not.toHaveBeenCalled();
@@ -190,6 +206,42 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
       vi.advanceTimersByTime(500);
     });
     expect(deps.triggerExport).toHaveBeenCalledTimes(1);
+  });
+
+  it('T8390 review: double-tap Publish (two clicks before the button unmounts) stakes/triggers only ONCE', () => {
+    const deps = makeDeps();
+    render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
+
+    const publishBtn = screen.getByRole('button', { name: 'Publish' });
+    fireEvent.click(publishBtn);
+    fireEvent.click(publishBtn); // same tick, preview hasn't unmounted yet
+
+    expect(deps.recordAchievement.mock.calls.filter((c) => c[0] === 'overlay_declined')).toHaveLength(1);
+    expect(deps.setEditorMode).toHaveBeenCalledTimes(1);
+
+    act(() => { vi.advanceTimersByTime(500); });
+    expect(deps.triggerExport).toHaveBeenCalledTimes(1);
+  });
+
+  it('T8390 review: a staked publish intent expires after the safety-net timeout (bounds staleness if the render never completes)', () => {
+    const deps = makeDeps();
+    render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    expect(usePublishIntentStore.getState().projectId).toBe(42);
+
+    act(() => { vi.advanceTimersByTime(PUBLISH_INTENT_TIMEOUT_MS); });
+    expect(usePublishIntentStore.getState().projectId).toBeNull();
+  });
+
+  it('T8390 review: Refocus/Add Spotlight/Add Spotlight Later abandon a stale publish intent for the SAME project', () => {
+    const deps = makeDeps();
+    usePublishIntentStore.getState().set(42);
+
+    render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
+    fireEvent.click(screen.getByText(/^Refocus/));
+
+    expect(usePublishIntentStore.getState().projectId).toBeNull();
   });
 
   it('overlay_offered + overlay_deferred + overlay_declined still sum to one event per completion cycle (T8520 regression)', () => {

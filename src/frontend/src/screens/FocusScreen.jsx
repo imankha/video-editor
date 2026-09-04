@@ -17,6 +17,7 @@ import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
 import { FOCUS_PUBLISH_LATER_TOAST } from '../config/displayNames';
+import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
@@ -27,6 +28,14 @@ import apiFetch from '../utils/apiFetch';
 import { useProjectDataStore, useFocusStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler, useQuestStore, useWorkingVideo } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 import { shouldPersistFocusForOverlayTransition } from './focusOverlayTransition';
+
+// T8390: safety-net expiry for a staked publish intent (see handlePublish).
+// ExportButtonContainer exposes no onError callback to this screen, so a
+// render that fails after Publish stakes the flag has no precise clear point
+// — this bounds the staleness window instead of leaving it staked forever
+// (which would silently auto-publish a LATER, unrelated export of the same
+// project). Generous relative to a spotlight-less single-clip render.
+const PUBLISH_INTENT_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
  * FocusScreen - Self-contained screen for Framing mode
@@ -1011,6 +1020,15 @@ export function FocusScreen({
       console.log('[FocusScreen] Refreshing project to get new working_video_id');
       await refreshProject();
 
+      // T8390: the post-export preview mounts IMMEDIATELY on this same
+      // completion callback (below) and needs a playable URL now, not just
+      // the refreshed working_video_id pointer — resolve it (degrades
+      // gracefully to no preview on failure; see resolveWorkingVideoPreviewUrl).
+      const previewUrl = await resolveWorkingVideoPreviewUrl(projectId);
+      if (previewUrl) {
+        setWorkingVideo({ file: null, url: previewUrl, metadata: null });
+      }
+
       workingVideoSet = true;
     }
 
@@ -1050,11 +1068,16 @@ export function FocusScreen({
     // App.jsx's effect emits the overlay-entry achievement when editorMode becomes
     // OVERLAY.
     setShowExportCompletePreview(false);
+    // T8390: defense-in-depth — abandon a stale publish intent for THIS
+    // project (e.g. Publish was tapped on an earlier failed render, this is
+    // a fresh preview for the same project). See PUBLISH_INTENT_TIMEOUT_MS.
+    if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     setEditorMode('overlay');
-  }, [setEditorMode]);
+  }, [setEditorMode, projectId]);
 
   const handleAddSpotlightLater = useCallback(() => {
     setShowExportCompletePreview(false);
+    if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     useQuestStore.getState().recordAchievement('overlay_deferred');
     // T8390: explainer toast — routed by is_auto_created (T8360's already-approved
     // split), since that's also where the draft actually landed (single-clip auto
@@ -1067,7 +1090,7 @@ export function FocusScreen({
     // Navigation only — lands on the drafts surface. Persists NOTHING; the draft
     // stays at its current stage and the Overlay tab remains enabled.
     useEditorStore.getState().goToProjectManager();
-  }, [project?.is_auto_created]);
+  }, [project?.is_auto_created, projectId]);
 
   // T8390: Publish — renamed from "Finish Now" now that the user has actually
   // watched the preview before deciding. ONE tap, TRUE publish: this fires the
@@ -1080,9 +1103,21 @@ export function FocusScreen({
   // of waiting for a second tap — see publishIntentStore.js for why a store
   // (not a plain ref) is the right shape for a cross-component signal here.
   const handlePublish = useCallback(() => {
+    // Re-entrancy guard: two Publish clicks landing in the same tick (before
+    // React unmounts the button on setShowExportCompletePreview(false)) must
+    // not schedule two renders -> two publish attempts. The store itself is
+    // the mutex: if this project's intent is already staked, a render is
+    // already in flight for it.
+    if (usePublishIntentStore.getState().projectId === projectId) return;
     setShowExportCompletePreview(false);
     useQuestStore.getState().recordAchievement('overlay_declined');
     usePublishIntentStore.getState().set(projectId);
+    // Safety net: ExportButtonContainer exposes no onError callback here, so
+    // a render that fails leaves no precise clear point — expire the stake
+    // instead of leaving it staked forever (see PUBLISH_INTENT_TIMEOUT_MS).
+    setTimeout(() => {
+      if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
+    }, PUBLISH_INTENT_TIMEOUT_MS);
     setEditorMode('overlay');
     setTimeout(() => exportButtonRef.current?.triggerExport(), 500);
   }, [setEditorMode, exportButtonRef, projectId]);
@@ -1095,7 +1130,9 @@ export function FocusScreen({
   // is "nevermind", not an explicit choice.
   const handleRefocus = useCallback(() => {
     setShowExportCompletePreview(false);
-  }, []);
+    // T8390: defense-in-depth clear (see handleAddSpotlight comment above).
+    if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
+  }, [projectId]);
 
   // Derive game name for selected clip
   const selectedClipGameName = useMemo(() => {
