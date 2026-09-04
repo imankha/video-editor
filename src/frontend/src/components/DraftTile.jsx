@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Z } from '../constants/zLayers';
-import { Pencil, CheckCircle, Tag, Loader2, FolderInput, MoreVertical, Trash2, Play, Crop, Layers, EyeOff, X, Film, AlertTriangle, Clock } from 'lucide-react';
+import { Pencil, CheckCircle, Tag, Loader2, FolderInput, MoreVertical, Trash2, Play, Crop, Layers, EyeOff, Film, AlertTriangle, Clock } from 'lucide-react';
 import { Button } from './shared/Button';
-import { MediaPlayer } from './MediaPlayer';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { TilePreviewVideo } from './collections/TilePreviewVideo';
 import { useTilePreview } from '../hooks/useTilePreview';
@@ -11,9 +10,10 @@ import { useProjectsStore } from '../stores/projectsStore';
 import { useCurrentProfile } from '../stores/profileStore';
 import { useSyncStore } from '../stores/syncStore';
 import { useExportStore } from '../stores/exportStore';
-import { useQuestStore } from '../stores/questStore';
+import { useReelPreviewStore } from '../stores/reelPreviewStore';
 import { usePublishProject } from '../hooks/usePublishProject';
 import { useIsCoarsePointer } from '../hooks/useIsMobile';
+import { openFinishedReel } from '../utils/finishedReelNav';
 import { API_BASE } from '../config';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
@@ -49,11 +49,12 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // carrying the T4050 durable-sync contract verbatim). `publishRetry` still
   // drives the in-card Retry surface below on a 503 sync_failed.
   const { publish: publishProject, isPublishing, publishRetry } = usePublishProject(project);
-  const [isPreviewing, setIsPreviewing] = useState(false);
-  // T6840: quest_4 "Watch Your Preview" fires after ~1s of preview playback
-  // (autoPlay), mirroring watched_gallery_video_1s so opening and instantly
-  // closing (or scrubbing past) doesn't count.
-  const previewTimerRef = useRef(null);
+  // T8535: the draft preview is the consolidated DraftReelPreview surface
+  // (openFinishedReel) — this tile no longer mounts its own player. Tracking
+  // whether THIS project's preview is the one currently open lets the tile
+  // release its own inline hover-preview stream while the full player is up
+  // (T5900: "full player opening RELEASES it").
+  const previewOpenForThisProject = useReelPreviewStore((s) => s.payload?.projectId === project.id);
   const [actionsRevealed, setActionsRevealed] = useState(false);
   // T6180 kebab (ready state only): the five secondary actions collapse behind a
   // menu. Mirrors ReelTile's pattern — a portaled, button-anchored popover on fine
@@ -75,10 +76,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // (mouse) at ANY width -> hover reveal; coarse pointer -> long-press, unchanged.
   const isCoarsePointer = useIsCoarsePointer();
   const isOffline = useSyncStore((state) => state.isOffline);
-  // T5130: the preview plays this profile's published reel, so the scrub handle
-  // is the active profile's sport ball (undefined sport -> plain dot in MediaPlayer).
   const currentProfile = useCurrentProfile();
-  const currentProfileSport = currentProfile?.sport;
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef(null);
   const renameProject = useProjectsStore(state => state.renameProject);
@@ -210,25 +208,6 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
     }
   };
 
-  // T6840: single entry point for opening the draft preview so every gesture
-  // (body tap, hover Play, ready-bar Preview) records the quest step the same way.
-  const startPreview = () => {
-    setIsPreviewing(true);
-    clearTimeout(previewTimerRef.current);
-    previewTimerRef.current = setTimeout(() => {
-      useQuestStore.getState().recordAchievement('previewed_draft_reel_1s');
-    }, 1000);
-  };
-
-  // Closing before ~1s cancels the pending achievement — only real watch time counts.
-  const stopPreview = () => {
-    clearTimeout(previewTimerRef.current);
-    setIsPreviewing(false);
-  };
-
-  // Cancel the pending timer if the tile unmounts mid-preview.
-  useEffect(() => () => clearTimeout(previewTimerRef.current), []);
-
   const handleCardClick = () => {
     if (isRenaming) return;
     // T6180 — a ready tile's body PREVIEWS (it used to be inert, which is exactly
@@ -236,7 +215,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
     // button; the low-risk body gesture is Preview. Guard on final_video_id: a ready
     // tile without a playable video simply does nothing on body tap.
     if (isReadyToPublish) {
-      if (project.final_video_id) startPreview();
+      if (project.final_video_id) openFinishedReel(project);
       return;
     }
     if (isCoarsePointer && actionsRevealed) {
@@ -338,7 +317,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // is open so the inline preview tears down and releases the stream (EPIC: full
   // player opening RELEASES it).
   const firstClip = project.clips?.[0];
-  const previewStreamUrl = isPreviewing
+  const previewStreamUrl = previewOpenForThisProject
     ? null
     : project.final_video_id
       ? `${API_BASE}/api/downloads/${project.final_video_id}/stream`
@@ -650,7 +629,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {!isReadyToPublish && (
         <div data-testid="tile-actions" className={`absolute top-9 right-1.5 z-30 flex flex-col items-end gap-1 transition-opacity ${actionsVisibility}`}>
           {isComplete && project.final_video_id && (
-            <Button variant="secondary" size="sm" icon={Play} iconOnly onClick={(e) => { e.stopPropagation(); startPreview(); }} title="Preview video" className={actionBtnClass} />
+            <Button variant="secondary" size="sm" icon={Play} iconOnly onClick={(e) => { e.stopPropagation(); openFinishedReel(project); }} title="Preview video" className={actionBtnClass} />
           )}
           {/* T6890: the rename pencil moved OUT of this rail to sit beside the name
               in the bottom scrim (above). It is no longer stacked here. */}
@@ -743,7 +722,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           {project.final_video_id && (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); startPreview(); }}
+              onClick={(e) => { e.stopPropagation(); openFinishedReel(project); }}
               title="Preview video"
               aria-label="Preview video"
               className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium bg-white/10 ring-1 ring-inset ring-white/25 backdrop-blur-sm text-white hover:bg-white/20 hover:ring-white/40 active:scale-[0.98] transition-all coarse-pointer:min-h-[44px]"
@@ -801,49 +780,6 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         </div>
       )}
 
-      {/* Video preview modal.
-          Portaled to document.body: the tile applies a hover `transform`/`filter`
-          (scale + brightness), which makes it the containing block for any
-          `position: fixed` descendant. Rendered inline, the fixed backdrop/panel
-          (and the video + its purple scrub bar) would resolve against the small,
-          offset tile box instead of the viewport -- video paints outside the panel
-          (T5900 defect A) and the scrub bar is left as a paint artifact on the tile
-          after unmount (defect B). The portal moves the modal out of the tile
-          subtree so `fixed` resolves to the viewport. Same pattern as ReelTile's
-          kebab menu. Note: React events still bubble through the component tree, so
-          the stopPropagation calls below still guard the tile's card onClick. */}
-      {isPreviewing && project.final_video_id && createPortal(
-        <>
-          <div
-            className={`fixed inset-0 bg-black/80 ${Z.OVERLAY_BACKDROP}`}
-            onClick={(e) => { e.stopPropagation(); stopPreview(); }}
-          />
-          <div className={`fixed inset-4 md:inset-12 lg:inset-20 ${Z.PLAYER} flex flex-col bg-gray-900 rounded-xl overflow-hidden shadow-2xl`}>
-            <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800">
-              <div className="flex items-center gap-3">
-                <Film size={20} className={REEL.accent} />
-                <h3 className="text-white font-medium">{getProjectDisplayName(project)}</h3>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={X}
-                iconOnly
-                onClick={(e) => { e.stopPropagation(); stopPreview(); }}
-              />
-            </div>
-            <div className="flex-1 min-h-0">
-              <MediaPlayer
-                src={`${API_BASE}/api/downloads/${project.final_video_id}/stream`}
-                autoPlay
-                onClose={stopPreview}
-                sport={currentProfileSport}
-              />
-            </div>
-          </div>
-        </>,
-        document.body
-      )}
     </div>
   );
 }
