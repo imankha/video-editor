@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
-import { List, X } from 'lucide-react';
+import { List, X, Sparkles } from 'lucide-react';
 import { FocusModeView } from '../modes';
 import { FocusContainer } from '../containers';
 import { useCrop, useSegments } from '../modes/focus';
@@ -12,7 +12,7 @@ import { useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ClipSelectorSidebar } from '../components/ClipSelectorSidebar';
 import { FileUpload } from '../components/FileUpload';
-import { ConfirmationDialog } from '../components/shared';
+import { ConfirmationDialog, OverlayEffectIllustration } from '../components/shared';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
@@ -20,7 +20,7 @@ import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments, clipRotation } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { useProjectDataStore, useFocusStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler } from '../stores';
+import { useProjectDataStore, useFocusStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler, useQuestStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 import { shouldPersistFocusForOverlayTransition } from './focusOverlayTransition';
 
@@ -77,6 +77,8 @@ export function FocusScreen({
   // T740: outdated clips dialog and state removed — framing always uses latest boundaries
   // Mobile sidebar toggle
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  // T8520: post-export completion choice card (overlay is an offer, not a stage)
+  const [showExportCompleteChoice, setShowExportCompleteChoice] = useState(false);
   const clipHasUserEditsRef = useRef(false);
   const localExportButtonRef = useRef(null);
   const initialLoadDoneRef = useRef(false);
@@ -1021,12 +1023,47 @@ export function FocusScreen({
     }
 
     if (workingVideoSet) {
-      console.log('[FocusScreen] Navigating to overlay mode');
-      setEditorMode('overlay');
+      // T8520: overlay is an offer, not a mandatory stage. Instead of the old
+      // silent `setEditorMode('overlay')`, show the completion choice card. This
+      // is a gesture-driven completion callback (export finished), NOT a reactive
+      // useEffect watching state, so recording `overlay_offered` here is allowed.
+      console.log('[FocusScreen] Export complete — offering overlay choice');
+      setShowExportCompleteChoice(true);
+      useQuestStore.getState().recordAchievement('overlay_offered');
     } else {
-      console.error('[FocusScreen] Cannot navigate to overlay - working video not set');
+      console.error('[FocusScreen] Cannot offer overlay — working video not set');
     }
   }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, clipMetadataCache, globalAspectRatio, refreshProject, projectId, onExportComplete, setIsLoadingWorkingVideo]);
+
+  // T8520: the three completion-choice gesture handlers. Each emits its own
+  // FLOW_EVENT from the click handler (never a reactive watcher).
+  const handleAddSpotlight = useCallback(() => {
+    // Identical to today's behavior — everything is already staged. No new event:
+    // App.jsx's effect emits the overlay-entry achievement when editorMode becomes
+    // OVERLAY.
+    setShowExportCompleteChoice(false);
+    setEditorMode('overlay');
+  }, [setEditorMode]);
+
+  // Also used for the X / onClose (the only choice that starts no work).
+  const handleAddSpotlightLater = useCallback(() => {
+    setShowExportCompleteChoice(false);
+    useQuestStore.getState().recordAchievement('overlay_deferred');
+    // Navigation only — lands on the drafts surface. Persists NOTHING; the draft
+    // stays at its current stage and the Overlay tab remains enabled.
+    useEditorStore.getState().goToProjectManager();
+  }, []);
+
+  const handleFinishNow = useCallback(() => {
+    setShowExportCompleteChoice(false);
+    useQuestStore.getState().recordAchievement('overlay_declined');
+    // Fire the OVERLAY (final) render with no spotlight. We switch to overlay mode
+    // so the overlay export button mounts and re-points `exportButtonRef`, then
+    // trigger it after it mounts (same 500ms cross-mode pattern as App.jsx:381).
+    // The overlay export skips the per-second credit check, so no extra charge.
+    setEditorMode('overlay');
+    setTimeout(() => exportButtonRef.current?.triggerExport(), 500);
+  }, [setEditorMode, exportButtonRef]);
 
   // Derive game name for selected clip
   const selectedClipGameName = useMemo(() => {
@@ -1255,6 +1292,23 @@ export function FocusScreen({
       </div>
 
       {/* T740: Outdated clips dialog removed — boundaries auto-refreshed silently */}
+
+      {/* T8520: post-export completion choice — overlay is an offer, not a stage.
+          Primary ("Add Spotlight") is LAST in the array so the footer's
+          flex-col-reverse puts it lowest on mobile / rightmost on desktop. */}
+      <ConfirmationDialog
+        isOpen={showExportCompleteChoice}
+        panelTestId="export-complete-choice"
+        title="Your reel is exported"
+        illustration={<OverlayEffectIllustration />}
+        message={"Add a spotlight overlay? Optional - it draws a glowing highlight around your athlete and can add text on the video."}
+        onClose={handleAddSpotlightLater}
+        buttons={[
+          { label: 'Add Spotlight Later', variant: 'secondary', onClick: handleAddSpotlightLater },
+          { label: 'Finish Now', variant: 'secondary', onClick: handleFinishNow },
+          { label: 'Add Spotlight', variant: 'cyan', icon: Sparkles, onClick: handleAddSpotlight },
+        ]}
+      />
     </div>
   );
 }

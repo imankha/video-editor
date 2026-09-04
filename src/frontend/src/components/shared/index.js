@@ -7,6 +7,7 @@ export { ConfirmationDialog } from './ConfirmationDialog';
 export { InlineSportSelect } from './InlineSportSelect';
 export { ModeSwitcher } from './ModeSwitcher';
 export { NoSportTagWarning } from './NoSportTagWarning';
+export { OverlayEffectIllustration } from './OverlayEffectIllustration';
 export { StarRating } from './StarRating';
 export { TagSelector } from './TagSelector';
 export { ToastContainer, useToast, toast } from './Toast';

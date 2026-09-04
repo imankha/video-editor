@@ -182,6 +182,13 @@ FLOW_EVENTS = {
     "gallery_watched_after_overlays": {"label": "Gallery Watched (Overlays)", "daily_col": None},
     # T3700: per-step framing/overlay drop-off events
     "overlay_opened":               {"label": "Overlay Opened",             "daily_col": None},
+    # T8520: overlay-is-an-offer completion-choice funnel (engagement dims, no
+    # daily_col, reuse user_actions). Sum invariant:
+    # overlay_offered = overlay_deferred + overlay_declined + <"Add Spotlight",
+    # which reuses overlay_opened>. If they stop summing, an exit path is unrecorded.
+    "overlay_offered":              {"label": "Overlay Offered",            "daily_col": None},
+    "overlay_deferred":             {"label": "Overlay Deferred",           "daily_col": None},
+    "overlay_declined":             {"label": "Overlay Declined",           "daily_col": None},
     "crop_adjusted":                {"label": "Crop Adjusted",              "daily_col": None},
     "speed_segment_created":        {"label": "Slow-mo Added",              "daily_col": None},
     "overlay_players_assigned":     {"label": "Players Spotlighted",        "daily_col": None},
