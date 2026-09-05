@@ -1,6 +1,6 @@
 # T8400: Publishing lands the user on the reel they just made (guided-path R4)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-02
@@ -62,10 +62,10 @@ surface has LANDED — no wait remains.
 
 ## Acceptance Criteria
 
-- [ ] A successful publish navigates to/reveals the published reel, not a generic screen
-- [ ] Share affordance visible at the landing moment
-- [ ] No reactive persistence introduced (navigation is part of the publish gesture)
-- [ ] Tests pass (unit + publish e2e updated)
+- [x] A successful publish navigates to/reveals the published reel, not a generic screen
+- [x] Share affordance visible at the landing moment
+- [x] No reactive persistence introduced (navigation is part of the publish gesture)
+- [x] Tests pass (unit + publish e2e updated)
 
 ## Progress Log
 
