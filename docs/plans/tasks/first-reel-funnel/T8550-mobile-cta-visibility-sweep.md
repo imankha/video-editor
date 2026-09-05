@@ -1,6 +1,6 @@
 # T8550: Mobile CTA visibility sweep (primary buttons above the fold)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-03
