@@ -131,26 +131,44 @@ function* _walkBoxes(view, start = 0, end = null) {
   }
 }
 
+// Seconds between the MP4 epoch (1904-01-01 UTC) and the Unix epoch (1970-01-01 UTC).
+const MP4_EPOCH_OFFSET_S = 2082844800;
+
 /**
- * Parse mvhd (movie header) for duration.
- * Returns { durationSec } or null if parse fails.
+ * Convert an mvhd creation value (seconds since 1904-01-01 UTC) to a JS Date.
+ * A zero value means "not set" (T8800) — return null, never a literal 1904 date.
+ */
+function _mp4TimeToDate(mp4Seconds) {
+  if (!mp4Seconds) return null;
+  return new Date((mp4Seconds - MP4_EPOCH_OFFSET_S) * 1000);
+}
+
+/**
+ * Parse mvhd (movie header) for duration and creation time.
+ * The creation timestamp sits right after version+flags: 4 bytes in a
+ * version-0 box, 8 bytes in a version-1 box.
+ * Returns { durationSec, creationTime } (creationTime is a Date or null).
  */
 function _parseMvhd(view, payloadStart) {
   const version = view.getUint8(payloadStart);
   // skip version(1) + flags(3)
   let o = payloadStart + 4;
   if (version === 1) {
+    const chi = view.getUint32(o, false);
+    const clo = view.getUint32(o + 4, false);
+    const creation = chi * 0x100000000 + clo;
     o += 8 + 8; // creation + modification
     const timescale = view.getUint32(o, false); o += 4;
     const hi = view.getUint32(o, false);
     const lo = view.getUint32(o + 4, false);
     const duration = hi * 0x100000000 + lo;
-    return { durationSec: duration / timescale };
+    return { durationSec: duration / timescale, creationTime: _mp4TimeToDate(creation) };
   }
+  const creation = view.getUint32(o, false);
   o += 4 + 4; // creation + modification
   const timescale = view.getUint32(o, false); o += 4;
   const duration = view.getUint32(o, false);
-  return { durationSec: duration / timescale };
+  return { durationSec: duration / timescale, creationTime: _mp4TimeToDate(creation) };
 }
 
 /**
@@ -177,12 +195,13 @@ function _parseTkhd(view, payloadStart) {
  */
 function _parseMoov(view, moovStart, moovEnd) {
   let durationSec = null;
+  let creationTime = null;
   let width = 0;
   let height = 0;
   for (const box of _walkBoxes(view, moovStart, moovEnd)) {
     if (box.type === 'mvhd') {
       const m = _parseMvhd(view, box.payloadStart);
-      if (m) durationSec = m.durationSec;
+      if (m) { durationSec = m.durationSec; creationTime = m.creationTime; }
     } else if (box.type === 'trak') {
       for (const trakBox of _walkBoxes(view, box.payloadStart, box.end)) {
         if (trakBox.type === 'tkhd') {
@@ -195,7 +214,7 @@ function _parseMoov(view, moovStart, moovEnd) {
       }
     }
   }
-  return { durationSec, width, height };
+  return { durationSec, width, height, creationTime };
 }
 
 /**
@@ -374,6 +393,7 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
     fileName,
     format: fileName.split('.').pop().toLowerCase() || 'mp4',
     framerate: 30,
+    creationTime: parsed.creationTime || null,
   };
 
   const elapsedMs = Math.round(performance.now() - __diagStart);
@@ -399,6 +419,43 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
 }
 
 /**
+ * Best-effort read of the embedded mvhd creation time from a File/Blob (T8800).
+ *
+ * Uses ranged blob slices (never reads the whole file — camera segments run tens
+ * of GB) and the SAME box walker as the URL path. moov usually sits in the head
+ * MB (fast-start); if not, we try the tail. Any failure or non-MP4 container
+ * yields null — creation time is optional evidence, never fatal.
+ *
+ * @param {File|Blob} blob
+ * @returns {Promise<Date|null>}
+ */
+async function _extractCreationTimeFromBlob(blob) {
+  const parseFrom = (view, moovStart, moovEnd) => {
+    const p = _parseMoov(view, moovStart, moovEnd);
+    return p ? (p.creationTime || null) : null;
+  };
+  try {
+    const headBuf = new Uint8Array(await blob.slice(0, HEAD_PROBE_BYTES).arrayBuffer());
+    const headView = new DataView(headBuf.buffer, headBuf.byteOffset, headBuf.byteLength);
+    const moov = _findMoov(headView);
+    if (moov && moov.end <= headBuf.byteLength) {
+      return parseFrom(headView, moov.payloadStart, moov.end);
+    }
+    const size = blob.size || 0;
+    if (size > HEAD_PROBE_BYTES) {
+      const tailStart = Math.max(HEAD_PROBE_BYTES, size - HEAD_PROBE_BYTES);
+      const tailBuf = new Uint8Array(await blob.slice(tailStart).arrayBuffer());
+      const tailView = new DataView(tailBuf.buffer, tailBuf.byteOffset, tailBuf.byteLength);
+      const tailMoov = _findMoov(tailView, tailStart);
+      if (tailMoov) return parseFrom(tailView, tailMoov.payloadStart, tailMoov.end);
+    }
+  } catch {
+    /* best-effort: creation time is optional evidence */
+  }
+  return null;
+}
+
+/**
  * Extract metadata from a video File or Blob.
  * Used by both Framing (original upload) and Overlay (rendered video).
  *
@@ -406,10 +463,13 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
  * The caller should create their own URL if they need to display the video.
  *
  * @param {File|Blob} videoSource - Video file or blob to extract metadata from
- * @returns {Promise<Object>} Video metadata
+ * @returns {Promise<Object>} Video metadata (includes creationTime: Date|null)
  */
 export async function extractVideoMetadata(videoSource) {
-  return new Promise((resolve, reject) => {
+  // Read the embedded recording time in parallel with the <video> element probe.
+  // The element gives reliable dims/duration; mvhd gives creation time (T8800).
+  const creationTimePromise = _extractCreationTimeFromBlob(videoSource);
+  const base = await new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.preload = 'metadata';
     video.muted = true; // Helps with autoplay policies
@@ -489,4 +549,7 @@ export async function extractVideoMetadata(videoSource) {
     video.src = url;
     video.load(); // Force the browser to start loading
   });
+
+  base.creationTime = await creationTimePromise;
+  return base;
 }
