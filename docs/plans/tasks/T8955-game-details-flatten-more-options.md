@@ -1,6 +1,6 @@
 # T8955: Remove the "More options" disclosure — Game Type always visible
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 1
 **Created:** 2026-09-05
