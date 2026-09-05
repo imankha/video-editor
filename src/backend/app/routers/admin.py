@@ -1911,6 +1911,16 @@ def analytics_pulse(
             # T7510: upload success rate over the same segment filter. Sourced from
             # user_actions (segment-scoped) since daily_counters can't honor an
             # arbitrary segment filter. Failed rows carry a ":<reason>" suffix.
+            # T8171 fix: this card is labeled "today" (PulseCards.jsx) but had NO
+            # date bound at all -- `user_actions.count` is a lifetime cumulative
+            # counter, so this summed EVERY occurrence ever recorded. A resolved
+            # incident (e.g. T8160's Aug 30-31 outage) stayed baked into "today"
+            # forever. Bounded to TODAY via `first_at::date`, the same first_at-day
+            # approximation signup_by_date/export_by_date above already use under a
+            # segment filter (exact for a same-day single occurrence; a repeat
+            # occurrence of the SAME action by the SAME user on a later day is not
+            # separately visible here -- a `user_actions` schema limitation shared
+            # by those other cards, not new to this fix).
             cur.execute(f"""
                 SELECT
                     COALESCE(SUM(CASE WHEN a.action = 'game_upload_succeeded' THEN a.count END), 0) AS succeeded,
@@ -1918,7 +1928,8 @@ def analytics_pulse(
                 FROM user_actions a
                 JOIN user_segments s ON a.user_id = s.user_id{seg_join}
                 {seg_where} AND (a.action = 'game_upload_succeeded' OR a.action LIKE 'game_upload_failed:%%')
-            """, filter_params)
+                    AND a.first_at::date = %s
+            """, [*filter_params, today])
             ur = cur.fetchone()
             upload_succeeded_total, upload_failed_total = ur["succeeded"], ur["failed"]
 
@@ -1987,8 +1998,14 @@ def analytics_pulse(
             revenue_by_date = {d: _cv(d, "credit_purchases") for d in date_range_tmp if _cv(d, "credit_purchases")}
 
             # T7510: upload success rate from the new daily_counters columns.
-            upload_succeeded_total = sum(_cv(d, "game_uploads_succeeded") for d in date_range_tmp)
-            upload_failed_total = sum(_cv(d, "game_uploads_failed") for d in date_range_tmp)
+            # T8171 fix: "today" must mean TODAY, matching every sibling card on
+            # this endpoint (signups/exports/active_users use a single day's
+            # value, see the T7990 comment above) -- summing the whole `days`
+            # window kept a resolved incident inside "today" for the window's
+            # entire length (e.g. T8160's Aug 30-31 outage stayed "today" for
+            # up to 90 days under the max `days` query param).
+            upload_succeeded_total = _cv(today, "game_uploads_succeeded")
+            upload_failed_total = _cv(today, "game_uploads_failed")
 
     date_range = [(start + timedelta(days=i)) for i in range(days)]
 

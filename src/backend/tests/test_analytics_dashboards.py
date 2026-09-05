@@ -466,6 +466,59 @@ class TestUploadSuccessRateAlarm:
         card = resp.json()["cards"]["upload_success_rate"]
         assert card["alarm"] is False
 
+    def test_stale_prior_day_failures_do_not_pollute_today_daily_counters_path(self, client, pg_conn):
+        # T8171 regression: `game_uploads_succeeded`/`_failed` used to be SUMMED
+        # across the whole `days` window (default 30) and mislabeled "today" --
+        # a resolved incident from days ago kept the card (and its alarm) reading
+        # as an ongoing collapse for the rest of the window. Seed a bad YESTERDAY
+        # alongside a healthy TODAY and assert only today's numbers surface.
+        from app.services.pg import get_pg
+        self._reset_upload_counters()
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO daily_counters (counter_date, origin_type, game_uploads_succeeded, game_uploads_failed)
+                VALUES (CURRENT_DATE - 1, 'all', 0, 20)
+                ON CONFLICT (counter_date, origin_type)
+                DO UPDATE SET game_uploads_succeeded = 0, game_uploads_failed = 20
+            """)
+        for _ in range(4):
+            record_milestone("user-a", "game_upload_succeeded")
+        _counter_buffer.flush()
+
+        # T8110: exclude_test=false to exercise the daily_counters shortcut path.
+        resp = client.get("/api/admin/analytics/pulse?exclude_test=false", headers=_auth())
+        assert resp.status_code == 200
+        card = resp.json()["cards"]["upload_success_rate"]
+        assert card["succeeded"] == 4
+        assert card["failed"] == 0
+        assert card["today"] == 100.0
+        assert card["alarm"] is False
+
+    def test_stale_prior_day_failures_do_not_pollute_today_segment_filtered_path(self, client, pg_conn):
+        # T8171 regression, default (exclude_test=True) path: `user_actions.count`
+        # is a LIFETIME cumulative counter with no date column, and this card's
+        # query previously had NO date bound at all -- it summed every occurrence
+        # ever recorded. Backdate a large stale failure count to "yesterday" and
+        # assert it does not surface under today's card.
+        from app.services.pg import get_pg
+        record_milestone("user-a", "game_upload_failed", reason="sync_failed")
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE user_actions SET count = 20, first_at = now() - INTERVAL '1 day'
+                WHERE user_id = 'user-a' AND action = 'game_upload_failed:sync_failed'
+            """)
+        # user-a's fixture-seeded game_upload_succeeded (analytics_setup) is
+        # dated "now" (today), so it's legitimate today activity, not staleness.
+        resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+        assert resp.status_code == 200
+        card = resp.json()["cards"]["upload_success_rate"]
+        assert card["failed"] == 0
+        assert card["succeeded"] == 1
+        assert card["today"] == 100.0
+        assert card["alarm"] is False
+
 
 class TestPulseUtcDateWindow:
     """T8250: `daily_counters` rows are keyed on Postgres's `CURRENT_DATE` (UTC,
