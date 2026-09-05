@@ -400,8 +400,18 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   backgrounded tab can't inflate) and `POST /api/auth/session-close` (reuses `close_session`,
   idempotent via its open-session guard — banks the last session without a logout, fixes D2).
   Frontend: `src/frontend/src/hooks/useSessionHeartbeat.js` (wired in App.jsx next to
-  useExportRecovery) — visibility-gated 60s heartbeat + `navigator.sendBeacon` close on
-  `visibilitychange→hidden`/`pagehide`. Admin UI `UserTable.jsx fmtDuration` renders hours-only
+  useExportRecovery) — 60s heartbeat + `navigator.sendBeacon` close on
+  `visibilitychange→hidden`/`pagehide`. **T8920: the 60s heartbeat is gated on BOTH
+  tab-visibility AND interaction-recency** — visibility alone is not engagement, so an
+  idle-but-foregrounded tab (e.g. left open during a slow background upload) used to keep
+  `last_active_at` fresh forever and defeat the server's 30-min new-session boundary,
+  massively over-stating engaged time. Passive `mousemove`/`keydown`/`scroll`/`touchstart`
+  listeners stamp `lastInteractionRef` (throttled to ≤1/s); a heartbeat — both the interval
+  tick AND the foreground-regain ping in `onVisibilityChange` — is withheld unless the last
+  stamp is within `INTERACTION_WINDOW_MS = 90_000` (generous vs the 60s tick so a user
+  reading/watching for one tick isn't punished). Mount stamps the ref so the first heartbeat
+  isn't wrongly withheld. The tab-close beacon is deliberately NOT gated (banks the session
+  on hide/unload regardless of recency). Tests: `useSessionHeartbeat.test.js` (fake timers). Admin UI `UserTable.jsx fmtDuration` renders hours-only
   (no days branch: `26h`, not `1d 2h`). Decisions: NO backfill (values self-correct as new
   sessions accrue), all-time cumulative window (unchanged). Tests: `test_analytics.py`
   (`TestSessionEngagedSeconds`, `TestCloseSessionBanking`, `TestHeartbeatGapCap`).
