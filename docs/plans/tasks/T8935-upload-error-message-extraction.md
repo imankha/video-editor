@@ -1,6 +1,6 @@
 # T8935: Upload error messages never render "[object Object]"; validation errors are logged server-side
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-05
