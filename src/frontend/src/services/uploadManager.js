@@ -1085,15 +1085,24 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
         precomputed: hashResult,
       });
 
-      // Step D: Subsequent files — attach to existing game after upload.
-      if (i > 0) {
+      // Step D: activate right after the FIRST video lands, before attaching
+      // any subsequent one. T8940 fix: add_game_videos (T8700) 409s
+      // ("Videos can only be added to a ready game") unless the game is
+      // already 'ready' — activating only once, after the WHOLE loop, meant
+      // every video 2..N always hit that guard while the game was still
+      // 'pending' (a deterministic bug, not a timing race — it failed 100% of
+      // the time for any 2+ file create). Activating here instead also makes
+      // the game usable immediately after video 1 (T1540's annotate-during-
+      // upload intent), with videos 2..N streaming in via the SAME append
+      // mechanism T8700 already uses for post-creation attach.
+      if (i === 0) {
+        await activateGame(gameResult.game_id);
+        activated = true;
+      } else {
+        // Step E: Subsequent files — attach to the now-ready game after upload.
         lastAttach = await addVideosToGame(gameResult.game_id, [videoRef]);
       }
     }
-
-    // Step E: Activate game (validates R2, backfills FPS, flips to 'ready').
-    await activateGame(gameResult.game_id);
-    activated = true;
 
     useQuestStore.getState().fetchProgress({ force: true });
     import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
