@@ -114,13 +114,23 @@ describe('ClipScrubRegion playhead (T8720)', () => {
     expect(playheadLeftPercent()).toBeCloseTo(70, 1);
   });
 
-  it('no longer renders a per-editor Preview button (T8760 single play control)', () => {
-    // T8760 item 5: the small in-editor play/preview button is gone — the main
-    // transport bar is the single playback control.
+  it('does not render a Preview button in the fullscreen editor (T8760 single play control)', () => {
+    // T8760 item 5: in the fullscreen edit overlay (clipEditorActive), the small
+    // in-editor play/preview button stays gone — the main transport bar is the
+    // single playback control there.
     const controller = makeController(100);
-    render(<ClipScrubRegion {...baseProps(controller)} />);
+    render(<ClipScrubRegion {...baseProps(controller)} clipEditorActive existingClip={{ id: 1, startTime: 98, endTime: 104 }} />);
     expect(screen.queryByTitle('Preview clip')).toBeNull();
     expect(screen.queryByTitle('Stop preview')).toBeNull();
+  });
+
+  it('renders a Preview button in the sidebar, where there is no main transport (T8780)', () => {
+    // T8780: the clips-sidebar ClipDetailsEditor instance (clipEditorActive
+    // false, the baseProps default) has no main transport of its own, so it
+    // keeps its own Preview control to play back just this clip's span.
+    const controller = makeController(100);
+    render(<ClipScrubRegion {...baseProps(controller)} />);
+    expect(screen.getByTitle('Preview clip')).toBeTruthy();
   });
 
   it('keeps the playhead visible after playback stops (symptom 1)', () => {

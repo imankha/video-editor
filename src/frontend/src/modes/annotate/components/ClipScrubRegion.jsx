@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { Play, Square } from 'lucide-react';
 
 const WINDOW_BEFORE = 30; // seconds before anchor
 const WINDOW_AFTER = 30;  // seconds after anchor
@@ -20,16 +21,20 @@ function formatTime(seconds) {
  * the clip point with draggable start/end handles. Dragging a handle seeks the
  * video to that frame for real-time visual feedback.
  *
- * T8760: the single playback control while editing is the MAIN transport bar
- * (play/pause + spacebar). This component no longer renders its own Preview
- * button — instead, while a clip is open for EDITING, the playhead-follow loop
- * below constrains playback to the clip's [start, end] region and loops back to
- * the start when it runs past the end. That looping is scoped structurally to
- * this component being mounted (it is only mounted while the clip editor is
- * open), so normal game scrubbing/playback outside clip-edit mode is never
- * affected. All the clip-scoped behaviors here are gated on `existingClip`
- * (edit mode); create mode (placing a NEW play) keeps the wide game-context
- * window and unconstrained playback.
+ * T8760: the single playback control while EDITING (clipEditorActive) is the
+ * MAIN transport bar (play/pause + spacebar) — the fullscreen overlay renders
+ * no Preview button; instead the playhead-follow loop below constrains
+ * playback to the clip's [start, end] region and loops back to the start when
+ * it runs past the end. That looping is scoped structurally to this component
+ * being mounted (it is only mounted while the clip editor is open), so normal
+ * game scrubbing/playback outside clip-edit mode is never affected. All the
+ * clip-scoped behaviors here are gated on `existingClip` (edit mode); create
+ * mode (placing a NEW play) keeps the wide game-context window and
+ * unconstrained playback.
+ *
+ * T8780: the sidebar's ClipDetailsEditor instance (clipEditorActive false) has
+ * no main transport of its own, so it keeps a Preview button that seeks to
+ * startTime, plays, and loops back at endTime.
  *
  * @param {number} currentTime - The "Add Clip" point (playhead time when paused)
  * @param {number} videoDuration - Total video duration in seconds
@@ -64,6 +69,12 @@ export function ClipScrubRegion({
 }) {
   const trackRef = useRef(null);
   const [dragging, setDragging] = useState(null); // 'start' | 'end' | null
+  // T8780: restored for the sidebar (clipEditorActive=false) only -- the
+  // fullscreen edit overlay still relies on the single main-transport control
+  // + clip-scoped auto-loop (T8760), but the sidebar has no other way to play
+  // back just this clip's [start, end] span.
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const previewRafRef = useRef(null);
   // T8720: the playhead marker mirrors the video's ACTUAL current time, so it
   // is always visible (even when stopped) and tracks playback identically no
   // matter how it was started — the transport play/pause button or the spacebar.
@@ -150,6 +161,16 @@ export function ClipScrubRegion({
   useEffect(() => { onDragStartRef.current = onDragStart; }, [onDragStart]);
   useEffect(() => { onDragEndRef.current = onDragEnd; }, [onDragEnd]);
 
+  // Stop preview helper (must be defined before handlePointerDown which references it)
+  const stopPreview = useCallback(() => {
+    videoController?.pause();
+    setIsPreviewing(false);
+    if (previewRafRef.current) {
+      cancelAnimationFrame(previewRafRef.current);
+      previewRafRef.current = null;
+    }
+  }, [videoController]);
+
   // Handle pointer down on a handle
   const handlePointerDown = useCallback((handle, e) => {
     e.preventDefault();
@@ -157,6 +178,10 @@ export function ClipScrubRegion({
     // Pause video when user starts dragging (prevents playback fighting with drag preview)
     if (videoController && !videoController.isPaused()) {
       videoController.pause();
+    }
+    // Stop any running preview when the user starts dragging
+    if (isPreviewing) {
+      stopPreview();
     }
     // Calculate offset: where the user clicked vs where the handle center is
     const clickTime = pixelToTime(e.clientX);
@@ -170,7 +195,7 @@ export function ClipScrubRegion({
     draggingRef.current = handle;
     setDragging(handle);
     e.target.setPointerCapture(e.pointerId);
-  }, [pixelToTime, videoController]);
+  }, [isPreviewing, stopPreview, pixelToTime, videoController]);
 
   // Handle pointer move — reads everything from refs, never stale
   const handlePointerMove = useCallback((e) => {
@@ -222,6 +247,53 @@ export function ClipScrubRegion({
       window.removeEventListener('pointerup', onUp);
     };
   }, [handlePointerMove, handlePointerUp]);
+
+  // T8780: Preview play — sidebar only (clipEditorActive false). Loops
+  // [startTime, endTime] with its own RAF, independent of the edit-mode
+  // auto-loop below (which only fires when clipEditorActive && existingClip).
+  const handlePreviewPlay = useCallback(() => {
+    if (!videoController) return;
+
+    if (isPreviewing) {
+      stopPreview();
+      return;
+    }
+
+    videoController.seek(startTime);
+    videoController.play();
+    setIsPreviewing(true);
+
+    const tick = () => {
+      const s = startTimeRef.current;
+      const e = endTimeRef.current;
+
+      if (videoController.isPaused() && previewRafRef.current) {
+        // Video was paused externally — stop the loop. The playhead keeps
+        // showing the paused position via the sync effect below.
+        setIsPreviewing(false);
+        previewRafRef.current = null;
+        return;
+      }
+
+      if (videoController.getCurrentTime() >= e) {
+        // Loop back to start
+        videoController.seek(s);
+      }
+
+      previewRafRef.current = requestAnimationFrame(tick);
+    };
+    previewRafRef.current = requestAnimationFrame(tick);
+  }, [videoController, startTime, isPreviewing, stopPreview]);
+
+  // Cleanup preview on unmount — only pause if a preview was actively running
+  useEffect(() => {
+    return () => {
+      if (previewRafRef.current) {
+        cancelAnimationFrame(previewRafRef.current);
+        videoController?.pause();
+      }
+    };
+  }, [videoController]);
 
   // T8720 + T8760: keep the playhead marker locked to the video's real current
   // time, AND (edit mode only) enforce clip-scoped looping. A single RAF runs
@@ -371,7 +443,27 @@ export function ClipScrubRegion({
           {' '}&rarr;{' '}
           <span className="font-mono text-white">{formatTime(endTime)}</span>
         </div>
-        <span className="text-sm font-mono text-gray-400">{clipDuration.toFixed(1)}s</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-mono text-gray-400">{clipDuration.toFixed(1)}s</span>
+          {/* T8780: preview button restored for the sidebar only. The fullscreen
+              edit overlay (clipEditorActive) intentionally has no button here --
+              its single main-transport control auto-loops the clip instead
+              (T8760). The sidebar has no such control, so this is the only way
+              to play back just this clip's span from here. */}
+          {!clipEditorActive && (
+            <button
+              onClick={handlePreviewPlay}
+              className="p-1.5 rounded-lg hover:bg-gray-700 transition-colors"
+              title={isPreviewing ? 'Stop preview' : 'Preview clip'}
+            >
+              {isPreviewing ? (
+                <Square size={16} className="text-red-400" />
+              ) : (
+                <Play size={16} className="text-green-400" />
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Timeline track */}
