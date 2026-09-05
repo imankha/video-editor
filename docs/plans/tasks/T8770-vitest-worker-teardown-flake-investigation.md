@@ -1,6 +1,6 @@
 # T8770: Investigate + fix the recurring vitest-worker RPC-teardown CI flake
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-04
