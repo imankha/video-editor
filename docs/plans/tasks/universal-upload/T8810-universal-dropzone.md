@@ -1,6 +1,6 @@
 # T8810: Universal dropzone replaces Per Game / Per Half
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-09-05
