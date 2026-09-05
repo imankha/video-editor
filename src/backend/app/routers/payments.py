@@ -19,6 +19,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from ..analytics import decrement_total_spent, increment_total_spent, record_milestone
+from ..services.auth_db import get_user_by_id
 from ..services.credit_ledger import CreditsUnavailable, credit_key, grant, has_processed_payment
 from ..services.user_db import get_stripe_customer_id, set_stripe_customer_id
 from ..user_context import get_current_user_id
@@ -124,6 +125,24 @@ def _get_or_create_customer(user_id: str) -> str:
     return customer_id
 
 
+def _receipt_email_for(user_id: str) -> str | None:
+    """Look up the user's account email server-side for Stripe's receipt_email.
+
+    Never sourced from the client -- a client-supplied email could redirect a
+    payment receipt (and the identity trail it carries) to an address the
+    payer doesn't control.
+    """
+    user = get_user_by_id(user_id)
+    if not user:
+        # users.email is NOT NULL and sessions FK-reference users, so an
+        # authenticated request with no users row should be unreachable in
+        # prod (dev X-User-ID bypass aside). Log it -- this silently produces
+        # exactly the receipt-less charge this task exists to prevent.
+        logger.warning(f"[Payments] No users row for {user_id}; PaymentIntent will have no receipt_email")
+        return None
+    return user["email"]
+
+
 # ---------------------------------------------------------------------------
 # Checkout endpoint
 # ---------------------------------------------------------------------------
@@ -145,6 +164,7 @@ async def create_checkout(request: CheckoutRequest):
 
     user_id = get_current_user_id()
     customer_id = _get_or_create_customer(user_id)
+    receipt_email = _receipt_email_for(user_id)
 
     session = stripe.checkout.Session.create(
         customer=customer_id,
@@ -164,6 +184,7 @@ async def create_checkout(request: CheckoutRequest):
             "pack": request.pack,
             "credits": str(pack["credits"]),
         },
+        payment_intent_data={"receipt_email": receipt_email},
         success_url=f"{FRONTEND_URL}?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{FRONTEND_URL}?payment=cancelled",
     )
@@ -193,12 +214,14 @@ async def create_payment_intent(request: CreateIntentRequest):
 
     user_id = get_current_user_id()
     customer_id = _get_or_create_customer(user_id)
+    receipt_email = _receipt_email_for(user_id)
 
     try:
         intent = stripe.PaymentIntent.create(
             amount=pack["price_cents"],
             currency="usd",
             customer=customer_id,
+            receipt_email=receipt_email,
             metadata={
                 "user_id": user_id,
                 "pack": request.pack,
