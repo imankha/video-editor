@@ -13,10 +13,10 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
  * naming ACs below; T8555 split the old combined "Highlights" tab into "In
  * Progress Reels" (in-progress multiclip drafts) and "Published" (published reels)):
  *   AC1 In Progress Clips tab (Home) shows ONLY is_auto_created===true projects,
- *       never a multi-clip "N clips" badge, no New Highlight Reel button here
+ *       never a multi-clip "N clips" badge, no Build New Reel button here
  *   AC2 In Progress Reels tab shows ONLY is_auto_created===false projects
  *       (in-progress multiclip drafts); Published tab shows the published reels
- *   AC3 New Highlight Reel button lives on the In Progress Reels tab, not on the
+ *   AC3 Build New Reel button lives on the In Progress Reels tab, not on the
  *       In Progress Clips tab
  *   AC4 no surface renders stale "Reel Drafts" terminology
  *   AC5 responsive (375px mobile + desktop) — no horizontal overflow on either surface
@@ -55,8 +55,8 @@ test('AC1/AC3/AC4: In Progress Clips tab shows only single-clip auto-drafts, no 
   await expect(tab).toBeVisible();
   // AC4: no stale "Reel Drafts" copy anywhere on this tab.
   await expect(page.locator('body')).not.toContainText('Reel Drafts');
-  // AC3: New Highlight Reel does not live on the In Progress Clips tab.
-  await expect(page.getByRole('button', { name: 'New Highlight Reel' })).toHaveCount(0);
+  // AC3: Build New Reel does not live on the In Progress Clips tab.
+  await expect(page.getByRole('button', { name: 'Build New Reel' })).toHaveCount(0);
 
   if (autoDrafts.length === 0 && !hasClips) {
     // Real, provable state for a fully empty account: the dead-end guard must
@@ -86,7 +86,7 @@ test('AC1/AC3/AC4: In Progress Clips tab shows only single-clip auto-drafts, no 
   await responsiveSweep(page);
 });
 
-test('AC2/AC3/AC4: In Progress Reels tab shows in-progress multiclip drafts, with the New Highlight Reel button', async ({ page }) => {
+test('AC2/AC3/AC4: In Progress Reels tab shows in-progress multiclip drafts, with the Build New Reel button', async ({ page }) => {
   await page.goto('/home/reels-in-progress');
   await waitForAppReady(page, { ready: page.getByTestId('in-progress-reels-tab-panel') });
 
@@ -99,8 +99,8 @@ test('AC2/AC3/AC4: In Progress Reels tab shows in-progress multiclip drafts, wit
   const panel = page.getByTestId('in-progress-reels-tab-panel');
   await expect(panel).toBeVisible({ timeout: 10000 });
 
-  // AC3: the relocated New Highlight Reel button lives on the In Progress Reels tab.
-  await expect(page.getByRole('button', { name: 'New Highlight Reel' })).toBeVisible();
+  // AC3: the relocated Build New Reel button lives on the In Progress Reels tab.
+  await expect(page.getByRole('button', { name: 'Build New Reel' })).toBeVisible();
   // AC4: no stale "Reel Drafts" copy on this surface either.
   await expect(panel).not.toContainText('Reel Drafts');
 

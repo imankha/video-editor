@@ -175,7 +175,7 @@ describe('T8555: In Progress Reels tab shows ONLY unpublished multiclip drafts',
     useGalleryStore.setState({ isOpen: false });
   });
 
-  it('shows highlightDrafts (is_auto_created === false) and the New Highlight Reel button, no published content', () => {
+  it('shows highlightDrafts (is_auto_created === false) and the Build New Reel button, no published content', () => {
     renderManager({
       projects: [multiclipDraft(1, 'My Multiclip Draft'), singleclipDraft(2, 'My Single Clip')],
     });
@@ -189,9 +189,10 @@ describe('T8555: In Progress Reels tab shows ONLY unpublished multiclip drafts',
     expect(screen.queryByText('My Single Clip')).toBeNull();
 
     // The assembly button lives inline on this tab now (moved out of
-    // DownloadsPanel per the design's mechanical-move decision), with the
-    // gate-approved copy "New Highlight Reel" (not "Create Highlight Reel").
-    expect(screen.getByRole('button', { name: 'New Highlight Reel' })).toBeTruthy();
+    // DownloadsPanel per the design's mechanical-move decision). T8780
+    // renamed it to "Build New Reel" -- "Highlight Reel" is reserved for
+    // published reels elsewhere in the app (displayNames.js).
+    expect(screen.getByRole('button', { name: 'Build New Reel' })).toBeTruthy();
 
     // No published-gallery content (ConfidenceBanner / CollectionsTab /
     // published-tab-panel testid) leaks into this tab's body. (dataset.active,
@@ -200,13 +201,18 @@ describe('T8555: In Progress Reels tab shows ONLY unpublished multiclip drafts',
     expect(screen.queryByTestId('published-tab-panel')?.dataset.active).not.toBe('true');
   });
 
-  it('empty state shows "No reels in progress" + New Highlight Reel copy when there are no multiclip drafts', () => {
+  it('empty state shows "No reels in progress" + Build New Reel copy, button below the message', () => {
     renderManager({ projects: [singleclipDraft(2)] });
 
     fireEvent.click(inProgressReelsTab());
 
-    expect(screen.getByText(/No reels in progress/i)).toBeTruthy();
-    expect(screen.getByText(/New Highlight Reel/i)).toBeTruthy();
+    const message = screen.getByText(/No reels in progress/i);
+    const button = screen.getByRole('button', { name: /Build New Reel/i });
+    expect(message).toBeTruthy();
+    expect(button).toBeTruthy();
+    // T8780: empty-state message resolves into its own action below it,
+    // matching the Published tab's empty-state order.
+    expect(message.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByTestId('draft-tile')).toBeNull();
   });
 });

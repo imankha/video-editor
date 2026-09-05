@@ -521,7 +521,7 @@ async function navigateToProjectManager(page) {
   // moved to the In Progress Reels tab (was a top-right icon button opening a drawer;
   // now a peer tab alongside Games/Clips). Switch to it to reach it, instead
   // of the Reel Drafts/Clips tab.
-  const newProjectButton = page.locator('button:has-text("New Highlight Reel")');
+  const newProjectButton = page.locator('button:has-text("Build New Reel")');
   if (await newProjectButton.isVisible().catch(() => false)) {
     return; // Already on the In Progress Reels tab
   }
@@ -648,7 +648,7 @@ async function ensureAnnotateModeWithClips(page) {
 
   if (!clipsSaved) {
     // T7790: fail FAST and accurately here instead of continuing. Previously this
-    // only warned, so a downstream step (e.g. clicking a "New Highlight Reel" button that
+    // only warned, so a downstream step (e.g. clicking a "Build New Reel" button that
     // clipsTabDisabled correctly disables when 0 clips exist) hung until the hard
     // 5-minute cap. The clip-save race this guarded is now fixed at the source
     // (importAnnotationsWithRawClips waits for the in-flight upload's game id), so a
@@ -919,7 +919,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   await page.waitForTimeout(500);
 
   // Click New Project to open the modal
-  await page.locator('button:has-text("New Highlight Reel")').click();
+  await page.locator('button:has-text("Build New Reel")').click();
   await page.waitForTimeout(500);
 
   // Wait for clips to load in the modal (should show clip buttons or "No clips" message)
@@ -1260,7 +1260,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForTimeout(500);
 
     // Create project from clips
-    await page.locator('button:has-text("New Highlight Reel")').click();
+    await page.locator('button:has-text("Build New Reel")').click();
     await page.waitForTimeout(500);
 
     // The "Create Project from Clips" modal should now show clips
@@ -1316,7 +1316,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForTimeout(500);
 
     // Create project from clips
-    await page.locator('button:has-text("New Highlight Reel")').click();
+    await page.locator('button:has-text("Build New Reel")').click();
     await page.waitForTimeout(500);
 
     // The "Create Project from Clips" modal should now show clips
@@ -1361,7 +1361,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForTimeout(500);
 
     // Create project from clips
-    await page.locator('button:has-text("New Highlight Reel")').click();
+    await page.locator('button:has-text("Build New Reel")').click();
     await page.waitForTimeout(500);
 
     // The "Create Project from Clips" modal should now show clips
@@ -1504,7 +1504,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(500);
 
     // Click New Project to open the Create Project from Clips modal
-    await page.locator('button:has-text("New Highlight Reel")').click();
+    await page.locator('button:has-text("Build New Reel")').click();
     await page.waitForTimeout(500);
 
     // Modal should show clips from library
@@ -1666,7 +1666,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(1000);
 
     // Verify we're at project manager
-    await expect(page.locator('button:has-text("New Highlight Reel")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('button:has-text("Build New Reel")')).toBeVisible({ timeout: 5000 });
 
     // Re-open the same project
     const projectCard = page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ clip/i') }).first();
@@ -1958,7 +1958,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(1000);
 
     // Verify we're at project manager
-    await expect(page.locator('button:has-text("New Highlight Reel")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('button:has-text("Build New Reel")')).toBeVisible({ timeout: 5000 });
 
     // STEP 5: Reload the same project
     console.log('[Full] Step 5: Reloading project...');
@@ -2175,7 +2175,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(500);
 
     // Click New Project to open the Create Project from Clips modal
-    await page.locator('button:has-text("New Highlight Reel")').click();
+    await page.locator('button:has-text("Build New Reel")').click();
     await page.waitForTimeout(500);
 
     // Modal should show clips from library - create project
