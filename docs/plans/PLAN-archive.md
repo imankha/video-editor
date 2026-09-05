@@ -490,6 +490,12 @@ User ran the full local Playwright suite 2026-08-25 (348 passed / 144 failed / 2
 |------|------|------|------|------|------|------|------|
 | T6370 | [SEO - get the landing pages actually indexed (GSC coverage cleanup + page value)](tasks/T6370-seo-indexing-gsc-cleanup.md) | 6 | 4 | 1.5 | DONE | [ ] | DONE (merged 2026-08-17, ancestor of the 2026-08-19 prod deploy — status was left stale at STAGING until this 2026-08-26 reconciliation caught it). GSC coverage cleanup: soft-404 fix on `app.reelballers.com`, robots/canonical hygiene, template-similarity reduction across the sport-page family, `verify-seo.mjs` invariants. |
 
+## Single-Server Priority (2026-07-18; durability re-escalated 2026-07-24) — First Reel Funnel (walkthrough remediation) — START NEXT
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T8560 | ↳ [Persistent journey stepper (design gate)](tasks/first-reel-funnel/T8560-journey-stepper-design.md) | 7 | 5 | 1.4 | DONE | [ ] | DONE (closed 2026-09-05, zero product code shipped). **RESOLVED 2026-09-03: FOLDED into T7620/T7630, user-approved.** Architect found the stepper is not a second system - it's T7620's already-approved 5-rung goal ladder, unnamed and only half-drawn. Naming the rungs + a full-map view ship inside T7630 as "Round 3" instead. Full rationale: [T8560-design.md](tasks/T8560-design.md). |
+
 ## Completed Tasks — Epic: Auth Integrity (IN_PROGRESS) -- BUG FIX
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
