@@ -89,6 +89,12 @@ KEY_PREFIX = {
     # T8370: pre-cut clip upload batch charge + its Q3 reconciliation refund.
     "clip_upload": "clip_upload",
     "clip_upload_refund": "clip_upload_refund",
+    # T8945: T8700's add_game_videos (attach a video to an existing/in-progress
+    # game) has always called deduct_credits with this source but it was never
+    # registered here -- every real (non-free) attach raised this ValueError as
+    # an unhandled 500. Distinct prefix from game_upload (activate_game's own
+    # source) so the two never collide on the same reference_id shape.
+    "game_video_add": "game_video_add",
 }
 
 

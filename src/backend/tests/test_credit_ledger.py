@@ -39,6 +39,17 @@ class TestCreditKey:
         with pytest.raises(ValueError):
             credit_key("not_a_real_source", "x")
 
+    def test_game_video_add_is_registered(self):
+        """T8945: add_game_videos (games.py, T8700) calls
+        deduct_credits(..., source="game_video_add", ...) but the source was
+        never added to KEY_PREFIX -- credit_key raised ValueError for every
+        real (non-free) video attach, a 500 the client saw as a raw network
+        failure (Failed to fetch) rather than a clean error. This was
+        UNREACHABLE until T8940 fixed uploadMultiVideoGame's activate-ordering
+        bug, which is why it surfaced only now. Distinct prefix from
+        game_upload (activate_game's source) so the two never collide."""
+        assert credit_key("game_video_add", "12:abc123") == "game_video_add:12:abc123"
+
 
 class TestGrant:
     def test_first_grant_creates_row(self, pg_conn):
@@ -256,7 +267,7 @@ class TestReservations:
         assert ok is True
         assert get_balance(USER) == 30  # already deducted at reserve time
         txns = list_transactions(USER)
-        usage = [t for t in txns if t["source"] == "framing_usage"][0]
+        usage = next(t for t in txns if t["source"] == "framing_usage")
         assert usage["amount"] == -20
         assert usage["reference_id"] == "job-1"
 
