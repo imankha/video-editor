@@ -1,6 +1,6 @@
 # T8930: Game Type defaults to Unknown, not Home
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 1
 **Created:** 2026-09-05
