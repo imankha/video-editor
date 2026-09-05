@@ -22,6 +22,23 @@ export const SECTION_NAMES = {
   LIBRARY: 'Highlight Reels',
 };
 
+// T8380: direct clip upload ("Add Video") on the In Progress Clips tab. A
+// separate group from SECTION_NAMES (tab labels) -- this is the upload GESTURE
+// plus its one-time consequence notice. "New Clip" (T8130) stays reserved; the
+// user chose "Add Video" for this direct-upload entry point. The notice copy was
+// user-approved 2026-09-05 (softened from an absolute "can't" claim; the "add to
+// a Game instead" pointer was dropped for a terser notice).
+export const CLIP_UPLOAD = {
+  ADD_VIDEO: 'Add Video',
+  NOTICE_TITLE: 'Heads up: these clips won’t be linked to a game',
+  NOTICE_BODY:
+    'Uploading here adds videos straight to your clips, ready to Focus and publish. '
+    + 'Because they don’t come from a game in Annotate, they won’t be part of a '
+    + 'game you can build more highlights from.',
+  NOTICE_CONTINUE: 'Continue',
+  NOTICE_CANCEL: 'Cancel',
+};
+
 // T8390: Focus's post-export publish-exit action bar (FocusPublishActionBar).
 export const FOCUS_PUBLISH = {
   PUBLISH_LABEL: 'Publish',
