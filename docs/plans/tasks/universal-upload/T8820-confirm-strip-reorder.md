@@ -1,6 +1,6 @@
 # T8820: Confirm strip + reorder editor
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-05
