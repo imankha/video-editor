@@ -1,6 +1,6 @@
 # T8400: Publishing lands the user on the reel they just made (guided-path R4)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-02
