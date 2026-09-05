@@ -1,10 +1,10 @@
 # T8920: Heartbeat Must Require Real User Interaction, Not Just Tab Visibility
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-05
-**Updated:** 2026-09-05
+**Updated:** 2026-09-05 (merged, PR #342)
 
 ## Problem
 
@@ -78,10 +78,10 @@ feeds it.
 ## Implementation
 
 ### Steps
-1. [ ] Add throttled interaction listeners (mousemove/keydown/scroll/touchstart) to `useSessionHeartbeat.js` tracking a `lastInteractionRef` timestamp
-2. [ ] Gate `sendHeartbeat` and the visibility-regain call in `onVisibilityChange` on `Date.now() - lastInteractionRef.current < INTERACTION_WINDOW_MS`
-3. [ ] Write `useSessionHeartbeat.test.js` covering the gated and un-gated paths
-4. [ ] Update `.claude/knowledge/backend-services.md`'s T5660 note to reflect the interaction gate
+1. [x] Add throttled interaction listeners (mousemove/keydown/scroll/touchstart) to `useSessionHeartbeat.js` tracking a `lastInteractionRef` timestamp
+2. [x] Gate `sendHeartbeat` and the visibility-regain call in `onVisibilityChange` on `Date.now() - lastInteractionRef.current < INTERACTION_WINDOW_MS`
+3. [x] Write `useSessionHeartbeat.test.js` covering the gated and un-gated paths
+4. [x] Update `.claude/knowledge/backend-services.md`'s T5660 note to reflect the interaction gate
 
 ### Progress Log
 
@@ -89,13 +89,27 @@ feeds it.
 vasima.imran42@gmail.com's ~3h dashboard reading to a 2h14m idle-but-visible-tab stretch during
 a slow game upload, fully counted as engaged time.
 
+**2026-09-05**: Implemented in container worker (`feature/T8920-heartbeat-idle-detection`).
+`lastInteractionRef` + `INTERACTION_WINDOW_MS = 90_000`, throttled to 1/s, gates both the
+interval tick and the visibility-regain call (which reuses `sendHeartbeat` directly, so the
+gate applies to both call sites for free). Mount stamps the ref so the first heartbeat isn't
+withheld. Tab-close beacon left ungated on purpose. 6 new unit tests; supervisor produced an
+independent red->green proof by reverting the hook to pre-fix source (2/6 tests fail: the two
+gate-behavior tests) and restoring it (6/6 pass). Reviewer approved (0 blocking/major, 2
+cosmetic minors). Branch CI green (frontend job; backend job correctly skipped, no backend
+files touched). Merged to master via PR #342.
+
 ## Acceptance Criteria
 
-- [ ] Heartbeat (both the interval tick and the visibility-regain call) only fires when the user
+- [x] Heartbeat (both the interval tick and the visibility-regain call) only fires when the user
       interacted within the last ~90s
-- [ ] A tab left open and visible but untouched for >30 min correctly closes its session (i.e.
-      `is_new_session` trips on the next real interaction) instead of extending indefinitely
-- [ ] Existing backend tests (`test_analytics.py::TestHeartbeatGapCap` etc.) still pass unchanged
-- [ ] New frontend unit tests for the interaction gate pass
+- [x] A tab left open and visible but untouched for >30 min correctly closes its session (i.e.
+      `is_new_session` trips on the next real interaction) instead of extending indefinitely —
+      proven at the unit level (gate withholds the heartbeat); not yet observed against a live
+      Postgres session
+- [x] Existing backend tests (`test_analytics.py::TestHeartbeatGapCap` etc.) still pass unchanged
+      (no backend files touched by this task)
+- [x] New frontend unit tests for the interaction gate pass
 - [ ] Manually verify: leave a tab open+idle past 30 min, confirm the admin panel's Usage figure
-      for a test account stops growing during the idle stretch
+      for a test account stops growing during the idle stretch — **not yet done**, needs a real
+      staging session; flagged by the worker as out of reach for an automated test
