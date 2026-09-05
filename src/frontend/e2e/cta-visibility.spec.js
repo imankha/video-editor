@@ -82,7 +82,9 @@ for (const vp of CTA_VIEWPORTS) {
       await openTab(page, /^Games/);
       await page.getByRole('button', { name: 'Add Game', exact: true }).first().click();
 
-      const form = page.locator('form:has([data-testid="game-details-disclosure"])');
+      // T8955 removed the "More options" disclosure this used to anchor on;
+      // the dropzone heading is a stable, always-present anchor instead.
+      const form = page.locator('form:has-text("Drop your whole game here")');
       await form.waitFor({ state: 'visible', timeout: 15000 });
       const submit = form.locator('button[type="submit"]');
       const dropzone = form.locator('[role="button"]').first();

@@ -75,25 +75,24 @@ describe('GameDetailsModal — T8500 video-first', () => {
     expect(screen.getByText(/Balance:\s*88/)).toBeTruthy();
   });
 
-  it('renders the More options disclosure closed by default in create mode', () => {
+  it('T8955: has no "More options" disclosure at all — Game Type is always visible', () => {
     renderModal();
-    const details = screen.getByTestId('game-details-disclosure');
-    expect(details.open).toBe(false);
-    // T8700: the advanced create-time settings (game type, tournament, video
-    // format) stay collapsed; the summary is now the neutral "More options".
-    expect(screen.getByText('More options')).toBeTruthy();
+    // The collapsed disclosure is gone outright, not just defaulted-open.
+    expect(screen.queryByTestId('game-details-disclosure')).toBeNull();
+    expect(screen.queryByText('More options')).toBeNull();
+    // Game Type's four buttons are reachable with zero interaction.
+    expect(screen.getByRole('button', { name: 'Unknown' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Home' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Away' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tournament' })).toBeTruthy();
   });
 
-  it('surfaces Opponent + Date as first-class fields OUTSIDE the collapsed disclosure (T8700)', () => {
+  it('surfaces Opponent + Date as first-class fields (T8700)', () => {
     const { container } = renderModal();
-    // Opponent input (its placeholder) and the date input are reachable without
-    // ever opening the "More options" disclosure — they read as wanted, not skippable.
+    // Opponent input (its placeholder) and the date input are reachable with
+    // zero interaction — they read as wanted, not skippable.
     expect(screen.getByPlaceholderText('e.g., Carlsbad SC')).toBeTruthy();
     expect(container.querySelector('input[type="date"]')).toBeTruthy();
-    // And they are not descendants of the collapsed disclosure.
-    const details = screen.getByTestId('game-details-disclosure');
-    expect(details.contains(screen.getByPlaceholderText('e.g., Carlsbad SC'))).toBe(false);
-    expect(details.contains(container.querySelector('input[type="date"]'))).toBe(false);
   });
 
   it('disables submit until a file is selected, then enables it with zero typing', () => {
@@ -115,7 +114,7 @@ describe('GameDetailsModal — T8500 video-first', () => {
     await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
     // T8810: uniform ordered list — a single file is a 1-element list, no videoMode.
     // T8930: Game Type defaults to Unknown (never a silently-assumed Home) unless the
-    // user opens "More options" and picks one.
+    // user picks one of the always-visible buttons (T8955 removed the disclosure).
     expect(onCreateGame).toHaveBeenCalledWith({
       opponentName: 'Unnamed opponent',
       gameDate: localTodayISO(),
@@ -130,7 +129,6 @@ describe('GameDetailsModal — T8500 video-first', () => {
     const { container } = renderModal({ onCreateGame });
 
     pickFile(container);
-    fireEvent.click(screen.getByTestId('game-details-disclosure').querySelector('summary'));
     fireEvent.change(screen.getByPlaceholderText('e.g., Carlsbad SC'), {
       target: { value: 'Carlsbad SC' },
     });
