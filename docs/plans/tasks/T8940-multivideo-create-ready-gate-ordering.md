@@ -1,6 +1,6 @@
 # T8940: Multi-video game creation always failed on the 2nd file ("Videos can only be added to a ready game")
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 2
 **Created:** 2026-09-05
