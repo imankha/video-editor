@@ -56,12 +56,12 @@ approach was wrong.
 ## Acceptance Criteria
 
 - [x] Root cause or reliable mitigation confirmed (not guessed) via a synthetic local repro
-- [ ] Fix applied and verified against several real CI runs with zero regressions (a
-      deliberately-failing test in the same run must still fail CI) — **1 green CI run so
-      far (PR #341's own Branch CI run, 2026-09-05); needs several more before this is
-      fully satisfied**
-- [x] known-failures.md row 30 retired (or narrowed) once confirmed fixed — narrowed with
-      a "fix applied" note; full retirement still pending the CI-run evidence above
+- [x] Fix applied and verified against several real CI runs with zero regressions (a
+      deliberately-failing test in the same run must still fail CI) — 3 green post-fix
+      runs of the frontend/unit-test job confirmed: PR #341's own Branch CI, plus two
+      full-suite Master CI runs on master (`e6a3a246`, `435ab05f`) — zero recurrences
+- [x] known-failures.md row 30 retired (or narrowed) once confirmed fixed — **fully
+      retired 2026-09-05** (row deleted, not just narrowed)
 
 ## Resolution (2026-09-05)
 
@@ -74,8 +74,13 @@ leaving every other unhandled error (including a deliberate in-test failure) una
 Proven via a synthetic repro kept as a permanent regression guard
 (`src/frontend/test/flake-repro/`): control (no filter) = exit 1, deliberate failure +
 filter = exit 1, teardown-rpc + filter = exit 0, genuine rejection + filter = exit 1.
-Reviewer approved (0 blocking/major). Branch CI green.
+Reviewer approved (0 blocking/major).
 
-**Still open**: this task's own bar for full retirement is "several real CI runs" — only
-one has run so far. Re-check `known-failures.md` row 30 after a handful of ordinary
-pushes/master-CI runs accumulate and either retire the row fully or note any recurrence.
+**CI confirmation (2026-09-05, same day):** 3 real post-merge runs of the affected job, all
+green, zero recurrence of the flake: PR #341 Branch CI (frontend job); Master CI at
+`e6a3a246` (full suite); Master CI at `435ab05f` (full suite — this run's overall
+`failure` conclusion was an unrelated pre-existing backend flake,
+`test_background_sync.py::test_5_rapid_deletes_under_250ms`, already documented as
+CI-load-sensitive timing noise, not touched by this task). `docs/testing/known-failures.md`
+row fully retired (deleted, per the doc's own "delete the row when fixed" rule) rather than
+left narrowed. Task complete.
