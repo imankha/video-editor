@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { execSync } from 'child_process'
 import { resolve } from 'path'
 import { fileURLToPath } from 'url'
+import { onUnhandledError } from './vitest.onUnhandledError.js'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
@@ -135,6 +136,13 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     exclude: ['**/node_modules/**', '**/e2e/**', '**/tests/perf/**'],
+    // T8770: drop ONLY the Vitest worker-pool RPC teardown flake (a post-run
+    // unhandled rejection that reddened otherwise-100%-passing CI runs). This
+    // per-error filter runs before the error reaches the exit-code path, so
+    // genuine failures — assertion failures AND other unhandled rejections —
+    // still fail the run. Proven safe by test/flake-repro/. Deliberately NOT
+    // dangerouslyIgnoreUnhandledErrors, which would blanket-suppress real bugs.
+    onUnhandledError,
     // src/version.json is gitignored/build-generated (generate-version.js runs
     // pre-dev/build) and absent on a clean CI checkout. Redirect the import to a
     // committed stub so tests don't depend on that build step having run.
