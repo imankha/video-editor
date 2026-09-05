@@ -104,6 +104,27 @@ describe('useFootageIntake', () => {
     expect(result.current.order.map((i) => i.name)).toEqual(['y.mp4', 'x.mp4']);
   });
 
+  it('setManualOrder clears the time-chain gaps (afterIndex is meaningless once hand-ordered)', async () => {
+    // A real time chain with a halftime gap: seg1 (5 min) then seg2 starting
+    // 20 min later -> a gap after index 0. inferOrder yields confidence "time".
+    const t0 = new Date('2026-09-05T14:00:00');
+    const t1 = new Date('2026-09-05T14:20:00');
+    probeResults.set('seg1.mp4', { duration: 300, creationTime: t0 });
+    probeResults.set('seg2.mp4', { duration: 300, creationTime: t1 });
+    const { result } = renderHook(() => useFootageIntake());
+    await act(async () => {
+      await result.current.addFiles([mkFile('seg1.mp4'), mkFile('seg2.mp4')]);
+    });
+    expect(result.current.confidence).toBe('time');
+    expect(result.current.gaps).toHaveLength(1); // the halftime break
+
+    act(() => {
+      result.current.setManualOrder(['seg2.mp4', 'seg1.mp4']);
+    });
+    // Stale gaps would draw a break connector between the newly-adjacent segments.
+    expect(result.current.gaps).toEqual([]);
+  });
+
   it('removeItem drops an item and recomputes order', async () => {
     probeResults.set('a.mp4', { duration: 5, creationTime: null });
     probeResults.set('b.mp4', { duration: 5, creationTime: null });
