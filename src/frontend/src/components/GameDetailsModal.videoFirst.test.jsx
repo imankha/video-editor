@@ -105,7 +105,7 @@ describe('GameDetailsModal — T8500 video-first', () => {
     expect(submit.disabled).toBe(false);
   });
 
-  it('submits the defaults in the create payload: placeholder opponent, today, Home + a 1-element footage list', async () => {
+  it('submits the defaults in the create payload: placeholder opponent, today, Unknown type + a 1-element footage list', async () => {
     const onCreateGame = vi.fn(() => Promise.resolve());
     const { container } = renderModal({ onCreateGame });
 
@@ -114,10 +114,12 @@ describe('GameDetailsModal — T8500 video-first', () => {
 
     await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
     // T8810: uniform ordered list — a single file is a 1-element list, no videoMode.
+    // T8930: Game Type defaults to Unknown (never a silently-assumed Home) unless the
+    // user opens "More options" and picks one.
     expect(onCreateGame).toHaveBeenCalledWith({
       opponentName: 'Unnamed opponent',
       gameDate: localTodayISO(),
-      gameType: GameType.HOME,
+      gameType: GameType.UNKNOWN,
       tournamentName: null,
       files: [{ file, sequence: 1 }],
     });

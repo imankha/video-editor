@@ -10,7 +10,7 @@ import { useGamesDataStore } from '../stores/gamesDataStore';
 export function EditGameModal({ isOpen, onClose, game }) {
   const [opponentName, setOpponentName] = useState('');
   const [gameDate, setGameDate] = useState('');
-  const [gameType, setGameType] = useState(GameType.HOME);
+  const [gameType, setGameType] = useState(GameType.UNKNOWN);
   const [tournamentName, setTournamentName] = useState('');
   const [existingTournaments, setExistingTournaments] = useState([]);
   const [showTournamentDropdown, setShowTournamentDropdown] = useState(false);
@@ -24,7 +24,7 @@ export function EditGameModal({ isOpen, onClose, game }) {
     if (isOpen && game) {
       setOpponentName(game.opponent_name || '');
       setGameDate(game.game_date || '');
-      setGameType(game.game_type || GameType.HOME);
+      setGameType(game.game_type || GameType.UNKNOWN);
       setTournamentName(game.tournament_name || '');
 
       apiFetch(`${API_BASE}/api/games/tournaments`)
@@ -140,6 +140,7 @@ export function EditGameModal({ isOpen, onClose, game }) {
             </label>
             <div className="flex gap-2">
               {[
+                { value: GameType.UNKNOWN, label: 'Unknown' },
                 { value: GameType.HOME, label: 'Home' },
                 { value: GameType.AWAY, label: 'Away' },
                 { value: GameType.TOURNAMENT, label: 'Tournament' },

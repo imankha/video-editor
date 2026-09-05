@@ -27,7 +27,7 @@ const OPPONENT_PLACEHOLDER = 'Unnamed opponent';
 export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const [opponentName, setOpponentName] = useState('');
   const [gameDate, setGameDate] = useState(localTodayISO);
-  const [gameType, setGameType] = useState(GameType.HOME);
+  const [gameType, setGameType] = useState(GameType.UNKNOWN);
   const [tournamentName, setTournamentName] = useState('');
   const [existingTournaments, setExistingTournaments] = useState([]);
   const [showTournamentDropdown, setShowTournamentDropdown] = useState(false);
@@ -115,7 +115,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const resetForm = useCallback(() => {
     setOpponentName('');
     setGameDate(localTodayISO());
-    setGameType(GameType.HOME);
+    setGameType(GameType.UNKNOWN);
     setTournamentName('');
     setShowTournamentDropdown(false);
     setFootage({ files: [], totalBytes: 0, proxies: {} });
@@ -277,6 +277,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                 </label>
                 <div className="flex gap-2">
                   {[
+                    { value: GameType.UNKNOWN, label: 'Unknown' },
                     { value: GameType.HOME, label: 'Home' },
                     { value: GameType.AWAY, label: 'Away' },
                     { value: GameType.TOURNAMENT, label: 'Tournament' },
