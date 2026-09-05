@@ -1,10 +1,10 @@
 # T8660: Send Stripe receipts (receipt_email on the PaymentIntent)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-03
-**Updated:** 2026-09-03
+**Updated:** 2026-09-05
 
 Epic 5/6. See [EPIC.md](EPIC.md). Independent of the other tasks; can land any time.
 
@@ -59,8 +59,18 @@ Details:
 
 ## Acceptance Criteria
 
-- [ ] `receipt_email` is set on every PaymentIntent we create, sourced server-side
-- [ ] A live test purchase produces a Stripe receipt email
+- [x] `receipt_email` is set on every PaymentIntent we create, sourced server-side
+      (PR #344, merged 2026-09-05: `_receipt_email_for` in payments.py reads
+      Postgres `users.email` for the current session; red->green proof in
+      `test_payments_receipt_email.py`)
+- [ ] A live test purchase produces a Stripe receipt email -- **outstanding, needs a
+      live-mode purchase**; test-mode sends no email so this cannot be automated
 - [ ] The statement descriptor is verified against the receipt and recorded in the task's
-      progress log
-- [ ] No second receipt email is sent by our own mailer
+      progress log -- **outstanding, Stripe dashboard operator step, no code involved**
+- [x] No second receipt email is sent by our own mailer (nothing in this change touches
+      `email.py`/Resend)
+
+**2026-09-05: code shipped to STAGING.** The two outstanding items are manual/operator
+steps (a live-mode purchase and a Stripe dashboard check) that gate calling this task
+DONE, not the merge -- the code-level fix was provably verified (red->green test +
+Branch CI green) before merging.
