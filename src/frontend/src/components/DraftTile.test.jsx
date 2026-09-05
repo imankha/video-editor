@@ -167,10 +167,11 @@ describe('DraftTile (T5672)', () => {
     // "Ready to share" is a status, not a control — no button carries that accessible name.
     expect(screen.queryByRole('button', { name: /^ready to share$/i })).toBeNull();
     expect(screen.getByText('Ready to share')).toBeTruthy();
-    // The primary action reads as an action and names the destination verb.
+    // The primary action's accessible name still carries the full destination, but
+    // its visible label is shortened to "Publish" (matches CollectionPlayer's button).
     const primary = screen.getByRole('button', { name: 'Publish to Highlight Reels' });
     expect(primary).toBeTruthy();
-    expect(primary.textContent).toMatch(/publish to highlight reels/i);
+    expect(primary.textContent).toMatch(/^publish$/i);
   });
 
   it('publishes via the primary button click (records the moved_to_my_reels quest step)', async () => {

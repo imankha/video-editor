@@ -29,7 +29,7 @@ export const DRAFT_STAGE_LABELS = {
   [DRAFT_STAGE.NOT_STARTED]: 'Draft',
   [DRAFT_STAGE.IN_FRAMING]: 'Draft - in Focus',
   [DRAFT_STAGE.IN_OVERLAY]: 'Draft - in Overlay',
-  [DRAFT_STAGE.READY]: 'Ready to share',
+  [DRAFT_STAGE.READY]: 'Ready to Publish',
 };
 
 // Text tint per stage — matches the CollapsibleGroup legend colors so the row

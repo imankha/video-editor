@@ -715,7 +715,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
             className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-semibold tracking-tight bg-cyan-500 text-gray-950 shadow-lg shadow-cyan-500/25 hover:bg-cyan-400 active:scale-[0.98] disabled:opacity-60 transition-all coarse-pointer:min-h-[44px]"
           >
             {isPublishing ? <Loader2 size={14} className="animate-spin" /> : <FolderInput size={14} />}
-            Publish to {SECTION_NAMES.LIBRARY}
+            Publish
           </button>
           {/* Secondary — same footprint as the primary so they pair; outlined rather
               than a translucent slab, so it reads as a button and not as scrim. */}
