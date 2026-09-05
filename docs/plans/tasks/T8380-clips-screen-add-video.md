@@ -16,8 +16,12 @@ naturally look for it. The user named it: an **"Add Video" button on the Clips s
 — now the **"In Progress Clips"** tab (id `projects`, `/home/reels`) after **T8555**
 (SHIPPED) split the home screen into four tabs. That tab holds single-clip in-progress
 work (`is_auto_created === true`) and has NO action button of its own (the assembly
-button "New Highlight Reel" lives on the In Progress Reels tab). Its empty/dead-end
-states assume clips can only be born in Annotate.
+button "Build New Reel" — T8780 renamed from "New Highlight Reel" — lives on the In
+Progress Reels tab). Its empty/dead-end states assume clips can only be born in
+Annotate. **T8780** also added a visible on-screen reason (not a button) beneath the
+tab bar when this tab is disabled, since the existing `title`-attribute tooltip never
+fires on touch — check whether that caption still makes sense once this task inverts
+the disabled guard.
 
 ## IA the tab lives in (T8555, SHIPPED — no longer "in flight")
 
