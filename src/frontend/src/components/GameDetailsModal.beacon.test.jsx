@@ -29,6 +29,23 @@ vi.mock('./shared', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
 
+// Stub the picker so this file tests the MODAL's beacon wiring (onFileSelected ->
+// recordAchievement). The per-path beacon coverage lives in GameFootagePicker.test.
+vi.mock('./GameFootagePicker', () => ({
+  GameFootagePicker: ({ onFootageChange, onFileSelected }) => (
+    <input
+      type="file"
+      data-testid="stub-footage-input"
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        onFileSelected?.();
+        onFootageChange?.({ files: [{ file, sequence: 1 }], totalBytes: file.size, proxies: {} });
+      }}
+    />
+  ),
+}));
+
 import { GameDetailsModal } from './GameDetailsModal';
 
 describe('GameDetailsModal — T7890 upload_file_selected beacon', () => {

@@ -147,7 +147,7 @@ export const useUploadStore = create((set, get) => {
       status: UPLOAD_STATUS.UPLOADING,
       phase: UPLOAD_PHASE.HASHING,
       progress: 0,
-      message: entry.isMultiVideo ? 'Hashing first half...' : 'Computing file hash...',
+      message: entry.isMultiVideo ? 'Hashing video 1...' : 'Computing file hash...',
       // T7820 review: re-stamp at RUN start (not enqueue) so the tile's ETA
       // extrapolation isn't poisoned by queue wait or a retry gap — a queued
       // upload promoted after 20 min would otherwise show hours of ETA.
@@ -228,8 +228,10 @@ export const useUploadStore = create((set, get) => {
         return existing.id;
       }
 
-      const isMultiVideo = Array.isArray(fileOrFiles);
-      const files = isMultiVideo ? fileOrFiles : [fileOrFiles];
+      // T8810: route on file COUNT, not a per-half mode. A 1-element array is a
+      // single-video upload; only 2+ files take the multi-video path.
+      const files = Array.isArray(fileOrFiles) ? fileOrFiles : [fileOrFiles];
+      const isMultiVideo = files.length > 1;
       const primaryFile = files[0];
       const id = `upl_${++_uploadSeq}`;
       const anyActive = get().uploads.some(u => u.status === UPLOAD_STATUS.UPLOADING);
@@ -241,12 +243,12 @@ export const useUploadStore = create((set, get) => {
         status: anyActive ? UPLOAD_STATUS.QUEUED : UPLOAD_STATUS.UPLOADING,
         file: isMultiVideo ? null : primaryFile,
         files: isMultiVideo ? files : null,
-        fileName: isMultiVideo ? `${files[0].name} + ${files[1].name}` : primaryFile.name,
+        fileName: isMultiVideo ? `${files[0].name} + ${files.length - 1} more` : primaryFile.name,
         fileKey,
         fileSize: files.reduce((sum, f) => sum + f.size, 0),
         progress: 0,
         phase: UPLOAD_PHASE.HASHING,
-        message: anyActive ? 'Queued' : (isMultiVideo ? 'Hashing first half...' : 'Computing file hash...'),
+        message: anyActive ? 'Queued' : (isMultiVideo ? 'Hashing video 1...' : 'Computing file hash...'),
         startedAt: new Date().toISOString(),
         gameDetails,
         videoMetadata,

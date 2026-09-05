@@ -1,10 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
-import { X, Upload, Gamepad2, Calendar, MapPin, Trophy, ChevronDown, ChevronRight, Coins } from 'lucide-react';
+import { X, Gamepad2, Calendar, MapPin, Trophy, ChevronDown, ChevronRight, Coins } from 'lucide-react';
 import { Button } from './shared/Button';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 import { toast } from './shared';
-import { GameType, VideoMode } from '../constants/gameConstants';
+import { GameType } from '../constants/gameConstants';
+import { GameFootagePicker } from './GameFootagePicker';
 import { useCreditStore } from '../stores/creditStore';
 import { useQuestStore } from '../stores/questStore';
 import { calculateUploadCost } from '../utils/storageCost';
@@ -30,18 +31,16 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const [tournamentName, setTournamentName] = useState('');
   const [existingTournaments, setExistingTournaments] = useState([]);
   const [showTournamentDropdown, setShowTournamentDropdown] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [videoMode, setVideoMode] = useState(VideoMode.PER_GAME);
-  const [halfFiles, setHalfFiles] = useState([null, null]);
+  // T8810: the universal footage picker reports its plan up here — an ordered,
+  // uniform list ({file, sequence}) whether the user picked one file, many, or a
+  // folder. `pickerKey` remounts the picker (and its useFootageIntake) to reset it.
+  const [footage, setFootage] = useState({ files: [], totalBytes: 0, proxies: {} });
+  const [pickerKey, setPickerKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [draggingHalfIndex, setDraggingHalfIndex] = useState(null);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
-  const fileInputRef = useRef(null);
   const creditBalance = useCreditStore(state => state.balance);
   const creditsLoaded = useCreditStore(state => state.loaded);
   const fetchCredits = useCreditStore(state => state.fetchCredits);
-  const halfFileInputRefs = [useRef(null), useRef(null)];
   const tournamentInputRef = useRef(null);
   const dropdownRef = useRef(null);
 
@@ -90,101 +89,23 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     useQuestStore.getState().recordAchievement('upload_file_selected');
   }, []);
 
-  const handleFileSelect = useCallback((event) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      recordFileSelected();
-    }
-  }, [recordFileSelected]);
-
-  const handleHalfFileSelect = useCallback((index, event) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setHalfFiles(prev => {
-        const updated = [...prev];
-        updated[index] = file;
-        return updated;
-      });
-      recordFileSelected();
-    }
-  }, [recordFileSelected]);
-
-  const ACCEPTED_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'];
-
-  const getVideoFile = useCallback((dataTransfer) => {
-    const file = dataTransfer.files?.[0];
-    if (file && ACCEPTED_VIDEO_TYPES.includes(file.type)) return file;
-    return null;
+  // T8810: the picker owns all selection paths (click, multi, folder pick/drag)
+  // and reports the normalized plan here. Memory-only lift of form state — never a
+  // store/backend write, so the reactive-persistence ban does not apply.
+  const handleFootageChange = useCallback((next) => {
+    setFootage(next);
   }, []);
 
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
-
-  const handleDragEnter = useCallback((e, halfIndex) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (halfIndex !== undefined) {
-      setDraggingHalfIndex(halfIndex);
-    } else {
-      setIsDragging(true);
-    }
-  }, []);
-
-  const handleDragLeave = useCallback((e, halfIndex) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.currentTarget.contains(e.relatedTarget)) return;
-    if (halfIndex !== undefined) {
-      setDraggingHalfIndex(null);
-    } else {
-      setIsDragging(false);
-    }
-  }, []);
-
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    if (isSubmitting) return;
-    const file = getVideoFile(e.dataTransfer);
-    if (file) {
-      setSelectedFile(file);
-      recordFileSelected();
-    }
-  }, [isSubmitting, getVideoFile, recordFileSelected]);
-
-  const handleHalfDrop = useCallback((index, e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDraggingHalfIndex(null);
-    if (isSubmitting) return;
-    const file = getVideoFile(e.dataTransfer);
-    if (file) {
-      setHalfFiles(prev => {
-        const updated = [...prev];
-        updated[index] = file;
-        return updated;
-      });
-      recordFileSelected();
-    }
-  }, [isSubmitting, getVideoFile, recordFileSelected]);
-
-  const hasVideo = videoMode === VideoMode.PER_GAME ? selectedFile : (halfFiles[0] && halfFiles[1]);
   // T8500: only the video gates submit - every metadata field has a default.
-  const isValid = Boolean(hasVideo);
+  // T8810: any number of files ≥1 is valid (single file = 1-element list).
+  const isValid = footage.files.length >= 1;
 
   const uploadCost = useMemo(() => {
-    if (videoMode === VideoMode.PER_GAME && selectedFile) {
-      return calculateUploadCost(selectedFile.size);
-    }
-    if (videoMode === VideoMode.PER_HALF && halfFiles[0] && halfFiles[1]) {
-      return calculateUploadCost(halfFiles[0].size + halfFiles[1].size);
+    if (footage.files.length >= 1) {
+      return calculateUploadCost(footage.totalBytes);
     }
     return null;
-  }, [videoMode, selectedFile, halfFiles]);
+  }, [footage]);
 
   // Cost shown before a file is picked: calculateUploadCost(0) is the 1-credit
   // storage minimum + the auto-export surcharge (= 2 credits today). Once a
@@ -197,27 +118,21 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     setGameType(GameType.HOME);
     setTournamentName('');
     setShowTournamentDropdown(false);
-    setSelectedFile(null);
-    setVideoMode(VideoMode.PER_GAME);
-    setHalfFiles([null, null]);
+    setFootage({ files: [], totalBytes: 0, proxies: {} });
+    setPickerKey(k => k + 1); // remount the picker to clear its intake state
   }, []);
 
   const submitGame = useCallback(async () => {
     setIsSubmitting(true);
     try {
+      // T8810: uniform ordered list — a single file is a 1-element list. No videoMode.
       const gameDetails = {
         opponentName: opponentName.trim() || OPPONENT_PLACEHOLDER,
         gameDate,
         gameType,
         tournamentName: gameType === GameType.TOURNAMENT ? tournamentName.trim() : null,
-        videoMode,
+        files: footage.files,
       };
-
-      if (videoMode === VideoMode.PER_HALF) {
-        gameDetails.files = halfFiles;
-      } else {
-        gameDetails.file = selectedFile;
-      }
 
       await onCreateGame(gameDetails);
       resetForm();
@@ -225,7 +140,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [opponentName, gameDate, gameType, tournamentName, selectedFile, videoMode, halfFiles, onCreateGame, onClose, resetForm]);
+  }, [opponentName, gameDate, gameType, tournamentName, footage, onCreateGame, onClose, resetForm]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -298,108 +213,15 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
             <span className="font-medium text-white">Balance: {creditsLoaded ? creditBalance : '…'}</span>
           </div>
 
-          {/* Game Video */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              {videoMode === VideoMode.PER_HALF ? 'Game Videos *' : 'Game Video *'}
-            </label>
-
-            {videoMode === VideoMode.PER_GAME ? (
-              /* Upload File - Full Game */
-              <div
-                onDragOver={handleDragOver}
-                onDragEnter={(e) => handleDragEnter(e)}
-                onDragLeave={(e) => handleDragLeave(e)}
-                onDrop={handleDrop}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="video/mp4,video/quicktime,video/webm"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                  disabled={isSubmitting}
-                />
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => !isSubmitting && fileInputRef.current?.click()}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
-                  className={`w-full px-4 py-3 border-2 border-dashed rounded-lg transition-colors cursor-pointer ${
-                    isDragging
-                      ? 'border-blue-400 bg-blue-900/30'
-                      : selectedFile
-                        ? 'border-green-500 bg-green-900/20'
-                        : 'border-gray-600 hover:border-gray-500 bg-gray-900/50'
-                  } ${isSubmitting ? 'opacity-50 pointer-events-none' : ''}`}
-                >
-                  {selectedFile ? (
-                    <div className="text-center">
-                      <p className="text-green-400 font-medium truncate">{selectedFile.name}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="text-center text-gray-400">
-                      <Upload size={24} className="mx-auto mb-2" />
-                      <p className="font-medium">{isDragging ? 'Drop video here' : 'Click or drag to upload video'}</p>
-                      <p className="text-xs text-gray-500 mt-1">MP4, MOV, or WebM</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              /* Upload File - Per Half */
-              <div className="grid grid-cols-2 gap-3">
-                {['First Half', 'Second Half'].map((label, index) => (
-                  <div
-                    key={label}
-                    onDragOver={handleDragOver}
-                    onDragEnter={(e) => handleDragEnter(e, index)}
-                    onDragLeave={(e) => handleDragLeave(e, index)}
-                    onDrop={(e) => handleHalfDrop(index, e)}
-                  >
-                    <input
-                      ref={halfFileInputRefs[index]}
-                      type="file"
-                      accept="video/mp4,video/quicktime,video/webm"
-                      onChange={(e) => handleHalfFileSelect(index, e)}
-                      className="hidden"
-                      disabled={isSubmitting}
-                    />
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => !isSubmitting && halfFileInputRefs[index].current?.click()}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); halfFileInputRefs[index].current?.click(); } }}
-                      className={`w-full px-3 py-3 border-2 border-dashed rounded-lg transition-colors cursor-pointer ${
-                        draggingHalfIndex === index
-                          ? 'border-blue-400 bg-blue-900/30'
-                          : halfFiles[index]
-                            ? 'border-green-500 bg-green-900/20'
-                            : 'border-gray-600 hover:border-gray-500 bg-gray-900/50'
-                      } ${isSubmitting ? 'opacity-50 pointer-events-none' : ''}`}
-                    >
-                      {halfFiles[index] ? (
-                        <div className="text-center">
-                          <p className="text-green-400 text-xs font-medium truncate">{halfFiles[index].name}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {(halfFiles[index].size / (1024 * 1024)).toFixed(1)} MB
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="text-center text-gray-400">
-                          <Upload size={18} className="mx-auto mb-1" />
-                          <p className="text-xs font-medium">{draggingHalfIndex === index ? 'Drop here' : label}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* T8810: universal footage picker — one dropzone for a single file, many
+              files, or a whole camera folder. Replaces the old Per Game / Per Half
+              toggle and its twin dropzones. */}
+          <GameFootagePicker
+            key={pickerKey}
+            onFootageChange={handleFootageChange}
+            onFileSelected={recordFileSelected}
+            isSubmitting={isSubmitting}
+          />
 
           {/* T8700: Opponent + Date are surfaced as first-class fields (out of
               the old collapsed "optional" disclosure) — live-testing feedback was
@@ -543,33 +365,6 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                   )}
                 </div>
               )}
-
-              {/* Video Format */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Video Format
-                </label>
-                <div className="flex gap-2">
-                  {[
-                    { value: VideoMode.PER_GAME, label: 'Full Game' },
-                    { value: VideoMode.PER_HALF, label: 'Per Half' },
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setVideoMode(option.value)}
-                      disabled={isSubmitting}
-                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        videoMode === option.value
-                          ? 'bg-green-600 text-white'
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      } disabled:opacity-50`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
 
             </div>
           </details>

@@ -76,7 +76,7 @@ test('quest/help panel does not occlude the Add Game modal at 390x844', async ({
 
   // 2) The dropzone is genuinely hit-testable: elementFromPoint at its center
   //    resolves to a node INSIDE the modal, never a quest-panel node.
-  const dropzone = page.getByText('Click or drag to upload video');
+  const dropzone = page.getByText('Drop your whole game here');
   await expect(dropzone).toBeVisible();
   const box = await dropzone.boundingBox();
   expect(box).not.toBeNull();

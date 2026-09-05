@@ -1017,11 +1017,13 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       const sequence = i + 1;
       const metadata = options.videoMetadataList?.[i] || {};
       const basePercent = i * fileWeight * 100;
-      const halfLabel = fileCount === 2 ? (i === 0 ? 'First Half' : 'Second Half') : `Part ${sequence}`;
+      // T8810: uniform per-video label (was 'First Half'/'Second Half'/'Part N') now
+      // that a game is an ordered N-video list, not a two-half pair.
+      const label = `Video ${sequence} of ${fileCount}`;
 
       const perFileProgress = (progress) => {
         const overallPercent = Math.round(basePercent + progress.percent * fileWeight);
-        notify(progress.phase, overallPercent, `${halfLabel}: ${progress.message}`);
+        notify(progress.phase, overallPercent, `${label}: ${progress.message}`);
       };
 
       // Step A: Hash this file.
@@ -1049,7 +1051,7 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
         videoDuration: metadata.duration || null,
         videoWidth: metadata.width || null,
         videoHeight: metadata.height || null,
-        label: halfLabel,
+        label,
         precomputed: hashResult,
       });
 

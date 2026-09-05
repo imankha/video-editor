@@ -83,8 +83,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // Check on mount if we're loading a game or file or have an active upload, set loading flag to prevent redirect
   useState(() => {
     const pendingDetails = getPendingGameDetails();
-    const hasMultiVideo = pendingDetails?.files?.length > 0;
-    if (hasPendingGame() || getPendingGameFile() || hasMultiVideo || selectActiveUpload(useUploadStore.getState())?.blobUrl) {
+    const hasFootageList = pendingDetails?.files?.length > 0;
+    if (hasPendingGame() || getPendingGameFile() || hasFootageList || selectActiveUpload(useUploadStore.getState())?.blobUrl) {
       isLoadingRef.current = true;
     }
   });
@@ -532,11 +532,12 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   useEffect(() => {
     const pendingFile = getPendingGameFile();
     const pendingDetails = getPendingGameDetails();
-    const hasMultiVideo = pendingDetails?.files?.length > 0;
-    if ((pendingFile || hasMultiVideo) && !annotateVideoUrl) {
+    const hasFootageList = pendingDetails?.files?.length > 0;
+    if ((pendingFile || hasFootageList) && !annotateVideoUrl) {
       isLoadingRef.current = true;
       clearPendingGameFile();
-      // For multi-video, pendingFile is null - handleGameVideoSelect reads files from details
+      // New-game flow: pendingFile is null - handleGameVideoSelect reads the footage
+      // list (files:[{file, sequence}]) from details. Resume flow passes the file.
       handleGameVideoSelect(pendingFile, pendingDetails);
     }
   }, [handleGameVideoSelect, annotateVideoUrl]);

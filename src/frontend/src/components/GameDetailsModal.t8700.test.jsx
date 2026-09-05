@@ -46,6 +46,23 @@ vi.mock('./shared', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
 
+// Stub the picker (T8810): a file input that reports the normalized footage payload
+// up. Keeps these Opponent/Date contract tests independent of intake internals.
+vi.mock('./GameFootagePicker', () => ({
+  GameFootagePicker: ({ onFootageChange, onFileSelected }) => (
+    <input
+      type="file"
+      data-testid="stub-footage-input"
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        onFileSelected?.();
+        onFootageChange?.({ files: [{ file, sequence: 1 }], totalBytes: file.size, proxies: {} });
+      }}
+    />
+  ),
+}));
+
 import { GameDetailsModal } from './GameDetailsModal';
 
 function renderModal(props = {}) {
