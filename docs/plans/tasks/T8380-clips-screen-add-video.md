@@ -1,6 +1,6 @@
 # T8380: "Add Video" button on the Clips screen
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-02
@@ -98,10 +98,10 @@ T8350 (staleness cue) is also done by then, rebase awareness only - different ti
 
 ## Acceptance Criteria
 
-- [ ] ui-designer spec approved (placement, empty states, final copy)
-- [ ] Add Video on the Clips tab uploads one-or-many videos into clips (T8370 flow)
-- [ ] Empty Clips tab shows the two-path story and is REACHABLE for a zero-content
+- [x] ui-designer spec approved (placement, empty states, final copy)
+- [x] Add Video on the Clips tab uploads one-or-many videos into clips (T8370 flow)
+- [x] Empty Clips tab shows the two-path story and is REACHABLE for a zero-content
       account (dead-end guard reworked)
-- [ ] Upload failures surface the standard Retry UX, never a silent loss
-- [ ] `data-tutorial-target` present for the guided path
-- [ ] Tests pass (unit + the new-account e2e)
+- [x] Upload failures surface the standard Retry UX, never a silent loss
+- [x] `data-tutorial-target` present for the guided path
+- [x] Tests pass (unit + the new-account e2e)
