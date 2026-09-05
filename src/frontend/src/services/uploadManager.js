@@ -32,6 +32,36 @@ export const UPLOAD_PHASE = {
 };
 
 /**
+ * T8935: extract a human-readable message from a JSON error body, regardless of which
+ * shape `detail` comes back in — a plain string (most HTTPException raises), a FastAPI/
+ * Pydantic validation-error array (`[{loc, msg, type}, ...]`, e.g. a 422 on a malformed
+ * request body), or an object (the activateGame 402 shape, `{message, required, balance}`).
+ * Without this, `new Error(detail)` on a non-string detail silently stringifies to
+ * "[object Object]" — an unreadable failure toast with no clue what actually went wrong
+ * (root cause of a live-testing report where the actual validation error was lost).
+ */
+function extractErrorMessage(errorBody, fallback) {
+  const detail = errorBody?.detail;
+  if (typeof detail === 'string' && detail) return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail
+      .map(e => (e && typeof e === 'object' && e.msg)
+        ? `${(e.loc || []).join('.')}: ${e.msg}`
+        : String(e))
+      .join('; ');
+  }
+  if (detail && typeof detail === 'object') {
+    if (typeof detail.message === 'string') return detail.message;
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      // fall through to fallback
+    }
+  }
+  return fallback;
+}
+
+/**
  * T8180: is the user right now annotating the game whose upload just failed?
  *
  * The failure-cleanup path fires DELETE /api/games/{id}?only_if_empty=true to remove a
@@ -615,7 +645,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       file_size: uploadSize,
       kind: options.kind,
     });
-    throw new Error(error.detail || `Prepare failed: ${prepareRes.status}`);
+    throw new Error(extractErrorMessage(error, `Prepare failed: ${prepareRes.status}`));
   }
 
   const prepareData = await prepareRes.json();
@@ -769,7 +799,7 @@ export async function uploadClipsBatch(items) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `Clip batch upload failed: ${response.status}`);
+    throw new Error(extractErrorMessage(error, `Clip batch upload failed: ${response.status}`));
   }
 
   return await response.json();
@@ -802,7 +832,7 @@ async function createGame(options, videos, status) {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
-    throw new Error(error.detail || `Create game failed: ${res.status}`);
+    throw new Error(extractErrorMessage(error, `Create game failed: ${res.status}`));
   }
 
   return await res.json();
@@ -819,7 +849,7 @@ async function addVideosToGame(gameId, videos) {
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
-    throw new Error(error.detail || `Add videos failed: ${res.status}`);
+    throw new Error(extractErrorMessage(error, `Add videos failed: ${res.status}`));
   }
   return await res.json();
 }
@@ -845,7 +875,7 @@ async function activateGame(gameId) {
       err.balance = detail.balance;
       throw err;
     }
-    throw new Error(error.detail || `Activate game failed: ${res.status}`);
+    throw new Error(extractErrorMessage(error, `Activate game failed: ${res.status}`));
   }
   return await res.json();
 }
@@ -1170,7 +1200,7 @@ export async function cancelUpload(sessionId) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `Cancel failed: ${response.status}`);
+    throw new Error(extractErrorMessage(error, `Cancel failed: ${response.status}`));
   }
 
   return await response.json();
@@ -1186,7 +1216,7 @@ export async function getDedupeGameUrl(gameId) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `Failed to get URL: ${response.status}`);
+    throw new Error(extractErrorMessage(error, `Failed to get URL: ${response.status}`));
   }
 
   const data = await response.json();
@@ -1204,7 +1234,7 @@ export async function deleteDedupeGame(gameId) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `Delete failed: ${response.status}`);
+    throw new Error(extractErrorMessage(error, `Delete failed: ${response.status}`));
   }
 
   return await response.json();
@@ -1219,7 +1249,7 @@ export async function listDedupeGames() {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `List failed: ${response.status}`);
+    throw new Error(extractErrorMessage(error, `List failed: ${response.status}`));
   }
 
   const data = await response.json();
@@ -1244,7 +1274,7 @@ export async function listPendingUploads() {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        throw new Error(error.detail || `List failed: ${response.status}`);
+        throw new Error(extractErrorMessage(error, `List failed: ${response.status}`));
       }
 
       const data = await response.json();
