@@ -1,6 +1,6 @@
 # T8380: "Add Video" button on the Clips screen
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-02
