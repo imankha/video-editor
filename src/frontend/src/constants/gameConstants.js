@@ -4,6 +4,7 @@
 
 /** Game type indicating venue/context */
 export const GameType = {
+  UNKNOWN: 'unknown',
   HOME: 'home',
   AWAY: 'away',
   TOURNAMENT: 'tournament',
