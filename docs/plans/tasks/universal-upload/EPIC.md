@@ -70,7 +70,7 @@ overrides.)
 
 | ID | Task | Status |
 |----|------|--------|
-| T8800 | [Footage intake logic: probe + order inference](T8800-footage-intake-inference.md) | TODO |
+| T8800 | [Footage intake logic: probe + order inference](T8800-footage-intake-inference.md) | WIP |
 | T8810 | [Universal dropzone replaces Per Game / Per Half](T8810-universal-dropzone.md) | TODO |
 | T8820 | [Confirm strip + reorder editor](T8820-confirm-strip-reorder.md) | TODO |
 | T8830 | [Shrink spike: WebCodecs 8K benchmark (go/no-go)](T8830-shrink-spike-benchmark.md) | TODO |

@@ -1,6 +1,6 @@
 # T8770: Investigate + fix the recurring vitest-worker RPC-teardown CI flake
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-04
@@ -55,7 +55,27 @@ approach was wrong.
 
 ## Acceptance Criteria
 
-- [ ] Root cause or reliable mitigation confirmed (not guessed) via a synthetic local repro
+- [x] Root cause or reliable mitigation confirmed (not guessed) via a synthetic local repro
 - [ ] Fix applied and verified against several real CI runs with zero regressions (a
-      deliberately-failing test in the same run must still fail CI)
-- [ ] known-failures.md row 30 retired (or narrowed) once confirmed fixed
+      deliberately-failing test in the same run must still fail CI) — **1 green CI run so
+      far (PR #341's own Branch CI run, 2026-09-05); needs several more before this is
+      fully satisfied**
+- [x] known-failures.md row 30 retired (or narrowed) once confirmed fixed — narrowed with
+      a "fix applied" note; full retirement still pending the CI-run evidence above
+
+## Resolution (2026-09-05)
+
+Merged to master (PR #341, `b297d182`). Root-caused against Vitest 4.0.13 source:
+`dangerouslyIgnoreUnhandledErrors` (the earlier reverted attempt) is a blanket switch that
+would also swallow genuine in-test unhandled rejections. Fixed instead with a narrow
+`test.onUnhandledError` filter (`src/frontend/vitest.onUnhandledError.js`) that drops only
+the message-matched worker-teardown RPC error before it reaches the exit-code path,
+leaving every other unhandled error (including a deliberate in-test failure) unaffected.
+Proven via a synthetic repro kept as a permanent regression guard
+(`src/frontend/test/flake-repro/`): control (no filter) = exit 1, deliberate failure +
+filter = exit 1, teardown-rpc + filter = exit 0, genuine rejection + filter = exit 1.
+Reviewer approved (0 blocking/major). Branch CI green.
+
+**Still open**: this task's own bar for full retirement is "several real CI runs" — only
+one has run so far. Re-check `known-failures.md` row 30 after a handful of ordinary
+pushes/master-CI runs accumulate and either retire the row fully or note any recurrence.
