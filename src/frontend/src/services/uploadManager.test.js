@@ -13,6 +13,7 @@ import {
   UPLOAD_STATUS,
   hashFile,
   uploadGame,
+  uploadMultiVideoGame,
   cancelUpload,
   getDedupeGameUrl,
   deleteDedupeGame,
@@ -660,6 +661,134 @@ describe('uploadManager — T4100 pipeline polish', () => {
     });
 
     await expect(uploadGame(mockFile(), () => {})).rejects.toThrow('Part 2 checksum mismatch');
+  });
+});
+
+describe('uploadMultiVideoGame — T8940 create-time ready-gate ordering', () => {
+  // Reproduces a live-testing bug (2026-09-05): a multi-file CREATE (T8810's
+  // universal dropzone, 2+ files at once) always failed on the SECOND file
+  // with "Videos can only be added to a ready game" (backend 409,
+  // code: game_not_ready). Root cause: add_game_videos (POST
+  // /api/games/{id}/videos) requires the game to already be 'ready' (T8700
+  // hardened it for the post-creation attach gesture), but
+  // uploadMultiVideoGame calls activateGame exactly ONCE, AFTER attaching
+  // every subsequent video in its loop — so video 2..N always hit the guard
+  // while the game was still 'pending'. This is a DETERMINISTIC ordering
+  // bug (fails 100% of the time for any 2+ file create), not a
+  // timing-dependent race — the mock below enforces the exact same
+  // ready-gate the real backend enforces, so this test fails today for the
+  // identical reason a real upload does.
+
+  class MockXHR {
+    constructor() {
+      this.upload = {};
+      this.status = 200;
+    }
+    open() {}
+    getResponseHeader(name) {
+      return name === 'ETag' ? '"mock-etag"' : null;
+    }
+    send() {
+      setTimeout(() => {
+        if (this.upload.onprogress) {
+          this.upload.onprogress({ lengthComputable: true, loaded: 4, total: 4 });
+        }
+        this.status = 200;
+        if (this.onload) this.onload();
+      }, 0);
+    }
+  }
+
+  const jsonResp = (status, body) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  });
+
+  let gameStatus;
+  let calls;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    globalThis.Worker = MockWorker;
+    globalThis.XMLHttpRequest = MockXHR;
+    globalThis.URL = class extends originalURL {
+      static createObjectURL = vi.fn(() => 'blob:mock-url');
+    };
+    gameStatus = 'pending';
+    calls = [];
+
+    // A faithful mock of the real backend contract: /videos 409s with the
+    // exact game_not_ready shape whenever the game isn't 'ready' yet —
+    // mirroring add_game_videos's own guard (games.py) byte-for-byte.
+    mockFetch.mockImplementation(async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      if (/\/api\/games$/.test(url) && method === 'POST') {
+        calls.push('create');
+        return jsonResp(200, {
+          status: 'created', game_id: 777, name: 'Multi Game', video_url: null, videos: [],
+        });
+      }
+      if (url.includes('/prepare-upload')) {
+        return jsonResp(200, {
+          status: 'upload_required',
+          upload_session_id: 'sess_x',
+          parts: [{ part_number: 1, presigned_url: 'https://r2/put', start_byte: 0, end_byte: 3 }],
+        });
+      }
+      if (url.includes('/parts')) return jsonResp(200, {});
+      if (url.includes('/finalize-upload')) {
+        return jsonResp(200, { blake3_hash: 'a'.repeat(64), file_size: 4 });
+      }
+      if (url.includes('/activate')) {
+        calls.push('activate');
+        gameStatus = 'ready';
+        return jsonResp(200, { game_id: 777, status: 'ready' });
+      }
+      if (url.includes('/videos') && method === 'POST') {
+        calls.push(`videos(${gameStatus})`);
+        if (gameStatus !== 'ready') {
+          return jsonResp(409, {
+            detail: { code: 'game_not_ready', message: 'Videos can only be added to a ready game' },
+          });
+        }
+        return jsonResp(200, { videos: [{ video_url: 'https://r2/video2.mp4' }] });
+      }
+      return jsonResp(200, {});
+    });
+  });
+
+  afterEach(() => {
+    globalThis.URL = originalURL;
+  });
+
+  const mockFile = (name) => new File(['test'], name, { type: 'video/mp4' });
+
+  it('activates the game before attaching the second video, so a 2-file create succeeds', async () => {
+    const result = await uploadMultiVideoGame(
+      [mockFile('a.mp4'), mockFile('b.mp4')],
+      () => {}
+    );
+
+    expect(result.game_id).toBe(777);
+    const activateIdx = calls.indexOf('activate');
+    const secondVideoIdx = calls.indexOf('videos(ready)');
+    expect(activateIdx).toBeGreaterThan(-1);
+    expect(secondVideoIdx).toBeGreaterThan(-1);
+    expect(activateIdx).toBeLessThan(secondVideoIdx);
+    // Never even attempted to attach while the game was still pending.
+    expect(calls).not.toContain('videos(pending)');
+  });
+
+  it('activates before EACH subsequent attach in a 4-file create, not just once', async () => {
+    const result = await uploadMultiVideoGame(
+      [mockFile('a.mp4'), mockFile('b.mp4'), mockFile('c.mp4'), mockFile('d.mp4')],
+      () => {}
+    );
+
+    expect(result.game_id).toBe(777);
+    expect(calls.filter(c => c === 'videos(pending)')).toHaveLength(0);
+    expect(calls.filter(c => c === 'videos(ready)')).toHaveLength(3);
   });
 });
 
