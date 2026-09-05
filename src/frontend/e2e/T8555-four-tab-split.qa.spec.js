@@ -49,7 +49,7 @@ test('T8555: four-tab split, content separation, badges, responsive', async ({ c
   await page.waitForTimeout(400);
   await expect(page.getByTestId('in-progress-reels-tab-panel')).toBeVisible();
   // The assembly button lives here with the gate-approved copy.
-  await expect(page.getByRole('button', { name: 'New Highlight Reel' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Build New Reel' })).toBeVisible();
   // ZERO published ReelTiles under this tab (drafts use a different tile).
   const reelTilesUnderInProgress = await page
     .getByTestId('in-progress-reels-tab-panel')

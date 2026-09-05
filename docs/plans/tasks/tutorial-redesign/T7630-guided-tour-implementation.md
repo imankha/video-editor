@@ -17,8 +17,8 @@ Implement the approved T7620 design exactly:
 2. data-tutorial-target attributes on every essential-path element (upload button, game
    tile, Add Clip, rating/save controls, **Focus** entry (NOT "Framing" — renamed by
    T7700), the **"Clip Out Play"** CTA (NOT "Create Reel" — renamed by T8760), the
-   **"New Highlight Reel"** assembly button (NOT "Create Highlight Reel" — renamed by
-   T8555), the **Published / In Progress Reels** tabs (NOT "My Reels"/"Highlights" —
+   **"Build New Reel"** assembly button (NOT "Create Highlight Reel", NOT "New Highlight
+   Reel" — renamed again by T8780), the **Published / In Progress Reels** tabs (NOT "My Reels"/"Highlights" —
    T8555's four-tab IA), share) - stable, greppable names. **NOTE: T8390 already ships
    `data-tutorial-target="focus-publish"` on the Focus Publish button — REUSE it for the
    Focus→publish step (guided rule 30), do not invent a second Focus anchor.**

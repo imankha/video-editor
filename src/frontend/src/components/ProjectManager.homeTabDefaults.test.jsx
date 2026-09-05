@@ -117,15 +117,30 @@ describe('ProjectManager home tab defaults (T6830)', () => {
   it('fresh account (no games, no drafts): lands on Games, Clips tab disabled with tooltip', async () => {
     renderManager();
 
-    // Games tab is active -> its action button (Add Game) is shown.
-    expect(screen.getByRole('button', { name: 'Add Game' })).toBeTruthy();
-    // The "New Highlight Reel" assembly button is NOT shown on the Games tab
+    // Games tab is active, empty -> "Add Game" resolves the "No games yet"
+    // message directly below it (T8780), same order as Reels/Published.
+    const message = screen.getByText('No games yet');
+    const addGameButton = screen.getByRole('button', { name: 'Add Game' });
+    expect(message.compareDocumentPosition(addGameButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The "Build New Reel" assembly button is NOT shown on the Games tab
     // (T8555: it lives on the In Progress Reels tab body only).
-    expect(screen.queryByRole('button', { name: 'New Highlight Reel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Build New Reel' })).toBeNull();
 
     const tab = clipsTab();
     expect(tab.disabled).toBe(true);
     expect(tab.getAttribute('title')).toMatch(/Extract clips from a game first/i);
+    // T8780: the same reason is also visible as on-screen text (native title
+    // tooltips never fire on touch), except on the Reels tab where the
+    // identical sentence already appears inline in its own empty state.
+    expect(screen.getByText(/Extract clips from a game first using Annotate mode to unlock/i)).toBeTruthy();
+  });
+
+  it('games still loading: "Add Game" stays visible (does not wait for the empty check to resolve)', async () => {
+    renderManager({ gamesLoading: true });
+
+    // T8780: gamesEmptyConfirmed is gated on !gamesLoading, so the button
+    // shouldn't disappear mid-fetch just because `games` is momentarily [].
+    expect(screen.getByRole('button', { name: 'Add Game' })).toBeTruthy();
   });
 
   it('/home/reels deep link in the dead-end state falls back to Games', async () => {
@@ -156,11 +171,11 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     // projects load, so its count chip appears. T8545: the button renders TWO
     // count badges (mobile corner + desktop inline, one hidden per breakpoint
     // via CSS that jsdom doesn't evaluate) -- getAllByText covers both. The
-    // "New Highlight Reel" action lives on the In Progress Reels tab, not here.
+    // "Build New Reel" action lives on the In Progress Reels tab, not here.
     await waitFor(() => {
       expect(within(tab).getAllByText('1').length).toBeGreaterThan(0);
     });
-    expect(screen.queryByRole('button', { name: 'New Highlight Reel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Build New Reel' })).toBeNull();
   });
 
   it('user with only multi-clip (In Progress Reels) drafts: Clips tab stays on the dead-end guard (T8360)', async () => {

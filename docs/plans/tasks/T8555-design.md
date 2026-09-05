@@ -318,6 +318,12 @@ Reel", not the "Build New Reel" phrasing). Sweep sites (all must read "New Highl
 - Any e2e asserting the button text (grep `rg -i "Create Highlight Reel" src/frontend`).
 - `GameClipSelectorModal` title/heading if it echoes the phrase.
 
+**SUPERSEDED same day by T8780 (2026-09-04):** this task's own `displayNames.js` reserves
+"Highlight Reel(s)" for PUBLISHED reels (`LIBRARY`), which "New Highlight Reel" collided with —
+the button creates an unpublished draft, not a published one. Re-raised independently by the user
+and re-approved at T8780's own gate: button copy is now **"Build New Reel"**. The rejected-at-the-time
+"Build New Reel" phrasing above is what ultimately shipped; left as-is for the historical record.
+
 ### RESOLVED at the gate — remaining ui-spec choices
 - Full icon set approved: Games `Gamepad2` / In Progress Clips `Scissors` / In Progress Reels `Clapperboard` / Published `Send`.
 - `grid-cols-4` + two-line-wrap layout, PUBLISHED amber token, In Progress Reels empty-state promoted to the centered block — all approved.

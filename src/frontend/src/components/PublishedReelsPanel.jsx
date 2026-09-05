@@ -742,7 +742,7 @@ export function PublishedReelsPanel({
       {active && (
       /* T8555: Published tab body -- every published reel grouped by game
          (CollectionsTab), regardless of single- or multi-clip origin. The
-         in-progress multiclip drafts + "New Highlight Reel" assembly button
+         in-progress multiclip drafts + "Build New Reel" assembly button
          that used to sit above this list moved to ProjectManager's inline
          In Progress Reels tab (T8555 split). Width mirrors the old drawer's
          own breakpoints (T5673) so CollectionsTab/CardCarousel's tuned grid

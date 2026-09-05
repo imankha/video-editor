@@ -286,6 +286,9 @@ RESOLVED (button copy = **"New Highlight Reel"**; promoted to the centered block
 - Promoted to the centered block (matching CollectionsTab's §5b convention) with `Clapperboard`
   (the In Progress Reels icon) at `size={48} className="text-gray-600 mb-4"`, so both new-ish
   tabs feel like first-class surfaces.
+- **SUPERSEDED same day by T8780:** button copy is now "Build New Reel" (naming collision with
+  `displayNames.js`'s "Highlight Reel" == published-only). T8780 also moved the button below this
+  empty-state message when there are no drafts, keeping it above the carousel once drafts exist.
 
 ### 5b. Published — empty
 

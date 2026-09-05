@@ -490,6 +490,16 @@ export function ProjectManager({
   const unseenReelsCount = unseenReelsCountProp ?? contextUnseenReelsCount ?? 0;
   const exportingProject = exportingProjectProp ?? contextExportingProject;
   const hasClips = games.some(g => g.clip_count > 0);
+  // T8780: drives whether "Add Game" renders above the list (has content) or
+  // below the "No games yet" message (empty) -- same empty-state-resolves-
+  // into-its-own-action order as the Reels/Published tabs, single source of
+  // truth shared by the button-visibility check and the empty branch below.
+  // Gated on !gamesLoading/!gamesError too so the button doesn't disappear
+  // mid-fetch or on a fetch error -- it only moves once emptiness is CONFIRMED,
+  // matching the ternary below (loading/error render before this branch is
+  // ever reached there).
+  const gamesEmpty = games.length === 0 && pendingUploads.length === 0 && uploads.length === 0;
+  const gamesEmptyConfirmed = gamesEmpty && !gamesLoading && !gamesError;
   // T8320: game_id -> game lookup for the read-only source-expiry join that Reel
   // Drafts (DraftTile) use to surface expired/expiring source videos. Built from
   // the games list ProjectManager already holds — a pure computed map, not state.
@@ -536,7 +546,7 @@ export function ProjectManager({
       window.history.replaceState(null, '', path);
     }
   }, []);
-  // T8555: the "New Highlight Reel" assembly button lives on the In Progress
+  // T8555: the "Build New Reel" assembly button lives on the In Progress
   // Reels tab body (rendered inline in this component's content ternary), so
   // the assembly modal's open state (and the GameClipSelectorModal it drives)
   // both live in this component -- no lifting to a common parent needed.
@@ -1295,10 +1305,23 @@ export function ProjectManager({
         />
       </div>
 
+      {/* T8780: the disabled Clips tab's reason (title attribute above) is a
+          native tooltip -- invisible on touch, where hover never fires. This
+          caption surfaces the same reason as on-screen text instead. Skipped
+          on the Reels tab, which already shows the identical reason inline in
+          its own empty state -- avoids a third repeat of the same sentence. */}
+      {clipsTabDisabled && activeTab !== 'inProgressReels' && (
+        <p className="text-xs text-gray-500 mb-4 px-1">
+          Extract clips from a game first using Annotate mode to unlock {SECTION_NAMES.CLIPS}
+        </p>
+      )}
+
       {/* Action Button — T8360: the In Progress Clips tab has no create action
-          here; the "New Highlight Reel" assembly button lives on the In Progress
-          Reels tab body (T8555). This block is the Games tab's Add Game button. */}
-      {activeTab === 'games' && (
+          here; the "Build New Reel" assembly button lives on the In Progress
+          Reels tab body (T8555). This block is the Games tab's Add Game button,
+          shown here only once there's content (T8780: with zero games it moves
+          below the empty message instead, see the gamesEmptyConfirmed branch). */}
+      {activeTab === 'games' && !gamesEmptyConfirmed && (
         <div className="mb-4 sm:mb-5">
           <Button
             variant="success"
@@ -1358,13 +1381,24 @@ export function ProjectManager({
               Retry
             </Button>
           </div>
-        ) : games.length === 0 && pendingUploads.length === 0 && uploads.length === 0 ? (
-          <div className="text-gray-500 text-center">
-            {/* T7840: single status line only — the green Add Game button and the
-                quest card's actionable "Add Your First Game" row carry the CTA, so
-                the old "Add a game to annotate your footage" sub-line was a third
-                duplicate prompt for the same action. */}
+        ) : gamesEmptyConfirmed ? (
+          <div className="flex flex-col items-center text-gray-500 text-center">
+            {/* T8780: supersedes T7840's single-status-line decision -- the Add
+                Game button now resolves into this message directly below it
+                (matching Reels/Published), so it's no longer a duplicate of a
+                CTA rendered elsewhere on the page. The Quest panel's own
+                "Add Your First Game" row is a separate onboarding surface and
+                is unaffected. */}
             <p>No games yet</p>
+            <Button
+              variant="success"
+              size="lg"
+              icon={Plus}
+              onClick={handleAddGameClick}
+              className="mt-4"
+            >
+              Add Game
+            </Button>
           </div>
         ) : (
           <div className={GAMES_GRID_CONTAINER_CLASS}>
@@ -1756,33 +1790,52 @@ export function ProjectManager({
         )
       ) : activeTab === 'inProgressReels' ? (
         /* T8555: In Progress Reels tab -- unpublished multiclip drafts ONLY
-           (is_auto_created === false) + the "New Highlight Reel" assembly button.
+           (is_auto_created === false) + the "Build New Reel" assembly button.
            Rendered inline (not a separate always-mounted component) because it
            holds no state that must survive a tab switch: the assembly modal is
            ProjectManager-owned and the DraftTile carousel is stateless. Moved
            out of the old DownloadsPanel body (now PublishedReelsPanel) so
-           published reels no longer share this surface -- the T8555 bug fix. */
+           published reels no longer share this surface -- the T8555 bug fix.
+           T8780: renamed from "New Highlight Reel" -- displayNames.js reserves
+           "Highlight Reel" for PUBLISHED reels, so the old label misdescribed
+           the draft this button actually creates. Button also moves below the
+           empty message (matching Published's empty state) when there are no
+           drafts yet; once drafts exist it stays pinned above the carousel. */
         <div className="w-full max-w-md lg:max-w-2xl xl:max-w-3xl" data-testid="in-progress-reels-tab-panel">
-          <div className="mb-4">
-            <Button
-              variant="cyan"
-              size="lg"
-              icon={Plus}
-              disabled={!hasClips}
-              title={!hasClips ? 'Extract clips from a game first using Annotate mode' : undefined}
-              onClick={() => setShowAssemblyModal(true)}
-              className="w-full"
-            >
-              New Highlight Reel
-            </Button>
-          </div>
           {highlightDrafts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Clapperboard size={48} className="text-gray-600 mb-4" />
               <p className="text-gray-400">No reels in progress</p>
-              <p className="text-sm text-gray-500 mt-1">Build one from your clips to get started</p>
+              <p className="text-sm text-gray-500 mt-1">
+                {hasClips ? 'Build one from your clips to get started' : 'Extract clips from a game first using Annotate mode'}
+              </p>
+              <Button
+                variant="cyan"
+                size="lg"
+                icon={Plus}
+                disabled={!hasClips}
+                title={!hasClips ? 'Extract clips from a game first using Annotate mode' : undefined}
+                onClick={() => setShowAssemblyModal(true)}
+                className="w-full max-w-xs mt-4"
+              >
+                Build New Reel
+              </Button>
             </div>
           ) : (
+            <>
+            <div className="mb-4">
+              <Button
+                variant="cyan"
+                size="lg"
+                icon={Plus}
+                disabled={!hasClips}
+                title={!hasClips ? 'Extract clips from a game first using Annotate mode' : undefined}
+                onClick={() => setShowAssemblyModal(true)}
+                className="w-full"
+              >
+                Build New Reel
+              </Button>
+            </div>
             <CardCarousel ariaLabel={`${SECTION_NAMES.HIGHLIGHTS} in progress`}>
               {highlightDrafts.map((project) => (
                 <DraftTile
@@ -1796,6 +1849,7 @@ export function ProjectManager({
                 />
               ))}
             </CardCarousel>
+            </>
           )}
         </div>
       ) : null}
@@ -1811,7 +1865,7 @@ export function ProjectManager({
         onViewClips={() => setActiveTab('projects')}
       />
 
-      {/* New Highlight Reel Modal - Game/Clip selector (opened from the
+      {/* Build New Reel Modal - Game/Clip selector (opened from the
           In Progress Reels tab; see setShowAssemblyModal/showAssemblyModal) */}
       <GameClipSelectorModal
         isOpen={showAssemblyModal}

@@ -32,7 +32,7 @@ Surfaces + their primary CTAs (component refs verified):
 | Focus completion action bar (**T8390 replaced T8520's card**) | "Publish" (center) / "Add Spotlight" / "Add Spotlight Later" / "Refocus" | `components/FocusPublishActionBar.jsx` — preview-first, mounted over the preview player; audit the whole action bar at phone sizes (four choices stack vertically on mobile) |
 | Ready board tile | "Publish to Highlight Reels" | `components/DraftTile.jsx` (post-T8530 label) |
 | Reel player | "Share" | `components/collections/CollectionPlayer.jsx` (post-T8540) |
-| In Progress Reels tab (**T8555: four-tab split**) | "New Highlight Reel" | `components/ProjectManager.jsx` inline branch, testid `in-progress-reels-tab-panel` |
+| In Progress Reels tab (**T8555: four-tab split**) | "Build New Reel" (T8780 renamed from "New Highlight Reel"; now sits below the empty-state message when there are no drafts, above the carousel otherwise) | `components/ProjectManager.jsx` inline branch, testid `in-progress-reels-tab-panel` |
 | Published tab (**T8555: new top-level tab, was the Highlights drawer/DownloadsPanel**) | reel tiles + share | `components/PublishedReelsPanel.jsx` (renamed from DownloadsPanel), testid `published-tab-panel` |
 
 ## Existing tooling to build on (do not invent new harnesses)
