@@ -22,7 +22,7 @@ import { useWakeLock } from '../hooks/useWakeLock';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
 import { buildFullVideoTimeline } from '../modes/annotate/hooks/useVirtualTimeline';
-import { VideoMode, GameType } from '../constants/gameConstants';
+import { GameType } from '../constants/gameConstants';
 import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
 import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInput';
@@ -441,15 +441,19 @@ export function AnnotateContainer({
   const wasPlayingRef = useRef(false);
 
   /**
-   * Handle game video selection for Annotate mode
-   * Supports both single-video and multi-video (per-half) games.
+   * Handle game video selection for Annotate mode.
+   * T8810: footage arrives as a uniform ordered list (gameDetails.files =
+   * [{file, sequence}]) from the universal picker — single OR multi. The resume
+   * path still passes a bare `file` (no list). Routing keys on file COUNT, not a
+   * per-half mode: length 1 → single-video path, length >1 → multi-video path.
    *
-   * @param {File} file - Video file (single-video mode) or first file of multi-video
-   * @param {Object} gameDetails - Game details including videoMode and optional files array
+   * @param {File} file - Video file for the resume path (null when a footage list is given)
+   * @param {Object} gameDetails - Game details incl. footage list `files: [{file, sequence}]`
    */
   const handleGameVideoSelect = async (file, gameDetails = null) => {
-    const isMultiVideo = gameDetails?.videoMode === VideoMode.PER_HALF && gameDetails?.files;
-    const files = isMultiVideo ? gameDetails.files : [file];
+    const footageList = Array.isArray(gameDetails?.files) ? gameDetails.files : null;
+    const files = footageList ? footageList.map(f => f.file) : [file];
+    const isMultiVideo = files.length > 1;
 
     if (!files[0]) return;
 

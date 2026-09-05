@@ -416,6 +416,9 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     const disclosure = page.getByTestId('game-details-disclosure');
     expect(await disclosure.evaluate(el => el.open)).toBe(false);
 
+    // T8810: one universal footage dropzone (no Per Game / Per Half toggle).
+    await expect(page.getByText('Drop your whole game here')).toBeVisible({ timeout: 10000 });
+
     // Fill the Add Game form (typed metadata still wins over the defaults)
     await openGameDetailsDisclosure(page);
     await page.getByPlaceholder('e.g., Carlsbad SC').fill('Sporting CA');
@@ -794,8 +797,9 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await page.waitForTimeout(500);
 
     // T8500 zero-typing path: pick a file and submit with NO other input -
-    // every metadata field is defaulted (opponent placeholder, today, Home,
-    // Full Game). Two gestures from open modal to upload started.
+    // every metadata field is defaulted (opponent placeholder, today, Home).
+    // T8810: single file flows through the universal dropzone as a 1-element
+    // footage list. Two gestures from open modal to upload started.
     const videoInput2 = page.locator('form input[type="file"][accept*="video"]');
     await expect(videoInput2).toBeAttached({ timeout: 10000 });
     await videoInput2.setInputFiles(GAME2_VIDEO);

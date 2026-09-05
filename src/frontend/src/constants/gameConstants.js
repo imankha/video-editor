@@ -9,11 +9,9 @@ export const GameType = {
   TOURNAMENT: 'tournament',
 };
 
-/** How video files are organized for a game */
-export const VideoMode = {
-  PER_GAME: 'per_game',
-  PER_HALF: 'per_half',
-};
+// T8810: `VideoMode` (per_game / per_half) removed. Games now intake through the
+// universal GameFootagePicker + useFootageIntake — an ordered N-video list, never
+// a two-half toggle. No backend field was ever tied to it.
 
 /** Status from POST /api/games (game management layer) */
 export const GameCreateStatus = {

@@ -29,8 +29,26 @@ vi.mock('./shared', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
 
+// Stub the picker (its own suite covers intake/probe/folder behavior). The stub
+// exposes a file input that, on change, reports the normalized footage payload up
+// exactly as the real picker does: files:[{file, sequence}] + totalBytes.
+vi.mock('./GameFootagePicker', () => ({
+  GameFootagePicker: ({ onFootageChange, onFileSelected }) => (
+    <input
+      type="file"
+      data-testid="stub-footage-input"
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        onFileSelected?.();
+        onFootageChange?.({ files: [{ file, sequence: 1 }], totalBytes: file.size, proxies: {} });
+      }}
+    />
+  ),
+}));
+
 import { GameDetailsModal, localTodayISO } from './GameDetailsModal';
-import { GameType, VideoMode } from '../constants/gameConstants';
+import { GameType } from '../constants/gameConstants';
 
 function renderModal(props = {}) {
   return render(
@@ -87,7 +105,7 @@ describe('GameDetailsModal — T8500 video-first', () => {
     expect(submit.disabled).toBe(false);
   });
 
-  it('submits the defaults in the create payload: placeholder opponent, today, Home, Full Game', async () => {
+  it('submits the defaults in the create payload: placeholder opponent, today, Home + a 1-element footage list', async () => {
     const onCreateGame = vi.fn(() => Promise.resolve());
     const { container } = renderModal({ onCreateGame });
 
@@ -95,13 +113,13 @@ describe('GameDetailsModal — T8500 video-first', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add Game' }));
 
     await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
+    // T8810: uniform ordered list — a single file is a 1-element list, no videoMode.
     expect(onCreateGame).toHaveBeenCalledWith({
       opponentName: 'Unnamed opponent',
       gameDate: localTodayISO(),
       gameType: GameType.HOME,
       tournamentName: null,
-      videoMode: VideoMode.PER_GAME,
-      file,
+      files: [{ file, sequence: 1 }],
     });
   });
 

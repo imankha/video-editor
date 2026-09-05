@@ -19,4 +19,4 @@ export {
 export { KeyframeOrigin, default as KeyframeOriginDefault } from './keyframeOrigins';
 
 // Game constants
-export { GameType, VideoMode, GameCreateStatus } from './gameConstants';
+export { GameType, GameCreateStatus } from './gameConstants';

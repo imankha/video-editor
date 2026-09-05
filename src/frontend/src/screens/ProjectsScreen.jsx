@@ -21,7 +21,8 @@ import { toast } from '../components/shared/Toast';
 let pendingGameData = null;
 
 export function getPendingGameFile() {
-  // For multi-video (per_half), files array is set instead of file
+  // T8810: new-game flow carries a footage list (details.files); only the resume
+  // path sets a bare `file`. Returns null for the list flow.
   return pendingGameData?.file || null;
 }
 
@@ -32,7 +33,7 @@ export function getPendingGameDetails() {
     gameDate: pendingGameData.gameDate,
     gameType: pendingGameData.gameType,
     tournamentName: pendingGameData.tournamentName,
-    videoMode: pendingGameData.videoMode || undefined,
+    // T8810: uniform footage list [{file, sequence}] (single OR multi). No videoMode.
     files: pendingGameData.files || undefined,
   };
 }

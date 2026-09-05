@@ -381,6 +381,19 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   concatenates per-half videos into one virtual timeline (`getVideoOffset`, `clampToVideo`);
   `buildVirtualTimeline(clips)` (L12-116) is the separate clip-playback stitcher. Single-video ⇒
   `gameVideos = null`.
+- **Universal footage intake (T8810)** replaced the old Per Game / Per Half toggle: game creation
+  now goes through `GameFootagePicker` (`components/GameFootagePicker.jsx`) driven by
+  `useFootageIntake` (T8800) — one dropzone for a single file, many files, or a whole camera folder
+  (folder pick via a hidden `webkitdirectory` input behind the "or add a whole folder" link;
+  folder DRAG-drop walks `DataTransferItem.webkitGetAsEntry()` via `utils/folderDrop.js`). The
+  submit payload is a UNIFORM ordered list `gameDetails.files = [{file, sequence}]` (a single file
+  is a 1-element list — no more `videoMode`/`VideoMode`, which is fully deleted; nothing on the
+  backend was ever tied to it). Routing keys on file COUNT everywhere downstream:
+  `AnnotateContainer.handleGameVideoSelect` (`files.length > 1` → multi), `uploadStore.startUpload`
+  (2+ files → `uploadMultiVideoGame`), and `uploadManager` per-file progress reads "Video {i} of
+  {n}". The T7890 `recordFileSelected` beacon fires once per session on the first accepted selection
+  from every path (the picker calls `onFileSelected`, which is session-deduped). Don't grep for
+  `PER_HALF`/`videoMode` — they're gone.
 - **Attach-more-videos to an existing game (T8700)** is a first-class post-creation gesture, not
   just a create-time step. Frontend: `attachVideoToExistingGame` (uploadManager.js) behind
   GameTile's "Add video" kebab action → `AttachVideoModal`; reuses the create-time
