@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppStateProvider } from '../contexts';
 
@@ -114,7 +114,7 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     useGalleryStore.setState({ isOpen: false });
   });
 
-  it('fresh account (no games, no drafts): lands on Games, Clips tab disabled with tooltip', async () => {
+  it('fresh account (no games, no drafts): lands on Games, Clips tab REACHABLE (T8380)', async () => {
     renderManager();
 
     // Games tab is active, empty -> "Add Game" resolves the "No games yet"
@@ -126,13 +126,20 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     // (T8555: it lives on the In Progress Reels tab body only).
     expect(screen.queryByRole('button', { name: 'Build New Reel' })).toBeNull();
 
+    // T8380: the In Progress Clips tab is no longer a dead end -- "Add Video"
+    // makes it a valid clip-creation entry point, so it must be reachable even
+    // for a zero-content account. The old disabled state + T8780 caption are gone.
     const tab = clipsTab();
-    expect(tab.disabled).toBe(true);
-    expect(tab.getAttribute('title')).toMatch(/Extract clips from a game first/i);
-    // T8780: the same reason is also visible as on-screen text (native title
-    // tooltips never fire on touch), except on the Reels tab where the
-    // identical sentence already appears inline in its own empty state.
-    expect(screen.getByText(/Extract clips from a game first using Annotate mode to unlock/i)).toBeTruthy();
+    expect(tab.disabled).toBe(false);
+    expect(tab.getAttribute('title')).toBeNull();
+    expect(screen.queryByText(/Extract clips from a game first using Annotate mode to unlock/i)).toBeNull();
+
+    // Clicking in shows the two-path empty state (upload directly OR extract in
+    // Annotate), including the Add Video CTA and its tutorial anchor.
+    fireEvent.click(tab);
+    const addVideo = await screen.findByRole('button', { name: 'Add Video' });
+    expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
+    expect(screen.getByText(/Clip Out Play/i)).toBeTruthy();
   });
 
   it('games still loading: "Add Game" stays visible (does not wait for the empty check to resolve)', async () => {
@@ -143,18 +150,19 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     expect(screen.getByRole('button', { name: 'Add Game' })).toBeTruthy();
   });
 
-  it('/home/reels deep link in the dead-end state falls back to Games', async () => {
+  it('/home/reels deep link on a zero-content account STAYS on Clips (T8380: no dead-end redirect)', async () => {
     renderManager({}, '/home/reels');
 
-    // Redirect effect moves the disabled-state user off the dead tab onto Games.
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add Game' })).toBeTruthy();
-    });
-    expect(window.location.pathname).toBe('/home/games');
-    expect(clipsTab().disabled).toBe(true);
+    // T8380: the old redirect effect (bounce off the dead-end Clips tab onto
+    // Games) was removed -- /home/reels is now a valid landing surface, so the
+    // Add Video CTA is shown in place and the URL is not rewritten to Games.
+    const addVideo = await screen.findByRole('button', { name: 'Add Video' });
+    expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
+    expect(window.location.pathname).toBe('/home/reels');
+    expect(clipsTab().disabled).toBe(false);
   });
 
-  it('user with extracted clips but no drafts: Clips tab is ENABLED (asymmetry)', () => {
+  it('user with extracted clips but no drafts: Clips tab is enabled', () => {
     renderManager({ games: [{ id: 1, clip_count: 3, created_at: '2026-08-01T00:00:00Z' }] });
 
     expect(clipsTab().disabled).toBe(false);
@@ -178,13 +186,15 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     expect(screen.queryByRole('button', { name: 'Build New Reel' })).toBeNull();
   });
 
-  it('user with only multi-clip (In Progress Reels) drafts: Clips tab stays on the dead-end guard (T8360)', async () => {
+  it('user with only multi-clip (In Progress Reels) drafts: Clips tab is still reachable (T8380)', async () => {
     // A multi-clip draft (is_auto_created: false) does NOT count toward clipDrafts
     // -- it belongs to the In Progress Reels tab, not the In Progress Clips tab.
+    // Pre-T8380 this left the Clips tab on the dead-end guard; now Add Video keeps
+    // it reachable regardless.
     renderManager({ projects: [{ id: 8, name: 'A Highlight', game_ids: [], is_auto_created: false }] });
 
     const tab = clipsTab();
-    expect(tab.disabled).toBe(true);
+    expect(tab.disabled).toBe(false);
   });
 
   it('mid-load (games still loading): Clips NOT disabled — no disabled->enabled flash', () => {

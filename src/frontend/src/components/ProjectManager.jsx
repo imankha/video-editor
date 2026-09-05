@@ -18,7 +18,9 @@ import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES } from '../config/displayNames';
+import { SECTION_NAMES, CLIP_UPLOAD } from '../config/displayNames';
+import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
+import { useClipUpload } from '../hooks/useClipUpload';
 import { GAME, REEL, HIGHLIGHT, PUBLISHED } from '../config/themeColors';
 import { ExpirationBadge } from './ExpirationBadge';
 import { StorageExtensionModal } from './StorageExtensionModal';
@@ -526,14 +528,13 @@ export function ProjectManager({
   // owned here so this tab's badge count lives next to clipDrafts, single
   // source = the projects prop). Published reels are NOT here (Published tab).
   const highlightDrafts = useMemo(() => projects.filter(p => !p.is_auto_created), [projects]);
-  // T6830: the Clips tab is a dead end when there are no clip drafts AND Create
-  // Reel is unreachable (no game has extracted clips) — clicking in can only show
-  // an empty list with no way to add one. Disable the tab in exactly that case.
-  // Purely derived, no persisted view state. Gated on both loads settling so it
-  // can't flash disabled->enabled while games/projects stream in (a user WITH
-  // clips would otherwise render disabled for one frame, then enable).
-  const clipsTabDisabled =
-    !loading && !gamesLoading && clipDrafts.length === 0 && !hasClips;
+  // T8380: the In Progress Clips tab is NO LONGER a dead end. Before this task it
+  // disabled itself for a zero-content account (no clip drafts AND no extractable
+  // clips) because the only way to make a clip was Annotate. "Add Video" now makes
+  // this tab its own clip-creation entry point, so it must stay reachable for a
+  // brand-new user with zero games -- the old T6830 `clipsTabDisabled` guard (and
+  // its /home/reels dead-end redirect effect) were removed. Games remains the
+  // default LANDING tab via `initialTab` below; the tab is just no longer blocked.
   // URL-first: a deep link / refresh to /home/games or /home/reels lands on that
   // tab. Bare /home falls back to the clip-drafts-count default. (T5677)
   const initialTab = tabFromPath(window.location.pathname)
@@ -568,6 +569,18 @@ export function ProjectManager({
   const gamesContainerRef = useRef(null);
   const promotedGameIdsRef = useRef(new Set());
   const [resumingUploadFilename, setResumingUploadFilename] = useState(null); // Track which upload we're resuming
+
+  // T8380: "Add Video" direct clip upload on the In Progress Clips tab. The whole
+  // hash -> R2 -> POST /api/clips/upload capability already ships in useClipUpload
+  // (T8370); this component only owns the entry point: the consequence notice, the
+  // file picker, and the in-flight/failed rail. `failedClips` persists the files
+  // that failed to reach R2 (name -> File) so Retry can re-run just those -- kept
+  // in local state rather than reading the hook's progressByFile, since a per-file
+  // retry re-invokes uploadClips and resets progressByFile (the T8380 seam).
+  const clipFileInputRef = useRef(null);
+  const [showClipNotice, setShowClipNotice] = useState(false);
+  const [failedClips, setFailedClips] = useState([]); // [{ name, file }]
+  const { uploadClips, progressByFile, isUploading: isUploadingClips } = useClipUpload();
 
   // Project filter state - persisted via settings store
   const {
@@ -930,6 +943,87 @@ export function ProjectManager({
     });
   }, [requireAuth]);
 
+  // T8380: "Add Video" flow. Warn (consequence notice) FIRST, then open the OS
+  // file picker on Continue -- so the notice is shown once per flow, never once
+  // per file, and never after the user has already picked. Auth-gated like Add
+  // Game (uploading creates persistent data).
+  const handleAddVideoClick = useCallback(() => {
+    requireAuth(() => setShowClipNotice(true));
+  }, [requireAuth]);
+
+  const handleClipNoticeContinue = useCallback(() => {
+    setShowClipNotice(false);
+    clipFileInputRef.current?.click();
+  }, []);
+
+  // Run a batch through useClipUpload and reconcile the retryable-failure rail.
+  // A file that fails BEFORE reaching R2 comes back with `original_filename`, so
+  // we still hold its File and can offer Retry; a backend-side rejection (e.g.
+  // duration cap, insufficient credits) is surfaced as a toast instead, since
+  // retrying it as-is would just fail again. Never a silent loss (T8380 AC).
+  const runClipUpload = useCallback(async (files) => {
+    const fileByName = new Map(files.map((f) => [f.name, f]));
+    const { results, charged } = await uploadClips(files);
+
+    const okCount = results.filter((r) => r.ok).length;
+    const retryable = results
+      .filter((r) => !r.ok && r.original_filename && fileByName.has(r.original_filename))
+      .map((r) => ({ name: r.original_filename, file: fileByName.get(r.original_filename) }));
+    const nonRetryable = results.filter(
+      (r) => !r.ok && !(r.original_filename && fileByName.has(r.original_filename)),
+    );
+
+    // Replace this run's files in the failed set (a retried file that now
+    // succeeded drops out; a still-failing one stays).
+    setFailedClips((prev) => {
+      const thisRun = new Set(files.map((f) => f.name));
+      return [...prev.filter((p) => !thisRun.has(p.name)), ...retryable];
+    });
+
+    if (okCount > 0) {
+      toast.success(
+        `Added ${okCount} clip${okCount !== 1 ? 's' : ''}`
+        + (charged ? ` (${charged} credit${charged !== 1 ? 's' : ''})` : ''),
+      );
+    }
+    if (nonRetryable.length > 0) {
+      toast.error(
+        `${nonRetryable.length} upload${nonRetryable.length !== 1 ? 's' : ''} could not be added`,
+      );
+    }
+  }, [uploadClips]);
+
+  const handleClipFilesChange = useCallback((e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ''; // allow re-selecting the same file(s)
+    if (files.length > 0) runClipUpload(files);
+  }, [runClipUpload]);
+
+  const handleRetryClip = useCallback((name) => {
+    const entry = failedClips.find((f) => f.name === name);
+    if (entry?.file) runClipUpload([entry.file]);
+  }, [failedClips, runClipUpload]);
+
+  const handleDismissClip = useCallback((name) => {
+    setFailedClips((prev) => prev.filter((f) => f.name !== name));
+  }, []);
+
+  // Rail rows: live progress while a batch is in flight (from the hook's
+  // progressByFile, excluding completed rows so they don't linger beside the new
+  // tiles), plus persisted failed rows awaiting Retry.
+  const clipUploadRows = useMemo(() => {
+    const rows = [];
+    if (isUploadingClips) {
+      for (const [name, pct] of Object.entries(progressByFile)) {
+        if (pct >= 0 && pct < 100) rows.push({ name, pct, failed: false });
+      }
+    }
+    for (const { name } of failedClips) {
+      if (!rows.some((r) => r.name === name)) rows.push({ name, pct: -1, failed: true });
+    }
+    return rows;
+  }, [isUploadingClips, progressByFile, failedClips]);
+
   // T7840: register the auth-gated add-game gesture as the quest panel's opener
   // for the `upload_game` step so its "Add Your First Game" row is actionable
   // (mirrors the WatchTutorialButton store-action idiom). Cleared on unmount —
@@ -973,16 +1067,9 @@ export function ProjectManager({
     }
   }, [clipDrafts, loading]);
 
-  // T6830: never leave the user parked on a dead-end Clips tab. A /home/reels
-  // deep link (or a stale tab hint) lands on 'projects' before data loads; once the
-  // loads settle and the tab is disabled, fall back to Games. clipsTabDisabled is
-  // false mid-load, so this can't fight the initial-tab logic above; and it never
-  // fires for a user with clip drafts or extracted clips (the asymmetric enabled cases).
-  useEffect(() => {
-    if (clipsTabDisabled && activeTab === 'projects') {
-      setActiveTab('games');
-    }
-  }, [clipsTabDisabled, activeTab, setActiveTab]);
+  // T8380: the T6830 dead-end redirect effect (bounce a zero-content account off
+  // /home/reels back to Games) was removed -- the In Progress Clips tab is now a
+  // valid landing surface thanks to "Add Video", so parking there is intentional.
 
   // T8400/T8545/T8555: "land on the published reel" (e.g. DraftTile's Publish ->
   // My Reels action) fires galleryStore.open(); T8555 split published reels onto
@@ -1134,6 +1221,18 @@ export function ProjectManager({
         className="hidden"
       />
 
+      {/* T8380: hidden multi-file input for "Add Video" direct clip upload.
+          Opened only after the consequence notice is accepted. */}
+      <input
+        ref={clipFileInputRef}
+        type="file"
+        accept="video/*"
+        multiple
+        onChange={handleClipFilesChange}
+        className="hidden"
+        data-testid="clip-upload-input"
+      />
+
       {/* Credits anchored far left. First-run hint derives "never uploaded a
           game" from the loaded games list (T8500) - a pure render-time
           derivation, no persisted view state. */}
@@ -1276,8 +1375,6 @@ export function ProjectManager({
         />
         <SegmentedTabButton
           active={activeTab === 'projects'}
-          disabled={clipsTabDisabled}
-          title={clipsTabDisabled ? 'Extract clips from a game first using Annotate mode' : undefined}
           onClick={() => setActiveTab('projects')}
           Icon={Scissors}
           label={SECTION_NAMES.CLIPS}
@@ -1305,16 +1402,9 @@ export function ProjectManager({
         />
       </div>
 
-      {/* T8780: the disabled Clips tab's reason (title attribute above) is a
-          native tooltip -- invisible on touch, where hover never fires. This
-          caption surfaces the same reason as on-screen text instead. Skipped
-          on the Reels tab, which already shows the identical reason inline in
-          its own empty state -- avoids a third repeat of the same sentence. */}
-      {clipsTabDisabled && activeTab !== 'inProgressReels' && (
-        <p className="text-xs text-gray-500 mb-4 px-1">
-          Extract clips from a game first using Annotate mode to unlock {SECTION_NAMES.CLIPS}
-        </p>
-      )}
+      {/* T8380: the T8780 disabled-Clips-tab caption was removed with the
+          dead-end guard -- the tab is always reachable now, and its two-path
+          empty state (Add Video + Clip Out Play) replaces that caption's job. */}
 
       {/* Action Button — T8360: the In Progress Clips tab has no create action
           here; the "Build New Reel" assembly button lives on the In Progress
@@ -1332,6 +1422,78 @@ export function ProjectManager({
             Add Game
           </Button>
         </div>
+      )}
+
+      {/* T8380: "Add Video" action row on the In Progress Clips tab. Shown once
+          there are clips; a zero-content account gets the same button inside the
+          two-path empty state instead (they are mutually exclusive, so exactly
+          one data-tutorial-target="clips-add-video" node exists at a time -- what
+          T7630's guided-tour anchor needs). Mobile-first, above the carousels. */}
+      {activeTab === 'projects' && clipDrafts.length > 0 && (
+        <div className="mb-4 sm:mb-5">
+          <Button
+            variant="success"
+            size="lg"
+            icon={Plus}
+            onClick={handleAddVideoClick}
+            data-tutorial-target="clips-add-video"
+          >
+            {CLIP_UPLOAD.ADD_VIDEO}
+          </Button>
+        </div>
+      )}
+
+      {/* T8380: in-flight + failed clip-upload rail. Reuses the Games "Uploading"
+          header idiom and AttachVideoModal's progress-bar markup. A failed file
+          (source never reached R2) keeps a Retry until retried or dismissed. */}
+      {activeTab === 'projects' && clipUploadRows.length > 0 && (
+        <section className="mb-4 sm:mb-5" data-testid="clip-uploading-rail">
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide flex items-center gap-2 mb-3">
+            {isUploadingClips
+              ? <Loader2 size={14} className="animate-spin text-green-400" />
+              : <Upload size={14} />}
+            Uploading
+          </h2>
+          <div className="space-y-2">
+            {clipUploadRows.map(({ name, pct, failed }) => (
+              <div key={name} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-gray-300 truncate mr-2">{name}</span>
+                  {failed
+                    ? <span className="text-red-400 shrink-0">Failed</span>
+                    : <span className="text-gray-400 shrink-0">{pct}%</span>}
+                </div>
+                {failed ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 flex-1">Upload didn’t finish.</span>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={RefreshCw}
+                      onClick={() => handleRetryClip(name)}
+                    >
+                      Retry
+                    </Button>
+                    <button
+                      onClick={() => handleDismissClip(name)}
+                      className="p-1 text-gray-400 hover:text-gray-200 rounded"
+                      aria-label="Dismiss"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-green-500 transition-[width] duration-200"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* T5820: degraded cross-profile link notice — the owning game was deleted
@@ -1558,9 +1720,35 @@ export function ProjectManager({
             </p>
           </div>
         ) : clipDrafts.length === 0 ? (
-          <div className="text-gray-500 text-center">
-            <p className="mb-2">No clips yet</p>
-            <p className="text-sm">Tap &apos;Clip Out Play&apos; on a clip in Annotate to start one.</p>
+          /* T8380: two-path empty state. Path A (upload directly) is primary --
+             this tab's own action, and the mobile-first camera-roll path -- so it
+             carries the Add Video button. Path B (extract in Annotate) stays as
+             guidance since its action lives on the Annotate screen, not here. */
+          <div className="flex flex-col items-center text-center max-w-sm mx-auto py-4">
+            <p className="text-gray-400 mb-1">No clips yet</p>
+            <p className="text-sm text-gray-500 mb-5">Start a clip in one of two ways.</p>
+
+            <Button
+              variant="success"
+              size="lg"
+              icon={Plus}
+              onClick={handleAddVideoClick}
+              data-tutorial-target="clips-add-video"
+            >
+              {CLIP_UPLOAD.ADD_VIDEO}
+            </Button>
+            <p className="text-xs text-gray-500 mt-2">Upload videos from your phone or computer.</p>
+
+            <div className="flex items-center gap-3 w-full my-5">
+              <div className="h-px flex-1 bg-gray-700" />
+              <span className="text-xs text-gray-600 uppercase tracking-wide">or</span>
+              <div className="h-px flex-1 bg-gray-700" />
+            </div>
+
+            <p className="text-sm text-gray-400">
+              Tap <span className="font-medium text-gray-300">&apos;Clip Out Play&apos;</span> on a
+              play in Annotate to pull a clip from one of your games.
+            </p>
           </div>
         ) : (
           /* Drafts tab widens to max-w-6xl so the carousels use the viewport (Q1 /
@@ -1891,6 +2079,13 @@ export function ProjectManager({
         game={attachVideoGame}
         onClose={() => setAttachVideoGame(null)}
         onAttached={() => { setAttachVideoGame(null); onFetchGames?.(); }}
+      />
+
+      {/* T8380: consequence notice shown before the Add Video file picker. */}
+      <ClipUploadNoticeModal
+        isOpen={showClipNotice}
+        onCancel={() => setShowClipNotice(false)}
+        onContinue={handleClipNoticeContinue}
       />
 
       {extensionGame && (

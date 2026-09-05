@@ -1,5 +1,18 @@
 ---
 domain: annotate
+updated: 2026-09-05 (T8380 ships the "Add Video" ENTRY POINT for T8370's direct clip upload:
+there are now TWO clip-creation origins -- (1) Annotate extraction (game -> save_raw_clip, this
+doc's main subject) and (2) direct upload from the home screen's In Progress Clips tab. The button
+lives in `ProjectManager.jsx` (`activeTab === 'projects'` branch), NOT on the Annotate screen: it
+opens a one-time consequence notice (`ClipUploadNoticeModal.jsx`, copy in
+`displayNames.CLIP_UPLOAD`, user-approved 2026-09-05) then a multi-file picker, and uploads via
+T8370's `useClipUpload` hook -> `POST /api/clips/upload` (game_id NULL, emits `clip_uploaded`).
+T8380 also REMOVED the T6830 `clipsTabDisabled` dead-end guard (+ its /home/reels->Games redirect
+effect + the T8780 disabled caption): the In Progress Clips tab is now always reachable so a
+zero-content account can start by uploading; Games stays the default LANDING tab via `initialTab`.
+The per-file metadata modal `UploadClipModal.jsx` is deliberately NOT used by this batch path (it
+stays in Annotate's `ClipSelectorSidebar`); Add Video auto-names clips from filename, editable
+later. Failed-to-reach-R2 files get a Retry rail; backend rejections surface a toast. Prior:)
 updated: 2026-09-04 (T8760 single play control + clip-scoped looping playhead in the clip editor:
 the per-editor Preview button in `ClipScrubRegion.jsx` is DELETED — the main transport bar
 (`AnnotateControls.jsx`, play/pause + spacebar, both already converged by T8720) is now the SINGLE
