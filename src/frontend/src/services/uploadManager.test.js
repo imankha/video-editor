@@ -167,6 +167,72 @@ describe('uploadManager', () => {
     });
   });
 
+  describe('error message extraction (T8935)', () => {
+    // Every failing-response path in uploadManager.js shares one message-extraction
+    // helper. getDedupeGameUrl exercises it directly without needing the full
+    // hash/create/upload orchestration a game-creation test would require.
+    it('stringifies a FastAPI/Pydantic validation-error array instead of "[object Object]"', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 422,
+        json: async () => ({
+          detail: [{ loc: ['body', 'game_type'], msg: 'field required', type: 'missing' }],
+        }),
+      });
+
+      await expect(getDedupeGameUrl(1)).rejects.toThrow('body.game_type: field required');
+    });
+
+    it('joins multiple validation errors', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 422,
+        json: async () => ({
+          detail: [
+            { loc: ['body', 'a'], msg: 'field required', type: 'missing' },
+            { loc: ['body', 'b'], msg: 'must be positive', type: 'value_error' },
+          ],
+        }),
+      });
+
+      await expect(getDedupeGameUrl(1)).rejects.toThrow(
+        'body.a: field required; body.b: must be positive'
+      );
+    });
+
+    it('reads .message off an object detail (the activateGame 402 shape)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 402,
+        json: async () => ({ detail: { message: 'Insufficient credits', required: 2, balance: 0 } }),
+      });
+
+      await expect(getDedupeGameUrl(1)).rejects.toThrow('Insufficient credits');
+    });
+
+    it('falls back to a stringified object detail with no .message, never "[object Object]"', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ detail: { code: 'weird_shape' } }),
+      });
+
+      const err = await getDedupeGameUrl(1).catch(e => e);
+      expect(err.message).not.toBe('[object Object]');
+      expect(err.message).toBe('{"code":"weird_shape"}');
+    });
+
+    it('falls back to the generic message when detail is missing entirely', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({}),
+      });
+
+      await expect(getDedupeGameUrl(1)).rejects.toThrow('Failed to get URL: 500');
+    });
+  });
+
   describe('listDedupeGames', () => {
     it('should fetch and return games list', async () => {
       const mockGames = [

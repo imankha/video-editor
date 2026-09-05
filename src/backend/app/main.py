@@ -43,6 +43,8 @@ else:
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -607,6 +609,27 @@ async def below_migration_floor_handler(request, exc):
             "cannot be loaded. Support has been notified.",
             "code": "schema_below_floor",
         },
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    """T8935 investigation: FastAPI/Starlette's own default RequestValidationError
+    handling returns the normal `{"detail": [...]}` 422 body but never LOGS anything —
+    a request that fails Pydantic validation is completely invisible in server logs.
+    That silence is exactly what made a frontend "[object Object]" upload-failure
+    report (new Error(detail) stringifying a validation-error array) unroot-causeable
+    after the fact. This handler adds a WARNING log line (path + method + the error
+    list) before returning the SAME response FastAPI would have given by default —
+    behavior is unchanged, only visibility is added.
+    """
+    logger.warning(
+        "[Validation] 422 %s %s errors=%s",
+        request.method, request.url.path, exc.errors(),
+    )
+    return JSONResponse(
+        status_code=422,
+        content={"detail": jsonable_encoder(exc.errors())},
     )
 
 
