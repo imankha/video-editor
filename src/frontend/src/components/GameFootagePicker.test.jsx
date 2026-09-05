@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // accepted selection from EVERY path), the emitted payload shape, and folder
 // drag-drop via a mocked webkitGetAsEntry() directory tree.
 
-const { intake, addFilesMock, toastInfo } = vi.hoisted(() => ({
+const { intake, addFilesMock, removeItemMock, setManualOrderMock, toastInfo } = vi.hoisted(() => ({
   intake: {
     current: {
       status: 'empty',
@@ -20,11 +20,18 @@ const { intake, addFilesMock, toastInfo } = vi.hoisted(() => ({
     },
   },
   addFilesMock: vi.fn(),
+  removeItemMock: vi.fn(),
+  setManualOrderMock: vi.fn(),
   toastInfo: vi.fn(),
 }));
 
 vi.mock('../hooks/useFootageIntake', () => ({
-  useFootageIntake: () => ({ ...intake.current, addFiles: addFilesMock }),
+  useFootageIntake: () => ({
+    ...intake.current,
+    addFiles: addFilesMock,
+    removeItem: removeItemMock,
+    setManualOrder: setManualOrderMock,
+  }),
 }));
 
 vi.mock('./shared', () => ({
@@ -43,8 +50,10 @@ function makeItem(name, size = 1024) {
 
 beforeEach(() => {
   addFilesMock.mockReset().mockResolvedValue({ duplicates: [] });
+  removeItemMock.mockReset();
+  setManualOrderMock.mockReset();
   toastInfo.mockReset();
-  setIntake({ status: 'empty', items: [], order: [], skipped: [], proxies: {} });
+  setIntake({ status: 'empty', items: [], order: [], confidence: 'unknown', gaps: [], skipped: [], proxies: {} });
 });
 
 describe('GameFootagePicker — states', () => {
@@ -76,15 +85,51 @@ describe('GameFootagePicker — states', () => {
     expect(screen.getByText('5.0 MB')).toBeTruthy();
   });
 
-  it('ready multi: shows a plain ordered placeholder list + skipped disclosure', () => {
+  it('ready multi: mounts the FootageStrip (real confirm strip, not the old placeholder)', () => {
     const order = [makeItem('DJI_0003.MP4'), makeItem('DJI_0004.MP4'), makeItem('DJI_0005.MP4')];
-    setIntake({ status: 'ready', items: order, order, skipped: ['clip.THM'] });
+    setIntake({ status: 'ready', items: order, order, confidence: 'time', skipped: ['clip.THM'] });
     render(<GameFootagePicker onFootageChange={vi.fn()} />);
     expect(screen.getByTestId('footage-picker-ready-multi')).toBeTruthy();
-    const list = screen.getByTestId('footage-order-list');
-    expect(list.querySelectorAll('li')).toHaveLength(3);
-    expect(list.textContent).toContain('DJI_0003.MP4');
-    expect(screen.getByTestId('footage-skipped-line').textContent).toContain('Skipped 1');
+    expect(screen.getByTestId('footage-strip')).toBeTruthy();
+    expect(screen.getAllByTestId('footage-chip')).toHaveLength(3);
+    // The T8810 placeholder list is gone.
+    expect(screen.queryByTestId('footage-order-list')).toBeNull();
+    // Skipped junk now lives in the strip's gray disclosure.
+    expect(screen.getByTestId('footage-skipped').textContent).toContain('Skipped 1 extra camera file');
+  });
+
+  it('ready multi with confident order does NOT auto-open the reorder editor', () => {
+    const order = [makeItem('DJI_0003.MP4'), makeItem('DJI_0004.MP4')];
+    setIntake({ status: 'ready', items: order, order, confidence: 'time' });
+    render(<GameFootagePicker onFootageChange={vi.fn()} />);
+    expect(screen.queryByTestId('footage-reorder-list')).toBeNull();
+  });
+
+  it('ready multi with unknown order auto-opens the reorder editor', () => {
+    const order = [makeItem('clipA.mp4'), makeItem('clipB.mp4')];
+    setIntake({ status: 'ready', items: order, order, confidence: 'unknown' });
+    render(<GameFootagePicker onFootageChange={vi.fn()} />);
+    expect(screen.getByTestId('footage-reorder-list')).toBeTruthy();
+  });
+
+  it('Adjust order opens the reorder editor; Done closes it', () => {
+    const order = [makeItem('DJI_0003.MP4'), makeItem('DJI_0004.MP4')];
+    setIntake({ status: 'ready', items: order, order, confidence: 'time' });
+    render(<GameFootagePicker onFootageChange={vi.fn()} />);
+    expect(screen.queryByTestId('footage-reorder-list')).toBeNull();
+    fireEvent.click(screen.getByTestId('footage-adjust-order'));
+    expect(screen.getByTestId('footage-reorder-list')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('footage-reorder-done'));
+    expect(screen.queryByTestId('footage-reorder-list')).toBeNull();
+  });
+
+  it('single-file state remains untouched — no strip, no reorder editor (T8810 C0)', () => {
+    const only = makeItem('game.mp4', 5 * 1024 * 1024);
+    setIntake({ status: 'ready', items: [only], order: [only], confidence: 'time' });
+    render(<GameFootagePicker onFootageChange={vi.fn()} />);
+    expect(screen.getByTestId('footage-picker-ready-single')).toBeTruthy();
+    expect(screen.queryByTestId('footage-strip')).toBeNull();
+    expect(screen.queryByTestId('footage-reorder-list')).toBeNull();
   });
 });
 

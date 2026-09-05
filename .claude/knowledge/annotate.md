@@ -394,6 +394,19 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   {n}". The T7890 `recordFileSelected` beacon fires once per session on the first accepted selection
   from every path (the picker calls `onFileSelected`, which is session-deduped). Don't grep for
   `PER_HALF`/`videoMode` — they're gone.
+- **Confirm strip + reorder editor (T8820)** completes the intake arc. Inside `GameFootagePicker`'s
+  multi-file (`order.length >= 2`) `ready` state, `FootageStrip` (`components/FootageStrip.jsx`)
+  renders the hook's decided plan as evidence-bearing chips (number badge + duration + clock-time or
+  filename evidence), chevrons/labelled gap connectors, one trust line keyed on `confidence`
+  (`time`/`name`/`unknown`/`manual`), a "+ Add more" chip and the skipped-junk `<details>`. Tapping
+  "Adjust order" (or an `unknown` order auto-opening it — pure VIEW state, never persisted) mounts
+  `FootageReorderList`, a vertical drag-reorder list using the RegionLayer Pointer-Events +
+  `setPointerCapture` + `touch-none` pattern; any manual drag calls `setManualOrder`, flipping the
+  trust line to "Order set by you". Shared display formatters live in `utils/footageDisplay.js`
+  (`humanizeMinutes`, `footageEvidence`, `gapDisplay`, `HUGE_GAP_S = 10800`). Both are purely
+  presentational — all ordering/junk logic stays in `useFootageIntake`. Ordering ambiguity NEVER
+  gates submit. Single-file `ready` is byte-for-byte T8810 (no strip). This is the END of the intake
+  arc; the angles/shrink work (T8830+) is separate.
 - **Attach-more-videos to an existing game (T8700)** is a first-class post-creation gesture, not
   just a create-time step. Frontend: `attachVideoToExistingGame` (uploadManager.js) behind
   GameTile's "Add video" kebab action → `AttachVideoModal`; reuses the create-time

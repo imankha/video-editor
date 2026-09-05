@@ -3,6 +3,8 @@ import { Upload } from 'lucide-react';
 import { toast } from './shared';
 import { useFootageIntake } from '../hooks/useFootageIntake';
 import { pairProxies, isJunkFile } from '../utils/footageIntake';
+import { FootageStrip } from './FootageStrip';
+import { FootageReorderList } from './FootageReorderList';
 import {
   entriesFromDataTransfer,
   hasDirectoryEntry,
@@ -51,13 +53,23 @@ function acceptedVideoCount(fileList) {
  * reactive-persistence ban does not apply.
  */
 export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmitting = false }) {
-  const { status, items, order, skipped, proxies, addFiles } = useFootageIntake();
+  const { status, items, order, confidence, gaps, skipped, proxies, addFiles, removeItem, setManualOrder } =
+    useFootageIntake();
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState(false);
   const [flashError, setFlashError] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  // Reorder editor open/close is pure VIEW state (never persisted) — this is not a
+  // reactive-persistence write, so the useEffect below is allowed. "Adjust order"
+  // opens it; an `unknown` order auto-opens it so the user lands on the fix; Done
+  // closes it (it does not re-open after a manual reorder flips confidence away).
+  const [reorderOpen, setReorderOpen] = useState(false);
   const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
+
+  useEffect(() => {
+    if (confidence === 'unknown') setReorderOpen(true);
+  }, [confidence]);
 
   // Report the current footage plan upward whenever the inferred order changes.
   // order carries only successfully-probed videos, already in play sequence.
@@ -233,33 +245,37 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
   }
 
   if (isReady) {
-    // 2+ files: plain ordered placeholder list (T8820 replaces with confirm strip).
+    // 2+ files: the trust-building confirm strip + (optional) reorder editor.
     return (
       <div data-testid="footage-picker-ready-multi">
         {hiddenInputs}
-        <div className="w-full px-4 py-3 border-2 border-dashed border-green-500 bg-green-900/20 rounded-lg">
-          <p className="text-green-400 font-medium mb-2">{acceptedItems.length} videos ready</p>
-          <ol className="space-y-1" data-testid="footage-order-list">
-            {acceptedItems.map((it, i) => (
-              <li key={it.name} className="flex items-center gap-2 text-sm text-gray-300">
-                <span className="text-gray-500 w-5 shrink-0">{i + 1}.</span>
-                <span className="truncate">{it.name}</span>
-              </li>
-            ))}
-          </ol>
-          {skipped.length > 0 && (
-            <p className="text-xs text-gray-500 mt-2" data-testid="footage-skipped-line">
-              Skipped {skipped.length} other file{skipped.length !== 1 ? 's' : ''}
-            </p>
+        {/* The strip container stays a drop target so more files merge via addFiles. */}
+        <div
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={isSubmitting ? 'opacity-50 pointer-events-none' : ''}
+        >
+          <FootageStrip
+            order={order}
+            items={items}
+            confidence={confidence}
+            gaps={gaps}
+            skipped={skipped}
+            onRemove={removeItem}
+            onAddMore={openFilePicker}
+            onAdjustOrder={() => setReorderOpen(true)}
+          />
+          {reorderOpen && (
+            <FootageReorderList
+              order={order}
+              confidence={confidence}
+              onReorder={setManualOrder}
+              onRemove={removeItem}
+              onClose={() => setReorderOpen(false)}
+            />
           )}
-          <button
-            type="button"
-            onClick={openFilePicker}
-            disabled={isSubmitting}
-            className="mt-3 text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
-          >
-            + add more videos
-          </button>
         </div>
         {/* A junk-only "add more" selection must still surface feedback here. */}
         {error && (

@@ -103,7 +103,11 @@ export function useFootageIntake() {
     const order = names
       .map((n) => byName.get(n))
       .filter((it) => it && !it.probeError);
-    setState((s) => ({ ...s, order, confidence: 'manual' }));
+    // gaps were computed against the time-ordered chain (afterIndex points into
+    // THAT order); once the user hand-orders, those indices are meaningless and
+    // would draw break connectors — even the yellow "two games?" warning —
+    // between segments the user just placed adjacent. Drop them.
+    setState((s) => ({ ...s, order, confidence: 'manual', gaps: [] }));
   }, []);
 
   const reset = useCallback(() => {
