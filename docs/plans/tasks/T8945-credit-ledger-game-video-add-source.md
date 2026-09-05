@@ -1,6 +1,6 @@
 # T8945: Credit ledger never registered "game_video_add" as a source (500 -> "Failed to fetch")
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 1
 **Created:** 2026-09-05
