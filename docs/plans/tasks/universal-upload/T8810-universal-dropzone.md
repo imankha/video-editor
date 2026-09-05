@@ -1,6 +1,6 @@
 # T8810: Universal dropzone replaces Per Game / Per Half
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-09-05
@@ -89,6 +89,16 @@ a uniform ordered list. Mockup + approved microcopy: artifact section 03 screens
 ### Progress Log
 
 **2026-09-05**: Filed.
+
+**2026-09-05**: Implemented (PR #345, merged to master/STAGING). All automatable acceptance
+criteria proven via 190 curated tests (incl. a synthetic-fixture folder-drop test
+reproducing T8800's DJI tuple values) + a fresh-context reviewer pass (approved, 2 minor
+fixes applied). **Open manual-verification gap, not yet done**: the container that
+implemented this had no access to a real OS folder or a live Chrome browser, so two
+acceptance criteria are unverified against the real world — (1) selecting/dragging the
+actual `formal annotations/u14 adonis/ECNL Test - DJI Action 6/` folder in a real browser,
+and (2) real Chrome folder drag-drop. Do this manually against staging once deployed,
+before considering this task fully done.
 
 ## Acceptance Criteria
 
