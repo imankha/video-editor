@@ -410,11 +410,10 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await page.locator('button:has-text("Add Game")').click();
     await page.waitForTimeout(500);
 
-    // T8500: cost line + 30-day expiry render BEFORE any file is selected,
-    // and the metadata fields live in a collapsed disclosure.
+    // T8500: cost line + 30-day expiry render BEFORE any file is selected.
+    // T8955: the metadata fields (incl. Game Type) are all always-visible now,
+    // no collapsed disclosure to check.
     await expect(page.getByText(/keeps your video for 30 days/)).toBeVisible({ timeout: 10000 });
-    const disclosure = page.getByTestId('game-details-disclosure');
-    expect(await disclosure.evaluate(el => el.open)).toBe(false);
 
     // T8810: one universal footage dropzone (no Per Game / Per Half toggle).
     await expect(page.getByText('Drop your whole game here')).toBeVisible({ timeout: 10000 });
