@@ -12,6 +12,7 @@ convention as final_videos.rating_counts) via utils/encoding.py.
 
 import logging
 
+from app.database import column_exists
 from app.queries import latest_working_clips_subquery
 from app.utils.encoding import decode_data, encode_data
 
@@ -271,7 +272,24 @@ def compute_unified_clip_start(cursor, source_clip_id, clip_start_time):
     if row is None:
         return clip_start_time
     video_sequence, game_id = row[0], row[1]
-    if not video_sequence or video_sequence <= 1 or game_id is None:
+    if not video_sequence or game_id is None:
+        return clip_start_time
+    # T8870: prefer the source video's canonical offset_seconds (its position on
+    # the game's real-time axis) when present. Backfilled rows carry
+    # offset_seconds == the prefix-sum below, so this is BYTE-IDENTICAL for
+    # existing sequence-only games; overlap games place the source correctly even
+    # when sequence order != chronological order. column_exists guards the
+    # rolling-deploy skew window where a peer hasn't migrated the column in yet.
+    if column_exists(cursor, "game_videos", "offset_seconds"):
+        off_row = cursor.execute(
+            "SELECT offset_seconds FROM game_videos WHERE game_id = ? AND sequence = ?",
+            (game_id, video_sequence),
+        ).fetchone()
+        if off_row is not None and off_row[0] is not None:
+            return float(clip_start_time) + float(off_row[0])
+    # Prefix-sum-by-sequence fallback (unchanged): the first/single video (or a
+    # game with no placement data) reads as file-relative.
+    if video_sequence <= 1:
         return clip_start_time
     offset = cursor.execute(
         "SELECT COALESCE(SUM(duration), 0) FROM game_videos "

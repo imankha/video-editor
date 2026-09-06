@@ -193,6 +193,8 @@ export const useUploadStore = create((set, get) => {
         options.videoDuration = entry.videoMetadata.duration;
         options.videoWidth = entry.videoMetadata.width;
         options.videoHeight = entry.videoMetadata.height;
+        // T8870: embedded recording time -> recorded_at on the create payload.
+        options.videoRecordedAt = entry.videoMetadata.recorded_at || null;
       }
       promise = uploadGame(entry.file, progressHandler, options);
     }

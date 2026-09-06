@@ -17,10 +17,10 @@ import contextlib
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.analytics import record_milestone
 from app.constants import GameCreateStatus, GameStatus, GameType, ShareClipScope, get_rating_adjective
@@ -54,6 +54,117 @@ from app.utils.offload import run_in_context
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/games", tags=["games"])
+
+
+# ==============================================================================
+# T8870 — Overlap placement (recorded_at + offset_seconds)
+# ==============================================================================
+
+# A recorded_at farther than this from the game's time zero is treated as a
+# garbage clock (export-time timestamps, uncalibrated device clock): store it as
+# evidence but place the video by prefix-sum instead and log a warning.
+PLACEMENT_WINDOW_H = 12
+
+
+def _parse_recorded_at(value) -> datetime | None:
+    """Parse an ISO-8601 recorded_at into an aware UTC datetime, or None.
+
+    Naive input is assumed UTC. Returns None on anything unparseable (the API
+    boundary validator rejects unparseable client input with 422; inside the
+    pure helper an unparseable value degrades to "no timestamp evidence").
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        try:
+            dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _normalize_recorded_at(value) -> str | None:
+    """Canonical stored form: 'YYYY-MM-DDTHH:MM:SSZ' (UTC), or None."""
+    dt = _parse_recorded_at(value)
+    if dt is None:
+        return None
+    return dt.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def compute_video_offsets(new_videos: list, existing_videos: list | None = None) -> list[float]:
+    """Canonical offset_seconds (position on the game's real-time axis) for each
+    video in ``new_videos``, in order. See EPIC decision 7 + T8870 task file.
+
+    Each video is a mapping with ``sequence`` (int), ``duration`` (float | None)
+    and ``recorded_at`` (ISO string | None). ``existing_videos`` are the game's
+    already-persisted rows and additionally carry ``offset_seconds`` (their
+    frozen placement, which this function NEVER renumbers).
+
+    Rules:
+      - Time zero = the earliest video's recording time. Existing rows anchor the
+        axis: a video's offset is (recorded_at - zero) in seconds. If the game
+        already has placed rows with recorded_at, zero stays their zero (derived
+        as recorded_at - offset_seconds), so an existing row is never renumbered
+        and a NEW video recorded EARLIER than that zero gets a legal NEGATIVE
+        offset. With no existing anchor, zero = min(recorded_at) across all
+        videos that have one.
+      - No recorded_at -> offset = prefix-sum of durations by sequence (the exact
+        virtual position today's concatenation gives it).
+      - recorded_at present but > PLACEMENT_WINDOW_H hours from zero (garbage
+        clock) -> keep the recorded_at as evidence at the call site, but place by
+        prefix-sum and log a warning.
+    """
+    existing_videos = list(existing_videos or [])
+
+    # Axis zero. Prefer an anchor from existing PLACED rows (recorded_at +
+    # offset_seconds both present): zero = recorded_at - offset. Take the min so
+    # the axis stays pinned to the earliest existing anchor even if rows disagree.
+    anchor_zeros = []
+    for ev in existing_videos:
+        rec = _parse_recorded_at(ev.get("recorded_at"))
+        off = ev.get("offset_seconds")
+        if rec is not None and off is not None:
+            anchor_zeros.append(rec - timedelta(seconds=off))
+    if anchor_zeros:
+        zero_dt = min(anchor_zeros)
+    else:
+        all_recs = [
+            _parse_recorded_at(v.get("recorded_at"))
+            for v in existing_videos + list(new_videos)
+        ]
+        all_recs = [r for r in all_recs if r is not None]
+        zero_dt = min(all_recs) if all_recs else None
+
+    all_videos = existing_videos + list(new_videos)
+
+    def prefix_sum(seq) -> float:
+        return float(sum(
+            (v.get("duration") or 0.0)
+            for v in all_videos
+            if v.get("sequence") is not None and v["sequence"] < seq
+        ))
+
+    offsets: list[float] = []
+    for nv in new_videos:
+        rec = _parse_recorded_at(nv.get("recorded_at"))
+        if rec is None or zero_dt is None:
+            offsets.append(prefix_sum(nv["sequence"]))
+            continue
+        candidate = (rec - zero_dt).total_seconds()
+        if abs(candidate) > PLACEMENT_WINDOW_H * 3600:
+            logger.warning(
+                "[compute_video_offsets] recorded_at %s is %.0fs from game zero "
+                "(> %dh window); placing by prefix-sum instead",
+                nv.get("recorded_at"), candidate, PLACEMENT_WINDOW_H,
+            )
+            offsets.append(prefix_sum(nv["sequence"]))
+        else:
+            offsets.append(float(candidate))
+    return offsets
 
 
 
@@ -167,6 +278,20 @@ class VideoReference(BaseModel):
     width: int | None = Field(None, description="Video width in pixels")
     height: int | None = Field(None, description="Video height in pixels")
     file_size: int | None = Field(None, description="File size in bytes")
+    # T8870: the video's embedded recording clock time (ISO-8601, e.g.
+    # "2026-07-18T18:44:59Z"). Evidence for overlap placement; null when the
+    # client couldn't read one (never a fabricated time). Reject a non-parseable
+    # string at the boundary (422) rather than silently dropping it.
+    recorded_at: str | None = Field(None, description="Embedded recording time (ISO-8601 UTC), or null")
+
+    @field_validator("recorded_at")
+    @classmethod
+    def _validate_recorded_at(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        if _parse_recorded_at(v) is None:
+            raise ValueError(f"recorded_at is not a parseable ISO-8601 timestamp: {v!r}")
+        return v
 
 
 class CreateGameRequest(BaseModel):
@@ -221,13 +346,18 @@ def _probe_video_metadata(blake3_hash: str) -> dict | None:
         return None
 
 
-def _insert_game_videos(cursor, game_id: int, videos: list[VideoReference], skip_fps_probe: bool = False) -> None:
+def _insert_game_videos(cursor, game_id: int, videos: list[VideoReference],
+                        skip_fps_probe: bool = False, offsets: list[float] | None = None) -> None:
     """Insert game_videos rows for a game. Shared by create and add-videos.
 
     skip_fps_probe: True for pending games (video not in R2 yet). FPS is
     probed when the game is activated after upload completes.
+
+    offsets: T8870 canonical offset_seconds parallel to ``videos`` (from
+    compute_video_offsets). None means "no placement supplied" -> offset_seconds
+    stays NULL and the game_videos.recorded_at is still stored as evidence.
     """
-    for video in videos:
+    for idx, video in enumerate(videos):
         fps = None
         duration = video.duration
         width = video.width
@@ -249,10 +379,12 @@ def _insert_game_videos(cursor, game_id: int, videos: list[VideoReference], skip
                     width = meta.get("width")
                 if height is None:
                     height = meta.get("height")
+        offset_seconds = offsets[idx] if offsets is not None else None
         cursor.execute("""
             INSERT INTO game_videos (game_id, blake3_hash, sequence, duration,
-                                     video_width, video_height, video_size, fps)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                     video_width, video_height, video_size, fps,
+                                     recorded_at, offset_seconds)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             game_id,
             video.blake3_hash.lower(),
@@ -262,13 +394,21 @@ def _insert_game_videos(cursor, game_id: int, videos: list[VideoReference], skip
             height,
             video.file_size,
             fps,
+            _normalize_recorded_at(video.recorded_at),
+            offset_seconds,
         ))
 
 
 def _get_game_videos_response(cursor, game_id: int) -> list:
     """Get game_videos as response dicts with presigned URLs."""
-    cursor.execute("""
-        SELECT blake3_hash, sequence, duration, video_width, video_height, video_size
+    # T8870: recorded_at/offset_seconds are projected only when present. The
+    # request path is always migrated to head by the JIT seam, so this is
+    # defence-in-depth for rolling-deploy skew (EPIC decision 8): naming a column
+    # a peer machine hasn't migrated yet would 500 the SELECT even with zero rows.
+    has_placement = column_exists(cursor, "game_videos", "offset_seconds")
+    placement_cols = ", recorded_at, offset_seconds" if has_placement else ""
+    cursor.execute(f"""
+        SELECT blake3_hash, sequence, duration, video_width, video_height, video_size{placement_cols}
         FROM game_videos WHERE game_id = ? ORDER BY sequence
     """, (game_id,))
     rows = cursor.fetchall()
@@ -285,6 +425,8 @@ def _get_game_videos_response(cursor, game_id: int) -> list:
             'video_url': video_url,
             'video_width': row['video_width'],
             'video_height': row['video_height'],
+            'recorded_at': row['recorded_at'] if has_placement else None,
+            'offset_seconds': row['offset_seconds'] if has_placement else None,
         })
     return videos
 
@@ -464,9 +606,16 @@ async def create_game(request: CreateGameRequest):
         ))
         game_id = cursor.lastrowid
 
+        # T8870: canonical placement for a fresh game (no existing rows to anchor).
+        offsets = compute_video_offsets([
+            {"sequence": v.sequence, "duration": v.duration, "recorded_at": v.recorded_at}
+            for v in request.videos
+        ])
+
         # Insert game_videos rows (for ALL games, including single-video)
         _insert_game_videos(cursor, game_id, request.videos,
-                            skip_fps_probe=(game_status == GameStatus.PENDING))
+                            skip_fps_probe=(game_status == GameStatus.PENDING),
+                            offsets=offsets)
 
         conn.commit()
 
@@ -580,10 +729,33 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
             for offset, video in enumerate(new_videos):
                 video.sequence = next_seq + offset
 
+            # T8870: place the attached videos on the game's existing real-time
+            # axis. Read the already-persisted rows so compute_video_offsets can
+            # anchor to their zero (and never renumber them); a video recorded
+            # earlier than the existing zero legally gets a negative offset.
+            has_placement = column_exists(cursor, "game_videos", "offset_seconds")
+            existing_rows = []
+            if has_placement:
+                cursor.execute(
+                    "SELECT sequence, duration, recorded_at, offset_seconds "
+                    "FROM game_videos WHERE game_id = ?",
+                    (game_id,),
+                )
+                existing_rows = [
+                    {"sequence": r["sequence"], "duration": r["duration"],
+                     "recorded_at": r["recorded_at"], "offset_seconds": r["offset_seconds"]}
+                    for r in cursor.fetchall()
+                ]
+            new_offsets = compute_video_offsets(
+                [{"sequence": v.sequence, "duration": v.duration, "recorded_at": v.recorded_at}
+                 for v in new_videos],
+                existing_videos=existing_rows,
+            ) if has_placement else None
+
             # Insert new game_videos rows (append-only sequences; _insert_game_videos
             # probes+backfills duration/dimensions from R2 so the attached half has a
             # real duration for buildFullVideoTimeline).
-            _insert_game_videos(cursor, game_id, new_videos)
+            _insert_game_videos(cursor, game_id, new_videos, offsets=new_offsets)
 
             # Update games table with re-aggregated video metadata.
             cursor.execute("""

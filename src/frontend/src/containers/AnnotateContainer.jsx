@@ -458,10 +458,18 @@ export function AnnotateContainer({
     if (!files[0]) return;
 
     try {
-      // Extract metadata for all files
+      // Extract metadata for all files. T8870: thread each item's embedded
+      // recording time (from the picker's footage list) as recorded_at so the
+      // upload can persist it for overlap placement. The resume path (bare file,
+      // no footageList) has no timestamp evidence -> null.
       const metadataList = [];
-      for (const f of files) {
-        const meta = await extractVideoMetadata(f);
+      for (let i = 0; i < files.length; i++) {
+        const meta = await extractVideoMetadata(files[i]);
+        const creationTime = footageList?.[i]?.creationTime;
+        meta.recorded_at =
+          creationTime instanceof Date && !Number.isNaN(creationTime.getTime())
+            ? creationTime.toISOString()
+            : null;
         metadataList.push(meta);
       }
 

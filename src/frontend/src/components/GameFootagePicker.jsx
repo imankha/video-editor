@@ -47,8 +47,10 @@ function acceptedVideoCount(fileList) {
  *              2+ items show a plain ordered placeholder list (T8820 swaps in the
  *              real confirm/reorder strip).
  *
- * Reports its value up via onFootageChange({ files:[{file,sequence}], totalBytes,
- * proxies }) — sequence is the 1-based index into the inferred order. This is a
+ * Reports its value up via onFootageChange({ files:[{file,sequence,creationTime}],
+ * totalBytes, proxies }) — sequence is the 1-based index into the inferred order,
+ * creationTime is the item's embedded recording time (Date|null, from T8800's
+ * intake probe) threaded through to the upload as recorded_at (T8870). This is a
  * memory-only lift of form state to the parent (NOT a store/backend write), so the
  * reactive-persistence ban does not apply.
  */
@@ -75,7 +77,14 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
   // order carries only successfully-probed videos, already in play sequence.
   useEffect(() => {
     if (!onFootageChange) return;
-    const files = order.map((it, i) => ({ file: it.file, sequence: i + 1 }));
+    const files = order.map((it, i) => ({
+      file: it.file,
+      sequence: i + 1,
+      // T8870: carry the embedded recording time so the upload can send it as
+      // recorded_at (evidence for overlap placement); null when the intake probe
+      // found none — never a fabricated time.
+      creationTime: it.creationTime instanceof Date ? it.creationTime : null,
+    }));
     const totalBytes = order.reduce((sum, it) => sum + (it.size || 0), 0);
     onFootageChange({ files, totalBytes, proxies });
   }, [order, proxies, onFootageChange]);
