@@ -1,5 +1,13 @@
 ---
 domain: persistence-sync
+updated: 2026-09-06 (T8870: profile_db head v050 -> v051 (game_videos.recorded_at + offset_seconds).
+Plain additive JIT-seam migration -- guarded PRAGMA table_info ALTER + a prefix-sum offset_seconds
+backfill (idempotent, WHERE offset_seconds IS NULL, tuple row-factory), no CAS/sync-path change, no
+new sync call site. Runner bumps PRAGMA user_version. offset_seconds is write-once at insert; the
+only future post-insert mutator is the Fix-timing gesture (T8900), consistent with gesture-based
+persistence. game_videos stays profile_db-only -- pg.py `_SCHEMA_DDL` untouched. Structural
+migration-window guard: HEAD_VERSION_AUDITED 50 -> 51, both new columns column_exists-guarded on the
+two hot reads (_get_game_videos_response, compute_unified_clip_start).)
 updated: 2026-09-01 (T8190 + T5087: T8190 fixed the JIT seam's same-thread reentrancy deadlock
 (a migration reaching `get_db_connection` from its own `up()` self-deadlocked the whole API
 process, no timeout) with a same-thread pass-through + `SEAM_LOCK_TIMEOUT_S` acquire-with-timeout,

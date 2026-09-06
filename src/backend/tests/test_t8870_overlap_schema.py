@@ -298,7 +298,7 @@ class TestUnifiedStartEquivalence:
         value the prefix-sum branch would (byte-identical for migrated data)."""
         from app.services.collection_metadata import compute_unified_clip_start
 
-        user_id, db_path, user_dir = self._fresh_db(tmp_path)
+        _user_id, db_path, user_dir = self._fresh_db(tmp_path)
         try:
             conn = sqlite3.connect(str(db_path))
             conn.row_factory = sqlite3.Row
@@ -344,7 +344,7 @@ class TestUnifiedStartEquivalence:
         directly (offset + clip.start_time) rather than sequence prefix-sum."""
         from app.services.collection_metadata import compute_unified_clip_start
 
-        user_id, db_path, user_dir = self._fresh_db(tmp_path)
+        _user_id, db_path, user_dir = self._fresh_db(tmp_path)
         try:
             conn = sqlite3.connect(str(db_path))
             conn.row_factory = sqlite3.Row
@@ -371,3 +371,73 @@ class TestUnifiedStartEquivalence:
         finally:
             if user_dir.exists():
                 shutil.rmtree(user_dir, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: the real create_game endpoint round-trips recorded_at +
+# offset_seconds through the DB and the response (API-level live-drive, since a
+# browser multi-video upload isn't practical in-container -- kickoff QA phase).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_create_game_endpoint_persists_and_returns_placement(tmp_path, monkeypatch):
+    import app.routers.games as games_mod
+    from app.database import USER_DATA_BASE, ensure_database, get_db_connection
+    from app.routers.games import CreateGameRequest, VideoReference, create_game
+
+    user_id = f"test_v051_e2e_{uuid.uuid4().hex[:8]}"
+    set_current_user_id(user_id)
+    set_current_profile_id("testdefault")
+    ensure_database()
+
+    # Stub the R2 / analytics boundaries; we are exercising placement + persistence.
+    monkeypatch.setattr(games_mod, "_validate_video_in_r2", lambda h: None)
+    monkeypatch.setattr(games_mod, "_probe_video_metadata", lambda h: None)
+    monkeypatch.setattr(games_mod, "generate_presigned_url_global", lambda *a, **k: "https://x/v.mp4")
+    monkeypatch.setattr(games_mod, "record_milestone", lambda *a, **k: None)
+
+    try:
+        h1, h2 = "a" * 64, "b" * 64
+        req = CreateGameRequest(
+            opponent_name="DJI",
+            videos=[
+                VideoReference(blake3_hash=h1, sequence=1, duration=1410, file_size=10,
+                               recorded_at="2026-07-18T17:55:44Z"),
+                VideoReference(blake3_hash=h2, sequence=2, duration=1013, file_size=10,
+                               recorded_at="2026-07-18T18:19:15Z"),
+            ],
+        )
+        resp = await create_game(req)
+
+        # Response carries placement per video (normalized recorded_at + offset).
+        vids = {v["sequence"]: v for v in resp["videos"]}
+        assert vids[1]["recorded_at"] == "2026-07-18T17:55:44Z"
+        assert vids[1]["offset_seconds"] == pytest.approx(0.0)
+        assert vids[2]["recorded_at"] == "2026-07-18T18:19:15Z"
+        assert vids[2]["offset_seconds"] == pytest.approx(1411.0)
+
+        # And the DB rows persisted them.
+        with get_db_connection() as conn:
+            rows = conn.execute(
+                "SELECT sequence, recorded_at, offset_seconds FROM game_videos "
+                "WHERE game_id = ? ORDER BY sequence", (resp["game_id"],)
+            ).fetchall()
+        assert rows[0]["recorded_at"] == "2026-07-18T17:55:44Z"
+        assert rows[0]["offset_seconds"] == pytest.approx(0.0)
+        assert rows[1]["offset_seconds"] == pytest.approx(1411.0)
+    finally:
+        path = USER_DATA_BASE / user_id
+        if path.exists():
+            shutil.rmtree(path, ignore_errors=True)
+
+
+@pytest.mark.asyncio
+async def test_create_game_rejects_unparseable_recorded_at():
+    """The VideoReference validator rejects a non-ISO recorded_at with a
+    ValidationError (surfaces as HTTP 422 at the API boundary)."""
+    from pydantic import ValidationError
+
+    from app.routers.games import VideoReference
+
+    with pytest.raises(ValidationError):
+        VideoReference(blake3_hash="a" * 64, sequence=1, recorded_at="not-a-timestamp")

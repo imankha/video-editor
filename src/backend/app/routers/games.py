@@ -167,7 +167,6 @@ def compute_video_offsets(new_videos: list, existing_videos: list | None = None)
     return offsets
 
 
-
 def get_game_video_url(blake3_hash: str, video_filename: str) -> str:
     """
     Get presigned URL for a game video, supporting both old and new storage.

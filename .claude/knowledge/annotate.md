@@ -1,5 +1,10 @@
 ---
 domain: annotate
+updated: 2026-09-06 (T8870 adds game_videos.recorded_at + offset_seconds (profile_db v051) for the
+overlap model -- every video now carries recording-clock evidence + a canonical real-time-axis
+offset, exposed per-video on the /load + get_game responses. Data-only (T8880 lanes / T8890 angle UI
+not built). offset_seconds is write-once at insert (compute_video_offsets); only Fix-timing (T8900)
+may mutate it later. See the "Overlap placement" bullet in the attach section below.)
 updated: 2026-09-05 (T8380 ships the "Add Video" ENTRY POINT for T8370's direct clip upload:
 there are now TWO clip-creation origins -- (1) Annotate extraction (game -> save_raw_clip, this
 doc's main subject) and (2) direct upload from the home screen's In Progress Clips tab. The button
@@ -421,6 +426,24 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   distinct from activate's `game_upload:{game_id}` so it's not a silent no-op, idempotent on retry)
   refs-before-charge like `activate_game`, with a `get_balance` pre-check so an unaffordable attach
   402s BEFORE committing the row (no free video). No schema change.
+- **Overlap placement: `game_videos.recorded_at` + `offset_seconds` (T8870, profile_db v051).**
+  Every game video now carries `recorded_at` (evidence: embedded recording clock time, ISO-8601 UTC
+  e.g. `2026-07-18T18:44:59Z`, nullable) + `offset_seconds` (canonical position on the game's
+  real-time axis; time zero = offset 0 = earliest video; nullable REAL). Both surface per-video on
+  the `_get_game_videos_response` payload (so `GET /games/{id}/load` and `get_game` `videos[]` both
+  include them; column-guarded for rolling-deploy skew). Offsets are computed ONCE at insert by
+  `compute_video_offsets(new, existing)` in games.py (called from `create_game` + `add_game_videos`):
+  all-timestamped -> `recorded_at - zero`; missing -> prefix-sum-by-sequence; `recorded_at` >
+  `PLACEMENT_WINDOW_H=12`h from zero (garbage/export clock) -> stored as evidence but placed by
+  prefix-sum + WARNING. Existing rows ANCHOR the axis and are NEVER renumbered on attach — a video
+  recorded earlier than the current zero gets a legal NEGATIVE offset (T8880 renders it). **Write-once
+  invariant: after insert, ONLY the Fix-timing gesture (T8900, not built yet) may mutate
+  `offset_seconds`** — nothing else writes it except insert-time computation + the v051 prefix-sum
+  backfill (which makes migrated games render byte-identically: `compute_unified_clip_start`'s new
+  offset branch reads `offset_seconds == prefix-sum`). Frontend thread: picker `creationTime` ->
+  uploadManager `recorded_at` on create + attach payloads (null when no evidence, never fabricated).
+  This is data-only — no timeline lanes (T8880) or angle UI (T8890) yet. `recorded_at` is validated
+  at the `VideoReference` boundary (422 on unparseable).
 - **boundaries_version** is the annotate↔framing invalidation signal on `raw_clips`: bumped by
   `save_raw_clip` on start_time change (clips.py:958-975) and `update_raw_clip` on duration change
   (L1158-1161); `update_working_clip` snapshots it into `working_clips.raw_clip_version`
