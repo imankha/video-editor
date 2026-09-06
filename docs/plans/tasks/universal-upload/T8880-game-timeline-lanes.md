@@ -1,10 +1,10 @@
 # T8880: Game timeline v2: lanes, backbone, extensions
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-09-05
-**Updated:** 2026-09-05
+**Updated:** 2026-09-06
 
 ## Problem
 
