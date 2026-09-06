@@ -1,6 +1,6 @@
 # T8880: Game timeline v2: lanes, backbone, extensions
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-09-05
@@ -98,6 +98,15 @@ games must hit the identical old code path). See [EPIC.md](EPIC.md) decisions 7 
 ### Progress Log
 
 **2026-09-05**: Filed.
+
+**2026-09-06**: Implemented by an automated worker. Escalated to the expert agent mid-task
+for the backbone-anchoring algorithm in the prepend/negative-offset edge case (resolved:
+backbone = longest-video spine grown by concatenation, then pre-seeded minimal-greedy lane
+assignment for lanes >= 1). Reviewer caught a MAJOR issue before approval: the builder
+selector would have routed gapped-but-non-overlapping multi-segment games to the new lane
+builder, which wasn't designed for that case - fixed to select on REAL overlap only.
+Test-first (33 new tests, RED->GREEN), 128 related tests green, CI green. Merged via PR
+#355 (merge commit 83a647cf).
 
 ## Acceptance Criteria
 

@@ -1,6 +1,6 @@
 # T8822: Consolidate footage strip + reorder list into one draggable list, add overlap badge
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-06
@@ -103,7 +103,7 @@ non-`time`-confidence state - fixed by gating the evidence line on `evidence.mon
 rather than codify it. Also fixed on review: a stale last-row gap-connector guard, the
 overlap badge silently dropping partners beyond the first (now says "and N more"), and a
 magic-number cleanup in `shortLabel`. 42 unit tests green, 3/3 e2e green (real browser,
-live stack), eslint clean.
+live stack), eslint clean. CI green. Merged via PR #354 (merge commit e8bdb038).
 
 ## Acceptance Criteria
 
