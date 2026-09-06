@@ -399,19 +399,28 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   {n}". The T7890 `recordFileSelected` beacon fires once per session on the first accepted selection
   from every path (the picker calls `onFileSelected`, which is session-deduped). Don't grep for
   `PER_HALF`/`videoMode` — they're gone.
-- **Confirm strip + reorder editor (T8820)** completes the intake arc. Inside `GameFootagePicker`'s
-  multi-file (`order.length >= 2`) `ready` state, `FootageStrip` (`components/FootageStrip.jsx`)
-  renders the hook's decided plan as evidence-bearing chips (number badge + duration + clock-time or
-  filename evidence), chevrons/labelled gap connectors, one trust line keyed on `confidence`
-  (`time`/`name`/`unknown`/`manual`), a "+ Add more" chip and the skipped-junk `<details>`. Tapping
-  "Adjust order" (or an `unknown` order auto-opening it — pure VIEW state, never persisted) mounts
-  `FootageReorderList`, a vertical drag-reorder list using the RegionLayer Pointer-Events +
+- **Confirm list (T8820, consolidated by T8822)** completes the intake arc. Inside
+  `GameFootagePicker`'s multi-file (`order.length >= 2`) `ready` state, `FootageList`
+  (`components/FootageList.jsx`) renders the hook's decided plan as ONE always-visible,
+  always-draggable vertical list — number badge + duration + clock-time-or-filename evidence per
+  row, labelled gap connectors between rows, one trust line keyed on `confidence`
+  (`time`/`name`/`unknown`/`manual`), a "+ Add more" row and the skipped-junk `<details>`. T8822
+  merged T8820's original two-component split (a horizontal chip strip for confirmation PLUS a
+  separate vertical `FootageReorderList` opened via "Adjust order") into this one component after
+  live-testing feedback that showing every video in two places was confusing — every row is
+  draggable immediately, no separate mode to open/close. Drag uses the RegionLayer Pointer-Events +
   `setPointerCapture` + `touch-none` pattern; any manual drag calls `setManualOrder`, flipping the
-  trust line to "Order set by you". Shared display formatters live in `utils/footageDisplay.js`
-  (`humanizeMinutes`, `footageEvidence`, `gapDisplay`, `HUGE_GAP_S = 10800`). Both are purely
-  presentational — all ordering/junk logic stays in `useFootageIntake`. Ordering ambiguity NEVER
-  gates submit. Single-file `ready` is byte-for-byte T8810 (no strip). This is the END of the intake
-  arc; the angles/shrink work (T8830+) is separate.
+  trust line to "Order set by you". T8822 also added a light-touch overlap badge
+  (`overlapGroups` in `utils/footageDisplay.js`): when two items' `creationTime`/`duration`
+  evidence ranges intersect AND `confidence === 'time'`, both rows get a violet informational badge
+  ("...we'll treat it as a second angle") — purely a heads-up, NOT the real lane/angle system
+  (T8880/T8890 own that in Annotate against the server's canonical `offset_seconds`; this badge
+  never affects the emitted `order`/sequence). Shared display formatters live in
+  `utils/footageDisplay.js` (`humanizeMinutes`, `footageEvidence`, `gapDisplay`,
+  `HUGE_GAP_S = 10800`, `overlapGroups`, `shortLabel`). `FootageList` is purely presentational —
+  all ordering/junk/overlap logic stays in `useFootageIntake` + `footageDisplay.js`. Ordering
+  ambiguity NEVER gates submit. Single-file `ready` is byte-for-byte T8810 (no list). This is the
+  END of the intake arc; the angles/shrink work (T8830+) is separate.
 - **Attach-more-videos to an existing game (T8700)** is a first-class post-creation gesture, not
   just a create-time step. Frontend: `attachVideoToExistingGame` (uploadManager.js) behind
   GameTile's "Add video" kebab action → `AttachVideoModal`; reuses the create-time

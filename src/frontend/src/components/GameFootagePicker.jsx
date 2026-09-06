@@ -3,8 +3,7 @@ import { Upload } from 'lucide-react';
 import { toast } from './shared';
 import { useFootageIntake } from '../hooks/useFootageIntake';
 import { pairProxies, isJunkFile } from '../utils/footageIntake';
-import { FootageStrip } from './FootageStrip';
-import { FootageReorderList } from './FootageReorderList';
+import { FootageList } from './FootageList';
 import {
   entriesFromDataTransfer,
   hasDirectoryEntry,
@@ -44,8 +43,7 @@ function acceptedVideoCount(fileList) {
  *   empty    → dropzone + hidden inputs (multi-select + folder) + folder link
  *   checking → pulsing skeleton chips, one per accepted file
  *   ready    → single item shows today's green filename+size chip byte-for-byte;
- *              2+ items show a plain ordered placeholder list (T8820 swaps in the
- *              real confirm/reorder strip).
+ *              2+ items show the always-draggable confirm list (FootageList, T8822).
  *
  * Reports its value up via onFootageChange({ files:[{file,sequence,creationTime}],
  * totalBytes, proxies }) — sequence is the 1-based index into the inferred order,
@@ -61,17 +59,8 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
   const [error, setError] = useState(false);
   const [flashError, setFlashError] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
-  // Reorder editor open/close is pure VIEW state (never persisted) — this is not a
-  // reactive-persistence write, so the useEffect below is allowed. "Adjust order"
-  // opens it; an `unknown` order auto-opens it so the user lands on the fix; Done
-  // closes it (it does not re-open after a manual reorder flips confidence away).
-  const [reorderOpen, setReorderOpen] = useState(false);
   const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
-
-  useEffect(() => {
-    if (confidence === 'unknown') setReorderOpen(true);
-  }, [confidence]);
 
   // Report the current footage plan upward whenever the inferred order changes.
   // order carries only successfully-probed videos, already in play sequence.
@@ -254,11 +243,12 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
   }
 
   if (isReady) {
-    // 2+ files: the trust-building confirm strip + (optional) reorder editor.
+    // 2+ files: the always-draggable confirm list (T8822 — one list, not a strip
+    // plus a separate reorder editor).
     return (
       <div data-testid="footage-picker-ready-multi">
         {hiddenInputs}
-        {/* The strip container stays a drop target so more files merge via addFiles. */}
+        {/* The list container stays a drop target so more files merge via addFiles. */}
         <div
           onDragOver={handleDragOver}
           onDragEnter={handleDragEnter}
@@ -266,25 +256,16 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
           onDrop={handleDrop}
           className={isSubmitting ? 'opacity-50 pointer-events-none' : ''}
         >
-          <FootageStrip
+          <FootageList
             order={order}
             items={items}
             confidence={confidence}
             gaps={gaps}
             skipped={skipped}
+            onReorder={setManualOrder}
             onRemove={removeItem}
             onAddMore={openFilePicker}
-            onAdjustOrder={() => setReorderOpen(true)}
           />
-          {reorderOpen && (
-            <FootageReorderList
-              order={order}
-              confidence={confidence}
-              onReorder={setManualOrder}
-              onRemove={removeItem}
-              onClose={() => setReorderOpen(false)}
-            />
-          )}
         </div>
         {/* A junk-only "add more" selection must still surface feedback here. */}
         {error && (
