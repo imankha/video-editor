@@ -220,8 +220,8 @@ export function buildFullVideoTimeline(gameVideos) {
 // T8880: Game timeline v2 -- lanes, backbone, coverage extensions.
 //
 // buildGameTimeline is the overlap-aware successor to buildFullVideoTimeline.
-// It is used ONLY when real overlap/gap placement exists (see
-// hasRealOverlapPlacement); an angle-free game keeps hitting the byte-identical
+// It is used ONLY when footage genuinely overlaps (see
+// hasOverlappingAngles); an angle-free game keeps hitting the byte-identical
 // buildFullVideoTimeline path. See EPIC.md decisions 7 (overlap model) + 9
 // (coverage extensions) and docs/plans/tasks/universal-upload/T8880-*.md.
 // ---------------------------------------------------------------------------
@@ -260,21 +260,33 @@ function resolveVideoOffsets(gameVideos) {
 }
 
 /**
- * True when any video is placed somewhere OTHER than its prefix-sum position
- * (real overlap or a real gap), i.e. the new lane builder is required. A null
- * offset (pre-migration edge) falls back to prefix-sum, so it never counts.
- * Sub-epsilon disagreement (float/recording slop) stays on the old path.
+ * True ONLY when some pair of videos genuinely OVERLAPS (beyond the epsilon slop),
+ * i.e. angles/extensions exist and buildFullVideoTimeline literally cannot
+ * represent the game -- the lane-aware builder is required.
  *
- * This is AnnotateContainer's fast-path selector: a plain 2-half game (offsets ==
- * prefix sums, incl. T8870's backfill) stays on buildFullVideoTimeline exactly as
- * before -- the safety rail against a T8870-style common-case regression.
+ * This is AnnotateContainer's fast-path selector. It deliberately does NOT trip on
+ * a real GAP (halftime): a gap-only game is still angle-free -- every video is on
+ * lane 0 -- so buildFullVideoTimeline concatenates it byte-identically to today
+ * (offsets ignored, gaps compress exactly as before). Routing a gap game to
+ * buildGameTimeline would hand the render path a different-shaped object and crash
+ * (T8890 adapts those consumers). So the rail keeps EVERY angle-free game (prefix-
+ * sum, backfilled, or gapped multi-segment) on the old path, and reserves the new
+ * builder for real overlap -- which no current intake produces (EPIC decision 1
+ * discards overlapping timestamps) and which only T8900/T8910 will create.
+ *
+ * A null offset (pre-migration edge) falls back to prefix-sum. Sub-epsilon overlap
+ * (recording-split slop) does not count -- same tolerance the lane builder uses.
  */
-export function hasRealOverlapPlacement(gameVideos) {
+export function hasOverlappingAngles(gameVideos) {
   if (!gameVideos || gameVideos.length < 2) return false;
-  const resolved = resolveVideoOffsets(gameVideos);
-  return resolved.some(
-    (v) => v.offset_seconds != null && Math.abs(v.offset_seconds - v.prefixSum) > OVERLAP_EPSILON_S,
-  );
+  const resolved = resolveVideoOffsets(gameVideos).sort((a, b) => a.start - b.start);
+  let maxEnd = -Infinity;
+  for (const v of resolved) {
+    // v starts before some earlier video's end (beyond slop) => a real overlap.
+    if (v.start < maxEnd - OVERLAP_EPSILON_S) return true;
+    maxEnd = Math.max(maxEnd, v.end);
+  }
+  return false;
 }
 
 /** Merge a list of {start,end} into sorted, disjoint runs. */

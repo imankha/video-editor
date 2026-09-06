@@ -3,7 +3,7 @@ import {
   buildVirtualTimeline,
   buildFullVideoTimeline,
   buildGameTimeline,
-  hasRealOverlapPlacement,
+  hasOverlappingAngles,
 } from './useVirtualTimeline';
 
 describe('buildVirtualTimeline', () => {
@@ -915,12 +915,15 @@ describe('buildGameTimeline', () => {
   });
 });
 
-// T8880: AnnotateContainer path selection -- old buildFullVideoTimeline for pure
-// prefix-sum placement, new buildGameTimeline only when real overlap/gap exists.
-describe('hasRealOverlapPlacement (AnnotateContainer path selection)', () => {
+// T8880: AnnotateContainer path selection -- old buildFullVideoTimeline for every
+// angle-free game (prefix-sum, backfilled, OR gapped), new buildGameTimeline ONLY
+// when footage genuinely overlaps. A gap game is angle-free and MUST stay on the
+// old path: routing it to the differently-shaped new builder would crash the
+// render path before T8890 adapts those consumers.
+describe('hasOverlappingAngles (AnnotateContainer path selection)', () => {
   it('is false for a plain 2-half game (offsets == prefix sums) -> old path', () => {
     expect(
-      hasRealOverlapPlacement([
+      hasOverlappingAngles([
         { sequence: 1, duration: 2700, offset_seconds: 0 },
         { sequence: 2, duration: 2700, offset_seconds: 2700 },
       ]),
@@ -929,7 +932,7 @@ describe('hasRealOverlapPlacement (AnnotateContainer path selection)', () => {
 
   it('is false for backfilled null offsets (fall back to prefix sum)', () => {
     expect(
-      hasRealOverlapPlacement([
+      hasOverlappingAngles([
         { sequence: 1, duration: 2700, offset_seconds: null },
         { sequence: 2, duration: 2700, offset_seconds: null },
       ]),
@@ -937,35 +940,44 @@ describe('hasRealOverlapPlacement (AnnotateContainer path selection)', () => {
   });
 
   it('is false for a single video', () => {
-    expect(hasRealOverlapPlacement([{ sequence: 1, duration: 2700, offset_seconds: 0 }])).toBe(
-      false,
-    );
+    expect(hasOverlappingAngles([{ sequence: 1, duration: 2700, offset_seconds: 0 }])).toBe(false);
   });
 
-  it('is true when a video is placed with a real gap (halftime offset)', () => {
+  it('is FALSE for a real halftime GAP with no overlap (angle-free -> old path)', () => {
+    // The DJI evidence case: continuous halves + ~halftime gap. Every video is on
+    // lane 0, so buildFullVideoTimeline concatenates it byte-identically to today.
     expect(
-      hasRealOverlapPlacement([
+      hasOverlappingAngles([
         { sequence: 1, duration: 2700, offset_seconds: 0 },
-        { sequence: 2, duration: 2700, offset_seconds: 3000 }, // real 300s gap
-      ]),
-    ).toBe(true);
-  });
-
-  it('is true when videos overlap (angle placement)', () => {
-    expect(
-      hasRealOverlapPlacement([
-        { sequence: 1, duration: 2700, offset_seconds: 0 },
-        { sequence: 2, duration: 600, offset_seconds: 2600 },
-      ]),
-    ).toBe(true);
-  });
-
-  it('tolerates sub-epsilon disagreement (1s slop stays on the old path)', () => {
-    expect(
-      hasRealOverlapPlacement([
-        { sequence: 1, duration: 1200, offset_seconds: 0 },
-        { sequence: 2, duration: 1200, offset_seconds: 1199.5 }, // 0.5s off prefix sum
+        { sequence: 2, duration: 2700, offset_seconds: 3000 }, // real 300s gap, no overlap
       ]),
     ).toBe(false);
+  });
+
+  it('is true when videos genuinely overlap (angle placement) -> new path', () => {
+    expect(
+      hasOverlappingAngles([
+        { sequence: 1, duration: 2700, offset_seconds: 0 },
+        { sequence: 2, duration: 600, offset_seconds: 2600 }, // overlaps the main by 100s
+      ]),
+    ).toBe(true);
+  });
+
+  it('tolerates sub-epsilon overlap (1s recording slop stays on the old path)', () => {
+    expect(
+      hasOverlappingAngles([
+        { sequence: 1, duration: 1200, offset_seconds: 0 },
+        { sequence: 2, duration: 1200, offset_seconds: 1199.5 }, // 0.5s overlap
+      ]),
+    ).toBe(false);
+  });
+
+  it('trips on a 2s overlap (bounds the epsilon) -> new path', () => {
+    expect(
+      hasOverlappingAngles([
+        { sequence: 1, duration: 1200, offset_seconds: 0 },
+        { sequence: 2, duration: 1200, offset_seconds: 1198 }, // 2s overlap
+      ]),
+    ).toBe(true);
   });
 });

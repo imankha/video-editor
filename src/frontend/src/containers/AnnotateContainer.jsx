@@ -21,7 +21,7 @@ import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
-import { buildFullVideoTimeline, buildGameTimeline, hasRealOverlapPlacement } from '../modes/annotate/hooks/useVirtualTimeline';
+import { buildFullVideoTimeline, buildGameTimeline, hasOverlappingAngles } from '../modes/annotate/hooks/useVirtualTimeline';
 import { GameType } from '../constants/gameConstants';
 import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
@@ -247,13 +247,16 @@ export function AnnotateContainer({
 
   // T2750: Dual-video scrub for unified multi-video experience
   const multiVideo = useMultiVideoScrub({ gameVideos, playbackRate: annotatePlaybackSpeed, onRefreshUrls: refreshMultiVideoUrls });
-  // T8880: pick the builder by PLACEMENT, not just count. A plain multi-half game
-  // (offsets == prefix sums, incl. T8870's backfill) stays on the byte-identical
-  // buildFullVideoTimeline path -- the guard against a T8870-style common-case
-  // regression. Only real overlap/gap placement routes to the lane-aware builder.
+  // T8880: pick the builder by real OVERLAP, not just video count. Every angle-free
+  // game -- prefix-sum, T8870-backfilled, OR a gapped multi-segment game (halftime)
+  // -- stays on the byte-identical buildFullVideoTimeline path (the guard against a
+  // T8870-style common-case regression). Only genuinely overlapping footage routes
+  // to the lane-aware builder; its different return shape is consumed by T8890,
+  // which adapts the render path. No current intake produces overlap, so the new
+  // path is inert until T8900/T8910 land.
   const fullTimeline = useMemo(() => {
     if (!gameVideos || gameVideos.length <= 1) return null;
-    return hasRealOverlapPlacement(gameVideos)
+    return hasOverlappingAngles(gameVideos)
       ? buildGameTimeline(gameVideos)
       : buildFullVideoTimeline(gameVideos);
   }, [gameVideos]);
