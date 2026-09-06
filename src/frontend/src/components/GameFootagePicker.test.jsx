@@ -85,51 +85,38 @@ describe('GameFootagePicker — states', () => {
     expect(screen.getByText('5.0 MB')).toBeTruthy();
   });
 
-  it('ready multi: mounts the FootageStrip (real confirm strip, not the old placeholder)', () => {
+  it('ready multi: mounts the FootageList (real confirm list, not the old placeholder)', () => {
     const order = [makeItem('DJI_0003.MP4'), makeItem('DJI_0004.MP4'), makeItem('DJI_0005.MP4')];
     setIntake({ status: 'ready', items: order, order, confidence: 'time', skipped: ['clip.THM'] });
     render(<GameFootagePicker onFootageChange={vi.fn()} />);
     expect(screen.getByTestId('footage-picker-ready-multi')).toBeTruthy();
-    expect(screen.getByTestId('footage-strip')).toBeTruthy();
-    expect(screen.getAllByTestId('footage-chip')).toHaveLength(3);
+    expect(screen.getByTestId('footage-list')).toBeTruthy();
+    expect(screen.getAllByTestId('footage-row')).toHaveLength(3);
     // The T8810 placeholder list is gone.
     expect(screen.queryByTestId('footage-order-list')).toBeNull();
-    // Skipped junk now lives in the strip's gray disclosure.
+    // Skipped junk now lives in the list's gray disclosure.
     expect(screen.getByTestId('footage-skipped').textContent).toContain('Skipped 1 extra camera file');
   });
 
-  it('ready multi with confident order does NOT auto-open the reorder editor', () => {
-    const order = [makeItem('DJI_0003.MP4'), makeItem('DJI_0004.MP4')];
-    setIntake({ status: 'ready', items: order, order, confidence: 'time' });
+  it('ready multi: every row is draggable regardless of confidence (T8822 — no separate reorder mode)', () => {
+    const confident = [makeItem('DJI_0003.MP4'), makeItem('DJI_0004.MP4')];
+    setIntake({ status: 'ready', items: confident, order: confident, confidence: 'time' });
+    const { unmount } = render(<GameFootagePicker onFootageChange={vi.fn()} />);
+    expect(screen.getByTestId('footage-row-handle-0')).toBeTruthy();
+    unmount();
+
+    const unknownOrder = [makeItem('clipA.mp4'), makeItem('clipB.mp4')];
+    setIntake({ status: 'ready', items: unknownOrder, order: unknownOrder, confidence: 'unknown' });
     render(<GameFootagePicker onFootageChange={vi.fn()} />);
-    expect(screen.queryByTestId('footage-reorder-list')).toBeNull();
+    expect(screen.getByTestId('footage-row-handle-0')).toBeTruthy();
   });
 
-  it('ready multi with unknown order auto-opens the reorder editor', () => {
-    const order = [makeItem('clipA.mp4'), makeItem('clipB.mp4')];
-    setIntake({ status: 'ready', items: order, order, confidence: 'unknown' });
-    render(<GameFootagePicker onFootageChange={vi.fn()} />);
-    expect(screen.getByTestId('footage-reorder-list')).toBeTruthy();
-  });
-
-  it('Adjust order opens the reorder editor; Done closes it', () => {
-    const order = [makeItem('DJI_0003.MP4'), makeItem('DJI_0004.MP4')];
-    setIntake({ status: 'ready', items: order, order, confidence: 'time' });
-    render(<GameFootagePicker onFootageChange={vi.fn()} />);
-    expect(screen.queryByTestId('footage-reorder-list')).toBeNull();
-    fireEvent.click(screen.getByTestId('footage-adjust-order'));
-    expect(screen.getByTestId('footage-reorder-list')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('footage-reorder-done'));
-    expect(screen.queryByTestId('footage-reorder-list')).toBeNull();
-  });
-
-  it('single-file state remains untouched — no strip, no reorder editor (T8810 C0)', () => {
+  it('single-file state remains untouched — no list (T8810 C0)', () => {
     const only = makeItem('game.mp4', 5 * 1024 * 1024);
     setIntake({ status: 'ready', items: [only], order: [only], confidence: 'time' });
     render(<GameFootagePicker onFootageChange={vi.fn()} />);
     expect(screen.getByTestId('footage-picker-ready-single')).toBeTruthy();
-    expect(screen.queryByTestId('footage-strip')).toBeNull();
-    expect(screen.queryByTestId('footage-reorder-list')).toBeNull();
+    expect(screen.queryByTestId('footage-list')).toBeNull();
   });
 });
 

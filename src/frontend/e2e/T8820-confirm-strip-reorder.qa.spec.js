@@ -1,17 +1,18 @@
 /**
- * T8820 QA — the multi-file confirm strip + reorder editor, driven end-to-end in a
- * real browser (not jsdom). This is the live-drive the intake arc owes: T8810
- * disclosed a manual-verification gap (real folder/device needed), but this screen
- * needs neither — we synthesize four tiny-but-VALID MP4 segments with ffmpeg,
- * stamping each with an explicit creation_time so useFootageIntake probes a real
- * embedded-time chain (seg1/2 continuous, a ~9-min break, seg3/4 continuous), the
- * exact shape of the DJI evidence fixture.
+ * T8820/T8822 QA — the multi-file confirm list, driven end-to-end in a real browser
+ * (not jsdom). T8822 merged T8820's separate chip-strip + reorder-editor into one
+ * always-draggable `FootageList` (live-testing feedback: every video showed in two
+ * places for one underlying list) — this spec now drives that single list directly.
+ * We synthesize four tiny-but-VALID MP4 segments with ffmpeg, stamping each with an
+ * explicit creation_time so useFootageIntake probes a real embedded-time chain
+ * (seg1/2 continuous, a ~9-min break, seg3/4 continuous), the exact shape of the DJI
+ * evidence fixture.
  *
  * It proves the acceptance criteria that unit tests can only approximate:
- *   - the strip renders from a REAL probe (4 chips, green time trust line, one
+ *   - the list renders from a REAL probe (4 rows, green time trust line, one
  *     "9 min break" gap connector);
- *   - "Adjust order" opens the reorder editor and a real pointer drag reorders,
- *     flipping the trust line to "Order set by you";
+ *   - every row is draggable immediately (no separate "Adjust order" mode) and a
+ *     real pointer drag reorders, flipping the trust line to "Order set by you";
  *   - submit ("Add Game") is NEVER gated by ordering — enabled throughout;
  *   - no horizontal overflow at 360 / 390 / 428 px.
  *
@@ -77,10 +78,10 @@ async function openAddGameModalWithFootage(page) {
 
   // Feed the four segments through the (hidden) multi-select input.
   await page.setInputFiles('[data-testid="footage-file-input"]', fixturePaths);
-  await expect(page.getByTestId('footage-strip')).toBeVisible({ timeout: 30000 });
+  await expect(page.getByTestId('footage-list')).toBeVisible({ timeout: 30000 });
 }
 
-test('confirm strip renders a real probed time-chain and submit is never gated', async ({ browser }) => {
+test('confirm list renders a real probed time-chain and submit is never gated', async ({ browser }) => {
   test.setTimeout(120_000);
   const context = await browser.newContext({ browserName: 'chromium', serviceWorkers: 'block' });
   await context.setExtraHTTPHeaders({ 'X-User-ID': 'manual-test-user', 'X-Test-Mode': 'true' });
@@ -88,8 +89,8 @@ test('confirm strip renders a real probed time-chain and submit is never gated',
 
   await openAddGameModalWithFootage(page);
 
-  // 4 chips, green time trust line, one non-huge "9 min break" gap connector.
-  await expect(page.getByTestId('footage-chip')).toHaveCount(4);
+  // 4 rows, green time trust line, one non-huge "9 min break" gap connector.
+  await expect(page.getByTestId('footage-row')).toHaveCount(4);
   const trust = page.getByTestId('footage-trust-line');
   await expect(trust).toHaveText('Put in order by the time each was recorded');
   const connectors = page.getByTestId('footage-gap-connector');
@@ -101,11 +102,11 @@ test('confirm strip renders a real probed time-chain and submit is never gated',
   const submit = page.getByRole('button', { name: /^Add Game$/ }).last();
   await expect(submit).toBeEnabled();
 
-  await saveEvidence(page, 't8820-strip');
+  await saveEvidence(page, 't8820-list');
   await context.close();
 });
 
-test('a real pointer drag reorders and flips the trust line to manual', async ({ browser }) => {
+test('a real pointer drag reorders and flips the trust line to manual (no separate reorder mode)', async ({ browser }) => {
   test.setTimeout(120_000);
   const context = await browser.newContext({ browserName: 'chromium', serviceWorkers: 'block' });
   await context.setExtraHTTPHeaders({ 'X-User-ID': 'manual-test-user', 'X-Test-Mode': 'true' });
@@ -113,12 +114,12 @@ test('a real pointer drag reorders and flips the trust line to manual', async ({
 
   await openAddGameModalWithFootage(page);
 
-  await page.getByTestId('footage-adjust-order').click();
-  await expect(page.getByTestId('footage-reorder-list')).toBeVisible();
+  // T8822: every row is draggable immediately — no "Adjust order" tap needed.
+  await expect(page.getByTestId('footage-adjust-order')).toHaveCount(0);
 
   // Drag row 0's handle down past row 2 with a real pointer.
-  const handle = page.getByTestId('footage-reorder-handle-0');
-  const rows = page.getByTestId('footage-reorder-row');
+  const handle = page.getByTestId('footage-row-handle-0');
+  const rows = page.getByTestId('footage-row');
   const from = await handle.boundingBox();
   const target = await rows.nth(2).boundingBox();
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
@@ -129,11 +130,10 @@ test('a real pointer drag reorders and flips the trust line to manual', async ({
 
   await expect(page.getByTestId('footage-trust-line')).toHaveText('Order set by you');
 
-  // Submit still enabled after the manual reorder.
+  // Submit still enabled after the manual reorder, and the list is still the only
+  // footage UI on screen (no separate editor to close).
   await expect(page.getByRole('button', { name: /^Add Game$/ }).last()).toBeEnabled();
-
-  await page.getByTestId('footage-reorder-done').click();
-  await expect(page.getByTestId('footage-reorder-list')).toHaveCount(0);
+  await expect(page.getByTestId('footage-list')).toBeVisible();
 
   await context.close();
 });
@@ -145,8 +145,6 @@ test('no horizontal overflow at 360 / 390 / 428 px', async ({ browser }) => {
   const page = await context.newPage();
 
   await openAddGameModalWithFootage(page);
-  await page.getByTestId('footage-adjust-order').click();
-  await expect(page.getByTestId('footage-reorder-list')).toBeVisible();
 
   for (const width of [360, 390, 428]) {
     await page.setViewportSize({ width, height: 780 });

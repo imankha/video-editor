@@ -55,3 +55,53 @@ export function gapDisplay(seconds) {
   const min = Math.round(seconds / 60);
   return { huge: false, label: `${min} min break` };
 }
+
+/**
+ * T8822 — Light-touch overlap detection for the confirm list: which items' recorded
+ * time ranges intersect another item's. Purely informational at upload time (the real
+ * lane/angle system is T8880/T8890, built against the server's canonical
+ * `offset_seconds` in Annotate) — only meaningful when we trust the embedded clock
+ * (`confidence === 'time'`); name/unknown/manual orders have no reliable time evidence
+ * to compare, so this returns an empty map for them.
+ *
+ * @returns {Map<string, string[]>} item name -> names of items it overlaps with
+ */
+export function overlapGroups(order, confidence) {
+  const groups = new Map();
+  if (confidence !== 'time') return groups;
+
+  const timed = order.filter(
+    (it) => it.creationTime instanceof Date && !Number.isNaN(it.creationTime.getTime()) && it.duration > 0
+  );
+
+  for (let i = 0; i < timed.length; i++) {
+    const a = timed[i];
+    const aStart = a.creationTime.getTime();
+    const aEnd = aStart + a.duration * 1000;
+    for (let j = i + 1; j < timed.length; j++) {
+      const b = timed[j];
+      const bStart = b.creationTime.getTime();
+      const bEnd = bStart + b.duration * 1000;
+      if (aStart < bEnd && bStart < aEnd) {
+        if (!groups.has(a.name)) groups.set(a.name, []);
+        if (!groups.has(b.name)) groups.set(b.name, []);
+        groups.get(a.name).push(b.name);
+        groups.get(b.name).push(a.name);
+      }
+    }
+  }
+  return groups;
+}
+
+// Matches the angle-name convention T8880 will use in Annotate.
+const SHORT_LABEL_MAX = 14;
+
+/** Short label for an overlap badge: filename stem, middle-ellipsis-truncated to
+ *  `SHORT_LABEL_MAX` chars. */
+export function shortLabel(name) {
+  const stem = name.replace(/\.[^./]+$/, '');
+  if (stem.length <= SHORT_LABEL_MAX) return stem;
+  const headLen = Math.ceil((SHORT_LABEL_MAX - 1) / 2);
+  const tailLen = Math.floor((SHORT_LABEL_MAX - 1) / 2);
+  return `${stem.slice(0, headLen)}…${stem.slice(stem.length - tailLen)}`;
+}
