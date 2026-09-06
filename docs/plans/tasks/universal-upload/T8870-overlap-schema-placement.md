@@ -1,10 +1,10 @@
 # T8870: Overlap schema: recorded_at + offset_seconds
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-05
-**Updated:** 2026-09-05
+**Updated:** 2026-09-06
 
 ## Problem
 
@@ -104,6 +104,16 @@ See [EPIC.md](EPIC.md) decision 7.
 ### Progress Log
 
 **2026-09-05**: Filed.
+
+**2026-09-06**: Implemented by an automated worker (Reviewer approved, 81 backend + FE
+tests green). Branch CI first came back red on a real regression: the `video_sequence <=
+1` early-return in `compute_unified_clip_start` had moved after two new per-clip queries
+(`column_exists` PRAGMA + `offset_seconds` SELECT), doubling query count for the common
+single-video-game case (2 -> 4 statements/clip per
+`test_recap_data_query_count_linear_slope_one_per_clip`). Fixed by collapsing everything
+into one combined query (LEFT JOIN + correlated prefix-sum subquery) per clip. Supervisor
+verified the red -> green transition directly against the real dev Postgres (not just the
+worker's offline harness) before merging. Merged via PR #353 (merge commit be6b2d85).
 
 ## Acceptance Criteria
 
