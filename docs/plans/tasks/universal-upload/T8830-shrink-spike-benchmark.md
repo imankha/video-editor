@@ -1,10 +1,10 @@
 # T8830: Shrink spike: WebCodecs 8K benchmark (go/no-go)
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-05
-**Updated:** 2026-09-05
+**Updated:** 2026-09-06
 
 ## Problem
 
@@ -69,6 +69,17 @@ this validates.
 ### Progress Log
 
 **2026-09-05**: Filed.
+
+**2026-09-06**: Harness built by an automated worker (branch
+`feature/T8830-shrink-spike-benchmark`, CI green) — index.html/spike.js/README.md per
+spec, including the full demux -> decode -> crop/scale -> encode -> mux pipeline with
+backpressure capping. A headless container cannot satisfy this task's real acceptance
+criteria (2+ real machines, the real 3.3 GB DJI file, hand-recorded results), so the
+worker's scope was limited to scaffolding + a smoke test on a small synthetic fixture
+(125/125 frames decoded+encoded, output played back in headless Chromium — fixed a
+concurrent-callback deadlock in the backpressure resolver and a module-loading issue along
+the way). **Waiting on the user** to run the harness per README.md on real hardware with
+the real DJI file and report GO / GO WITH CAVEATS / NO-GO before T8840 starts.
 
 ## Acceptance Criteria
 

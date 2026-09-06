@@ -73,7 +73,7 @@ overrides.)
 | T8800 | [Footage intake logic: probe + order inference](T8800-footage-intake-inference.md) | STAGING |
 | T8810 | [Universal dropzone replaces Per Game / Per Half](T8810-universal-dropzone.md) | STAGING |
 | T8820 | [Confirm strip + reorder editor](T8820-confirm-strip-reorder.md) | STAGING |
-| T8830 | [Shrink spike: WebCodecs 8K benchmark (go/no-go)](T8830-shrink-spike-benchmark.md) | WIP |
+| T8830 | [Shrink spike: WebCodecs 8K benchmark (go/no-go)](T8830-shrink-spike-benchmark.md) | WAITING ON USER |
 | T8840 | [Shrink pipeline core (worker transcode)](T8840-shrink-pipeline-core.md) | TODO |
 | T8850 | [Shrink UI: offer card + crop step + presets](T8850-shrink-ui-crop-step.md) | TODO |
 | T8860 | [Shrink upload integration + fallback](T8860-shrink-upload-integration.md) | TODO |
