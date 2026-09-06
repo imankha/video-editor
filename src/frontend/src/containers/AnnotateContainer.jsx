@@ -21,7 +21,7 @@ import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
-import { buildFullVideoTimeline } from '../modes/annotate/hooks/useVirtualTimeline';
+import { buildFullVideoTimeline, buildGameTimeline, hasRealOverlapPlacement } from '../modes/annotate/hooks/useVirtualTimeline';
 import { GameType } from '../constants/gameConstants';
 import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
@@ -208,6 +208,8 @@ export function AnnotateContainer({
           duration: v.duration,
           width: v.video_width,
           height: v.video_height,
+          offset_seconds: v.offset_seconds,
+          recorded_at: v.recorded_at,
         })));
       }
     } catch (err) {
@@ -245,10 +247,16 @@ export function AnnotateContainer({
 
   // T2750: Dual-video scrub for unified multi-video experience
   const multiVideo = useMultiVideoScrub({ gameVideos, playbackRate: annotatePlaybackSpeed, onRefreshUrls: refreshMultiVideoUrls });
-  const fullTimeline = useMemo(
-    () => gameVideos && gameVideos.length > 1 ? buildFullVideoTimeline(gameVideos) : null,
-    [gameVideos],
-  );
+  // T8880: pick the builder by PLACEMENT, not just count. A plain multi-half game
+  // (offsets == prefix sums, incl. T8870's backfill) stays on the byte-identical
+  // buildFullVideoTimeline path -- the guard against a T8870-style common-case
+  // regression. Only real overlap/gap placement routes to the lane-aware builder.
+  const fullTimeline = useMemo(() => {
+    if (!gameVideos || gameVideos.length <= 1) return null;
+    return hasRealOverlapPlacement(gameVideos)
+      ? buildGameTimeline(gameVideos)
+      : buildFullVideoTimeline(gameVideos);
+  }, [gameVideos]);
 
   // Unified videoController — multi-video uses proxy's controller, single-video wraps the raw ref
   const singleVideoController = useMemo(() => ({
@@ -659,6 +667,9 @@ export function AnnotateContainer({
           duration: v.duration,
           width: v.video_width,
           height: v.video_height,
+          // T8870 placement evidence -> T8880 lane builder selection
+          offset_seconds: v.offset_seconds,
+          recorded_at: v.recorded_at,
         };
       }));
       setActiveVideoIndex(0);

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { buildVirtualTimeline, buildFullVideoTimeline } from './useVirtualTimeline';
+import {
+  buildVirtualTimeline,
+  buildFullVideoTimeline,
+  buildGameTimeline,
+  hasRealOverlapPlacement,
+} from './useVirtualTimeline';
 
 describe('buildVirtualTimeline', () => {
   it('returns empty timeline for no clips', () => {
@@ -608,5 +613,359 @@ describe('buildFullVideoTimeline', () => {
       // can never be sequence 1 and can never steal offset 0 from existing clips.
       expect(timeline.getVideoOffset(2)).toBe(2700);
     });
+  });
+});
+
+// T8880: game timeline v2 -- lanes, backbone, coverage extensions.
+// The algorithm (see buildGameTimeline's header comment) is: backbone (lane 0) =
+// the longest video (the "main camera"), tie-broken earliest offset then sequence,
+// grown by concatenating every non-overlapping video in offset order; then the
+// remaining ("angle") videos are colored into lanes 1+ by the minimal-lane greedy.
+// Coverage extensions = footage covered only by lane-1+ videos, inserted into the
+// virtual domain at its wall-clock position.
+describe('buildGameTimeline', () => {
+  const videoEntries = (gt) => gt.domain.filter((d) => d.type === 'video');
+  const extEntries = (gt) => gt.domain.filter((d) => d.type === 'extension');
+
+  it('returns null for null/empty input', () => {
+    expect(buildGameTimeline(null)).toBeNull();
+    expect(buildGameTimeline([])).toBeNull();
+  });
+
+  // ---- T-EQ: the ACCEPTANCE BAR. Angle-free game (offsets == prefix sums) must
+  // produce a domain/boundaries output field-identical to buildFullVideoTimeline. ----
+  describe('equivalence with buildFullVideoTimeline (angle-free)', () => {
+    const twoHalves = [
+      { sequence: 1, duration: 2700, offset_seconds: null, url: 'v1.mp4' },
+      { sequence: 2, duration: 2700, offset_seconds: null, url: 'v2.mp4' },
+    ];
+
+    it('two-half game: domain matches buildFullVideoTimeline segment-for-segment', () => {
+      const gt = buildGameTimeline(twoHalves);
+      const ft = buildFullVideoTimeline(twoHalves);
+      expect(gt.totalDuration).toBe(ft.totalDuration); // 5400
+      expect(gt.lanes).toHaveLength(1);
+      expect(gt.angles).toEqual([]);
+
+      const vids = videoEntries(gt);
+      expect(vids).toHaveLength(ft.segments.length);
+      vids.forEach((d, i) => {
+        expect(d.sequence).toBe(ft.segments[i].videoSequence);
+        expect(d.virtualStart).toBe(ft.segments[i].virtualStart);
+        expect(d.virtualEnd).toBe(ft.segments[i].virtualEnd);
+      });
+      // boundaries derived from the domain == buildFullVideoTimeline boundaries
+      const boundaries = vids.slice(1).map((d) => d.virtualStart);
+      expect(boundaries).toEqual(ft.getVideoBoundaries()); // [2700]
+    });
+
+    it('three videos: cumulative offsets match', () => {
+      const three = [
+        { sequence: 1, duration: 1800, offset_seconds: null, url: 'a.mp4' },
+        { sequence: 2, duration: 2700, offset_seconds: null, url: 'b.mp4' },
+        { sequence: 3, duration: 900, offset_seconds: null, url: 'c.mp4' },
+      ];
+      const gt = buildGameTimeline(three);
+      const ft = buildFullVideoTimeline(three);
+      expect(videoEntries(gt).map((d) => d.virtualStart)).toEqual(
+        ft.segments.map((s) => s.virtualStart),
+      );
+      expect(gt.totalDuration).toBe(ft.totalDuration);
+      expect(extEntries(gt)).toHaveLength(0);
+    });
+
+    it('explicit offset_seconds equal to prefix sums is still equivalent', () => {
+      const explicit = [
+        { sequence: 1, duration: 2700, offset_seconds: 0, url: 'v1.mp4' },
+        { sequence: 2, duration: 2700, offset_seconds: 2700, url: 'v2.mp4' },
+      ];
+      const gt = buildGameTimeline(explicit);
+      const ft = buildFullVideoTimeline(explicit);
+      expect(gt.totalDuration).toBe(ft.totalDuration);
+      expect(gt.lanes).toHaveLength(1);
+      expect(videoEntries(gt).map((d) => d.virtualStart)).toEqual(
+        ft.segments.map((s) => s.virtualStart),
+      );
+    });
+  });
+
+  // ---- T-EPIC: 1 backbone + 4 clips, 2 overlapping each other -> exactly 3 lanes ----
+  it('EPIC scenario: yields exactly 3 lanes; lane 2 holds only the later of the overlapping pair', () => {
+    const gt = buildGameTimeline([
+      { sequence: 1, duration: 2000, offset_seconds: 0, url: 'main.mp4' }, // backbone
+      { sequence: 2, duration: 120, offset_seconds: 100, url: 'a.mp4' },
+      { sequence: 3, duration: 120, offset_seconds: 500, url: 'b.mp4' },
+      { sequence: 4, duration: 120, offset_seconds: 540, url: 'c.mp4' }, // overlaps seq3
+      { sequence: 5, duration: 120, offset_seconds: 900, url: 'd.mp4' },
+    ]);
+
+    expect(gt.lanes).toHaveLength(3);
+    expect(gt.lanes[0].map((v) => v.sequence)).toEqual([1]);
+    expect(gt.lanes[1].map((v) => v.sequence)).toEqual([2, 3, 5]);
+    expect(gt.lanes[2].map((v) => v.sequence)).toEqual([4]);
+
+    // all angle clips sit within the backbone span -> no extensions
+    expect(extEntries(gt)).toHaveLength(0);
+    expect(gt.totalDuration).toBe(2000);
+
+    // the overlapping pair puts seq4 on the third lane (index 2)
+    const seq4 = gt.angles.find((a) => a.sequence === 4);
+    expect(seq4.lane).toBe(2);
+  });
+
+  // ---- T-GAP: halftime-gap clip lands on lane 0 between the halves ----
+  it('halftime-gap clip (no overlap) lands on lane 0 with boundary markers both sides', () => {
+    const gt = buildGameTimeline([
+      { sequence: 1, duration: 2700, offset_seconds: 0, url: 'h1.mp4' },
+      { sequence: 2, duration: 2700, offset_seconds: 3000, url: 'h2.mp4' }, // 300s real gap
+      { sequence: 3, duration: 120, offset_seconds: 2800, url: 'clip.mp4' }, // inside the gap
+    ]);
+
+    expect(gt.lanes).toHaveLength(1); // everything on the backbone
+    expect(gt.angles).toEqual([]);
+    expect(extEntries(gt)).toHaveLength(0);
+
+    // backbone order by offset: seq1, seq3, seq2 (the gap compresses to zero width)
+    expect(videoEntries(gt).map((d) => d.sequence)).toEqual([1, 3, 2]);
+    expect(videoEntries(gt).map((d) => d.virtualStart)).toEqual([0, 2700, 2820]);
+    expect(gt.totalDuration).toBe(5520); // 2700 + 120 + 2700, gaps compressed
+
+    // the clip's own footage is reachable
+    expect(gt.sourcesAt(2760)).toEqual([3]);
+  });
+
+  // ---- T-APP: angle past backbone end -> extension appended ----
+  it('angle past backbone end appends a coverage extension', () => {
+    const gt = buildGameTimeline([
+      { sequence: 1, duration: 2700, offset_seconds: 0, url: 'main.mp4' },
+      { sequence: 2, duration: 600, offset_seconds: 2600, url: 'angle.mp4' }, // [2600,3200)
+    ]);
+
+    expect(gt.lanes).toHaveLength(2);
+    expect(gt.lanes[0].map((v) => v.sequence)).toEqual([1]);
+
+    const exts = extEntries(gt);
+    expect(exts).toHaveLength(1);
+    expect(exts[0].sourceSequence).toBe(2);
+    expect(exts[0].wallStart).toBe(2700);
+    expect(exts[0].virtualStart).toBe(2700);
+    expect(exts[0].virtualEnd).toBe(3200);
+    expect(gt.totalDuration).toBe(3200);
+
+    // domain order: backbone video first, extension appended
+    expect(gt.domain.map((d) => d.type)).toEqual(['video', 'extension']);
+
+    // angle virtual span maps through wall-clock
+    const angle = gt.angles.find((a) => a.sequence === 2);
+    expect(angle.virtualStart).toBe(2600);
+    expect(angle.virtualEnd).toBe(3200);
+
+    expect(gt.sourcesAt(2650)).toEqual([1, 2]); // deep overlap over the backbone
+    expect(gt.sourcesAt(2900)).toEqual([2]); // inside the extension
+  });
+
+  // ---- T-PRE: negative-offset angle before backbone start -> extension prepended.
+  // This is the regression lock for the lane-0/backbone inversion bug: the longer
+  // MAIN camera must stay on lane 0 even though the angle starts earlier. ----
+  it('negative-offset angle before backbone start prepends an extension (main stays lane 0)', () => {
+    const gt = buildGameTimeline([
+      { sequence: 1, duration: 2700, offset_seconds: 0, url: 'main.mp4' }, // longest -> backbone
+      { sequence: 2, duration: 400, offset_seconds: -300, url: 'early.mp4' }, // [-300,100)
+    ]);
+
+    // main camera (longer) stays on lane 0; the earlier-but-shorter clip is the angle
+    expect(gt.lanes[0].map((v) => v.sequence)).toEqual([1]);
+    expect(gt.lanes).toHaveLength(2);
+
+    const exts = extEntries(gt);
+    expect(exts).toHaveLength(1);
+    expect(exts[0].sourceSequence).toBe(2);
+    expect(exts[0].wallStart).toBe(-300);
+    expect(exts[0].virtualStart).toBe(0);
+    expect(exts[0].virtualEnd).toBe(300);
+
+    // domain order: extension prepended, then backbone
+    expect(gt.domain.map((d) => d.type)).toEqual(['extension', 'video']);
+    expect(gt.domain[1].sequence).toBe(1);
+    expect(gt.domain[1].virtualStart).toBe(300);
+    expect(gt.totalDuration).toBe(3000);
+
+    const angle = gt.angles.find((a) => a.sequence === 2);
+    expect(angle.virtualStart).toBe(0);
+    expect(angle.virtualEnd).toBe(400);
+
+    expect(gt.sourcesAt(150)).toEqual([2]); // inside the prepended extension
+    expect(gt.sourcesAt(350)).toEqual([1, 2]); // overlap region over the backbone
+  });
+
+  // ---- T-NOMAIN: two phone clips, no main camera, partial overlap ----
+  it('two phone clips (no main camera) partial overlap: earlier=lane0, later=lane1, tail=extension', () => {
+    const gt = buildGameTimeline([
+      { sequence: 1, duration: 600, offset_seconds: 0, url: 'phoneA.mp4' }, // [0,600)
+      { sequence: 2, duration: 600, offset_seconds: 400, url: 'phoneB.mp4' }, // [400,1000)
+    ]);
+
+    expect(gt.lanes[0].map((v) => v.sequence)).toEqual([1]);
+    expect(gt.lanes[1].map((v) => v.sequence)).toEqual([2]);
+
+    const exts = extEntries(gt);
+    expect(exts).toHaveLength(1);
+    expect(exts[0].sourceSequence).toBe(2);
+    expect(exts[0].wallStart).toBe(600);
+    expect(exts[0].virtualEnd).toBe(1000);
+    expect(gt.totalDuration).toBe(1000); // whole span playable
+
+    expect(gt.sourcesAt(100)).toEqual([1]);
+    expect(gt.sourcesAt(500)).toEqual([1, 2]);
+    expect(gt.sourcesAt(800)).toEqual([2]);
+  });
+
+  // ---- T-EPS: 1s recording-split slop does NOT create a second lane ----
+  describe('epsilon tolerance (OVERLAP_EPSILON_S = 1.0)', () => {
+    it('a 1s split slop keeps both videos on lane 0', () => {
+      const gt = buildGameTimeline([
+        { sequence: 1, duration: 1200, offset_seconds: 0, url: 'a.mp4' },
+        { sequence: 2, duration: 1200, offset_seconds: 1199, url: 'b.mp4' }, // 1s overlap
+      ]);
+      expect(gt.lanes).toHaveLength(1);
+      expect(gt.angles).toEqual([]);
+      expect(extEntries(gt)).toHaveLength(0);
+    });
+
+    it('a 2s overlap DOES create a second lane (bounds the epsilon)', () => {
+      const gt = buildGameTimeline([
+        { sequence: 1, duration: 1200, offset_seconds: 0, url: 'a.mp4' },
+        { sequence: 2, duration: 1200, offset_seconds: 1198, url: 'b.mp4' }, // 2s overlap
+      ]);
+      expect(gt.lanes).toHaveLength(2);
+      expect(gt.lanes[1].map((v) => v.sequence)).toEqual([2]);
+    });
+  });
+
+  // ---- T-SOURCES: sourcesAt in a deep 3-way overlap ----
+  it('sourcesAt returns 3 sequences inside a deep overlap, 1 outside', () => {
+    const gt = buildGameTimeline([
+      { sequence: 1, duration: 2000, offset_seconds: 0, url: 'main.mp4' },
+      { sequence: 2, duration: 300, offset_seconds: 500, url: 'a.mp4' }, // [500,800)
+      { sequence: 3, duration: 300, offset_seconds: 600, url: 'b.mp4' }, // [600,900) overlaps seq2
+    ]);
+    expect(gt.lanes).toHaveLength(3);
+    expect(gt.sourcesAt(650)).toEqual([1, 2, 3]); // deep overlap
+    expect(gt.sourcesAt(1500)).toEqual([1]); // backbone only
+  });
+
+  // ---- virtualToSource / clampToSource (consumed by T8890/T8900 playback) ----
+  describe('virtualToSource and clampToSource', () => {
+    const gt = () =>
+      buildGameTimeline([
+        { sequence: 1, duration: 2700, offset_seconds: 0, url: 'main.mp4' },
+        { sequence: 2, duration: 600, offset_seconds: 2600, url: 'angle.mp4' },
+      ]);
+
+    it('maps a virtual time to the active angle source file-relative time', () => {
+      const t = gt();
+      // virtual 2650 -> wall 2650; angle seq2 offset 2600 -> fileTime 50
+      const src = t.virtualToSource(2650, 2);
+      expect(src.sequence).toBe(2);
+      expect(src.fileTime).toBe(50);
+    });
+
+    it('falls back to the domain-owning source when the active source does not cover the time', () => {
+      const t = gt();
+      // virtual 100 is deep in the backbone; angle seq2 does not cover wall 100
+      const src = t.virtualToSource(100, 2);
+      expect(src.sequence).toBe(1);
+      expect(src.fileTime).toBe(100);
+    });
+
+    it('clampToSource snaps a virtual time into a source play range', () => {
+      const t = gt();
+      // clamp to the angle: virtual 100 (wall 100) is before the angle's wall start 2600
+      const clamped = t.clampToSource(100, 2);
+      // snaps forward to the angle's earliest reachable virtual position (its wall start)
+      expect(clamped).toBe(t.wallToVirtual(2600));
+    });
+  });
+
+  // ---- Display names ----
+  describe('angle display names', () => {
+    it('uses the filename stem, middle-ellipsised to 14 chars', () => {
+      const gt = buildGameTimeline([
+        { sequence: 1, duration: 2000, offset_seconds: 0, url: 'https://cdn/main.mp4' },
+        {
+          sequence: 2,
+          duration: 120,
+          offset_seconds: 100,
+          url: 'https://cdn/VID_20260905_094101.mp4',
+        },
+      ]);
+      const angle = gt.angles.find((a) => a.sequence === 2);
+      expect(angle.name).toContain('…'); // middle ellipsis
+      expect(angle.name.length).toBeLessThanOrEqual(14);
+    });
+
+    it('falls back to "Extra clip {n}" when no filename stem is available', () => {
+      const gt = buildGameTimeline([
+        { sequence: 1, duration: 2000, offset_seconds: 0, url: 'main.mp4' },
+        { sequence: 2, duration: 120, offset_seconds: 100, url: '' },
+      ]);
+      const angle = gt.angles.find((a) => a.sequence === 2);
+      expect(angle.name).toBe('Extra clip 1');
+    });
+  });
+});
+
+// T8880: AnnotateContainer path selection -- old buildFullVideoTimeline for pure
+// prefix-sum placement, new buildGameTimeline only when real overlap/gap exists.
+describe('hasRealOverlapPlacement (AnnotateContainer path selection)', () => {
+  it('is false for a plain 2-half game (offsets == prefix sums) -> old path', () => {
+    expect(
+      hasRealOverlapPlacement([
+        { sequence: 1, duration: 2700, offset_seconds: 0 },
+        { sequence: 2, duration: 2700, offset_seconds: 2700 },
+      ]),
+    ).toBe(false);
+  });
+
+  it('is false for backfilled null offsets (fall back to prefix sum)', () => {
+    expect(
+      hasRealOverlapPlacement([
+        { sequence: 1, duration: 2700, offset_seconds: null },
+        { sequence: 2, duration: 2700, offset_seconds: null },
+      ]),
+    ).toBe(false);
+  });
+
+  it('is false for a single video', () => {
+    expect(hasRealOverlapPlacement([{ sequence: 1, duration: 2700, offset_seconds: 0 }])).toBe(
+      false,
+    );
+  });
+
+  it('is true when a video is placed with a real gap (halftime offset)', () => {
+    expect(
+      hasRealOverlapPlacement([
+        { sequence: 1, duration: 2700, offset_seconds: 0 },
+        { sequence: 2, duration: 2700, offset_seconds: 3000 }, // real 300s gap
+      ]),
+    ).toBe(true);
+  });
+
+  it('is true when videos overlap (angle placement)', () => {
+    expect(
+      hasRealOverlapPlacement([
+        { sequence: 1, duration: 2700, offset_seconds: 0 },
+        { sequence: 2, duration: 600, offset_seconds: 2600 },
+      ]),
+    ).toBe(true);
+  });
+
+  it('tolerates sub-epsilon disagreement (1s slop stays on the old path)', () => {
+    expect(
+      hasRealOverlapPlacement([
+        { sequence: 1, duration: 1200, offset_seconds: 0 },
+        { sequence: 2, duration: 1200, offset_seconds: 1199.5 }, // 0.5s off prefix sum
+      ]),
+    ).toBe(false);
   });
 });
