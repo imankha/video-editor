@@ -73,11 +73,11 @@ overrides.)
 | T8800 | [Footage intake logic: probe + order inference](T8800-footage-intake-inference.md) | STAGING |
 | T8810 | [Universal dropzone replaces Per Game / Per Half](T8810-universal-dropzone.md) | STAGING |
 | T8820 | [Confirm strip + reorder editor](T8820-confirm-strip-reorder.md) | STAGING |
-| T8830 | [Shrink spike: WebCodecs 8K benchmark (go/no-go)](T8830-shrink-spike-benchmark.md) | TODO |
+| T8830 | [Shrink spike: WebCodecs 8K benchmark (go/no-go)](T8830-shrink-spike-benchmark.md) | WIP |
 | T8840 | [Shrink pipeline core (worker transcode)](T8840-shrink-pipeline-core.md) | TODO |
 | T8850 | [Shrink UI: offer card + crop step + presets](T8850-shrink-ui-crop-step.md) | TODO |
 | T8860 | [Shrink upload integration + fallback](T8860-shrink-upload-integration.md) | TODO |
-| T8870 | [Overlap schema: recorded_at + offset_seconds](T8870-overlap-schema-placement.md) | TODO |
+| T8870 | [Overlap schema: recorded_at + offset_seconds](T8870-overlap-schema-placement.md) | WIP |
 | T8880 | [Game timeline v2: lanes, backbone, extensions](T8880-game-timeline-lanes.md) | TODO |
 | T8890 | [Angle strip UI + source switching](T8890-angle-strip-source-switching.md) | TODO |
 | T8900 | [Fix timing: nudge an angle into alignment](T8900-fix-timing-alignment.md) | TODO |

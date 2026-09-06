@@ -1,6 +1,6 @@
 # T8870: Overlap schema: recorded_at + offset_seconds
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-05

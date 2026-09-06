@@ -1,6 +1,6 @@
 # T8830: Shrink spike: WebCodecs 8K benchmark (go/no-go)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-05
