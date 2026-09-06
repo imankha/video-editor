@@ -1,5 +1,28 @@
 ---
 domain: annotate
+updated: 2026-09-06 (T8880 adds the OVERLAP-AWARE timeline builder `buildGameTimeline(gameVideos)` in
+`useVirtualTimeline.js` (below the UNTOUCHED `buildFullVideoTimeline` ~L136-217 -- angle-free games stay
+byte-identical forever). It derives the lane model at render time (EPIC decisions 7+9), never stored:
+BACKBONE = lane 0 = the LONGEST video (the "main camera"; tie: earliest offset, then sequence) grown by
+admitting every non-overlapping video in offset order; ANGLES = lanes 1+ via the minimal-lane greedy
+(lowest lane whose last end <= this.start + `OVERLAP_EPSILON_S`=1.0). This backbone-anchoring is a
+DELIBERATE deviation from a naive "earliest interval wins lane 0" greedy, which inverts backbone/angle for
+a negative-offset attach (the earlier-but-shorter clip would steal lane 0 and turn the main camera into a
+giant extension) -- do NOT "simplify" it back. COVERAGE EXTENSIONS = union(lane1+) minus union(lane0),
+inserted into the virtual domain at wall position (prepended for negative offsets, in-gap, or appended).
+Return shape (consumed by T8890/T8900): `{domain:[{type:'video'|'extension', sequence?, sourceSequence?,
+virtualStart, virtualEnd, wallStart}], lanes (idx0=backbone), angles (lanes1+ flattened, +name),
+virtualToWall, wallToVirtual, virtualToSource, sourcesAt, clampToSource, totalDuration}`. **LANDMINE --
+builder selection is OVERLAP-ONLY, not "offset != prefix-sum":** `AnnotateContainer` picks the builder via
+`hasOverlappingAngles(gameVideos)` (a start-sorted sweep, epsilon-tolerant), routing to `buildGameTimeline`
+ONLY on genuine interval overlap. A real halftime GAP is angle-free (all lane 0), so it MUST stay on
+`buildFullVideoTimeline` -- routing a gap game to the new builder would hand its DIFFERENT-shaped return
+(no `.segments`/`.virtualToActual`/`.getVideoOffset`/`.clampToVideo`) to the live render consumers
+(`getRegionAtTimeUnified`, `AnnotateScreen` virtual regions, `useMultiVideoScrub`) and crash them until
+T8890 adapts those consumers. The new path is INERT in prod today: current intake discards overlapping
+timestamps (EPIC decision 1) so no game has real overlap until T8900 (fix-timing) / T8910 (add-in-annotate)
+create it. `gameVideos` state now carries `offset_seconds`+`recorded_at` per video (threaded from /load).
+Pure logic + tests; NO rendering/DOM changes (rendering is T8890). Prior:)
 updated: 2026-09-06 (T8870 adds game_videos.recorded_at + offset_seconds (profile_db v051) for the
 overlap model -- every video now carries recording-clock evidence + a canonical real-time-axis
 offset, exposed per-video on the /load + get_game responses. Data-only (T8880 lanes / T8890 angle UI
