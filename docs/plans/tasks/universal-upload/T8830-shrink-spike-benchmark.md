@@ -78,8 +78,30 @@ criteria (2+ real machines, the real 3.3 GB DJI file, hand-recorded results), so
 worker's scope was limited to scaffolding + a smoke test on a small synthetic fixture
 (125/125 frames decoded+encoded, output played back in headless Chromium — fixed a
 concurrent-callback deadlock in the backpressure resolver and a module-loading issue along
-the way). **Waiting on the user** to run the harness per README.md on real hardware with
-the real DJI file and report GO / GO WITH CAVEATS / NO-GO before T8840 starts.
+the way).
+
+**2026-09-06 (later)**: Supervisor ran the harness directly on the real 3.3 GB DJI file
+via a real Chrome browser (Playwright) on the dev machine. Found and fixed real bugs the
+container smoke test couldn't have caught: (1) the real DJI file is non-fast-start
+(mdat, the whole payload, sits before moov — confirmed via raw byte inspection), which
+defeats a purely sequential streaming demux — the vendored mp4box was also 8+ years out
+of date and had a real box-parsing bug on >2GB mdat atoms, upgraded 0.5.4 -> 2.4.1;
+(2) mp4-muxer needs an encoder-reported colorSpace or it crashes at finalize — added
+one; (3) reordered so throughput numbers report before muxing, so a mux bug can't hide
+the measurement; (4) switched to whole-file-in-memory demux (correct by construction,
+legitimate for a throwaway one-off) — but the FULL 3.3GB file still can't be read via a
+single Blob `.arrayBuffer()` call (a separate Chromium reliability limit). Got a real
+result on a 25s representative `-c copy` trim (same codec/resolution/bitrate as the
+full file): **1.523x realtime, output muxed and played back correctly — PRELIMINARY
+GO**. The Legends 1080p control clip stalled after 8 frames on this machine (reproduced
+in a fresh tab, no error) — documented as an unresolved, likely hardware/driver-specific
+decoder hang, separate from everything else fixed. Full details + the filled results
+table: `scripts/shrink-spike/README.md`. Pushed (commit 0fda5940), CI green.
+
+**Waiting on the user**: this is single-machine evidence, not the full "2+ machines"
+cross-validation the task calls for, and the control-clip stall is unresolved. Run on a
+second machine (ideally one where the Legends control also completes) before treating
+this as a firm GO for T8840.
 
 ## Acceptance Criteria
 
