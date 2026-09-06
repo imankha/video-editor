@@ -80,7 +80,7 @@ overrides.)
 | T8860 | [Shrink upload integration + fallback](T8860-shrink-upload-integration.md) | TODO |
 | T8870 | [Overlap schema: recorded_at + offset_seconds](T8870-overlap-schema-placement.md) | STAGING |
 | T8880 | [Game timeline v2: lanes, backbone, extensions](T8880-game-timeline-lanes.md) | STAGING |
-| T8890 | [Angle strip UI + source switching](T8890-angle-strip-source-switching.md) | WIP |
+| T8890 | [Angle strip UI + source switching](T8890-angle-strip-source-switching.md) | WAITING ON USER |
 | T8900 | [Fix timing: nudge an angle into alignment](T8900-fix-timing-alignment.md) | TODO |
 | T8910 | [Add footage from inside Annotate](T8910-add-footage-in-annotate.md) | TODO |
 

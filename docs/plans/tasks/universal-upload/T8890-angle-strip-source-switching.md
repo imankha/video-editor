@@ -1,6 +1,6 @@
 # T8890: Angle strip UI + source switching
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-09-05
@@ -106,6 +106,19 @@ annotate state hooks (ephemeral, never persisted).
 ### Progress Log
 
 **2026-09-05**: Filed.
+
+**2026-09-06**: Implemented by an automated worker (largest UI task in the epic).
+Reviewer (fresh-context Opus) caught a real MAJOR bug before approval:
+`currentVideoIndexRef` went stale after `switchSource`/auto-fallback crossed a
+backbone boundary - fixed + regression test. Branch CI first came back red on the
+ESLint regression gate (both new files had an unused `React` import); two-line fix,
+verified. 122 unit/component tests + 2 real-browser e2e green, CI green. **Handed
+off via PR #356 rather than auto-merged**: the worker's own AC mapping honestly
+flags AC3 (clip-on-angle plays from the angle in the editor loop) and AC4
+(auto-fallback never leaves a black player) as only provable at the data-layer
+pre-staging - a real 2-source overlapping game doesn't exist as a product path yet
+until T8900/T8910 ship, and the container has no R2/backend to seed one. Needs
+staging verification once a real overlap game can be created.
 
 ## Acceptance Criteria
 
