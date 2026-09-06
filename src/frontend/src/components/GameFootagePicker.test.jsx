@@ -237,8 +237,19 @@ describe('GameFootagePicker — reported payload', () => {
     const onFootageChange = vi.fn();
     render(<GameFootagePicker onFootageChange={onFootageChange} />);
     const last = onFootageChange.mock.calls.at(-1)[0];
-    expect(last.files).toEqual([{ file: item.file, sequence: 1 }]);
+    expect(last.files).toEqual([{ file: item.file, sequence: 1, creationTime: null }]);
     expect(last.totalBytes).toBe(2048);
+  });
+
+  it('T8870: threads the item creationTime through as recorded_at evidence', () => {
+    const ct = new Date('2026-07-18T18:44:59Z');
+    const item = { name: 'DJI_0005.MP4', size: 1024, duration: 60, creationTime: ct,
+      file: new File(['x'], 'DJI_0005.MP4', { type: 'video/mp4' }) };
+    setIntake({ status: 'ready', items: [item], order: [item], proxies: {} });
+    const onFootageChange = vi.fn();
+    render(<GameFootagePicker onFootageChange={onFootageChange} />);
+    const last = onFootageChange.mock.calls.at(-1)[0];
+    expect(last.files[0].creationTime).toBe(ct);
   });
 
   it('four files: emits a 1..4 sequenced list in inferred order', () => {

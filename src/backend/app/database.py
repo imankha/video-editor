@@ -1553,6 +1553,14 @@ def ensure_database():
         # including single-video ones (_insert_game_videos is called unconditionally) --
         # games.blake3_hash is also set for single-video games as a legacy/query
         # convenience, not as the sole source of truth this comment used to claim.
+        # T8870: recorded_at (evidence: the video's embedded recording clock time,
+        # ISO-8601 UTC, never recomputed after insert) + offset_seconds (canonical
+        # position on the game's real-time axis; time zero = offset 0 = earliest
+        # video). Both nullable. offset_seconds is written at insert by
+        # compute_video_offsets; afterwards ONLY the Fix-timing gesture (T8900) may
+        # update it. Fresh DBs get the columns here; existing DBs via migration v051
+        # (backfills offset_seconds = prefix-sum-by-sequence so migrated games render
+        # identically to the pre-overlap concatenation math).
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS game_videos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1564,6 +1572,8 @@ def ensure_database():
                 video_height INTEGER,
                 video_size INTEGER,
                 fps REAL,
+                recorded_at TEXT,
+                offset_seconds REAL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(game_id, sequence)
             )

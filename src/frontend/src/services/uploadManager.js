@@ -924,6 +924,8 @@ export async function uploadGame(file, onProgress, options = {}) {
       width: options.videoWidth || null,
       height: options.videoHeight || null,
       file_size: hashResult.file_size,
+      // T8870: embedded recording time (ISO-8601) for overlap placement, or null.
+      recorded_at: options.videoRecordedAt || null,
     };
 
     // Step 2: Create game as 'pending' — game_id available for clip persistence.
@@ -1066,6 +1068,10 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
         width: metadata.width || null,
         height: metadata.height || null,
         file_size: hashResult.file_size,
+        // T8870: embedded recording time (ISO-8601) for overlap placement, or
+        // null. Flows into both the create (video 1) and attach (videos 2..N)
+        // payloads since addVideosToGame sends this same videoRef.
+        recorded_at: metadata.recorded_at || null,
       };
 
       // Step B: First file — create game as pending before upload.

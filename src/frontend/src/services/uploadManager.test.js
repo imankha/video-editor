@@ -322,6 +322,33 @@ describe('uploadManager', () => {
       expect(progressUpdates.some((p) => p.phase === 'complete')).toBe(true);
     });
 
+    it('T8870: threads options.videoRecordedAt into the create payload as recorded_at', async () => {
+      // already_owned short-circuits right after createGame, so the first fetch
+      // call is the create; assert the videoRef carried recorded_at.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'already_owned', game_id: 7, name: 'G', video_url: null }),
+      });
+      const mockFile = new File(['test'], 'test.mp4', { type: 'video/mp4' });
+      await uploadGame(mockFile, () => {}, { videoRecordedAt: '2026-07-18T18:44:59Z' });
+
+      const createCall = mockFetch.mock.calls[0];
+      const body = JSON.parse(createCall[1].body);
+      expect(body.videos[0].recorded_at).toBe('2026-07-18T18:44:59Z');
+    });
+
+    it('T8870: sends recorded_at:null when no timestamp evidence', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'already_owned', game_id: 8, name: 'G', video_url: null }),
+      });
+      const mockFile = new File(['test'], 'test.mp4', { type: 'video/mp4' });
+      await uploadGame(mockFile, () => {}, {});
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.videos[0].recorded_at).toBe(null);
+    });
+
     it('should handle dedup (video exists in R2, new game created)', async () => {
       // Flow: hash → createGame (status:'created') → ensureVideoInR2 → prepare-upload
       // (status:'exists', skip upload) → activateGame → complete.

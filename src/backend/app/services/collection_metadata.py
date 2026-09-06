@@ -11,6 +11,7 @@ convention as final_videos.rating_counts) via utils/encoding.py.
 """
 
 import logging
+import sqlite3
 
 from app.queries import latest_working_clips_subquery
 from app.utils.encoding import decode_data, encode_data
@@ -264,21 +265,48 @@ def compute_unified_clip_start(cursor, source_clip_id, clip_start_time):
     """
     if clip_start_time is None or source_clip_id is None:
         return clip_start_time
-    row = cursor.execute(
-        "SELECT video_sequence, game_id FROM raw_clips WHERE id = ?",
-        (source_clip_id,),
-    ).fetchone()
-    if row is None:
-        return clip_start_time
-    video_sequence, game_id = row[0], row[1]
+    # T8870: single round trip returns video_sequence/game_id plus both possible
+    # offsets in one shot -- the source video's canonical offset_seconds (its
+    # position on the game's real-time axis, preferred when present; overlap
+    # games place the source correctly even when sequence order != chronological
+    # order) and the prefix-sum-by-sequence fallback (BYTE-IDENTICAL to
+    # offset_seconds for existing sequence-only games). The except branch
+    # handles the rolling-deploy skew window where a peer hasn't migrated the
+    # offset_seconds column in yet -- same query minus that column, still one
+    # round trip.
+    try:
+        row = cursor.execute(
+            "SELECT rc.video_sequence, rc.game_id, gv.offset_seconds, "
+            "COALESCE((SELECT SUM(duration) FROM game_videos "
+            "WHERE game_id = rc.game_id AND sequence < rc.video_sequence), 0) "
+            "FROM raw_clips rc "
+            "LEFT JOIN game_videos gv ON gv.game_id = rc.game_id "
+            "AND gv.sequence = rc.video_sequence "
+            "WHERE rc.id = ?",
+            (source_clip_id,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        row = cursor.execute(
+            "SELECT rc.video_sequence, rc.game_id, "
+            "COALESCE((SELECT SUM(duration) FROM game_videos "
+            "WHERE game_id = rc.game_id AND sequence < rc.video_sequence), 0) "
+            "FROM raw_clips rc "
+            "WHERE rc.id = ?",
+            (source_clip_id,),
+        ).fetchone()
+        if row is None:
+            return clip_start_time
+        video_sequence, game_id, prior_duration = row
+        offset_seconds = None
+    else:
+        if row is None:
+            return clip_start_time
+        video_sequence, game_id, offset_seconds, prior_duration = row
+    if offset_seconds is not None:
+        return float(clip_start_time) + float(offset_seconds)
     if not video_sequence or video_sequence <= 1 or game_id is None:
         return clip_start_time
-    offset = cursor.execute(
-        "SELECT COALESCE(SUM(duration), 0) FROM game_videos "
-        "WHERE game_id = ? AND sequence < ?",
-        (game_id, video_sequence),
-    ).fetchone()[0] or 0.0
-    return float(clip_start_time) + float(offset)
+    return float(clip_start_time) + float(prior_duration or 0.0)
 
 
 def compute_archive_clip_identity(cursor, archive: dict):

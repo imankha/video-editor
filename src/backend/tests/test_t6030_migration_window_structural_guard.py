@@ -59,6 +59,7 @@ POST_V023_COLUMNS = {
     "intro_cards": ["subtitle_text"],                                                    # v035
     "raw_clips": ["reel_source_start_time", "reel_source_end_time"],                  # v049
     "pending_uploads": ["kind"],                                                       # v050
+    "game_videos": ["recorded_at", "offset_seconds"],                                 # v051
     # v048 (T7830) delete-only R2 cleanup, adds no columns.
     # v049 (T8070 reel status timestamp staleness) adds raw_clips.reel_source_start_time/
     #   reel_source_end_time (above). Every hot read/write is column_exists-guarded:
@@ -161,7 +162,15 @@ POST_V023_COLUMNS = {
     #   row.keys()`) -- covered by
     #   test_t8370_clip_upload.py::test_prepare_clip_upload_on_below_v050_db_returns_503_not_mis_namespaced_row.
 }
-HEAD_VERSION_AUDITED = 50  # v050 (T8370): pending_uploads.kind, column_exists-guarded (503, not column-omit)
+    # v051 (T8870 overlap schema) adds game_videos.recorded_at + offset_seconds (above).
+    #   Both hot reads that name them are column_exists-guarded, projecting NULL when
+    #   absent (never a 500): games.py _get_game_videos_response (driven by
+    #   test_game_detail below via get_game) and collection_metadata.compute_unified_clip_start
+    #   (the offset branch guards on game_videos.offset_seconds, falling back to the
+    #   pre-existing prefix-sum SELECT). The insert-time WRITE (create_game/add_game_videos)
+    #   only runs at head (JIT seam) and is benign-additive (columns default NULL), so it
+    #   needs no refuse-guard like v050's kind='clip'.
+HEAD_VERSION_AUDITED = 51  # v051 (T8870): game_videos.recorded_at + offset_seconds, column_exists-guarded reads
 
 
 def _cleanup(user_id: str) -> None:
