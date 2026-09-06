@@ -4,6 +4,7 @@ import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
+import AngleSwitcherBadge from './annotate/AngleSwitcherBadge';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
 import { useCurrentProfile, useProfileStore } from '../stores';
@@ -111,6 +112,9 @@ export function AnnotateModeView({
   newClipLayerIsMine = true,
   // T8600: desktop strip only — opens the clip's reel in Focus mode.
   onOpenClipInFocus,
+  // T8890: angle strip + source switching (null for angle-free games)
+  angleData = null,
+  angleSwitcher = null,
 }) {
   // Derive existingClip from state machine's selectedRegionId.
   // EDITING(clipId) keeps the ID stable during scrub, so no frozen ref needed.
@@ -565,6 +569,17 @@ export function AnnotateModeView({
                       />
                     ) : null;
                   })()}
+                  {/* T8890: which-camera switcher, at rest over the video, only
+                      where >= 2 sources cover the playhead (or a transient
+                      auto-fallback message). */}
+                  {angleSwitcher && (
+                    <AngleSwitcherBadge
+                      sources={angleSwitcher.sources}
+                      activeSourceSequence={angleSwitcher.activeSourceSequence}
+                      onSelect={angleSwitcher.onSelect}
+                      fallbackLabel={angleSwitcher.fallbackLabel}
+                    />
+                  )}
                 </div>
               ) : (
                 <div className={annotateFullscreen ? 'absolute inset-0' : 'contents'}>
@@ -675,6 +690,7 @@ export function AnnotateModeView({
                       selectedLayer={annotateSelectedLayer}
                       onLayerSelect={onLayerSelect}
                       boundaryOffsets={boundaryOffsets}
+                      angleData={angleData}
                     />
                   </div>
                 )}
@@ -751,6 +767,7 @@ export function AnnotateModeView({
                         selectedLayer={annotateSelectedLayer}
                         onLayerSelect={onLayerSelect}
                         boundaryOffsets={boundaryOffsets}
+                        angleData={angleData}
                       />
                     </div>
                   </div>
@@ -792,6 +809,7 @@ export function AnnotateModeView({
                 selectedLayer={annotateSelectedLayer}
                 onLayerSelect={onLayerSelect}
                 boundaryOffsets={boundaryOffsets}
+                angleData={angleData}
               />
             </div>
           )}

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Info, Play, Users, Share2 } from 'lucide-react';
+import { Info, Play, Users, Share2, Video } from 'lucide-react';
 import { getRatingDisplay, RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
 import { generateClipName } from '../../../utils/clipDisplayName';
 
@@ -51,7 +51,7 @@ const formatTime = (seconds) => {
  * right-aligned on the row. Callers that lack an in-match start (e.g. recap mode)
  * omit it and the row renders without a time.
  */
-export function ClipListItem({ region, index, isSelected, isPlaybackActive = false, onClick, isMobile = false, onViewDetails, onJumpToClip, gameClock = null }) {
+export function ClipListItem({ region, index, isSelected, isPlaybackActive = false, onClick, isMobile = false, onViewDetails, onJumpToClip, gameClock = null, angleName = null }) {
   const rating = region.rating || 3;
   const { notation, badgeColor, backgroundColor } = getRatingDisplay(rating);
 
@@ -125,6 +125,19 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
             <span className="text-gray-500 mr-1">{index + 1}.</span>
             {displayName}
           </span>
+          {/* T8890: violet "from an angle" pill — only for a clip cut from a
+              non-backbone source; backbone clips (the common case) show nothing.
+              shrink-0 so the name truncates first. */}
+          {angleName && (
+            <span
+              className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full
+                         text-[10px] bg-gray-700 border border-violet-500/40 text-violet-300"
+              title={`Cut from ${angleName}`}
+              data-testid="clip-angle-pill"
+            >
+              <Video size={9} /> {angleName}
+            </span>
+          )}
           {!isMobile && region.shared_by && (
             <span
               className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full

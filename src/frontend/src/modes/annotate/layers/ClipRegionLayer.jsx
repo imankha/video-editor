@@ -1,7 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { Video } from 'lucide-react';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { RATING_NOTATION, RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
+
+// T8890: violet-400 accent for a clip cut from an "angle" (non-backbone source).
+// Backbone clips get NONE of this treatment — the common case stays clean.
+const ANGLE_ACCENT = '#a78bfa'; // violet-400
 
 /**
  * T6400: the marker tooltip is PORTALLED to document.body and positioned `fixed`.
@@ -92,6 +97,10 @@ export default function ClipRegionLayer({
   onDeleteRegion,
   edgePadding = 20,
   emptyMessage = 'No clips yet',
+  // T8890: Set of source sequences that are ANGLES (non-backbone). A region whose
+  // videoSequence is in this set gets the violet accent + camera glyph. Absent /
+  // empty for angle-free games -> zero visual change (byte-identical common case).
+  angleSequences = null,
 }) {
   const trackRef = useRef(null);
   const [hoveredRegionId, setHoveredRegionId] = useState(null);
@@ -174,6 +183,8 @@ export default function ClipRegionLayer({
           const displayName = region.name || generateClipName(rating, region.tags || [], region.notes || '') || '';
           const layerColor = layerColorFor(region);
           const layerName = layerNameFor(region);
+          const isAngle = !!angleSequences && region.videoSequence != null
+            && (angleSequences.has ? angleSequences.has(region.videoSequence) : angleSequences.includes?.(region.videoSequence));
 
           return (
             <div
@@ -209,6 +220,7 @@ export default function ClipRegionLayer({
                     backgroundColor: color,
                     border: '1px solid rgba(0,0,0,0.3)',
                     borderBottom: `3px solid ${layerColor}`,
+                    ...(isAngle && { borderTop: `2px solid ${ANGLE_ACCENT}` }),
                     boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                   }}
                 />
@@ -216,7 +228,7 @@ export default function ClipRegionLayer({
               {/* Desktop: rating notation badge */}
               <div
                 className={`
-                  hidden sm:block px-1.5 py-0.5 rounded font-bold transition-all duration-150
+                  hidden sm:block relative px-1.5 py-0.5 rounded font-bold transition-all duration-150
                   ${isSelected
                     ? 'text-lg ring-2 ring-white shadow-lg'
                     : 'text-sm hover:scale-110'
@@ -228,12 +240,22 @@ export default function ClipRegionLayer({
                   textShadow: '0 1px 2px rgba(0,0,0,0.5)',
                   border: '1px solid rgba(0,0,0,0.3)',
                   borderBottom: `2px solid ${layerColor}`,
+                  ...(isAngle && { borderTop: `2px solid ${ANGLE_ACCENT}` }),
                   boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                 }}
-                title={RATING_ADJECTIVES[rating]}
-                aria-label={RATING_ADJECTIVES[rating]}
+                title={isAngle ? `${RATING_ADJECTIVES[rating]} — from an angle` : RATING_ADJECTIVES[rating]}
+                aria-label={isAngle ? `${RATING_ADJECTIVES[rating]} — angle clip` : RATING_ADJECTIVES[rating]}
               >
                 {notation}
+                {isAngle && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 flex items-center justify-center rounded-full bg-violet-600 text-white"
+                    style={{ width: 12, height: 12 }}
+                    data-testid="angle-clip-glyph"
+                  >
+                    <Video size={8} />
+                  </span>
+                )}
               </div>
               {/* Show tooltip on hover or select - end timestamp before clip name.
                   T6400: the layer is signalled by the left accent bar ONLY (cyan =
