@@ -1,10 +1,10 @@
 # T8890: Angle strip UI + source switching
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-09-05
-**Updated:** 2026-09-05
+**Updated:** 2026-09-06
 
 ## Problem
 
