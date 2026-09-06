@@ -228,9 +228,19 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
     const { active, inactive } = getVideos();
     if (!active) return;
 
+    // The backbone playback segment sitting UNDER this wall position is the
+    // fallback target + the reference the RAF tick advances on. Keep
+    // currentVideoIndexRef pinned to it whenever we switch (angle OR backbone),
+    // so an angle that spans a backbone boundary can't leave the index stale
+    // (reviewer T8890): after fallback, activeSourceSeqRef == this segment's
+    // source, so `angleActive` reads false and boundary-advance re-engages.
+    const underlyingVirtual = fullTimeline.sourceTimeToVirtual(sequence, fileTime);
+    const underlyingIndex = fullTimeline.virtualToActual(underlyingVirtual).videoIndex;
+
     // Same source already showing -> just seek it (no swap needed).
     if (activeSourceSeqRef.current === sequence) {
       active.currentTime = fileTime;
+      currentVideoIndexRef.current = underlyingIndex;
       return;
     }
     if (!inactive) return;
@@ -251,6 +261,7 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
       pendingSwapRef.current = null;
       swapVideos();
       activeSourceSeqRef.current = sequence;
+      currentVideoIndexRef.current = underlyingIndex;
       setIsLoading(false);
 
       const { active: newActive, inactive: newInactive } = getVideos();

@@ -91,6 +91,28 @@ describe('buildGameTimeline — T8890 playback + source surface', () => {
     expect(seqs.slice().sort()).toEqual([1, 2, 3, 4]);
   });
 
+  it('an angle crossing a backbone boundary maps to the correct underlying segment index', () => {
+    // Two adjacent backbone videos (seq 1: 0-900, seq 5: 900-1800); angle seq 2
+    // spans wall 850-950, crossing the 900 boundary. This is the case that made
+    // currentVideoIndexRef go stale after auto-fallback (reviewer T8890): the
+    // switchSource fix resyncs the index via virtualToActual(sourceTimeToVirtual()).
+    const twoBackbone = [
+      { sequence: 1, duration: 900, offset_seconds: 0, url: 'a.mp4' },
+      { sequence: 5, duration: 900, offset_seconds: 900, url: 'b.mp4' },
+      { sequence: 2, duration: 100, offset_seconds: 850, url: 'angle.mp4' },
+    ];
+    const t = buildGameTimeline(twoBackbone);
+    expect(t.lanes[0].map((v) => v.sequence)).toEqual([1, 5]); // both backbone
+    // Angle file time 40 -> wall 890 -> under backbone segment 0 (seq 1).
+    const before = t.virtualToActual(t.sourceTimeToVirtual(2, 40));
+    expect(before.videoIndex).toBe(0);
+    expect(before.videoSequence).toBe(1);
+    // Angle file time 60 -> wall 910 -> under backbone segment 1 (seq 5).
+    const after = t.virtualToActual(t.sourceTimeToVirtual(2, 60));
+    expect(after.videoIndex).toBe(1);
+    expect(after.videoSequence).toBe(5);
+  });
+
   it('clampToSource keeps an out-point inside the chosen source bounds', () => {
     const t = buildGameTimeline(twoSource);
     // A clip on angle seq 2 (virtual 600-900) whose end would run to 1000 clamps back.
