@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Throwaway benchmark for T8830 - not part of the app bundle, never imported by app code.",
   "dependencies": {
-    "mp4box": "^0.5.2",
-    "mp4-muxer": "^5.0.0"
+    "mp4-muxer": "^5.0.0",
+    "mp4box": "2.4.1"
   }
 }

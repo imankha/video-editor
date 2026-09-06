@@ -29,14 +29,17 @@
   <video id="playback" controls></video>
 
   <!--
-    mp4box's published build is a classic script that sets window.MP4Box /
-    window.DataStream globals - it has no real ESM exports, so it's loaded here
-    rather than imported by spike.js. mp4-muxer does ship a real ESM build, mapped
-    below so spike.js can `import` it by bare specifier without a bundler.
+    mp4box 2.x ships a real ESM build (createFile/DataStream named exports) -
+    mapped below alongside mp4-muxer's ESM build so spike.js can `import` both
+    by bare specifier without a bundler.
   -->
-  <script src="./node_modules/mp4box/dist/mp4box.all.js"></script>
   <script type="importmap">
-    { "imports": { "mp4-muxer": "./node_modules/mp4-muxer/build/mp4-muxer.mjs" } }
+    {
+      "imports": {
+        "mp4box": "./node_modules/mp4box/dist/mp4box.all.mjs",
+        "mp4-muxer": "./node_modules/mp4-muxer/build/mp4-muxer.mjs"
+      }
+    }
   </script>
   <script type="module" src="./spike.js"></script>
 </body>
