@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>T8830 - Shrink spike (WebCodecs 8K benchmark)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    #results { background: #111; color: #0f0; padding: 1rem; white-space: pre-wrap; min-height: 4rem; }
+    #playback { display: block; margin-top: 1rem; max-width: 100%; }
+    button { font-size: 1rem; padding: 0.5rem 1rem; }
+    .hint { color: #666; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>Shrink spike: WebCodecs 8K benchmark (T8830)</h1>
+  <p class="hint">
+    Throwaway benchmark, not shipped to users. Pick the real 8K DJI file (or a small
+    control clip) and press Run. See README.md for how to serve this page and where
+    to point it.
+  </p>
+
+  <input id="file-input" type="file" accept="video/*" />
+  <button id="run-btn" disabled>Run</button>
+
+  <h2>Results</h2>
+  <pre id="results">(no run yet)</pre>
+
+  <h2>Output playback (proves mux correctness)</h2>
+  <video id="playback" controls></video>
+
+  <!--
+    mp4box 2.x ships a real ESM build (createFile/DataStream named exports) -
+    mapped below alongside mp4-muxer's ESM build so spike.js can `import` both
+    by bare specifier without a bundler.
+  -->
+  <script type="importmap">
+    {
+      "imports": {
+        "mp4box": "./node_modules/mp4box/dist/mp4box.all.mjs",
+        "mp4-muxer": "./node_modules/mp4-muxer/build/mp4-muxer.mjs"
+      }
+    }
+  </script>
+  <script type="module" src="./spike.js"></script>
+</body>
+</html>
