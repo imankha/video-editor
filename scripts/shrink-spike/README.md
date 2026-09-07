@@ -15,9 +15,11 @@ for the gating model this validates.
 2. Demux: reads the **whole file into memory** (`file.arrayBuffer()`) and feeds it to
    `mp4box` in a single `appendBuffer` call. **Deliberately not streaming** - see
    "Demux architecture" below for why.
-3. Decode: `VideoDecoder`, backpressured so at most ~8 frames are in flight
-   (`decoder.decodeQueueSize` and an in-flight counter both capped). `frame.close()`
-   is called on every frame after it's handed to the encoder.
+3. Decode: `VideoDecoder`, backpressured so at most 32 frames are in flight
+   (`decoder.decodeQueueSize` and an in-flight counter both capped - 32, not 8, because
+   the hardware H.264 decoder's own pipeline depth exceeds 8 and a smaller cap deadlocks;
+   see Test files). `frame.close()` is called on every frame after it's handed to the
+   encoder.
 4. Crop+scale: `OffscreenCanvas.drawImage` into a 2688-wide target canvas.
 5. Encode: tries `avc1.640033` (H.264) at 12 Mbps first (with an explicit
    Rec.709 `colorSpace` - `mp4-muxer` needs one on the encoder config or it crashes at
@@ -101,18 +103,18 @@ Open the served URL in Chrome (and once in Edge), pick a file, press **Run**.
   representative of the real content).
 - **Control file:** the Legends 1080p-class clip
   (`formal annotations/u14 phillips/9.20.LEGENDS/wcfc-vs-legends-fc-san-diego-1st-half-2025-09-20.mp4`,
-  H.264 1920x1080). Should be *far* above realtime; if it isn't, the pipeline has a
-  bug, not a hardware limit - don't trust the 8K numbers until the control passes.
-  **On this run's machine the control clip stalled after decoding exactly 8 frames -
-  no error event, no further `decoder.output` calls, indefinitely.** Reproduced twice
-  (once in a fresh browser tab, ruling out stale hardware-decoder session state from a
-  prior run). This looks like a genuine silent hardware-decoder hang specific to this
-  file/machine/driver combination - a real WebCodecs landmine T8840's production
-  pipeline should guard against with a decode-progress watchdog/timeout, not something
-  this spike had time to root-cause further. **Because of this, the control did NOT
-  validate "far above realtime" on this machine** - the DJI result below stands on its
-  own (it completed successfully end-to-end), but treat it as single-machine evidence,
-  not fully cross-validated the way the task intended.
+  H.264 1920x1080). The control's job: if it isn't well above realtime, the pipeline
+  has a bug, not a hardware limit - don't trust the 8K numbers until the control passes.
+  **It did its job.** First run, the control clip decoded exactly 8 frames and stalled
+  forever (no error event, no further `decoder.output`, reproduced in a fresh tab). Root
+  cause was the harness, not hardware: `IN_FLIGHT_CAP` was 8, and Chromium's hardware
+  H.264 decoder holds more than that in its own pipeline before emitting a first
+  output, so the in-flight counter never decremented. Raised to 32 -> control completes
+  at 1.918x realtime, output plays. The DJI HEVC path has a shallower decoder pipeline
+  and never hit it. (`ffprobe` reports `has_b_frames=0` for the control, so this is
+  decoder pipeline depth, not stream reordering.) Lesson for T8840: drive backpressure
+  off `decoder.decodeQueueSize` / the `dequeue` event with a generous cap, never a small
+  hand-rolled in-flight count.
 
 ### Where to run it
 
@@ -132,7 +134,7 @@ Control clip (Legends 1080p-class) results:
 
 | Machine | Browser | End-to-end fps | Realtime multiplier | Notes |
 |---------|---------|-----------------|----------------------|-------|
-| Dev laptop | Chrome 152 | n/a | n/a | **STALLED at 8 frames decoded, no error, indefinitely** (reproduced in a fresh tab). See Test files section - looks like a real hardware-decoder hang, not a pipeline bug (the harder DJI 8K case completed successfully on the same machine/browser). Needs investigation on a second machine to see if it reproduces. |
+| Dev laptop | Chrome 152 | 57.48 | **1.918x** | 750/750 frames, 13.05s wall, decode 57.5 fps, 42.0 MB out, played back OK. First attempt stalled at 8 frames with `IN_FLIGHT_CAP = 8` (harness bug, see Test files) - fixed by raising the cap to 32. Note it is only ~1.25x faster than the 8K run despite 20x fewer source pixels: both encode to the same 2688x1512 @ 12 Mbps target, so the pipeline is **encode-bound**, not decode-bound - the preset's output size, not the source resolution, drives shrink time. |
 
 ## Verdict
 
@@ -145,25 +147,30 @@ headless dev container cannot produce it.
 - **NO-GO**: unsupported, or < 0.25x realtime everywhere. Stop; set the epic's shrink
   tasks (T8840, T8850, T8860) to WAITING ON USER with these numbers.
 
-**Verdict:** **PRELIMINARY GO** (single machine, real 8K content, needs a second machine
-before this is final per the task's own "2+ machines" bar).
+**Verdict:** **GO WITH CAVEATS - PRELIMINARY** (one machine so far; the task's own bar
+is 2+ machines, Chrome + once in Edge, before this is final).
 
-**Numbers/caveats:**
-- 1.523x realtime end-to-end on a 25-second representative trim of the real DJI 8K
-  10-bit HEVC footage (same codec/resolution/bitrate as the full file) - well above the
-  0.5x GO threshold. Output muxed and played back correctly.
-- The FULL 3.3 GB file could not be run directly through this spike (Blob-read
-  reliability limit, see "Demux architecture") - the 1.523x number is from a
-  representative trim, not the complete file. T8840's real implementation will need
-  genuine chunked random-access demuxing regardless (see above) - that work will also
-  resolve the "can't read a 3+ GB file in one shot" limit this spike hit.
-- The Legends 1080p control clip stalled on this machine (see Results) - the intended
-  "far above realtime, or the pipeline has a bug" cross-check did NOT complete. Since
-  the harder 8K case succeeded cleanly on the same machine/browser, this reads as an
-  environment/driver-specific decoder hang rather than a pipeline bug, but it is
-  UNCONFIRMED - a second machine should try both files.
-- **Before starting T8840**, get at least one more machine's numbers (ideally one where
-  the Legends control also completes, to fully validate the harness) and update this
-  file. If the second machine's DJI number is also >= 0.5x, treat this as a firm GO;
-  if the Legends control fails there too, investigate that specifically before trusting
-  any 8K number, per the task's own logic.
+**Numbers:**
+- DJI 8K 10-bit HEVC (25 s representative trim, same codec/resolution/bitrate as the
+  full file): **1.523x realtime** end-to-end, output muxed + played back. Well above the
+  0.5x GO threshold.
+- Legends 1080p H.264 control: **1.918x realtime**, output played back. Pipeline
+  validated (after fixing the harness's own backpressure bug - see Test files).
+
+**Caveats T8840 inherits (binding, per the task file):**
+1. **Chunked random-access demux is mandatory.** Real camera files are non-fast-start
+   (mdat before moov); a sequential streaming demux cannot work, and a single-shot
+   `file.arrayBuffer()` fails in Chrome at 3.3 GB. Locate moov by top-level box hopping,
+   parse the sample table, then `file.slice()` per sample/chunk. See "Demux architecture".
+2. **Use mp4box >= 2.4.1** (0.5.x mis-parses >2 GB atoms) and give `VideoEncoder` an
+   explicit `colorSpace` (mp4-muxer crashes at finalize without one).
+3. **Backpressure off `decoder.decodeQueueSize` / `dequeue`, cap >= 32.** A small
+   hand-rolled in-flight count deadlocks against the hardware decoder's pipeline depth.
+4. **Encode-bound, not decode-bound.** 1080p and 8K sources both land at ~46-57 fps
+   into the same 2688x1512 @ 12 Mbps target. The preset's OUTPUT size drives the time
+   estimate (T8850's live estimates should key off output pixels x bitrate, not input).
+5. Tested only in Chrome 152 on one Windows 11 laptop (i7-13700H, Iris Xe + RTX 4060).
+   Edge and a second machine still owed.
+
+**To finish this task:** run both trims on a second machine (and once in Edge), add the
+rows above, and if both DJI numbers are >= 0.5x, promote this to a firm GO WITH CAVEATS.

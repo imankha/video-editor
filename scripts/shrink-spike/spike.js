@@ -25,7 +25,14 @@
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import { createFile, DataStream } from 'mp4box';
 
-const IN_FLIGHT_CAP = 8;
+// 32, not 8: Chromium's hardware H.264 decoder holds a number of inputs in its own
+// pipeline before emitting the first output. With the cap at 8 the Legends 1080p
+// control clip decoded exactly 8 frames and then stalled forever (no error event,
+// no output, inFlight never decremented) - the cap was below the decoder's pipeline
+// depth. The DJI HEVC path has a shallower pipeline and never hit it. A production
+// implementation (T8840) should drive backpressure off `decoder.decodeQueueSize` /
+// the `dequeue` event with a generous cap, never a small hand-rolled in-flight count.
+const IN_FLIGHT_CAP = 32;
 const ENCODE_TARGET_WIDTH = 2688;
 const ENCODE_BITRATE = 12_000_000;
 const H264_CODEC = 'avc1.640033';
