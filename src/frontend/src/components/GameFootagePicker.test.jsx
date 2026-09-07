@@ -228,15 +228,37 @@ describe('GameFootagePicker — reported payload', () => {
     expect(last.totalBytes).toBe(2048);
   });
 
-  it('T8870: threads the item creationTime through as recorded_at evidence', () => {
+  it('T8870/T8872: confidence "time" threads the item creationTime through as recorded_at evidence', () => {
     const ct = new Date('2026-07-18T18:44:59Z');
     const item = { name: 'DJI_0005.MP4', size: 1024, duration: 60, creationTime: ct,
       file: new File(['x'], 'DJI_0005.MP4', { type: 'video/mp4' }) };
-    setIntake({ status: 'ready', items: [item], order: [item], proxies: {} });
+    setIntake({ status: 'ready', items: [item], order: [item], confidence: 'time', proxies: {} });
     const onFootageChange = vi.fn();
     render(<GameFootagePicker onFootageChange={onFootageChange} />);
     const last = onFootageChange.mock.calls.at(-1)[0];
     expect(last.files[0].creationTime).toBe(ct);
+  });
+
+  it('T8872: confidence "name" (export-time artifact) nulls creationTime even when the item carries a real Date', () => {
+    const ct = new Date('2026-07-18T18:44:59Z');
+    const item = { name: '1st-half.mp4', size: 1024, duration: 60, creationTime: ct,
+      file: new File(['x'], '1st-half.mp4', { type: 'video/mp4' }) };
+    setIntake({ status: 'ready', items: [item], order: [item], confidence: 'name', proxies: {} });
+    const onFootageChange = vi.fn();
+    render(<GameFootagePicker onFootageChange={onFootageChange} />);
+    const last = onFootageChange.mock.calls.at(-1)[0];
+    expect(last.files[0].creationTime).toBeNull();
+  });
+
+  it('T8872: confidence "manual" (user-dragged order) nulls creationTime', () => {
+    const ct = new Date('2026-07-18T18:44:59Z');
+    const item = { name: 'clip.mp4', size: 1024, duration: 60, creationTime: ct,
+      file: new File(['x'], 'clip.mp4', { type: 'video/mp4' }) };
+    setIntake({ status: 'ready', items: [item], order: [item], confidence: 'manual', proxies: {} });
+    const onFootageChange = vi.fn();
+    render(<GameFootagePicker onFootageChange={onFootageChange} />);
+    const last = onFootageChange.mock.calls.at(-1)[0];
+    expect(last.files[0].creationTime).toBeNull();
   });
 
   it('four files: emits a 1..4 sequenced list in inferred order', () => {

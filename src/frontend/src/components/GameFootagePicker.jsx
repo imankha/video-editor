@@ -48,9 +48,11 @@ function acceptedVideoCount(fileList) {
  * Reports its value up via onFootageChange({ files:[{file,sequence,creationTime}],
  * totalBytes, proxies }) — sequence is the 1-based index into the inferred order,
  * creationTime is the item's embedded recording time (Date|null, from T8800's
- * intake probe) threaded through to the upload as recorded_at (T8870). This is a
- * memory-only lift of form state to the parent (NOT a store/backend write), so the
- * reactive-persistence ban does not apply.
+ * intake probe) threaded through to the upload as recorded_at (T8870), but ONLY
+ * when the intake trusted the chain (confidence 'time', T8872) — otherwise null,
+ * since an unsanctioned chain's embedded times are export artifacts, not evidence.
+ * This is a memory-only lift of form state to the parent (NOT a store/backend
+ * write), so the reactive-persistence ban does not apply.
  */
 export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmitting = false }) {
   const { status, items, order, confidence, gaps, skipped, proxies, addFiles, removeItem, setManualOrder } =
@@ -71,12 +73,15 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
       sequence: i + 1,
       // T8870: carry the embedded recording time so the upload can send it as
       // recorded_at (evidence for overlap placement); null when the intake probe
-      // found none — never a fabricated time.
-      creationTime: it.creationTime instanceof Date ? it.creationTime : null,
+      // found none — never a fabricated time. T8872: only when the intake trusted
+      // the chain (confidence 'time') — inferOrder discards untrustworthy export
+      // timestamps for order/confidence but never clears creationTime itself, so
+      // an untrusted timestamp must be gated here, at the payload boundary.
+      creationTime: confidence === 'time' && it.creationTime instanceof Date ? it.creationTime : null,
     }));
     const totalBytes = order.reduce((sum, it) => sum + (it.size || 0), 0);
     onFootageChange({ files, totalBytes, proxies });
-  }, [order, proxies, onFootageChange]);
+  }, [order, proxies, onFootageChange, confidence]);
 
   // Accept a raw selection from ANY path (click, multi-select, folder pick/drag).
   const ingest = useCallback(
