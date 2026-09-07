@@ -102,6 +102,11 @@ jobs:
         run: node scripts/check-media-api-base.mjs
       - name: Unit tests (vitest, retry absorbs known flakes)
         run: npx vitest run --retry=2
+      - name: Shrink tool unit tests (T8840 -- own vitest.config.js, own deps)
+        working-directory: scripts/shrink-tool
+        run: |
+          npm ci --no-audit --no-fund
+          npx vitest run
 
   backend:
     needs: changes

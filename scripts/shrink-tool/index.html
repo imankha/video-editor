@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>T8840 -- Shrink tool (standalone, not part of the app)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #14171c; color: #e6e8eb; margin: 0; padding: 24px;
+    }
+    h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+    .subtitle { color: #9aa2ad; font-size: 13px; margin: 0 0 20px; }
+    section { margin-bottom: 24px; padding: 16px; background: #1b1f26; border-radius: 8px; }
+    section h2 { font-size: 14px; margin: 0 0 12px; color: #c7ccd4; text-transform: uppercase; letter-spacing: 0.04em; }
+    button {
+      font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid #333a45;
+      background: #262b34; color: #e6e8eb; cursor: pointer;
+    }
+    button:hover:not(:disabled) { background: #2f353f; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.primary { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+    button.primary:hover:not(:disabled) { background: #2f6fdb; }
+    #workspace-banner { display: none; }
+    #workspace-banner.visible { display: block; }
+    .banner { padding: 12px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 13px; }
+    .banner.info { background: #1e2a3d; border: 1px solid #2c4568; }
+    .banner.warn { background: #3d331e; border: 1px solid #6b5528; }
+    .banner.danger { background: #3d1e1e; border: 1px solid #6b2828; }
+    .banner.go { background: #1e3d24; border: 1px solid #2c6b3a; }
+    #segment-list { display: flex; gap: 12px; flex-wrap: wrap; }
+    .segment-tile {
+      display: flex; flex-direction: column; width: 160px; padding: 6px; gap: 4px;
+      background: #12151a; border: 2px solid transparent; border-radius: 6px; text-align: left;
+    }
+    .segment-tile.segment-selected { border-color: #3b82f6; }
+    .segment-tile.segment-done { border-color: #2c6b3a; }
+    .segment-tile.segment-failed { border-color: #6b2828; }
+    .segment-thumb-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #0c0e12; border-radius: 4px; overflow: hidden; }
+    .segment-thumb, .segment-thumb-placeholder { width: 100%; height: 100%; object-fit: contain; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #6a7280; }
+    .segment-progress { position: absolute; bottom: 0; left: 0; height: 3px; background: #3b82f6; width: 0%; }
+    .segment-label { font-size: 11px; color: #c7ccd4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .segment-meta { font-size: 10px; color: #9aa2ad; }
+    #crop-canvas { max-width: 100%; background: #0c0e12; border-radius: 4px; touch-action: none; }
+    #crop-readout { font-size: 12px; color: #9aa2ad; margin-top: 6px; }
+    .preset-chips { display: flex; gap: 8px; }
+    .preset-chip { flex: 1; text-align: left; padding: 10px 12px; }
+    .preset-chip.selected { border-color: #3b82f6; background: #1e2a3d; }
+    .preset-chip .preset-name { font-weight: 600; display: block; }
+    .preset-chip .preset-estimate { font-size: 11px; color: #9aa2ad; display: block; margin-top: 2px; }
+    #progress-log { font-size: 12px; color: #9aa2ad; white-space: pre-wrap; max-height: 160px; overflow: auto; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <h1>T8840 -- Standalone browser shrink tool</h1>
+  <p class="subtitle">Never imported by app code. Serve the repo root and open this page directly. See README.md for the test recipe.</p>
+
+  <div id="workspace-banner"></div>
+
+  <section id="picker-section">
+    <h2>1. Pick a camera folder</h2>
+    <div class="row">
+      <button id="pick-folder-btn" class="primary" type="button">Pick folder&hellip;</button>
+      <input id="fallback-input" type="file" webkitdirectory multiple style="display:none" />
+      <span id="picker-note" class="subtitle" style="margin:0"></span>
+    </div>
+  </section>
+
+  <section id="segments-section" style="display:none">
+    <h2>2. Segments</h2>
+    <div id="segment-list"></div>
+  </section>
+
+  <section id="crop-section" style="display:none">
+    <h2>3. Crop (applies to every segment)</h2>
+    <canvas id="crop-canvas" width="960" height="540"></canvas>
+    <div id="crop-readout"></div>
+    <div class="row" style="margin-top:8px">
+      <button id="reset-crop-btn" type="button">Reset crop</button>
+    </div>
+  </section>
+
+  <section id="preset-section" style="display:none">
+    <h2>4. Preset</h2>
+    <div class="preset-chips" id="preset-chips"></div>
+  </section>
+
+  <section id="run-section" style="display:none">
+    <h2>5. Run</h2>
+    <div class="row">
+      <button id="start-btn" class="primary" type="button">Start</button>
+      <button id="cancel-btn" type="button" disabled>Cancel</button>
+      <button id="save-all-btn" type="button" disabled>Save all to disk</button>
+    </div>
+    <div id="verdict-banner"></div>
+    <div id="progress-log"></div>
+  </section>
+
+  <!--
+    T8838's shrinkCapability.js (reused as-is, see tool.js) does a dynamic
+    `import('mp4box')` -- a bare specifier that only resolves via an import map
+    when this page is served raw (no bundler). worker.js never triggers that
+    path at runtime (see pipeline/probe.js's header comment), so this map is
+    main-thread-only and does not need to reach the module Worker.
+  -->
+  <script type="importmap">
+    { "imports": { "mp4box": "./node_modules/mp4box/dist/mp4box.all.mjs" } }
+  </script>
+  <script type="module" src="./tool.js"></script>
+</body>
+</html>
