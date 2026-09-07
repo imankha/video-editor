@@ -27,26 +27,32 @@ overrides.)
 
 ## Settled design decisions (approved with the concept, 2026-09-05)
 
-1. **Ordering rule:** sort by embedded recording time, then sanity-check the chain (each
-   segment starts at or after the previous one ends, small tolerance). Chain implies
-   overlap -> timestamps are export times -> discard them WHOLESALE and fall back to
-   filename heuristics (half words, camera counters, trailing numbers). Neither works ->
-   name order + yellow "please check" state. NEVER block submit on ambiguity.
-   **UNDER REVISION (2026-09-06, user direction) - see T8824.** The wholesale discard
-   conflicts with decision 7: a phone clip filmed during the main camera is GENUINE
-   overlap and is this epic's headline scenario, but this rule makes the picker blind to
-   it. T8824 replaces the discard with a placement model that keeps trustworthy
-   timestamps, recognises genuine overlap as angles (possibly several levels), treats
-   overlap as an export-time artifact only when the evidence says so (Legends), and
-   shows the result as stacked lanes in the picker. Until it lands, T8872 (hotfix)
-   makes the shipped rule at least self-consistent: discarded timestamps are no longer
-   sent to the backend as `recorded_at`. "Never block submit" still stands.
+1. **Placement rule:** sort by embedded recording time. Files whose recorded spans OVERLAP
+   (beyond `OVERLAP_EPSILON_S = 1.0s`, the same tolerance Annotate uses) are classified, not
+   discarded: recording-split slop, a one-recording naming scheme (half words, consecutive
+   camera counters), or a clock outside the backend's 12h placement window means the
+   timestamps are export artifacts -> place sequentially by filename heuristics and send NO
+   `recorded_at`; a different camera family or a contained short clip means the overlap is
+   REAL -> place by the clock and show the files as **angles** in stacked lanes (derived by
+   the same `assignLanes` Annotate uses). Anything else asks one plain question with the
+   sequential (safe) answer preselected. Timestamps are sent for ALL files or NONE - never a
+   mix, because the backend places timed videos on the wall clock and untimed ones by
+   prefix-sum. Neither clock nor names decisive -> name order + yellow "please check".
+   **NEVER block submit on ambiguity.** (Amended by T8824, 2026-09-06; supersedes the
+   original wholesale-discard rule, which made the epic's own headline scenario - a phone
+   clip filmed during the main camera - unreachable. T8872's hotfix invariant, "an untrusted
+   timestamp is never sent as `recorded_at`," carries forward unchanged, now keyed on
+   `placement` rather than `confidence`.)
 2. **Junk filter:** `.LRF`/`.THM`/`.SRT`/images/hidden files silently excluded, disclosed
    in a quiet gray collapsible line. `.LRF` proxies are kept CLIENT-SIDE as preview
    sources for the shrink crop UI, never uploaded.
 3. **Trust-building confirm strip:** chips show their evidence (recorded clock time, or
    filename), gaps render as labeled connectors ("9 min break"), one plain-language trust
-   line. Single file = today's exact two-gesture flow, zero new UI (acceptance bar).
+   line. **When footage genuinely overlaps, the strip grows angle lanes (T8824, 2026-09-06):
+   lane 0 stays the draggable order list, each angle gets a violet lane positioned by its
+   recorded time plus a labelled row; a single link flips the whole set between "angles" and
+   "one recording in order".** Single file = today's exact two-gesture flow, zero new UI
+   (acceptance bar).
 4. **Shrink offer threshold:** total selected bytes > `SHRINK_OFFER_MIN_BYTES = 3 GB`.
    Below it the offer never renders. The offer NEVER gates Add Game.
 5. **Shrink presets:** Sharpest (~4K-class crop, ~24 Mbps) / Recommended (default,
