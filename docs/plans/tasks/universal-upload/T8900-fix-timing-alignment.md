@@ -1,6 +1,6 @@
 # T8900: Fix timing: nudge an angle into alignment
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-05
@@ -78,10 +78,17 @@ on the bar ONLY in this mode, one PATCH on Done. Spec + microcopy: artifact sect
 
 **2026-09-05**: Filed.
 
+**2026-09-07**: Implemented in container (reel-task-t8900). Backend `PATCH .../placement`
+endpoint + `FixTimingStrip.jsx` + drag-in-mode + A/B play + Reset/Esc/Done shipped. Real-browser
+Playwright drag tests added (T5380 guard - jsdom alone was not trusted for the drag-gating
+criterion) after the supervisor sent it back for that specific gap; both real bugs the drag
+test surfaced were test-harness bugs (viewport-vs-page coordinates, a render race), not product
+bugs. Reviewer approved. Merged PR #364, commit `c3e354ca`. STAGING.
+
 ## Acceptance Criteria
 
-- [ ] Accidental drag impossible outside the mode
-- [ ] Exactly one write, on Done; Esc/X writes nothing
-- [ ] Reload shows the corrected placement (persisted offset)
-- [ ] A/B play buttons audibly play the two sources from the same game moment
-- [ ] Curated test set green
+- [x] Accidental drag impossible outside the mode
+- [x] Exactly one write, on Done; Esc/X writes nothing
+- [x] Reload shows the corrected placement (persisted offset)
+- [x] A/B play buttons audibly play the two sources from the same game moment
+- [x] Curated test set green
