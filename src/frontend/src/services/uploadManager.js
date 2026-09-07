@@ -574,6 +574,14 @@ async function _hashAndAnalyze(file, onProgress, signal) {
   const __diagAnalyzeStart = performance.now();
   const faststartInfo = await analyzeMp4Faststart(file);
   console.log(`[DIAG upload-freeze] analyzeMp4Faststart ${(performance.now() - __diagAnalyzeStart).toFixed(0)}ms needsRelocation=${faststartInfo.needsRelocation}`);
+  // T8834: one visible structured line per uploaded file — records whether
+  // relocation ran and why, so production frequency/timing is observable
+  // (frontend console only; no Postgres column, not on the create/attach payload).
+  console.log(
+    `[Faststart] relocated=${faststartInfo.needsRelocation} reason=${faststartInfo.reason || 'unknown'} ` +
+    `analysisMs=${faststartInfo.analysisTimeMs} moovKB=${(faststartInfo.moovSize / 1024).toFixed(0)} ` +
+    `fileGB=${(file.size / 1e9).toFixed(2)}`
+  );
   if (faststartInfo.needsRelocation) {
     console.log(
       `[Upload] Moov atom at end (offset ${faststartInfo.moovOffset}), ` +

@@ -188,6 +188,7 @@ function patchChunkOffsets(moovBuffer, delta) {
 export async function analyzeMp4Faststart(file) {
   const result = {
     needsRelocation: false,
+    reason: '',
     originalSize: file.size,
     newSize: file.size,
     ftypOffset: 0,
@@ -196,6 +197,8 @@ export async function analyzeMp4Faststart(file) {
     moovSize: 0,
     mdatOffset: 0,
     mdatSize: 0,
+    trailingOffset: 0,
+    trailingSize: 0,
     patchedMoov: null,
     analysisTimeMs: 0,
   };
@@ -205,6 +208,7 @@ export async function analyzeMp4Faststart(file) {
 
   // Skip tiny files
   if (file.size < 1024 * 1024) {
+    result.reason = 'tiny-file';
     result.analysisTimeMs = Math.round(performance.now() - startTime);
     console.log(`[Faststart] skip reason=tiny-file size=${sizeMB}MB analysis=${result.analysisTimeMs}ms`);
     return result;
@@ -230,6 +234,7 @@ export async function analyzeMp4Faststart(file) {
   if (!ftyp || !moov || !mdat || hasMoof) {
     result.analysisTimeMs = Math.round(performance.now() - startTime);
     const reason = hasMoof ? 'fragmented-mp4' : (!ftyp ? 'no-ftyp' : !moov ? 'no-moov' : 'no-mdat');
+    result.reason = reason;
     console.log(`[Faststart] skip reason=${reason} size=${sizeMB}MB boxes=[${boxSummary}] analysis=${result.analysisTimeMs}ms`);
     return result;
   }
@@ -243,39 +248,67 @@ export async function analyzeMp4Faststart(file) {
 
   // Check if moov is already before mdat — no relocation needed
   if (moov.offset < mdat.offset) {
+    result.reason = 'already-faststart';
     result.analysisTimeMs = Math.round(performance.now() - startTime);
     console.log(`[Faststart] skip reason=already-faststart size=${sizeMB}MB moov@${moov.offset} mdat@${mdat.offset} moovSize=${(moov.size/1024).toFixed(0)}KB analysis=${result.analysisTimeMs}ms`);
     return result;
   }
 
-  // Moov is after mdat — needs relocation
-  result.needsRelocation = true;
+  // Moov is after mdat — relocation candidate.
 
-  // New layout: ftyp + moov + mdat (+ any other boxes after mdat, before moov)
-  // For simplicity, we handle: ftyp...mdat...moov (the common case)
-  // The new file size is: ftypSize + moovSize + mdatSize
-  // Any small boxes between ftyp and mdat (like 'free') are included in the mdat region
+  // New layout: ftyp + patched-moov + mdatRegion + trailingRegion
+  //   mdatRegion    = everything between ftyp and moov (mdat + any 'free' etc.)
+  //   trailingRegion = everything after moov to EOF (udta/meta/skip a phone/GoPro
+  //                    may append). Those boxes are NOT referenced by stco/co64
+  //                    (chunk offsets only point into mdat), so this region is a
+  //                    straight passthrough — no offset patching needed.
   const mdatRegionStart = ftyp.offset + ftyp.size; // Everything after ftyp
   const mdatRegionEnd = moov.offset; // Up to moov
   const mdatRegionSize = mdatRegionEnd - mdatRegionStart;
 
-  result.newSize = ftyp.size + moov.size + mdatRegionSize;
+  const trailingStart = moov.offset + moov.size; // First byte after moov
+  const trailingSize = Math.max(0, file.size - trailingStart);
 
-  // Read and patch the moov atom
+  // Read and patch the moov atom.
   const moovBuffer = await readFileRange(file, moov.offset, moov.size);
 
   // Delta = how far mdat shifts right (moov is inserted before it)
   const delta = moov.size;
-  patchChunkOffsets(moovBuffer, delta);
+  try {
+    patchChunkOffsets(moovBuffer, delta);
+  } catch (err) {
+    // stco 32-bit offset overflow (offset + moovSize crosses 4GB) and no co64
+    // upgrade path yet. Rather than reject the whole upload (pre-fallback behaviour
+    // for the rare file that hits this), fall back to uploading the file as-is:
+    // it still plays, just without the faststart speedup — exactly the pre-T1380
+    // behaviour, a safe fallback, not a regression.
+    // err.message already carries the exact overflowing offset + delta ("X + Y > 4GB").
+    console.error(
+      `[Faststart] overflow-fallback file=${file.name} size=${sizeMB}MB ` +
+      `moovSize=${(moov.size / 1024).toFixed(0)}KB: ${err.message} ` +
+      `— uploading as-is without relocation`
+    );
+    result.reason = 'overflow-fallback';
+    result.needsRelocation = false;
+    result.newSize = file.size;
+    result.patchedMoov = null;
+    result.analysisTimeMs = Math.round(performance.now() - startTime);
+    return result;
+  }
 
+  result.needsRelocation = true;
+  result.reason = 'relocated';
+  result.newSize = ftyp.size + moov.size + mdatRegionSize + trailingSize;
   result.patchedMoov = moovBuffer;
   result.mdatOffset = mdatRegionStart; // The start of the mdat region in the original file
   result.mdatSize = mdatRegionSize;
+  result.trailingOffset = trailingStart;
+  result.trailingSize = trailingSize;
   result.analysisTimeMs = Math.round(performance.now() - startTime);
 
   console.log(
     `[Faststart] relocating size=${sizeMB}MB moov@${moov.offset}→32 mdat@${mdat.offset} ` +
-    `moovSize=${(moov.size/1024).toFixed(0)}KB delta=${delta} ` +
+    `moovSize=${(moov.size/1024).toFixed(0)}KB delta=${delta} trailing=${trailingSize}B ` +
     `newSize=${result.newSize} (same=${result.newSize === file.size}) analysis=${result.analysisTimeMs}ms`
   );
   return result;
@@ -286,9 +319,10 @@ export async function analyzeMp4Faststart(file) {
  * Maps logical byte ranges in the new file to source data.
  *
  * New layout:
- *   [0 .. ftypSize-1]                              → original ftyp
- *   [ftypSize .. ftypSize+moovSize-1]               → patched moov buffer
- *   [ftypSize+moovSize .. newSize-1]                → original mdat region
+ *   [0 .. ftypSize-1]                               → original ftyp
+ *   [ftypSize .. ftypSize+moovSize-1]                → patched moov buffer
+ *   [ftypSize+moovSize .. +mdatSize-1]               → original mdat region
+ *   [.. +trailingSize-1] (= newSize-1)               → original trailing region
  *
  * @param {File} file - Original file
  * @param {object} info - FaststartInfo from analyzeMp4Faststart
@@ -299,6 +333,7 @@ export async function analyzeMp4Faststart(file) {
 export function getReorderedSlice(file, info, start, end) {
   const ftypEnd = info.ftypSize;
   const moovEnd = ftypEnd + info.patchedMoov.byteLength;
+  const mdatEnd = moovEnd + info.mdatSize;
   const parts = [];
 
   // Region 1: ftyp (from original file)
@@ -316,12 +351,23 @@ export function getReorderedSlice(file, info, start, end) {
   }
 
   // Region 3: mdat region (from original file, after ftyp up to moov)
-  if (end > moovEnd) {
+  if (start < mdatEnd && end > moovEnd) {
     const mdatLocalStart = Math.max(0, start - moovEnd);
-    const mdatLocalEnd = end - moovEnd;
+    const mdatLocalEnd = Math.min(info.mdatSize, end - moovEnd);
     parts.push(file.slice(
       info.mdatOffset + mdatLocalStart,
       info.mdatOffset + mdatLocalEnd,
+    ));
+  }
+
+  // Region 4: trailing region (original bytes after moov — udta/meta/skip etc.).
+  // Passthrough only; stco/co64 never reference these offsets.
+  if (info.trailingSize > 0 && end > mdatEnd) {
+    const trailingLocalStart = Math.max(0, start - mdatEnd);
+    const trailingLocalEnd = Math.min(info.trailingSize, end - mdatEnd);
+    parts.push(file.slice(
+      info.trailingOffset + trailingLocalStart,
+      info.trailingOffset + trailingLocalEnd,
     ));
   }
 

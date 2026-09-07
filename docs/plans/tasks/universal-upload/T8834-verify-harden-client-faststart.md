@@ -90,17 +90,18 @@ happens in production.
 ### Steps
 1. [ ] Measure `analyzeMp4Faststart` on all four DJI segments, the Legends half, and one
    phone clip; record ms, moov size, `needsRelocation`, table in the Progress Log.
+   OPEN — supervisor (real files, host-only).
 2. [ ] Reconstruct + `ffprobe`/`ffmpeg` verify the relocated output for the 3.3 GB DJI
    file and the Legends half (Playwright + real files, not jsdom).
-3. [ ] Overflow: unit test that reproduces the throw, then the fallback (upload as-is,
-   loud log); assert the upload no longer rejects.
-4. [ ] After-moov boxes: scan the phone fixture(s); implement trailing-region passthrough
-   if warranted, else document.
-5. [ ] One structured diag line per file in `uploadManager` (`[Faststart] relocated=...
-   reason=... analysisMs=... moovKB=... fileGB=...`) - frontend log only unless the task
-   finds a reason to carry it on the create payload.
-6. [ ] Curated tests: `mp4Faststart.test.js` + `uploadManager.test.js` + the relevant
-   T8810 picker/upload tests.
+   OPEN — supervisor (real files, host-only).
+3. [x] Overflow: unit test that reproduces the throw, then the fallback (upload as-is,
+   loud log); assert the upload no longer rejects. DONE (synthetic red→green).
+4. [x] After-moov boxes: implemented trailing-region passthrough + synthetic unit test
+   (no real phone fixture in container — supervisor confirms on real files if found).
+5. [x] One structured diag line per file in `uploadManager` (`[Faststart] relocated=...
+   reason=... analysisMs=... moovKB=... fileGB=...`) - frontend log only (no PG/payload).
+6. [x] Curated tests: `mp4Faststart.test.js` + `uploadManager.test.js` (+ attachVideo,
+   stall) + `useClipUpload.test.js` + `GameFootagePicker.test.jsx` — 77 pass.
 
 ### Progress Log
 
@@ -109,13 +110,67 @@ whether client-side moov relocation would be fast enough to be invisible; T1380 
 does it on every upload, but had never been measured on 8K camera files and has an
 uncaught overflow throw that can fail an upload outright.
 
+**2026-09-07** (container worker, M-tier hardening, no Architect): implemented the CODE
+half. Real-file measurement/ffprobe steps (task steps 1-2, acceptance criteria 1-2)
+NOT done here — those files live outside git under `formal annotations/` on the host;
+the supervisor closes them in real Chrome. Everything below is proven on SYNTHETIC
+fixtures (existing test helpers), which is sufficient proof for code correctness.
+
+- **stco overflow fallback** — caught inside `analyzeMp4Faststart` (chosen over
+  `_hashAndAnalyze`: keeps the fallback next to the throw and makes the reason string
+  available to the diag line). On the `patchChunkOffsets` throw it logs at error level
+  (file name/size + `err.message`, which already carries the exact `offset + delta > 4GB`)
+  and returns `needsRelocation:false, reason:'overflow-fallback', newSize=file.size,
+  patchedMoov=null` — i.e. upload as-is, the pre-T1380 behaviour (file still plays, just
+  no faststart speedup). Downstream `getReorderedSlice` is only reached when
+  `needsRelocation` is true, so the null moov never dereferences. **Real red→green
+  proven**: stashed the source fix and ran the new test against unfixed code — it rejected
+  with the throw; restored the fix — it resolves with `needsRelocation:false`. Did NOT
+  attempt a co64 upgrade (task says only if small; it changes every ancestor box size —
+  the fallback is enough and much lower risk).
+- **After-moov box passthrough** — relocated layout extended from
+  `ftyp | moov | mdatRegion` to `ftyp | patched-moov | mdatRegion | trailingRegion`
+  (`trailingRegion` = `moov.offset + moov.size` .. EOF). Trailing boxes (udta/meta/skip/
+  free) are never referenced by stco/co64 (chunk offsets only point into mdat), so it's a
+  straight passthrough — no offset patching. `result.newSize`, `trailingOffset`,
+  `trailingSize` added; `getReorderedSlice` gained region 4 and region 3 is now capped at
+  `mdatEnd`. Backward compatible: with no trailing box `trailingSize=0` and the layout
+  collapses to the old three-region form (existing tests still green). New test builds a
+  synthetic MP4 with a real trailing `free` box and asserts full reconstruction now
+  includes those bytes byte-for-byte + `newSize` reflects them (this was a real
+  red→green: pre-fix `info.trailingSize` was undefined and the bytes were dropped).
+  **IMPLEMENTED AND UNIT-TESTED, NOT verified against a real phone/GoPro fixture with a
+  real trailing box** — no access to one in the container; supervisor should confirm on
+  real files if one is found with a meaningful trailing box.
+- **Structured diag line** — one `[Faststart] relocated=<bool> reason=<string>
+  analysisMs=<n> moovKB=<n> fileGB=<n.nn>` line per uploaded file in `_hashAndAnalyze`
+  (uploadManager.js). `reason` is returned from `analyzeMp4Faststart` (new `result.reason`
+  field: `relocated` / `already-faststart` / `tiny-file` / `overflow-fallback` /
+  `fragmented-mp4` / `no-ftyp` / `no-moov` / `no-mdat`) rather than re-derived.
+  **Decision: frontend-console-only** — no Postgres column, not threaded onto the
+  create/attach payload (per task file: "decide during the task, do not add Postgres
+  state"; the console line is sufficient for observing production frequency/timing).
+- **Timeout attribution (item 4)** — **decision: no second timeout budget.** The existing
+  `[DIAG upload-freeze] analyzeMp4Faststart <n>ms` line already prints analysis wall-clock
+  BEFORE hashing starts, and the new `[Faststart]` line repeats `analysisMs`. Together they
+  answer "which phase was slow" when someone reads the log, so a slow analysis is
+  attributable even though it shares `HASH_TIMEOUT_MS` with hashing. Splitting the 120s
+  budget would be over-engineering for a phase the scan keeps well under 1s.
+- **Tests (curated, ~77)**: `mp4Faststart.test.js` (10, +2 new), `uploadManager.test.js`
+  + `.attachVideo` + `.stall` (44), `useClipUpload.test.js` (4), `GameFootagePicker.test.jsx`
+  (19) — all pass. Not the whole frontend suite; Branch CI is the full sweep.
+
 ## Acceptance Criteria
 
 - [ ] Measured analysis time < 1 s on every fixture (3.3 GB and 17 GB DJI, Legends,
-      phone), recorded in the Progress Log
+      phone), recorded in the Progress Log — OPEN, supervisor (real files, host-only)
 - [ ] Relocated output for the 3.3 GB DJI file and the Legends half is a valid faststart
       MP4 (ffprobe moov-first, identical frame count, ffmpeg decode clean, seeks in
-      `<video>`)
-- [ ] stco overflow can no longer reject an upload (red-green test)
-- [ ] After-moov box behaviour decided with evidence and either implemented or documented
-- [ ] Structured `[Faststart]` diag line emitted per uploaded file
+      `<video>`) — OPEN, supervisor (real files, host-only)
+- [x] stco overflow can no longer reject an upload (red-green test) — done, synthetic
+      red→green proven
+- [x] After-moov box behaviour decided with evidence and either implemented or documented
+      — trailing-region passthrough IMPLEMENTED + unit-tested (synthetic); real-fixture
+      confirmation left to supervisor
+- [x] Structured `[Faststart]` diag line emitted per uploaded file — done (frontend
+      console only; no Postgres/payload)
