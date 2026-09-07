@@ -54,3 +54,23 @@ describe('AnnotateControls time readout (T8760)', () => {
     expect(screen.getByTestId('clip-relative-time').textContent).toBe('0.0s / 7.3s');
   });
 });
+
+// T8960 item 9: while the strip editor is open (editorOpen), the step/seek/
+// restart transport buttons are hidden so the playhead can't leave the clip
+// span — only play/pause remains. Outside the editor they are present, unchanged.
+describe('AnnotateControls skip-button gating (T8960 item 9)', () => {
+  const SKIP_TITLES = ['Back 5 seconds', 'Step backward (one frame)', 'Restart', 'Step forward (one frame)'];
+
+  it('shows every transport button when the editor is NOT open (default)', () => {
+    render(<AnnotateControls {...baseProps} />);
+    SKIP_TITLES.forEach((t) => expect(screen.getByTitle(t)).toBeTruthy());
+    expect(screen.getByTitle('Play')).toBeTruthy();
+  });
+
+  it('hides step/seek/restart but keeps play/pause when editorOpen', () => {
+    render(<AnnotateControls {...baseProps} editorOpen />);
+    SKIP_TITLES.forEach((t) => expect(screen.queryByTitle(t)).toBeNull());
+    // Play/pause is the single remaining transport control.
+    expect(screen.getByTitle('Play')).toBeTruthy();
+  });
+});

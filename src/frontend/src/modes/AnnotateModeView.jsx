@@ -688,6 +688,10 @@ export function AnnotateModeView({
                     isEditMode={isEditMode}
                     videoController={videoController}
                     clipEditBounds={clipEditBounds}
+                    // T8960 item 9: hide step/seek/restart while the desktop
+                    // strip editor is open (both Add and Edit Play). Scoped to
+                    // desktop strip so fullscreen/mobile transports are untouched.
+                    editorOpen={desktopEditorOpen}
                   />
                 </div>
                 {annotateFullscreen && (

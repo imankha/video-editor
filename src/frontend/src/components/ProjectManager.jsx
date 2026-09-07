@@ -1746,7 +1746,7 @@ export function ProjectManager({
             </div>
 
             <p className="text-sm text-gray-400">
-              Tap <span className="font-medium text-gray-300">&apos;Clip Out Play&apos;</span> on a
+              Tap <span className="font-medium text-gray-300">&apos;Clip Play&apos;</span> on a
               play in Annotate to pull a clip from one of your games.
             </p>
           </div>
