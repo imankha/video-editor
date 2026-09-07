@@ -1,25 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
-import { GripVertical, Clock, FileText, AlertTriangle, Check, X, Plus, Layers } from 'lucide-react';
+import { GripVertical, Clock, FileText, AlertTriangle, Check, X, Plus, Camera } from 'lucide-react';
 import { useIsCoarsePointer } from '../hooks/useIsMobile';
-import { humanizeMinutes, footageEvidence, gapDisplay, overlapGroups, shortLabel } from '../utils/footageDisplay';
+import { humanizeMinutes, footageEvidence, gapDisplay, overlapSentence, shortLabel } from '../utils/footageDisplay';
 
 /**
- * T8822 — FootageList: the trust-building confirm list for a multi-file game.
+ * T8822/T8824 — FootageList: the layered order editor for a multi-file game.
  *
- * Replaces T8820's FootageStrip + FootageReorderList (live-testing feedback: every
- * video showed in two places — a horizontal chip for confirmation and a separate
- * vertical row for reordering). ONE always-draggable vertical list now does both:
- * order/evidence/trust/junk-disclosure display AND drag-to-reorder, with no separate
- * "Adjust order" mode to open or close.
+ * Lane 0 stays the original T8822 always-draggable vertical list (order/evidence/
+ * trust/junk-disclosure display AND drag-to-reorder). When footage genuinely
+ * overlaps (`lanes.length > 1`), a violet angle section renders below it — a
+ * time-proportional mini-map plus one labelled row per angle — reusing the SAME
+ * `assignLanes` Annotate uses, so the picker's lanes are provably Annotate's
+ * lanes (design doc docs/plans/tasks/T8824-design.md §2/§4). This SUPERSEDES
+ * T8822's light-touch overlap badge (`overlapGroups`, deleted) — the lanes ARE
+ * the overlap disclosure now.
  *
- * Drag uses Pointer Events + setPointerCapture + `touch-none`, unchanged from
- * FootageReorderList (same pattern as the timeline trim levers/RegionLayer, so a
- * fingertip drag works on mobile — mouse events only synthesize after touchend).
+ * `lanes.length === 1` renders BYTE-IDENTICAL to the pre-T8824 component: zero
+ * new pixels, same trust line, no angle section, no question, no override link.
  *
- * Overlap badge (new): a light-touch, purely informational heads-up when two items'
- * recorded time ranges intersect (`overlapGroups` in footageDisplay.js) — NOT the real
- * lane/angle system (T8880/T8890 own that in Annotate against the server's canonical
- * offset_seconds). Violet, matching the eventual angle color (EPIC decision 8).
+ * Drag uses Pointer Events + setPointerCapture + `touch-none` (unchanged from
+ * T8822/FootageReorderList — the timeline trim levers/RegionLayer pattern, so a
+ * fingertip drag works on mobile). Drag is lane-0-only; dragging folds any
+ * showing angles into the one resulting sequential lane (T8824 §4 point 4/6) by
+ * appending their names after the dragged lane-0 order before calling onReorder.
  */
 
 const TRUST = {
@@ -33,34 +36,96 @@ const TRUST = {
   manual: { text: 'Order set by you', Icon: Check, cls: 'text-green-400' },
 };
 
-// A JS string (not raw JSX text) so the apostrophes need no HTML-entity escaping.
-// `extraCount` names the rest when an item overlaps more than one other (rare, but
-// overlapGroups reports every partner - don't silently drop them from the copy).
-const OVERLAP_BADGE_TEXT = (label, extraCount) =>
-  `Looks like this overlaps with ${label}${extraCount > 0 ? ` (and ${extraCount} more)` : ''} -` +
-  ` that's fine, we'll treat it as a second angle.`;
+const ARTIFACT_NAMES_TEXT = 'These look like two parts of one recording - put in order by their names';
+const ASK_TRUST_TEXT = "We put them in order by their names - check this looks right";
+
+const LINK_COPY = {
+  toSequence: 'Not two cameras? Put them all in order instead',
+  toTime: 'Were they filmed at the same time? Show them as angles',
+  restoreTime: 'Use the recorded times instead',
+};
+
+/** Every item has a usable embedded recording time (the override link only does
+ *  something when this is true — forcing 'time' with no clock is a no-op). */
+function _allTimed(items) {
+  return (
+    items.length > 0 &&
+    items.every((it) => it.creationTime instanceof Date && !Number.isNaN(it.creationTime.getTime()))
+  );
+}
+
+/**
+ * Trust line + optional override link, derived from the model (no new hook
+ * state — T8824 §4.1's copy table). ASK takes priority over everything else.
+ */
+function deriveTrust({ question, confidence, placement, lanes, lane0Items }, onSetPlacementMode) {
+  if (question) {
+    return { text: ASK_TRUST_TEXT, Icon: AlertTriangle, cls: 'text-yellow-400', isAsk: true, link: null };
+  }
+  if (confidence === 'manual') {
+    const link = _allTimed(lane0Items)
+      ? { text: LINK_COPY.restoreTime, onClick: () => onSetPlacementMode?.('time') }
+      : null;
+    return { ...TRUST.manual, isAsk: false, link };
+  }
+  if (placement === 'sequence') {
+    if (confidence === 'time') {
+      // Slop (Q4): clock evidence is still true even though placement isn't.
+      return { ...TRUST.time, isAsk: false, link: null };
+    }
+    if (_allTimed(lane0Items)) {
+      return {
+        text: ARTIFACT_NAMES_TEXT,
+        Icon: FileText,
+        cls: 'text-gray-400',
+        isAsk: false,
+        link: { text: LINK_COPY.toTime, onClick: () => onSetPlacementMode?.('time') },
+      };
+    }
+    return { ...(TRUST[confidence] || TRUST.unknown), isAsk: false, link: null };
+  }
+  // placement === 'time'
+  if (lanes.length > 1) {
+    const n = lanes.length - 1;
+    return {
+      ...TRUST.time,
+      text: `${TRUST.time.text} - and ${n} angle${n !== 1 ? 's' : ''} filmed at the same time`,
+      isAsk: false,
+      link: { text: LINK_COPY.toSequence, onClick: () => onSetPlacementMode?.('sequence') },
+    };
+  }
+  return { ...TRUST.time, isAsk: false, link: null };
+}
 
 export function FootageList({
-  order = [],
   items = [],
   confidence = 'unknown',
   gaps = [],
+  placement = 'time',
+  lanes = [],
+  question = null,
   skipped = [],
   onReorder,
   onRemove,
   onAddMore,
+  onSetPlacementMode,
 }) {
   const isCoarse = useIsCoarsePointer();
   const [dragging, setDragging] = useState(null); // { name, pointerId }
   const rowEls = useRef(new Map());
 
-  const isUnknown = confidence === 'unknown';
-  const trust = TRUST[confidence] || TRUST.unknown;
+  const lane0 = lanes[0] ? lanes[0].map((p) => p.item) : [];
+  const angleLanes = lanes.slice(1);
+  const hasAngles = angleLanes.length > 0;
+  const angleNames = angleLanes.flat().map((p) => p.item.name);
+
+  const isUnknown = confidence === 'unknown' || Boolean(question);
+  const trust = deriveTrust({ question, confidence, placement, lanes, lane0Items: lane0 }, onSetPlacementMode);
   const gapByIndex = new Map(gaps.map((g) => [g.afterIndex, g.seconds]));
-  const overlaps = overlapGroups(order, confidence);
 
   const probeErrors = items.filter((it) => it.probeError);
-  const totalSeconds = order.reduce((sum, it) => sum + (it.duration || 0), 0);
+  const totalSeconds = lanes.flat().reduce((sum, p) => sum + (p.item.duration || 0), 0);
+  const totalVideos = lanes.flat().length;
 
   const setRowEl = (name) => (el) => {
     if (el) rowEls.current.set(name, el);
@@ -68,7 +133,7 @@ export function FootageList({
   };
 
   // Window-level listeners so the captured pointer keeps driving the drag even when
-  // it leaves the row. Rebinds when `order` changes (a live reorder re-renders us),
+  // it leaves the row. Rebinds when `lane0` changes (a live reorder re-renders us),
   // so the closure always sees the current order.
   useEffect(() => {
     if (!dragging) return;
@@ -77,9 +142,9 @@ export function FootageList({
       if (dragging.pointerId != null && e.pointerId !== dragging.pointerId) return;
       if (e.cancelable) e.preventDefault();
 
-      if (!order.some((it) => it.name === dragging.name)) return;
+      if (!lane0.some((it) => it.name === dragging.name)) return;
 
-      const without = order.filter((it) => it.name !== dragging.name);
+      const without = lane0.filter((it) => it.name !== dragging.name);
       let to = without.length;
       for (let idx = 0; idx < without.length; idx++) {
         const el = rowEls.current.get(without[idx].name);
@@ -91,11 +156,12 @@ export function FootageList({
           break;
         }
       }
-      const draggedItem = order.find((it) => it.name === dragging.name);
+      const draggedItem = lane0.find((it) => it.name === dragging.name);
       without.splice(to, 0, draggedItem);
-      const nextNames = without.map((it) => it.name);
-      const changed = nextNames.some((n, i) => n !== order[i].name);
-      if (changed) onReorder?.(nextNames);
+      const changed = without.some((it, i) => it.name !== lane0[i].name);
+      // A drag says "the clock is not the order" -- fold any showing angles into
+      // the one resulting sequential lane (T8824 §4 point 4/6).
+      if (changed) onReorder?.([...without.map((it) => it.name), ...angleNames]);
     };
 
     const handlePointerUp = (e) => {
@@ -111,7 +177,8 @@ export function FootageList({
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerUp);
     };
-  }, [dragging, order, onReorder]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragging, lanes, onReorder]);
 
   const containerCls = isUnknown
     ? 'border-yellow-500 bg-yellow-900/20'
@@ -120,24 +187,23 @@ export function FootageList({
   return (
     <div data-testid="footage-list" className={`w-full px-4 py-3 border-2 rounded-lg ${containerCls}`}>
       <p className="text-sm font-medium text-gray-200" data-testid="footage-list-header">
-        Your game - {order.length} videos - {humanizeMinutes(totalSeconds)}
+        Your game - {totalVideos} videos - {humanizeMinutes(totalSeconds)}
       </p>
 
       <ul className="mt-3 space-y-1">
-        {order.map((item, i) => {
+        {lane0.map((item, i) => {
           const evidence = footageEvidence(item, confidence);
           const gapSeconds = gapByIndex.get(i);
           const isDragged = dragging?.name === item.name;
-          const overlapNames = overlaps.get(item.name);
 
           return (
             <li key={item.name}>
               <div
                 ref={setRowEl(item.name)}
                 data-testid="footage-row"
-                className={`flex items-center gap-2 rounded-md bg-gray-800/70 border px-2 ${
-                  overlapNames ? 'border-violet-500/60' : 'border-gray-700'
-                } ${isCoarse ? 'min-h-[44px] py-2' : 'py-1.5'} ${isDragged ? 'opacity-60' : ''}`}
+                className={`flex items-center gap-2 rounded-md bg-gray-800/70 border border-gray-700 px-2 ${
+                  isCoarse ? 'min-h-[44px] py-2' : 'py-1.5'
+                } ${isDragged ? 'opacity-60' : ''}`}
               >
                 <div
                   data-testid={`footage-row-handle-${i}`}
@@ -181,22 +247,9 @@ export function FootageList({
                 </button>
               </div>
 
-              {/* Overlap badge: informational only, never blocks or reorders anything. */}
-              {overlapNames && overlapNames.length > 0 && (
-                <div
-                  className="flex items-center gap-1.5 text-[11px] text-violet-400 mt-1 ml-8"
-                  data-testid="footage-overlap-badge"
-                >
-                  <Layers size={12} className="shrink-0" />
-                  <span>
-                    {OVERLAP_BADGE_TEXT(shortLabel(overlapNames[0]), overlapNames.length - 1)}
-                  </span>
-                </div>
-              )}
-
               {/* Gap connector: a break before the NEXT row (never after the last one,
                   even if a stale `gaps` entry named it). */}
-              {i < order.length - 1 && gapSeconds != null && <GapConnector seconds={gapSeconds} />}
+              {i < lane0.length - 1 && gapSeconds != null && <GapConnector seconds={gapSeconds} />}
             </li>
           );
         })}
@@ -243,11 +296,56 @@ export function FootageList({
         </li>
       </ul>
 
+      {/* Angle section: only when footage genuinely overlaps. Zero pixels otherwise. */}
+      {hasAngles && <AngleLanes lanes={lanes} onRemove={onRemove} />}
+
+      {/* ASK state: one plain question, safe default preselected, submit never blocked. */}
+      {question && (
+        <div
+          className="mt-3 border border-yellow-500/50 bg-yellow-900/25 rounded-md px-3 py-2"
+          data-testid="footage-question"
+        >
+          <p className="text-xs text-yellow-200 mb-2">
+            Were {shortLabel(question.a.name)} and {shortLabel(question.b.name)} filmed at the same time?
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => onSetPlacementMode?.('sequence')}
+              data-testid="footage-question-no"
+              className="flex-1 min-w-[140px] min-h-[40px] rounded-md border border-green-500 bg-green-900/35 text-green-200 text-xs px-2"
+            >
+              No - two parts of one game
+            </button>
+            <button
+              type="button"
+              onClick={() => onSetPlacementMode?.('time')}
+              data-testid="footage-question-yes"
+              className="flex-1 min-w-[140px] min-h-[40px] rounded-md border border-gray-600 bg-gray-900 text-gray-200 text-xs px-2"
+            >
+              Yes - two cameras at once
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Trust line. */}
       <div className={`flex items-center gap-1.5 text-xs mt-3 ${trust.cls}`} data-testid="footage-trust-line">
         <trust.Icon size={14} className="shrink-0" />
         <span>{trust.text}</span>
       </div>
+
+      {/* One override link, three phrasings, one code path (setPlacementMode). */}
+      {trust.link && (
+        <button
+          type="button"
+          onClick={trust.link.onClick}
+          className="mt-2 text-[11px] text-blue-400 hover:text-blue-300 underline"
+          data-testid="footage-override-link"
+        >
+          {trust.link.text}
+        </button>
+      )}
 
       {/* Skipped junk: quiet gray disclosure, never a warning color. */}
       {skipped.length > 0 && (
@@ -294,6 +392,89 @@ function GapConnector({ seconds }) {
       data-huge="false"
     >
       <span className="text-[11px]">{label}</span>
+    </div>
+  );
+}
+
+/**
+ * T8824 — the violet angle section: a time-proportional mini-map (lane 0 gray
+ * blocks, angle lanes violet) plus one labelled row per angle, flattened across
+ * angle lanes and sorted by when they start. Reuses `assignLanes`'s lane numbers
+ * verbatim (`lanes` prop) so this is provably the same picture Annotate renders.
+ */
+function AngleLanes({ lanes, onRemove }) {
+  const isCoarse = useIsCoarsePointer();
+  const allPlaced = lanes.flat();
+  const spanSeconds = Math.max(1, ...allPlaced.map((p) => p.endSeconds));
+  const pct = (n) => `${Math.max(0, Math.min(100, (n / spanSeconds) * 100))}%`;
+
+  const angleRows = lanes
+    .slice(1)
+    .flat()
+    .sort((a, b) => a.offsetSeconds - b.offsetSeconds);
+
+  const partnersFor = (placed) =>
+    allPlaced
+      .filter((p) => p !== placed)
+      .map((p) => ({
+        item: p.item,
+        overlapAmount: Math.min(placed.endSeconds, p.endSeconds) - Math.max(placed.offsetSeconds, p.offsetSeconds),
+      }))
+      .filter((p) => p.overlapAmount > 0)
+      .sort((a, b) => b.overlapAmount - a.overlapAmount)
+      .map((p) => p.item);
+
+  return (
+    <div className="mt-3 pt-2 border-t border-violet-500/35" data-testid="footage-angle-section">
+      <p className="text-[11px] text-violet-300 mb-1.5">Also filmed at the same time</p>
+
+      <div className="mb-2" data-testid="footage-angle-minimap">
+        {lanes.map((lane, laneIndex) => (
+          <div key={laneIndex} className="relative h-3.5 mb-1 rounded bg-gray-700/35">
+            {lane.map((p) => (
+              <div
+                key={p.item.name}
+                className={`absolute top-0 bottom-0 rounded ${
+                  laneIndex === 0 ? 'bg-gray-500 border border-gray-400' : 'bg-violet-500 border border-violet-300'
+                }`}
+                style={{ left: pct(p.offsetSeconds), width: pct(p.endSeconds - p.offsetSeconds) }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {angleRows.map((placed) => (
+        <div
+          key={placed.item.name}
+          className={`flex items-center gap-2 rounded-md bg-violet-900/25 border border-violet-500/60 px-2 mb-1 ${
+            isCoarse ? 'min-h-[44px] py-2' : 'py-1.5'
+          }`}
+          data-testid="footage-angle-row"
+        >
+          <div className="w-6 h-6 rounded-full flex items-center justify-center bg-violet-700 text-violet-100 shrink-0">
+            <Camera size={12} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm text-gray-200 truncate" title={placed.item.name}>
+              {placed.item.name}
+            </div>
+            <div className="text-[11px] text-violet-300" data-testid="footage-angle-row-sub">
+              {overlapSentence(placed.item, partnersFor(placed))}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onRemove?.(placed.item.name)}
+            aria-label={`Remove ${placed.item.name}`}
+            className={`shrink-0 rounded-full text-gray-400 hover:text-white flex items-center justify-center ${
+              isCoarse ? 'w-11 h-11' : 'w-7 h-7'
+            }`}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

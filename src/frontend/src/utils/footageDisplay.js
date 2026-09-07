@@ -56,47 +56,10 @@ export function gapDisplay(seconds) {
   return { huge: false, label: `${min} min break` };
 }
 
-/**
- * T8822 — Light-touch overlap detection for the confirm list: which items' recorded
- * time ranges intersect another item's. Purely informational at upload time (the real
- * lane/angle system is T8880/T8890, built against the server's canonical
- * `offset_seconds` in Annotate) — only meaningful when we trust the embedded clock
- * (`confidence === 'time'`); name/unknown/manual orders have no reliable time evidence
- * to compare, so this returns an empty map for them.
- *
- * @returns {Map<string, string[]>} item name -> names of items it overlaps with
- */
-export function overlapGroups(order, confidence) {
-  const groups = new Map();
-  if (confidence !== 'time') return groups;
-
-  const timed = order.filter(
-    (it) => it.creationTime instanceof Date && !Number.isNaN(it.creationTime.getTime()) && it.duration > 0
-  );
-
-  for (let i = 0; i < timed.length; i++) {
-    const a = timed[i];
-    const aStart = a.creationTime.getTime();
-    const aEnd = aStart + a.duration * 1000;
-    for (let j = i + 1; j < timed.length; j++) {
-      const b = timed[j];
-      const bStart = b.creationTime.getTime();
-      const bEnd = bStart + b.duration * 1000;
-      if (aStart < bEnd && bStart < aEnd) {
-        if (!groups.has(a.name)) groups.set(a.name, []);
-        if (!groups.has(b.name)) groups.set(b.name, []);
-        groups.get(a.name).push(b.name);
-        groups.get(b.name).push(a.name);
-      }
-    }
-  }
-  return groups;
-}
-
-// Matches the angle-name convention T8880 will use in Annotate.
+// Matches the angle-name convention T8880 uses in Annotate.
 const SHORT_LABEL_MAX = 14;
 
-/** Short label for an overlap badge: filename stem, middle-ellipsis-truncated to
+/** Short label for an angle row/badge: filename stem, middle-ellipsis-truncated to
  *  `SHORT_LABEL_MAX` chars. */
 export function shortLabel(name) {
   const stem = name.replace(/\.[^./]+$/, '');
@@ -104,4 +67,25 @@ export function shortLabel(name) {
   const headLen = Math.ceil((SHORT_LABEL_MAX - 1) / 2);
   const tailLen = Math.floor((SHORT_LABEL_MAX - 1) / 2);
   return `${stem.slice(0, headLen)}…${stem.slice(stem.length - tailLen)}`;
+}
+
+/**
+ * T8824 — an angle row's evidence line: "{duration} - overlaps {partner(s)} from
+ * {clock} to {clock}". Superseded T8822's `overlapGroups` badge (real lanes now
+ * carry the overlap disclosure). `angle` is the raw item (name/duration/
+ * creationTime); `partners` are the other items it overlaps, most-overlapping
+ * first — at most the first two are named, matching the mockup's "{first} and
+ * {second}" copy.
+ */
+export function overlapSentence(angle, partners) {
+  const duration = humanizeMinutes(angle.duration);
+  const start = formatClockTime(angle.creationTime);
+  const end =
+    angle.creationTime instanceof Date
+      ? formatClockTime(new Date(angle.creationTime.getTime() + (angle.duration || 0) * 1000))
+      : null;
+  const names = partners.slice(0, 2).map((p) => shortLabel(p.name));
+  const partnerText = names.length > 1 ? `${names[0]} and ${names[1]}` : names[0] || '';
+  const range = start && end ? ` from ${start} to ${end}` : '';
+  return `${duration} - overlaps ${partnerText}${range}`;
 }

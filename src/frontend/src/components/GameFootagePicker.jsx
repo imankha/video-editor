@@ -49,14 +49,19 @@ function acceptedVideoCount(fileList) {
  * totalBytes, proxies }) — sequence is the 1-based index into the inferred order,
  * creationTime is the item's embedded recording time (Date|null, from T8800's
  * intake probe) threaded through to the upload as recorded_at (T8870), but ONLY
- * when the intake trusted the chain (confidence 'time', T8872) — otherwise null,
- * since an unsanctioned chain's embedded times are export artifacts, not evidence.
+ * when the model's placement is 'time' (T8824 — supersedes T8872's blunt
+ * `confidence === 'time'` gate with the correct input: `confidence` is a display
+ * concept now, `placement` is the payload gate; they differ for a slop chain,
+ * see docs/plans/tasks/T8824-design.md §2.5) — otherwise null, since an
+ * untrusted placement's embedded times are export artifacts, not evidence.
  * This is a memory-only lift of form state to the parent (NOT a store/backend
  * write), so the reactive-persistence ban does not apply.
  */
 export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmitting = false }) {
-  const { status, items, order, confidence, gaps, skipped, proxies, addFiles, removeItem, setManualOrder } =
-    useFootageIntake();
+  const {
+    status, items, order, confidence, gaps, placement, lanes, question,
+    skipped, proxies, addFiles, removeItem, setManualOrder, setPlacementMode,
+  } = useFootageIntake();
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState(false);
   const [flashError, setFlashError] = useState(false);
@@ -73,15 +78,16 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
       sequence: i + 1,
       // T8870: carry the embedded recording time so the upload can send it as
       // recorded_at (evidence for overlap placement); null when the intake probe
-      // found none — never a fabricated time. T8872: only when the intake trusted
-      // the chain (confidence 'time') — inferOrder discards untrustworthy export
-      // timestamps for order/confidence but never clears creationTime itself, so
-      // an untrusted timestamp must be gated here, at the payload boundary.
-      creationTime: confidence === 'time' && it.creationTime instanceof Date ? it.creationTime : null,
+      // found none — never a fabricated time. T8824: gated on `placement`, not
+      // `confidence` — placement is the model's payload-trust verdict; confidence
+      // is display-only and can read 'time' while placement is 'sequence' (a
+      // slop chain, §2.5), so gating on confidence would leak untrusted export
+      // timestamps as recorded_at.
+      creationTime: placement === 'time' && it.creationTime instanceof Date ? it.creationTime : null,
     }));
     const totalBytes = order.reduce((sum, it) => sum + (it.size || 0), 0);
     onFootageChange({ files, totalBytes, proxies });
-  }, [order, proxies, onFootageChange, confidence]);
+  }, [order, proxies, onFootageChange, placement]);
 
   // Accept a raw selection from ANY path (click, multi-select, folder pick/drag).
   const ingest = useCallback(
@@ -262,14 +268,17 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
           className={isSubmitting ? 'opacity-50 pointer-events-none' : ''}
         >
           <FootageList
-            order={order}
             items={items}
             confidence={confidence}
             gaps={gaps}
+            placement={placement}
+            lanes={lanes}
+            question={question}
             skipped={skipped}
             onReorder={setManualOrder}
             onRemove={removeItem}
             onAddMore={openFilePicker}
+            onSetPlacementMode={setPlacementMode}
           />
         </div>
         {/* A junk-only "add more" selection must still surface feedback here. */}

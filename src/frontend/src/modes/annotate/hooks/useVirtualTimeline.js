@@ -1,4 +1,7 @@
 import { useMemo } from 'react';
+// T8824: lane assignment (OVERLAP_EPSILON_S, assignLanes) moved to a shared
+// pure module so the footage-intake picker draws the same lanes Annotate does.
+import { OVERLAP_EPSILON_S, assignLanes } from '../../../utils/laneAssignment.js';
 
 /**
  * Build a virtual timeline from sorted clips.
@@ -226,16 +229,10 @@ export function buildFullVideoTimeline(gameVideos) {
 // (coverage extensions) and docs/plans/tasks/universal-upload/T8880-*.md.
 // ---------------------------------------------------------------------------
 
-// 1-2s of recording-split slop must not manufacture a phantom lane, so two
-// intervals whose overlap is within this tolerance are treated as adjacent.
-export const OVERLAP_EPSILON_S = 1.0;
+// OVERLAP_EPSILON_S re-exported here so no existing import path breaks.
+export { OVERLAP_EPSILON_S };
 
 const EPS_TINY = 1e-9;
-
-/** Interval overlap with the recording-split tolerance baked in. */
-function intervalsOverlap(a, b) {
-  return a.start < b.end - OVERLAP_EPSILON_S && b.start < a.end - OVERLAP_EPSILON_S;
-}
 
 /**
  * Resolve every video's canonical wall-clock interval.
@@ -385,40 +382,16 @@ export function buildGameTimeline(gameVideos) {
   const byOffset = [...videos].sort((a, b) => a.start - b.start || a.sequence - b.sequence);
   const videoBySeq = new Map(videos.map((v) => [v.sequence, v]));
 
-  // ---- Backbone (lane 0): longest video spine, grown by non-overlap ----
-  const seed = [...videos].sort(
-    (a, b) => b.duration - a.duration || a.start - b.start || a.sequence - b.sequence,
-  )[0];
-  const backbone = [seed];
-  const backboneSeqs = new Set([seed.sequence]);
-  for (const v of byOffset) {
-    if (backboneSeqs.has(v.sequence)) continue;
-    if (backbone.every((b) => !intervalsOverlap(b, v))) {
-      backbone.push(v);
-      backboneSeqs.add(v.sequence);
-    }
-  }
-  backbone.sort((a, b) => a.start - b.start || a.sequence - b.sequence);
-
-  // ---- Angles (lanes 1+): minimal-lane greedy over the rest ----
+  // ---- Lane assignment: backbone (lane 0) + angles (lanes 1+), shared with
+  // the footage-intake picker (T8824) via laneAssignment.js ----
+  const { laneOf, backbone: backboneSeqOrder } = assignLanes(
+    videos.map((v) => ({ key: v.sequence, start: v.start, end: v.end, duration: v.duration })),
+  );
+  const backboneSeqs = new Set(backboneSeqOrder);
+  const backbone = byOffset
+    .filter((v) => backboneSeqs.has(v.sequence))
+    .sort((a, b) => a.start - b.start || a.sequence - b.sequence);
   const angleVideos = byOffset.filter((v) => !backboneSeqs.has(v.sequence));
-  const laneEnds = []; // laneEnds[k] = last end on angle-lane (k+1)
-  const laneOf = new Map(backbone.map((v) => [v.sequence, 0]));
-  for (const v of angleVideos) {
-    let lane = -1;
-    for (let k = 0; k < laneEnds.length; k++) {
-      if (laneEnds[k] <= v.start + OVERLAP_EPSILON_S) {
-        laneEnds[k] = v.end;
-        lane = k + 1;
-        break;
-      }
-    }
-    if (lane === -1) {
-      laneEnds.push(v.end);
-      lane = laneEnds.length;
-    }
-    laneOf.set(v.sequence, lane);
-  }
 
   // ---- Coverage extensions: union(angles) minus union(backbone) ----
   const backboneCover = mergeIntervals(backbone.map((v) => ({ start: v.start, end: v.end })));

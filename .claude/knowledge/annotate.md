@@ -1,5 +1,43 @@
 ---
 domain: annotate
+updated: 2026-09-07 (T8824 replaces intake's wholesale-discard overlap rule with a PLACEMENT
+MODEL, so the epic's headline scenario -- a phone clip filmed during the main camera -- is
+finally reachable. `footageIntake.js`'s `inferOrder` is now `inferPlacement(items, {override,
+manualNames})`: every connected component of the overlap graph (epsilon 1.0s, the SAME
+constant Annotate uses -- never the old 120s "chain" tolerance) is classified ARTIFACT
+(recording-split slop A0, or a one-recording naming scheme A1: half-words or CONSECUTIVE
+camera counters -- `_orderByCounter` now requires consecutive integers so two different
+phones with merely-distinct counters are never mistaken for one recording), ANGLE (different
+camera family A2 -- resolution+extension only, no codec/fps probe; or containment A3 -- a
+short clip 3x+ inside a longer one), or ASK (A4, no signal decisive -- one plain question,
+safe sequential default, submit never blocked). The SET decides: `placement:'time'` only
+when EVERY overlapping component is an angle (lanes via `assignLanes`, see below); otherwise
+`placement:'sequence'` (one lane, `recorded_at` sent for NONE). **`confidence` is now
+display-only and can diverge from `placement`**: a slop chain (A0) keeps `confidence:'time'`
+(green trust line, real clock evidence) while `placement:'sequence'` (the payload sends
+null) -- `GameFootagePicker.jsx`'s payload gate reads `placement === 'time'`, NOT
+`confidence` (was `confidence==='time'` since T8872; same invariant, correct input) --
+a unit test pins this exact divergence so it can't be "simplified" back. **Lane assignment
+is shared, not duplicated:** `buildGameTimeline`'s backbone-seed + minimal-lane-greedy block
+moved verbatim into `src/frontend/src/utils/laneAssignment.js` (`OVERLAP_EPSILON_S`,
+`intervalsOverlap`, `assignLanes(intervals)` -> `{laneOf, backbone, laneCount}`);
+`useVirtualTimeline.js` re-exports `OVERLAP_EPSILON_S` and calls `assignLanes` instead of
+inlining the algorithm -- Annotate and the intake picker are PROVABLY drawing the same lanes
+for the same files (invariant P), not just hoping to agree. `useFootageIntake.js` collapsed
+to `items`/`override`/`manualNames` state; ONE `publish()` call derives EVERYTHING else
+(`order`, `confidence`, `gaps`, `placement`, `lanes`, `spanSeconds`, `question`) through
+`inferPlacement` -- no more hand-patched `setState` branches. New `setPlacementMode(mode)`
+gesture always clears `manualNames` too (an explicit override outranks a prior drag). In
+`FootageList.jsx`, lane 0 (`lanes[0]`) stays the exact T8822 draggable list -- **when
+`lanes.length === 1` the component renders byte-identical to pre-T8824** (a DOM-equality
+test pins this) -- and a new violet `<AngleLanes>` sub-block (mini-map + one labelled row
+per angle, `footageDisplay.overlapSentence`) renders only when `lanes.length > 1`. **T8822's
+overlap badge (`overlapGroups`) is DELETED, superseded by the real lanes** -- do not
+reintroduce it. Dragging a lane-0 row while angles show FOLDS them into the resulting single
+lane (appends the angle names after the dragged order before calling `setManualOrder`) --
+a drag is a strong enough signal that the clock stops being trusted for placement, with a
+"use the recorded times instead" escape hatch back. See
+`docs/plans/tasks/T8824-design.md` for the full disambiguation rule + fixture table. Prior:)
 updated: 2026-09-07 (T8892 gives angles REAL names + the "cut from {angle}" chip, fixing two T8890 defects
 found on a live overlap game. **Angle names: single source of truth = `buildGameTimeline` (useVirtualTimeline.js
 ~L616), reading the video's `original_filename`, NEVER the url** -- the url is content-addressed
@@ -478,28 +516,33 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   {n}". The T7890 `recordFileSelected` beacon fires once per session on the first accepted selection
   from every path (the picker calls `onFileSelected`, which is session-deduped). Don't grep for
   `PER_HALF`/`videoMode` — they're gone.
-- **Confirm list (T8820, consolidated by T8822)** completes the intake arc. Inside
-  `GameFootagePicker`'s multi-file (`order.length >= 2`) `ready` state, `FootageList`
-  (`components/FootageList.jsx`) renders the hook's decided plan as ONE always-visible,
-  always-draggable vertical list — number badge + duration + clock-time-or-filename evidence per
-  row, labelled gap connectors between rows, one trust line keyed on `confidence`
-  (`time`/`name`/`unknown`/`manual`), a "+ Add more" row and the skipped-junk `<details>`. T8822
-  merged T8820's original two-component split (a horizontal chip strip for confirmation PLUS a
-  separate vertical `FootageReorderList` opened via "Adjust order") into this one component after
-  live-testing feedback that showing every video in two places was confusing — every row is
-  draggable immediately, no separate mode to open/close. Drag uses the RegionLayer Pointer-Events +
-  `setPointerCapture` + `touch-none` pattern; any manual drag calls `setManualOrder`, flipping the
-  trust line to "Order set by you". T8822 also added a light-touch overlap badge
-  (`overlapGroups` in `utils/footageDisplay.js`): when two items' `creationTime`/`duration`
-  evidence ranges intersect AND `confidence === 'time'`, both rows get a violet informational badge
-  ("...we'll treat it as a second angle") — purely a heads-up, NOT the real lane/angle system
-  (T8880/T8890 own that in Annotate against the server's canonical `offset_seconds`; this badge
-  never affects the emitted `order`/sequence). Shared display formatters live in
-  `utils/footageDisplay.js` (`humanizeMinutes`, `footageEvidence`, `gapDisplay`,
-  `HUGE_GAP_S = 10800`, `overlapGroups`, `shortLabel`). `FootageList` is purely presentational —
-  all ordering/junk/overlap logic stays in `useFootageIntake` + `footageDisplay.js`. Ordering
-  ambiguity NEVER gates submit. Single-file `ready` is byte-for-byte T8810 (no list). This is the
-  END of the intake arc; the angles/shrink work (T8830+) is separate.
+- **Confirm list (T8820, consolidated by T8822, layered by T8824)** completes the intake arc.
+  Inside `GameFootagePicker`'s multi-file (`order.length >= 2`) `ready` state, `FootageList`
+  (`components/FootageList.jsx`) renders the hook's decided plan: lane 0 (`lanes[0]`) is the
+  original T8822 always-visible, always-draggable vertical list — number badge + duration +
+  clock-time-or-filename evidence per row, labelled gap connectors between rows, a "+ Add more"
+  row and the skipped-junk `<details>`; a violet `<AngleLanes>` sub-block (time-proportional
+  mini-map + one labelled row per angle, `footageDisplay.overlapSentence`) renders below it ONLY
+  when `lanes.length > 1` (genuine overlap, T8824). **`lanes.length === 1` renders
+  byte-identical to pre-T8824** (pinned by a DOM-equality test) — the no-angle path gained zero
+  pixels. Drag uses the RegionLayer Pointer-Events + `setPointerCapture` + `touch-none` pattern;
+  a manual drag calls `setManualOrder` with lane 0's new order PLUS any showing angle names
+  appended (folding them into one sequential lane — a drag is a strong enough signal that the
+  clock is no longer trusted for placement), flipping the trust line to "Order set by you" with
+  a "use the recorded times instead" escape hatch back. The trust line is keyed on `confidence`
+  (`time`/`name`/`unknown`/`manual`) for the no-overlap states, but overlap states get their own
+  copy (an ASK `question` renders a plain yes/no box; an artifact-by-naming sequence gets "these
+  look like two parts of one recording"; an angle set gets "...and N angle(s) filmed at the same
+  time") — see `docs/plans/tasks/T8824-design.md` §4.1 for the full copy table. **T8822's
+  light-touch overlap badge (`overlapGroups`) is DELETED, superseded by the real lanes** — do
+  not reintroduce it; `footageDisplay.js` now exports `overlapSentence` instead. Shared display
+  formatters live in `utils/footageDisplay.js` (`humanizeMinutes`, `footageEvidence`,
+  `gapDisplay`, `HUGE_GAP_S = 10800`, `overlapSentence`, `shortLabel`). `FootageList` is purely
+  presentational — all ordering/junk/overlap/placement logic stays in `useFootageIntake` +
+  `footageIntake.js`'s `inferPlacement` (see the top-of-file changelog entry for the full
+  disambiguation rule). Ordering/placement ambiguity NEVER gates submit. Single-file `ready` is
+  byte-for-byte T8810 (no list). This is the END of the intake arc; the shrink work (T8830+) is
+  separate.
 - **Attach-more-videos to an existing game (T8700)** is a first-class post-creation gesture, not
   just a create-time step. Frontend: `attachVideoToExistingGame` (uploadManager.js) behind
   GameTile's "Add video" kebab action → `AttachVideoModal`; reuses the create-time

@@ -115,3 +115,8 @@ live stack), eslint clean. CI green. Merged via PR #354 (merge commit e8bdb038).
       (consolidated into `FootageList.test.jsx`)
 - [x] E2E confirm-strip spec passes against the new single-list interaction
 - [x] Curated frontend unit + the one e2e spec green
+
+**Note (2026-09-07):** this task's light-touch overlap badge (`overlapGroups`, the violet
+"we'll treat it as a second angle" heads-up) is superseded by T8824 — the picker now renders
+real angle lanes (the same `assignLanes` Annotate uses) instead of a badge. `overlapGroups`
+is deleted.

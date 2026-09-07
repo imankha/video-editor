@@ -139,6 +139,43 @@ describe('useFootageIntake', () => {
     expect(result.current.order.map((i) => i.name)).toEqual(['b.mp4']);
   });
 
+  it('lanes.length === 1 -> order/confidence/gaps are field-for-field what today\'s hook produces (T8824)', async () => {
+    const t0 = new Date('2026-09-05T14:00:00');
+    const t1 = new Date('2026-09-05T14:20:00');
+    probeResults.set('seg1.mp4', { duration: 300, creationTime: t0, width: 1920, height: 1080 });
+    probeResults.set('seg2.mp4', { duration: 300, creationTime: t1, width: 1920, height: 1080 });
+    const { result } = renderHook(() => useFootageIntake());
+    await act(async () => {
+      await result.current.addFiles([mkFile('seg1.mp4'), mkFile('seg2.mp4')]);
+    });
+    expect(result.current.lanes).toHaveLength(1);
+    expect(result.current.placement).toBe('time');
+    expect(result.current.order.map((i) => i.name)).toEqual(['seg1.mp4', 'seg2.mp4']);
+    expect(result.current.confidence).toBe('time');
+    expect(result.current.gaps).toHaveLength(1);
+    expect(result.current.question).toBeNull();
+  });
+
+  it('setPlacementMode sets an explicit override and clears any manual order', async () => {
+    probeResults.set('a.mp4', { duration: 5, creationTime: null });
+    probeResults.set('b.mp4', { duration: 5, creationTime: null });
+    const { result } = renderHook(() => useFootageIntake());
+    await act(async () => {
+      await result.current.addFiles([mkFile('a.mp4'), mkFile('b.mp4')]);
+    });
+    act(() => {
+      result.current.setManualOrder(['b.mp4', 'a.mp4']);
+    });
+    expect(result.current.confidence).toBe('manual');
+
+    act(() => {
+      result.current.setPlacementMode('sequence');
+    });
+    // manualNames cleared -> falls back through the normal (no-clock) cascade,
+    // not the stale hand-picked order.
+    expect(result.current.confidence).not.toBe('manual');
+  });
+
   it('reset clears everything', async () => {
     probeResults.set('a.mp4', { duration: 5, creationTime: null });
     const { result } = renderHook(() => useFootageIntake());
