@@ -9,7 +9,7 @@
 ## Problem
 
 Live-testing feedback (2026-09-07) on the desktop under-canvas Add/Edit Play editor strip
-(`AnnotateFullscreenOverlay layout="strip"`, T8600, refined by T8760/T8730/T8490). Six
+(`AnnotateFullscreenOverlay layout="strip"`, T8600, refined by T8760/T8730/T8490). Seven
 items, verbatim from the user:
 
 1. "When in edit mode, the playhead should always be in the green area (selected); if it's
@@ -22,6 +22,7 @@ items, verbatim from the user:
    Say 'Clip Play to focus on your player' or 'Don't Clip Play' on the toggle."
 5. "My Athlete vs Team control should be on top line with play name."
 6. "More details should not require a scroll."
+7. "In edit mode, instead of calling it 'Clip Out Play' just call the button 'Clip Play'."
 
 Root cause of item 1 (already located, not a guess): T8760's clip-scoped loop in
 `ClipScrubRegion.jsx` (~L316) is gated on `isEditingRef = clipEditorActive && !!existingClip`,
@@ -67,8 +68,13 @@ Target layout (desktop strip):
   (create mode, ~L795) with a wider toggle-button whose label reads
   `Clip Play to focus on your player` when on and `Don't Clip Play` when off. Same state
   (`createProject` / `createProjectManuallySet`, T5725 auto-flip on rating x layer
-  unchanged). Edit-mode `Clip Out Play` button and `Reel created` chip stay. Do NOT touch
-  the T8490 rating captions or `SECTION_NAMES` - this is the one toggle's copy only.
+  unchanged). The `Reel created` chip stays. Do NOT touch the T8490 rating captions or
+  `SECTION_NAMES` - this is the toggle's copy only.
+- **Edit-mode button "Clip Play" (item 7):** the edit-mode `Clip Out Play` button (T8760's
+  rename) becomes `Clip Play`. It renders at TWO sites in `AnnotateFullscreenOverlay.jsx`
+  (formBody ~L639 and strip ~L791) - rename both so desktop and mobile edit mode agree.
+  `ClipDetailsEditor`'s sidebar reel button and the multi-clip assembly / overlay-export
+  "Create Reel" strings of OTHER features are unchanged (same scoping T8760 used).
 - **Layer control on the top line (item 5):** move `LayerSegmentedControl` from the
   below-card button row (~L909) into header row 1, right-aligned next to the X. The
   below-card row then holds only the edit-mode `Focus` button (still right-anchored);
@@ -141,6 +147,7 @@ located in `ClipScrubRegion.jsx` (loop gated on `existingClip`).
 - [ ] "+ Adding new play" is centered on its own row (create mode)
 - [ ] Toggle reads "Clip Play to focus on your player" / "Don't Clip Play", visibly wider
 - [ ] My Athlete | Team sits on the top line with the name
+- [ ] Edit-mode button reads "Clip Play" (both render sites); no "Clip Out Play" left in the overlay
 - [ ] Details expand in place with no inner scroll; no page scroll at 1280x720
 - [ ] Sidebar `ClipDetailsEditor` and mobile layouts unchanged (existing tests green)
 - [ ] Curated test set + e2e green
