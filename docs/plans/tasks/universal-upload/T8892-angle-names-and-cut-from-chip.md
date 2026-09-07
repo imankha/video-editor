@@ -1,6 +1,6 @@
 # T8892: T8890 follow-ups - real angle names + the "cut from {angle}" chip
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-06
