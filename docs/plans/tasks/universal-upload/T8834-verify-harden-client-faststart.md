@@ -1,6 +1,6 @@
 # T8834: Verify + harden T1380 client-side faststart on real camera files
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-06
