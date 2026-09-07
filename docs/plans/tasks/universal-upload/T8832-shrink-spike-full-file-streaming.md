@@ -1,6 +1,6 @@
 # T8832: Shrink spike part 2: full-file streaming demux on real camera files (memory + endurance)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-06
