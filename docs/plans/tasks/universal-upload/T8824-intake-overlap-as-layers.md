@@ -1,6 +1,6 @@
 # T8824: Intake - overlap is a signal, not a disqualifier (layered order editor)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-09-06
@@ -164,14 +164,38 @@ conflicts. Also matches this task file's own "Strongly prefer after: T8892" note
 spawn the implementation container the moment T8892 is pushed and merged, branching from
 the resulting master so the naming/chip work is already present.
 
+**2026-09-07**: Implemented in container `reel-task-t8824` (branch
+`feature/T8824-intake-overlap-as-layers`, cloned from master after T8892 merged), on
+`--model sonnet` per the tier table (design doc is the spec). Followed the design doc's
+7-commit sequence exactly: Step 1 extracted `assignLanes` into
+`src/frontend/src/utils/laneAssignment.js` with a hard zero-behaviour-change gate
+(`useVirtualTimeline.test.js` 88 tests + `.overlap.test.js` 14 tests passed unmodified);
+Step 2 replaced `inferOrder` with `inferPlacement` (12-fixture table + the
+`compute_video_offsets` mirror test, 32 tests); Step 3 collapsed `useFootageIntake` to
+`items`+`override`+`manualNames` behind one `publish()`; Step 4 built the `FootageList`
+angle lanes UI and deleted T8822's overlap badge; Step 5 flipped the payload gate from
+`confidence === 'time'` to `placement === 'time'`; Step 6 added 2 live e2e specs (real
+ffmpeg fixtures, real upload path, real backend/R2) proving the angle-upload and
+Legends-sequence paths, plus re-verified the existing `T8820-confirm-strip-reorder.qa.spec.js`
+green unmodified; Step 7 rewrote EPIC.md decision 1 (design doc SS7.1 text verbatim) and
+amended decision 3, updated `annotate.md`, noted T8822's badge as superseded. 220 unit/
+component tests total, Reviewer approved with zero findings. Branch CI green on the
+first push (backend correctly skipped - frontend-only change). Supervisor independently
+re-ran all 220 curated tests in an isolated worktree against the pushed commit, and
+spot-checked `_classifyComponent`'s signal order (A0 slop -> A1 names -> A2 different
+family -> A3 containment -> A4 ask) plus the EPIC.md rewrite text against the approved
+design doc - faithful match on both. PR #360, merged without asking per
+merge-when-provably-verified (CI green + 220 tests re-verified independently + 2 live
+e2e specs against real infra + reviewer approval). Commit `3f2fc736`.
+
 ## Acceptance Criteria
 
-- [ ] All three real fixtures place correctly (DJI sequential, Legends sequential with
+- [x] All three real fixtures place correctly (DJI sequential, Legends sequential with
       `null` timestamps, phone-in-main as an angle), plus main + 2 mutually overlapping
       phones => exactly 3 lanes in the picker AND in Annotate (same helper)
-- [ ] No untrusted timestamp ever reaches `recorded_at` (T8872's invariant, now per item)
-- [ ] Picker lanes match Annotate lanes for the same files (shared `assignLanes`)
-- [ ] Submit is never blocked; ambiguous cases ask with a safe default
-- [ ] Angle-free uploads render the picker exactly as T8822 left it (one list, no lanes)
-- [ ] Design doc approved by the user before implementation; curated tests + both e2e
+- [x] No untrusted timestamp ever reaches `recorded_at` (T8872's invariant, now per item)
+- [x] Picker lanes match Annotate lanes for the same files (shared `assignLanes`)
+- [x] Submit is never blocked; ambiguous cases ask with a safe default
+- [x] Angle-free uploads render the picker exactly as T8822 left it (one list, no lanes)
+- [x] Design doc approved by the user before implementation; curated tests + both e2e
       flows green; Reviewer pass
