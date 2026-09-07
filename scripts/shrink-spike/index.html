@@ -2,24 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>T8830 - Shrink spike (WebCodecs 8K benchmark)</title>
+  <title>Shrink spike (WebCodecs benchmark: single-shot + streaming)</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
     #results { background: #111; color: #0f0; padding: 1rem; white-space: pre-wrap; min-height: 4rem; }
     #playback { display: block; margin-top: 1rem; max-width: 100%; }
     button { font-size: 1rem; padding: 0.5rem 1rem; }
     .hint { color: #666; font-size: 0.9rem; }
+    .controls { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin: 1rem 0; }
+    .controls label { display: flex; gap: 0.35rem; align-items: center; }
+    #chunk-size { width: 4rem; }
   </style>
 </head>
 <body>
-  <h1>Shrink spike: WebCodecs 8K benchmark (T8830)</h1>
+  <h1>Shrink spike: WebCodecs benchmark (T8830 single-shot + T8832 streaming)</h1>
   <p class="hint">
-    Throwaway benchmark, not shipped to users. Pick the real 8K DJI file (or a small
-    control clip) and press Run. See README.md for how to serve this page and where
-    to point it.
+    Throwaway benchmark, not shipped to users. Pick a camera file (or a control clip),
+    choose a mode, and press Run. <b>single-shot</b> reads the whole file into memory
+    (T8830, fails past ~300 MB in Chrome). <b>streaming</b> feeds mp4box fixed-size
+    chunks from a faststart-ordered view (T8832) - the mode meant for the real 3-17 GB
+    files. See README.md for how to serve this page and where to point it.
   </p>
 
   <input id="file-input" type="file" accept="video/*" />
+
+  <div class="controls">
+    <label>Mode:
+      <select id="mode">
+        <option value="streaming">streaming (T8832)</option>
+        <option value="single-shot">single-shot (T8830)</option>
+      </select>
+    </label>
+    <label>Chunk size (MB):
+      <input id="chunk-size" type="number" value="8" min="1" step="1" />
+    </label>
+    <label><input id="decode-only" type="checkbox" /> decode-only (skip encode+mux)</label>
+  </div>
+
   <button id="run-btn" disabled>Run</button>
 
   <h2>Results</h2>
