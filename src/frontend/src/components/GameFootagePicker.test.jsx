@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // accepted selection from EVERY path), the emitted payload shape, and folder
 // drag-drop via a mocked webkitGetAsEntry() directory tree.
 
-const { intake, addFilesMock, removeItemMock, setManualOrderMock, toastInfo } = vi.hoisted(() => ({
+const { intake, addFilesMock, removeItemMock, setManualOrderMock, setPlacementModeMock, toastInfo } = vi.hoisted(() => ({
   intake: {
     current: {
       status: 'empty',
@@ -15,6 +15,9 @@ const { intake, addFilesMock, removeItemMock, setManualOrderMock, toastInfo } = 
       order: [],
       confidence: 'unknown',
       gaps: [],
+      placement: 'sequence',
+      lanes: [],
+      question: null,
       skipped: [],
       proxies: {},
     },
@@ -22,6 +25,7 @@ const { intake, addFilesMock, removeItemMock, setManualOrderMock, toastInfo } = 
   addFilesMock: vi.fn(),
   removeItemMock: vi.fn(),
   setManualOrderMock: vi.fn(),
+  setPlacementModeMock: vi.fn(),
   toastInfo: vi.fn(),
 }));
 
@@ -31,6 +35,7 @@ vi.mock('../hooks/useFootageIntake', () => ({
     addFiles: addFilesMock,
     removeItem: removeItemMock,
     setManualOrder: setManualOrderMock,
+    setPlacementMode: setPlacementModeMock,
   }),
 }));
 
@@ -48,12 +53,29 @@ function makeItem(name, size = 1024) {
   return { name, size, duration: 60, creationTime: null, file: new File(['x'], name, { type: 'video/mp4' }) };
 }
 
+/** Build a single-lane `lanes` array the way inferPlacement would, from a plain
+ *  item order (prefix-sum offsets) -- FootageList's lane-0 rows read this. */
+function oneLane(order) {
+  let acc = 0;
+  return [
+    order.map((it) => {
+      const offsetSeconds = acc;
+      acc += it.duration || 0;
+      return { item: it, offsetSeconds, endSeconds: acc, lane: 0 };
+    }),
+  ];
+}
+
 beforeEach(() => {
   addFilesMock.mockReset().mockResolvedValue({ duplicates: [] });
   removeItemMock.mockReset();
   setManualOrderMock.mockReset();
+  setPlacementModeMock.mockReset();
   toastInfo.mockReset();
-  setIntake({ status: 'empty', items: [], order: [], confidence: 'unknown', gaps: [], skipped: [], proxies: {} });
+  setIntake({
+    status: 'empty', items: [], order: [], confidence: 'unknown', gaps: [],
+    placement: 'sequence', lanes: [], question: null, skipped: [], proxies: {},
+  });
 });
 
 describe('GameFootagePicker — states', () => {
@@ -87,7 +109,10 @@ describe('GameFootagePicker — states', () => {
 
   it('ready multi: mounts the FootageList (real confirm list, not the old placeholder)', () => {
     const order = [makeItem('DJI_0003.MP4'), makeItem('DJI_0004.MP4'), makeItem('DJI_0005.MP4')];
-    setIntake({ status: 'ready', items: order, order, confidence: 'time', skipped: ['clip.THM'] });
+    setIntake({
+      status: 'ready', items: order, order, confidence: 'time', placement: 'time', lanes: oneLane(order),
+      skipped: ['clip.THM'],
+    });
     render(<GameFootagePicker onFootageChange={vi.fn()} />);
     expect(screen.getByTestId('footage-picker-ready-multi')).toBeTruthy();
     expect(screen.getByTestId('footage-list')).toBeTruthy();
@@ -100,13 +125,19 @@ describe('GameFootagePicker — states', () => {
 
   it('ready multi: every row is draggable regardless of confidence (T8822 — no separate reorder mode)', () => {
     const confident = [makeItem('DJI_0003.MP4'), makeItem('DJI_0004.MP4')];
-    setIntake({ status: 'ready', items: confident, order: confident, confidence: 'time' });
+    setIntake({
+      status: 'ready', items: confident, order: confident, confidence: 'time',
+      placement: 'time', lanes: oneLane(confident),
+    });
     const { unmount } = render(<GameFootagePicker onFootageChange={vi.fn()} />);
     expect(screen.getByTestId('footage-row-handle-0')).toBeTruthy();
     unmount();
 
     const unknownOrder = [makeItem('clipA.mp4'), makeItem('clipB.mp4')];
-    setIntake({ status: 'ready', items: unknownOrder, order: unknownOrder, confidence: 'unknown' });
+    setIntake({
+      status: 'ready', items: unknownOrder, order: unknownOrder, confidence: 'unknown',
+      placement: 'sequence', lanes: oneLane(unknownOrder),
+    });
     render(<GameFootagePicker onFootageChange={vi.fn()} />);
     expect(screen.getByTestId('footage-row-handle-0')).toBeTruthy();
   });
@@ -162,7 +193,7 @@ describe('GameFootagePicker — selection paths + beacon', () => {
 
   it('junk-only add while files already exist still surfaces the error (ready-multi state)', async () => {
     const order = [makeItem('DJI_0003.MP4'), makeItem('DJI_0004.MP4')];
-    setIntake({ status: 'ready', items: order, order });
+    setIntake({ status: 'ready', items: order, order, placement: 'sequence', lanes: oneLane(order) });
     render(<GameFootagePicker onFootageChange={vi.fn()} />);
     fireEvent.change(screen.getByTestId('footage-file-input'), {
       target: { files: [new File(['x'], 'thumb.THM', { type: '' })] },
@@ -228,33 +259,45 @@ describe('GameFootagePicker — reported payload', () => {
     expect(last.totalBytes).toBe(2048);
   });
 
-  it('T8870/T8872: confidence "time" threads the item creationTime through as recorded_at evidence', () => {
+  it('T8824: placement "time" threads the item creationTime through as recorded_at evidence', () => {
     const ct = new Date('2026-07-18T18:44:59Z');
     const item = { name: 'DJI_0005.MP4', size: 1024, duration: 60, creationTime: ct,
       file: new File(['x'], 'DJI_0005.MP4', { type: 'video/mp4' }) };
-    setIntake({ status: 'ready', items: [item], order: [item], confidence: 'time', proxies: {} });
+    setIntake({ status: 'ready', items: [item], order: [item], confidence: 'time', placement: 'time', proxies: {} });
     const onFootageChange = vi.fn();
     render(<GameFootagePicker onFootageChange={onFootageChange} />);
     const last = onFootageChange.mock.calls.at(-1)[0];
     expect(last.files[0].creationTime).toBe(ct);
   });
 
-  it('T8872: confidence "name" (export-time artifact) nulls creationTime even when the item carries a real Date', () => {
+  it('T8824: placement "sequence" (export-time artifact) nulls creationTime even when the item carries a real Date', () => {
     const ct = new Date('2026-07-18T18:44:59Z');
     const item = { name: '1st-half.mp4', size: 1024, duration: 60, creationTime: ct,
       file: new File(['x'], '1st-half.mp4', { type: 'video/mp4' }) };
-    setIntake({ status: 'ready', items: [item], order: [item], confidence: 'name', proxies: {} });
+    setIntake({ status: 'ready', items: [item], order: [item], confidence: 'name', placement: 'sequence', proxies: {} });
     const onFootageChange = vi.fn();
     render(<GameFootagePicker onFootageChange={onFootageChange} />);
     const last = onFootageChange.mock.calls.at(-1)[0];
     expect(last.files[0].creationTime).toBeNull();
   });
 
-  it('T8872: confidence "manual" (user-dragged order) nulls creationTime', () => {
+  it('T8824: placement "sequence" from a manual reorder nulls creationTime', () => {
     const ct = new Date('2026-07-18T18:44:59Z');
     const item = { name: 'clip.mp4', size: 1024, duration: 60, creationTime: ct,
       file: new File(['x'], 'clip.mp4', { type: 'video/mp4' }) };
-    setIntake({ status: 'ready', items: [item], order: [item], confidence: 'manual', proxies: {} });
+    setIntake({ status: 'ready', items: [item], order: [item], confidence: 'manual', placement: 'sequence', proxies: {} });
+    const onFootageChange = vi.fn();
+    render(<GameFootagePicker onFootageChange={onFootageChange} />);
+    const last = onFootageChange.mock.calls.at(-1)[0];
+    expect(last.files[0].creationTime).toBeNull();
+  });
+
+  it('T8824: a slop chain (confidence "time" + placement "sequence") still sends null -- '
+    + 'this is the test that pins the confidence-vs-placement distinction', () => {
+    const ct = new Date('2026-07-18T18:44:59Z');
+    const item = { name: 'DJI_0010.MP4', size: 1024, duration: 60, creationTime: ct,
+      file: new File(['x'], 'DJI_0010.MP4', { type: 'video/mp4' }) };
+    setIntake({ status: 'ready', items: [item], order: [item], confidence: 'time', placement: 'sequence', proxies: {} });
     const onFootageChange = vi.fn();
     render(<GameFootagePicker onFootageChange={onFootageChange} />);
     const last = onFootageChange.mock.calls.at(-1)[0];
@@ -263,7 +306,7 @@ describe('GameFootagePicker — reported payload', () => {
 
   it('four files: emits a 1..4 sequenced list in inferred order', () => {
     const order = [makeItem('DJI_0003.MP4'), makeItem('DJI_0004.MP4'), makeItem('DJI_0005.MP4'), makeItem('DJI_0006.MP4')];
-    setIntake({ status: 'ready', items: order, order });
+    setIntake({ status: 'ready', items: order, order, placement: 'sequence', lanes: oneLane(order) });
     const onFootageChange = vi.fn();
     render(<GameFootagePicker onFootageChange={onFootageChange} />);
     const last = onFootageChange.mock.calls.at(-1)[0];
