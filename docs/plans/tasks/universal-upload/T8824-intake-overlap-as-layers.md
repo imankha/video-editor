@@ -1,6 +1,6 @@
 # T8824: Intake - overlap is a signal, not a disqualifier (layered order editor)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-09-06
