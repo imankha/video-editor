@@ -1,5 +1,37 @@
 ---
 domain: annotate
+updated: 2026-09-07 (T8960 play-editor strip layout feedback -- REVERSES T8760's create-mode
+exclusion for the PRIMARY editor and reworks the strip header/controls. **Loop + seed now gate on
+`clipEditorActive` ALONE** (`ClipScrubRegion.jsx`), so the clip-scoped looping playhead + seed-to-start
+fire in CREATE mode ("Add Play") too, not just edit -- the SUPERSEDES the T8760 entry's "create mode /
+Add Play deliberately keep unconstrained playback" clause (that clause is now WRONG for the primary
+editor; it still holds for the sidebar). `clipEditorActive` stays the structural leak guard: the sidebar
+`ClipDetailsEditor` (clipEditorActive false) and normal game playback are untouched, and the create-mode
+seed is once-per-open via `seededClipRef` keyed on the clip id or a `'__create__'` sentinel. The
+edit-only zoom-to-green-region still gates on `isEditing` (`clipEditorActive && existingClip`) -- create
+mode keeps the wide +/-30s game-context window. **Click-inside-span seeks (item 8):** a pointerdown+up
+(< 4px = a click, not a drag) on the scrub TRACK between the two handles calls `onSeek(clickTime)` and
+moves neither handle; gated on `clipEditorActive` (sidebar unchanged), inside-span only (outside-span is
+today's no-op), handle presses stopPropagation so they never reach the track handler. Track has
+`data-testid="scrub-track"`. VERIFIED LIVE (dev-verify) -- the T5380/T8900 jsdom-pointer landmine means
+this needs a real-browser check, which the QA spec does. **No skip buttons/shortcuts in the editor
+(item 9):** `AnnotateControls.jsx` hides Back-5s / Step-back / Restart / Step-forward when a NEW prop
+`editorOpen` is true (play/pause stays -- the single-play-control invariant); wired from
+`AnnotateModeView` as `editorOpen={desktopEditorOpen}` (= `underCanvasEditor && !isMobile`, so fullscreen
++ mobile transports keep their buttons). NOTE: `clipEditBounds` could NOT drive this -- it derives from
+`existingClip`, which is null in create mode. The matching arrow-key seek/clip-nav is disabled in
+`AnnotateScreen.jsx`'s keydown handler when `showAnnotateOverlay` (editor open, any surface) so no key
+can push the playhead out of the span. **Strip header/controls (items 2-7):** header row 1 = pencil-name
+(the SAME inline-input affordance for BOTH modes now, create shows the default/auto name until renamed --
+the standalone controls-row name `<input>` is DELETED) + `LayerSegmentedControl size="sm"` (moved UP from
+the below-card row) + Close; header row 2 = centered "+ Adding new play" title (create only). The
+below-card row now holds ONLY the edit-mode Focus CTA (nothing in create). Create-mode reel control is a
+WIDER toggle-BUTTON ("Clip Play to focus on your player" on / "Don't Clip Play" off; same
+`createProject`/`createProjectManuallySet` state, T5725 auto-flip unchanged). The edit-mode reel action
+button is renamed **"Clip Out Play" -> "Clip Play"** at BOTH `AnnotateFullscreenOverlay.jsx` render sites
+(formBody + strip) AND the `ProjectManager.jsx` empty-state instruction copy that names it (+ its
+`homeTabDefaults` test + the T8380 e2e assertion). Details panel dropped `max-h-64 overflow-y-auto` --
+grows to fit, no inner scroll. Persistence untouched (name/toggle local until Save).)
 updated: 2026-09-07 (T8900 Fix-timing: nudge an angle into alignment -- the FIRST gesture that
 mutates a placed angle's `offset_seconds` after insert (T8870 insert-time compute is the only other
 writer). **Backend:** `PATCH /api/games/{game_id}/videos/{sequence}/placement` body `{offset_seconds}`

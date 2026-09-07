@@ -99,8 +99,9 @@ test.describe('T8380 Add Video — brand-new account', () => {
     const addVideo = page.getByRole('button', { name: 'Add Video' });
     await expect(addVideo).toBeVisible();
     await expect(addVideo).toHaveAttribute('data-tutorial-target', 'clips-add-video');
-    // Path B guidance (extract in Annotate) is present alongside.
-    await expect(page.getByText(/Clip Out Play/i)).toBeVisible();
+    // Path B guidance (extract in Annotate) is present alongside. T8960 renamed
+    // this instructional copy "Clip Out Play" -> "Clip Play".
+    await expect(page.getByText(/Clip Play/i)).toBeVisible();
     // No dead-end redirect: we stay on /home/reels.
     expect(await page.evaluate(() => window.location.pathname)).toBe('/home/reels');
 
