@@ -311,6 +311,13 @@ class AddVideosRequest(BaseModel):
     videos: list[VideoReference] = Field(..., description="Video references to add")
 
 
+class PlacementUpdate(BaseModel):
+    # T8900 Fix-timing: the new canonical offset on the game's real-time axis, in
+    # seconds (may be negative — a video recorded before the game's zero). A
+    # non-numeric body value is rejected at the boundary (422).
+    offset_seconds: float = Field(..., description="New offset_seconds on the game's real-time axis")
+
+
 class FinishAnnotationRequest(BaseModel):
     viewed_duration: float = Field(0, description="High-water mark of video watched in seconds")
 
@@ -857,6 +864,56 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
         "videos": videos_response,
         "upload_cost_charged": cost,
     }
+
+
+@router.patch("/{game_id:int}/videos/{sequence:int}/placement")
+async def update_video_placement(
+    game_id: int,
+    sequence: int,
+    request: PlacementUpdate,
+    _durable: None = Depends(durable_sync),  # T8900: sync the offset write to R2 before 200
+):
+    """
+    T8900 Fix-timing: nudge ONE angle's placement along the game's real-time axis.
+
+    Writes game_videos.offset_seconds ONLY — never recorded_at. This is the ONLY
+    post-insert writer of offset_seconds (the other is insert-time
+    compute_video_offsets, T8870), and the Fix-timing "Done" gesture is its sole
+    call site (gesture-based persistence: never a reactive/side-effect write).
+    Profile-scoped like every sibling game mutation. 404 when the (game_id,
+    sequence) video row does not exist; a non-numeric body value is 422 (Pydantic).
+    Returns the updated video row.
+
+    Moving an angle shifts its clips' VIRTUAL render positions (they map through
+    the placement model) but NOT their stored file-relative start/end + sequence —
+    a clip is cut from one source at a fixed file time; only where that source sits
+    on the game timeline changed. So no raw_clips row is touched here.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM games WHERE id = ?", (game_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Game not found")
+        cursor.execute(
+            "SELECT id FROM game_videos WHERE game_id = ? AND sequence = ?",
+            (game_id, sequence),
+        )
+        if not cursor.fetchone():
+            raise HTTPException(
+                status_code=404, detail=f"No video with sequence {sequence} for this game"
+            )
+        cursor.execute(
+            "UPDATE game_videos SET offset_seconds = ? WHERE game_id = ? AND sequence = ?",
+            (request.offset_seconds, game_id, sequence),
+        )
+        conn.commit()
+        videos = _get_game_videos_response(cursor, game_id)
+
+    logger.info(
+        f"[placement] game={game_id} seq={sequence} offset_seconds={request.offset_seconds}"
+    )
+    updated = next((v for v in videos if v["sequence"] == sequence), None)
+    return updated
 
 
 def _ensure_game_storage_refs(cursor, game_id, user_id, profile_id, expires_str):
