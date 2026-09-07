@@ -27,6 +27,9 @@ this validates.
 
 ### Related Tasks
 - Blocks: T8840, T8850, T8860 (a NO-GO verdict sends those back to the user for re-scope)
+- Follow-up: T8832 (full-file streaming + endurance - the half this spike deliberately
+  did not test), T8834 (T1380's client-side faststart, which turns out to be the likely
+  demux answer for T8840), T8836 (survey of other cheap pre-upload work)
 
 ### Technical Notes
 - Test file: `formal annotations/u14 adonis/ECNL Test - DJI Action 6/DJI_20260718120831_0006_D.MP4`

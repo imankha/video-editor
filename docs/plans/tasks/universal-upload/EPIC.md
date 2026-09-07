@@ -85,6 +85,9 @@ overrides.)
 | T8822 | [Consolidate footage list + overlap badge](T8822-consolidate-footage-list-overlap-badge.md) | STAGING |
 | T8824 | [Intake: overlap is a signal, not a disqualifier (layered order editor)](T8824-intake-overlap-as-layers.md) | TODO |
 | T8830 | [Shrink spike: WebCodecs 8K benchmark (go/no-go)](T8830-shrink-spike-benchmark.md) | STAGING |
+| T8832 | [Shrink spike part 2: full-file streaming demux on real camera files](T8832-shrink-spike-full-file-streaming.md) | TODO |
+| T8834 | [Verify + harden T1380 client-side faststart on real camera files](T8834-verify-harden-client-faststart.md) | TODO |
+| T8836 | [Survey: other cheap client-side pre-upload work (decision doc)](T8836-survey-cheap-client-preupload-work.md) | TODO |
 | T8840 | [Shrink pipeline core (worker transcode)](T8840-shrink-pipeline-core.md) | TODO |
 | T8850 | [Shrink UI: offer card + crop step + presets](T8850-shrink-ui-crop-step.md) | TODO |
 | T8860 | [Shrink upload integration + fallback](T8860-shrink-upload-integration.md) | TODO |
@@ -101,6 +104,13 @@ T8860 (its verdict can re-scope them). T8870 -> T8880 -> T8890 -> T8900 build an
 order. T8910 needs T8810 (picker) and benefits from T8870 (placement) - it is last.
 If T8830's benchmark says NO-GO for client-side 8K, tasks T8840-T8860 return to the user
 for a re-scope decision (server-side alternative is NOT viable - upload is the bottleneck).
+
+Added 2026-09-06 after T8830 landed GO WITH CAVEATS: **T8832** (full-file streaming +
+endurance spike, the half T8830 deliberately did not test) now gates T8840 alongside
+T8830; its verdict rewrites T8840's demux caveat into a proven approach (likely T1380's
+zero-copy faststart view + forward streaming). **T8834** (measure + harden T1380 on real
+camera files) and **T8836** (survey of cheap pre-upload work, decision doc) are independent
+of the shrink track and can run any time.
 
 Added 2026-09-06 after the first live test of the angle track: **T8872** (P1 hotfix, do
 first - stops discarded timestamps leaking into `recorded_at`) -> merge T8890 (#356) ->

@@ -30,7 +30,10 @@ are BINDING constraints on this task.
 
 ### Related Tasks
 - Depends on: T8830 (GO verdict + its caveat list; reuse the spike's working demux/
-  backpressure code as the starting point)
+  backpressure code as the starting point) AND T8832 (full-file streaming proof - its
+  verdict replaces caveat 1 below with the PROVEN demux approach; expected: T1380's
+  `mp4Faststart.js` zero-copy faststart view + forward chunked `appendBuffer`, which
+  needs no random-access demuxer at all)
 - Blocks: T8850, T8860
 
 ### T8830 binding caveats (from `scripts/shrink-spike/README.md` "Verdict", copied
