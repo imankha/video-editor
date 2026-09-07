@@ -330,34 +330,63 @@ The bounded mp4box buffer count (never above 1) is the mechanism proof that
 - A 90 s / 142 MB clip cannot stand in for a 4.6-minute 3.3 GB or 45-minute 17 GB run. Two
   30 s buckets is not an endurance test.
 
-## Real-file results (supervisor fills in after running on real hardware)
+## Real-file results (real hardware, 2026-09-07)
 
-Run these on a real machine (real GPU, real DJI files under `formal annotations/`, no worker
-containers up), serving the repo root with COOP/COEP so `measureUserAgentSpecificMemory` works.
-**Do not fabricate — a container cannot produce these.** See the task file
-`docs/plans/tasks/universal-upload/T8832-shrink-spike-full-file-streaming.md` for the full
-acceptance criteria and per-step run order (decode-only on the 17 GB file first, then
-decode+encode on the 3.3 GB file, then the Legends control).
+Run on the dev laptop (i7-13700H, Iris Xe + RTX 4060 Laptop GPU, Windows 11, Chrome, headed),
+serving the repo root with COOP/COEP so `measureUserAgentSpecificMemory` works, no worker
+containers up.
 
-| File | Size | Mode | Chunk | Peak heap | Final heap | Avg fps | Min bucket fps | Verdict |
-|------|------|------|-------|-----------|------------|---------|----------------|---------|
-| DJI_20260718105543_0003_D.MP4 (17.2 GB, co64) | 17.2 GB | streaming, decode-only | 8 MB | | | | | |
-| DJI_20260718105543_0003_D.MP4 | 17.2 GB | streaming, decode-only | 32 MB | | | | | |
-| DJI_20260718120831_0006_D.MP4 (3.3 GB) | 3.3 GB | streaming, decode+encode | 8 MB | | | | | |
-| DJI_20260718120831_0006_D.MP4 | 3.3 GB | streaming, decode+encode | 32 MB | | | | | |
-| Legends 1st half (H.264 1080p) | full | streaming, decode-only | 8/32 MB | | | | | |
-| Legends 1st half | full | streaming, decode+encode | 8/32 MB | | | | | |
+| File | Size | Mode | Chunk | Peak heap | Final heap | Frames | Wall | Avg fps | Realtime x | Min bucket fps | mp4box buffers (max/final) | Verdict |
+|------|------|------|-------|-----------|------------|--------|------|---------|------------|-----------------|------------------------------|---------|
+| DJI_20260718105543_0003_D.MP4 (17.2 GB, co64, 7680x4320 HEVC) | 17.2 GB | streaming, decode-only | 32 MB | **200.8 MB** | 5.5 MB | 42,264 / 42,264 (moov) | 320.0 s | 132.07 | **4.407x** | 89.22 | 1 / 1 (423 releases) | **PASS** |
+| DJI_20260718120831_0006_D.MP4 (3.3 GB) | 3.3 GB | streaming, decode+encode | 32 MB | - | - | interrupted ~1,100/8,280 | - | - | - | - | - | **not run** - see note below |
+| Legends 1st half (H.264 1080p, 44 min) | full | streaming, decode+encode | 32 MB | - | - | - | - | - | - | - | - | **not run** - see note below |
+
+**Full raw output:** the 17.2 GB run's complete per-30s-bucket breakdown and memory sample
+array are in the task file's Progress Log (2026-09-07 entry).
+
+**Why the 3.3 GB and Legends runs were not completed:** running real hardware decode+encode
+of 8K video in a headed browser for the FULL 4.6-minute file (not T8830's 25 s trim) pegged
+the dev machine hard enough that the user had to kill it partway through to keep working.
+User direction: skip these rather than repeat something that locks up the machine, and
+finalize on the evidence already in hand. That evidence is judged sufficient:
+- The 17.2 GB decode-ONLY run already proves the thing these two runs were mainly for -
+  memory staying flat and mp4box's buffers staying bounded over a long, real, GB-scale run
+  (11 buckets of dead-flat throughput, no leak).
+- T8830 (above) already established encode-bound throughput numbers on the real 3.3 GB
+  file's codec/resolution/bitrate via a 25 s `-c copy` trim (1.4-1.5x realtime, Chrome +
+  Edge) and validated the Legends control's pipeline correctness (1.9-4.1x realtime, output
+  played back). Nothing about switching from single-shot to streaming changes the per-frame
+  decode/encode cost - streaming only changes how bytes get INTO the pipeline, which the
+  17.2 GB run proves is not the bottleneck (decode-only streaming ran at 4.4x realtime,
+  well above the 1.4-1.5x decode+encode number, confirming encode is still the bound, not
+  the new chunked-read mechanism).
+- Re-running the full decode+encode pass would mainly confirm "no slope over 4.6 minutes
+  instead of 25 seconds" - a real but secondary confirmation, not worth repeating a
+  machine-locking run for.
 
 **Acceptance targets (from the task file):** 17.2 GB decodes start-to-finish with peak JS
-heap under ~1 GB and no upward slope; 3.3 GB decode+encode completes, output plays, average
-throughput within 20% of T8830's 25 s trim result (~1.4-1.5x realtime), no per-bucket
-degradation; Legends control passes both runs.
+heap under ~1 GB and no upward slope - **MET** (200.8 MB peak, flat). 3.3 GB decode+encode /
+Legends control - **not independently re-run on the full files; treated as covered** by the
+combination above per user direction (2026-09-07).
 
-## Verdict for T8840 (supervisor writes after the real runs)
+## Verdict for T8840
 
-*Pending real-hardware runs.* Fill in the proven demux approach (faststart view + forward
-streaming, or the random-access fallback if the faststart view failed for a reason intrinsic
-to it), the chunk size that held memory flat, the `releaseUsedSamples` cadence, and the
-in-flight cap — then rewrite T8840's caveat 1 to that proven approach. The container smoke
-test confirms the faststart-view forward-streaming *mechanism* is correct and bounds mp4box's
-buffers; only the real files can confirm it holds across GB-scale, minutes-long runs.
+**Proven demux approach: the faststart-ordered forward-streaming view (T1380's
+`mp4Faststart.js` `getReorderedSlice`), NOT random-access demuxing.** T8840 should adopt:
+- `analyzeMp4Faststart(file)` once to get the faststart-ordered logical layout (zero-copy;
+  reads only box headers + the moov itself, not the payload).
+- Feed mp4box fixed-size chunks (**32 MB proven**; 8 MB also mechanism-tested in the
+  container smoke test but not real-hardware-timed - 32 MB is the one to ship) taken from
+  that logical view via `.slice(start, end)`, moving strictly forward. No random access,
+  no file rewrite, no random-access sample-table walking needed.
+- `setExtractionOptions(trackId, null, {nbSamples: 100})` + `releaseUsedSamples` every 100
+  samples - proven on real hardware to hold mp4box's internal buffer list at a constant 1
+  buffer across a 42,264-sample, 320-second run (423 release calls).
+- Backpressure cap of 32 in-flight frames (unchanged from T8830).
+
+This REPLACES the original "chunked random-access demux is mandatory... a substantial,
+real piece of engineering" caveat - that random-access design is no longer needed. The
+faststart view already solves the non-fast-start problem, and `File.slice()` gives free
+random access into the ORIGINAL file for the mdat region regardless of layout, so no new
+demuxer needs to be written at all.

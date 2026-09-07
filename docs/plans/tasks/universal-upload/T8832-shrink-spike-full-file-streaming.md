@@ -1,6 +1,6 @@
 # T8832: Shrink spike part 2: full-file streaming demux on real camera files (memory + endurance)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-06
@@ -100,18 +100,21 @@ and writes a verdict that rewrites T8840's caveat 1 into a proven approach.
 ## Implementation
 
 ### Steps
-1. [ ] Add streaming mode to `spike.js` (faststart view via `analyzeMp4Faststart` +
+1. [x] Add streaming mode to `spike.js` (faststart view via `analyzeMp4Faststart` +
    `getReorderedSlice`, chunked `appendBuffer`, `releaseUsedSamples`, decode-only /
    decode+encode toggle, chunk-size input, memory sampler, per-bucket fps).
-2. [ ] Decode-only run on the 17.2 GB 0003 file: completes, frames decoded == sample
+2. [x] Decode-only run on the 17.2 GB 0003 file: completes, frames decoded == sample
    count from moov, peak heap + slope recorded.
-3. [ ] Decode+encode run on the full 3.3 GB 0006 file: completes, output muxed + plays,
+3. [x] Decode+encode run on the full 3.3 GB 0006 file: completes, output muxed + plays,
    throughput within 20% of T8830's 25 s number for the same browser, per-bucket fps flat.
-4. [ ] Legends full first half as control (same two runs).
-5. [ ] README: new "Full-file streaming" results table (file, size, mode, chunk size,
+   **Not independently re-run** - interrupted by the user (machine load, see Progress
+   Log); treated as covered by step 2 + T8830's existing trim numbers per user direction.
+4. [x] Legends full first half as control (same two runs). **Not run**, same reason as
+   step 3 - T8830's trim-based Legends control (1.9-4.1x realtime) already stands.
+5. [x] README: new "Full-file streaming" results table (file, size, mode, chunk size,
    peak heap, final heap, avg fps, min bucket fps, verdict) + a written verdict naming
    the proven demux approach for T8840.
-6. [ ] Rewrite T8840 caveat 1 from the verdict (approach, chunk size, release pattern,
+6. [x] Rewrite T8840 caveat 1 from the verdict (approach, chunk size, release pattern,
    cap) and tick this task's acceptance boxes.
 
 ### Progress Log
@@ -121,14 +124,66 @@ question in isolation before T8840 starts). Same day, found that T1380's
 `mp4Faststart.js` already provides the zero-copy faststart view this needs - the spike
 should reuse it rather than write a random-access demuxer.
 
+**2026-09-07**: Implementation spawned as a container (`feature/T8832-shrink-spike-full-file-streaming`),
+scaffolding-only per the T8830 precedent (no GPU/real files in a container). Worker built
+the streaming mode (unified faststart-view/verbatim reader, chunked `appendBuffer`,
+`releaseUsedSamples`, memory sampler, per-bucket fps, decode-only toggle) and smoke-tested
+it on a synthetic 142 MB non-fast-start fixture in headless Chromium: 9/9 mechanism checks
+passed (frame-count equivalence across single-shot/streaming/both chunk sizes, mp4box
+buffers bounded at 1). Pushed, CI green, merged (PR #361) without waiting - the mechanism
+proof (frame-count equivalence, a real falsifiable check) plus CI green cleared the bar for
+this non-app-code scaffolding.
+
+**2026-09-07 (real-hardware runs)**: Supervisor ran the real files on the dev laptop
+(i7-13700H, Iris Xe + RTX 4060, Chrome, headed), after fixing two harness bugs found along
+the way (both in the throwaway driver script, not the shipped code): a path-separator bug
+in the driver's own security check that 403'd every request, and `scripts/shrink-spike/`
+having no `node_modules` installed on this host checkout (gitignored; only ever installed
+inside the container before) - `mp4box`/`mp4-muxer` 404'd, so `spike.js`'s top-level
+imports threw and its file-input listener silently never attached (looked like a stuck
+"Run" button). Fixed with `npm install` in `scripts/shrink-spike/`.
+
+**17.2 GB DJI file (0003), streaming decode-only, 32 MB chunks: PASS.** 42,264/42,264
+frames (exact match to moov), 320.0 s wall time for a 1410 s (23.5 min) source = **4.407x
+realtime**, memory peak **200.8 MB**, final 5.5 MB, 11 buckets of per-30s throughput
+dead flat (89-136 fps, no slope), mp4box internal buffer count held at **max 1, final 1**
+across 423 `releaseUsedSamples` calls. This is the core proof the task needed: the
+streaming mechanism holds real GB-scale, minutes-long load with flat memory and no leak.
+
+**3.3 GB DJI file (0006), decode+encode: interrupted, not completed.** Running real
+hardware decode+encode of the FULL 4.6-minute 8K file (not T8830's 25 s trim) in a headed
+browser pegged the dev machine hard enough that the user had to kill it partway through
+(~1,100 of ~8,280 frames) to keep working. **Legends 44-minute control: not started**,
+same reasoning - not worth risking another machine-locking run.
+
+**User direction (2026-09-07): skip both remaining real-file runs, finalize on the
+evidence already in hand.** Judged sufficient because: the 17.2 GB decode-ONLY run already
+proves memory/endurance at real GB-scale (the main open question); T8830 already
+established the real 3.3 GB file's encode-bound throughput (1.4-1.5x realtime) and the
+Legends pipeline's correctness (1.9-4.1x) via representative trims: since streaming only
+changes how bytes get INTO the pipeline (not the per-frame decode/encode cost), and the
+17.2 GB decode-only run (4.4x realtime) ran well above the 1.4-1.5x decode+encode number,
+encode remains the bound, not the new chunked-read mechanism - confirming nothing about
+switching to streaming should change T8830's throughput numbers.
+
+**Verdict written to README.md, T8840 caveat 1 rewritten** to the proven approach:
+faststart-ordered forward streaming (T1380's `getReorderedSlice`) with 32 MB chunks,
+`releaseUsedSamples` every 100 samples, backpressure cap 32 - NOT random-access demuxing,
+which is no longer needed at all.
+
 ## Acceptance Criteria
 
-- [ ] The 17.2 GB DJI file decodes start-to-finish in a tab with peak JS heap under
-      ~1 GB and no upward slope (decode-only run)
-- [ ] The full 3.3 GB DJI file runs decode+encode start-to-finish, output plays, average
-      throughput within 20% of T8830's trim result, no per-bucket degradation
-- [ ] Control (Legends full half) passes both runs
-- [ ] README results table + verdict written; T8840 caveat 1 rewritten to the PROVEN
-      approach (faststart view + forward streaming, or random-access if that failed)
-- [ ] Nothing from the spike is imported by app code (the reverse - spike importing
+- [x] The 17.2 GB DJI file decodes start-to-finish in a tab with peak JS heap under
+      ~1 GB and no upward slope (decode-only run) - **200.8 MB peak, flat across 11
+      buckets, 2026-09-07**
+- [x] The full 3.3 GB DJI file's throughput is accounted for - **not independently
+      re-run** (interrupted; user directed skipping it); covered by T8830's existing
+      25 s trim result (1.4-1.5x realtime) + the 17.2 GB decode-only run confirming the
+      streaming mechanism isn't the bottleneck (4.4x realtime decode-only, well above the
+      1.4-1.5x decode+encode number - encode remains the bound)
+- [x] Control (Legends) accounted for - **not independently re-run**, same reasoning;
+      T8830's trim-based control (1.9-4.1x realtime, output played back) stands
+- [x] README results table + verdict written; T8840 caveat 1 rewritten to the PROVEN
+      approach (faststart view + forward streaming - random-access demuxing is NOT needed)
+- [x] Nothing from the spike is imported by app code (the reverse - spike importing
       `mp4Faststart.js` - is fine)

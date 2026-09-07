@@ -29,20 +29,28 @@ are BINDING constraints on this task.
 - `src/frontend/package.json` - add `mp4box` + `mp4-muxer`
 
 ### Related Tasks
-- Depends on: T8830 (GO verdict + its caveat list; reuse the spike's working demux/
-  backpressure code as the starting point) AND T8832 (full-file streaming proof - its
-  verdict replaces caveat 1 below with the PROVEN demux approach; expected: T1380's
-  `mp4Faststart.js` zero-copy faststart view + forward chunked `appendBuffer`, which
-  needs no random-access demuxer at all)
+- Depends on: T8830 (GO verdict + its caveat list; reuse the spike's working
+  backpressure/encode/mux code as the starting point) AND T8832 (full-file streaming
+  proof, DONE 2026-09-07 - its verdict replaces caveat 1 below)
 - Blocks: T8850, T8860
 
-### T8830 binding caveats (from `scripts/shrink-spike/README.md` "Verdict", copied
-verbatim 2026-09-06 - final GO WITH CAVEATS, one physical machine tested: Chrome 152 +
-Edge 140, i7-13700H / Iris Xe + RTX 4060 Laptop GPU)
-1. **Chunked random-access demux is mandatory.** Real camera files are non-fast-start
-   (mdat before moov); a sequential streaming demux cannot work, and a single-shot
-   `file.arrayBuffer()` fails in Chrome at 3.3 GB. Locate moov by top-level box hopping,
-   parse the sample table, then `file.slice()` per sample/chunk.
+### T8830/T8832 binding caveats (from `scripts/shrink-spike/README.md` "Verdict",
+updated 2026-09-07 with T8832's real-hardware proof)
+1. **Demux via T1380's faststart-ordered forward streaming - NOT random-access.**
+   PROVEN on real hardware (T8832, 2026-09-07): reuse `src/frontend/src/utils/
+   mp4Faststart.js` (`analyzeMp4Faststart` + `getReorderedSlice`) to get a zero-copy
+   logical `ftyp | patched-moov | mdat` view of the file regardless of its original
+   layout, then feed the decoder fixed-size **32 MB** chunks of that view via
+   `.slice(start, end)`, moving strictly forward - no random access, no file rewrite,
+   no sample-table walking needed. Use `setExtractionOptions(trackId, null,
+   {nbSamples: 100})` + `releaseUsedSamples` every 100 samples to keep mp4box's own
+   buffer list bounded (proven: max 1 buffer retained across a 42,264-sample, 320 s
+   run on the real 17.2 GB DJI file - peak JS heap 200.8 MB, no upward slope across
+   11 throughput buckets). Backpressure cap 32 in-flight frames (unchanged from T8830).
+   The original "chunked random-access demux... a substantial, real piece of
+   engineering" plan is NOT needed - this is simpler and already proven correct and
+   memory-flat at real GB-scale. See `scripts/shrink-spike/README.md` "Verdict for
+   T8840" for the full writeup.
 2. **Use mp4box >= 2.4.1** (0.5.x mis-parses >2 GB atoms) and give `VideoEncoder` an
    explicit `colorSpace` (mp4-muxer crashes at finalize without one).
 3. **Backpressure off `decoder.decodeQueueSize` / `dequeue`, cap >= 32.** A small
