@@ -5,6 +5,7 @@ import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
 import AngleSwitcherBadge from './annotate/AngleSwitcherBadge';
+import FixTimingStrip from './annotate/FixTimingStrip';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
 import { useCurrentProfile, useProfileStore } from '../stores';
@@ -115,6 +116,8 @@ export function AnnotateModeView({
   // T8890: angle strip + source switching (null for angle-free games)
   angleData = null,
   angleSwitcher = null,
+  // T8900: Fix-timing strip data (null unless the mode is open)
+  fixTiming = null,
 }) {
   // T8892: display name of the active NON-backbone angle, or null. Drives the
   // Add/Edit Play editor's "cut from {angle}" chip so the user knows which camera
@@ -587,6 +590,7 @@ export function AnnotateModeView({
                       activeSourceSequence={angleSwitcher.activeSourceSequence}
                       onSelect={angleSwitcher.onSelect}
                       fallbackLabel={angleSwitcher.fallbackLabel}
+                      onRequestFixTiming={angleSwitcher.onRequestFixTiming}
                     />
                   )}
                 </div>
@@ -894,11 +898,26 @@ export function AnnotateModeView({
           />
         )}
 
+        {/* T8900: Fix-timing mode-swaps the primary CTA block (yellow strip in its
+            place; the timeline above stays visible so the bar can be dragged). */}
+        {!annotateFullscreen && !underCanvasEditor && fixTiming && (
+          <FixTimingStrip
+            angleName={fixTiming.angleName}
+            moved={fixTiming.moved}
+            onNudge={fixTiming.onNudge}
+            onPlayAngle={fixTiming.onPlayAngle}
+            onPlayMain={fixTiming.onPlayMain}
+            onReset={fixTiming.onReset}
+            onDone={fixTiming.onDone}
+            onCancel={fixTiming.onCancel}
+          />
+        )}
+
         {/* Primary "Add Play" CTA + secondary actions (hidden while the under-canvas
-            editor is open). T8130: the Add Play button is the single loudest element
-            on the screen; Playback Annotations + Share are demoted to text-level
-            prominence until the first clip exists. */}
-        {!annotateFullscreen && !underCanvasEditor && (
+            editor is open OR Fix-timing is active). T8130: the Add Play button is the
+            single loudest element on the screen; Playback Annotations + Share are
+            demoted to text-level prominence until the first clip exists. */}
+        {!annotateFullscreen && !underCanvasEditor && !fixTiming && (
           <div className="mt-3 sm:mt-6">
             <div className="space-y-3">
               {/* PRIMARY CTA — full-width, high-contrast, >=44pt tap target.

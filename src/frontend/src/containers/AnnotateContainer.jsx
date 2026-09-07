@@ -22,6 +22,7 @@ import { useWakeLock } from '../hooks/useWakeLock';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
 import { buildFullVideoTimeline, buildGameTimeline, hasOverlappingAngles } from '../modes/annotate/hooks/useVirtualTimeline';
+import { usePulseHighlight } from '../modes/annotate/hooks/usePulseHighlight';
 import { GameType } from '../constants/gameConstants';
 import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
@@ -118,6 +119,26 @@ function reelToastClipName(region) {
  *
  * @see APP_REFACTOR_PLAN.md Task 3.1 for refactoring context
  */
+
+/**
+ * T8900 Fix-timing: the ONLY post-insert writer of game_videos.offset_seconds.
+ * Fires exactly one PATCH with the FINAL offset (called once from the Done
+ * gesture — never per nudge/drag). Exported so the single-write contract is
+ * unit-testable in isolation. Throws on a non-2xx so the caller can surface it.
+ */
+export async function patchPlacement(gameId, sequence, offsetSeconds) {
+  const res = await apiFetch(
+    `${API_BASE}/api/games/${gameId}/videos/${sequence}/placement`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ offset_seconds: offsetSeconds }),
+    },
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res;
+}
+
 export function AnnotateContainer({
   // Video element ref and controls
   videoRef,
@@ -259,12 +280,33 @@ export function AnnotateContainer({
   // to the lane-aware builder; its different return shape is consumed by T8890,
   // which adapts the render path. No current intake produces overlap, so the new
   // path is inert until T8900/T8910 land.
+  // T8900 Fix-timing: a LOCAL pending offset for the angle being nudged. Null when
+  // Fix-timing is closed. { sequence, loadedOffset, pendingOffset } — never mutates
+  // loaded gameVideos; the PATCH fires only on the Done gesture (commitFixTiming).
+  const [fixTiming, setFixTiming] = useState(null);
+  // Bar-pulse when Done changes an angle's lane (shared helper; T8910 reuses it).
+  const { pulseKey: pulseSequence, pulseNonce, pulse } = usePulseHighlight();
+
+  // Preview videos = loaded gameVideos with the Fix-timing pending offset applied
+  // to the target angle only. Feeding this to buildGameTimeline recomputes the
+  // lane model + all wall<->virtual<->source maps live from the pending value, so
+  // the bar and every angle-clip position preview WITHOUT persisting anything.
+  const previewVideos = useMemo(() => {
+    if (!gameVideos || !fixTiming) return gameVideos;
+    return gameVideos.map((v) =>
+      v.sequence === fixTiming.sequence ? { ...v, offset_seconds: fixTiming.pendingOffset } : v,
+    );
+  }, [gameVideos, fixTiming]);
+
+  // T8880: pick the builder by real OVERLAP, not just video count. Routing keys on
+  // the LOADED gameVideos (a Fix-timing nudge must never flip a game off the
+  // overlap path mid-drag and lose the strip); the preview override only changes
+  // WHAT the overlap builder produces, never WHETHER it runs.
   const fullTimeline = useMemo(() => {
     if (!gameVideos || gameVideos.length <= 1) return null;
-    return hasOverlappingAngles(gameVideos)
-      ? buildGameTimeline(gameVideos)
-      : buildFullVideoTimeline(gameVideos);
-  }, [gameVideos]);
+    if (!hasOverlappingAngles(gameVideos)) return buildFullVideoTimeline(gameVideos);
+    return buildGameTimeline(previewVideos);
+  }, [gameVideos, previewVideos]);
 
   // Unified videoController — multi-video uses proxy's controller, single-video wraps the raw ref
   const singleVideoController = useMemo(() => ({
@@ -342,7 +384,9 @@ export function AnnotateContainer({
   // This writes only EPHEMERAL view state in response to the playhead (same shape
   // as the auto-deselect effect) — never any backend/store persistence.
   useEffect(() => {
-    if (!isOverlapTimeline || activeSourceSequence == null) return;
+    // Fix-timing owns the active source + player while open (A/B preview seeks it
+    // deliberately); auto-fallback must not fight it. Suppressed while fixTiming set.
+    if (!isOverlapTimeline || activeSourceSequence == null || fixTiming) return;
     const angle = fullTimeline.angles.find((a) => a.sequence === activeSourceSequence);
     if (!angle) return;
     const TOL = 0.05;
@@ -353,7 +397,96 @@ export function AnnotateContainer({
       multiVideo?.switchSource(backboneSeq, fileTime);
       showFallbackLabel();
     }
-  }, [isOverlapTimeline, activeSourceSequence, effectiveCurrentTime, fullTimeline, multiVideo, setActiveSourceSequence, showFallbackLabel]);
+  }, [isOverlapTimeline, activeSourceSequence, effectiveCurrentTime, fullTimeline, multiVideo, setActiveSourceSequence, showFallbackLabel, fixTiming]);
+
+  // ---- T8900: Fix-timing (nudge an angle into alignment) --------------------
+  // A/B play stop timer: each preview plays ~3s from the current playhead in a
+  // source, then pauses (compare the same game moment across cameras by ear).
+  const abStopTimerRef = useRef(null);
+  useEffect(() => () => { if (abStopTimerRef.current) clearTimeout(abStopTimerRef.current); }, []);
+
+  const playSourcePreview = useCallback((sequence) => {
+    if (!isOverlapTimeline || !multiVideo || sequence == null) return;
+    const { fileTime } = fullTimeline.virtualToSource(effectiveCurrentTime, sequence);
+    multiVideo.switchSource(sequence, fileTime);
+    videoController.play();
+    if (abStopTimerRef.current) clearTimeout(abStopTimerRef.current);
+    abStopTimerRef.current = setTimeout(() => { videoController.pause(); }, 3000);
+  }, [isOverlapTimeline, multiVideo, fullTimeline, effectiveCurrentTime, videoController]);
+
+  // Backbone (main camera) sequence covering the current playhead, for A/B play.
+  const backboneSeqAtPlayhead = useCallback(() => {
+    if (!isOverlapTimeline) return null;
+    return fullTimeline.virtualToActual(effectiveCurrentTime).videoSequence;
+  }, [isOverlapTimeline, fullTimeline, effectiveCurrentTime]);
+
+  // EXPORTED opener (T8910 reuses this for the no-timestamp amber-bar tap — keep
+  // it a stable, reusable callback, never inlined). Captures the angle's current
+  // offset as the loaded baseline and activates that source so the bar + A/B
+  // preview are already on it.
+  const openFixTiming = useCallback((sequence) => {
+    if (!isOverlapTimeline) return;
+    const v = gameVideos?.find((x) => x.sequence === sequence);
+    if (!v) return;
+    if (v.offset_seconds == null) {
+      // Internal invariant: an overlap game's videos are placed at insert (T8870).
+      console.warn('[FixTiming] angle has no offset_seconds; defaulting baseline to 0', sequence);
+    }
+    const loaded = v.offset_seconds != null ? v.offset_seconds : 0;
+    setFixTiming({ sequence, loadedOffset: loaded, pendingOffset: loaded });
+    switchToSource(sequence, effectiveCurrentTime);
+  }, [isOverlapTimeline, gameVideos, switchToSource, effectiveCurrentTime]);
+
+  const nudgeFixTiming = useCallback((delta) => {
+    setFixTiming((prev) => (prev ? { ...prev, pendingOffset: prev.pendingOffset + delta } : prev));
+  }, []);
+
+  const dragFixTimingTo = useCallback((absoluteOffset) => {
+    setFixTiming((prev) => (prev ? { ...prev, pendingOffset: absoluteOffset } : prev));
+  }, []);
+
+  const resetFixTiming = useCallback(() => {
+    setFixTiming((prev) => (prev ? { ...prev, pendingOffset: prev.loadedOffset } : prev));
+  }, []);
+
+  const cancelFixTiming = useCallback(() => {
+    if (abStopTimerRef.current) { clearTimeout(abStopTimerRef.current); videoController.pause(); }
+    setFixTiming(null);
+  }, [videoController]);
+
+  // Done: EXACTLY ONE PATCH with the final offset (never one per nudge/drag), then
+  // update loaded gameVideos in memory + recompute lanes. Pulse the bar if the
+  // move changed its lane assignment. Gesture-based persistence: this is the sole
+  // writer call site.
+  const commitFixTiming = useCallback(async () => {
+    const ft = fixTiming;
+    if (!ft) return;
+    const { sequence, pendingOffset } = ft;
+    if (abStopTimerRef.current) { clearTimeout(abStopTimerRef.current); videoController.pause(); }
+
+    // Lane-change detection: compare the angle's lane before vs after the move.
+    const before = buildGameTimeline(gameVideos);
+    const after = buildGameTimeline(
+      gameVideos.map((v) => (v.sequence === sequence ? { ...v, offset_seconds: pendingOffset } : v)),
+    );
+    const laneBefore = before?.angles.find((a) => a.sequence === sequence)?.lane;
+    const laneAfter = after?.angles.find((a) => a.sequence === sequence)?.lane;
+
+    // Commit to memory + close the mode BEFORE awaiting the network (optimistic;
+    // the offset is already the source of truth locally).
+    setGameVideos((prev) =>
+      prev?.map((v) => (v.sequence === sequence ? { ...v, offset_seconds: pendingOffset } : v)),
+    );
+    setFixTiming(null);
+    if (laneBefore !== laneAfter) pulse(sequence);
+
+    try {
+      await patchPlacement(annotateGameIdRef.current, sequence, pendingOffset);
+    } catch (err) {
+      console.warn('[FixTiming] placement PATCH failed:', err.message);
+      toast.error('Could not save the timing change. Please try again.');
+    }
+  }, [fixTiming, gameVideos, pulse, videoController]);
 
   // Clip selection state machine — single source of truth for selection + overlay
   const {
@@ -1686,6 +1819,13 @@ export function AnnotateContainer({
           angleSequences,
           activeSourceSequence,
           onSelectAngle: switchToSource,
+          // T8900 Fix-timing: bar entry point + drag-in-mode + lane-change pulse.
+          onRequestFixTiming: openFixTiming,
+          fixSequence: fixTiming?.sequence ?? null,
+          fixPendingOffset: fixTiming?.pendingOffset ?? 0,
+          onFixDragTo: dragFixTimingTo,
+          pulseSequence,
+          pulseNonce,
         }
       : null,
     angleSwitcher: isOverlapTimeline
@@ -1694,6 +1834,23 @@ export function AnnotateContainer({
           activeSourceSequence,
           fallbackLabel,
           onSelect: (seq) => switchToSource(seq, effectiveCurrentTime),
+          onRequestFixTiming: openFixTiming,
+        }
+      : null,
+    // T8900: Fix-timing strip data (null unless the mode is open). The strip
+    // replaces the primary CTA block under the canvas (T8600 mode-swap pattern).
+    fixTiming: fixTiming
+      ? {
+          sequence: fixTiming.sequence,
+          angleName:
+            fullTimeline?.angles.find((a) => a.sequence === fixTiming.sequence)?.name ?? 'this angle',
+          moved: fixTiming.pendingOffset - fixTiming.loadedOffset,
+          onNudge: nudgeFixTiming,
+          onPlayAngle: () => playSourcePreview(fixTiming.sequence),
+          onPlayMain: () => playSourcePreview(backboneSeqAtPlayhead()),
+          onReset: resetFixTiming,
+          onDone: commitFixTiming,
+          onCancel: cancelFixTiming,
         }
       : null,
     // Angle display name for a clip's source, or null for backbone/angle-free.
@@ -1743,6 +1900,7 @@ export function AnnotateContainer({
       setAnnotateGameId(null);
       setGameVideos(null);
       setActiveVideoIndex(0);
+      setFixTiming(null);
       resetAnnotate();
       setAnnotateHasSelectedClip(false);
     }, [annotateVideoUrl, resetAnnotate, setAnnotateHasSelectedClip]),

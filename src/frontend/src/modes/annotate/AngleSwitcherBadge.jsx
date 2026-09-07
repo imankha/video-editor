@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Video, ChevronUp } from 'lucide-react';
+import { Video, ChevronUp, Clock } from 'lucide-react';
 
 /**
  * AngleSwitcherBadge (T8890) — the floating over-video control that tells the
@@ -23,6 +23,9 @@ export default function AngleSwitcherBadge({
   activeSourceSequence = null,
   onSelect,
   fallbackLabel = null,
+  // T8900: same "Fix timing" entry point as the angle bar's long-press menu,
+  // offered per angle source (non-backbone) inside the popover.
+  onRequestFixTiming,
 }) {
   const [open, setOpen] = useState(false);
 
@@ -108,6 +111,22 @@ export default function AngleSwitcherBadge({
                   </button>
                 );
               })}
+              {onRequestFixTiming && sources.some((s) => !s.isBackbone) && (
+                <div className="border-t border-gray-700">
+                  {sources.filter((s) => !s.isBackbone).map((s) => (
+                    <button
+                      key={`fix-${s.sequence}`}
+                      type="button"
+                      data-testid={`angle-fix-timing-${s.sequence}`}
+                      onClick={() => { setOpen(false); onRequestFixTiming(s.sequence); }}
+                      className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-yellow-200 hover:bg-gray-700 transition-colors"
+                    >
+                      <Clock size={11} className="shrink-0" />
+                      <span className="truncate">Fix timing: {s.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           <button

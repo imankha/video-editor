@@ -209,6 +209,18 @@ body {
   animation: quest-pulse 2s ease-in-out infinite;
 }
 
+/* --- Angle-bar pulse (T8900 Fix-timing lane-change confirm; T8910 landing pulse) ---
+   A violet ring that expands and fades TWICE, drawing the eye to a bar whose lane
+   assignment just changed. Shared via usePulseHighlight / PULSE_CLASS. */
+@keyframes angle-pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.75); }
+  60%  { box-shadow: 0 0 0 7px rgba(139, 92, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+}
+.angle-pulse {
+  animation: angle-pulse-ring 0.6s ease-out 2;
+}
+
 /* --- Card container --- */
 .quest-card {
   background: linear-gradient(145deg, #1a1520 0%, #0f0d14 60%, #1a1018 100%);
