@@ -1,6 +1,6 @@
 # T8900: Fix timing: nudge an angle into alignment
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-05
