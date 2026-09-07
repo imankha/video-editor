@@ -159,8 +159,9 @@ test.describe('T8760 — clip editor single-playhead + rename: live QA', () => {
     await expect(page.locator('button[title="Play"]:visible')).toBeVisible();
     await saveEvidence(page, 'T8760-4-spacebar-pause-matches-button');
 
-    // --- Item 7: rename to "Clip Out Play" (only if not already reeled) ---
-    const clipOutBtn = strip.getByRole('button', { name: 'Clip Out Play' });
+    // --- Item 7: reel action button (T8960 renamed "Clip Out Play" -> "Clip
+    // Play"; only shown if not already reeled) ---
+    const clipOutBtn = strip.getByRole('button', { name: 'Clip Play' });
     const alreadyReeled = await strip.getByText('Reel created').count();
     if (await clipOutBtn.count()) {
       await expect(clipOutBtn).toBeVisible();
