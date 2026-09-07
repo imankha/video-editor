@@ -59,7 +59,7 @@ POST_V023_COLUMNS = {
     "intro_cards": ["subtitle_text"],                                                    # v035
     "raw_clips": ["reel_source_start_time", "reel_source_end_time"],                  # v049
     "pending_uploads": ["kind"],                                                       # v050
-    "game_videos": ["recorded_at", "offset_seconds"],                                 # v051
+    "game_videos": ["recorded_at", "offset_seconds", "original_filename"],             # v051, v052
     # v048 (T7830) delete-only R2 cleanup, adds no columns.
     # v049 (T8070 reel status timestamp staleness) adds raw_clips.reel_source_start_time/
     #   reel_source_end_time (above). Every hot read/write is column_exists-guarded:
@@ -170,7 +170,14 @@ POST_V023_COLUMNS = {
     #   pre-existing prefix-sum SELECT). The insert-time WRITE (create_game/add_game_videos)
     #   only runs at head (JIT seam) and is benign-additive (columns default NULL), so it
     #   needs no refuse-guard like v050's kind='clip'.
-HEAD_VERSION_AUDITED = 51  # v051 (T8870): game_videos.recorded_at + offset_seconds, column_exists-guarded reads
+    # v052 (T8892 real angle names) adds game_videos.original_filename (above). The one
+    #   hot read that names it -- games.py _get_game_videos_response (driven by
+    #   test_game_detail below via get_game) -- guards it with its OWN column_exists
+    #   check (has_filename), separate from v051's has_placement, since v052 is a
+    #   distinct migration a peer machine can lag behind; it projects NULL when absent
+    #   (never a 500). The insert-time WRITE (create_game/add_game_videos) only runs at
+    #   head (JIT seam) and is benign-additive (column defaults NULL).
+HEAD_VERSION_AUDITED = 52  # v052 (T8892): game_videos.original_filename, column_exists-guarded read
 
 
 def _cleanup(user_id: str) -> None:

@@ -39,10 +39,11 @@ const baseProps = {
 
 // A 3-lane deep-overlap angleData (mirrors buildGameTimeline's return shape).
 const angleData = {
+  // T8892: names are stems of original_filename (no extension), never the hash url.
   angles: [
-    { sequence: 2, lane: 1, virtualStart: 40, virtualEnd: 55, name: 'a.mp4' },
-    { sequence: 3, lane: 2, virtualStart: 42, virtualEnd: 57, name: 'b.mp4' },
-    { sequence: 4, lane: 3, virtualStart: 44, virtualEnd: 59, name: 'c.mp4' },
+    { sequence: 2, lane: 1, virtualStart: 40, virtualEnd: 55, name: 'endzone' },
+    { sequence: 3, lane: 2, virtualStart: 42, virtualEnd: 57, name: 'sideline' },
+    { sequence: 4, lane: 3, virtualStart: 44, virtualEnd: 59, name: 'corner' },
   ],
   laneCount: 3,
   extensions: [{ type: 'extension', sourceSequence: 2, virtualStart: 90, virtualEnd: 100 }],

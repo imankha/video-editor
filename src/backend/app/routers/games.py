@@ -282,6 +282,11 @@ class VideoReference(BaseModel):
     # client couldn't read one (never a fabricated time). Reject a non-parseable
     # string at the boundary (422) rather than silently dropping it.
     recorded_at: str | None = Field(None, description="Embedded recording time (ISO-8601 UTC), or null")
+    # T8892: the user's filename WITH extension exactly as given ("sideline.mp4").
+    # Evidence for the angle's display name (the frontend strips path/extension);
+    # null when the client couldn't supply one (never fabricated). Not validated --
+    # any string is a legitimate filename.
+    original_filename: str | None = Field(None, description="Original upload filename with extension, or null")
 
     @field_validator("recorded_at")
     @classmethod
@@ -379,11 +384,15 @@ def _insert_game_videos(cursor, game_id: int, videos: list[VideoReference],
                 if height is None:
                     height = meta.get("height")
         offset_seconds = offsets[idx] if offsets is not None else None
+        # T8892: original_filename is written unconditionally here. Like recorded_at,
+        # the WRITE path is always at head (JIT seam migrates before any insert), so
+        # naming the v052 column can't fail; the READ (_get_game_videos_response) is
+        # column-guarded for rolling-deploy skew instead.
         cursor.execute("""
             INSERT INTO game_videos (game_id, blake3_hash, sequence, duration,
                                      video_width, video_height, video_size, fps,
-                                     recorded_at, offset_seconds)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     recorded_at, offset_seconds, original_filename)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             game_id,
             video.blake3_hash.lower(),
@@ -395,6 +404,7 @@ def _insert_game_videos(cursor, game_id: int, videos: list[VideoReference],
             fps,
             _normalize_recorded_at(video.recorded_at),
             offset_seconds,
+            video.original_filename,
         ))
 
 
@@ -406,8 +416,14 @@ def _get_game_videos_response(cursor, game_id: int) -> list:
     # a peer machine hasn't migrated yet would 500 the SELECT even with zero rows.
     has_placement = column_exists(cursor, "game_videos", "offset_seconds")
     placement_cols = ", recorded_at, offset_seconds" if has_placement else ""
+    # T8892: original_filename ships in a SEPARATE migration (v052) from placement
+    # (v051), so it needs its OWN guard -- a peer machine mid-rolling-deploy can be at
+    # v051 (offset_seconds present, original_filename not). Naming an absent column
+    # would 500 the SELECT.
+    has_filename = column_exists(cursor, "game_videos", "original_filename")
+    filename_col = ", original_filename" if has_filename else ""
     cursor.execute(f"""
-        SELECT blake3_hash, sequence, duration, video_width, video_height, video_size{placement_cols}
+        SELECT blake3_hash, sequence, duration, video_width, video_height, video_size{placement_cols}{filename_col}
         FROM game_videos WHERE game_id = ? ORDER BY sequence
     """, (game_id,))
     rows = cursor.fetchall()
@@ -426,6 +442,7 @@ def _get_game_videos_response(cursor, game_id: int) -> list:
             'video_height': row['video_height'],
             'recorded_at': row['recorded_at'] if has_placement else None,
             'offset_seconds': row['offset_seconds'] if has_placement else None,
+            'original_filename': row['original_filename'] if has_filename else None,
         })
     return videos
 

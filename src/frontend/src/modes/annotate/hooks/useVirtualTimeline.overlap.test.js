@@ -8,17 +8,20 @@ import { buildGameTimeline, buildFullVideoTimeline, hasOverlappingAngles } from 
 // makes a clip created while an angle is active carry THAT angle's sequence.
 
 // video B sits entirely inside video A (the classic sideline-phone-during-game case).
+// T8892: `url` is the REAL R2 shape (content-addressed by blake3 hash); the angle
+// name comes from `original_filename`, NEVER the url. A hash url + a human filename
+// is the exact regression this task fixes -- assertions must read the filename.
 const twoSource = [
-  { sequence: 1, duration: 1500, offset_seconds: 0, url: 'main.mp4' },
-  { sequence: 2, duration: 300, offset_seconds: 600, url: 'sideline.mp4' },
+  { sequence: 1, duration: 1500, offset_seconds: 0, url: 'games/67ef5eefeed423a69.mp4', original_filename: 'main-camera.mp4' },
+  { sequence: 2, duration: 300, offset_seconds: 600, url: 'games/1c0ffee9900dbeef.mp4', original_filename: 'sideline.mp4' },
 ];
 
 // EPIC deep-overlap: three angles concurrent over the backbone at ~600-960s.
 const deepOverlap = [
-  { sequence: 1, duration: 1500, offset_seconds: 0, url: 'main.mp4' },
-  { sequence: 2, duration: 300, offset_seconds: 600, url: 'a.mp4' },
-  { sequence: 3, duration: 300, offset_seconds: 650, url: 'b.mp4' },
-  { sequence: 4, duration: 300, offset_seconds: 660, url: 'c.mp4' },
+  { sequence: 1, duration: 1500, offset_seconds: 0, url: 'games/aaa111.mp4', original_filename: 'main-camera.mp4' },
+  { sequence: 2, duration: 300, offset_seconds: 600, url: 'games/bbb222.mp4', original_filename: 'endzone.mp4' },
+  { sequence: 3, duration: 300, offset_seconds: 650, url: 'games/ccc333.mp4', original_filename: 'sideline.mp4' },
+  { sequence: 4, duration: 300, offset_seconds: 660, url: 'games/ddd444.mp4', original_filename: 'corner.mp4' },
 ];
 
 describe('buildGameTimeline — T8890 playback + source surface', () => {
@@ -32,7 +35,34 @@ describe('buildGameTimeline — T8890 playback + source surface', () => {
     const t = buildGameTimeline(twoSource);
     expect(t.lanes[0].map((v) => v.sequence)).toEqual([1]);
     expect(t.angles.map((a) => a.sequence)).toEqual([2]);
-    expect(t.angles[0].name).toBe('sideline'); // filename stem
+    expect(t.angles[0].name).toBe('sideline'); // stem of original_filename, NOT the hash url
+  });
+
+  it('T8892: angle name derives from original_filename, never the content-hash url', () => {
+    const t = buildGameTimeline(twoSource);
+    // The url is `games/1c0ffee9900dbeef.mp4`; the name must be the human filename.
+    expect(t.angles[0].name).toBe('sideline');
+    expect(t.angles[0].name).not.toMatch(/[0-9a-f]{8}/i); // no hash leaked in
+  });
+
+  it('T8892: an angle with NO original_filename falls back to "Extra clip {n}", never a hash', () => {
+    const noName = [
+      { sequence: 1, duration: 1500, offset_seconds: 0, url: 'games/deadbeef01.mp4', original_filename: 'main-camera.mp4' },
+      { sequence: 2, duration: 300, offset_seconds: 600, url: 'games/cafef00d02.mp4', original_filename: null },
+    ];
+    const t = buildGameTimeline(noName);
+    expect(t.angles[0].name).toBe('Extra clip 1'); // 1-based lane order among angles
+    expect(t.angles[0].name).not.toMatch(/[0-9a-f]{8}/i);
+  });
+
+  it('T8892: long filenames are middle-ellipsized to 14 chars', () => {
+    const longName = [
+      { sequence: 1, duration: 1500, offset_seconds: 0, url: 'games/x1.mp4', original_filename: 'main-camera.mp4' },
+      { sequence: 2, duration: 300, offset_seconds: 600, url: 'games/x2.mp4', original_filename: 'GX010042-sideline-endzone-camera.mp4' },
+    ];
+    const t = buildGameTimeline(longName);
+    expect(t.angles[0].name).toContain('…');
+    expect(t.angles[0].name.length).toBeLessThanOrEqual(14);
   });
 
   it('sourceTimeToVirtual round-trips against virtualToSource for the backbone', () => {

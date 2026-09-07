@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Star, X, Plus, Pencil, Crop, ChevronDown, ChevronUp } from 'lucide-react';
+import { Star, X, Plus, Pencil, Crop, ChevronDown, ChevronUp, Video } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
@@ -78,6 +78,27 @@ function StarRating({ rating, onRatingChange, size = 24 }) {
 }
 
 /**
+ * CutFromAngleChip (T8892) — while the active source is a non-backbone angle, the
+ * Add/Edit Play editor tells the user WHICH camera this play will be cut from.
+ * Violet family per EPIC decision 8 (matches AngleLanes / AngleSwitcherBadge), a
+ * camera glyph, and a plain-language microcopy line. Renders NOTHING when `name`
+ * is falsy (backbone / angle-free), so an angle-free game's editor is byte-
+ * identical to before this task.
+ */
+function CutFromAngleChip({ name }) {
+  if (!name) return null;
+  return (
+    <div data-testid="cut-from-angle" className="flex flex-col gap-1 mb-3">
+      <span className="inline-flex items-center gap-1 self-start rounded-full border border-violet-500/40 bg-violet-600/20 px-2 py-0.5 text-xs font-medium text-violet-300">
+        <Video size={12} className="shrink-0" />
+        from {name}
+      </span>
+      <p className="text-xs text-violet-300/80">This play will be cut from {name}.</p>
+    </div>
+  );
+}
+
+/**
  * AnnotateFullscreenOverlay - Overlay that appears when paused in fullscreen
  *
  * Features:
@@ -117,6 +138,11 @@ export function AnnotateFullscreenOverlay({
   // T8600 §2.5: required per-render-site discriminator for the
   // add_clip_opened_no_save beacon (no default — see the effect below).
   surface,
+  // T8892: display name of the active NON-backbone angle (from buildGameTimeline
+  // via AnnotateModeView), or null when cutting from the backbone / an angle-free
+  // game. Non-null => this play is being cut from an angle; render the "cut from"
+  // chip + microcopy. Null => zero pixels (angle-free games stay byte-identical).
+  activeSourceName = null,
 }) {
   const isEditMode = !!existingClip;
   const isMobile = useIsMobile();
@@ -448,6 +474,9 @@ export function AnnotateFullscreenOverlay({
           </div>
         </div>
 
+        {/* T8892: which camera this play is cut from (angle-active only). */}
+        <CutFromAngleChip name={activeSourceName} />
+
         {/* T8140: reassurance so a first-time user knows the defaults aren't
             permanent — lowers the perceived cost of a one-tap save. Create only. */}
         {!isEditMode && (
@@ -719,6 +748,13 @@ export function AnnotateFullscreenOverlay({
             </button>
           </div>
 
+          {/* T8892: which camera this play is cut from (angle-active only). */}
+          {activeSourceName && (
+            <div className="px-4 pt-2">
+              <CutFromAngleChip name={activeSourceName} />
+            </div>
+          )}
+
           {/* Scrub row — non-compact, full strip width */}
           <div className="px-4 pt-3">
             <ClipScrubRegion
@@ -930,6 +966,10 @@ export function AnnotateFullscreenOverlay({
   if (layout === 'landscape-inline') {
     return (
       <div data-add-clip-form className="border-t border-gray-700 px-3 py-2">
+        {/* T8892: which camera this play is cut from (angle-active only). Same
+            chip as the other editor surfaces so landscape phone isn't the one
+            orientation left without it. */}
+        <CutFromAngleChip name={activeSourceName} />
         <ClipScrubRegion
           currentTime={currentTime}
           videoDuration={videoDuration}

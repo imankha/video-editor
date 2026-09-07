@@ -251,10 +251,12 @@ class TestV051Migration:
         assert 51 in versions, "v051 must be registered in profile_db MIGRATIONS"
 
     def test_migration_head_is_derived_not_literal(self):
-        """Guard against a hardcoded head: the latest registered version must be
-        v051 after this task (fragility rule from the task file's step 6)."""
+        """v051 is registered and at or below head. Asserted as `>=`, NOT `== 51`,
+        so a later migration (v052 T8892, etc.) legitimately advancing the head
+        never trips this guard -- the hardcoded-migration-head landmine."""
         head = max(m.version for m in MIGRATIONS)
-        assert head == 51
+        assert 51 in [m.version for m in MIGRATIONS]
+        assert head >= 51
 
     def test_fresh_ensure_database_has_the_columns(self, tmp_path):
         """A fresh deploy's DDL must include both columns directly (fresh DBs

@@ -116,6 +116,15 @@ export function AnnotateModeView({
   angleData = null,
   angleSwitcher = null,
 }) {
+  // T8892: display name of the active NON-backbone angle, or null. Drives the
+  // Add/Edit Play editor's "cut from {angle}" chip so the user knows which camera
+  // this play will be cut from. Null for backbone / angle-free games (chip = zero
+  // pixels), keeping angle-free editors byte-identical.
+  const activeSourceName = useMemo(() => {
+    if (!angleData || angleData.activeSourceSequence == null) return null;
+    return angleData.angles.find(a => a.sequence === angleData.activeSourceSequence)?.name ?? null;
+  }, [angleData]);
+
   // Derive existingClip from state machine's selectedRegionId.
   // EDITING(clipId) keeps the ID stable during scrub, so no frozen ref needed.
   const existingClip = useMemo(() => {
@@ -646,6 +655,7 @@ export function AnnotateModeView({
                 videoController={videoController}
                 isFullscreen={annotateFullscreen}
                 surface="dock_fullscreen"
+                activeSourceName={activeSourceName}
                 teammateSuggestions={teammateSuggestions}
                 onScrubDragChange={isMobile ? setIsDraggingScrub : undefined}
                 newClipLayerIsMine={newClipLayerIsMine}
@@ -721,6 +731,7 @@ export function AnnotateModeView({
                     isFullscreen={false}
                     layout={isLandscape ? 'landscape-inline' : 'inline'}
                     surface="fullscreen_mobile"
+                    activeSourceName={activeSourceName}
                     teammateSuggestions={teammateSuggestions}
                     onScrubDragChange={setIsDraggingScrub}
                     newClipLayerIsMine={newClipLayerIsMine}
@@ -832,6 +843,7 @@ export function AnnotateModeView({
                 isFullscreen={false}
                 layout="strip"
                 surface="inline_desktop"
+                activeSourceName={activeSourceName}
                 teammateSuggestions={teammateSuggestions}
                 newClipLayerIsMine={newClipLayerIsMine}
                 nextClipNumber={nextClipNumber}
@@ -861,6 +873,7 @@ export function AnnotateModeView({
               isFullscreen={false}
               layout="inline"
               surface="sheet_mobile"
+              activeSourceName={activeSourceName}
               teammateSuggestions={teammateSuggestions}
               newClipLayerIsMine={newClipLayerIsMine}
               nextClipNumber={nextClipNumber}

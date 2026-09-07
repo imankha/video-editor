@@ -349,6 +349,20 @@ describe('uploadManager', () => {
       expect(body.videos[0].recorded_at).toBe(null);
     });
 
+    it('T8892: puts the File name on the create payload as original_filename', async () => {
+      // The angle name is derived from this. Read straight off the File (File.name),
+      // not threaded from the picker.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'already_owned', game_id: 9, name: 'G', video_url: null }),
+      });
+      const mockFile = new File(['test'], 'sideline.mp4', { type: 'video/mp4' });
+      await uploadGame(mockFile, () => {}, {});
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.videos[0].original_filename).toBe('sideline.mp4');
+    });
+
     it('should handle dedup (video exists in R2, new game created)', async () => {
       // Flow: hash → createGame (status:'created') → ensureVideoInR2 → prepare-upload
       // (status:'exists', skip upload) → activateGame → complete.

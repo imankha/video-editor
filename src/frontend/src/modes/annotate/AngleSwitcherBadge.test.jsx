@@ -7,10 +7,12 @@ const twoSources = [
   { sequence: 2, name: 'sideline', isBackbone: false },
 ];
 
+// T8892: angle names are stems of the original filename (no extension), e.g.
+// "endzone", NOT "endzone.mp4" and never the R2 content hash.
 const threeSources = [
   { sequence: 1, name: 'Main camera', isBackbone: true },
-  { sequence: 2, name: 'a.mp4', isBackbone: false },
-  { sequence: 3, name: 'b.mp4', isBackbone: false },
+  { sequence: 2, name: 'endzone', isBackbone: false },
+  { sequence: 3, name: 'sideline', isBackbone: false },
 ];
 
 describe('AngleSwitcherBadge', () => {

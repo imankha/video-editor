@@ -1,5 +1,28 @@
 ---
 domain: annotate
+updated: 2026-09-07 (T8892 gives angles REAL names + the "cut from {angle}" chip, fixing two T8890 defects
+found on a live overlap game. **Angle names: single source of truth = `buildGameTimeline` (useVirtualTimeline.js
+~L616), reading the video's `original_filename`, NEVER the url** -- the url is content-addressed
+(`games/{blake3}.mp4`), so the old `filenameStem(v.url)` labelled every angle with its hash. New rule: stem of
+`original_filename` (drop last extension) -> `middleEllipsis(_, 14)`; absent -> `Extra clip {n}` (n = 1-based
+offset/lane order among angles); backbone stays "Main camera". Every surface (bar, AngleSwitcherBadge, ClipListItem
+pill, tooltip, the new chip, T8900/T8910) reads `angle.name` -- do NOT compute a name anywhere else. NEW column
+`game_videos.original_filename TEXT NULL` (profile_db **v052**, additive, NO backfill -- the datum never existed
+for old rows, so legacy rows honestly show `Extra clip {n}`, not a fabricated name). Threaded picker->backend as
+the user's filename WITH extension ("sideline.mp4"); the FRONTEND strips path/ext for display. Backend: `VideoReference.
+original_filename`, written unconditionally in `_insert_game_videos`, read column-guarded (its OWN `has_filename`
+guard, separate from v051's `has_placement`) in `_get_game_videos_response` -- so all four video projections
+(create/attach/get/load) carry it. **Frontend threading is NOT the T8870 hop-for-hop pattern:** `original_filename`
+is read straight off `File.name` at the three uploadManager videoRef sinks (uploadGame / uploadMultiVideoGame /
+attachVideoToExistingGame) -- File.name is native and authoritative there, so threading it through picker->store
+would duplicate a value already in hand (single-source-of-truth). recorded_at HAD to be threaded because it comes
+from a probe, not the File. **Chip:** `CutFromAngleChip` (AnnotateFullscreenOverlay.jsx) -- violet `from {name}` +
+microcopy "This play will be cut from {name}." in the Add/Edit Play editor's formBody (overlay/inline) AND strip
+header, gated on a new `activeSourceName` prop that AnnotateModeView derives from `angleData` (angle active =>
+non-null; backbone/angle-free => null => zero pixels, editor byte-identical). Editing/selecting an angle clip
+auto-activates its source (handleSelectRegion -> switchToSource, T8890, both SELECTED+EDITING branches), so the chip
+shows the right camera while editing. Angle UI still INERT in prod (no real overlap game until T8900/T8910); browser
+live-drive of a seeded overlap game owed on staging. Prior:)
 updated: 2026-09-06 (T8890 renders T8880's overlap model in Annotate: the violet ANGLE STRIP + source
 switching. NEW components `modes/annotate/AngleLanes.jsx` (per-lane bars above the clip lanes, mobile ONE
 merged `h-3.5` strip, positioned with the shared EDGE_PADDING calc) and `modes/annotate/AngleSwitcherBadge.jsx`

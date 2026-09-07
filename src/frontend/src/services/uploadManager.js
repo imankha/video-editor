@@ -926,6 +926,12 @@ export async function uploadGame(file, onProgress, options = {}) {
       file_size: hashResult.file_size,
       // T8870: embedded recording time (ISO-8601) for overlap placement, or null.
       recorded_at: options.videoRecordedAt || null,
+      // T8892: the user's filename -> the angle's display name. Read straight off
+      // the File (File.name is native and authoritative here) rather than threaded
+      // through the picker/store, which would duplicate a value already in hand
+      // (single-source-of-truth). recorded_at HAD to be threaded because it comes
+      // from a probe, not the File; a filename does not.
+      original_filename: file.name || null,
     };
 
     // Step 2: Create game as 'pending' — game_id available for clip persistence.
@@ -1072,6 +1078,10 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
         // null. Flows into both the create (video 1) and attach (videos 2..N)
         // payloads since addVideosToGame sends this same videoRef.
         recorded_at: metadata.recorded_at || null,
+        // T8892: the user's filename -> the angle's display name. Read off the
+        // File (files[i]) directly — see uploadGame for why it isn't threaded.
+        // Flows into both create (video 1) and attach (videos 2..N).
+        original_filename: file.name || null,
       };
 
       // Step B: First file — create game as pending before upload.
@@ -1186,6 +1196,9 @@ export async function attachVideoToExistingGame(gameId, file, onProgress) {
     duration: null,
     width: null,
     height: null,
+    // T8892: the attached file's name -> the new angle's display name. `file` is
+    // the attach param; File.name is authoritative here (see uploadGame).
+    original_filename: file.name || null,
   };
   const result = await addVideosToGame(gameId, [videoRef]);
 

@@ -1,5 +1,15 @@
 ---
 domain: persistence-sync
+updated: 2026-09-07 (T8892: profile_db head v051 -> v052 (game_videos.original_filename TEXT NULL, for
+real angle names). Plain additive JIT-seam migration -- guarded PRAGMA table_info ALTER, idempotent,
+tuple row-factory, NO backfill (the datum never existed for pre-existing rows; a NULL is the honest
+"no filename" state the frontend renders as "Extra clip {n}"). No CAS/sync-path change, no new sync
+call site; runner bumps PRAGMA user_version. game_videos stays profile_db-only -- pg.py `_SCHEMA_DDL`
+untouched. Structural migration-window guard: HEAD_VERSION_AUDITED 51 -> 52, original_filename added to
+POST_V023_COLUMNS; the one hot read (_get_game_videos_response) guards it with its OWN column_exists
+check (has_filename), SEPARATE from v051's has_placement, since v052 is a distinct migration a peer can
+lag behind. The write (create_game/add_game_videos insert) only runs at head (JIT seam) and is
+benign-additive. Prior:)
 updated: 2026-09-06 (T8870: profile_db head v050 -> v051 (game_videos.recorded_at + offset_seconds).
 Plain additive JIT-seam migration -- guarded PRAGMA table_info ALTER + a prefix-sum offset_seconds
 backfill (idempotent, WHERE offset_seconds IS NULL, tuple row-factory), no CAS/sync-path change, no
