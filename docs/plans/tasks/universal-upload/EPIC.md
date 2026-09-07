@@ -32,6 +32,15 @@ overrides.)
    overlap -> timestamps are export times -> discard them WHOLESALE and fall back to
    filename heuristics (half words, camera counters, trailing numbers). Neither works ->
    name order + yellow "please check" state. NEVER block submit on ambiguity.
+   **UNDER REVISION (2026-09-06, user direction) - see T8824.** The wholesale discard
+   conflicts with decision 7: a phone clip filmed during the main camera is GENUINE
+   overlap and is this epic's headline scenario, but this rule makes the picker blind to
+   it. T8824 replaces the discard with a placement model that keeps trustworthy
+   timestamps, recognises genuine overlap as angles (possibly several levels), treats
+   overlap as an export-time artifact only when the evidence says so (Legends), and
+   shows the result as stacked lanes in the picker. Until it lands, T8872 (hotfix)
+   makes the shipped rule at least self-consistent: discarded timestamps are no longer
+   sent to the backend as `recorded_at`. "Never block submit" still stands.
 2. **Junk filter:** `.LRF`/`.THM`/`.SRT`/images/hidden files silently excluded, disclosed
    in a quiet gray collapsible line. `.LRF` proxies are kept CLIENT-SIDE as preview
    sources for the shrink crop UI, never uploaded.
@@ -74,13 +83,16 @@ overrides.)
 | T8810 | [Universal dropzone replaces Per Game / Per Half](T8810-universal-dropzone.md) | STAGING |
 | T8820 | [Confirm strip + reorder editor](T8820-confirm-strip-reorder.md) | STAGING |
 | T8822 | [Consolidate footage list + overlap badge](T8822-consolidate-footage-list-overlap-badge.md) | STAGING |
+| T8824 | [Intake: overlap is a signal, not a disqualifier (layered order editor)](T8824-intake-overlap-as-layers.md) | TODO |
 | T8830 | [Shrink spike: WebCodecs 8K benchmark (go/no-go)](T8830-shrink-spike-benchmark.md) | WAITING ON USER |
 | T8840 | [Shrink pipeline core (worker transcode)](T8840-shrink-pipeline-core.md) | TODO |
 | T8850 | [Shrink UI: offer card + crop step + presets](T8850-shrink-ui-crop-step.md) | TODO |
 | T8860 | [Shrink upload integration + fallback](T8860-shrink-upload-integration.md) | TODO |
 | T8870 | [Overlap schema: recorded_at + offset_seconds](T8870-overlap-schema-placement.md) | STAGING |
+| T8872 | [Hotfix: send recorded_at only when the intake trusted the timestamps](T8872-gate-recorded-at-on-trusted-timestamps.md) | TODO |
 | T8880 | [Game timeline v2: lanes, backbone, extensions](T8880-game-timeline-lanes.md) | STAGING |
 | T8890 | [Angle strip UI + source switching](T8890-angle-strip-source-switching.md) | WAITING ON USER |
+| T8892 | [T8890 follow-ups: real angle names + the "cut from {angle}" chip](T8892-angle-names-and-cut-from-chip.md) | TODO |
 | T8900 | [Fix timing: nudge an angle into alignment](T8900-fix-timing-alignment.md) | TODO |
 | T8910 | [Add footage from inside Annotate](T8910-add-footage-in-annotate.md) | TODO |
 
@@ -89,6 +101,13 @@ T8860 (its verdict can re-scope them). T8870 -> T8880 -> T8890 -> T8900 build an
 order. T8910 needs T8810 (picker) and benefits from T8870 (placement) - it is last.
 If T8830's benchmark says NO-GO for client-side 8K, tasks T8840-T8860 return to the user
 for a re-scope decision (server-side alternative is NOT viable - upload is the bottleneck).
+
+Added 2026-09-06 after the first live test of the angle track: **T8872** (P1 hotfix, do
+first - stops discarded timestamps leaking into `recorded_at`) -> merge T8890 (#356) ->
+**T8892** (real angle names via a v052 `original_filename` column + the missing "cut from"
+chip; blocks T8900/T8910 being usable) -> **T8824** (design-gated: rewrites decision 1 so
+genuine overlap becomes lanes in the picker; needs T8872 first, prefers T8892 first for
+real names). T8892 and T8824 are file-disjoint and can run in parallel once T8872 is in.
 
 ## Test fixtures
 

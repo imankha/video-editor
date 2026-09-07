@@ -120,12 +120,39 @@ pre-staging - a real 2-source overlapping game doesn't exist as a product path y
 until T8900/T8910 ship, and the container has no R2/backend to seed one. Needs
 staging verification once a real overlap game can be created.
 
+**2026-09-06 (live local-stack verification, supervisor):** seeded a real overlap game
+through the actual upload path on a local stack running this branch (recipe in
+T8892's task file: navy "MAIN CAMERA" 8 min @ 14:00:00 + orange "SIDELINE PHONE" 3 min
+@ 14:02:00, burned-in file-relative timers; dev profile game id 10 "Vs ANGLE TEST
+Sep 6"). Backend stored `offset_seconds` 0 / 120 (genuine overlap; prefix-sum would be
+480) and v051 backfilled the profile's 7 existing rows cleanly. **Verified working:**
+angle bar at 26.5-61.7% of the strip (expected 25-62.5%, delta = EDGE_PADDING); click
+-> picture switches navy -> orange and the sideline shows `file time 00:01:37.567` at
+game time 00:03:37.582 (exactly the 120 s offset); switcher badge appears as a
+segmented pill only inside the overlap; playing past 5:00 reverts to main camera with
+`readyState 4` throughout and no black frame; a clip cut while the angle was active is
+in the DB with `video_sequence = 2` and file-relative times 90.07-102.07 (game 210.1
+minus 120); `clip-angle-pill` + `angle-clip-glyph` render. **Two defects found -> filed
+as T8892:** (1) every angle is labelled with its blake3 hash (bar, badge, pill, tooltip)
+because `buildGameTimeline` derives the name from the content-addressed R2 URL and the
+original filename is never stored; (2) the spec'd "from {angle}" chip + "This play will
+be cut from {angle}." microcopy in the Add Play header were never implemented (grep
+confirms). **A third finding is a live data bug outside this task -> filed as T8872
+(P1):** the picker sends `recorded_at` even when the intake discarded the timestamps
+as export-time artifacts, so a Legends/Trace two-half upload would place the halves as
+overlapping angles. The intake/angles design tension behind it -> T8824.
+
 ## Acceptance Criteria
 
-- [ ] Angle-free game renders BYTE-IDENTICAL timeline DOM (snapshot/equivalence test)
-- [ ] EPIC scenario: 3 lanes visible at the deep overlap only; clicking each bar switches
-      picture within ~1s (idle-slot preload)
-- [ ] A clip created on an angle plays from the angle in the editor loop and carries the
-      pill in the sidebar
-- [ ] Auto-fallback never errors, never leaves a black player
-- [ ] Curated test set + new e2e green; live QA on a real seeded game recorded
+- [x] Angle-free game renders BYTE-IDENTICAL timeline DOM (snapshot/equivalence test) -
+      equivalence test + the dev profile's 7 existing games unaffected after v051
+- [x] EPIC scenario: 3 lanes visible at the deep overlap only; clicking each bar switches
+      picture within ~1s (idle-slot preload) - 3-lane case by unit test; 2-lane case
+      verified live with exact time mapping, 2026-09-06
+- [~] A clip created on an angle plays from the angle in the editor loop and carries the
+      pill in the sidebar - save binding (`video_sequence = 2`, file-relative times) and
+      the sidebar pill verified live; editor-loop playback not yet eyeballed by a human;
+      pill currently shows a hash (T8892)
+- [x] Auto-fallback never errors, never leaves a black player - verified live
+      (`readyState 4`, no black frame) 2026-09-06
+- [x] Curated test set + new e2e green; live QA on a real seeded game recorded
