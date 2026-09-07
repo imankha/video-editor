@@ -65,7 +65,7 @@ function SpeedControl({ speed, onSpeedChange }) {
  * - Play/pause, step forward/backward, restart
  * - Time display
  * - Playback speed control (YouTube style)
- * - Add Play button (visible when not in fullscreen, or when paused in fullscreen)
+ * - Add Play button (fullscreen only — non-fullscreen uses AnnotateModeView's primary CTA)
  * - Fullscreen toggle button
  */
 export function AnnotateControls({
@@ -184,15 +184,12 @@ export function AnnotateControls({
 
       {/* Right side controls */}
       <div className="flex items-center gap-2">
-        {/* Add/Edit Clip button visibility:
-            Non-fullscreen: show only when no clip selected (NONE) — sidebar handles editing
-            Fullscreen: always visible (clicking pauses video and opens overlay)
-            Hidden when overlay is open (onAddClip will be undefined) */}
-        {onAddClip && (
-          isFullscreen
-            ? true                      // FS: always show Add/Edit
-            : !isEditMode               // Non-FS: only show Add (not Edit)
-        ) && (
+        {/* Add/Edit Clip button visibility: fullscreen only. Non-fullscreen is covered by
+            AnnotateModeView's primary full-width CTA (Add) and the sidebar (Edit) — this
+            toolbar button would just duplicate them. In fullscreen, the CTA doesn't render,
+            so this is the only way to add/edit a play (clicking pauses video and opens
+            overlay). Hidden when overlay is open (onAddClip will be undefined). */}
+        {onAddClip && isFullscreen && (
           <Button
             variant={isEditMode ? 'warning' : 'success'}
             size="sm"
@@ -204,12 +201,8 @@ export function AnnotateControls({
             {isEditMode ? 'Edit Play' : 'Add Play'}
           </Button>
         )}
-        {/* Mobile: icon-only Add/Edit Clip */}
-        {onAddClip && (
-          isFullscreen
-            ? true
-            : !isEditMode
-        ) && (
+        {/* Mobile: icon-only Add/Edit Clip (fullscreen only, see above) */}
+        {onAddClip && isFullscreen && (
           <Button
             variant={isEditMode ? 'warning' : 'success'}
             size="sm"
