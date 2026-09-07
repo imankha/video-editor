@@ -326,10 +326,18 @@ function subtractIntervals(cover, holes) {
   return result.filter((s) => s.end - s.start > EPS_TINY);
 }
 
-/** filename stem (no path, no extension) from a url, or '' if none usable. */
-function filenameStem(url) {
-  if (!url || typeof url !== 'string') return '';
-  const noQuery = url.split(/[?#]/)[0];
+/**
+ * Stem of a filename (no path, no extension), or '' if none usable.
+ *
+ * T8892: fed the video's `original_filename` ("sideline.mp4" -> "sideline"), NOT
+ * its R2 `url` -- the url is content-addressed (`games/{blake3}.mp4`), so a stem
+ * off it is a hash, never a human name. A NULL/empty filename yields '' so the
+ * caller falls back to "Extra clip {n}". (Path-splitting is retained but inert
+ * for a bare filename; harmless.)
+ */
+function filenameStem(name) {
+  if (!name || typeof name !== 'string') return '';
+  const noQuery = name.split(/[?#]/)[0];
   const base = noQuery.split('/').pop() || '';
   const dot = base.lastIndexOf('.');
   return dot > 0 ? base.slice(0, dot) : base;
@@ -613,7 +621,11 @@ export function buildGameTimeline(gameVideos) {
   }
 
   const angles = angleVideos.map((v, idx) => {
-    const stem = filenameStem(v.url);
+    // T8892: name from the user's original_filename (NOT the content-addressed
+    // url). Absent -> "Extra clip {n}", n = 1-based lane order among angles
+    // (angleVideos is offset-sorted). Legacy rows (no filename ever stored) get
+    // the honest fallback, never a hash.
+    const stem = filenameStem(v.original_filename);
     return {
       sequence: v.sequence,
       lane: laneOf.get(v.sequence),

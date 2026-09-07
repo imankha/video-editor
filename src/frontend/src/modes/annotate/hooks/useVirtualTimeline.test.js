@@ -888,15 +888,18 @@ describe('buildGameTimeline', () => {
   });
 
   // ---- Display names ----
+  // T8892: names derive from original_filename, NEVER the url (the url is the
+  // content-addressed R2 key, games/{blake3}.mp4 -- a stem off it is a hash).
   describe('angle display names', () => {
-    it('uses the filename stem, middle-ellipsised to 14 chars', () => {
+    it('uses the original_filename stem, middle-ellipsised to 14 chars', () => {
       const gt = buildGameTimeline([
-        { sequence: 1, duration: 2000, offset_seconds: 0, url: 'https://cdn/main.mp4' },
+        { sequence: 1, duration: 2000, offset_seconds: 0, url: 'https://cdn/aaa111.mp4', original_filename: 'main.mp4' },
         {
           sequence: 2,
           duration: 120,
           offset_seconds: 100,
-          url: 'https://cdn/VID_20260905_094101.mp4',
+          url: 'https://cdn/bbb222.mp4',
+          original_filename: 'VID_20260905_094101.mp4',
         },
       ]);
       const angle = gt.angles.find((a) => a.sequence === 2);
@@ -904,10 +907,10 @@ describe('buildGameTimeline', () => {
       expect(angle.name.length).toBeLessThanOrEqual(14);
     });
 
-    it('falls back to "Extra clip {n}" when no filename stem is available', () => {
+    it('falls back to "Extra clip {n}" when original_filename is absent, never the hash url', () => {
       const gt = buildGameTimeline([
-        { sequence: 1, duration: 2000, offset_seconds: 0, url: 'main.mp4' },
-        { sequence: 2, duration: 120, offset_seconds: 100, url: '' },
+        { sequence: 1, duration: 2000, offset_seconds: 0, url: 'https://cdn/hash1.mp4', original_filename: 'main.mp4' },
+        { sequence: 2, duration: 120, offset_seconds: 100, url: 'https://cdn/hash2.mp4', original_filename: null },
       ]);
       const angle = gt.angles.find((a) => a.sequence === 2);
       expect(angle.name).toBe('Extra clip 1');

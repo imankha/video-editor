@@ -213,6 +213,8 @@ export function AnnotateContainer({
           height: v.video_height,
           offset_seconds: v.offset_seconds,
           recorded_at: v.recorded_at,
+          // T8892: source for the angle's display name (buildGameTimeline).
+          original_filename: v.original_filename,
         })));
       }
     } catch (err) {
@@ -736,6 +738,8 @@ export function AnnotateContainer({
           // T8870 placement evidence -> T8880 lane builder selection
           offset_seconds: v.offset_seconds,
           recorded_at: v.recorded_at,
+          // T8892: source for the angle's display name (buildGameTimeline).
+          original_filename: v.original_filename,
         };
       }));
       setActiveVideoIndex(0);

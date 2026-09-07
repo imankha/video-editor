@@ -1561,6 +1561,11 @@ def ensure_database():
         # update it. Fresh DBs get the columns here; existing DBs via migration v051
         # (backfills offset_seconds = prefix-sum-by-sequence so migrated games render
         # identically to the pre-overlap concatenation math).
+        # T8892: original_filename (the user's filename with extension, e.g.
+        # "sideline.mp4"; nullable) is the honest source for an angle's display name --
+        # the frontend strips path/ext for the label, and a NULL yields the "Extra clip
+        # {n}" fallback (never the R2 content-hash). Fresh DBs get it here; existing DBs
+        # via migration v052 (no backfill -- the datum never existed for old rows).
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS game_videos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1574,6 +1579,7 @@ def ensure_database():
                 fps REAL,
                 recorded_at TEXT,
                 offset_seconds REAL,
+                original_filename TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(game_id, sequence)
             )
