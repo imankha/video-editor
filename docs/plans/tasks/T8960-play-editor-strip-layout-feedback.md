@@ -9,7 +9,7 @@
 ## Problem
 
 Live-testing feedback (2026-09-07) on the desktop under-canvas Add/Edit Play editor strip
-(`AnnotateFullscreenOverlay layout="strip"`, T8600, refined by T8760/T8730/T8490). Seven
+(`AnnotateFullscreenOverlay layout="strip"`, T8600, refined by T8760/T8730/T8490). Nine
 items, verbatim from the user:
 
 1. "When in edit mode, the playhead should always be in the green area (selected); if it's
@@ -23,6 +23,11 @@ items, verbatim from the user:
 5. "My Athlete vs Team control should be on top line with play name."
 6. "More details should not require a scroll."
 7. "In edit mode, instead of calling it 'Clip Out Play' just call the button 'Clip Play'."
+8. "If I click on the timeline inside of the selected area during edit/add play mode, the
+   playhead should jump there."
+9. "Just remove the back and forward buttons when in add/edit play mode." (Superseded the
+   first wording, "the restart button restarts on the start_time" - the user chose removal
+   over retargeting.)
 
 Root cause of item 1 (already located, not a guess): T8760's clip-scoped loop in
 `ClipScrubRegion.jsx` (~L316) is gated on `isEditingRef = clipEditorActive && !!existingClip`,
@@ -57,6 +62,23 @@ Target layout (desktop strip):
   start past the playhead), seek to `startTime` - the playhead is never outside the green
   span while the editor is open. Keep the `clipEditorActive` leak guard exactly as T8760
   built it (the sidebar instance must keep its own T8780 Preview-play behaviour).
+- **Click inside the span seeks (item 8):** a pointerdown+up (no drag) on the scrub
+  region's track BETWEEN the two handles seeks the playhead to that time (`onSeek`) and
+  moves neither handle. Note the main `AnnotateTimeline` is HIDDEN while the strip editor
+  is open (`underCanvasEditor`, T8600), so `ClipScrubRegion` is the only timeline the user
+  can click here - this lives in its pointer handler, next to the existing handle-drag
+  code (the RegionLayer Pointer-Events + `setPointerCapture` pattern). A click OUTSIDE the
+  span keeps today's behaviour (whatever it does now - verify and pin it in a test, since
+  the loop/clamp from item 1 must not fight a deliberate outside-click). Distinguish click
+  from drag with the same small movement threshold the handle drag already uses.
+- **No back/forward buttons in the editor (item 9):** the transport bar's skip-back
+  (restart) and skip-forward controls in `AnnotateControls.jsx` are NOT rendered while the
+  editor is open. Gate on `clipEditBounds` (`{start,end}`, T8760, already passed from
+  `AnnotateModeView`, `null` outside the editor) - no new prop, no new state. Play/pause +
+  spacebar stay (T8760 single-play-control invariant); the clip-relative time readout stays.
+  Their keyboard shortcuts, if any, are disabled under the same gate so the playhead can't
+  leave the span via a key the button no longer offers. Do not remove them from the
+  non-editing transport bar.
 - **Name first, default + pencil (item 2):** reuse the edit-mode header pattern (pencil +
   inline input on click, `isEditingName`) for create mode too. Show `defaultClipName` as
   the rendered text until the user renames; the standalone `<input>` in the controls row
@@ -94,7 +116,10 @@ strip. Do not change the fullscreen or landscape-inline layouts.
 - `src/frontend/src/modes/annotate/components/AnnotateFullscreenOverlay.jsx` - `layout === 'strip'`
   branch (~L681-940): header, controls row, details panel, below-card button row
 - `src/frontend/src/modes/annotate/components/ClipScrubRegion.jsx` - loop gate (~L316) and
-  seed-to-start (~L339); the `isEditing` derivation (~L90)
+  seed-to-start (~L339); the `isEditing` derivation (~L90); track pointer handler (item 8)
+- `src/frontend/src/modes/annotate/components/AnnotateControls.jsx` - skip-back/forward
+  buttons (+ their shortcuts) gated off on `clipEditBounds` (item 9); `AnnotateModeView.jsx`
+  already passes it (T8760)
 - `src/frontend/src/modes/annotate/components/AnnotateFullscreenOverlay.details.test.jsx`,
   `AnnotateFullscreenOverlay.layer.test.jsx`, `AnnotateFullscreenOverlay.keys.test.jsx`,
   `AnnotateModeView.strip.test.jsx` - existing strip tests to update (copy + structure)
@@ -148,6 +173,8 @@ located in `ClipScrubRegion.jsx` (loop gated on `existingClip`).
 - [ ] Toggle reads "Clip Play to focus on your player" / "Don't Clip Play", visibly wider
 - [ ] My Athlete | Team sits on the top line with the name
 - [ ] Edit-mode button reads "Clip Play" (both render sites); no "Clip Out Play" left in the overlay
+- [ ] Clicking the scrub track inside the green span jumps the playhead there without moving a handle (real-browser check, not jsdom only - pointer interaction, T5380 precedent)
+- [ ] Skip-back and skip-forward buttons (and their shortcuts) are absent while the editor is open; present and unchanged otherwise
 - [ ] Details expand in place with no inner scroll; no page scroll at 1280x720
 - [ ] Sidebar `ClipDetailsEditor` and mobile layouts unchanged (existing tests green)
 - [ ] Curated test set + e2e green
