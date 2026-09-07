@@ -93,7 +93,7 @@ overrides.)
 | T8830 | [Shrink spike: WebCodecs 8K benchmark (go/no-go)](T8830-shrink-spike-benchmark.md) | STAGING |
 | T8832 | [Shrink spike part 2: full-file streaming demux on real camera files](T8832-shrink-spike-full-file-streaming.md) | STAGING |
 | T8834 | [Verify + harden T1380 client-side faststart on real camera files](T8834-verify-harden-client-faststart.md) | WIP |
-| T8836 | [Survey: other cheap client-side pre-upload work (decision doc)](T8836-survey-cheap-client-preupload-work.md) | WIP |
+| T8836 | [Survey: other cheap client-side pre-upload work (decision doc)](T8836-survey-cheap-client-preupload-work.md) | WAITING ON USER |
 | T8840 | [Shrink pipeline core (worker transcode)](T8840-shrink-pipeline-core.md) | TODO |
 | T8850 | [Shrink UI: offer card + crop step + presets](T8850-shrink-ui-crop-step.md) | TODO |
 | T8860 | [Shrink upload integration + fallback](T8860-shrink-upload-integration.md) | TODO |
