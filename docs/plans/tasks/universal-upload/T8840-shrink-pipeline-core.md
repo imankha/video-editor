@@ -184,7 +184,8 @@ updated 2026-09-07 with T8832's real-hardware proof)
    means it is the slow case and T8850's estimates need the number. A fail here
    re-scopes the task; do not build steps 1-6 on an unproven muxer/audio path.
    **Also required (added 2026-09-07, design doc R11):** a visual side-by-side of the
-   source frame against the Recommended-preset H.264 output at matched viewing size,
+   source frame against the Sharpest-preset H.264 output (the default, per EPIC decision
+   5) at matched viewing size,
    checking BOTH color (R3 - BT.2020/HLG source into an sRGB canvas tagged bt709 can
    wash out or shift color) AND compression artifacts (R11 - H.264 is less efficient
    than the source's 10-bit HEVC at the same bits-per-pixel, so a preset that targets
@@ -227,7 +228,9 @@ updated 2026-09-07 with T8832's real-hardware proof)
 1. Serve the repo root, open the tool on the dev laptop. Pick the real DJI folder
    (4 segments, 50 GB). Segments appear in the right order with proxy previews.
 2. Draw a crop around the field on segment 1; flip through the other segments' previews -
-   the rect stays put. Pick Recommended. Estimate shows a size and a time.
+   the rect stays put. Pick Sharpest (the default, 2026-09-07 - Recommended visibly
+   softened player detail in a real side-by-side, see EPIC decision 5). Estimate shows
+   a size and a time.
 3. Start. The probe runs (seconds), then segments shrink one by one with live progress.
    The machine WILL be busy - that is expected and the copy says so.
 4. Mid-run: reload the tab. The tool resumes at the first unfinished segment; finished
