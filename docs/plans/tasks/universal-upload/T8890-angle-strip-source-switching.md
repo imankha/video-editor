@@ -1,6 +1,6 @@
 # T8890: Angle strip UI + source switching
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-09-05
@@ -141,6 +141,10 @@ confirms). **A third finding is a live data bug outside this task -> filed as T8
 (P1):** the picker sends `recorded_at` even when the intake discarded the timestamps
 as export-time artifacts, so a Legends/Trace two-half upload would place the halves as
 overlapping angles. The intake/angles design tension behind it -> T8824.
+
+**2026-09-06 (merge, supervisor):** T8872 merged first (PR #357). PR #356 merged as-is
+per the live-verification comment's recommendation (Branch CI green: frontend pass,
+backend skipped). Commit `4b643dd4`. Follow-ups T8892/T8824 queued next.
 
 ## Acceptance Criteria
 
