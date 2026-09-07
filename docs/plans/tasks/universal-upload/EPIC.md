@@ -60,9 +60,17 @@ overrides.)
    4.67 Mbps - already below every preset target - so a bytes-only gate would offer to
    "shrink" a ~3.1 GB two-half export that cannot get smaller, burning the user's
    machine for nothing; the DJI 8K files are ~97 Mbps, an 8-14x win.)
-5. **Shrink presets:** Sharpest (~4K-class crop, ~24 Mbps) / Recommended (default,
-   ~2.7K-class, ~12 Mbps) / Smallest (1080p-class, ~7 Mbps). Names never expose
-   resolution/bitrate. One STATIC crop rect for all segments in v1, verified via a
+5. **Shrink presets:** Sharpest (default, ~4K-class crop, ~24 Mbps) / Recommended
+   (~2.7K-class, ~12 Mbps) / Smallest (1080p-class, ~7 Mbps). **Default changed from
+   Recommended to Sharpest 2026-09-07** after the user judged Sharpest visibly sharper
+   than Recommended on player detail from real side-by-side crops of the DJI footage
+   (both target nearly the source's own bits-per-pixel, so the gap is a resolution-cap
+   difference, not a compression-artifact one - a crop cannot close it, since crop only
+   removes dead space and the resolution cap is driven by output WIDTH, which a
+   full-field static crop can't safely narrow without risking cutting off real play
+   over a match). User priority: no visible quality loss on the player beats minimizing
+   shrink/upload time. Names never expose resolution/bitrate. One STATIC crop rect for
+   all segments in v1, verified via a
    filmstrip of per-segment preview frames. Audio copied through, never re-encoded.
 6. **Shrink capability gating:** `VideoDecoder.isConfigSupported()` with the file's actual
    codec string decides whether the offer renders at all. Firefox/mobile/unsupported GPUs
