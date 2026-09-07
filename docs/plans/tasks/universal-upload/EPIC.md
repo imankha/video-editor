@@ -124,7 +124,7 @@ overrides.)
 | T8890 | [Angle strip UI + source switching](T8890-angle-strip-source-switching.md) | WAITING ON USER |
 | T8892 | [T8890 follow-ups: real angle names + the "cut from {angle}" chip](T8892-angle-names-and-cut-from-chip.md) | TODO |
 | T8900 | [Fix timing: nudge an angle into alignment](T8900-fix-timing-alignment.md) | STAGING |
-| T8910 | [Add footage from inside Annotate](T8910-add-footage-in-annotate.md) | WIP |
+| T8910 | [Add footage from inside Annotate](T8910-add-footage-in-annotate.md) | STAGING |
 
 Dependency notes: T8800 -> T8810 -> T8820 complete the intake. T8830 gates T8840/T8850/
 T8860 (its verdict can re-scope them). T8870 -> T8880 -> T8890 -> T8900 build angles in

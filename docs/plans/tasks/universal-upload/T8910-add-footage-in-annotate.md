@@ -1,6 +1,6 @@
 # T8910: Add footage from inside Annotate
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-05

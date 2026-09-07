@@ -1,6 +1,6 @@
 # T8960: Play editor strip: loop in create mode, name-first header, "Clip" toggle, layer on top line, no details scroll
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-07
