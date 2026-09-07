@@ -16,6 +16,14 @@
  *     final offset (loaded 8 + 1 = 9), Esc/cancel writes nothing;
  *   - reload shows the corrected placement (the persisted offset).
  *
+ * T5380 LANDMINE: jsdom pointer-event tests (AngleLanes.fixTiming.test.jsx) gave
+ * false confidence before on setPointerCapture semantics diverging from a real
+ * browser. The two "real pointer drag" tests below drive an ACTUAL Chromium
+ * mouse drag (page.mouse down/move/up, real PointerEvents incl. setPointerCapture)
+ * rather than fireEvent, so the #1 acceptance criterion (accidental drag
+ * structurally impossible outside the mode) is proven in a real browser, not just
+ * jsdom.
+ *
  * Run: bash scripts/dev-verify.sh e2e/T8900-fix-timing.qa.spec.js
  */
 import { test, expect } from '@playwright/test';
@@ -97,6 +105,30 @@ async function stubAndOpen(page, game, patches) {
   await page.goto('/annotate', { waitUntil: 'domcontentloaded' });
 }
 
+// EDGE_PADDING mirrors TimelineBase.jsx / AngleLanes.jsx's default (20px) — used
+// to convert a real drag's pixel delta into the offset_seconds we expect the
+// endpoint to receive, so the drag assertion is tied to the actual distance
+// dragged, not just "some number changed".
+const EDGE_PADDING = 20;
+const TIMELINE_DURATION_S = 20; // backbone (seq 1) duration in makeOverlapGame()
+
+/** A REAL Chromium pointer drag (mouse down/move/up -> real PointerEvents,
+ * including setPointerCapture) on `locator`, moving `dxPx` horizontally. */
+async function realDrag(page, locator, dxPx) {
+  // boundingBox() is PAGE-relative but page.mouse is VIEWPORT-relative — if the
+  // bar sits below the fold (this game's timeline does, at 1280x800) those
+  // coordinates land off-screen and the mouse events hit nothing. Scroll it
+  // into view first so the drag coordinates are actually on-screen.
+  await locator.scrollIntoViewIfNeeded();
+  const box = await locator.boundingBox();
+  const startX = box.x + box.width / 2;
+  const startY = box.y + box.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + dxPx, startY, { steps: 12 });
+  await page.mouse.up();
+}
+
 test('open Fix-timing, +1s, Done -> one PATCH; reload shows the corrected placement', async ({ browser }) => {
   test.setTimeout(120_000);
   const context = await browser.newContext({ browserName: 'chromium', viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
@@ -169,6 +201,98 @@ test('Esc discards Fix-timing without any write', async ({ browser }) => {
   await page.waitForTimeout(300);
   expect(patches.length).toBe(0);
   await expect(page.getByTestId('annotate-primary-cta')).toBeVisible();
+
+  await context.close();
+});
+
+test('T5380 guard: a REAL pointer drag OUTSIDE Fix-timing mode does nothing (no PATCH, bar unmoved)', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const context = await browser.newContext({ browserName: 'chromium', viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
+  await context.setExtraHTTPHeaders({ 'X-User-ID': 'manual-test-user', 'X-Test-Mode': 'true' });
+  const page = await context.newPage();
+
+  const game = makeOverlapGame();
+  const patches = [];
+  await stubAndOpen(page, game, patches);
+
+  const bar = page.getByTestId('angle-bar-2');
+  await expect(bar).toBeVisible({ timeout: 30000 });
+  expect(await bar.getAttribute('data-fix-target')).toBe('false');
+  const leftBefore = await bar.evaluate((el) => el.style.left);
+
+  // Fix-timing is NOT open (fixSequence is null everywhere) — attempt a REAL
+  // mouse drag (down+move+up, real PointerEvents/setPointerCapture) directly on
+  // the bar. Per the structural gate (dragProps only attached when
+  // isFixTarget), this must be a no-op: no drag, no PATCH.
+  await realDrag(page, bar, 120);
+  await page.waitForTimeout(300); // let any (wrongly) fired async PATCH land
+
+  const leftAfter = await bar.evaluate((el) => el.style.left);
+  expect(leftAfter).toBe(leftBefore); // position unchanged — no drag happened
+  expect(patches.length).toBe(0); // no write of any kind
+  // Fix-timing must still be closed (the drag didn't accidentally open it).
+  await expect(page.getByTestId('fix-timing-strip')).toHaveCount(0);
+
+  await context.close();
+});
+
+test('T5380 guard: a REAL pointer drag INSIDE Fix-timing mode moves the bar; Done fires exactly one PATCH', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const context = await browser.newContext({ browserName: 'chromium', viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
+  await context.setExtraHTTPHeaders({ 'X-User-ID': 'manual-test-user', 'X-Test-Mode': 'true' });
+  const page = await context.newPage();
+
+  const game = makeOverlapGame();
+  const patches = [];
+  await stubAndOpen(page, game, patches);
+
+  const bar = page.getByTestId('angle-bar-2');
+  await expect(bar).toBeVisible({ timeout: 30000 });
+
+  // Open Fix-timing (menu-open mechanics are exercised by the earlier tests;
+  // here we drive the OPEN via synthetic events so this test isolates the
+  // real-pointer DRAG itself, same pattern as the tests above).
+  await bar.dispatchEvent('contextmenu');
+  const item = page.getByTestId('fix-timing-menu-item');
+  await item.waitFor({ state: 'visible' });
+  await item.dispatchEvent('click');
+  await expect(page.getByTestId('fix-timing-strip')).toBeVisible();
+
+  const target = page.getByTestId('angle-bar-2');
+  expect(await target.getAttribute('data-fix-target')).toBe('true');
+  const leftBefore = await target.evaluate((el) => el.style.left);
+
+  // Real drag of +120px. Convert to the expected offset_seconds via the SAME
+  // formula AngleLanes uses (pixel delta / usableWidth * duration), so the
+  // eventual PATCH is checked against the actual distance dragged, not just
+  // "some number changed".
+  const trackBox = await page.getByTestId('angle-strip').boundingBox();
+  const usableWidth = trackBox.width - EDGE_PADDING * 2;
+  const dxPx = 120;
+  const expectedDeltaSeconds = (dxPx / usableWidth) * TIMELINE_DURATION_S;
+  const expectedOffset = 8 + expectedDeltaSeconds; // loaded offset_seconds is 8
+
+  await realDrag(page, target, dxPx);
+
+  // Wait on an AUTO-RETRYING assertion first — mouse.up() only confirms the OS
+  // event was dispatched, not that React has re-rendered from the resulting
+  // state update. A raw el.evaluate() read straight after would race that
+  // render (this is exactly the class of jsdom-vs-real-browser timing gap
+  // T5380 warns about: a plain read has no retry, an `expect(...)` does).
+  await expect(page.getByTestId('fix-timing-moved')).not.toContainText('Moved 0s');
+  // Now the render has landed — the bar's rendered position previews the drag live.
+  const leftDuringDrag = await target.evaluate((el) => el.style.left);
+  expect(leftDuringDrag).not.toBe(leftBefore);
+  expect(patches.length).toBe(0); // preview only — nothing written yet
+  await saveEvidence(page, 't8900-real-drag-preview');
+
+  // Done -> EXACTLY ONE PATCH, carrying the dragged-to offset (within the
+  // rounding the strip's own display uses).
+  await page.getByTestId('fix-timing-done').click();
+  await expect(page.getByTestId('fix-timing-strip')).toHaveCount(0);
+  await expect.poll(() => patches.length).toBe(1);
+  expect(patches[0].seq).toBe(2);
+  expect(patches[0].offset_seconds).toBeCloseTo(expectedOffset, 0);
 
   await context.close();
 });
