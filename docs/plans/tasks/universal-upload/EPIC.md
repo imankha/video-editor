@@ -53,8 +53,13 @@ overrides.)
    recorded time plus a labelled row; a single link flips the whole set between "angles" and
    "one recording in order".** Single file = today's exact two-gesture flow, zero new UI
    (acceptance bar).
-4. **Shrink offer threshold:** total selected bytes > `SHRINK_OFFER_MIN_BYTES = 3 GB`.
-   Below it the offer never renders. The offer NEVER gates Add Game.
+4. **Shrink offer threshold:** total selected bytes > `SHRINK_OFFER_MIN_BYTES = 3 GB`
+   **AND source bitrate > `SHRINK_OFFER_MIN_BITRATE` (~10 Mbps, a margin above the
+   Smallest preset's 7 Mbps).** Below either the offer never renders. The offer NEVER
+   gates Add Game. (Amended 2026-09-07 from T8836 row 5: the real Legends export is
+   4.67 Mbps - already below every preset target - so a bytes-only gate would offer to
+   "shrink" a ~3.1 GB two-half export that cannot get smaller, burning the user's
+   machine for nothing; the DJI 8K files are ~97 Mbps, an 8-14x win.)
 5. **Shrink presets:** Sharpest (~4K-class crop, ~24 Mbps) / Recommended (default,
    ~2.7K-class, ~12 Mbps) / Smallest (1080p-class, ~7 Mbps). Names never expose
    resolution/bitrate. One STATIC crop rect for all segments in v1, verified via a
@@ -62,7 +67,13 @@ overrides.)
 6. **Shrink capability gating:** `VideoDecoder.isConfigSupported()` with the file's actual
    codec string decides whether the offer renders at all. Firefox/mobile/unsupported GPUs
    silently get today's plain upload. Mid-shrink failure falls back to uploading originals
-   with a toast, never a dead end.
+   with a toast, never a dead end. **Capability is not speed (T8830 caveat 6, 2026-09-06):**
+   a device that passes `isConfigSupported` can still be far below realtime, so T8840
+   runs a short real decode+encode probe on the user's own device before committing and
+   falls back to server-side Modal processing when it is too slow. **T8838 (2026-09-07)
+   ships the capability probe alone first, as a census** - counts of decode/encode support
+   by codec family + resolution bucket + platform from real uploads decide how much
+   T8850/T8860 polish the offer deserves.
 7. **Overlap model:** every video gets `recorded_at` (evidence) + `offset_seconds`
    (canonical position, computed once at attach, changed ONLY by the Fix-timing gesture).
    Lanes/layers are DERIVED at render time (greedy: sort by start, lowest non-overlapping
@@ -94,7 +105,9 @@ overrides.)
 | T8832 | [Shrink spike part 2: full-file streaming demux on real camera files](T8832-shrink-spike-full-file-streaming.md) | STAGING |
 | T8834 | [Verify + harden T1380 client-side faststart on real camera files](T8834-verify-harden-client-faststart.md) | STAGING |
 | T8836 | [Survey: other cheap client-side pre-upload work (decision doc)](T8836-survey-cheap-client-preupload-work.md) | WAITING ON USER |
-| T8840 | [Shrink pipeline core (worker transcode)](T8840-shrink-pipeline-core.md) | TODO |
+| T8838 | [Shrink capability census (probe real users' devices before building the UI)](T8838-shrink-capability-census.md) | TODO |
+| T8840 | [Standalone browser shrink tool (fully working, zero app integration)](T8840-shrink-pipeline-core.md) | TODO |
+| T8845 | [Port the approved standalone shrink tool into the app (worker + client API)](T8845-port-shrink-tool-into-app.md) | TODO |
 | T8850 | [Shrink UI: offer card + crop step + presets](T8850-shrink-ui-crop-step.md) | TODO |
 | T8860 | [Shrink upload integration + fallback](T8860-shrink-upload-integration.md) | TODO |
 | T8870 | [Overlap schema: recorded_at + offset_seconds](T8870-overlap-schema-placement.md) | STAGING |
@@ -117,6 +130,15 @@ T8830; its verdict rewrites T8840's demux caveat into a proven approach (likely 
 zero-copy faststart view + forward streaming). **T8834** (measure + harden T1380 on real
 camera files) and **T8836** (survey of cheap pre-upload work, decision doc) are independent
 of the shrink track and can run any time.
+
+Re-sequenced 2026-09-07 (user direction: **no shrink integration until the whole
+pipeline can be tested completely on its own, as a separate tool that shrinks video from
+the browser, fully working**): **T8840** is now that standalone tool
+(`scripts/shrink-tool/`, zero app imports, acceptance = the user runs its test recipe on
+the real 50 GB folder and a second machine) -> user sign-off -> **T8845** ports the
+DOM-free pipeline modules into the app worker -> T8850 -> T8860. **T8838** (capability
+census: the probe alone, counted from real uploads) runs independently in parallel and
+does not touch the shrink pipeline; its numbers size the T8850/T8860 investment.
 
 Added 2026-09-06 after the first live test of the angle track: **T8872** (P1 hotfix, do
 first - stops discarded timestamps leaking into `recorded_at`) -> merge T8890 (#356) ->

@@ -120,6 +120,14 @@ target would shrink this further if bandwidth matters more than the extra ms).
 | 5 | Gate the shrink offer by bitrate, not total bytes (EPIC decision 4) | 0003: **97.48 Mbps**, 0006: **97.29 Mbps** (both ~8x the "Smallest" 7 Mbps preset - huge win). Legends half: **4.67 Mbps** - already BELOW every shrink preset (Smallest 7 / Recommended 12 / Sharpest 24 Mbps). A full Legends game (~3.1 GB, both halves) crosses today's 3 GB total-bytes offer threshold despite shrinking being pure loss: it would re-encode to an EQUAL-OR-LARGER file while burning real CPU/wall time for nothing. | **YES, this is a real gap, not just an optimization** - today's decision 4 would offer to "shrink" a file that can't get smaller. Recommend gating on `totalBytes > 3GB AND sourceBitrate > ~8-10 Mbps` (a margin above the lowest preset), not bytes alone. | EPIC decision 4 amendment + T8850 (offer gating logic) |
 | 6 | Anything needing a re-encode (frame-rate/audio re-encode, bitrate reduction outside the shrink flow) | N/A - out of scope by definition | Shrink pipeline territory (T8840-T8860), not this survey | - |
 
+**2026-09-07 (user: "proceed with your recommendations")** - actioned from the readiness
+review: row 1 -> **T8838** (capability census; the client-side probe in its minimal,
+highest-information form), row 4 -> T8840 caveat 8 (drop DJI metadata tracks in the
+mux), row 5 -> EPIC decision 4 amended (bytes AND bitrate) + T8850 gating note. Still
+the user's call: row 2 (`stss` keyframe index - natural to bundle into T8838's mp4box
+parse later, or into T8840/T8850 directly) and row 3 (`.LRF`-proxy posters replacing
+`poster.py` seeks - a real 224 ms/frame win, but a separate small task).
+
 ## Acceptance Criteria
 
 - [x] Every candidate has a measured number on the 17 GB DJI file (or a stated reason it

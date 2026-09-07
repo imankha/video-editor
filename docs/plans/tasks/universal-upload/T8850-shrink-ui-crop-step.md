@@ -46,8 +46,17 @@ off output pixels x bitrate the same way - never off input resolution, which wou
 under-estimate 8K sources and over-estimate small ones.
 
 ### Technical Notes
-- Offer renders ONLY when `totalBytes > SHRINK_OFFER_MIN_BYTES (3 GB)` AND
-  `canShrink(...)` resolved true for every selected video's codec. Card copy: "This
+- Offer renders ONLY when `totalBytes > SHRINK_OFFER_MIN_BYTES (3 GB)` AND the source
+  bitrate exceeds `SHRINK_OFFER_MIN_BITRATE` (~10 Mbps; EPIC decision 4 as amended
+  2026-09-07 from T8836 row 5 - the real Legends export is 4.67 Mbps, already BELOW every
+  preset target, so a bytes-only gate would offer to "shrink" a file that cannot get
+  smaller; the DJI 8K files are ~97 Mbps) AND `canShrink(...)` resolved true for every
+  selected video's codec. Bitrate = `file.size * 8 / durationSeconds` from the intake's
+  existing per-file metadata - no new probe. **Expectation copy before starting** (T8840
+  caveat 10): shrinking pegs the machine for roughly the source's duration divided by
+  the measured multiplier (Recommended ~1.4x; Sharpest is slower - use T8840 step 0's
+  number, do not guess) - say "about {t}; your computer will be busy while this runs",
+  always prefixed "about". Card copy: "This
   upload is big - {size}" / "That's around {t} of uploading. Shrink it first and save
   time and credits." Upload-time estimate assumes 25 Mbps, always prefixed "around".
   Primary "Shrink before upload" (blue - green stays reserved for Add Game), dismiss
