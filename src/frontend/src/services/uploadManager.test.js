@@ -43,6 +43,12 @@ vi.mock('../stores/editorStore', () => ({
   },
 }));
 
+// T8838: _hashAndAnalyze fires a fire-and-forget shrink-capability beacon. It's
+// fully unit-tested in shrinkCapability.test.js; stub it here so its extra telemetry
+// fetch never consumes the sequential mockFetch queue these orchestration tests rely
+// on (the probe is decoupled from the upload path by contract — never awaited).
+vi.mock('../utils/shrinkCapability', () => ({ probeAndReport: vi.fn() }));
+
 // Mock fetch globally
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;

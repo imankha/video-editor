@@ -543,6 +543,23 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   disambiguation rule). Ordering/placement ambiguity NEVER gates submit. Single-file `ready` is
   byte-for-byte T8810 (no list). This is the END of the intake arc; the shrink work (T8830+) is
   separate.
+- **Shrink capability census (T8838)** rides the upload path silently to answer "how many of OUR
+  users' browsers could ever see the shrink offer" BEFORE building the crop UI (T8850/T8860).
+  `uploadManager._hashAndAnalyze` fires `probeAndReport(file, faststartInfo, report)` from
+  `utils/shrinkCapability.js` right after `analyzeMp4Faststart` resolves — concurrent, never
+  awaited, a fire-and-forget census on the real upload gesture (upload timing is unchanged). The
+  probe re-parses ONLY ftyp+moov (mp4box, sliced via the faststart byte ranges; never reads mdat)
+  for the exact codec string + coded size, then runs `VideoDecoder`/`VideoEncoder.isConfigSupported`
+  and emits ONE beacon set per file through the T7515 impression pipeline
+  (`recordUiImpression('capability', name)` → `capability` kind in `IMPRESSION_KINDS`). Rows land in
+  the PG `user_actions` aggregate as `capability_impression:shrink_*`: `shrink_probe_total` (the
+  denominator), `shrink_decode_{yes|no|unavailable}_{family}_{bucket}` (`family` ∈
+  {avc,hevc8,hevc10,av1,vp9,other}, `bucket` ∈ {le1080,le4k,gt4k}), `shrink_encode_{...}`, or a lone
+  `shrink_probe_failed` when the moov won't parse. No PII (no filename/size/duration), no new PG
+  table/column, platform is already per-row via `record_impression`. Read the census with
+  `action LIKE 'capability_impression:shrink_%'` grouped by platform. `shrinkCapability.js` is
+  PLAIN ESM (no config/apiFetch/store imports — reporting is injected) so T8840's standalone tool
+  can reuse `probeShrinkCapability`/`deriveCodecFamily` without pulling the app in.
 - **Attach-more-videos to an existing game (T8700)** is a first-class post-creation gesture, not
   just a create-time step. Frontend: `attachVideoToExistingGame` (uploadManager.js) behind
   GameTile's "Add video" kebab action → `AttachVideoModal`; reuses the create-time
