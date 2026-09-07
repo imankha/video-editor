@@ -12,8 +12,7 @@ import {
 
 // Approved microcopy (artifact screen A). Kept as literals next to use.
 const COPY = {
-  heading: 'Drop your whole game here',
-  sub: "One video or all of them - we'll put them in order",
+  heading: 'Drop any game video here.',
   mobileSub: 'Tap to choose videos - pick as many as you want',
   dragOver: 'Drop everything here',
   folderLink: 'or add a whole folder',
@@ -322,8 +321,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
           <p className="font-medium text-gray-200">
             {isDragging ? COPY.dragOver : COPY.heading}
           </p>
-          {/* Desktop vs. touch sub-copy — coarse pointers can't drag files. */}
-          <p className="text-xs text-gray-500 mt-1 hidden fine-pointer:block">{COPY.sub}</p>
+          {/* Touch-only sub-copy — coarse pointers can't drag files. */}
           <p className="text-xs text-gray-500 mt-1 fine-pointer:hidden">{COPY.mobileSub}</p>
           <p className="text-xs text-gray-600 mt-1">{COPY.formats}</p>
         </div>

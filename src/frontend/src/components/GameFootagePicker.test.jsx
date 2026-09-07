@@ -81,7 +81,7 @@ beforeEach(() => {
 describe('GameFootagePicker — states', () => {
   it('empty: renders the approved heading, folder link, and both hidden inputs', () => {
     render(<GameFootagePicker onFootageChange={vi.fn()} />);
-    expect(screen.getByText('Drop your whole game here')).toBeTruthy();
+    expect(screen.getByText('Drop any game video here.')).toBeTruthy();
     expect(screen.getByTestId('footage-folder-link').textContent).toBe('or add a whole folder');
     expect(screen.getByTestId('footage-file-input')).toBeTruthy();
     expect(screen.getByTestId('footage-folder-input')).toBeTruthy();
