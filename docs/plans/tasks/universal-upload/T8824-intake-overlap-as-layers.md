@@ -1,7 +1,6 @@
 # T8824: Intake - overlap is a signal, not a disqualifier (layered order editor)
 
-**Status:** TODO (design approved 2026-09-07; implementation queued behind T8892 - shared
-files, see progress log)
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-09-06
