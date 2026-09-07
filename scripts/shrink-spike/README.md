@@ -82,8 +82,19 @@ reliably against real DJI files** and was abandoned after direct investigation:
 ```bash
 cd scripts/shrink-spike
 npm install          # pulls mp4box + mp4-muxer into this folder only, never the app bundle
-npx serve .           # or point the app's vite dev server at this folder
+cd ../..             # back to REPO ROOT
+npx serve .          # serve the repo root, then open /scripts/shrink-spike/
 ```
+
+Serve from the **repo root** (not the spike folder): the streaming mode imports
+`../../src/frontend/src/utils/mp4Faststart.js`, which lives outside the spike folder, so
+`npx serve` must be able to reach it. Open `http://localhost:3000/scripts/shrink-spike/`.
+(The `../../src/...` path and the `./node_modules/...` importmap in `index.html` both
+resolve correctly from that URL.)
+
+> **Note (T8830 legacy):** the original T8830 instructions said `npx serve .` from inside
+> `scripts/shrink-spike`. That still works for **single-shot mode only**. Streaming mode
+> needs the repo-root serve above so the `mp4Faststart.js` import resolves.
 
 `mp4box`'s published build (2.4.1) ships a real ESM build - imported by `spike.js` as
 `import { createFile, DataStream } from 'mp4box'`, mapped in `index.html`'s
@@ -207,3 +218,146 @@ headless dev container cannot produce it.
    This is how the single-machine gap above gets closed in practice: measuring every
    real user's device at runtime is more reliable than trying to pre-sample enough dev
    hardware to stand in for it.
+
+---
+
+# T8832: Full-file streaming demux (memory + endurance)
+
+T8830 (above) proved the **speed** half of the shrink bet on a 25 s trim, deliberately
+loading the whole file into memory. It did **not** prove a browser tab can stream a real
+3-17 GB camera file through the pipeline start-to-finish without exhausting memory or
+degrading over minutes. T8832 adds a **streaming mode** to answer that, and rewrites
+T8840's "chunked random-access demux is mandatory" caveat with whatever this proves.
+
+## The approach: faststart-ordered forward streaming
+
+Real DJI files are **non-fast-start** (`ftyp | free | mdat (~all of it) | moov` at EOF), so
+a naive forward feeder never sees the sample table until the whole payload has gone by, and
+a single-shot `file.arrayBuffer()` fails in Chrome past ~300 MB. Instead of writing a
+random-access demuxer, streaming mode reuses **T1380's `mp4Faststart.js`**
+(`analyzeMp4Faststart` + `getReorderedSlice`) to present a **logical faststart-ordered view**
+(`ftyp | patched-moov | mdat`) without materializing a new file, then feeds mp4box
+fixed-size chunks of that view. moov arrives first; every sample streams forward — ordinary
+sequential demux, no random access, no file rewrite.
+
+`makeReader(file, info)` unifies the two layouts behind one `.slice(start,end) -> Blob`:
+- **non-fast-start** (`needsRelocation: true`) -> `getReorderedSlice(file, info, ...)`, logical size `info.newSize`.
+- **already fast-start** (`needsRelocation: false`) -> stream the original file bytes verbatim (`fileStart` = true offset), logical size `file.size`. Preserves every `stco`/`co64` offset exactly (they are absolute and unchanged); recomposing `[ftyp|moov]+[mdat]` would corrupt offsets if any box sits between moov and mdat, so verbatim is both simpler and strictly more correct.
+
+**Keeping mp4box's own memory flat** is the classic streaming leak: mp4box retains every
+appended buffer until the samples in it are extracted *and released*. Streaming mode uses
+`setExtractionOptions(trackId, null, {nbSamples: 100})`, drains + decodes the emitted samples
+after each chunk's `appendBuffer`, and calls `releaseUsedSamples(trackId, lastSampleNumber)`
+every 100 samples. It logs mp4box's internal buffer count (`mp4boxFile.stream.buffers.length`)
+so you can confirm it stays bounded instead of growing.
+
+## How to run streaming mode
+
+Serve from the repo root (see "How to run" up top), open `/scripts/shrink-spike/`, then:
+- **Mode:** select `streaming (T8832)`.
+- **Chunk size (MB):** try `8` and `32` (report both).
+- **decode-only:** check it to skip encode+mux entirely (just decode + `frame.close()` +
+  frame count) — use this for the largest file, where encoding isn't the point. Uncheck for
+  the full decode+encode + playback-verify run.
+
+Results report: frames decoded (vs moov sample count), per-30 s-bucket fps (endurance/slope),
+peak + final memory (prefers `performance.measureUserAgentSpecificMemory()` under cross-origin
+isolation, falls back to `performance.memory.usedJSHeapSize`), and — for streaming — mp4box's
+max/final retained buffer count and `releaseUsedSamples` call count.
+
+**Cross-origin isolation for accurate memory:** `measureUserAgentSpecificMemory()` needs
+COOP `same-origin` + COEP `require-corp`. Plain `npx serve` does not send these. Two options:
+(a) use the bundled smoke driver's server, which sets them (see below); or (b) accept the
+`performance.memory.usedJSHeapSize` fallback (Chrome-only, coarse/quantized, but fine for a
+slope check). Also watch **Chrome Task Manager's GPU memory** during a decode+encode run —
+`VideoFrame` leaks show up there, not in the JS heap.
+
+## Synthetic-fixture smoke test (mechanism proof — container-safe)
+
+The container running this task has **no GPU and no access to the real DJI files**, so it
+cannot produce the real acceptance numbers. It CAN prove the streaming *mechanism* is correct
+on a synthetic non-fast-start fixture. Generate it (ffmpeg required):
+
+```bash
+# ~142 MB, 2700 frames, 720p30 h264, NON-fast-start (mdat before moov) — crosses
+# 16x 8 MB and 4x 32 MB chunk boundaries. testsrc2 + forced bitrate so it doesn't
+# compress down below the chunk sizes (a plain testsrc came out at ~4 MB).
+ffmpeg -y -f lavfi -i "testsrc2=size=1280x720:rate=30" -t 90 -c:v libx264 \
+  -preset ultrafast -pix_fmt yuv420p -b:v 13M -minrate 13M -maxrate 13M -bufsize 13M \
+  scripts/shrink-spike/fixtures/synthetic_90s.mp4
+# Confirm non-fast-start: top-level boxes are ftyp, free, mdat, then moov LAST.
+```
+
+Then run the driver (Playwright headless Chromium; borrows playwright from
+`src/frontend/node_modules`):
+
+```bash
+node scripts/shrink-spike/qa/t8832-streaming-smoke.mjs
+```
+
+It serves the repo root with COOP/COEP, runs single-shot + streaming(8/32 MB) x
+decode-only/decode+encode, and writes `qa/t8832-streaming-smoke.log`.
+
+**What the smoke run proved (headless container, 2026-09-07):**
+
+| Check | Result |
+|-------|--------|
+| single-shot decode-only frame count | 2700 / 2700 (moov) |
+| streaming 8 MB frame count == single-shot | 2700 == 2700 |
+| streaming 32 MB frame count == single-shot | 2700 == 2700 |
+| frame count matches moov sample count | YES (both chunk sizes) |
+| `releaseUsedSamples` called | 27 calls (8 MB and 32 MB) |
+| mp4box retained buffer count | **max 1, final 1** across the whole run (release working) |
+| both chunk sizes run without error | YES |
+| decode+encode output plays back | YES (8 MB streaming and single-shot; `verifyPlayback` OK) |
+| per-bucket fps sane / flat | single-shot decode+encode: `[0-30s] 73.07 fps`, `[30-60s] 72.99 fps` (flat) |
+
+Frame-count equivalence (streaming == single-shot == moov) is the core correctness proof:
+the faststart-view forward stream decodes exactly the same samples as the whole-file demux.
+The bounded mp4box buffer count (never above 1) is the mechanism proof that
+`releaseUsedSamples` prevents mp4box's own buffer list from growing.
+
+**What this smoke test does NOT prove (explicitly — do not read the numbers as acceptance):**
+- Absolute speed is meaningless here — no GPU, software decode/encode on a container. The
+  ~73 fps decode+encode and ~800-1600 fps decode-only numbers say nothing about real hardware.
+- **JS heap read a constant 304 MB in every run** because headless Chromium's
+  `performance.memory.usedJSHeapSize` is heavily quantized (and
+  `measureUserAgentSpecificMemory` was not exposed in this headless build even with
+  `crossOriginIsolated === true`). This is NOT evidence of flat memory — it is evidence the
+  fallback meter is too coarse to see anything. The real memory verdict must come from a real
+  browser with `measureUserAgentSpecificMemory` (see supervisor table below). The trustworthy
+  memory signal from the container is the **mp4box buffer count**, which is exact and stayed at 1.
+- A 90 s / 142 MB clip cannot stand in for a 4.6-minute 3.3 GB or 45-minute 17 GB run. Two
+  30 s buckets is not an endurance test.
+
+## Real-file results (supervisor fills in after running on real hardware)
+
+Run these on a real machine (real GPU, real DJI files under `formal annotations/`, no worker
+containers up), serving the repo root with COOP/COEP so `measureUserAgentSpecificMemory` works.
+**Do not fabricate — a container cannot produce these.** See the task file
+`docs/plans/tasks/universal-upload/T8832-shrink-spike-full-file-streaming.md` for the full
+acceptance criteria and per-step run order (decode-only on the 17 GB file first, then
+decode+encode on the 3.3 GB file, then the Legends control).
+
+| File | Size | Mode | Chunk | Peak heap | Final heap | Avg fps | Min bucket fps | Verdict |
+|------|------|------|-------|-----------|------------|---------|----------------|---------|
+| DJI_20260718105543_0003_D.MP4 (17.2 GB, co64) | 17.2 GB | streaming, decode-only | 8 MB | | | | | |
+| DJI_20260718105543_0003_D.MP4 | 17.2 GB | streaming, decode-only | 32 MB | | | | | |
+| DJI_20260718120831_0006_D.MP4 (3.3 GB) | 3.3 GB | streaming, decode+encode | 8 MB | | | | | |
+| DJI_20260718120831_0006_D.MP4 | 3.3 GB | streaming, decode+encode | 32 MB | | | | | |
+| Legends 1st half (H.264 1080p) | full | streaming, decode-only | 8/32 MB | | | | | |
+| Legends 1st half | full | streaming, decode+encode | 8/32 MB | | | | | |
+
+**Acceptance targets (from the task file):** 17.2 GB decodes start-to-finish with peak JS
+heap under ~1 GB and no upward slope; 3.3 GB decode+encode completes, output plays, average
+throughput within 20% of T8830's 25 s trim result (~1.4-1.5x realtime), no per-bucket
+degradation; Legends control passes both runs.
+
+## Verdict for T8840 (supervisor writes after the real runs)
+
+*Pending real-hardware runs.* Fill in the proven demux approach (faststart view + forward
+streaming, or the random-access fallback if the faststart view failed for a reason intrinsic
+to it), the chunk size that held memory flat, the `releaseUsedSamples` cadence, and the
+in-flight cap — then rewrite T8840's caveat 1 to that proven approach. The container smoke
+test confirms the faststart-view forward-streaming *mechanism* is correct and bounds mp4box's
+buffers; only the real files can confirm it holds across GB-scale, minutes-long runs.

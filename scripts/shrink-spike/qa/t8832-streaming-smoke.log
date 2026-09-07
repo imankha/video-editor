@@ -1,0 +1,177 @@
+Serving /workspace at http://127.0.0.1:40541 (COOP/COEP on)
+Fixture: /workspace/scripts/shrink-spike/fixtures/synthetic_90s.mp4 (141.9 MB), expected frames: 2700
+
+=== CASE: single-shot / decode-only ===
+crossOriginIsolated: true
+File: synthetic_90s.mp4 (0.14 GB)
+Mode: single-shot | decode-only
+Input codec: avc1.42c01f (1280x720), moov reports 2700 samples
+
+--- Throughput (single-shot, decode-only) ---
+Frames decoded: 2700 / 2700 expected (moov)
+Frames encoded: n/a (decode-only)
+Frame count matches moov: YES
+Wall seconds: 1.65
+End-to-end fps: 1634.82
+Realtime multiplier: 54.549x (source ~29.97fps)
+
+Per-bucket throughput (30 s wall-clock buckets):
+  [0-30s] 2700 frames, 1634.82 fps
+Min bucket fps: 1634.82
+
+Memory (performance.memory.usedJSHeapSize):
+  Peak: 304.0 MB
+  Final: 304.0 MB
+  Samples (MB over time): [304, 304]
+
+Output: skipped (decode-only mode)
+
+=== CASE: streaming 8MB / decode-only ===
+crossOriginIsolated: true
+  [console.log] [Faststart] relocating size=135.3MB moov@141846970→32 mdat@40 moovSize=13KB delta=12962 newSize=141859932 (same=true) analysis=70ms
+File: synthetic_90s.mp4 (0.14 GB)
+Mode: streaming | chunk 8 MB | decode-only
+Faststart: RELOCATING moov (non-fast-start source). logicalSize=141.9 MB, moov=13 KB, mdatRegion=141.8 MB
+Input codec: avc1.42c01f (1280x720), moov reports 2700 samples
+
+--- Throughput (streaming, 8 MB chunks, decode-only) ---
+Frames decoded: 2700 / 2700 expected (moov)
+Frames encoded: n/a (decode-only)
+Frame count matches moov: YES
+Wall seconds: 3.28
+End-to-end fps: 823.99
+Realtime multiplier: 27.494x (source ~29.97fps)
+
+Per-bucket throughput (30 s wall-clock buckets):
+  [0-30s] 2700 frames, 823.99 fps
+Min bucket fps: 823.99
+
+Memory (performance.memory.usedJSHeapSize):
+  Peak: 304.0 MB
+  Final: 304.0 MB
+  Samples (MB over time): [304, 304]
+
+mp4box internal buffers (must stay bounded = releaseUsedSamples working):
+  max retained buffer count during run: 1
+  final buffer count: 1
+  releaseUsedSamples calls: 27
+
+Output: skipped (decode-only mode)
+
+=== CASE: streaming 32MB / decode-only ===
+crossOriginIsolated: true
+  [console.log] [Faststart] relocating size=135.3MB moov@141846970→32 mdat@40 moovSize=13KB delta=12962 newSize=141859932 (same=true) analysis=170ms
+File: synthetic_90s.mp4 (0.14 GB)
+Mode: streaming | chunk 32 MB | decode-only
+Faststart: RELOCATING moov (non-fast-start source). logicalSize=141.9 MB, moov=13 KB, mdatRegion=141.8 MB
+Input codec: avc1.42c01f (1280x720), moov reports 2700 samples
+
+--- Throughput (streaming, 32 MB chunks, decode-only) ---
+Frames decoded: 2700 / 2700 expected (moov)
+Frames encoded: n/a (decode-only)
+Frame count matches moov: YES
+Wall seconds: 2.68
+End-to-end fps: 1006.57
+Realtime multiplier: 33.586x (source ~29.97fps)
+
+Per-bucket throughput (30 s wall-clock buckets):
+  [0-30s] 2700 frames, 1006.57 fps
+Min bucket fps: 1006.57
+
+Memory (performance.memory.usedJSHeapSize):
+  Peak: 304.0 MB
+  Final: 304.0 MB
+  Samples (MB over time): [304, 304]
+
+mp4box internal buffers (must stay bounded = releaseUsedSamples working):
+  max retained buffer count during run: 1
+  final buffer count: 1
+  releaseUsedSamples calls: 27
+
+Output: skipped (decode-only mode)
+
+=== CASE: streaming 8MB / decode+encode ===
+crossOriginIsolated: true
+  [console.log] [Faststart] relocating size=135.3MB moov@141846970→32 mdat@40 moovSize=13KB delta=12962 newSize=141859932 (same=true) analysis=63ms
+File: synthetic_90s.mp4 (0.14 GB)
+Mode: streaming | chunk 8 MB | decode+encode
+Faststart: RELOCATING moov (non-fast-start source). logicalSize=141.9 MB, moov=13 KB, mdatRegion=141.8 MB
+Input codec: avc1.42c01f (1280x720), moov reports 2700 samples
+
+--- Throughput (streaming, 8 MB chunks, decode+encode) ---
+Frames decoded: 2700 / 2700 expected (moov)
+Frames encoded: 2700
+Frame count matches moov: YES
+Wall seconds: 37.26
+End-to-end fps: 72.47
+Realtime multiplier: 2.418x (source ~29.97fps)
+
+Per-bucket throughput (30 s wall-clock buckets):
+  [0-30s] 2157 frames, 71.90 fps
+  [30-60s] 543 frames, 74.82 fps
+Min bucket fps: 71.90
+
+Memory (performance.memory.usedJSHeapSize):
+  Peak: 304.0 MB
+  Final: 304.0 MB
+  Samples (MB over time): [304, 304, 304, 304, 304, 304, 304, 304, 304]
+
+mp4box internal buffers (must stay bounded = releaseUsedSamples working):
+  max retained buffer count during run: 1
+  final buffer count: 1
+  releaseUsedSamples calls: 27
+
+Output size: 134.6 MB
+Output playability: OK (played back)
+
+=== CASE: single-shot / decode+encode ===
+crossOriginIsolated: true
+File: synthetic_90s.mp4 (0.14 GB)
+Mode: single-shot | decode+encode
+Input codec: avc1.42c01f (1280x720), moov reports 2700 samples
+
+--- Throughput (single-shot, decode+encode) ---
+Frames decoded: 2700 / 2700 expected (moov)
+Frames encoded: 2700
+Frame count matches moov: YES
+Wall seconds: 36.96
+End-to-end fps: 73.05
+Realtime multiplier: 2.438x (source ~29.97fps)
+
+Per-bucket throughput (30 s wall-clock buckets):
+  [0-30s] 2192 frames, 73.07 fps
+  [30-60s] 508 frames, 72.99 fps
+Min bucket fps: 72.99
+
+Memory (performance.memory.usedJSHeapSize):
+  Peak: 304.0 MB
+  Final: 304.0 MB
+  Samples (MB over time): [304, 304, 304, 304, 304, 304, 304, 304, 304]
+
+Output size: 134.6 MB
+Output playability: OK (played back)
+
+
+================ VERDICT ================
+  [PASS] single-shot decoded expected frame count
+  [PASS] streaming 8MB frame count == single-shot
+  [PASS] streaming 32MB frame count == single-shot
+  [PASS] streaming 8MB matches moov sample count
+  [PASS] streaming 8MB called releaseUsedSamples (>0)
+  [PASS] streaming 8MB mp4box buffers bounded (max < 32)
+  [PASS] streaming 32MB called releaseUsedSamples (>0)
+  [PASS] streaming 8MB min bucket fps > 0
+  [PASS] no run reported a hard failure
+
+---- decode+encode (best effort, headless encoder support varies) ----
+  streaming 8MB / decode+encode: frames=2700 playable=true failed=false
+  single-shot / decode+encode: frames=2700 playable=true failed=false
+
+---- memory (container heap, NOT a real endurance measurement) ----
+  single-shot / decode-only: peak=304MB final=304MB maxBuffers=n/a releaseCalls=n/a minBucketFps=1634.82
+  streaming 8MB / decode-only: peak=304MB final=304MB maxBuffers=1 releaseCalls=27 minBucketFps=823.99
+  streaming 32MB / decode-only: peak=304MB final=304MB maxBuffers=1 releaseCalls=27 minBucketFps=1006.57
+  streaming 8MB / decode+encode: peak=304MB final=304MB maxBuffers=1 releaseCalls=27 minBucketFps=71.9
+  single-shot / decode+encode: peak=304MB final=304MB maxBuffers=n/a releaseCalls=n/a minBucketFps=72.99
+
+MECHANISM SMOKE: PASS
