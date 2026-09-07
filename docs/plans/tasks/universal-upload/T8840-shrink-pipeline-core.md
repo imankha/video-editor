@@ -183,6 +183,17 @@ updated 2026-09-07 with T8832's real-hardware proof)
    preset (3840-wide, 24 Mbps) on the 25 s trim in the same session - encode-bound
    means it is the slow case and T8850's estimates need the number. A fail here
    re-scopes the task; do not build steps 1-6 on an unproven muxer/audio path.
+   **Also required (added 2026-09-07, design doc R11):** a visual side-by-side of the
+   source frame against the Recommended-preset H.264 output at matched viewing size,
+   checking BOTH color (R3 - BT.2020/HLG source into an sRGB canvas tagged bt709 can
+   wash out or shift color) AND compression artifacts (R11 - H.264 is less efficient
+   than the source's 10-bit HEVC at the same bits-per-pixel, so a preset that targets
+   the source's own bpp is not guaranteed equivalent quality, just equivalent density).
+   Use real footage with grass texture, motion, and skin tones - where softness/blocking
+   shows first. If either check fails, the fix is a constant change in `presets.js`
+   (raise the affected preset's bitrate, or add an explicit canvas colorSpace) - never a
+   new user-facing setting, per the standing rule that quality-neutral optimizations are
+   silent and only framing (crop) is the user's call.
 1. [ ] `pipeline/demux.js` + `decode.js` + `cropScale.js` + `encode.js`: the T8832
    faststart view + 32 MB forward chunks (caveat 1, never random access), backpressure
    cap 32, crop rect applied in `drawImage` (OffscreenCanvas 2D; WebGPU is a later

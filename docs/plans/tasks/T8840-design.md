@@ -1,6 +1,6 @@
 # T8840 Design: Standalone browser shrink tool (zero app integration)
 
-**Status:** APPROVED (2026-09-07) — all 8 open questions accepted per the design's recommendations
+**Status:** APPROVED (2026-09-07) — all 8 open questions accepted per the design's recommendations. Amended same day (R11 added below) per user direction: prioritize no visible quality loss over minimizing shrink/upload time.
 **Author:** Architect Agent
 **Created:** 2026-09-07
 **Task file:** [universal-upload/T8840-shrink-pipeline-core.md](universal-upload/T8840-shrink-pipeline-core.md)
@@ -958,6 +958,7 @@ by ear.
 | R8 | **Scope creep**: this tool has a full UI and it is throwaway-adjacent | Medium | The UI is 4 files and is explicitly not ported by T8845 (T8850 rebuilds it in React). Review the `pipeline/` boundary hard and the UI lightly |
 | R9 | **T8838 lands after T8840** and the shared module does not exist yet | Medium | §7's "whichever lands first creates it" rule, with the exact signature fixed here so neither task has to guess |
 | R10 | **The `.LRF` field of view might not match its `.MP4`** on some camera modes | Low | Recipe step 5 ("the crop is right") is the check. If it ever mismatches, the fallback is to preview from the original file, which is already the rung-2 path |
+| R11 | **H.264 output vs. HEVC source is not equivalent quality at matched bits/pixel.** All three presets target roughly the source's own bits-per-pixel (source ~0.098; Sharpest ~0.097, Recommended ~0.099, Smallest ~0.113 — computed from the real DJI bitrate/resolution/fps), which is the right instinct for preserving detail, but H.264 is a less efficient codec than 10-bit HEVC at the same bpp, so Recommended and Sharpest (the two running closest to the source's own density) may look softer or blockier than the source, not just downscaled. HEVC output was considered and rejected for browser playback compatibility (Firefox and much of Chrome lack HEVC decode) — that is a real, separate axis from quality, not something to trade away | Medium | **User direction 2026-09-07: no visible quality loss takes priority over minimizing shrink/upload time, and any quality-neutral optimization should be automatic, never a user-facing choice.** Step 0's already-planned visual side-by-side (R3) is extended from a color-only check to an explicit compression-artifact A/B: source vs. Recommended-preset H.264 output at matched viewing size, on real footage (grass texture, motion, skin tones — the surfaces where blocking/softness show first). If it's visibly worse, the fix is raising `PRESETS.recommended.bitrate` (and `sharpest.bitrate` if it shows the same issue) in `presets.js` — a constant change, no new UI, no codec switch, keeping H.264's compatibility. Reference sample clips (source + all three presets, real footage, no crop, ffmpeg/libx264 approximation ahead of the real WebCodecs build) were produced for a manual look ahead of Step 0 proper |
 
 ---
 

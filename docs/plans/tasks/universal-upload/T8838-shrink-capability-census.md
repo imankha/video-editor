@@ -1,6 +1,6 @@
 # T8838: Shrink capability census (probe real users' devices before building the UI)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-07
