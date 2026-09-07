@@ -33,6 +33,33 @@ are BINDING constraints on this task.
   backpressure code as the starting point)
 - Blocks: T8850, T8860
 
+### T8830 binding caveats (from `scripts/shrink-spike/README.md` "Verdict", copied
+verbatim 2026-09-06 - final GO WITH CAVEATS, one physical machine tested: Chrome 152 +
+Edge 140, i7-13700H / Iris Xe + RTX 4060 Laptop GPU)
+1. **Chunked random-access demux is mandatory.** Real camera files are non-fast-start
+   (mdat before moov); a sequential streaming demux cannot work, and a single-shot
+   `file.arrayBuffer()` fails in Chrome at 3.3 GB. Locate moov by top-level box hopping,
+   parse the sample table, then `file.slice()` per sample/chunk.
+2. **Use mp4box >= 2.4.1** (0.5.x mis-parses >2 GB atoms) and give `VideoEncoder` an
+   explicit `colorSpace` (mp4-muxer crashes at finalize without one).
+3. **Backpressure off `decoder.decodeQueueSize` / `dequeue`, cap >= 32.** A small
+   hand-rolled in-flight count deadlocks against the hardware decoder's pipeline depth.
+4. **Encode-bound, not decode-bound.** 1080p and 8K sources both land at ~42-123 fps
+   into the same output target - the preset's OUTPUT size drives shrink time, not the
+   input resolution (T8850's live time estimates should key off output pixels x bitrate).
+5. Speed was verified on only one physical machine (above-average discrete GPU); a
+   second machine was not available for T8830. Ordinary users' hardware is unverified by
+   that spike - closed by caveat 6, not by more dev-machine sampling.
+6. **`canShrink()`/`isConfigSupported` answers capability, not speed - do not treat
+   "supported" as "fast enough."** Since the pipeline is encode-bound (#4), a weaker
+   device can pass the capability check in `capability.js` and still run far below
+   realtime. This task must add a real per-device runtime speed probe (time a short
+   real decode+encode sample - a second or two of actual footage - on the user's own
+   device before committing to the full client-side shrink) and fall back to
+   server-side Modal processing when the probe comes back too slow. This is how T8830's
+   single-machine gap gets closed in production: measuring every real user's device at
+   runtime, rather than pre-sampling enough dev hardware to stand in for it.
+
 ### Technical Notes
 - Presets (`presets.js`), applied AFTER crop: `sharpest` (cap output width 3840,
   ~24 Mbps), `recommended` (cap 2688, ~12 Mbps), `smallest` (cap 1920, ~7 Mbps). Never
@@ -67,7 +94,10 @@ are BINDING constraints on this task.
 3. [ ] Implement `presets.js` with the table + estimator and unit tests (pure math).
 4. [ ] Implement `shrinkClient.js`: `shrinkFile(file, crop, preset, {onProgress, signal})`
    -> Promise<File>, wrapping the worker, one worker per call, AbortSignal -> cancel.
-5. [ ] Implement `capability.js` with a 'result memoized per codec string' cache.
+5. [ ] Implement `capability.js` with a 'result memoized per codec string' cache. Also
+   add a runtime speed probe (short real decode+encode sample) so a device that passes
+   the capability check but is too slow triggers a Modal server-side fallback instead
+   of silently running client-side at an unusable speed (T8830 caveat 6).
 6. [ ] Tests: presets math unit tests; a worker-protocol test with a mocked worker
    (message sequencing, cancel path, error propagation). Real-decode paths are covered by
    a MANUAL verification checklist in the task file (run on the real DJI segment:
@@ -85,4 +115,7 @@ are BINDING constraints on this task.
 - [ ] Cancel mid-shrink terminates within 2s and frees resources
 - [ ] Progress events arrive throttled with sane fps numbers
 - [ ] `canShrink` returns false gracefully on a Firefox run (manual check) - no throw
+- [ ] A device that passes the capability check but probes below the speed threshold
+      falls back to Modal server-side processing instead of running client-side (T8830
+      caveat 6)
 - [ ] Unit tests green; manual checklist executed and recorded in the Progress Log

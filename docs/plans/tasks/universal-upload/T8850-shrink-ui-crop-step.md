@@ -35,6 +35,16 @@ upload time (T8860). Mockups + ALL microcopy: artifact screens E and F (link in
   renders the "Will shrink to ~{size}" badge), T8800 (`proxies` map for preview frames)
 - Blocks: T8860
 
+### T8830 finding this task must respect
+The shrink spike (T8830) found the pipeline is **encode-bound, not decode-bound**: a
+1080p source and an 8K source land at nearly the same throughput once both are encoding
+to the same output size - the OUTPUT preset (pixels x bitrate), not the input file's
+resolution, drives processing time. The size estimator already keys off preset
+bitrate x duration (correct per this finding). If this task or a later one ever adds a
+live TIME estimate for the shrink step itself (not just size/upload-time), it must key
+off output pixels x bitrate the same way - never off input resolution, which would
+under-estimate 8K sources and over-estimate small ones.
+
 ### Technical Notes
 - Offer renders ONLY when `totalBytes > SHRINK_OFFER_MIN_BYTES (3 GB)` AND
   `canShrink(...)` resolved true for every selected video's codec. Card copy: "This

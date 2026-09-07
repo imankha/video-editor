@@ -1,6 +1,6 @@
 # T8830: Shrink spike: WebCodecs 8K benchmark (go/no-go)
 
-**Status:** WAITING ON USER
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-05
@@ -50,16 +50,19 @@ this validates.
 ## Implementation
 
 ### Steps
-1. [ ] Build the page: file input, Run button, and a results `<pre>` that reports:
+1. [x] Build the page: file input, Run button, and a results `<pre>` that reports:
    support verdict, frames decoded, wall seconds, decode fps, end-to-end fps,
    realtime multiplier (fps / 29.97), output size, and output playability (attach the
    result Blob to a `<video>` and play 5 seconds).
-2. [ ] Run on at least 2 real machines (the dev desktop + one laptop) in Chrome, and once
+2. [x] Run on at least 2 real machines (the dev desktop + one laptop) in Chrome, and once
    in Edge. Record every row in README.md: CPU/GPU, OS, browser version, support verdict,
    realtime multiplier per stage.
-3. [ ] Also measure the Legends 1080p-class file as a control (should be far above
+   - Only one physical machine was reachable (Chrome + Edge both run there); see
+     README.md "Why one machine is treated as sufficient" and caveat 6 for how the gap
+     is closed instead (T8840 runtime speed probe + Modal fallback).
+3. [x] Also measure the Legends 1080p-class file as a control (should be far above
    realtime; if it is not, the pipeline has a bug, not a hardware limit).
-4. [ ] Write the verdict in README.md and the Progress Log here:
+4. [x] Write the verdict in README.md and the Progress Log here:
    - GO: end-to-end >= 0.5x realtime on at least one ordinary machine.
    - GO WITH CAVEATS: works but only via specific settings (e.g. H.264-only encode,
      smaller output) - list them; T8840 inherits them as constraints.
@@ -108,6 +111,18 @@ pipeline has a bug"). Also learned: 1080p decodes at 57 fps vs 8K at 46 fps into
 same 2688x1512 target, so the pipeline is **encode-bound** - output size, not source
 resolution, drives shrink time. Commit 238f00ea on the branch; README verdict promoted to
 **GO WITH CAVEATS - PRELIMINARY** with T8840's binding caveats enumerated.
+
+**2026-09-06 (finished)**: Same physical machine (a second machine was not available) run
+in Edge 140: DJI 8K trim **1.419x realtime**, Legends control **4.113x realtime**, both
+muxed + played back. User confirmed the actual risk of one-machine testing is not
+crash-on-unsupported-hardware (the capability probe already reports a clean NO-GO for
+that) but silently-too-slow-on-weaker-hardware (isConfigSupported answers support, not
+throughput, and the pipeline is encode-bound per the earlier finding) - and directed
+closing that risk via a new binding caveat instead of blocking on more physical
+machines: T8840 must add a per-device runtime speed probe with a Modal fallback for
+devices that come back too slow. Verdict promoted to **GO WITH CAVEATS** (no longer
+PRELIMINARY) in README.md, with this as caveat 6. Caveats copied into T8840 and the
+encode-bound finding into T8850 (see below).
 
 ## Handoff: finishing this task (written 2026-09-06 for a fresh session)
 
@@ -159,10 +174,13 @@ containers down.
 
 ## Acceptance Criteria
 
-- [ ] README.md contains a filled results table from >= 2 machines + the verdict
-      (1 machine filled as of 2026-09-06; second machine + Edge owed)
+- [x] README.md contains a filled results table from >= 2 machines + the verdict
+      - one physical machine only (Chrome + Edge); a second machine was not available,
+        and the user directed closing that gap via a T8840 runtime speed-probe caveat
+        instead of blocking on more hardware (2026-09-06)
 - [x] The output Blob plays in a video element (proves mux correctness, not just speed)
-      - verified for both the DJI 8K trim and the Legends 1080p control, 2026-09-06
+      - verified for both the DJI 8K trim and the Legends 1080p control, in both Chrome
+        and Edge, 2026-09-06
 - [x] Nothing from this spike is imported by app code
-- [ ] Verdict + numbers reported to the user before any T8840 work starts (preliminary
-      GO WITH CAVEATS reported 2026-09-06; final report after the second machine)
+- [x] Verdict + numbers reported to the user before any T8840 work starts
+      - final GO WITH CAVEATS reported 2026-09-06
