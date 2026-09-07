@@ -1,7 +1,8 @@
 import React from 'react';
-import { Film, Scissors } from 'lucide-react';
+import { Film, Scissors, Video } from 'lucide-react';
 import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBase';
 import ClipRegionLayer from './layers/ClipRegionLayer';
+import AngleLanes from './AngleLanes';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
 /**
@@ -41,14 +42,30 @@ export function AnnotateTimeline({
   onLayerSelect,
   // T2750: Video boundary markers
   boundaryOffsets,
+  // T8890: overlap-angle data (null for angle-free games -> zero angle pixels)
+  angleData = null,
 }) {
   const isMobile = useIsMobile();
+
+  // T8890: render angle UI ONLY when angles genuinely exist (EPIC: zero angles =
+  // zero pixels). For an angle-free game angleData is null, so every branch below
+  // is inert and the DOM is byte-identical to pre-T8890.
+  const hasAngles = !!angleData && angleData.angles.length > 0;
+  const shownAngleRows = hasAngles ? (isMobile ? 1 : Math.min(angleData.laneCount, 3)) : 0;
 
   // Fixed layer height for Annotate.
   // Mobile: Video (h-8 = 2rem) + single Clips track (ClipRegionLayer's track root
   // is always h-12 = 3rem) + margin + buffer.
   // Desktop: Video (h-12 = 3rem) + My Athlete lane (h-12) + Team lane (h-12) + margins + buffer.
-  const totalLayerHeight = isMobile ? '6.75rem' : '9.75rem';
+  // The angle strip adds height ONLY when angles exist.
+  const baseHeightRem = isMobile ? 6.75 : 9.75;
+  const angleExtraRem = hasAngles
+    ? (isMobile ? 1.125 /* mt-1 + h-3.5 */ : 0.25 + shownAngleRows * 1.375 /* mt-1 + rows*(h-5+mb-0.5) */)
+    : 0;
+  const totalLayerHeight = `${baseHeightRem + angleExtraRem}rem`;
+
+  const leftCalc = (t) => `calc(${EDGE_PADDING}px + (100% - ${2 * EDGE_PADDING}px) * ${t / duration})`;
+  const widthCalc = (a, b) => `calc((100% - ${2 * EDGE_PADDING}px) * ${(b - a) / duration})`;
 
   // Legacy-NULL rule (T5700): region.my_athlete ?? true -> My Athlete.
   const mineRegions = regions.filter(region => region.my_athlete !== false);
@@ -75,6 +92,22 @@ export function AnnotateTimeline({
       >
         <Film size={18} className="text-blue-400" />
       </div>
+
+      {/* T8890: Angles label — aligns with the angle strip (first child below the
+          scrubber). Rendered only when angles exist (zero angles = zero pixels). */}
+      {hasAngles && (
+        <div
+          data-testid="angle-lane-label"
+          className="mt-1 flex items-center justify-center border-r border-violet-500/40 bg-gray-900"
+          style={{ height: `${angleExtraRem - 0.25}rem` }}
+          title="Camera angles — click a bar to switch"
+        >
+          <div className="flex items-center gap-1 px-2 text-violet-300">
+            <Video size={14} />
+            <span className="text-xs">Angles</span>
+          </div>
+        </div>
+      )}
 
       {isMobile ? (
         // Phone: single tinted Clips track (unchanged from pre-follow-up T5700 shape)
@@ -133,6 +166,19 @@ export function AnnotateTimeline({
       selectedLayer={selectedLayer}
       onLayerSelect={onLayerSelect}
     >
+      {/* T8890: angle strip — first child (directly below the scrubber, above the
+          clip lanes). Only mounted when angles exist. */}
+      {hasAngles && (
+        <AngleLanes
+          angles={angleData.angles}
+          laneCount={angleData.laneCount}
+          duration={duration}
+          activeSourceSequence={angleData.activeSourceSequence}
+          onSelectAngle={angleData.onSelectAngle}
+          edgePadding={EDGE_PADDING}
+          isMobile={isMobile}
+        />
+      )}
       {isMobile ? (
         <div className="mt-1" data-testid="clip-track-mobile">
           <ClipRegionLayer
@@ -142,6 +188,7 @@ export function AnnotateTimeline({
             onSelectRegion={onSelectRegion}
             onDeleteRegion={onDeleteRegion}
             edgePadding={EDGE_PADDING}
+            angleSequences={angleData?.angleSequences}
           />
         </div>
       ) : (
@@ -155,6 +202,7 @@ export function AnnotateTimeline({
               onDeleteRegion={onDeleteRegion}
               edgePadding={EDGE_PADDING}
               emptyMessage="No My Athlete clips yet"
+              angleSequences={angleData?.angleSequences}
             />
           </div>
           <div className="mt-0.5 lg:mt-1" data-testid="clip-lane-team">
@@ -166,10 +214,27 @@ export function AnnotateTimeline({
               onDeleteRegion={onDeleteRegion}
               edgePadding={EDGE_PADDING}
               emptyMessage="No Team clips yet"
+              angleSequences={angleData?.angleSequences}
             />
           </div>
         </>
       )}
+      {/* T8890: coverage-extension hatch on the main track — "no main camera"
+          stretches where only an angle has footage. */}
+      {hasAngles && angleData.extensions?.map((ext) => (
+        <div
+          key={`ext-${ext.virtualStart}`}
+          data-testid="angle-extension-hatch"
+          className="absolute top-0 bottom-0 pointer-events-none"
+          title="Only your sideline clip covers this part"
+          style={{
+            left: leftCalc(ext.virtualStart),
+            width: widthCalc(ext.virtualStart, ext.virtualEnd),
+            zIndex: 4,
+            background: 'repeating-linear-gradient(45deg, rgba(55,65,81,0.55) 0, rgba(55,65,81,0.55) 6px, rgba(31,41,55,0.55) 6px, rgba(31,41,55,0.55) 12px)',
+          }}
+        />
+      ))}
       {/* T2750: Video boundary markers */}
       {boundaryOffsets?.map(offset => {
         return (

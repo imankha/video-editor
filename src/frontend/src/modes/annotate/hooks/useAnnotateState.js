@@ -73,6 +73,15 @@ export default function useAnnotateState() {
   const [newClipLayerIsMine, setNewClipLayerIsMine] = useState(true);
   const [layerFilter, setLayerFilter] = useState(DEFAULT_LAYER_FILTER);
 
+  // T8890: which camera "angle" the user is currently watching in an overlap
+  // game. Pure EPHEMERAL view state (EPIC decision 10) — null means the backbone
+  // ("main camera"), the default. Resets on the game-open gesture (below); it is
+  // NEVER persisted and NEVER written from a state-watching effect. The concrete
+  // backbone sequence is resolved lazily at read sites from buildGameTimeline, so
+  // there is no load-time write-back to seed a default (that would be the banned
+  // reactive-persistence shape). Inert for angle-free games (stays null).
+  const [activeSourceSequence, setActiveSourceSequence] = useState(null);
+
   // Ref for fullscreen container
   const annotateContainerRef = useRef(null);
 
@@ -150,6 +159,7 @@ export default function useAnnotateState() {
     setAnnotateSelectedLayer(DEFAULT_SELECTED_LAYER);
     setNewClipLayerIsMine(true);
     setLayerFilter(DEFAULT_LAYER_FILTER);
+    setActiveSourceSequence(null);
   }, [annotateVideoUrl, annotateVideoFile]);
 
   /**
@@ -235,6 +245,10 @@ export default function useAnnotateState() {
     setNewClipLayerIsMine,
     layerFilter,
     setLayerFilter,
+
+    // T8890: active camera angle (view state, null = backbone / main camera)
+    activeSourceSequence,
+    setActiveSourceSequence,
 
     // Refs
     annotateContainerRef,

@@ -1,5 +1,38 @@
 ---
 domain: annotate
+updated: 2026-09-06 (T8890 renders T8880's overlap model in Annotate: the violet ANGLE STRIP + source
+switching. NEW components `modes/annotate/AngleLanes.jsx` (per-lane bars above the clip lanes, mobile ONE
+merged `h-3.5` strip, positioned with the shared EDGE_PADDING calc) and `modes/annotate/AngleSwitcherBadge.jsx`
+(over-video pill, shown at rest only when `sourcesAt(playhead).length >= 2`: 2 sources = segmented
+`Main camera | {angle}`, 3+ = chevron popover; also renders the transient `Back to main camera` label).
+**buildGameTimeline gained a T8890 surface** (useVirtualTimeline.js): `kind:'overlap'` (the discriminator
+EVERY consumer branches on), `sourceTimeToVirtual(seq, fileTime)` (exact file->virtual via wallToVirtual --
+use this, NOT a constant getVideoOffset, for angle clip mapping), and a playback-compat block
+(`segments`/`virtualToActual`/`actualToVirtual`/`getVideoBoundaries` over the backbone+extension domain) so
+`useVideoProxy` drives the A/B player unchanged. **useVideoProxy now builds buildGameTimeline for overlap
+games** (angle-free -- incl. halftime-gap multi-video -- stays byte-identical on buildFullVideoTimeline; the
+kind-branches for URL resolution/getCurrentTime are inert there) and gained `switchSource(sequence, fileTime)`
+= the EXACT idle-slot seeked/canplay swap as a cross-boundary seek, different target. **LANDMINE (reviewer-
+caught, fixed):** `switchSource` MUST resync `currentVideoIndexRef` to the backbone segment under the wall
+position (`virtualToActual(sourceTimeToVirtual(seq,fileTime)).videoIndex`) for BOTH the angle switch and the
+fallback-to-backbone -- else an angle spanning a backbone-segment boundary leaves the index stale and the RAF
+tick mis-reads a backbone source as an active angle and stops advancing past the next boundary. **ACTIVE SOURCE
+IS EPHEMERAL VIEW STATE** (`activeSourceSequence` in useAnnotateState, null=backbone, reset in
+resetAnnotateState, NEVER persisted, NEVER seeded via a state-watching effect -- the backbone default resolves
+lazily at read sites). Container (AnnotateContainer): `switchToSource` gesture (angle bar / badge / selecting an
+angle clip auto-activates its source), an AUTO-FALLBACK useEffect (playhead exits the angle span -> revert to
+backbone + 1.5s label; writes only local view state in response to the playhead, same shape as auto-deselect,
+NO backend/store write), clip SAVE binds to the active angle via `virtualToSource(startTime, activeSourceSequence)`
+with the out-point clamped by `clampToSource` (EPIC decision 10: a clip is cut from ONE source, permanent). Every
+`fullTimeline` consumer that used buildFullVideoTimeline-only methods (getVideoOffset/virtualToActual/segments)
+in AnnotateContainer + AnnotateScreen is now KIND-BRANCHED: overlap uses sourceTimeToVirtual/virtualToSource, the
+`else` keeps the old code verbatim (angle-free byte-identical -- the epic's recurring common-case-regression guard).
+Clip visuals: `ClipRegionLayer` gets a violet top border + camera glyph and `ClipListItem` a violet `[cam] {name}`
+pill ONLY for a clip whose videoSequence is in the angle set (backbone clips: nothing). Extension segments render a
+diagonal hatch on the main track. **Equivalence guaranteed by test** (`AnnotateTimeline.angleStrip.test.jsx`:
+absent angleData == null == identical DOM, zero angle-UI pixels). Angle strip mounts as the FIRST layer child (below
+the scrubber, above the clip lanes); `totalLayerHeight` grows ONLY when angles exist. NO real overlap game can be
+created until T8900 (fix-timing) / T8910 (add-in-annotate), so the whole angle UI is INERT in prod today. Prior:)
 updated: 2026-09-06 (T8880 adds the OVERLAP-AWARE timeline builder `buildGameTimeline(gameVideos)` in
 `useVirtualTimeline.js` (below the UNTOUCHED `buildFullVideoTimeline` ~L136-217 -- angle-free games stay
 byte-identical forever). It derives the lane model at render time (EPIC decisions 7+9), never stored:

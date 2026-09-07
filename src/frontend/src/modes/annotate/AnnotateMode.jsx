@@ -24,6 +24,7 @@ export default function AnnotateMode({
   selectedLayer = 'clips',
   onLayerSelect,
   boundaryOffsets,
+  angleData = null,
 }) {
   if (!duration) return null;
 
@@ -41,6 +42,7 @@ export default function AnnotateMode({
         selectedLayer={selectedLayer}
         onLayerSelect={onLayerSelect}
         boundaryOffsets={boundaryOffsets}
+        angleData={angleData}
       />
     </div>
   );

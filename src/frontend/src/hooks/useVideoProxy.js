@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { buildFullVideoTimeline } from '../modes/annotate/hooks/useVirtualTimeline';
+import { buildFullVideoTimeline, buildGameTimeline, hasOverlappingAngles } from '../modes/annotate/hooks/useVirtualTimeline';
 import { classifyVideoError, VideoErrorKind } from '../utils/videoErrorClassifier';
 
 /**
@@ -25,16 +25,29 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
   const pendingSwapRef = useRef(null);
   const retryCountRef = useRef(0);
   const MAX_RETRY_ATTEMPTS = 2;
+  // T8890: sequence of the source file currently in the ACTIVE slot. For a
+  // backbone-only (angle-free) game this stays in lockstep with the current
+  // playback segment; switchSource sets it to an angle's sequence when an angle
+  // is showing. Null for single/legacy paths (unused there).
+  const activeSourceSeqRef = useRef(null);
 
   const [virtualTime, setVirtualTime] = useState(0);
   const [activeSlotLabel, setActiveSlotLabel] = useState('A');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // T8890: an overlap game drives playback off buildGameTimeline (backbone +
+  // coverage extensions); every angle-free multi-video game (incl. halftime
+  // gaps) stays on the byte-identical buildFullVideoTimeline path -- same
+  // selector AnnotateContainer uses.
   const fullTimeline = useMemo(
-    () => isMultiVideo ? buildFullVideoTimeline(videos) : null,
+    () => {
+      if (!isMultiVideo) return null;
+      return hasOverlappingAngles(videos) ? buildGameTimeline(videos) : buildFullVideoTimeline(videos);
+    },
     [videos, isMultiVideo],
   );
+  const isOverlap = fullTimeline?.kind === 'overlap';
 
   // --- Internal helpers (also exposed for consuming hooks' RAF loops) ---
 
@@ -56,6 +69,22 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
     const v = videos[index];
     return v?.url || v?.serverUrl;
   }, [videos]);
+
+  // T8890: resolve a source URL by its sequence (overlap playback maps segments
+  // to source files by sequence, not array position, since the backbone is a
+  // subset of videos and extensions reference their owning angle).
+  const getVideoUrlBySeq = useCallback((seq) => {
+    if (!videos || seq == null) return null;
+    const v = videos.find((x) => x.sequence === seq);
+    return v?.url || v?.serverUrl || null;
+  }, [videos]);
+
+  // URL for playback SEGMENT index: sequence-keyed for overlap, array-keyed for
+  // the legacy concatenated timeline (keeps the halftime path byte-identical).
+  const getSegmentUrl = useCallback((segIndex) => {
+    if (isOverlap) return getVideoUrlBySeq(fullTimeline.segments[segIndex]?.videoSequence);
+    return getVideoUrl(segIndex);
+  }, [isOverlap, fullTimeline, getVideoUrlBySeq, getVideoUrl]);
 
   const cancelPendingSwap = useCallback(() => {
     if (pendingSwapRef.current) {
@@ -82,19 +111,21 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
     if (!fullTimeline || !isMultiVideo) return;
     const a = videoARef.current;
     const b = videoBRef.current;
+    const segCount = isOverlap ? fullTimeline.segments.length : videos.length;
     if (a) {
-      a.src = getVideoUrl(0);
+      a.src = getSegmentUrl(0);
       a.load();
     }
-    if (b && videos.length > 1) {
-      b.src = getVideoUrl(1);
+    if (b && segCount > 1) {
+      b.src = getSegmentUrl(1);
       b.load();
     }
     activeVideoRef.current = 'A';
     currentVideoIndexRef.current = 0;
+    activeSourceSeqRef.current = isOverlap ? (fullTimeline.segments[0]?.videoSequence ?? null) : null;
     setActiveSlotLabel('A');
     setVirtualTime(0);
-  }, [fullTimeline, isMultiVideo, getVideoUrl, videos?.length]);
+  }, [fullTimeline, isMultiVideo, isOverlap, getSegmentUrl, videos?.length]);
 
   useEffect(() => {
     if (videos) setError(null);
@@ -122,11 +153,18 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
     const { active, inactive } = getVideos();
     if (!active) return;
 
-    if (result.videoIndex !== currentVideoIndexRef.current) {
+    // T8890: a plain seek always follows the BACKBONE spine. If an angle is
+    // currently showing (activeSourceSeqRef diverged from this segment's source),
+    // swap back to the backbone source even when the segment index is unchanged.
+    const targetSeq = isOverlap ? result.videoSequence : null;
+    const needSwap = result.videoIndex !== currentVideoIndexRef.current
+      || (isOverlap && activeSourceSeqRef.current !== targetSeq);
+
+    if (needSwap) {
       const wasPlaying = !active.paused;
       active.pause();
 
-      const targetUrl = getVideoUrl(result.videoIndex);
+      const targetUrl = isOverlap ? getVideoUrlBySeq(targetSeq) : getVideoUrl(result.videoIndex);
       if (inactive && inactive.src !== targetUrl) {
         inactive.src = targetUrl;
         inactive.load();
@@ -142,6 +180,7 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
           pendingSwapRef.current = null;
           swapVideos();
           currentVideoIndexRef.current = result.videoIndex;
+          activeSourceSeqRef.current = targetSeq;
           setIsLoading(false);
 
           const { active: newActive, inactive: newInactive } = getVideos();
@@ -152,10 +191,11 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
             newActive.play().catch(() => {});
           }
 
+          const segCount = isOverlap ? fullTimeline.segments.length : videos.length;
           const adjacentIndex = result.videoIndex === 0 ? 1 : result.videoIndex - 1;
-          if (newInactive && videos && adjacentIndex >= 0 && adjacentIndex < videos.length) {
-            const adjUrl = getVideoUrl(adjacentIndex);
-            if (newInactive.src !== adjUrl) {
+          if (newInactive && adjacentIndex >= 0 && adjacentIndex < segCount) {
+            const adjUrl = getSegmentUrl(adjacentIndex);
+            if (adjUrl && newInactive.src !== adjUrl) {
               newInactive.src = adjUrl;
               newInactive.load();
             }
@@ -167,12 +207,74 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
       } else {
         swapVideos();
         currentVideoIndexRef.current = result.videoIndex;
+        activeSourceSeqRef.current = targetSeq;
       }
     } else {
       active.currentTime = result.actualTime;
     }
     setVirtualTime(vt);
-  }, [isMultiVideo, fullTimeline, getVideos, getVideoUrl, swapVideos, cancelPendingSwap, videos]);
+  }, [isMultiVideo, fullTimeline, isOverlap, getVideos, getVideoUrl, getVideoUrlBySeq, getSegmentUrl, swapVideos, cancelPendingSwap, videos]);
+
+  // --- T8890: source switching (angles) ---
+  // The SAME idle-slot swap as a cross-boundary seek, but the target is an
+  // arbitrary source file (an angle) at a given file-relative time rather than
+  // the next backbone segment. currentVideoIndexRef keeps pointing at the
+  // underlying backbone segment (the fallback target); only activeSourceSeqRef
+  // moves. Switching back to the backbone source is just switchSource(backboneSeq).
+  const switchSource = useCallback((sequence, fileTime) => {
+    if (!isMultiVideo || !isOverlap || !fullTimeline) return;
+    const targetUrl = getVideoUrlBySeq(sequence);
+    if (!targetUrl) return;
+    const { active, inactive } = getVideos();
+    if (!active) return;
+
+    // The backbone playback segment sitting UNDER this wall position is the
+    // fallback target + the reference the RAF tick advances on. Keep
+    // currentVideoIndexRef pinned to it whenever we switch (angle OR backbone),
+    // so an angle that spans a backbone boundary can't leave the index stale
+    // (reviewer T8890): after fallback, activeSourceSeqRef == this segment's
+    // source, so `angleActive` reads false and boundary-advance re-engages.
+    const underlyingVirtual = fullTimeline.sourceTimeToVirtual(sequence, fileTime);
+    const underlyingIndex = fullTimeline.virtualToActual(underlyingVirtual).videoIndex;
+
+    // Same source already showing -> just seek it (no swap needed).
+    if (activeSourceSeqRef.current === sequence) {
+      active.currentTime = fileTime;
+      currentVideoIndexRef.current = underlyingIndex;
+      return;
+    }
+    if (!inactive) return;
+
+    const wasPlaying = !active.paused;
+    active.pause();
+    if (inactive.src !== targetUrl) {
+      inactive.src = targetUrl;
+      inactive.load();
+    }
+    cancelPendingSwap();
+    inactive.currentTime = fileTime;
+    setIsLoading(true);
+
+    const onReady = () => {
+      inactive.removeEventListener('seeked', onReady);
+      inactive.removeEventListener('canplay', onReady);
+      pendingSwapRef.current = null;
+      swapVideos();
+      activeSourceSeqRef.current = sequence;
+      currentVideoIndexRef.current = underlyingIndex;
+      setIsLoading(false);
+
+      const { active: newActive, inactive: newInactive } = getVideos();
+      if (newInactive && !newInactive.paused) newInactive.pause();
+      if (wasPlaying && newActive) {
+        newActive.playbackRate = playbackRateRef.current;
+        newActive.play().catch(() => {});
+      }
+    };
+    pendingSwapRef.current = { el: inactive, handler: onReady };
+    inactive.addEventListener('seeked', onReady, { once: true });
+    inactive.addEventListener('canplay', onReady, { once: true });
+  }, [isMultiVideo, isOverlap, fullTimeline, getVideoUrlBySeq, getVideos, swapVideos, cancelPendingSwap]);
 
   // --- Error handling ---
 
@@ -242,6 +344,13 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
       if (isMultiVideo) {
         const active = getVideos().active;
         if (!active || !fullTimeline) return 0;
+        // T8890: when an angle is showing (its source != the backbone segment's
+        // source), the active element's currentTime is angle-file time -- map it
+        // through the wall axis, not the backbone segment's time base.
+        if (isOverlap && activeSourceSeqRef.current != null
+            && activeSourceSeqRef.current !== fullTimeline.segments[currentVideoIndexRef.current]?.videoSequence) {
+          return fullTimeline.sourceTimeToVirtual(activeSourceSeqRef.current, active.currentTime);
+        }
         return fullTimeline.actualToVirtual(currentVideoIndexRef.current, active.currentTime);
       }
       return videoARef.current?.currentTime ?? 0;
@@ -252,7 +361,7 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
     },
     getActiveElement: () => isMultiVideo ? getVideos().active : videoARef.current,
     _renderRefs: isMultiVideo ? { videoARef, videoBRef } : { videoARef },
-  }), [isMultiVideo, seek, getVideos, fullTimeline]);
+  }), [isMultiVideo, isOverlap, seek, getVideos, fullTimeline]);
 
   return {
     videoController,
@@ -278,6 +387,10 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
     currentVideoIndexRef,
     playbackRateRef,
     setVirtualTime,
+    // T8890: source switching (angles)
+    switchSource,
+    activeSourceSeqRef,
+    getVideoUrlBySeq,
   };
 }
 

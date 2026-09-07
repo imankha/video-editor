@@ -21,6 +21,7 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
   const [isPlaying, setIsPlaying] = useState(false);
 
   const startTimeUpdateLoop = useCallback(() => {
+    const isOverlap = proxy.timeline?.kind === 'overlap';
     const tick = () => {
       if (!isPlayingRef.current || !proxy.timeline) return;
 
@@ -31,14 +32,42 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
       }
 
       const actualTime = active.currentTime;
-      const seg = proxy.timeline.segments[proxy.currentVideoIndexRef.current];
+      const segs = proxy.timeline.segments;
+      const segIdx = proxy.currentVideoIndexRef.current;
+      const seg = segs[segIdx];
 
-      if (seg && actualTime >= seg.duration - 0.05) {
-        const nextIndex = proxy.currentVideoIndexRef.current + 1;
-        if (nextIndex < proxy.timeline.segments.length) {
+      // T8890: an angle is showing on the spine -- its element time is angle-file
+      // time, mapped through the wall axis. Just advance the virtual playhead; the
+      // container's auto-fallback effect reverts to the backbone once the playhead
+      // leaves the angle's span (or the angle file simply ends here).
+      const angleActive = isOverlap
+        && proxy.activeSourceSeqRef.current != null
+        && proxy.activeSourceSeqRef.current !== seg?.videoSequence;
+      if (angleActive) {
+        const vt = proxy.timeline.sourceTimeToVirtual(proxy.activeSourceSeqRef.current, actualTime);
+        proxy.setVirtualTime(vt);
+        rafIdRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      // End of the current playback segment? (fileStart handles extension slices
+      // that begin partway into their source file; 0 for a backbone video.)
+      const fileStart = seg?.fileStart ?? 0;
+      if (seg && actualTime >= fileStart + seg.duration - 0.05) {
+        const nextIndex = segIdx + 1;
+        if (nextIndex < segs.length) {
+          const next = segs[nextIndex];
+          const nextFileStart = next.fileStart ?? 0;
+          const nextUrl = isOverlap ? proxy.getVideoUrlBySeq?.(next.videoSequence) : null;
           const { inactive } = proxy.getVideos();
           if (inactive) {
-            inactive.currentTime = 0;
+            // Overlap: the next segment may be a DIFFERENT source file (backbone
+            // -> extension -> backbone), so point the idle slot at it first.
+            if (isOverlap && nextUrl && inactive.src !== nextUrl) {
+              inactive.src = nextUrl;
+              inactive.load();
+            }
+            inactive.currentTime = isOverlap ? nextFileStart : 0;
             inactive.playbackRate = proxy.playbackRateRef.current;
             inactive.play().catch(() => {
               isPlayingRef.current = false;
@@ -48,6 +77,7 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
           active.pause();
           proxy.swapVideos();
           proxy.currentVideoIndexRef.current = nextIndex;
+          if (isOverlap) proxy.activeSourceSeqRef.current = next.videoSequence;
         } else {
           active.pause();
           isPlayingRef.current = false;
@@ -58,12 +88,12 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
         }
       }
 
-      const vt = proxy.timeline.actualToVirtual(proxy.currentVideoIndexRef.current, actualTime);
+      const vt = proxy.timeline.actualToVirtual(proxy.currentVideoIndexRef.current, active.currentTime);
       proxy.setVirtualTime(vt);
       rafIdRef.current = requestAnimationFrame(tick);
     };
     rafIdRef.current = requestAnimationFrame(tick);
-  }, [proxy.timeline, proxy.getVideos, proxy.swapVideos, proxy.currentVideoIndexRef, proxy.playbackRateRef, proxy.setVirtualTime]);
+  }, [proxy.timeline, proxy.getVideos, proxy.swapVideos, proxy.currentVideoIndexRef, proxy.activeSourceSeqRef, proxy.getVideoUrlBySeq, proxy.playbackRateRef, proxy.setVirtualTime]);
 
   const stopTimeUpdateLoop = useCallback(() => {
     if (rafIdRef.current) {
@@ -205,6 +235,10 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
     retry: proxy.retry,
     videoController,
     videoHandlers: proxy.videoHandlers,
+    // T8890: source switching (angles). switchSource loads an angle's file into
+    // the idle slot and swaps; activeSourceSeqRef is the sequence now on screen.
+    switchSource: proxy.switchSource,
+    activeSourceSeqRef: proxy.activeSourceSeqRef,
   };
 }
 

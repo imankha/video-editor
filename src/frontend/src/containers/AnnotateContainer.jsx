@@ -177,6 +177,9 @@ export function AnnotateContainer({
     setNewClipLayerIsMine,
     layerFilter,
     setLayerFilter,
+    // T8890: active camera angle (view state; null = backbone / main camera)
+    activeSourceSequence,
+    setActiveSourceSequence,
   } = useAnnotateState();
 
   // Keep a ref to annotateGameId so async callbacks always read the latest value.
@@ -289,6 +292,66 @@ export function AnnotateContainer({
   // Current video's sequence number (1-based, for clip tagging)
   const currentVideoSequence = multiVideo?.currentVideoSequence
     ?? (gameVideos ? gameVideos[activeVideoIndex]?.sequence : null);
+
+  // ---- T8890: overlap-angle derivations (read-only; view state = activeSourceSequence) ----
+  const isOverlapTimeline = fullTimeline?.kind === 'overlap';
+  // Set of source sequences that are ANGLES (lanes 1+). Drives the violet clip
+  // treatment; null/empty for angle-free games (byte-identical common case).
+  const angleSequences = useMemo(
+    () => (isOverlapTimeline ? new Set(fullTimeline.angles.map((a) => a.sequence)) : null),
+    [isOverlapTimeline, fullTimeline],
+  );
+  // Sources covering the playhead (backbone-first), for the switcher badge.
+  const sourcesAtPlayhead = useMemo(() => {
+    if (!isOverlapTimeline) return [];
+    return fullTimeline.sourcesAt(effectiveCurrentTime).map((seq) => {
+      const angle = fullTimeline.angles.find((a) => a.sequence === seq);
+      return { sequence: seq, isBackbone: !angle, name: angle ? angle.name : 'Main camera' };
+    });
+  }, [isOverlapTimeline, fullTimeline, effectiveCurrentTime]);
+
+  // Transient "Back to main camera" label shown for ~1.5s on auto-fallback.
+  const [fallbackLabel, setFallbackLabel] = useState(null);
+  const fallbackTimerRef = useRef(null);
+  const showFallbackLabel = useCallback(() => {
+    setFallbackLabel('Back to main camera');
+    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+    fallbackTimerRef.current = setTimeout(() => setFallbackLabel(null), 1500);
+  }, []);
+  useEffect(() => () => { if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current); }, []);
+
+  // Switch the active camera to `sequence`, seeking to `virtualTime` first (clamped
+  // into that source's own bounds) so the picture changes at the aimed spot. A
+  // backbone sequence reverts to the main camera (null view state).
+  const switchToSource = useCallback((sequence, virtualTime) => {
+    if (!isOverlapTimeline || !multiVideo) return;
+    const t = virtualTime != null ? virtualTime : effectiveCurrentTime;
+    const clamped = fullTimeline.clampToSource(t, sequence);
+    effectiveSeek(clamped);
+    const { fileTime } = fullTimeline.virtualToSource(clamped, sequence);
+    multiVideo.switchSource(sequence, fileTime);
+    const isBackbone = !angleSequences?.has(sequence);
+    setActiveSourceSequence(isBackbone ? null : sequence);
+    setFallbackLabel(null);
+  }, [isOverlapTimeline, multiVideo, fullTimeline, effectiveSeek, effectiveCurrentTime, angleSequences, setActiveSourceSequence]);
+
+  // Auto-fallback: once the playhead leaves the active angle's span, silently
+  // revert to the backbone (never a black player) and flash the transient label.
+  // This writes only EPHEMERAL view state in response to the playhead (same shape
+  // as the auto-deselect effect) — never any backend/store persistence.
+  useEffect(() => {
+    if (!isOverlapTimeline || activeSourceSequence == null) return;
+    const angle = fullTimeline.angles.find((a) => a.sequence === activeSourceSequence);
+    if (!angle) return;
+    const TOL = 0.05;
+    if (effectiveCurrentTime < angle.virtualStart - TOL || effectiveCurrentTime > angle.virtualEnd + TOL) {
+      setActiveSourceSequence(null);
+      const backboneSeq = fullTimeline.virtualToActual(effectiveCurrentTime).videoSequence;
+      const { fileTime } = fullTimeline.virtualToSource(effectiveCurrentTime, backboneSeq);
+      multiVideo?.switchSource(backboneSeq, fileTime);
+      showFallbackLabel();
+    }
+  }, [isOverlapTimeline, activeSourceSequence, effectiveCurrentTime, fullTimeline, multiVideo, setActiveSourceSequence, showFallbackLabel]);
 
   // Clip selection state machine — single source of truth for selection + overlay
   const {
@@ -883,14 +946,16 @@ export function AnnotateContainer({
     if (match) {
       selectClip(match.id);
       let seekTarget = match.startTime;
-      if (fullTimeline && match.videoSequence) {
+      if (isOverlapTimeline && match.videoSequence) {
+        seekTarget = fullTimeline.sourceTimeToVirtual(match.videoSequence, match.startTime);
+      } else if (fullTimeline && match.videoSequence) {
         seekTarget += fullTimeline.getVideoOffset(match.videoSequence);
       }
       effectiveSeek(seekTarget);
       setAnnotateSelectedLayer('clips');
     }
     pendingSelectSeekTimeRef.current = null;
-  }, [clipRegions, selectClip, effectiveSeek, fullTimeline]);
+  }, [clipRegions, selectClip, effectiveSeek, fullTimeline, isOverlapTimeline]);
 
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, annotateFullscreen);
@@ -932,12 +997,26 @@ export function AnnotateContainer({
     let segmentDuration = null;
 
     if (fullTimeline) {
-      const result = fullTimeline.virtualToActual(clipData.startTime);
-      startTime = result.actualTime;
-      videoSeq = fullTimeline.segments[result.videoIndex].videoSequence;
-      segmentDuration = fullTimeline.segments[result.videoIndex].duration;
-      const maxDur = segmentDuration - result.actualTime;
-      clipDuration = Math.min(clipDuration, maxDur);
+      if (isOverlapTimeline) {
+        // T8890: bind the clip to the ACTIVE angle (or the backbone it falls on),
+        // not the backbone owner at that virtual time. Out-point clamps to the
+        // chosen source's bounds via clampToSource (EPIC decision 10).
+        const src = fullTimeline.virtualToSource(clipData.startTime, activeSourceSequence);
+        startTime = src.fileTime;
+        videoSeq = src.sequence;
+        const srcVideo = gameVideos?.find((v) => v.sequence === videoSeq);
+        segmentDuration = srcVideo?.duration ?? null;
+        const endVirtual = fullTimeline.clampToSource(clipData.startTime + clipData.duration, videoSeq);
+        const endFileTime = fullTimeline.virtualToSource(endVirtual, videoSeq).fileTime;
+        clipDuration = Math.max(0, endFileTime - startTime);
+      } else {
+        const result = fullTimeline.virtualToActual(clipData.startTime);
+        startTime = result.actualTime;
+        videoSeq = fullTimeline.segments[result.videoIndex].videoSequence;
+        segmentDuration = fullTimeline.segments[result.videoIndex].duration;
+        const maxDur = segmentDuration - result.actualTime;
+        clipDuration = Math.min(clipDuration, maxDur);
+      }
       console.log('[CreateClip] virtual:', clipData.startTime, '→ actual:', startTime, 'seq:', videoSeq, 'segDur:', segmentDuration, 'clipDur:', clipDuration);
     }
 
@@ -999,7 +1078,7 @@ export function AnnotateContainer({
       }
     }
     // Overlay closes automatically: addClipRegion calls onSelect → selectClip → CREATING→SELECTED
-  }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, notifyReelCreated]);
+  }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, isOverlapTimeline, activeSourceSequence, gameVideos, notifyReelCreated]);
 
   /**
    * Update a clip region - syncs to backend
@@ -1027,11 +1106,23 @@ export function AnnotateContainer({
     let actualUpdates = updates;
     if (fullTimeline && (updates.startTime !== undefined || updates.endTime !== undefined)) {
       actualUpdates = { ...updates };
-      if (updates.startTime !== undefined) {
-        actualUpdates.startTime = fullTimeline.virtualToActual(updates.startTime).actualTime;
-      }
-      if (updates.endTime !== undefined) {
-        actualUpdates.endTime = fullTimeline.virtualToActual(updates.endTime).actualTime;
+      if (isOverlapTimeline) {
+        // An existing region's source is fixed (region.videoSequence); map the
+        // edited virtual bounds back into THAT source's file time.
+        const seq = region.videoSequence ?? fullTimeline.virtualToActual(effectiveCurrentTime).videoSequence;
+        if (updates.startTime !== undefined) {
+          actualUpdates.startTime = fullTimeline.virtualToSource(updates.startTime, seq).fileTime;
+        }
+        if (updates.endTime !== undefined) {
+          actualUpdates.endTime = fullTimeline.virtualToSource(updates.endTime, seq).fileTime;
+        }
+      } else {
+        if (updates.startTime !== undefined) {
+          actualUpdates.startTime = fullTimeline.virtualToActual(updates.startTime).actualTime;
+        }
+        if (updates.endTime !== undefined) {
+          actualUpdates.endTime = fullTimeline.virtualToActual(updates.endTime).actualTime;
+        }
       }
     }
 
@@ -1060,7 +1151,7 @@ export function AnnotateContainer({
         rating: actualUpdates.rating ?? region.rating,
         tags: actualUpdates.tags ?? region.tags,
         notes: actualUpdates.notes ?? region.notes,
-        video_sequence: region.videoSequence ?? currentVideoSequence,
+        video_sequence: region.videoSequence ?? activeSourceSequence ?? currentVideoSequence,
         tagged_teammates: actualUpdates.tagged_teammates ?? region.tagged_teammates ?? null,
         my_athlete: actualUpdates.my_athlete ?? region.my_athlete,
       };
@@ -1117,7 +1208,7 @@ export function AnnotateContainer({
         console.warn('[CreateReel] ABORT: backendUpdates was empty, nothing sent to backend');
       }
     }
-  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, notifyReelCreated]);
+  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, activeSourceSequence, fullTimeline, isOverlapTimeline, effectiveCurrentTime, notifyReelCreated]);
 
   /**
    * Handle updating an existing clip from fullscreen overlay
@@ -1164,15 +1255,24 @@ export function AnnotateContainer({
   // against the correct video's clips. Clips store actual per-video times.
   const getRegionAtTimeUnified = useCallback((time) => {
     if (!fullTimeline) return getAnnotateRegionAtTime(time);
-    const { actualTime, videoIndex } = fullTimeline.virtualToActual(time);
-    const videoSeq = fullTimeline.segments[videoIndex].videoSequence;
-    const match = clipRegions.find(r =>
+    // T8890: match against the ACTIVE source (angle or backbone) at this playhead.
+    let videoSeq;
+    let fileTime;
+    if (isOverlapTimeline) {
+      const src = fullTimeline.virtualToSource(time, activeSourceSequence);
+      videoSeq = src.sequence;
+      fileTime = src.fileTime;
+    } else {
+      const r = fullTimeline.virtualToActual(time);
+      videoSeq = fullTimeline.segments[r.videoIndex].videoSequence;
+      fileTime = r.actualTime;
+    }
+    return clipRegions.find(r =>
       (r.videoSequence ?? 1) === videoSeq &&
-      actualTime >= r.startTime &&
-      actualTime <= r.endTime
+      fileTime >= r.startTime &&
+      fileTime <= r.endTime
     ) ?? null;
-    return match;
-  }, [fullTimeline, getAnnotateRegionAtTime, clipRegions]);
+  }, [fullTimeline, isOverlapTimeline, activeSourceSequence, getAnnotateRegionAtTime, clipRegions]);
 
   /**
    * Timeline seek — wraps seek() with overlay management.
@@ -1186,12 +1286,18 @@ export function AnnotateContainer({
       return;
     }
     effectiveSeek(time);
+    // T8890: clicking the timeline (the "main track") reverts to the backbone —
+    // proxy.seek already swaps the picture back; keep the view state in lockstep.
+    if (isOverlapTimeline && activeSourceSequence != null) {
+      setActiveSourceSequence(null);
+      setFallbackLabel(null);
+    }
     if (selectionState.type === 'EDITING' || selectionState.type === 'CREATING') {
       if (!getRegionAtTimeUnified(time)) {
         closeOverlay();
       }
     }
-  }, [effectiveSeek, selectionState, getRegionAtTimeUnified, closeOverlay]);
+  }, [effectiveSeek, selectionState, getRegionAtTimeUnified, closeOverlay, isOverlapTimeline, activeSourceSequence, setActiveSourceSequence]);
 
   const handleSelectRegion = useCallback((regionId) => {
     if (hasUncommittedTeammateText()) {
@@ -1207,18 +1313,24 @@ export function AnnotateContainer({
       } else {
         selectClip(regionId);
       }
-      // T2750: Convert actual startTime to virtual for seek in multi-video mode
-      let seekTarget = region.startTime;
-      if (fullTimeline && region.videoSequence) {
-        seekTarget += fullTimeline.getVideoOffset(region.videoSequence);
+      // T2750/T8890: Convert file startTime to virtual for the seek. In an overlap
+      // game, ALSO auto-activate the clip's own source (an angle clip switches the
+      // picture to its angle while selected/edited; a backbone clip reverts).
+      if (isOverlapTimeline && region.videoSequence) {
+        const vStart = fullTimeline.sourceTimeToVirtual(region.videoSequence, region.startTime);
+        switchToSource(region.videoSequence, vStart);
+      } else {
+        let seekTarget = region.startTime;
+        if (fullTimeline && region.videoSequence) {
+          seekTarget += fullTimeline.getVideoOffset(region.videoSequence);
+        }
+        effectiveSeek(seekTarget);
       }
-      console.log('[SelectClip] Seeking to virtual:', seekTarget, 'currentTime:', effectiveCurrentTime);
-      effectiveSeek(seekTarget);
       setAnnotateSelectedLayer('clips');
     } else {
       console.warn('[AnnotateContainer] Region not found! Available IDs:', clipRegions.map(r => r.id));
     }
-  }, [clipRegions, selectionState, selectClip, editClip, effectiveSeek, effectiveCurrentTime, fullTimeline]);
+  }, [clipRegions, selectionState, selectClip, editClip, effectiveSeek, effectiveCurrentTime, fullTimeline, isOverlapTimeline, switchToSource]);
 
   // Effect: Auto-select/deselect based on playhead position
   // EDITING and CREATING are immune — scrub handles move playhead without deselecting
@@ -1239,16 +1351,19 @@ export function AnnotateContainer({
     if (type === 'SELECTED') {
       const selectedClip = clipRegions.find(r => r.id === clipId);
       if (selectedClip) {
-        // T2750: Convert actual clip times to virtual for comparison
+        // T2750/T8890: Convert file clip times to virtual for comparison.
         let clipStart = selectedClip.startTime;
         let clipEnd = selectedClip.endTime;
-        if (fullTimeline && selectedClip.videoSequence) {
+        if (isOverlapTimeline && selectedClip.videoSequence) {
+          clipStart = fullTimeline.sourceTimeToVirtual(selectedClip.videoSequence, selectedClip.startTime);
+          clipEnd = fullTimeline.sourceTimeToVirtual(selectedClip.videoSequence, selectedClip.endTime);
+        } else if (fullTimeline && selectedClip.videoSequence) {
           const offset = fullTimeline.getVideoOffset(selectedClip.videoSequence);
           clipStart += offset;
           clipEnd += offset;
         }
         if (effectiveCurrentTime < clipStart - FRAME_TOLERANCE || effectiveCurrentTime > clipEnd + FRAME_TOLERANCE) {
-          console.log('[AutoDeselect] Deselecting', clipId, 'playhead:', effectiveCurrentTime.toFixed(2), 'clipVirtual:', clipStart.toFixed(2), '-', clipEnd.toFixed(2), 'seq:', selectedClip.videoSequence, 'offset:', fullTimeline?.getVideoOffset(selectedClip.videoSequence) ?? 0, 'regionAtPlayhead:', regionAtPlayhead?.id ?? 'none');
+          console.log('[AutoDeselect] Deselecting', clipId, 'playhead:', effectiveCurrentTime.toFixed(2), 'clipVirtual:', clipStart.toFixed(2), '-', clipEnd.toFixed(2), 'seq:', selectedClip.videoSequence, 'regionAtPlayhead:', regionAtPlayhead?.id ?? 'none');
           regionAtPlayhead ? selectClip(regionAtPlayhead.id) : deselectClip();
         }
       } else {
@@ -1257,7 +1372,7 @@ export function AnnotateContainer({
     } else {
       if (regionAtPlayhead) selectClip(regionAtPlayhead.id);
     }
-  }, [annotateVideoUrl, effectiveCurrentTime, selectionState, getRegionAtTimeUnified, clipRegions, selectClip, deselectClip, fullTimeline]);
+  }, [annotateVideoUrl, effectiveCurrentTime, selectionState, getRegionAtTimeUnified, clipRegions, selectClip, deselectClip, fullTimeline, isOverlapTimeline]);
 
   // Effect: Sync playback speed with video element (single-video only; multiVideo handles its own)
   useEffect(() => {
@@ -1557,6 +1672,34 @@ export function AnnotateContainer({
     multiVideo,
     videoController,
     fullTimeline,
+    // T8890: angle strip + source switching (all empty/null for angle-free games)
+    isOverlapTimeline,
+    angleData: isOverlapTimeline
+      ? {
+          angles: fullTimeline.angles,
+          laneCount: fullTimeline.lanes.length - 1,
+          extensions: fullTimeline.domain.filter((e) => e.type === 'extension'),
+          angleSequences,
+          activeSourceSequence,
+          onSelectAngle: switchToSource,
+        }
+      : null,
+    angleSwitcher: isOverlapTimeline
+      ? {
+          sources: sourcesAtPlayhead,
+          activeSourceSequence,
+          fallbackLabel,
+          onSelect: (seq) => switchToSource(seq, effectiveCurrentTime),
+        }
+      : null,
+    // Angle display name for a clip's source, or null for backbone/angle-free.
+    getAngleName: useCallback(
+      (videoSequence) => {
+        if (!isOverlapTimeline || videoSequence == null) return null;
+        return fullTimeline.angles.find((a) => a.sequence === videoSequence)?.name ?? null;
+      },
+      [isOverlapTimeline, fullTimeline],
+    ),
     effectiveCurrentTime,
     effectiveSeek,
     effectiveTogglePlay,

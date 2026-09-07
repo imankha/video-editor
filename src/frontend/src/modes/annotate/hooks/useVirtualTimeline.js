@@ -535,6 +535,61 @@ export function buildGameTimeline(gameVideos) {
     return wallToVirtual(w);
   }
 
+  // Virtual position of a source's file-relative time. Exact for any fileTime
+  // (goes through wallToVirtual), so an angle whose span crosses a backbone/gap
+  // boundary maps correctly -- a constant per-source offset would not. T8890's
+  // clip-region -> timeline mapping (AnnotateScreen) and clip-select seek use this.
+  function sourceTimeToVirtual(sequence, fileTime) {
+    const v = videoBySeq.get(sequence);
+    if (!v) return 0;
+    return wallToVirtual(v.offset + fileTime);
+  }
+
+  // ---- Playback-compat surface (T8890) --------------------------------------
+  // useVideoProxy drives the A/B player off `segments` + virtualToActual /
+  // actualToVirtual / getVideoBoundaries -- the buildFullVideoTimeline interface.
+  // Expose the SAME shape here over the backbone+extension virtual domain so the
+  // proxy's existing seek/RAF loop works unchanged for an overlap game (angles
+  // are switched onto this spine via switchSource, not concatenated into it).
+  // Each playback segment maps a contiguous virtual span to ONE source file:
+  // fileStart = the source file time aligned with the segment's virtualStart
+  // (0 for a backbone video whose file-zero IS its wall start; the in-file offset
+  // for an extension slice of an angle).
+  const playbackSegments = domain.map((e, index) => ({
+    videoIndex: index,
+    videoSequence: e.type === 'video' ? e.sequence : e.sourceSequence,
+    virtualStart: e.virtualStart,
+    virtualEnd: e.virtualEnd,
+    duration: e.length,
+    fileStart: e.type === 'video' ? 0 : e.wallStart - (videoBySeq.get(e.sourceSequence)?.offset ?? e.wallStart),
+  }));
+
+  function virtualToActual(vt) {
+    const clamped = Math.max(0, Math.min(vt, totalDuration));
+    for (let i = 0; i < playbackSegments.length; i++) {
+      const seg = playbackSegments[i];
+      const isLast = i === playbackSegments.length - 1;
+      if (clamped >= seg.virtualStart && (isLast ? clamped <= seg.virtualEnd : clamped < seg.virtualEnd)) {
+        return { videoIndex: seg.videoIndex, videoSequence: seg.videoSequence, actualTime: seg.fileStart + (clamped - seg.virtualStart) };
+      }
+    }
+    const last = playbackSegments[playbackSegments.length - 1];
+    return last
+      ? { videoIndex: last.videoIndex, videoSequence: last.videoSequence, actualTime: last.fileStart + last.duration }
+      : { videoIndex: 0, videoSequence: null, actualTime: 0 };
+  }
+
+  function actualToVirtual(videoIndex, actualTime) {
+    const seg = playbackSegments[videoIndex];
+    if (!seg) return 0;
+    const clamped = Math.max(seg.fileStart, Math.min(actualTime, seg.fileStart + seg.duration));
+    return seg.virtualStart + (clamped - seg.fileStart);
+  }
+
+  function getVideoBoundaries() {
+    return playbackSegments.slice(1).map((s) => s.virtualStart);
+  }
+
   // ---- lanes / angles views ----
   const domainVideoBySeq = new Map(
     domain.filter((e) => e.type === 'video').map((e) => [e.sequence, e]),
@@ -569,15 +624,22 @@ export function buildGameTimeline(gameVideos) {
   });
 
   return {
+    kind: 'overlap',
     domain,
     lanes,
     angles,
     virtualToWall,
     wallToVirtual,
     virtualToSource,
+    sourceTimeToVirtual,
     sourcesAt,
     clampToSource,
     totalDuration,
+    // Playback-compat surface consumed by useVideoProxy / useMultiVideoScrub.
+    segments: playbackSegments,
+    virtualToActual,
+    actualToVirtual,
+    getVideoBoundaries,
   };
 }
 

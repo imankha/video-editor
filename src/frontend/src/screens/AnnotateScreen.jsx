@@ -317,6 +317,10 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     multiVideo,
     videoController,
     fullTimeline,
+    // T8890: angle strip + source switching (null for angle-free games)
+    angleData,
+    angleSwitcher,
+    getAngleName,
     effectiveCurrentTime,
     effectiveDuration,
     effectiveSeek,
@@ -343,31 +347,42 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   } = annotate;
 
   // T2750: Compute regions with virtual offsets for timeline/sidebar display
+  // T8890: an overlap game maps a clip's file times through wallToVirtual (exact
+  // for any source, incl. angles crossing a boundary); an angle-free game keeps
+  // the byte-identical constant-offset math on buildFullVideoTimeline.
+  const isOverlapTimeline = fullTimeline?.kind === 'overlap';
+  const toVirtual = useCallback((r) => {
+    if (isOverlapTimeline) {
+      return {
+        start: fullTimeline.sourceTimeToVirtual(r.videoSequence, r.startTime),
+        end: fullTimeline.sourceTimeToVirtual(r.videoSequence, r.endTime),
+      };
+    }
+    const offset = fullTimeline.getVideoOffset(r.videoSequence);
+    return { start: r.startTime + offset, end: r.endTime + offset };
+  }, [isOverlapTimeline, fullTimeline]);
+
   const virtualRegionsWithLayout = useMemo(() => {
     if (!fullTimeline) return annotateRegionsWithLayout;
     return annotateRegionsWithLayout.map(r => {
-      const offset = fullTimeline.getVideoOffset(r.videoSequence);
-      return {
-        ...r,
-        startTime: r.startTime + offset,
-        endTime: r.endTime + offset,
-      };
+      const v = toVirtual(r);
+      return { ...r, startTime: v.start, endTime: v.end };
     });
-  }, [annotateRegionsWithLayout, fullTimeline]);
+  }, [annotateRegionsWithLayout, fullTimeline, toVirtual]);
 
   const virtualClipRegions = useMemo(() => {
     if (!fullTimeline) return clipRegions;
     return clipRegions.map(r => {
-      const offset = fullTimeline.getVideoOffset(r.videoSequence);
+      const v = toVirtual(r);
       return {
         ...r,
-        startTime: r.startTime + offset,
-        endTime: r.endTime + offset,
+        startTime: v.start,
+        endTime: v.end,
         _actualStartTime: r.startTime,
         _actualEndTime: r.endTime,
       };
     });
-  }, [clipRegions, fullTimeline]);
+  }, [clipRegions, fullTimeline, toVirtual]);
 
   // T2820: Compute unique tags with clip counts and clip IDs per tag
   // Only count tags from clips the user owns (not received shares)
@@ -487,9 +502,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       let clipStart = region.startTime;
       let clipEnd = region.endTime;
       if (fullTimeline && region.videoSequence) {
-        const offset = fullTimeline.getVideoOffset(region.videoSequence);
-        clipStart += offset;
-        clipEnd += offset;
+        const v = toVirtual(region);
+        clipStart = v.start;
+        clipEnd = v.end;
       }
       const FRAME_TOLERANCE = 0.15;
       within = effectiveCurrentTime >= clipStart - FRAME_TOLERANCE
@@ -525,7 +540,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     // Video is seekable but selection hasn't stuck yet → (re)issue select + seek.
     pendingSourceSelectAttemptsRef.current += 1;
     handleSelectAnnotateRegion(region.id);
-  }, [clipRegions, duration, annotateSelectedRegionId, effectiveCurrentTime, fullTimeline, handleSelectAnnotateRegion]);
+  }, [clipRegions, duration, annotateSelectedRegionId, effectiveCurrentTime, fullTimeline, toVirtual, handleSelectAnnotateRegion]);
 
   // Handle pending game file from ProjectsScreen (when "Add Game" was clicked)
   // Supports both single-video (file) and multi-video (files array in details)
@@ -686,6 +701,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           onSetLayerFilter={setLayerFilter}
           onOpenClipInFocus={openClipInFocus}
           onOpenClipInOverlay={openClipInOverlay}
+          getAngleName={getAngleName}
         />
       </div>
       {/* Mobile sidebar overlay */}
@@ -723,6 +739,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
                 }
                 setShowMobileSidebar(false);
               }}
+              getAngleName={getAngleName}
             />
             <button
               onClick={() => setShowMobileSidebar(false)}
@@ -844,6 +861,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         // T2750: Multi-video scrub
         multiVideo={multiVideo}
         boundaryOffsets={multiVideo?.boundaryOffsets}
+        // T8890: angle strip + source switching (null for angle-free games)
+        angleData={angleData}
+        angleSwitcher={angleSwitcher}
         // T2820: Share with tagged players
         onShare={() => setShowShareModal(true)}
         hasUnsentShares={hasUnsentShares}

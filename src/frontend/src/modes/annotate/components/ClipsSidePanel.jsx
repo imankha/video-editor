@@ -54,6 +54,8 @@ export function ClipsSidePanel({
   onSetLayerFilter,
   onOpenClipInFocus,
   onOpenClipInOverlay,
+  // T8890: (videoSequence) -> angle display name, or null for backbone / angle-free.
+  getAngleName = null,
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
 
@@ -304,6 +306,7 @@ export function ClipsSidePanel({
                   isSelected={region.id === selectedRegionId}
                   isPlaybackActive={region.id === activePlaybackClipId}
                   gameClock={clipGameClock(region, boundaryOffsets)}
+                  angleName={getAngleName?.(region.videoSequence) ?? null}
                   onClick={() => onSelectRegion(region.id)}
                   isMobile={isMobile}
                   onViewDetails={isMobile ? () => handleMobileViewDetails(region.id) : undefined}
