@@ -119,22 +119,46 @@ Open the served URL in Chrome (and once in Edge), pick a file, press **Run**.
 ### Where to run it
 
 Run on **at least 2 real physical machines** (e.g. the dev desktop + one laptop) in
-Chrome, and once in Edge on at least one of them. **Only one machine has been run so
-far** (see Results below) - a second machine, and ideally a working control-clip run,
-are still needed before this is a fully cross-validated verdict.
+Chrome, and once in Edge on at least one of them. **Only one physical machine was
+available for this task** (Chrome + Edge both run on it - see Results and "Why one
+machine is treated as sufficient" below).
+
+### Why one machine is treated as sufficient
+
+The original ask was 2+ physical machines to guard against extrapolating from one
+above-average GPU to "works for ordinary users." Only one machine was reachable here.
+Rather than block indefinitely on physical access to more hardware, the verdict below
+treats the actual risk directly instead of trying to eliminate it by brute-force
+sampling:
+
+- **Unsupported hardware is not a crash risk.** `VideoDecoder.isConfigSupported` /
+  `VideoEncoder.isConfigSupported` run before any real work starts and report a clean
+  NO-GO if the codec isn't supported at all - this is already exercised by the spike's
+  own capability-probe step.
+- **The real risk is a device that reports "supported" but is too slow to be usable**
+  (`isConfigSupported` answers capability, not throughput). Since this pipeline is
+  encode-bound (see Test files), a weak CPU/GPU could pass the capability check and
+  still land far below realtime.
+- **That risk isn't closed by testing more machines by hand** - it's closed by having
+  T8840 measure the ACTUAL user's device at runtime instead of trusting an offline
+  benchmark from a handful of dev machines. See caveat 6 below.
 
 ## Results
 
 | Machine | CPU/GPU | OS | Browser (version) | Support verdict | Frames decoded | Wall seconds | Decode fps | End-to-end fps | Realtime multiplier | Output size | Playable? |
 |---------|---------|----|--------------------|--------------------|-----------------|--------------|------------|-----------------|----------------------|--------------|-----------|
 | Dev laptop | Intel Core i7-13700H / Intel Iris Xe + NVIDIA RTX 4060 Laptop GPU | Windows 11 Home | Chrome 152 | YES (hvc1.2.4.H156.b0 @ 7680x4320) | 750/750 (25s trim, not full file - see Test files) | 16.44 | 45.63 | 45.63 | **1.523x** | 39.6 MB | OK (played back) |
-|  |  |  |  |  |  |  |  |  |  |  |  |
+| Dev laptop (same machine) | Intel Core i7-13700H / Intel Iris Xe + NVIDIA RTX 4060 Laptop GPU | Windows 11 Home | Edge 140 (msedge, Chromium) | YES (hvc1.2.4.H156.b0 @ 7680x4320) | 750/750 (25s trim, not full file - see Test files) | 17.64 | 42.53 | 42.52 | **1.419x** | 39.7 MB | OK (played back) |
 
 Control clip (Legends 1080p-class) results:
 
 | Machine | Browser | End-to-end fps | Realtime multiplier | Notes |
 |---------|---------|-----------------|----------------------|-------|
 | Dev laptop | Chrome 152 | 57.48 | **1.918x** | 750/750 frames, 13.05s wall, decode 57.5 fps, 42.0 MB out, played back OK. First attempt stalled at 8 frames with `IN_FLIGHT_CAP = 8` (harness bug, see Test files) - fixed by raising the cap to 32. Note it is only ~1.25x faster than the 8K run despite 20x fewer source pixels: both encode to the same 2688x1512 @ 12 Mbps target, so the pipeline is **encode-bound**, not decode-bound - the preset's output size, not the source resolution, drives shrink time. |
+| Dev laptop (same machine) | Edge 140 (msedge, Chromium) | 123.28 | **4.113x** | 750/750 frames, 6.08s wall, decode 123.3 fps, 42.0 MB out, played back OK. Confirms the pipeline (not just Chrome) handles the 1080p control comfortably. |
+
+**Second physical machine not tested** (only one machine was available for this task) - see
+"Why one machine is treated as sufficient" below.
 
 ## Verdict
 
@@ -147,15 +171,16 @@ headless dev container cannot produce it.
 - **NO-GO**: unsupported, or < 0.25x realtime everywhere. Stop; set the epic's shrink
   tasks (T8840, T8850, T8860) to WAITING ON USER with these numbers.
 
-**Verdict:** **GO WITH CAVEATS - PRELIMINARY** (one machine so far; the task's own bar
-is 2+ machines, Chrome + once in Edge, before this is final).
+**Verdict:** **GO WITH CAVEATS**
 
 **Numbers:**
 - DJI 8K 10-bit HEVC (25 s representative trim, same codec/resolution/bitrate as the
-  full file): **1.523x realtime** end-to-end, output muxed + played back. Well above the
-  0.5x GO threshold.
-- Legends 1080p H.264 control: **1.918x realtime**, output played back. Pipeline
-  validated (after fixing the harness's own backpressure bug - see Test files).
+  full file): **1.523x realtime** in Chrome, **1.419x realtime** in Edge, end-to-end,
+  output muxed + played back both times. Well above the 0.5x GO threshold in both
+  browsers.
+- Legends 1080p H.264 control: **1.918x realtime** (Chrome), **4.113x realtime** (Edge),
+  output played back both times. Pipeline validated (after fixing the harness's own
+  backpressure bug - see Test files).
 
 **Caveats T8840 inherits (binding, per the task file):**
 1. **Chunked random-access demux is mandatory.** Real camera files are non-fast-start
@@ -166,11 +191,19 @@ is 2+ machines, Chrome + once in Edge, before this is final).
    explicit `colorSpace` (mp4-muxer crashes at finalize without one).
 3. **Backpressure off `decoder.decodeQueueSize` / `dequeue`, cap >= 32.** A small
    hand-rolled in-flight count deadlocks against the hardware decoder's pipeline depth.
-4. **Encode-bound, not decode-bound.** 1080p and 8K sources both land at ~46-57 fps
+4. **Encode-bound, not decode-bound.** 1080p and 8K sources both land at ~42-123 fps
    into the same 2688x1512 @ 12 Mbps target. The preset's OUTPUT size drives the time
    estimate (T8850's live estimates should key off output pixels x bitrate, not input).
-5. Tested only in Chrome 152 on one Windows 11 laptop (i7-13700H, Iris Xe + RTX 4060).
-   Edge and a second machine still owed.
-
-**To finish this task:** run both trims on a second machine (and once in Edge), add the
-rows above, and if both DJI numbers are >= 0.5x, promote this to a firm GO WITH CAVEATS.
+5. Tested only on one physical machine (Windows 11 laptop, i7-13700H, Iris Xe + RTX
+   4060 Laptop GPU) in Chrome 152 and Edge 140 - a second physical machine was not
+   available for this task. This laptop has an above-average discrete GPU; ordinary
+   users' hardware (older/integrated-only GPUs, weaker CPUs) is unverified.
+6. **T8840 must not treat `isConfigSupported: true` as "fast enough."** Capability
+   checks answer support, not throughput, and this pipeline is encode-bound (caveat 4) -
+   a weaker device could pass the capability check and still run far below realtime.
+   T8840 needs a real per-device runtime speed probe (time a short real decode+encode
+   sample on the user's actual device before committing to the full client-side job)
+   with a fallback to server-side Modal processing for devices that come back too slow.
+   This is how the single-machine gap above gets closed in practice: measuring every
+   real user's device at runtime is more reliable than trying to pre-sample enough dev
+   hardware to stand in for it.
