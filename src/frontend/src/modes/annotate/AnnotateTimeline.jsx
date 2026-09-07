@@ -177,6 +177,13 @@ export function AnnotateTimeline({
           onSelectAngle={angleData.onSelectAngle}
           edgePadding={EDGE_PADDING}
           isMobile={isMobile}
+          // T8900 Fix-timing: entry point + drag-in-mode + lane-change pulse.
+          onRequestFixTiming={angleData.onRequestFixTiming}
+          fixSequence={angleData.fixSequence}
+          fixPendingOffset={angleData.fixPendingOffset}
+          onFixDragTo={angleData.onFixDragTo}
+          pulseSequence={angleData.pulseSequence}
+          pulseNonce={angleData.pulseNonce}
         />
       )}
       {isMobile ? (

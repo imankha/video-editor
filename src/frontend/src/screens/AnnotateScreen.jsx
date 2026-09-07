@@ -320,6 +320,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     // T8890: angle strip + source switching (null for angle-free games)
     angleData,
     angleSwitcher,
+    // T8900: Fix-timing strip data (null unless the mode is open)
+    fixTiming,
     getAngleName,
     effectiveCurrentTime,
     effectiveDuration,
@@ -864,6 +866,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         // T8890: angle strip + source switching (null for angle-free games)
         angleData={angleData}
         angleSwitcher={angleSwitcher}
+        // T8900: Fix-timing strip (mode-swaps the primary CTA block)
+        fixTiming={fixTiming}
         // T2820: Share with tagged players
         onShare={() => setShowShareModal(true)}
         hasUnsentShares={hasUnsentShares}

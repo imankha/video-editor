@@ -1,5 +1,37 @@
 ---
 domain: annotate
+updated: 2026-09-07 (T8900 Fix-timing: nudge an angle into alignment -- the FIRST gesture that
+mutates a placed angle's `offset_seconds` after insert (T8870 insert-time compute is the only other
+writer). **Backend:** `PATCH /api/games/{game_id}/videos/{sequence}/placement` body `{offset_seconds}`
+(`games.py` `update_video_placement` + `PlacementUpdate` model) -- profile-scoped, `durable_sync` to R2,
+writes `offset_seconds` ONLY (never `recorded_at`), 404 on unknown game/sequence, 422 on non-numeric,
+returns the updated video row via `_get_game_videos_response`. It touches NO `raw_clips` row: moving an
+angle shifts its clips' VIRTUAL render positions (they map through the placement model) but not their
+stored file-relative start/end+sequence. **Single-write contract:** the ONLY caller is
+`AnnotateContainer`'s `commitFixTiming` (the Done gesture), which calls the exported
+`patchPlacement(gameId, sequence, offsetSeconds)` helper exactly once -- never per nudge/drag, never a
+reactive useEffect. **Frontend mode:** `modes/annotate/FixTimingStrip.jsx` (NEW) is a yellow
+(`bg-yellow-950/20 border-yellow-800/40`) mode-swap strip that REPLACES the primary "Add Play" CTA block
+under the canvas (T8600 pattern; the timeline above stays visible so the bar can be dragged). Local pending
+offset ONLY: `AnnotateContainer` holds `fixTiming = {sequence, loadedOffset, pendingOffset}`; nudge/drag
+mutate `pendingOffset`; `previewVideos` = loaded gameVideos with the override applied is fed to
+`buildGameTimeline` (routing still keys on the LOADED gameVideos so a nudge can't flip the game off the
+overlap path) so the bar + all clip positions preview live WITHOUT persisting. **Exported opener (T8910
+DEPENDS on this):** `openFixTiming(sequence)` -- the reusable entry the amber no-timestamp tap will reuse;
+do NOT inline it. Entry points TODAY: long-press (500ms) or right-click an angle bar in `AngleLanes.jsx`
+-> a one-item "Fix timing" context menu (`data-testid="fix-timing-menu"`, PORTALLED to document.body to
+escape the timeline's transformed-ancestor stacking context -- the T5700/T8600 landmine), and a "Fix
+timing: {name}" row per angle source in `AngleSwitcherBadge`'s 3+ popover. **Drag-in-mode:** ONLY the
+`fixSequence` bar binds Pointer-Events drag (setPointerCapture + touch-none, orange styling); a bare drag
+outside the mode is STRUCTURALLY impossible (no code path binds pointer-move to a bar when `fixSequence`
+is null) -- the #1 acceptance criterion. **A/B play:** `playSourcePreview(seq)` = T8890 `switchSource` +
+a 3s stop timer; "Play this angle"/"Play main camera" play the same wall moment from each source.
+**Esc/X discards** (two-layer Esc, the strip owns the outer layer), **Reset** restores `loadedOffset`,
+**Done** commits + recomputes lanes + pulses the bar if its lane changed. **Shared pulse helper:**
+`modes/annotate/hooks/usePulseHighlight.js` (`usePulseHighlight()` -> `{pulseKey, pulseNonce, pulse}`,
+`PULSE_CLASS='angle-pulse'`, keyframes in index.css) -- 2x violet ring fade; T8910 REUSES this for its
+landing pulse, do not duplicate. The auto-fallback useEffect is suppressed while `fixTiming` is set (the
+A/B preview owns the player). Prior:)
 updated: 2026-09-07 (T8824 replaces intake's wholesale-discard overlap rule with a PLACEMENT
 MODEL, so the epic's headline scenario -- a phone clip filmed during the main camera -- is
 finally reachable. `footageIntake.js`'s `inferOrder` is now `inferPlacement(items, {override,
