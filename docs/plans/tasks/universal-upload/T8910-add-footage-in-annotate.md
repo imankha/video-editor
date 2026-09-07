@@ -84,6 +84,59 @@ attach endpoint, with landing feedback. Spec + microcopy: artifact section 09 (l
 
 **2026-09-05**: Filed.
 
+**2026-09-07**: Implemented (Sonnet container worker, expert-consulted on the hard parts). Frontend
+only, on `feature/T8910-add-footage-in-annotate` (rebased on merged T8900, PR #364).
+
+- **Prereq**: confirmed T8900 merged to master; its exported opener `openFixTiming(sequence)`
+  imports/resolves. No reimplementation.
+- **`attachVideoToExistingGame` generalized** (uploadManager.js) to accept a File / File[] /
+  `[{file, recorded_at}]`, sequential uploads, `Video {i} of {n}` labels (n>1 only). Backward
+  compatible: a bare File keeps T8700's exact behavior, so `AttachVideoModal` (GameTile kebab) is
+  untouched and still passes its 5 tests.
+- **`attachMode` on `GameFootagePicker`** (+ `initialFiles` for the drop path) — picker/strip only,
+  no game-metadata fields (those live in `GameDetailsModal`, never in the picker).
+- **`AddFootageButton.jsx` (NEW)**: ghost secondary in the timeline header (not UnifiedHeader) +
+  window-level drag target (one dashed violet overlay; whole surface is one target). Cost line is
+  `calculateUploadCost` display-only (endpoint charges server-side).
+- **Landing feedback** in the upload-complete handler (gesture-based, not reactive): full reload via
+  the existing `handleLoadGame` (correct single->multi transition), then variant per newly-appended
+  video from the SERVER `offset_seconds` (pure, unit-tested `footageLanding.computeLandingOutcomes`):
+  angle-lane pulse + tappable "watch" toast / main-track toast / amber-parked bar + Fix-timing hint.
+- **T7890 beacon decision (step 9)**: `upload_file_selected` is the Add-Game funnel middle step
+  (`add_game_opened -> upload_file_selected -> game_created`, analytics.py L225-231), NOT generic
+  file-selection analytics. Firing it from a post-creation attach would corrupt that funnel
+  (`upload_file_selected` without `game_created`). **Decision: do NOT fire it here.**
+- **Shrink offer (step 6): EXCLUDED.** The offer-card pipeline (T8850/T8860) is not built yet
+  (still TODO in the epic), so it is not trivially composable. Follow-up: fold the shrink offer
+  into this attach modal once T8860 lands.
+- **AMBER Fix-timing handoff — SPEC CONFLICT, follow-up owed.** The spec says tapping the amber
+  (no-timestamp) bar opens Fix timing via `openFixTiming`. But no-usable-time footage is placed by
+  prefix-sum (appended at the end, no overlap) => backbone lane 0, and `openFixTiming` early-returns
+  unless the timeline is overlap and treats its arg as an ANGLE. So the amber bar renders (amber
+  warning family, tap wired to the real opener) but Fix-timing does NOT engage for a lane-0 video
+  today — the tap is a safe no-op. Making Fix-timing nudge a lane-0 concatenated segment is a real
+  T8900-scope extension (a separate timing-adjust UX), deliberately deferred rather than relaxing
+  the opener (which would be a defensive fix for a state it was scoped to reject). **Needs a new
+  task** to give lane-0 appended footage its own timing-adjust affordance, or a product call to
+  reword the amber microcopy.
+- **Live QA (dev-verify) caught + fixed a production crash**: the completion handler's `useCallback`
+  referenced `handleLoadGame` in its dep array while defined ABOVE it (temporal dead zone) —
+  white-screened the whole Annotate route (`ReferenceError: Cannot access 'handleLoadGame' before
+  initialization`). Fixed by defining `handleFootageAttached` after `handleLoadGame`.
+- **QA note**: the dev account's game sources are ALL expired in this environment, so add-footage is
+  (correctly) disabled for every game — the enabled button/modal + drag paths could not be
+  live-driven to completion (the e2e skips loudly rather than false-pass). The button/modal render
+  path WAS observed live before the expiry flag settled; full feature logic is covered by unit +
+  component tests (below).
+- **Tests (curated set, 175 green)**: `footageLanding.test.jsx` (7 — all three variants incl. the
+  >12h-window==AMBER case, single->multi, multi-add tail, dedup no-op); `uploadManager.attachFootage.test.js`
+  (4 — N-file payload shape, recorded_at/original_filename per file, no client sequence, bare-File
+  back-compat, single reload); `AnnotateTimeline.angleStrip.test.jsx` (+3 — amber bar byte-identity
+  when empty, renders when present, tap calls onFixAmberFootage); plus regression across
+  GameFootagePicker/AttachVideoModal/useVirtualTimeline/AnnotateContainer/AnnotateModeView.
+  Pre-existing failure: `uploadManager.attachVideo.test.js` "in order" case fails on master too
+  (stale mock, unrelated to this change).
+
 ## Acceptance Criteria
 
 - [ ] Add footage works from button AND drag-drop, charging credits once

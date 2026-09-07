@@ -322,6 +322,10 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     angleSwitcher,
     // T8900: Fix-timing strip data (null unless the mode is open)
     fixTiming,
+    // T8910: Add-footage-from-Annotate
+    addFootage,
+    amberFootage,
+    onFixAmberFootage,
     getAngleName,
     effectiveCurrentTime,
     effectiveDuration,
@@ -868,6 +872,10 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         angleSwitcher={angleSwitcher}
         // T8900: Fix-timing strip (mode-swaps the primary CTA block)
         fixTiming={fixTiming}
+        // T8910: Add footage from inside Annotate (button + drop + amber bars)
+        addFootage={addFootage}
+        amberFootage={amberFootage}
+        onFixAmberFootage={onFixAmberFootage}
         // T2820: Share with tagged players
         onShare={() => setShowShareModal(true)}
         hasUnsentShares={hasUnsentShares}

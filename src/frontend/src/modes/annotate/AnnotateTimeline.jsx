@@ -1,5 +1,5 @@
 import React from 'react';
-import { Film, Scissors, Video } from 'lucide-react';
+import { Film, Scissors, Video, Clock } from 'lucide-react';
 import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBase';
 import ClipRegionLayer from './layers/ClipRegionLayer';
 import AngleLanes from './AngleLanes';
@@ -44,6 +44,11 @@ export function AnnotateTimeline({
   boundaryOffsets,
   // T8890: overlap-angle data (null for angle-free games -> zero angle pixels)
   angleData = null,
+  // T8910: footage added inside Annotate whose recorded time we couldn't use —
+  // parked at the end and drawn in the amber warning family. Empty for every
+  // other game, so the timeline DOM stays byte-identical (zero amber pixels).
+  amberFootage = [],
+  onFixAmberFootage,
 }) {
   const isMobile = useIsMobile();
 
@@ -241,6 +246,30 @@ export function AnnotateTimeline({
             background: 'repeating-linear-gradient(45deg, rgba(55,65,81,0.55) 0, rgba(55,65,81,0.55) 6px, rgba(31,41,55,0.55) 6px, rgba(31,41,55,0.55) 12px)',
           }}
         />
+      ))}
+      {/* T8910: amber "we couldn't tell when this was filmed" bars — parked at
+          the end, drawn in the amber warning family. Tapping opens Fix timing
+          (engages only when the footage is a genuine angle; see task note).
+          Rendered only when amber footage exists, so the DOM is byte-identical
+          for every other game. */}
+      {amberFootage?.map((f) => (
+        <button
+          key={`amber-${f.sequence}`}
+          type="button"
+          data-testid={`amber-footage-${f.sequence}`}
+          aria-label={`${f.name} — timing unknown, tap to fix`}
+          title={`We couldn't tell when ${f.name} was filmed. Tap to fix its timing.`}
+          onClick={() => onFixAmberFootage?.(f.sequence)}
+          className="absolute top-0 bottom-0 flex items-center gap-1 overflow-hidden rounded border border-amber-500/70 bg-amber-500/25 px-1 text-[10px] leading-none text-amber-200 hover:bg-amber-500/35"
+          style={{
+            left: leftCalc(f.virtualStart),
+            width: widthCalc(f.virtualStart, f.virtualEnd),
+            zIndex: 6,
+          }}
+        >
+          <Clock size={11} className="shrink-0" />
+          <span className="truncate">{f.name}</span>
+        </button>
       ))}
       {/* T2750: Video boundary markers */}
       {boundaryOffsets?.map(offset => {

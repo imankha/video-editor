@@ -13,6 +13,9 @@ import {
 // Approved microcopy (artifact screen A). Kept as literals next to use.
 const COPY = {
   heading: 'Drop any game video here.',
+  // T8910 attachMode: the picker is scoped to an existing game, so the empty
+  // state names that context instead of implying a brand-new game.
+  attachHeading: 'Drop footage to add to this game.',
   mobileSub: 'Tap to choose videos - pick as many as you want',
   dragOver: 'Drop everything here',
   folderLink: 'or add a whole folder',
@@ -56,7 +59,7 @@ function acceptedVideoCount(fileList) {
  * This is a memory-only lift of form state to the parent (NOT a store/backend
  * write), so the reactive-persistence ban does not apply.
  */
-export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmitting = false }) {
+export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmitting = false, attachMode = false, initialFiles = null }) {
   const {
     status, items, order, confidence, gaps, placement, lanes, question,
     skipped, proxies, addFiles, removeItem, setManualOrder, setPlacementMode,
@@ -121,6 +124,14 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
     },
     [ingest]
   );
+
+  // T8910: files handed in from an outside drop (the Annotate window-level
+  // drop target) are ingested exactly as a manual pick would be — a new array
+  // reference per drop, so this runs once per drop, never in a loop.
+  useEffect(() => {
+    if (initialFiles && initialFiles.length) ingest(initialFiles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFiles]);
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
@@ -319,7 +330,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
         <div className="text-center text-gray-400">
           <Upload size={24} className="mx-auto mb-2" />
           <p className="font-medium text-gray-200">
-            {isDragging ? COPY.dragOver : COPY.heading}
+            {isDragging ? COPY.dragOver : attachMode ? COPY.attachHeading : COPY.heading}
           </p>
           {/* Touch-only sub-copy — coarse pointers can't drag files. */}
           <p className="text-xs text-gray-500 mt-1 fine-pointer:hidden">{COPY.mobileSub}</p>

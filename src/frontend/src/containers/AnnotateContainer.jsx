@@ -22,6 +22,8 @@ import { useWakeLock } from '../hooks/useWakeLock';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
 import { buildFullVideoTimeline, buildGameTimeline, hasOverlappingAngles } from '../modes/annotate/hooks/useVirtualTimeline';
+import { computeLandingOutcomes, LANDING } from '../modes/annotate/footageLanding';
+import { formatClock } from '../utils/timeFormat';
 import { usePulseHighlight } from '../modes/annotate/hooks/usePulseHighlight';
 import { GameType } from '../constants/gameConstants';
 import { PROFILING_ENABLED } from '../utils/profiling';
@@ -286,6 +288,11 @@ export function AnnotateContainer({
   const [fixTiming, setFixTiming] = useState(null);
   // Bar-pulse when Done changes an angle's lane (shared helper; T8910 reuses it).
   const { pulseKey: pulseSequence, pulseNonce, pulse } = usePulseHighlight();
+  // T8910: transient landing-feedback for footage added inside Annotate whose
+  // recorded time we couldn't use — it's appended at the end (prefix-sum) on the
+  // main track and rendered in the amber warning family until the user acts.
+  // Empty for every other game, so the timeline DOM stays byte-identical.
+  const [amberFootage, setAmberFootage] = useState([]);
 
   // Preview videos = loaded gameVideos with the Fix-timing pending offset applied
   // to the target angle only. Feeding this to buildGameTimeline recomputes the
@@ -378,6 +385,13 @@ export function AnnotateContainer({
     setActiveSourceSequence(isBackbone ? null : sequence);
     setFallbackLabel(null);
   }, [isOverlapTimeline, multiVideo, fullTimeline, effectiveSeek, effectiveCurrentTime, angleSequences, setActiveSourceSequence]);
+
+  // T8910: a landing toast's "Watch" tap fires LATER, after the post-attach
+  // reload has rebuilt fullTimeline (single->multi). Route it through a ref so it
+  // always calls the CURRENT switchToSource (the one closed over the fresh
+  // overlap timeline), never the stale pre-reload no-op.
+  const switchToSourceRef = useRef(switchToSource);
+  switchToSourceRef.current = switchToSource;
 
   // Auto-fallback: once the playhead leaves the active angle's span, silently
   // revert to the backbone (never a black player) and flash the transient label.
@@ -909,6 +923,11 @@ export function AnnotateContainer({
     // not via a state-watching effect.
     setLayerFilter('all');
 
+    // T8910: any prior amber landing-feedback belongs to the game being left;
+    // clear it as part of the load gesture (handleFootageAttached re-sets it
+    // after its own reload for the just-added footage).
+    setAmberFootage([]);
+
     // T4000: revoke any prior in-memory blob src, then set the stable, gameId-only
     // first-paint src NOW and kick off /load. The src-set happens BEFORE awaiting
     // loadGame, so the video byte fetch (302 -> direct R2, sequence=1) overlaps
@@ -1053,6 +1072,67 @@ export function AnnotateContainer({
       }
     }
   }, [loadGame, getGame, applyGameData, annotateVideoUrl, setAnnotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode, saveClip, requireAuth]);
+
+  // ---- T8910: Add footage from inside Annotate — landing feedback ----------
+  // Called by AddFootageButton once the attach upload completes (the upload-
+  // complete GESTURE, not a reactive effect). Re-derives the game via the
+  // existing load path, then produces one of three landing outcomes per newly
+  // added video from the SERVER-computed offsets (never re-inferred client-side):
+  //   A) landed on an angle lane  -> pulse the bar + tappable "watch" toast
+  //   B) landed on the main track -> "Added {name} at {mm:ss}."
+  //   C) no usable recorded time  -> amber-parked at the end + Fix-timing hint
+  // Variant C is detected the same way the backend placed it (games.py
+  // compute_video_offsets): offset == prefix-sum of prior durations.
+  // Defined AFTER handleLoadGame so its dep reference is initialized (a useCallback
+  // dep array is read at render time — referencing a later `const` = TDZ crash).
+  const handleFootageAttached = useCallback(async (addedCount, attachedVideos) => {
+    const gameId = annotateGameIdRef.current;
+    if (!gameId || !addedCount) return;
+
+    // Existing load path re-derives gameVideos + the single->multi player
+    // transition (applyGameData); it also clears any prior amber feedback.
+    // handleLoadGame swallows its own errors, so no try/catch is needed here.
+    await handleLoadGame(gameId);
+
+    // Classify from the authoritative post-attach video list the attach endpoint
+    // already returned (server-computed offset_seconds) — no extra fetch. Fall
+    // back to a fresh read only if a caller omits it.
+    let videos = attachedVideos;
+    if (!Array.isArray(videos)) {
+      try {
+        videos = (await getGame(gameId)).videos;
+      } catch (err) {
+        console.warn('[AddFootage] could not read game after attach:', err?.message);
+        return;
+      }
+    }
+
+    // Pure, server-placement-driven classifier (unit tested in footageLanding).
+    const outcomes = computeLandingOutcomes(videos, addedCount);
+    const newAmber = [];
+    outcomes.forEach((o) => {
+      if (o.variant === LANDING.ANGLE) {
+        // Variant A: overlaps existing footage -> a real angle lane. Pulse the
+        // bar + a tappable "watch" toast (tap = seek + activate that source).
+        pulse(o.sequence);
+        toast.success(
+          `Added ${o.name}. It landed ${formatClock(o.pos)} into the game. Tap to watch it.`,
+          { action: { label: 'Watch', onClick: () => switchToSourceRef.current(o.sequence, o.pos) } },
+        );
+      } else if (o.variant === LANDING.AMBER) {
+        // Variant C: no usable recorded time -> amber-parked at the end.
+        newAmber.push({ sequence: o.sequence, name: o.name, virtualStart: o.pos, virtualEnd: o.virtualEnd });
+        toast.info(
+          `We couldn't tell when ${o.name} was filmed. We put it at the end. Use Fix timing to move it.`,
+          { duration: 8000 },
+        );
+      } else {
+        // Variant B: placed on the main track by its recorded time.
+        toast.success(`Added ${o.name} at ${formatClock(o.pos)}.`);
+      }
+    });
+    if (newAmber.length) setAmberFootage(newAmber);
+  }, [handleLoadGame, getGame, pulse]);
 
   // T710: Annotation playback hook (dual-video ping-pong)
   const playback = useAnnotationPlayback({
@@ -1853,6 +1933,18 @@ export function AnnotateContainer({
           onCancel: cancelFixTiming,
         }
       : null,
+    // T8910: Add-footage-from-Annotate wiring. `addFootage` drives the button +
+    // window drop-target; `amberFootage` renders the no-timestamp warning bars;
+    // `onFixAmberFootage` reuses T8900's exported opener for the amber-bar tap
+    // (engages only when the footage is a genuine angle — see the task's
+    // Progress Log for the lane-0 limitation).
+    addFootage: {
+      gameId: annotateGameId,
+      disabled: !annotateGameId || annotateSourceExpired,
+      onFootageAttached: handleFootageAttached,
+    },
+    amberFootage,
+    onFixAmberFootage: openFixTiming,
     // Angle display name for a clip's source, or null for backbone/angle-free.
     getAngleName: useCallback(
       (videoSequence) => {
