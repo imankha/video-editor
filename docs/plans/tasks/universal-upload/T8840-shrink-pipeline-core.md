@@ -1,6 +1,6 @@
 # T8840: Standalone browser shrink tool (fully working, zero app integration)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 7
 **Created:** 2026-09-05
