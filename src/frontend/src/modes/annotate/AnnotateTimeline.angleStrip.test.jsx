@@ -125,3 +125,40 @@ describe('AnnotateTimeline — angle strip (EPIC deep-overlap)', () => {
     expect(screen.getByTestId('angle-bar-4')).toBeTruthy();
   });
 });
+
+describe('AnnotateTimeline — T8910 amber (no-timestamp) footage bars', () => {
+  const amberFootage = [
+    { sequence: 2, name: 'phone-clip', virtualStart: 80, virtualEnd: 95 },
+  ];
+
+  it('renders no amber pixels for a game with none (byte-identical DOM)', () => {
+    stubMatchMedia(false);
+    const a = render(<AnnotateTimeline {...baseProps} />);
+    const baseline = a.container.innerHTML;
+    a.unmount();
+    // An empty amberFootage array must not change the DOM vs the default.
+    const b = render(<AnnotateTimeline {...baseProps} amberFootage={[]} />);
+    expect(b.container.innerHTML).toBe(baseline);
+    expect(screen.queryByTestId('amber-footage-2')).toBeNull();
+  });
+
+  it('renders an amber bar for parked footage', () => {
+    stubMatchMedia(false);
+    render(<AnnotateTimeline {...baseProps} amberFootage={amberFootage} />);
+    expect(screen.getByTestId('amber-footage-2')).toBeTruthy();
+  });
+
+  it('tapping the amber bar opens Fix timing (calls onFixAmberFootage with the sequence)', () => {
+    stubMatchMedia(false);
+    let fixed = null;
+    render(
+      <AnnotateTimeline
+        {...baseProps}
+        amberFootage={amberFootage}
+        onFixAmberFootage={(seq) => { fixed = seq; }}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('amber-footage-2'));
+    expect(fixed).toBe(2);
+  });
+});

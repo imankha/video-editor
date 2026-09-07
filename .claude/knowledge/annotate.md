@@ -32,6 +32,54 @@ a 3s stop timer; "Play this angle"/"Play main camera" play the same wall moment 
 `PULSE_CLASS='angle-pulse'`, keyframes in index.css) -- 2x violet ring fade; T8910 REUSES this for its
 landing pulse, do not duplicate. The auto-fallback useEffect is suppressed while `fixTiming` is set (the
 A/B preview owns the player). Prior:)
+updated: 2026-09-07 (T8910 Add footage from INSIDE Annotate -- a second post-creation attach entry
+point next to GameTile's kebab `AttachVideoModal` (T8700), which stays SEPARATE and untouched.
+**NEW component** `modes/annotate/AddFootageButton.jsx`: ghost-secondary button (`bg-gray-700`,
+`FilePlus`, label `hidden lg:inline`) mounted in the non-fullscreen timeline header row in
+`AnnotateModeView` (the `!annotateFullscreen && !underCanvasEditor` block), NOT UnifiedHeader --
+it acts on the timeline. It owns the modal (universal `GameFootagePicker` in NEW `attachMode` --
+same payload, only the empty-state heading changes; `initialFiles` prop lets an outside drop feed
+it) + a window-level file drag target (`data-testid=add-footage-drop-target`, one dashed violet
+overlay over the whole surface; `dataTransfer.types` includes 'Files' gate; drop point never
+decides placement -- recorded time does). Cost line is `calculateUploadCost(totalBytes)` DISPLAY
+ONLY (the attach endpoint charges server-side; do not double-charge). The button + its window
+listeners are DISABLED when `annotateSourceExpired` (add-footage needs a live source).
+**`attachVideoToExistingGame(gameId, filesOrFile, onProgress)` GENERALIZED (uploadManager.js):**
+was one `File`, now accepts a `File`, `File[]`, or `[{file, recorded_at}]` -- normalized to a list,
+uploaded SEQUENTIALLY (append-only server sequence keeps order; dedup makes a retry safe) with
+`Video {i} of {n}` labels (only when n>1; a bare File stays byte-identical to T8700's call, so
+AttachVideoModal is untouched). Each videoRef carries its own `recorded_at` (ISO from the intake's
+trusted `creationTime`, null otherwise) + `original_filename`; sequence omitted (server assigns).
+Returns the LAST addVideosToGame result whose `videos` is the full post-attach list. **Landing
+feedback (gesture-based, in the upload-complete handler `handleFootageAttached` in AnnotateContainer,
+NOT a reactive effect):** it runs the EXISTING load path `handleLoadGame(gameId)` (re-derives
+gameVideos + the single->multi player transition via applyGameData; resets playhead -- acceptable,
+the point is to view the new footage) then classifies each appended video via the PURE
+`modes/annotate/footageLanding.js` `computeLandingOutcomes(videos, addedCount)` (unit-tested).
+**Variant is derived from the SERVER-computed `offset_seconds`, never re-inferred:** ANGLE (overlaps
+-> in `buildGameTimeline().angles`) -> `pulse(seq)` (reuses T8900's `usePulseHighlight`) + a
+tappable "Added {name}. It landed {mm:ss}... Tap to watch it." toast whose action calls
+`switchToSource` via a REF (`switchToSourceRef`, because the toast fires AFTER the reload rebuilt
+fullTimeline -- a direct closure would call the stale pre-reload no-op); MAIN (non-overlap, offset
+!= prefix-sum -> placed by clock) -> "Added {name} at {mm:ss}."; AMBER (offset == prefix-sum of
+prior durations -> no usable recorded time, catches BOTH recorded_at==null AND the >12h-window case,
+which a null-check alone misses) -> an amber warning bar on the main track + "We couldn't tell
+when... Use Fix timing to move it." **Amber bar** = a gated overlay in `AnnotateTimeline.jsx`
+(`amberFootage` prop, threaded container->AnnotateModeView->AnnotateMode->AnnotateTimeline,
+SEPARATE from angleData since amber footage is angle-free; empty array => byte-identical DOM, a
+DOM-equality test pins this). `amberFootage` is transient landing state (container `useState`),
+cleared at the top of `handleLoadGame` and re-set after the post-attach reload. **KNOWN LIMITATION
+(spec conflict, follow-up owed):** the amber-bar tap calls T8900's exported `openFixTiming(seq)`,
+but that opener EARLY-RETURNS unless `isOverlapTimeline` and treats its arg as an ANGLE -- a
+prefix-sum-appended (amber) video is backbone lane 0 with no overlap, so Fix-timing does NOT
+currently engage for it (the tap is a safe no-op). Relaxing openFixTiming to nudge a lane-0
+concatenated segment is a real T8900-scope feature, deliberately deferred, not a defensive patch.
+**T7890 `upload_file_selected` beacon is NOT fired here** -- it is the Add-Game funnel middle step
+(`add_game_opened -> upload_file_selected -> game_created`, analytics.py), so firing it from a
+post-creation attach would corrupt that funnel. **Shrink offer EXCLUDED** (T8850/T8860 not built
+yet -- not composable; follow-up). `videoDisplayName(original_filename, fallbackIndex)` was
+EXTRACTED + EXPORTED from useVirtualTimeline.js (single source of truth; buildGameTimeline's angle
+naming + footageLanding both use it). Prior:)
 updated: 2026-09-07 (T8824 replaces intake's wholesale-discard overlap rule with a PLACEMENT
 MODEL, so the epic's headline scenario -- a phone clip filmed during the main camera -- is
 finally reachable. `footageIntake.js`'s `inferOrder` is now `inferPlacement(items, {override,

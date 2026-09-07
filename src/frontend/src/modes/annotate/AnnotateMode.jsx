@@ -25,6 +25,9 @@ export default function AnnotateMode({
   onLayerSelect,
   boundaryOffsets,
   angleData = null,
+  // T8910: no-timestamp landing footage (amber warning bars) + Fix-timing tap.
+  amberFootage = [],
+  onFixAmberFootage,
 }) {
   if (!duration) return null;
 
@@ -43,6 +46,8 @@ export default function AnnotateMode({
         onLayerSelect={onLayerSelect}
         boundaryOffsets={boundaryOffsets}
         angleData={angleData}
+        amberFootage={amberFootage}
+        onFixAmberFootage={onFixAmberFootage}
       />
     </div>
   );

@@ -1171,7 +1171,8 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
 }
 
 /**
- * T8700: Attach ONE additional video to an existing, already-`ready` game.
+ * T8700 / T8910: Attach one or more additional videos to an existing,
+ * already-`ready` game.
  *
  * Reuses the exact create-time transport uploadMultiVideoGame runs for halves
  * >= 2 — hashAndAnalyze -> ensureVideoInR2 (dedup-aware R2 multipart upload) ->
@@ -1185,49 +1186,84 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
  * The `blake3_hash` sent is the server-confirmed hash of the object in R2; the
  * server assigns the sequence (append-only), so we do not send one.
  *
- * @param {number} gameId - Existing ready game to attach the video to
- * @param {File} file - Video file (e.g. a second half)
+ * T8910 generalized this from a single File to a list: each entry uploads
+ * sequentially (append-only server sequencing keeps order stable across the N
+ * POSTs; dedup makes a retry safe) with a "Video {i} of {n}" progress label —
+ * the SAME label shape the create-time multi-video path uses — and carries its
+ * own embedded `recorded_at` (evidence for overlap placement, null when the
+ * intake found none — never fabricated).
+ *
+ * Backward compatible: a bare `File` (T8700's AttachVideoModal call site) is
+ * normalized to a 1-item list with no recorded_at, so that caller is untouched.
+ *
+ * @param {number} gameId - Existing ready game to attach the video(s) to
+ * @param {File|File[]|Array<{file:File, recorded_at?:string|null}>} filesOrFile
  * @param {function} [onProgress] - ({ phase, percent, message }) => void
- * @returns {Promise<Object>} - addVideosToGame result incl. upload_cost_charged
+ * @returns {Promise<Object>} - the LAST addVideosToGame result; its `videos`
+ *   array is the full post-attach list (append-only), including every new row.
  */
-export async function attachVideoToExistingGame(gameId, file, onProgress) {
+export async function attachVideoToExistingGame(gameId, filesOrFile, onProgress) {
   const notify = (phase, percent, message) => {
     if (onProgress) onProgress({ phase, percent, message });
   };
 
-  // Step 1: hash + faststart analysis (emits 'hashing' progress).
-  const hashResult = await hashAndAnalyze(file, onProgress);
+  // Normalize to a uniform [{ file, recorded_at }] list. A bare File (T8700) or
+  // an array of bare Files both map to null recorded_at.
+  const raw = Array.isArray(filesOrFile) ? filesOrFile : [filesOrFile];
+  const entries = raw.map((e) =>
+    e instanceof File ? { file: e, recorded_at: null } : { file: e.file, recorded_at: e.recorded_at || null }
+  );
+  const total = entries.length;
 
-  // Step 2: ensure the bytes are durable in R2 (dedup-aware multipart upload).
-  const r2Result = await ensureVideoInR2(file, onProgress, {
-    precomputed: hashResult,
-  });
+  let result = null;
+  for (let i = 0; i < total; i++) {
+    const { file, recorded_at } = entries[i];
+    // Single attach keeps its bare progress messages (byte-identical to T8700);
+    // a multi-file attach prefixes the create-path "Video {i} of {n}" label.
+    const label = total > 1 ? `Video ${i + 1} of ${total}` : null;
+    const perFileProgress = (progress) => {
+      if (!onProgress) return;
+      onProgress(
+        label ? { ...progress, message: `${label}: ${progress.message}` } : progress
+      );
+    };
 
-  // Step 3: attach to the game. The endpoint assigns the append-only sequence
-  // (MAX(sequence)+1) server-side, so we intentionally omit `sequence`.
-  const videoRef = {
-    blake3_hash: r2Result.blake3_hash,
-    file_size: r2Result.file_size,
-    duration: null,
-    width: null,
-    height: null,
-    // T8892: the attached file's name -> the new angle's display name. `file` is
-    // the attach param; File.name is authoritative here (see uploadGame).
-    original_filename: file.name || null,
-  };
-  const result = await addVideosToGame(gameId, [videoRef]);
+    // Step 1: hash + faststart analysis (emits 'hashing' progress).
+    const hashResult = await hashAndAnalyze(file, perFileProgress);
+
+    // Step 2: ensure the bytes are durable in R2 (dedup-aware multipart upload).
+    const r2Result = await ensureVideoInR2(file, perFileProgress, {
+      precomputed: hashResult,
+    });
+
+    // Step 3: attach to the game. The endpoint assigns the append-only sequence
+    // (MAX(sequence)+1) server-side, so we intentionally omit `sequence`.
+    const videoRef = {
+      blake3_hash: r2Result.blake3_hash,
+      file_size: r2Result.file_size,
+      duration: null,
+      width: null,
+      height: null,
+      // T8870: embedded recording time (ISO-8601) for overlap placement, or null.
+      recorded_at,
+      // T8892: the attached file's name -> the new angle's display name. `file`
+      // is the attach param; File.name is authoritative here (see uploadGame).
+      original_filename: file.name || null,
+    };
+    result = await addVideosToGame(gameId, [videoRef]);
+  }
 
   // Step 4 (success only): re-load the game via /load so AnnotateContainer
   // re-derives gameVideos and buildFullVideoTimeline runs (single->multi). Also
-  // refresh the games list so its aggregate duration/size pick up the new half,
-  // and the quest progress in case a milestone fired. A throw in step 1-3 skips
-  // this entirely — no reload on failure.
+  // refresh the games list so its aggregate duration/size pick up the new
+  // footage, and the quest progress in case a milestone fired. A throw in any
+  // per-file step above skips this entirely — no reload on failure.
   const { useGamesDataStore } = await import('../stores/gamesDataStore');
   await useGamesDataStore.getState().loadGame(gameId);
   useGamesDataStore.getState().invalidateGames();
   useQuestStore.getState().fetchProgress({ force: true });
 
-  notify(UPLOAD_PHASE.COMPLETE, 100, 'Video added');
+  notify(UPLOAD_PHASE.COMPLETE, 100, total > 1 ? 'Footage added' : 'Video added');
 
   return result;
 }

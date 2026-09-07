@@ -6,6 +6,7 @@ import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
 import AngleSwitcherBadge from './annotate/AngleSwitcherBadge';
 import FixTimingStrip from './annotate/FixTimingStrip';
+import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
 import { useCurrentProfile, useProfileStore } from '../stores';
@@ -118,6 +119,10 @@ export function AnnotateModeView({
   angleSwitcher = null,
   // T8900: Fix-timing strip data (null unless the mode is open)
   fixTiming = null,
+  // T8910: Add footage from inside Annotate
+  addFootage = null,
+  amberFootage = [],
+  onFixAmberFootage,
 }) {
   // T8892: display name of the active NON-backbone angle, or null. Drives the
   // Add/Edit Play editor's "cut from {angle}" chip so the user knows which camera
@@ -812,6 +817,17 @@ export function AnnotateModeView({
           {/* Annotate Mode Timeline - non-fullscreen (hidden while the under-canvas editor is open) */}
           {!annotateFullscreen && !underCanvasEditor && (
             <div className="mt-6">
+              {/* T8910: timeline header row — "Add footage" lives WITH the
+                  timeline (it acts on the timeline), not in UnifiedHeader. */}
+              {addFootage && (
+                <div className="mb-1 flex items-center justify-end">
+                  <AddFootageButton
+                    gameId={addFootage.gameId}
+                    disabled={addFootage.disabled}
+                    onFootageAttached={addFootage.onFootageAttached}
+                  />
+                </div>
+              )}
               <AnnotateMode
                 currentTime={currentTime}
                 duration={duration || annotateVideoMetadata?.duration || 0}
@@ -825,6 +841,8 @@ export function AnnotateModeView({
                 onLayerSelect={onLayerSelect}
                 boundaryOffsets={boundaryOffsets}
                 angleData={angleData}
+                amberFootage={amberFootage}
+                onFixAmberFootage={onFixAmberFootage}
               />
             </div>
           )}

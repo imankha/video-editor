@@ -350,6 +350,18 @@ function middleEllipsis(s, maxLen) {
 }
 
 /**
+ * Display name for a game video from its user-supplied `original_filename`
+ * (T8892). Single source of truth for the label shown on every angle surface
+ * AND T8910's landing feedback (which needs a name for backbone/non-angle
+ * videos too, where there is no `angle.name`). Absent filename -> the honest
+ * "Extra clip {n}" fallback (n = 1-based), never the content-addressed hash.
+ */
+export function videoDisplayName(originalFilename, fallbackIndex = 0) {
+  const stem = filenameStem(originalFilename);
+  return stem ? middleEllipsis(stem, 14) : `Extra clip ${fallbackIndex + 1}`;
+}
+
+/**
  * Build the overlap-aware game timeline: lane model, backbone virtual domain,
  * coverage extensions, and the wall<->virtual<->source mapping functions
  * consumed by T8890 (angle strip / source switching) and T8900 (fix timing).
@@ -598,13 +610,12 @@ export function buildGameTimeline(gameVideos) {
     // url). Absent -> "Extra clip {n}", n = 1-based lane order among angles
     // (angleVideos is offset-sorted). Legacy rows (no filename ever stored) get
     // the honest fallback, never a hash.
-    const stem = filenameStem(v.original_filename);
     return {
       sequence: v.sequence,
       lane: laneOf.get(v.sequence),
       virtualStart: wallToVirtual(v.start),
       virtualEnd: wallToVirtual(v.end),
-      name: stem ? middleEllipsis(stem, 14) : `Extra clip ${idx + 1}`,
+      name: videoDisplayName(v.original_filename, idx),
     };
   });
 
