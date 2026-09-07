@@ -84,7 +84,7 @@ overrides.)
 | T8820 | [Confirm strip + reorder editor](T8820-confirm-strip-reorder.md) | STAGING |
 | T8822 | [Consolidate footage list + overlap badge](T8822-consolidate-footage-list-overlap-badge.md) | STAGING |
 | T8824 | [Intake: overlap is a signal, not a disqualifier (layered order editor)](T8824-intake-overlap-as-layers.md) | TODO |
-| T8830 | [Shrink spike: WebCodecs 8K benchmark (go/no-go)](T8830-shrink-spike-benchmark.md) | WAITING ON USER |
+| T8830 | [Shrink spike: WebCodecs 8K benchmark (go/no-go)](T8830-shrink-spike-benchmark.md) | STAGING |
 | T8840 | [Shrink pipeline core (worker transcode)](T8840-shrink-pipeline-core.md) | TODO |
 | T8850 | [Shrink UI: offer card + crop step + presets](T8850-shrink-ui-crop-step.md) | TODO |
 | T8860 | [Shrink upload integration + fallback](T8860-shrink-upload-integration.md) | TODO |

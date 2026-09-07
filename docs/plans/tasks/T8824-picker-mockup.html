@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>T8824 - Footage picker: overlap as layers (mockup)</title>
+<style>
+  :root{
+    --bg:#0b0f16; --panel:#111827; --row:#1f2937; --rowb:#374151;
+    --text:#e5e7eb; --dim:#9ca3af; --faint:#6b7280;
+    --green:#22c55e; --greenb:#16a34a; --greenbg:rgba(20,83,45,.20);
+    --violet:#8b5cf6; --violetdim:#a78bfa; --violetbg:rgba(76,29,149,.22);
+    --yellow:#facc15; --yellowb:#eab308; --yellowbg:rgba(113,63,18,.20);
+    --red:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:14px/1.35 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+  h1{font-size:18px;margin:24px 16px 4px}
+  h2{font-size:14px;margin:28px 16px 2px;color:var(--violetdim);letter-spacing:.04em;text-transform:uppercase}
+  p.note{margin:0 16px 12px;color:var(--dim);font-size:12px;max-width:900px}
+  .gallery{display:flex;flex-wrap:wrap;gap:20px;padding:8px 16px 32px;align-items:flex-start}
+  .device{background:#000;border:1px solid #1f2937;border-radius:14px;padding:10px}
+  .device .label{font-size:10px;color:var(--faint);margin:0 0 6px 2px;letter-spacing:.06em}
+  .w360{width:360px}.w390{width:390px}.w428{width:428px}
+
+  /* ---- the picker card (FootageList) ---- */
+  .card{border:2px solid var(--greenb);background:var(--greenbg);border-radius:8px;padding:10px 12px}
+  .card.ask{border-color:var(--yellowb);background:var(--yellowbg)}
+  .hdr{font-size:13px;font-weight:600;color:#e5e7eb;margin:0 0 8px}
+  ul.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+  .row{display:flex;align-items:center;gap:8px;background:rgba(31,41,55,.7);
+       border:1px solid var(--rowb);border-radius:6px;padding:6px 8px;min-height:44px}
+  .grip{color:var(--faint);flex:0 0 auto;font-size:13px;letter-spacing:-2px}
+  .num{flex:0 0 auto;width:24px;height:24px;border-radius:50%;background:var(--greenb);
+       color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .num.y{background:#ca8a04}
+  .cam{flex:0 0 auto;width:24px;height:24px;border-radius:50%;background:#5b21b6;color:#ddd6fe;
+       font-size:11px;display:flex;align-items:center;justify-content:center}
+  .meta{min-width:0;flex:1 1 auto}
+  .name{font-size:13px;color:#e5e7eb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sub{font-size:11px;color:var(--dim)}
+  .sub .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-left:4px}
+  .x{flex:0 0 auto;width:28px;height:28px;border-radius:50%;color:var(--dim);
+     display:flex;align-items:center;justify-content:center;font-size:14px}
+  .gap{display:flex;justify-content:center;align-items:center;padding:3px 0;margin:3px 0;
+       border-top:2px dashed #4b5563;color:var(--faint);font-size:11px}
+  .addmore{display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;
+           border:2px dashed #4b5563;border-radius:6px;color:var(--dim);font-size:12px}
+  .trust{display:flex;gap:6px;align-items:flex-start;font-size:12px;margin-top:10px;color:var(--green)}
+  .trust.y{color:var(--yellow)}
+  .trust.g{color:var(--dim)}
+  .skipped{margin-top:8px;font-size:11px;color:var(--faint)}
+
+  /* ---- angle section ---- */
+  .anglesec{margin-top:10px;border-top:1px solid rgba(139,92,246,.35);padding-top:8px}
+  .anglehdr{font-size:11px;color:var(--violetdim);margin:0 0 6px;letter-spacing:.02em}
+  .map{position:relative;margin:0 0 8px}
+  .lane{position:relative;height:14px;margin-bottom:4px}
+  .lane .track{position:absolute;inset:0;background:rgba(75,85,99,.35);border-radius:3px}
+  .blk{position:absolute;top:0;bottom:0;border-radius:3px}
+  .blk.main{background:#4b5563;border:1px solid #6b7280}
+  .blk.angle{background:var(--violet);border:1px solid #c4b5fd}
+  .lanetag{position:absolute;left:0;top:-13px;font-size:9px;color:var(--faint)}
+  .arow{display:flex;align-items:center;gap:8px;background:var(--violetbg);
+        border:1px solid rgba(139,92,246,.6);border-radius:6px;padding:6px 8px;min-height:44px;margin-bottom:4px}
+  .arow .sub{color:var(--violetdim)}
+  .qbox{margin-top:10px;border:1px solid rgba(234,179,8,.5);background:rgba(113,63,18,.25);
+        border-radius:6px;padding:8px 10px}
+  .qbox .q{font-size:12px;color:#fde68a;margin:0 0 8px}
+  .btns{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{flex:1 1 140px;min-height:40px;border-radius:6px;border:1px solid #4b5563;background:#111827;
+       color:var(--text);font-size:12px;display:flex;align-items:center;justify-content:center;padding:4px 8px;text-align:center}
+  .btn.sel{border-color:var(--green);background:rgba(20,83,45,.35);color:#bbf7d0}
+  .link{display:inline-block;margin-top:8px;font-size:11px;color:#93c5fd;text-decoration:underline}
+  .err{display:flex;align-items:center;gap:8px;background:rgba(127,29,29,.3);border:1px solid #b91c1c;
+       border-radius:6px;padding:6px 8px;min-height:44px;color:#fca5a5;font-size:11px}
+  .caption{font-size:11px;color:var(--faint);margin:6px 2px 0}
+</style>
+</head>
+<body>
+
+<h1>T8824 - Footage picker: overlap is a signal, not a disqualifier</h1>
+<p class="note">
+  All screens are the multi-file <code>ready</code> state of <code>GameFootagePicker</code> (component:
+  <code>FootageList</code>). Lane 0 stays exactly today's numbered, always-draggable list. Angles render
+  below it as a violet mini-map plus one labelled row per angle. Colors follow the app
+  (green = confident, yellow = asking, violet = angle - EPIC decision 8).
+</p>
+
+<h2>S1 - No overlap (reference: unchanged from T8822)</h2>
+<p class="note">DJI folder, 4 segments, one 9-minute halftime break. Zero angle pixels: lanes.length === 1
+  renders the identical DOM shipped today.</p>
+<div class="gallery">
+  <div class="device w390"><div class="label">390 px</div>
+    <div class="card">
+      <p class="hdr">Your game - 4 videos - 1 hr 17 min</p>
+      <ul class="list">
+        <li><div class="row"><span class="grip">||</span><span class="num">1</span>
+          <div class="meta"><div class="name">DJI_0003.MP4</div><div class="sub">23 min<span class="mono">5:55 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">2</span>
+          <div class="meta"><div class="name">DJI_0004.MP4</div><div class="sub">17 min<span class="mono">6:19 PM</span></div></div>
+          <span class="x">&times;</span></div>
+          <div class="gap">9 min break</div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">3</span>
+          <div class="meta"><div class="name">DJI_0005.MP4</div><div class="sub">24 min<span class="mono">6:44 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">4</span>
+          <div class="meta"><div class="name">DJI_0006.MP4</div><div class="sub">5 min<span class="mono">7:08 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="addmore">+ Add more</div></li>
+      </ul>
+      <div class="trust"><span>&#9201;</span><span>Put in order by the time each was recorded</span></div>
+      <div class="skipped">&#9656; Skipped 4 extra camera files</div>
+    </div>
+  </div>
+</div>
+
+<h2>S2 - Main camera + 1 angle (the epic's headline case)</h2>
+<p class="note">Same DJI folder plus <code>sideline.mp4</code> (phone, 4 min, filmed during DJI_0004).
+  Different camera family (8K landscape vs 1080x1920 portrait) + overlap =&gt; genuine angle, no question asked.</p>
+<div class="gallery">
+  <div class="device w390"><div class="label">390 px</div>
+    <div class="card">
+      <p class="hdr">Your game - 5 videos - 1 hr 21 min</p>
+      <ul class="list">
+        <li><div class="row"><span class="grip">||</span><span class="num">1</span>
+          <div class="meta"><div class="name">DJI_0003.MP4</div><div class="sub">23 min<span class="mono">5:55 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">2</span>
+          <div class="meta"><div class="name">DJI_0004.MP4</div><div class="sub">17 min<span class="mono">6:19 PM</span></div></div>
+          <span class="x">&times;</span></div>
+          <div class="gap">9 min break</div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">3</span>
+          <div class="meta"><div class="name">DJI_0005.MP4</div><div class="sub">24 min<span class="mono">6:44 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">4</span>
+          <div class="meta"><div class="name">DJI_0006.MP4</div><div class="sub">5 min<span class="mono">7:08 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="addmore">+ Add more</div></li>
+      </ul>
+
+      <div class="anglesec">
+        <p class="anglehdr">Also filmed at the same time</p>
+        <div class="map">
+          <div class="lane"><div class="track"></div>
+            <div class="blk main" style="left:0%;width:30.4%"></div>
+            <div class="blk main" style="left:30.4%;width:21.9%"></div>
+            <div class="blk main" style="left:63.7%;width:30.4%"></div>
+            <div class="blk main" style="left:94.1%;width:5.9%"></div>
+          </div>
+          <div class="lane"><div class="track"></div>
+            <div class="blk angle" style="left:38.8%;width:5.2%"></div>
+          </div>
+        </div>
+        <div class="arow"><span class="cam">&#9679;</span>
+          <div class="meta"><div class="name">sideline.mp4</div>
+            <div class="sub">4 min - overlaps DJI_0004.MP4 from 6:25 PM to 6:29 PM</div></div>
+          <span class="x">&times;</span></div>
+      </div>
+
+      <div class="trust"><span>&#9201;</span><span>Put in order by the time each was recorded - and 1 angle filmed at the same time</span></div>
+      <a class="link">Not two cameras? Put them all in order instead</a>
+    </div>
+  </div>
+
+  <div class="device w360"><div class="label">360 px (smallest supported)</div>
+    <div class="card">
+      <p class="hdr">Your game - 5 videos - 1 hr 21 min</p>
+      <ul class="list">
+        <li><div class="row"><span class="grip">||</span><span class="num">1</span>
+          <div class="meta"><div class="name">DJI_0003.MP4</div><div class="sub">23 min<span class="mono">5:55 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">2</span>
+          <div class="meta"><div class="name">DJI_0004.MP4</div><div class="sub">17 min<span class="mono">6:19 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+      </ul>
+      <div class="anglesec">
+        <p class="anglehdr">Also filmed at the same time</p>
+        <div class="map">
+          <div class="lane"><div class="track"></div>
+            <div class="blk main" style="left:0%;width:30.4%"></div>
+            <div class="blk main" style="left:30.4%;width:21.9%"></div>
+            <div class="blk main" style="left:63.7%;width:30.4%"></div>
+            <div class="blk main" style="left:94.1%;width:5.9%"></div>
+          </div>
+          <div class="lane"><div class="track"></div>
+            <div class="blk angle" style="left:38.8%;width:5.2%"></div>
+          </div>
+        </div>
+        <div class="arow"><span class="cam">&#9679;</span>
+          <div class="meta"><div class="name">sideline.mp4</div>
+            <div class="sub">4 min - overlaps DJI_0004.MP4 from 6:25 PM to 6:29 PM</div></div>
+          <span class="x">&times;</span></div>
+      </div>
+      <div class="trust"><span>&#9201;</span><span>Put in order by the time each was recorded - and 1 angle filmed at the same time</span></div>
+    </div>
+    <p class="caption">The "overlaps ... from ... to ..." line wraps to 2 lines at 360 px. Nothing truncates
+      except the filename (existing behaviour).</p>
+  </div>
+
+  <div class="device w428"><div class="label">428 px</div>
+    <div class="card">
+      <p class="hdr">Your game - 5 videos - 1 hr 21 min</p>
+      <ul class="list">
+        <li><div class="row"><span class="grip">||</span><span class="num">1</span>
+          <div class="meta"><div class="name">DJI_0003.MP4</div><div class="sub">23 min<span class="mono">5:55 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">2</span>
+          <div class="meta"><div class="name">DJI_0004.MP4</div><div class="sub">17 min<span class="mono">6:19 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+      </ul>
+      <div class="anglesec">
+        <p class="anglehdr">Also filmed at the same time</p>
+        <div class="map">
+          <div class="lane"><div class="track"></div>
+            <div class="blk main" style="left:0%;width:30.4%"></div>
+            <div class="blk main" style="left:30.4%;width:21.9%"></div>
+            <div class="blk main" style="left:63.7%;width:30.4%"></div>
+            <div class="blk main" style="left:94.1%;width:5.9%"></div>
+          </div>
+          <div class="lane"><div class="track"></div>
+            <div class="blk angle" style="left:38.8%;width:5.2%"></div>
+          </div>
+        </div>
+        <div class="arow"><span class="cam">&#9679;</span>
+          <div class="meta"><div class="name">sideline.mp4</div>
+            <div class="sub">4 min - overlaps DJI_0004.MP4 from 6:25 PM to 6:29 PM</div></div>
+          <span class="x">&times;</span></div>
+      </div>
+      <div class="trust"><span>&#9201;</span><span>Put in order by the time each was recorded - and 1 angle filmed at the same time</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>S3 - Two angles that also overlap each other (3 lanes)</h2>
+<p class="note">Same lane numbers the user will see in Annotate: identical <code>assignLanes()</code> call,
+  identical inputs. Lane 2 exists only because the two phone clips overlap each other.</p>
+<div class="gallery">
+  <div class="device w390"><div class="label">390 px</div>
+    <div class="card">
+      <p class="hdr">Your game - 6 videos - 1 hr 29 min</p>
+      <ul class="list">
+        <li><div class="row"><span class="grip">||</span><span class="num">1</span>
+          <div class="meta"><div class="name">DJI_0003.MP4</div><div class="sub">23 min<span class="mono">5:55 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">2</span>
+          <div class="meta"><div class="name">DJI_0004.MP4</div><div class="sub">17 min<span class="mono">6:19 PM</span></div></div>
+          <span class="x">&times;</span></div>
+          <div class="gap">9 min break</div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">3</span>
+          <div class="meta"><div class="name">DJI_0005.MP4</div><div class="sub">24 min<span class="mono">6:44 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">4</span>
+          <div class="meta"><div class="name">DJI_0006.MP4</div><div class="sub">5 min<span class="mono">7:08 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="addmore">+ Add more</div></li>
+      </ul>
+
+      <div class="anglesec">
+        <p class="anglehdr">Also filmed at the same time</p>
+        <div class="map">
+          <div class="lane"><div class="track"></div>
+            <div class="blk main" style="left:0%;width:30.4%"></div>
+            <div class="blk main" style="left:30.4%;width:21.9%"></div>
+            <div class="blk main" style="left:63.7%;width:30.4%"></div>
+            <div class="blk main" style="left:94.1%;width:5.9%"></div>
+          </div>
+          <div class="lane"><div class="track"></div>
+            <div class="blk angle" style="left:38.8%;width:5.2%"></div>
+          </div>
+          <div class="lane"><div class="track"></div>
+            <div class="blk angle" style="left:41.4%;width:10.4%"></div>
+          </div>
+        </div>
+        <div class="arow"><span class="cam">&#9679;</span>
+          <div class="meta"><div class="name">sideline.mp4</div>
+            <div class="sub">4 min - overlaps DJI_0004.MP4 from 6:25 PM to 6:29 PM</div></div>
+          <span class="x">&times;</span></div>
+        <div class="arow"><span class="cam">&#9679;</span>
+          <div class="meta"><div class="name">dads-phone.mp4</div>
+            <div class="sub">8 min - overlaps DJI_0004.MP4 and sideline.mp4 from 6:27 PM to 6:35 PM</div></div>
+          <span class="x">&times;</span></div>
+      </div>
+
+      <div class="trust"><span>&#9201;</span><span>Put in order by the time each was recorded - and 2 angles filmed at the same time</span></div>
+      <a class="link">Not two cameras? Put them all in order instead</a>
+    </div>
+  </div>
+</div>
+
+<h2>S4 - Legends / Trace export pair (overlap is an artifact)</h2>
+<p class="note">Half-words are a one-recording naming scheme, so the 32-minute "overlap" is an export-time
+  artifact: one lane, order from the names, and NO timestamp is sent to the backend (T8872's invariant).
+  The escape hatch is the same control as everywhere else, just phrased the other way round.</p>
+<div class="gallery">
+  <div class="device w390"><div class="label">390 px</div>
+    <div class="card">
+      <p class="hdr">Your game - 2 videos - 1 hr 30 min</p>
+      <ul class="list">
+        <li><div class="row"><span class="grip">||</span><span class="num">1</span>
+          <div class="meta"><div class="name">2026-09-05 LEGENDS 1st-half.mp4</div><div class="sub">45 min</div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">2</span>
+          <div class="meta"><div class="name">2026-09-05 LEGENDS 2nd-half.mp4</div><div class="sub">45 min</div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="addmore">+ Add more</div></li>
+      </ul>
+      <div class="trust g"><span>&#128196;</span><span>These look like two parts of one recording - put in order by their names</span></div>
+      <a class="link">Were they filmed at the same time? Show them as angles</a>
+    </div>
+  </div>
+</div>
+
+<h2>S5 - Ambiguous overlap: ask, never block</h2>
+<p class="note">Two files from the same kind of camera (same resolution + container), overlapping, with no
+  one-recording naming scheme and no containment geometry. The safe default (sequential) is already applied -
+  Add Game is never blocked - and one tap flips it.</p>
+<div class="gallery">
+  <div class="device w390"><div class="label">390 px</div>
+    <div class="card ask">
+      <p class="hdr">Your game - 2 videos - 1 hr 34 min</p>
+      <ul class="list">
+        <li><div class="row"><span class="grip">||</span><span class="num y">1</span>
+          <div class="meta"><div class="name">IMG_4471.MOV</div><div class="sub">48 min</div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num y">2</span>
+          <div class="meta"><div class="name">IMG_4472.MOV</div><div class="sub">46 min</div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="addmore">+ Add more</div></li>
+      </ul>
+      <div class="qbox">
+        <p class="q">Were IMG_4471 and IMG_4472 filmed at the same time?</p>
+        <div class="btns">
+          <div class="btn sel">No - two parts of one game</div>
+          <div class="btn">Yes - two cameras at once</div>
+        </div>
+      </div>
+      <div class="trust y"><span>&#9888;</span><span>We put them in order by their names - check this looks right</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>S6 - The user dragged lane 0 while angles were showing</h2>
+<p class="note">A drag says "the clock is not the order" - so the clock stops being evidence, angles fold back
+  into one list, and the one-line escape hatch offers the clock back. Same single control, third phrasing.</p>
+<div class="gallery">
+  <div class="device w390"><div class="label">390 px</div>
+    <div class="card">
+      <p class="hdr">Your game - 5 videos - 1 hr 21 min</p>
+      <ul class="list">
+        <li><div class="row"><span class="grip">||</span><span class="num">1</span>
+          <div class="meta"><div class="name">DJI_0004.MP4</div><div class="sub">17 min</div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">2</span>
+          <div class="meta"><div class="name">DJI_0003.MP4</div><div class="sub">23 min</div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">3</span>
+          <div class="meta"><div class="name">sideline.mp4</div><div class="sub">4 min</div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">4</span>
+          <div class="meta"><div class="name">DJI_0005.MP4</div><div class="sub">24 min</div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="row"><span class="grip">||</span><span class="num">5</span>
+          <div class="meta"><div class="name">DJI_0006.MP4</div><div class="sub">5 min</div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="addmore">+ Add more</div></li>
+      </ul>
+      <div class="trust"><span>&#10003;</span><span>Order set by you</span></div>
+      <a class="link">Use the recorded times instead</a>
+    </div>
+  </div>
+</div>
+
+<h2>S7 - Unreadable file alongside an angle (existing red row is unchanged)</h2>
+<div class="gallery">
+  <div class="device w390"><div class="label">390 px</div>
+    <div class="card">
+      <p class="hdr">Your game - 2 videos - 51 min</p>
+      <ul class="list">
+        <li><div class="row"><span class="grip">||</span><span class="num">1</span>
+          <div class="meta"><div class="name">main-camera.mp4</div><div class="sub">47 min<span class="mono">5:55 PM</span></div></div>
+          <span class="x">&times;</span></div></li>
+        <li><div class="err"><div class="meta">Can't read this one - broken.mp4</div><span class="x">&times;</span></div></li>
+        <li><div class="addmore">+ Add more</div></li>
+      </ul>
+      <div class="anglesec">
+        <p class="anglehdr">Also filmed at the same time</p>
+        <div class="map">
+          <div class="lane"><div class="track"></div><div class="blk main" style="left:0%;width:100%"></div></div>
+          <div class="lane"><div class="track"></div><div class="blk angle" style="left:22%;width:8.5%"></div></div>
+        </div>
+        <div class="arow"><span class="cam">&#9679;</span>
+          <div class="meta"><div class="name">sideline.mp4</div>
+            <div class="sub">4 min - overlaps main-camera.mp4 from 6:05 PM to 6:09 PM</div></div>
+          <span class="x">&times;</span></div>
+      </div>
+      <div class="trust"><span>&#9201;</span><span>Put in order by the time each was recorded - and 1 angle filmed at the same time</span></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

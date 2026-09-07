@@ -1,6 +1,7 @@
 # T8824: Intake - overlap is a signal, not a disqualifier (layered order editor)
 
-**Status:** WIP
+**Status:** TODO (design approved 2026-09-07; implementation queued behind T8892 - shared
+files, see progress log)
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-09-06
@@ -151,6 +152,18 @@ for Annotate in T8880's tests, so the picker's lanes have a ground truth to matc
 
 **2026-09-06**: Filed from the live local-stack test of T8890 and the user's direction
 that overlap must be handled with layers, not disqualified.
+
+**2026-09-06/07**: Architect design pass complete (`docs/plans/tasks/T8824-design.md` +
+`T8824-picker-mockup.html`, 7-screen sweep). Presented as a decision artifact
+(https://claude.ai/code/artifact/525bdf7a-f59f-4a8b-a098-da3bc2a18cba); user approved as
+recommended on all 7 open questions 2026-09-07. **Implementation queued, not yet spawned**:
+the supervisor found `GameFootagePicker.jsx` (the payload-emitting effect) and
+`useVirtualTimeline.js` (`buildGameTimeline`) are shared primary files with T8892, which
+is already mid-flight in its own container - per the project's file-ownership rule this
+sequences behind T8892 rather than running concurrently, to avoid wasted rework/merge
+conflicts. Also matches this task file's own "Strongly prefer after: T8892" note. Will
+spawn the implementation container the moment T8892 is pushed and merged, branching from
+the resulting master so the naming/chip work is already present.
 
 ## Acceptance Criteria
 
