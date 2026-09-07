@@ -1,6 +1,6 @@
 # T8892: T8890 follow-ups - real angle names + the "cut from {angle}" chip
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-06
@@ -158,16 +158,37 @@ delete it.
 
 **2026-09-06**: Filed from the live local-stack verification of T8890.
 
+**2026-09-06/07**: Implemented in container `reel-task-t8892` (v052 migration, backend
+threading, `buildGameTimeline` naming rewrite, `CutFromAngleChip` on all 4 editor
+surfaces). Deliberate deviation from the kickoff: frontend reads `File.name` directly at
+the 3 `uploadManager` videoRef sinks instead of threading `originalFilename` through
+`GameFootagePicker`'s payload - `File.name` is native and authoritative there, so
+threading would duplicate a value already in hand. Reviewer approved (0 blocking, 1
+MAJOR caught+fixed: chip missing on the landscape-inline mobile editor).
+
+**First Branch CI run: red on a genuine regression** (not a flake) - a pre-existing test
+in `useVirtualTimeline.test.js` (distinct from `useVirtualTimeline.overlap.test.js`,
+which the worker did update) still asserted the old URL-derived naming, so it hit the
+`Extra clip 1` fallback under the new rule and failed. Resumed the worker to fix: updated
+that fixture to the `original_filename`-based rule and strengthened the fallback case to
+use a hash-shaped URL (proving it never falls back to a URL-derived name). Amended the
+commit, force-pushed. Re-ran CI: green (changes/backend/frontend). Supervisor
+independently re-verified all 7 curated frontend test files (160 tests) against the
+fixed commit in an isolated worktree before merging. PR #359, merged without asking per
+the provably-verified rule (a real red->green cycle observed directly on CI, plus
+independent re-verification). Commit `533d72e4`.
+
 ## Acceptance Criteria
 
-- [ ] Fresh and migrated DBs have identical schema (DDL-equivalence test); legacy rows
+- [x] Fresh and migrated DBs have identical schema (DDL-equivalence test); legacy rows
       read back `original_filename = null`
-- [ ] A game uploaded with `sideline.mp4` shows `sideline` on the angle bar, switcher
+- [x] A game uploaded with `sideline.mp4` shows `sideline` on the angle bar, switcher
       badge, sidebar pill, tooltip and the Add Play chip; a legacy overlap game shows
       `Extra clip 1`; no surface anywhere shows a hash (assert with a regex over the
       rendered angle UI in a component test)
-- [ ] "This play will be cut from sideline." + violet `from sideline` chip render only
+- [x] "This play will be cut from sideline." + violet `from sideline` chip render only
       while an angle is active; angle-free games render byte-identical (existing
       equivalence test still green)
-- [ ] Curated backend + frontend sets green; Reviewer pass; live QA screenshots per
-      criterion
+- [x] Curated backend + frontend sets green (75 + 83, plus the CI-fix cycle); Reviewer
+      pass. Live QA on a real seeded overlap game is still owed on staging - the angle UI
+      is inert in prod until T8900/T8910 exist, same standing as T8890's own live-QA note.
