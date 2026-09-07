@@ -23,9 +23,8 @@ export function formatMoved(seconds) {
   const rounded = Math.round(seconds * 10) / 10;
   if (rounded === 0) return 'Moved 0s';
   const sign = rounded > 0 ? '+' : ''; // negatives already carry '-'
-  // Strip a trailing .0 (e.g. 1.0 -> "1", 1.5 -> "1.5").
-  const label = Number.isInteger(rounded) ? String(rounded) : String(rounded);
-  return `Moved ${sign}${label}s`;
+  // String(rounded) already drops a trailing .0 (1.0 -> "1", 1.5 -> "1.5").
+  return `Moved ${sign}${rounded}s`;
 }
 
 export default function FixTimingStrip({
