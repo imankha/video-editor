@@ -88,6 +88,14 @@ export function AnnotateControls({
   // clip-relative time (elapsed / clip-duration) instead of the absolute
   // game-time. `{ start, end }` when editing a clip, else null (unchanged).
   clipEditBounds = null,
+  // T8960 item 9: true while the desktop strip Add/Edit Play editor is open. The
+  // step-frame / back-5s / restart transport buttons are hidden then, so the
+  // ONLY playback control is play/pause (T8760 single-play-control invariant)
+  // and the playhead can't be nudged out of the clip's green span. Gated by the
+  // caller on the desktop strip only, so fullscreen/mobile transports are
+  // unchanged. `clipEditBounds` alone can't drive this — it's null in create
+  // (Add Play) mode, where the buttons must also be hidden.
+  editorOpen = false,
 }) {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -109,27 +117,33 @@ export function AnnotateControls({
     <div className={`controls-container flex flex-wrap items-center justify-between gap-y-1 px-2 lg:px-4 ${
       isFullscreen ? 'py-0.5 bg-gray-900/90' : 'py-2 bg-gray-800 rounded-b-lg'
     }`}>
-      {/* Playback controls */}
+      {/* Playback controls — T8960 item 9: while the strip editor is open the
+          step/seek/restart buttons are hidden so the playhead can't leave the
+          clip span; only play/pause remains. */}
       <div className="flex items-center gap-1">
         {/* Back 5 seconds */}
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={Rewind}
-          iconOnly
-          onClick={() => onSeekBackward?.(5)}
-          title="Back 5 seconds"
-        />
+        {!editorOpen && (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Rewind}
+            iconOnly
+            onClick={() => onSeekBackward?.(5)}
+            title="Back 5 seconds"
+          />
+        )}
 
         {/* Step backward */}
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={SkipBack}
-          iconOnly
-          onClick={onStepBackward}
-          title="Step backward (one frame)"
-        />
+        {!editorOpen && (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={SkipBack}
+            iconOnly
+            onClick={onStepBackward}
+            title="Step backward (one frame)"
+          />
+        )}
 
         {/* Play/Pause button */}
         <Button
@@ -143,24 +157,28 @@ export function AnnotateControls({
         />
 
         {/* Restart button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={RotateCcw}
-          iconOnly
-          onClick={onRestart}
-          title="Restart"
-        />
+        {!editorOpen && (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={RotateCcw}
+            iconOnly
+            onClick={onRestart}
+            title="Restart"
+          />
+        )}
 
         {/* Step forward */}
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={SkipForward}
-          iconOnly
-          onClick={onStepForward}
-          title="Step forward (one frame)"
-        />
+        {!editorOpen && (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={SkipForward}
+            iconOnly
+            onClick={onStepForward}
+            title="Step forward (one frame)"
+          />
+        )}
       </div>
 
       {/* Time display — T8760 item 10: clip-relative while editing a clip

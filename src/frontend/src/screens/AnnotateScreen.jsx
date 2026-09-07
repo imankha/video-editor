@@ -594,6 +594,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       // Arrow keys: Navigate playhead or clips
       if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
         if (!annotateVideoUrl) return;
+        // T8960 item 9: while the Add/Edit Play editor is open the playhead is
+        // constrained to the clip's green span (loop + no transport skips) — an
+        // arrow-key seek / clip-nav would move it out, so those shortcuts are
+        // disabled under the same gate as the removed skip buttons.
+        if (showAnnotateOverlay) return;
         // Don't handle if modifier keys are pressed
         if (event.ctrlKey || event.metaKey || event.altKey) return;
 

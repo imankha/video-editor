@@ -139,7 +139,7 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     fireEvent.click(tab);
     const addVideo = await screen.findByRole('button', { name: 'Add Video' });
     expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
-    expect(screen.getByText(/Clip Out Play/i)).toBeTruthy();
+    expect(screen.getByText(/Clip Play/i)).toBeTruthy();
   });
 
   it('games still loading: "Add Game" stays visible (does not wait for the empty check to resolve)', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, cleanup } from '@testing-library/react';
+import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
 import { ClipScrubRegion } from './ClipScrubRegion';
 
 /**
@@ -169,6 +169,73 @@ describe('ClipScrubRegion playhead (T8720)', () => {
 });
 
 /**
+ * T8960 item 8 — click INSIDE the green span seeks the playhead there.
+ *
+ * jsdom has no layout, so the track's getBoundingClientRect is stubbed to give
+ * pixelToTime a real mapping. This proves the click-vs-drag + inside-vs-outside
+ * gating logic; the real-browser pointer behavior is verified separately via
+ * dev-verify (T5380/T8900 jsdom-pointer landmine).
+ */
+describe('ClipScrubRegion click-to-seek (T8960 item 8)', () => {
+  // Window is anchor(100) ± 30 = 70..130 over a 300px-wide track, so
+  // clientX = (t - 70) / 60 * 300. Span is [98, 104].
+  const RECT = { left: 0, top: 0, width: 300, height: 40, right: 300, bottom: 40 };
+  const xForTime = (t) => ((t - 70) / 60) * 300;
+
+  function renderTrack(extra = {}) {
+    const onSeek = vi.fn();
+    const controller = makeController(100);
+    render(
+      <ClipScrubRegion
+        {...baseProps(controller)}
+        clipEditorActive
+        startTime={98}
+        endTime={104}
+        onSeek={onSeek}
+        {...extra}
+      />,
+    );
+    const track = screen.getByTestId('scrub-track');
+    track.getBoundingClientRect = () => RECT;
+    track.setPointerCapture = () => {};
+    return { onSeek, track };
+  }
+
+  it('a click BETWEEN the handles seeks the playhead to that time', () => {
+    const { onSeek, track } = renderTrack();
+    const x = xForTime(101); // mid-span
+    fireEvent.pointerDown(track, { clientX: x, clientY: 20 });
+    fireEvent.pointerUp(track, { clientX: x, clientY: 20 });
+    expect(onSeek).toHaveBeenCalledTimes(1);
+    expect(onSeek.mock.calls[0][0]).toBeCloseTo(101, 1);
+  });
+
+  it('a click OUTSIDE the span does nothing (today\'s behavior preserved)', () => {
+    const { onSeek, track } = renderTrack();
+    const x = xForTime(120); // right of the span (end 104)
+    fireEvent.pointerDown(track, { clientX: x, clientY: 20 });
+    fireEvent.pointerUp(track, { clientX: x, clientY: 20 });
+    expect(onSeek).not.toHaveBeenCalled();
+  });
+
+  it('a drag (moved past the threshold) inside the span does NOT seek', () => {
+    const { onSeek, track } = renderTrack();
+    const x = xForTime(101);
+    fireEvent.pointerDown(track, { clientX: x, clientY: 20 });
+    fireEvent.pointerUp(track, { clientX: x + 40, clientY: 20 });
+    expect(onSeek).not.toHaveBeenCalled();
+  });
+
+  it('does NOT seek on click when clipEditorActive is false (sidebar unchanged)', () => {
+    const { onSeek, track } = renderTrack({ clipEditorActive: false });
+    const x = xForTime(101);
+    fireEvent.pointerDown(track, { clientX: x, clientY: 20 });
+    fireEvent.pointerUp(track, { clientX: x, clientY: 20 });
+    expect(onSeek).not.toHaveBeenCalled();
+  });
+});
+
+/**
  * T8760 — clip-scoped looping playback + defaults, while EDITING a clip.
  *
  * The loop lives in the same playhead-follow RAF and is gated on `existingClip`
@@ -224,16 +291,41 @@ describe('ClipScrubRegion clip-scoped loop (T8760)', () => {
     expect(controller.seek).not.toHaveBeenCalled();
   });
 
-  it('does NOT loop in create mode (no existingClip) — the loop is edit-scoped', () => {
+  it('does NOT loop when clipEditorActive is false (normal game playback) — the non-leak guard', () => {
     // Regression proof that the clip-scoped loop cannot leak into normal game
-    // playback: with no clip being edited, playing past the region never seeks.
+    // playback: with the primary editor NOT active, playing past the region
+    // never seeks. (T8960 kept clipEditorActive as the structural leak guard.)
     const controller = makeController(100);
-    render(<ClipScrubRegion {...baseProps(controller)} />); // existingClip: null
+    render(<ClipScrubRegion {...baseProps(controller)} />); // clipEditorActive false
     controller.state.paused = false;
     controller.state.time = 300; // far past endTime (104)
     flushFrame();
     expect(controller.seek).not.toHaveBeenCalled();
     expect(controller.state.time).toBe(300);
+  });
+
+  // T8960 item 1: the loop + seed now fire in CREATE mode too (clipEditorActive
+  // with NO existingClip) — reversing the T8760 create-mode exclusion for the
+  // primary editor. The clipEditorActive leak guard is unchanged.
+  it('seeds the playhead to the start handle when opened in CREATE mode (T8960)', () => {
+    const controller = makeController(200);
+    render(<ClipScrubRegion {...baseProps(controller)} clipEditorActive startTime={98} endTime={104} />);
+    // On open, create mode seeds to the current start handle (98), not left at 200.
+    expect(controller.seek).toHaveBeenCalledWith(98);
+    expect(controller.state.time).toBe(98);
+  });
+
+  it('loops back to the start in CREATE mode when playback runs past the end (T8960)', () => {
+    const controller = makeController(98);
+    render(<ClipScrubRegion {...baseProps(controller)} clipEditorActive startTime={98} endTime={104} />);
+    controller.seek.mockClear();
+
+    controller.state.paused = false;
+    controller.state.time = 105; // past endTime 104
+    flushFrame();
+
+    expect(controller.seek).toHaveBeenLastCalledWith(98);
+    expect(controller.state.time).toBe(98);
   });
 
   it('does NOT loop or seed in the clips SIDEBAR (existingClip set, clipEditorActive false)', () => {

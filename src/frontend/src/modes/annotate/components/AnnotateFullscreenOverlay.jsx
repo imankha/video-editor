@@ -636,7 +636,7 @@ export function AnnotateFullscreenOverlay({
                   icon={Plus}
                   onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
                 >
-                  Clip Out Play
+                  Clip Play
                 </Button>
               )
             ) : (
@@ -688,65 +688,86 @@ export function AnnotateFullscreenOverlay({
     const clipDisplayName = existingClip
       ? (existingClip.name || generateClipName(existingClip.rating, existingClip.tags, existingClip.notes) || 'this play')
       : '';
+    // T8960 item 2: the name is the first control in BOTH modes. Edit mode shows
+    // the clip's name; create mode shows the auto/default name until renamed.
+    const headerName = isEditMode ? clipDisplayName : (clipName || defaultClipName);
     return (
       <>
         <div
           data-testid="annotate-editor-strip"
           className={`rounded-lg border ${isEditMode ? 'bg-yellow-950/20 border-yellow-800/40' : 'bg-green-950/20 border-green-800/40'}`}
         >
-          {/* Header row — T8760 items 3+4: in edit mode the header is the ONE
-              place the clip name shows and the ONE edit affordance. The pencil
-              (or the name) opens an inline input; there is no separate name
-              field in the controls row anymore. "Editing:" is dropped. */}
+          {/* Header row 1 — T8960 items 2+5: the name is the FIRST control in
+              BOTH modes (create shows the default/auto name until renamed; the
+              pencil opens an inline input — the SAME affordance edit mode uses),
+              the My Athlete | Team layer control sits on this top line, then the
+              Close button. There is no separate name field in the controls row. */}
           <div className={`flex items-center justify-between gap-3 px-4 py-2.5 border-b ${isEditMode ? 'border-yellow-800/30' : 'border-green-800/30'}`}>
-            <div className="flex items-center gap-2 min-w-0">
-              {isEditMode ? (
-                isEditingName ? (
-                  <>
-                    <Pencil size={16} className="text-yellow-400 shrink-0" />
-                    <input
-                      type="text"
-                      value={clipName}
-                      onChange={handleNameChange}
-                      onBlur={() => setIsEditingName(false)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === 'Escape') {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setIsEditingName(false);
-                        }
-                      }}
-                      aria-label="Clip name"
-                      placeholder="Clip name"
-                      autoFocus
-                      className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm
-                                 text-white placeholder-gray-500 focus:border-green-500 focus:outline-none"
-                    />
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingName(true)}
-                    title="Rename this play"
-                    className="flex items-center gap-2 min-w-0 group"
-                  >
-                    <Pencil size={16} className="text-yellow-400 shrink-0 group-hover:text-yellow-300" />
-                    <span className="text-sm font-semibold text-white truncate group-hover:underline">
-                      {clipDisplayName}
-                    </span>
-                  </button>
-                )
-              ) : (
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              {isEditingName ? (
                 <>
-                  <Plus size={16} className="text-green-400 shrink-0" />
-                  <span className="text-sm font-semibold text-white truncate">Adding new play</span>
+                  <Pencil size={16} className={`shrink-0 ${isEditMode ? 'text-yellow-400' : 'text-green-400'}`} />
+                  <input
+                    type="text"
+                    value={clipName}
+                    onChange={handleNameChange}
+                    onBlur={() => setIsEditingName(false)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === 'Escape') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsEditingName(false);
+                      }
+                    }}
+                    aria-label="Clip name"
+                    placeholder={defaultClipName || 'Clip name'}
+                    autoFocus
+                    className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm
+                               text-white placeholder-gray-500 focus:border-green-500 focus:outline-none"
+                  />
                 </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingName(true)}
+                  title="Rename this play"
+                  className="flex items-center gap-2 min-w-0 group"
+                >
+                  <Pencil size={16} className={`shrink-0 ${isEditMode ? 'text-yellow-400 group-hover:text-yellow-300' : 'text-green-400 group-hover:text-green-300'}`} />
+                  <span className="text-sm font-semibold text-white truncate group-hover:underline">
+                    {headerName}
+                  </span>
+                </button>
               )}
             </div>
-            <button onClick={onClose} title="Cancel (Esc)" className="p-1.5 hover:bg-gray-700/50 rounded transition-colors shrink-0">
-              <X size={18} className="text-gray-400" />
-            </button>
+            <div className="flex items-center gap-3 shrink-0">
+              <LayerSegmentedControl
+                size="sm"
+                value={myAthlete}
+                onChange={(mine) => {
+                  setMyAthlete(mine);
+                  // T5725: switching TO My Athlete clears teammate tags.
+                  if (mine) setTaggedTeammates([]);
+                  if (!createProjectManuallySet) setCreateProject(rating === 5 && mine);
+                }}
+                disabled={!!existingClip?.shared_by}
+                disabledReason={existingClip?.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
+              />
+              <button onClick={onClose} title="Cancel (Esc)" className="p-1.5 hover:bg-gray-700/50 rounded transition-colors shrink-0">
+                <X size={18} className="text-gray-400" />
+              </button>
+            </div>
           </div>
+
+          {/* Header row 2 — T8960 item 3: the "+ Adding new play" TITLE, centered
+              on its own row (create mode only; edit mode's name already says what
+              is being edited). */}
+          {!isEditMode && (
+            <div className="px-4 pt-2 flex items-center justify-center gap-1.5">
+              <Plus size={16} className="text-green-400 shrink-0" />
+              <span className="text-sm font-semibold text-white">Adding new play</span>
+            </div>
+          )}
 
           {/* T8892: which camera this play is cut from (angle-active only). */}
           {activeSourceName && (
@@ -777,7 +798,11 @@ export function AnnotateFullscreenOverlay({
           <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
             <StarRating rating={rating} onRatingChange={handleRatingChange} size={22} />
 
-            {/* Create Reel — next to Rating (its state auto-flips with rating) */}
+            {/* Clip toggle — next to Rating (its state auto-flips with rating).
+                T8960 items 4+7: create mode is a WIDER toggle-button with stateful
+                copy; edit mode is the "Clip Play" action (renamed from
+                "Clip Out Play"). The name field that used to live here is gone —
+                the header pencil is the single name affordance now. */}
             {isEditMode ? (
               existingClip?.autoProjectId ? (
                 <span className="text-xs text-green-400 shrink-0">Reel created</span>
@@ -788,37 +813,23 @@ export function AnnotateFullscreenOverlay({
                   icon={Plus}
                   onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
                 >
-                  Clip Out Play
+                  Clip Play
                 </Button>
               )
             ) : (
-              <div className="flex items-center gap-1.5 shrink-0" title="Auto-create a reel from this play">
-                <span className={`text-xs font-medium ${createProject ? 'text-cyan-400' : 'text-gray-500'}`}>Reel</span>
-                <Toggle
-                  checked={createProject}
-                  onChange={(val) => { setCreateProject(val); setCreateProjectManuallySet(true); }}
-                  size="sm"
-                  accent="cyan"
-                />
-              </div>
-            )}
-
-            {/* T8760 item 3: the clip-name field lives here in CREATE mode only.
-                In edit mode the name is edited inline from the header (the pencil),
-                so this standalone field — the duplicate the user flagged — is gone. */}
-            {!isEditMode && (
-              <>
-                <div className="hidden sm:block h-6 w-px bg-gray-700/50 shrink-0" />
-                <input
-                  type="text"
-                  value={clipName}
-                  onChange={handleNameChange}
-                  aria-label="Clip name"
-                  placeholder={defaultClipName || 'Clip name'}
-                  className="w-36 lg:w-44 px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white
-                             placeholder-gray-500 focus:border-green-500 focus:outline-none shrink-0"
-                />
-              </>
+              <button
+                type="button"
+                onClick={() => { setCreateProject(!createProject); setCreateProjectManuallySet(true); }}
+                aria-pressed={createProject}
+                title="Auto-create a reel from this play"
+                className={`shrink-0 px-3 py-1.5 rounded text-sm font-medium border transition-colors ${
+                  createProject
+                    ? 'bg-cyan-600/20 border-cyan-500/60 text-cyan-300 hover:bg-cyan-600/30'
+                    : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600'
+                }`}
+              >
+                {createProject ? 'Clip Play to focus on your player' : "Don't Clip Play"}
+              </button>
             )}
 
             {!myAthlete && (
@@ -870,10 +881,11 @@ export function AnnotateFullscreenOverlay({
             </div>
           )}
 
-          {/* Details panel — desktop expand-in-place, own max-height scroll.
-              Dismissal is the toggle button itself; no separate Done/X. */}
+          {/* Details panel — desktop expand-in-place. T8960 item 6: no inner
+              scroll (the panel grows to fit Tags + Notes); dismissal is the
+              toggle button itself, no separate Done/X. */}
           {detailsOpen && (
-            <div className={`border-t px-4 py-3 max-h-64 overflow-y-auto ${isEditMode ? 'border-yellow-800/30' : 'border-green-800/30'}`}>
+            <div className={`border-t px-4 py-3 ${isEditMode ? 'border-yellow-800/30' : 'border-green-800/30'}`}>
               {tagSet && (
                 <div className="mb-4">
                   <label className="block text-gray-400 text-sm mb-2">Tags</label>
@@ -902,30 +914,19 @@ export function AnnotateFullscreenOverlay({
           )}
         </div>
 
-        {/* Button row (outside the card): Layer + Focus (edit mode only).
-            T8730: more breathing room (mt-5 + gap-4) and Focus anchored right as
-            the edit-mode CTA. Touch targets floor at 44px on coarse pointers
-            (codebase convention — keyed off pointer type, not viewport width). */}
-        <div className="mt-5 flex flex-wrap items-center gap-4">
-          <LayerSegmentedControl
-            size="md"
-            value={myAthlete}
-            onChange={(mine) => {
-              setMyAthlete(mine);
-              // T5725: switching TO My Athlete clears teammate tags.
-              if (mine) setTaggedTeammates([]);
-              if (!createProjectManuallySet) setCreateProject(rating === 5 && mine);
-            }}
-            disabled={!!existingClip?.shared_by}
-            disabledReason={existingClip?.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
-          />
-          {isEditMode && existingClip?.autoProjectId && (
+        {/* Button row (outside the card): Focus (edit mode only). T8960 item 5
+            moved the My Athlete | Team layer control UP into header row 1, so
+            this row now holds only the edit-mode Focus CTA (right-anchored) and
+            renders nothing in create mode. Touch targets floor at 44px on coarse
+            pointers (codebase convention — keyed off pointer type, not viewport). */}
+        {isEditMode && existingClip?.autoProjectId && (
+          <div className="mt-5 flex flex-wrap items-center justify-end gap-4">
             <Button
               variant="cyan"
               size="lg"
               icon={Crop}
               title="Open in Focus mode"
-              className="ml-auto coarse-pointer:min-h-[44px]"
+              className="coarse-pointer:min-h-[44px]"
               // T8730: only prompt to save when there are ACTUAL unsaved changes;
               // otherwise open Focus directly (no more false-positive dialog).
               onClick={() => {
@@ -935,8 +936,8 @@ export function AnnotateFullscreenOverlay({
             >
               Focus
             </Button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* T8600 §2.8: Focus mid-edit — never a silent discard. Save & open
             Focus awaits the same save handleSave/Enter/1-5 already use. */}

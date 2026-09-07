@@ -1404,7 +1404,7 @@ export function ProjectManager({
 
       {/* T8380: the T8780 disabled-Clips-tab caption was removed with the
           dead-end guard -- the tab is always reachable now, and its two-path
-          empty state (Add Video + Clip Out Play) replaces that caption's job. */}
+          empty state (Add Video + Clip Play) replaces that caption's job. */}
 
       {/* Action Button — T8360: the In Progress Clips tab has no create action
           here; the "Build New Reel" assembly button lives on the In Progress
@@ -1746,7 +1746,7 @@ export function ProjectManager({
             </div>
 
             <p className="text-sm text-gray-400">
-              Tap <span className="font-medium text-gray-300">&apos;Clip Out Play&apos;</span> on a
+              Tap <span className="font-medium text-gray-300">&apos;Clip Play&apos;</span> on a
               play in Annotate to pull a clip from one of your games.
             </p>
           </div>

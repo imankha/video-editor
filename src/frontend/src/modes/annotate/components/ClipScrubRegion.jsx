@@ -4,6 +4,10 @@ import { Play, Square } from 'lucide-react';
 const WINDOW_BEFORE = 30; // seconds before anchor
 const WINDOW_AFTER = 30;  // seconds after anchor
 const MIN_REGION_DURATION = 0.5; // minimum clip duration in seconds
+// T8960 item 8: a pointerdown+up on the track that moves less than this many
+// pixels counts as a click (seek), not a drag. Small so a deliberate click is
+// forgiving of hand tremor but a real scrub gesture never seeks by accident.
+const CLICK_MOVE_THRESHOLD_PX = 4;
 
 /**
  * Format seconds to MM:SS.s
@@ -27,10 +31,14 @@ function formatTime(seconds) {
  * playback to the clip's [start, end] region and loops back to the start when
  * it runs past the end. That looping is scoped structurally to this component
  * being mounted (it is only mounted while the clip editor is open), so normal
- * game scrubbing/playback outside clip-edit mode is never affected. All the
- * clip-scoped behaviors here are gated on `existingClip` (edit mode); create
- * mode (placing a NEW play) keeps the wide game-context window and
- * unconstrained playback.
+ * game scrubbing/playback outside clip-edit mode is never affected.
+ *
+ * T8960: the loop, the seed-to-start, and the click-inside-span seek are now
+ * gated on `clipEditorActive` ALONE (both Add Play and Edit Play), reversing
+ * T8760's create-mode exclusion — the user wants the same in-region, looping
+ * playhead while placing a NEW play. The zoom-to-green-region timeline stays
+ * edit-only (`isEditing`, below): create mode keeps the wide ±30s game-context
+ * window so the user can still see the surrounding play.
  *
  * T8780: the sidebar's ClipDetailsEditor instance (clipEditorActive false) has
  * no main transport of its own, so it keeps a Preview button that seeks to
@@ -139,15 +147,20 @@ export function ClipScrubRegion({
   useEffect(() => { startTimeRef.current = startTime; }, [startTime]);
   useEffect(() => { endTimeRef.current = endTime; }, [endTime]);
 
-  // T8760: whether a clip is being EDITED (gates the clip-scoped loop below).
-  // Read from a ref so the always-running follow RAF sees the live value
+  // T8760/T8960: the clip-scoped loop is gated on `clipEditorActive` alone (the
+  // primary Add/Edit editor), NOT `existingClip` — so it fires in create mode
+  // too. Read from a ref so the always-running follow RAF sees the live value
   // without being re-created each render.
-  const isEditingRef = useRef(isEditing);
-  useEffect(() => { isEditingRef.current = isEditing; }, [isEditing]);
+  const clipEditorActiveRef = useRef(clipEditorActive);
+  useEffect(() => { clipEditorActiveRef.current = clipEditorActive; }, [clipEditorActive]);
 
   // All drag state in refs to avoid stale closures when switching handles
   const draggingRef = useRef(null);
   const dragOffsetRef = useRef(0);
+  // T8960 item 8: pointerdown position on the TRACK (not a handle), so pointerup
+  // can tell a click (seek into the span) from a drag (ignored). Null when no
+  // track press is in flight.
+  const trackPressRef = useRef(null);
 
   // Stable refs for callbacks so window listeners never go stale
   const onStartTimeChangeRef = useRef(onStartTimeChange);
@@ -214,6 +227,9 @@ export function ClipScrubRegion({
         Math.min(time, en - MIN_REGION_DURATION)
       );
       onStartTimeChangeRef.current(clamped);
+      // T8960 item 1: seeking to the dragged handle IS the playhead clamp — it
+      // pulls the playhead to the new start, so it can never be left outside the
+      // green span (e.g. when the user drags start PAST where the playhead was).
       onSeekRef.current?.(clamped);
     } else if (d === 'end') {
       const clamped = Math.min(
@@ -234,6 +250,32 @@ export function ClipScrubRegion({
       setDragging(null);
     }
   }, []);
+
+  // T8960 item 8: click INSIDE the green span seeks the playhead there (moving
+  // neither handle). Only in the primary editor (clipEditorActive) — the sidebar
+  // instance keeps its whole-game click behavior. A press that turns into a drag
+  // (moves past CLICK_MOVE_THRESHOLD_PX) is ignored, as is a click OUTSIDE the
+  // span (today's no-op). Handle presses stopPropagation, so they never reach
+  // this track-level handler.
+  const handleTrackPointerDown = useCallback((e) => {
+    if (!clipEditorActive) return;
+    if (draggingRef.current) return; // a handle drag is in flight
+    trackPressRef.current = { x: e.clientX, y: e.clientY };
+  }, [clipEditorActive]);
+
+  const handleTrackPointerUp = useCallback((e) => {
+    const press = trackPressRef.current;
+    trackPressRef.current = null;
+    if (!press) return;
+    if (draggingRef.current) return; // ended on a handle drag
+    const moved = Math.hypot(e.clientX - press.x, e.clientY - press.y);
+    if (moved > CLICK_MOVE_THRESHOLD_PX) return; // it was a drag, not a click
+    const t = pixelToTime(e.clientX);
+    // Only seek when the click landed BETWEEN the two handles (inside the span).
+    if (t >= startTimeRef.current && t <= endTimeRef.current) {
+      onSeekRef.current?.(t);
+    }
+  }, [pixelToTime]);
 
   // Attach move/up to window once, stable listeners (no churn)
   useEffect(() => {
@@ -312,8 +354,9 @@ export function ClipScrubRegion({
         last = t;
         setPlayheadTime(t);
       }
-      // T8760 item 6: clip-scoped looping playback (edit mode only).
-      if (isEditingRef.current
+      // T8760 item 6 / T8960 item 1: clip-scoped looping playback in the
+      // primary editor (create AND edit) — gated on clipEditorActive alone.
+      if (clipEditorActiveRef.current
           && typeof videoController.isPaused === 'function'
           && !videoController.isPaused()) {
         const s = startTimeRef.current;
@@ -330,17 +373,22 @@ export function ClipScrubRegion({
     };
   }, [videoController]);
 
-  // T8760 item 7: on opening a clip for EDITING, default the playhead to the
-  // clip's start — not wherever the game video happened to be positioned. Once
-  // per clip id (the id is stable during scrub), so dragging a handle never
-  // yanks the playhead back to the start.
+  // T8760 item 7 / T8960 item 1: on opening the editor, default the playhead to
+  // the clip's start — not wherever the game video happened to be positioned.
+  // In EDIT mode that is `existingClip.startTime`; in CREATE mode ("Add Play")
+  // it is the current start handle. Once per open (keyed on the clip id, or a
+  // sentinel in create mode), so dragging a handle never yanks the playhead back
+  // to the start.
   const seededClipRef = useRef(null);
   useEffect(() => {
-    if (!clipEditorActive || !existingClip || typeof videoController?.seek !== 'function') return;
-    if (seededClipRef.current === existingClip.id) return;
-    seededClipRef.current = existingClip.id;
-    videoController.seek(existingClip.startTime);
-    setPlayheadTime(existingClip.startTime);
+    if (!clipEditorActive || typeof videoController?.seek !== 'function') return;
+    const seedKey = existingClip ? existingClip.id : '__create__';
+    if (seededClipRef.current === seedKey) return;
+    seededClipRef.current = seedKey;
+    const seedTime = existingClip ? existingClip.startTime : startTimeRef.current;
+    if (!Number.isFinite(seedTime)) return;
+    videoController.seek(seedTime);
+    setPlayheadTime(seedTime);
   }, [existingClip, videoController, clipEditorActive]);
 
   const startPercent = timeToPercent(startTime);
@@ -375,6 +423,8 @@ export function ClipScrubRegion({
         </div>
         <div
           ref={trackRef}
+          onPointerDown={handleTrackPointerDown}
+          onPointerUp={handleTrackPointerUp}
           className="relative flex-1 h-8 bg-gray-800 rounded-lg select-none touch-none"
           style={{ cursor: dragging ? 'col-resize' : 'default' }}
         >
@@ -469,6 +519,9 @@ export function ClipScrubRegion({
       {/* Timeline track */}
       <div
         ref={trackRef}
+        data-testid="scrub-track"
+        onPointerDown={handleTrackPointerDown}
+        onPointerUp={handleTrackPointerUp}
         className="relative h-10 bg-gray-800 rounded-lg select-none touch-none"
         style={{ cursor: dragging ? 'col-resize' : 'default' }}
       >
