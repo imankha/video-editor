@@ -18,6 +18,8 @@ import { useQuestStore } from '../stores/questStore';
 import { useEditorStore } from '../stores/editorStore';
 import { analyzeMp4Faststart, getReorderedSlice } from '../utils/mp4Faststart';
 import { getWarmingDiag } from '../utils/cacheWarming';
+import { probeAndReport } from '../utils/shrinkCapability';
+import { recordUiImpression } from '../utils/uiTelemetry';
 
 // Upload phases for progress tracking
 export const UPLOAD_PHASE = {
@@ -574,6 +576,11 @@ async function _hashAndAnalyze(file, onProgress, signal) {
   const __diagAnalyzeStart = performance.now();
   const faststartInfo = await analyzeMp4Faststart(file);
   console.log(`[DIAG upload-freeze] analyzeMp4Faststart ${(performance.now() - __diagAnalyzeStart).toFixed(0)}ms needsRelocation=${faststartInfo.needsRelocation}`);
+  // T8838: shrink-capability census. The user just started this upload (a named
+  // gesture), so probe the file's real codec + WebCodecs decode/encode support and
+  // count the answer through the T7515 impression pipeline. Fire-and-forget and
+  // NEVER awaited — hashFile/upload timing must be identical whether or not this runs.
+  probeAndReport(file, faststartInfo, (name) => recordUiImpression('capability', name));
   // T8834: one visible structured line per uploaded file — records whether
   // relocation ran and why, so production frequency/timing is observable
   // (frontend console only; no Postgres column, not on the create/attach payload).

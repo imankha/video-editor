@@ -571,7 +571,12 @@ def record_milestone(
 
 # Blocking surfaces we count impressions for. Kept closed so a stray beacon can't
 # invent a new kind (the NAME within a kind is open, the kind is not).
-IMPRESSION_KINDS = frozenset({"toast", "dialog"})
+#   "capability" (T8838): the shrink-capability census — one beacon set per uploaded
+#   file names the source codec family + resolution bucket and whether the browser
+#   can decode it / encode the shrink preset (`shrink_probe_total`,
+#   `shrink_decode_{yes|no|unavailable}_{family}_{bucket}`, `shrink_encode_*`,
+#   `shrink_probe_failed`). Aggregate-only, no new PG table/column.
+IMPRESSION_KINDS = frozenset({"toast", "dialog", "capability"})
 
 # Screens a session-exit breadcrumb may name (mirrors the frontend EDITOR_MODES).
 # Bounding the trail/dwell keys keeps the per-user log free of junk/PII.

@@ -457,6 +457,47 @@ class TestRecordImpression:
         assert _get_action("user-a", "dialog_impression:tag_not_submitted") is None
 
 
+class TestCapabilityImpression:
+    """T8838: the shrink-capability census reuses the T7515 impression pipeline via a
+    new closed `capability` kind — no new PG table/column, just a new action string."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, pg_conn):
+        from app.user_context import set_current_user_id
+        create_user("user-a", email="a@test.com")
+        create_user_segment("user-a", "organic", None, "otp")
+        set_current_user_id("user-a")
+
+    def test_capability_kind_upserts_shrink_row(self, pg_conn):
+        # A census beacon like shrink_decode_yes_hevc10_gt4k lands as a bounded,
+        # queryable aggregate row under the capability_impression: namespace.
+        from app.analytics import record_impression
+        record_impression("capability", "shrink_decode_yes_hevc10_gt4k")
+        row = _get_action("user-a", "capability_impression:shrink_decode_yes_hevc10_gt4k")
+        assert row is not None and row["count"] == 1
+
+    def test_capability_rows_are_census_queryable(self, pg_conn):
+        # The whole census is read via LIKE 'capability_impression:shrink_%'.
+        from app.analytics import record_impression
+        from app.services.pg import get_pg
+        record_impression("capability", "shrink_probe_total")
+        record_impression("capability", "shrink_encode_no")
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT count(*) AS n FROM user_actions "
+                "WHERE user_id = %s AND action LIKE 'capability_impression:shrink_%%'",
+                ("user-a",),
+            )
+            assert cur.fetchone()["n"] == 2
+
+    def test_unknown_kind_still_rejected(self, pg_conn):
+        # Adding "capability" must not open the gate to arbitrary kinds.
+        from app.analytics import record_impression
+        record_impression("gpu", "shrink_decode_yes_hevc10_gt4k")
+        assert _get_action("user-a", "gpu_impression:shrink_decode_yes_hevc10_gt4k") is None
+
+
 class TestRecordSessionExit:
     """T7515 tier 4: session-exit breadcrumbs written to per-user user_action_log."""
 

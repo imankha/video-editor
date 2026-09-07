@@ -134,7 +134,14 @@ updated 2026-09-07 with T8832's real-hardware proof)
     doesn't tank throughput (measure, don't assume).
 11. **`capability.js` reuses T8838's probe module** (codec string via mp4box ftyp+moov,
     the two `isConfigSupported` calls) rather than re-implementing it - T8838 is the
-    first real use, this is the second.
+    first real use, this is the second. LANDED: `src/frontend/src/utils/shrinkCapability.js`
+    exports `probeShrinkCapability(file, faststartInfo) -> {decode, encode, codecFamily,
+    resBucket, codec, width, height}` plus the pure `deriveCodecFamily(codec)` /
+    `deriveResBucket(height)` helpers. It is PLAIN ESM (no config/apiFetch/store imports;
+    reporting is injected via a `report(name)` callback in `probeAndReport`), so this
+    standalone tool can import it directly. Build `canShrink()` on top of
+    `probeShrinkCapability`'s `decode`/`encode` fields (both must be `'yes'`) - do NOT copy
+    the codec-string or `isConfigSupported` logic.
 
 ### Technical Notes
 - Presets (`presets.js`), applied AFTER crop: `sharpest` (cap output width 3840,
