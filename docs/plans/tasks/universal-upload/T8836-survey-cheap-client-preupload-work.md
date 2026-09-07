@@ -1,6 +1,6 @@
 # T8836: Survey: other cheap client-side pre-upload work worth doing now (decision doc)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-06
