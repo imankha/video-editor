@@ -136,7 +136,7 @@ async function runInPage({ fixtureUrl, expectedFrames }) {
     const result = await shrinkSegment({
       file,
       crop: { x: 0, y: 0, w: 1, h: 1 },
-      preset: PRESETS.smallest,
+      preset: PRESETS.small,
       sink: { dirHandle: testDir, filename: 'full-run.mp4' },
       onProgress: (p) => progressCalls.push(p.framesDone),
     });
@@ -188,7 +188,7 @@ async function runInPage({ fixtureUrl, expectedFrames }) {
     const cancelResult = await shrinkSegment({
       file,
       crop: { x: 0, y: 0, w: 1, h: 1 },
-      preset: PRESETS.sharpest,
+      preset: PRESETS.sharp,
       sink: null, // throwaway OPFS file
       signal: controller.signal,
       onProgress: (p) => { if (p.framesDone >= 15) controller.abort(); },
@@ -232,11 +232,11 @@ async function runInPage({ fixtureUrl, expectedFrames }) {
     let doneMsg = null;
     let workerError = null;
     try {
-      worker.postMessage({ cmd: 'probe', file, crop: { x: 0, y: 0, w: 1, h: 1 }, preset: PRESETS.smallest });
+      worker.postMessage({ cmd: 'probe', file, crop: { x: 0, y: 0, w: 1, h: 1 }, preset: PRESETS.small });
       probeMsg = await waitFor('probe', 60000);
 
       worker.postMessage({
-        cmd: 'start', file, crop: { x: 0, y: 0, w: 1, h: 1 }, preset: PRESETS.smallest,
+        cmd: 'start', file, crop: { x: 0, y: 0, w: 1, h: 1 }, preset: PRESETS.small,
         dirHandle: workerTmpDir, outName: 'worker-run.part',
       });
       doneMsg = await waitFor('done', 120000);
