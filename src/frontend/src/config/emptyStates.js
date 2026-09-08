@@ -50,7 +50,16 @@ export const EMPTY_TAB_GUIDE = {
       + 'clip can be published on its own; a reel is for a full game or a season.',
     noClipsReason: 'You need at least one clip first',
     cutClipButton: 'Cut a clip from a game',
-    hasClipsCaption: (n) => `You have ${n} clip${n === 1 ? '' : 's'} ready to use.`,
+    // Build New Reel is gated by hasClips (clipDrafts OR any game with
+    // clip_count > 0), but this count is clipDrafts only (the single-clip-draft
+    // number the In Progress Clips badge shows). Those populations differ: a
+    // game clip bumps its game's clip_count without necessarily creating a
+    // single-clip auto-draft, so an account with only game clips has hasClips
+    // true but clipCount 0. Never render "0 clips ready to use" under an enabled
+    // button -- drop the number in that case (the approved "N clips" copy is
+    // preserved verbatim whenever the count is real).
+    hasClipsCaption: (n) =>
+      n > 0 ? `You have ${n} clip${n === 1 ? '' : 's'} ready to use.` : 'You have clips ready to use.',
     footer: 'Finished reels move to Published when you share them.',
   },
   published: {

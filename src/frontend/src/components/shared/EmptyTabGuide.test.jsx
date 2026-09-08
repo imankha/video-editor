@@ -113,6 +113,18 @@ describe('EmptyTabGuide - Reels tab', () => {
     expect(onNavigate).toHaveBeenCalledWith('projects');
   });
 
+  it('has clips but clipCount 0 (game-clips-only account): enabled button, no contradictory "0 clips"', () => {
+    // hasClips counts game clips too, but clipCount is clipDrafts-only, so this
+    // pairing is reachable (a game annotated into clips, no Add-Video drafts).
+    // The button must be enabled and the caption must NOT claim "0 clips".
+    render(
+      <EmptyTabGuide tab="reels" hasClips clipCount={0} gamesCount={1} onNavigate={vi.fn()} onBuildReel={vi.fn()} />,
+    );
+    expect(screen.getByRole('button', { name: 'Build New Reel' }).disabled).toBe(false);
+    expect(screen.getByText('You have clips ready to use.')).toBeTruthy();
+    expect(screen.queryByText(/0 clip/)).toBeNull();
+  });
+
   it('has clips: Build New Reel is enabled with the "N clips ready" caption (pluralized)', () => {
     const onBuildReel = vi.fn();
     render(
