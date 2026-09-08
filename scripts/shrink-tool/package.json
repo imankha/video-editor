@@ -1,0 +1,16 @@
+{
+  "name": "shrink-tool",
+  "private": true,
+  "type": "module",
+  "description": "T8840 - standalone browser shrink tool. Never imported by app code; own deps, own test config.",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "mp4-muxer": "^5.0.0",
+    "mp4box": "2.4.1"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.13"
+  }
+}

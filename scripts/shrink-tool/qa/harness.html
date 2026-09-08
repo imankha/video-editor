@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>T8840 smoke test harness</title>
+  <!-- Test 2 calls checkCapability() directly from this page, same as tool.js -- see pipeline/probe.js's header comment. -->
+  <script type="importmap">
+    { "imports": { "mp4box": "../node_modules/mp4box/dist/mp4box.all.mjs" } }
+  </script>
+</head>
+<body>
+<!--
+  Deliberately blank: qa/t8840-smoke.mjs drives everything via `page.evaluate` +
+  dynamic `import()` of the pipeline modules directly. Kept separate from
+  index.html so the real tool's init() (folder-picker wiring, OPFS workspace
+  banner) never runs during the automated test.
+-->
+</body>
+</html>
