@@ -117,9 +117,10 @@ describe('ProjectManager home tab defaults (T6830)', () => {
   it('fresh account (no games, no drafts): lands on Games, Clips tab REACHABLE (T8380)', async () => {
     renderManager();
 
-    // Games tab is active, empty -> "Add Game" resolves the "No games yet"
-    // message directly below it (T8780), same order as Reels/Published.
-    const message = screen.getByText('No games yet');
+    // T8980: the Games empty state is the shared EmptyTabGuide -- its approved
+    // headline resolves into the Add Game CTA directly below it (T8780 order,
+    // preserved), same shape as the Reels/Published guides.
+    const message = screen.getByText('Every highlight starts with a game');
     const addGameButton = screen.getByRole('button', { name: 'Add Game' });
     expect(message.compareDocumentPosition(addGameButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The "Build New Reel" assembly button is NOT shown on the Games tab
@@ -134,12 +135,14 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     expect(tab.getAttribute('title')).toBeNull();
     expect(screen.queryByText(/Extract clips from a game first using Annotate mode to unlock/i)).toBeNull();
 
-    // Clicking in shows the two-path empty state (upload directly OR extract in
-    // Annotate), including the Add Video CTA and its tutorial anchor.
+    // T8980: clicking in shows the shared EmptyTabGuide two-path empty state
+    // (game path OR upload directly), including the Add Video CTA + tutorial
+    // anchor. With no games yet the game path reads "Add a game and tap Add Play."
     fireEvent.click(tab);
     const addVideo = await screen.findByRole('button', { name: 'Add Video' });
     expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
-    expect(screen.getByText(/Clip Play/i)).toBeTruthy();
+    expect(screen.getByText('Clips are the plays you cut from a game')).toBeTruthy();
+    expect(screen.getByText(/Add a game and tap Add Play/i)).toBeTruthy();
   });
 
   it('games still loading: "Add Game" stays visible (does not wait for the empty check to resolve)', async () => {

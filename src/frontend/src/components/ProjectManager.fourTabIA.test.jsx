@@ -201,17 +201,20 @@ describe('T8555: In Progress Reels tab shows ONLY unpublished multiclip drafts',
     expect(screen.queryByTestId('published-tab-panel')?.dataset.active).not.toBe('true');
   });
 
-  it('empty state shows "No reels in progress" + Build New Reel copy, button below the message', () => {
+  it('empty state shows the EmptyTabGuide reels headline + Build New Reel, button below the message', () => {
     renderManager({ projects: [singleclipDraft(2)] });
 
     fireEvent.click(inProgressReelsTab());
 
-    const message = screen.getByText(/No reels in progress/i);
+    // T8980: the shared EmptyTabGuide replaces the old "No reels in progress"
+    // dead end. Headline resolves into the Build New Reel CTA below it (T8780
+    // order preserved). The lone single-clip draft makes hasClips true, so the
+    // button is enabled with the "1 clip ready to use" caption.
+    const message = screen.getByText('Reels stitch several clips into one highlight video');
     const button = screen.getByRole('button', { name: /Build New Reel/i });
     expect(message).toBeTruthy();
-    expect(button).toBeTruthy();
-    // T8780: empty-state message resolves into its own action below it,
-    // matching the Published tab's empty-state order.
+    expect(button.disabled).toBe(false);
+    expect(screen.getByText(/1 clip ready to use/i)).toBeTruthy();
     expect(message.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByTestId('draft-tile')).toBeNull();
   });

@@ -77,10 +77,13 @@ test('T8555: four-tab split, content separation, badges, responsive', async ({ c
     console.log(`[T8555-QA] @${w}px horizontal overflow: ${overflow}px`);
     expect(overflow).toBeLessThanOrEqual(2); // allow sub-pixel rounding
     await page.screenshot({ path: `${SHOT}/tabbar-${w}.png`, fullPage: false });
-    // All four tab labels present at this width.
+    // All four tab labels present at this width. T8980: below `sm` the tab bar
+    // shows one-line SHORT labels (Games / Clips / Reels / Published), so the
+    // In-Progress-prefixed full labels are NOT the accessible name here -- match
+    // the short labels the sub-`sm` bar actually renders.
     await expect(gamesTab(page)).toBeVisible();
-    await expect(clipsTab(page)).toBeVisible();
-    await expect(reelsTab(page)).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Clips/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Reels/i })).toBeVisible();
     await expect(publishedTab(page)).toBeVisible();
   }
 

@@ -55,7 +55,12 @@ export function PublishedReelsPanel({
   // (mirrors how the old drawer survived being closed without unmounting).
   active,
   onOpenProject,  // (projectId) => void - Navigate to project (re-edit a reel)
-  onViewClips, // T8470 (Part C): () => void - switch home to the In Progress Clips tab (ProjectManager owns tab state)
+  // T8980: the empty Published state renders the shared EmptyTabGuide, which
+  // needs the account's game count + cross-tab / Add Game gestures (all owned by
+  // ProjectManager). Forwarded straight through to CollectionsTab.
+  accountGamesCount = 0,
+  onNavigateTab,
+  onAddGame,
 }) {
   // T8470 (Part C): the In Progress Clips-tab population - single-clip
   // auto-drafts. Same predicate ProjectManager's clipDrafts uses, so the
@@ -762,7 +767,9 @@ export function PublishedReelsPanel({
           onDownloadCollection={onDownloadCollection}
           introBadgesByKey={introBadgesByKey}
           draftClipCount={draftClipCount}
-          onViewDraftClips={onViewClips}
+          accountGamesCount={accountGamesCount}
+          onNavigateTab={onNavigateTab}
+          onAddGame={onAddGame}
         />
       </div>
       )}
