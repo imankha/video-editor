@@ -99,7 +99,7 @@ const state = {
   segments: [], // ordered [{file,name,size,lastModified,durationSec,video,faststartInfo}]
   allFiles: [], // every File in the picked folder, for .LRF lookup
   selectedIndex: 0,
-  crop: { x: 0, y: 0, w: 1, h: 1 },
+  // (no job-wide crop: each segment owns its own rect -- see cropFor/setCropFor)
   presetId: 'sharp', // EPIC decision 5 (amended 2026-09-08): Sharp is the default, 2 tiers only
   probeResult: null,
   worker: null,
@@ -114,6 +114,30 @@ const state = {
 
 let segmentView = null;
 let cropController = null;
+
+// ---------------------------------------------------------------------------
+// Per-segment crop (EPIC decision 5 as amended 2026-09-08). Each segment owns
+// its rect; there is no job-wide crop any more. Before Start the rect lives on
+// `state.segments[i].crop`; once a manifest exists it is read from
+// `state.manifest.segments[i].crop` (M4: the manifest is the writer of record).
+// ---------------------------------------------------------------------------
+const FULL_FRAME = { x: 0, y: 0, w: 1, h: 1 };
+
+function selectedSeg() {
+  return state.segments[state.selectedIndex] ?? state.segments[0] ?? null;
+}
+
+function cropFor(seg) {
+  if (!seg) return { ...FULL_FRAME };
+  const idx = state.segments.indexOf(seg);
+  const fromManifest = state.manifest?.segments?.[idx]?.crop;
+  return { ...(fromManifest ?? seg.crop ?? FULL_FRAME) };
+}
+
+function setCropFor(seg, crop) {
+  if (!seg || state.manifest) return; // locked once a job exists (applyJobLock)
+  seg.crop = { ...crop };
+}
 
 // A multi-hour job emits tens of thousands of progress lines (~2/s throttled
 // updates x segments) -- `textContent +=` would re-copy the whole ever-growing
@@ -198,9 +222,13 @@ async function onResumeClick() {
     return;
   }
   await loadSegmentsFromFiles(present);
-  state.crop = { ...state.manifest.crop };
+  // Per-segment crops come back from the manifest (writer of record, M4);
+  // mirror them onto the live segments so the filmstrip shows each one.
+  for (const [i, mseg] of state.manifest.segments.entries()) {
+    if (state.segments[i]) state.segments[i].crop = { ...(mseg.crop ?? state.manifest.crop ?? FULL_FRAME) };
+  }
   state.presetId = state.manifest.preset;
-  cropController.setCrop(state.crop);
+  cropController.setCrop(cropFor(selectedSeg()));
   applyJobLock(); // M4: crop/preset are restored from the manifest and shown read-only (design §3.4)
   renderPresetChips();
   renderCropReadout();
@@ -313,6 +341,14 @@ async function loadSegmentsFromFiles(files) {
     });
   }
 
+  // Automated per-segment crop (EPIC decision 5, amended 2026-09-08 -- "yes I want
+  // it automated"): seed EVERY segment's rect from where the motion is, in the
+  // background, so the user never has to draw one -- "Suggest crop" is a re-run
+  // for the selected segment. Skipped on Resume (the manifest owns the crops then).
+  // Sequential on purpose: parallel <video> decodes on one machine is exactly the
+  // contention that produced false smoke-test failures earlier.
+  if (!state.manifest) autoCropAllSegments();
+
   cropController = createCropRectController(el.cropCanvas, { onChange: onCropChange });
   selectSegment(0);
   applyJobLock(); // M4: locked if this folder pick is a Resume of an existing manifest
@@ -368,12 +404,12 @@ function selectSegment(idx) {
     segmentView.setThumb(idx, canvas);
     draw();
   });
-  cropController.setCrop(state.crop);
+  cropController.setCrop(cropFor(seg)); // this segment's own rect (per-segment crop)
   renderCropReadout();
 }
 
 function onCropChange(crop) {
-  state.crop = crop;
+  setCropFor(selectedSeg(), crop); // drag/resize/reset edits the SELECTED segment only
   renderCropReadout();
   invalidateProbe();
 }
@@ -385,6 +421,34 @@ function onCropChange(crop) {
  * the suggested rect as the crop. The user can still drag/resize it afterward -- this
  * only picks a better STARTING point, framing itself stays their call.
  */
+/**
+ * Automated per-segment crop pass, run on folder load. Sequential (one <video> decode
+ * at a time -- parallel decodes contend and produced false failures before). Stops
+ * early if a manifest appears mid-pass (the user hit Start; the manifest now owns
+ * the crops). Never throws: a segment that can't be analysed just keeps full frame.
+ */
+async function autoCropAllSegments() {
+  for (const seg of state.segments) {
+    if (state.manifest) return;
+    if (!seg?.video) continue;
+    try {
+      const source = findProxyFile(seg.name, state.allFiles) ?? seg.file;
+      const { frames, width, height } = await sampleMotionFrames(source);
+      const suggested = suggestCropFromFrames(frames, width, height);
+      if (!suggested || state.manifest) continue;
+      setCropFor(seg, suggested);
+      if (seg === selectedSeg()) {
+        cropController.setCrop(suggested);
+        renderCropReadout();
+        invalidateProbe();
+      }
+      log(`${seg.name}: auto-crop keeps ${Math.round(suggested.w * suggested.h * 100)}% of the frame (from motion)`);
+    } catch (err) {
+      log(`${seg.name}: auto-crop skipped (${err.message}) -- full frame kept`);
+    }
+  }
+}
+
 async function onSuggestCropClick() {
   const seg = state.segments[state.selectedIndex] ?? state.segments[0];
   if (!seg) return;
@@ -398,8 +462,8 @@ async function onSuggestCropClick() {
       el.suggestCropStatus.textContent = 'Could not find a clear active region (clip looked static in the sample) -- crop left unchanged.';
       return;
     }
-    state.crop = suggested;
-    cropController.setCrop(state.crop);
+    setCropFor(seg, suggested);
+    cropController.setCrop(suggested);
     renderCropReadout();
     invalidateProbe();
     el.suggestCropStatus.textContent = 'Suggested from motion -- drag any handle to adjust.';
@@ -418,10 +482,12 @@ async function onSuggestCropClick() {
  * same math. `video` defaults to the first segment's (the one the probe always
  * measures against); pass the selected segment's for the live crop readout.
  */
-function currentOutputSize(preset, video = state.segments[0]?.video) {
+function currentOutputSize(preset, seg = state.segments[0]) {
+  const video = seg?.video;
   if (!video) return { width: 0, height: 0 };
-  const crop = state.manifest?.crop ?? state.crop;
-  const src = resolveCropRect(crop, video.codedWidth, video.codedHeight);
+  // Per-segment crop: output dims can differ per segment now, so callers pass the
+  // SEGMENT (not just its video) and get that segment's own crop applied.
+  const src = resolveCropRect(cropFor(seg), video.codedWidth, video.codedHeight);
   return resolveOutputSize(preset, src.sw, src.sh);
 }
 
@@ -437,9 +503,9 @@ function renderCropReadout() {
   const seg = state.segments[state.selectedIndex];
   if (!seg?.video) return;
   const preset = PRESETS[state.presetId];
-  const out = currentOutputSize(preset, seg.video);
+  const out = currentOutputSize(preset, seg);
   const uncropped = resolveOutputSize(preset, seg.video.codedWidth, seg.video.codedHeight);
-  const crop = state.manifest?.crop ?? state.crop;
+  const crop = cropFor(seg);
   const coverage = Math.round(crop.w * crop.h * 100);
   const bitsPerPixelGain = (uncropped.width * uncropped.height) / Math.max(1, out.width * out.height);
   const gainText = bitsPerPixelGain > 1.005
@@ -491,11 +557,15 @@ function applyJobLock() {
 function estimateLine(preset) {
   if (!state.segments.length) return '';
   const totalDuration = state.segments.reduce((sum, s) => sum + (s.durationSec ?? 0), 0);
-  const bytes = estimateOutputBytes(preset, totalDuration);
+  const bytes = estimateOutputBytes(preset, totalDuration); // bitrate x duration: crop-independent
   const pixelsPerSecond = state.probeResult?.pixelsPerSecond ?? REFERENCE_ENCODE_PIXELS_PER_SEC;
-  const out = currentOutputSize(preset);
-  const fps = state.segments[0]?.video?.fps ?? 30;
-  const seconds = estimateShrinkSeconds({ outWidth: out.width, outHeight: out.height, durationSec: totalDuration, fps, pixelsPerSecond });
+  // Per-segment crops mean per-segment output dims, so shrink time is the SUM over
+  // segments (each at its own output size), not one size x the total duration.
+  const seconds = state.segments.reduce((sum, seg) => {
+    if (!seg.video) return sum;
+    const out = currentOutputSize(preset, seg);
+    return sum + estimateShrinkSeconds({ outWidth: out.width, outHeight: out.height, durationSec: seg.durationSec ?? 0, fps: seg.video.fps ?? 30, pixelsPerSecond });
+  }, 0);
   const label = state.probeResult ? '' : ' (reference machine)';
   return `${formatBytes(bytes)}, about ${formatDuration(seconds)}${label}`;
 }
@@ -554,11 +624,12 @@ async function onStartClick() {
     const jobId = await hashJobId(state.segments);
     state.manifest = newManifest({
       jobId,
-      crop: state.crop,
+      crop: cropFor(state.segments[0]), // job-level DEFAULT only; each segment carries its own below
       preset: state.presetId,
       segments: state.segments.map((s) => ({
         name: s.name, size: s.size, lastModified: s.lastModified,
         durationSec: s.durationSec, framesTotal: s.video?.nbSamples ?? null,
+        crop: cropFor(s), // per-segment crop (EPIC decision 5, amended 2026-09-08)
       })),
     });
     await writeManifest(state.workspace.root, state.manifest);
@@ -568,7 +639,7 @@ async function onStartClick() {
   el.startBtn.disabled = true;
   banner(el.verdictBanner, 'info', 'Running the speed probe...');
   spawnWorker();
-  state.worker.postMessage({ cmd: 'probe', file: state.segments[0].file, crop: state.manifest.crop, preset: PRESETS[state.manifest.preset] });
+  state.worker.postMessage({ cmd: 'probe', file: state.segments[0].file, crop: state.manifest.segments[0].crop, preset: PRESETS[state.manifest.preset] });
 }
 
 function onProbeResult(msg) {
@@ -586,7 +657,7 @@ function onProbeResult(msg) {
   // M6: use the SAME crop-aware derivation as the readout/estimate -- the probe's
   // own pixelsPerSecond is measured at the CROPPED size, so dividing it into the
   // uncropped pixel count understated the ETA whenever a crop was drawn.
-  const out = currentOutputSize(preset, seg0.video);
+  const out = currentOutputSize(preset, seg0);
   const seconds = estimateShrinkSeconds({ outWidth: out.width, outHeight: out.height, durationSec: totalDuration, fps: seg0.video.fps, pixelsPerSecond: msg.pixelsPerSecond });
 
   function offerSlowPath(html) {
@@ -662,7 +733,17 @@ async function runQueue(firstPendingIdx) {
 
       if (!state.worker) spawnWorker();
       const outName = tmpPartName(state.manifest.segments[i]);
-      const fileEntry = state.segments.find((s) => s.name === seg.name) ?? { file: null };
+      const fileEntry = state.segments.find((s) => s.name === seg.name);
+      if (!fileEntry) {
+        // MINOR 1 / CLAUDE.md "no silent fallbacks for internal data": a manifest
+        // segment with no matching picked file means the manifest and the folder
+        // have drifted apart. Posting `file: null` would just fail confusingly
+        // downstream in demux -- name the real problem here and stop.
+        const message = `Segment "${seg.name}" from the saved workspace was not found among the picked files -- the manifest and the folder no longer match.`;
+        banner(el.verdictBanner, 'danger', message);
+        log(`  UNEXPECTED ERROR: ${message}`);
+        break;
+      }
       const completed = await new Promise((resolve) => {
         state.onSegmentSettled = resolve;
         state.worker.postMessage({
@@ -671,7 +752,8 @@ async function runQueue(firstPendingIdx) {
           // M4: crop/preset come from the MANIFEST, never live UI state -- the
           // crop canvas/preset chips are locked while a job exists (applyJobLock),
           // but reading from the manifest here is the actual guarantee.
-          crop: state.manifest.crop,
+          // Per-segment crop: THIS segment's rect, not a job-wide one.
+          crop: state.manifest.segments[i].crop,
           preset: PRESETS[state.manifest.preset],
           dirHandle: state.workspace.tmpDir,
           outName,

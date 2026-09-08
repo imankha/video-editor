@@ -32,6 +32,7 @@ export async function orderSegments(files) {
     let video = null;
     let faststartInfo = null;
     let probeError = null;
+    let droppedTracks = [];
     try {
       const reader = await openReader(file);
       faststartInfo = reader.info;
@@ -39,10 +40,15 @@ export async function orderSegments(files) {
       createdAt = tracks.createdAt ? tracks.createdAt.getTime() : null;
       durationSec = tracks.durationSec;
       video = tracks.video;
+      // MINOR 6: caveat 8's evidence (DJI djmd/dbgi/tmcd tracks the mux drops) --
+      // captured here so tool.js can log it per segment; it never reached the UI before.
+      droppedTracks = tracks.droppedTracks ?? [];
     } catch (err) {
       probeError = err.message;
     }
-    return { file, name: file.name, size: file.size, lastModified: file.lastModified, createdAt, durationSec, faststartInfo, video, probeError };
+    // `crop` is per segment (EPIC decision 5 as amended 2026-09-08 -- replaces v1's
+    // one-static-rect rule): null until the auto-crop pass or the user sets it.
+    return { file, name: file.name, size: file.size, lastModified: file.lastModified, createdAt, durationSec, faststartInfo, video, probeError, droppedTracks, crop: null };
   }));
   withMeta.sort((a, b) => (a.createdAt ?? a.lastModified) - (b.createdAt ?? b.lastModified));
   return withMeta;

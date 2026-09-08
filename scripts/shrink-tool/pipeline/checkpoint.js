@@ -41,7 +41,14 @@ export function outputNameFor(segment) {
 // Pure reducer
 // ============================================================================
 
-/** @param {{ jobId: string, crop: object, preset: string, segments: Array }} options */
+/**
+ * @param {{ jobId: string, crop: object, preset: string, segments: Array }} options
+ *   `crop` is the job-level DEFAULT rect; each segment carries its own `crop`
+ *   (EPIC decision 5 as amended 2026-09-08, per-segment automated crop replaces
+ *   v1's one-static-rect rule), seeded from its own `s.crop` when present, else
+ *   this default. Keeping the job-level field additive means existing manifests,
+ *   tests, and the smoke test keep working unchanged.
+ */
 export function newManifest({ jobId, crop, preset, segments }) {
   return {
     version: 1,
@@ -57,6 +64,7 @@ export function newManifest({ jobId, crop, preset, segments }) {
       lastModified: s.lastModified,
       durationSec: s.durationSec ?? null,
       framesTotal: s.framesTotal ?? null,
+      crop: s.crop ?? crop,
       state: 'pending',
       outputName: null,
       outputBytes: null,
