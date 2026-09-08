@@ -117,9 +117,16 @@ monitor cannot keep it alive forever.
 | Games (1 game) | Now cut your first play | Open your game and tap Add Play at each moment worth keeping; each play becomes a clip on In Progress Clips. | **Open game** (loads it) | Clips are step 2 of 4. |
 | In Progress Clips (row not full) | Give each clip a Focus pass | Open a clip to follow your athlete and add an optional Spotlight, then publish it on its own or build several into a reel. | none (the tile is the action; Add Video already sits in the row above) | Published clips show up on the Published tab. |
 | In Progress Reels (row not full) | Finish your reel and export once | Put the plays in order, export, then Publish moves it to the Published tab with a link you can share. | none (Build New Reel is already pinned above the row) | Finished reels move to Published when you share them. |
-| Published (row not full) | Share it | Every published reel gets its own link; send it to coaches, family and recruiters from the player or the card. | none | Publish more clips to see them grouped by game here. |
+| Published (row not full) | Ready for coaches and family | Every published reel gets its own link. Use Share or Copy Link on any card. | none (Share and Copy Link are already on the card and in its kebab menu) | Publish more clips to see them grouped by game here. |
 
 Vocabulary: T8130's approved nouns and `displayNames.js`; no new terms.
+
+**Headline rule (learned 2026-09-08, user review):** a guide headline must not read like a
+control label. The first Published draft was "Share it", which collides with the REAL `Share`
+button on every published card and the `Share` / `Copy Link` items in its kebab menu, so it
+scans as a button rather than as guidance. Referring to those controls BY NAME inside the
+body is good (it points at a real affordance); naming one in the headline is not. Applies to
+any future copy on this component.
 
 ### Decisions (LOCKED 2026-09-08, all six on the filed recommendations)
 
@@ -180,6 +187,20 @@ measurement `CardCarousel` already makes. Draft partial copy + 6 decisions recor
 
 **2026-09-08 (same day)**: user replied "proceed" - all six decisions locked on the filed
 recommendations, copy table binding, implementation started (container worker).
+
+**2026-09-08 (design review)**: published a review artifact with faithful mockups at real
+proportions. User reviewed and caught a copy collision: the Published headline "Share it"
+duplicates the actual `Share` control on published cards (and `Copy Link` beside it in the
+kebab). Replaced with "Ready for coaches and family" + a body that points at both real
+controls by name; headline rule recorded above. Worker was interrupted at setup (before any
+copy was written) and resumed with the correction, so nothing was built against the old
+string. Two mockup inaccuracies also found and worth carrying into the build: Published tiles
+are usually PORTRAIT (`ReelTile` `sm:w-[150px] aspect-[9/16]`, about 267px tall), not
+landscape, and the Published tab renders smart-collection rows plus a per-game "Game
+Highlights" row above the reel tiles. So the filler's height is NOT one number: it follows
+whatever the row's tiles are (about 146px on a landscape row, about 267px on a portrait one),
+which the `self-stretch` sizing already handles. Write the carousel copy to fit the LANDSCAPE
+case, the tighter of the two.
 
 ## Acceptance Criteria
 
