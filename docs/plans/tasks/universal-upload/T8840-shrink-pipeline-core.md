@@ -1,10 +1,10 @@
 # T8840: Standalone browser shrink tool (fully working, zero app integration)
 
-**Status:** STAGING
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 7
 **Created:** 2026-09-05
-**Updated:** 2026-09-07
+**Updated:** 2026-09-08
 
 ## Problem
 
@@ -246,6 +246,24 @@ updated 2026-09-07 with T8832's real-hardware proof)
 
 **2026-09-05**: Filed.
 
+**2026-09-08**: Design approved and amended (R11: H.264 vs HEVC quality; Sharpest made the
+default preset per real player-detail crops, see EPIC decision 5). Implementation built
+against the synthetic fixture, then put through a 3-lens parallel Reviewer fan-out
+(Correctness, Persistence & State, Performance) which found 3 BLOCKING bugs (backpressure
+deadlock on any encode-bound machine, `outputBytes` corruption that deleted finished
+segments on reload, mux `strict`-mode throw on staggered A/V timestamps) and 9 MAJOR
+issues, all fixed and independently re-verified (several via live Chromium reproductions).
+A further self-directed review round found 2 more real issues (flush-window error
+routing, unbounded progress-log growth), also fixed. All 16 MINOR findings from the
+original review addressed. Merged to master (PR #368) - the one CI failure
+(`profileStore.test.js`/`useIntroCardStore`) is the pre-existing, unrelated
+full-suite-parallelism flake already logged in `docs/testing/known-failures.md` from the
+T8838 merge. Full mechanism (demux/decode/crop/encode/mux/checkpoint/cancel/resume) is
+proven on the synthetic fixture; nothing under `scripts/shrink-tool/` is imported by app
+code (grep-confirmed). What remains is explicitly out of reach for any test harness: the
+real 50 GB DJI folder, a second machine, and the R11 quality A/B - that is what the
+acceptance criteria below still need, and it is the user's own call, never the AI's.
+
 ## Acceptance Criteria
 
 - [ ] **The user has run the full test recipe above on the real 50 GB DJI folder and on
@@ -258,8 +276,10 @@ updated 2026-09-07 with T8832's real-hardware proof)
 - [ ] Progress is live and honest (frames, fps, ETA); expectation copy shown before Start
 - [ ] Speed probe refuses on a too-slow device with a clear verdict; capability check
       returns false gracefully on Firefox (manual check) - no throw
-- [ ] Nothing under `scripts/shrink-tool/` is imported by app code
+- [x] Nothing under `scripts/shrink-tool/` is imported by app code (grep-confirmed)
 - [ ] A device that passes the capability check but probes below the speed threshold
       falls back to Modal server-side processing instead of running client-side (T8830
       caveat 6)
-- [ ] Unit tests green; manual checklist executed and recorded in the Progress Log
+- [x] Unit tests green (34/34) and the headless synthetic-fixture smoke test green
+      (32/32 mechanism checks) - the manual real-hardware checklist is still open, to be
+      recorded here after the user's own run
