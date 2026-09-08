@@ -19,12 +19,15 @@ function stemOf(name) {
   return name.replace(/\.[^.]+$/, '');
 }
 
-/** `<stem>.shrunk.mp4` -- ONE derivation, shared by the `finalizing` transition
+/** `<idx>-<stem>.shrunk.mp4` (design §3.1, matching `tmpPartName`'s own
+ * idx-prefixed scheme) -- ONE derivation, shared by the `finalizing` transition
  * (M9: must be set as soon as finalizing starts, not only at `finish`) and
  * `promoteOutput` (which needs the same name to move the file to), so a crash
- * between the two can never disagree about what the file is called. */
+ * between the two can never disagree about what the file is called. The idx
+ * prefix matters: two segments can share a stem (e.g. DJI filenames reused
+ * across SD cards) and would otherwise silently collide in `out/`. */
 export function outputNameFor(segment) {
-  return `${stemOf(segment.name)}.shrunk.mp4`;
+  return `${segment.idx}-${stemOf(segment.name)}.shrunk.mp4`;
 }
 
 // ============================================================================

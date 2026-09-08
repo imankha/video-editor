@@ -60,7 +60,7 @@ describe('reduceSegment -- every §3.3 transition', () => {
       type: 'finalizing', framesDone: 300, outputBytes: 5000,
     });
     expect(seg.outputName).toBe(outputNameFor(seg));
-    expect(seg.outputName).toBe('DJI_0001.shrunk.mp4');
+    expect(seg.outputName).toBe('0-DJI_0001.shrunk.mp4');
   });
 
   it('finalizing --finish--> done, setting outputName', () => {
