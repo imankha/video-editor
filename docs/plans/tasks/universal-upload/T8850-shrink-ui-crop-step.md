@@ -74,8 +74,9 @@ under-estimate 8K sources and over-estimate small ones.
 - Filmstrip: one thumb per segment (same sourcing rules); tapping swaps the stage frame,
   THE RECT STAYS PUT (that is how one static crop is verified across segments). Selected
   thumb ring-blue. Label: "Check every part of the game". "Reset crop" text button.
-- Preset chips: "Sharpest" (default, 2026-09-07 - see EPIC decision 5) / "Recommended" /
-  "Smallest", each with its live
+- Preset chips: two only - "Sharp" (default) / "Small" (EPIC decision 5 as amended
+  2026-09-08: the middle "Recommended" tier was cut, Sharpest/Smallest renamed), each
+  with its live
   size estimate underneath (estimator from T8840 presets.js, summed over segments with
   each segment's duration). Never show resolution/bitrate/fps.
 - Estimate panel: "New size: about {size}" + "Saves around {t} of uploading and {n}

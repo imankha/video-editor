@@ -228,9 +228,9 @@ updated 2026-09-07 with T8832's real-hardware proof)
 1. Serve the repo root, open the tool on the dev laptop. Pick the real DJI folder
    (4 segments, 50 GB). Segments appear in the right order with proxy previews.
 2. Draw a crop around the field on segment 1; flip through the other segments' previews -
-   the rect stays put. Pick Sharpest (the default, 2026-09-07 - Recommended visibly
-   softened player detail in a real side-by-side, see EPIC decision 5). Estimate shows
-   a size and a time.
+   the rect stays put (or click "Suggest crop" to seed it from where the motion is).
+   Pick Sharp (the default; the tool has two tiers, Sharp / Small - see EPIC decision 5,
+   amended 2026-09-08). Estimate shows a size and a time.
 3. Start. The probe runs (seconds), then segments shrink one by one with live progress.
    The machine WILL be busy - that is expected and the copy says so.
 4. Mid-run: reload the tab. The tool resumes at the first unfinished segment; finished

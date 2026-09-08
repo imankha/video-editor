@@ -60,10 +60,14 @@ overrides.)
    4.67 Mbps - already below every preset target - so a bytes-only gate would offer to
    "shrink" a ~3.1 GB two-half export that cannot get smaller, burning the user's
    machine for nothing; the DJI 8K files are ~97 Mbps, an 8-14x win.)
-5. **Shrink presets:** Sharpest (default, ~4K-class crop, ~24 Mbps) / Recommended
-   (~2.7K-class, ~12 Mbps) / Smallest (1080p-class, ~7 Mbps). **Default changed from
-   Recommended to Sharpest 2026-09-07** after the user judged Sharpest visibly sharper
-   than Recommended on player detail from real side-by-side crops of the DJI footage
+5. **Shrink presets:** two tiers only, Sharp (default, ~4K-class crop, ~24 Mbps) /
+   Small (1080p-class, ~7 Mbps). **Amended 2026-09-08 from three tiers to two:** the
+   middle "Recommended" (~2.7K, ~12 Mbps) was cut, and Sharpest/Smallest renamed
+   Sharp/Small. **The default had already moved from Recommended to Sharpest on
+   2026-09-07** after the user judged Sharpest visibly sharper than Recommended on
+   player detail from real side-by-side crops of the DJI footage; cutting Recommended
+   entirely follows from the same evidence - at nearly Sharp's own bits-per-pixel it was
+   strictly worse, never meaningfully smaller, so it earned no slot
    (both target nearly the source's own bits-per-pixel, so the gap is a resolution-cap
    difference, not a compression-artifact one - a crop cannot close it, since crop only
    removes dead space and the resolution cap is driven by output WIDTH, which a
