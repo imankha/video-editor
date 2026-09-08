@@ -4,7 +4,7 @@
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-05
-**Updated:** 2026-09-05
+**Updated:** 2026-09-08
 
 ## Problem
 
@@ -17,8 +17,9 @@ zero friction added to normal small uploads.
 Two components in the Add Game modal flow: `ShrinkOfferCard` (inline, conditional) and
 `ShrinkStep` (full-modal takeover with crop stage, filmstrip, presets, estimate). Output
 is a `shrinkPlan {rect, preset}` attached to the pending upload; the actual encode runs at
-upload time (T8860). Mockups + ALL microcopy: artifact screens E and F (link in
-[EPIC.md](EPIC.md), decisions 4-6).
+upload time (T8860). Mockups + ALL microcopy: artifact screens E and F (link in the
+Universal Upload [EPIC.md](../universal-upload/EPIC.md), decisions 4-6). This task now
+lives in the Pre-Shrink Integration epic ([EPIC.md](EPIC.md)).
 
 ## Context
 
@@ -29,10 +30,17 @@ upload time (T8860). Mockups + ALL microcopy: artifact screens E and F (link in
 - `src/frontend/src/components/GameDetailsModal.jsx` - takeover swap (mobile `fixed inset-0`,
   desktop widen to `max-w-2xl`), carry `shrinkPlan` in the submit payload
 - `src/frontend/src/constants/uploadConstants.js` - NEW or extend: `SHRINK_OFFER_MIN_BYTES`
+  (or, if T9040 landed, the inputs `decideShrink` needs instead of the constants)
 
 ### Related Tasks
-- Depends on: T8840 (`capability.canShrink`, `presets.js` estimator), T8820 (strip
-  renders the "Will shrink to ~{size}" badge), T8800 (`proxies` map for preview frames)
+- Depends on: **the Pre-Shrink Research epic complete**
+  ([../pre-shrink-research/EPIC.md](../pre-shrink-research/EPIC.md)), then T8845
+  (`capability.canShrink`, `presets.js` estimator, and `decision.js` / `cropPath.js` if
+  research added them), T8820 (strip renders the "Will shrink to ~{size}" badge), T8800
+  (`proxies` map for preview frames). Research inputs this UI consumes: T9040
+  (`decideShrink` replaces the bytes+bitrate gate), T9010/T9050 (per-segment automated
+  crops; a moving rect if tweening was adopted), T9060 (`stss` times for filmstrip
+  seeks), T9070 (proxy frames mechanism)
 - Blocks: T8860
 
 ### T8830 finding this task must respect
@@ -52,9 +60,10 @@ under-estimate 8K sources and over-estimate small ones.
   preset target, so a bytes-only gate would offer to "shrink" a file that cannot get
   smaller; the DJI 8K files are ~97 Mbps) AND `canShrink(...)` resolved true for every
   selected video's codec. Bitrate = `file.size * 8 / durationSeconds` from the intake's
-  existing per-file metadata - no new probe. **Expectation copy before starting** (T8840
-  caveat 10): shrinking pegs the machine for roughly the source's duration divided by
-  the measured multiplier (Recommended ~1.4x; Sharpest is slower - use T8840 step 0's
+  existing per-file metadata - no new probe. **If T9040 landed, `decideShrink` IS the
+  gate** (mode `'none'` = no card) and the two constants become its defaults. **Expectation
+  copy before starting** (T8840 caveat 10): shrinking pegs the machine for roughly the
+  source's duration divided by the measured multiplier (use T9000/T9030's recorded Sharp
   number, do not guess) - say "about {t}; your computer will be busy while this runs",
   always prefixed "about". Card copy: "This
   upload is big - {size}" / "That's around {t} of uploading. Shrink it first and save
@@ -69,11 +78,14 @@ under-estimate 8K sources and over-estimate small ones.
 - Crop rect: free-form, corner handles visible at rest (white squares), 44px transparent
   hit boxes on coarse pointers, Pointer Events + `setPointerCapture` + `touch-none`,
   clamped to the frame, min 10% per axis. Outside area scrimmed `bg-black/60`.
-  Stored normalized (0..1). Default rect on open: full frame minus 10% top - do NOT
-  pre-guess the field; let the user pull it in.
-- Filmstrip: one thumb per segment (same sourcing rules); tapping swaps the stage frame,
-  THE RECT STAYS PUT (that is how one static crop is verified across segments). Selected
-  thumb ring-blue. Label: "Check every part of the game". "Reset crop" text button.
+  Stored normalized (0..1). Default rect on open: **the automated per-segment auto-crop
+  suggestion** (T9010-tuned `suggestCropFromFrames`; superseding the original "full frame
+  minus 10% top" default) - the user still pulls it in or out.
+- Filmstrip: one thumb per segment (same sourcing rules); tapping swaps the stage frame
+  and shows THAT segment's rect (per-segment crops, EPIC decision 5 as amended
+  2026-09-08; the original "rect stays put" rule is superseded). Selected thumb
+  ring-blue. Label: "Check every part of the game". "Reset crop" text button. If T9050's
+  crop path was adopted, the rect shown is the path evaluated at the thumb's time.
 - Preset chips: two only - "Sharp" (default) / "Small" (EPIC decision 5 as amended
   2026-09-08: the middle "Recommended" tier was cut, Sharpest/Smallest renamed), each
   with its live
@@ -93,8 +105,8 @@ under-estimate 8K sources and over-estimate small ones.
 ## Implementation
 
 ### Steps
-1. [ ] Add `SHRINK_OFFER_MIN_BYTES` constant; render `ShrinkOfferCard` conditionally
-   (size AND capability); dismiss/reopen behavior.
+1. [ ] Add `SHRINK_OFFER_MIN_BYTES` constant (or wire `decideShrink`); render
+   `ShrinkOfferCard` conditionally (size AND capability); dismiss/reopen behavior.
 2. [ ] Build the crop stage + handles interaction (desktop mouse + touch), normalized
    rect state, scrim, reset.
 3. [ ] Build filmstrip with proxy-first frame sourcing; verify with the real DJI folder
@@ -112,11 +124,16 @@ under-estimate 8K sources and over-estimate small ones.
 
 **2026-09-05**: Filed.
 
+**2026-09-08**: Moved from `docs/plans/tasks/universal-upload/` into the Video Pre-Shrink
+milestone (Pre-Shrink Integration epic). Links re-pointed; dependencies now include the
+Pre-Shrink Research epic; crop defaults updated to per-segment automated crops (EPIC
+decision 5 amendment) and T9040/T9050/T9060/T9070 named as inputs.
+
 ## Acceptance Criteria
 
 - [ ] Small uploads (< 3 GB) never see any shrink UI
 - [ ] Firefox (no WebCodecs HEVC) never sees the offer - silently
-- [ ] Crop rect draggable/resizable on desktop and a real phone; stays put across
-      filmstrip taps
+- [ ] Crop rect draggable/resizable on desktop and a real phone; each segment shows its
+      own rect across filmstrip taps
 - [ ] Estimates update live; Add Game never disabled by any of this
 - [ ] Curated test set green + manual touch pass recorded

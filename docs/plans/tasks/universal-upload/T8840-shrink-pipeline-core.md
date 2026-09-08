@@ -70,7 +70,11 @@ decisions 5-6; the caveats below are BINDING.
   backpressure/encode/mux code as the starting point) AND T8832 (full-file streaming
   proof, DONE 2026-09-07 - its verdict replaces caveat 1 below)
 - Blocks: T8845 (port into the app - starts ONLY after the user has tested this tool),
-  and through it T8850, T8860
+  and through it T8850, T8860. **2026-09-08:** the real-folder + second-machine run
+  that closes the acceptance below is tracked as **T9000** in the Pre-Shrink Research
+  epic (`docs/plans/tasks/pre-shrink-research/`); T8845/T8850/T8860 moved to the
+  Pre-Shrink Integration epic (Video Pre-Shrink milestone). This task's status is
+  unchanged and remains the user's call.
 - Related: T8838 (capability census, DONE 2026-09-07). `src/frontend/src/utils/shrinkCapability.js`
   now EXISTS and is deliberately PLAIN ESM (no `config`/`apiFetch`/store imports) so this tool can
   reuse it directly: `pipeline/probe.js` should `import { probeShrinkCapability, deriveCodecFamily,

@@ -85,7 +85,7 @@ overrides.)
    falls back to server-side Modal processing when it is too slow. **T8838 (2026-09-07)
    ships the capability probe alone first, as a census** - counts of decode/encode support
    by codec family + resolution bucket + platform from real uploads decide how much
-   T8850/T8860 polish the offer deserves.
+   T8850/T8860 polish the offer deserves (T8850/T8860 now in Video Pre-Shrink).
 7. **Overlap model:** every video gets `recorded_at` (evidence) + `offset_seconds`
    (canonical position, computed once at attach, changed ONLY by the Fix-timing gesture).
    Lanes/layers are DERIVED at render time (greedy: sort by start, lowest non-overlapping
@@ -119,9 +119,7 @@ overrides.)
 | T8836 | [Survey: other cheap client-side pre-upload work (decision doc)](T8836-survey-cheap-client-preupload-work.md) | WAITING ON USER |
 | T8838 | [Shrink capability census (probe real users' devices before building the UI)](T8838-shrink-capability-census.md) | TODO |
 | T8840 | [Standalone browser shrink tool (fully working, zero app integration)](T8840-shrink-pipeline-core.md) | STAGING |
-| T8845 | [Port the approved standalone shrink tool into the app (worker + client API)](T8845-port-shrink-tool-into-app.md) | TODO |
-| T8850 | [Shrink UI: offer card + crop step + presets](T8850-shrink-ui-crop-step.md) | TODO |
-| T8860 | [Shrink upload integration + fallback](T8860-shrink-upload-integration.md) | TODO |
+| T8845-T8860 | Shrink integration (port, UI, upload) - moved to the Video Pre-Shrink milestone, 2026-09-08: [../pre-shrink-integration/EPIC.md](../pre-shrink-integration/EPIC.md) | moved |
 | T8870 | [Overlap schema: recorded_at + offset_seconds](T8870-overlap-schema-placement.md) | STAGING |
 | T8872 | [Hotfix: send recorded_at only when the intake trusted the timestamps](T8872-gate-recorded-at-on-trusted-timestamps.md) | TODO |
 | T8880 | [Game timeline v2: lanes, backbone, extensions](T8880-game-timeline-lanes.md) | STAGING |
@@ -135,6 +133,7 @@ T8860 (its verdict can re-scope them). T8870 -> T8880 -> T8890 -> T8900 build an
 order. T8910 needs T8810 (picker) and benefits from T8870 (placement) - it is last.
 If T8830's benchmark says NO-GO for client-side 8K, tasks T8840-T8860 return to the user
 for a re-scope decision (server-side alternative is NOT viable - upload is the bottleneck).
+(T8845/T8850/T8860 now in Video Pre-Shrink, 2026-09-08; the history above stands as written.)
 
 Added 2026-09-06 after T8830 landed GO WITH CAVEATS: **T8832** (full-file streaming +
 endurance spike, the half T8830 deliberately did not test) now gates T8840 alongside
@@ -151,6 +150,9 @@ the real 50 GB folder and a second machine) -> user sign-off -> **T8845** ports 
 DOM-free pipeline modules into the app worker -> T8850 -> T8860. **T8838** (capability
 census: the probe alone, counted from real uploads) runs independently in parallel and
 does not touch the shrink pipeline; its numbers size the T8850/T8860 investment.
+(T8845 -> T8850 -> T8860 now in Video Pre-Shrink, 2026-09-08, behind a Pre-Shrink
+Research epic that closes T8840's real-folder acceptance and the open auto-crop /
+benchmark / cost-model questions first.)
 
 Added 2026-09-06 after the first live test of the angle track: **T8872** (P1 hotfix, do
 first - stops discarded timestamps leaking into `recorded_at`) -> merge T8890 (#356) ->

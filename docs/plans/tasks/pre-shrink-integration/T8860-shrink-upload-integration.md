@@ -4,7 +4,7 @@
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-05
-**Updated:** 2026-09-05
+**Updated:** 2026-09-08
 
 ## Problem
 
@@ -16,7 +16,9 @@ falls back to uploading originals - never a dead end, never a double credit char
 ## Solution
 
 Extend the upload queue so a game entry with a `shrinkPlan` runs a per-segment
-shrink -> upload pipeline using T8840's `shrinkClient`. See [EPIC.md](EPIC.md) decision 6.
+shrink -> upload pipeline using T8845's `shrinkClient`. See the Universal Upload
+[EPIC.md](../universal-upload/EPIC.md) decision 6 (capability gating + Modal fallback).
+This task now lives in the Pre-Shrink Integration epic ([EPIC.md](EPIC.md)).
 
 ## Context
 
@@ -30,8 +32,11 @@ shrink -> upload pipeline using T8840's `shrinkClient`. See [EPIC.md](EPIC.md) d
   existing per-file progress - locate via the "Video {i} of {n}" label from T8810)
 
 ### Related Tasks
-- Depends on: T8840 (worker + client), T8850 (`shrinkPlan` in the payload), T8810
-  (uniform N-file upload path)
+- Depends on: **the Pre-Shrink Research epic complete**
+  ([../pre-shrink-research/EPIC.md](../pre-shrink-research/EPIC.md)), then T8845
+  (worker + client), T8850 (`shrinkPlan` in the payload), T8810 (uniform N-file upload
+  path). Research input this task consumes: T9040 (when the device probes too slow, the
+  Modal fallback is bounded by the cost rule; `mode: 'none'` means upload originals)
 - Blocks: nothing (shrink feature complete after this)
 
 ### Technical Notes
@@ -56,6 +61,9 @@ shrink -> upload pipeline using T8840's `shrinkClient`. See [EPIC.md](EPIC.md) d
   the error with stage detail (console + existing frontend logging path) - loudly, per
   the no-silent-fallback rule this IS the external-dependency case where a fallback is
   allowed, but it must warn.
+- Modal fallback (too-slow device): the server cannot shrink what it does not have, so
+  this path uploads the ORIGINAL first and transcodes server-side; it saves storage and
+  credits, never upload time. T9040's cost rule decides whether it is offered at all.
 - Page close during shrink: the browser will prompt via the existing beforeunload guard
   if one exists for uploads; if none exists, add nothing new (out of scope), but verify
   a reload leaves no corrupt game (the pending-game + activate flow already covers
@@ -84,6 +92,10 @@ shrink -> upload pipeline using T8840's `shrinkClient`. See [EPIC.md](EPIC.md) d
 ### Progress Log
 
 **2026-09-05**: Filed.
+
+**2026-09-08**: Moved from `docs/plans/tasks/universal-upload/` into the Video Pre-Shrink
+milestone (Pre-Shrink Integration epic). Links re-pointed; dependencies now include the
+Pre-Shrink Research epic and T9040's cost rule for the Modal fallback.
 
 ## Acceptance Criteria
 

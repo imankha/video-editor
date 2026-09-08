@@ -4,7 +4,7 @@
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-07
-**Updated:** 2026-09-07
+**Updated:** 2026-09-08
 
 ## Problem
 
@@ -33,20 +33,26 @@ own smoke fixture + frame-count equivalence check run against the ported modules
 - `src/frontend/src/services/shrink/shrinkClient.js` - NEW: `shrinkFile(file, crop,
   preset, {onProgress, signal})` -> Promise<File>, one worker per call, AbortSignal ->
   cancel
-- `src/frontend/src/services/shrink/{demux,decode,cropScale,encode,mux,checkpoint,probe,presets}.js`
+- `src/frontend/src/services/shrink/{demux,decode,cropScale,encode,mux,checkpoint,probe,presets,autoCrop,shrinkSegment}.js`
   - MOVED from `scripts/shrink-tool/pipeline/` (git mv; no behaviour change in the move
-  commit, per the refactoring rules)
+  commit, per the refactoring rules). Plus whatever the research epic added there
+  (`decision.js` from T9040, `cropPath.js` from T9050) - port the folder as it stands at
+  the end of research, per its hand-off note
 - `src/frontend/src/services/shrink/capability.js` - `canShrink(codec, w, h)` memoized
   per codec string + the runtime speed probe -> Modal fallback decision (the tool's
-  "too slow" verdict becomes "use server-side" here)
+  "too slow" verdict becomes "use server-side" here; T9040's `decideShrink` supplies the
+  rule if it landed)
 - `src/frontend/package.json` - add `mp4box` (2.4.1 exact) + `mp4-muxer`
 - `scripts/shrink-tool/` - re-pointed at the app modules or deleted (decide: keeping the
   tool alive as a dev harness is useful for future regressions; if kept, it imports
   from `src/frontend/src/services/shrink/`, never the reverse)
 
 ### Related Tasks
-- Depends on: **T8840 tested and approved by the user** (hard gate), T8838 (share the
-  probe module)
+- Depends on: **the Pre-Shrink Research epic complete**
+  ([../pre-shrink-research/EPIC.md](../pre-shrink-research/EPIC.md)) - in particular
+  T9000 (the user's real-folder sign-off on T8840, the hard gate this task always had),
+  T9040 (decision rule, if it changes `pipeline/`), T9050 (crop path shape, if
+  adopted); T8838 (share the probe module)
 - Blocks: T8850, T8860
 
 ### Technical Notes
@@ -57,6 +63,9 @@ own smoke fixture + frame-count equivalence check run against the ported modules
   interval) so later seek/annotate behaviour on the uploaded file is sane (carry from
   the tool if T8840 already did it; add here if not).
 - All T8840 caveats remain binding.
+- Per-segment crops (and a crop PATH if T9050 adopted one) travel in the worker
+  protocol's `crop` field; the message shape above is the minimum, extend it in the
+  same commit as the port if the pipeline's `crop` type changed.
 
 ## Implementation
 
@@ -73,6 +82,11 @@ own smoke fixture + frame-count equivalence check run against the ported modules
 ### Progress Log
 
 **2026-09-07**: Filed when T8840 was re-scoped to a standalone tool (user direction).
+
+**2026-09-08**: Moved from `docs/plans/tasks/universal-upload/` into the new Video
+Pre-Shrink milestone (Pre-Shrink Integration epic). Content unchanged except: links,
+dependency on the Pre-Shrink Research epic, and the note that the port covers
+`pipeline/` as it stands after research (not the T8840 snapshot).
 
 ## Acceptance Criteria
 

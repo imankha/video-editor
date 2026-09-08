@@ -128,6 +128,13 @@ the user's call: row 2 (`stss` keyframe index - natural to bundle into T8838's m
 parse later, or into T8840/T8850 directly) and row 3 (`.LRF`-proxy posters replacing
 `poster.py` seeks - a real 224 ms/frame win, but a separate small task).
 
+**2026-09-08 (roadmap reorganization, Video Pre-Shrink milestone)** - rows 2 and 3 were
+filed PROVISIONALLY as small tasks in the Pre-Shrink Research epic so they stop dangling
+here: row 2 -> **T9060** (`stss` keyframe index client-side), row 3 -> **T9070** (`.LRF`
+proxy posters at upload time). Status stays WAITING ON USER: the user's pick is still the
+gate. Confirm = tick step 4; veto = close the task(s) and tick step 4 with the declined
+row noted.
+
 ## Acceptance Criteria
 
 - [x] Every candidate has a measured number on the 17 GB DJI file (or a stated reason it
