@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { FocusPublishActionBar } from './FocusPublishActionBar';
+import { FOCUS_PUBLISH } from '../config/displayNames';
 
 function makeHandlers() {
   return {
@@ -12,11 +13,14 @@ function makeHandlers() {
 }
 
 describe('FocusPublishActionBar (T8390)', () => {
+  // The ONE test that pins the literal approved copy. Everything below queries via
+  // FOCUS_PUBLISH so a future rename doesn't break unrelated assertions -- but a
+  // rename still has to come here and be made deliberately, which is the point.
   it('renders all four choices with the approved copy', () => {
     render(<FocusPublishActionBar {...makeHandlers()} />);
 
-    expect(screen.getByRole('button', { name: 'Publish' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Add Spotlight', exact: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Publish Now' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add Spotlight Now' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Add Spotlight Later' })).toBeTruthy();
     expect(screen.getByText('Refocus (reframe and export again, uses credits)')).toBeTruthy();
     expect(screen.getByText('Puts it in Highlight Reels so you can share it.')).toBeTruthy();
@@ -35,47 +39,53 @@ describe('FocusPublishActionBar (T8390)', () => {
     const handlers = makeHandlers();
     render(<FocusPublishActionBar {...handlers} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }));
     expect(handlers.onPublish).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Spotlight', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.ADD_SPOTLIGHT_LABEL }));
     expect(handlers.onAddSpotlight).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Spotlight Later' }));
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.ADD_SPOTLIGHT_LATER_LABEL }));
     expect(handlers.onAddSpotlightLater).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText('Refocus (reframe and export again, uses credits)'));
+    fireEvent.click(screen.getByText(FOCUS_PUBLISH.REFOCUS_LABEL));
     expect(handlers.onRefocus).toHaveBeenCalledTimes(1);
   });
 
   it('publishLoading spins/disables Publish only', () => {
     render(<FocusPublishActionBar {...makeHandlers()} publishLoading />);
-    expect(screen.getByRole('button', { name: 'Publish' }).disabled).toBe(true);
-    expect(screen.getByRole('button', { name: 'Add Spotlight', exact: true }).disabled).toBe(false);
+    expect(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: FOCUS_PUBLISH.ADD_SPOTLIGHT_LABEL }).disabled).toBe(false);
   });
 
-  it('orders the three main choices Add Spotlight, Publish, Add Spotlight Later on both breakpoints, with Publish centered', () => {
+  // Redesigned 2026-09-08: three stacked zones (Publish / the spotlight pair /
+  // Refocus) in the SAME order at every width. The old design crammed all four
+  // into one row and reordered them per breakpoint with `order-*` utilities;
+  // this asserts that visual hierarchy is now carried by DOM order alone, so a
+  // regression back to breakpoint-reordering fails here.
+  it('reads Publish, Add Spotlight Now, Add Spotlight Later, Refocus at every width', () => {
     const { container } = render(<FocusPublishActionBar {...makeHandlers()} />);
     const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent);
     expect(buttons).toEqual([
-      'Refocus (reframe and export again, uses credits)',
-      'Add Spotlight',
-      'Publish',
-      'Add Spotlight Later',
+      FOCUS_PUBLISH.PUBLISH_LABEL,
+      FOCUS_PUBLISH.ADD_SPOTLIGHT_LABEL,
+      FOCUS_PUBLISH.ADD_SPOTLIGHT_LATER_LABEL,
+      FOCUS_PUBLISH.REFOCUS_LABEL,
     ]);
 
-    const addSpotlightItem = screen.getByRole('button', { name: 'Add Spotlight', exact: true }).closest('div');
-    const publishItem = screen.getByRole('button', { name: 'Publish' }).closest('div');
-    const addSpotlightLaterItem = screen.getByRole('button', { name: 'Add Spotlight Later' }).closest('div');
+    // No `order-*` juggling anywhere: DOM order IS the visual order at every
+    // breakpoint (the explicit fix for the old crammed single-row strip).
+    expect(container.innerHTML).not.toMatch(/\border-\d\b|\bsm:order-\d\b/);
+  });
 
-    // Mobile (no sm: prefix): top -> bottom Add Spotlight, Publish, Add Spotlight Later.
-    expect(addSpotlightItem.className).toContain('order-1');
-    expect(publishItem.className).toContain('order-2');
-    expect(addSpotlightLaterItem.className).toContain('order-3');
+  it('gives Publish its own primary zone, separate from the paired spotlight choices', () => {
+    render(<FocusPublishActionBar {...makeHandlers()} />);
+    const publishZone = screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }).closest('div');
+    const spotlightNow = screen.getByRole('button', { name: FOCUS_PUBLISH.ADD_SPOTLIGHT_LABEL });
+    const spotlightLater = screen.getByRole('button', { name: FOCUS_PUBLISH.ADD_SPOTLIGHT_LATER_LABEL });
 
-    // Desktop (sm:): left -> right Add Spotlight, Publish, Add Spotlight Later, Publish still center.
-    expect(addSpotlightItem.className).toContain('sm:order-2');
-    expect(publishItem.className).toContain('sm:order-3');
-    expect(addSpotlightLaterItem.className).toContain('sm:order-4');
+    // Publish is alone in its zone; the two spotlight choices share theirs.
+    expect(publishZone.contains(spotlightNow)).toBe(false);
+    expect(spotlightNow.closest('div')).toBe(spotlightLater.closest('div'));
   });
 });

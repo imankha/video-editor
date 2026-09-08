@@ -54,10 +54,13 @@ export const CLIP_UPLOAD = {
 };
 
 // T8390: Focus's post-export publish-exit action bar (FocusPublishActionBar).
+// Labels renamed 2026-09-08 (product owner, visual-hierarchy redesign): "Publish"
+// -> "Publish Now" and "Add Spotlight" -> "Add Spotlight Now" so the two "now"
+// choices read as a matched pair against "Add Spotlight Later". Captions unchanged.
 export const FOCUS_PUBLISH = {
-  PUBLISH_LABEL: 'Publish',
+  PUBLISH_LABEL: 'Publish Now',
   PUBLISH_CAPTION: 'Puts it in Highlight Reels so you can share it.',
-  ADD_SPOTLIGHT_LABEL: 'Add Spotlight',
+  ADD_SPOTLIGHT_LABEL: 'Add Spotlight Now',
   ADD_SPOTLIGHT_LATER_LABEL: 'Add Spotlight Later',
   SPOTLIGHT_CAPTION: 'A spotlight is a glowing highlight that follows your athlete.',
   REFOCUS_LABEL: 'Refocus (reframe and export again, uses credits)',
