@@ -1,6 +1,6 @@
 # T8980: Empty tab guidance - use blank tab space to explain the flow
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4 (raised from 3 on 2026-09-07 when the tab-bar label + iPad tap-target work was folded in; the e2e locator sweep is the cost)
 **Created:** 2026-09-07
