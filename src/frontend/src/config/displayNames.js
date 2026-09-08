@@ -22,6 +22,20 @@ export const SECTION_NAMES = {
   LIBRARY: 'Highlight Reels',
 };
 
+// T8980: one-line short tab labels shown BELOW `sm`. The two-word SECTION_NAMES
+// ("In Progress Clips/Reels") don't fit a ~70px column at 320px, and their
+// shared "In Progress" prefix carries no distinguishing information. Full
+// SECTION_NAMES labels still show at `sm`+ (responsive shortening, not a
+// rename). "Published" sitting next to "Reels" is what reads the middle two as
+// in-progress. These are ALSO the EmptyTabGuide flow-strip step labels
+// (emptyStates.js FLOW_STEPS) -- same words, single source.
+export const SECTION_NAMES_SHORT = {
+  GAMES: 'Games',
+  CLIPS: 'Clips',
+  REELS: 'Reels',
+  PUBLISHED: 'Published',
+};
+
 // T8380: direct clip upload ("Add Video") on the In Progress Clips tab. A
 // separate group from SECTION_NAMES (tab labels) -- this is the upload GESTURE
 // plus its one-time consequence notice. "New Clip" (T8130) stays reserved; the

@@ -145,7 +145,7 @@ for (const vp of CTA_VIEWPORTS) {
     // verification at all 4 widths before it ships — un-fixme when green.
     test.fixme('Focus panel: Export CTA above the fold', async ({ page }) => {
       await reachHome(page);
-      await openTab(page, /^In Progress Clips/);
+      await openTab(page, /^Clips/); // T8980: sub-`sm` short tab label
       const framingChip = page.getByTitle(/\(click to open\)/)
         .filter({ hasNotText: /^Overlay:/ }).first();
       const hasChip = await framingChip.waitFor({ state: 'visible', timeout: 15000 })
@@ -172,7 +172,7 @@ for (const vp of CTA_VIEWPORTS) {
     // --- Surface 5: Ready board tile (Publish) -------------------------------
     test('Ready board tile: Publish CTA above the fold', async ({ page }) => {
       await reachHome(page);
-      await openTab(page, /^In Progress Clips/);
+      await openTab(page, /^Clips/); // T8980: sub-`sm` short tab label
       const publish = page.getByTestId('ready-actions')
         .getByRole('button', { name: 'Publish to Highlight Reels' }).first();
       const hasReady = await publish.waitFor({ state: 'visible', timeout: 15000 })
@@ -200,7 +200,7 @@ for (const vp of CTA_VIEWPORTS) {
     // --- Surface 7: In Progress Reels tab (Build New Reel) -------------------
     test('In Progress Reels tab: Build New Reel CTA above the fold', async ({ page }) => {
       await reachHome(page);
-      await openTab(page, /^In Progress Reels/);
+      await openTab(page, /^Reels/); // T8980: sub-`sm` short tab label
       await page.getByTestId('in-progress-reels-tab-panel')
         .waitFor({ state: 'visible', timeout: 15000 });
       const build = page.getByRole('button', { name: 'Build New Reel' }).first();
@@ -226,7 +226,7 @@ for (const vp of CTA_VIEWPORTS) {
     // --- Surface 9: Add Video button (T8380, In Progress Clips tab) ----------
     test('Add Video CTA above the fold', async ({ page }) => {
       await reachHome(page);
-      await openTab(page, /^In Progress Clips/);
+      await openTab(page, /^Clips/); // T8980: sub-`sm` short tab label
       // Exactly one clips-add-video node exists at a time (empty vs populated).
       const addVideo = page.locator('[data-tutorial-target="clips-add-video"]');
       await addVideo.first().waitFor({ state: 'visible', timeout: 15000 });

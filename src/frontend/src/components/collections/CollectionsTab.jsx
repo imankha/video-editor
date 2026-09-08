@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Loader, AlertCircle, FolderOpen } from 'lucide-react';
+import { Loader, AlertCircle } from 'lucide-react';
 import { Button } from '../shared/Button';
+import { EmptyTabGuide } from '../shared/EmptyTabGuide';
 import { REEL } from '../../config/themeColors';
 import { RATIO_ORDER } from '../../constants/aspectRatios';
 import { GameCollectionGroup } from './GameCollectionGroup';
@@ -45,10 +46,16 @@ export function CollectionsTab({
   onDownloadCollection,
   introBadgesByKey = {},
   // T8470 (Part C): the empty published-reels state must never claim "No reels
-  // yet" while draft clips exist on the Clips tab. Count + navigate come from the
-  // panel so this stays a pure view.
+  // yet" while draft clips exist on the Clips tab. The count comes from the panel
+  // so this stays a pure view (the old onViewDraftClips link is superseded by
+  // EmptyTabGuide's own cross-tab button via onNavigateTab).
   draftClipCount = 0,
-  onViewDraftClips,
+  // T8980: the empty state is now the shared EmptyTabGuide (Published tab). It
+  // branches on the account's game count and offers cross-tab / Add Game
+  // gestures; all threaded down from ProjectManager via PublishedReelsPanel.
+  accountGamesCount = 0,
+  onNavigateTab,
+  onAddGame,
 }) {
   const { summary, summaryState, members, memberStates, fetchSummary, fetchMembers } = collections;
 
@@ -128,24 +135,21 @@ export function CollectionsTab({
   ];
   const activeAxis = availableAxes.includes(groupBy) ? groupBy : GROUP_BY.GAME;
 
+  // `games` here is the PUBLISHED-reel-by-game grouping (summary.games), so this
+  // condition means "no published reels" -- the Published tab's empty state.
   if (smart.length === 0 && games.length === 0 && !hasMixes) {
+    // T8980: the shared EmptyTabGuide replaces the old "No reels yet" dead end
+    // (and its stale "the Clips tab" link -- T8555 renamed it "In Progress
+    // Clips"). draftClipCount is the same single-clip-draft count the Clips
+    // badge shows, so the "N clips in progress" branch can never disagree.
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <FolderOpen size={48} className="text-gray-600 mb-4" />
-        <p className="text-gray-400">No reels yet</p>
-        <p className="text-sm text-gray-500 mt-1">
-          Publish reels to see them grouped by game here
-        </p>
-        {draftClipCount > 0 && (
-          <button
-            type="button"
-            onClick={onViewDraftClips}
-            className={`text-sm ${REEL.accent} hover:underline mt-3`}
-          >
-            You have {draftClipCount} draft clip{draftClipCount === 1 ? '' : 's'} in progress - find {draftClipCount === 1 ? 'it' : 'them'} on the Clips tab.
-          </button>
-        )}
-      </div>
+      <EmptyTabGuide
+        tab="published"
+        clipCount={draftClipCount}
+        gamesCount={accountGamesCount}
+        onNavigate={onNavigateTab}
+        onAddGame={onAddGame}
+      />
     );
   }
 

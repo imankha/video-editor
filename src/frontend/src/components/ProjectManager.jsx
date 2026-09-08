@@ -18,7 +18,7 @@ import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES, CLIP_UPLOAD } from '../config/displayNames';
+import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { useClipUpload } from '../hooks/useClipUpload';
 import { GAME, REEL, HIGHLIGHT, PUBLISHED } from '../config/themeColors';
@@ -47,6 +47,7 @@ import { InstallButton } from './InstallButton';
 import { DraftTile } from './DraftTile';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { CardCarousel } from './shared/CardCarousel';
+import { EmptyTabGuide } from './shared/EmptyTabGuide';
 import { GameTile } from './GameTile';
 import { UploadingGameTile } from './UploadingGameTile';
 import { ReferenceGameCard } from './ReferenceGameCard';
@@ -398,14 +399,20 @@ function tabFromPath(pathname) {
 // className wins at `sm`+ since CSS beats an SVG's width/height attributes).
 // Both badge variants render together, one hidden per breakpoint, rather than
 // switching DOM structure at the breakpoint.
-function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, count, activeBg, activeBgDark }) {
+function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, shortLabel, count, activeBg, activeBgDark }) {
   const badgeBg = active ? activeBgDark : 'bg-gray-700';
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 px-2 py-2 sm:px-4 rounded-md font-medium transition-all duration-200 ${
+      // T8980: a coarse-pointer (touch) tablet lands on the DESKTOP form at
+      // `sm`+ (every iPad width is above `sm`), which is ~36px tall -- below the
+      // 44px touch minimum. Floor the height to 44px at `sm`+ on coarse pointers
+      // ONLY, via the capability query (NEVER a UA sniff -- T7350 landmine), so
+      // the fine-pointer mouse desktop form is byte-identical. Below `sm` the
+      // stacked form is already ~55px, so no floor is needed there.
+      className={`flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 px-2 py-2 sm:px-4 sm:coarse-pointer:min-h-[44px] rounded-md font-medium transition-all duration-200 ${
         disabled
           ? 'text-gray-600 opacity-50 cursor-not-allowed'
           : active
@@ -419,13 +426,17 @@ function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, cou
           name computation follows document order, not CSS. `order-first` on
           the icon span moves it to the FRONT visually (stacked-top on mobile,
           row-start on desktop) while staying LAST in the DOM. */}
-      {/* T8555: labels can now be two words ("In Progress Clips/Reels"). Allow
-          wrapping to two lines below `sm` and drop one font step at the base
-          class so the longest label fits a ~72px grid column at 320px; single
-          row + full size restored at `sm`+ where the bar is content-width, not
-          a 4-up grid. (tailwind.config defines no `xs` screen, so there is no
-          intermediate step -- text-[10px] then sm:text-sm.) */}
-      <span className="text-[10px] sm:text-sm leading-tight text-center whitespace-normal break-words">{label}</span>
+      {/* T8980: responsive label SHORTENING (not a rename). The full two-word
+          SECTION_NAMES label shows at `sm`+ (content-width bar); below `sm` a
+          one-line 12px short label (Games/Clips/Reels/Published) replaces the
+          old 10px wrapping label -- 10px is below the iOS/Material floor and the
+          shared "In Progress" prefix wasted the ~70px column. Both spans precede
+          the icon+badge so the count stays last in the accessible name; only the
+          breakpoint-visible span contributes to the name in a real browser
+          (display:none is excluded from name computation). Full label first so
+          the existing "{full label}" locators still anchor. */}
+      <span className="hidden sm:inline text-sm leading-tight text-center whitespace-normal break-words">{label}</span>
+      <span className="sm:hidden text-xs leading-tight text-center whitespace-nowrap">{shortLabel}</span>
       <span className="order-first relative">
         <Icon size={18} className="sm:w-4 sm:h-4" />
         {count > 0 && (
@@ -491,7 +502,8 @@ export function ProjectManager({
   // Use props if provided, otherwise fall back to context
   const unseenReelsCount = unseenReelsCountProp ?? contextUnseenReelsCount ?? 0;
   const exportingProject = exportingProjectProp ?? contextExportingProject;
-  const hasClips = games.some(g => g.clip_count > 0);
+  // T8980: `hasClips` is derived just below, after `clipDrafts` is defined (a
+  // reel can be built from clips cut from a game OR clips added via "Add Video").
   // T8780: drives whether "Add Game" renders above the list (has content) or
   // below the "No games yet" message (empty) -- same empty-state-resolves-
   // into-its-own-action order as the Reels/Published tabs, single source of
@@ -523,6 +535,14 @@ export function ProjectManager({
   // is_auto_created (the raw_clips.auto_project_id link) is the routing key, not
   // clip_count -- see T8360-design.md "The signal we can trust".
   const clipDrafts = useMemo(() => projects.filter(p => p.is_auto_created), [projects]);
+  // T8980: a reel can be built from ANY clip the account has -- clips cut from a
+  // game (games[].clip_count) OR clips added directly via "Add Video" (T8370),
+  // which have game_id = NULL so they never bump a game's clip_count but DO
+  // create a single-clip auto-draft (clipDrafts). The old games-only form left
+  // Build New Reel disabled, with no visible reason, for an Add-Video-only
+  // account. Single source of truth (no second flag): both terms derive from
+  // data already held (games list + the clipDrafts memo above).
+  const hasClips = clipDrafts.length > 0 || games.some(g => g.clip_count > 0);
   // T8555: multi-clip in-progress drafts (is_auto_created === false) populate
   // the In Progress Reels tab (was DownloadsPanel's `highlightDrafts`, now
   // owned here so this tab's badge count lives next to clipDrafts, single
@@ -1369,6 +1389,7 @@ export function ProjectManager({
           onClick={() => setActiveTab('games')}
           Icon={Gamepad2}
           label="Games"
+          shortLabel={SECTION_NAMES_SHORT.GAMES}
           count={games.length}
           activeBg={GAME.bg}
           activeBgDark={GAME.bgDark}
@@ -1378,6 +1399,7 @@ export function ProjectManager({
           onClick={() => setActiveTab('projects')}
           Icon={Scissors}
           label={SECTION_NAMES.CLIPS}
+          shortLabel={SECTION_NAMES_SHORT.CLIPS}
           count={clipDrafts.length}
           activeBg={REEL.bg}
           activeBgDark={REEL.bgDark}
@@ -1387,6 +1409,7 @@ export function ProjectManager({
           onClick={() => setActiveTab('inProgressReels')}
           Icon={Clapperboard}
           label={SECTION_NAMES.HIGHLIGHTS}
+          shortLabel={SECTION_NAMES_SHORT.REELS}
           count={highlightDrafts.length}
           activeBg={HIGHLIGHT.bg}
           activeBgDark={HIGHLIGHT.bgDark}
@@ -1396,6 +1419,7 @@ export function ProjectManager({
           onClick={() => setActiveTab('published')}
           Icon={Send}
           label={SECTION_NAMES.PUBLISHED}
+          shortLabel={SECTION_NAMES_SHORT.PUBLISHED}
           count={unseenReelsCount}
           activeBg={PUBLISHED.bg}
           activeBgDark={PUBLISHED.bgDark}
@@ -1544,24 +1568,17 @@ export function ProjectManager({
             </Button>
           </div>
         ) : gamesEmptyConfirmed ? (
-          <div className="flex flex-col items-center text-gray-500 text-center">
-            {/* T8780: supersedes T7840's single-status-line decision -- the Add
-                Game button now resolves into this message directly below it
-                (matching Reels/Published), so it's no longer a duplicate of a
-                CTA rendered elsewhere on the page. The Quest panel's own
-                "Add Your First Game" row is a separate onboarding surface and
-                is unaffected. */}
-            <p>No games yet</p>
-            <Button
-              variant="success"
-              size="lg"
-              icon={Plus}
-              onClick={handleAddGameClick}
-              className="mt-4"
-            >
-              Add Game
-            </Button>
-          </div>
+          /* T8980: the shared EmptyTabGuide replaces the old "No games yet" +
+             Add Game dead end. It carries the flow strip (Games lit as step 1),
+             the approved headline/body, the Add Game CTA with the cost caption,
+             and the footer link to In Progress Clips. gamesEmptyConfirmed still
+             gates it (T8780) so it never flashes mid-load or on error. */
+          <EmptyTabGuide
+            tab="games"
+            gamesCount={games.length}
+            onAddGame={handleAddGameClick}
+            onNavigate={setActiveTab}
+          />
         ) : (
           <div className={GAMES_GRID_CONTAINER_CLASS}>
             {/* Uploading rail (T7820): every client upload (active/queued/failed,
@@ -1720,36 +1737,19 @@ export function ProjectManager({
             </p>
           </div>
         ) : clipDrafts.length === 0 ? (
-          /* T8380: two-path empty state. Path A (upload directly) is primary --
-             this tab's own action, and the mobile-first camera-roll path -- so it
-             carries the Add Video button. Path B (extract in Annotate) stays as
-             guidance since its action lives on the Annotate screen, not here. */
-          <div className="flex flex-col items-center text-center max-w-sm mx-auto py-4">
-            <p className="text-gray-400 mb-1">No clips yet</p>
-            <p className="text-sm text-gray-500 mb-5">Start a clip in one of two ways.</p>
-
-            <Button
-              variant="success"
-              size="lg"
-              icon={Plus}
-              onClick={handleAddVideoClick}
-              data-tutorial-target="clips-add-video"
-            >
-              {CLIP_UPLOAD.ADD_VIDEO}
-            </Button>
-            <p className="text-xs text-gray-500 mt-2">Upload videos from your phone or computer.</p>
-
-            <div className="flex items-center gap-3 w-full my-5">
-              <div className="h-px flex-1 bg-gray-700" />
-              <span className="text-xs text-gray-600 uppercase tracking-wide">or</span>
-              <div className="h-px flex-1 bg-gray-700" />
-            </div>
-
-            <p className="text-sm text-gray-400">
-              Tap <span className="font-medium text-gray-300">&apos;Clip Play&apos;</span> on a
-              play in Annotate to pull a clip from one of your games.
-            </p>
-          </div>
+          /* T8980: shared EmptyTabGuide replaces the T8380 two-path dead end. It
+             keeps both clip-creation paths (Add Video is still primary and still
+             carries the clips-add-video tutorial target; the game path branches
+             on whether the account has games yet) and adds the flow strip +
+             next-tab hint. The Add Video button here and the non-empty action row
+             above stay mutually exclusive, so the tutorial anchor is unique. */
+          <EmptyTabGuide
+            tab="clips"
+            gamesCount={games.length}
+            onNavigate={setActiveTab}
+            onAddGame={handleAddGameClick}
+            onAddVideo={handleAddVideoClick}
+          />
         ) : (
           /* Drafts tab widens to max-w-6xl so the carousels use the viewport (Q1 /
              audit finding #13 desktop dead-space fix); the Games tab now uses the same
@@ -1991,24 +1991,19 @@ export function ProjectManager({
            drafts yet; once drafts exist it stays pinned above the carousel. */
         <div className="w-full max-w-md lg:max-w-2xl xl:max-w-3xl" data-testid="in-progress-reels-tab-panel">
           {highlightDrafts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Clapperboard size={48} className="text-gray-600 mb-4" />
-              <p className="text-gray-400">No reels in progress</p>
-              <p className="text-sm text-gray-500 mt-1">
-                {hasClips ? 'Build one from your clips to get started' : 'Extract clips from a game first using Annotate mode'}
-              </p>
-              <Button
-                variant="cyan"
-                size="lg"
-                icon={Plus}
-                disabled={!hasClips}
-                title={!hasClips ? 'Extract clips from a game first using Annotate mode' : undefined}
-                onClick={() => setShowAssemblyModal(true)}
-                className="w-full max-w-xs mt-4"
-              >
-                Build New Reel
-              </Button>
-            </div>
+            /* T8980: shared EmptyTabGuide. Build New Reel stays the primary CTA
+               (cyan); when the account has no clips it is disabled with a VISIBLE
+               reason (never the old hover-only title) plus a working cross-tab
+               button to cut a clip. hasClips now counts Add-Video clips too, so
+               an Add-Video-only account can build a reel. */
+            <EmptyTabGuide
+              tab="reels"
+              hasClips={hasClips}
+              clipCount={clipDrafts.length}
+              gamesCount={games.length}
+              onNavigate={setActiveTab}
+              onBuildReel={() => setShowAssemblyModal(true)}
+            />
           ) : (
             <>
             <div className="mb-4">
@@ -2050,7 +2045,12 @@ export function ProjectManager({
       <PublishedReelsPanel
         active={activeTab === 'published'}
         onOpenProject={(projectId) => onSelectProjectWithMode?.(projectId, { mode: 'framing' })}
-        onViewClips={() => setActiveTab('projects')}
+        // T8980: the Published empty state now renders the shared EmptyTabGuide
+        // (inside CollectionsTab), which branches on the account's game count and
+        // can switch tabs / open Add Game -- so plumb those through the panel.
+        accountGamesCount={games.length}
+        onNavigateTab={setActiveTab}
+        onAddGame={handleAddGameClick}
       />
 
       {/* Build New Reel Modal - Game/Clip selector (opened from the
