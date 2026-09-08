@@ -259,7 +259,8 @@ segments on reload, mux `strict`-mode throw on staggered A/V timestamps) and 9 M
 issues, all fixed and independently re-verified (several via live Chromium reproductions).
 A further self-directed review round found 2 more real issues (flush-window error
 routing, unbounded progress-log growth), also fixed. All 16 MINOR findings from the
-original review addressed. Merged to master (PR #368) - the one CI failure
+original review were REPORTED addressed at this point - that claim later proved false,
+see the correction in the next entry. Merged to master (PR #368) - the one CI failure
 (`profileStore.test.js`/`useIntroCardStore`) is the pre-existing, unrelated
 full-suite-parallelism flake already logged in `docs/testing/known-failures.md` from the
 T8838 merge. Full mechanism (demux/decode/crop/encode/mux/checkpoint/cancel/resume) is
@@ -267,6 +268,53 @@ proven on the synthetic fixture; nothing under `scripts/shrink-tool/` is importe
 code (grep-confirmed). What remains is explicitly out of reach for any test harness: the
 real 50 GB DJI folder, a second machine, and the R11 quality A/B - that is what the
 acceptance criteria below still need, and it is the user's own call, never the AI's.
+
+**2026-09-08 (later, live-testing round - the user drove the tool on the dev laptop).**
+Everything below is merged to master (commits 17338c3d, b8601797, e48be044, c814e905).
+The tool is materially different from the state described in the entry above; the real
+50 GB run still has NOT happened (the user was mid-setup when the line was parked), so
+this task stays WAITING ON USER and its acceptance criteria stay open.
+
+- **Correction to the entry above:** the "all 16 MINOR findings addressed" claim was
+  wrong. An audit against master found **12 of 16 were never implemented**. Worse, two of
+  the three I had personally spot-checked (the `?? { file: null }` silent fallback and
+  the unsurfaced `droppedTracks`) existed only in the worker's clone and never reached
+  the merge - I had verified the clone, not master. All 16 are now genuinely fixed and
+  re-verified against master. Lesson recorded in memory
+  (`project_worker_self_spawn_and_chrome_leak_incident`): a worker's status line is a
+  claim, not evidence; verify against the merge.
+- **Two presets, not three** (EPIC decision 5, amended): Sharp (default) / Small.
+  Recommended was cut - at nearly Sharp's own bits-per-pixel it was visibly softer on
+  player detail in a real side-by-side and never meaningfully smaller, so it earned no
+  slot.
+- **Per-segment automated crop** (EPIC decision 5, amended - replaces v1's
+  one-static-rect exclusion): every segment gets its own motion-derived rect on folder
+  load via the new DOM-free `pipeline/autoCrop.js` (per-cell luminance variance across
+  ~8 frames spread over the clip - variance over spread samples, not frame-to-frame
+  diffing, so slow lighting drift does not read as motion). The filmstrip edits the
+  selected segment's rect; "Suggest crop" re-runs it for one segment. Manifest carries a
+  crop per segment (additive schema; the job-level default is kept so older manifests,
+  tests and the smoke test stay valid).
+- **Hardware acceleration is now explicit and visible.** Decoder and encoder both request
+  `hardwareAcceleration: 'prefer-hardware'` via `isConfigSupported`, falling back to
+  `'no-preference'` only where the strict flag is misreported (some platforms do), and
+  the GRANTED value is threaded shrinkSegment -> probe -> worker -> UI, logged as
+  "Acceleration: decode = GPU, encode = GPU". This answers "is it really using the GPU?"
+  with the value WebCodecs actually granted rather than an assumption - and it is the
+  honest input for T9040/T9050's benchmarking and cost model.
+- **Crop does not reduce file size, and the UI now says so.** Output bytes are
+  `bitrate x duration`, and preset bitrate is a fixed constant, so a cropped and an
+  uncropped run at the same preset produce the SAME size. What cropping buys is quality:
+  fewer wasted pixels means more of a fixed bit budget lands on the players. The crop
+  readout reports bits-per-pixel gain versus an uncropped encode and states the size is
+  unchanged, instead of a "bytes saved by crop" figure that would always read ~0. This
+  is why T9050's size-cap-driven bitrate idea (a hard ~8 GB cap choosing the bitrate,
+  with a source-bpp quality floor choosing resolution) is the actual lever for size, not
+  the crop.
+- Tests: 41/41 vitest in `scripts/shrink-tool/` (34 existing + 7 new for `autoCrop`),
+  headless smoke green. A renamed preset key silently broke the smoke driver at one
+  point - it is a Playwright script, not a vitest spec, so the suite could not see it
+  (fixed in e48be044).
 
 ## Acceptance Criteria
 
