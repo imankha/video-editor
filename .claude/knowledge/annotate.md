@@ -1,5 +1,35 @@
 ---
 domain: annotate
+updated: 2026-09-08 (T8970 Playback Annotations mode bug fixes -- 3 gaps found by live-drive.
+**Item 1 (blank annotate video after exiting playback):** the annotate `<video>` nodes
+(AnnotateModeView.jsx multiVideo branch) UNMOUNT when `playback.isPlaybackMode` flips true (the
+playback tree is a separate early `return`, L252+, with its OWN dual videos from
+useAnnotationPlayback -- UNRELATED A/B machinery, don't conflate). useVideoProxy's src is set
+IMPERATIVELY by the SEED EFFECT (~L117-136), keyed on `[fullTimeline,isMultiVideo,isOverlap,
+getSegmentUrl,videos?.length]` -- so on exit the remounted (fresh, blank) node never gets a src
+reapplied (deps unchanged) => blank. FIX = narrow reapply-on-mount, NOT the return-tree
+restructure: multiVideo slots now use CALLBACK REFS `attachA`/`attachB` (`_renderRefs.attachA/
+attachB`, exposed alongside the raw `videoARef`/`videoBRef`) that reseed ONLY the ACTIVE slot's
+src+position on remount, guarded by `hasSeededRef` (true first mount -> seed effect owns it) and
+`if(el.src)return` (reused sourced node -> leave alone). `virtualTimeRef` mirrors virtualTime so
+the ref can restore position without churning identity every RAF. **Single-video is UNAFFECTED**
+(VideoPlayer sets src as a JSX attribute, which survives remount -- single path keeps `_renderRefs:
+{videoARef}`, no callback ref). Consumers render `attachA || videoARef` so the single path is
+untouched. Regression: useVideoProxy.attachSlot.test.js. **Item 2 (clip menu still active in
+playback):** during playback the parent sets `selectedRegionId = playback.activeClipId`, so
+ClipsSidePanel's `selectedRegion` was set and it rendered the mutating ClipDetailsEditor (rename/
+retag/delete/create-reel/open-in-focus) for the PLAYING clip. FIX = new `isPlaybackMode` prop on
+ClipsSidePanel gates OFF the desktop details editor AND the mobile detail takeover (+ mobile
+`onViewDetails`); a row click still seeks (onSelectRegion -> playback.seekToClip). Wired from both
+AnnotateScreen ClipsSidePanel mounts. **Item 3 (highlight tracks playback):** ALREADY WORKED, no
+change -- `activeClipId` updates per segment (useAnnotationPlayback L269), ClipListItem renders
+`isPlaybackActive` distinctly (animate-pulse + rating-color tint + colored left border) vs the
+normal `isSelected`. **Item 4 (mode clarity):** playback container was neutral chrome, identical
+to annotate. FIX = distinct CYAN treatment (`bg-cyan-500/10` + `border-2 border-cyan-400/40` +
+`ring-cyan-400/20`) + a PERSISTENT `data-testid="playback-mode-badge"` "Playback Annotations" pill
+(cyan, Play icon) shown the whole time the mode is active (green=create/yellow=edit/violet=angle
+were taken; cyan/blue is the playback family). Render test: AnnotateModeView.playbackBadge.test.jsx;
+gating test: ClipsSidePanel.playbackMode.test.jsx; e2e: T8970-playback-mode-qa.qa.spec.js. Prior:)
 updated: 2026-09-07 (T8960 play-editor strip layout feedback -- REVERSES T8760's create-mode
 exclusion for the PRIMARY editor and reworks the strip header/controls. **Loop + seed now gate on
 `clipEditorActive` ALONE** (`ClipScrubRegion.jsx`), so the clip-scoped looping playhead + seed-to-start
