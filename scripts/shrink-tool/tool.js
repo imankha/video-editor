@@ -112,8 +112,17 @@ const state = {
 let segmentView = null;
 let cropController = null;
 
+// A multi-hour job emits tens of thousands of progress lines (~2/s throttled
+// updates x segments) -- `textContent +=` would re-copy the whole ever-growing
+// string on every call. Ring-buffer the last LOG_MAX_LINES instead, so each
+// call's cost stays flat regardless of how long the job has been running.
+const LOG_MAX_LINES = 500;
+let logLines = [];
+
 function log(line) {
-  el.progressLog.textContent += `${line}\n`;
+  logLines.push(line);
+  if (logLines.length > LOG_MAX_LINES) logLines = logLines.slice(-LOG_MAX_LINES);
+  el.progressLog.textContent = `${logLines.join('\n')}\n`;
   el.progressLog.scrollTop = el.progressLog.scrollHeight;
 }
 
