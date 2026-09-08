@@ -1,6 +1,6 @@
 # T8790: Fix the 3 below-fold CTA findings from T8550's mobile visibility audit
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-09-05
