@@ -1,6 +1,6 @@
 # T8990: Partial-row guidance - keep the tab guide until the first row fills
 
-**Status:** TODO (analysis done 2026-09-08; copy + 6 decisions below need user approval before implementation)
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-09-08
@@ -110,7 +110,7 @@ filler no longer fits beside the tiles (width-based), which lands at 3-4 landsca
 desktop.** No count cap needed: the container's `max-w` bounds the width, so an ultra-wide
 monitor cannot keep it alive forever.
 
-### Draft partial copy (NEEDS APPROVAL, same gate as T8980)
+### Partial copy (LOCKED 2026-09-08, binding)
 
 | Tab (partial) | Headline | Body (one sentence) | Action | Footer |
 |---|---|---|---|---|
@@ -121,20 +121,20 @@ monitor cannot keep it alive forever.
 
 Vocabulary: T8130's approved nouns and `displayNames.js`; no new terms.
 
-### Decisions needed (recommendations marked)
+### Decisions (LOCKED 2026-09-08, all six on the filed recommendations)
 
-1. **Scope**: Games grid cell only, or all four tabs? *Recommend all four, implemented Games
-   first* (Games is the cheap, high-value half; the carousel filler is the reusable half).
-2. **Partial copy**: approve the draft table, or edit.
-3. **Games CTA**: "Open game" that loads the single game into Annotate, vs no CTA (the tile is
-   right there). *Recommend the CTA*: it names the next action, and the tile's own affordance
-   is a poster, not an instruction.
-4. **Hide the Games guide while an upload is in progress?** *Recommend yes.*
-5. **Carousel retire rule**: width-based (filler hides when it no longer fits) vs count-based
-   (hide at N items). *Recommend width-based*: it is literally "until the row is full" and
-   needs no per-tab constant.
-6. **Dismissible?** *Recommend no*: it retires itself; a dismiss adds session state and a
-   control to test for no user benefit.
+1. **Scope**: all four tabs, Games implemented FIRST (Games is the cheap, high-value half;
+   the carousel filler is the reusable half). If the carousel half turns out to be more than
+   it looks, Games alone is still a shippable increment - say so in the Progress Log rather
+   than half-doing both.
+2. **Partial copy**: the table above, verbatim.
+3. **Games CTA**: yes, "Open game" loading that single game into Annotate. The tile's own
+   affordance is a poster, not an instruction.
+4. **Hide the Games guide while an upload is in flight**: yes.
+5. **Carousel retire rule**: width-based (the filler hides when it no longer fits beside the
+   tiles). It is literally "until the row is full" and needs no per-tab constant.
+6. **Dismissible**: no. It retires itself; a dismiss adds session state and a control to test
+   for no user benefit.
 
 ## Context
 
@@ -162,7 +162,7 @@ Vocabulary: T8130's approved nouns and `displayNames.js`; no new terms.
 ## Implementation
 
 ### Steps
-1. [ ] User approves scope + partial copy + decisions 3-6
+1. [x] Decisions locked 2026-09-08 (user "proceed" on the six filed recommendations)
 2. [ ] Branch `feature/T8990-partial-row-guidance`
 3. [ ] `PARTIAL_TAB_GUIDE` copy + `EmptyTabGuide variant="partial"` (compact tile-shaped layout; empty variant unchanged, pinned by the existing tests)
 4. [ ] Games: guide cell at `games.length === 1`, hidden during uploads; CTA loads the game
@@ -176,8 +176,10 @@ Vocabulary: T8130's approved nouns and `displayNames.js`; no new terms.
 **2026-09-08**: Filed from the user's idea after T8980 landed. Code analysis done: Games
 is a grid whose only partial-first-row state is exactly one game (T7330's data-derived
 columns), the other three tabs are fixed-width-tile carousels where "unused space" is a
-measurement `CardCarousel` already makes. Draft partial copy + 6 decisions recorded above,
-awaiting the user.
+measurement `CardCarousel` already makes. Draft partial copy + 6 decisions recorded above.
+
+**2026-09-08 (same day)**: user replied "proceed" - all six decisions locked on the filed
+recommendations, copy table binding, implementation started (container worker).
 
 ## Acceptance Criteria
 
