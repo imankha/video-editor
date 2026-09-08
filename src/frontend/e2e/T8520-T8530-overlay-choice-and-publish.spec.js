@@ -86,8 +86,8 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
     await expect(page.locator('[data-tutorial-target="focus-publish"]')).toHaveCount(1);
 
     // Acceptance: all four choices visible.
-    await expect(bar.getByRole('button', { name: 'Publish' })).toBeVisible();
-    await expect(bar.getByRole('button', { name: 'Add Spotlight', exact: true })).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'Publish Now', exact: true })).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'Add Spotlight Now', exact: true })).toBeVisible();
     await expect(bar.getByRole('button', { name: 'Add Spotlight Later' })).toBeVisible();
     await expect(bar.getByText(/^Refocus/)).toBeVisible();
 
@@ -99,8 +99,8 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
       await page.waitForTimeout(200);
       await assertNoHorizontalOverflow(page);
       for (const locatorFn of [
-        () => bar.getByRole('button', { name: 'Publish' }),
-        () => bar.getByRole('button', { name: 'Add Spotlight', exact: true }),
+        () => bar.getByRole('button', { name: 'Publish Now', exact: true }),
+        () => bar.getByRole('button', { name: 'Add Spotlight Now', exact: true }),
         () => bar.getByRole('button', { name: 'Add Spotlight Later' }),
         () => bar.getByText(/^Refocus/),
       ]) {
@@ -128,10 +128,10 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
     await expect(page.getByText('Saved to Highlight Reels, under Highlights')).toBeVisible();
     await saveEvidence(page, 'T8390-pathB-add-spotlight-later-closed');
 
-    // ---- Path C: "Publish" -> overlay_declined + publish-intent staked, preview closes ----
+    // ---- Path C: "Publish Now" -> overlay_declined + publish-intent staked, preview closes ----
     await page.getByTestId('diag-reopen').click();
     await expect(page.getByTestId('focus-publish-action-bar')).toBeVisible();
-    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Publish' }).click();
+    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Publish Now', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'publish');
     const staked = await page.evaluate(() => window.__t8390PublishIntentStore.getState().projectId);
     expect(staked).toBe(424242);
@@ -142,7 +142,7 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
     // already covers entry per the task's own design) ----
     await page.getByTestId('diag-reopen').click();
     await expect(page.getByTestId('focus-publish-action-bar')).toBeVisible();
-    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Add Spotlight', exact: true }).click();
+    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Add Spotlight Now', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'add-spotlight');
     await saveEvidence(page, 'T8390-pathA-add-spotlight-closed');
 

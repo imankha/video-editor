@@ -117,9 +117,16 @@ monitor cannot keep it alive forever.
 | Games (1 game) | Now cut your first play | Open your game and tap Add Play at each moment worth keeping; each play becomes a clip on In Progress Clips. | **Open game** (loads it) | Clips are step 2 of 4. |
 | In Progress Clips (row not full) | Give each clip a Focus pass | Open a clip to follow your athlete and add an optional Spotlight, then publish it on its own or build several into a reel. | none (the tile is the action; Add Video already sits in the row above) | Published clips show up on the Published tab. |
 | In Progress Reels (row not full) | Finish your reel and export once | Put the plays in order, export, then Publish moves it to the Published tab with a link you can share. | none (Build New Reel is already pinned above the row) | Finished reels move to Published when you share them. |
-| Published (row not full) | Ready for coaches and family | Every published reel gets its own link. Use Share or Copy Link on any card. | none | Publish more clips to see them grouped by game here. | (headline reworded 2026-09-08 review: a guide headline must not read like a control label; "Share it" collided with the real Share button. Body names the affordances instead.) |
+| Published (row not full) | Ready for coaches and family | Every published reel gets its own link. Use Share or Copy Link on any card. | none (Share and Copy Link are already on the card and in its kebab menu) | Publish more clips to see them grouped by game here. |
 
 Vocabulary: T8130's approved nouns and `displayNames.js`; no new terms.
+
+**Headline rule (learned 2026-09-08, user review):** a guide headline must not read like a
+control label. The first Published draft was "Share it", which collides with the REAL `Share`
+button on every published card and the `Share` / `Copy Link` items in its kebab menu, so it
+scans as a button rather than as guidance. Referring to those controls BY NAME inside the
+body is good (it points at a real affordance); naming one in the headline is not. Applies to
+any future copy on this component.
 
 ### Decisions (LOCKED 2026-09-08, all six on the filed recommendations)
 
@@ -181,6 +188,20 @@ measurement `CardCarousel` already makes. Draft partial copy + 6 decisions recor
 **2026-09-08 (same day)**: user replied "proceed" - all six decisions locked on the filed
 recommendations, copy table binding, implementation started (container worker).
 
+**2026-09-08 (design review)**: published a review artifact with faithful mockups at real
+proportions. User reviewed and caught a copy collision: the Published headline "Share it"
+duplicates the actual `Share` control on published cards (and `Copy Link` beside it in the
+kebab). Replaced with "Ready for coaches and family" + a body that points at both real
+controls by name; headline rule recorded above. Worker was interrupted at setup (before any
+copy was written) and resumed with the correction, so nothing was built against the old
+string. Two mockup inaccuracies also found and worth carrying into the build: Published tiles
+are usually PORTRAIT (`ReelTile` `sm:w-[150px] aspect-[9/16]`, about 267px tall), not
+landscape, and the Published tab renders smart-collection rows plus a per-game "Game
+Highlights" row above the reel tiles. So the filler's height is NOT one number: it follows
+whatever the row's tiles are (about 146px on a landscape row, about 267px on a portrait one),
+which the `self-stretch` sizing already handles. Write the carousel copy to fit the LANDSCAPE
+case, the tighter of the two.
+
 ## Acceptance Criteria
 
 - [ ] Games tab with exactly one game shows the partial guide in the empty grid cell beside the tile at 390 / 768 / 1280; with two games it is gone; while an upload is in flight it is hidden
@@ -192,3 +213,90 @@ recommendations, copy table binding, implementation started (container worker).
 - [ ] `clips-add-video` tutorial target on exactly one node in the empty, partial and full Clips states
 - [ ] No persisted state; no UA sniffing; carousel filler decided by measurement, not breakpoint
 - [ ] Unit + affected e2e green; Branch CI green
+
+---
+
+# HANDOFF (2026-09-08, supervisor session ending) - READ THIS FIRST TO RESUME
+
+This task is PARTLY BUILT. A container worker wrote the implementation and got its unit tests
+green, but the branch was never pushed. Everything below is what a fresh session needs; you do
+NOT need the old conversation.
+
+## Where the work physically is
+
+| | |
+|---|---|
+| Container | `reel-task-t8990` (was UP at handoff; `docker ps --filter name=reel-task` to confirm) |
+| Checkout (host) | `C:/work/tasks/t8990/` (bind mount, readable without docker) |
+| Branch | `feature/T8990-partial-row-guidance`, based on master `06f5d97e` |
+| Worker's own log | `/workspace/.dotask-status` (stage log), `.dotask-drive-{1,2}.log` |
+| Kickoff it is following | `/workspace/.dotask-kickoff.md` (also `C:\tmp\kickoff-t8990.md`) |
+
+**The work is SAFE in git.** At handoff the supervisor committed the worker's tree as a
+durability snapshot, `b20f727c` ("WIP safety snapshot"), and PUSHED the branch to origin. So
+`feature/T8990-partial-row-guidance` on GitHub already contains the full implementation and its
+green unit tests. Nothing is lost if the container disappears: a fresh session can
+`git fetch && git checkout feature/T8990-partial-row-guidance` anywhere, or `task.sh up t8990`
+again. That snapshot is explicitly NOT a finished branch (no QA drive, no Reviewer pass) and
+must not be merged as-is.
+
+## What was already built (do not re-derive)
+
+- `src/frontend/src/config/emptyStates.js` - new `PARTIAL_TAB_GUIDE` copy set (the LOCKED table
+  above, with the corrected Published row).
+- `src/frontend/src/components/shared/EmptyTabGuide.jsx` - new `variant="partial"` (compact,
+  tile-shaped). The T8980 empty variant is untouched and its tests still pass.
+- `src/frontend/src/components/shared/CardCarousel.jsx` - new `fillerSlot` prop plus an
+  EXPORTED pure `fillerFits(...)` predicate (mirrors the existing `pickPeekGap` pattern, so the
+  width logic is unit-testable without a layout engine).
+- `src/frontend/src/components/ProjectManager.jsx` - the Games grid cell (gated at exactly one
+  game, hidden during uploads) and the Clips + Reels fillers.
+- `src/frontend/src/components/collections/CollectionsTab.jsx` and `GameCollectionGroup.jsx` -
+  the Published filler on a game's reel row.
+- Tests touched: `EmptyTabGuide.test.jsx`, `CardCarousel.test.jsx`,
+  `ProjectManager.fourTabIA.test.jsx`.
+
+## What is DONE vs NOT DONE
+
+DONE: implementation, and **62 relevant unit tests green** covering the partial variant + copy,
+`fillerFits` boundaries, the Games cell appearing at 1 game but not at 0 / 2 / during an upload,
+`clips-add-video` anchor uniqueness, and the T8980 empty-state suites still passing untouched.
+
+NOT DONE, in order: commit -> live QA drive (real browser via `dev-verify.sh`) -> Reviewer pass
+-> `PUSHREADY` -> supervisor push -> Branch CI -> merge -> status flip -> container nuke.
+
+## Resume in one call
+
+```
+docker exec -u dev reel-task-t8990 bash -lc 'cd /workspace && claude -p --model opus \
+  "Read /workspace/.dotask-kickoff.md and /workspace/.dotask-status. Implementation from a \
+   prior turn may be uncommitted in the tree. Verify it against the task file, commit it \
+   (explicit git add, never -A), then finish the kickoff: live QA drive, Reviewer pass, \
+   PUSHREADY." > /workspace/.dotask-drive-3.log 2>&1'
+```
+If the container is gone, `bash scripts/task.sh up t8990`, re-seed `C:\tmp\kickoff-t8990.md`
+to `/workspace/.dotask-kickoff.md`, and rebuild from this ticket (the copy table and decisions
+above are the whole spec).
+
+**Before trusting any browser result in that container**, kill stray dev servers BY PID (not
+`pkill -f`): a long-lived container accumulates vite/uvicorn on incrementing ports and serves
+pre-fix code. This produced two false "still broken" verdicts elsewhere in this wave.
+
+## Landing it
+
+`bash scripts/task.sh push t8990`, then poll Branch CI. **Expect exactly one failure**:
+`src/services/uploadManager.attachVideo.test.js` ("Unexpected status: undefined"), which is
+pre-existing, documented in `docs/testing/known-failures.md`, reproduces on clean master, and
+is untouched by this branch. Anything else is real. Then merge, flip PLAN.md + this file to
+STAGING, and `bash scripts/task.sh nuke t8990`.
+
+## Design review (approved)
+
+https://claude.ai/code/artifact/b0837b85-949e-4de7-84fd-b9ac391a5c41 - faithful mockups of all
+four tabs at real proportions with a Today/Proposed toggle. **User reviewed and approved it on
+2026-09-08.** Two corrections came out of that review and are already folded into this ticket:
+the Published headline rule (below) and the portrait-tile/variable-height finding.
+
+Still-open question the artifact raises, worth one look during QA rather than a redesign: the
+three carousel bodies are written to the tighter LANDSCAPE row height (about 146px). If they
+read as crowded in the live drive, trim those bodies to one short line. Do not grow the row.

@@ -117,9 +117,73 @@ re-read the current `FocusScreen.jsx` + `ExportButtonContainer.jsx` + the T8520/
 completion flow and confirm whether a real gap still exists.** If it's already closed,
 close this task with the evidence recorded here rather than building anything.
 
+## Round 2 (2026-09-08): Visual redesign of `FocusPublishActionBar`
+
+User saw the shipped action bar live on staging and asked for a visual redesign in the same
+conversation — captured here rather than as a new task since it's the same component/feature,
+still pre-DONE. Iterated live via the `t8520diag.html` real-browser harness (mounts the REAL
+`FocusPublishActionBar` inside the REAL `CollectionPlayer`), screenshotted at mobile (375px) and
+desktop widths after every round, several rounds driven by direct user feedback:
+
+1. Hierarchy pass (ui-designer agent): tiered layout (Publish primary, spotlight pair secondary,
+   Refocus a quiet ghost link) — **rejected** by the user: "no single choice should look more
+   important than the others."
+2. Flattened: all 4 choices (Add Spotlight Now, Publish Now, Add Spotlight Later, Refocus) render
+   as identical `Button variant="secondary" size="lg"` cards, single CSS grid — one DOM instance
+   per choice at every width, no `order-*` reordering. Copy renamed: "Add Spotlight" → "Add
+   Spotlight Now", "Publish" → "Publish Now". Refocus's cost warning split out of its button label
+   into its own caption ("Reframe and export again, uses credits.") so its card structure matches
+   the other three (title + caption).
+3. Typography pass: bigger button text (`size="lg"`), captions styled as a distinct tier (`text-sm
+   italic leading-relaxed`) rather than just smaller/dimmer text.
+4. **Landmine found via live DOM measurement, not visual inspection**: the desktop row used
+   `grid-template-columns: repeat(4, minmax(max-content, 1fr))`, intending "never let a button
+   title wrap." But CSS `max-content` sizing measures a WHOLE grid item as if nothing inside it
+   could wrap — including the caption `<p>`, which CAN wrap. The captions' full unwrapped
+   sentence width (not the short titles) was silently setting the column floor, forcing a real
+   horizontal scrollbar on real desktop widths (measured: needed ~1474px, but a genuine 1440px
+   browser window's `CollectionPlayer` panel — `md:inset-12` — is only ~1344px). Fix:
+   `minmax(min-content, 1fr)` instead — `min-content` correctly shrinks the caption's
+   contribution to its longest unbreakable word while the title's own `white-space: nowrap` span
+   still forces ITS min-content to equal its full unwrapped width, so the column floor is title-
+   driven as intended and captions wrap freely. Verified via direct DOM measurement (not
+   eyeballing): all 4 titles stay single-line and the row needs only ~930px, comfortably under
+   even a simulated 1280px-viewport modal width (1184px available), with zero horizontal scroll.
+
+5. **Fresh-context Reviewer pass on the round-2 diff (before commit, per M-tier workflow)** caught
+   a real functional bug the four-column layout introduced: it was gated at `sm:` (640px), but the
+   row's real measured content need is ~930px — so every real width from 640px up to roughly
+   1030px (iPad portrait 768px included) would overflow, reintroducing the exact horizontal-scroll
+   bug round 6 had just fixed, just at a narrower width band that hadn't been verified live. Fixed
+   to a 3-stage layout (`grid-cols-1` stacked / `sm:` 2-up / `xl:` (1280px) the full single row —
+   verified live at 768/1024/1280, all clean). Reviewer also caught that `sm:overflow-x-auto` made
+   this whole class of bug undetectable by any test checking only document-level overflow (fails
+   OPEN) — removed in favor of failing loud if it ever regresses; a stale "deliberately redundant"
+   docblock claim about the two nowrap mechanisms (they're complementary, not redundant — the
+   `min-content` floor only works because of the `whitespace-nowrap` span); a stale `displayNames.js`
+   comment claiming "captions unchanged" when `REFOCUS_CAPTION` was new; a weakened `publishLoading`
+   test that queried by `data-tutorial-target` instead of the real accessible name (the original,
+   stronger assertion actually passes — `Button` only swaps the icon slot while loading, the label
+   text is unconditional); and a too-narrow `order-*` regression regex. All fixed; 19/19 green.
+6. **Toast confirmation added to "Add Spotlight Now"** (product owner, same conversation, after
+   approving the flat redesign): every action-bar choice should confirm what happened + what's next,
+   matching the pattern "Add Spotlight Later" already had (`FOCUS_PUBLISH_LATER_TOAST`). New
+   `FOCUS_ADD_SPOTLIGHT_TOAST` ("Framing saved" / "Now add a spotlight to your reel — you can still
+   publish it whenever you're ready.") fires from `FocusScreen.handleAddSpotlight` before switching
+   to Overlay mode. Publish Now and Refocus were deliberately left as-is: Publish already lands the
+   user on the finished reel with a stronger "Published" toast once the render completes (T8400);
+   Refocus is a pure abort back to the same edit screen with nothing new to confirm. Not re-litigated
+   with the user in this pass — flag if they want one on Refocus/Publish too.
+
+Final structure/rationale fully documented in the component's own doc comment
+(`src/frontend/src/components/FocusPublishActionBar.jsx`) — read that for the authoritative,
+up-to-date design record rather than duplicating it here.
+
 ## Acceptance Criteria
 
-- [ ] A user finishing in Focus has a visible, one-tap path toward publishing
-- [ ] `data-tutorial-target="focus-publish"` present (literal, greppable)
-- [ ] ui-designer-consistent placement/copy; responsive at 375px
-- [ ] Tests pass (unit + the Focus e2e updated)
+- [x] A user finishing in Focus has a visible, one-tap path toward publishing
+- [x] `data-tutorial-target="focus-publish"` present (literal, greppable)
+- [x] ui-designer-consistent placement/copy; responsive at 375px (round 2 redesign above)
+- [ ] Tests pass (unit + the Focus e2e updated) — `FocusPublishActionBar.test.jsx` and
+      `screens/__tests__/focusPublishExit.test.jsx` still need updating for round 2's new
+      copy/structure before this can be checked off

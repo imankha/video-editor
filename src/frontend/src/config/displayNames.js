@@ -54,13 +54,22 @@ export const CLIP_UPLOAD = {
 };
 
 // T8390: Focus's post-export publish-exit action bar (FocusPublishActionBar).
+// Labels renamed 2026-09-08 (product owner): "Publish" -> "Publish Now" and
+// "Add Spotlight" -> "Add Spotlight Now" so the two "now" choices read as a
+// matched pair against "Add Spotlight Later". REFOCUS_CAPTION is new (below).
 export const FOCUS_PUBLISH = {
-  PUBLISH_LABEL: 'Publish',
-  PUBLISH_CAPTION: 'Puts it in Highlight Reels so you can share it.',
-  ADD_SPOTLIGHT_LABEL: 'Add Spotlight',
+  PUBLISH_LABEL: 'Publish Now',
+  PUBLISH_CAPTION: 'Puts it in Highlight Reels so you can share it, as is without a spotlight.',
+  ADD_SPOTLIGHT_LABEL: 'Add Spotlight Now',
   ADD_SPOTLIGHT_LATER_LABEL: 'Add Spotlight Later',
   SPOTLIGHT_CAPTION: 'A spotlight is a glowing highlight that follows your athlete.',
-  REFOCUS_LABEL: 'Refocus (reframe and export again, uses credits)',
+  // 2026-09-08 round 5: split out of the old single string 'Refocus (reframe
+  // and export again, uses credits)' into a title + caption pair, matching
+  // the other three cards' structure (title Button + caption <p>) exactly —
+  // product owner explicitly asked for the parenthetical to become a real
+  // caption line, not button text.
+  REFOCUS_LABEL: 'Refocus',
+  REFOCUS_CAPTION: 'Reframe and export again, uses credits.',
 };
 
 // T8390: "Add Spotlight Later" toast copy, routed by is_auto_created (T8360 split).
@@ -75,4 +84,13 @@ export const FOCUS_PUBLISH_LATER_TOAST = {
     message: 'Highlight Reels join several clips into one video. Single plays stay in Clips. '
       + 'Yours is still a draft, so add a spotlight or publish it from here whenever you want.',
   },
+};
+
+// 2026-09-08: "Add Spotlight Now" confirmation toast (product owner: every
+// FocusPublishActionBar choice should confirm what happened + what's next,
+// same as the existing Add Spotlight Later toast above). Short, since the
+// user isn't leaving the flow -- they land straight in Overlay right after.
+export const FOCUS_ADD_SPOTLIGHT_TOAST = {
+  title: 'Framing saved',
+  message: 'Now add a spotlight to your reel -- you can still publish it whenever you\'re ready.',
 };

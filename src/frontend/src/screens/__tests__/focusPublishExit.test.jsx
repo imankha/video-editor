@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { useState, useCallback } from 'react';
 import { FocusPublishActionBar } from '../../components/FocusPublishActionBar';
-import { FOCUS_PUBLISH_LATER_TOAST } from '../../config/displayNames';
+import { FOCUS_PUBLISH, FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST } from '../../config/displayNames';
 import { usePublishIntentStore } from '../../stores/publishIntentStore';
 
 // T8390: FocusScreen is a very large screen that cannot be mounted in isolation
@@ -39,8 +39,9 @@ function FocusPublishExitHarness({ deps, startOpen = false, isAutoCreated = fals
   const handleAddSpotlight = useCallback(() => {
     setShowExportCompletePreview(false);
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
+    toastSuccess(FOCUS_ADD_SPOTLIGHT_TOAST.title, { message: FOCUS_ADD_SPOTLIGHT_TOAST.message });
     setEditorMode('overlay');
-  }, [setEditorMode, projectId]);
+  }, [setEditorMode, projectId, toastSuccess]);
 
   const handleAddSpotlightLater = useCallback(() => {
     setShowExportCompletePreview(false);
@@ -124,8 +125,8 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     const deps = makeDeps();
     render(<FocusPublishExitHarness deps={deps} startOpen />);
 
-    expect(screen.getByRole('button', { name: 'Publish' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Add Spotlight', exact: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL })).toBeTruthy();
+    expect(screen.getByRole('button', { name: FOCUS_PUBLISH.ADD_SPOTLIGHT_LABEL })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Add Spotlight Later' })).toBeTruthy();
     expect(screen.getByText(/^Refocus/)).toBeTruthy();
 
@@ -133,18 +134,22 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     expect(panel.textContent.toLowerCase()).not.toContain('skip');
   });
 
-  it('"Add Spotlight" switches to overlay mode and fires no deferred/declined event/toast', () => {
+  it('"Add Spotlight Now" switches to overlay mode, confirms via toast, fires no deferred/declined event', () => {
     const deps = makeDeps();
     render(<FocusPublishExitHarness deps={deps} startOpen />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Spotlight', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.ADD_SPOTLIGHT_LABEL }));
 
     expect(deps.setEditorMode).toHaveBeenCalledWith('overlay');
     expect(deps.recordAchievement).not.toHaveBeenCalled();
     expect(deps.goToProjectManager).not.toHaveBeenCalled();
     expect(deps.triggerExport).not.toHaveBeenCalled();
     expect(usePublishIntentStore.getState().projectId).toBeNull();
-    expect(deps.toastSuccess).not.toHaveBeenCalled();
+    // 2026-09-08: every action-bar choice confirms what happened + what's next.
+    expect(deps.toastSuccess).toHaveBeenCalledWith(
+      FOCUS_ADD_SPOTLIGHT_TOAST.title,
+      expect.objectContaining({ message: FOCUS_ADD_SPOTLIGHT_TOAST.message }),
+    );
   });
 
   it('"Add Spotlight Later" records overlay_deferred, shows the MULTI-CLIP toast, and navigates home; no render', () => {
@@ -193,7 +198,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     const deps = makeDeps();
     render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }));
 
     expect(deps.recordAchievement).toHaveBeenCalledTimes(1);
     expect(deps.recordAchievement).toHaveBeenCalledWith('overlay_declined');
@@ -212,7 +217,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     const deps = makeDeps();
     render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
 
-    const publishBtn = screen.getByRole('button', { name: 'Publish' });
+    const publishBtn = screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL });
     fireEvent.click(publishBtn);
     fireEvent.click(publishBtn); // same tick, preview hasn't unmounted yet
 
@@ -227,7 +232,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     const deps = makeDeps();
     render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }));
     expect(usePublishIntentStore.getState().projectId).toBe(42);
 
     act(() => { vi.advanceTimersByTime(PUBLISH_INTENT_TIMEOUT_MS); });
@@ -249,7 +254,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     render(<FocusPublishExitHarness deps={deps} />);
 
     fireEvent.click(screen.getByText('fire-export-complete'));
-    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }));
 
     // overlay_offered (on completion) + overlay_declined (Publish) — exactly
     // one entry event and one exit event, never both deferred AND declined.
