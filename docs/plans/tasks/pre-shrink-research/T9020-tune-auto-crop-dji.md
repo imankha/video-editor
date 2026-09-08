@@ -1,4 +1,4 @@
-# T9010: Tune auto-crop on the real DJI folder (parameter sweep + ball-in-frame check)
+# T9020: Tune auto-crop on the real DJI folder (parameter sweep + ball-in-frame check)
 
 **Status:** TODO
 **Impact:** 7
@@ -27,7 +27,7 @@ A parameter sweep of the existing heuristic against the four real DJI segments, 
 an offline ground truth: ball + player bounding boxes from YOLO on sampled proxy frames.
 Output = recommended defaults (grid, threshold, padding, sample count, sample resolution)
 committed to `autoCrop.js` with a table of evidence in the README, and a repeatable
-`qa/` script so the sweep can be re-run when the heuristic changes (T9050 tweening will
+`qa/` script so the sweep can be re-run when the heuristic changes (T9060 tweening will
 need exactly this harness). The heuristic stays pure and DOM-free; frame sampling stays
 in `ui/segmentList.js`.
 
@@ -62,10 +62,10 @@ in `ui/segmentList.js`.
   detection worked; `dji-study-assets/autocrop_*_annotated.jpg`)
 
 ### Related Tasks
-- Depends on: T9000 (the real-folder run records whether the current rects looked
+- Depends on: T9010 (the real-folder run records whether the current rects looked
   usable - that observation seeds the sweep; also proves the tool runs on this folder)
-- Blocks: T9020 (other sources use the tuned defaults as the baseline), T9050
-  (tweening evolves this heuristic; needs this harness), T9040 (size-cap bitrate is
+- Blocks: T9030 (other sources use the tuned defaults as the baseline), T9060
+  (tweening evolves this heuristic; needs this harness), T9050 (size-cap bitrate is
   parked until auto-crop is proven - this task is half of that proof)
 - Related: T8840 (tool), T8845 (ports `pipeline/` - keep it DOM-free)
 
@@ -105,7 +105,7 @@ in `ui/segmentList.js`.
 5. [ ] Re-run the tool on the folder; confirm the suggested rects match the sweep's
    winner visually on all four segments; record the evidence table in the README.
 6. [ ] Note in the Progress Log what the static heuristic could NOT do (this is the
-   brief for T9050 tweening).
+   brief for T9060 tweening).
 
 ### Progress Log
 
@@ -123,4 +123,4 @@ padding 3%, min axis 10%, 8 samples at 160 x 90 across the middle 80%.
 - [ ] Constants updated in `autoCrop.js` with tests encoding the real findings;
       `pipeline/` remains DOM-free (grep-confirmed)
 - [ ] README "Auto-crop evidence" table filled; the static heuristic's limits written
-      down as T9050's brief
+      down as T9060's brief

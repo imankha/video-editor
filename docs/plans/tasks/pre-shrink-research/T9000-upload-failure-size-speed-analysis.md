@@ -1,4 +1,4 @@
-# T8990: Upload-failure analysis: which file-size x connection-speed combinations stop users uploading (sets the milestone goal)
+# T9000: Upload-failure analysis: which file-size x connection-speed combinations stop users uploading (sets the milestone goal)
 
 **Status:** TODO
 **Impact:** 8
@@ -14,7 +14,7 @@ a lost user into a successful upload. Nobody has the production number behind th
 Every shrink figure so far (T8830, T8832, T8840) was measured on ONE dev laptop against
 ONE 50 GB DJI folder; the target audience uploads 1-4 GB Trace/Veo exports and phone
 clips from ordinary laptops on ordinary home Wi-Fi. Without the real distribution of
-(file size, connection speed, outcome) the later research tasks (T9030 benchmark, T9040
+(file size, connection speed, outcome) the later research tasks (T9040 benchmark, T9050
 cost model) have no target to hit, and the integration epic could ship a feature that
 optimizes the wrong case.
 
@@ -71,7 +71,7 @@ the analytics rules (in-house, aggregates-only, counts not events, no new Postgr
 ### Related Tasks
 - Depends on: none (first task of the Pre-Shrink Research epic; see
   [EPIC.md](EPIC.md))
-- Blocks: T9030 (benchmark needs the target bandwidths), T9040 (cost model needs the
+- Blocks: T9040 (benchmark needs the target bandwidths), T9050 (cost model needs the
   size/speed distribution and the goal statement)
 - Related: T7510 (attempted vs successful everywhere), T7970 (real failure sites),
   T7890 (pre-upload funnel beacons), T8950 (pricing audit for high-res sources), the
@@ -102,7 +102,7 @@ the analytics rules (in-house, aggregates-only, counts not events, no new Postgr
 - **Sizes to expect**: the epic's own evidence puts a DJI 8K game at ~50 GB (97 Mbps),
   a Trace/Legends two-half export at ~3.1 GB (4.67 Mbps), phone clips at MBs. The matrix
   should say how much of production is each shape - the upload distribution IS the
-  input T9030's file-type survey extends with codec/resolution.
+  input T9040's file-type survey extends with codec/resolution.
 - If the data is too thin for a cell, say so in the cell rather than interpolating.
 
 ## Implementation
@@ -138,7 +138,7 @@ milestone). Ordered first on purpose: it defines success for everything after it
 - [ ] One concrete goal statement (X GB / Y Mbps / Z hours / output cap C GB) is
       written into this epic's EPIC.md with the cells it rests on
 - [ ] The production distribution of upload sizes (and durations/dimensions where
-      present) is recorded for T9030 to extend
+      present) is recorded for T9040 to extend
 - [ ] Every non-inferable dimension is named with its would-be beacon; none built
 - [ ] No app code changed; script is read-only (no R2 or Postgres writes) and lives in
       `scripts/`

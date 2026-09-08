@@ -1,4 +1,4 @@
-# T9070: Poster + preview frames from the `.LRF` proxy at upload time (T8836 row 3)
+# T9080: Poster + preview frames from the `.LRF` proxy at upload time (T8836 row 3)
 
 **Status:** TODO
 **Impact:** 4
@@ -48,10 +48,10 @@ location and a backfill path); the only new thing is the client supplying the by
   candidate 3 measurement (cite)
 - `docs/plans/tasks/universal-upload/EPIC.md` decision 2 (proxies stay client-side)
 - `docs/plans/tasks/T8840-design.md` R10 - the `.LRF` field of view might not match
-  the `.MP4` on some camera modes; T9000's "crop is right" check is the evidence
+  the `.MP4` on some camera modes; T9010's "crop is right" check is the evidence
 
 ### Related Tasks
-- Depends on: user confirmation of T8836 row 3; T9000 (R10 verdict: proxy framing
+- Depends on: user confirmation of T8836 row 3; T9010 (R10 verdict: proxy framing
   matches the main file on the real folder)
 - Blocks: nothing hard. Feeds T8850 (filmstrip frames use the same mechanism)
 - Related: poster backfill (`POST /api/admin/backfill-share-posters`), the share unfurl
@@ -70,7 +70,7 @@ location and a backfill path); the only new thing is the client supplying the by
   selector is cheap to reuse; otherwise 30% is fine for v1.
 - Lower q / smaller target if bandwidth matters more than the extra ms (T8836 note);
   210 KB is already negligible next to a multi-GB upload.
-- Coordinate with T9060: both extend the same analyze step; keep the two additions as
+- Coordinate with T9070: both extend the same analyze step; keep the two additions as
   separate, greppable functions.
 
 ## Implementation

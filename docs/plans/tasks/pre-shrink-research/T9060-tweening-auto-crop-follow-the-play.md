@@ -1,4 +1,4 @@
-# T9050: Tweening auto-crop: a keyframed crop path that follows the play
+# T9060: Tweening auto-crop: a keyframed crop path that follows the play
 
 **Status:** TODO
 **Impact:** 7
@@ -16,7 +16,7 @@ player detail - needs a rect that MOVES with play: smaller, re-centred as the ac
 shifts, smoothed so it never jitters. T5650 §9 already showed the signal exists (ball
 detected in every tested frame on the proxy) and named the missing piece: a smoother
 (Kalman / 1-euro) for a non-jittery virtual camera path. This is the "follow the play"
-upgrade to the heuristic T9010 tunes.
+upgrade to the heuristic T9020 tunes.
 
 ## Solution
 
@@ -61,7 +61,7 @@ vs "Fixed".
   path (v1), not per-keyframe editing
 - `scripts/shrink-tool/tool.js` - `autoCropAllSegments`, `cropFor` / `setCropFor`,
   the M6 output-dimension derivation (uses path SIZE), "Follow the play" toggle
-- `scripts/shrink-tool/qa/autocrop-sweep.mjs` - T9010's harness; extend scoring to a
+- `scripts/shrink-tool/qa/autocrop-sweep.mjs` - T9020's harness; extend scoring to a
   path: ball-in-rect rate per sampled timestamp using the path evaluated at that time
 - `scripts/shrink-tool/README.md` - results row(s)
 - `docs/plans/research/T5650-dji-8k-ingest-reduction-study.md` §9 (ball detection +
@@ -72,11 +72,11 @@ vs "Fixed".
   hint" is not a translation problem. Read-only.
 
 ### Related Tasks
-- Depends on: T9010 (tuned static heuristic + ground-truth harness), T9020 (which
+- Depends on: T9020 (tuned static heuristic + ground-truth harness), T9030 (which
   sources are in scope - panning cameras likely stay static/full-frame)
 - Blocks: nothing in this epic; informs T8845 (port includes `cropPath.js`) and T8850
   (crop step UI shows a moving rect)
-- Related: T9040 (a path's constant size feeds `decideShrink`'s output pixels), the
+- Related: T9050 (a path's constant size feeds `decideShrink`'s output pixels), the
   Focus (framing) keyframe system in `.claude/knowledge/keyframes-framing.md` - do NOT
   reuse its stores; only its interpolation shape
 
@@ -94,7 +94,7 @@ vs "Fixed".
   every 2 s in the output (T8845 note) - irrelevant to the path but do not confuse the
   two "keyframe" meanings in code names (`cropKeyframes` vs encoder key frames).
 - **Never lose play**: the path must keep 100% of detected ball positions in-rect
-  (same bar as T9010); if the smoother would lag the ball out of frame, widen the
+  (same bar as T9020); if the smoother would lag the ball out of frame, widen the
   constant size rather than speed up the pan.
 - **Manifest compatibility**: a plain rect must remain valid (`isCropPath` false ->
   today's behaviour, byte-identical output). Add a manifest `version` bump only if the
@@ -116,7 +116,7 @@ vs "Fixed".
    passes the path through; manifest round-trip + resume test.
 4. [ ] UI: rect rendered at previewed time, scrub, "Follow the play" / "Fixed" toggle,
    drag = whole-path offset.
-5. [ ] Run on the four DJI segments: record kept-area vs T9010's static rect, output
+5. [ ] Run on the four DJI segments: record kept-area vs T9020's static rect, output
    pixels/bytes/time delta, ball-in-rect rate, and a playback check for jitter (user
    judges at 1x). README row + Progress Log.
 6. [ ] Update this epic's EPIC.md with the verdict: is the pan worth its complexity for
@@ -124,14 +124,14 @@ vs "Fixed".
 
 ### Progress Log
 
-**2026-09-08**: Filed. Brief comes from T9010's recorded limits of the static heuristic.
+**2026-09-08**: Filed. Brief comes from T9020's recorded limits of the static heuristic.
 
 ## Acceptance Criteria
 
 - [ ] `cropPath.js` + `suggestCropPath` are pure/DOM-free and unit-tested (velocity
       bound, clamp, still-hold, plain-rect passthrough)
 - [ ] On the real DJI segments the path keeps 100% of detected ball positions in-rect
-      and reduces output width vs the T9010 static rect by a recorded amount
+      and reduces output width vs the T9020 static rect by a recorded amount
 - [ ] No visible jitter at 1x playback (user verdict recorded); no snap on direction
       change
 - [ ] Manifest round-trip + resume replay identical paths; old plain-rect manifests

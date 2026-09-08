@@ -1,4 +1,4 @@
-# T9040: Cost model: when NOT to shrink, and the size-cap-driven bitrate rule
+# T9050: Cost model: when NOT to shrink, and the size-cap-driven bitrate rule
 
 **Status:** TODO
 **Impact:** 8
@@ -18,7 +18,7 @@ video types and sizes, with one deliberate asymmetry: on a slow connection the t
 should automatically spend MORE time shrinking, because that still saves total time.
 Intuition is not enough - the rule must come with numbers.
 
-A second idea has been explicitly parked until auto-crop is proven (T9010/T9020):
+A second idea has been explicitly parked until auto-crop is proven (T9020/T9030):
 **size-cap-driven bitrate** - instead of fixed preset bitrates, derive the target bitrate
 from a hard total-upload cap (~8 GB per game) and let a source-bits-per-pixel quality
 floor choose the output resolution. This task picks that idea back up now that the crop
@@ -33,7 +33,7 @@ portable by T8845) that replaces the two-constant gate:
 decideShrink({
   totalBytes, sourceBitrateBps, durationSec, sourceWidth, sourceHeight, sourceFps,
   cropAreaFraction,            // from auto-crop (1.0 = full frame)
-  measuredUploadMbps | null,   // from a short upload probe or T8990's default bucket
+  measuredUploadMbps | null,   // from a short upload probe or T9000's default bucket
   probeMultiplier | null,      // runtime speed probe (design §4.1); null before probe
   probePixelsPerSecond | null,
   onBattery | null, thermalThrottled | null,   // navigator.getBattery() where available
@@ -43,7 +43,7 @@ decideShrink({
         estShrinkSec, estUploadSec, estTotalSec, estOriginalUploadSec, reason }
 ```
 
-fitted to T9030's measured numbers and T8990's bandwidth distribution, with the
+fitted to T9040's measured numbers and T9000's bandwidth distribution, with the
 "when NOT to shrink" boundaries stated explicitly and the slow-connection asymmetry
 built in. Documented as a decision table in EPIC.md; wired into the tool's offer line so
 the user can see the verdict on real files. App integration (T8850 offer gating, T8860
@@ -74,13 +74,13 @@ Modal fallback) consumes it later.
   (ffmpeg/NVENC transcode of a whole game) - measure it, do not reuse these numbers
 - `src/backend/app/services/storage_credits.py` - `R2_RATE_PER_GB_MONTH = 0.015`,
   `MARGIN = 0.10` (storage side of the ledger; smaller uploads also cost less to store)
-- `docs/plans/research/pre-shrink-benchmark.md` - T9030's numbers (input)
-- `docs/plans/tasks/pre-shrink-research/EPIC.md` - "Milestone goal" (T8990) and the
+- `docs/plans/research/pre-shrink-benchmark.md` - T9040's numbers (input)
+- `docs/plans/tasks/pre-shrink-research/EPIC.md` - "Milestone goal" (T9000) and the
   decision table this task adds
 
 ### Related Tasks
-- Depends on: T8990 (bandwidth distribution + goal), T9030 (time/quality per source
-  type and machine), T9010 + T9020 (auto-crop proven - the explicit precondition for
+- Depends on: T9000 (bandwidth distribution + goal), T9040 (time/quality per source
+  type and machine), T9020 + T9030 (auto-crop proven - the explicit precondition for
   un-parking the size-cap idea)
 - Blocks: T8850 (offer gating replaces bytes+bitrate constants with `decideShrink`),
   T8860 (Modal fallback consumes `mode: 'modal'` and its cost bound)
@@ -120,7 +120,7 @@ Modal fallback) consumes it later.
 ## Implementation
 
 ### Steps
-1. [ ] Write the cost equations with T9030's measured constants; produce the
+1. [ ] Write the cost equations with T9040's measured constants; produce the
    break-even bandwidth curve per source type and the Modal $ per source-minute.
 2. [ ] Implement `pipeline/decision.js` (`decideShrink`, `deriveSizeCapBitrate`) with
    unit tests covering: DJI 50 GB on 5/10/25/50 Mbps; Legends export (must be `'none'`);
@@ -137,7 +137,7 @@ Modal fallback) consumes it later.
 ### Progress Log
 
 **2026-09-08**: Filed. Carries the parked "size-cap-driven bitrate (~8 GB cap, source-bpp
-quality floor chooses resolution)" idea, sequenced after T9010/T9020 as agreed.
+quality floor chooses resolution)" idea, sequenced after T9020/T9030 as agreed.
 
 ## Acceptance Criteria
 

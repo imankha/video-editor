@@ -36,11 +36,11 @@ own smoke fixture + frame-count equivalence check run against the ported modules
 - `src/frontend/src/services/shrink/{demux,decode,cropScale,encode,mux,checkpoint,probe,presets,autoCrop,shrinkSegment}.js`
   - MOVED from `scripts/shrink-tool/pipeline/` (git mv; no behaviour change in the move
   commit, per the refactoring rules). Plus whatever the research epic added there
-  (`decision.js` from T9040, `cropPath.js` from T9050) - port the folder as it stands at
+  (`decision.js` from T9050, `cropPath.js` from T9060) - port the folder as it stands at
   the end of research, per its hand-off note
 - `src/frontend/src/services/shrink/capability.js` - `canShrink(codec, w, h)` memoized
   per codec string + the runtime speed probe -> Modal fallback decision (the tool's
-  "too slow" verdict becomes "use server-side" here; T9040's `decideShrink` supplies the
+  "too slow" verdict becomes "use server-side" here; T9050's `decideShrink` supplies the
   rule if it landed)
 - `src/frontend/package.json` - add `mp4box` (2.4.1 exact) + `mp4-muxer`
 - `scripts/shrink-tool/` - re-pointed at the app modules or deleted (decide: keeping the
@@ -50,8 +50,8 @@ own smoke fixture + frame-count equivalence check run against the ported modules
 ### Related Tasks
 - Depends on: **the Pre-Shrink Research epic complete**
   ([../pre-shrink-research/EPIC.md](../pre-shrink-research/EPIC.md)) - in particular
-  T9000 (the user's real-folder sign-off on T8840, the hard gate this task always had),
-  T9040 (decision rule, if it changes `pipeline/`), T9050 (crop path shape, if
+  T9010 (the user's real-folder sign-off on T8840, the hard gate this task always had),
+  T9050 (decision rule, if it changes `pipeline/`), T9060 (crop path shape, if
   adopted); T8838 (share the probe module)
 - Blocks: T8850, T8860
 
@@ -63,7 +63,7 @@ own smoke fixture + frame-count equivalence check run against the ported modules
   interval) so later seek/annotate behaviour on the uploaded file is sane (carry from
   the tool if T8840 already did it; add here if not).
 - All T8840 caveats remain binding.
-- Per-segment crops (and a crop PATH if T9050 adopted one) travel in the worker
+- Per-segment crops (and a crop PATH if T9060 adopted one) travel in the worker
   protocol's `crop` field; the message shape above is the minimum, extend it in the
   same commit as the port if the pipeline's `crop` type changed.
 

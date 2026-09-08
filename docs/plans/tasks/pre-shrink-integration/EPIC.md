@@ -28,12 +28,12 @@ dependencies (now on the research epic) changed.
   FIRST as its own epic; integration follows as a port of what the research settles.
   Consequences for the three tasks here:
   - T8845 ports whatever `pipeline/` contains at the end of research (possibly a
-    `decision.js` from T9040 and `cropPath.js` from T9050), not the T8840 snapshot.
-  - T8850's offer gating uses T9040's `decideShrink` rule instead of the two constants
+    `decision.js` from T9050 and `cropPath.js` from T9060), not the T8840 snapshot.
+  - T8850's offer gating uses T9050's `decideShrink` rule instead of the two constants
     (`SHRINK_OFFER_MIN_BYTES` / `SHRINK_OFFER_MIN_BITRATE`); its crop step shows
-    per-segment automated crops (and a moving rect if T9050 says so), not "one static
+    per-segment automated crops (and a moving rect if T9060 says so), not "one static
     rect".
-  - T8860's Modal fallback is bounded by T9040's cost rule.
+  - T8860's Modal fallback is bounded by T9050's cost rule.
 - Design decisions that still govern the UI and copy live in the Universal Upload epic:
   [../universal-upload/EPIC.md](../universal-upload/EPIC.md) decisions 2, 4, 5, 6 and the
   approved artifact screens E + F. This epic does not restate them.

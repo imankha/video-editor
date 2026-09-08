@@ -1,4 +1,4 @@
-# T9030: Benchmark shrink-time + upload-time vs visual quality across ALL file types (with a production file-type survey)
+# T9040: Benchmark shrink-time + upload-time vs visual quality across ALL file types (with a production file-type survey)
 
 **Status:** TODO
 **Impact:** 9
@@ -30,7 +30,7 @@ Two deliverables, both numbers:
    (`capability_impression:shrink_*` rows in `user_actions`) for the share of uploaders
    whose browser can decode/encode each codec family + resolution bucket.
 2. **The benchmark matrix**: source type x preset x machine -> shrink wall-clock, output
-   bytes, upload time at each target bandwidth (from T8990's buckets), total time vs
+   bytes, upload time at each target bandwidth (from T9000's buckets), total time vs
    upload-original time, and a quality score on player regions. Weighted by (1), this
    says whether the thesis holds where production lives, not just on the 8K corner case.
 
@@ -57,23 +57,23 @@ summarized in this epic's EPIC.md. No app code ships.
   (beacon vocabulary: `shrink_probe_total`, `shrink_decode_{yes|no|unavailable}_{family}_
   {bucket}`, `shrink_encode_{yes|no|unavailable}`, `shrink_probe_failed`; read via
   `LIKE 'capability_impression:shrink_%'`, platform column present)
-- `scripts/analyze_upload_failures.py` - T8990's read-only fleet walk; EXTEND it with the
+- `scripts/analyze_upload_failures.py` - T9000's read-only fleet walk; EXTEND it with the
   survey columns rather than writing a second walker
 - `docs/plans/analytics-playbook.md` - aggregates-only conventions
 - `docs/plans/research/pre-shrink-benchmark.md` - NEW: the results doc
 - Fixtures (never committed): DJI folder (8K HEVC 97 Mbps), Trace/Legends exports (1080p
-  4.67 Mbps), phone clip (720p), `formal annotations/test.short/`; Veo if T9020 obtained
+  4.67 Mbps), phone clip (720p), `formal annotations/test.short/`; Veo if T9030 obtained
   one
 - `docs/plans/tasks/upscale-quality/T4700-sr-quality-testbed.md` - the app's planned SR
   quality testbed (PSNR/SSIM/LPIPS + blind A/B). Do NOT build it here; borrow its
   metric choices so the two efforts stay comparable
 
 ### Related Tasks
-- Depends on: T8990 (target bandwidth buckets + goal statement), T9000 (real Sharp
+- Depends on: T9000 (target bandwidth buckets + goal statement), T9010 (real Sharp
   timing on two machines; the second machine's row is this benchmark's "ordinary
-  laptop" column), T9010/T9020 (crop rects per source, since crop changes output
+  laptop" column), T9020/T9030 (crop rects per source, since crop changes output
   pixels and therefore time)
-- Blocks: T9040 (the cost model is fitted to these numbers)
+- Blocks: T9050 (the cost model is fitted to these numbers)
 - Related: T8950 (credits for high-res sources - output bytes here feed that audit),
   T8838 (census is an input, not something to extend)
 
@@ -81,10 +81,10 @@ summarized in this epic's EPIC.md. No app code ships.
 - **Time model**: the pipeline is encode-bound (T8830 caveat 4), so shrink time keys
   off OUTPUT pixels x fps x duration / `pixelsPerSecond`, not input resolution. Measure
   `pixelsPerSecond` per machine per preset with the tool's own probe and confirm against
-  the full-segment wall-clock from T9000 (this also validates the estimator's +/-15%
+  the full-segment wall-clock from T9010 (this also validates the estimator's +/-15%
   bar, R7).
 - **Upload time**: computed, not measured, per bandwidth bucket: `bytes * 8 / mbps`.
-  Use T8990's buckets. Total = shrink + upload(shrunk) vs upload(original). Report the
+  Use T9000's buckets. Total = shrink + upload(shrunk) vs upload(original). Report the
   break-even bandwidth per source type: above it, shrinking loses.
 - **Quality on players, not whole-frame**: crop a player/ball region from the source
   and from each output at matched viewing size; compute SSIM/VMAF on those regions
@@ -98,13 +98,13 @@ summarized in this epic's EPIC.md. No app code ships.
 - **Survey**: bitrate = `video_size * 8 / video_duration`; bucket resolution as the
   census does (`deriveResBucket`). Exclude test accounts (imankh prod payment test,
   e2e@test.local, fixture clones). Pair tries and successes where a count is shown.
-- Machines: the dev laptop (RTX 4060) and T9000's second machine at minimum; a third
+- Machines: the dev laptop (RTX 4060) and T9010's second machine at minimum; a third
   (integrated GPU Windows laptop) if available. Record CPU/GPU/OS/browser per row.
 
 ## Implementation
 
 ### Steps
-1. [ ] Extend T8990's script with the survey columns; run on prod (read-only); write
+1. [ ] Extend T9000's script with the survey columns; run on prod (read-only); write
    the distribution tables (resolution bucket x bitrate bucket x count; codec family
    capability share from the census).
 2. [ ] For each source type and preset (Sharp, Small), on each machine: run the

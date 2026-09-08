@@ -130,7 +130,7 @@ parse later, or into T8840/T8850 directly) and row 3 (`.LRF`-proxy posters repla
 
 **2026-09-08 (roadmap reorganization, Video Pre-Shrink milestone)** - rows 2 and 3 were
 filed PROVISIONALLY as small tasks in the Pre-Shrink Research epic so they stop dangling
-here: row 2 -> **T9060** (`stss` keyframe index client-side), row 3 -> **T9070** (`.LRF`
+here: row 2 -> **T9070** (`stss` keyframe index client-side), row 3 -> **T9080** (`.LRF`
 proxy posters at upload time). Status stays WAITING ON USER: the user's pick is still the
 gate. Confirm = tick step 4; veto = close the task(s) and tick step 4 with the declined
 row noted.

@@ -1,4 +1,4 @@
-# T9060: Extract the `stss` keyframe index client-side (T8836 row 2)
+# T9070: Extract the `stss` keyframe index client-side (T8836 row 2)
 
 **Status:** TODO
 **Impact:** 4

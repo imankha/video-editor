@@ -1,4 +1,4 @@
-# T9020: Trial auto-crop on other camera sources (Trace, Veo, iPhone, existing fixtures)
+# T9030: Trial auto-crop on other camera sources (Trace, Veo, iPhone, existing fixtures)
 
 **Status:** TODO
 **Impact:** 6
@@ -19,20 +19,20 @@ results before anything integrates.
 
 ## Solution
 
-Run the tuned heuristic (T9010 defaults) on every camera source we can get, using the
-same sweep + ground-truth harness T9010 builds, and record one row per source in a README
+Run the tuned heuristic (T9020 defaults) on every camera source we can get, using the
+same sweep + ground-truth harness T9020 builds, and record one row per source in a README
 results table: does it produce a usable rect, how much frame it keeps, what it gets wrong.
 Where a source has no fixture (Veo), obtain one or record "not tested" explicitly. The
 deliverable is a per-source verdict (use as-is / needs a source-specific rule / never
-auto-crop this source) that T9040's decision rule and T8850's UI consume.
+auto-crop this source) that T9050's decision rule and T8850's UI consume.
 
 ## Context
 
 ### Relevant Files (REQUIRED)
-- `scripts/shrink-tool/pipeline/autoCrop.js` - the heuristic under test (post-T9010
+- `scripts/shrink-tool/pipeline/autoCrop.js` - the heuristic under test (post-T9020
   defaults); may gain a `sourceHint` option ONLY if a per-source rule is justified by
   the data
-- `scripts/shrink-tool/qa/autocrop-sweep.mjs` + `qa/autocrop-groundtruth.py` - T9010's
+- `scripts/shrink-tool/qa/autocrop-sweep.mjs` + `qa/autocrop-groundtruth.py` - T9020's
   harness, reused as-is
 - `scripts/shrink-tool/ui/segmentList.js` - `sampleMotionFrames`; phone clips are
   seconds long, so the middle-80% / 8-sample assumption needs checking
@@ -55,8 +55,8 @@ auto-crop this source) that T9040's decision rule and T8850's UI consume.
   may be offered independently of re-encoding later)
 
 ### Related Tasks
-- Depends on: T9010 (tuned defaults + the harness)
-- Blocks: T9040 (per-source verdicts are an input to "when not to shrink"), T9050
+- Depends on: T9020 (tuned defaults + the harness)
+- Blocks: T9050 (per-source verdicts are an input to "when not to shrink"), T9060
   (tweening must be designed knowing whether panning sources are in or out of scope)
 - Related: T8800 (intake already classifies camera family from filename/metadata -
   reuse that classification if a per-source rule is needed rather than inventing a
@@ -72,7 +72,7 @@ auto-crop this source) that T9040's decision rule and T8850's UI consume.
 - **Letterboxing / static overlays**: Trace/Veo exports may carry a scoreboard, logo,
   or black bars. Those are static and WILL be dropped by a variance heuristic, which is
   correct for bars and questionable for a scoreboard the parent may want. Record it;
-  decide in T9040/T8850, not here.
+  decide in T9050/T8850, not here.
 - **Phone clips**: 10 s clips have ~8 s in the middle 80%; the heuristic may see one
   play and crop tightly around it. Also portrait orientation - `resolveCropRect`
   clamps on both axes so nothing breaks, but the result should be checked.
@@ -87,15 +87,15 @@ auto-crop this source) that T9040's decision rule and T8850's UI consume.
 ### Steps
 1. [ ] Inventory the available fixtures per source family; request a Veo export from
    the user; note gaps.
-2. [ ] Build ground truth for one representative file per source (T9010's YOLO script;
+2. [ ] Build ground truth for one representative file per source (T9020's YOLO script;
    ball may be undetectable on 1080p far-side - record detection rate too).
-3. [ ] Run the sweep harness with T9010 defaults on each; record rect, kept-area,
+3. [ ] Run the sweep harness with T9020 defaults on each; record rect, kept-area,
    ball-in-rect, players-in-rect, sampling time (proxy vs main file).
 4. [ ] Classify each source: usable / near-full-frame (correct no-op) / harmful. For
    harmful cases, test the >90%-area -> `null` guard and any minimal per-source rule
    the data justifies.
 5. [ ] Fill the README "Auto-crop by source" table; write the per-source verdict into
-   [EPIC.md](EPIC.md) so T9040 and T8850 read one place.
+   [EPIC.md](EPIC.md) so T9050 and T8850 read one place.
 
 ### Progress Log
 

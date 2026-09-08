@@ -35,7 +35,7 @@ This task now lives in the Pre-Shrink Integration epic ([EPIC.md](EPIC.md)).
 - Depends on: **the Pre-Shrink Research epic complete**
   ([../pre-shrink-research/EPIC.md](../pre-shrink-research/EPIC.md)), then T8845
   (worker + client), T8850 (`shrinkPlan` in the payload), T8810 (uniform N-file upload
-  path). Research input this task consumes: T9040 (when the device probes too slow, the
+  path). Research input this task consumes: T9050 (when the device probes too slow, the
   Modal fallback is bounded by the cost rule; `mode: 'none'` means upload originals)
 - Blocks: nothing (shrink feature complete after this)
 
@@ -63,7 +63,7 @@ This task now lives in the Pre-Shrink Integration epic ([EPIC.md](EPIC.md)).
   allowed, but it must warn.
 - Modal fallback (too-slow device): the server cannot shrink what it does not have, so
   this path uploads the ORIGINAL first and transcodes server-side; it saves storage and
-  credits, never upload time. T9040's cost rule decides whether it is offered at all.
+  credits, never upload time. T9050's cost rule decides whether it is offered at all.
 - Page close during shrink: the browser will prompt via the existing beforeunload guard
   if one exists for uploads; if none exists, add nothing new (out of scope), but verify
   a reload leaves no corrupt game (the pending-game + activate flow already covers
@@ -95,7 +95,7 @@ This task now lives in the Pre-Shrink Integration epic ([EPIC.md](EPIC.md)).
 
 **2026-09-08**: Moved from `docs/plans/tasks/universal-upload/` into the Video Pre-Shrink
 milestone (Pre-Shrink Integration epic). Links re-pointed; dependencies now include the
-Pre-Shrink Research epic and T9040's cost rule for the Modal fallback.
+Pre-Shrink Research epic and T9050's cost rule for the Modal fallback.
 
 ## Acceptance Criteria
 

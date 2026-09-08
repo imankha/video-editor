@@ -30,17 +30,17 @@ lives in the Pre-Shrink Integration epic ([EPIC.md](EPIC.md)).
 - `src/frontend/src/components/GameDetailsModal.jsx` - takeover swap (mobile `fixed inset-0`,
   desktop widen to `max-w-2xl`), carry `shrinkPlan` in the submit payload
 - `src/frontend/src/constants/uploadConstants.js` - NEW or extend: `SHRINK_OFFER_MIN_BYTES`
-  (or, if T9040 landed, the inputs `decideShrink` needs instead of the constants)
+  (or, if T9050 landed, the inputs `decideShrink` needs instead of the constants)
 
 ### Related Tasks
 - Depends on: **the Pre-Shrink Research epic complete**
   ([../pre-shrink-research/EPIC.md](../pre-shrink-research/EPIC.md)), then T8845
   (`capability.canShrink`, `presets.js` estimator, and `decision.js` / `cropPath.js` if
   research added them), T8820 (strip renders the "Will shrink to ~{size}" badge), T8800
-  (`proxies` map for preview frames). Research inputs this UI consumes: T9040
-  (`decideShrink` replaces the bytes+bitrate gate), T9010/T9050 (per-segment automated
-  crops; a moving rect if tweening was adopted), T9060 (`stss` times for filmstrip
-  seeks), T9070 (proxy frames mechanism)
+  (`proxies` map for preview frames). Research inputs this UI consumes: T9050
+  (`decideShrink` replaces the bytes+bitrate gate), T9020/T9060 (per-segment automated
+  crops; a moving rect if tweening was adopted), T9070 (`stss` times for filmstrip
+  seeks), T9080 (proxy frames mechanism)
 - Blocks: T8860
 
 ### T8830 finding this task must respect
@@ -60,10 +60,10 @@ under-estimate 8K sources and over-estimate small ones.
   preset target, so a bytes-only gate would offer to "shrink" a file that cannot get
   smaller; the DJI 8K files are ~97 Mbps) AND `canShrink(...)` resolved true for every
   selected video's codec. Bitrate = `file.size * 8 / durationSeconds` from the intake's
-  existing per-file metadata - no new probe. **If T9040 landed, `decideShrink` IS the
+  existing per-file metadata - no new probe. **If T9050 landed, `decideShrink` IS the
   gate** (mode `'none'` = no card) and the two constants become its defaults. **Expectation
   copy before starting** (T8840 caveat 10): shrinking pegs the machine for roughly the
-  source's duration divided by the measured multiplier (use T9000/T9030's recorded Sharp
+  source's duration divided by the measured multiplier (use T9010/T9040's recorded Sharp
   number, do not guess) - say "about {t}; your computer will be busy while this runs",
   always prefixed "about". Card copy: "This
   upload is big - {size}" / "That's around {t} of uploading. Shrink it first and save
@@ -79,12 +79,12 @@ under-estimate 8K sources and over-estimate small ones.
   hit boxes on coarse pointers, Pointer Events + `setPointerCapture` + `touch-none`,
   clamped to the frame, min 10% per axis. Outside area scrimmed `bg-black/60`.
   Stored normalized (0..1). Default rect on open: **the automated per-segment auto-crop
-  suggestion** (T9010-tuned `suggestCropFromFrames`; superseding the original "full frame
+  suggestion** (T9020-tuned `suggestCropFromFrames`; superseding the original "full frame
   minus 10% top" default) - the user still pulls it in or out.
 - Filmstrip: one thumb per segment (same sourcing rules); tapping swaps the stage frame
   and shows THAT segment's rect (per-segment crops, EPIC decision 5 as amended
   2026-09-08; the original "rect stays put" rule is superseded). Selected thumb
-  ring-blue. Label: "Check every part of the game". "Reset crop" text button. If T9050's
+  ring-blue. Label: "Check every part of the game". "Reset crop" text button. If T9060's
   crop path was adopted, the rect shown is the path evaluated at the thumb's time.
 - Preset chips: two only - "Sharp" (default) / "Small" (EPIC decision 5 as amended
   2026-09-08: the middle "Recommended" tier was cut, Sharpest/Smallest renamed), each
@@ -127,7 +127,7 @@ under-estimate 8K sources and over-estimate small ones.
 **2026-09-08**: Moved from `docs/plans/tasks/universal-upload/` into the Video Pre-Shrink
 milestone (Pre-Shrink Integration epic). Links re-pointed; dependencies now include the
 Pre-Shrink Research epic; crop defaults updated to per-segment automated crops (EPIC
-decision 5 amendment) and T9040/T9050/T9060/T9070 named as inputs.
+decision 5 amendment) and T9050/T9060/T9070/T9080 named as inputs.
 
 ## Acceptance Criteria
 

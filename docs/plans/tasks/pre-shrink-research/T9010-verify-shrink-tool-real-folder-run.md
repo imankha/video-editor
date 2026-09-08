@@ -1,4 +1,4 @@
-# T9000: Run T8840's test recipe on the real 50 GB DJI folder and a second machine (T8840's open acceptance)
+# T9010: Run T8840's test recipe on the real 50 GB DJI folder and a second machine (T8840's open acceptance)
 
 **Status:** TODO
 **Impact:** 8
@@ -52,7 +52,7 @@ user's run:
   R10 (`.LRF` field of view vs `.MP4`), R11 (H.264 vs HEVC quality at matched bpp)
 - `scripts/shrink-tool/tool.js` - the page; `autoCropAllSegments` (~L430) runs on
   folder load, so the run also exercises auto-crop (note whether the suggested rects
-  looked right - that observation seeds T9010)
+  looked right - that observation seeds T9020)
 - `formal annotations/u14 adonis/ECNL Test - DJI Action 6/` - the real folder (4 x 8K
   HEVC segments + `.LRF` proxies, ~50 GB)
 - `formal annotations/u14 adonis/DJII Compressed/` - the four existing shrunk outputs;
@@ -60,7 +60,7 @@ user's run:
 
 ### Related Tasks
 - Depends on: T8840 merged (done, PR #368); nothing else
-- Blocks: T9010 (auto-crop tuning runs on the same tool + folder), T9030 (benchmark
+- Blocks: T9020 (auto-crop tuning runs on the same tool + folder), T9040 (benchmark
   needs the real Sharp timing + output size), and the whole Pre-Shrink Integration epic
   (T8845 starts only after the user's sign-off recorded here)
 - Related: T8830 (1.4-1.5x realtime on 8K HEVC, 25 s trim), T8832 (17.2 GB streaming
@@ -109,7 +109,7 @@ Research epic so nothing dangles. T8840 itself stays WAITING ON USER.
 - [ ] README "Results per machine" has at least two filled rows (dev laptop + one other
       machine) covering recipe steps 1-7
 - [ ] Sharp-preset wall-clock, output size per segment and estimator error are recorded
-      (these feed T9030)
+      (these feed T9040)
 - [ ] R1 (mdat >4 GB), R3/R11 (color + compression A/B) and R10 (LRF vs MP4 framing)
       each have a recorded verdict
 - [ ] Every defect found is filed as its own task and linked here

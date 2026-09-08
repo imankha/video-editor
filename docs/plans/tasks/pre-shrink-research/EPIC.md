@@ -14,21 +14,21 @@ Finish the research behind client-side pre-shrink so that integration is a port 
 PROVEN pipeline, not a bet. "Proven" means, with numbers:
 
 1. We know which file-size x connection-speed combinations stop real users uploading,
-   and have written the concrete goal the shrink must hit (T8990).
+   and have written the concrete goal the shrink must hit (T9000).
 2. The standalone tool (`scripts/shrink-tool/`, T8840) has been run by the user on the
-   real 50 GB DJI folder and a second machine, and the run is recorded (T9000).
+   real 50 GB DJI folder and a second machine, and the run is recorded (T9010).
 3. Auto-crop reliably keeps the field + players + ball and drops dead space on the DJI
-   footage (T9010), and we know what it does on every other camera source (T9020).
+   footage (T9020), and we know what it does on every other camera source (T9030).
 4. Total time (shrink + upload) goes DOWN while player-region quality is NOT sacrificed,
-   across all file types, weighted by what production actually uploads (T9030).
+   across all file types, weighted by what production actually uploads (T9040).
 5. A cost model says when NOT to shrink and how to pick the output size from a hard
-   upload cap and a quality floor (T9040).
-6. The crop can follow the play (tweened path) if the numbers justify it (T9050).
-7. T8836's two undecided cheap wins are either filed or vetoed (T9060, T9070).
+   upload cap and a quality floor (T9050).
+6. The crop can follow the play (tweened path) if the numbers justify it (T9060).
+7. T8836's two undecided cheap wins are either filed or vetoed (T9070, T9080).
 
-## Milestone goal (filled by T8990)
+## Milestone goal (filled by T9000)
 
-_Pending T8990._ Format: "A {X} GB game must become uploadable on a {Y} Mbps connection
+_Pending T9000._ Format: "A {X} GB game must become uploadable on a {Y} Mbps connection
 in under {Z} hours, and the output must stay under {C} GB." Every later task in the
 milestone designs toward this line.
 
@@ -50,36 +50,36 @@ milestone designs toward this line.
 
 | ID | Task | Impact | Cmplx | Pri | Status |
 |----|------|--------|-------|-----|--------|
-| T8990 | [Upload-failure analysis: size x speed combinations that stop users (sets the milestone goal)](T8990-upload-failure-size-speed-analysis.md) | 8 | 3 | 2.7 | TODO |
-| T9000 | [Run T8840's recipe on the real 50 GB folder + a second machine (T8840's open acceptance)](T9000-verify-shrink-tool-real-folder-run.md) | 8 | 3 | 2.7 | TODO |
-| T9010 | [Tune auto-crop on the real DJI folder (sweep + ball-in-frame check)](T9010-tune-auto-crop-dji.md) | 7 | 4 | 1.8 | TODO |
-| T9020 | [Trial auto-crop on other camera sources (Trace, Veo, iPhone, fixtures)](T9020-auto-crop-other-camera-sources.md) | 6 | 4 | 1.5 | TODO |
-| T9030 | [Benchmark shrink + upload time vs quality across all file types + production survey](T9030-benchmark-time-vs-quality-all-file-types.md) | 9 | 6 | 1.5 | TODO |
-| T9040 | [Cost model: when NOT to shrink + size-cap-driven bitrate rule](T9040-cost-model-when-not-to-shrink.md) | 8 | 5 | 1.6 | TODO |
-| T9050 | [Tweening auto-crop: keyframed crop path that follows the play](T9050-tweening-auto-crop-follow-the-play.md) | 7 | 7 | 1.0 | TODO |
-| T9060 | [Extract the `stss` keyframe index client-side (T8836 row 2)](T9060-stss-keyframe-index-client-side.md) | 4 | 2 | 2.0 | TODO |
-| T9070 | [Poster + preview frames from the `.LRF` proxy (T8836 row 3)](T9070-lrf-proxy-poster-frames.md) | 4 | 3 | 1.3 | TODO |
+| T9000 | [Upload-failure analysis: size x speed combinations that stop users (sets the milestone goal)](T9000-upload-failure-size-speed-analysis.md) | 8 | 3 | 2.7 | TODO |
+| T9010 | [Run T8840's recipe on the real 50 GB folder + a second machine (T8840's open acceptance)](T9010-verify-shrink-tool-real-folder-run.md) | 8 | 3 | 2.7 | TODO |
+| T9020 | [Tune auto-crop on the real DJI folder (sweep + ball-in-frame check)](T9020-tune-auto-crop-dji.md) | 7 | 4 | 1.8 | TODO |
+| T9030 | [Trial auto-crop on other camera sources (Trace, Veo, iPhone, fixtures)](T9030-auto-crop-other-camera-sources.md) | 6 | 4 | 1.5 | TODO |
+| T9040 | [Benchmark shrink + upload time vs quality across all file types + production survey](T9040-benchmark-time-vs-quality-all-file-types.md) | 9 | 6 | 1.5 | TODO |
+| T9050 | [Cost model: when NOT to shrink + size-cap-driven bitrate rule](T9050-cost-model-when-not-to-shrink.md) | 8 | 5 | 1.6 | TODO |
+| T9060 | [Tweening auto-crop: keyframed crop path that follows the play](T9060-tweening-auto-crop-follow-the-play.md) | 7 | 7 | 1.0 | TODO |
+| T9070 | [Extract the `stss` keyframe index client-side (T8836 row 2)](T9070-stss-keyframe-index-client-side.md) | 4 | 2 | 2.0 | TODO |
+| T9080 | [Poster + preview frames from the `.LRF` proxy (T8836 row 3)](T9080-lrf-proxy-poster-frames.md) | 4 | 3 | 1.3 | TODO |
 
 ## Why this order
 
 Within an epic, order is dependency and "what defines success first", not raw priority
 score:
 
-1. **T8990 first** - it writes the goal line everything else is measured against. A
+1. **T9000 first** - it writes the goal line everything else is measured against. A
    benchmark without a target bandwidth and a cost model without a size distribution
    are decoration.
-2. **T9000 second** - the tool's real-hardware acceptance is still open; its run
+2. **T9010 second** - the tool's real-hardware acceptance is still open; its run
    produces the real Sharp timing, output sizes and quality stills every later task
    cites, and it is the gate for the Integration epic.
-3. **T9010 then T9020** - prove the static crop on the footage it was built for, then
+3. **T9020 then T9030** - prove the static crop on the footage it was built for, then
    on everything else. Both are preconditions for un-parking the size-cap bitrate idea.
-4. **T9030 then T9040** - the numbers (time, bytes, quality per source and machine),
-   then the rule fitted to them. T9040 also carries the parked size-cap-driven bitrate
+4. **T9040 then T9050** - the numbers (time, bytes, quality per source and machine),
+   then the rule fitted to them. T9050 also carries the parked size-cap-driven bitrate
    design.
-5. **T9050** - the follow-the-play upgrade is the most complex item and only worth
-   doing once the static heuristic's limits are recorded (T9010) and the sources in
-   scope are known (T9020).
-6. **T9060, T9070** - small, independent, filed provisionally from T8836 rows 2-3; the
+5. **T9060** - the follow-the-play upgrade is the most complex item and only worth
+   doing once the static heuristic's limits are recorded (T9020) and the sources in
+   scope are known (T9030).
+6. **T9070, T9080** - small, independent, filed provisionally from T8836 rows 2-3; the
    user may veto either. They sit last because nothing on the success path depends on
    them, but they should not dangle in T8836 any longer.
 
@@ -106,14 +106,14 @@ score:
 
 ## Completion Criteria
 
-- [ ] Milestone goal line written above (T8990) with the production cells it rests on
-- [ ] T8840's acceptance recorded on two machines (T9000); T8840 promoted by the user
+- [ ] Milestone goal line written above (T9000) with the production cells it rests on
+- [ ] T8840's acceptance recorded on two machines (T9010); T8840 promoted by the user
 - [ ] Auto-crop evidence tables filled for DJI and every other available source
-      (T9010, T9020) with 100% ball-in-rect on DJI
+      (T9020, T9030) with 100% ball-in-rect on DJI
 - [ ] `docs/plans/research/pre-shrink-benchmark.md` written; the thesis verdict
-      ("time goes down, player quality holds, where") stated per source type (T9030)
-- [ ] `decideShrink` decision table in this file with numeric boundaries (T9040)
-- [ ] Tweening verdict recorded (T9050): port it, or keep static, with numbers
-- [ ] T9060/T9070 either done or vetoed; T8836 step 4 closed either way
+      ("time goes down, player quality holds, where") stated per source type (T9040)
+- [ ] `decideShrink` decision table in this file with numeric boundaries (T9050)
+- [ ] Tweening verdict recorded (T9060): port it, or keep static, with numbers
+- [ ] T9070/T9080 either done or vetoed; T8836 step 4 closed either way
 - [ ] Hand-off note written for [Pre-Shrink Integration](../pre-shrink-integration/EPIC.md):
       what changed in `pipeline/` since T8840 merged, so the port is scoped correctly
