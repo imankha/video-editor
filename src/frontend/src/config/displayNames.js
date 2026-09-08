@@ -59,7 +59,7 @@ export const CLIP_UPLOAD = {
 // matched pair against "Add Spotlight Later". REFOCUS_CAPTION is new (below).
 export const FOCUS_PUBLISH = {
   PUBLISH_LABEL: 'Publish Now',
-  PUBLISH_CAPTION: 'Puts it in Highlight Reels so you can share it.',
+  PUBLISH_CAPTION: 'Puts it in Highlight Reels so you can share it, as is without a spotlight.',
   ADD_SPOTLIGHT_LABEL: 'Add Spotlight Now',
   ADD_SPOTLIGHT_LATER_LABEL: 'Add Spotlight Later',
   SPOTLIGHT_CAPTION: 'A spotlight is a glowing highlight that follows your athlete.',

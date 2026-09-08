@@ -24,7 +24,7 @@ describe('FocusPublishActionBar (T8390, flat redesign round 2)', () => {
     expect(screen.getByRole('button', { name: 'Add Spotlight Later' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Refocus' })).toBeTruthy();
 
-    expect(screen.getByText('Puts it in Highlight Reels so you can share it.')).toBeTruthy();
+    expect(screen.getByText('Puts it in Highlight Reels so you can share it, as is without a spotlight.')).toBeTruthy();
     // Shared caption appears under both spotlight choices.
     expect(screen.getAllByText('A spotlight is a glowing highlight that follows your athlete.')).toHaveLength(2);
     expect(screen.getByText('Reframe and export again, uses credits.')).toBeTruthy();
