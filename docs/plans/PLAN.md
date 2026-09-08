@@ -270,6 +270,27 @@ anchor to the deleted Per Game / Per Half toggle - reconcile at T7640 time.
 | T8900 | ↳ [Fix timing: nudge an angle into alignment](tasks/universal-upload/T8900-fix-timing-alignment.md) | 5 | 4 | 1.3 | STAGING | [x] | Merged PR #364, commit c3e354ca. Epic 11/12. Clock-skew repair behind an explicit mode (long-press/right-click, T8600 yellow strip): drag + nudge buttons mutate a LOCAL pending offset with live lane recompute, A/B "Play this angle / Play main camera" 3s buttons for align-by-ear, Reset/Esc discard; Done fires the single surgical `PATCH /videos/{seq}/placement` (the only post-insert writer of offset_seconds, per the gesture-persistence rule). |
 | T8910 | ↳ [Add footage from inside Annotate](tasks/universal-upload/T8910-add-footage-in-annotate.md) | 7 | 4 | 1.8 | STAGING | [x] | Merged PR #365, commit cccaadde. Epic 12/12. "Add footage" ghost button in the timeline header + whole-timeline drag-drop target ("We'll place it by when it was filmed" - drop point never decides placement), reusing the universal picker in attachMode over T8700's attach endpoint generalized to N files with recorded_at; landing pulse + tappable seek toast (3 variants); no-timestamp footage parks amber at the end and taps into T8900's Fix timing. GameTile's AttachVideoModal stays untouched. |
 
+### Milestone: Publish Load Performance (user-ordered 2026-09-08, before Tutorial Redesign)
+
+**Filed 2026-09-08 from `published.har` analysis** (41 requests, waterfall + findings:
+https://claude.ai/code/artifact/25370533-d3ce-4381-8d31-66feedac679c). The Publish screen sits
+blank ~4.9s after mount — NOT video weight (zero `.mp4` bytes in the capture). Seven unrelated
+endpoints (`admin/me`, `health`, `rank/confidence`×2, `collections/summary`, `intro-cards`,
+`bootstrap`) resolve in near-perfect lockstep 3.6s after firing, then four more repeat the
+pattern for ~0.9s — the documented **T6200 blocking-event-loop signature** (`app/utils/offload.py`),
+not yet root-caused for this specific burst. Two things the user asked about were checked and are
+**already correct, no task filed**: `+faststart`/moov-to-front is universal across every encoder
+and enforced pre-upload (`storage.py` `FaststartCheck`), and preview video already loads
+poster-first + hover-only (`TilePreviewVideo.jsx`, zero video bytes at mount confirms it). Full
+findings in [EPIC.md](tasks/publish-load-performance/EPIC.md).
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+|  | **[Publish Load Performance](tasks/publish-load-performance/EPIC.md)** | 8 | 6 | 1.3 |  |  | Root-cause + fix the Publish page-load stall, plus a separate product decision on recency vs. rank ordering. |
+| T9120 | ↳ [Root-cause the Publish page-load event-loop stall](tasks/publish-load-performance/T9120-root-cause-publish-load-stall.md) | 8 | 6 | 1.3 | WIP | [ ] | Epic 1/3. Expert-agent investigation (root cause not obvious from a HAR read alone, per CLAUDE.md's own escalation rule) — name the actual blocking call, don't guess-and-patch. Leads: `bootstrap.py`'s profile-scoped read is NOT thread-offloaded despite T4771 fixing the user-scoped half; none of the 7 stalled endpoints show `run_in_context`/`asyncio.to_thread` usage on a first grep. Spawned 2026-09-08. |
+| T9130 | ↳ [Offload the blocking call(s) found by T9120](tasks/publish-load-performance/T9130-fix-publish-load-stall.md) | 8 | ? | ? | TODO | [ ] | Epic 2/3, blocked on T9120. Same fix class as T6240's `user_session_init` offload — wrap the identified call(s) in `run_in_context`/`asyncio.to_thread`, verify via a re-captured HAR showing no synchronized-stall burst. |
+| T9140 | ↳ [Decide: recency vs. rank order on the Publish list](tasks/publish-load-performance/T9140-recent-reels-vs-rank-order.md) | 4 | ? | ? | TODO | [ ] | Epic 3/3, independent of T9120/T9130. `ORDER_BY_RANK` (T3630) sorts rating -> quality_score -> created_at, so a fresh publish isn't guaranteed to surface first. Decision doc with 3 options (leave as-is / time-boxed "New" pin / weight recency into the formula) — not to be implemented before a direction is picked. |
+
 ### Tutorial Redesign: guided essential path
 
 **Moved here 2026-09-02 (user order): every UI-VISIBLE task in "Next Up" ships before this

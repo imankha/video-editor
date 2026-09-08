@@ -16,7 +16,7 @@ import { toast } from '../components/shared';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
-import { FOCUS_PUBLISH_LATER_TOAST } from '../config/displayNames';
+import { FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST } from '../config/displayNames';
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
@@ -1072,6 +1072,9 @@ export function FocusScreen({
     // project (e.g. Publish was tapped on an earlier failed render, this is
     // a fresh preview for the same project). See PUBLISH_INTENT_TIMEOUT_MS.
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
+    // 2026-09-08: confirm what happened before leaving the screen (product
+    // owner: every action-bar choice should say what happened + what's next).
+    toast.success(FOCUS_ADD_SPOTLIGHT_TOAST.title, { message: FOCUS_ADD_SPOTLIGHT_TOAST.message });
     setEditorMode('overlay');
   }, [setEditorMode, projectId]);
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { useState, useCallback } from 'react';
 import { FocusPublishActionBar } from '../../components/FocusPublishActionBar';
-import { FOCUS_PUBLISH, FOCUS_PUBLISH_LATER_TOAST } from '../../config/displayNames';
+import { FOCUS_PUBLISH, FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST } from '../../config/displayNames';
 import { usePublishIntentStore } from '../../stores/publishIntentStore';
 
 // T8390: FocusScreen is a very large screen that cannot be mounted in isolation
@@ -39,8 +39,9 @@ function FocusPublishExitHarness({ deps, startOpen = false, isAutoCreated = fals
   const handleAddSpotlight = useCallback(() => {
     setShowExportCompletePreview(false);
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
+    toastSuccess(FOCUS_ADD_SPOTLIGHT_TOAST.title, { message: FOCUS_ADD_SPOTLIGHT_TOAST.message });
     setEditorMode('overlay');
-  }, [setEditorMode, projectId]);
+  }, [setEditorMode, projectId, toastSuccess]);
 
   const handleAddSpotlightLater = useCallback(() => {
     setShowExportCompletePreview(false);
@@ -133,7 +134,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     expect(panel.textContent.toLowerCase()).not.toContain('skip');
   });
 
-  it('"Add Spotlight" switches to overlay mode and fires no deferred/declined event/toast', () => {
+  it('"Add Spotlight Now" switches to overlay mode, confirms via toast, fires no deferred/declined event', () => {
     const deps = makeDeps();
     render(<FocusPublishExitHarness deps={deps} startOpen />);
 
@@ -144,7 +145,11 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     expect(deps.goToProjectManager).not.toHaveBeenCalled();
     expect(deps.triggerExport).not.toHaveBeenCalled();
     expect(usePublishIntentStore.getState().projectId).toBeNull();
-    expect(deps.toastSuccess).not.toHaveBeenCalled();
+    // 2026-09-08: every action-bar choice confirms what happened + what's next.
+    expect(deps.toastSuccess).toHaveBeenCalledWith(
+      FOCUS_ADD_SPOTLIGHT_TOAST.title,
+      expect.objectContaining({ message: FOCUS_ADD_SPOTLIGHT_TOAST.message }),
+    );
   });
 
   it('"Add Spotlight Later" records overlay_deferred, shows the MULTI-CLIP toast, and navigates home; no render', () => {
