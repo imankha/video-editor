@@ -705,6 +705,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           videoController={videoController}
           onScrubLock={lockScrub}
           onScrubUnlock={unlockScrub}
+          isPlaybackMode={!!playback?.isPlaybackMode}
           clipEditorOpen={showAnnotateOverlay && !annotateFullscreen}
           teammateSuggestions={teammateSuggestions}
           boundaryOffsets={multiVideo?.boundaryOffsets}
@@ -735,6 +736,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               isVideoUploading={isUploadingGameVideo}
               isAdmin={isAdmin}
               isMobile
+              isPlaybackMode={!!playback?.isPlaybackMode}
               teammateSuggestions={teammateSuggestions}
               boundaryOffsets={multiVideo?.boundaryOffsets}
               onSeek={effectiveSeek}

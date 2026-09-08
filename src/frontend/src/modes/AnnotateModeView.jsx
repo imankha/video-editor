@@ -260,10 +260,27 @@ export function AnnotateModeView({
       <div
         className={isFS
           ? 'fixed inset-0 z-[100] bg-gray-900 flex flex-col'
-          : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'
+          // T8970 item 4: distinct cyan treatment so Playback Annotations mode is
+          // unmistakable vs the neutral-chrome annotate mode (green=create,
+          // yellow=edit, violet=angle are taken; cyan/blue is the playback family).
+          : 'bg-cyan-500/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border-2 border-cyan-400/40 ring-1 ring-cyan-400/20'
         }
         onMouseMove={mobilePlaybackFs ? playbackFsControls.handleInteraction : undefined}
       >
+        {/* T8970 item 4: persistent mode badge — visible the whole time the mode
+            is active (not just on the entry button), so the user always knows
+            they are in Playback Annotations, not Annotate. */}
+        {!isFS && (
+          <div className="flex items-center mb-2 sm:mb-4">
+            <span
+              data-testid="playback-mode-badge"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 text-xs font-semibold tracking-wide"
+            >
+              <Play size={12} className="fill-cyan-300 text-cyan-300" />
+              Playback Annotations
+            </span>
+          </div>
+        )}
         {/* Video container */}
         <div className={isFS
           ? 'flex-1 min-h-0 flex items-center justify-center'

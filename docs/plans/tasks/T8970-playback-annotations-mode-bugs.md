@@ -151,6 +151,37 @@ PARTIALLY wired already on a static read (`AnnotateScreen.jsx` already routes
 `onSelectRegion`/`selectedRegionId` through playback state) - flagged for live verification
 rather than blind reimplementation.
 
+**2026-09-08 (item 1 fix)**: Expert-consulted. Audit confirmed the src-assignment is the
+multiVideo SEED EFFECT (`useVideoProxy.js` ~L117-136), keyed on `[fullTimeline, isMultiVideo,
+isOverlap, getSegmentUrl, videos?.length]` - it does NOT re-run when the annotate `<video>`
+nodes remount on Playback-Annotations exit (deps unchanged), so the fresh DOM node stayed
+blank. Single-video is NOT affected (`VideoPlayer` sets `src` as a JSX attribute, which
+survives remount). Chose the narrower reapply-on-mount fix over the full return-tree
+restructure: added `attachA`/`attachB` CALLBACK REFS on the multiVideo slots that reseed the
+ACTIVE slot's `src`+position on remount (guarded so a true first mount and already-sourced
+reused nodes are left to the seed effect). Regression test:
+`useVideoProxy.attachSlot.test.js`. Committed 41c1ac80. Playback-adjacent suite green (129).
+
+**2026-09-08 (items 2-4 LIVE-DRIVE, before writing their fix)**: Drove Playback Annotations
+on real seeded games via `dev-verify.sh` (evidence in `qa/`):
+- **Item 1 (live confirm)**: multi-video game 10 (ANGLE TEST) - after enter->exit playback the
+  annotate video renders content ("SIDELINE PHONE / file time 00:01:45.600"), NOT blank. Fix
+  works end-to-end.
+- **Item 2 (GAP CONFIRMED)**: game 5 (36 clips) - during playback `Delete Clip` + `Create Reel`
+  are VISIBLE and clicking any sidebar row opens the FULL `ClipDetailsEditor` (editable rating/
+  tags/name/notes, Delete Clip, Create Reel, Open-in-Focus/Overlay). Root cause: during
+  playback `selectedRegionId = activeClipId`, so `ClipsSidePanel`'s `selectedRegion` is set and
+  the desktop `ClipDetailsEditor` (L323) + mobile details takeover render, ungated on playback
+  mode. Row click correctly seeks (onSelectRegion->seekToClip) but ALSO exposes mutation. FIX:
+  suppress the details editor (and mobile details takeover) while `isPlaybackMode` - seek only.
+- **Item 3 (ALREADY WORKS - no code change)**: clean measurement (no clicks) - active-row
+  `animate-pulse` highlight advanced clip 0->1 as playback ran (samples [0,0,0,0,1,1,1,1]) and
+  renders distinctly from the normal selected-row highlight. `activeClipId` updates per segment
+  (`useAnnotationPlayback.js` L269); `ClipListItem` renders `isPlaybackActive` distinctly. No fix.
+- **Item 4 (GAP CONFIRMED)**: playback chrome is visually identical to annotate mode (0
+  "Playback Annotations" labels on screen while in mode; only cue is the "Back to Annotate"
+  button). FIX: distinct color treatment (cyan/blue family) + persistent mode badge.
+
 ## Acceptance Criteria
 
 - [ ] Entering then exiting Playback Annotations leaves the annotate video playable, not blank
