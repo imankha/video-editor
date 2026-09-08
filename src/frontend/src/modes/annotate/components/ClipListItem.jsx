@@ -164,13 +164,17 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
           <div className="flex items-center gap-1 ml-2 flex-shrink-0">
             {/* T4080: prefer the in-match soccer clock; fall back to clip end time */}
             <span className="text-xs text-gray-500 mr-1 tabular-nums">{gameClock || formatTime(region.endTime)}</span>
-            <button
-              onClick={onViewDetails}
-              className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
-              title="View details"
-            >
-              <Info size={16} />
-            </button>
+            {/* T8970: hidden in playback mode (onViewDetails undefined) — the clip
+                editor is suppressed there, so the button would be a dead affordance. */}
+            {onViewDetails && (
+              <button
+                onClick={onViewDetails}
+                className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
+                title="View details"
+              >
+                <Info size={16} />
+              </button>
+            )}
             <button
               onClick={onJumpToClip}
               className="p-2 rounded-lg bg-green-700 hover:bg-green-600 text-white transition-colors"

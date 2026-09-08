@@ -267,20 +267,18 @@ export function AnnotateModeView({
         }
         onMouseMove={mobilePlaybackFs ? playbackFsControls.handleInteraction : undefined}
       >
-        {/* T8970 item 4: persistent mode badge — visible the whole time the mode
-            is active (not just on the entry button), so the user always knows
-            they are in Playback Annotations, not Annotate. */}
-        {!isFS && (
-          <div className="flex items-center mb-2 sm:mb-4">
-            <span
-              data-testid="playback-mode-badge"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 text-xs font-semibold tracking-wide"
-            >
-              <Play size={12} className="fill-cyan-300 text-cyan-300" />
-              Playback Annotations
-            </span>
-          </div>
-        )}
+        {/* T8970 item 4: persistent mode badge — visible the WHOLE time the mode
+            is active (inline in windowed mode, floated top-left in fullscreen),
+            so the user always knows they are in Playback Annotations, not Annotate. */}
+        <div className={isFS ? 'absolute top-2 left-2 z-30' : 'flex items-center mb-2 sm:mb-4'}>
+          <span
+            data-testid="playback-mode-badge"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 text-xs font-semibold tracking-wide backdrop-blur-sm"
+          >
+            <Play size={12} className="fill-cyan-300 text-cyan-300" />
+            Playback Annotations
+          </span>
+        </div>
         {/* Video container */}
         <div className={isFS
           ? 'flex-1 min-h-0 flex items-center justify-center'
