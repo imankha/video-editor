@@ -12,7 +12,8 @@ import { openReader, probeContainer, streamSamples } from './demux.js';
 import { createDecodeStage } from './decode.js';
 import { resolveCropRect, createCropScaler } from './cropScale.js';
 import { pickOutputCodec, createEncodeStage } from './encode.js';
-import { createOpfsSink, createMuxer } from './mux.js';
+import { createOpfsSink, createMuxer, deriveMuxerAudioCodec } from './mux.js';
+import { openWorkspaceRoot, openScratchDir } from './checkpoint.js';
 import { resolveOutputSize } from './presets.js';
 
 const DEFAULT_CHUNK_SIZE_MB = 32;
@@ -28,8 +29,9 @@ export class StageError extends Error {
 }
 
 async function createThrowawaySink() {
-  const root = await navigator.storage.getDirectory();
-  const scratchDir = await root.getDirectoryHandle('shrink-tool-scratch', { create: true });
+  // MINOR 5: under the workspace root (design §3.1), not a sibling at the OPFS
+  // root -- so discardWorkspace's recursive remove actually cleans it up.
+  const scratchDir = await openScratchDir(await openWorkspaceRoot());
   const filename = `probe-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}.part`;
   return { dirHandle: scratchDir, filename, throwaway: true };
 }
@@ -99,10 +101,10 @@ function makeFpsTracker() {
  *   onProgress?: Function, signal?: AbortSignal, pauseGate?: ReturnType<typeof createPauseGate>,
  *   limits?: { chunkSizeMB?: number, inFlightCap?: number, sampleFrames?: number|null } }} options
  */
-export async function shrinkSegment({ file, crop, preset, sink, onProgress = () => {}, signal, pauseGate, limits = {} }) {
+export async function shrinkSegment({ file, crop, preset, sink, onProgress = () => {}, signal, pauseGate, limits = {}, reader = null, tracks = null }) {
   const resolvedSink = sink ?? (await createThrowawaySink());
   try {
-    return await runShrinkSegment({ file, crop, preset, sink: resolvedSink, onProgress, signal, pauseGate, limits });
+    return await runShrinkSegment({ file, crop, preset, sink: resolvedSink, onProgress, signal, pauseGate, limits, reader, tracks });
   } finally {
     if (resolvedSink.throwaway) {
       await resolvedSink.dirHandle.removeEntry(resolvedSink.filename).catch(() => {});
@@ -110,18 +112,22 @@ export async function shrinkSegment({ file, crop, preset, sink, onProgress = () 
   }
 }
 
-async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, pauseGate, limits }) {
+async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, pauseGate, limits, reader: givenReader = null, tracks: givenTracks = null }) {
   const { chunkSizeMB = DEFAULT_CHUNK_SIZE_MB, inFlightCap = DEFAULT_IN_FLIGHT_CAP, sampleFrames = null } = limits;
   const startTime = performance.now();
   const fpsTracker = makeFpsTracker();
 
-  let reader;
-  let tracks;
-  try {
-    reader = await openReader(file);
-    tracks = await probeContainer(reader, { chunkSizeMB });
-  } catch (err) {
-    throw new StageError('analyze', err.message);
+  // MINOR 12: the probe already opened a reader and parsed the moov -- reuse both
+  // when handed over instead of paying for a second openReader/probeContainer.
+  let reader = givenReader;
+  let tracks = givenTracks;
+  if (!reader || !tracks) {
+    try {
+      reader = await openReader(file);
+      tracks = await probeContainer(reader, { chunkSizeMB });
+    } catch (err) {
+      throw new StageError('analyze', err.message);
+    }
   }
   if (!tracks.video) throw new StageError('analyze', 'no video track');
 
@@ -135,6 +141,17 @@ async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, 
     throw new StageError('encode', err.message);
   }
   if (!codecChoice) throw new StageError('encode', `no supported output encoder at ${out.width}x${out.height}`);
+
+  // MINOR 9: validate the audio codec BEFORE opening the OPFS sink. createMuxer
+  // used to throw a raw Error for an unsupported codec AFTER the .part file already
+  // existed, orphaning it -- and outside the closed StageError stage vocabulary.
+  if (tracks.audio) {
+    try {
+      deriveMuxerAudioCodec(tracks.audio.codec);
+    } catch (err) {
+      throw new StageError('mux', err.message);
+    }
+  }
 
   let opfsSink;
   try {
@@ -169,6 +186,7 @@ async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, 
       height: out.height,
       bitrate: preset.bitrate,
       framerate: tracks.video.fps,
+      choice: codecChoice, // MINOR 13: reuse the resolved codec + acceleration, no second isConfigSupported round trip
       onChunk: (chunk, meta) => {
         encodedBytes += chunk.byteLength;
         muxer.addVideoChunk(chunk, meta);
@@ -268,7 +286,18 @@ async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, 
       await sink.dirHandle.removeEntry(sink.filename).catch(() => {});
       throw pipelineError;
     }
-    return { cancelled: true, framesDone, framesTotal, liveFrames: decoder.stats().liveFrames };
+    // MINOR 3 / design §3.5 step 6: assert AND log liveFrames on cancel -- this is
+    // the number the manual chrome://gpu / Task Manager check corroborates. The
+    // cancelled result deliberately has a different shape from the success result
+    // (no outputHandle/bytes: there is nothing valid to hand back) -- callers branch
+    // on `cancelled`, they never read output fields off a cancelled run.
+    const liveFramesAfterCancel = decoder.stats().liveFrames;
+    if (liveFramesAfterCancel !== 0) {
+      console.error(`shrinkSegment: cancel left ${liveFramesAfterCancel} live VideoFrame(s) -- a frame leaked past cropScale's single-owner rule`);
+    } else {
+      console.log('shrinkSegment: cancel teardown clean, liveFrames === 0');
+    }
+    return { cancelled: true, framesDone, framesTotal, liveFrames: liveFramesAfterCancel };
   };
 
   const aborted = signal?.aborted === true;
@@ -307,5 +336,9 @@ async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, 
     pixelsPerSecond: wallSeconds > 0 ? (out.width * out.height * framesDone) / wallSeconds : 0,
     outputHandle: opfsSink.handle,
     mp4boxBuffers: demuxResult.maxMp4boxBuffers,
+    // Which acceleration WebCodecs actually granted -- surfaced so the UI can
+    // answer "is this really using the GPU?" with the real value, not a guess.
+    decoderAcceleration: decoder.stats().decoderAcceleration,
+    encoderAcceleration: encoder.stats().hardwareAcceleration,
   };
 }

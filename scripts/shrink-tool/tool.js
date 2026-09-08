@@ -11,13 +11,14 @@ import {
   resolveOutputSize, estimateOutputBytes, estimateShrinkSeconds, shouldOfferShrink,
 } from './pipeline/presets.js';
 import { resolveCropRect } from './pipeline/cropScale.js';
+import { suggestCropFromFrames } from './pipeline/autoCrop.js';
 import { checkCapability, MAX_COMFORTABLE_SECONDS, SPEED_REFUSE_MULTIPLIER } from './pipeline/probe.js';
 import {
   openWorkspace, readManifest, writeManifest, verifyOutputs, promoteOutput, discardWorkspace,
   newManifest, reduceSegment, planResume, tmpPartName,
 } from './pipeline/checkpoint.js';
 import { createCropRectController } from './ui/cropRect.js';
-import { createSegmentListView, orderSegments, findProxyFile, previewFrame } from './ui/segmentList.js';
+import { createSegmentListView, orderSegments, findProxyFile, previewFrame, sampleMotionFrames } from './ui/segmentList.js';
 import { formatBytes, formatDuration, formatMultiplier } from './ui/format.js';
 
 const STORAGE_HEADROOM = 1.2; // 20% headroom over the estimate (design §3.4)
@@ -76,6 +77,8 @@ const el = {
   cropCanvas: document.getElementById('crop-canvas'),
   cropReadout: document.getElementById('crop-readout'),
   resetCropBtn: document.getElementById('reset-crop-btn'),
+  suggestCropBtn: document.getElementById('suggest-crop-btn'),
+  suggestCropStatus: document.getElementById('suggest-crop-status'),
   presetSection: document.getElementById('preset-section'),
   presetChips: document.getElementById('preset-chips'),
   runSection: document.getElementById('run-section'),
@@ -97,7 +100,7 @@ const state = {
   allFiles: [], // every File in the picked folder, for .LRF lookup
   selectedIndex: 0,
   crop: { x: 0, y: 0, w: 1, h: 1 },
-  presetId: 'sharpest', // EPIC decision 5 (amended 2026-09-07): Sharpest is the default
+  presetId: 'sharp', // EPIC decision 5 (amended 2026-09-08): Sharp is the default, 2 tiers only
   probeResult: null,
   worker: null,
   cancelTimer: null,
@@ -228,6 +231,7 @@ function wireStaticHandlers() {
     await loadSegmentsFromFiles(files);
   });
   el.resetCropBtn.addEventListener('click', () => cropController.reset());
+  el.suggestCropBtn.addEventListener('click', onSuggestCropClick);
   el.startBtn.addEventListener('click', onStartClick);
   el.pauseBtn.addEventListener('click', onPauseClick);
   el.cancelBtn.addEventListener('click', onCancelClick);
@@ -331,15 +335,36 @@ async function checkDeviceCapability() {
   }
 }
 
+/** Design §5 rung 3: a gray tile with the filename, shown when no preview frame could be drawn. */
+function placeholderTile(name) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 320;
+  canvas.height = 180;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#2a2e35';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#9aa2ad';
+  ctx.font = '13px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(name, canvas.width / 2, canvas.height / 2 - 10);
+  ctx.fillText('(no preview available)', canvas.width / 2, canvas.height / 2 + 12);
+  return canvas;
+}
+
 function selectSegment(idx) {
   state.selectedIndex = idx;
   segmentView.setSelected(idx);
   const seg = state.segments[idx];
   if (!seg?.video) return;
-  const draw = () => cropController.setFrame(seg.previewCanvas ?? el.cropCanvas, seg.video.codedWidth, seg.video.codedHeight);
-  if (seg.previewCanvas) draw();
+  // MINOR 10: `previewCanvas` is a tri-state -- undefined (never attempted), null
+  // (attempted and failed, cached so we don't retry on every click), or a canvas.
+  // A failed preview draws a real gray placeholder tile (design §5 rung 3), never
+  // the old self-referential `el.cropCanvas` (which just redrew the canvas into itself).
+  const draw = () => cropController.setFrame(seg.previewCanvas ?? placeholderTile(seg.name), seg.video.codedWidth, seg.video.codedHeight);
+  if (seg.previewCanvas !== undefined) draw();
   else previewFrame(findProxyFile(seg.name, state.allFiles) ?? seg.file).then((canvas) => {
-    seg.previewCanvas = canvas;
+    seg.previewCanvas = canvas; // null on failure -- cached, not retried
     segmentView.setThumb(idx, canvas);
     draw();
   });
@@ -351,6 +376,38 @@ function onCropChange(crop) {
   state.crop = crop;
   renderCropReadout();
   invalidateProbe();
+}
+
+/**
+ * Samples the selected segment's proxy for motion (pipeline/autoCrop.js's per-cell
+ * variance across widely-spaced frames -- distinguishes players/ball moving through a
+ * region from a static background like sky or an unused corner of the field) and sets
+ * the suggested rect as the crop. The user can still drag/resize it afterward -- this
+ * only picks a better STARTING point, framing itself stays their call.
+ */
+async function onSuggestCropClick() {
+  const seg = state.segments[state.selectedIndex] ?? state.segments[0];
+  if (!seg) return;
+  el.suggestCropBtn.disabled = true;
+  el.suggestCropStatus.textContent = 'Analyzing motion across the clip...';
+  try {
+    const source = findProxyFile(seg.name, state.allFiles) ?? seg.file;
+    const { frames, width, height } = await sampleMotionFrames(source);
+    const suggested = suggestCropFromFrames(frames, width, height);
+    if (!suggested) {
+      el.suggestCropStatus.textContent = 'Could not find a clear active region (clip looked static in the sample) -- crop left unchanged.';
+      return;
+    }
+    state.crop = suggested;
+    cropController.setCrop(state.crop);
+    renderCropReadout();
+    invalidateProbe();
+    el.suggestCropStatus.textContent = 'Suggested from motion -- drag any handle to adjust.';
+  } catch (err) {
+    el.suggestCropStatus.textContent = `Could not analyze this clip (${err.message}) -- crop left unchanged.`;
+  } finally {
+    el.suggestCropBtn.disabled = false;
+  }
 }
 
 /**
@@ -368,11 +425,27 @@ function currentOutputSize(preset, video = state.segments[0]?.video) {
   return resolveOutputSize(preset, src.sw, src.sh);
 }
 
+/**
+ * Shows the output size plus what the crop actually buys. Cropping does NOT change the
+ * file size (each preset's bitrate is a fixed constant, so bytes = bitrate * duration
+ * regardless of resolution) -- what it changes is how that fixed bit budget is spent.
+ * Fewer wasted pixels (sky, empty field) means each remaining pixel gets more bits, so
+ * the honest number to show is bits-per-pixel relative to an uncropped encode, not a
+ * "bytes saved by crop" figure (which would always read ~0).
+ */
 function renderCropReadout() {
   const seg = state.segments[state.selectedIndex];
   if (!seg?.video) return;
-  const out = currentOutputSize(PRESETS[state.presetId], seg.video);
-  el.cropReadout.textContent = `Output: ${out.width} x ${out.height}`;
+  const preset = PRESETS[state.presetId];
+  const out = currentOutputSize(preset, seg.video);
+  const uncropped = resolveOutputSize(preset, seg.video.codedWidth, seg.video.codedHeight);
+  const crop = state.manifest?.crop ?? state.crop;
+  const coverage = Math.round(crop.w * crop.h * 100);
+  const bitsPerPixelGain = (uncropped.width * uncropped.height) / Math.max(1, out.width * out.height);
+  const gainText = bitsPerPixelGain > 1.005
+    ? `each pixel gets ~${bitsPerPixelGain.toFixed(1)}x the bits an uncropped encode would`
+    : 'no crop, so no extra bits per pixel';
+  el.cropReadout.textContent = `Output: ${out.width} x ${out.height} · crop keeps ${coverage}% of the frame · ${gainText} (file size unchanged: it's set by bitrate x duration, not by the crop)`;
 }
 
 function checkOfferShrink() {
@@ -502,6 +575,11 @@ function onProbeResult(msg) {
   state.probeResult = msg;
   renderPresetChips();
   const { verdict, realtimeMultiplier } = msg;
+  // Answer "is this actually using the GPU?" with the value WebCodecs granted, not
+  // a guess: 'prefer-hardware' means the media engine took it; 'no-preference'
+  // means the browser chose (usually still hardware, but not guaranteed).
+  const gpu = (v) => (v === 'prefer-hardware' ? 'GPU' : v === 'no-preference' ? "browser's choice" : v);
+  log(`Acceleration: decode = ${gpu(msg.decoderAcceleration)}, encode = ${gpu(msg.encoderAcceleration)}`);
   const totalDuration = state.segments.reduce((sum, s) => sum + (s.durationSec ?? 0), 0);
   const preset = PRESETS[state.manifest.preset];
   const seg0 = state.segments[0];

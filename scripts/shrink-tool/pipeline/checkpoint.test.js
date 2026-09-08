@@ -24,7 +24,7 @@ describe('newManifest', () => {
     const m = newManifest({
       jobId: 'abc123',
       crop: { x: 0, y: 0, w: 1, h: 1 },
-      preset: 'recommended',
+      preset: 'sharp',
       segments: [
         { name: 'a.mp4', size: 10, lastModified: 1 },
         { name: 'b.mp4', size: 20, lastModified: 2 },
@@ -122,7 +122,7 @@ describe('planResume', () => {
   const manifest = newManifest({
     jobId: 'j1',
     crop: { x: 0, y: 0, w: 1, h: 1 },
-    preset: 'recommended',
+    preset: 'sharp',
     segments: [
       { name: 'a.mp4', size: 100, lastModified: 1 },
       { name: 'b.mp4', size: 200, lastModified: 2 },

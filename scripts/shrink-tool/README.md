@@ -50,9 +50,16 @@ recipe on real hardware.
 ## Headless smoke test (mechanism proof, not the acceptance bar)
 
 ```bash
-# generates its own synthetic fixture if missing -- see the ffmpeg command below
+# exits with code 2 and prints the ffmpeg command below if the fixture is missing --
+# it does NOT generate the fixture itself; run that command once first
 node scripts/shrink-tool/qa/t8840-smoke.mjs
 ```
+
+The pre-probe size/time estimate shown before Start is calibrated to a reference
+machine (design §2.2, `REFERENCE_ENCODE_PIXELS_PER_SEC`) and carries a documented
+**+/-40% error band** until Step 0's real Sharp-preset timing replaces it. After the
+runtime speed probe runs, the estimate is re-derived from this machine's measured
+throughput and that band no longer applies.
 
 Drives the pipeline modules directly (no folder picker -- OS pickers can't be automated
 headlessly) against a synthetic non-fast-start A/V fixture. Proves: demux frame-count

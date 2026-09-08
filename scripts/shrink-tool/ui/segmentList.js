@@ -101,6 +101,71 @@ export function previewFrame(file) {
   });
 }
 
+const MOTION_SAMPLE_WIDTH = 160;
+const MOTION_SAMPLE_HEIGHT = 90;
+const MOTION_SAMPLE_TIMEOUT_MS = 30_000;
+
+/**
+ * Samples `count` frames spread across the middle 80% of `file` (avoiding any black
+ * lead-in/out at the very ends) at a small, fixed resolution, for pipeline/autoCrop.js's
+ * variance analysis. Downscaling to MOTION_SAMPLE_WIDTH/HEIGHT keeps each seek+draw+
+ * readback cheap regardless of the source's real resolution -- the crop suggestion only
+ * needs coarse regions, not per-pixel accuracy.
+ * @param {File} file
+ * @param {number} [count]
+ * @returns {Promise<{ frames: Array<Uint8ClampedArray>, width: number, height: number }>}
+ *   `frames` may have fewer than `count` entries (or be empty) if the file errors or
+ *   times out partway through -- the caller (autoCrop) already treats <2 frames as
+ *   "nothing to suggest" rather than throwing.
+ */
+export function sampleMotionFrames(file, count = 8) {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.preload = 'metadata';
+    video.playsInline = true;
+    const url = URL.createObjectURL(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = MOTION_SAMPLE_WIDTH;
+    canvas.height = MOTION_SAMPLE_HEIGHT;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const frames = [];
+    let idx = 0;
+    let settled = false;
+    let timer = null;
+
+    const cleanup = () => { URL.revokeObjectURL(url); if (timer) clearTimeout(timer); };
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve({ frames, width: MOTION_SAMPLE_WIDTH, height: MOTION_SAMPLE_HEIGHT });
+    };
+    timer = setTimeout(finish, MOTION_SAMPLE_TIMEOUT_MS);
+
+    function seekNext() {
+      if (idx >= count) { finish(); return; }
+      // Middle 80%: skip the first/last 10% so lead-in/out black frames or a
+      // pre-kickoff static shot don't dominate the sample set.
+      const t = video.duration * (0.1 + (0.8 * idx) / Math.max(1, count - 1));
+      video.currentTime = Math.min(video.duration - 0.05, Math.max(0, t));
+    }
+    video.addEventListener('loadedmetadata', () => {
+      if (!Number.isFinite(video.duration) || video.duration <= 0) { finish(); return; }
+      seekNext();
+    });
+    video.addEventListener('seeked', () => {
+      if (settled) return;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      frames.push(ctx.getImageData(0, 0, canvas.width, canvas.height).data);
+      idx++;
+      seekNext();
+    });
+    video.addEventListener('error', finish);
+    video.src = url;
+  });
+}
+
 const STATE_LABEL = {
   pending: 'Pending', running: 'Shrinking…', finalizing: 'Finishing…', done: 'Done', failed: 'Failed',
 };

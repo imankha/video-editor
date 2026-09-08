@@ -31,7 +31,7 @@ function throttle(fn, ms) {
   let last = -Infinity;
   let timer = null;
   let trailingArgs = null;
-  return (...args) => {
+  const throttled = (...args) => {
     const now = performance.now();
     const elapsed = now - last;
     if (elapsed >= ms) {
@@ -49,6 +49,15 @@ function throttle(fn, ms) {
       }
     }
   };
+  // MINOR 16: a pending trailing update can fire up to `ms` after the segment
+  // finishes -- by then tool.js has advanced to the next segment, so the stale
+  // frame count would briefly render against the wrong progress bar. handleStart
+  // cancels it on every segment transition.
+  throttled.cancel = () => {
+    if (timer) { clearTimeout(timer); timer = null; }
+    trailingArgs = null;
+  };
+  return throttled;
 }
 
 function postError(err) {
@@ -96,6 +105,7 @@ async function handleStart({ file, crop, preset, dirHandle, outName }) {
   } catch (err) {
     postError(err);
   } finally {
+    onProgress.cancel(); // MINOR 16: never let a trailing update land on the NEXT segment
     activeAbort = null;
     activePauseGate = null;
   }

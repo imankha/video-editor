@@ -14,6 +14,13 @@ const MANIFEST_NAME = 'manifest.json';
 const MANIFEST_TMP_NAME = 'manifest.json.tmp';
 const TMP_DIR = 'tmp';
 const OUT_DIR = 'out';
+const SCRATCH_DIR = 'scratch'; // probe throwaway sinks (MINOR 5: under the workspace root, so discardWorkspace's recursive remove covers it)
+
+/** The probe's throwaway-sink directory, UNDER the workspace root (design §3.1) --
+ * never a sibling at the OPFS root, which discardWorkspace could never reach. */
+export async function openScratchDir(root) {
+  return root.getDirectoryHandle(SCRATCH_DIR, { create: true });
+}
 
 function stemOf(name) {
   return name.replace(/\.[^.]+$/, '');
@@ -175,6 +182,13 @@ async function fileSize(dirHandle, name) {
 }
 
 /** @returns {Promise<{ root: FileSystemDirectoryHandle, outDir: FileSystemDirectoryHandle, tmpDir: FileSystemDirectoryHandle }>} */
+/** The workspace root handle alone (no tmp/out), for callers that only need a
+ * place under it -- e.g. the probe's throwaway scratch sink (MINOR 5). */
+export async function openWorkspaceRoot() {
+  const opfsRoot = await navigator.storage.getDirectory();
+  return opfsRoot.getDirectoryHandle(ROOT_DIR, { create: true });
+}
+
 export async function openWorkspace() {
   const opfsRoot = await navigator.storage.getDirectory();
   const root = await opfsRoot.getDirectoryHandle(ROOT_DIR, { create: true });
@@ -225,6 +239,13 @@ export async function verifyOutputs(root, manifest) {
     } else if (segment.state === 'done') {
       const size = segment.outputName ? await fileSize(outDir, segment.outputName) : null;
       if (size == null || size !== segment.outputBytes) {
+        // MINOR 2 / design §3.4: log loudly, never silently "fix" the number. A
+        // done segment whose file is missing or the wrong size is real data loss
+        // (or a manifest bug) and the operator must be able to see it happened.
+        console.warn(
+          `checkpoint.verifyOutputs: segment ${segment.idx} (${segment.name}) was 'done' but its output ` +
+          `${size == null ? 'is missing' : `is ${size} bytes, expected ${segment.outputBytes}`} -- resetting to pending`,
+        );
         segment = reduceSegment(segment, { type: 'orphan' });
       }
     }

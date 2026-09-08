@@ -21,29 +21,28 @@ describe('resolveOutputSize', () => {
   });
 
   it('caps width at preset.maxWidth for a crop wider than the cap', () => {
-    const { width, height } = resolveOutputSize(PRESETS.recommended, 7680, 4320);
-    expect(width).toBe(2688);
-    expect(height).toBe(1512); // 7680:4320 == 16:9, 2688*9/16 = 1512
+    const { width, height } = resolveOutputSize(PRESETS.sharp, 7680, 4320);
+    expect(width).toBe(3840);
+    expect(height).toBe(2160); // 7680:4320 == 16:9, 3840*9/16 = 2160
   });
 
   it('both dimensions are always even', () => {
     // odd crop dims exercise the floor-to-even path
-    const { width, height } = resolveOutputSize(PRESETS.smallest, 1921, 1081);
+    const { width, height } = resolveOutputSize(PRESETS.small, 1921, 1081);
     expect(width % 2).toBe(0);
     expect(height % 2).toBe(0);
   });
 
-  it('holds for all three presets against the real 8K crop', () => {
-    expect(resolveOutputSize(PRESETS.sharpest, 7680, 4320)).toEqual({ width: 3840, height: 2160 });
-    expect(resolveOutputSize(PRESETS.recommended, 7680, 4320)).toEqual({ width: 2688, height: 1512 });
-    expect(resolveOutputSize(PRESETS.smallest, 7680, 4320)).toEqual({ width: 1920, height: 1080 });
+  it('holds for both presets against the real 8K crop', () => {
+    expect(resolveOutputSize(PRESETS.sharp, 7680, 4320)).toEqual({ width: 3840, height: 2160 });
+    expect(resolveOutputSize(PRESETS.small, 7680, 4320)).toEqual({ width: 1920, height: 1080 });
   });
 });
 
 describe('estimateOutputBytes', () => {
   it('is bitrate * duration / 8, plus 2% overhead', () => {
-    const bytes = estimateOutputBytes(PRESETS.recommended, 100);
-    const expected = (12_000_000 * 100 / 8) * 1.02;
+    const bytes = estimateOutputBytes(PRESETS.sharp, 100);
+    const expected = (24_000_000 * 100 / 8) * 1.02;
     expect(bytes).toBeCloseTo(expected, 6);
   });
 });
@@ -53,14 +52,9 @@ describe('estimateShrinkSeconds', () => {
     const durationSec = 69 * 60;
     const fps = 29.97;
 
-    const recommended = resolveOutputSize(PRESETS.recommended, 7680, 4320);
-    const sharpest = resolveOutputSize(PRESETS.sharpest, 7680, 4320);
-    const smallest = resolveOutputSize(PRESETS.smallest, 7680, 4320);
+    const sharpest = resolveOutputSize(PRESETS.sharp, 7680, 4320);
+    const smallest = resolveOutputSize(PRESETS.small, 7680, 4320);
 
-    const recSeconds = estimateShrinkSeconds({
-      outWidth: recommended.width, outHeight: recommended.height, durationSec, fps,
-      pixelsPerSecond: REFERENCE_ENCODE_PIXELS_PER_SEC,
-    });
     const sharpSeconds = estimateShrinkSeconds({
       outWidth: sharpest.width, outHeight: sharpest.height, durationSec, fps,
       pixelsPerSecond: REFERENCE_ENCODE_PIXELS_PER_SEC,
@@ -70,7 +64,6 @@ describe('estimateShrinkSeconds', () => {
       pixelsPerSecond: REFERENCE_ENCODE_PIXELS_PER_SEC,
     });
 
-    expect(recSeconds / 60).toBeCloseTo(45.4, 0);
     expect(sharpSeconds / 60).toBeCloseTo(92.7, 0);
     expect(smallSeconds / 60).toBeCloseTo(23.2, 0);
   });

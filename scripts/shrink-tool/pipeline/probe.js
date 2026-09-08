@@ -11,9 +11,10 @@
  * "harmless at 16-124 ms"). `checkCapability` here is adapted to that actual shape
  * (`(file, faststartInfo)`, not `(videoTrack, outputConfig)`) rather than
  * reimplementing the pure split T8838 didn't ship. A real, separate limitation this
- * carries: `probeShrinkCapability`'s encode check is hardcoded to the Recommended
- * preset's 2688-wide/12 Mbps target (T8838 §"ENCODE_WIDTH/ENCODE_BITRATE"), so it
- * does not verify encoder support at Sharpest's or Smallest's actual output size --
+ * carries: `probeShrinkCapability`'s encode check is hardcoded to a fixed 2688-wide/
+ * 12 Mbps target (T8838 §"ENCODE_WIDTH/ENCODE_BITRATE", predating this tool's own
+ * preset naming), so it does not verify encoder support at Sharp's or Small's actual
+ * output size --
  * `runSpeedProbe` below (which runs the REAL preset through the REAL pipeline) is
  * what actually validates the chosen preset; capability is only a coarse yes/no gate
  * on WebCodecs existing at all (caveat 6: "supported" is not "fast enough").
@@ -83,6 +84,11 @@ export async function runSpeedProbe({ file, crop, preset, signal }) {
     preset,
     sink: null, // throwaway OPFS file; shrinkSegment deletes it before returning
     signal,
+    // MINOR 12: hand over the reader + parsed moov we already have, so the probe
+    // doesn't pay for a second openReader/probeContainer round trip (design §4.1:
+    // "reuses the reader that was already opened for probeContainer").
+    reader,
+    tracks,
     limits: { sampleFrames: probeFrameCount },
     onProgress: ({ framesDone }) => {
       const now = performance.now();
@@ -90,6 +96,17 @@ export async function runSpeedProbe({ file, crop, preset, signal }) {
       if (framesDone === probeFrameCount) measureEndTime = now;
     },
   });
+
+  // MINOR 14: a Cancel during the probe must surface as cancelled, never as a
+  // verdict computed from a partial window. (Not reachable through the UI today --
+  // the Cancel button is disabled until beginRun() -- but the hole is real if that
+  // ever changes, so close it here rather than rely on the button state.)
+  if (result.cancelled) return { cancelled: true, sourceFps };
+
+  const acceleration = {
+    decoderAcceleration: result.decoderAcceleration ?? 'unknown',
+    encoderAcceleration: result.encoderAcceleration ?? 'unknown',
+  };
 
   // M5(a): a segment shorter than the probe window never completes it -- both
   // timestamps must exist before any number is trusted. The old `?? 0` fallback
@@ -99,7 +116,7 @@ export async function runSpeedProbe({ file, crop, preset, signal }) {
   if (warmupEndTime == null || measureEndTime == null) {
     return {
       framesMeasured: 0, wallSeconds: 0, fps: 0, sourceFps,
-      realtimeMultiplier: 0, pixelsPerSecond: 0, verdict: 'unknown',
+      realtimeMultiplier: 0, pixelsPerSecond: 0, verdict: 'unknown', ...acceleration,
     };
   }
 
@@ -114,5 +131,5 @@ export async function runSpeedProbe({ file, crop, preset, signal }) {
   const pixelsPerSecond = out.width * out.height * fps;
   const verdict = realtimeMultiplier >= SPEED_GO_MULTIPLIER ? 'go' : realtimeMultiplier >= SPEED_REFUSE_MULTIPLIER ? 'slow' : 'too-slow';
 
-  return { framesMeasured, wallSeconds, fps, sourceFps, realtimeMultiplier, pixelsPerSecond, verdict };
+  return { framesMeasured, wallSeconds, fps, sourceFps, realtimeMultiplier, pixelsPerSecond, verdict, ...acceleration };
 }

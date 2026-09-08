@@ -7,10 +7,13 @@
  * UI decides whether to label the result "estimated on a reference machine".
  */
 
+// Two tiers only (EPIC decision 5, amended 2026-09-08): the middle "Recommended" tier
+// was cut after a real side-by-side showed it visibly softer than Sharp on player
+// detail, at close to Sharp's own bits-per-pixel -- it was strictly worse, never
+// meaningfully smaller. Sharp is the default; Small is the deliberate small/fast choice.
 export const PRESETS = {
-  sharpest: { id: 'sharpest', label: 'Sharpest', maxWidth: 3840, bitrate: 24_000_000 },
-  recommended: { id: 'recommended', label: 'Recommended', maxWidth: 2688, bitrate: 12_000_000 },
-  smallest: { id: 'smallest', label: 'Smallest', maxWidth: 1920, bitrate: 7_000_000 },
+  sharp: { id: 'sharp', label: 'Sharp', maxWidth: 3840, bitrate: 24_000_000 },
+  small: { id: 'small', label: 'Small', maxWidth: 1920, bitrate: 7_000_000 },
 };
 
 // T8830 Chrome, 8K source -> 2688x1512 @ 12 Mbps at 45.63 fps = 4,064,256 px x 45.63.

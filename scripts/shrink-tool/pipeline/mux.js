@@ -27,8 +27,10 @@ export async function createOpfsSink(dirHandle, filename) {
   return { handle, writable, target };
 }
 
-/** Maps a real RFC 6381 / mp4box codec string to mp4-muxer's small audio enum. */
-function deriveMuxerAudioCodec(codec) {
+/** Maps a real RFC 6381 / mp4box codec string to mp4-muxer's small audio enum.
+ * Exported so shrinkSegment can check it BEFORE opening the OPFS sink (MINOR 9):
+ * an unsupported audio codec must never leave an orphaned .part file behind. */
+export function deriveMuxerAudioCodec(codec) {
   const c = String(codec || '').toLowerCase();
   if (c.startsWith('mp4a')) return 'aac';
   if (c.startsWith('opus') || c === '.opus') return 'opus';

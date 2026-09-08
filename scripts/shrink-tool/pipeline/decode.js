@@ -25,6 +25,24 @@ function sampleToChunk(sample) {
  * @param {{ video: object, onFrame: Function, onError?: Function, encoderQueueDepth: Function, inFlightCap?: number, signal?: AbortSignal }} options
  * @returns {Promise<{ push: Function, wake: Function, flush: Function, close: Function, stats: Function }>}
  */
+/**
+ * Prefer the hardware media engine, fall back to the browser's own choice only if
+ * the strict flag isn't reported as supported (never hard-refuse on it alone).
+ * Returns the `hardwareAcceleration` value that isConfigSupported accepted.
+ */
+export async function pickAcceleration(config, Codec = VideoDecoder) {
+  if (typeof Codec === 'undefined' || !Codec?.isConfigSupported) return 'no-preference';
+  for (const hardwareAcceleration of ['prefer-hardware', 'no-preference']) {
+    try {
+      const res = await Codec.isConfigSupported({ ...config, hardwareAcceleration });
+      if (res?.supported) return hardwareAcceleration;
+    } catch {
+      // try the next preference
+    }
+  }
+  return 'no-preference';
+}
+
 export async function createDecodeStage({ video, onFrame, onError, encoderQueueDepth, inFlightCap = IN_FLIGHT_CAP, signal }) {
   let framesDecoded = 0;
   let inFlight = 0; // samples handed to decoder.decode(), not yet output
@@ -79,12 +97,19 @@ export async function createDecodeStage({ video, onFrame, onError, encoderQueueD
     },
     error: (err) => onError?.(err),
   });
-  decoder.configure({
+  // Ask for the GPU media engine explicitly. The WebCodecs default ('no-preference')
+  // lets the browser silently fall back to software, which at 8K would fail the
+  // speed probe anyway -- so state the intent, but don't hard-refuse on
+  // 'prefer-hardware' alone: some platforms misreport that flag even when the
+  // hardware path exists. Record which one was granted so the UI can show it.
+  const baseConfig = {
     codec: video.codec,
     codedWidth: video.codedWidth,
     codedHeight: video.codedHeight,
     description: video.description,
-  });
+  };
+  const decoderAcceleration = await pickAcceleration(baseConfig);
+  decoder.configure({ ...baseConfig, hardwareAcceleration: decoderAcceleration });
   decoder.addEventListener('dequeue', resumeWaiters);
 
   return {
@@ -107,7 +132,7 @@ export async function createDecodeStage({ video, onFrame, onError, encoderQueueD
       decoder.close();
     },
     stats() {
-      return { framesDecoded, inFlight, liveFrames };
+      return { framesDecoded, inFlight, liveFrames, decoderAcceleration };
     },
   };
 }

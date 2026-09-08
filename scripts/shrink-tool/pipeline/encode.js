@@ -20,31 +20,38 @@ const HEVC_FALLBACK_CODEC = 'hev1.1.6.L120.90';
 export async function pickOutputCodec({ width, height, bitrate, framerate }) {
   if (typeof VideoEncoder === 'undefined' || !VideoEncoder.isConfigSupported) return null;
 
-  try {
-    const h264 = await VideoEncoder.isConfigSupported({ codec: OUTPUT_CODEC, width, height, bitrate, framerate });
-    if (h264?.supported) return { codec: OUTPUT_CODEC, muxerCodec: 'avc' };
-  } catch {
-    // fall through to the HEVC fallback
+  // Codec preference (H.264 always beats HEVC, R11) x acceleration preference
+  // (hardware always beats software). This pipeline is encode-bound on the GPU's
+  // media engine, so ask for it explicitly; fall back to the browser's own choice
+  // rather than refusing, since some platforms misreport 'prefer-hardware' even
+  // when the hardware path exists. The granted value is returned so the UI can
+  // show whether the run is actually GPU-accelerated.
+  const candidates = [[OUTPUT_CODEC, 'avc'], [HEVC_FALLBACK_CODEC, 'hevc']];
+  for (const [codec, muxerCodec] of candidates) {
+    for (const hardwareAcceleration of ['prefer-hardware', 'no-preference']) {
+      try {
+        const res = await VideoEncoder.isConfigSupported({ codec, width, height, bitrate, framerate, hardwareAcceleration });
+        if (res?.supported) return { codec, muxerCodec, hardwareAcceleration };
+      } catch {
+        // try the next combination
+      }
+    }
   }
-
-  try {
-    const hevc = await VideoEncoder.isConfigSupported({ codec: HEVC_FALLBACK_CODEC, width, height, bitrate, framerate });
-    if (hevc?.supported) return { codec: HEVC_FALLBACK_CODEC, muxerCodec: 'hevc' };
-  } catch {
-    // no supported output encoder at all
-  }
-
   return null;
 }
 
 /**
  * @param {{ width: number, height: number, bitrate: number, framerate: number, onChunk: Function, onError?: Function }} options
  */
-export async function createEncodeStage({ width, height, bitrate, framerate, onChunk, onError }) {
-  const choice = await pickOutputCodec({ width, height, bitrate, framerate });
+export async function createEncodeStage({ width, height, bitrate, framerate, onChunk, onError, choice: resolvedChoice = null }) {
+  // MINOR 13: shrinkSegment already resolved the codec (it needs muxerCodec for the
+  // muxer header) -- reuse it rather than re-running isConfigSupported and
+  // creating a second source of truth for which codec/acceleration is in play.
+  const choice = resolvedChoice ?? (await pickOutputCodec({ width, height, bitrate, framerate }));
   if (!choice) {
     throw new Error(`encode.createEncodeStage: no supported output encoder at ${width}x${height}`);
   }
+  const hardwareAcceleration = choice.hardwareAcceleration ?? 'no-preference';
 
   let framesEncoded = 0;
   let lastKeyframeSec = null;
@@ -63,6 +70,7 @@ export async function createEncodeStage({ width, height, bitrate, framerate, onC
     height,
     bitrate,
     framerate,
+    hardwareAcceleration,
     // mp4-muxer crashes at finalize without this (caveat 2).
     colorSpace: { primaries: 'bt709', transfer: 'bt709', matrix: 'bt709', fullRange: false },
   });
@@ -101,7 +109,7 @@ export async function createEncodeStage({ width, height, bitrate, framerate, onC
       encoder.close();
     },
     stats() {
-      return { framesEncoded };
+      return { framesEncoded, hardwareAcceleration };
     },
   };
 }
