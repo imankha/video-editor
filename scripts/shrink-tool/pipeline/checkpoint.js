@@ -15,6 +15,18 @@ const MANIFEST_TMP_NAME = 'manifest.json.tmp';
 const TMP_DIR = 'tmp';
 const OUT_DIR = 'out';
 
+function stemOf(name) {
+  return name.replace(/\.[^.]+$/, '');
+}
+
+/** `<stem>.shrunk.mp4` -- ONE derivation, shared by the `finalizing` transition
+ * (M9: must be set as soon as finalizing starts, not only at `finish`) and
+ * `promoteOutput` (which needs the same name to move the file to), so a crash
+ * between the two can never disagree about what the file is called. */
+export function outputNameFor(segment) {
+  return `${stemOf(segment.name)}.shrunk.mp4`;
+}
+
 // ============================================================================
 // Pure reducer
 // ============================================================================
@@ -70,11 +82,17 @@ export function reduceSegment(segment, event) {
     case 'start':
       return { ...segment, state: nextState, error: null };
     case 'finalizing':
+      // M9: outputName must be set HERE, not only at 'finish' -- verifyOutputs'
+      // finalizing crash-repair check gates on outputName existing to look the
+      // promoted file up, so leaving it null made a crash between "bytes written"
+      // and "manifest says done" always take the cancel/redo branch, silently
+      // discarding a file that was actually promoted successfully.
       return {
         ...segment,
         state: nextState,
         framesDone: event.framesDone ?? segment.framesDone,
         outputBytes: event.outputBytes ?? segment.outputBytes,
+        outputName: outputNameFor(segment),
       };
     case 'finish':
       return { ...segment, state: nextState, outputName: event.outputName ?? segment.outputName, savedToDisk: false, error: null };
@@ -127,10 +145,6 @@ export function planResume(manifest, presentSegments) {
 // ============================================================================
 // OPFS shell (not unit-testable -- jsdom has no OPFS; proven by qa/t8840-smoke.mjs)
 // ============================================================================
-
-function stemOf(name) {
-  return name.replace(/\.[^.]+$/, '');
-}
 
 /** `tmp/<idx>-<stem>.part` -- exported so tool.js can hand the worker the exact
  * filename its own OPFS shell (verifyOutputs/promoteOutput) will look for. */
@@ -231,7 +245,7 @@ export async function verifyOutputs(root, manifest) {
 export async function promoteOutput(root, segment) {
   const tmpDir = await root.getDirectoryHandle(TMP_DIR, { create: true });
   const outDir = await root.getDirectoryHandle(OUT_DIR, { create: true });
-  const outputName = segment.outputName ?? `${stemOf(segment.name)}.shrunk.mp4`;
+  const outputName = segment.outputName ?? outputNameFor(segment);
   const tmpHandle = await tmpDir.getFileHandle(tmpPartName(segment));
   await tmpHandle.move(outDir, outputName);
   return outputName;

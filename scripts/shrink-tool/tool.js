@@ -11,7 +11,7 @@ import {
   resolveOutputSize, estimateOutputBytes, estimateShrinkSeconds, shouldOfferShrink,
 } from './pipeline/presets.js';
 import { resolveCropRect } from './pipeline/cropScale.js';
-import { checkCapability } from './pipeline/probe.js';
+import { checkCapability, MAX_COMFORTABLE_SECONDS, SPEED_REFUSE_MULTIPLIER } from './pipeline/probe.js';
 import {
   openWorkspace, readManifest, writeManifest, verifyOutputs, promoteOutput, discardWorkspace,
   newManifest, reduceSegment, planResume, tmpPartName,
@@ -80,6 +80,7 @@ const el = {
   presetChips: document.getElementById('preset-chips'),
   runSection: document.getElementById('run-section'),
   startBtn: document.getElementById('start-btn'),
+  pauseBtn: document.getElementById('pause-btn'),
   cancelBtn: document.getElementById('cancel-btn'),
   saveAllBtn: document.getElementById('save-all-btn'),
   verdictBanner: document.getElementById('verdict-banner'),
@@ -101,8 +102,11 @@ const state = {
   worker: null,
   cancelTimer: null,
   running: false,
+  paused: false,
   currentIdx: null, // index into manifest.segments currently in flight
   onSegmentSettled: null, // resolves runQueue's per-segment await ('done'|'error'|'cancelled')
+  runningSamples: [], // {t, fps} within the last 60s of the CURRENT segment (M7 thermal re-check)
+  thermalWarned: false, // shown at most once per segment
 };
 
 let segmentView = null;
@@ -150,6 +154,7 @@ function renderWorkspaceBanner(manifest) {
   document.getElementById('discard-btn').addEventListener('click', async () => {
     await discardWorkspace(state.workspace.root);
     state.manifest = null;
+    applyJobLock();
     el.workspaceBanner.classList.remove('visible');
     el.workspaceBanner.innerHTML = '';
   });
@@ -184,10 +189,12 @@ async function onResumeClick() {
   state.crop = { ...state.manifest.crop };
   state.presetId = state.manifest.preset;
   cropController.setCrop(state.crop);
+  applyJobLock(); // M4: crop/preset are restored from the manifest and shown read-only (design §3.4)
   renderPresetChips();
   renderCropReadout();
   el.startBtn.disabled = true;
   el.cancelBtn.disabled = false;
+  el.pauseBtn.disabled = false;
   await runQueue(plan.firstPendingIdx);
 }
 
@@ -213,8 +220,17 @@ function wireStaticHandlers() {
   });
   el.resetCropBtn.addEventListener('click', () => cropController.reset());
   el.startBtn.addEventListener('click', onStartClick);
+  el.pauseBtn.addEventListener('click', onPauseClick);
   el.cancelBtn.addEventListener('click', onCancelClick);
   el.saveAllBtn.addEventListener('click', () => saveAllFinished(state.manifest));
+}
+
+/** Pause (design Q7): distinct from Cancel -- costs nothing, unlike re-encoding a whole segment. */
+function onPauseClick() {
+  if (!state.worker || !state.running) return;
+  state.paused = !state.paused;
+  state.worker.postMessage({ cmd: state.paused ? 'pause' : 'resume' });
+  el.pauseBtn.textContent = state.paused ? 'Resume' : 'Pause';
 }
 
 async function pickFolder() {
@@ -286,6 +302,7 @@ async function loadSegmentsFromFiles(files) {
 
   cropController = createCropRectController(el.cropCanvas, { onChange: onCropChange });
   selectSegment(0);
+  applyJobLock(); // M4: locked if this folder pick is a Resume of an existing manifest
   renderPresetChips();
   checkOfferShrink();
   await checkDeviceCapability();
@@ -327,11 +344,25 @@ function onCropChange(crop) {
   invalidateProbe();
 }
 
+/**
+ * M6: the ONE place crop + preset -> output dimensions is derived. `estimateLine`
+ * and `onProbeResult` used to skip the crop entirely (using the full source
+ * frame), and the probe's own `pixelsPerSecond` (measured at the CROPPED size)
+ * was divided into the uncropped pixel count -- three divergent copies of the
+ * same math. `video` defaults to the first segment's (the one the probe always
+ * measures against); pass the selected segment's for the live crop readout.
+ */
+function currentOutputSize(preset, video = state.segments[0]?.video) {
+  if (!video) return { width: 0, height: 0 };
+  const crop = state.manifest?.crop ?? state.crop;
+  const src = resolveCropRect(crop, video.codedWidth, video.codedHeight);
+  return resolveOutputSize(preset, src.sw, src.sh);
+}
+
 function renderCropReadout() {
   const seg = state.segments[state.selectedIndex];
   if (!seg?.video) return;
-  const src = resolveCropRect(state.crop, seg.video.codedWidth, seg.video.codedHeight);
-  const out = resolveOutputSize(PRESETS[state.presetId], src.sw, src.sh);
+  const out = currentOutputSize(PRESETS[state.presetId], seg.video);
   el.cropReadout.textContent = `Output: ${out.width} x ${out.height}`;
 }
 
@@ -350,9 +381,13 @@ function checkOfferShrink() {
 // ---------------------------------------------------------------------------
 function renderPresetChips() {
   el.presetChips.innerHTML = '';
+  // M4: once a manifest/job exists, preset is read-only for that job (same rule
+  // as the crop rect -- see cropController.setEnabled).
+  const locked = !!state.manifest;
   for (const preset of Object.values(PRESETS)) {
     const chip = document.createElement('button');
     chip.type = 'button';
+    chip.disabled = locked;
     chip.className = `preset-chip${preset.id === state.presetId ? ' selected' : ''}`;
     chip.innerHTML = `<span class="preset-name">${preset.label}</span><span class="preset-estimate">${estimateLine(preset)}</span>`;
     chip.addEventListener('click', () => {
@@ -365,14 +400,19 @@ function renderPresetChips() {
   }
 }
 
+/** M4: applies/lifts the crop+preset read-only lock -- called whenever
+ * `state.manifest` transitions (created, restored on resume, or discarded). */
+function applyJobLock() {
+  cropController?.setEnabled(!state.manifest);
+}
+
 function estimateLine(preset) {
   if (!state.segments.length) return '';
   const totalDuration = state.segments.reduce((sum, s) => sum + (s.durationSec ?? 0), 0);
   const bytes = estimateOutputBytes(preset, totalDuration);
   const pixelsPerSecond = state.probeResult?.pixelsPerSecond ?? REFERENCE_ENCODE_PIXELS_PER_SEC;
-  const seg0 = state.segments[0];
-  const out = seg0?.video ? resolveOutputSize(preset, seg0.video.codedWidth, seg0.video.codedHeight) : { width: 0, height: 0 };
-  const fps = seg0?.video?.fps ?? 30;
+  const out = currentOutputSize(preset);
+  const fps = state.segments[0]?.video?.fps ?? 30;
   const seconds = estimateShrinkSeconds({ outWidth: out.width, outHeight: out.height, durationSec: totalDuration, fps, pixelsPerSecond });
   const label = state.probeResult ? '' : ' (reference machine)';
   return `${formatBytes(bytes)}, about ${formatDuration(seconds)}${label}`;
@@ -387,6 +427,12 @@ function invalidateProbe() {
 // Worker lifecycle
 // ---------------------------------------------------------------------------
 function spawnWorker() {
+  // M8: a leftover worker from a previous probe/run must be terminated before
+  // its reference is replaced, or it keeps running (and holding GPU resources)
+  // with nothing left able to reach it.
+  if (state.worker) {
+    state.worker.terminate();
+  }
   const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
   worker.addEventListener('message', onWorkerMessage);
   state.worker = worker;
@@ -435,11 +481,12 @@ async function onStartClick() {
     });
     await writeManifest(state.workspace.root, state.manifest);
   }
+  applyJobLock(); // M4: crop/preset are now fixed for this job -- read from the manifest from here on
 
   el.startBtn.disabled = true;
   banner(el.verdictBanner, 'info', 'Running the speed probe...');
   spawnWorker();
-  state.worker.postMessage({ cmd: 'probe', file: state.segments[0].file, crop: state.crop, preset });
+  state.worker.postMessage({ cmd: 'probe', file: state.segments[0].file, crop: state.manifest.crop, preset: PRESETS[state.manifest.preset] });
 }
 
 function onProbeResult(msg) {
@@ -447,22 +494,37 @@ function onProbeResult(msg) {
   renderPresetChips();
   const { verdict, realtimeMultiplier } = msg;
   const totalDuration = state.segments.reduce((sum, s) => sum + (s.durationSec ?? 0), 0);
-  const preset = PRESETS[state.presetId];
+  const preset = PRESETS[state.manifest.preset];
   const seg0 = state.segments[0];
-  const out = resolveOutputSize(preset, seg0.video.codedWidth, seg0.video.codedHeight);
+  // M6: use the SAME crop-aware derivation as the readout/estimate -- the probe's
+  // own pixelsPerSecond is measured at the CROPPED size, so dividing it into the
+  // uncropped pixel count understated the ETA whenever a crop was drawn.
+  const out = currentOutputSize(preset, seg0.video);
   const seconds = estimateShrinkSeconds({ outWidth: out.width, outHeight: out.height, durationSec: totalDuration, fps: seg0.video.fps, pixelsPerSecond: msg.pixelsPerSecond });
 
+  function offerSlowPath(html) {
+    banner(el.verdictBanner, 'warn', `${html} <button id="confirm-slow-btn" class="primary" type="button" style="margin-left:8px">Start anyway</button>`);
+    document.getElementById('confirm-slow-btn').addEventListener('click', () => beginRun());
+    el.startBtn.disabled = false;
+  }
+
+  if (verdict === 'unknown') {
+    // M5(a): the probe couldn't complete its timed window (segment shorter than
+    // PROBE_WARMUP_FRAMES + PROBE_MEASURE_FRAMES) -- never fabricate a verdict.
+    offerSlowPath('Could not measure this device\'s speed (the first segment is very short). Proceeding with the reference-machine estimate.');
+    return;
+  }
   if (verdict === 'too-slow') {
     banner(el.verdictBanner, 'danger', `This computer is too slow for this (${formatMultiplier(realtimeMultiplier)} realtime). Upload the originals instead.`);
     el.startBtn.disabled = false;
     return;
   }
-  if (verdict === 'slow') {
-    banner(el.verdictBanner, 'warn',
-      `This will take about ${formatDuration(seconds)} (${formatMultiplier(realtimeMultiplier)} realtime) and your computer will be busy the whole time. Uploading the originals may be easier.
-       <button id="confirm-slow-btn" class="primary" type="button" style="margin-left:8px">Start anyway</button>`);
-    document.getElementById('confirm-slow-btn').addEventListener('click', () => beginRun());
-    el.startBtn.disabled = false;
+  // M7 guard 1 (design §4.2): even a green multiplier isn't enough if the job is
+  // still hours long.
+  const tooLong = seconds > MAX_COMFORTABLE_SECONDS;
+  if (verdict === 'slow' || tooLong) {
+    const longNote = tooLong && verdict === 'go' ? ' This is a long job even though your device is fast enough.' : '';
+    offerSlowPath(`This will take about ${formatDuration(seconds)} (${formatMultiplier(realtimeMultiplier)} realtime) and your computer will be busy the whole time.${longNote} Uploading the originals may be easier.`);
     return;
   }
   banner(el.verdictBanner, 'go', `About ${formatDuration(seconds)}. Your computer will be busy the whole time.`);
@@ -480,6 +542,7 @@ async function beginRun() {
   }
   el.startBtn.disabled = true;
   el.cancelBtn.disabled = false;
+  el.pauseBtn.disabled = false;
   await runQueue(0);
 }
 
@@ -488,44 +551,102 @@ async function beginRun() {
 // ---------------------------------------------------------------------------
 async function runQueue(firstPendingIdx) {
   state.running = true;
-  for (let i = firstPendingIdx; i < state.manifest.segments.length; i += 1) {
-    if (!state.running) break; // Cancel stops the queue, doesn't advance past it
-    const seg = state.manifest.segments[i];
-    if (seg.state === 'done') continue;
-    state.currentIdx = i;
-    state.manifest.segments[i] = reduceSegment(seg, { type: 'start' });
-    await writeManifest(state.workspace.root, state.manifest);
-    segmentView?.setStatus(i, { state: 'running' });
-    log(`Segment ${i + 1}/${state.manifest.segments.length}: ${seg.name}`);
+  try {
+    for (let i = firstPendingIdx; i < state.manifest.segments.length; i += 1) {
+      if (!state.running) break; // Cancel stops the queue, doesn't advance past it
+      let seg = state.manifest.segments[i];
+      if (seg.state === 'done') continue;
+      if (seg.state === 'failed') {
+        // M1: TRANSITIONS.failed only accepts 'cancel' (the reducer's own Retry
+        // reset) -- dispatching 'start' directly on a failed segment threw inside
+        // this un-awaited-by-the-caller loop, wedging the UI. Reset first.
+        seg = reduceSegment(seg, { type: 'cancel' });
+        state.manifest.segments[i] = seg;
+      }
+      state.currentIdx = i;
+      state.manifest.segments[i] = reduceSegment(seg, { type: 'start' });
+      await writeManifest(state.workspace.root, state.manifest);
+      segmentView?.setStatus(i, { state: 'running' });
+      log(`Segment ${i + 1}/${state.manifest.segments.length}: ${seg.name}`);
+      state.runningSamples = [];
+      state.thermalWarned = false;
+      state.paused = false;
+      el.pauseBtn.textContent = 'Pause';
 
-    if (!state.worker) spawnWorker();
-    const outName = tmpPartName(state.manifest.segments[i]);
-    const fileEntry = state.segments.find((s) => s.name === seg.name) ?? { file: null };
-    const completed = await new Promise((resolve) => {
-      state.onSegmentSettled = resolve;
-      state.worker.postMessage({
-        cmd: 'start',
-        file: fileEntry.file,
-        crop: state.crop,
-        preset: PRESETS[state.manifest.preset],
-        dirHandle: state.workspace.tmpDir,
-        outName,
+      if (!state.worker) spawnWorker();
+      const outName = tmpPartName(state.manifest.segments[i]);
+      const fileEntry = state.segments.find((s) => s.name === seg.name) ?? { file: null };
+      const completed = await new Promise((resolve) => {
+        state.onSegmentSettled = resolve;
+        state.worker.postMessage({
+          cmd: 'start',
+          file: fileEntry.file,
+          // M4: crop/preset come from the MANIFEST, never live UI state -- the
+          // crop canvas/preset chips are locked while a job exists (applyJobLock),
+          // but reading from the manifest here is the actual guarantee.
+          crop: state.manifest.crop,
+          preset: PRESETS[state.manifest.preset],
+          dirHandle: state.workspace.tmpDir,
+          outName,
+        });
       });
-    });
-    if (completed !== 'done') break; // cancelled or failed -- stop the queue, don't auto-advance
+      if (completed !== 'done') break; // cancelled or failed -- stop the queue, don't auto-advance
+    }
+    if (state.manifest.segments.every((s) => s.state === 'done')) {
+      el.saveAllBtn.disabled = false;
+      banner(el.verdictBanner, 'go', 'All segments shrunk. Save them to disk and check playback.');
+    }
+  } catch (err) {
+    // M1: a reducer throw (or any other unexpected error) must surface as a
+    // banner, not an unhandled rejection that silently wedges the UI.
+    banner(el.verdictBanner, 'danger', `Unexpected error: ${err.message}`);
+    log(`  UNEXPECTED ERROR: ${err.message}`);
+  } finally {
+    state.running = false;
+    // M1: onSegmentError's banner says "click Start again to retry" -- if a
+    // real segment failure (not Cancel, which has its own re-enable in
+    // finishCancel) leaves this disabled, that instruction is a lie and the
+    // UI is wedged exactly like the bug this fix targets.
+    el.startBtn.disabled = false;
+    el.cancelBtn.disabled = true;
+    el.pauseBtn.disabled = true;
   }
-  state.running = false;
-  if (state.manifest.segments.every((s) => s.state === 'done')) {
-    el.saveAllBtn.disabled = false;
-    banner(el.verdictBanner, 'go', 'All segments shrunk. Save them to disk and check playback.');
-  }
-  el.cancelBtn.disabled = true;
 }
 
 function onProgress({ framesDone, framesTotal, fps }) {
   const i = state.currentIdx;
   segmentView?.setStatus(i, { state: 'running', framesDone, framesTotal });
   log(`  frame ${framesDone}/${framesTotal ?? '?'} (${fps ? fps.toFixed(1) : '?'} fps)`);
+  trackRunningSpeed(fps);
+}
+
+/**
+ * M7 guard 2 (design §4.2): a 4s probe can't see thermal throttling. Keeps a
+ * rolling ~60s average of the observed fps for the CURRENT segment; if the
+ * resulting multiplier drops below the refuse line, surfaces a banner once
+ * (Pause/Cancel are already visible during a run). Never auto-aborts --
+ * finished segments are already checkpointed either way.
+ */
+function trackRunningSpeed(fps) {
+  const seg = state.segments.find((s) => s.name === state.manifest.segments[state.currentIdx]?.name);
+  const sourceFps = seg?.video?.fps;
+  if (!fps || !sourceFps || state.thermalWarned) return;
+
+  const now = performance.now();
+  state.runningSamples.push({ t: now, fps });
+  state.runningSamples = state.runningSamples.filter((s) => now - s.t <= 60000);
+  if (state.runningSamples.length < 5) return; // not enough signal yet
+
+  const avgFps = state.runningSamples.reduce((sum, s) => sum + s.fps, 0) / state.runningSamples.length;
+  const multiplier = avgFps / sourceFps;
+  if (multiplier >= SPEED_REFUSE_MULTIPLIER) return;
+
+  state.thermalWarned = true;
+  const manifestSeg = state.manifest.segments[state.currentIdx];
+  const remaining = Math.max(0, (manifestSeg.framesTotal ?? 0) - (manifestSeg.framesDone ?? 0));
+  const eta = avgFps > 0 ? remaining / avgFps : null;
+  banner(el.verdictBanner, 'danger',
+    `This is running much slower than the probe predicted (${formatMultiplier(multiplier)} realtime)${eta ? `, about ${formatDuration(eta)} left` : ''}. Your device may be thermal throttling.`);
 }
 
 async function onSegmentDone(msg) {
@@ -559,6 +680,10 @@ async function onSegmentError(msg) {
 function onCancelClick() {
   if (!state.worker) return;
   el.cancelBtn.disabled = true;
+  el.pauseBtn.disabled = true;
+  state.paused = false;
+  // (pipeline/shrinkSegment.js wakes a paused pauseGate on abort itself, so
+  // Cancel works correctly regardless of pause state -- no need to resume first.)
   state.worker.postMessage({ cmd: 'cancel' });
   state.cancelTimer = setTimeout(async () => {
     state.worker.terminate();
@@ -586,6 +711,8 @@ async function finishCancel() {
   state.running = false;
   el.startBtn.disabled = false;
   el.cancelBtn.disabled = true;
+  el.pauseBtn.disabled = true;
+  el.pauseBtn.textContent = 'Pause';
   log('Cancelled.');
   state.onSegmentSettled?.('cancelled');
 }

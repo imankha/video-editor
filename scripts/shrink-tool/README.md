@@ -112,3 +112,26 @@ criterion "the user has run the full test recipe... and says the tool works."
 - One static crop rect for every segment (EPIC decision 5, v1).
 - `<input webkitdirectory>` fallback (browsers without `showDirectoryPicker()`) cannot
   resume after a reload -- the folder must be re-picked.
+- **A/V start-time skew beyond a couple of sample durations is not faithfully
+  preserved.** `mux.js` uses mp4-muxer's `firstTimestampBehavior: 'cross-track-offset'`,
+  which prevents a hard crash when the two tracks' first timestamps genuinely differ,
+  but mp4-muxer never writes an edit-list (elst) box -- ISO BMFF's own rule that a
+  track's first sample sits at media-internal time 0 absorbs any larger gap into the
+  first inter-sample delta instead of a true "starts N ms late". Confirmed empirically
+  during the T8840 revision pass. For real DJI footage the actual skew is expected to
+  be sub-frame hardware-clock jitter (a few ms, per the T8830/T8832 spike findings),
+  where this is imperceptible; a genuinely large skew (hundreds of ms) would need
+  edit-list support this dependency doesn't have. Step 0's real-footage A/V-sync check
+  (recipe step 5, "audio is in sync") is what actually proves this in practice.
+
+## What is deliberately NOT proven by this container (supervisor/user-only)
+
+- **Step 0** (task file): the full 17.2 GB real DJI segment decode+encode+mux run,
+  unattended, plus the Sharpest-preset timing on a 25 s trim.
+- **R11's quality A/B** (design doc risk register): source vs. Sharpest-preset H.264
+  output, side by side, on real footage.
+- The user test recipe above, on the real 50 GB folder and a second machine.
+
+This container has no GPU and cannot see the real fixture files. Every pipeline
+mechanism these would exercise is proven instead via `qa/t8840-smoke.mjs` on a
+synthetic fixture (see above) -- that is a mechanism check, not a substitute for these.

@@ -176,13 +176,15 @@ export function probeContainer(reader, { chunkSizeMB = DEFAULT_CHUNK_SIZE_MB } =
  *
  * @param {{ logicalSize: number, slice: Function }} reader
  * @param {{ video: object, audio: object|null }} tracks - from probeContainer()
- * @param {{ chunkSizeMB?: number, onVideoSample: Function, onAudioSample?: Function, signal?: AbortSignal }} options
+ * @param {{ chunkSizeMB?: number, onVideoSample: Function, onAudioSample?: Function, signal?: AbortSignal,
+ *   pauseGate?: { wait(): Promise<void> } }} options
  */
 export async function streamSamples(reader, tracks, {
   chunkSizeMB = DEFAULT_CHUNK_SIZE_MB,
   onVideoSample,
   onAudioSample = () => {},
   signal,
+  pauseGate,
 } = {}) {
   const chunkSize = chunkSizeMB * 1024 * 1024;
   const { video, audio } = tracks;
@@ -255,6 +257,8 @@ export async function streamSamples(reader, tracks, {
   }
 
   for (let off = 0; off < reader.logicalSize; off += chunkSize) {
+    if (signal?.aborted) break;
+    await pauseGate?.wait(); // Pause (design Q7): parks between chunks, never mid-chunk
     if (signal?.aborted) break;
     const end = Math.min(off + chunkSize, reader.logicalSize);
     const buf = await reader.slice(off, end).arrayBuffer();

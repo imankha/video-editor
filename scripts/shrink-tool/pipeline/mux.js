@@ -38,10 +38,9 @@ function deriveMuxerAudioCodec(codec) {
 /**
  * @param {{ target: FileSystemWritableFileStreamTarget, writable: FileSystemWritableFileStream,
  *   video: { codec: 'avc'|'hevc', width: number, height: number },
- *   audio: { codec: string, sampleRate: number, numberOfChannels: number, description: Uint8Array|null }|null,
- *   timestampOriginUs: number }} options
+ *   audio: { codec: string, sampleRate: number, numberOfChannels: number, description: Uint8Array|null }|null }} options
  */
-export function createMuxer({ target, writable, video, audio, timestampOriginUs }) {
+export function createMuxer({ target, writable, video, audio }) {
   const muxerAudioCodec = audio ? deriveMuxerAudioCodec(audio.codec) : null;
 
   const muxer = new Muxer({
@@ -51,21 +50,28 @@ export function createMuxer({ target, writable, video, audio, timestampOriginUs 
     // moov-at-end is fine and deliberate: the upload path relocates moov via T1380
     // in 6-15 ms anyway (T8834), so the shrunk file still lands fast-start on R2.
     fastStart: false,
-    // Deliberately NOT 'offset': it rebases each track independently and would
-    // desync A/V (design §2.2 mux). ONE shared t0 is subtracted below instead, so
-    // the muxer can run in its default 'strict' mode.
+    // B3 fix: the default 'strict' mode throws unless EACH track's first chunk
+    // lands exactly on timestamp 0 -- with a single shared origin, only the
+    // earlier track hits 0 and the other throws
+    // ("The first chunk for your media track must have a timestamp of 0").
+    // 'cross-track-offset' is mp4-muxer's own implementation of exactly this
+    // design's shared-t0 scheme: it computes min(firstVideoTs, firstAudioTs)
+    // internally and subtracts it from BOTH tracks. This is NOT 'offset', which
+    // rebases each track independently and would desync A/V. Raw (un-adjusted)
+    // timestamps are passed in below; the muxer does the subtraction.
+    firstTimestampBehavior: 'cross-track-offset',
   });
 
   let audioDescriptionSent = false;
 
   return {
     addVideoChunk(chunk, meta) {
-      muxer.addVideoChunk(chunk, meta, chunk.timestamp - timestampOriginUs);
+      muxer.addVideoChunk(chunk, meta);
     },
     /** Raw copy-through, no AudioEncoder (design §2.2 mux / task file R4). */
     addAudioSample(sample) {
       if (!audio) throw new Error('mux.addAudioSample: muxer was created without an audio track');
-      const timestamp = (sample.cts / sample.timescale) * 1e6 - timestampOriginUs;
+      const timestamp = (sample.cts / sample.timescale) * 1e6;
       const duration = (sample.duration / sample.timescale) * 1e6;
       const type = sample.is_sync ? 'key' : 'delta';
       const meta = !audioDescriptionSent

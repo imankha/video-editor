@@ -48,6 +48,7 @@ export async function createEncodeStage({ width, height, bitrate, framerate, onC
 
   let framesEncoded = 0;
   let lastKeyframeSec = null;
+  const dequeueListeners = new Set();
 
   const encoder = new VideoEncoder({
     output: (chunk, meta) => {
@@ -65,17 +66,33 @@ export async function createEncodeStage({ width, height, bitrate, framerate, onC
     // mp4-muxer crashes at finalize without this (caveat 2).
     colorSpace: { primaries: 'bt709', transfer: 'bt709', matrix: 'bt709', fullRange: false },
   });
+  // B2: `VideoEncoder` fires `dequeue` too -- this is decode.js's missing
+  // encoder-side wake source for its backpressure gate.
+  encoder.addEventListener('dequeue', () => {
+    for (const cb of dequeueListeners) cb();
+  });
 
   return {
     encode(videoFrame) {
-      const tsSec = videoFrame.timestamp / 1e6;
-      const forceKeyFrame = lastKeyframeSec === null || tsSec - lastKeyframeSec >= KEYFRAME_INTERVAL_SEC;
-      if (forceKeyFrame) lastKeyframeSec = tsSec;
-      encoder.encode(videoFrame, { keyFrame: forceKeyFrame });
-      videoFrame.close();
+      try {
+        const tsSec = videoFrame.timestamp / 1e6;
+        const forceKeyFrame = lastKeyframeSec === null || tsSec - lastKeyframeSec >= KEYFRAME_INTERVAL_SEC;
+        if (forceKeyFrame) lastKeyframeSec = tsSec;
+        encoder.encode(videoFrame, { keyFrame: forceKeyFrame });
+      } finally {
+        // M3: must close even if encoder.encode() throws (e.g. the cancel race --
+        // encoder.close() already ran while this frame was in flight) or the frame
+        // leaks, violating the `liveFrames === 0` cancel guarantee (design §3.5).
+        videoFrame.close();
+      }
     },
     queueDepth() {
       return encoder.encodeQueueSize;
+    },
+    /** @returns {() => void} unsubscribe */
+    onDequeue(cb) {
+      dequeueListeners.add(cb);
+      return () => dequeueListeners.delete(cb);
     },
     async flush() {
       await encoder.flush();

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newManifest, reduceSegment, planResume } from './checkpoint.js';
+import { newManifest, reduceSegment, planResume, outputNameFor } from './checkpoint.js';
 
 function baseSegment(overrides = {}) {
   return {
@@ -50,6 +50,17 @@ describe('reduceSegment -- every §3.3 transition', () => {
     expect(seg.state).toBe('finalizing');
     expect(seg.framesDone).toBe(300);
     expect(seg.outputBytes).toBe(5000);
+  });
+
+  it('M9: running --finalizing--> finalizing sets outputName immediately, not only at finish', () => {
+    // A crash between "bytes written" and "manifest says done" is exactly the
+    // window `finalizing` exists to protect (design §3.6) -- verifyOutputs' crash
+    // repair needs outputName to already be there to find the promoted file.
+    const seg = reduceSegment(baseSegment({ state: 'running', name: 'DJI_0001.MP4' }), {
+      type: 'finalizing', framesDone: 300, outputBytes: 5000,
+    });
+    expect(seg.outputName).toBe(outputNameFor(seg));
+    expect(seg.outputName).toBe('DJI_0001.shrunk.mp4');
   });
 
   it('finalizing --finish--> done, setting outputName', () => {

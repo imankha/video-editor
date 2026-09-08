@@ -22,10 +22,10 @@ function sampleToChunk(sample) {
 }
 
 /**
- * @param {{ video: object, onFrame: Function, onError?: Function, encoderQueueDepth: Function, inFlightCap?: number }} options
- * @returns {Promise<{ push: Function, flush: Function, close: Function, stats: Function }>}
+ * @param {{ video: object, onFrame: Function, onError?: Function, encoderQueueDepth: Function, inFlightCap?: number, signal?: AbortSignal }} options
+ * @returns {Promise<{ push: Function, wake: Function, flush: Function, close: Function, stats: Function }>}
  */
-export async function createDecodeStage({ video, onFrame, onError, encoderQueueDepth, inFlightCap = IN_FLIGHT_CAP }) {
+export async function createDecodeStage({ video, onFrame, onError, encoderQueueDepth, inFlightCap = IN_FLIGHT_CAP, signal }) {
   let framesDecoded = 0;
   let inFlight = 0; // samples handed to decoder.decode(), not yet output
   let liveFrames = 0; // frames emitted by the decoder, still owned downstream
@@ -41,6 +41,23 @@ export async function createDecodeStage({ video, onFrame, onError, encoderQueueD
       waiters.shift()();
     }
   }
+
+  // B2 fix: `resumeWaiters` only drains waiters whose gate condition has ALREADY
+  // cleared. It was only ever called from decoder-side events -- on an encode-bound
+  // pipeline (every real machine, caveat 4) the decoder drains fully and stops
+  // firing those events while the encoder queue is still over cap, parking `push()`
+  // forever. The orchestrator wires the encoder's own `dequeue` event to `wake()`.
+  function wake() {
+    resumeWaiters();
+  }
+
+  // A parked push() must also unpark on abort -- otherwise a pipeline error or a
+  // Cancel whose queues never drain (both routes through this same gate) can never
+  // reach the teardown code that follows it (B2 second consequence).
+  function unparkAll() {
+    while (waiters.length) waiters.shift()();
+  }
+  signal?.addEventListener('abort', unparkAll, { once: true });
 
   const decoder = new VideoDecoder({
     output: (frame) => {
@@ -74,10 +91,11 @@ export async function createDecodeStage({ video, onFrame, onError, encoderQueueD
     async push(sample) {
       inFlight += 1;
       decoder.decode(sampleToChunk(sample));
-      if (shouldPause()) {
+      if (shouldPause() && !signal?.aborted) {
         await new Promise((resolve) => waiters.push(resolve));
       }
     },
+    wake,
     async flush() {
       await decoder.flush();
       await Promise.all(pendingFrames);

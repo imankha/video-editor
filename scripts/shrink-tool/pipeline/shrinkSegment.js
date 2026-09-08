@@ -35,41 +35,35 @@ async function createThrowawaySink() {
 }
 
 /**
- * Peeks at the first video and (if present) first audio sample's real CTS, in
- * microseconds, WITHOUT touching the decoder/encoder/muxer. mp4box only resolves a
- * sample's actual composition time once that sample has streamed through
- * (probeContainer only parses moov headers), so this runs a throwaway demux pass
- * that self-aborts the instant both are known. Needed for the single shared
- * `timestampOriginUs` design §2.2 mux requires -- see mux.js's header comment.
+ * Pause (design Q7, approved): distinct from Cancel -- "I need my laptop for
+ * 20 minutes" should cost nothing, not a whole re-encoded segment. The demux
+ * loop (`streamSamples`) awaits this gate between chunks; decode/encode/mux
+ * simply stop being fed while paused, which is enough to free the machine up.
  */
-async function peekFirstTimestamps(reader, tracks, chunkSizeMB) {
-  let firstVideoCtsUs = null;
-  let firstAudioCtsUs = tracks.audio ? null : 0;
-  const peekAbort = new AbortController();
-
-  const bothKnown = () => firstVideoCtsUs !== null && firstAudioCtsUs !== null;
-
-  try {
-    await streamSamples(reader, tracks, {
-      chunkSizeMB,
-      onVideoSample: async (sample) => {
-        if (firstVideoCtsUs === null) firstVideoCtsUs = (sample.cts / sample.timescale) * 1e6;
-        if (bothKnown()) peekAbort.abort();
-      },
-      onAudioSample: (sample) => {
-        if (firstAudioCtsUs === null) firstAudioCtsUs = (sample.cts / sample.timescale) * 1e6;
-        if (bothKnown()) peekAbort.abort();
-      },
-      signal: peekAbort.signal,
-    });
-  } catch {
-    // Deliberate self-abort, or the file ran out of samples before both trakcs
-    // reported in (e.g. no audio) -- either way, use whatever was captured.
-  }
-
+export function createPauseGate() {
+  let paused = false;
+  let resolveWait = null;
   return {
-    firstVideoCtsUs: firstVideoCtsUs ?? 0,
-    firstAudioCtsUs: firstAudioCtsUs ?? 0,
+    pause() {
+      paused = true;
+    },
+    resume() {
+      paused = false;
+      if (resolveWait) {
+        const r = resolveWait;
+        resolveWait = null;
+        r();
+      }
+    },
+    isPaused() {
+      return paused;
+    },
+    async wait() {
+      if (!paused) return;
+      await new Promise((resolve) => {
+        resolveWait = resolve;
+      });
+    },
   };
 }
 
@@ -102,13 +96,13 @@ function makeFpsTracker() {
 
 /**
  * @param {{ file: File, crop: object, preset: object, sink: {dirHandle, filename}|null,
- *   onProgress?: Function, signal?: AbortSignal,
+ *   onProgress?: Function, signal?: AbortSignal, pauseGate?: ReturnType<typeof createPauseGate>,
  *   limits?: { chunkSizeMB?: number, inFlightCap?: number, sampleFrames?: number|null } }} options
  */
-export async function shrinkSegment({ file, crop, preset, sink, onProgress = () => {}, signal, limits = {} }) {
+export async function shrinkSegment({ file, crop, preset, sink, onProgress = () => {}, signal, pauseGate, limits = {} }) {
   const resolvedSink = sink ?? (await createThrowawaySink());
   try {
-    return await runShrinkSegment({ file, crop, preset, sink: resolvedSink, onProgress, signal, limits });
+    return await runShrinkSegment({ file, crop, preset, sink: resolvedSink, onProgress, signal, pauseGate, limits });
   } finally {
     if (resolvedSink.throwaway) {
       await resolvedSink.dirHandle.removeEntry(resolvedSink.filename).catch(() => {});
@@ -116,7 +110,7 @@ export async function shrinkSegment({ file, crop, preset, sink, onProgress = () 
   }
 }
 
-async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, limits }) {
+async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, pauseGate, limits }) {
   const { chunkSizeMB = DEFAULT_CHUNK_SIZE_MB, inFlightCap = DEFAULT_IN_FLIGHT_CAP, sampleFrames = null } = limits;
   const startTime = performance.now();
   const fpsTracker = makeFpsTracker();
@@ -142,9 +136,6 @@ async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, 
   }
   if (!codecChoice) throw new StageError('encode', `no supported output encoder at ${out.width}x${out.height}`);
 
-  const { firstVideoCtsUs, firstAudioCtsUs } = await peekFirstTimestamps(reader, tracks, chunkSizeMB);
-  const timestampOriginUs = tracks.audio ? Math.min(firstVideoCtsUs, firstAudioCtsUs) : firstVideoCtsUs;
-
   let opfsSink;
   try {
     opfsSink = await createOpfsSink(sink.dirHandle, sink.filename);
@@ -152,18 +143,24 @@ async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, 
     throw new StageError('mux', err.message);
   }
 
-  let bytes = 0;
+  // Diagnostic only (encoded video payload + raw audio payload) -- NEVER the
+  // persisted `outputBytes` (B1: that must be the real OPFS file size, which only
+  // the caller knows after finalize()/abort() -- see worker.js).
+  let encodedBytes = 0;
   const muxer = createMuxer({
     target: opfsSink.target,
     writable: opfsSink.writable,
     video: { codec: codecChoice.muxerCodec, width: out.width, height: out.height },
     audio: tracks.audio,
-    timestampOriginUs,
   });
 
   let pipelineError = null;
   const sampleAbort = new AbortController();
   const combinedSignal = anySignal([signal, sampleAbort.signal]);
+  // A paused demux loop is parked on `pauseGate.wait()`, not the abort check --
+  // an abort arriving while paused must wake it too, or Cancel/probe-sample-abort
+  // stays stuck forever behind the pause.
+  combinedSignal.addEventListener('abort', () => pauseGate?.resume(), { once: true });
 
   let encoder;
   try {
@@ -173,7 +170,7 @@ async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, 
       bitrate: preset.bitrate,
       framerate: tracks.video.fps,
       onChunk: (chunk, meta) => {
-        bytes += chunk.byteLength;
+        encodedBytes += chunk.byteLength;
         muxer.addVideoChunk(chunk, meta);
       },
       onError: (err) => {
@@ -200,6 +197,7 @@ async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, 
     video: tracks.video,
     inFlightCap,
     encoderQueueDepth: encoder.queueDepth,
+    signal: combinedSignal,
     onError: (err) => {
       pipelineError = pipelineError ?? new StageError('decode', err.message);
       sampleAbort.abort();
@@ -214,7 +212,7 @@ async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, 
         sampleAbort.abort();
         return;
       }
-      encoder.encode(scaled); // closes `scaled`
+      encoder.encode(scaled); // closes `scaled` (even if encode() throws -- M3)
       framesDone += 1;
       const now = performance.now();
       onProgress({ framesDone, framesTotal, fps: fpsTracker(now), stage: 'encode' });
@@ -222,38 +220,61 @@ async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, 
     },
   });
 
+  // B2: the backpressure gate watches the encoder's queue depth but had no
+  // encoder-side wake source -- only decoder-side events (`dequeue`, per-frame
+  // `finally`) ever called `resumeWaiters()`. On an encode-bound pipeline (every
+  // real machine, caveat 4), the decoder drains fully and stops firing its own
+  // events while the encoder queue is still over cap, parking `push()` forever.
+  // Wire the encoder's own `dequeue` event to the decode stage's `wake()`.
+  const unwatchEncoderDequeue = encoder.onDequeue(() => decoder.wake());
+
   let demuxResult = { samplesRead: 0, releaseCalls: 0, maxMp4boxBuffers: 0, finalMp4boxBuffers: 0 };
   try {
     demuxResult = await streamSamples(reader, tracks, {
       chunkSizeMB,
       onVideoSample: (sample) => decoder.push(sample),
       onAudioSample: (sample) => {
-        bytes += sample.size ?? 0;
+        encodedBytes += sample.size ?? 0;
         muxer.addAudioSample(sample);
       },
       signal: combinedSignal,
+      pauseGate,
     });
   } catch (err) {
     if (!signal?.aborted) {
       pipelineError = pipelineError ?? new StageError('demux', err.message);
     }
+  } finally {
+    unwatchEncoderDequeue();
   }
 
-  if (signal?.aborted) {
-    // Cancel teardown, exact order (design §3.5): close (not flush) so queued
-    // inputs/outputs are discarded, then abort (not finalize) the sink.
+  const aborted = signal?.aborted === true;
+  if (aborted || pipelineError) {
+    // Cancel OR pipeline-error teardown, exact order (design §3.5): close (not
+    // flush) so queued inputs/outputs are discarded, then abort (not finalize)
+    // the sink. M2: a known-bad run must never attempt decoder.flush()/
+    // encoder.flush()/muxer.finalize() -- flushing an errored codec throws a
+    // generic InvalidStateError that masks the real StageError, and skipping
+    // muxer.abort() leaks the FileSystemWritableFileStream on the .part file.
     decoder.close();
     scaler.close();
     encoder.close();
     await muxer.abort();
+    if (pipelineError) {
+      // A genuine failure (not a user Cancel) leaves an invalid, orphaned
+      // .part file behind -- Cancel's own cleanup is the caller's job
+      // (tool.js's finishCancel), but nothing else ever cleans up a failed
+      // run's partial output, so do it here rather than leaking disk space
+      // until a retry happens to overwrite it.
+      await sink.dirHandle.removeEntry(sink.filename).catch(() => {});
+      throw pipelineError;
+    }
     return { cancelled: true, framesDone, framesTotal, liveFrames: decoder.stats().liveFrames };
   }
 
   await decoder.flush();
   await encoder.flush();
   await muxer.finalize();
-
-  if (pipelineError) throw pipelineError;
 
   const liveFrames = decoder.stats().liveFrames;
   if (liveFrames !== 0) {
@@ -266,7 +287,7 @@ async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, 
   return {
     framesDone,
     framesTotal,
-    bytes,
+    encodedBytes,
     wallSeconds,
     pixelsPerSecond: wallSeconds > 0 ? (out.width * out.height * framesDone) / wallSeconds : 0,
     outputHandle: opfsSink.handle,

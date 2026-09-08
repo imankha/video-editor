@@ -37,6 +37,7 @@ export const SPEED_GO_MULTIPLIER = 0.5; // >= this: green, proceed
 export const SPEED_REFUSE_MULTIPLIER = 0.25; // < this: red, refuse
 export const PROBE_WARMUP_FRAMES = 30; // ~1s, discarded from timing (decoder/encoder/GPU spin-up)
 export const PROBE_MEASURE_FRAMES = 90; // ~3s, the measured window
+export const MAX_COMFORTABLE_SECONDS = 4 * 3600; // design §4.2 guard 1: a 3h+ job is a bad idea even at a green multiplier
 
 /**
  * Capability gate: does WebCodecs support this file's codec at all? Delegates to
@@ -90,10 +91,24 @@ export async function runSpeedProbe({ file, crop, preset, signal }) {
     },
   });
 
-  // A very short segment may not have enough frames to fill the probe window --
-  // fall back to whatever was actually measured rather than reporting a bogus number.
-  const framesMeasured = Math.max(1, result.framesDone - PROBE_WARMUP_FRAMES);
-  const wallSeconds = Math.max(0.001, ((measureEndTime ?? performance.now()) - (warmupEndTime ?? 0)) / 1000);
+  // M5(a): a segment shorter than the probe window never completes it -- both
+  // timestamps must exist before any number is trusted. The old `?? 0` fallback
+  // made elapsed time = time-since-worker-start (potentially hundreds of
+  // seconds), collapsing fps and manufacturing a false 'too-slow' refusal on a
+  // perfectly capable machine. Report 'unknown' instead of inventing a verdict.
+  if (warmupEndTime == null || measureEndTime == null) {
+    return {
+      framesMeasured: 0, wallSeconds: 0, fps: 0, sourceFps,
+      realtimeMultiplier: 0, pixelsPerSecond: 0, verdict: 'unknown',
+    };
+  }
+
+  // M5(b): the numerator must be exactly the timed window (PROBE_MEASURE_FRAMES),
+  // not `result.framesDone - PROBE_WARMUP_FRAMES` -- decoder.flush() after the
+  // window closes drains additional queued frames through onFrame, so framesDone
+  // can overshoot what the timer actually measured, overstating fps by up to ~70%.
+  const framesMeasured = PROBE_MEASURE_FRAMES;
+  const wallSeconds = Math.max(0.001, (measureEndTime - warmupEndTime) / 1000);
   const fps = framesMeasured / wallSeconds;
   const realtimeMultiplier = fps / sourceFps;
   const pixelsPerSecond = out.width * out.height * fps;

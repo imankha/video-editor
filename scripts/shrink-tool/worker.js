@@ -7,8 +7,9 @@
  *   in  {cmd:'start', file, crop, preset, dirHandle, outName}
  *   in  {cmd:'probe',  file, crop, preset}
  *   in  {cmd:'cancel'}
- *   out {type:'progress', framesDone, framesTotal, fps}      throttled to ~2/s HERE
- *   out {type:'done', file, bytes, framesDone, wallSeconds, pixelsPerSecond}
+ *   in  {cmd:'pause'} / {cmd:'resume'}                        design Q7
+ *   out {type:'progress', framesDone, framesTotal, fps}       throttled to ~2/s HERE
+ *   out {type:'done', file, bytes, encodedBytes, framesDone, wallSeconds, pixelsPerSecond}
  *   out {type:'probe', framesMeasured, wallSeconds, fps, sourceFps, realtimeMultiplier, pixelsPerSecond, verdict}
  *   out {type:'error', stage, message}
  *   out {type:'cancelled'}
@@ -17,12 +18,13 @@
  * are not re-paid per segment) -- tool.js owns that lifecycle, not this file.
  */
 
-import { shrinkSegment, StageError } from './pipeline/shrinkSegment.js';
+import { shrinkSegment, createPauseGate, StageError } from './pipeline/shrinkSegment.js';
 import { runSpeedProbe } from './pipeline/probe.js';
 
 const PROGRESS_THROTTLE_MS = 500; // ~2/s
 
 let activeAbort = null;
+let activePauseGate = null;
 
 /** Leading + trailing edge: never drops the final call in a burst (e.g. framesDone === framesTotal). */
 function throttle(fn, ms) {
@@ -55,6 +57,7 @@ function postError(err) {
 
 async function handleStart({ file, crop, preset, dirHandle, outName }) {
   activeAbort = new AbortController();
+  activePauseGate = createPauseGate();
   const onProgress = throttle(({ framesDone, framesTotal, fps }) => {
     self.postMessage({ type: 'progress', framesDone, framesTotal, fps });
   }, PROGRESS_THROTTLE_MS);
@@ -66,6 +69,7 @@ async function handleStart({ file, crop, preset, dirHandle, outName }) {
       preset,
       sink: { dirHandle, filename: outName },
       signal: activeAbort.signal,
+      pauseGate: activePauseGate,
       onProgress,
     });
 
@@ -74,11 +78,16 @@ async function handleStart({ file, crop, preset, dirHandle, outName }) {
       return;
     }
 
+    // B1: the persisted size must be the REAL OPFS file size -- `result.encodedBytes`
+    // is only the encoded video/audio payload and excludes ftyp/mdat header/moov
+    // (can be MB on a long segment), which made checkpoint.js's exact-equality
+    // verifyOutputs check fail and delete every finished segment on reload.
     const outFile = await result.outputHandle.getFile();
     self.postMessage({
       type: 'done',
       file: outFile,
-      bytes: result.bytes,
+      bytes: outFile.size,
+      encodedBytes: result.encodedBytes,
       framesDone: result.framesDone,
       wallSeconds: result.wallSeconds,
       pixelsPerSecond: result.pixelsPerSecond,
@@ -88,6 +97,7 @@ async function handleStart({ file, crop, preset, dirHandle, outName }) {
     postError(err);
   } finally {
     activeAbort = null;
+    activePauseGate = null;
   }
 }
 
@@ -112,9 +122,20 @@ function handleCancel() {
   }
 }
 
+/** Pause (design Q7): "I need my laptop for 20 minutes" costs nothing, unlike Cancel. */
+function handlePause() {
+  activePauseGate?.pause();
+}
+
+function handleResume() {
+  activePauseGate?.resume();
+}
+
 self.onmessage = (event) => {
   const msg = event.data;
   if (msg?.cmd === 'start') handleStart(msg);
   else if (msg?.cmd === 'probe') handleProbe(msg);
   else if (msg?.cmd === 'cancel') handleCancel();
+  else if (msg?.cmd === 'pause') handlePause();
+  else if (msg?.cmd === 'resume') handleResume();
 };

@@ -40,6 +40,10 @@ export function createCropRectController(canvas, { onChange = () => {} } = {}) {
   let source = null;
   let drawRect = { x: 0, y: 0, w: canvas.width, h: canvas.height };
   let drag = null; // { mode, startX, startY, crop0 } in normalized frame space
+  // M4: once a manifest/job exists, the crop is read-only for that job (design
+  // §5 "written into the manifest at Start and restored read-only on Resume") --
+  // without this, dragging the rect mid-run silently mixes crops across segments.
+  let enabled = true;
 
   function computeDrawRect() {
     if (!frameWidth || !frameHeight) return { x: 0, y: 0, w: canvas.width, h: canvas.height };
@@ -143,6 +147,7 @@ export function createCropRectController(canvas, { onChange = () => {} } = {}) {
   }
 
   canvas.addEventListener('pointerdown', (evt) => {
+    if (!enabled) return;
     const { px, py } = localPos(evt);
     const mode = hitTest(px, py);
     if (!mode) return;
@@ -152,6 +157,7 @@ export function createCropRectController(canvas, { onChange = () => {} } = {}) {
   });
 
   canvas.addEventListener('pointermove', (evt) => {
+    if (!enabled) return;
     const { px, py } = localPos(evt);
     if (!drag) {
       const mode = hitTest(px, py);
@@ -173,6 +179,7 @@ export function createCropRectController(canvas, { onChange = () => {} } = {}) {
   canvas.addEventListener('pointercancel', endDrag);
 
   canvas.addEventListener('dblclick', (evt) => {
+    if (!enabled) return;
     const { px, py } = localPos(evt);
     if (hitTest(px, py)) return; // only resets on a click outside the current rect
     setCropInternal({ x: 0, y: 0, w: 1, h: 1 });
@@ -189,6 +196,11 @@ export function createCropRectController(canvas, { onChange = () => {} } = {}) {
     },
     getCrop() {
       return { ...crop };
+    },
+    /** M4: locks/unlocks pointer interaction once a manifest/job exists. */
+    setEnabled(next) {
+      enabled = next;
+      canvas.style.cursor = enabled ? 'default' : 'not-allowed';
     },
     setCrop(next) {
       setCropInternal({ x: next.x, y: next.y, w: next.w, h: next.h }, { notify: false });
