@@ -2,7 +2,7 @@ import { ChevronRight, Plus } from 'lucide-react';
 import { Button } from './Button';
 import { GAME, REEL, HIGHLIGHT, PUBLISHED } from '../../config/themeColors';
 import { CLIP_UPLOAD } from '../../config/displayNames';
-import { FLOW_STEPS, EMPTY_TAB_GUIDE } from '../../config/emptyStates';
+import { FLOW_STEPS, EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 
 /**
  * EmptyTabGuide (T8980) - the shared empty state rendered by all four home tabs
@@ -28,6 +28,17 @@ import { FLOW_STEPS, EMPTY_TAB_GUIDE } from '../../config/emptyStates';
  * @param {() => void} onAddGame  - open the Add Game flow
  * @param {() => void} onAddVideo - open the direct clip-upload (Add Video) flow
  * @param {() => void} onBuildReel - open the Build New Reel assembly modal
+ * @param {'empty'|'partial'} variant - 'empty' (default) is the full-panel state
+ *                              rendered when a tab is completely empty; 'partial'
+ *                              (T8990) is the compact, tile-shaped state kept until
+ *                              the first row fills (a lone game cell, or a carousel
+ *                              filler). The two are separate copy sets + layouts.
+ * @param {string} className - extra classes for the partial variant's outer aside,
+ *                              so the caller sizes it for its slot (a grid cell's
+ *                              `aspect-video self-stretch`, or a carousel filler's
+ *                              `h-full`). Ignored by the empty variant.
+ * @param {() => void} onAction - the partial variant's single CTA (Games "Open
+ *                              game"); tabs whose action sits above the row pass none.
  */
 export function EmptyTabGuide({
   tab,
@@ -38,7 +49,14 @@ export function EmptyTabGuide({
   onAddGame,
   onAddVideo,
   onBuildReel,
+  variant = 'empty',
+  className = '',
+  onAction,
 }) {
+  if (variant === 'partial') {
+    return <PartialTabGuide tab={tab} className={className} onAction={onAction} />;
+  }
+
   const copy = EMPTY_TAB_GUIDE[tab];
   if (!copy) return null;
 
@@ -276,6 +294,63 @@ function Footer({ tab, onNavigate }) {
     );
   }
   return <p className="text-xs text-gray-500">{copy.footer}</p>;
+}
+
+/**
+ * PartialTabGuide (T8990) - the compact, tile-shaped variant. It fills the
+ * leftover space in a tab's first row (a lone game's empty grid cell, or a
+ * carousel filler beside a short row) with NEXT-STEP coaching, and retires
+ * itself the moment the row fills (the caller stops rendering it, or the
+ * carousel unmounts it once tiles overflow). No persisted state, no dismiss
+ * control (decision 6): it disappears by construction, not by a gesture.
+ *
+ * An `aside` with an `h3` -- the enclosing group already owns the `h2` (a Games
+ * month header, a Clips/Published game header). The flow strip is always in its
+ * compact numbered-dots form (this slot is too small for the full 4-step row);
+ * unlike the empty variant it is not breakpoint-gated, since the slot itself
+ * only exists at widths where the dots fit.
+ */
+function PartialTabGuide({ tab, className = '', onAction }) {
+  const copy = PARTIAL_TAB_GUIDE[tab];
+  if (!copy) return null;
+  const currentIndex = FLOW_STEPS.findIndex((s) => s.key === tab);
+  const current = FLOW_STEPS[currentIndex];
+
+  return (
+    <aside
+      className={`flex flex-col items-center justify-center text-center overflow-hidden
+                  rounded-lg border border-gray-700 bg-gray-800/40 px-3 py-3 ${className}`}
+    >
+      <ol className="flex items-center gap-1.5 mb-2" aria-hidden="true">
+        {FLOW_STEPS.map((step, i) => {
+          const active = step.key === tab;
+          return (
+            <li
+              key={step.key}
+              className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
+                active ? `${STEP_COLORS[step.key]} text-white` : 'bg-gray-700 text-gray-500'
+              }`}
+            >
+              {i + 1}
+            </li>
+          );
+        })}
+      </ol>
+      <p className="text-[11px] font-medium text-gray-400 mb-1.5">
+        Step {currentIndex + 1} of {FLOW_STEPS.length}: {current.label}
+      </p>
+      <h3 className="text-sm font-semibold text-white mb-1.5 leading-snug">{copy.headline}</h3>
+      <p className="text-xs text-gray-400 leading-snug">{copy.body}</p>
+      {copy.cta && onAction && (
+        <div className="mt-3">
+          <Button variant="success" size="sm" onClick={onAction}>
+            {copy.cta}
+          </Button>
+        </div>
+      )}
+      <p className="text-[11px] text-gray-500 mt-3">{copy.footer}</p>
+    </aside>
+  );
 }
 
 export default EmptyTabGuide;

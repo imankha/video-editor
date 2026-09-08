@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CardCarousel, pickPeekGap } from './CardCarousel';
+import { CardCarousel, pickPeekGap, fillerFits } from './CardCarousel';
 
 describe('CardCarousel (T5672)', () => {
   beforeEach(() => {
@@ -227,5 +227,40 @@ describe('pickPeekGap (item 1 — always leave a peek)', () => {
     const remainder = containerW % (tileW + gap);
     expect(remainder).toBeGreaterThan(PEEK_MIN(tileW));
     expect(remainder).toBeLessThan(PEEK_MAX(tileW));
+  });
+});
+
+describe('fillerFits (T8990 - mount the coaching filler only while it fits)', () => {
+  // The filler needs >= MIN_FILLER_WIDTH (280) beyond the tiles + one gap each.
+  it('returns false on degenerate inputs (no layout engine / empty row)', () => {
+    expect(fillerFits(0, 1000, 3)).toBe(false);
+    expect(fillerFits(260, 0, 3)).toBe(false);
+    expect(fillerFits(260, 1000, 0)).toBe(false);
+    expect(fillerFits(NaN, 1000, 3)).toBe(false);
+  });
+
+  it('fits beside a short landscape row at the Clips container width (1152)', () => {
+    // 1 landscape tile (260): 260 + 12 + 280 = 552 <= 1152 -> fits
+    expect(fillerFits(260, 1152, 1)).toBe(true);
+    // 3 tiles: 780 + 36 + 280 = 1096 <= 1152 -> still fits
+    expect(fillerFits(260, 1152, 3)).toBe(true);
+  });
+
+  it('retires once landscape tiles fill the row (4-up at 1152)', () => {
+    // 4 tiles: 1040 + 48 + 280 = 1368 > 1152 -> no longer fits
+    expect(fillerFits(260, 1152, 4)).toBe(false);
+  });
+
+  it('never fits on a phone: one 72vw tile already fills the row', () => {
+    // ~390px viewport, tile ~281 (72vw): 281 + 12 + 280 = 573 > 390 -> false
+    expect(fillerFits(281, 390, 1)).toBe(false);
+  });
+
+  it('is decided from the tiles only, so at the exact boundary adding a tile flips it', () => {
+    // Construct a container exactly at the 1-tile threshold: 260 + 12 + 280 = 552.
+    expect(fillerFits(260, 552, 1)).toBe(true);   // exactly fits
+    expect(fillerFits(260, 551, 1)).toBe(false);  // one px short
+    // Portrait tiles (168) pack more before the filler retires.
+    expect(fillerFits(168, 1152, 3)).toBe(true);  // 504 + 36 + 280 = 820 <= 1152
   });
 });

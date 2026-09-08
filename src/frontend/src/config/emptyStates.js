@@ -74,3 +74,46 @@ export const EMPTY_TAB_GUIDE = {
     footer: 'Every published reel gets its own link. Share it from the player or the card.',
   },
 };
+
+// T8990: copy for the PARTIAL state -- the compact, tile-shaped variant of
+// EmptyTabGuide that keeps coaching a tab until its first row is full (one game,
+// or a carousel row the tiles have not yet filled). Copy is LOCKED (2026-09-08)
+// and binding -- do not paraphrase. No em dashes anywhere (project-wide rule).
+// Where the empty copy is written for absence, this is written for the NEXT step:
+// what to do with the thing you just made. `cta` is present only where a gesture
+// beyond "the tile is the action" is wanted (Games "Open game"); the other three
+// tabs already carry their action above the row (Add Video / Build New Reel), so
+// the partial guide there is copy-only.
+export const PARTIAL_TAB_GUIDE = {
+  games: {
+    headline: 'Now cut your first play',
+    body:
+      'Open your game and tap Add Play at each moment worth keeping; each play '
+      + 'becomes a clip on In Progress Clips.',
+    cta: 'Open game',
+    footer: 'Clips are step 2 of 4.',
+  },
+  clips: {
+    headline: 'Give each clip a Focus pass',
+    body:
+      'Open a clip to follow your athlete and add an optional Spotlight, then '
+      + 'publish it on its own or build several into a reel.',
+    footer: 'Published clips show up on the Published tab.',
+  },
+  reels: {
+    headline: 'Finish your reel and export once',
+    body:
+      'Put the plays in order, export, then Publish moves it to the Published tab '
+      + 'with a link you can share.',
+    footer: 'Finished reels move to Published when you share them.',
+  },
+  published: {
+    // Headline must READ as guidance, never as a control label (T8990 review): the
+    // old "Share it" scanned as the real Share button. Name the affordances in the
+    // BODY (they point at real controls), not the headline.
+    headline: 'Ready for coaches and family',
+    body:
+      'Every published reel gets its own link. Use Share or Copy Link on any card.',
+    footer: 'Publish more clips to see them grouped by game here.',
+  },
+};

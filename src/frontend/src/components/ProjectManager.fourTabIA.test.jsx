@@ -75,6 +75,13 @@ vi.mock('./SignInButton', () => ({ SignInButton: () => <div />, default: () => <
 vi.mock('./ProfileSportButton', () => ({ ProfileSportButton: () => <div />, default: () => <div /> }));
 vi.mock('./ProfileDropdown', () => ({ ProfileDropdown: () => <div /> }));
 vi.mock('./GameTile', () => ({ GameTile: () => <div data-testid="game-tile" /> }));
+// T8990: the uploading rail renders these; stub so the "hidden during upload"
+// case doesn't drag in the tile's own store/hook deps.
+vi.mock('./UploadingGameTile', () => ({ UploadingGameTile: () => <div data-testid="uploading-tile" /> }));
+// A lone is_reference game renders ReferenceGameCard (cross-profile link), not a
+// GameTile; stub it so the "no partial guide for a reference-only account" case
+// doesn't drag in its store deps.
+vi.mock('./ReferenceGameCard', () => ({ ReferenceGameCard: () => <div data-testid="reference-card" /> }));
 // DraftTile is used both by the (frozen) Clips tab AND the new inline
 // In Progress Reels branch -- echo the project id/name so tests can assert
 // WHICH drafts rendered where.
@@ -96,6 +103,7 @@ vi.mock('./PublishedReelsPanel', () => ({
 
 import { ProjectManager } from './ProjectManager';
 import { useGalleryStore } from '../stores/galleryStore';
+import { EMPTY_TAB_GUIDE } from '../config/emptyStates';
 
 const APP_STATE = { unseenReelsCount: 0, exportingProject: null };
 
@@ -252,6 +260,91 @@ describe('T8555: Published tab renders the published gallery panel', () => {
     });
     // Fire-once signal consumed, same T8400/T8470 contract as before.
     expect(useGalleryStore.getState().isOpen).toBe(false);
+  });
+});
+
+// T8990: the lone-game coaching cell + the Clips tutorial-target invariant.
+const oneGame = (id = 'g1') => ({
+  id,
+  name: `Game ${id}`,
+  created_at: '2026-09-01T00:00:00Z',
+  game_date: '2026-09-01',
+});
+
+describe('T8990: Games partial-guide cell', () => {
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/home/games');
+    useGalleryStore.setState({ isOpen: false });
+  });
+
+  const partialHeadline = 'Now cut your first play';
+
+  it('renders the partial guide beside the tile at exactly one game', () => {
+    renderManager({ games: [oneGame()] }, '/home/games');
+    expect(screen.getByText(partialHeadline)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open game' })).toBeTruthy();
+    // The lone game tile still renders -- the guide sits in the second cell.
+    expect(screen.getByTestId('game-tile')).toBeTruthy();
+  });
+
+  it('the Open game CTA loads that game', () => {
+    const onLoadGame = vi.fn();
+    renderManager({ games: [oneGame('gX')], onLoadGame }, '/home/games');
+    fireEvent.click(screen.getByRole('button', { name: 'Open game' }));
+    expect(onLoadGame).toHaveBeenCalledWith('gX');
+  });
+
+  it('does NOT render at zero games (the empty variant shows instead)', () => {
+    renderManager({ games: [] }, '/home/games');
+    expect(screen.queryByText(partialHeadline)).toBeNull();
+    // The full empty guide is what renders at zero.
+    expect(screen.getByText(EMPTY_TAB_GUIDE.games.headline)).toBeTruthy();
+  });
+
+  it('does NOT render at two games (first row is full)', () => {
+    renderManager({ games: [oneGame('g1'), oneGame('g2')] }, '/home/games');
+    expect(screen.queryByText(partialHeadline)).toBeNull();
+  });
+
+  it('is hidden while an upload is in flight', () => {
+    renderManager({ games: [oneGame()], uploads: [{ id: 'u1', status: 'uploading', fileName: 'x.mp4' }] }, '/home/games');
+    expect(screen.queryByText(partialHeadline)).toBeNull();
+    expect(screen.getByTestId('uploading-tile')).toBeTruthy();
+  });
+
+  it('is hidden while a resumable pending upload exists', () => {
+    renderManager({ games: [oneGame()], pendingUploads: [{ session_id: 's1', original_filename: 'x.mp4' }] }, '/home/games');
+    expect(screen.queryByText(partialHeadline)).toBeNull();
+  });
+
+  it('does NOT render when the lone game is a cross-profile reference (CTA would misroute)', () => {
+    renderManager({ games: [{ ...oneGame('gRef'), is_reference: true }] }, '/home/games');
+    expect(screen.getByTestId('reference-card')).toBeTruthy();
+    expect(screen.queryByText(partialHeadline)).toBeNull();
+  });
+});
+
+describe('T8990: clips-add-video tutorial target stays unique (T8380 invariant)', () => {
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/home/reels');
+    useGalleryStore.setState({ isOpen: false });
+  });
+
+  const targets = () => document.querySelectorAll('[data-tutorial-target="clips-add-video"]');
+
+  it('empty Clips state: exactly one target (the empty guide Add Video button)', () => {
+    renderManager({ projects: [] }, '/home/reels');
+    fireEvent.click(clipsTab());
+    expect(targets().length).toBe(1);
+  });
+
+  it('non-empty Clips state: exactly one target (the action row), partial filler adds none', () => {
+    // jsdom measures no layout, so the carousel filler never mounts here -- which
+    // is itself the guarantee that the partial guide (which carries NO Add Video
+    // button anyway) can never introduce a second target.
+    renderManager({ projects: [singleclipDraft(2)] }, '/home/reels');
+    fireEvent.click(clipsTab());
+    expect(targets().length).toBe(1);
   });
 });
 
