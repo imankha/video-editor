@@ -248,14 +248,13 @@ async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, 
     unwatchEncoderDequeue();
   }
 
-  const aborted = signal?.aborted === true;
-  if (aborted || pipelineError) {
-    // Cancel OR pipeline-error teardown, exact order (design §3.5): close (not
-    // flush) so queued inputs/outputs are discarded, then abort (not finalize)
-    // the sink. M2: a known-bad run must never attempt decoder.flush()/
-    // encoder.flush()/muxer.finalize() -- flushing an errored codec throws a
-    // generic InvalidStateError that masks the real StageError, and skipping
-    // muxer.abort() leaks the FileSystemWritableFileStream on the .part file.
+  // Cancel OR pipeline-error teardown, exact order (design §3.5): close (not
+  // flush) so queued inputs/outputs are discarded, then abort (not finalize)
+  // the sink. M2: a known-bad run must never attempt decoder.flush()/
+  // encoder.flush()/muxer.finalize() -- flushing an errored codec throws a
+  // generic InvalidStateError that masks the real StageError, and skipping
+  // muxer.abort() leaks the FileSystemWritableFileStream on the .part file.
+  const abortRun = async () => {
     decoder.close();
     scaler.close();
     encoder.close();
@@ -270,10 +269,26 @@ async function runShrinkSegment({ file, crop, preset, sink, onProgress, signal, 
       throw pipelineError;
     }
     return { cancelled: true, framesDone, framesTotal, liveFrames: decoder.stats().liveFrames };
-  }
+  };
 
-  await decoder.flush();
-  await encoder.flush();
+  const aborted = signal?.aborted === true;
+  if (aborted || pipelineError) return abortRun();
+
+  // A codec fault can still land in `pipelineError` asynchronously WHILE
+  // flush() is draining queued work (the encoder/decoder `onError` callbacks
+  // above), after the check above already passed -- flush() itself can also
+  // reject outright. Either way this is the same known-bad-run case as
+  // above, not the happy path: route it through the same abort teardown
+  // instead of letting muxer.finalize() commit a stream that's missing its
+  // tail chunks.
+  try {
+    await decoder.flush();
+    await encoder.flush();
+  } catch (err) {
+    pipelineError = pipelineError ?? new StageError('encode', err.message);
+  }
+  if (pipelineError) return abortRun();
+
   await muxer.finalize();
 
   const liveFrames = decoder.stats().liveFrames;
