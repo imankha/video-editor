@@ -440,7 +440,9 @@ async def set_panel_collapsed(payload: dict):
 
 
 @router.post("/achievements/{key}")
-async def record_achievement(key: str):
+# T9130: sync def -> anyio threadpool. Blocking get_db_connection() write + reads and
+# a synchronous record_milestone, no await in the body.
+def record_achievement(key: str):
     """
     Record a non-derivable achievement. Idempotent — INSERT OR IGNORE.
     """

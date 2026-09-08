@@ -167,7 +167,8 @@ def _fetch_card(cursor, card_id: int):
 # ---------------------------------------------------------------------------
 
 @router.get("")
-async def list_intro_cards():
+# T9130: sync def -> anyio threadpool. Blocking get_db_connection() read, no await.
+def list_intro_cards():
     """List the current profile's intro cards (raw rows + derived composition +
     a freshly presigned preview URL)."""
     with get_db_connection() as conn:

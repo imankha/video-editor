@@ -96,7 +96,7 @@ def _insert_raw_clip(cur, *, game_id, auto_project_id):
 
 def _summary():
     from app.routers.collections import collections_summary
-    return asyncio.run(collections_summary())
+    return collections_summary()
 
 
 def _downloads(**kwargs):
@@ -539,7 +539,7 @@ class TestSmartCollections:
         conn.commit(); conn.close()
 
         from app.routers.collections import collections_summary
-        s = asyncio.run(collections_summary(sport="volleyball"))
+        s = collections_summary(sport="volleyball")
         smart = {sc.key: sc for sc in s.smart_collections}
         # Volleyball combo present (Kill OR Ace), soccer combo absent.
         assert smart["vb_kills_aces"].reel_count == 2
@@ -594,7 +594,7 @@ class TestMultiSportCollections:
         _insert_fv(cur, game_ids=[7], ratio="9:16", duration=40.0, tags=[tag])  # >=30s
         conn.commit(); conn.close()
 
-        s = asyncio.run(collections_summary(sport=sport))
+        s = collections_summary(sport=sport)
         smart = {sc.key: sc for sc in s.smart_collections}
 
         # Flagship is always present and nudges.
@@ -617,7 +617,7 @@ class TestMultiSportCollections:
         _insert_fv(cur, game_ids=[7], ratio="9:16", duration=40.0, tags=["Kill"])
         conn.commit(); conn.close()
 
-        s = asyncio.run(collections_summary(sport="soccer"))
+        s = collections_summary(sport="soccer")
         smart = {sc.key: sc for sc in s.smart_collections}
         assert "soccer_goals_assists" not in smart   # no Goal/Assist reels
         assert "vb_kills_aces" not in smart           # soccer combo set in use

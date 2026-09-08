@@ -84,7 +84,7 @@ async def test_create_card_blocked_without_consent(intro_env):
 
     # And nothing was written.
     from app.routers.intro_cards import list_intro_cards
-    listed = await list_intro_cards()
+    listed = list_intro_cards()
     assert listed["cards"] == []
 
 

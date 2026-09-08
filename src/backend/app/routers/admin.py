@@ -186,7 +186,10 @@ def _rank_to_label(rank) -> str:
 # ---------------------------------------------------------------------------
 
 @router.get("/me")
-async def admin_me():
+# T9130: sync def -> anyio threadpool, off the event loop. is_admin() makes two
+# blocking psycopg2 round-trips (auth_db.py); no await in the body. Same flip class
+# as T8020's admin_dashboard. See backend-services.md concurrency model.
+def admin_me():
     """Check if the current user is an admin. Safe for all users — never 403."""
     user_id = get_current_user_id()
     return {"is_admin": is_admin(user_id), "environment": APP_ENV}

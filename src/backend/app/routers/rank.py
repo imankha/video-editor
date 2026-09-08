@@ -468,7 +468,9 @@ def _apply_twin_sync(cursor, reel, new_rating: float, new_rd: float) -> None:
 
 
 @router.get("/confidence", response_model=ConfidenceResponse)
-async def rank_confidence(aspect_ratio: str):
+# T9130: sync def -> anyio threadpool. Blocking get_db_connection() read, no await.
+# Called twice per Publish page load (once per aspect ratio).
+def rank_confidence(aspect_ratio: str):
     """Collection Confidence banner numbers for one ratio (spec §4.2)."""
     with get_db_connection() as conn:
         return _confidence_stats(conn.cursor(), aspect_ratio)

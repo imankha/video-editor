@@ -741,7 +741,9 @@ async def upload_failure_beacon(request: Request):
 
 
 @router.get("/pending-uploads")
-async def list_pending_uploads():
+# T9130: sync def -> anyio threadpool. Blocking R2 multipart validity/abort HEADs +
+# get_db_connection() reads/writes + synchronous record_milestone, no await in the body.
+def list_pending_uploads():
     """
     List pending uploads for the current user.
 

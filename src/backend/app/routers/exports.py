@@ -710,7 +710,9 @@ async def list_recent_exports(hours: int = Query(default=24, ge=1, le=168)):
 
 
 @router.get("/unacknowledged", response_model=ExportJobListResponse)
-async def list_unacknowledged_exports():
+# T9130: sync def -> anyio threadpool, matching its sibling /active (T7040). Blocking
+# get_db_connection() read, no await in the body.
+def list_unacknowledged_exports():
     """
     T12: Get exports that completed while user was away (not yet acknowledged).
 

@@ -131,6 +131,51 @@ body for an actual `await` before choosing — don't flip one that has one.
 9 independent un-offloaded handlers (not one shared cause) plus one scaling amplifier
 (`list_projects`'s per-project poster-warm HEAD). Full spec above. Unblocked.
 
+**2026-09-08 (implementation)**: All 9 burst handlers offloaded + the amplifier batched.
+
+- **Flipped `async def` -> plain `def`** (all bodies confirmed `await`-free first): `admin_me`
+  (admin.py), `get_warmup_urls` (storage.py), `collections_summary` + `get_collection_intro_batch`
+  (collections.py), `list_unacknowledged_exports` (exports.py), `rank_confidence` (rank.py),
+  `list_intro_cards` (intro_cards.py), `record_achievement` (quests.py), `list_pending_uploads`
+  (games_upload.py).
+- **Offloaded / restructured:** `bootstrap`'s `_read_profile_misc` now runs via `run_in_context`
+  as a THIRD concurrent `asyncio.gather` leg (`_read_profile_misc_group`) instead of trailing
+  projects+games on the loop; `list_projects`'s poster-warm fire-and-forget now sweeps the
+  per-project `file_exists_in_r2` existence checks in ONE `run_in_context` call instead of one
+  blocking boto3 HEAD per project; `poster_warmer.py`'s two dedup double-check HEADs
+  (`file_exists_in_r2`, `r2_head_object_global`) offloaded via `run_in_context`.
+- **Direct-caller landmine (as warned):** the `async def`->`def` flip broke tests calling handlers
+  directly. Updated the direct callers to plain sync calls in `test_collections_summary.py`,
+  `test_reel_ranking.py`, `test_t5195_intro_cards.py`, `test_t5230_intro_compliance.py`,
+  `test_achievement_post_returns_progress.py`. TestClient callers (`test_t7490_honest_reap.py`,
+  `test_t7970_upload_failure_milestones.py`) and `test_t6030`'s `iscoroutine`-guarded `_run` helper
+  needed NO change.
+- **Regression test:** `tests/test_t9130_publish_burst_concurrency.py` — a loop-resident ticker is
+  the witness; N=7 blocking handlers fire concurrently and the test asserts the loop keeps ticking
+  (overlap) + burst wall ~= max(individual). Counterfactual sibling drives the SAME burst against an
+  inline-blocking `async def` and proves the ticker stalls + burst serializes. Both pass; property
+  test FAILS if a handler goes back on the loop.
+- **Extended `scripts/concurrency_probe.py`** with `--publish-burst`: fires the 7 distinct Stall-A
+  endpoints concurrently and reports each endpoint's latency + burst wall + serial-sum + the
+  `/api/health` victim. (Committed artifact; a LIVE run needs a warm staging process with the
+  `X-User-ID`/`X-Profile-ID` header bypass — see the staging-verification note below.)
+- **Cold-path decision:** the two offenders outside the burst (`auth.py:198 init_session`,
+  `session_init.py:408` startup recovery) are FILED AS FOLLOW-UP **T9135**, not folded in — to keep
+  this diff reviewable and because the startup-recovery offload carries the T6240 main-loop landmine
+  (offloaded loop task must reschedule onto the captured main loop, never `asyncio.run`) that
+  deserves its own focused review. `run_in_context` also takes positional args only, so
+  `init_session`'s `hint_profile_id` needs the closure shape T9135 specifies.
+- **Tests:** curated relevant set (touched handlers/routers + concurrency guards) — 317 passed
+  across two batches; one flake in `test_t6200_concurrency.py::test_authed_burst_larger_than_pool_does_not_503`
+  under the 4-min parallel run passed in isolation (it patches its own PG pool/gate, untouched here).
+  `from app.main import app` import check clean. Ruff clean on changed lines.
+- **STAGING-PHASE verification (deferred, needs live staging):** re-running T9120's burst experiment
+  (`--publish-burst`) against a warm staging process and re-capturing a fresh Publish-page HAR to
+  confirm burst wall dropped from ~605ms to ~max(individual) and `/api/health` from 602ms to <100ms
+  cannot be done from the worker (no staging/machine access, and staging IS the test phase per
+  CLAUDE.md). The automated ticker-witness regression test is the durable, counterfactual-proven
+  in-repo evidence; the live HAR/probe numbers get captured once the branch lands on staging.
+
 ## Acceptance Criteria
 
 - [ ] All 9 handlers in "Handlers to fix" are offloaded or flipped to plain `def`, each verified

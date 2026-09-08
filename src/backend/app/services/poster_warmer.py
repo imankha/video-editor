@@ -12,15 +12,16 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
+from ..profile_context import set_current_profile_id
+from ..storage import file_exists_in_r2, r2_head_object_global
+from ..user_context import set_current_user_id
+from ..utils.offload import run_in_context
 from .poster import (
     draft_poster_rel_path,
     ensure_draft_poster,
     ensure_game_source_poster,
     recap_card_poster_r2_key,
 )
-from ..profile_context import set_current_profile_id
-from ..storage import file_exists_in_r2, r2_head_object_global
-from ..user_context import set_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -106,8 +107,10 @@ class PosterWarmer:
 
         async with self._locks[key]:
             # Double-check: maybe another task finished while we waited.
+            # T9130: the existence HEAD is a blocking boto3 call -- offload it so
+            # this dedup check never holds the event loop.
             rel_path = draft_poster_rel_path(project_id)
-            if file_exists_in_r2(user_id, rel_path):
+            if await run_in_context(file_exists_in_r2, user_id, rel_path):
                 logger.info(f"[PosterWarm] draft {key} already exists (dedup double-check)")
                 return rel_path
 
@@ -171,8 +174,10 @@ class PosterWarmer:
 
         async with self._locks[key]:
             # Double-check.
+            # T9130: the existence HEAD is a blocking boto3 call -- offload it so
+            # this dedup check never holds the event loop.
             poster_key = recap_card_poster_r2_key(user_id, profile_id, game_id)
-            if r2_head_object_global(poster_key) is not None:
+            if await run_in_context(r2_head_object_global, poster_key) is not None:
                 logger.info(f"[PosterWarm] game_source {key} already exists (dedup double-check)")
                 return True
 

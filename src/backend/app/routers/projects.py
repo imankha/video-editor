@@ -634,13 +634,23 @@ async def list_projects():
         warmer = get_poster_warmer()
         user_id = get_current_user_id()
         profile_id = get_current_profile_id()
+
+        # T9130: the poster-existence check is a blocking boto3 head_object
+        # (~88ms each). Running it once per project directly on the loop turned
+        # this fire-and-forget into the biggest latent amplifier of the Publish
+        # burst (scales linearly with project count). Sweep the whole set in ONE
+        # worker thread instead of one blocking HEAD per project on the loop.
+        def _missing_poster_project_ids() -> list[int]:
+            return [
+                project.id for project in result
+                if not file_exists_in_r2(user_id, draft_poster_rel_path(project.id))
+            ]
+        missing_ids = await run_in_context(_missing_poster_project_ids)
+
         tasks = []
-        for project in result:
-            # Skip if poster already exists (cache hit).
-            if file_exists_in_r2(user_id, draft_poster_rel_path(project.id)):
-                continue
+        for project_id in missing_ids:
             # Queue warming with bounded semaphore.
-            coro = warmer.warm_draft_poster_async(user_id, profile_id, project.id)
+            coro = warmer.warm_draft_poster_async(user_id, profile_id, project_id)
             tasks.append(warmer.warm_with_semaphore(coro))
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)

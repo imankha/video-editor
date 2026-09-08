@@ -125,7 +125,7 @@ def _downloads(**kwargs):
 
 def _summary():
     from app.routers.collections import collections_summary
-    return asyncio.run(collections_summary())
+    return collections_summary()
 
 
 # ---------------------------------------------------------------------------
@@ -543,7 +543,7 @@ class TestRankEndpoints:
 
     def _confidence(self, ratio="9:16"):
         from app.routers.rank import rank_confidence
-        return asyncio.run(rank_confidence(aspect_ratio=ratio))
+        return rank_confidence(aspect_ratio=ratio)
 
     def _restore(self, undo):
         from app.routers.rank import rank_restore

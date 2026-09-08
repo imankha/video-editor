@@ -200,7 +200,9 @@ async def check_file_exists(file_type: str, filename: str) -> dict:
 
 
 @router.get("/warmup")
-async def get_warmup_urls(
+# T9130: sync def -> anyio threadpool. Blocking get_db_connection() read + a
+# sequential per-video generate_presigned_url loop (HMAC CPU), no await in the body.
+def get_warmup_urls(
     expires_in: int = Query(default=14400, ge=60, le=86400)
 ) -> dict:
     """
