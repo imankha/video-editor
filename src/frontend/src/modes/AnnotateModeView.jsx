@@ -512,7 +512,7 @@ export function AnnotateModeView({
                 <div className={annotateFullscreen ? 'absolute inset-0' : 'relative'}
                      style={annotateFullscreen ? undefined : { aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}` }}>
                   <video
-                    ref={videoController._renderRefs.videoARef}
+                    ref={videoController._renderRefs.attachA || videoController._renderRefs.videoARef}
                     className="absolute inset-0 w-full h-full object-contain bg-black"
                     style={{
                       opacity: multiVideo.activeVideoLabel === 'A' ? 1 : 0,
@@ -526,7 +526,7 @@ export function AnnotateModeView({
                     preload="auto"
                   />
                   <video
-                    ref={videoController._renderRefs.videoBRef}
+                    ref={videoController._renderRefs.attachB || videoController._renderRefs.videoBRef}
                     className="absolute inset-0 w-full h-full object-contain bg-black"
                     style={{
                       opacity: multiVideo.activeVideoLabel === 'B' ? 1 : 0,
