@@ -114,7 +114,7 @@ overrides.)
 | T8834 | [Verify + harden T1380 client-side faststart on real camera files](T8834-verify-harden-client-faststart.md) | STAGING |
 | T8836 | [Survey: other cheap client-side pre-upload work (decision doc)](T8836-survey-cheap-client-preupload-work.md) | WAITING ON USER |
 | T8838 | [Shrink capability census (probe real users' devices before building the UI)](T8838-shrink-capability-census.md) | TODO |
-| T8840 | [Standalone browser shrink tool (fully working, zero app integration)](T8840-shrink-pipeline-core.md) | TODO |
+| T8840 | [Standalone browser shrink tool (fully working, zero app integration)](T8840-shrink-pipeline-core.md) | STAGING |
 | T8845 | [Port the approved standalone shrink tool into the app (worker + client API)](T8845-port-shrink-tool-into-app.md) | TODO |
 | T8850 | [Shrink UI: offer card + crop step + presets](T8850-shrink-ui-crop-step.md) | TODO |
 | T8860 | [Shrink upload integration + fallback](T8860-shrink-upload-integration.md) | TODO |
