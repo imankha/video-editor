@@ -117,7 +117,7 @@ monitor cannot keep it alive forever.
 | Games (1 game) | Now cut your first play | Open your game and tap Add Play at each moment worth keeping; each play becomes a clip on In Progress Clips. | **Open game** (loads it) | Clips are step 2 of 4. |
 | In Progress Clips (row not full) | Give each clip a Focus pass | Open a clip to follow your athlete and add an optional Spotlight, then publish it on its own or build several into a reel. | none (the tile is the action; Add Video already sits in the row above) | Published clips show up on the Published tab. |
 | In Progress Reels (row not full) | Finish your reel and export once | Put the plays in order, export, then Publish moves it to the Published tab with a link you can share. | none (Build New Reel is already pinned above the row) | Finished reels move to Published when you share them. |
-| Published (row not full) | Share it | Every published reel gets its own link; send it to coaches, family and recruiters from the player or the card. | none | Publish more clips to see them grouped by game here. |
+| Published (row not full) | Ready for coaches and family | Every published reel gets its own link. Use Share or Copy Link on any card. | none | Publish more clips to see them grouped by game here. | (headline reworded 2026-09-08 review: a guide headline must not read like a control label; "Share it" collided with the real Share button. Body names the affordances instead.) |
 
 Vocabulary: T8130's approved nouns and `displayNames.js`; no new terms.
 
