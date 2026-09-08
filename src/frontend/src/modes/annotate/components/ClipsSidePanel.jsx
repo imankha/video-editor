@@ -48,6 +48,11 @@ export function ClipsSidePanel({
   // form — it's the ONLY reason the panel still knows an editor is open (it
   // must not render a second live editor, i.e. ClipDetailsEditor, alongside it).
   clipEditorOpen = false,
+  // T8970 item 2: in Playback Annotations mode the sidebar rows drive seek only
+  // (onSelectRegion -> seekToClip). Suppress the mutating ClipDetailsEditor so the
+  // user can't rename/retag/delete/create-reel a clip mid-playback — the active
+  // clip's selection is a playback cursor, not an edit target.
+  isPlaybackMode = false,
   teammateSuggestions = [],
   boundaryOffsets,
   layerFilter = 'all',
@@ -75,7 +80,7 @@ export function ClipsSidePanel({
   // editors" hole on mobile that the desktop side closes structurally (the
   // strip and the mobile sheet already can't co-render; this was the one
   // remaining mobile-only gap, pre-existing and not introduced by this task).
-  const mobileShowDetail = isMobile && selectedRegion && !mobileForceList && !clipEditorOpen;
+  const mobileShowDetail = isMobile && selectedRegion && !mobileForceList && !clipEditorOpen && !isPlaybackMode;
 
   // When viewing details for a clip on mobile, switch to detail view
   const handleMobileViewDetails = (regionId) => {
@@ -309,7 +314,7 @@ export function ClipsSidePanel({
                   angleName={getAngleName?.(region.videoSequence) ?? null}
                   onClick={() => onSelectRegion(region.id)}
                   isMobile={isMobile}
-                  onViewDetails={isMobile ? () => handleMobileViewDetails(region.id) : undefined}
+                  onViewDetails={isMobile && !isPlaybackMode ? () => handleMobileViewDetails(region.id) : undefined}
                   onJumpToClip={isMobile && onJumpToClip ? () => onJumpToClip(region.id, region.endTime) : undefined}
                 />
               ))
@@ -320,7 +325,7 @@ export function ClipsSidePanel({
               min-h-0 overflow-y-auto gives the editor its own scroll region so its
               controls (Delete Clip / Create Reel) stay reachable when the sidebar is
               shorter than the editor content — e.g. the landscape-phone sm sidebar (T4933). */}
-          {!isMobile && selectedRegion && !clipEditorOpen && (
+          {!isMobile && selectedRegion && !clipEditorOpen && !isPlaybackMode && (
             <div className="min-h-0 overflow-y-auto">
               <ClipDetailsEditor
                 region={selectedRegion}

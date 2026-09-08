@@ -30,6 +30,13 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
   // playback segment; switchSource sets it to an angle's sequence when an angle
   // is showing. Null for single/legacy paths (unused there).
   const activeSourceSeqRef = useRef(null);
+  // T8970: latest committed virtualTime, mirrored into a ref so the remount
+  // callback ref (attachSlot) can read it without churning its identity every
+  // RAF tick. Also tracks whether the seed effect (below) has run once, so a
+  // TRUE first mount is left to that effect and only a blank REMOUNTED node
+  // (Playback-Annotations exit) gets reseeded.
+  const virtualTimeRef = useRef(0);
+  const hasSeededRef = useRef(false);
 
   const [virtualTime, setVirtualTime] = useState(0);
   const [activeSlotLabel, setActiveSlotLabel] = useState('A');
@@ -123,9 +130,15 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
     activeVideoRef.current = 'A';
     currentVideoIndexRef.current = 0;
     activeSourceSeqRef.current = isOverlap ? (fullTimeline.segments[0]?.videoSequence ?? null) : null;
+    hasSeededRef.current = true;
     setActiveSlotLabel('A');
     setVirtualTime(0);
   }, [fullTimeline, isMultiVideo, isOverlap, getSegmentUrl, videos?.length]);
+
+  // T8970: keep the ref mirror of virtualTime current for attachSlot's restore.
+  useEffect(() => {
+    virtualTimeRef.current = virtualTime;
+  }, [virtualTime]);
 
   useEffect(() => {
     if (videos) setError(null);
@@ -320,6 +333,45 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
     if (onRefreshUrls) onRefreshUrls();
   }, [clearError, onRefreshUrls]);
 
+  // T8970: callback ref for a multi-video slot. The seed effect above sets src
+  // imperatively keyed on the timeline/URL, so it does NOT re-run when the
+  // annotate <video> nodes REMOUNT after exiting Playback Annotations (the deps
+  // are unchanged) -- the fresh DOM node would stay blank. This reseeds the
+  // ACTIVE slot's src + position (from the surviving virtualTime/index refs) on
+  // that remount. A true first mount is handled by the seed effect (guarded by
+  // hasSeededRef); a reused node that already has a src is left alone (the seed
+  // effect owns any reset when videos change). Single-video is unaffected --
+  // VideoPlayer sets src as a JSX attribute, which survives remount.
+  const attachSlot = useCallback((slot) => (el) => {
+    const ref = slot === 'A' ? videoARef : videoBRef;
+    ref.current = el;
+    if (!el || !isMultiVideo || !fullTimeline) return;
+    if (el.src) return;                       // reused node still sourced -> seed effect owns it
+    if (!hasSeededRef.current) return;        // true first mount -> seed effect will source it
+    if (activeVideoRef.current !== slot) return; // only the visible slot must not be blank
+
+    const vt = virtualTimeRef.current;
+    const angleShowing = isOverlap && activeSourceSeqRef.current != null
+      && activeSourceSeqRef.current !== fullTimeline.segments[currentVideoIndexRef.current]?.videoSequence;
+    let url;
+    let actualTime;
+    if (angleShowing) {
+      url = getVideoUrlBySeq(activeSourceSeqRef.current);
+      actualTime = fullTimeline.virtualToSource(vt, activeSourceSeqRef.current)?.fileTime ?? 0;
+    } else {
+      url = getSegmentUrl(currentVideoIndexRef.current);
+      actualTime = fullTimeline.virtualToActual(vt)?.actualTime ?? 0;
+    }
+    if (!url) return;
+    el.src = url;
+    el.load();
+    el.currentTime = actualTime;
+    el.playbackRate = playbackRateRef.current;
+  }, [isMultiVideo, isOverlap, fullTimeline, getVideoUrlBySeq, getSegmentUrl]);
+
+  const attachA = useMemo(() => attachSlot('A'), [attachSlot]);
+  const attachB = useMemo(() => attachSlot('B'), [attachSlot]);
+
   // --- Video controller (stable across slot swaps) ---
 
   const videoController = useMemo(() => ({
@@ -360,8 +412,10 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
       return el ? el.paused : true;
     },
     getActiveElement: () => isMultiVideo ? getVideos().active : videoARef.current,
-    _renderRefs: isMultiVideo ? { videoARef, videoBRef } : { videoARef },
-  }), [isMultiVideo, isOverlap, seek, getVideos, fullTimeline]);
+    // T8970: multiVideo slots use callback refs (attachA/attachB) so a node
+    // remounted after Playback-Annotations exit gets its src reapplied.
+    _renderRefs: isMultiVideo ? { videoARef, videoBRef, attachA, attachB } : { videoARef },
+  }), [isMultiVideo, isOverlap, seek, getVideos, fullTimeline, attachA, attachB]);
 
   return {
     videoController,
