@@ -232,10 +232,13 @@ NOT need the old conversation.
 | Worker's own log | `/workspace/.dotask-status` (stage log), `.dotask-drive-{1,2}.log` |
 | Kickoff it is following | `/workspace/.dotask-kickoff.md` (also `C:\tmp\kickoff-t8990.md`) |
 
-**The implementation may still be UNCOMMITTED in that working tree.** At handoff the branch tip
-was still master's `06f5d97e` with ~10 modified files. If the container is gone, check whether
-the branch was pushed to origin before assuming the work is lost:
-`git ls-remote origin feature/T8990-partial-row-guidance`.
+**The work is SAFE in git.** At handoff the supervisor committed the worker's tree as a
+durability snapshot, `b20f727c` ("WIP safety snapshot"), and PUSHED the branch to origin. So
+`feature/T8990-partial-row-guidance` on GitHub already contains the full implementation and its
+green unit tests. Nothing is lost if the container disappears: a fresh session can
+`git fetch && git checkout feature/T8990-partial-row-guidance` anywhere, or `task.sh up t8990`
+again. That snapshot is explicitly NOT a finished branch (no QA drive, no Reviewer pass) and
+must not be merged as-is.
 
 ## What was already built (do not re-derive)
 
