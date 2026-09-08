@@ -1,6 +1,6 @@
 # T8970: Playback Annotations mode: blank video on exit, sidebar click routing, and mode clarity
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-09-07
