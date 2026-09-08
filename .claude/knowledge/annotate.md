@@ -403,6 +403,23 @@ Highlights tab / `highlights-tab-panel` testid in the same commit, but none were
 server in the implementing container); a live QA pass against a real account is still owed
 — see the "SESSION UPDATE" note in `C:/work/tasks/WAVE.md` for what the supervisor's own
 spot-check found: the failures reproduced are pre-existing, unrelated to this diff.)
+updated: 2026-09-08 (T8980 empty-tab guidance + tab-bar labels/tap-targets): the four inline
+empty states (Games/Clips/Reels/Published) are GONE, replaced by one shared
+`components/shared/EmptyTabGuide.jsx` rendered by all four tabs (Published via
+CollectionsTab, plumbed through PublishedReelsPanel). It carries a numbered flow strip (current
+tab lit in its `themeColors` color, collapsing to a single named dot below `sm`), an approved
+headline+body (copy in `config/emptyStates.js`, binding), an action block whose primary CTA is
+always enabled OR shows a VISIBLE reason + a working cross-tab `setActiveTab` button (never a
+hover-only `title`), and a footer hint. `hasClips` now derives
+`clipDrafts.length > 0 || games.some(g => g.clip_count > 0)` (Add-Video-only accounts can build
+a reel; single source, no second flag). `SegmentedTabButton` gained a `shortLabel` prop:
+below `sm` a one-line 12px short label (`SECTION_NAMES_SHORT`, Games/Clips/Reels/Published) via
+`sm:hidden`, full `SECTION_NAMES` via `hidden sm:inline` in the SAME button — so below `sm`
+tab locators must match the SHORT label ("Clips"/"Reels"), not "In Progress Clips/Reels" (the
+full label is `display:none` there and drops out of the accessible name; the DOM-order landmine
+above still applies, both label spans precede the icon+badge). Tap targets: `sm:coarse-pointer:min-h-[44px]`
+floors touch-tablet tabs to 44px at `sm`+ via the capability query only (NEVER a UA sniff, T7350);
+fine-pointer desktop stays ~34px. Verified live: coarse=44px, fine=34px at 768/1024.
 updated: 2026-09-03 (T8490 star-scale caption + glyph labels + Keeper Save rename: the 5-entry
 `RATING_NOTATION`/`RATING_ADJECTIVES` maps had FOUR duplicate local copies —
 `AnnotateFullscreenOverlay.jsx`, `ClipRegionLayer.jsx`, `useAnnotate.js` (dead — returned from the
