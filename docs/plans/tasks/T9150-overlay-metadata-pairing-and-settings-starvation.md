@@ -1,6 +1,6 @@
 # T9150: Overlay metadata half-record bug class + settings panel starved on 16:9 reels
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-09
@@ -281,4 +281,5 @@ NEEDS REVISION. All BLOCKING/MAJOR addressed, verified, re-committed:
 - [x] Live staging symptom check (Playwright, post hard-refresh) reported to the user - confirmed
       stale PWA tab (update-gate dialog fired), fresh bundle renders correctly; user independently
       confirmed "staging looked good"
-- [ ] Unit + e2e green; Branch CI green - unit/e2e green locally; Branch CI pending push
+- [x] Unit + e2e green; Branch CI green - merged PR #375, CI green except the documented
+      pre-existing `uploadManager.attachVideo.test.js` flake
