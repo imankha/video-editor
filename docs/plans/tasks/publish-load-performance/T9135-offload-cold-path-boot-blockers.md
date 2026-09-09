@@ -1,6 +1,6 @@
 # T9135: Offload the two cold-path boot blockers T9120 found outside the burst
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-08
@@ -60,9 +60,33 @@ two sites.
 
 ## Acceptance Criteria
 
-- [ ] `init_session` offloads `user_session_init` via `run_in_context` and re-applies the profile
+- [x] `init_session` offloads `user_session_init` via `run_in_context` and re-applies the profile
       id on the request context afterward
-- [ ] `_schedule_startup_recovery`'s recovery chain is offloaded without reintroducing the T6240
+- [x] `_schedule_startup_recovery`'s recovery chain is offloaded without reintroducing the T6240
       ephemeral-loop `asyncio.run` fallback (fire-and-forget onto the captured main loop)
-- [ ] A concurrency regression test proves the cold boot burst no longer serializes on
+- [x] A concurrency regression test proves the cold boot burst no longer serializes on
       `init_session`
+
+## Resolution (2026-09-09)
+
+Both blockers fixed as scoped, plus the second half of item 2 — `recover_orphaned_jobs` itself
+(export_worker.py) was `async def` with a fully-blocking body and no `await` inside it, so it was
+flipped to plain `def` (matching the T6200 "whole body is synchronous -> should just be def" shape)
+and is now called via `await run_in_context(recover_orphaned_jobs)` from `_run_startup_recovery`.
+`_schedule_startup_recovery`'s own main-loop scheduling (the T6240 landmine fix) was already correct
+and untouched — verified by the existing `test_offloaded_startup_recovery_is_fire_and_forget_on_main_loop`
+guard, which still passes.
+
+`process_modal_queue` was deliberately left unchanged: it does real async work via `asyncio.gather`
+and its sync prefix is a near-empty table check (no task types are currently enqueued in this app),
+so it wasn't in scope of the two named blockers.
+
+New guard: `tests/test_t9135_cold_boot_offload.py` — 4 tests, both fixes counterfactual-proven
+(reverting either offload reintroduces serialization / a blocked loop and fails red). Existing
+regression suite unaffected: `test_t6240_session_init_concurrency.py`, `test_session_init_recovery.py`
+(one mock updated to match `recover_orphaned_jobs`'s new sync signature),
+`test_vacuum_on_signout.py` (its AST-based `init_session` structural check updated to detect
+`user_session_init` referenced via `run_in_context`, not only called directly), and
+`test_t9130_publish_burst_concurrency.py` all green. 49/49 relevant tests pass.
+
+Knowledge doc updated: `.claude/knowledge/backend-services.md` § Request concurrency model.

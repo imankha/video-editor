@@ -26,10 +26,10 @@ def _seed_orphans_for(user_id: str, profile_id: str) -> int:
 
     Returns the export_jobs row id so the test can assert it was updated.
     """
-    from app.user_context import set_current_user_id
+    from app.database import ensure_database, get_db_connection
     from app.profile_context import set_current_profile_id
     from app.services.user_db import ensure_user_database
-    from app.database import ensure_database, get_db_connection
+    from app.user_context import set_current_user_id
 
     set_current_user_id(user_id)
     set_current_profile_id(profile_id)
@@ -58,11 +58,11 @@ def _seed_orphans_for(user_id: str, profile_id: str) -> int:
 class TestLazyStartupRecovery:
     def test_recovery_runs_on_first_init(self):
         """user_session_init triggers orphan recovery + modal queue drain."""
-        from app.session_init import _init_cache
-        from app.services.user_db import create_profile, set_selected_profile_id
         from app.database import get_db_connection
-        from app.user_context import set_current_user_id
         from app.profile_context import set_current_profile_id
+        from app.services.user_db import create_profile, set_selected_profile_id
+        from app.session_init import _init_cache
+        from app.user_context import set_current_user_id
 
         uid = _uid("lazy")
         pid = uuid4().hex[:8]
@@ -97,8 +97,8 @@ class TestLazyStartupRecovery:
 
     def test_recovery_is_gated_by_cache(self):
         """Second call to user_session_init must not rerun recovery."""
-        from app.session_init import _init_cache, user_session_init
         from app.services.user_db import create_profile, set_selected_profile_id
+        from app.session_init import _init_cache, user_session_init
 
         uid = _uid("cached")
         pid = uuid4().hex[:8]
@@ -143,12 +143,13 @@ class TestRunningLoopPath:
         # (Superseded a wall-clock `elapsed < 0.1` assert that flaked on the
         # /workspace bind mount where user_session_init's own sqlite work
         # legitimately exceeded 100ms.)
-        from app.session_init import (
-            _init_cache, user_session_init, _run_startup_recovery as _real,
-        )
-        from app.services.user_db import create_profile, set_selected_profile_id
-        from app.user_context import get_current_user_id
         from app.profile_context import get_current_profile_id
+        from app.services.user_db import create_profile, set_selected_profile_id
+        from app.session_init import (
+            _init_cache,
+            user_session_init,
+        )
+        from app.user_context import get_current_user_id
 
         uid = _uid("loop")
         pid = uuid4().hex[:8]
@@ -203,8 +204,8 @@ class TestErrorIsolation:
     @pytest.mark.asyncio
     async def test_queue_drain_runs_even_if_orphan_recovery_raises(self):
         from app import session_init as si
-        from app.user_context import set_current_user_id
         from app.profile_context import set_current_profile_id
+        from app.user_context import set_current_user_id
 
         uid = _uid("isolerr")
         pid = uuid4().hex[:8]
@@ -214,7 +215,10 @@ class TestErrorIsolation:
 
         queue_called = {"n": 0}
 
-        async def _boom():
+        def _boom():
+            # T9135: recover_orphaned_jobs is now a plain sync def, offloaded
+            # via run_in_context (not awaited directly) -- the stand-in must
+            # match the real signature.
             raise RuntimeError("orphan recovery exploded")
 
         async def _ok_queue():

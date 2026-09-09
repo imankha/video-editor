@@ -21,7 +21,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -43,14 +43,18 @@ def test_archive_project_no_vacuum():
         if not isinstance(node, ast.FunctionDef) or node.name != "archive_project":
             continue
         for child in ast.walk(node):
-            if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
-                if child.func.attr == "execute" and child.args:
-                    arg = child.args[0]
-                    if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                        assert "VACUUM" not in arg.value.upper(), (
-                            f"archive_project still calls execute('{arg.value}') — "
-                            "VACUUM must be removed (T2010)"
-                        )
+            if (
+                isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Attribute)
+                and child.func.attr == "execute"
+                and child.args
+            ):
+                arg = child.args[0]
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    assert "VACUUM" not in arg.value.upper(), (
+                        f"archive_project still calls execute('{arg.value}') — "
+                        "VACUUM must be removed (T2010)"
+                    )
         return
 
     pytest.fail("archive_project function not found in project_archive.py")
@@ -69,11 +73,15 @@ def test_cleanup_database_bloat_still_has_vacuum():
         if not isinstance(node, ast.FunctionDef) or node.name != "cleanup_database_bloat":
             continue
         for child in ast.walk(node):
-            if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
-                if child.func.attr == "execute" and child.args:
-                    arg = child.args[0]
-                    if isinstance(arg, ast.Constant) and "VACUUM" in str(arg.value).upper():
-                        return  # Found it
+            if (
+                isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Attribute)
+                and child.func.attr == "execute"
+                and child.args
+            ):
+                arg = child.args[0]
+                if isinstance(arg, ast.Constant) and "VACUUM" in str(arg.value).upper():
+                    return  # Found it
         pytest.fail("cleanup_database_bloat no longer calls VACUUM — it should (T2010 safety net)")
 
     pytest.fail("cleanup_database_bloat function not found in project_archive.py")
@@ -160,7 +168,7 @@ def test_vacuum_user_dbs_skips_dirs_without_sqlite(tmp_path):
 
 def test_vacuum_user_dbs_clears_active_conn_after_success(tmp_path):
     """After a successful VACUUM, user_id should not remain in _active_vacuum_conns."""
-    from app.routers.auth import _vacuum_user_dbs, _active_vacuum_conns
+    from app.routers.auth import _active_vacuum_conns, _vacuum_user_dbs
 
     user_id = "test-user"
     profiles_dir = tmp_path / user_id / "profiles" / "p1"
@@ -179,7 +187,7 @@ def test_vacuum_user_dbs_clears_active_conn_after_success(tmp_path):
 
 def test_vacuum_user_dbs_clears_active_conn_after_failure(tmp_path):
     """After a failed VACUUM, user_id should not remain in _active_vacuum_conns."""
-    from app.routers.auth import _vacuum_user_dbs, _active_vacuum_conns
+    from app.routers.auth import _active_vacuum_conns, _vacuum_user_dbs
 
     user_id = "test-user"
     profiles_dir = tmp_path / user_id / "profiles" / "p1"
@@ -200,7 +208,7 @@ def test_vacuum_user_dbs_clears_active_conn_after_failure(tmp_path):
 
 def test_cancel_active_vacuum_interrupts(tmp_path):
     """cancel_active_vacuum should call interrupt() on the tracked connection."""
-    from app.routers.auth import cancel_active_vacuum, _active_vacuum_conns, _users_who_archived
+    from app.routers.auth import _active_vacuum_conns, _users_who_archived, cancel_active_vacuum
 
     mock_conn = MagicMock(spec=sqlite3.Connection)
     _active_vacuum_conns["user-123"] = mock_conn
@@ -223,7 +231,7 @@ def test_cancel_active_vacuum_interrupts(tmp_path):
 
 def test_cancel_active_vacuum_noop_when_no_vacuum():
     """cancel_active_vacuum should not raise when no VACUUM is in progress."""
-    from app.routers.auth import cancel_active_vacuum, _active_vacuum_conns
+    from app.routers.auth import _active_vacuum_conns, cancel_active_vacuum
 
     _active_vacuum_conns.pop("nonexistent", None)  # ensure clean state
     cancel_active_vacuum("nonexistent")  # should not raise
@@ -235,7 +243,7 @@ def test_cancel_active_vacuum_noop_when_no_vacuum():
 
 def test_mark_user_archived():
     """mark_user_archived should add user to _users_who_archived set."""
-    from app.routers.auth import mark_user_archived, _users_who_archived
+    from app.routers.auth import _users_who_archived, mark_user_archived
 
     _users_who_archived.discard("user-mark-test")
     mark_user_archived("user-mark-test")
@@ -250,6 +258,7 @@ def test_mark_user_archived():
 def test_logout_fires_vacuum_when_user_archived():
     """POST /logout should schedule VACUUM only if user archived a project during session."""
     from fastapi.testclient import TestClient
+
     from app.main import app
     from app.routers.auth import _users_who_archived
 
@@ -276,6 +285,7 @@ def test_logout_fires_vacuum_when_user_archived():
 def test_logout_skips_vacuum_when_no_archive():
     """POST /logout should NOT schedule VACUUM if user didn't archive anything."""
     from fastapi.testclient import TestClient
+
     from app.main import app
     from app.routers.auth import _users_who_archived
 
@@ -301,6 +311,7 @@ def test_logout_skips_vacuum_when_no_archive():
 def test_logout_without_session_skips_vacuum():
     """POST /logout without a session cookie should not fire VACUUM."""
     from fastapi.testclient import TestClient
+
     from app.main import app
 
     client = TestClient(app)
@@ -317,7 +328,16 @@ def test_logout_without_session_skips_vacuum():
 # ---------------------------------------------------------------------------
 
 def test_init_calls_cancel_active_vacuum():
-    """POST /init should call cancel_active_vacuum before user_session_init."""
+    """POST /init should call cancel_active_vacuum before user_session_init.
+
+    T9135: user_session_init is now offloaded via
+    `await run_in_context(user_session_init, ...)` rather than called
+    directly, so `user_session_init` appears as a Name argument (not a Call
+    node's func) in the AST. Detect either shape — a direct call OR a bare
+    Name reference (e.g. passed to run_in_context) — so the ordering
+    invariant survives the offload without re-coupling this test to one
+    specific calling convention.
+    """
     src = AUTH_PY.read_text(encoding="utf-8")
     tree = ast.parse(src)
 
@@ -329,19 +349,22 @@ def test_init_calls_cancel_active_vacuum():
         found_cancel = False
         found_init = False
         for child in ast.walk(node):
-            if isinstance(child, ast.Call):
-                if isinstance(child.func, ast.Name) and child.func.id == "cancel_active_vacuum":
-                    found_cancel = True
-                if isinstance(child.func, ast.Name) and child.func.id == "user_session_init":
-                    if not found_cancel:
-                        pytest.fail(
-                            "user_session_init is called before cancel_active_vacuum in init_session — "
-                            "VACUUM must be cancelled before any DB access"
-                        )
-                    found_init = True
+            if (
+                isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Name)
+                and child.func.id == "cancel_active_vacuum"
+            ):
+                found_cancel = True
+            if isinstance(child, ast.Name) and child.id == "user_session_init":
+                if not found_cancel:
+                    pytest.fail(
+                        "user_session_init is referenced before cancel_active_vacuum in init_session — "
+                        "VACUUM must be cancelled before any DB access"
+                    )
+                found_init = True
 
         assert found_cancel, "init_session must call cancel_active_vacuum"
-        assert found_init, "init_session must call user_session_init"
+        assert found_init, "init_session must call (or offload) user_session_init"
         return
 
     pytest.fail("init_session function not found in auth.py")
@@ -422,10 +445,13 @@ def test_publish_calls_mark_user_archived():
 
         found = False
         for child in ast.walk(node):
-            if isinstance(child, ast.Call) and isinstance(child.func, ast.Name):
-                if child.func.id == "mark_user_archived":
-                    found = True
-                    break
+            if (
+                isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Name)
+                and child.func.id == "mark_user_archived"
+            ):
+                found = True
+                break
         assert found, (
             "publish_to_my_reels must call mark_user_archived after a successful archive — "
             "without this, logout VACUUM will never fire"

@@ -419,9 +419,19 @@ async def _run_startup_recovery(user_id: str) -> None:
     """
     from .services.export_worker import recover_orphaned_jobs
     from .services.modal_queue import process_modal_queue
+    from .utils.offload import run_in_context
 
     try:
-        await recover_orphaned_jobs()
+        # T9135: recover_orphaned_jobs is blocking sqlite + a blocking Modal
+        # network call, with no await inside it. This coroutine is scheduled
+        # fire-and-forget onto the MAIN loop (_schedule_startup_recovery above)
+        # -- the very loop the user's next requests are served on -- so calling
+        # it inline here would re-block that loop for the whole recovery,
+        # defeating the point of making startup recovery fire-and-forget.
+        # run_in_context (not a bare to_thread) copies this task's already-set
+        # user/profile ContextVars into the worker thread, which
+        # get_db_connection() needs to resolve the right profile.sqlite.
+        await run_in_context(recover_orphaned_jobs)
     except Exception as e:
         logger.warning(
             f"[SessionInit] recover_orphaned_jobs failed for {user_id}: {e}"
