@@ -9,7 +9,7 @@ import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
-import { extractVideoMetadata, extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
+import { extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { describeHighlightCarryNote } from '../utils/highlightCarryNote';
 import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
@@ -103,7 +103,6 @@ export function OverlayScreen({
     effectType: highlightEffectType,
     highlightColor,
     isLoadingWorkingVideo,
-    overlayChangedSinceExport,
     setEffectType: setHighlightEffectType,
     setHighlightColor,
     setIsLoadingWorkingVideo,
