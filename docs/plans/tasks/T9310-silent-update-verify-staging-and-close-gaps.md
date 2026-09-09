@@ -118,9 +118,14 @@ silently skip.
 
 ### Related Tasks
 - Follows: T8460 (silent app update, STAGING as of 2026-09-03) and its predecessors T5070 / Tbug40p / Tbug41s
-- Note: T8460 has not reached prod yet (prod build 4290 is below 4437). A prod deploy will show every
-  prod user the old wall exactly once, for the same stale-client reason. That is expected, not a
-  regression, and is worth saying out loud before the deploy.
+- Note: T8460 has not reached prod yet (prod build 4290 is below 4437). The NEXT prod deploy, whenever
+  it happens, will show every prod user the old wall exactly once, for the same stale-client reason.
+  That is expected, not a regression, and is worth saying out loud before the deploy.
+- **T8460 gets no special deploy treatment** (decided 2026-09-09). It ships in the normal batch with
+  the other ~88 tasks at STAGING. Deploying it early saves nobody a wall: the wall is spent exactly
+  once per browser either way, so going early only buys an extra deploy cycle. The only case where
+  early would pay is several intermediate prod deploys before the batch, which this repo's cadence
+  (prod last deployed 2026-09-01, master 527 commits ahead) does not do.
 
 ### Technical Notes
 - The gate is deliberately never raised until the new bundle is fully downloaded and installed
