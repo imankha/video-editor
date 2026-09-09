@@ -1,6 +1,6 @@
 # T9280: Mobile Focus export sometimes lands on the Clips tab instead of the publish-exit preview
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-09-09

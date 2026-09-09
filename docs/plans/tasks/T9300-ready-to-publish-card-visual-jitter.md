@@ -1,6 +1,6 @@
 # T9300: "Ready to Publish" clip card visually twitches/jitters
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-09

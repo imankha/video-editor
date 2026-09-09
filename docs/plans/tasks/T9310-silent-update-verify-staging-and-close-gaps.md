@@ -1,6 +1,6 @@
 # T9310: Silent app update (T8460): confirm it actually works on staging, then close the residual gaps
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-09
