@@ -1043,7 +1043,14 @@ export function AnnotateFullscreenOverlay({
     return (
       <div data-add-clip-form className="border-t border-gray-700 flex flex-col min-h-0 max-h-full">
         <div className="p-3 overflow-y-auto min-h-0 flex-1">{formBody}</div>
-        <div className="p-3 border-t border-gray-700 bg-gray-900/95 flex-shrink-0">{actionsFooter}</div>
+        {/* T8790/F3: this sheet is `fixed bottom-0` but a `backdrop-blur` ancestor
+            (AnnotateModeView's frosted card) becomes its containing block, so the
+            sheet is anchored to that card's bottom (mid-screen), not the viewport, so
+            the pinned Save then lands ~363px down, BELOW the keyboard-reduced fold on
+            the two SHORT phones (568/667 tall). Extra bottom padding on short
+            viewports lifts Save clear of the keyboard band; tall phones (844/926)
+            already cleared it, so the height query leaves them untouched. */}
+        <div className="p-3 [@media(max-height:700px)]:pb-9 border-t border-gray-700 bg-gray-900/95 flex-shrink-0">{actionsFooter}</div>
         {/* T8600: mobile-only full-screen "Add details" popup — the bottom
             sheet (T8140) and the mobile fullscreen portrait sheet both use
             this layout, so both inherit it. */}

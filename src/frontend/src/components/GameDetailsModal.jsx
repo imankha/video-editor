@@ -177,13 +177,15 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
       {/* Backdrop — no dismiss on click; use X button instead */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
-      {/* Modal — max-h + internal scroll so the tall form's header (close X) and
-          submit button stay reachable on short mobile viewports. Without this the
-          panel is fixed-centered and taller than a ~500px iPhone screen, clipping
-          both ends off-screen with nothing to scroll (T7590). */}
-      <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-gray-700 max-h-[90vh] overflow-y-auto">
+      {/* Modal: a flex column: fixed header, a SCROLLABLE body, and a pinned
+          footer holding submit (T8790/F2). The submit lives OUTSIDE the scroll
+          region so it can never fall below the fold as the form grows (the T7590
+          fix put everything inside one scroll container, which left submit at
+          y=612 > 568 on a short phone, reachable only by scrolling). max-h-[90vh]
+          still bounds the whole panel; only the body scrolls now. */}
+      <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-gray-700 max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+        <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-green-600/20 rounded-lg">
               <Gamepad2 size={20} className="text-green-400" />
@@ -202,7 +204,9 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
         {/* Form - video-first (T8500): cost up top, dropzone as the hero,
             every metadata field defaulted inside a collapsed disclosure so an
             upload takes two gestures (pick file, submit). */}
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+          {/* Scrollable body: everything EXCEPT submit scrolls here. */}
+          <div className="p-4 space-y-4 overflow-y-auto min-h-0 flex-1">
           {/* Upload cost - visible BEFORE any file is selected (the first
               mention of credits/expiry a new user sees). */}
           <div className="flex items-center justify-between px-3 py-2 rounded-lg text-sm bg-gray-700/50 text-gray-300">
@@ -360,8 +364,11 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
             )}
           </div>
 
-          {/* Submit Button */}
-          <div className="pt-2">
+          </div>
+
+          {/* Submit Button: pinned footer OUTSIDE the scroll region so it stays
+              above the fold no matter how tall the form grows (T8790/F2). */}
+          <div className="p-4 border-t border-gray-700 flex-shrink-0">
             <Button
               type="submit"
               variant="success"
