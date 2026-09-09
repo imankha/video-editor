@@ -47,6 +47,34 @@ reproduced live before deciding the fix. If confirmed, note this is the SAME sha
 different places at different times going out of sync) — worth checking whether the fix pattern
 generalizes.
 
+## Findings (container worker + Opus expert, 2026-09-09)
+
+**Live mobile-staging reproduction was NOT possible** in the permission-free container
+(no backend venv / Modal auth / staging creds — the documented worker gap). Root cause
+was traced by code analysis + an Opus expert pass instead; the mobile trigger below is a
+high-confidence hypothesis, still UNCONFIRMED on a real device.
+
+- **Both `exportedProjectId` and `currentlyViewingProjectId` derive from the SAME store
+  field** (`useProjectsStore.selectedProjectId`) — the closure value at export-start vs a
+  fresh `getState()` at completion. `fetchProjects`/`refreshSelectedProject` never change
+  the id, so the guard only fires if `selectedProjectId` actually changed or went null.
+- **The guard's real defect (fixed here):** it treated a **null/absent** selection the
+  same as "user is on a DIFFERENT project," silently skipping the T8390 preview. That is a
+  banned silent fallback. Hardened via `shouldSkipFocusCompletionPreview` (skip only when
+  BOTH ids truthy AND differ). This fixes the *still-mounted, momentarily-null* sub-case
+  and preserves criterion 3.
+- **Dominant mobile trigger (per expert, UNCONFIRMED, NOT fixed here):** on mobile the
+  backgrounded tab is discarded during a slow Modal export and reloaded on return. Reload
+  re-inits `editorMode=FRAMING` (from the `/focus` URL) with `selectedProjectId=null`; no
+  plain-reload path re-selects the project, so `App.jsx:546-552` bounces to the Clips home
+  and **FocusScreen never mounts**. The export completes via the recovery path
+  (`useExportRecovery.js`) / `GlobalExportIndicator`, which call only `completeExport(...)`
+  — **never `onProceedToOverlay`/`handleExportComplete` for a FRAMING export** — so the
+  preview is never shown. The guard change is INERT for this path. Closing it is an L-tier
+  recovery-path change (route the recovery-path FRAMING completion into an App-level
+  completion handler + carry a completion-preview intent across the unmount, e.g. an
+  ephemeral store mirroring `publishIntentStore`) and needs a live mobile repro first.
+
 ## Context
 
 ### Relevant Files
