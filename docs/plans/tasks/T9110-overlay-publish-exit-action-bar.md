@@ -1,6 +1,6 @@
 # T9110: Overlay gets a publish-exit action bar (Publish Now / Reapply Overlay / Reapply Focus / Publish Later)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-08
