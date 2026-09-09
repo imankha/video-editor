@@ -25,7 +25,7 @@ import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments, clipRotation } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { useProjectDataStore, useFocusStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler, useQuestStore, useWorkingVideo } from '../stores';
+import { useProjectDataStore, useFocusStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler, useQuestStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 import { shouldPersistFocusForOverlayTransition } from './focusOverlayTransition';
 
@@ -94,7 +94,16 @@ export function FocusScreen({
   // not a stage; the preview mounts BEFORE any choice, replacing T8520's
   // choose-then-preview card with preview-first per the approved design).
   const [showExportCompletePreview, setShowExportCompletePreview] = useState(false);
-  const workingVideo = useWorkingVideo();
+  // T9100: the post-export preview is an ephemeral modal that only needs a
+  // playable URL. Keep it in local view state — do NOT route it through the
+  // shared projectDataStore.workingVideo record (that is the Overlay editing
+  // canvas's source-of-truth, and it must always carry metadata alongside a
+  // url; seeding it with metadata:null poisoned every effectiveOverlayMetadata
+  // consumer for the session — detection boxes, spotlight geometry persistence).
+  const [exportPreviewUrl, setExportPreviewUrl] = useState(null);
+  // T9100: FocusScreen no longer READS the shared workingVideo record (the
+  // post-export preview now uses local exportPreviewUrl); it still WRITES it via
+  // setWorkingVideo. So the reactive selector is gone, but the store action stays.
   const clipHasUserEditsRef = useRef(false);
   const localExportButtonRef = useRef(null);
   const initialLoadDoneRef = useRef(false);
@@ -1026,7 +1035,11 @@ export function FocusScreen({
       // gracefully to no preview on failure; see resolveWorkingVideoPreviewUrl).
       const previewUrl = await resolveWorkingVideoPreviewUrl(projectId);
       if (previewUrl) {
-        setWorkingVideo({ file: null, url: previewUrl, metadata: null });
+        // T9100: hold the preview URL in local view state, NOT in workingVideo.
+        // setWorkingVideo(null) above stays as-is so OverlayScreen's real loader
+        // (OverlayScreen.jsx:487) runs on entry and populates metadata + clears
+        // the loading spinner.
+        setExportPreviewUrl(previewUrl);
       }
 
       workingVideoSet = true;
@@ -1068,6 +1081,7 @@ export function FocusScreen({
     // App.jsx's effect emits the overlay-entry achievement when editorMode becomes
     // OVERLAY.
     setShowExportCompletePreview(false);
+    setExportPreviewUrl(null); // T9100: drop the ephemeral preview URL on exit
     // T8390: defense-in-depth — abandon a stale publish intent for THIS
     // project (e.g. Publish was tapped on an earlier failed render, this is
     // a fresh preview for the same project). See PUBLISH_INTENT_TIMEOUT_MS.
@@ -1080,6 +1094,7 @@ export function FocusScreen({
 
   const handleAddSpotlightLater = useCallback(() => {
     setShowExportCompletePreview(false);
+    setExportPreviewUrl(null); // T9100: drop the ephemeral preview URL on exit
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     useQuestStore.getState().recordAchievement('overlay_deferred');
     // T8390: explainer toast — routed by is_auto_created (T8360's already-approved
@@ -1113,6 +1128,7 @@ export function FocusScreen({
     // already in flight for it.
     if (usePublishIntentStore.getState().projectId === projectId) return;
     setShowExportCompletePreview(false);
+    setExportPreviewUrl(null); // T9100: drop the ephemeral preview URL on exit
     useQuestStore.getState().recordAchievement('overlay_declined');
     usePublishIntentStore.getState().set(projectId);
     // Safety net: ExportButtonContainer exposes no onError callback here, so
@@ -1133,6 +1149,7 @@ export function FocusScreen({
   // is "nevermind", not an explicit choice.
   const handleRefocus = useCallback(() => {
     setShowExportCompletePreview(false);
+    setExportPreviewUrl(null); // T9100: drop the ephemeral preview URL on exit
     // T8390: defense-in-depth clear (see handleAddSpotlight comment above).
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
   }, [projectId]);
@@ -1370,12 +1387,12 @@ export function FocusScreen({
           card), decision comes after. Same CollectionPlayer DraftReelPreview
           uses, mounted directly (not via reelPreviewStore) since there is no
           final_videos row yet at this point — only the working video. */}
-      {showExportCompletePreview && workingVideo?.url && (
+      {showExportCompletePreview && exportPreviewUrl && (
         <CollectionPlayer
           reels={[{
             id: projectId,
             name: project?.name,
-            streamUrl: workingVideo.url,
+            streamUrl: exportPreviewUrl,
             aspect_ratio: projectAspectRatio,
             duration: null,
           }]}

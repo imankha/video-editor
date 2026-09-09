@@ -262,3 +262,92 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     expect(deps.recordAchievement.mock.calls.map((c) => c[0])).toEqual(['overlay_offered', 'overlay_declined']);
   });
 });
+
+// T9100: the null-blob branch of handleProceedToOverlayInternal — the branch
+// that runs for every real server-authoritative export (FocusScreen.jsx
+// ~L1015-1033). The T8390 harness above deliberately omits it; it is exactly
+// where the regression lived. Reproduced verbatim (both the fixed and the
+// pre-T9100 buggy shape) so we can pin THE WRITE CONTRACT: the shared
+// projectDataStore.workingVideo record must NEVER be seeded with a `url` but a
+// falsy `metadata` — that violated "a workingVideo record with a url always has
+// metadata" and poisoned effectiveOverlayMetadata for the whole session
+// (misaligned detection boxes AND corrupted persisted spotlight geometry).
+async function runNullBlobBranch({ deps, buggy = false, projectId = 42 }) {
+  const {
+    setWorkingVideo,
+    setIsLoadingWorkingVideo,
+    setExportPreviewUrl,
+    refreshProject,
+    resolveWorkingVideoPreviewUrl,
+  } = deps;
+
+  // --- verbatim from the else / null-blob branch ---
+  setIsLoadingWorkingVideo(true);
+  setWorkingVideo(null);
+  await refreshProject();
+  const previewUrl = await resolveWorkingVideoPreviewUrl(projectId);
+  if (previewUrl) {
+    if (buggy) {
+      // Pre-T9100 (commit 6ab3f5c1): url without metadata — the regression.
+      setWorkingVideo({ file: null, url: previewUrl, metadata: null });
+    } else {
+      // T9100 fix: hold the ephemeral URL in local view state instead.
+      setExportPreviewUrl(previewUrl);
+    }
+  }
+  // --- end branch ---
+}
+
+/**
+ * The write contract itself: for every workingVideo record ever written, a
+ * truthy `url` implies a truthy `metadata`. Throws (test fails) on violation.
+ */
+function assertWorkingVideoUrlAlwaysHasMetadata(setWorkingVideo) {
+  for (const [record] of setWorkingVideo.mock.calls) {
+    if (record && record.url) {
+      expect(record.metadata).toBeTruthy();
+    }
+  }
+}
+
+function makeBranchDeps() {
+  return {
+    setWorkingVideo: vi.fn(),
+    setIsLoadingWorkingVideo: vi.fn(),
+    setExportPreviewUrl: vi.fn(),
+    refreshProject: vi.fn().mockResolvedValue(undefined),
+    resolveWorkingVideoPreviewUrl: vi.fn().mockResolvedValue('blob:preview-url'),
+  };
+}
+
+describe('T9100 export->overlay handoff: workingVideo write contract', () => {
+  it('the null-blob branch NEVER writes a url without metadata into workingVideo; the preview URL goes to local view state, and the loading signal is left for OverlayScreen to clear', async () => {
+    const deps = makeBranchDeps();
+
+    await runNullBlobBranch({ deps });
+
+    // The ephemeral preview URL is routed to local view state, not the store.
+    expect(deps.setExportPreviewUrl).toHaveBeenCalledWith('blob:preview-url');
+    // workingVideo is reset to null and never re-seeded with a partial record.
+    expect(deps.setWorkingVideo).toHaveBeenCalledTimes(1);
+    expect(deps.setWorkingVideo).toHaveBeenCalledWith(null);
+    // The loading flag stays SET so OverlayScreen's real loader clears it.
+    expect(deps.setIsLoadingWorkingVideo).toHaveBeenCalledWith(true);
+    // The invariant.
+    assertWorkingVideoUrlAlwaysHasMetadata(deps.setWorkingVideo);
+  });
+
+  it('negative control: the pre-T9100 buggy branch DOES seed url-without-metadata, so the contract assertion catches it', async () => {
+    const deps = makeBranchDeps();
+
+    await runNullBlobBranch({ deps, buggy: true });
+
+    // Prove the buggy branch produces exactly the poisoned record...
+    expect(deps.setWorkingVideo).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'blob:preview-url', metadata: null }),
+    );
+    // ...and that the contract assertion above would have FAILED on it (proving
+    // the regression test actually discriminates the bug from the fix).
+    expect(() => assertWorkingVideoUrlAlwaysHasMetadata(deps.setWorkingVideo)).toThrow();
+  });
+});
