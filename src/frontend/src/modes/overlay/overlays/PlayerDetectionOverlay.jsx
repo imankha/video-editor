@@ -68,11 +68,17 @@ export default function PlayerDetectionOverlay({
     lastLoggedDetections.current = detKey;
 
     const video = videoRef.current;
-    console.debug('[Detection Alignment]', {
+    const dimensionMatch = videoMetadata?.width === detectionVideoWidth && videoMetadata?.height === detectionVideoHeight;
+    // T9100: detections are always produced from the working video's OWN
+    // dimensions, so a mismatch here is always an internal-data bug (a wrong
+    // videoMetadata was fed in). Fail loudly per CLAUDE.md's no-silent-fallback
+    // rule instead of burying it in a debug-level log.
+    const log = dimensionMatch ? console.debug : console.warn;
+    log('[Detection Alignment]', {
       videoMetadata: `${videoMetadata?.width}x${videoMetadata?.height}`,
       detectionSource: `${detectionVideoWidth}x${detectionVideoHeight}`,
       videoElement: `${video.videoWidth}x${video.videoHeight}`,
-      dimensionMatch: videoMetadata?.width === detectionVideoWidth && videoMetadata?.height === detectionVideoHeight,
+      dimensionMatch,
       displayRect: {
         offset: `(${videoDisplayRect.offsetX.toFixed(1)}, ${videoDisplayRect.offsetY.toFixed(1)})`,
         size: `${videoDisplayRect.width.toFixed(1)}x${videoDisplayRect.height.toFixed(1)}`,

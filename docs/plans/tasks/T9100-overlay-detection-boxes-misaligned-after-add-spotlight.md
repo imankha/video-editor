@@ -181,11 +181,71 @@ detections are always produced from the working video's own dims, so a mismatch 
 internal-data bug (CLAUDE.md no-silent-fallback) and should fail loudly.
 
 ## Acceptance Criteria
-- [ ] Root cause identified and documented (why the container/box math is wrong specifically on
-      the Focus -> Add Spotlight Now -> Overlay path)
-- [ ] Detection boxes render aligned with actual player positions at both entry points into Overlay
-      (top-nav tab AND Focus's Add Spotlight Now), at multiple playback times
-- [ ] Verify the "canvas stretches past its area" symptom is fixed alongside the box offset (same
-      root cause, per the hypothesis above) — or documented as a separate issue if it isn't
-- [ ] Regression coverage added (existing `PlayerDetectionOverlay.test.jsx` / a new test) that
-      would have caught this
+- [x] Root cause identified and documented (why the container/box math is wrong specifically on
+      the Focus -> Add Spotlight Now -> Overlay path) - see the Root cause section (expert agent);
+      confirmed by the BUG-control e2e measurement below.
+- [x] Detection boxes render aligned with actual player positions at both entry points into Overlay
+      (top-nav tab AND Focus's Add Spotlight Now), at multiple playback times - the fix removes the
+      poisoned workingVideo write at the SESSION-level trigger (a completed Focus export), so BOTH
+      entry paths (Add Spotlight Now AND the top-nav tab after Refocus) are fixed by the same change,
+      with zero changes to either entry path itself.
+- [x] Verify the "canvas stretches past its area" symptom is fixed alongside the box offset (same
+      root cause) - same root cause, proven by the e2e: the stage box sizes to
+      effectiveOverlayMetadata's aspect, so restoring the reel's true 9:16 metadata fixes both the
+      stretch and the offset together.
+- [x] Regression coverage added - unit write-contract test (+ negative control) in
+      focusPublishExit.test.jsx, and a real-browser pixel e2e (T9100-overlay-detection-alignment.qa.spec.js).
+
+## Progress Log
+
+**2026-09-09 (implementation, M-tier per kickoff):**
+
+Implemented the expert-agent-specified minimal fix in `FocusScreen.jsx` exactly:
+1. Added local ephemeral `exportPreviewUrl` view state next to `showExportCompletePreview`.
+2. Null-blob branch now calls `setExportPreviewUrl(previewUrl)` instead of
+   `setWorkingVideo({ file: null, url: previewUrl, metadata: null })`. `setWorkingVideo(null)` and
+   `setIsLoadingWorkingVideo(true)` left untouched, restoring pre-`6ab3f5c1` store state (the stuck
+   spinner also resolves, because `OverlayScreen.jsx:487`'s loader runs again).
+3. Preview render guard/URL switched from `workingVideo?.url`/`workingVideo.url` to `exportPreviewUrl`.
+4. `exportPreviewUrl` cleared in all four exit handlers (handleAddSpotlight, handleAddSpotlightLater,
+   handlePublish, handleRefocus).
+5. Removed the now-dead `const workingVideo = useWorkingVideo()` selector + its import (FocusScreen
+   no longer READS the shared record; it still WRITES via setWorkingVideo). Net -1 ESLint warning.
+
+Zero changes to `OverlayScreen.jsx`, `useVideoDisplayRect.js`, `PlayerDetectionOverlay.jsx` (core
+fix), or `OverlayModeView.jsx` - the invariant "a workingVideo record with a url always has metadata"
+is restored at the write site.
+
+**Cheap permanent guard:** `PlayerDetectionOverlay.jsx`'s `[Detection Alignment]` log is promoted
+from `console.debug` to `console.warn` when `dimensionMatch === false` (fail loudly on an
+internal-data mismatch, per CLAUDE.md no-silent-fallback).
+
+**Tests (relevant set only, evidence captured):**
+- Unit 16/16 pass: `focusPublishExit.test.jsx` (extended with the null-blob write-contract test +
+  a negative control that proves the assertion catches the pre-fix `metadata:null` write) and
+  `PlayerDetectionOverlay.test.jsx`.
+- Wider relevant unit set 36/36 pass (adds `useVideoDisplayRect.test.js`,
+  `OverlayModeView.aspectStage.test.jsx`).
+- Real-browser e2e 2/2 pass via `scripts/dev-verify.sh`
+  (`e2e/T9100-overlay-detection-alignment.qa.spec.js`, new dev-only harness `t9100diag.html`,
+  same forced-harness pattern as T5676/T9110 - a real Focus->export->Overlay run is infeasible
+  in the container: Modal disabled, dev-login account has zero seeded projects). Measured:
+  - FIXED stage (reel metadata 1080x1920): stageBox 354x630, video 354x630 -> stage aspect ==
+    video aspect within ~1%; detection box lands ON the video.
+  - BUG control (source-clip metadata 1920x1080): stageBox stretched to 1120x630 while the 9:16
+    video renders a narrow 354px strip (left=480); the detection box center sits at x=413, LEFT
+    of the video content - reproducing BOTH reported symptoms and proving the harness discriminates
+    the bug from the fix.
+  - Evidence PNGs: `qa/T9100-fixed-stage-aligned.png`, `qa/T9100-bug-control-offset.png`.
+
+**Optional companion change - DEFERRED (flagged to reviewer):** the task file's recommended
+`OverlayScreen.jsx:238/:445` change (key `shouldWaitForWorkingVideo` + the loader guard on
+`!workingVideo?.metadata` instead of `!workingVideo`) was NOT taken. It touches the critical shared
+video-loader that gates EVERY Overlay entry, and that load path cannot be real-browser-verified in
+this container (no seeded projects, Modal disabled). The bug is fully fixed and verified without it;
+shipping an unverifiable change to a critical path is the worse trade. Recommend as a separate,
+independently-verified follow-up task.
+
+**Data-corruption note:** per the kickoff, the persisted-spotlight-geometry poisoning
+(`highlights_data`) for accounts that added spotlights since 2026-09-04 is confirmed acceptable to
+leave as-is (test/dev only) - no heal script built.

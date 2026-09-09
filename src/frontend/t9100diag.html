@@ -1,0 +1,32 @@
+<!doctype html>
+<!--
+  T9100 DEV-ONLY diagnostic harness proving that the Overlay video stage +
+  player-detection boxes align with the actual rendered video ONLY when the
+  stage is fed the reel's TRUE metadata (what the T9100 fix guarantees), and
+  reproduces the bug (offset boxes + a stage that stretches past the video) when
+  fed the source clip's landscape metadata (the pre-fix outcome of seeding
+  workingVideo with metadata:null -> effectiveOverlayMetadata falling back to the
+  16:9 source dims).
+
+  NOT a production page: it is not an input to Vite's build (rollupOptions.input
+  is index.html only), so it never ships in the built app -- same as the other
+  *diag.html harnesses (aspectdiag / t9110diag). Served by the dev server only,
+  for the Playwright real-browser verification (jsdom cannot measure layout, and
+  a real Focus->Overlay export is infeasible in this container -- Modal disabled,
+  the dev-login account has zero seeded projects; same constraint T5676's harness
+  documents).
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>T9100 detection-box alignment diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #111827; }
+    </style>
+  </head>
+  <body>
+    <div id="t9100diag-root"></div>
+    <script type="module" src="/src/t9100diag/main.jsx"></script>
+  </body>
+</html>
