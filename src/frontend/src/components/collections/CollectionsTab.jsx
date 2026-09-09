@@ -13,6 +13,12 @@ import { collectionIntroKey } from './introBadgeKey';
 
 const MIXES_NAME = 'Mixes & compilations';
 
+// T8990: the Published tab's partial-guide filler (copy-only, no CTA -- Share and
+// Copy Link already live on each card). h-full so it fills the carousel's
+// self-stretch filler wrapper, matching the reel row's height whether the tiles
+// are portrait or landscape. Constant node -- no per-render props.
+const PUBLISHED_PARTIAL_FILLER = <EmptyTabGuide tab="published" variant="partial" className="h-full" />;
+
 // Grouping axes for the game section (T5880). 'game' is the flat default; the
 // derived axes ('tournament'/'month') come from server-computed
 // summary.game_groups and are only offered when at least one such group exists.
@@ -102,7 +108,7 @@ export function CollectionsTab({
   // A game group is nested from the SAME per-game buckets rendered flat, keyed
   // by id -- no duplicated aggregate data, just a different arrangement.
   const gamesById = new Map(games.map((g) => [g.game_id, g]));
-  const renderGameGroup = (g) => {
+  const renderGameGroup = (g, withFiller = false) => {
     const key = `game:${g.game_id}`;
     return (
       <GameCollectionGroup
@@ -121,6 +127,10 @@ export function CollectionsTab({
         onIntro={onIntroCollection}
         onDownload={onDownloadCollection}
         introBadgesByKey={introBadgesByKey}
+        // T8990: keep coaching the Published tab until its first per-game reel row
+        // fills. Attaches to the FIRST game group's first reel row only (the
+        // carousel decides by width whether it actually fits beside the tiles).
+        fillerSlot={withFiller ? PUBLISHED_PARTIAL_FILLER : null}
       />
     );
   };
@@ -230,7 +240,7 @@ export function CollectionsTab({
           same game on every reopen and silently discarded whatever the user had
           expanded. Collapsed-by-default is neutral; in-session expansions persist
           because playing a reel no longer closes the panel. */}
-      {activeAxis === GROUP_BY.GAME && games.map((g) => renderGameGroup(g))}
+      {activeAxis === GROUP_BY.GAME && games.map((g, i) => renderGameGroup(g, i === 0))}
 
       {/* Derived axis view: each server-computed group is a heading whose games
           nest beneath it (two-level shape). Games missing this axis's metadata
@@ -239,6 +249,15 @@ export function CollectionsTab({
         const axisGroups = gameGroups.filter((g) => g.axis === activeAxis);
         const grouped = new Set(axisGroups.flatMap((g) => g.game_ids));
         const ungrouped = games.filter((g) => !grouped.has(g.game_id));
+        // T8990: the partial guide follows the tab's first per-game reel row in
+        // render order -- the first axis group's first game, or (if none) the
+        // first ungrouped game. `first` is flipped once, so exactly one row gets it.
+        let first = true;
+        const withFillerOnce = (g) => {
+          const node = renderGameGroup(g, first);
+          first = false;
+          return node;
+        };
         return (
           <>
             {axisGroups.map((grp) => (
@@ -251,10 +270,10 @@ export function CollectionsTab({
                 {grp.game_ids
                   .map((id) => gamesById.get(id))
                   .filter(Boolean)
-                  .map((g) => renderGameGroup(g))}
+                  .map((g) => withFillerOnce(g))}
               </GameAxisGroup>
             ))}
-            {ungrouped.map((g) => renderGameGroup(g))}
+            {ungrouped.map((g) => withFillerOnce(g))}
           </>
         );
       })()}

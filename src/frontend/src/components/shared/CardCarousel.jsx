@@ -36,6 +36,40 @@ const MAX_GAP = 28;
 // Target peek: how much of the next card should poke past the right edge, as a
 // fraction of one tile. ~35% reads clearly as "there's more" without wasting space.
 const TARGET_PEEK_FRACTION = 0.35;
+// T8990: minimum width the optional trailing `fillerSlot` needs to read as a real
+// coaching tile rather than a sliver. Matches the filler wrapper's min-w-[280px];
+// the filler only mounts while at least this much space is free beside the tiles.
+const MIN_FILLER_WIDTH = 280;
+
+/**
+ * Decide whether the trailing `fillerSlot` (T8990) fits beside the row's tiles.
+ * The verdict is read from the NON-filler tiles only, so the filler can never
+ * change its own answer (mount it and re-measuring the tiles yields the same
+ * result -> no mount/unmount loop). "Fits" means the tiles plus one more gap plus
+ * a minimum-width filler still sit within the container. Pure + exported so the
+ * width-driven behavior is unit-testable without a real layout engine (jsdom
+ * measures nothing -- the T5380 landmine), mirroring pickPeekGap.
+ *
+ * @param {number} tileW - natural width of one tile (px)
+ * @param {number} containerW - the carousel's clientWidth (px)
+ * @param {number} tileCount - number of NON-filler tiles in the row
+ * @returns {boolean} true when the filler should be mounted
+ */
+export function fillerFits(tileW, containerW, tileCount) {
+  if (!(tileW > 0) || !(containerW > 0) || !(tileCount > 0)) return false;
+  // tiles + the gap between each (including one before the filler) at the default
+  // gap: when the filler fits the row is not overflowing, so the peek gap never
+  // kicks in and DEFAULT_GAP is the real spacing.
+  const tilesWidth = tileCount * tileW + tileCount * DEFAULT_GAP;
+  return tilesWidth + MIN_FILLER_WIDTH <= containerW;
+}
+
+// The real tiles of a carousel row, excluding the optional trailing fillerSlot
+// (marked data-carousel-filler). Both the peek-gap count and the fits-check read
+// tiles-only, so the filler never influences a decision about itself (T8990).
+function tileChildren(el) {
+  return Array.from(el.children).filter((c) => !c.hasAttribute('data-carousel-filler'));
+}
 
 /**
  * Pick an inter-card gap (px) that guarantees a partial "peek" of the next card
@@ -81,12 +115,15 @@ export function pickPeekGap(tileW, containerW, childCount) {
   return foundPeek ? best : fallbackGap;
 }
 
-export function CardCarousel({ children, ariaLabel, className = '' }) {
+export function CardCarousel({ children, ariaLabel, className = '', fillerSlot = null }) {
   const scrollRef = useRef(null);
   const [scrollState, setScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const [isOverflowing, setIsOverflowing] = useState(false);
   const [isFinePointer, setIsFinePointer] = useState(false);
   const [gap, setGap] = useState(DEFAULT_GAP);
+  // T8990: whether the optional trailing fillerSlot currently fits beside the
+  // tiles. Ephemeral, width-derived (never persisted); guarded so it cannot loop.
+  const [fillerVisible, setFillerVisible] = useState(false);
   // Ephemeral scroll-position indicator: ratio 0..1, page dots metadata, thumb size.
   const [progress, setProgress] = useState({ ratio: 0, pages: 1, page: 0, thumbPct: 100 });
 
@@ -144,11 +181,34 @@ export function CardCarousel({ children, ariaLabel, className = '' }) {
     if (!firstChild) return;
     const tileW = firstChild.getBoundingClientRect().width;
     const containerW = el.clientWidth;
-    const childCount = el.children.length;
+    // Exclude the trailing filler (T8990) from the peek-gap child count -- the
+    // peek is a property of the real tiles, and counting the filler would let it
+    // change its own row's gap.
+    const childCount = tileChildren(el).length;
     if (tileW <= 0 || containerW <= 0) return;
     const best = pickPeekGap(tileW, containerW, childCount);
     setGap((prev) => (prev === best ? prev : best));
   }, []);
+
+  // T8990: decide whether the trailing fillerSlot fits, from the NON-filler tiles
+  // only (fillerFits is pure over the tiles, so mounting the filler yields the
+  // same verdict -> no mount/unmount loop). Runs in the same post-render pass as
+  // computeGap so it reacts to tiles being added/removed without a resize event.
+  const computeFiller = useCallback(() => {
+    if (!fillerSlot) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const tiles = tileChildren(el);
+    if (tiles.length === 0) {
+      setFillerVisible((prev) => (prev === false ? prev : false));
+      return;
+    }
+    const tileW = tiles[0].getBoundingClientRect().width;
+    const containerW = el.clientWidth;
+    if (tileW <= 0 || containerW <= 0) return;
+    const fits = fillerFits(tileW, containerW, tiles.length);
+    setFillerVisible((prev) => (prev === fits ? prev : fits));
+  }, [fillerSlot]);
 
   // Scroll listener (position only — gap is size-driven, not scroll-driven).
   useEffect(() => {
@@ -163,7 +223,7 @@ export function CardCarousel({ children, ariaLabel, className = '' }) {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const onResize = () => { computeGap(); recompute(); };
+    const onResize = () => { computeGap(); computeFiller(); recompute(); };
     window.addEventListener('resize', onResize);
     let ro;
     if (typeof ResizeObserver !== 'undefined') {
@@ -174,13 +234,14 @@ export function CardCarousel({ children, ariaLabel, className = '' }) {
       window.removeEventListener('resize', onResize);
       if (ro) ro.disconnect();
     };
-  }, [computeGap, recompute]);
+  }, [computeGap, computeFiller, recompute]);
 
-  // Run after EVERY render (no deps): keeps arrows/progress/gap correct even when
-  // the children list changes (tiles added/removed) — which alters scrollWidth
+  // Run after EVERY render (no deps): keeps arrows/progress/gap/filler correct even
+  // when the children list changes (tiles added/removed) — which alters scrollWidth
   // without firing a scroll or resize event. Guarded setters prevent a loop.
   useEffect(() => {
     computeGap();
+    computeFiller();
     recompute();
   });
 
@@ -204,6 +265,17 @@ export function CardCarousel({ children, ariaLabel, className = '' }) {
         className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth px-1 pb-1"
       >
         {children}
+        {/* T8990: trailing coaching filler, mounted only while it fits beside the
+            tiles (fillerVisible, width-driven). self-stretch matches the row's
+            tile height; data-carousel-filler keeps it out of the peek/fits math. */}
+        {fillerSlot && fillerVisible && (
+          <div
+            data-carousel-filler
+            className="flex-1 self-stretch min-w-[280px] max-w-[420px]"
+          >
+            {fillerSlot}
+          </div>
+        )}
       </div>
 
       {/* Left arrow — desktop only, solid circular button half-out past the row edge */}

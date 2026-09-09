@@ -54,6 +54,7 @@ export function GameCollectionGroup({
   onIntro,
   onDownload,
   introBadgesByKey = {},
+  fillerSlot = null,
 }) {
   const ratioCounts = collection.ratio_counts || {};
   const ratioDurations = collection.ratio_durations || {};
@@ -105,7 +106,7 @@ export function GameCollectionGroup({
       defaultExpanded={defaultExpanded}
       onToggle={(open) => { if (open) requestMembers(); }}
     >
-      {eligibleRatios.map((ratio) => (
+      {eligibleRatios.map((ratio, ratioIdx) => (
         <div key={`elig-${ratio}`} className="space-y-2 mb-2">
           {isMultiAspect && (
             <span className="inline-block text-[10px] font-semibold text-gray-500 bg-gray-700/40 px-1.5 py-0.5 rounded">
@@ -130,7 +131,12 @@ export function GameCollectionGroup({
           />
           {members
             ? (
-                <CardCarousel ariaLabel={`${cardTitle} ${ratio} reels`}>
+                <CardCarousel
+                  ariaLabel={`${cardTitle} ${ratio} reels`}
+                  // T8990: partial guide on this group's first eligible-ratio row
+                  // only (the tab's first row, passed only to the first group).
+                  fillerSlot={ratioIdx === 0 ? fillerSlot : null}
+                >
                   {membersFor(ratio).map((d) => renderCard(d))}
                 </CardCarousel>
               )

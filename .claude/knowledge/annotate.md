@@ -403,6 +403,32 @@ Highlights tab / `highlights-tab-panel` testid in the same commit, but none were
 server in the implementing container); a live QA pass against a real account is still owed
 — see the "SESSION UPDATE" note in `C:/work/tasks/WAVE.md` for what the supervisor's own
 spot-check found: the failures reproduced are pre-existing, unrelated to this diff.)
+updated: 2026-09-08 (T8990 partial-row guidance): `EmptyTabGuide` grew a second variant,
+`variant="partial"` (default stays `"empty"`, byte-identical), a compact tile-shaped `aside`+`h3`
+that keeps coaching a tab UNTIL its first row fills, with its own LOCKED copy set
+`PARTIAL_TAB_GUIDE` in `config/emptyStates.js` (next-step framing, not absence framing). Two
+mechanisms for the two layouts. (1) GAMES is a real grid whose only partial-first-row state is
+EXACTLY ONE game (T7330 data-derived columns floor at 2), so `ProjectManager` renders the guide as
+the second grid cell when `games.length === 1 && uploads.length === 0 && pendingUploads.length === 0`
+(no measuring); the cell is NOT a game (excluded from `gamesGridColumns`/grouping), `aspect-video
+self-stretch`, CTA "Open game" -> `onLoadGame(game.id)`. (2) CLIPS/REELS/PUBLISHED are fixed-width-tile
+`CardCarousel`s, which gained a `fillerSlot` prop: it mounts the node as the LAST child ONLY while it
+fits, decided by the new PURE exported `fillerFits(tileW, containerW, tileCount)` (mirrors
+`pickPeekGap`) in the same post-render measurement pass as `computeGap`. Landmine-safety rules baked in:
+the verdict reads the NON-filler tiles only (the filler is marked `data-carousel-filler` and excluded
+from BOTH the peek child count and the fits count) so it can never flip its own decision -> no
+mount/unmount loop; the setter is guarded. Retire rule is width-based, no per-tab constant: filler
+hides once tiles overflow (~4 landscape tiles at the 1152 container; never below `sm` by construction).
+The tab passes the filler to its FIRST rendered row only (DraftStageRows/DraftPhaseAspectRows attach
+to `stageIdx===0 && aspectIdx===0`; CollectionsTab to the first game group's first eligible-ratio reel
+row). CLIPS partial renders NO Add Video button, so the `clips-add-video` tutorial target stays on
+exactly one node across empty/partial/full (T8380). Copy rule (2026-09-08 review): a guide HEADLINE
+must never read like a control label -- Published's "Share it" collided with the real Share button, so
+it became "Ready for coaches and family" and names Share/Copy Link in the BODY instead. jsdom measures
+no layout (T5380/T8900), so the width-driven filler is proven by `fillerFits` unit tests PLUS a real
+Chromium harness (`e2e/T8990-harness/` + `e2e/T8990-verify.mjs`, standalone like T8980-qa-drive; NOTE
+Vite does not watch `e2e/`, so restart the dev server after editing the harness). No persisted state,
+no dismiss (decision 6): the guide retires itself.
 updated: 2026-09-08 (T8980 empty-tab guidance + tab-bar labels/tap-targets): the four inline
 empty states (Games/Clips/Reels/Published) are GONE, replaced by one shared
 `components/shared/EmptyTabGuide.jsx` rendered by all four tabs (Published via

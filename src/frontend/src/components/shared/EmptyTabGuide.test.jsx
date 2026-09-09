@@ -1,7 +1,7 @@
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { EmptyTabGuide } from './EmptyTabGuide';
-import { EMPTY_TAB_GUIDE } from '../../config/emptyStates';
+import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 
 // T8980: the shared empty state rendered by all four home tabs. Copy is APPROVED
 // and binding; these tests assert the exact copy + the count-driven branching +
@@ -175,5 +175,70 @@ describe('EmptyTabGuide copy hygiene', () => {
       return '';
     };
     expect(walk(EMPTY_TAB_GUIDE)).not.toContain('—');
+  });
+
+  it('ships no em dashes anywhere in the LOCKED partial copy (T8990)', () => {
+    const walk = (v) => {
+      if (typeof v === 'string') return v;
+      if (v && typeof v === 'object') return Object.values(v).map(walk).join(' ');
+      return '';
+    };
+    expect(walk(PARTIAL_TAB_GUIDE)).not.toContain('—');
+  });
+});
+
+// T8990: the compact, tile-shaped partial variant kept until the first row fills.
+describe('EmptyTabGuide - partial variant (T8990)', () => {
+  it('renders the locked headline, body and footer for every tab', () => {
+    for (const tab of ['games', 'clips', 'reels', 'published']) {
+      const { unmount } = render(<EmptyTabGuide tab={tab} variant="partial" />);
+      const c = PARTIAL_TAB_GUIDE[tab];
+      expect(screen.getByText(c.headline)).toBeTruthy();
+      expect(screen.getByText(c.body)).toBeTruthy();
+      expect(screen.getByText(c.footer)).toBeTruthy();
+      unmount();
+    }
+  });
+
+  it('renders the headline as an h3 (the enclosing group owns the h2)', () => {
+    render(<EmptyTabGuide tab="clips" variant="partial" />);
+    const h3 = screen.getByRole('heading', { level: 3 });
+    expect(h3.textContent).toBe(PARTIAL_TAB_GUIDE.clips.headline);
+  });
+
+  it('shows the compact flow-strip step label for the tab', () => {
+    render(<EmptyTabGuide tab="reels" variant="partial" />);
+    expect(screen.getByText('Step 3 of 4: Reels')).toBeTruthy();
+  });
+
+  it('Games: renders the "Open game" CTA and fires onAction', () => {
+    const onAction = vi.fn();
+    render(<EmptyTabGuide tab="games" variant="partial" onAction={onAction} />);
+    const cta = screen.getByRole('button', { name: PARTIAL_TAB_GUIDE.games.cta });
+    fireEvent.click(cta);
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('Clips partial renders NO Add Video button and NO tutorial target (T8380 invariant)', () => {
+    const { container } = render(<EmptyTabGuide tab="clips" variant="partial" />);
+    expect(screen.queryByRole('button', { name: 'Add Video' })).toBeNull();
+    expect(container.querySelector('[data-tutorial-target="clips-add-video"]')).toBeNull();
+    // Copy-only: no buttons at all on the clips/reels/published partial.
+    expect(container.querySelector('button')).toBeNull();
+  });
+
+  it('Reels and Published partials carry no CTA button (action lives above the row)', () => {
+    for (const tab of ['reels', 'published']) {
+      const { container, unmount } = render(<EmptyTabGuide tab={tab} variant="partial" />);
+      expect(container.querySelector('button')).toBeNull();
+      unmount();
+    }
+  });
+
+  it('applies the caller-provided sizing className to the outer aside', () => {
+    render(<EmptyTabGuide tab="games" variant="partial" className="aspect-video self-stretch" onAction={vi.fn()} />);
+    const aside = screen.getByRole('complementary');
+    expect(aside.className).toMatch(/aspect-video/);
+    expect(aside.className).toMatch(/self-stretch/);
   });
 });

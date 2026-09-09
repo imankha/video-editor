@@ -1,6 +1,6 @@
 # T9130: Offload the blocking call(s) found by T9120
 
-**Status:** TODO — unblocked, T9120 complete
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5 (M — 9 handler flips + 1 amplifier fix, all the same mechanical pattern, no new abstraction)
 **Created:** 2026-09-08

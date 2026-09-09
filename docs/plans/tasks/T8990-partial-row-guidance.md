@@ -1,6 +1,6 @@
 # T8990: Partial-row guidance - keep the tab guide until the first row fills
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-09-08
@@ -201,6 +201,15 @@ Highlights" row above the reel tiles. So the filler's height is NOT one number: 
 whatever the row's tiles are (about 146px on a landscape row, about 267px on a portrait one),
 which the `self-stretch` sizing already handles. Write the carousel copy to fit the LANDSCAPE
 case, the tighter of the two.
+
+**2026-09-08 (session close, via `/dotask`):** Resumed the container worker, which had actually
+reached PUSHREADY (Reviewer APPROVED, 63 unit tests + 14/14 real-browser checks green, commit
+`46f3a46e`) - further along than the handoff note suggested. Force-pushed over an earlier
+throwaway "WIP safety snapshot" commit (same code, less clean). Branch CI green except the one
+documented pre-existing `uploadManager.attachVideo.test.js` failure (known-failures.md row 30,
+reproduces on clean master, unrelated to this diff). Merging master into the branch surfaced one
+real conflict in this file's own copy table (two independently-written versions of the same
+Published row); resolved by keeping the well-formed 5-column version. **Merged: PR #370.**
 
 ## Acceptance Criteria
 

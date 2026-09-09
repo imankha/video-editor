@@ -79,6 +79,15 @@ const GAMES_GROUP_SECTION_CLASS = 'lg:grid lg:grid-cols-[8rem_minmax(0,1fr)] lg:
 const GAMES_GROUP_HEADER_CLASS = 'mb-2 lg:mb-0 lg:sticky lg:top-2 lg:self-start '
   + 'flex flex-wrap items-baseline gap-x-2 gap-y-0.5 lg:block';
 
+// T8990: the partial-guide fillers for the Clips and Reels carousels. Both are
+// copy-only (no CTA): each tab already carries its action above the row (Add Video
+// on Clips, Build New Reel on Reels), and the Clips partial must render NO Add
+// Video button so the clips-add-video tutorial target stays on exactly one node
+// (T8380). h-full so the guide fills the carousel's self-stretch filler wrapper.
+// Constant nodes because they take no per-render props -- greppable, no closures.
+const CLIPS_PARTIAL_FILLER = <EmptyTabGuide tab="clips" variant="partial" className="h-full" />;
+const REELS_PARTIAL_FILLER = <EmptyTabGuide tab="reels" variant="partial" className="h-full" />;
+
 // T6810: the stage-labeled carousel rows for one draft list (a game group or
 // "Other reels"). Each stage row = a label chip (legend-tinted stage name +
 // count) then one carousel per aspect present within that stage; the aspect
@@ -92,8 +101,9 @@ function DraftStageRows({
   exportingProject,
   pendingGameIds,
   gamesById,
+  fillerSlot = null,
 }) {
-  return byStage.map(({ stage, byAspect }) => {
+  return byStage.map(({ stage, byAspect }, stageIdx) => {
     const stageCount = byAspect.reduce((n, bucket) => n + bucket.projects.length, 0);
     return (
       <div key={stage} data-testid={`stage-row-${stage}`}>
@@ -103,7 +113,7 @@ function DraftStageRows({
           </span>
           <span className="text-[10px] text-gray-500">{stageCount}</span>
         </div>
-        {byAspect.map(({ ratio, projects: aspectProjects }) => (
+        {byAspect.map(({ ratio, projects: aspectProjects }, aspectIdx) => (
           <div key={ratio ?? 'source'}>
             {byAspect.length > 1 && (
               <div className="px-3 pb-1">
@@ -114,6 +124,8 @@ function DraftStageRows({
             )}
             <CardCarousel
               ariaLabel={`${ariaPrefix} ${DRAFT_STAGE_LABELS[stage]}${byAspect.length > 1 ? ` ${ratio}` : ''}`}
+              // T8990: the partial guide attaches to the tab's FIRST row only.
+              fillerSlot={stageIdx === 0 && aspectIdx === 0 ? fillerSlot : null}
             >
               {aspectProjects.map(project => (
                 <DraftTile
@@ -159,8 +171,9 @@ function DraftPhaseAspectRows({
   exportingProject,
   pendingGameIds,
   gamesById,
+  fillerSlot = null,
 }) {
-  return byAspect.map(({ ratio, byGame }) => (
+  return byAspect.map(({ ratio, byGame }, aspectIdx) => (
     <div key={ratio ?? 'source'}>
       {byAspect.length > 1 && (
         <div className="px-3 pb-1">
@@ -170,7 +183,7 @@ function DraftPhaseAspectRows({
         </div>
       )}
       <div className="flex flex-wrap gap-x-5 gap-y-3">
-        {byGame.map(({ key, label, projects }) => (
+        {byGame.map(({ key, label, projects }, gameIdx) => (
           <div key={key} data-testid={`game-row-${key}`} className={`shrink-0 ${COMPACT_ROW_MAX_WIDTH}`}>
             <div className="px-3 pb-1 flex items-center gap-1.5">
               <span className="text-[10px] font-semibold text-gray-300 bg-gray-700/40 px-1.5 py-0.5 rounded">
@@ -180,6 +193,11 @@ function DraftPhaseAspectRows({
             </div>
             <CardCarousel
               ariaLabel={`${ariaPrefix} ${label}${byAspect.length > 1 ? ` ${ratio}` : ''}`}
+              // T8990: partial guide on the tab's FIRST compact cluster only. The
+              // clusters flex-wrap and are max-w-[420px], so a filler rarely fits
+              // here -- but the fits-check is the arbiter, so a wide first cluster
+              // with a single tile still gets it and a full one never does.
+              fillerSlot={aspectIdx === 0 && gameIdx === 0 ? fillerSlot : null}
             >
               {projects.map(project => (
                 <DraftTile
@@ -1644,6 +1662,20 @@ export function ProjectManager({
             {games.length > 0 && (() => {
               const gameGroups = groupGamesForTab(games);
               const tileGridClass = GAMES_TILE_GRID_BY_COLUMNS[gamesGridColumns(gameGroups)];
+              // T8990: with exactly one game and nothing uploading, the first row
+              // has one empty grid cell. Fill it with the partial guide coaching
+              // "now cut your first play". The cell is NOT a game: it never feeds
+              // gamesGridColumns or the grouping. Hidden while an upload is in
+              // flight (an upload tile already owns that attention -- decision 4).
+              // uploads.length === 0 makes filteredPending === pendingUploads, so
+              // the analysis condition reduces to these two counts. Excludes a lone
+              // is_reference game: it renders ReferenceGameCard and opens via
+              // handleOpenReference, not onLoadGame, so the "Open game" CTA would
+              // misroute -- and a cross-profile link is not a "now cut your first
+              // play" moment anyway.
+              const showGamesPartialGuide =
+                games.length === 1 && !games[0].is_reference
+                && uploads.length === 0 && pendingUploads.length === 0;
               return (
                 <>
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">
@@ -1711,6 +1743,19 @@ export function ProjectManager({
                               )}
                             </div>
                           ))}
+                          {/* T8990: the lone-game coaching cell. Rendered inside the
+                              grid so it reads as the second cell of the first row;
+                              onAction opens that game (lands in Annotate, where Add
+                              Play lives). Not a game -> excluded from the grid math
+                              above. games.length === 1 means one group, one tile. */}
+                          {showGamesPartialGuide && (
+                            <EmptyTabGuide
+                              tab="games"
+                              variant="partial"
+                              className="aspect-video self-stretch"
+                              onAction={() => onLoadGame(group.games[0].id)}
+                            />
+                          )}
                         </div>
                       </section>
                     ))}
@@ -1885,7 +1930,7 @@ export function ProjectManager({
                       bordered card (distinguishes phases from each other) with
                       aspect-major rows inside (row-height invariant: a wrapped
                       line never mixes tile heights) sub-grouped by game. */}
-                  {groupedByPhase.map(({ stage, count, byAspect }) => (
+                  {groupedByPhase.map(({ stage, count, byAspect }, phaseIdx) => (
                     <div
                       key={stage}
                       className="mb-4 rounded-lg border border-gray-700/50 bg-gray-900/20 pt-2 pb-3"
@@ -1908,6 +1953,8 @@ export function ProjectManager({
                         exportingProject={exportingProject}
                         pendingGameIds={pendingGameIds}
                         gamesById={gamesById}
+                        // T8990: partial coaching filler on the tab's first row only.
+                        fillerSlot={phaseIdx === 0 ? CLIPS_PARTIAL_FILLER : null}
                       />
                     </div>
                   ))}
@@ -1935,6 +1982,8 @@ export function ProjectManager({
                         exportingProject={exportingProject}
                         pendingGameIds={pendingGameIds}
                         gamesById={gamesById}
+                        // T8990: "Other reels" is the tab's first row when present.
+                        fillerSlot={CLIPS_PARTIAL_FILLER}
                       />
                     </div>
                   )}
@@ -1942,10 +1991,13 @@ export function ProjectManager({
                   {/* Grouped projects by game - expand if has incomplete or unpublished projects.
                       Bordered card (T8080 follow-up) so one game's group reads as visually
                       distinct from the next, matching the By-Phase treatment above. */}
-                  {groupedProjects.sortedKeys.map(groupKey => {
+                  {groupedProjects.sortedKeys.map((groupKey, groupIdx) => {
                     const group = groupedProjects.groups[groupKey];
                     const hasIncomplete = group.statusCounts.done < group.statusCounts.total;
                     const hasUnpublished = group.projects.some(p => p.has_final_video && !p.is_published);
+                    // T8990: when there is no "Other reels" section, the first game
+                    // group carries the tab's first row (and its filler).
+                    const isFirstRow = groupedProjects.ungrouped.length === 0 && groupIdx === 0;
                     return (
                     <CollapsibleGroup
                       key={groupKey}
@@ -1967,6 +2019,7 @@ export function ProjectManager({
                         exportingProject={exportingProject}
                         pendingGameIds={pendingGameIds}
                         gamesById={gamesById}
+                        fillerSlot={isFirstRow ? CLIPS_PARTIAL_FILLER : null}
                       />
                     </CollapsibleGroup>
                     );
@@ -2019,7 +2072,7 @@ export function ProjectManager({
                 Build New Reel
               </Button>
             </div>
-            <CardCarousel ariaLabel={`${SECTION_NAMES.HIGHLIGHTS} in progress`}>
+            <CardCarousel ariaLabel={`${SECTION_NAMES.HIGHLIGHTS} in progress`} fillerSlot={REELS_PARTIAL_FILLER}>
               {highlightDrafts.map((project) => (
                 <DraftTile
                   key={project.id}
