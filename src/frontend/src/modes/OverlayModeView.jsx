@@ -52,9 +52,9 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
     onExportComplete,
   });
 
-  // View: pure presentation
+  // View: pure presentation.
+  // T9270: renders the full-width ActionBand (the CTA is "Add Overlay").
   return (
-    <div className="mt-6">
       <ExportButtonView
         ref={ref}
         isCurrentlyExporting={container.isCurrentlyExporting}
@@ -85,7 +85,6 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
         onCloseInsufficientCredits={null}
         handleExportRef={container.handleExportRef}
       />
-    </div>
   );
 });
 
@@ -743,7 +742,7 @@ export function OverlayModeView({
   );
 
   return (
-    <>
+    <div className="flex flex-col min-h-0">
       {/* T740: Outdated Focus banner */}
       {framingOutdated && !isFullscreen && (
         <div className="mb-3 flex items-center justify-between gap-3 bg-amber-900/40 border border-amber-500/30 rounded-lg px-4 py-2.5">
@@ -1108,9 +1107,12 @@ export function OverlayModeView({
           </div>
         )}
 
-        {/* Add Spotlight button + export progress — full width at the bottom on
-            all widths (settings moved out to <OverlaySettingsCard>, T5676). */}
-        {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
+      </div>
+
+      {/* T9270: the action band is the last flex:none child of the shell, spanning
+          the full width under the stage + settings rail. "Add Overlay" CTA. */}
+      {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
+        <div className="mt-4 sm:mt-6 -mx-3 sm:-mx-6">
           <OverlayExportButtonSection
             ref={exportButtonRef}
             videoFile={effectiveOverlayFile}
@@ -1123,8 +1125,8 @@ export function OverlayModeView({
             onExportComplete={onExportComplete}
             disabled={!effectiveOverlayFile && !effectiveOverlayVideoUrl}
           />
-        )}
-      </div>
-    </>
+        </div>
+      )}
+    </div>
   );
 }

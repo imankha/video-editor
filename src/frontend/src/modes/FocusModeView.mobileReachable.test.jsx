@@ -25,7 +25,12 @@ vi.mock('../containers/ExportButtonContainer', () => ({
   HIGHLIGHT_EFFECT_LABELS: {},
   EXPORT_CONFIG: {},
 }));
-vi.mock('../components/shared', () => ({ Button: ({ children }) => <button>{children}</button> }));
+vi.mock('../components/shared', () => ({
+  Button: ({ children }) => <button>{children}</button>,
+  Toggle: ({ checked, onChange }) => (
+    <button role="switch" aria-checked={checked} onClick={() => onChange?.(!checked)} />
+  ),
+}));
 vi.mock('../components/shared/clipConstants', () => ({ formatTimeSimple: () => '0:00' }));
 vi.mock('./focus', () => ({ FocusMode: () => <div />, CropOverlay: () => <div /> }));
 vi.mock('../hooks/useFullscreenControls', () => ({

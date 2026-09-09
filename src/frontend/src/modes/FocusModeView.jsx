@@ -8,7 +8,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
-import { Button } from '../components/shared';
+import { Button, Toggle } from '../components/shared';
 import { FocusMode, CropOverlay } from './focus';
 import { formatTimeSimple } from '../components/shared/clipConstants';
 
@@ -74,15 +74,11 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
     saveCurrentClipState,
   });
 
-  // View: pure presentation
-  // T8790/F1: on phones the export action sits ~400-1000px below the fold (after
-  // the video + timeline + segment stack), so it never paints above the fold on
-  // first load. Pin it as a bottom action bar on mobile (sticky bottom-0 against
-  // the `flex-1 overflow-auto` scroll container, NOT `fixed`, which the Focus
-  // card's `backdrop-blur` would trap mid-screen exactly like the F3 sheet). Reset
-  // to normal flow at `lg` so the shared DESKTOP editor layout is byte-unchanged.
+  // View: pure presentation.
+  // T9270: this is now the full-width ActionBand (ExportButtonView renders it). It
+  // is the same component at every width — the T8790 mobile-only sticky reset is
+  // gone; the band is the last flex:none child of each view's flex-col shell.
   return (
-    <div className="mt-4 sm:mt-6 sticky bottom-0 z-30 bg-gray-900/95 backdrop-blur-sm py-2 lg:static lg:z-auto lg:bg-transparent lg:backdrop-blur-none lg:py-0">
       <ExportButtonView
         ref={ref}
         isCurrentlyExporting={container.isCurrentlyExporting}
@@ -125,7 +121,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         onPaymentSuccess={container.onPaymentSuccess}
         handleExportRef={container.handleExportRef}
       />
-    </div>
   );
 });
 
@@ -284,7 +279,7 @@ export function FocusModeView({
   const isMultiClip = hasClips && (clipsWithCurrentState?.length || 0) > 1;
 
   return (
-    <>
+    <div className="flex flex-col min-h-0">
       {/* Error Message */}
       {error && (
         <div className="mb-6 bg-red-500/20 border border-red-500 rounded-lg p-4">
@@ -366,6 +361,15 @@ export function FocusModeView({
               <AspectRatioSelector
                 aspectRatio={globalAspectRatio}
                 onAspectRatioChange={onAspectRatioChange}
+              />
+            </div>
+            {/* Audio toggle (Reel setting). Temporary home in this toolbar until the
+                settings rail lands; moves into the rail's Reel group there. */}
+            <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
+              <span className="text-xs text-gray-300">Audio</span>
+              <Toggle
+                checked={includeAudio}
+                onChange={onIncludeAudioChange}
               />
             </div>
             {/* Precision-pointer tools stay desktop-only: dim, straighten, zoom. */}
@@ -723,8 +727,17 @@ export function FocusModeView({
           </div>
         )}
 
-        {/* Export Button - hidden in fullscreen and on mobile */}
-        {videoUrl && !isFullscreen && !mobileFs && (
+      </div>
+
+      {/* No "Getting Started" onboarding here: Framing is always reached with an
+          existing game/clips, so the app-level guide is out of context and only
+          flashed during the brief clip-load window. */}
+
+      {/* T9270: the action band is the last flex:none child of the shell, spanning
+          the full width under the editor column (and, once it lands, the settings
+          rail). Hidden in fullscreen / mobile fullscreen. */}
+      {videoUrl && !isFullscreen && !mobileFs && (
+        <div className="mt-4 sm:mt-6 -mx-3 sm:-mx-6">
           <ExportButtonSection
             ref={exportButtonRef}
             videoFile={videoFile}
@@ -740,12 +753,8 @@ export function FocusModeView({
             onExportComplete={onExportComplete}
             saveCurrentClipState={saveCurrentClipState}
           />
-        )}
-      </div>
-
-      {/* No "Getting Started" onboarding here: Framing is always reached with an
-          existing game/clips, so the app-level guide is out of context and only
-          flashed during the brief clip-load window. */}
-    </>
+        </div>
+      )}
+    </div>
   );
 }
