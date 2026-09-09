@@ -84,3 +84,100 @@ task closes, or landed deliberately as a logging change with its own justificati
 - Note from T9310: T8460 is not on prod yet (prod was on build 4290, T8460 landed in 4437), so the
   next prod deploy shows every existing user the OLD blocking wall exactly once. Any latency number
   measured on staging describes the post-4437 world only.
+
+## Findings (2026-09-09, measured on the T6230 real-SW harness)
+
+**Verdict: the dominant leg is TIME TO NOTICE, by orders of magnitude. It is a POLICY cost
+(throttle constants + missing trigger), not a bytes-or-mechanics cost. The other two legs are
+seconds. Implement T9360 (notice) first. T9380 (activate) is a drop candidate pending a real-iOS
+number. T9370 (fetch) is not droppable — but only because of one fat chunk, and it matters on
+cellular, not wifi.**
+
+### How this was measured
+
+- Harness: `e2e/T6230-update-gate-real-sw.spec.js`'s fixture (`helpers/staticBuildServer.js`) —
+  two genuinely-different real production builds served from a self-owned `localhost` origin with a
+  real ServiceWorker. A temporary measurement spec (`e2e/T9340-latency-measure.spec.js`, **removed
+  before PUSHREADY**) reused that fixture to stopwatch each leg on two profiles (warm desktop tab;
+  mobile-viewport PWA driven only by a `visibilitychange` resume). Existing `test:e2e:sw-gate` stays
+  green (3 passed, 1.3m).
+- Source re-verified against current code (T9310 has landed): `SW_ACTIVATE_TIMEOUT_MS`
+  `pwaUpdate.js:15`, `SW_INSTALL_TIMEOUT_MS` `:21`, `UPDATE_CHECK_MIN_GAP_MS` `:9`; `PROBE_MIN_GAP_MS`
+  `appVersion.js:68`, Gap-C `PROBE_RETRY_WHILE_INSTALLING_MS`=30s `:73`. The three known stalls still
+  exist; T9310's Gap A/B/C mitigations are in place and are **not** re-reported below.
+- Honest harness limits, stated so no number is over-claimed: (a) `localhost` transfer is
+  near-instant, so the *fetch* stopwatch (~1.9s, poll-cadence-quantized and identical on both
+  profiles) is **not** a real-network number — the fetch cost is derived from actual built-asset
+  bytes instead; (b) the Chromium engine cannot reproduce iOS Safari's flaky `controllerchange`, so
+  the *activate* 3.5s Safari escalation path is reasoned from source, not stopwatched; (c) the
+  harness resets `lastCheckAt`/`lastProbeAt` to 0 on every load, so it **structurally bypasses the
+  notice throttle** — which is exactly why the dominant leg cannot be a stopwatch number and is
+  derived from the call graph.
+
+### Leg 1 — TIME TO NOTICE (dominant)
+
+`checkServerVersion` (the only path that raises the gate) has exactly three callers:
+`sessionInit.js:119` (fires on **every** API response), `pwaUpdate.js` on-load `GET /api/version`
+(once per page load), and `onReturnToApp` (`visibilitychange`/`pageshow`, throttled by
+`UPDATE_CHECK_MIN_GAP_MS`=5min via `lastCheckAt`). The probe inside it (`hasNewerBundle`) is
+independently throttled by `PROBE_MIN_GAP_MS`=5min via `lastProbeAt`. Consequence by profile:
+
+| Profile | Time to notice | Why |
+|---------|----------------|-----|
+| Warm desktop tab, **actively** making API calls | **seconds** | next API response runs `checkServerVersion`; the first post-deploy probe fires immediately because `lastProbeAt` is stale (the 5-min gap only throttles *repeat* probes — the staging storm guard) |
+| Warm desktop tab, **visible but idle** (reading a page, no API calls, no tab-switch) | **effectively unbounded** | nothing calls `checkServerVersion` at all — no API response, no visibility change. Matches T9310 Part 1's own verdict |
+| Mobile PWA **resumed from background** | **until the user next foregrounds it, AND only if >5min since the last check** | backgrounded timers are frozen and there is no API traffic, so notice cannot even *start* until resume; on resume `onReturnToApp` early-returns if `lastCheckAt` is <5min old, so a quick background/resume gets **no** check |
+
+The dominant cost is therefore structural: **there is no time-based trigger for a visible-idle tab,
+and a 5-minute gate on the resume trigger.** This is where "minutes to unbounded" comes from.
+
+### Leg 2 — TIME TO FETCH (real, but bimodal; matters on cellular only)
+
+Built-asset facts (real production build, `npm run build`): 13 JS chunks, **559 KB gzipped total**
+first-load precache (24 precache entries). The distribution is lopsided — a **single
+`index-*.js` app chunk is 342 KB gzipped / 1.17 MB raw**; only `vendor-stripe` is split out
+(`vite.config.js` `manualChunks`). Everything shared — stores, utils, and `pwaUpdate`/`appVersion`/
+`updateGateStore` themselves — lives in that index chunk. Because Vite content-hashes chunks,
+Workbox re-downloads only entries whose hash changed, so the re-download is bimodal:
+
+- change isolated to a lazy screen chunk (`AnnotateScreen` 48 KB gz, `FocusScreen` 23 KB gz, …) →
+  only that chunk re-downloads: **small**.
+- change anywhere in shared code (the common case) → the **whole 342 KB gz index chunk** +
+  `index.html` + `sw.js` re-download.
+
+On wifi that 342 KB is sub-second (and the localhost harness confirms it is not the bottleneck). On
+constrained cellular (~50–100 KB/s effective) it is ~3–7s — which is the epic's "can dominate on a
+phone on cellular." **Not droppable for mobile, but a chunking fix, not a constant.**
+
+### Leg 3 — TIME TO ACTIVATE (smallest; drop candidate)
+
+Measured `notice(mechanical)+activate` round-trip ≈ **1.1s** on Chromium (both profiles), of which
+activate (`skipWaiting`→`controllerchange`→workbox reload→new bundle boots) is the bulk. Known
+additions, all already tuned by prior work and **not** re-litigated here: the `SW_ACTIVATE_TIMEOUT_MS`
+=3.5s Safari escalation (only paid when `controllerchange` doesn't fire — unreproducible on
+Chromium), and T9310 Gap A's ~5s input-idle floor (a deliberate "don't reload mid-scrub" floor, not
+a fixed cost — it adds latency only if the user is mid-interaction at trigger time). On the evidence
+here activate is ~1s of genuine cost — noise next to a multi-minute notice leg.
+
+### Recommendation (smallest change that moves the dominant leg)
+
+1. **T9360 / notice — DO FIRST, biggest lever.** Give the visible tab a time-based trigger it
+   currently lacks: a low-frequency scheduled `checkServerVersion` while `document.visibilityState
+   === 'visible'` (e.g. every ~30–60s) so a visible-idle tab notices within ~1 min instead of never.
+   This reuses the *scheduled-timer* pattern T9310 Gap B already established (its 2s quiescence
+   `setInterval`), so it does **not** violate the no-reactive-persistence invariant. Pair it with
+   lowering/removing `UPDATE_CHECK_MIN_GAP_MS` on the *resume* path (the check is a cheap `GET
+   /api/version` + a `registration.update()`); keep `PROBE_MIN_GAP_MS` as the storm guard, or gate
+   it on `serverBuild > clientBuild` so it only fires when there's genuinely something to find. A
+   server-push signal (SSE/WS "new build N") would cut notice to ~0 but is a larger change than the
+   epic's "smallest change" ask — recommend the visible-tab interval as the MVP and note push as the
+   ceiling.
+2. **T9370 / fetch — SECOND, and only for cellular.** Split the 342 KB gz `index` chunk: move the
+   stable heavy vendor libs (React/Zustand/Router/lucide, and the `html2canvas`/`mp4box` 200 KB-raw
+   libs already in their own chunks) into a `manualChunks` vendor bundle so a typical app-code change
+   re-downloads a small app chunk, not the vendor bytes. No effect on wifi notice; real help on a
+   phone on cellular. Cross-check T8570's bundle findings before starting (epic §Related).
+3. **T9380 / activate — DROP CANDIDATE.** ~1s mechanical on Chromium; the only real risk is the iOS
+   Safari 3.5s escalation, which this harness cannot measure. Recommend **not** scheduling T9380
+   until a real-iOS-Safari activate number exists; if that number is also ~1–4s, drop the leg
+   outright per the epic's "a leg it shows to be noise may be dropped."
