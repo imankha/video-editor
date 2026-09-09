@@ -1,9 +1,10 @@
 # T9280: Mobile Focus export sometimes lands on the Clips tab instead of the publish-exit preview
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-09-09
+**Updated:** 2026-09-09
 
 ## Problem
 
@@ -103,8 +104,31 @@ high-confidence hypothesis, still UNCONFIRMED on a real device.
 - [ ] Root cause confirmed via live reproduction on mobile staging (not just code-reading)
 - [ ] A Focus export always lands the user on the `FocusPublishActionBar` preview screen when
       they're still in Focus for the exported project, matching desktop behavior
-- [ ] If the legitimate "user navigated away mid-export" case still needs to skip the preview,
+- [x] If the legitimate "user navigated away mid-export" case still needs to skip the preview,
       that stays correct — this task fixes the FALSE early-return, not the real one
-- [ ] Regression test reproducing the stale-selectedProjectId race (or whatever the confirmed
+- [x] Regression test reproducing the stale-selectedProjectId race (or whatever the confirmed
       cause turns out to be)
-- [ ] Tests pass
+- [x] Tests pass
+
+## Progress Log
+
+**2026-09-09**: `/dotask` container worker fixed and merged a real, CONFIRMABLE secondary
+defect: `handleProceedToOverlayInternal` was conflating a null `selectedProjectId` with a
+genuine project-id mismatch, causing the early-return guard to fire incorrectly. Reviewer
+APPROVED (0 blocking/major), 22 relevant tests green, CI green (1 pre-existing documented
+flake, known-failures.md row 30, unrelated). Merged PR #378.
+
+This does NOT close the task. The worker separately consulted the `expert` agent internally
+and found the likely DOMINANT trigger for the reported symptom is a different, bigger
+mechanism: a mobile tab-discard reload unmounts `FocusScreen` mid/post-export, and the
+recovery path on remount never shows the preview (unconfirmed, would be an L-tier follow-up
+if verified — recovery-path state needs to persist enough to know "we just finished an
+export for project X" across an unmount/remount, not just across a stale in-memory id
+comparison). Live confirmation requires simulating an actual mobile tab discard/backgrounding
+cycle, which is materially harder to reproduce faithfully than the CardCarousel-style bug T9300
+turned out to be (no clean Playwright primitive for OS-level tab discard) — flagging rather
+than guessing. **Needs a decision**: (a) attempt a live repro of the tab-discard hypothesis
+(supervisor session, real mobile viewport + real account, next available slot), (b) accept the
+merged guard fix as sufficient for now and close this task, treating any further reports as a
+new bug, or (c) file the recovery-path fix as its own follow-up task now without further
+live confirmation, given the mechanism is plausible from the code reading alone.
