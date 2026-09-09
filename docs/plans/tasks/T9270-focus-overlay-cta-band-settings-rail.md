@@ -2,8 +2,9 @@
 
 **Status:** TODO
 **Impact:** 8
-**Complexity:** 6
+**Complexity:** 7
 **Created:** 2026-09-08
+**Milestone:** Final Polish (moved 2026-09-09, user order)
 
 ## Problem
 
@@ -46,8 +47,10 @@ Related defects found while inventorying, all in scope because they are the same
 
 Canvas: https://claude.ai/code/artifact/2c86163e-c498-4bfb-a50d-1e29d999cfd7
 (page "CTA placement" = the chosen Placement 1; page "Rail states" = the rail's two states plus
-an interactive collapse; page "Explored options" = the three rejected earlier directions.)
-Working artboard sources: `C:\tmp\focus-overlay-canvas\` (`Main.dc.html` is the interactive one).
+an interactive collapse; page "Mobile" = the below-lg drawer in both states plus an interactive
+handle; page "Explored options" = the three rejected earlier directions.)
+Working artboard sources: `C:\tmp\focus-overlay-canvas\` (`Main.dc.html` and `MobileMain.dc.html`
+are the interactive ones; the stills are generated from them by `make-stills.mjs`).
 
 ### The governing rule
 
@@ -138,6 +141,57 @@ gesture there, not a size one. That is expected, not a bug.
   never all of it. Reclaiming the last 64px would mean relocating the CTA, which the design
   explicitly rejects.
 
+### Mobile (below `lg`, or any coarse pointer - `useIsMobile`'s query) - added 2026-09-09
+
+The same three regions and the same rule, re-cut for a 390px-wide screen. Canvas page "Mobile".
+
+- **The rail becomes a drawer, collapsed by default, and it expands HORIZONTALLY**: it slides in
+  from the right edge over the stage. The opposite default from desktop (expanded), because on a
+  phone an open panel and a usable stage cannot coexist.
+- **Geometry (390x844):** header 48px; action band 100px at the bottom; the drawer occupies the
+  region between them (top 48, bottom 100), `width: 300px`, `background: #0f172a`,
+  `border-left: 1px solid #334155`, `box-shadow: -12px 0 32px rgba(0,0,0,0.45)`. Open leaves a
+  90px sliver of stage visible; that is accepted (see tradeoffs).
+- **It stops above the action band.** The CTA is fully visible in BOTH drawer states. This is
+  the governing rule applied to mobile: settings may cover the video, never the action.
+- **One property animates:** `transform: translateX(300px -> 0)`, `320ms cubic-bezier(0.2, 0.8,
+  0.2, 1)`. Nothing reflows; the stage does not change size (it is already full width). A scrim
+  (`rgba(0,0,0,0.35)`) fades over the stage behind the drawer.
+- **The handle rides the drawer's left edge** as a child (`left: -28px`, vertically centred,
+  28x72px, `border-radius: 10px 0 0 10px`, chevron + the screen's icon), so it is the SAME
+  control in both states and pokes out 28px when the drawer is closed. It sits at the vertical
+  middle of the right edge deliberately: top-right is the mobile fullscreen `Maximize` button
+  (`absolute top-2 right-2`, Focus and Overlay), bottom is the playback controls. Visible at
+  rest, `title` + `aria-label="Settings"`, >=44px hit target via an invisible padding
+  pseudo-element (the discoverable-never-hover-only rule).
+- **No backdrop-tap to close** (house rule, `feedback_no_backdrop_close`). The handle, now showing
+  a right-pointing chevron, is the way out.
+- **Drawer content is the desktop rail's content verbatim** (same tabs, same `SettingRow`s, same
+  groups). Rows keep the 44px coarse-pointer floor. A row whose control is wider than the label
+  column (the six 44px colour swatches) STACKS: label row, then control row, `flex-wrap`.
+- **Focus keeps its current desktop-only exclusions**: zoom (pinch handles it) and background dim
+  (there is no pillarbox to dim on a phone) do not appear in the mobile drawer, exactly as
+  `FocusModeView.jsx:371-372` gates them today. Straighten's line-drag tool likewise stays
+  desktop-only. The mobile Focus drawer therefore holds Reel (aspect ratio, include audio) and
+  the Clips tab; Overlay's holds the full Spotlight / Text / Thumbnail set.
+- **The aspect selector moves into the drawer.** T7130 rendered it at every width because gating
+  it behind `lg:` stranded phone users on 9:16; it is still reachable at every width here, one
+  tap further. Acceptable; noted so nobody re-adds a second copy above the video.
+- **Action band on a phone stacks:** a single 12px status line (`text-gray-400`, truncating)
+  above a FULL-WIDTH 56px CTA; `padding: 10px 16px 12px` + `env(safe-area-inset-bottom)`, 100px
+  total. Export progress and the disabled reason take the status line's slot, so "reason next to
+  the button" still holds. This IS T8790's sticky bar, now the same component as the desktop
+  band.
+- **In mobile fullscreen (`mobileFs`) the handle is hidden**, as the toolbar is today.
+- Drawer open/closed is ephemeral view state, same as the desktop rail.
+
+**Mobile tradeoffs (decisions, do not "fix"):** open, the drawer covers 300 of 390px, so a
+spotlight is tuned while seeing a 90px sliver of it (changes are live; close to review). The
+28px handle overlaps the stage's right edge; with the 40vh-capped portrait video centred at
+190px wide it never touches the video, and on a 16:9 source it covers a 28px strip of the
+right edge. A bottom sheet was considered and rejected per direction (horizontal expansion
+keeps the mental model identical to the desktop rail).
+
 ## Scope
 
 **In:** `FocusModeView.jsx`, `OverlayModeView.jsx`, a new shared `SettingRow` /
@@ -148,8 +202,9 @@ gesture there, not a size one. That is expected, not a bug.
 swap, and the affected tests.
 
 **Out:** Annotate (its own screen, its own idiom - a follow-up if this lands well); the mobile
-layout below `lg` beyond keeping T8790's behaviour working; any change to what the settings
-actually DO; any persistence or schema change (there is none in this task).
+FULLSCREEN layout (`mobileFs`, T4880) beyond hiding the drawer handle there; any change to what
+the settings actually DO; any persistence or schema change (there is none in this task).
+(The non-fullscreen mobile layout IS in scope as of 2026-09-09: see § Mobile.)
 
 ## Acceptance criteria
 
@@ -166,7 +221,15 @@ actually DO; any persistence or schema change (there is none in this task).
 5. The Overlay settings tabs are rendered ONCE, with one source of truth for the active tab.
 6. Rail open/collapsed does not survive a reload (no-persisted-view-state).
 7. Collapsing the rail grows the Focus stage; the transition runs on the rail width only.
-8. T8790's mobile behaviour still holds: the CTA is reachable at 390x844 on both screens.
+8. At 390x844 on both screens: the CTA is fully within the viewport on first paint
+   (`boundingBox()`, as in criterion 1), the settings drawer is CLOSED on load, and the CTA's
+   box is identical with the drawer open and closed. T8790's guarantee is subsumed, not lost.
+10. The mobile drawer opens with a horizontal slide from the right (assert the drawer's
+    `transform` before/after, not just presence), stops above the action band, does not close on
+    a tap outside it, and its handle is visible at rest with a >=44px hit box, `title` and
+    `aria-label`. Every control in the drawer meets the 44px floor on a coarse pointer.
+11. On mobile, the aspect selector is reachable inside the drawer and is NOT also rendered above
+    the video (exactly one instance, on every width).
 9. Export progress, failed/retry and the disabled reason all render in the band beside the CTA.
 
 ## Test scope (relevant set, ~10)
@@ -177,7 +240,10 @@ actually DO; any persistence or schema change (there is none in this task).
 - `OverlayModeView.aspectStage.test.jsx` (the T5676 geometry test - the stage row changes)
 - `OverlaySettingsTabs.test.jsx`
 - `FocusPublishActionBar.test.jsx`, `OverlayPublishActionBar.test.jsx`
-- New: a rail collapse/expand unit test and a CTA-above-fold e2e spec at three viewports
+- New: a rail collapse/expand unit test and a CTA-above-fold e2e spec at three desktop viewports
+- New: a mobile drawer e2e at 390x844 (closed on load, slide open, CTA box unchanged, no
+  backdrop close, handle hit box) - run with a coarse-pointer emulation, since `useIsMobile`
+  also keys on `(hover: none) and (pointer: coarse)`
 - Note the T5380 precedent: pointer/layout behaviour gets a REAL browser check, not jsdom alone.
 
 ## Suggested sequencing (three shippable steps)
@@ -188,12 +254,21 @@ actually DO; any persistence or schema change (there is none in this task).
    existing rows onto them, fix the duplicate-tabs bug, unify the accent.
 3. **Re-home Focus's settings.** Move the toolbar and the below-timeline card into the rail with
    the Reel / This clip / View only grouping; add the collapse behaviour to both screens.
+4. **Mobile drawer.** Below `lg`, render the same `SettingsRail` as the translateX drawer with
+   the edge handle, collapsed by default; delete Overlay's second (`lg:hidden mt-6`) settings
+   render and Focus's above-video aspect selector, since both now live in the drawer.
 
 ## Notes for the implementor
 
-- `OverlayModeView.jsx:376` already reserves rail width with `lg:max-w-[calc(100%-22rem)]`, so
-  the aspect-sized stage is used to sharing the row. 22rem = 352px against this design's 300px
-  rail plus its gap.
+- T9150 landed 2026-09-09 (PR #375) and is the baseline for the Overlay stage row: the rail
+  reservation is now a cap on the stage COLUMN, `lg:max-w-[calc(100%-22rem)]` at
+  `OverlayModeView.jsx:873`, not on the stage box (its Reviewer caught the `100vw`-vs-`100%`
+  bug; read that commit, `869f7a16`, before touching the row). 22rem = 352px against this
+  design's 300px rail plus its gap, so the numbers already line up.
+- The mobile drawer is a `transform`, not a width change: never animate `width` on the phone
+  path, and never let the drawer's presence alter the stage box (it is `position: absolute`
+  inside the body region). The desktop rail is the opposite (in-flow width tween). Same
+  component, two layout modes, switched on `useIsMobile()`.
 - Do NOT add a `useEffect` that writes rail state anywhere. Gesture-based persistence rule; and
   this state is not persisted at all.
 - Read `.claude/knowledge/keyframes-framing.md` before touching the Focus stage or timeline, and
