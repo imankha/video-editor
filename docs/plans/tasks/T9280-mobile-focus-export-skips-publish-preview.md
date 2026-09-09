@@ -1,6 +1,6 @@
 # T9280: Mobile Focus export sometimes lands on the Clips tab instead of the publish-exit preview
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-09-09
@@ -101,14 +101,25 @@ high-confidence hypothesis, still UNCONFIRMED on a real device.
   assuming the ids were ever actually different projects.
 
 ## Acceptance Criteria
-- [ ] Root cause confirmed via live reproduction on mobile staging (not just code-reading)
-- [ ] A Focus export always lands the user on the `FocusPublishActionBar` preview screen when
-      they're still in Focus for the exported project, matching desktop behavior
+
+**Scope narrowed 2026-09-09** (see Progress Log): the still-mounted/null-selection case is
+this task's scope and is fully met below. The still-open "does every Focus export land on
+the preview, including across a mobile tab discard" question is NOT struck — it's owned by
+[T9285](T9285-focus-recovery-path-skips-completion-preview.md) now, which carries its own
+copy of the equivalent criteria so nothing is silently dropped.
+
+- [x] The FALSE early-return (null selection conflated with a real project mismatch) no
+      longer skips the preview when `FocusScreen` is still mounted
 - [x] If the legitimate "user navigated away mid-export" case still needs to skip the preview,
       that stays correct — this task fixes the FALSE early-return, not the real one
-- [x] Regression test reproducing the stale-selectedProjectId race (or whatever the confirmed
-      cause turns out to be)
+- [x] Regression test reproducing the null-selection conflation
 - [x] Tests pass
+- [ ] ~~Root cause confirmed via live reproduction on mobile staging~~ — moved to T9285
+      (the confirmed root cause for THIS task's scope is the null-conflation guard bug,
+      confirmed by code trace + regression test; the still-unconfirmed piece is T9285's
+      tab-discard hypothesis)
+- [ ] ~~A Focus export always lands the user on the preview screen (all cases)~~ — moved to
+      T9285 (this task's fix covers the still-mounted case only)
 
 ## Progress Log
 
@@ -124,11 +135,12 @@ mechanism: a mobile tab-discard reload unmounts `FocusScreen` mid/post-export, a
 recovery path on remount never shows the preview (unconfirmed, would be an L-tier follow-up
 if verified — recovery-path state needs to persist enough to know "we just finished an
 export for project X" across an unmount/remount, not just across a stale in-memory id
-comparison). Live confirmation requires simulating an actual mobile tab discard/backgrounding
-cycle, which is materially harder to reproduce faithfully than the CardCarousel-style bug T9300
-turned out to be (no clean Playwright primitive for OS-level tab discard) — flagging rather
-than guessing. **Needs a decision**: (a) attempt a live repro of the tab-discard hypothesis
-(supervisor session, real mobile viewport + real account, next available slot), (b) accept the
-merged guard fix as sufficient for now and close this task, treating any further reports as a
-new bug, or (c) file the recovery-path fix as its own follow-up task now without further
-live confirmation, given the mechanism is plausible from the code reading alone.
+comparison). Filed as [T9285](T9285-focus-recovery-path-skips-completion-preview.md) rather than left
+as an open question here — filing costs nothing and queues it for prioritization without
+committing implementation time. Live confirmation of the real device-level trigger (a
+genuine OS tab discard, materially harder to reproduce faithfully than the CardCarousel-style
+bug T9300 turned out to be — no clean Playwright primitive for OS-level tab discard) is left
+to T9285's own acceptance criteria rather than blocking on it here.
+
+This task's own (narrowed) acceptance criteria are met and merged — STAGING. The still-open
+dominant-mechanism question lives entirely in T9285 now.
