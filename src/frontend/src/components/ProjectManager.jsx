@@ -1274,8 +1274,11 @@ export function ProjectManager({
       {/* Credits anchored far left. First-run hint derives "never uploaded a
           game" from the loaded games list (T8500) - a pure render-time
           derivation, no persisted view state. */}
+      {/* T9290: opaque backing plate (matches the gray-900 page surface) so
+          scrolled tile content passes cleanly BEHIND the chip instead of
+          bleeding through its translucent bg-white/10 pill. Invisible at rest. */}
       {isAuthenticated && (
-        <div className="fixed top-4 left-4 z-30">
+        <div className="fixed top-4 left-4 z-30 rounded-lg bg-gray-900">
           <CreditBalance showFirstRunHint={!gamesLoading && games.length === 0} />
         </div>
       )}
@@ -1283,7 +1286,12 @@ export function ProjectManager({
       {/* Top right controls - Invite + Sign-in/Profile. T8545: the Gallery
           (Highlight Reels) icon-button/drawer entry point that used to live
           here is gone -- Highlight Reels is now the third peer tab below. */}
-      <div className="fixed top-4 right-4 z-30 flex items-center gap-3 sm:gap-4">
+      {/* T9290: opaque backing plate on the fixed controls cluster (matches the
+          gray-900 page surface) so scrolled content passes fully behind the row
+          rather than bleeding through the translucent Invite/sport chips.
+          Invisible at rest (page is gray-900 too); the gap between chips just
+          reads as page background. */}
+      <div className="fixed top-4 right-4 z-30 flex items-center gap-3 sm:gap-4 rounded-lg bg-gray-900">
         <InstallButton />
         {isAuthenticated && (
           <Button
