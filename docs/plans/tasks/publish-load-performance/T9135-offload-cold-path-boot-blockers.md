@@ -1,6 +1,6 @@
 # T9135: Offload the two cold-path boot blockers T9120 found outside the burst
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-08
@@ -90,3 +90,16 @@ regression suite unaffected: `test_t6240_session_init_concurrency.py`, `test_ses
 `test_t9130_publish_burst_concurrency.py` all green. 49/49 relevant tests pass.
 
 Knowledge doc updated: `.claude/knowledge/backend-services.md` § Request concurrency model.
+
+**Merge note:** a concurrent session sharing this same working tree independently implemented and
+merged this exact task as PR #376 while this work was in progress. Both implementations converged
+on the same approach (including the same two incidental bugs from lint-driven cleanup). Rather than
+redo the shipped work, the two real bugs a Reviewer pass caught were landed as a small follow-up,
+PR #377: `test_vacuum_on_signout.py::test_init_calls_cancel_active_vacuum` used `ast.walk()`
+discovery order (breadth-first, not source order) to check ordering, so it silently stopped
+enforcing "cancel_active_vacuum before user_session_init" after the offload — fixed by comparing
+`ast` line numbers instead. `auth.py`'s two fire-and-forget background tasks used
+`task.add_done_callback(lambda t: t.exception())` to silence a RUF006 finding, which discarded any
+real exception instead of logging it and didn't fix the underlying GC hazard — fixed with a shared
+module-level task set (real strong reference) + a logging done-callback. 145 tests green across
+both PRs' relevant sets.
