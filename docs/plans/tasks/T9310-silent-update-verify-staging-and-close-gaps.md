@@ -167,6 +167,64 @@ sighting most likely came from a stale client bundle. That remains unconfirmed a
 task. The three gaps in Part 2 were found by reading the shipped T8460 implementation and are
 independent of how Part 1 resolves.
 
+**2026-09-09 — PART 1 VERDICT (evidence-backed; written before any code change).**
+
+**Sighting: stale client — most plausible and the only explanation consistent with the deployed-code
+evidence; unrefuted.** The old blocking wall's exact strings ("A new version is ready" / "Update now")
+have **0 occurrences** in the build staging actually serves (4815, bundle `index-DYAeD_Dj.js`). Those
+strings only exist in pre-T8460 (pre-4437) code. A wall can therefore only be drawn by a client whose
+*running* bundle predates 4437 — the new bundle is installed and `waiting` behind it, and the old
+bundle draws its own wall until activation. The container worker cannot read the user's `[Build] <hash>
+(#n)` console line (`main.jsx:26`) to confirm the exact running build; per the kickoff, absent contrary
+evidence (a client already >= 4437 drawing the wall, which would refute the theory and make this a live
+bug reproduced via `npm run test:e2e:sw-gate`) the stale-client hypothesis stands. It burns off once per
+browser profile per device. **No code change is warranted for the sighting itself.** If the supervisor
+can relay a `[Build]` line >= 4437 that drew the wall, reopen this as a live bug.
+
+**Activation window (`registerType:'prompt'` + no-op `onNeedRefresh`) — real regardless of the sighting,
+characterized.** A waiting bundle never self-activates; the ONLY activator is `checkServerVersion ->
+requireUpdate -> runUpdate` (`appVersion.js:91`). `checkServerVersion` fires from (a) the sessionInit
+interceptor on every API response, (b) the on-load `GET /api/version` in `setupPwaUpdatePrompt`, and
+(c) the visibilitychange/pageshow return-to-app poll, throttled to 5 min (`UPDATE_CHECK_MIN_GAP_MS`).
+So a client that installed the waiting bundle holds the old one until the next un-throttled check that
+*also* finds the app quiescent. Two amplifiers widen this beyond expectation, and are exactly Gaps B/C:
+(1) the cold-boot guard (`updateGateStore.js:72`) suppresses the on-load auto-run for the first 30s of
+an unauthenticated boot, and nothing re-tests quiescence once it lapses unless a *new* `checkServerVersion`
+happens to fire (Gap B); (2) a probe that answers "no" — whether genuinely nothing waiting, the
+onRegisteredSW/on-load-probe race (T6230 header), or a still-installing worker that missed the 10s
+`SW_INSTALL_TIMEOUT_MS` — sets `lastProbeAt` and locks out re-probing for a full 5 min (Gap C). For a
+truly idle tab that makes no API calls and never tab-switches, the window is effectively unbounded until
+the next return-to-app. Acceptable in steady state; Gaps B and C narrow it. **Documented as acceptable,
+narrowed by Part 2 — no separate fix for the window itself beyond B/C.**
+
+**CDN/deploy plumbing — ruled out.** `src/frontend/public/_headers` sets `Cache-Control: no-cache` on
+`index.html`, `sw.js`, and `manifest.webmanifest` (revalidate; T5070), so the CDN never serves a stale
+entry document. `vite.config.js` has `cleanupOutdatedCaches:true` + `clientsClaim:true`, and
+`landLatestBundle` (`pwaUpdate.js:172`) unregisters a stale controller before reloading. The plumbing is
+sound; the sighting is a one-time client-side SW transition, not a caching bug.
+
+**2026-09-09 — GAP D DECISION: DEFER (do not implement auto-retry now).** The zero-gesture promise already
+holds for the overwhelmingly common path (a sub-second `flush-verify` -> silent reload); Gap D only touches
+the rare failure. Auto-retrying `flush-verify` with backoff would be a **blind retry of a write path**, which
+the project's persistence invariant explicitly forbids for the conflict case: a `flush-verify` failure is not
+guaranteed transient — it can be a genuine CAS/stale-snapshot refusal, for which CLAUDE.md § Persistence
+mandates "freeze the write, log CRITICAL, surface the failed-sync/Retry UX — never auto-merge, never
+blind-retry". `runUpdate` today collapses every error into one generic message and has no taxonomy to tell a
+transient network blip from a CAS refusal, so a correct auto-retry would first require classifying the error
+and would STILL have to fall through to the manual Retry for the conflict case. The existing single manual
+Retry surface is exactly the failed-sync/Retry UX the invariant calls for. Net: deferring is the safe,
+standards-aligned choice; revisit only if `flush-verify` grows a typed transient-vs-conflict error and telemetry
+shows transient blips are common enough to be worth the added surface. No code change for Gap D.
+
+**2026-09-09 — GAPS A/B/C IMPLEMENTED.** Gap A: `isQuiescent` now also requires ~5s of pointer/key input-idle
+(passive capture-phase listeners record a timestamp only — no store writes, no persistence). Gap B: a 2s
+`setInterval` re-tests quiescence while an update is pending and resumes the reload with no new API traffic;
+it self-stops on gate-clear/flush/error and never auto-retries a flush failure (that stays the Retry gesture).
+Gap C: `probeForWaitingBundle` returns `{ hasBundle, stillInstalling }`; a "no" caused only by a slow install
+missing the 10s `SW_INSTALL_TIMEOUT_MS` now re-probes after ~30s instead of the full 5-minute lockout, while
+every other "no" keeps the 5-minute gap that prevents a probe-per-response storm. Unit coverage extended in
+all three existing test files (`updateGateStore.test.js`, `appVersion.test.js`, `pwaUpdate.test.js`).
+
 ## Acceptance Criteria
 
 - [ ] The staging sighting has a written, evidence-backed explanation: either confirmed stale client (no code change needed) or a reproduced bug with a fix
