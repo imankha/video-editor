@@ -1,6 +1,6 @@
 # T9100: Player-detection boxes render offset from the video after "Add Spotlight Now"
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-09-08
