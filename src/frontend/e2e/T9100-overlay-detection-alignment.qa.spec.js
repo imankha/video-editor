@@ -74,15 +74,27 @@ async function measureStage(page, testId) {
     const ry = +rect.getAttribute('y');
     const rw = +rect.getAttribute('width');
     const rh = +rect.getAttribute('height');
+    const settingsRect = settings ? settings.getBoundingClientRect() : null;
     return {
-      stageBox: { width: sb.width, height: sb.height },
+      stageBox: { x: sb.x, right: sb.x + sb.width, width: sb.width, height: sb.height },
       video: { x: v.x, y: v.y, width: v.width, height: v.height },
       natural: { w: video.videoWidth, h: video.videoHeight },
       // Detection box center in screen coordinates.
       boxCenter: { x: s.x + rx + rw / 2, y: s.y + ry + rh / 2 },
-      settingsWidth: settings ? settings.getBoundingClientRect().width : null,
+      settingsWidth: settingsRect ? settingsRect.width : null,
+      settingsLeft: settingsRect ? settingsRect.x : null,
     };
   }, testId);
+}
+
+/** T9150: the stage box must never visually overlap the settings column beside
+ * it -- a settings column that merely HAS width (settingsWidth >= floor) is not
+ * enough if the stage paints over it (OverlaySettingsTabs is backdrop-blur, so
+ * it would render on TOP of, not beside, the video). */
+function assertNoStageSettingsOverlap(m, label) {
+  expect(m.settingsLeft, `${label}: settings column left edge`).not.toBeNull();
+  expect(m.stageBox.right, `${label}: stage box must not overlap the settings column`)
+    .toBeLessThanOrEqual(m.settingsLeft + 1); // +1px rounding tolerance
 }
 
 test.describe('T9100 detection-box alignment @staging-gate @gate-c', () => {
@@ -140,9 +152,11 @@ test.describe('T9100 detection-box alignment @staging-gate @gate-c', () => {
     expect(m.boxCenter.y).toBeLessThanOrEqual(m.video.y + m.video.height + 2);
 
     // T9150: a correctly-aligned 9:16 stage never needed much width, so its
-    // settings column was never at risk — assert the floor holds anyway.
+    // settings column was never at risk — assert the floor holds anyway, and that
+    // the stage never paints OVER it (not just "has width").
     expect(m.settingsWidth, 'FIXED: settings column width').not.toBeNull();
     expect(m.settingsWidth).toBeGreaterThanOrEqual(MIN_SETTINGS_WIDTH);
+    assertNoStageSettingsOverlap(m, 'FIXED');
     await saveEvidence(page, 'T9100-fixed-stage-aligned');
   });
 
@@ -159,6 +173,7 @@ test.describe('T9100 detection-box alignment @staging-gate @gate-c', () => {
     }, { timeout: 30000 });
     await page.locator('[data-testid="stage-bug"] svg rect[stroke-dasharray]').first().waitFor({ timeout: 30000 });
     await page.waitForTimeout(400);
+    await assertNoHorizontalOverflow(page);
 
     const m = await measureStage(page, 'stage-bug');
     expect(m, 'measured BUG stage').not.toBeNull();
@@ -186,6 +201,7 @@ test.describe('T9100 detection-box alignment @staging-gate @gate-c', () => {
     // starved to a sliver or 0px, independent of whatever fixes the metadata itself.
     expect(m.settingsWidth, 'BUG: settings column width').not.toBeNull();
     expect(m.settingsWidth).toBeGreaterThanOrEqual(MIN_SETTINGS_WIDTH);
+    assertNoStageSettingsOverlap(m, 'BUG');
     await saveEvidence(page, 'T9100-bug-control-offset');
   });
 
@@ -202,17 +218,20 @@ test.describe('T9100 detection-box alignment @staging-gate @gate-c', () => {
     }, { timeout: 30000 });
     await page.locator('[data-testid="stage-16x9-real"] svg rect[stroke-dasharray]').first().waitFor({ timeout: 30000 });
     await page.waitForTimeout(400);
+    await assertNoHorizontalOverflow(page);
 
     const m = await measureStage(page, 'stage-16x9-real');
     expect(m, 'measured 16:9 stage').not.toBeNull();
     console.log(`[T9150] 16x9 stageBox=${Math.round(m.stageBox.width)}x${Math.round(m.stageBox.height)} ` +
-      `settingsWidth=${Math.round(m.settingsWidth ?? -1)}`);
+      `settingsWidth=${Math.round(m.settingsWidth ?? -1)} settingsLeft=${Math.round(m.settingsLeft ?? -1)}`);
 
     // This case has NO metadata bug at all (the reel genuinely is 16:9) — before
     // Fix C, this was the independently-discovered, currently-shipping regression:
     // a real landscape reel starved its own settings panel with fully correct data.
     expect(m.settingsWidth, '16:9: settings column width').not.toBeNull();
     expect(m.settingsWidth).toBeGreaterThanOrEqual(MIN_SETTINGS_WIDTH);
+    // Not just "has width" — must not be painted over by the (backdrop-blur) stage.
+    assertNoStageSettingsOverlap(m, '16:9');
     await saveEvidence(page, 'T9150-16x9-settings-not-starved');
   });
 
@@ -231,12 +250,14 @@ test.describe('T9100 detection-box alignment @staging-gate @gate-c', () => {
         page.locator(`[data-testid="${id}"] svg rect[stroke-dasharray]`).first().waitFor({ timeout: 30000 })),
     );
     await page.waitForTimeout(400);
+    await assertNoHorizontalOverflow(page);
 
     for (const id of ['stage-fixed', 'stage-bug', 'stage-16x9-real']) {
       const m = await measureStage(page, id);
       expect(m, `measured ${id} at 2560x1440`).not.toBeNull();
       expect(m.settingsWidth, `${id}: settings column width at 2560x1440`).not.toBeNull();
       expect(m.settingsWidth).toBeGreaterThanOrEqual(MIN_SETTINGS_WIDTH);
+      assertNoStageSettingsOverlap(m, `${id}@2560x1440`);
     }
   });
 });

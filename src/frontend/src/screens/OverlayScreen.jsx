@@ -289,12 +289,17 @@ export function OverlayScreen({
     framingVideoUrl,
     framingMetadata,
   });
-  if (workingVideo && !workingVideoUsable) {
-    console.error('[OverlayScreen] Half-populated workingVideo record - refusing it', {
-      hasUrl: !!workingVideo.url,
-      hasMetadata: !!workingVideo.metadata,
-    });
-  }
+  // Runs in an effect (not the render body) so a persistent half-record logs once
+  // per occurrence instead of once per render (OverlayScreen re-renders on every
+  // currentTime tick) -- a log, not a persisted write, so an effect is fine here.
+  useEffect(() => {
+    if (workingVideo && !workingVideoUsable) {
+      console.error('[OverlayScreen] Half-populated workingVideo record - refusing it', {
+        hasUrl: !!workingVideo.url,
+        hasMetadata: !!workingVideo.metadata,
+      });
+    }
+  }, [workingVideo, workingVideoUsable]);
 
   // Diagnostic: log video source state on every render where something interesting happens
   useEffect(() => {

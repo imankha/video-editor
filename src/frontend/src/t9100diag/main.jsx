@@ -60,10 +60,12 @@ const STAGES = [
 ];
 
 // Row layout mirrors modes/OverlayModeView.jsx's non-fullscreen stage/settings
-// row verbatim (T9150 Fix C): video column lg:w-fit lg:flex-initial lg:min-w-0,
-// stage box lg:h-[70vh] lg:max-w-[calc(100%-22rem)], settings column
-// lg:flex-1 lg:min-w-[20rem]. Mirrored, not imported, matching this harness's
-// existing pattern (see the stageBoxClass note below) — keep both in sync by hand.
+// row verbatim (T9150 Fix C): video column lg:w-fit lg:flex-initial lg:min-w-0
+// lg:max-w-[calc(100%-22rem)] (a % cap here is safe -- this column's parent, the
+// row, has a definite width from the container/card shell below, not lg:w-fit);
+// stage box lg:h-[70vh] max-w-full (no cap of its own -- the column bounds it);
+// settings column lg:flex-1 lg:min-w-[20rem]. Mirrored, not imported, matching
+// this harness's existing pattern — keep in sync by hand with OverlayModeView.jsx.
 function DetectionStage({ testId, label, metadata }) {
   const videoRef = useRef(null);
 
@@ -72,7 +74,7 @@ function DetectionStage({ testId, label, metadata }) {
   // `effectiveOverlayMetadata` drives it in the real screen.
   const useAspectStage = metadata.width > 0 && metadata.height > 0;
   const stageBoxClass = useAspectStage
-    ? 'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh] lg:max-w-[calc(100vw-22rem)]'
+    ? 'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh]'
     : 'relative bg-gray-900 rounded-lg';
   const stageBoxStyle = useAspectStage ? { aspectRatio: `${metadata.width} / ${metadata.height}` } : undefined;
 
@@ -80,7 +82,7 @@ function DetectionStage({ testId, label, metadata }) {
     <div data-testid={testId} style={{ marginBottom: 24 }}>
       <div style={{ color: '#9ca3af', fontSize: 13, marginBottom: 6, fontFamily: 'sans-serif' }}>{label}</div>
       <div className="lg:flex lg:flex-row lg:items-start lg:gap-6">
-        <div className="flex flex-col w-full lg:w-fit lg:flex-initial lg:min-w-0">
+        <div className="flex flex-col w-full lg:w-fit lg:flex-initial lg:min-w-0 lg:max-w-[calc(100%-22rem)]">
           <div className={stageBoxClass} style={stageBoxStyle}>
             <VideoPlayer
               videoRef={videoRef}
@@ -120,16 +122,20 @@ function DetectionStage({ testId, label, metadata }) {
 
 function T9100DiagHarness() {
   return (
-    // No maxWidth cap: the T9150 settings-starvation row needs the full viewport
-    // width to reproduce (the bug only manifests once lg:h-[70vh]'s aspect-driven
-    // width is wide enough to exceed the row at 1600px+ viewports).
-    <div style={{ padding: 16 }}>
-      {STAGES.map((s) => (
-        <DetectionStage key={s.testId} {...s} />
-      ))}
-      {/* T9150: a genuinely 16:9 reel (correct metadata, no T9100 bug involved) must
-          still leave the settings column at least 20rem wide, not starved to 0. */}
-      <DetectionStage testId="stage-16x9-real" label="T9150: genuinely 16:9 reel (correct metadata)" metadata={REAL_16X9_META} />
+    // T9150: the row/column % cap resolves against THIS wrapper's width, so it must
+    // match production's actual row width -- App.jsx's `container mx-auto px-4`
+    // (Tailwind's default container maxes at 1536px) plus OverlayModeView's card
+    // `p-6 border` -- not the raw viewport. A narrower or wider stand-in here would
+    // make the settings-starvation assertions pass/fail on the WRONG geometry.
+    <div className="container mx-auto px-4" style={{ maxWidth: 1536 }}>
+      <div className="p-6 border" style={{ borderColor: '#374151' }}>
+        {STAGES.map((s) => (
+          <DetectionStage key={s.testId} {...s} />
+        ))}
+        {/* T9150: a genuinely 16:9 reel (correct metadata, no T9100 bug involved) must
+            still leave the settings column at least 20rem wide, not starved to 0. */}
+        <DetectionStage testId="stage-16x9-real" label="T9150: genuinely 16:9 reel (correct metadata)" metadata={REAL_16X9_META} />
+      </div>
     </div>
   );
 }

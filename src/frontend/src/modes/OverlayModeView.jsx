@@ -370,13 +370,14 @@ export function OverlayModeView({
   const aspectH = effectiveOverlayMetadata?.height;
   const useAspectStage = !isFullscreen && !mobileFs && aspectW > 0 && aspectH > 0;
   const stageBoxClass = useAspectStage
-    ? // lg:max-w caps the aspect-driven width so a landscape stage (whether from a
-      // genuinely 16:9 reel or a wrong-metadata bug) can never consume the whole row
-      // and starve the settings column beside it to 0px (T9150). Uses vw, not a %,
-      // because the column this sits in is lg:w-fit (fit-content) -- a percentage
-      // max-width there resolves against a not-yet-determined ancestor width and
-      // collapses the box to a near-zero size (a real bug this fix hit once).
-      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh] lg:max-w-[calc(100vw-22rem)]'
+    ? // T9150: the width cap that stops a landscape stage (genuinely 16:9, or a
+      // wrong-metadata bug) from starving the settings column lives on the VIDEO
+      // COLUMN below (lg:max-w-[calc(100%-22rem)]), not here. A % max-width on
+      // THIS box would resolve against its own lg:w-fit (fit-content) parent --
+      // circular, since the parent's width depends on this box's width. The column
+      // has a definite width from ITS parent (the row), so capping there is safe;
+      // this box just respects whatever width the column leaves it via max-w-full.
+      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh]'
     : `relative bg-gray-900 ${
         (isFullscreen || mobileFs)
           ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
@@ -864,9 +865,12 @@ export function OverlayModeView({
               {/* Video column — shrink-wraps the aspect box so Controls bind to the
                   video width (lg:w-fit); full width when stacked on mobile.
                   lg:flex-initial (not lg:flex-none) lets it yield width to the
-                  settings column instead of forcing it to 0 (T9150) — the stage
-                  box's own lg:max-w cap is what actually bounds it. */}
-              <div className="flex flex-col w-full lg:w-fit lg:flex-initial lg:min-w-0">
+                  settings column instead of forcing it to 0 (T9150). lg:max-w is a
+                  PERCENTAGE of the row (this column's own parent has a definite
+                  width, so no circularity) leaving room for the settings column's
+                  lg:min-w-[20rem] + the row's lg:gap-6 (24px) — the stage box
+                  inside just respects whatever width this leaves it. */}
+              <div className="flex flex-col w-full lg:w-fit lg:flex-initial lg:min-w-0 lg:max-w-[calc(100%-22rem)]">
                 <div data-testid="overlay-video-stage" className={stageBoxClass} style={stageBoxStyle}>
                   {videoStageInner}
                 </div>

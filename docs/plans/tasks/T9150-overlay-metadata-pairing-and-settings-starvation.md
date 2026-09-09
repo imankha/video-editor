@@ -223,6 +223,45 @@ investigation, small enough to review together):
   4/4 e2e pass with real DOM measurement; 60/60 relevant unit tests green; 0 new lint
   warnings/errors on any touched file.
 
+**2026-09-09 (Reviewer pass, fresh-context, M-tier)**: 1 BLOCKING + 2 MAJOR + 7 minor. Verdict:
+NEEDS REVISION. All BLOCKING/MAJOR addressed, verified, re-committed:
+- **BLOCKING** (real): the shipped `lg:max-w-[calc(100vw-22rem)]` on the STAGE BOX was measured
+  against the wrong reference. Production's row is NOT `100vw - 32px` - it's bounded by
+  `App.jsx`'s `container mx-auto` (Tailwind default, maxes at 1536px) plus the card's `p-6
+  border`. The Reviewer measured the shipped fix in real Chromium against the exact production
+  class chain and proved the stage OVERLAPS the settings panel by 50-658px depending on
+  viewport (0px settings-width was "fixed" but the panel is invisible under the
+  `backdrop-blur` stage). **Fix**: moved the cap from the stage box to its COLUMN
+  (`lg:max-w-[calc(100%-22rem)]`, a percentage - safe here because the column's OWN parent,
+  the row, has a definite width, unlike the box's `lg:w-fit` parent). Stage box reverted to
+  `max-w-full` only. Re-verified live: exact match to the Reviewer's own independently-computed
+  proof numbers (1102x840 stage, 328px settings, both at 1600x1200 and 2560x1440).
+- **MAJOR** (real): the e2e harness had DROPPED its `maxWidth: 1280` cap entirely (making the
+  row `100vw`, even more generous than the buggy `22rem` assumption), and the spec asserted only
+  `settingsWidth >= 240`, never checking the stage doesn't visually overlap it - so the harness
+  could not have caught the BLOCKING issue above. **Fix**: wrapped the harness root in the same
+  `container mx-auto px-4` (max 1536px) + card `p-6 border` shell as production, and added
+  `assertNoStageSettingsOverlap` (stage's right edge <= settings' left edge) to all 4
+  settings-relevant tests, plus `assertNoHorizontalOverflow` to the 3 that lacked it.
+- **MAJOR** (moot after the BLOCKING fix): `aspectdiag/main.jsx` (T5676's harness) was flagged as
+  a stale 3rd hand-copy of the stage-box class. Since the BLOCKING fix moved the cap OFF the
+  stage box entirely, the box's class string is now back to exactly what `aspectdiag` already
+  had (no divergence) - `aspectdiag` needed no change. Confirmed by diffing the three copies
+  after the fix.
+- **Minor #2** (real, fixed): the half-record `console.error` ran in the render body
+  (`OverlayScreen` re-renders every `currentTime` tick -> unbounded error spam for a persistent
+  half-record). Moved into a `useEffect` keyed on `[workingVideo, workingVideoUsable]`.
+- **Minor #6** (real, fixed): `overlaydiag/main.jsx` still passed no-op
+  `setOverlayVideoFile/Url/Metadata` props that `OverlayContainer` no longer destructures.
+  Removed.
+- **Minor #7**: the second dead-code area (Fix B's scope note) is the same surface as the
+  existing **T4440** row - named explicitly now, nothing further to do here.
+  Minors #1/#3/#4/#5 were either superseded by the BLOCKING fix (#1, #4 - the vw-vs-% comment
+  and the 22rem/20rem arithmetic both changed with it) or accepted as documented tradeoffs (#3
+  loader-repair edge case, #5 export-for-test module split) - not blocking, not actioned.
+  Re-verified: 4/4 e2e (now with overlap+overflow assertions) pass, 60/60 unit tests green, 0
+  new lint warnings on any touched file including the two newly-touched harnesses.
+
 ## Acceptance Criteria
 
 - [x] A half-populated `workingVideo` record (`url` present, `metadata` null) can never produce
