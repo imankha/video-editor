@@ -1,14 +1,15 @@
 import { forwardRef, useState } from 'react';
-import { Minimize, Maximize, Crop, RotateCw } from 'lucide-react';
+import { Minimize, Maximize, Crop, Sliders, Film, ChevronLeft } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
-import ZoomControls from '../components/ZoomControls';
-import AspectRatioSelector from '../components/AspectRatioSelector';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
-import { Button, Toggle } from '../components/shared';
+import { Button } from '../components/shared';
+import SettingsRail from '../components/settings/SettingsRail';
+import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
+import FocusClipsPanel from '../components/settings/FocusClipsPanel';
 import { FocusMode, CropOverlay } from './focus';
 import { formatTimeSimple } from '../components/shared/clipConstants';
 
@@ -270,6 +271,53 @@ export function FocusModeView({
   // (CropOverlay CSS-rotate + OOB mask stay ungated); only the editing UI toggles.
   const [straightenVisible, setStraightenVisible] = useState(false);
 
+  // T9270: ephemeral settings-rail view state. NEVER persisted (no-persisted-view-state
+  // rule; precedent T5641 straightenVisible above, T5610 circleEditActive). Desktop
+  // rail defaults EXPANDED; the mobile drawer defaults CLOSED. Its tab defaults to
+  // Settings. No useEffect writes these — gesture handlers only.
+  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [railTab, setRailTab] = useState('settings');
+
+  // T9270: the Focus settings-rail tabs (Clips | Settings) and their bodies. The
+  // Settings tab re-homes the old above-video toolbar (aspect, audio, straighten,
+  // background dim, zoom) into Reel / This clip / View-only groups. `desktopOnly`
+  // keeps dim/zoom + the straighten line-drag tool out of the mobile drawer (Step 4),
+  // exactly as the old toolbar gated them.
+  const focusRailTabs = [
+    { id: 'clips', label: 'Clips', icon: Film },
+    { id: 'settings', label: 'Settings', icon: Sliders },
+  ];
+  const renderFocusSettings = (desktopOnly) => (
+    <FocusSettingsPanel
+      globalAspectRatio={globalAspectRatio}
+      onAspectRatioChange={onAspectRatioChange}
+      includeAudio={includeAudio}
+      onIncludeAudioChange={onIncludeAudioChange}
+      straightenVisible={straightenVisible}
+      onToggleStraighten={() => setStraightenVisible((v) => !v)}
+      dimOpacity={dimOpacity}
+      onToggleDim={() => setDimOpacity(dimOpacity === 0.2 ? 0.7 : 0.2)}
+      zoom={zoom}
+      onZoomIn={onZoomIn}
+      onZoomOut={onZoomOut}
+      onResetZoom={onResetZoom}
+      minZoom={MIN_ZOOM}
+      maxZoom={MAX_ZOOM}
+      desktopOnly={desktopOnly}
+    />
+  );
+  const focusRailBody = (desktopOnly) => (railTab === 'clips'
+    ? <FocusClipsPanel clips={hasClips ? clipsWithCurrentState : null} />
+    : renderFocusSettings(desktopOnly));
+
+  // T9270: the mobile entry row's live-summary second line. DERIVED from the same
+  // state the rows bind to — never a second stored copy. Straighten reads "Level"
+  // when no angle is set, else "Straightened".
+  const aspectSummary = globalAspectRatio === '16:9' ? '16:9 wide' : '9:16 vertical';
+  const mobileSettingsSummary =
+    `${aspectSummary} - Audio ${includeAudio ? 'on' : 'off'} - ${rotation ? 'Straightened' : 'Level'}`;
+
   // T5780: emphasize the selected clip's output chip only when it differs from the
   // source-timeline length the playback timer shows (slow-mo or trim present).
   const sourceLength = duration || clipDuration || 0;
@@ -351,71 +399,16 @@ export function FocusModeView({
 
       {/* Main Editor Area */}
       <div className={`${(isFullscreen || mobileFs) ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-6 border border-white/20'}`}>
-        {/* Controls Bar - hidden in fullscreen and on mobile */}
-        {videoUrl && !isFullscreen && !mobileFs && (
-          <div className="flex mb-3 lg:mb-6 gap-4 items-center">
-            {/* Reel-level aspect ratio (T3910): applies to ALL clips, re-fitting their crop.
-                Rendered at EVERY width (T7130) — it is the only way to reshape a reel after
-                creation, so gating it behind lg: stranded phone users on the default 9:16. */}
-            <div className="flex items-center gap-2">
-              <AspectRatioSelector
-                aspectRatio={globalAspectRatio}
-                onAspectRatioChange={onAspectRatioChange}
-              />
-            </div>
-            {/* Audio toggle (Reel setting). Temporary home in this toolbar until the
-                settings rail lands; moves into the rail's Reel group there. */}
-            <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
-              <span className="text-xs text-gray-300">Audio</span>
-              <Toggle
-                checked={includeAudio}
-                onChange={onIncludeAudioChange}
-              />
-            </div>
-            {/* Precision-pointer tools stay desktop-only: dim, straighten, zoom. */}
-            <div className="ml-auto hidden lg:flex items-center gap-2">
-              <div className="flex items-center bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
-                <span className="text-xs text-gray-400 mr-2">Background:</span>
-                <span className="text-xs text-gray-300 mr-1.5">Dim</span>
-                <button
-                  onClick={() => setDimOpacity(dimOpacity === 0.2 ? 0.7 : 0.2)}
-                  className="relative w-8 h-4 rounded-full transition-colors"
-                  style={{ backgroundColor: dimOpacity === 0.7 ? '#2563eb' : '#4b5563' }}
-                  aria-label="Toggle background darkness"
-                >
-                  <span
-                    className="absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform"
-                    style={{ transform: dimOpacity === 0.7 ? 'translateX(16px)' : 'translateX(0)' }}
-                  />
-                </button>
-                <span className="text-xs text-gray-300 ml-1.5">Dark</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setStraightenVisible((v) => !v)}
-                className={`flex items-center gap-1.5 border rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  straightenVisible
-                    ? 'bg-blue-600 border-blue-500 text-white'
-                    : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
-                }`}
-                aria-pressed={straightenVisible}
-                title="Straighten: level tilted footage by dragging along the horizon (or a vertical)"
-              >
-                <RotateCw size={14} />
-                Straighten
-              </button>
-              <ZoomControls
-                zoom={zoom}
-                onZoomIn={onZoomIn}
-                onZoomOut={onZoomOut}
-                onResetZoom={onResetZoom}
-                minZoom={MIN_ZOOM}
-                maxZoom={MAX_ZOOM}
-              />
-            </div>
-          </div>
-        )}
+        {/* T9270: the old above-video controls toolbar (aspect, audio, background
+            dim, straighten, zoom) is re-homed into the settings rail's Settings tab
+            (Reel / This clip / View-only groups). The stage row below carries the
+            rail on desktop; the mobile drawer (Step 4) carries the mobile-safe subset. */}
 
+        {/* T9270: desktop stage row — the editor column (video + timeline) beside the
+            settings rail. In fullscreen / mobileFs the container escapes via fixed
+            positioning so the row collapses to just the (gated-off) rail. */}
+        <div className="lg:flex lg:flex-row lg:items-start">
+        <div className="flex flex-col w-full lg:flex-1 lg:min-w-0 lg:pr-6">
         {/* Fullscreen container - uses fixed positioning to overlay viewport */}
         <div
           ref={fullscreenContainerRef}
@@ -725,6 +718,65 @@ export function FocusModeView({
               testId="project-output-length-chip"
             />
           </div>
+        )}
+        </div>
+        {/* T9270: the unified settings rail — desktop (fine pointer) only, beside the
+            editor column. Focus tabs = Clips | Settings; collapses to a 64px icon
+            strip. On mobile the SAME rail renders as the translateX drawer below. */}
+        {videoUrl && !isFullscreen && !mobileFs && !isMobile && (
+          <SettingsRail
+            isMobile={false}
+            collapsed={railCollapsed}
+            onToggleCollapse={() => setRailCollapsed((v) => !v)}
+            tabs={focusRailTabs}
+            activeTab={railTab}
+            onTabChange={setRailTab}
+            title="Settings"
+          >
+            {focusRailBody(true)}
+          </SettingsRail>
+        )}
+        {/* T9270: mobile settings drawer — the SAME SettingsRail in translateX mode,
+            opened by the mobile-settings-row below. Positioned absolute inside this
+            relatively-positioned stage row so it never alters the stage box. Holds
+            the mobile-safe subset (Reel + This clip via desktopOnly=false; no dim/zoom
+            or straighten line-drag tool). */}
+        {videoUrl && !isFullscreen && !mobileFs && isMobile && (
+          <SettingsRail
+            isMobile
+            open={drawerOpen}
+            onCloseDrawer={() => setDrawerOpen(false)}
+            tabs={focusRailTabs}
+            activeTab={railTab}
+            onTabChange={setRailTab}
+            title="Settings"
+          >
+            {focusRailBody(false)}
+          </SettingsRail>
+        )}
+        </div>
+
+        {/* T9270: mobile settings entry row — a 64px full-width labelled button that
+            opens the drawer, with a derived live-summary second line. Hidden in mobile
+            fullscreen (as the toolbar was). Desktop uses the in-flow rail instead. */}
+        {videoUrl && !isFullscreen && !mobileFs && isMobile && (
+          <button
+            type="button"
+            data-testid="mobile-settings-row"
+            onClick={() => setDrawerOpen(true)}
+            className="mt-4 w-full h-16 flex items-center gap-3 rounded-[10px] px-3.5 text-left"
+            style={{ border: '1px solid #334155', background: '#0f172a' }}
+            aria-label="Open settings"
+          >
+            <Sliders size={20} className="shrink-0 text-gray-300" aria-hidden="true" />
+            <span className="flex flex-col min-w-0 flex-1">
+              <span className="text-sm font-semibold text-gray-100">Settings</span>
+              <span data-testid="mobile-settings-summary" className="text-xs text-gray-400 truncate">
+                {mobileSettingsSummary}
+              </span>
+            </span>
+            <ChevronLeft size={18} className="shrink-0 text-gray-500" aria-hidden="true" />
+          </button>
         )}
 
       </div>

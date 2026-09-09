@@ -82,10 +82,19 @@ function renderView(overrides = {}) {
   return render(<FocusModeView {...props} />);
 }
 
-/** Bare `hidden` (not `lg:hidden`) on any ancestor means the node is gone below 1024px. */
+/**
+ * Bare `hidden` on any ancestor means the node is gone below 1024px — UNLESS the same
+ * ancestor also carries a `lg:` reveal (`lg:flex`/`lg:block`/`lg:grid`), which makes it
+ * visible on desktop. The T9270 desktop settings rail is `hidden lg:flex` (shown at lg,
+ * where the desktop selector lives); the mobile drawer is never `hidden`. So a plain
+ * `hidden` with no `lg:` reveal is the only true "gone at the tested width" signal.
+ * Real visibility is verified in a browser at 352/375/1280px.
+ */
 function hiddenAncestorOf(node) {
   for (let el = node.parentElement; el; el = el.parentElement) {
-    if (el.classList.contains('hidden')) return el;
+    if (!el.classList.contains('hidden')) continue;
+    const hasLgReveal = [...el.classList].some((c) => /^lg:(flex|block|grid|inline)/.test(c));
+    if (!hasLgReveal) return el;
   }
   return null;
 }
