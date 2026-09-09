@@ -4,9 +4,30 @@ import { setBundleProbe } from './appVersion';
 import { useUpdateGateStore } from '../stores/updateGateStore';
 
 // Long-lived installed PWAs never hit a "next load", and browsers throttle or
-// freeze background timers, so the re-check rides visibilitychange instead of
-// an interval: returning to the app is exactly the moment to check (T4150).
-const UPDATE_CHECK_MIN_GAP_MS = 5 * 60 * 1000;
+// freeze background timers, so the re-check rides visibilitychange (returning to
+// the app is exactly the moment to check, T4150) AND a low-frequency scheduled
+// poll while the tab is visible (T9360 candidate 1 — the visible-but-idle tab that
+// makes no API calls and never tab-switches otherwise has NO time-based trigger and
+// notices a deploy effectively never; T9340 measured this as the dominant latency
+// leg).
+//
+// T9360 candidate 2: this gap was 5 minutes, which stranded the mobile-PWA case —
+// a quick background/resume within 5 min of the last check got NO version check at
+// all. Lowered to a short storm guard: it is still a gap (a burst of alt-tabs, or a
+// scheduled tick landing right after a resume check, coalesces to one cheap GET
+// /api/version), but a genuine resume now almost always re-checks. The expensive
+// half — registration.update() inside the bundle probe — keeps its own independent
+// PROBE_MIN_GAP_MS storm guard (appVersion.js), and checkServerVersion only reaches
+// the probe when serverBuild > clientBuild, so a check that finds nothing new is a
+// bare header read.
+const UPDATE_CHECK_MIN_GAP_MS = 30 * 1000;
+
+// T9360 candidate 1: how often a VISIBLE tab re-checks the server build with no
+// other trigger. A scheduled poll (setInterval), not a reactive effect watching
+// state — same shape as updateGateStore's Gap B quiescence timer, so it does not
+// violate the gesture/scheduled-only persistence rule. The interval only ever fires
+// a cheap GET /api/version; UPDATE_CHECK_MIN_GAP_MS coalesces it with resume checks.
+const VISIBLE_POLL_INTERVAL_MS = 30 * 1000;
 
 // Tbug40p: after asking a waiting SW to skipWaiting, workbox-window reloads the
 // page itself on 'controllerchange'. On Safari that reload is flaky and can fail
@@ -19,6 +40,20 @@ const SW_ACTIVATE_TIMEOUT_MS = 3500;
 // slow install answers "no bundle yet" (retried after the probe cooldown) instead of
 // hanging the gate decision forever.
 const SW_INSTALL_TIMEOUT_MS = 10 * 1000;
+
+// T9360: the visible-tab poll timer (candidate 1). Module-level so a test can stop
+// it between cases and it never leaks across the suite. setupPwaUpdatePrompt runs
+// exactly once in production (main.jsx), so the interval lives for the app's
+// lifetime by design — the app's update heartbeat, not a leak.
+let visiblePollTimer = null;
+
+/** Test-only seam: stop the visible-tab poll so it can't leak across cases. */
+export function __stopVisiblePollForTest() {
+  if (visiblePollTimer !== null) {
+    clearInterval(visiblePollTimer);
+    visiblePollTimer = null;
+  }
+}
 
 /**
  * T6630 round 4: DEV must never run under a service worker, and must
@@ -112,23 +147,39 @@ export function setupPwaUpdatePrompt() {
   // slow/failed SW registration under-gates (safe) rather than looping (not safe).
   setBundleProbe(() => probeForWaitingBundle(() => registration));
 
+  // A version check, throttled by UPDATE_CHECK_MIN_GAP_MS so the resume trigger
+  // (bursty — a flurry of alt-tabs) and the scheduled visible poll coalesce onto a
+  // single gap instead of storming GET /api/version. Rejection inside
+  // checkBackendVersion just means the check couldn't reach the server
+  // (offline/flaky) — the next trigger retries.
+  function maybeCheckBackendVersion() {
+    const now = Date.now();
+    if (now - lastCheckAt < UPDATE_CHECK_MIN_GAP_MS) return;
+    lastCheckAt = now;
+    checkBackendVersion();
+  }
+
   // Returning to the app is the moment to re-check. Shared by visibilitychange
   // (tab switch / wake from sleep) and pageshow (Safari bfcache restore).
   function onReturnToApp() {
     // Let the SW discover/stage a newer bundle (mechanism, not a gate trigger).
     registration?.update().catch(() => {});
-    const now = Date.now();
-    if (now - lastCheckAt < UPDATE_CHECK_MIN_GAP_MS) return;
-    lastCheckAt = now;
-    // Rejection here just means the check couldn't reach the server
-    // (offline/flaky network) — the next return to the app retries.
-    checkBackendVersion();
+    maybeCheckBackendVersion();
   }
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
     onReturnToApp();
   });
+
+  // T9360 candidate 1: a visible-but-idle tab has no other trigger — no API traffic,
+  // no tab-switch — so give it a time-based one. A hidden tab is skipped (its next
+  // visibilitychange already re-checks on return, and background timers are throttled
+  // anyway); coalesced with resume checks by the shared UPDATE_CHECK_MIN_GAP_MS.
+  __stopVisiblePollForTest();
+  visiblePollTimer = setInterval(() => {
+    if (document.visibilityState === 'visible') maybeCheckBackendVersion();
+  }, VISIBLE_POLL_INTERVAL_MS);
 
   // Safari (the bug39/40 reporter's browser) restores a backgrounded page from
   // bfcache on back/forward WITHOUT a fresh load and, for a bfcache restore, may

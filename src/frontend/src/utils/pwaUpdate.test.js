@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { setupPwaUpdatePrompt, evictStaleDevServiceWorker, probeForWaitingBundle } from './pwaUpdate';
+import {
+  setupPwaUpdatePrompt,
+  evictStaleDevServiceWorker,
+  probeForWaitingBundle,
+  __stopVisiblePollForTest,
+} from './pwaUpdate';
 import { useUpdateGateStore } from '../stores/updateGateStore';
 
 const { registerSWMock } = vi.hoisted(() => ({ registerSWMock: vi.fn() }));
@@ -78,6 +83,8 @@ describe('setupPwaUpdatePrompt', () => {
   });
 
   afterEach(() => {
+    __stopVisiblePollForTest(); // T9360: never leak the visible-tab poll across cases
+    delete document.visibilityState; // T9360: drop any per-case visibility override
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
@@ -125,18 +132,21 @@ describe('setupPwaUpdatePrompt', () => {
       expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/version'));
     });
 
-    it('rate-limits the resume poll to one per five minutes', () => {
+    it('T9360 candidate 2: rate-limits the resume poll to one per 30s (was 5 min), so a quick resume re-checks', () => {
       const now = vi.spyOn(Date, 'now');
       now.mockReturnValue(1_000_000);
       const { handlers, registration, returnToApp } = setup();
       handlers.onRegisteredSW('/sw.js', registration);
       fetch.mockClear();
 
+      // A burst of resumes inside the gap coalesces to a single cheap check.
       returnToApp();
       returnToApp();
       expect(fetch).toHaveBeenCalledTimes(1);
 
-      now.mockReturnValue(1_000_000 + 5 * 60 * 1000 + 1);
+      // Just past the new 30s gap — a resume now DOES re-check, where the old
+      // 5-minute gap would have stranded a returning PWA for minutes.
+      now.mockReturnValue(1_000_000 + 30 * 1000 + 1);
       returnToApp();
       expect(fetch).toHaveBeenCalledTimes(2);
     });
@@ -163,6 +173,61 @@ describe('setupPwaUpdatePrompt', () => {
     it('does not throw on resume when no registration was ever provided', () => {
       const { returnToApp } = setup();
       expect(() => returnToApp()).not.toThrow();
+    });
+  });
+
+  describe('T9360 candidate 1: scheduled visible-tab poll', () => {
+    const setVisibility = (state) =>
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+
+    it('re-checks the server build on a 30s interval while the tab is visible (the idle-tab trigger)', () => {
+      vi.useFakeTimers();
+      setVisibility('visible');
+      const { handlers, registration } = setup();
+      handlers.onRegisteredSW('/sw.js', registration);
+      fetch.mockClear(); // drop the on-load check; measure the scheduled ticks only
+
+      vi.advanceTimersByTime(30 * 1000);
+      expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/version'));
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(30 * 1000);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
+
+    it('does NOT poll while the tab is hidden (no wasted background checks)', () => {
+      vi.useFakeTimers();
+      setVisibility('hidden');
+      const { handlers, registration } = setup();
+      handlers.onRegisteredSW('/sw.js', registration);
+      fetch.mockClear();
+
+      vi.advanceTimersByTime(5 * 60 * 1000); // five minutes hidden
+      expect(fetch).not.toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    it('coalesces a scheduled tick with a recent resume check via the shared 30s gap', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(1_000_000); // a base well above the lastCheckAt=0 sentinel
+      setVisibility('visible');
+      const { handlers, registration, returnToApp } = setup();
+      handlers.onRegisteredSW('/sw.js', registration);
+      fetch.mockClear();
+
+      // Resume at +20s checks (sets lastCheckAt). The scheduled tick at +30s lands
+      // only 10s later — inside the gap — so it coalesces instead of double-fetching.
+      vi.advanceTimersByTime(20 * 1000);
+      returnToApp();
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(10 * 1000); // scheduled tick at +30s, throttled
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(30 * 1000); // scheduled tick at +60s, >30s since resume
+      expect(fetch).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
     });
   });
 
