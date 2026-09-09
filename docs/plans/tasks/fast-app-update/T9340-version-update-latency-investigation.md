@@ -1,6 +1,6 @@
 # T9340: Why does the version update take so long?
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-09
