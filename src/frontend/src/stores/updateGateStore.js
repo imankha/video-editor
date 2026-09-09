@@ -45,6 +45,50 @@ import('./uploadStore').then((m) => { uploadStoreModule = m; });
 const COLD_BOOT_AT = Date.now();
 const FIRST_SESSION_GUARD_MS = 30_000;
 
+// T9310 Gap A: an auto-reload must never land mid-interaction (e.g. scrubbing the
+// Focus timeline -- keyframes survive the flush, but playhead/zoom/selection/undo
+// are lost across the reload). isQuiescent requires "no pointer or key input for
+// ~5s" on top of the export/upload/modal checks. This is gesture-driven tracking,
+// NOT a reactive effect: passive capture-phase listeners record only a timestamp,
+// touch no store, and persist nothing (CLAUDE.md gesture-based-persistence rule).
+// pointermove/touchmove are included so an in-progress drag (a scrub is one long
+// pointerdown+move) keeps registering as active, not just its opening pointerdown.
+const INPUT_IDLE_MS = 5_000;
+let lastInputAt = 0;
+if (typeof window !== 'undefined') {
+  const markInput = () => { lastInputAt = Date.now(); };
+  for (const evt of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'touchmove']) {
+    window.addEventListener(evt, markInput, { passive: true, capture: true });
+  }
+}
+
+/** Test-only seam: reset the input-idle timestamp so a case starts genuinely idle. */
+export function __resetInputActivityForTest() {
+  lastInputAt = 0;
+}
+
+// T9310 Gap B: once the gate is up but the app is non-quiescent, nothing in the
+// existing cadence re-tests quiescence -- a closed modal, a finished upload, the
+// cold-boot guard lapsing, and the input-idle timer (Gap A) crossing 5s are all
+// SILENT. Only checkServerVersion re-invokes requireUpdate, and that needs a new
+// API response or a tab-switch. So poll quiescence on a short timer while the
+// update is pending, resuming the reload the moment the app clears WITHOUT any new
+// network traffic. A scheduled check (setInterval), never a reactive effect
+// watching state (CLAUDE.md gesture/scheduled-only persistence rule).
+const QUIESCENCE_RETRY_MS = 2_000;
+let quiescenceRetryTimer = null;
+function stopQuiescenceRetry() {
+  if (quiescenceRetryTimer !== null) {
+    clearInterval(quiescenceRetryTimer);
+    quiescenceRetryTimer = null;
+  }
+}
+
+/** Test-only seam: clear the Gap B retry timer so it can't leak across cases. */
+export function __stopQuiescenceRetryForTest() {
+  stopQuiescenceRetry();
+}
+
 export const useUpdateGateStore = create((set, get) => ({
   isUpdateRequired: false,
   // Tbug40p decision #3 (seam only): true would route runUpdate through the heavy
@@ -71,7 +115,9 @@ export const useUpdateGateStore = create((set, get) => ({
     const modalOpen = isAnyModalOpen();
     const coldBoot = !useAuthStore.getState().isAuthenticated &&
       (Date.now() - COLD_BOOT_AT) < FIRST_SESSION_GUARD_MS;
-    return !exporting && !uploading && !modalOpen && !coldBoot;
+    // T9310 Gap A: not quiescent while the user is actively interacting.
+    const inputActive = (Date.now() - lastInputAt) < INPUT_IDLE_MS;
+    return !exporting && !uploading && !modalOpen && !coldBoot && !inputActive;
   },
 
   requireUpdate: ({ needsMigration = false } = {}) => {
@@ -83,15 +129,40 @@ export const useUpdateGateStore = create((set, get) => ({
       // T8460: no click to wait on -- every subsequent requireUpdate() call
       // (fired by the existing re-check cadence: API responses, visibilitychange)
       // re-tests quiescence and runs once conditions clear.
-      if (phase === 'idle' && get().isQuiescent()) {
-        get().runUpdate();
-      }
+      if (phase === 'idle') get()._runOrScheduleRetry();
       return;
     }
     set({ isUpdateRequired: true, needsMigration });
+    get()._runOrScheduleRetry();
+  },
+
+  // T8460/T9310: run the update now if quiescent, otherwise keep the Gap B poll
+  // alive so it resumes on the next quiescent tick. Single place that decides
+  // "run vs wait", so requireUpdate and the retry timer stay in agreement.
+  _runOrScheduleRetry: () => {
     if (get().isQuiescent()) {
+      stopQuiescenceRetry();
       get().runUpdate();
+    } else {
+      get()._scheduleQuiescenceRetry();
     }
+  },
+
+  _scheduleQuiescenceRetry: () => {
+    if (quiescenceRetryTimer !== null) return; // already polling
+    quiescenceRetryTimer = setInterval(() => {
+      const { isUpdateRequired, phase } = get();
+      // Gate cleared, or already flushing/errored -> stop polling. (A flush error
+      // parks on the Retry gesture; Gap B does not auto-retry a failed flush.)
+      if (!isUpdateRequired || phase !== 'idle') {
+        stopQuiescenceRetry();
+        return;
+      }
+      if (get().isQuiescent()) {
+        stopQuiescenceRetry();
+        get().runUpdate();
+      }
+    }, QUIESCENCE_RETRY_MS);
   },
 
   /**

@@ -90,17 +90,18 @@ for (const viewport of RUNS) {
       // Still no alertdialog -- this is a passive card, not a gate.
       await expect(page.locator(ALERTDIALOG)).toHaveCount(0);
 
-      // Add Game (or an equally-fundamental always-present control) is not
-      // covered by anything -- the exact regression this task fixes (prod bug #18).
-      const addGame = page.getByRole('button', { name: /add game/i }).first();
-      await expect(addGame).toBeVisible();
-      await expect(addGame).toBeEnabled();
-      const addGameIsOnTop = await addGame.evaluate((el) => {
+      // The primary always-present home CTA (T8380/T8500 renamed it "Add Game" ->
+      // "Add Video") is not covered by anything -- the exact regression this task
+      // fixes (prod bug #18).
+      const primaryCta = page.getByRole('button', { name: /add video/i }).first();
+      await expect(primaryCta).toBeVisible();
+      await expect(primaryCta).toBeEnabled();
+      const primaryCtaIsOnTop = await primaryCta.evaluate((el) => {
         const rect = el.getBoundingClientRect();
         const topEl = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
         return el === topEl || el.contains(topEl);
       });
-      expect(addGameIsOnTop, 'Add Game must not be occluded by the progress card').toBe(true);
+      expect(primaryCtaIsOnTop, 'Add Video must not be occluded by the progress card').toBe(true);
 
       await saveEvidence(page, `T8460-progress-card-nonblocking-${viewport.label}`);
 
@@ -140,8 +141,8 @@ for (const viewport of RUNS) {
       expect(markerSurvived).toBe(true);
 
       // Retry is the ONE interactive surface, and it never blocked the app behind it.
-      const addGame = page.getByRole('button', { name: /add game/i }).first();
-      await expect(addGame).toBeEnabled();
+      const primaryCta = page.getByRole('button', { name: /add video/i }).first();
+      await expect(primaryCta).toBeEnabled();
 
       shouldFail = false;
       const navigationPromise = page.waitForEvent('framenavigated', { timeout: 10_000 });

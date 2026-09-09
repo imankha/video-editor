@@ -66,7 +66,15 @@ let bundleProbe = null;
 // runs on EVERY api response. Without a cooldown the staging case (server
 // permanently ahead, no bundle to find) would fire an update() per response.
 const PROBE_MIN_GAP_MS = 5 * 60 * 1000;
+// T9310 Gap C: a probe that answered "no bundle" ONLY because a worker was still
+// installing (slow connection missed pwaUpdate's SW_INSTALL_TIMEOUT_MS window) gets
+// this much shorter cooldown instead, so a missed install window costs ~30s, not a
+// full 5 minutes of lockout while the bundle is seconds from ready.
+const PROBE_RETRY_WHILE_INSTALLING_MS = 30 * 1000;
 let lastProbeAt = 0;
+// The cooldown that applies to lastProbeAt — normally PROBE_MIN_GAP_MS, dropped to
+// PROBE_RETRY_WHILE_INSTALLING_MS after a still-installing miss (Gap C).
+let probeCooldownMs = PROBE_MIN_GAP_MS;
 let probeInFlight = null;
 
 export function setBundleProbe(fn) {
@@ -77,6 +85,7 @@ export function setBundleProbe(fn) {
 export function __resetProbeStateForTest() {
   bundleProbe = null;
   lastProbeAt = 0;
+  probeCooldownMs = PROBE_MIN_GAP_MS;
   probeInFlight = null;
 }
 
@@ -147,15 +156,25 @@ async function hasNewerBundle() {
   if (probeInFlight) return probeInFlight;
 
   const now = Date.now();
-  if (now - lastProbeAt < PROBE_MIN_GAP_MS) return false;
+  if (now - lastProbeAt < probeCooldownMs) return false;
   lastProbeAt = now;
 
   probeInFlight = (async () => {
     try {
-      return await bundleProbe();
+      // Gap C: the probe reports { hasBundle, stillInstalling }. Shorten the next
+      // cooldown ONLY when the "no" was purely a still-installing miss, so the
+      // client re-probes in ~30s and catches the finished install; every other "no"
+      // (genuinely nothing waiting, or the permanently-ahead staging case) keeps the
+      // full 5-minute gap that stops a probe-per-response storm.
+      const { hasBundle, stillInstalling } = await bundleProbe();
+      probeCooldownMs = (!hasBundle && stillInstalling)
+        ? PROBE_RETRY_WHILE_INSTALLING_MS
+        : PROBE_MIN_GAP_MS;
+      return hasBundle;
     } catch {
       // Offline/flaky: cannot confirm a newer bundle, so do not gate. The next
-      // response after the cooldown retries.
+      // response after the (full) cooldown retries.
+      probeCooldownMs = PROBE_MIN_GAP_MS;
       return false;
     } finally {
       probeInFlight = null;

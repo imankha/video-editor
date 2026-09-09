@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { useUpdateGateStore } from './updateGateStore';
+import {
+  useUpdateGateStore,
+  __resetInputActivityForTest,
+  __stopQuiescenceRetryForTest,
+} from './updateGateStore';
 import { useAuthStore } from './authStore';
 import { useExportStore } from './exportStore';
 import { useUploadStore } from './uploadStore';
@@ -29,6 +33,10 @@ describe('updateGateStore', () => {
   beforeEach(() => {
     flushDurableStateMock.mockReset();
     useUpdateGateStore.setState(INITIAL_STATE);
+    // Gap A/B (T9310): start every case genuinely input-idle and with no leaked
+    // retry timer from a prior non-quiescent case.
+    __resetInputActivityForTest();
+    __stopQuiescenceRetryForTest();
     useAuthStore.setState({ isAuthenticated: true });
     // jsdom's window.location.reload is non-configurable, so vi.spyOn can't
     // redefine it directly — replace the whole location object instead.
@@ -40,6 +48,7 @@ describe('updateGateStore', () => {
   });
 
   afterEach(() => {
+    __stopQuiescenceRetryForTest();
     Object.defineProperty(window, 'location', {
       configurable: true,
       value: originalLocation,
@@ -147,7 +156,7 @@ describe('updateGateStore', () => {
       // own unless checkServerVersion re-invokes it.
       __resetProbeStateForTest();
       __setClientBuildForTest(100);
-      setBundleProbe(async () => true);
+      setBundleProbe(async () => ({ hasBundle: true, stillInstalling: false }));
       useExportStore.setState({ activeExports: { 'e1': {} } });
       flushDurableStateMock.mockResolvedValue(undefined);
       const reloader = vi.fn().mockResolvedValue(undefined);
@@ -164,6 +173,111 @@ describe('updateGateStore', () => {
 
       await vi.waitFor(() => expect(reloader).toHaveBeenCalledTimes(1));
       expect(flushDurableStateMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('isQuiescent — input-idle (Gap A, T9310)', () => {
+    // Gate the auto-run behind a genuine input pause so a reload never lands
+    // mid-scrub (playhead/zoom/selection/undo would be lost across it).
+    it('is NOT quiescent immediately after a pointer event', () => {
+      window.dispatchEvent(new Event('pointerdown'));
+      expect(useUpdateGateStore.getState().isQuiescent()).toBe(false);
+    });
+
+    it('is NOT quiescent while a scrub drag keeps firing pointermove', () => {
+      window.dispatchEvent(new Event('pointermove'));
+      expect(useUpdateGateStore.getState().isQuiescent()).toBe(false);
+    });
+
+    it('is NOT quiescent immediately after a key event', () => {
+      window.dispatchEvent(new Event('keydown'));
+      expect(useUpdateGateStore.getState().isQuiescent()).toBe(false);
+    });
+
+    it('becomes quiescent again ~5s after the last input', () => {
+      const now = vi.spyOn(Date, 'now');
+      now.mockReturnValue(1_000_000);
+      window.dispatchEvent(new Event('pointerdown')); // lastInputAt = 1_000_000
+      expect(useUpdateGateStore.getState().isQuiescent()).toBe(false);
+
+      now.mockReturnValue(1_000_000 + 5_000); // input-idle threshold reached
+      expect(useUpdateGateStore.getState().isQuiescent()).toBe(true);
+      now.mockRestore();
+    });
+
+    it('defers the auto-run while the user is mid-interaction', () => {
+      window.dispatchEvent(new Event('pointerdown'));
+      const reloader = vi.fn().mockResolvedValue(undefined);
+      useUpdateGateStore.getState().setSwReloader(reloader);
+
+      useUpdateGateStore.getState().requireUpdate();
+
+      expect(useUpdateGateStore.getState().isUpdateRequired).toBe(true);
+      expect(useUpdateGateStore.getState().phase).toBe('idle');
+      expect(reloader).not.toHaveBeenCalled();
+      expect(flushDurableStateMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('requireUpdate — quiescence retry poll (Gap B, T9310)', () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('resumes on a later tick once the app goes quiescent, with NO new requireUpdate/API call', async () => {
+      useExportStore.setState({ activeExports: { e1: {} } });
+      flushDurableStateMock.mockResolvedValue(undefined);
+      const reloader = vi.fn().mockResolvedValue(undefined);
+      useUpdateGateStore.getState().setSwReloader(reloader);
+
+      useUpdateGateStore.getState().requireUpdate(); // deferred: export active
+      expect(reloader).not.toHaveBeenCalled();
+
+      // Export finishes silently — nothing calls requireUpdate/checkServerVersion again.
+      useExportStore.setState({ activeExports: {} });
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(reloader).toHaveBeenCalledTimes(1);
+      expect(flushDurableStateMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('runs immediately (schedules no poll) when the app is already quiescent', async () => {
+      flushDurableStateMock.mockResolvedValue(undefined);
+      const reloader = vi.fn().mockResolvedValue(undefined);
+      useUpdateGateStore.getState().setSwReloader(reloader);
+
+      useUpdateGateStore.getState().requireUpdate();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(reloader).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops polling once the gate clears — no runaway interval', async () => {
+      useExportStore.setState({ activeExports: { e1: {} } });
+      useUpdateGateStore.getState().requireUpdate(); // schedules the poll
+
+      // The gate clears (e.g. the reload landed): the next tick must stop the poll.
+      useUpdateGateStore.setState({ isUpdateRequired: false });
+      await vi.advanceTimersByTimeAsync(2000);
+
+      const reloader = vi.fn().mockResolvedValue(undefined);
+      useUpdateGateStore.getState().setSwReloader(reloader);
+      useExportStore.setState({ activeExports: {} });
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(reloader).not.toHaveBeenCalled(); // timer already stopped, not resurrected
+    });
+
+    it('does NOT auto-retry a flush failure via the poll (that stays the Retry gesture)', async () => {
+      useExportStore.setState({ activeExports: { e1: {} } });
+      flushDurableStateMock.mockRejectedValue(new Error('flush failed'));
+      useUpdateGateStore.getState().setSwReloader(vi.fn());
+
+      useUpdateGateStore.getState().requireUpdate(); // deferred
+      useExportStore.setState({ activeExports: {} });
+      await vi.advanceTimersByTimeAsync(2000); // poll -> runUpdate -> flush rejects
+      expect(useUpdateGateStore.getState().phase).toBe('error');
+
+      flushDurableStateMock.mockClear();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(flushDurableStateMock).not.toHaveBeenCalled();
     });
   });
 

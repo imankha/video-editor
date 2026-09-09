@@ -7,6 +7,11 @@ import {
 } from './appVersion';
 import { useUpdateGateStore } from '../stores/updateGateStore';
 
+// T9310 Gap C: the bundle probe now reports { hasBundle, stillInstalling } rather
+// than a bare boolean, so hasNewerBundle can shorten its cooldown after a
+// still-installing miss. This helper keeps the cases readable.
+const yields = (hasBundle, stillInstalling = false) => async () => ({ hasBundle, stillInstalling });
+
 /**
  * Tbug40p — checkServerVersion raises the blocking update gate when the deployed
  * server's build number is STRICTLY GREATER than this running client's baked build
@@ -28,7 +33,7 @@ describe('checkServerVersion', () => {
     __resetProbeStateForTest();
     // Default for the Tbug40p cases: a newer bundle IS available, so those cases
     // exercise the build comparison in isolation. Tbug41s cases override this.
-    setBundleProbe(async () => true);
+    setBundleProbe(yields(true));
   });
 
   it('(a) does NOT gate when the server build equals the client build (steady version, Safari resume)', async () => {
@@ -107,7 +112,7 @@ describe('checkServerVersion — Tbug41s: never gate without an obtainable bundl
     // a442ad49 = 3165. Commits 3164-3165 touched zero files under src/frontend, so
     // deploy-frontend.yml never ran and 3163 is the newest bundle that exists.
     __setClientBuildForTest(3163);
-    setBundleProbe(async () => false);
+    setBundleProbe(yields(false));
 
     await checkServerVersion(3165);
 
@@ -116,12 +121,12 @@ describe('checkServerVersion — Tbug41s: never gate without an obtainable bundl
 
   it('THE BUG, repeated: clicking "Update now" reloads onto the same bundle and STILL must not gate', async () => {
     __setClientBuildForTest(3163);
-    setBundleProbe(async () => false);
+    setBundleProbe(yields(false));
 
     // Each iteration stands for one reload landing back on 3163.
     for (let i = 0; i < 5; i++) {
       __resetProbeStateForTest();
-      setBundleProbe(async () => false);
+      setBundleProbe(yields(false));
       await checkServerVersion(3165);
     }
 
@@ -147,20 +152,20 @@ describe('checkServerVersion — Tbug41s: never gate without an obtainable bundl
 
   it('once a bundle IS available, the very next check gates (fix does not break real deploys)', async () => {
     __setClientBuildForTest(3163);
-    setBundleProbe(async () => false);
+    setBundleProbe(yields(false));
     await checkServerVersion(3165);
     expect(useUpdateGateStore.getState().isUpdateRequired).toBe(false);
 
     // The frontend workflow finally runs and publishes 3167.
     __resetProbeStateForTest();
-    setBundleProbe(async () => true);
+    setBundleProbe(yields(true));
     await checkServerVersion(3167);
     expect(useUpdateGateStore.getState().isUpdateRequired).toBe(true);
   });
 
   it('throttles: a server permanently ahead does not fire a probe per API response', async () => {
     __setClientBuildForTest(3163);
-    const probe = vi.fn(async () => false);
+    const probe = vi.fn(yields(false));
     setBundleProbe(probe);
 
     // 10 API responses in quick succession, all carrying X-App-Build: 3165.
@@ -172,7 +177,7 @@ describe('checkServerVersion — Tbug41s: never gate without an obtainable bundl
 
   it('skips the probe entirely once the gate is already up', async () => {
     __setClientBuildForTest(100);
-    const probe = vi.fn(async () => true);
+    const probe = vi.fn(yields(true));
     setBundleProbe(probe);
 
     await checkServerVersion(101);
@@ -182,5 +187,82 @@ describe('checkServerVersion — Tbug41s: never gate without an obtainable bundl
     await checkServerVersion(102);
     await checkServerVersion(103);
     expect(probe).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * T9310 Gap C — a probe that answered "no" ONLY because a worker was still
+ * installing (a slow install that missed pwaUpdate's SW_INSTALL_TIMEOUT_MS) must
+ * re-probe in ~30s, not sit out the full 5-minute cooldown. Every other "no"
+ * (genuinely nothing waiting, offline) keeps the full 5-minute gap so the
+ * permanently-ahead staging case never storms registration.update() per response.
+ */
+describe('checkServerVersion — Gap C: shorter cooldown after a still-installing miss', () => {
+  let nowSpy;
+  const T0 = 10_000_000;
+
+  beforeEach(() => {
+    useUpdateGateStore.setState({ isUpdateRequired: false, needsMigration: false });
+    __resetProbeStateForTest();
+    __setClientBuildForTest(100);
+    nowSpy = vi.spyOn(Date, 'now').mockReturnValue(T0);
+  });
+
+  it('re-probes after ~30s when the previous "no" was a still-installing miss', async () => {
+    const probe = vi.fn(yields(false, true)); // no bundle YET, but a worker is installing
+    setBundleProbe(probe);
+
+    await checkServerVersion(101);
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(useUpdateGateStore.getState().isUpdateRequired).toBe(false);
+
+    // 20s later — still inside the shortened 30s window, no re-probe.
+    nowSpy.mockReturnValue(T0 + 20_000);
+    await checkServerVersion(101);
+    expect(probe).toHaveBeenCalledTimes(1);
+
+    // 31s later — past the shortened window: the install has finished, bundle waits.
+    nowSpy.mockReturnValue(T0 + 31_000);
+    probe.mockImplementation(yields(true));
+    await checkServerVersion(101);
+    expect(probe).toHaveBeenCalledTimes(2);
+    expect(useUpdateGateStore.getState().isUpdateRequired).toBe(true);
+  });
+
+  it('keeps the full 5-minute cooldown when the "no" was genuinely nothing waiting', async () => {
+    const probe = vi.fn(yields(false, false)); // nothing installing, nothing waiting
+    setBundleProbe(probe);
+
+    await checkServerVersion(101);
+    expect(probe).toHaveBeenCalledTimes(1);
+
+    // Well past 30s but inside 5 min — the still-installing shortcut must NOT apply.
+    nowSpy.mockReturnValue(T0 + 60_000);
+    await checkServerVersion(101);
+    expect(probe).toHaveBeenCalledTimes(1);
+
+    // Past the full 5-minute gap — now it re-probes.
+    nowSpy.mockReturnValue(T0 + 5 * 60 * 1000 + 1);
+    await checkServerVersion(101);
+    expect(probe).toHaveBeenCalledTimes(2);
+  });
+
+  it('a still-installing miss that then resolves to nothing restores the full cooldown', async () => {
+    const probe = vi.fn(yields(false, true));
+    setBundleProbe(probe);
+
+    await checkServerVersion(101); // still-installing -> 30s cooldown
+    expect(probe).toHaveBeenCalledTimes(1);
+
+    // 31s later the worker turned out to be a dead end (nothing waiting, not installing).
+    nowSpy.mockReturnValue(T0 + 31_000);
+    probe.mockImplementation(yields(false, false));
+    await checkServerVersion(101);
+    expect(probe).toHaveBeenCalledTimes(2);
+
+    // 31s more: cooldown is back to the full 5 min, so no third probe yet.
+    nowSpy.mockReturnValue(T0 + 62_000);
+    await checkServerVersion(101);
+    expect(probe).toHaveBeenCalledTimes(2);
   });
 });
