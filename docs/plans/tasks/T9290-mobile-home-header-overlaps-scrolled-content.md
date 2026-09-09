@@ -1,6 +1,6 @@
 # T9290: Mobile Home screen's top bar visually overlaps content when scrolling
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-09-09
