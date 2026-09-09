@@ -46,13 +46,17 @@ const HARNESS = '/t9100diag.html';
 const REEL_ASPECT = 1080 / 1920;
 // Tolerance: the task names ~1%.
 const ASPECT_TOL = 0.01;
+// T9150: the settings column must never render narrower than this, whether the
+// cause would be the T9100 metadata bug or a genuinely-landscape reel.
+const MIN_SETTINGS_WIDTH = 240;
 
 async function routeSample(page) {
   await page.route(/t9100diag-9x16\.mp4(\?.*)?$/, (route) =>
     route.fulfill({ status: 200, contentType: 'video/mp4', body: fs.readFileSync(SAMPLE_9x16) }));
 }
 
-/** Measure a stage's stage-box, rendered <video>, and detection box (screen px). */
+/** Measure a stage's stage-box, rendered <video>, detection box, and (T9150) its
+ * sibling settings column (screen px). */
 async function measureStage(page, testId) {
   return page.evaluate((id) => {
     const wrap = document.querySelector(`[data-testid="${id}"]`);
@@ -61,6 +65,7 @@ async function measureStage(page, testId) {
     const video = wrap.querySelector('video');
     const svg = wrap.querySelector('svg');
     const rect = wrap.querySelector('svg rect[stroke-dasharray]');
+    const settings = document.querySelector(`[data-testid="${id}-settings"]`);
     if (!stageBox || !video || !svg || !rect) return null;
     const sb = stageBox.getBoundingClientRect();
     const v = video.getBoundingClientRect();
@@ -69,14 +74,27 @@ async function measureStage(page, testId) {
     const ry = +rect.getAttribute('y');
     const rw = +rect.getAttribute('width');
     const rh = +rect.getAttribute('height');
+    const settingsRect = settings ? settings.getBoundingClientRect() : null;
     return {
-      stageBox: { width: sb.width, height: sb.height },
+      stageBox: { x: sb.x, right: sb.x + sb.width, width: sb.width, height: sb.height },
       video: { x: v.x, y: v.y, width: v.width, height: v.height },
       natural: { w: video.videoWidth, h: video.videoHeight },
       // Detection box center in screen coordinates.
       boxCenter: { x: s.x + rx + rw / 2, y: s.y + ry + rh / 2 },
+      settingsWidth: settingsRect ? settingsRect.width : null,
+      settingsLeft: settingsRect ? settingsRect.x : null,
     };
   }, testId);
+}
+
+/** T9150: the stage box must never visually overlap the settings column beside
+ * it -- a settings column that merely HAS width (settingsWidth >= floor) is not
+ * enough if the stage paints over it (OverlaySettingsTabs is backdrop-blur, so
+ * it would render on TOP of, not beside, the video). */
+function assertNoStageSettingsOverlap(m, label) {
+  expect(m.settingsLeft, `${label}: settings column left edge`).not.toBeNull();
+  expect(m.stageBox.right, `${label}: stage box must not overlap the settings column`)
+    .toBeLessThanOrEqual(m.settingsLeft + 1); // +1px rounding tolerance
 }
 
 test.describe('T9100 detection-box alignment @staging-gate @gate-c', () => {
@@ -98,7 +116,9 @@ test.describe('T9100 detection-box alignment @staging-gate @gate-c', () => {
   test('FIXED stage: stage aspect == video aspect and the detection box lands ON the video', async ({ page }) => {
     test.setTimeout(90_000);
     await routeSample(page);
-    await page.setViewportSize({ width: 1315, height: 900 });
+    // T9150: 1600x1200, the width where the settings-panel starvation bug was
+    // proven to reach 0px (not just a sliver) — see the task's live evidence table.
+    await page.setViewportSize({ width: 1600, height: 1200 });
     await page.goto(HARNESS);
 
     await page.getByTestId('stage-fixed').waitFor({ timeout: 30000 });
@@ -130,13 +150,20 @@ test.describe('T9100 detection-box alignment @staging-gate @gate-c', () => {
     expect(m.boxCenter.x).toBeLessThanOrEqual(m.video.x + m.video.width + 2);
     expect(m.boxCenter.y).toBeGreaterThanOrEqual(m.video.y - 2);
     expect(m.boxCenter.y).toBeLessThanOrEqual(m.video.y + m.video.height + 2);
+
+    // T9150: a correctly-aligned 9:16 stage never needed much width, so its
+    // settings column was never at risk — assert the floor holds anyway, and that
+    // the stage never paints OVER it (not just "has width").
+    expect(m.settingsWidth, 'FIXED: settings column width').not.toBeNull();
+    expect(m.settingsWidth).toBeGreaterThanOrEqual(MIN_SETTINGS_WIDTH);
+    assertNoStageSettingsOverlap(m, 'FIXED');
     await saveEvidence(page, 'T9100-fixed-stage-aligned');
   });
 
   test('BUG control: wrong (source-clip) metadata stretches the stage past the video and offsets the box left', async ({ page }) => {
     test.setTimeout(90_000);
     await routeSample(page);
-    await page.setViewportSize({ width: 1315, height: 900 });
+    await page.setViewportSize({ width: 1600, height: 1200 });
     await page.goto(HARNESS);
 
     await page.getByTestId('stage-bug').waitFor({ timeout: 30000 });
@@ -146,6 +173,7 @@ test.describe('T9100 detection-box alignment @staging-gate @gate-c', () => {
     }, { timeout: 30000 });
     await page.locator('[data-testid="stage-bug"] svg rect[stroke-dasharray]').first().waitFor({ timeout: 30000 });
     await page.waitForTimeout(400);
+    await assertNoHorizontalOverflow(page);
 
     const m = await measureStage(page, 'stage-bug');
     expect(m, 'measured BUG stage').not.toBeNull();
@@ -166,6 +194,70 @@ test.describe('T9100 detection-box alignment @staging-gate @gate-c', () => {
     // reported symptom (boxes in the empty black space left of the video).
     expect(m.boxCenter.x, 'BUG: detection box center sits left of the video content')
       .toBeLessThan(m.video.x);
+
+    // T9150 Fix C: even in the poisoned-metadata case, the stage's lg:max-w cap
+    // (alongside lg:flex-initial on its column) must stop the wrongly-landscape
+    // stage from consuming the whole row — the settings column must never be
+    // starved to a sliver or 0px, independent of whatever fixes the metadata itself.
+    expect(m.settingsWidth, 'BUG: settings column width').not.toBeNull();
+    expect(m.settingsWidth).toBeGreaterThanOrEqual(MIN_SETTINGS_WIDTH);
+    assertNoStageSettingsOverlap(m, 'BUG');
     await saveEvidence(page, 'T9100-bug-control-offset');
+  });
+
+  test('T9150: a genuinely 16:9 reel (correct metadata) does not starve the settings column', async ({ page }) => {
+    test.setTimeout(90_000);
+    await routeSample(page);
+    await page.setViewportSize({ width: 1600, height: 1200 });
+    await page.goto(HARNESS);
+
+    await page.getByTestId('stage-16x9-real').waitFor({ timeout: 30000 });
+    await page.waitForFunction(() => {
+      const vids = Array.from(document.querySelectorAll('video'));
+      return vids.length >= 3 && vids.every((v) => v.videoWidth > 0);
+    }, { timeout: 30000 });
+    await page.locator('[data-testid="stage-16x9-real"] svg rect[stroke-dasharray]').first().waitFor({ timeout: 30000 });
+    await page.waitForTimeout(400);
+    await assertNoHorizontalOverflow(page);
+
+    const m = await measureStage(page, 'stage-16x9-real');
+    expect(m, 'measured 16:9 stage').not.toBeNull();
+    console.log(`[T9150] 16x9 stageBox=${Math.round(m.stageBox.width)}x${Math.round(m.stageBox.height)} ` +
+      `settingsWidth=${Math.round(m.settingsWidth ?? -1)} settingsLeft=${Math.round(m.settingsLeft ?? -1)}`);
+
+    // This case has NO metadata bug at all (the reel genuinely is 16:9) — before
+    // Fix C, this was the independently-discovered, currently-shipping regression:
+    // a real landscape reel starved its own settings panel with fully correct data.
+    expect(m.settingsWidth, '16:9: settings column width').not.toBeNull();
+    expect(m.settingsWidth).toBeGreaterThanOrEqual(MIN_SETTINGS_WIDTH);
+    // Not just "has width" — must not be painted over by the (backdrop-blur) stage.
+    assertNoStageSettingsOverlap(m, '16:9');
+    await saveEvidence(page, 'T9150-16x9-settings-not-starved');
+  });
+
+  test('T9150: at 2560x1440, neither the metadata bug nor a real 16:9 reel starves the settings column', async ({ page }) => {
+    test.setTimeout(90_000);
+    await routeSample(page);
+    await page.setViewportSize({ width: 2560, height: 1440 });
+    await page.goto(HARNESS);
+
+    await page.waitForFunction(() => {
+      const vids = Array.from(document.querySelectorAll('video'));
+      return vids.length >= 3 && vids.every((v) => v.videoWidth > 0);
+    }, { timeout: 30000 });
+    await Promise.all(
+      ['stage-fixed', 'stage-bug', 'stage-16x9-real'].map((id) =>
+        page.locator(`[data-testid="${id}"] svg rect[stroke-dasharray]`).first().waitFor({ timeout: 30000 })),
+    );
+    await page.waitForTimeout(400);
+    await assertNoHorizontalOverflow(page);
+
+    for (const id of ['stage-fixed', 'stage-bug', 'stage-16x9-real']) {
+      const m = await measureStage(page, id);
+      expect(m, `measured ${id} at 2560x1440`).not.toBeNull();
+      expect(m.settingsWidth, `${id}: settings column width at 2560x1440`).not.toBeNull();
+      expect(m.settingsWidth).toBeGreaterThanOrEqual(MIN_SETTINGS_WIDTH);
+      assertNoStageSettingsOverlap(m, `${id}@2560x1440`);
+    }
   });
 });

@@ -370,7 +370,14 @@ export function OverlayModeView({
   const aspectH = effectiveOverlayMetadata?.height;
   const useAspectStage = !isFullscreen && !mobileFs && aspectW > 0 && aspectH > 0;
   const stageBoxClass = useAspectStage
-    ? 'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh]'
+    ? // T9150: the width cap that stops a landscape stage (genuinely 16:9, or a
+      // wrong-metadata bug) from starving the settings column lives on the VIDEO
+      // COLUMN below (lg:max-w-[calc(100%-22rem)]), not here. A % max-width on
+      // THIS box would resolve against its own lg:w-fit (fit-content) parent --
+      // circular, since the parent's width depends on this box's width. The column
+      // has a definite width from ITS parent (the row), so capping there is safe;
+      // this box just respects whatever width the column leaves it via max-w-full.
+      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh]'
     : `relative bg-gray-900 ${
         (isFullscreen || mobileFs)
           ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
@@ -856,8 +863,14 @@ export function OverlayModeView({
           ) : (
             <div className="lg:flex lg:flex-row lg:items-start lg:gap-6">
               {/* Video column — shrink-wraps the aspect box so Controls bind to the
-                  video width (lg:w-fit); full width when stacked on mobile. */}
-              <div className="flex flex-col w-full lg:w-fit lg:flex-none">
+                  video width (lg:w-fit); full width when stacked on mobile.
+                  lg:flex-initial (not lg:flex-none) lets it yield width to the
+                  settings column instead of forcing it to 0 (T9150). lg:max-w is a
+                  PERCENTAGE of the row (this column's own parent has a definite
+                  width, so no circularity) leaving room for the settings column's
+                  lg:min-w-[20rem] + the row's lg:gap-6 (24px) — the stage box
+                  inside just respects whatever width this leaves it. */}
+              <div className="flex flex-col w-full lg:w-fit lg:flex-initial lg:min-w-0 lg:max-w-[calc(100%-22rem)]">
                 <div data-testid="overlay-video-stage" className={stageBoxClass} style={stageBoxStyle}>
                   {videoStageInner}
                 </div>
@@ -867,8 +880,9 @@ export function OverlayModeView({
                   renders its own copy above the Add Spotlight button (below). The
                   three-tab section (Overlay | Text | Thumbnail) has a constant
                   height, so selecting a block swaps the Text tab in place without
-                  moving the timeline (T6630 round 2). */}
-              <div className="hidden lg:block lg:flex-1 lg:min-w-0">
+                  moving the timeline (T6630 round 2). lg:min-w floors it so a
+                  landscape stage can never starve it to 0px (T9150). */}
+              <div className="hidden lg:block lg:flex-1 lg:min-w-[20rem]">
                 {settingsTabs}
               </div>
             </div>

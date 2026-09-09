@@ -1,7 +1,6 @@
 import { useEffect, useCallback, useMemo, useState } from 'react';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from '../modes/overlay';
 import { useSpotlightLoop } from '../modes/overlay/hooks/useSpotlightLoop';
-import { extractVideoMetadata } from '../utils/videoMetadata';
 import { EDITOR_MODES } from '../stores';
 import { useQuestStore } from '../stores/questStore';
 import { countDetectionAssignments, detectionAssignmentStates } from '../modes/overlay/utils/detectionAssignment';
@@ -64,9 +63,6 @@ export function OverlayContainer({
   overlayVideoMetadata,
   overlayClipMetadata,
   isLoadingWorkingVideo,
-  setOverlayVideoFile,
-  setOverlayVideoUrl,
-  setOverlayVideoMetadata,
   setOverlayClipMetadata,
   setIsLoadingWorkingVideo,
   dragHighlight,
@@ -531,47 +527,6 @@ export function OverlayContainer({
     if (region) maybeEmitPlayersAssigned(region.id, assignTime);
   }, [currentTime, clickedDetection, highlightRegionsFramerate, isTimeInEnabledRegion, addHighlightRegionKeyframe, getRegionAtTime, maybeEmitPlayersAssigned]);
 
-  /**
-   * Handle transition from Framing to Overlay mode
-   */
-  const handleProceedToOverlay = useCallback(async (renderedVideoBlob, clipMetadata = null) => {
-    try {
-      const url = URL.createObjectURL(renderedVideoBlob);
-      const meta = await extractVideoMetadata(renderedVideoBlob);
-
-      if (overlayVideoUrl) {
-        URL.revokeObjectURL(overlayVideoUrl);
-      }
-
-      setOverlayVideoFile(renderedVideoBlob);
-      setOverlayVideoUrl(url);
-      setOverlayVideoMetadata(meta);
-      setOverlayClipMetadata(clipMetadata);
-
-      // Reset highlight state for fresh start
-      resetHighlightRegions();
-
-      setEditorMode('overlay');
-
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.currentTime = 0;
-          videoRef.current.pause();
-        }
-      }, 100);
-
-      console.log('[OverlayContainer] Transitioned to Overlay mode:', {
-        width: meta.width,
-        height: meta.height,
-        duration: meta.duration,
-        hasClipMetadata: !!clipMetadata,
-      });
-    } catch (err) {
-      console.error('[OverlayContainer] Failed to transition to Overlay mode:', err);
-      throw err;
-    }
-  }, [overlayVideoUrl, videoRef, resetHighlightRegions, setEditorMode]);
-
   // NOTE: Effects for highlight region initialization and persistence are in OverlayScreen.jsx
   // OverlayContainer only provides derived state and handlers to avoid duplicate effects
 
@@ -642,16 +597,12 @@ export function OverlayContainer({
     handlePlayerSelect,
     handleHighlightChange,
     handleHighlightComplete,
-    handleProceedToOverlay,
 
     // Persistence
     overlaySyncState,
     overlayLoadedProjectId,
 
     // State setters (for external use)
-    setOverlayVideoFile,
-    setOverlayVideoUrl,
-    setOverlayVideoMetadata,
     setOverlayClipMetadata,
     setIsLoadingWorkingVideo,
   };
