@@ -31,6 +31,7 @@ from pydantic import BaseModel
 
 from app.analytics import _determine_origin, close_session, create_user_segment, record_milestone, update_session
 from app.database import USER_DATA_BASE
+from app.profile_context import set_current_profile_id
 from app.services.auth_db import (
     create_session,
     create_user,
@@ -50,6 +51,9 @@ from app.storage import (
     R2_ENABLED,
 )
 from app.user_context import get_current_user_id, set_current_user_id
+from app.utils.cookies import delete_cookie as _delete_cookie
+from app.utils.cookies import set_cookie as _set_cookie
+from app.utils.offload import run_in_context
 
 
 # Test accounts that auto-reset on every login (fresh new-user experience).
@@ -168,9 +172,6 @@ def _reset_test_account(user_id: str, email: str) -> None:
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-from app.utils.cookies import delete_cookie as _delete_cookie
-from app.utils.cookies import set_cookie as _set_cookie
-
 
 class InitRequest(BaseModel):
     profile_id: str | None = None
@@ -195,7 +196,19 @@ async def init_session(body: InitRequest = InitRequest()):
     """
     user_id = get_current_user_id()
     cancel_active_vacuum(user_id)
-    result = user_session_init(user_id, hint_profile_id=body.profile_id)
+    # T9135: user_session_init does blocking R2 + sqlite + Postgres work (measured
+    # 2145ms cold) and this endpoint is the explicit /api/auth/init call on the
+    # literal first request of a cold session -- running it inline blocked the
+    # whole boot burst behind it. Offload via run_in_context (mirrors
+    # db_sync.py:966's middleware twin): NOT a bare to_thread, since
+    # ensure_database() reads get_current_user_id()/get_current_profile_id() in
+    # the thread. run_in_context takes positional args only, so hint_profile_id
+    # is threaded positionally. The profile_id the thread sets on its COPIED
+    # context does not propagate back, so we re-apply it on the request context
+    # from the returned dict, same as the middleware does.
+    result = await run_in_context(user_session_init, user_id, body.profile_id)
+    if result.get("profile_id"):
+        set_current_profile_id(result["profile_id"])
 
     return InitResponse(
         user_id=user_id,
@@ -292,10 +305,10 @@ async def _verify_google_token(token: str) -> dict:
                 )
 
         resp = await retry_async_call(_call, operation="google_oauth", **TIER_1)
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=503, detail="Google token verification timed out")
+    except httpx.TimeoutException as e:
+        raise HTTPException(status_code=503, detail="Google token verification timed out") from e
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach Google: {e}")
+        raise HTTPException(status_code=503, detail=f"Could not reach Google: {e}") from e
 
     if resp.status_code != 200:
         raise HTTPException(status_code=401, detail="Invalid Google token")
@@ -454,9 +467,9 @@ async def auth_me(request: Request):
             raise HTTPException(status_code=401, detail="No session")
         try:
             session = validate_session(session_id)
-        except Exception:
+        except Exception as e:
             logger.exception("[Auth] /me: validate_session raised — degrading to 401")
-            raise HTTPException(status_code=401, detail="Session check failed")
+            raise HTTPException(status_code=401, detail="Session check failed") from e
 
     t_after_session = _time.perf_counter()
 
@@ -484,7 +497,8 @@ async def auth_me(request: Request):
         except Exception:
             logger.exception(f"[Auth] /me: update_session failed for user={user_id} (ignored)")
 
-    asyncio.create_task(_background_writes())
+    _me_background_task = asyncio.create_task(_background_writes())
+    _me_background_task.add_done_callback(lambda t: t.exception())
 
     logger.info(
         f"[PROFILE auth/me] session_resolve={int((t_after_session-t_me_start)*1000)}ms "
@@ -581,11 +595,11 @@ async def send_otp(body: SendOtpRequest, request: Request):
 
     try:
         await send_otp_email(email, code)
-    except ValueError:
-        raise HTTPException(status_code=500, detail="Email service not configured")
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail="Email service not configured") from e
     except Exception as e:
         logger.error(f"[Auth] Failed to send OTP email to {email}: {e}")
-        raise HTTPException(status_code=503, detail="Failed to send email. Please try again.")
+        raise HTTPException(status_code=503, detail="Failed to send email. Please try again.") from e
 
     logger.info(f"[Auth] OTP sent to {email}")
     return {"sent": True}
@@ -738,7 +752,8 @@ async def logout(request: Request):
     if user_id and user_id in _users_who_archived:
         _users_who_archived.discard(user_id)
         import asyncio
-        asyncio.ensure_future(asyncio.to_thread(_vacuum_user_dbs, user_id))
+        _vacuum_task = asyncio.ensure_future(asyncio.to_thread(_vacuum_user_dbs, user_id))
+        _vacuum_task.add_done_callback(lambda t: t.exception())
 
     response = JSONResponse(content={"logged_out": True})
     _delete_cookie(response, "rb_session")

@@ -432,7 +432,7 @@ def is_modal_available() -> bool:
     return modal_enabled()
 
 
-async def recover_orphaned_jobs():
+def recover_orphaned_jobs():
     """
     Recover jobs that were processing when the server stopped.
 
@@ -441,6 +441,13 @@ async def recover_orphaned_jobs():
     Behavior controlled by CLEAR_PENDING_JOBS_ON_STARTUP env var:
     - true: Mark all pending/processing jobs as error (dev mode)
     - false/unset: Try to recover Modal jobs, mark local orphans as error (production)
+
+    T9135: plain `def`, not `async def` -- the whole body is blocking sqlite +
+    a blocking `modal.FunctionCall.from_id(...).get()` network call, with no
+    `await` anywhere. session_init._run_startup_recovery offloads this via
+    `run_in_context` so it runs on a worker thread instead of whichever event
+    loop the fire-and-forget recovery task lands on (same T6200 "whole body is
+    synchronous -> should just be def" shape as the Publish-burst handlers).
     """
     import os
     clear_all = os.environ.get("CLEAR_PENDING_JOBS_ON_STARTUP", "false").lower() == "true"
