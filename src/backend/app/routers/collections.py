@@ -391,7 +391,8 @@ def _build_game_groups(games: list, games_info: dict) -> list:
 # ---------------------------------------------------------------------------
 
 @router.get("/summary", response_model=CollectionsSummaryResponse)
-async def collections_summary(sport: str | None = None):
+# T9130: sync def -> anyio threadpool. Blocking get_db_connection() read, no await.
+def collections_summary(sport: str | None = None):
     """Per-game / mixes / season / tag aggregates for the Collections tab.
 
     `sport` selects the curated combo set (the per-tag and per-game aggregates
@@ -1282,7 +1283,8 @@ class CollectionIntroBatchItem(BaseModel):
 
 
 @router.get("/intro/batch")
-async def get_collection_intro_batch(items: str):
+# T9130: sync def -> anyio threadpool. Blocking get_db_connection() read, no await.
+def get_collection_intro_batch(items: str):
     """Batch-resolve MANY collections' OWN attached intro in ONE round trip
     (T5215 round 3 -- the Collections tab renders N cards; badging every one
     of them must not fire N separate requests). GET, not POST: this is a pure

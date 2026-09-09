@@ -12,15 +12,16 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
+from ..profile_context import set_current_profile_id
+from ..storage import file_exists_in_r2, r2_head_object_global
+from ..user_context import set_current_user_id
+from ..utils.offload import run_in_context
 from .poster import (
     draft_poster_rel_path,
     ensure_draft_poster,
     ensure_game_source_poster,
     recap_card_poster_r2_key,
 )
-from ..profile_context import set_current_profile_id
-from ..storage import file_exists_in_r2, r2_head_object_global
-from ..user_context import set_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -105,17 +106,27 @@ class PosterWarmer:
             self._locks[key] = asyncio.Lock()
 
         async with self._locks[key]:
-            # Double-check: maybe another task finished while we waited.
-            rel_path = draft_poster_rel_path(project_id)
-            if file_exists_in_r2(user_id, rel_path):
-                logger.info(f"[PosterWarm] draft {key} already exists (dedup double-check)")
-                return rel_path
-
-            # Run blocking work on a thread pool.
+            # Run the existence double-check AND the blocking warm INSIDE the
+            # in-flight task, so the task is registered in _warming_tasks before
+            # either offloaded (event-loop-yielding) call runs.
+            # T9130: the existence HEAD is a blocking boto3 call and must be
+            # offloaded off the loop -- but awaiting it here, OUTSIDE the
+            # registered task, would yield the loop after the top-level in-flight
+            # check and before registration. Concurrent callers for the same key
+            # would then miss the dedup (they queue on the lock, and by the time
+            # each acquires it the prior task has finished and popped
+            # _warming_tasks) and each spawn their own ffmpeg run, breaking the
+            # T5683 dedup contract. Keeping the check inside do_warm preserves the
+            # offload while registration always precedes the first yield.
             async def do_warm():
                 try:
                     set_current_user_id(user_id)
                     set_current_profile_id(profile_id)
+                    # Double-check: maybe the poster already exists in R2.
+                    rel_path = draft_poster_rel_path(project_id)
+                    if await run_in_context(file_exists_in_r2, user_id, rel_path):
+                        logger.info(f"[PosterWarm] draft {key} already exists (dedup double-check)")
+                        return rel_path
                     result = await asyncio.to_thread(
                         ensure_draft_poster, project_id, user_id
                     )
@@ -170,16 +181,20 @@ class PosterWarmer:
             self._locks[key] = asyncio.Lock()
 
         async with self._locks[key]:
-            # Double-check.
-            poster_key = recap_card_poster_r2_key(user_id, profile_id, game_id)
-            if r2_head_object_global(poster_key) is not None:
-                logger.info(f"[PosterWarm] game_source {key} already exists (dedup double-check)")
-                return True
-
+            # Run the existence double-check AND the blocking warm INSIDE the
+            # in-flight task, so the task is registered in _warming_tasks before
+            # either offloaded call yields the loop. See warm_draft_poster_async
+            # for why an offloaded check OUTSIDE the registered task breaks the
+            # T5683 dedup contract (T9130).
             async def do_warm():
                 try:
                     set_current_user_id(user_id)
                     set_current_profile_id(profile_id)
+                    # Double-check: maybe the poster already exists in R2.
+                    poster_key = recap_card_poster_r2_key(user_id, profile_id, game_id)
+                    if await run_in_context(r2_head_object_global, poster_key) is not None:
+                        logger.info(f"[PosterWarm] game_source {key} already exists (dedup double-check)")
+                        return True
                     result = await asyncio.to_thread(
                         ensure_game_source_poster, user_id, profile_id, game_id
                     )

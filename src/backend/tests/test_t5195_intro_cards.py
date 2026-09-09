@@ -106,7 +106,7 @@ async def test_create_read(db):
     # No photo -> title-only regardless of 2 facts.
     assert created["composition"] == COMPOSITION_TITLE_ONLY
 
-    listed = await list_intro_cards()
+    listed = list_intro_cards()
     assert len(listed["cards"]) == 1
     assert listed["cards"][0]["id"] == created["id"]
 
@@ -192,7 +192,7 @@ async def test_create_first_card_does_not_default(db):
     assert "is_default" not in b
 
     from app.routers.intro_cards import list_intro_cards
-    cards = {c["id"]: c for c in (await list_intro_cards())["cards"]}
+    cards = {c["id"]: c for c in (list_intro_cards())["cards"]}
     assert "is_default" not in cards[a["id"]]
     assert "is_default" not in cards[b["id"]]
 
@@ -220,7 +220,7 @@ async def test_delete_does_not_report_promotion(db):
     assert result == {"success": True}
 
     from app.routers.intro_cards import list_intro_cards
-    cards = (await list_intro_cards())["cards"]
+    cards = (list_intro_cards())["cards"]
     assert len(cards) == 1
     assert cards[0]["id"] == b["id"]
 
@@ -352,5 +352,5 @@ async def test_list_below_head_returns_empty(db):
     conn.commit()
     conn.close()
 
-    result = await list_intro_cards()  # must not raise OperationalError / 500
+    result = list_intro_cards()  # must not raise OperationalError / 500
     assert result == {"cards": []}

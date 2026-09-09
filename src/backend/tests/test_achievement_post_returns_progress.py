@@ -51,7 +51,7 @@ def _steps_for(payload, quest_id):
 
 def test_post_response_is_backward_compatible():
     """Existing key/achieved_at fields are preserved (additive change)."""
-    res = asyncio.run(record_achievement("opened_framing_editor"))
+    res = record_achievement("opened_framing_editor")
     assert res["key"] == "opened_framing_editor"
     assert res["achieved_at"] is not None
 
@@ -59,7 +59,7 @@ def test_post_response_is_backward_compatible():
 def test_post_returns_progress_reflecting_the_write():
     """The POST body carries the same {"quests": [...]} shape as GET /progress,
     with the just-recorded step already flipped True."""
-    res = asyncio.run(record_achievement("opened_framing_editor"))
+    res = record_achievement("opened_framing_editor")
 
     assert "progress" in res
     assert "quests" in res["progress"]
@@ -70,7 +70,7 @@ def test_post_returns_progress_reflecting_the_write():
 def test_post_progress_matches_standalone_get():
     """POST-embedded progress and the standalone GET agree — the client can rely
     on the POST body in place of the follow-up GET."""
-    post_res = asyncio.run(record_achievement("opened_overlay_editor"))
+    post_res = record_achievement("opened_overlay_editor")
     get_res = asyncio.run(get_progress())
 
     assert post_res["progress"]["quests"] == get_res["quests"]

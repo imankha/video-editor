@@ -28,6 +28,7 @@ from ..services.user_db import (
 )
 from ..storage import generate_presigned_url_global
 from ..user_context import get_current_user_id
+from ..utils.offload import run_in_context
 
 logger = logging.getLogger(__name__)
 
@@ -200,18 +201,28 @@ def _read_profile_misc() -> dict:
 
 
 async def _read_profile_scoped():
-    """Profile-scoped group (profile.sqlite): projects + games (async, sync-bodied)
-    + downloads/exports/pending. Runs on the event loop concurrently with the
-    user-scoped worker thread. Returns (projects_response, games_response, misc)
-    where misc carries the group's own wall time under `_ms` (internal only)."""
+    """Profile-scoped projects + games group (profile.sqlite; async, sync-bodied
+    handlers that offload internally). Returns (projects_response, games_response,
+    ms) where ms is the group's own wall time (internal only). T9130: the
+    downloads/exports/pending block (`_read_profile_misc`) no longer trails this
+    group -- it is offloaded and gathered as its own concurrent leg in bootstrap()."""
     t0 = time.perf_counter()
     from ..routers.games import list_games_metadata
     from ..routers.projects import list_projects
     projects_response = await list_projects()
     games_response = await list_games_metadata()
-    misc = _read_profile_misc()
+    return projects_response, games_response, int((time.perf_counter() - t0) * 1000)
+
+
+async def _read_profile_misc_group() -> dict:
+    """T9130: run the blocking `_read_profile_misc` sqlite reads on a worker thread
+    (run_in_context, so get_current_*() resolve there) and stamp the group's own
+    wall time under `_ms` (internal only). Gathered concurrently in bootstrap()
+    instead of running inline on the loop after projects+games."""
+    t0 = time.perf_counter()
+    misc = await run_in_context(_read_profile_misc)
     misc["_ms"] = int((time.perf_counter() - t0) * 1000)
-    return projects_response, games_response, misc
+    return misc
 
 
 @router.get("/bootstrap")
@@ -238,16 +249,18 @@ async def bootstrap():
     ctx = contextvars.copy_context()
     user_future = loop.run_in_executor(None, lambda: ctx.run(_read_user_scoped, user_id))
 
-    # gather joins BOTH groups; if one raises, gather retrieves the other's
+    # gather joins ALL THREE groups; if one raises, gather retrieves the others'
     # result/exception too (no orphaned "future exception never retrieved").
-    user_scoped, (projects_response, games_response, misc) = await asyncio.gather(
-        user_future, _read_profile_scoped(),
+    # T9130: the profile-misc reads (downloads/exports/pending) are now a third
+    # concurrent leg instead of trailing projects+games on the loop.
+    user_scoped, (projects_response, games_response, profile_ms), misc = await asyncio.gather(
+        user_future, _read_profile_scoped(), _read_profile_misc_group(),
     )
     t_end = time.perf_counter()
 
     logger.info(
         f"[PROFILE bootstrap] user_group={user_scoped['_ms']}ms "
-        f"profile_group={misc['_ms']}ms "
+        f"projects_games={profile_ms}ms misc_group={misc['_ms']}ms "
         f"wall={int((t_end-t_start)*1000)}ms"
     )
 
