@@ -4,8 +4,7 @@
 # T5070: entry documents must always revalidate — a stale HTTP-cached copy of
 # any of these would mean the browser byte-checks a stale sw.js/index.html and
 # the update gate's handshake never sees the new deploy. no-cache (not
-# no-store) still allows a fast 304; hashed JS/CSS assets keep their default
-# long-cache (they're immutable — a new deploy always emits new hashes).
+# no-store) still allows a fast 304.
 /index.html
   Cache-Control: no-cache
 
@@ -14,3 +13,14 @@
 
 /manifest.webmanifest
   Cache-Control: no-cache
+
+# T8570: content-hashed build assets are immutable — a new deploy always emits a
+# new hash in the filename, so an old file's bytes never change. Cloudflare Pages
+# does NOT long-cache these by default: measured on staging (2026-09-09) it serves
+# /assets/* as `public, max-age=0, must-revalidate`, forcing a conditional
+# revalidation round-trip for every hashed chunk on every repeat navigation and on
+# each SW precache/update. Marking them immutable lets the browser HTTP cache serve
+# them with zero network. Safe because the filename hash IS the cache key — the
+# entry documents above stay no-cache so a new deploy is always discovered.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
