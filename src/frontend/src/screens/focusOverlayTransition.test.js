@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { shouldPersistFocusForOverlayTransition } from './focusOverlayTransition';
+import {
+  shouldPersistFocusForOverlayTransition,
+  shouldSkipFocusCompletionPreview,
+} from './focusOverlayTransition';
 
 /**
  * T4020: Export creates an empty "shadow" working-clip version that loses framing.
@@ -44,5 +47,47 @@ describe('T4020 - export->overlay transition must not persist a framing shadow',
     }
 
     expect(saveCurrentClipState).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * T9280: a completed Focus export must land the user on the preview-first
+ * completion screen (FocusPublishActionBar) whenever they are still in Focus for
+ * the exported project. The completion callback skips the preview only when the
+ * user has deliberately switched to a DIFFERENT project.
+ *
+ * The bug: the old guard `exportedProjectId !== currentlyViewingProjectId`
+ * treated a null/absent selection (a transient no-project blip on mobile — an
+ * in-flight selection clear / app auto-navigation) the same as a deliberate
+ * switch, silently skipping the preview and dropping the user on the Clips tab.
+ */
+describe('T9280 - shouldSkipFocusCompletionPreview', () => {
+  it('skips the preview when the user is on a genuinely DIFFERENT project (criterion 3)', () => {
+    expect(shouldSkipFocusCompletionPreview('proj-A', 'proj-B')).toBe(true);
+  });
+
+  it('shows the preview when the exported project is still the selected one', () => {
+    expect(shouldSkipFocusCompletionPreview('proj-A', 'proj-A')).toBe(false);
+  });
+
+  it('shows the preview when selection is null (transient blip, NOT a different project) - the bug', () => {
+    // This is the core regression: null must NOT be reinterpreted as "moved away".
+    expect(shouldSkipFocusCompletionPreview('proj-A', null)).toBe(false);
+  });
+
+  it('shows the preview for every absent-selection form (undefined / empty string)', () => {
+    expect(shouldSkipFocusCompletionPreview('proj-A', undefined)).toBe(false);
+    expect(shouldSkipFocusCompletionPreview('proj-A', '')).toBe(false);
+  });
+
+  it('never skips when there is no exported project id', () => {
+    expect(shouldSkipFocusCompletionPreview(null, 'proj-A')).toBe(false);
+    expect(shouldSkipFocusCompletionPreview(undefined, 'proj-B')).toBe(false);
+  });
+
+  it('matches numeric project ids the same way (same id -> show, different -> skip)', () => {
+    // selectedProjectId can be numeric (project.id); identity comparison must hold.
+    expect(shouldSkipFocusCompletionPreview(42, 42)).toBe(false);
+    expect(shouldSkipFocusCompletionPreview(42, 43)).toBe(true);
   });
 });

@@ -27,7 +27,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useProjectDataStore, useFocusStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler, useQuestStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
-import { shouldPersistFocusForOverlayTransition } from './focusOverlayTransition';
+import { shouldPersistFocusForOverlayTransition, shouldSkipFocusCompletionPreview } from './focusOverlayTransition';
 
 // T8390: safety-net expiry for a staked publish intent (see handlePublish).
 // ExportButtonContainer exposes no onError callback to this screen, so a
@@ -953,7 +953,12 @@ export function FocusScreen({
       closureProjectId: projectId
     });
 
-    if (exportedProjectId && exportedProjectId !== currentlyViewingProjectId) {
+    // T9280: skip the completion preview ONLY when the user has deliberately
+    // moved to a DIFFERENT project. A null/absent currentlyViewingProjectId is a
+    // transient no-selection blip, NOT a deliberate navigation — treating it as
+    // one silently dropped the T8390 preview-first completion screen (reported on
+    // mobile). shouldSkipFocusCompletionPreview requires BOTH ids truthy + differ.
+    if (shouldSkipFocusCompletionPreview(exportedProjectId, currentlyViewingProjectId)) {
       console.log('[FocusScreen] Export completed for different project, ignoring navigation', {
         exportedProjectId,
         currentProjectId: currentlyViewingProjectId
