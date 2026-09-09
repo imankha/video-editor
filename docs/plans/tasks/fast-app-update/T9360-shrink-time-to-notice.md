@@ -1,6 +1,6 @@
 # T9360: Shrink time-to-notice - a client should learn about a deploy in seconds
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-09
