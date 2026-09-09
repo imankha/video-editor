@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useProfileStore } from '../stores';
 import { useAuthStore } from '../stores/authStore';
 import { ManageProfilesModal } from './ManageProfilesModal';
@@ -26,6 +26,21 @@ export function ProfileSportButton() {
   const [showManageModal, setShowManageModal] = useState(false);
   const [failedPhotoUrl, setFailedPhotoUrl] = useState(null);
 
+  // T9290: the intro photo below hangs (absolute top-full) into the page content
+  // beneath this viewport-fixed header control, so once the user scrolls away
+  // from the very top it visually overlaps the scrolled tiles. Track scroll
+  // position in EPHEMERAL local UI state (a DOM event subscription, never a
+  // store/backend write) and hide the decorative, pointer-events-none photo
+  // while scrolled. At rest the photo still shows under the profile indicator
+  // (its T5215 purpose).
+  const [scrolledPastTop, setScrolledPastTop] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolledPastTop(window.scrollY > 24);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   if (!isAuthenticated || !isInitialized) return null;
 
   const currentProfile = profiles.find(p => p.id === currentProfileId);
@@ -49,7 +64,7 @@ export function ProfileSportButton() {
   // instead of staying suppressed for the session.
   // Scope note: this only hides the broken thumbnail. The user-visible "photo
   // missing" state, and repairing the dangling key, belong to T6650.
-  const showPhoto = !!photoUrl && failedPhotoUrl !== photoUrl;
+  const showPhoto = !!photoUrl && failedPhotoUrl !== photoUrl && !scrolledPastTop;
 
   return (
     <>
