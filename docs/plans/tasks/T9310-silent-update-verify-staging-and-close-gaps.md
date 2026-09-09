@@ -225,6 +225,16 @@ missing the 10s `SW_INSTALL_TIMEOUT_MS` now re-probes after ~30s instead of the 
 every other "no" keeps the 5-minute gap that prevents a probe-per-response storm. Unit coverage extended in
 all three existing test files (`updateGateStore.test.js`, `appVersion.test.js`, `pwaUpdate.test.js`).
 
+**2026-09-09 — QA.** Unit: 71 tests across the three files pass (`vitest run`, exit 0). E2E: `npm run
+test:e2e:sw-gate` (T6230 real-SW, 3/3) passes — this drives the real `probeForWaitingBundle` end-to-end, so
+it proves the Gap C `{ hasBundle, stillInstalling }` contract change did not break the SW path. `e2e/update-
+gate.spec.js` (4/4 at 1280px + 390x844) passes after correcting a PRE-EXISTING stale locator unrelated to
+this task: the spec queried the home CTA by `/add game/i`, but T8380/T8500 (video-first) renamed the
+always-present home CTA to "Add Video" ("Add Game" now exists only as the GameDetailsModal submit button), so
+the spec had been failing on master since that rename. Fixed the locator to `/add video/i` (test-only, intent
+preserved: a fundamental always-present control stays tappable under the passive card). Both viewports confirm
+Gap A does not wrongly defer the quiescent auto-run and the flush-failure -> Retry -> reload path still works.
+
 ## Acceptance Criteria
 
 - [ ] The staging sighting has a written, evidence-backed explanation: either confirmed stale client (no code change needed) or a reproduced bug with a fix
