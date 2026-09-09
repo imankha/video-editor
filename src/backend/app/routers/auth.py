@@ -15,6 +15,7 @@ has a non-null email. Unauthenticated visitors have no user_id; mutating
 actions must go through the auth modal first.
 """
 
+import asyncio
 import logging
 import os
 import re
@@ -207,8 +208,7 @@ async def init_session(body: InitRequest = InitRequest()):
     # context does not propagate back, so we re-apply it on the request context
     # from the returned dict, same as the middleware does.
     result = await run_in_context(user_session_init, user_id, body.profile_id)
-    if result.get("profile_id"):
-        set_current_profile_id(result["profile_id"])
+    set_current_profile_id(result["profile_id"])
 
     return InitResponse(
         user_id=user_id,
@@ -484,7 +484,6 @@ async def auth_me(request: Request):
 
     logger.info(f"[Auth] /me: valid session — user={user_id}, email={email}")
 
-    import asyncio
     is_pwa = request.headers.get("X-PWA") == "1"
 
     async def _background_writes():
@@ -497,8 +496,9 @@ async def auth_me(request: Request):
         except Exception:
             logger.exception(f"[Auth] /me: update_session failed for user={user_id} (ignored)")
 
-    _me_background_task = asyncio.create_task(_background_writes())
-    _me_background_task.add_done_callback(lambda t: t.exception())
+    _me_task = asyncio.create_task(_background_writes(), name=f"auth-me-writes-{user_id}")
+    _background_tasks.add(_me_task)
+    _me_task.add_done_callback(_log_background_task_exception)
 
     logger.info(
         f"[PROFILE auth/me] session_resolve={int((t_after_session-t_me_start)*1000)}ms "
@@ -691,6 +691,25 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
 _active_vacuum_conns: dict[str, sqlite3.Connection] = {}
 _users_who_archived: set[str] = set()
 
+# T9135: shared done-callback for the module's fire-and-forget background
+# tasks (logout VACUUM, /me's best-effort last-seen/session writes). A task
+# with no reference held elsewhere can be garbage-collected mid-flight
+# (RUF006); this set holds a strong reference until the task finishes. Also
+# logs any exception instead of letting it disappear silently -- an uncaught
+# exception in a bare fire-and-forget task otherwise only surfaces as
+# asyncio's generic "Task exception was never retrieved" warning with no
+# context on which task or user.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _log_background_task_exception(task: asyncio.Task) -> None:
+    _background_tasks.discard(task)
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.error(f"[Auth] background task {task.get_name()} failed: {exc!r}", exc_info=exc)
+
 
 def mark_user_archived(user_id: str) -> None:
     """Record that this user archived a project during their session."""
@@ -751,9 +770,11 @@ async def logout(request: Request):
 
     if user_id and user_id in _users_who_archived:
         _users_who_archived.discard(user_id)
-        import asyncio
-        _vacuum_task = asyncio.ensure_future(asyncio.to_thread(_vacuum_user_dbs, user_id))
-        _vacuum_task.add_done_callback(lambda t: t.exception())
+        _vacuum_task = asyncio.create_task(
+            asyncio.to_thread(_vacuum_user_dbs, user_id), name=f"auth-logout-vacuum-{user_id}"
+        )
+        _background_tasks.add(_vacuum_task)
+        _vacuum_task.add_done_callback(_log_background_task_exception)
 
     response = JSONResponse(content={"logged_out": True})
     _delete_cookie(response, "rb_session")
