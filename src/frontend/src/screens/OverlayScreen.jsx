@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { OverlayModeView } from '../modes';
 import { OverlayContainer } from '../containers';
+import { CollectionPlayer } from '../components/collections/CollectionPlayer';
+import { OverlayPublishActionBar } from '../components/OverlayPublishActionBar';
 import { useHighlightRegions, useOverlayState, useTextOverlays } from '../modes/overlay';
 import { FontKey, Align, Animation } from '../constants/textSpec';
 import { useVideo } from '../hooks/useVideo';
@@ -27,6 +29,11 @@ import * as overlayActions from '../api/overlayActions';
 import { dispatchOverlayAction, useOverlayActionStore } from '../stores/overlayActionStore';
 import { track } from '../utils/analytics';
 import { clipGameClock } from '../utils/timeFormat';
+import { usePublishProject } from '../hooks/usePublishProject';
+import { usePublishIntentStore } from '../stores/publishIntentStore';
+import { openFinishedReel } from '../utils/finishedReelNav';
+import { toast } from '../components/shared';
+import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST } from '../config/displayNames';
 
 /**
  * OverlayScreen - Self-contained screen for Overlay mode
@@ -208,6 +215,15 @@ export function OverlayScreen({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const internalExportButtonRef = useRef(null);
   const exportButtonRef = externalExportButtonRef || internalExportButtonRef;
+
+  // T9110: post-export completion preview + publish-exit action bar. Overlay's
+  // sibling of Focus's T8390 flow. A plain overlay export used to auto-navigate
+  // home + open the finished-reel preview (App.handleExportComplete); now it
+  // shows THIS preview instead, offering the four exit choices. The Focus
+  // one-tap Publish path (publishIntent staked) is still owned by App.jsx —
+  // handleExportComplete below only raises this preview when NO intent is staked.
+  const [showExportCompletePreview, setShowExportCompletePreview] = useState(false);
+  const { publish: publishProject, isPublishing } = usePublishProject({ id: projectId });
   const fullscreenContainerRef = useRef(null);
   const videoLoadedFromUrlRef = useRef(null); // Track which URL we've loaded to prevent infinite loops
   const workingVideoFetchIdRef = useRef(null); // Track which working_video_id we've started fetching
@@ -1499,14 +1515,82 @@ export function OverlayScreen({
     setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
   }, [setEditorMode]);
 
-  const handleExportComplete = useCallback((completed) => {
-    refreshProject();
+  const handleExportComplete = useCallback(async (completed) => {
+    // Refresh FIRST and read the returned project so the completion preview can
+    // stream the freshly-produced final video (its id isn't in `completed`,
+    // which only carries { projectId, mode }). Gesture-driven (export-complete
+    // callback), not a reactive watcher, so this awaited refresh is allowed.
+    const refreshed = await refreshProject();
     // Reset the "changed since export" flag since we just exported
     setOverlayChangedSinceExport(false);
+    // T9110: raise the in-screen completion preview for a PLAIN overlay export.
+    // If a publish intent is staked for this project, this export is Focus's
+    // one-tap Publish render — App.handleExportComplete owns that path
+    // (auto-publish + land on the reel), so we must NOT also show this preview.
+    const isFocusOneTapPublish = usePublishIntentStore.getState().projectId === projectId;
+    if (!isFocusOneTapPublish && refreshed?.final_video_id) {
+      setShowExportCompletePreview(true);
+    }
     if (onExportComplete) {
       onExportComplete(completed);
     }
-  }, [refreshProject, setOverlayChangedSinceExport, onExportComplete]);
+  }, [refreshProject, setOverlayChangedSinceExport, onExportComplete, projectId]);
+
+  // T9110: the four post-preview gesture handlers, mirroring FocusScreen's
+  // T8390 handlers. Each fires from a click (never a reactive watcher).
+
+  // Publish Now — the final video ALREADY exists (this preview follows a
+  // completed overlay export), so unlike Focus's Publish there is nothing to
+  // re-render: just run the publish gesture, then land the user on the reel the
+  // same way T8400/T8390 do (openFinishedReel with alreadyPublished so it opens
+  // straight into the Share state). Publish already lands somewhere self-
+  // evidently confirming (the published reel + its own "Published" toast), so
+  // per the per-choice toast rule it fires NO extra toast here.
+  const handlePublishNow = useCallback(async () => {
+    // Snapshot the project row BEFORE publishing: publish archives it and the
+    // next fetchProjects drops it from the store, so a post-publish store lookup
+    // could miss it (finishedReelNav relies on the snapshot outliving the row).
+    // The preview gate guarantees project.final_video_id is present here.
+    const snapshot = project;
+    const published = await publishProject({ openGallery: false });
+    setShowExportCompletePreview(false);
+    if (published) {
+      toast.success('Published', { message: 'Anyone with the link can watch it.' });
+    }
+    if (snapshot?.final_video_id) {
+      openFinishedReel(snapshot, { alreadyPublished: !!published });
+    }
+  }, [publishProject, project]);
+
+  // Reapply Overlay — close the preview back to the still-mounted Overlay
+  // editor. A pure return to the SAME screen (the spotlight work is right
+  // there), so like Focus's Refocus it fires no toast. Also the preview's
+  // onClose ("nevermind") maps here, so an incidental dismiss has no side effects.
+  const handleReapplyOverlay = useCallback(() => {
+    setShowExportCompletePreview(false);
+  }, []);
+
+  // Reapply Focus — go back into Focus to reframe. Moves the user into ANOTHER
+  // edit mode, so (mirroring Focus's Add Spotlight Now) it confirms with a toast
+  // that the spotlight is saved + a fresh export follows. The button caption
+  // already carries the honest "uses credits" cost warning.
+  const handleReapplyFocus = useCallback(() => {
+    setShowExportCompletePreview(false);
+    toast.success(OVERLAY_REAPPLY_FOCUS_TOAST.title, { message: OVERLAY_REAPPLY_FOCUS_TOAST.message });
+    setEditorMode(EDITOR_MODES.FRAMING);
+  }, [setEditorMode]);
+
+  // Publish Later — defer; land on the drafts surface with the same explainer
+  // toast Focus's "Add Spotlight Later" uses, routed by is_auto_created (T8360's
+  // Clips-vs-Highlight-Reels split — that's where the draft actually landed).
+  const handlePublishLater = useCallback(() => {
+    setShowExportCompletePreview(false);
+    const copy = project?.is_auto_created
+      ? FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP
+      : FOCUS_PUBLISH_LATER_TOAST.MULTI_CLIP;
+    toast.success(copy.title, { message: copy.message, duration: 10000 });
+    useEditorStore.getState().goToProjectManager();
+  }, [project?.is_auto_created]);
 
   // =========================================
   // RENDER
@@ -1517,6 +1601,7 @@ export function OverlayScreen({
   const highlightCarryMessage = describeHighlightCarryNote(highlightCarryNote);
 
   return (
+    <>
     <OverlayModeView
       // T4350: re-export highlight-carry notice (dismissible banner)
       highlightCarryMessage={highlightCarryMessage}
@@ -1674,6 +1759,35 @@ export function OverlayScreen({
       onToggleText={wrappedToggleText}
       onUpdateTextSpec={wrappedUpdateTextSpec}
     />
+
+      {/* T9110: post-export completion preview + publish-exit action bar.
+          Mounts on top of the still-live Overlay editor (like Focus's T8390
+          preview), so "Reapply Overlay"/onClose just closes back to editing.
+          Streams the FINAL exported video (spotlight burned in) by id off the
+          refreshed project — no API data held in state, only the boolean gate. */}
+      {showExportCompletePreview && project?.final_video_id && (
+        <CollectionPlayer
+          reels={[{
+            id: project.final_video_id,
+            name: project?.name,
+            streamUrl: `${API_BASE}/api/downloads/${project.final_video_id}/stream`,
+            aspect_ratio: project?.aspect_ratio,
+            duration: null,
+          }]}
+          title={project?.name}
+          onClose={handleReapplyOverlay}
+          actionBar={(
+            <OverlayPublishActionBar
+              onPublishNow={handlePublishNow}
+              publishLoading={isPublishing}
+              onReapplyOverlay={handleReapplyOverlay}
+              onReapplyFocus={handleReapplyFocus}
+              onPublishLater={handlePublishLater}
+            />
+          )}
+        />
+      )}
+    </>
   );
 }
 
