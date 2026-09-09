@@ -337,6 +337,13 @@ def test_init_calls_cancel_active_vacuum():
     Name reference (e.g. passed to run_in_context) — so the ordering
     invariant survives the offload without re-coupling this test to one
     specific calling convention.
+
+    Compare by source line number, NOT by ast.walk() discovery order:
+    ast.walk() is breadth-first, so a deeper node (the `user_session_init`
+    Name, nested inside an Await -> Call) can be visited before a shallower
+    one (the `cancel_active_vacuum` Call) regardless of which actually comes
+    first in the source — a walk-order check would silently stop enforcing
+    the ordering invariant it exists for.
     """
     src = AUTH_PY.read_text(encoding="utf-8")
     tree = ast.parse(src)
@@ -345,26 +352,25 @@ def test_init_calls_cancel_active_vacuum():
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.name != "init_session":
             continue
 
-        # Walk the body in order — cancel_active_vacuum must appear before user_session_init
-        found_cancel = False
-        found_init = False
-        for child in ast.walk(node):
-            if (
-                isinstance(child, ast.Call)
-                and isinstance(child.func, ast.Name)
-                and child.func.id == "cancel_active_vacuum"
-            ):
-                found_cancel = True
-            if isinstance(child, ast.Name) and child.id == "user_session_init":
-                if not found_cancel:
-                    pytest.fail(
-                        "user_session_init is referenced before cancel_active_vacuum in init_session — "
-                        "VACUUM must be cancelled before any DB access"
-                    )
-                found_init = True
+        cancel_lines = [
+            child.lineno
+            for child in ast.walk(node)
+            if isinstance(child, ast.Call)
+            and isinstance(child.func, ast.Name)
+            and child.func.id == "cancel_active_vacuum"
+        ]
+        init_lines = [
+            child.lineno
+            for child in ast.walk(node)
+            if isinstance(child, ast.Name) and child.id == "user_session_init"
+        ]
 
-        assert found_cancel, "init_session must call cancel_active_vacuum"
-        assert found_init, "init_session must call (or offload) user_session_init"
+        assert cancel_lines, "init_session must call cancel_active_vacuum"
+        assert init_lines, "init_session must call (or offload) user_session_init"
+        assert min(cancel_lines) < min(init_lines), (
+            "user_session_init is referenced before cancel_active_vacuum in init_session — "
+            "VACUUM must be cancelled before any DB access"
+        )
         return
 
     pytest.fail("init_session function not found in auth.py")

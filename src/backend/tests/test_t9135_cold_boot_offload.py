@@ -104,6 +104,33 @@ def test_single_init_request_actually_pays_the_delay():
     assert wall >= DELAY * 0.8, f"single request too fast ({wall:.3f}s) -- stub not blocking?"
 
 
+def test_init_session_threads_hint_profile_id_positionally():
+    """The task's own callout: run_in_context(fn, *args) is positional-only,
+    so init_session must pass body.profile_id positionally into
+    user_session_init's hint_profile_id param, not drop it. A prior version of
+    this guard exercised only the None-hint default path, which would still
+    pass with the hint silently dropped."""
+    seen = {}
+
+    def _capturing_user_session_init(user_id, hint_profile_id=None):
+        seen[user_id] = hint_profile_id
+        return {"profile_id": "abcd1234", "is_new_user": False}
+
+    async def _call():
+        set_current_user_id("t9135-hint-user")
+        return await init_session(InitRequest(profile_id="deadbeef"))
+
+    with patch("app.routers.auth.user_session_init", _capturing_user_session_init):
+        resp = asyncio.run(_call())
+
+    assert resp.profile_id == "abcd1234"
+    assert seen.get("t9135-hint-user") == "deadbeef", (
+        f"body.profile_id was not threaded into user_session_init's hint_profile_id "
+        f"(saw {seen.get('t9135-hint-user')!r}) -- run_in_context takes positional "
+        f"args only, so a kwarg-shaped call would silently drop the hint"
+    )
+
+
 # ---------------------------------------------------------------------------
 # 2. _run_startup_recovery must not block the loop it is scheduled on.
 # ---------------------------------------------------------------------------
@@ -135,7 +162,7 @@ def test_startup_recovery_does_not_block_its_own_loop():
         async def _ticker():
             while True:
                 ticks["n"] += 1
-                await asyncio.sleep(0.02)
+                await asyncio.sleep(0.01)
 
         ticker_task = asyncio.create_task(_ticker())
         try:
@@ -157,11 +184,13 @@ def test_startup_recovery_does_not_block_its_own_loop():
     wall, ticks = asyncio.run(scenario())
 
     assert wall >= DELAY * 0.8, f"recovery finished too fast ({wall:.3f}s) -- stub not blocking?"
-    # At a 0.02s tick interval, a free loop advances ~10 times over a 0.2s
-    # recovery. A generous floor (5) keeps this from flaking under CI jitter
-    # while still failing decisively if recover_orphaned_jobs is called
-    # directly on the loop (the ticker would advance ~0-1 times).
-    assert ticks >= 5, (
+    # At a 0.01s tick interval, a free loop advances ~15-20 times over a 0.2s
+    # recovery on Linux CI; measured ~7 on Windows (coarser ~15.6ms timer
+    # granularity rounds the sleep up). A floor of 3 keeps generous headroom
+    # under either platform's jitter while still failing decisively if
+    # recover_orphaned_jobs is called directly on the loop (the ticker would
+    # advance ~0-1 times in that case).
+    assert ticks >= 3, (
         f"ticker only advanced {ticks} times during a {wall:.3f}s recovery -- "
         f"the loop was blocked. recover_orphaned_jobs is likely being awaited "
         f"directly instead of offloaded via run_in_context."
