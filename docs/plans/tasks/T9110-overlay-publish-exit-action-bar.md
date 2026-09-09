@@ -108,3 +108,72 @@ way:**
       768/1024/1280, not just one viewport) to actually fit the row's real content width — no
       `overflow-x-auto` fallback masking a wrong breakpoint choice
 - [ ] Tests pass (unit + an Overlay completion e2e spec)
+
+## Progress Log
+
+### 2026-09-09 — Implemented (M-tier: implement -> unit -> QA -> reviewer)
+
+Faithful mirror of T8390's shipped Focus pattern, as the task directed. Files:
+
+- **`src/frontend/src/components/OverlayPublishActionBar.jsx`** (new) — the Overlay
+  sibling of `FocusPublishActionBar`. Four equal-weight choices (Publish Now /
+  Reapply Overlay / Reapply Focus / Publish Later), same flat/no-hierarchy grid,
+  same three-stage responsive layout (`grid-cols-1` / `sm:` 2-up /
+  `xl:` 4-across), same `minmax(min-content, 1fr)` column floor + `whitespace-nowrap`
+  title span, no `overflow-x-auto`. Both T8390 landmines reproduced verbatim, not
+  re-derived (doc comment points at `FocusPublishActionBar` as the authoritative
+  rationale). Icons reuse app conventions: `FolderInput` (publish), `Sparkles`
+  (spotlight/overlay), `Crop` (Focus/framing), `Clock` (later).
+- **`displayNames.js`** — `OVERLAY_PUBLISH` copy + `OVERLAY_REAPPLY_FOCUS_TOAST`.
+  `REAPPLY_FOCUS_CAPTION` mirrors Focus's `REFOCUS_CAPTION` ("Reframe and export
+  again, uses credits.") verbatim for the honest paid-re-export warning.
+- **`OverlayScreen.jsx`** — `showExportCompletePreview` boolean state (NO API data
+  in state); `handleExportComplete` now `await refreshProject()` first, then raises
+  the preview ONLY for a plain overlay export (gated on
+  `usePublishIntentStore.getState().projectId !== projectId`); four gesture
+  handlers; a `CollectionPlayer` preview overlay streaming the FINAL video
+  (URL derived at render from the refreshed `project.final_video_id`).
+- **`App.jsx handleExportComplete`** — `goToProjectManager` + `openFinishedReel` moved
+  INSIDE the publish-intent (Focus one-tap Publish) branch only. A plain overlay
+  export no longer auto-navigates home; OverlayScreen owns the completion UI now.
+
+**Abstraction call (task asked me to decide + record):** did NOT extract a shared
+`<FlatChoiceActionBar>`. Only two call sites exist (Focus + Overlay); extracting on
+the 2nd use is premature per the project's rule-of-three (abstract on the 3rd
+duplication — premature indirection hides code paths from grep). When a 3rd flat
+action bar appears, extract then and fold both onto it. Recorded in the component
+doc comment.
+
+**Per-choice toast decisions (task's "don't blanket-apply" test):**
+- Publish Now — NO toast. Lands on the published reel with its own "Published"
+  toast (T8400), self-evidently confirming. Mirrors Focus's Publish.
+- Reapply Overlay — NO toast. Pure return to the still-mounted Overlay editor
+  (the spotlight work is right there). Mirrors Focus's Refocus; also the preview's
+  onClose (X/Escape), so an incidental dismiss has no side effects.
+- Reapply Focus — TOAST (`OVERLAY_REAPPLY_FOCUS_TOAST`). Moves the user into another
+  edit mode with no other confirmation their work was saved; mirrors Focus's Add
+  Spotlight Now. Honest that the spotlight carries over the Focus re-export
+  (highlight carry-forward, T4350/T4355) and a fresh export follows.
+- Publish Later — TOAST. Defers to the drafts surface; reuses `FOCUS_PUBLISH_LATER_TOAST`
+  (routed by `is_auto_created`, T8360's Clips-vs-Highlight-Reels split — where the
+  draft actually landed). Mirrors Focus's Add Spotlight Later.
+
+**Publish Now semantics:** unlike Focus (whose Publish triggers a fresh overlay
+render), the overlay final video ALREADY exists at this point, so Publish Now just
+runs the existing `usePublishProject().publish()` gesture then lands on the reel
+via `openFinishedReel(..., {alreadyPublished})` — no re-export. The project row is
+snapshotted BEFORE publishing (publish archives it + the next fetchProjects drops
+it, per `finishedReelNav`'s note).
+
+**Tests / evidence:**
+- Unit: `OverlayPublishActionBar.test.jsx` (9) + `screens/__tests__/overlayPublishExit.test.jsx`
+  (10) green; the min-content and xl:-breakpoint landmines each have a tripwire.
+  Regression `appPublishAfterRender` / `publishIntentStore` / `DraftReelPreview` /
+  `FocusPublishActionBar` / `focusPublishExit` (32) still green — the App.jsx
+  refactor preserved the Focus one-tap Publish path.
+- E2E: `e2e/T9110-overlay-publish-exit.spec.js` via `t9110diag.html` (dev-only
+  harness, mirror of t8520diag), 4/4 passed under `dev-verify.sh`. LIVE DOM
+  measurement confirmed resolved `grid-template-columns` = 1/2/2/4 tracks at
+  375/768/1024/1280 (single row gated at `xl:`, not `sm:`) with the grid's
+  `scrollWidth <= clientWidth` and no clipped title at every width. Evidence:
+  `qa/T9110-criterion-*.png`.

@@ -94,3 +94,31 @@ export const FOCUS_ADD_SPOTLIGHT_TOAST = {
   title: 'Framing saved',
   message: 'Now add a spotlight to your reel -- you can still publish it whenever you\'re ready.',
 };
+
+// T9110: Overlay's post-export publish-exit action bar (OverlayPublishActionBar).
+// Mirrors FOCUS_PUBLISH (see above) for the Overlay completion screen. Four
+// equal-weight choices, no hierarchy (same product decision as T8390 round 2).
+// The two "reapply" choices send the user back into an edit mode; "Publish
+// Later" defers. REAPPLY_FOCUS_CAPTION carries the same honest cost warning as
+// Focus's REFOCUS_CAPTION (a Focus re-frame forces a fresh paid overlay
+// re-export afterward), verbatim so the two read as one system.
+export const OVERLAY_PUBLISH = {
+  PUBLISH_LABEL: 'Publish Now',
+  PUBLISH_CAPTION: 'Puts it in Highlight Reels so you can share it.',
+  REAPPLY_OVERLAY_LABEL: 'Reapply Overlay',
+  REAPPLY_OVERLAY_CAPTION: 'Go back and redo the spotlight on your reel.',
+  REAPPLY_FOCUS_LABEL: 'Reapply Focus',
+  REAPPLY_FOCUS_CAPTION: 'Reframe and export again, uses credits.',
+  PUBLISH_LATER_LABEL: 'Publish Later',
+  PUBLISH_LATER_CAPTION: 'Save it as a draft and publish whenever you\'re ready.',
+};
+
+// T9110: "Reapply Focus" confirmation toast. Mirrors FOCUS_ADD_SPOTLIGHT_TOAST's
+// reasoning (product owner, 2026-09-08): a choice that moves the user into
+// ANOTHER edit mode has no other confirmation their prior work was saved, so it
+// gets a toast. Honest that the spotlight carries over the Focus re-export
+// (highlight carry-forward, T4350/T4355) and that a fresh export follows.
+export const OVERLAY_REAPPLY_FOCUS_TOAST = {
+  title: 'Spotlight saved',
+  message: 'Reframe your clip in Focus, then export again -- your spotlight carries over to the new reel.',
+};

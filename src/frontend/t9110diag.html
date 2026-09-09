@@ -1,0 +1,39 @@
+<!doctype html>
+<!--
+  T9110 DEV-ONLY diagnostic harness proving Overlay's post-export completion
+  preview + publish-exit action bar (CollectionPlayer + OverlayPublishActionBar
+  + the four gesture handlers OverlayScreen wires — Publish Now / Reapply
+  Overlay / Reapply Focus / Publish Later). The Overlay sibling of t8520diag.html
+  (T8390's Focus harness). NOT a production page: Vite's default build entry is
+  index.html only, and this file is not added to rollupOptions.input, so it never
+  ships in the built app (same as the other *diag.html harnesses).
+
+  Mounts the REAL CollectionPlayer + REAL OverlayPublishActionBar with the exact
+  props/handler shape OverlayScreen uses. Only the "an overlay export just
+  finished" premise + video source are synthetic — everything downstream of that
+  is the real component tree. A real end-to-end run (uploaded game, annotated
+  clips, real Focus + Overlay renders) is infeasible in this container (Modal
+  disabled; the dev-login account has zero seeded projects), so this harness uses
+  the project's established forced-entry technique (see t8520diag.html's header).
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>T9110 Overlay publish exit diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #111827; }
+    </style>
+  </head>
+  <body>
+    <div id="t9110diag-root"></div>
+    <script>
+      // Same guard t8520diag.html documents: stash the hash before the module
+      // import chain can fire editorStore's module-scope URL canonicalization
+      // (which would replaceState this non-canonical path to /home and strip
+      // the hash). Plain (non-module) script runs first.
+      window.__T9110_DIAG_HASH__ = location.hash;
+    </script>
+    <script type="module" src="/src/t9110diag/main.jsx"></script>
+  </body>
+</html>

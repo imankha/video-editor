@@ -597,36 +597,38 @@ function App() {
       currentMode === EDITOR_MODES.OVERLAY &&
       completed.projectId === currentProjectId
     ) {
-      // Atomic transition: clear selection + reset video + switch mode together,
-      // so an in-flight project refresh can't resurrect the selection afterward.
-      useEditorStore.getState().goToProjectManager();
-      // T8530: land the user ON the finished reel — the SINGLE call site of
-      // openFinishedReel. Re-read the project from the store AFTER the forced
-      // fetchProjects above, so final_video_id (set by the overlay export) is
-      // present in the snapshot the preview player opens with.
-      const finishedProject = useProjectsStore
-        .getState()
-        .projects?.find((p) => p.id === completed.projectId);
-      if (finishedProject?.final_video_id) {
-        // T8390: this export IS Focus's one-tap Publish render (FocusScreen.
-        // handlePublish staked the intent BEFORE triggering it) — auto-complete
-        // the publish gesture now instead of landing the user on another
-        // decision screen. Fresh getState() read (not the reactive selector
-        // above) so the match is against the CURRENT flag at the moment this
-        // callback actually runs, exactly like the currentMode/currentProjectId
-        // reads above.
-        const publishIntent = usePublishIntentStore.getState();
-        if (publishIntent.projectId === completed.projectId) {
+      // T9110: distinguish Focus's one-tap Publish render (publish intent staked
+      // by FocusScreen.handlePublish BEFORE triggering) from a PLAIN overlay
+      // export. Fresh getState() read (not the reactive selector above) so the
+      // match is against the CURRENT flag at the moment this callback runs,
+      // exactly like the currentMode/currentProjectId reads above.
+      const publishIntent = usePublishIntentStore.getState();
+      if (publishIntent.projectId === completed.projectId) {
+        // Focus one-tap Publish: auto-complete the publish gesture + land the
+        // user ON the finished reel, instead of another decision screen (T8390).
+        // Atomic transition: clear selection + reset video + switch mode together
+        // so an in-flight project refresh can't resurrect the selection afterward.
+        useEditorStore.getState().goToProjectManager();
+        // T8530: SINGLE call site of openFinishedReel for this path. Re-read the
+        // project AFTER the forced fetchProjects above, so final_video_id (set by
+        // the overlay export) is present in the snapshot the preview opens with.
+        const finishedProject = useProjectsStore
+          .getState()
+          .projects?.find((p) => p.id === completed.projectId);
+        if (finishedProject?.final_video_id) {
           publishIntent.clear();
           const published = await publishFocusExit({ openGallery: false });
           if (published) {
             toast.success('Published', { message: 'Anyone with the link can watch it.' });
           }
           openFinishedReel(finishedProject, { alreadyPublished: published });
-        } else {
-          openFinishedReel(finishedProject);
         }
       }
+      // PLAIN overlay export (no publish intent): OverlayScreen owns the
+      // completion experience now — it raises its own preview + publish-exit
+      // action bar (T9110). App does NOT navigate away, so the OverlayScreen
+      // preview stays mounted. (Pre-T9110, this branch auto-navigated home +
+      // openFinishedReel; that landing is superseded by the in-screen action bar.)
     }
   }, [fetchProjects, publishFocusExit]);
 
