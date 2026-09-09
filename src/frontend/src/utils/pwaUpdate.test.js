@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { setupPwaUpdatePrompt, evictStaleDevServiceWorker } from './pwaUpdate';
+import { setupPwaUpdatePrompt, evictStaleDevServiceWorker, probeForWaitingBundle } from './pwaUpdate';
 import { useUpdateGateStore } from '../stores/updateGateStore';
 
 const { registerSWMock } = vi.hoisted(() => ({ registerSWMock: vi.fn() }));
@@ -257,5 +257,73 @@ describe('evictStaleDevServiceWorker (T6630 round 4)', () => {
       value: { getRegistrations: vi.fn().mockRejectedValue(new Error('boom')) },
     });
     await expect(evictStaleDevServiceWorker()).resolves.not.toThrow();
+  });
+});
+
+/**
+ * T9310 Gap C — probeForWaitingBundle now returns { hasBundle, stillInstalling } so
+ * appVersion.hasNewerBundle can tell a slow-install miss (retry in ~30s) apart from
+ * "genuinely nothing waiting" (full 5-minute cooldown). Tbug41s's `waiting`-only
+ * supersede rule is unchanged — a first-ever install still never reports a bundle.
+ */
+describe('probeForWaitingBundle (Gap C status)', () => {
+  const makeWorker = (state) => {
+    const listeners = {};
+    return {
+      state,
+      addEventListener: (t, h) => { listeners[t] = h; },
+      removeEventListener: () => {},
+      fire: () => listeners.statechange?.(),
+    };
+  };
+
+  it('no registration -> not gating, not installing', async () => {
+    await expect(probeForWaitingBundle(() => null)).resolves.toEqual({ hasBundle: false, stillInstalling: false });
+  });
+
+  it('a waiting worker -> hasBundle', async () => {
+    const reg = { update: vi.fn().mockResolvedValue(undefined), waiting: {}, installing: null };
+    await expect(probeForWaitingBundle(() => reg)).resolves.toEqual({ hasBundle: true, stillInstalling: false });
+  });
+
+  it('no waiting and nothing installing (update found no new bytes) -> nothing', async () => {
+    const reg = { update: vi.fn().mockResolvedValue(undefined), waiting: null, installing: null };
+    await expect(probeForWaitingBundle(() => reg)).resolves.toEqual({ hasBundle: false, stillInstalling: false });
+  });
+
+  it('registration.update() rejects (offline) -> nothing, not installing', async () => {
+    const reg = { update: vi.fn().mockRejectedValue(new Error('offline')), waiting: null, installing: null };
+    await expect(probeForWaitingBundle(() => reg)).resolves.toEqual({ hasBundle: false, stillInstalling: false });
+  });
+
+  it('a slow install that finishes as waiting within the window -> hasBundle', async () => {
+    const worker = makeWorker('installing');
+    const reg = { update: vi.fn().mockResolvedValue(undefined), waiting: null, installing: worker };
+    const pending = probeForWaitingBundle(() => reg);
+    await flushMicrotasks(); // update() resolves + statechange listener registers
+    worker.state = 'installed';
+    reg.waiting = {};
+    worker.fire();
+    await expect(pending).resolves.toEqual({ hasBundle: true, stillInstalling: false });
+  });
+
+  it('a slow install still going when the timeout fires -> stillInstalling (Gap C)', async () => {
+    vi.useFakeTimers();
+    const worker = makeWorker('installing');
+    const reg = { update: vi.fn().mockResolvedValue(undefined), waiting: null, installing: worker };
+    const pending = probeForWaitingBundle(() => reg);
+    await vi.advanceTimersByTimeAsync(10_000); // past SW_INSTALL_TIMEOUT_MS
+    await expect(pending).resolves.toEqual({ hasBundle: false, stillInstalling: true });
+    vi.useRealTimers();
+  });
+
+  it('a worker that settles to a dead end (redundant, nothing waiting) -> nothing, not installing', async () => {
+    const worker = makeWorker('installing');
+    const reg = { update: vi.fn().mockResolvedValue(undefined), waiting: null, installing: worker };
+    const pending = probeForWaitingBundle(() => reg);
+    await flushMicrotasks();
+    worker.state = 'redundant';
+    worker.fire();
+    await expect(pending).resolves.toEqual({ hasBundle: false, stillInstalling: false });
   });
 });

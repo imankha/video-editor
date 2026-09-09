@@ -206,34 +206,44 @@ async function landLatestBundle(updateSW, getRegistration) {
 
 /**
  * Tbug41s — the bundle probe appVersion consults before raising the gate.
- * Resolves true ONLY when a newer bundle is genuinely waiting to take over.
+ * Reports whether a newer bundle is genuinely waiting to take over.
  *
  * Why `waiting` specifically, and not "an SW installed": a FIRST-EVER registration
  * installs and activates directly with nothing to supersede — that is THIS bundle
  * registering itself, not an update. Treating it as one would gate a client that is
  * already running the newest code it can get, i.e. the loop again.
+ *
+ * T9310 Gap C — the return type is `{ hasBundle, stillInstalling }`, not a bare
+ * boolean, so `appVersion.hasNewerBundle` can tell "genuinely nothing waiting" apart
+ * from "a worker is mid-install and just missed the SW_INSTALL_TIMEOUT_MS window on a
+ * slow connection". The latter deserves a ~30s re-probe, not the full 5-minute
+ * cooldown that would otherwise lock the client out of an update it is seconds from.
  */
-async function probeForWaitingBundle(getRegistration) {
+export async function probeForWaitingBundle(getRegistration) {
   const registration = getRegistration?.();
   // No registration (SW unsupported, private mode, registration still pending or
   // failed) — cannot prove a newer bundle exists, so do not gate.
-  if (!registration) return false;
+  if (!registration) return { hasBundle: false, stillInstalling: false };
 
   try {
     await registration.update();
   } catch {
     // Offline/flaky — unprovable, so "no". Retried after the probe cooldown.
-    return false;
+    return { hasBundle: false, stillInstalling: false };
   }
 
-  if (registration.waiting) return true;
+  if (registration.waiting) return { hasBundle: true, stillInstalling: false };
 
   const installing = registration.installing;
-  if (!installing) return false; // update() found no new bytes → no newer bundle.
+  if (!installing) return { hasBundle: false, stillInstalling: false }; // no new bytes.
 
   await waitForInstalledOrTimeout(installing, SW_INSTALL_TIMEOUT_MS);
   // Re-read after settling: only `waiting` proves a supersede.
-  return !!registration.waiting;
+  if (registration.waiting) return { hasBundle: true, stillInstalling: false };
+  // No waiting worker after the bounded wait. If OUR worker is still in the
+  // 'installing' state it simply didn't finish in time (slow install) → Gap C
+  // asks the caller to retry soon rather than sit out the full cooldown.
+  return { hasBundle: false, stillInstalling: installing.state === 'installing' };
 }
 
 /** Resolve once `worker` leaves the 'installing' state, or on timeout. */
