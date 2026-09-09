@@ -75,8 +75,14 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   });
 
   // View: pure presentation
+  // T8790/F1: on phones the export action sits ~400-1000px below the fold (after
+  // the video + timeline + segment stack), so it never paints above the fold on
+  // first load. Pin it as a bottom action bar on mobile (sticky bottom-0 against
+  // the `flex-1 overflow-auto` scroll container, NOT `fixed`, which the Focus
+  // card's `backdrop-blur` would trap mid-screen exactly like the F3 sheet). Reset
+  // to normal flow at `lg` so the shared DESKTOP editor layout is byte-unchanged.
   return (
-    <div className="mt-4 sm:mt-6">
+    <div className="mt-4 sm:mt-6 sticky bottom-0 z-30 bg-gray-900/95 backdrop-blur-sm py-2 lg:static lg:z-auto lg:bg-transparent lg:backdrop-blur-none lg:py-0">
       <ExportButtonView
         ref={ref}
         isCurrentlyExporting={container.isCurrentlyExporting}
