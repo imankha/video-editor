@@ -370,7 +370,13 @@ export function OverlayModeView({
   const aspectH = effectiveOverlayMetadata?.height;
   const useAspectStage = !isFullscreen && !mobileFs && aspectW > 0 && aspectH > 0;
   const stageBoxClass = useAspectStage
-    ? 'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh]'
+    ? // lg:max-w caps the aspect-driven width so a landscape stage (whether from a
+      // genuinely 16:9 reel or a wrong-metadata bug) can never consume the whole row
+      // and starve the settings column beside it to 0px (T9150). Uses vw, not a %,
+      // because the column this sits in is lg:w-fit (fit-content) -- a percentage
+      // max-width there resolves against a not-yet-determined ancestor width and
+      // collapses the box to a near-zero size (a real bug this fix hit once).
+      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh] lg:max-w-[calc(100vw-22rem)]'
     : `relative bg-gray-900 ${
         (isFullscreen || mobileFs)
           ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
@@ -856,8 +862,11 @@ export function OverlayModeView({
           ) : (
             <div className="lg:flex lg:flex-row lg:items-start lg:gap-6">
               {/* Video column — shrink-wraps the aspect box so Controls bind to the
-                  video width (lg:w-fit); full width when stacked on mobile. */}
-              <div className="flex flex-col w-full lg:w-fit lg:flex-none">
+                  video width (lg:w-fit); full width when stacked on mobile.
+                  lg:flex-initial (not lg:flex-none) lets it yield width to the
+                  settings column instead of forcing it to 0 (T9150) — the stage
+                  box's own lg:max-w cap is what actually bounds it. */}
+              <div className="flex flex-col w-full lg:w-fit lg:flex-initial lg:min-w-0">
                 <div data-testid="overlay-video-stage" className={stageBoxClass} style={stageBoxStyle}>
                   {videoStageInner}
                 </div>
@@ -867,8 +876,9 @@ export function OverlayModeView({
                   renders its own copy above the Add Spotlight button (below). The
                   three-tab section (Overlay | Text | Thumbnail) has a constant
                   height, so selecting a block swaps the Text tab in place without
-                  moving the timeline (T6630 round 2). */}
-              <div className="hidden lg:block lg:flex-1 lg:min-w-0">
+                  moving the timeline (T6630 round 2). lg:min-w floors it so a
+                  landscape stage can never starve it to 0px (T9150). */}
+              <div className="hidden lg:block lg:flex-1 lg:min-w-[20rem]">
                 {settingsTabs}
               </div>
             </div>

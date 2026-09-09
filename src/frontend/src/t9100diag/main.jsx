@@ -49,11 +49,21 @@ const ZOOM = 1;
 const PAN_OFFSET = { x: 0, y: 0 };
 const NOOP_HANDLERS = {};
 
+// A genuinely-16:9 reel's metadata — used by the T9150 settings-panel-starvation
+// row, distinct from SOURCE_CLIP_META (that one is a WRONG value fed to a 9:16
+// video; this one is a real video that legitimately IS landscape).
+const REAL_16X9_META = { width: 1920, height: 1080 };
+
 const STAGES = [
   { testId: 'stage-fixed', label: 'FIXED: reel metadata (1080x1920)', metadata: REEL_META },
   { testId: 'stage-bug', label: 'BUG: source-clip metadata (1920x1080)', metadata: SOURCE_CLIP_META },
 ];
 
+// Row layout mirrors modes/OverlayModeView.jsx's non-fullscreen stage/settings
+// row verbatim (T9150 Fix C): video column lg:w-fit lg:flex-initial lg:min-w-0,
+// stage box lg:h-[70vh] lg:max-w-[calc(100%-22rem)], settings column
+// lg:flex-1 lg:min-w-[20rem]. Mirrored, not imported, matching this harness's
+// existing pattern (see the stageBoxClass note below) — keep both in sync by hand.
 function DetectionStage({ testId, label, metadata }) {
   const videoRef = useRef(null);
 
@@ -62,34 +72,47 @@ function DetectionStage({ testId, label, metadata }) {
   // `effectiveOverlayMetadata` drives it in the real screen.
   const useAspectStage = metadata.width > 0 && metadata.height > 0;
   const stageBoxClass = useAspectStage
-    ? 'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh]'
+    ? 'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh] lg:max-w-[calc(100vw-22rem)]'
     : 'relative bg-gray-900 rounded-lg';
   const stageBoxStyle = useAspectStage ? { aspectRatio: `${metadata.width} / ${metadata.height}` } : undefined;
 
   return (
     <div data-testid={testId} style={{ marginBottom: 24 }}>
       <div style={{ color: '#9ca3af', fontSize: 13, marginBottom: 6, fontFamily: 'sans-serif' }}>{label}</div>
-      <div className={stageBoxClass} style={stageBoxStyle}>
-        <VideoPlayer
-          videoRef={videoRef}
-          videoUrl={SRC}
-          handlers={NOOP_HANDLERS}
-          fitToAspect={useAspectStage}
-          zoom={ZOOM}
-          panOffset={PAN_OFFSET}
-          overlays={[
-            <PlayerDetectionOverlay
-              key="detections"
+      <div className="lg:flex lg:flex-row lg:items-start lg:gap-6">
+        <div className="flex flex-col w-full lg:w-fit lg:flex-initial lg:min-w-0">
+          <div className={stageBoxClass} style={stageBoxStyle}>
+            <VideoPlayer
               videoRef={videoRef}
-              videoMetadata={metadata}
-              detections={DETECTIONS}
-              detectionVideoWidth={REEL_META.width}
-              detectionVideoHeight={REEL_META.height}
+              videoUrl={SRC}
+              handlers={NOOP_HANDLERS}
+              fitToAspect={useAspectStage}
               zoom={ZOOM}
               panOffset={PAN_OFFSET}
-            />,
-          ]}
-        />
+              overlays={[
+                <PlayerDetectionOverlay
+                  key="detections"
+                  videoRef={videoRef}
+                  videoMetadata={metadata}
+                  detections={DETECTIONS}
+                  detectionVideoWidth={REEL_META.width}
+                  detectionVideoHeight={REEL_META.height}
+                  zoom={ZOOM}
+                  panOffset={PAN_OFFSET}
+                />,
+              ]}
+            />
+          </div>
+        </div>
+        <div
+          data-testid={`${testId}-settings`}
+          className="hidden lg:block lg:flex-1 lg:min-w-[20rem]"
+          style={{ background: '#111827', minHeight: 120 }}
+        >
+          <span style={{ color: '#9ca3af', fontSize: 12, fontFamily: 'sans-serif', padding: 8, display: 'block' }}>
+            settings panel stand-in
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -97,10 +120,16 @@ function DetectionStage({ testId, label, metadata }) {
 
 function T9100DiagHarness() {
   return (
-    <div style={{ padding: 16, maxWidth: 1280, margin: '0 auto' }}>
+    // No maxWidth cap: the T9150 settings-starvation row needs the full viewport
+    // width to reproduce (the bug only manifests once lg:h-[70vh]'s aspect-driven
+    // width is wide enough to exceed the row at 1600px+ viewports).
+    <div style={{ padding: 16 }}>
       {STAGES.map((s) => (
         <DetectionStage key={s.testId} {...s} />
       ))}
+      {/* T9150: a genuinely 16:9 reel (correct metadata, no T9100 bug involved) must
+          still leave the settings column at least 20rem wide, not starved to 0. */}
+      <DetectionStage testId="stage-16x9-real" label="T9150: genuinely 16:9 reel (correct metadata)" metadata={REAL_16X9_META} />
     </div>
   );
 }

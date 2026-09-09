@@ -176,16 +176,70 @@ reported back to the user.
 section for full mechanism, evidence, and the refuted alternate hypothesis). Implementation
 starting inline in the supervisor session (single-area frontend fix, not container-scale).
 
+**2026-09-09 (live symptom check)**: Before writing any code, drove the user's exact repro
+(staging, dev-login as imankh@gmail.com, project 60 "dfsadf", Focus -> Open in Focus -> Overlay
+tab) via Playwright MCP against the user's own live browser profile. Hit a PWA update-gate
+dialog ("A new version is ready") on the first load - confirming the stale-bundle hypothesis
+directly. After "Update now", the SAME clip rendered correctly: `810x1440` metadata (not the
+stale `1920x1080`), all 7 detection boxes precisely on the players, full Spotlight/Text/Thumbnail
+settings panel present, zero `[Detection Alignment]` console warnings. User confirmed "staging
+looked good" independently. Live symptom closed - was a stale cached tab, not a code bug.
+
+**2026-09-09 (implementation)**: All three fixes shipped in one diff (Overlay-area, same root
+investigation, small enough to review together):
+- **Fix A**: extracted the derivation into a new pure, exported `deriveOverlayVideoSource()` at
+  the top of `OverlayScreen.jsx` (unit-testable without a layout engine, matching this codebase's
+  `fillerFits`/`pickPeekGap` pattern) and switched the component to call it. The loader guard
+  (3 branches) now gates on `!workingVideoUsable` instead of `!workingVideo`, so a half-record no
+  longer permanently blocks the one loader that can repair it. Found and fixed a real (harmless
+  but sloppy) JS quirk while writing the unit test: `!x && (a || b)` returns `a` itself (a
+  string), not a boolean, when `a` is truthy - coerced with `!!(...)`. Never affected behavior
+  (only ever consumed in boolean contexts) but the pure function's contract needed to be exact.
+- **Fix B**: confirmed `handleProceedToOverlay` (`OverlayContainer.jsx`) and its three landmine
+  setters are truly dead in production (grepped every consumer of `OverlayContainer`'s return
+  value - `overlay.handleProceedToOverlay`/`overlay.setOverlayVideo*` appear nowhere). Deleted
+  the function, the three setters, the now-unused `extractVideoMetadata` import, and the matching
+  prop-pass from `OverlayScreen.jsx`. Found a SECOND, related dead-code area while auditing this
+  (`OverlayContainer.jsx`'s own internal `effectiveOverlayVideoUrl`/`Metadata` derivation, which
+  has the SAME independent-fallback shape, feeding an exported `OverlayVideoOverlays` component
+  that's also never rendered anywhere, plus a naming collision with the real `OverlayTimeline`)
+  - scoped OUT of this diff to keep it reviewable; tracked as a follow-up, not silently expanded.
+- **Fix C**: `OverlayModeView.jsx`'s stage/settings row - video column `lg:flex-none` ->
+  `lg:flex-initial lg:min-w-0`, settings column `lg:min-w-0` -> `lg:min-w-[20rem]`, stage box
+  gained `lg:max-w-[calc(100vw-22rem)]`. **Landmine hit and fixed**: the expert's proposed
+  `calc(100%-22rem)` collapsed the FIXED (portrait) stage to 121px wide in the first live e2e
+  run - a percentage `max-width` inside a `lg:w-fit` (fit-content) ancestor is circular (the
+  child's max-width depends on a parent width the parent hasn't resolved yet). Switched to `vw`
+  units, matching the file's own existing `lg:h-[70vh]` pattern (viewport-relative, no ancestor
+  dependency) - confirmed correct via real Playwright measurement (473x840 exact match).
+- **Tests**: new `overlayVideoSource.test.jsx` (6 unit tests pinning `deriveOverlayVideoSource`,
+  including a negative control proving the old independent-fallback expression WOULD produce the
+  poisoned pairing). Extended `T9100-overlay-detection-alignment.qa.spec.js` (real browser, T5380
+  rule) with a settings-column-width assertion (>=240px) on all stages, bumped viewport to
+  1600x1200 (where the task's evidence showed full 0px starvation, not just a sliver), added a
+  new genuinely-16:9 stage + a 2560x1440 sweep across all three stages. Extended the
+  `t9100diag` harness with a mirrored row + settings-column stand-in (harness duplicates
+  `OverlayModeView`'s classes by hand, matching its existing pattern - keep both in sync).
+  4/4 e2e pass with real DOM measurement; 60/60 relevant unit tests green; 0 new lint
+  warnings/errors on any touched file.
+
 ## Acceptance Criteria
 
-- [ ] A half-populated `workingVideo` record (`url` present, `metadata` null) can never produce
+- [x] A half-populated `workingVideo` record (`url` present, `metadata` null) can never produce
       `effectiveOverlayMetadata !== null && effectiveOverlayMetadata !== workingVideo.metadata`
       (i.e. can never pair a URL with a different video's metadata) - pinned by a unit test
-- [ ] The working-video loader can still repair a half-populated record (not permanently blocked)
-- [ ] The dead landmine setters (`setOverlayVideoFile`/`Url`/`Metadata`) and their only caller are removed
-- [ ] Overlay's settings panel never renders narrower than 240px for a genuinely 16:9 project at
-      1600x1200 and 2560x1440, verified live via Playwright `boundingBox()`
-- [ ] Detection boxes remain correctly aligned for the already-fixed Focus -> Add Spotlight Now
-      path (no regression from Fix A/C)
-- [ ] Live staging symptom check (Playwright, post hard-refresh) reported to the user
-- [ ] Unit + e2e green; Branch CI green
+      (`overlayVideoSource.test.jsx`, incl. a negative control)
+- [x] The working-video loader can still repair a half-populated record (not permanently blocked)
+      - loader guard now gates on `!workingVideoUsable`, not `!workingVideo`
+- [x] The dead landmine setters (`setOverlayVideoFile`/`Url`/`Metadata`) and their only caller are removed
+- [x] Overlay's settings panel never renders narrower than 240px for a genuinely 16:9 project at
+      1600x1200 and 2560x1440, verified live via Playwright `boundingBox()` - via the `t9100diag`
+      harness's real mount of `OverlayModeView`'s exact stage/settings row classes (same
+      dev-harness-instead-of-full-pipeline precedent as T5676/T9110; a real Focus/Overlay export
+      needs Modal, disabled in this environment)
+- [x] Detection boxes remain correctly aligned for the already-fixed Focus -> Add Spotlight Now
+      path (no regression from Fix A/C) - FIXED-stage e2e still passes with exact stage/video match
+- [x] Live staging symptom check (Playwright, post hard-refresh) reported to the user - confirmed
+      stale PWA tab (update-gate dialog fired), fresh bundle renders correctly; user independently
+      confirmed "staging looked good"
+- [ ] Unit + e2e green; Branch CI green - unit/e2e green locally; Branch CI pending push

@@ -77,6 +77,32 @@ const DEFAULT_TEXT_SPEC = {
   animation: Animation.NONE,
 };
 
+// Pure, unit-testable derivation of Overlay's effective video source (T9150).
+// A `workingVideo` record is only USABLE when it carries BOTH a url and metadata --
+// pairing one video's url with a different video's metadata (e.g. the reel's URL with
+// the source clip's landscape dimensions) is the T9100 bug class: a banned silent
+// fallback for internal data that poisons the video->screen transform and, via
+// effectiveOverlayMetadata feeding the stage box's aspect ratio, can starve the
+// settings panel to 0px width. Exported for the regression test; not used outside
+// this file.
+export function deriveOverlayVideoSource({
+  workingVideo,
+  projectWorkingVideoUrl,
+  isLoadingWorkingVideo,
+  framingVideoUrl,
+  framingMetadata,
+}) {
+  const workingVideoUsable = !!(workingVideo?.url && workingVideo?.metadata);
+  const shouldWait = !workingVideoUsable && !!(projectWorkingVideoUrl || isLoadingWorkingVideo);
+  return {
+    workingVideoUsable,
+    shouldWaitForWorkingVideo: shouldWait,
+    effectiveOverlayVideoUrl: workingVideoUsable ? workingVideo.url : (shouldWait ? null : framingVideoUrl),
+    effectiveOverlayMetadata: workingVideoUsable ? workingVideo.metadata : (shouldWait ? null : framingMetadata),
+    effectiveOverlayFile: workingVideoUsable ? workingVideo.file : null,
+  };
+}
+
 export function OverlayScreen({
   // Export callback (legacy - will be moved to store in Task 07)
   onExportComplete,
@@ -248,14 +274,27 @@ export function OverlayScreen({
   const framingVideoUrl = firstClipId != null ? getClipFileUrl(firstClipId, projectId) : undefined;
   const framingMetadata = firstClipId != null ? clipMetadataCache[firstClipId] : undefined;
 
-  // Determine if we should wait for working video (don't use original clip as fallback)
-  // If project has a working_video_url but workingVideo is null, we're loading it
-  const shouldWaitForWorkingVideo = !workingVideo && (project?.working_video_url || isLoadingWorkingVideo);
-
-  // Effective video: working video from store, or fallback to framing video only if no working video exists
-  const effectiveOverlayVideoUrl = workingVideo?.url || (shouldWaitForWorkingVideo ? null : framingVideoUrl);
-  const effectiveOverlayMetadata = workingVideo?.metadata || (shouldWaitForWorkingVideo ? null : framingMetadata);
-  const effectiveOverlayFile = workingVideo?.file || null;
+  // See deriveOverlayVideoSource (top of file) for why the url/metadata pairing must
+  // be atomic -- a half-populated workingVideo record is the T9100 bug class.
+  const {
+    workingVideoUsable,
+    shouldWaitForWorkingVideo,
+    effectiveOverlayVideoUrl,
+    effectiveOverlayMetadata,
+    effectiveOverlayFile,
+  } = deriveOverlayVideoSource({
+    workingVideo,
+    projectWorkingVideoUrl: project?.working_video_url,
+    isLoadingWorkingVideo,
+    framingVideoUrl,
+    framingMetadata,
+  });
+  if (workingVideo && !workingVideoUsable) {
+    console.error('[OverlayScreen] Half-populated workingVideo record - refusing it', {
+      hasUrl: !!workingVideo.url,
+      hasMetadata: !!workingVideo.metadata,
+    });
+  }
 
   // Diagnostic: log video source state on every render where something interesting happens
   useEffect(() => {
@@ -457,7 +496,7 @@ export function OverlayScreen({
     // T1670: Guard on working_video_id (not URL) because the proxy URL is stable across exports
     // (/api/projects/{id}/working_video/stream never changes). The ID changes per export,
     // so a new export triggers a fresh load even though the URL is the same.
-    if (!workingVideo && project?.working_video_url && workingVideoFetchIdRef.current !== project.working_video_id) {
+    if (!workingVideoUsable && project?.working_video_url && workingVideoFetchIdRef.current !== project.working_video_id) {
       workingVideoFetchIdRef.current = project.working_video_id;
       workingVideoRecoveryAttemptedRef.current = false; // Reset recovery guard
       workingVideoAttemptsRef.current = 0;
@@ -530,7 +569,7 @@ export function OverlayScreen({
         }
       };
       attemptLoad();
-    } else if (!workingVideo && !project?.working_video_url && isLoadingWorkingVideo) {
+    } else if (!workingVideoUsable && !project?.working_video_url && isLoadingWorkingVideo) {
       // Stuck state: isLoadingWorkingVideo was set externally (by FocusScreen) but
       // project data doesn't include working_video_url. This happens when React renders
       // OverlayScreen before the refreshed project data has propagated.
@@ -551,7 +590,7 @@ export function OverlayScreen({
         console.warn('[OverlayScreen] Working video URL still missing after refresh — clearing loading state');
         setIsLoadingWorkingVideo(false);
       }
-    } else if (project && !workingVideo && !project.working_video_url && !isLoadingWorkingVideo) {
+    } else if (project && !workingVideoUsable && !project.working_video_url && !isLoadingWorkingVideo) {
       // Project loaded but has no working video URL at all — log why.
       // (Before project data loads, this state is normal — stay quiet.)
       console.warn('[OverlayScreen] No working video URL in project data', {
@@ -559,7 +598,7 @@ export function OverlayScreen({
         workingVideoId: project.working_video_id,
       });
     }
-  }, [workingVideo, project, projectId, isLoadingWorkingVideo, setIsLoadingWorkingVideo, setWorkingVideo, refreshProject]);
+  }, [workingVideo, workingVideoUsable, project, projectId, isLoadingWorkingVideo, setIsLoadingWorkingVideo, setWorkingVideo, refreshProject]);
 
   // Load video into useVideo hook when effectiveOverlayVideoUrl is available
   // Uses a ref to track the source URL to prevent infinite loops (blob URLs are always unique)
@@ -1314,9 +1353,6 @@ export function OverlayScreen({
     overlayVideoMetadata: workingVideo?.metadata,
     overlayClipMetadata,
     isLoadingWorkingVideo,
-    setOverlayVideoFile: (file) => setWorkingVideo(workingVideo ? { ...workingVideo, file } : { file, url: null, metadata: null }),
-    setOverlayVideoUrl: (url) => setWorkingVideo(workingVideo ? { ...workingVideo, url } : { file: null, url, metadata: null }),
-    setOverlayVideoMetadata: (meta) => setWorkingVideo(workingVideo ? { ...workingVideo, metadata: meta } : { file: null, url: null, metadata: meta }),
     setOverlayClipMetadata,
     setIsLoadingWorkingVideo,
     dragHighlight,
