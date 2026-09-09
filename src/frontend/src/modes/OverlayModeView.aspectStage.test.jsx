@@ -89,12 +89,13 @@ describe('OverlayModeView aspect-fit stage (T5676)', () => {
     expect(stage.style.aspectRatio).toBe('');
   });
 
-  it('renders the settings tabs in both the desktop-beside and mobile-stacked slots', () => {
+  it('renders the desktop settings rail beside the video and the mobile-stacked tabs', () => {
     isMobileMock.mockReturnValue(false);
     renderView();
-    // T6630 round 2: the "Overlay Settings" card became the three-tab section
-    // (Overlay | Text | Thumbnail). One copy in the desktop two-column row
-    // (hidden lg:block) + one in the mobile stacked slot (lg:hidden); both in DOM.
-    expect(screen.getAllByTestId('overlay-settings-tabs')).toHaveLength(2);
+    // T9270: the desktop settings column is now the unified SettingsRail
+    // (data-testid="settings-rail"); the mobile-stacked copy still uses the old
+    // tabbed section (data-testid="overlay-settings-tabs") until Step 4's drawer.
+    expect(screen.getByTestId('settings-rail')).toBeTruthy();
+    expect(screen.getAllByTestId('overlay-settings-tabs')).toHaveLength(1);
   });
 });
