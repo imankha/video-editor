@@ -197,6 +197,17 @@ if _cors_extra:
 # the call_next() boundary. See db_sync.py for details.
 app.add_middleware(RequestContextMiddleware)
 
+# T8570: gzip text/JSON responses. Added AFTER RequestContextMiddleware so it sits
+# OUTSIDE it — it compresses the finalized body once RequestContextMiddleware has
+# set Cache-Control/ETag (db_sync.py), and the compressed body still gets CORS /
+# X-App-* headers from the middlewares below (they touch headers, not the body).
+# SelectiveGZipMiddleware (not stock GZipMiddleware) is required: it skips 206
+# range streams and non-text content so the byte-range video/media endpoints are
+# never corrupted. See app/middleware/compression.py.
+from app.middleware.compression import SelectiveGZipMiddleware
+
+app.add_middleware(SelectiveGZipMiddleware, minimum_size=500)
+
 # T1190: ASGI-level WebSocket replay. Added AFTER RequestContextMiddleware so it
 # sits OUTSIDE it for WebSocket scopes (the only scopes it checks for
 # fly_machine_id; HTTP scopes pass straight through). NOTE: the CORS and gpc

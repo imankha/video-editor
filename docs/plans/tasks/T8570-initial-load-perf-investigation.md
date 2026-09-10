@@ -114,6 +114,53 @@ actually picked up.
 **2026-09-03**: Task filed per user request, sequenced after the First Reel Funnel epic. Not
 started.
 
+**2026-09-09**: Investigation + fixes. Tier confirmed **M** (mechanical caching/compression
+tweaks, no bundle-splitting restructure — no design gate needed).
+
+*Capture (Playwright HAR, cold contexts):*
+- Logged-out landing on **staging** (Cloudflare Pages, real CDN): FCP 200ms, load 697ms,
+  43 requests, 5.08MB. Assets already brotli-compressed. Landing is healthy.
+- Authenticated first-load on **local dev** (dev-login; staging can't dev-login) for the
+  `/api/*` waterfall. Heavily confounded by Vite's unbundled dev module graph (250 requests)
+  and React StrictMode double-invoke (the `2x /api/bootstrap`, `2x /api/health`, aborted
+  `status=-1` entries are dev-only artifacts, NOT prod bugs). Real signal: serial
+  `me → init → bootstrap` chain; every `/api/*` response uncompressed.
+
+*Findings the DATA justified (measured, not speculative):*
+1. **Cloudflare Pages does not immutable-cache hashed assets.** Measured on staging (curl):
+   `/assets/*.js|.css` served `public, max-age=0, must-revalidate` — a conditional
+   revalidation round-trip per hashed chunk (24 in the current build) on every repeat
+   navigation and every SW precache/update. The old `_headers` comment claiming assets "keep
+   their default long-cache" was factually wrong.
+2. **API JSON ships uncompressed.** Measured: `GET /api/bootstrap` = 13077 bytes with no
+   `Content-Encoding` even when the client sends `Accept-Encoding: gzip` (no compression
+   middleware). Body scales with account data (~7KB/game, ~1.6KB/project).
+
+*Fixes implemented:*
+- `src/frontend/public/_headers`: `/assets/*` → `Cache-Control: public, max-age=31536000,
+  immutable` (index.html/sw.js/manifest stay `no-cache` so deploys are still discovered).
+- `src/backend/app/middleware/compression.py` (new) + `main.py`: `SelectiveGZipMiddleware` —
+  gzips only HTTP 200 text/JSON responses; **skips 206/`Content-Range` byte-range streams and
+  non-text content** so the video/media StreamingResponse endpoints are never corrupted (stock
+  `GZipMiddleware` would gzip a 206, deleting Content-Length while leaving Content-Range on the
+  uncompressed offsets — broken seeking).
+
+*Before → after (re-measured):*
+- `/assets/*` cache header: `max-age=0, must-revalidate` → `max-age=31536000, immutable`
+  (verified via `wrangler pages dev dist`, which honors `_headers`).
+- `/api/bootstrap` (Accept-Encoding: gzip): **13077 → 3171 bytes, 75.7% smaller**
+  (`content-encoding: gzip`, `vary: Accept-Encoding`).
+- Safety verified LIVE: `GET /api/games/13/stream` with `Range: bytes=0-1023` +
+  `Accept-Encoding: gzip` still returns `206`, `content-range: bytes 0-1023/1547044453`,
+  `content-length: 1024`, `video/mp4`, **no** `content-encoding`.
+- Tests: 6 new middleware unit tests (`test_t8570_selective_gzip.py`) + CORS/stream regression
+  corner (20 tests total) pass.
+
+*Deferred (NOT implemented — would be speculative or need own task/sign-off):* vendor/React
+manualChunks split (benefit is cross-deploy cache granularity, not visible in a single-load
+before/after — could be a follow-up now that assets are immutable-cached); ETag/304 on
+`/api/bootstrap`.
+
 ## Acceptance Criteria
 
 - [ ] A HAR file of the app's initial load (cold, both logged-out and authenticated) has been
