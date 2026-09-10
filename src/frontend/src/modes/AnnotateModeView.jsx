@@ -80,6 +80,8 @@ export function AnnotateModeView({
   onFullscreenCreateClip,
   onFullscreenUpdateClip,
   onOverlayResume,
+  // T9330: resume playback WITHOUT closing — desktop strip stays open on create.
+  onOverlayResumePlayback,
   onOverlayClose,
 
   // Layer selection
@@ -112,8 +114,13 @@ export function AnnotateModeView({
   onSharePlayback,
   // T5700: which layer NEW clips default to (mode toggle)
   newClipLayerIsMine = true,
-  // T8600: desktop strip only — opens the clip's reel in Focus mode.
+  // T8600: desktop strip only — opens the clip's project in Focus mode.
   onOpenClipInFocus,
+  // T9330: opens the clip's project in Spotlight (Overlay mode) for the strip's
+  // stage CTA; and the clip whose project is being created right now (drives the
+  // strip's disabled "Apply AI Focus" pending CTA).
+  onOpenClipInOverlay,
+  pendingProjectClipId = null,
   // T8890: angle strip + source switching (null for angle-free games)
   angleData = null,
   angleSwitcher = null,
@@ -885,6 +892,7 @@ export function AnnotateModeView({
                 onCreateClip={handleCreateClipWithSportPrompt}
                 onUpdateClip={onFullscreenUpdateClip}
                 onResume={onOverlayResume}
+                onResumePlaybackOnly={onOverlayResumePlayback}
                 onClose={onOverlayClose}
                 onSeek={seek}
                 videoController={videoController}
@@ -896,6 +904,8 @@ export function AnnotateModeView({
                 newClipLayerIsMine={newClipLayerIsMine}
                 nextClipNumber={nextClipNumber}
                 onOpenInFocus={onOpenClipInFocus}
+                onOpenInOverlay={onOpenClipInOverlay}
+                focusPending={!!existingClip && existingClip.id === pendingProjectClipId && !existingClip.autoProjectId}
               />
             </div>
           )}

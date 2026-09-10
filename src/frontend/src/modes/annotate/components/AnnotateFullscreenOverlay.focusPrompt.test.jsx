@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
+import { useProjectsStore } from '../../../stores/projectsStore';
 
 // The strip's own footer also has a "Cancel" button, so dialog assertions
 // must scope to the dialog's own container (found via its title).
@@ -40,6 +41,7 @@ function mockViewport(matches) {
 }
 
 beforeEach(() => mockViewport(false));
+afterEach(() => useProjectsStore.setState({ projects: [] }));
 
 const existingClip = {
   id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], my_athlete: true, autoProjectId: 42,
@@ -103,12 +105,50 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
     await waitFor(() => expect(onOpenInFocus).toHaveBeenCalledWith(42));
   });
 
-  it('the dialog copy names Annotate, not "the play editor" (T8730 naming)', () => {
+  // T9330 decision 4: the editor now STAYS OPEN after navigating, so the old
+  // "closes the Annotate editor" line is stale and dropped — no replacement
+  // sentence asserts the editor closes.
+  it('does NOT say the editor closes (T9330 — the editor stays open, decision 4)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={vi.fn()} />);
     dirtyEdit();
     fireEvent.click(screen.getByRole('button', { name: /focus/i }));
-    expect(screen.getByText('Opening AI Focus closes the Annotate editor.')).toBeTruthy();
+    expect(screen.queryByText('Opening AI Focus closes the Annotate editor.')).toBeNull();
+    expect(screen.queryByText(/closes the annotate editor/i)).toBeNull();
     expect(screen.queryByText(/play editor/i)).toBeNull();
+  });
+});
+
+// T9330: the confirm-dialog button label and content track the CLIP'S STAGE
+// (getClipStage), not a hardcoded "AI Focus" — a Spotlight-stage clip should
+// read "Save & open Spotlight", not "Save & open AI Focus".
+describe('AnnotateFullscreenOverlay — stage-aware confirm dialog copy (T9330)', () => {
+  it('FOCUS stage: dialog button reads "Save & open AI Focus"', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={vi.fn()} />);
+    dirtyEdit();
+    fireEvent.click(screen.getByRole('button', { name: /focus/i }));
+    expect(dialogScope().getByRole('button', { name: 'Save & open AI Focus' })).toBeTruthy();
+  });
+
+  it('SPOTLIGHT stage: dialog button reads "Save & open Spotlight", not "AI Focus"', () => {
+    const spotlightClip = {
+      id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], my_athlete: true,
+      autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10,
+    };
+    // linkedProject is looked up via useProjectsList — seed the store.
+    useProjectsStore.setState({ projects: [{ id: 42, has_working_video: true, has_final_video: false, is_published: false }] });
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps}
+        existingClip={spotlightClip}
+        onUpdateClip={vi.fn()}
+        onOpenInOverlay={vi.fn()}
+      />
+    );
+    dirtyEdit();
+    fireEvent.click(screen.getByRole('button', { name: /spotlight/i }));
+    const dialog = dialogScope();
+    expect(dialog.getByRole('button', { name: 'Save & open Spotlight' })).toBeTruthy();
+    expect(dialog.queryByRole('button', { name: /AI Focus/i })).toBeNull();
   });
 });
 

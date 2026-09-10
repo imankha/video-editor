@@ -538,6 +538,12 @@ export function AnnotateContainer({
   } = useAnnotate(annotateVideoMetadata, {
     selectedRegionId: annotateSelectedRegionId,
     onSelect: useCallback((id) => id ? selectClip(id) : deselectClip(), [selectClip, deselectClip]),
+    // T9330: the create edge lands EDITING on the just-created region (atomic
+    // CREATING->EDITING) so the editor STAYS OPEN after a create. The mobile
+    // divergence (sheet closes on create) is NOT here — it lives in the save
+    // handler's resume-vs-close split (handleOverlayResume closes; the strip's
+    // resume-playback-only keeps it open), so the transition is uniform.
+    onCreateSelect: useCallback((id) => editClip(id), [editClip]),
   });
 
   // Real-time clip saving hook
@@ -1202,6 +1208,16 @@ export function AnnotateContainer({
     announceReelCreated(projectId, { onOpenReelInFocus, fetchProjects, clipName });
   }, [onOpenReelInFocus, fetchProjects]);
 
+  // T9330: which just-created clip is waiting for its project id to land.
+  // The editor stays open on the new clip after a create (see onCreateSelect);
+  // while `create_project` was requested and the backend round trip hasn't
+  // answered yet, the strip CTA shows a DISABLED "Apply AI Focus". This is
+  // transient view state driven by the Save gesture (memory-only, never
+  // persisted, never a reactive write) — it clears the instant setAutoProjectId
+  // lands (or the save fails). A specific clip id (not a bool) so an unrelated
+  // no-project clip opened mid-flight never inherits the pending CTA.
+  const [pendingProjectClipId, setPendingProjectClipId] = useState(null);
+
   /**
    * Handle creating a clip from fullscreen overlay
    * Now saves to backend in real-time (if video is uploaded and we have a gameId)
@@ -1253,6 +1269,13 @@ export function AnnotateContainer({
       // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek
       effectiveSeek(clipData.startTime);
 
+      // T9330: arm the disabled "Apply AI Focus" pending CTA for this clip while
+      // the project is being created (only when we'll actually save + a project
+      // was requested). Cleared in every result branch below.
+      if (annotateGameId && clipData.createProject) {
+        setPendingProjectClipId(newRegion.id);
+      }
+
       // Save to backend if we have a game ID (game record exists in DB even during upload)
       if (annotateGameId) {
         const result = await saveClip(annotateGameId, {
@@ -1267,6 +1290,15 @@ export function AnnotateContainer({
           my_athlete: newRegion.my_athlete,
           ...(clipData.createProject != null && { create_project: clipData.createProject }),
         });
+
+        // T9330: the create round trip has answered — release the pending CTA in
+        // EVERY case, including saveClip returning null (dedup guard, sync_failed
+        // 503, or a thrown/other-HTTP error caught in useRawClipSave). Clearing
+        // here rather than per-branch is what prevents a permanently-disabled
+        // "Apply AI Focus" on the just-cut clip in the sync-failure flow. When a
+        // project WAS created, setAutoProjectId below lands the live stage CTA;
+        // when it wasn't, no CTA shows — both correct with pending cleared.
+        setPendingProjectClipId(null);
 
         if (result?.notFound) {
           // T8180: the game was deleted out from under this annotate session (ghost).
@@ -1294,7 +1326,11 @@ export function AnnotateContainer({
         }
       }
     }
-    // Overlay closes automatically: addClipRegion calls onSelect → selectClip → CREATING→SELECTED
+    // T9330: the editor STAYS OPEN after a create — addClipRegion routes the
+    // create edge through onCreateSelect -> editClip (CREATING->EDITING), landing
+    // the editor on the new region. handleSave resumes playback WITHOUT closing on
+    // the desktop strip; the mobile sheet still closes (its save path calls the
+    // close-bearing onResume). The CTA lights up when setAutoProjectId lands above.
   }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, isOverlapTimeline, activeSourceSequence, gameVideos, notifyReelCreated]);
 
   /**
@@ -1467,6 +1503,17 @@ export function AnnotateContainer({
     closeOverlay();
     effectiveTogglePlay();
   }, [closeOverlay, effectiveTogglePlay]);
+
+  /**
+   * T9330: resume playback WITHOUT closing the overlay. Used by the desktop
+   * strip's create-save so the editor stays open on the just-created clip while
+   * playback resumes (matching today's felt behavior — the strip doesn't cover
+   * the canvas). The split is deliberate: handleOverlayResume conflated
+   * close+play, which can't express "keep editing, keep playing".
+   */
+  const handleOverlayResumePlayback = useCallback(() => {
+    effectiveTogglePlay();
+  }, [effectiveTogglePlay]);
 
   // T2750: In unified multi-video mode, convert virtual time to actual and match
   // against the correct video's clips. Clips store actual per-video times.
@@ -1852,6 +1899,9 @@ export function AnnotateContainer({
     annotateClipCount,
     isLoadingAnnotations,
     ANNOTATE_MAX_NOTES_LENGTH,
+    // T9330: the clip whose project is being created right now (create-save in
+    // flight) — drives the strip's disabled "Apply AI Focus" pending CTA.
+    pendingProjectClipId,
 
     // Handlers
     handleGameVideoSelect,
@@ -1862,6 +1912,7 @@ export function AnnotateContainer({
     handleFullscreenUpdateClip,
     handleOverlayClose,
     handleOverlayResume,
+    handleOverlayResumePlayback,
     handleSelectRegion,
     handleTimelineSeek, // Seek + close overlay if target outside clips (timeline gesture)
     setAnnotatePlaybackSpeed,

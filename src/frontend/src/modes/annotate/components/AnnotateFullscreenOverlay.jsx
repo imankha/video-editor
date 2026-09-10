@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Star, X, Plus, Pencil, Crop, ChevronDown, ChevronUp, Video } from 'lucide-react';
+import { Star, X, Plus, Pencil, Crop, Sparkles, ChevronDown, ChevronUp, Video } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
 import { TeammateTagInput, commitPendingTeammateText, hasUncommittedTeammateText } from '../../../components/shared/TeammateTagInput';
-import { useCurrentProfile, useProfileStore } from '../../../stores';
+import { useCurrentProfile, useProfileStore, useProjectsList } from '../../../stores';
+import { getClipStage } from '../clipStage';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { recordUiImpression } from '../../../utils/uiTelemetry';
 import { ClipScrubRegion } from './ClipScrubRegion';
@@ -132,9 +133,20 @@ export function AnnotateFullscreenOverlay({
   onScrubDragChange,
   newClipLayerIsMine = true,
   nextClipNumber = 1,
-  // T8600: desktop strip only — opens the clip's reel in Focus mode. Same
+  // T8600: desktop strip only — opens the clip's project in Focus mode. Same
   // prop name/semantics ClipDetailsEditor already uses.
   onOpenInFocus,
+  // T9330: opens the clip's project in Spotlight (Overlay mode) — the stage CTA
+  // routes here when getClipStage returns action 'overlay'. Same prop name
+  // ClipDetailsEditor already uses.
+  onOpenInOverlay,
+  // T9330: resume playback WITHOUT closing the editor — the desktop strip's
+  // create-save uses this so the editor stays open on the just-created clip.
+  // Falls back to onResume (close+play) when absent.
+  onResumePlaybackOnly,
+  // T9330: true while THIS clip's project is being created (create-save in
+  // flight, id not landed yet). Renders a DISABLED "Apply AI Focus" pending CTA.
+  focusPending = false,
   // T8600 §2.5: required per-render-site discriminator for the
   // add_clip_opened_no_save beacon (no default — see the effect below).
   surface,
@@ -146,6 +158,17 @@ export function AnnotateFullscreenOverlay({
 }) {
   const isEditMode = !!existingClip;
   const isMobile = useIsMobile();
+  // T9330: the clip's stage-aware CTA, shared with ClipDetailsEditor via
+  // getClipStage. linkedProject is looked up the SAME way ClipDetailsEditor does
+  // (useProjectsList by autoProjectId) — single source, not a passed prop.
+  const projects = useProjectsList();
+  const linkedProject = existingClip?.autoProjectId
+    ? projects.find(p => p.id === existingClip.autoProjectId)
+    : null;
+  const clipStage = existingClip ? getClipStage(existingClip, linkedProject) : null;
+  // T9330: the stage's noun for the "Save & open …" dialog — the CTA label minus
+  // its verb ("Apply AI Focus" -> "AI Focus", "View Final" -> "Final").
+  const openStageName = (clipStage?.label || 'AI Focus').replace(/^(Apply|View)\s+/, '');
   // T8140: one-tap first clip — a nameless new clip defaults to "Play N" so the
   // user can save without typing a name. Display-and-persist default (memory-only
   // until the Save gesture); never applied in edit mode.
@@ -397,18 +420,20 @@ export function AnnotateFullscreenOverlay({
       };
       savePromise = onCreateClip(clipData);
     }
-    setRating(DEFAULT_RATING);
-    setSelectedTags([]);
-    setClipName('');
-    setIsNameManuallyEdited(false);
-    setScrubStartTime(Math.max(0, currentTimeRef.current - DEFAULT_CLIP_BEFORE));
-    setScrubEndTime(Math.min(currentTimeRef.current + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
-    setNotes('');
-    setTaggedTeammates([]);
-    setMyAthlete(newClipLayerIsMine);
-    setCreateProject(DEFAULT_RATING === 5 && newClipLayerIsMine);
-    setCreateProjectManuallySet(false);
-    onResume();
+    // T9330: NO form reset here anymore. On the desktop strip the editor STAYS
+    // OPEN after a create and rehydrates from the just-saved region via the
+    // [existingClip] effect (the single form-population path) — resetting to
+    // create defaults would blank a form that now shows a real clip AND make it
+    // read dirty. On surfaces that still close (mobile sheet, fullscreen dock,
+    // and every edit save), the component unmounts, so there is nothing to reset.
+    //
+    // T9330: resume playback. The desktop strip's CREATE save keeps the editor
+    // open (resume playback only); everything else closes as before.
+    if (!isEditMode && layout === 'strip') {
+      (onResumePlaybackOnly || onResume)();
+    } else {
+      onResume();
+    }
     return savePromise;
   };
   handleSaveRef.current = handleSave;
@@ -762,10 +787,17 @@ export function AnnotateFullscreenOverlay({
           {/* Header row 2 — T8960 item 3: the "+ Adding new play" TITLE, centered
               on its own row (create mode only; edit mode's name already says what
               is being edited). */}
-          {!isEditMode && (
+          {!isEditMode ? (
             <div className="px-4 pt-2 flex items-center justify-center gap-1.5">
               <Plus size={16} className="text-green-400 shrink-0" />
               <span className="text-sm font-semibold text-white">Adding new play</span>
+            </div>
+          ) : (
+            // T9330: symmetric edit-mode title — the editor now stays open after a
+            // create and lands here, so the surface names what it is doing.
+            <div className="px-4 pt-2 flex items-center justify-center gap-1.5">
+              <Pencil size={14} className="text-yellow-400 shrink-0" />
+              <span className="text-sm font-semibold text-white">Edit Play</span>
             </div>
           )}
 
@@ -804,8 +836,13 @@ export function AnnotateFullscreenOverlay({
                 "Clip Out Play"). The name field that used to live here is gone —
                 the header pencil is the single name affordance now. */}
             {isEditMode ? (
-              existingClip?.autoProjectId ? (
-                <span className="text-xs text-green-400 shrink-0">Reel created</span>
+              // T9330: a project exists (autoProjectId) OR is being created right
+              // now (focusPending) — either way the manual "Clip Play" create
+              // affordance would be wrong, so show the created indicator. "Clip
+              // created", not "Reel created" (vocabulary: this is the clip's own
+              // project, never a reel).
+              (existingClip?.autoProjectId || focusPending) ? (
+                <span className="text-xs text-green-400 shrink-0">Clip created</span>
               ) : (
                 <Button
                   variant="cyan"
@@ -914,48 +951,80 @@ export function AnnotateFullscreenOverlay({
           )}
         </div>
 
-        {/* Button row (outside the card): Focus (edit mode only). T8960 item 5
-            moved the My Athlete | Team layer control UP into header row 1, so
-            this row now holds only the edit-mode Focus CTA (right-anchored) and
-            renders nothing in create mode. Touch targets floor at 44px on coarse
-            pointers (codebase convention — keyed off pointer type, not viewport). */}
-        {isEditMode && existingClip?.autoProjectId && (
-          <div className="mt-5 flex flex-wrap items-center justify-end gap-4">
+        {/* T9330: the stage-aware primary CTA (edit mode only), now FULL-WIDTH
+            and driven by getClipStage — one label/target across this strip and
+            ClipDetailsEditor. While a create is in flight (focusPending, no
+            autoProjectId yet) it shows a DISABLED "Apply AI Focus" that goes live
+            when the project id lands (pure re-render). Touch targets floor at
+            44px on coarse pointers (codebase convention — pointer type, not
+            viewport). */}
+        {isEditMode && existingClip?.autoProjectId && clipStage && (
+          <div className="mt-5">
+            <Button
+              variant="cyan"
+              size="lg"
+              icon={clipStage.action === 'overlay' ? Sparkles : Crop}
+              title={`Open the clip: ${clipStage.label}`}
+              className="w-full coarse-pointer:min-h-[44px]"
+              // T8730: only prompt to save when there are ACTUAL unsaved changes;
+              // otherwise navigate directly (no false-positive dialog).
+              onClick={() => {
+                if (hasUnsavedEdits()) {
+                  setFocusConfirmOpen(true);
+                } else if (clipStage.action === 'overlay') {
+                  onOpenInOverlay?.(existingClip.autoProjectId);
+                } else {
+                  onOpenInFocus?.(existingClip.autoProjectId);
+                }
+              }}
+            >
+              {clipStage.label}
+            </Button>
+          </div>
+        )}
+        {/* T9330: create-in-flight — the project is being created but its id has
+            not landed. A disabled "Apply AI Focus" that becomes live above once
+            setAutoProjectId resolves. Represented by focusPending (a gesture-
+            traced, memory-only signal), never a stored flag. */}
+        {isEditMode && !existingClip?.autoProjectId && focusPending && (
+          <div className="mt-5">
             <Button
               variant="cyan"
               size="lg"
               icon={Crop}
-              title="Open in AI Focus mode"
-              className="coarse-pointer:min-h-[44px]"
-              // T8730: only prompt to save when there are ACTUAL unsaved changes;
-              // otherwise open Focus directly (no more false-positive dialog).
-              onClick={() => {
-                if (hasUnsavedEdits()) setFocusConfirmOpen(true);
-                else onOpenInFocus?.(existingClip.autoProjectId);
-              }}
+              disabled
+              className="w-full coarse-pointer:min-h-[44px]"
             >
-              AI Focus
+              Apply AI Focus
             </Button>
           </div>
         )}
 
-        {/* T8600 §2.8: Focus mid-edit — never a silent discard. Save & open
-            Focus awaits the same save handleSave/Enter/1-5 already use. */}
+        {/* T8600 §2.8: navigating mid-edit is never a silent discard. Save &
+            open awaits the same save handleSave/Enter/1-5 already use. T9330: the
+            copy is STAGE-AWARE ("Save & open AI Focus" / "Spotlight" / "Final" /
+            "Published") and the stale "closes the Annotate editor" line is gone —
+            the editor now stays open. openStageName strips the CTA verb
+            ("Apply AI Focus" -> "AI Focus", "View Final" -> "Final"). */}
         <ConfirmationDialog
           isOpen={focusConfirmOpen}
           title="Save this play first?"
-          message="Opening AI Focus closes the Annotate editor."
+          message={`We'll save your changes first, then open ${openStageName}.`}
           onClose={() => setFocusConfirmOpen(false)}
           impressionKey="focus_while_editing_play"
           buttons={[
             { label: 'Cancel', variant: 'secondary', onClick: () => setFocusConfirmOpen(false) },
             {
-              label: 'Save & open AI Focus',
+              label: `Save & open ${openStageName}`,
               variant: 'primary',
               onClick: async () => {
                 setFocusConfirmOpen(false);
                 await handleSave();
-                onOpenInFocus?.(existingClip.autoProjectId);
+                if (clipStage?.action === 'overlay') {
+                  onOpenInOverlay?.(existingClip.autoProjectId);
+                } else {
+                  onOpenInFocus?.(existingClip.autoProjectId);
+                }
               },
             },
           ]}

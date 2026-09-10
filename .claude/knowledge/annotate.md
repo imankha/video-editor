@@ -1,5 +1,42 @@
 ---
 domain: annotate
+updated: 2026-09-10 (T9330 — clipping a play KEEPS THE EDITOR OPEN + one stage-aware CTA shared by
+the strip and the sidebar. **Stay-open:** `addClipRegion` (useAnnotate.js) gained an `onCreateSelect`
+option; the container wires it to `editClip(newRegion.id)` so the create edge is CREATING->EDITING
+(atomic, no SELECTED flash) instead of the old onSelect->selectClip->CREATING->SELECTED close. The
+transition is UNIFORM across surfaces; the mobile-vs-desktop divergence lives ONLY in the save
+handler's resume-vs-close split: `AnnotateFullscreenOverlay.handleSave` calls the NEW container
+`handleOverlayResumePlayback` (play, no close) when `!isEditMode && layout==='strip'`, else the
+close-bearing `handleOverlayResume` — so the desktop strip stays open, the mobile sheet / fullscreen
+dock still close on create. The unconditional create-defaults form RESET at the end of handleSave was
+DELETED: the `[existingClip]` effect is now the SOLE form-population path, so a stay-open clip
+rehydrates from its just-saved values (and reads CLEAN for T8730 — `defaultClipName` is '' in edit
+mode so nameToSave collapses to '', createProject===!!autoProjectId). T8140 beacon unaffected
+(savedThisOpenRef set before the isEditMode flip). **Create-in-flight CTA:** container state
+`pendingProjectClipId` (memory-only, Save-gesture-traced, NEVER a reactive write) marks the clip whose
+project is being created; the strip derives `focusPending = existingClip.id===pendingProjectClipId &&
+!autoProjectId` and shows a DISABLED "Apply AI Focus" until the late `setAutoProjectId` lands (pure
+re-render). LANDMINE (reviewer-caught, fixed): `pendingProjectClipId` MUST be cleared UNCONDITIONALLY
+right after the `saveClip` await — `saveClip` returns bare `null` on dedup / sync_failed-503 / caught
+errors (useRawClipSave), so a per-branch clear leaves the CTA stuck disabled forever on that clip in
+the sync-failure flow. **Shared stage helper:** NEW pure `getClipStage(region, linkedProject)` in
+`modes/annotate/clipStage.js` (+ `CLIP_STAGE` consts) returns `{stage,label,action:'focus'|'overlay'|null}`;
+consumed by BOTH `ClipDetailsEditor` (sidebar) and the strip CTA (now FULL-WIDTH primary, was a
+right-anchored chip). 6 rows: NO_PROJECT->manual "Create Clip" (kept, separate affordance) / else the
+project OPENS. Labels (user-decided 2026-09-09, supersede T9320's on these two surfaces): **Apply AI
+Focus / Apply Spotlight / View Final / View Published**. FINAL/PUBLISHED are now BUTTONS (open the
+project), not the old plain status text. T8070 exact-equality staleness (`projectReflectsClip`, no
+epsilon) + T8470 fresh-draft (both moved INTO the helper) compose so drifted / below-migration /
+fresh-draft ALL resolve to FOCUS "Apply AI Focus" (a project that EXISTS opens; only genuine
+no-project offers Create Clip). Confirm-dialog copy is now stage-aware ("Save & open {Stage}") and the
+stale "closes the Annotate editor" line is dropped. **VOCABULARY (binding, see memory
+feedback_play_produces_clip_never_reel):** the thing `region.autoProjectId`/`linkedProject` points at
+is the CLIP'S OWN PROJECT, NOT a reel — Reel/Highlight Reel is the multi-clip published object only.
+New code uses project/clip words (getClipStage, pendingProjectClipId, "Clip created"); grandfathered
+persisted/store names are untouched (`autoProjectId`, `reelSourceStartTime/EndTime`,
+`notifyReelCreated`, `reelRequested`). **OWED: real-device mobile check** (T5380 precedent — jsdom
+can't verify the sheet close-on-create; unit tests cover the desktop strip only). Design:
+`docs/plans/tasks/T9330-design.md`. Prior:)
 updated: 2026-09-10 (T9350 moves the Add footage button OUT of the timeline header row into a NEW
 toolbar row above the video canvas (`AnnotateModeView.jsx`), paired with the existing `ZoomControls`
 on the right -- this SUPERSEDES the T8910 entry's "mounted in the non-fullscreen timeline header row"

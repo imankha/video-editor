@@ -12,6 +12,7 @@ import ClipScrubRegion from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { getEditRatingCaption } from '../../../components/shared/clipConstants';
+import { getClipStage, CLIP_STAGE } from '../clipStage';
 
 // Rating-based background colors (used for tinting the details panel)
 const RATING_COLORS = {
@@ -116,44 +117,17 @@ export function ClipDetailsEditor({
   const hasReel = !!region.autoProjectId;
   const notesLength = region.notes?.length || 0;
 
-  // T8060: once a reel exists, the Reel control tracks it through Focus ->
-  // Overlay -> Completed/Published, using the same has_working_video/
-  // has_final_video/is_published fields DraftTile already reads for the
-  // Clips list — no separate stage computation to keep in sync.
+  // T8060/T9330: once the clip has its own project, the stage control tracks it
+  // through Focus -> Spotlight -> Final/Published, using the same
+  // has_working_video/has_final_video/is_published fields DraftTile reads for the
+  // Clips list. T9330 extracted this into the shared getClipStage helper so this
+  // sidebar and the desktop strip (AnnotateFullscreenOverlay) compute ONE stage,
+  // one vocabulary. T8070 staleness (exact-equality snapshot) and T8470 Part D
+  // (fresh draft = live link) both live inside the helper now. Display-level only
+  // — region.autoProjectId is never mutated by it.
   const projects = useProjectsList();
   const linkedProject = hasReel ? projects.find(p => p.id === region.autoProjectId) : null;
-
-  // T8070: the reel's produced working_video/final_video were rendered from a
-  // specific start/end window, snapshotted onto the raw_clip
-  // (reelSourceStartTime/EndTime) at export completion. Only surface the produced
-  // stage while the clip's CURRENT boundaries still match that window EXACTLY
-  // (exact equality, no epsilon — a genuine nudge is a real drift). Editing the
-  // clip's start/end after producing the reel drops the control back to
-  // "Create Reel"; reverting to the exact producing values restores the produced
-  // status (the snapshot is frozen until the NEXT export, so this is a pure value
-  // comparison). Display-level only — region.autoProjectId is never mutated by it.
-  const reelReflectsClip =
-    hasReel &&
-    region.reelSourceStartTime != null &&
-    region.reelSourceEndTime != null &&
-    region.startTime === region.reelSourceStartTime &&
-    region.endTime === region.reelSourceEndTime;
-
-  // T8470 (Part D): a reel EXISTS the moment project_created lands (autoProjectId
-  // is set), but a fresh draft has no reel-source snapshot yet (only set at export
-  // completion) and no produced video - so reelReflectsClip is false and the
-  // control used to fall through to an ACTIONABLE "Create Reel", a dead-end that
-  // offers to create a reel that already exists. Detect that state and turn it
-  // into a live "Open reel (Draft)" link instead. Deliberately narrow: a
-  // below-migration reel with a produced video but a null snapshot (has_working_
-  // video / has_final_video) still shows "Create Reel" so it can be re-produced,
-  // and a DRIFTED reel (non-null snapshot) is untouched.
-  const reelIsFreshDraft =
-    hasReel &&
-    region.reelSourceStartTime == null &&
-    region.reelSourceEndTime == null &&
-    !linkedProject?.has_working_video &&
-    !linkedProject?.has_final_video;
+  const clipStage = getClipStage(region, linkedProject);
 
   // T5725: teammate tagging is a Team-layer-only affordance. Legacy-NULL rule
   // (`my_athlete ?? true` => My Athlete) — never read region.my_athlete bare.
@@ -382,56 +356,22 @@ export function ClipDetailsEditor({
           </div>
         )}
 
-        {/* Create Reel Button — desktop only. Once a reel exists
-            (region.autoProjectId), this tracks the reel's own progress
-            (T8040/T8060): Focus, then Overlay, then a plain status once
-            there's nothing left to open from here. While the create-reel
-            request is in flight (reelRequested but no autoProjectId yet),
-            it stays disabled/"Reel Created" as before.
-            T8070: the produced-stage branches are gated on reelReflectsClip —
-            if the clip's start/end changed since the reel was produced, the
-            stage is hidden and the control drops to "Create Reel" until the
-            boundaries are reverted to the exact producing window (or the reel
-            is re-exported). */}
+        {/* Stage control — desktop only. T9330: driven by the shared
+            getClipStage helper (same stage + label as the desktop strip CTA).
+            - NO_PROJECT: the manual "Create Clip" affordance (rating<5 / Team-
+              layer clips with no project). Separate from the stage CTA and NOT
+              replaced by it; while the request is in flight (reelRequested, no
+              autoProjectId yet) it stays disabled "Clip Created".
+            - every other stage: a button that OPENS the clip's existing project
+              (Apply AI Focus / Apply Spotlight / View Final / View Published),
+              routing action 'overlay' -> Spotlight, else Focus. Drifted and
+              below-migration projects land on "Apply AI Focus" (open it), never
+              back on Create Clip — a project that EXISTS should open.
+            T8070 staleness + T8470 fresh-draft both live inside getClipStage. */}
         {!isMobile && (
           <div className="flex items-center justify-between">
             <label className="text-gray-400 text-xs">Clip</label>
-            {reelReflectsClip && linkedProject?.has_final_video ? (
-              <span className="text-xs text-green-400 flex items-center gap-1.5">
-                <Check size={14} />
-                {linkedProject.is_published ? 'Published' : 'Completed'}
-              </span>
-            ) : reelReflectsClip && linkedProject?.has_working_video ? (
-              <Button
-                variant="cyan"
-                size="sm"
-                icon={Sparkles}
-                onClick={() => onOpenInOverlay(region.autoProjectId)}
-              >
-                Spotlight
-              </Button>
-            ) : reelReflectsClip ? (
-              <Button
-                variant="cyan"
-                size="sm"
-                icon={Crop}
-                onClick={() => onOpenInFocus(region.autoProjectId)}
-              >
-                AI Focus
-              </Button>
-            ) : reelIsFreshDraft ? (
-              // T8470 (Part D): existing draft reel, not yet produced -> a live
-              // link into Focus (same select+navigate the T8480 toast performs),
-              // never an actionable "Create Reel".
-              <Button
-                variant="cyan"
-                size="sm"
-                icon={Crop}
-                onClick={() => onOpenInFocus(region.autoProjectId)}
-              >
-                Open clip (Draft)
-              </Button>
-            ) : (
+            {clipStage.stage === CLIP_STAGE.NO_PROJECT ? (
               <Button
                 variant={reelRequested ? 'success' : 'cyan'}
                 size="sm"
@@ -443,6 +383,19 @@ export function ClipDetailsEditor({
                 }}
               >
                 {reelRequested ? 'Clip Created' : 'Create Clip'}
+              </Button>
+            ) : (
+              <Button
+                variant="cyan"
+                size="sm"
+                icon={clipStage.action === 'overlay' ? Sparkles : Crop}
+                onClick={() =>
+                  clipStage.action === 'overlay'
+                    ? onOpenInOverlay(region.autoProjectId)
+                    : onOpenInFocus(region.autoProjectId)
+                }
+              >
+                {clipStage.label}
               </Button>
             )}
           </div>
