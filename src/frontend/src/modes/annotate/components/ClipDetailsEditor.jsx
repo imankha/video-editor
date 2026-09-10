@@ -395,7 +395,7 @@ export function ClipDetailsEditor({
             is re-exported). */}
         {!isMobile && (
           <div className="flex items-center justify-between">
-            <label className="text-gray-400 text-xs">Reel</label>
+            <label className="text-gray-400 text-xs">Clip</label>
             {reelReflectsClip && linkedProject?.has_final_video ? (
               <span className="text-xs text-green-400 flex items-center gap-1.5">
                 <Check size={14} />
@@ -408,7 +408,7 @@ export function ClipDetailsEditor({
                 icon={Sparkles}
                 onClick={() => onOpenInOverlay(region.autoProjectId)}
               >
-                Overlay
+                Spotlight
               </Button>
             ) : reelReflectsClip ? (
               <Button
@@ -417,7 +417,7 @@ export function ClipDetailsEditor({
                 icon={Crop}
                 onClick={() => onOpenInFocus(region.autoProjectId)}
               >
-                Focus
+                AI Focus
               </Button>
             ) : reelIsFreshDraft ? (
               // T8470 (Part D): existing draft reel, not yet produced -> a live
@@ -429,7 +429,7 @@ export function ClipDetailsEditor({
                 icon={Crop}
                 onClick={() => onOpenInFocus(region.autoProjectId)}
               >
-                Open reel (Draft)
+                Open clip (Draft)
               </Button>
             ) : (
               <Button
@@ -442,7 +442,7 @@ export function ClipDetailsEditor({
                   onUpdate({ createProject: true });
                 }}
               >
-                {reelRequested ? 'Reel Created' : 'Create Reel'}
+                {reelRequested ? 'Clip Created' : 'Create Clip'}
               </Button>
             )}
           </div>

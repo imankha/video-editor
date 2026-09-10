@@ -3,7 +3,7 @@
  * working video actually streams, then gate on the real overlay ready-signal (T6110).
  *
  * WHY THIS EXISTS. The three real-account overlay specs (T5676, bug38, T4550's overlay
- * test) used to open the `.first()` "In Overlay" draft and then wait on the overlay
+ * test) used to open the `.first()` "In Spotlight" draft and then wait on the overlay
  * stage's inline `aspect-ratio` — the app's OWN "metadata ready / useAspectStage flipped"
  * signal. That signal is correct, but T6100 measured WHY the wait never returned on
  * staging: the seed carries DANGLING `working_videos` refs. `working_video/playback-url`
@@ -92,20 +92,20 @@ export async function openLoadableOverlayDraft(page, { minReadyState = 3 } = {})
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
   await page.getByRole('button', { name: 'Clips' }).click();
-  const overlayFilter = page.getByText(/^In Overlay \(\d+\)$/);
+  const overlayFilter = page.getByText(/^In Spotlight \(\d+\)$/);
   if ((await overlayFilter.count()) === 0) {
     return {
       ok: false,
-      reason: `probe found streamable In-Overlay draft(s) [${loadable.join(', ')}] but the "In Overlay" ` +
+      reason: `probe found streamable In-Overlay draft(s) [${loadable.join(', ')}] but the "In Spotlight" ` +
         'drafts filter is absent in the UI (API/UI mismatch)',
     };
   }
   await overlayFilter.first().click();
 
   // T7750: a streamable working video is NECESSARY but not SUFFICIENT. The resolved tile can be
-  // in a UI state (e.g. mid-publish) exposing NEITHER the hover-rail "Open in Overlay" button NOR
+  // in a UI state (e.g. mid-publish) exposing NEITHER the hover-rail "Open in Spotlight" button NOR
   // the kebab entry, so a fixed loadable[0] used to hang on a card that could never be opened.
-  // Walk the loadable candidates and open the FIRST whose "Open in Overlay" affordance actually
+  // Walk the loadable candidates and open the FIRST whose "Open in Spotlight" affordance actually
   // exists; if opening or hydration fails, record why and fall through to the next candidate.
   const skipped = [];
   for (const targetId of loadable) {
@@ -124,20 +124,20 @@ export async function openLoadableOverlayDraft(page, { minReadyState = 3 } = {})
 
     // Prefer the hover-rail icon button; fall back to the T6180 ready-to-publish kebab menu.
     // If NEITHER action exists on this tile, it's an unopenable state — skip to the next.
-    const hoverBtn = card.getByRole('button', { name: 'Open in Overlay' });
+    const hoverBtn = card.getByRole('button', { name: 'Open in Spotlight' });
     if ((await hoverBtn.count()) > 0) {
       await hoverBtn.first().click();
     } else {
       const kebab = card.getByRole('button', { name: 'More actions' });
       if ((await kebab.count()) === 0) {
-        skipped.push(`project ${targetId}: no hover-rail "Open in Overlay" and no kebab (unopenable tile state)`);
+        skipped.push(`project ${targetId}: no hover-rail "Open in Spotlight" and no kebab (unopenable tile state)`);
         continue;
       }
       await kebab.click();
-      const menuItem = page.getByRole('button', { name: 'Open in Overlay' });
+      const menuItem = page.getByRole('button', { name: 'Open in Spotlight' });
       if ((await menuItem.count()) === 0) {
         await page.keyboard.press('Escape'); // dismiss the menu before the next candidate
-        skipped.push(`project ${targetId}: kebab has no "Open in Overlay" entry`);
+        skipped.push(`project ${targetId}: kebab has no "Open in Spotlight" entry`);
         continue;
       }
       await menuItem.first().click();
@@ -160,6 +160,6 @@ export async function openLoadableOverlayDraft(page, { minReadyState = 3 } = {})
     ok: false,
     reason:
       `No streamable In-Overlay draft [${loadable.join(', ')}] could be opened in Overlay ` +
-      `(none exposed an "Open in Overlay" affordance / hydrated):\n  ${skipped.join('\n  ')}`,
+      `(none exposed an "Open in Spotlight" affordance / hydrated):\n  ${skipped.join('\n  ')}`,
   };
 }

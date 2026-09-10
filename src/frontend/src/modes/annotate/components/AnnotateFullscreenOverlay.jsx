@@ -925,7 +925,7 @@ export function AnnotateFullscreenOverlay({
               variant="cyan"
               size="lg"
               icon={Crop}
-              title="Open in Focus mode"
+              title="Open in AI Focus mode"
               className="coarse-pointer:min-h-[44px]"
               // T8730: only prompt to save when there are ACTUAL unsaved changes;
               // otherwise open Focus directly (no more false-positive dialog).
@@ -934,7 +934,7 @@ export function AnnotateFullscreenOverlay({
                 else onOpenInFocus?.(existingClip.autoProjectId);
               }}
             >
-              Focus
+              AI Focus
             </Button>
           </div>
         )}
@@ -944,13 +944,13 @@ export function AnnotateFullscreenOverlay({
         <ConfirmationDialog
           isOpen={focusConfirmOpen}
           title="Save this play first?"
-          message="Opening Focus closes the Annotate editor."
+          message="Opening AI Focus closes the Annotate editor."
           onClose={() => setFocusConfirmOpen(false)}
           impressionKey="focus_while_editing_play"
           buttons={[
             { label: 'Cancel', variant: 'secondary', onClick: () => setFocusConfirmOpen(false) },
             {
-              label: 'Save & open Focus',
+              label: 'Save & open AI Focus',
               variant: 'primary',
               onClick: async () => {
                 setFocusConfirmOpen(false);

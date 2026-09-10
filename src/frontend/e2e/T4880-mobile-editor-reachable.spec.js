@@ -87,7 +87,7 @@ test.describe('T4880 mobile editor reachability', () => {
         ? await overlayTab.isEnabled()
         : (await disabledOverlay.count()) === 0;
     test.skip(!overlayReachable, 'Overlay needs an exported reel in this env; covered by Vitest OverlayModeView.mobileReachable');
-    await (await overlayTab.count() ? overlayTab : page.getByRole('button', { name: /Overlay/ }).first()).click();
+    await (await overlayTab.count() ? overlayTab : page.getByRole('button', { name: /Spotlight/ }).first()).click();
 
     // In overlay mode the primary export button is labelled "Create Reel" (T7580).
     const createReel = page.getByRole('button', { name: /Create Reel/ });

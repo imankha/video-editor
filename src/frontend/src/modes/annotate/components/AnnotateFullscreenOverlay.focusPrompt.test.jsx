@@ -11,7 +11,7 @@ function dialogScope() {
 // T8600 §2.8: Focus mid-edit must never silently discard the open form. The
 // strip's Focus button (edit mode, existingClip.autoProjectId set) opens a
 // confirm-then-save-then-navigate prompt with exactly two buttons (Q2:
-// "Save & open Focus" + "Cancel", no third "Discard" button).
+// "Save & open AI Focus" + "Cancel", no third "Discard" button).
 //
 // T8730: the prompt now ONLY appears when there are real unsaved changes. The
 // dirty-path suite below therefore edits a field first (dirtyEdit) so the
@@ -69,12 +69,12 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
     expect(screen.getByText('Save this play first?')).toBeTruthy();
   });
 
-  it('exactly two buttons: "Save & open Focus" and "Cancel" (no Discard, Q2)', () => {
+  it('exactly two buttons: "Save & open AI Focus" and "Cancel" (no Discard, Q2)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={vi.fn()} />);
     dirtyEdit();
     fireEvent.click(screen.getByRole('button', { name: /focus/i }));
     const dialog = dialogScope();
-    expect(dialog.getByRole('button', { name: 'Save & open Focus' })).toBeTruthy();
+    expect(dialog.getByRole('button', { name: 'Save & open AI Focus' })).toBeTruthy();
     expect(dialog.getByRole('button', { name: 'Cancel' })).toBeTruthy();
     expect(dialog.getAllByRole('button')).toHaveLength(3); // header X + the two above
     expect(screen.queryByText(/discard/i)).toBeNull();
@@ -92,13 +92,13 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
     expect(onOpenInFocus).not.toHaveBeenCalled();
   });
 
-  it('"Save & open Focus" saves first, then navigates with the reel id', async () => {
+  it('"Save & open AI Focus" saves first, then navigates with the reel id', async () => {
     const onUpdateClip = vi.fn(() => Promise.resolve());
     const onOpenInFocus = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} onOpenInFocus={onOpenInFocus} />);
     dirtyEdit();
     fireEvent.click(screen.getByRole('button', { name: /focus/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save & open Focus' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save & open AI Focus' }));
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(onOpenInFocus).toHaveBeenCalledWith(42));
   });
@@ -107,7 +107,7 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={vi.fn()} />);
     dirtyEdit();
     fireEvent.click(screen.getByRole('button', { name: /focus/i }));
-    expect(screen.getByText('Opening Focus closes the Annotate editor.')).toBeTruthy();
+    expect(screen.getByText('Opening AI Focus closes the Annotate editor.')).toBeTruthy();
     expect(screen.queryByText(/play editor/i)).toBeNull();
   });
 });

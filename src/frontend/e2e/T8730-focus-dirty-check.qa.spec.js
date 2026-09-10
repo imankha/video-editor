@@ -81,12 +81,12 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
 
     // The strip editor mounts with the Focus button once the clip is being edited.
     await expect(page.getByTestId('annotate-editor-strip')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByTitle('Open in Focus mode')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTitle('Open in AI Focus mode')).toBeVisible({ timeout: 10000 });
   });
 
   test('no edits: Focus navigates directly, no confirm dialog @staging-gate @gate-a', async ({ page }) => {
     // Untouched form -> click Focus immediately.
-    await page.getByTitle('Open in Focus mode').click();
+    await page.getByTitle('Open in AI Focus mode').click();
     await page.waitForTimeout(500); // let a (wrongly shown) dialog have time to mount
     await expect(page.getByText(DIALOG_TITLE)).toHaveCount(0);
     await saveEvidence(page, 'T8730-no-dialog-when-clean');
@@ -98,7 +98,7 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
     const newRating = currentRating === 5 ? 4 : 5;
     await page.getByTitle(`${newRating} star${newRating > 1 ? 's' : ''}`).click();
 
-    await page.getByTitle('Open in Focus mode').click();
+    await page.getByTitle('Open in AI Focus mode').click();
     await expect(page.getByText(DIALOG_TITLE)).toBeVisible({ timeout: 5000 });
     await saveEvidence(page, 'T8730-dirty-rating');
     await page.getByText('Opening Focus closes the Annotate editor.').locator('xpath=ancestor::div[contains(@class,"bg-gray-800")]').getByRole('button', { name: 'Cancel' }).click(); // never save
@@ -112,7 +112,7 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
     await expect(nameInput).toBeVisible();
     await nameInput.fill(`${targetClip.name} EDITED T8730`);
 
-    await page.getByTitle('Open in Focus mode').click();
+    await page.getByTitle('Open in AI Focus mode').click();
     await expect(page.getByText(DIALOG_TITLE)).toBeVisible({ timeout: 5000 });
     await saveEvidence(page, 'T8730-dirty-name');
     await page.getByText('Opening Focus closes the Annotate editor.').locator('xpath=ancestor::div[contains(@class,"bg-gray-800")]').getByRole('button', { name: 'Cancel' }).click();
@@ -125,7 +125,7 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
     await expect(notesBox).toBeVisible({ timeout: 5000 });
     await notesBox.fill('T8730 QA note - not saved');
 
-    await page.getByTitle('Open in Focus mode').click();
+    await page.getByTitle('Open in AI Focus mode').click();
     await expect(page.getByText(DIALOG_TITLE)).toBeVisible({ timeout: 5000 });
     await saveEvidence(page, 'T8730-dirty-notes');
     await page.getByText('Opening Focus closes the Annotate editor.').locator('xpath=ancestor::div[contains(@class,"bg-gray-800")]').getByRole('button', { name: 'Cancel' }).click();
@@ -139,7 +139,7 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
     await tagInput.fill('T8730 QA Teammate');
     await tagInput.press('Enter');
 
-    await page.getByTitle('Open in Focus mode').click();
+    await page.getByTitle('Open in AI Focus mode').click();
     await expect(page.getByText(DIALOG_TITLE)).toBeVisible({ timeout: 5000 });
     await saveEvidence(page, 'T8730-dirty-teammate-committed');
     await page.getByText('Opening Focus closes the Annotate editor.').locator('xpath=ancestor::div[contains(@class,"bg-gray-800")]').getByRole('button', { name: 'Cancel' }).click();
@@ -153,7 +153,7 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
     await expect(tagInput).toBeVisible({ timeout: 5000 });
     await tagInput.fill('T8730 QA Pending NoEnter'); // deliberately no Enter press
 
-    await page.getByTitle('Open in Focus mode').click();
+    await page.getByTitle('Open in AI Focus mode').click();
     await expect(page.getByText(DIALOG_TITLE)).toBeVisible({ timeout: 5000 });
     await saveEvidence(page, 'T8730-dirty-teammate-pending-not-entered');
     await page.getByText('Opening Focus closes the Annotate editor.').locator('xpath=ancestor::div[contains(@class,"bg-gray-800")]').getByRole('button', { name: 'Cancel' }).click();
@@ -162,7 +162,7 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
   test('dialog copy says "Annotate", not "the play editor" @staging-gate @gate-a', async ({ page }) => {
     await page.getByTitle('Rename this play').click();
     await page.getByLabel('Clip name').fill(`${targetClip.name} EDITED`);
-    await page.getByTitle('Open in Focus mode').click();
+    await page.getByTitle('Open in AI Focus mode').click();
     await expect(page.getByText('Opening Focus closes the Annotate editor.')).toBeVisible({ timeout: 5000 });
     await expect(page.getByText(/play editor/i)).toHaveCount(0);
     await page.getByText('Opening Focus closes the Annotate editor.').locator('xpath=ancestor::div[contains(@class,"bg-gray-800")]').getByRole('button', { name: 'Cancel' }).click();

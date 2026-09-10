@@ -74,7 +74,7 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} estimatedCredits={9} creditBalance={42} />);
     expect(screen.queryByTestId('export-credit-estimate')).toBeNull();
     // Overlay primary CTA applies the configured overlay (T7700 reverses T7580's "Create Reel").
-    expect(screen.getByRole('button', { name: 'Add Overlay' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add Spotlight' })).toBeTruthy();
   });
 });
 
@@ -117,7 +117,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     render(<ExportButtonView {...baseProps}
       isFramingMode={false} hasUnframedClips={true} isButtonDisabled={false} />);
     expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Add Overlay' }).disabled).toBe(false);
+    expect(screen.getByRole('button', { name: 'Add Spotlight' }).disabled).toBe(false);
   });
 
   it('caption is hidden while an export is in progress', () => {
@@ -226,9 +226,9 @@ describe('ExportButtonView — T7580 reel vocabulary', () => {
     expect(screen.getByRole('button', { name: 'Export Focused Video (2/3)' })).toBeTruthy();
   });
 
-  it('Overlay primary CTA is "Add Overlay" (applies the configured overlay) (T7700)', () => {
+  it('Overlay primary CTA is "Add Spotlight" (applies the configured overlay) (T7700)', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} />);
-    expect(screen.getByRole('button', { name: 'Add Overlay' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add Spotlight' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Create Reel' })).toBeNull();
   });
 

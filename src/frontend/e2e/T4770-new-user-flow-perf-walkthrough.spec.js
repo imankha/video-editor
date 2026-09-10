@@ -258,12 +258,12 @@ test.describe('T4770 new-user-flow perf walkthrough', () => {
     // ---- 4. OVERLAY: highlights load ---------------------------------------
     await leg('overlay', async () => {
       await stamp(page, 'overlay:navStart');
-      // Open an overlay-ready draft directly via its card's "Open in Overlay"
+      // Open an overlay-ready draft directly via its card's "Open in Spotlight"
       // button (needs has_working_video — projects 50/49/47 qualify).
       await page.goto('/', { waitUntil: 'commit' });
       await page.getByRole('button', { name: /^In Progress Clips/ }).first().waitFor({ state: 'visible', timeout: 15000 });
       await page.getByRole('button', { name: /^In Progress Clips/ }).first().click({ timeout: 8000 });
-      const overlayBtn = page.getByTitle('Open in Overlay').first();
+      const overlayBtn = page.getByTitle('Open in Spotlight').first();
       await overlayBtn.waitFor({ state: 'visible', timeout: 12000 });
       await overlayBtn.click({ timeout: 8000 });
       await stamp(page, 'overlay:clicked');

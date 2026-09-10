@@ -50,7 +50,7 @@ async function pauseVideos(page) {
 }
 
 /** Open OVERLAY_PROJECT on the REAL Overlay screen via the sessionStorage
- *  breadcrumb the app itself uses (the DraftTile "Open in Overlay" affordance is
+ *  breadcrumb the app itself uses (the DraftTile "Open in Spotlight" affordance is
  *  gone). Returns once the stage is hydrated and the real video is ready. */
 async function openOverlay(page, projectId) {
   await page.goto('/');

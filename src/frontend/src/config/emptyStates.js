@@ -36,7 +36,7 @@ export const EMPTY_TAB_GUIDE = {
   clips: {
     headline: 'Clips are the plays you cut from a game',
     body:
-      'Each clip gets a Focus pass to follow your athlete and an optional '
+      'Each clip gets an AI Focus pass to follow your athlete and an optional '
       + 'Spotlight. Then publish it on its own, or build several into a reel.',
     openGameText: 'Open a game and tap Add Play.', // games > 0
     addGameText: 'Add a game and tap Add Play.', // games = 0
@@ -94,7 +94,7 @@ export const PARTIAL_TAB_GUIDE = {
     footer: 'Clips are step 2 of 4.',
   },
   clips: {
-    headline: 'Give each clip a Focus pass',
+    headline: 'Give each clip an AI Focus pass',
     body:
       'Open a clip to follow your athlete and add an optional Spotlight, then '
       + 'publish it on its own or build several into a reel.',

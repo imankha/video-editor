@@ -48,13 +48,13 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
 
   if (framingComplete) {
     // Framing done - show single "Framing" segment as complete
-    clipSegments.push({ status: 'done', label: 'Focus', tags: [] });
+    clipSegments.push({ status: 'done', label: 'AI Focus', tags: [] });
   } else if (isExporting === 'framing') {
     // Currently exporting - show single "Framing" segment as exporting (or disconnected)
-    clipSegments.push({ status: isOffline ? 'disconnected' : 'exporting', label: 'Focus', tags: [] });
+    clipSegments.push({ status: isOffline ? 'disconnected' : 'exporting', label: 'AI Focus', tags: [] });
   } else if (failedExportType === 'framing') {
     // Framing export failed - show single "Framing" segment as failed
-    clipSegments.push({ status: 'export_failed', label: 'Focus', tags: [] });
+    clipSegments.push({ status: 'export_failed', label: 'AI Focus', tags: [] });
   } else {
     // Framing not done - show per-clip editing status
     for (let i = 0; i < clip_count; i++) {
@@ -91,7 +91,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
   } else if (has_working_video) {
     overlayStatus = 'ready';
   }
-  const overlaySegment = { status: overlayStatus, label: 'Overlay' };
+  const overlaySegment = { status: overlayStatus, label: 'Spotlight' };
 
   const allSegments = [...clipSegments, overlaySegment];
 
@@ -133,12 +133,12 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
               ) : isExporting === 'framing' ? (
                 <span className="text-amber-400 flex items-center gap-1">
                   <RefreshCw size={10} className="animate-spin" />
-                  Focus...
+                  AI Focus...
                 </span>
               ) : framingComplete ? (
-                <span className="text-green-400">Focus</span>
+                <span className="text-green-400">AI Focus</span>
               ) : (
-                <span>Focus</span>
+                <span>AI Focus</span>
               )}
             </span>
             {isExporting === 'overlay' && isOffline ? (
@@ -149,7 +149,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
                 Exporting...
               </span>
             ) : (
-              <span>Overlay</span>
+              <span>Spotlight</span>
             )}
           </>
         )}
@@ -192,7 +192,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
                 segment.status === 'done' ? 'Complete' :
                 segment.status === 'disconnected' ? 'Not Connected' :
                 segment.status === 'exporting' ? 'Exporting...' :
-                segment.status === 'in_progress' ? (isOverlay ? 'Started - export to complete' : 'Started - export Focus to complete') :
+                segment.status === 'in_progress' ? (isOverlay ? 'Started - export to complete' : 'Started - export AI Focus to complete') :
                 segment.status === 'ready' ? 'Ready to share' :
                 'Draft'
               } (click to open)${segment.stale ? ' — clip edited since this reel was made' : ''}`}

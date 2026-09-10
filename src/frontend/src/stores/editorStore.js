@@ -97,8 +97,8 @@ function updatePath(mode) {
  */
 export const SCREENS = {
   PROJECT_MANAGER: { type: EDITOR_MODES.PROJECT_MANAGER, label: SECTION_NAMES.CLIPS },
-  FRAMING: { type: EDITOR_MODES.FRAMING, label: 'Focus' },
-  OVERLAY: { type: EDITOR_MODES.OVERLAY, label: 'Overlay' },
+  FRAMING: { type: EDITOR_MODES.FRAMING, label: 'AI Focus' },
+  OVERLAY: { type: EDITOR_MODES.OVERLAY, label: 'Spotlight' },
   ANNOTATE: { type: EDITOR_MODES.ANNOTATE, label: 'Annotate' },
 };
 

@@ -70,7 +70,7 @@ test.describe('T4900 overlay action failure visibility', () => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
-    // Navigate to overlay: open "Clips" and pick any "In Overlay" draft.
+    // Navigate to overlay: open "Clips" and pick any "In Spotlight" draft.
     // If none exists, we fall back to the store-based injection path (criterion B
     // is still verified by the absence of error toasts on initial load).
     await page.getByRole('button', { name: 'Clips' }).click().catch(() => {});
@@ -79,9 +79,9 @@ test.describe('T4900 overlay action failure visibility', () => {
     // Try to find and open an overlay project
     let inOverlay = false;
     try {
-      // Look for an "In Overlay" draft or any project with a working video
+      // Look for an "In Spotlight" draft or any project with a working video
       const overlayChip = page.getByTitle(/^Overlay:/).first();
-      const openBtn = page.getByTitle('Open in Overlay').first();
+      const openBtn = page.getByTitle('Open in Spotlight').first();
       const target = await overlayChip.isVisible() ? overlayChip : openBtn;
       await target.click({ timeout: 5000 });
       // Wait for the overlay editor to be ready (detection markers or timeline)

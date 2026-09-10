@@ -792,7 +792,7 @@ export function ExportButtonContainer({
           }
 
           setLocalProgress(100);
-          setProgressMessage('Loading into Overlay mode...');
+          setProgressMessage('Loading into Spotlight mode...');
 
           if (exportIdRef.current) {
             completeExportInStore(exportIdRef.current);

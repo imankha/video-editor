@@ -3,7 +3,7 @@
  * video-editor/src/frontend/e2e/ before running. Marks map to line numbers in
  * ReelBallersTutroials/overlay/talk_track.txt.
  *
- * Uses a draft in "In Overlay" status and REALLY clicks Create Reel at the end
+ * Uses a draft in "In Spotlight" status and REALLY clicks Create Reel at the end
  * (render job runs on the dev backend after the recording stops).
  */
 import { test } from '@playwright/test';
@@ -42,7 +42,7 @@ test('capture overlay tutorial footage @tutorial-capture', async ({ browser }) =
   await page.waitForLoadState('domcontentloaded');
   await page.getByRole('button', { name: 'Clips' }).click();
   const overlayChip = page.getByTitle(/^Overlay: .*\(click to open\)/).first();
-  const openBtn = page.getByTitle('Open in Overlay').first();
+  const openBtn = page.getByTitle('Open in Spotlight').first();
   let target = overlayChip;
   try { await overlayChip.waitFor({ timeout: 4000 }); } catch { target = openBtn; }
   await target.click();
@@ -55,7 +55,7 @@ test('capture overlay tutorial footage @tutorial-capture', async ({ browser }) =
     await dwell(0.8);
   } catch { step('pre-roll Body click failed'); }
   await page.getByText('Clips', { exact: true }).first().click();  // breadcrumb home
-  await page.getByRole('button', { name: /^In Overlay \(|^All \(/ }).first()
+  await page.getByRole('button', { name: /^In Spotlight \(|^All \(/ }).first()
     .waitFor({ timeout: 15000 }).catch(() => {});
   await dwell(1);
 

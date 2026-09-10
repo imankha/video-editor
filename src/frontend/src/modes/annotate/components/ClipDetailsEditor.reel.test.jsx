@@ -34,23 +34,23 @@ const baseRegion = {
 describe('ClipDetailsEditor — Reel button (T8040)', () => {
   it('shows an enabled "Create Reel" button when no reel exists yet', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: null }} onUpdate={() => {}} onDelete={() => {}} />);
-    const button = screen.getByRole('button', { name: 'Create Reel' });
+    const button = screen.getByRole('button', { name: 'Create Clip' });
     expect(button.disabled).toBe(false);
   });
 
   it('clicking "Create Reel" fires onUpdate({ createProject: true }) and shows a disabled transitional state while the request is in flight', () => {
     const onUpdate = vi.fn();
     render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: null }} onUpdate={onUpdate} onDelete={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create Reel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Clip' }));
     expect(onUpdate).toHaveBeenCalledWith({ createProject: true });
-    const button = screen.getByRole('button', { name: 'Reel Created' });
+    const button = screen.getByRole('button', { name: 'Clip Created' });
     expect(button.disabled).toBe(true);
   });
 
   it('shows an enabled "Focus" button once region.autoProjectId is set, not a disabled "Reel Created"', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.queryByRole('button', { name: 'Reel Created' })).toBeNull();
-    const button = screen.getByRole('button', { name: 'Focus' });
+    expect(screen.queryByRole('button', { name: 'Clip Created' })).toBeNull();
+    const button = screen.getByRole('button', { name: 'AI Focus' });
     expect(button.disabled).toBe(false);
   });
 
@@ -64,7 +64,7 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
         onOpenInFocus={onOpenInFocus}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Focus' }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Focus' }));
     expect(onOpenInFocus).toHaveBeenCalledTimes(1);
     expect(onOpenInFocus).toHaveBeenCalledWith(42);
   });
@@ -77,7 +77,7 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
     it('still shows "Focus" when the linked project has not been exported yet', () => {
       useProjectsStore.setState({ projects: [{ id: 42, has_working_video: false, has_final_video: false, is_published: false }] });
       render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }} onUpdate={() => {}} onDelete={() => {}} />);
-      expect(screen.getByRole('button', { name: 'Focus' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'AI Focus' })).toBeTruthy();
     });
 
     it('shows "Overlay" once Focus has been exported (has_working_video)', () => {
@@ -91,8 +91,8 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
           onOpenInOverlay={onOpenInOverlay}
         />
       );
-      expect(screen.queryByRole('button', { name: 'Focus' })).toBeNull();
-      fireEvent.click(screen.getByRole('button', { name: 'Overlay' }));
+      expect(screen.queryByRole('button', { name: 'AI Focus' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Spotlight' }));
       expect(onOpenInOverlay).toHaveBeenCalledWith(42);
     });
 
@@ -100,8 +100,8 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
       useProjectsStore.setState({ projects: [{ id: 42, has_working_video: true, has_final_video: true, is_published: false }] });
       render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }} onUpdate={() => {}} onDelete={() => {}} />);
       expect(screen.getByText('Completed')).toBeTruthy();
-      expect(screen.queryByRole('button', { name: 'Focus' })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Overlay' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'AI Focus' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Spotlight' })).toBeNull();
     });
 
     it('shows a "Published" status (no button) once the reel is published', () => {
@@ -130,7 +130,7 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
         />
       );
       expect(screen.getByText('Completed')).toBeTruthy();
-      expect(screen.queryByRole('button', { name: 'Create Reel' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Create Clip' })).toBeNull();
     });
 
     it('falls back to "Create Reel" when the START time drifted from the reel-source window', () => {
@@ -143,7 +143,7 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
         />
       );
       expect(screen.queryByText('Completed')).toBeNull();
-      expect(screen.getByRole('button', { name: 'Create Reel' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Create Clip' })).toBeTruthy();
     });
 
     it('falls back to "Create Reel" when the END time drifted from the reel-source window', () => {
@@ -156,7 +156,7 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
         />
       );
       expect(screen.queryByText('Completed')).toBeNull();
-      expect(screen.getByRole('button', { name: 'Create Reel' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Create Clip' })).toBeTruthy();
     });
 
     it('hides the Focus stage too when a not-yet-exported reel has drifted boundaries', () => {
@@ -168,8 +168,8 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
           onDelete={() => {}}
         />
       );
-      expect(screen.queryByRole('button', { name: 'Focus' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'Create Reel' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'AI Focus' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Create Clip' })).toBeTruthy();
     });
 
     it('restores the produced status when boundaries are reverted to the EXACT reel-source values', () => {
@@ -195,7 +195,7 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
         />
       );
       expect(screen.queryByText('Completed')).toBeNull();
-      expect(screen.getByRole('button', { name: 'Create Reel' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Create Clip' })).toBeTruthy();
     });
   });
 
@@ -216,8 +216,8 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
           onDelete={() => {}}
         />
       );
-      expect(screen.queryByRole('button', { name: 'Create Reel' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'Open reel (Draft)' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Create Clip' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Open clip (Draft)' })).toBeTruthy();
     });
 
     it('shows "Open reel (Draft)" for a linked draft with no produced video yet', () => {
@@ -229,7 +229,7 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
           onDelete={() => {}}
         />
       );
-      expect(screen.getByRole('button', { name: 'Open reel (Draft)' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Open clip (Draft)' })).toBeTruthy();
     });
 
     it('clicking "Open reel (Draft)" opens Focus for the reel via onOpenInFocus', () => {
@@ -242,7 +242,7 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
           onOpenInFocus={onOpenInFocus}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: 'Open reel (Draft)' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Open clip (Draft)' }));
       expect(onOpenInFocus).toHaveBeenCalledWith(42);
     });
 
@@ -255,8 +255,8 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
           onDelete={() => {}}
         />
       );
-      expect(screen.queryByRole('button', { name: 'Open reel (Draft)' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'Create Reel' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Open clip (Draft)' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Create Clip' })).toBeTruthy();
     });
   });
 
@@ -276,9 +276,9 @@ describe('ClipDetailsEditor — Reel button (T8040)', () => {
 
     it('never renders the Reel control (Create Reel or Focus) — desktop only', () => {
       render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }} onUpdate={() => {}} onDelete={() => {}} />);
-      expect(screen.queryByRole('button', { name: 'Focus' })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Create Reel' })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Reel Created' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'AI Focus' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Create Clip' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Clip Created' })).toBeNull();
     });
   });
 });

@@ -27,8 +27,8 @@ export const DRAFT_STAGE_ORDER = [
 // "Ready" wording that contradicted the "Reel created!" story elsewhere.
 export const DRAFT_STAGE_LABELS = {
   [DRAFT_STAGE.NOT_STARTED]: 'Draft',
-  [DRAFT_STAGE.IN_FRAMING]: 'Draft - in Focus',
-  [DRAFT_STAGE.IN_OVERLAY]: 'Draft - in Overlay',
+  [DRAFT_STAGE.IN_FRAMING]: 'Draft - in AI Focus',
+  [DRAFT_STAGE.IN_OVERLAY]: 'Draft - in Spotlight',
   [DRAFT_STAGE.READY]: 'Ready to Publish',
 };
 

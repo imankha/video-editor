@@ -49,12 +49,14 @@ export const DEFAULT_RATING = 3;
 // rating + layer only, not the live createProject toggle, so it always
 // communicates the RULE regardless of a manual override.
 export function getRatingCaption(rating, mine) {
-  if (!rating) return "1-5: how big was this play? 5 starts a reel automatically.";
-  if (rating <= 3) return 'Saved to your library.';
-  if (rating === 4) return `Big play (${RATING_NOTATION[4]}) - saved to your library.`;
+  if (!rating) return 'How good was this play? Rate it 1 to 5 - five stars creates a clip from the play.';
+  if (rating === 1) return `Mental lapse (${RATING_NOTATION[1]}) - a play to learn from.`;
+  if (rating === 2) return `Technical lapse (${RATING_NOTATION[2]}) - a play to learn from.`;
+  if (rating === 3) return `Interesting play (${RATING_NOTATION[3]}) - worth a second look.`;
+  if (rating === 4) return `Good play (${RATING_NOTATION[4]}) - one more star creates a clip.`;
   return mine
-    ? `Can't-miss play (${RATING_NOTATION[5]}) - reel will be created.`
-    : `Can't-miss team play (${RATING_NOTATION[5]}) - team clips don't start reels.`;
+    ? `Brilliant play (${RATING_NOTATION[5]}) - clip will be created from play.`
+    : `Brilliant team play (${RATING_NOTATION[5]}) - team plays don't create clips.`;
 }
 
 // T8490: edit-mode variant for ClipDetailsEditor — no auto-flip happens here
@@ -62,13 +64,15 @@ export function getRatingCaption(rating, mine) {
 // so the 5-star/My Athlete state reads off `hasReel` instead of promising a
 // future "will be created".
 export function getEditRatingCaption(rating, mine, hasReel) {
-  if (!rating) return "1-5: how big was this play? 5 starts a reel automatically.";
-  if (rating <= 3) return 'Saved to your library.';
-  if (rating === 4) return `Big play (${RATING_NOTATION[4]}) - saved to your library.`;
-  if (!mine) return `Can't-miss team play (${RATING_NOTATION[5]}) - team clips don't start reels.`;
+  if (!rating) return 'How good was this play? Rate it 1 to 5 - five stars creates a clip from the play.';
+  if (rating === 1) return `Mental lapse (${RATING_NOTATION[1]}) - a play to learn from.`;
+  if (rating === 2) return `Technical lapse (${RATING_NOTATION[2]}) - a play to learn from.`;
+  if (rating === 3) return `Interesting play (${RATING_NOTATION[3]}) - worth a second look.`;
+  if (rating === 4) return `Good play (${RATING_NOTATION[4]}) - one more star creates a clip.`;
+  if (!mine) return `Brilliant team play (${RATING_NOTATION[5]}) - team plays don't create clips.`;
   return hasReel
-    ? `Can't-miss play (${RATING_NOTATION[5]}) - reel already created.`
-    : `Can't-miss play (${RATING_NOTATION[5]}) - create a reel below.`;
+    ? `Brilliant play (${RATING_NOTATION[5]}) - clip already created from play.`
+    : `Brilliant play (${RATING_NOTATION[5]}) - create a clip below.`;
 }
 
 /**

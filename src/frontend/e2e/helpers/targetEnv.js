@@ -543,7 +543,7 @@ export const LOCAL_ONLY_SPECS = [
     file: 'T5676-aspect-stage-alignment.qa.spec.js',
     category: 'dev-harness',
     depends: ['/aspectdiag.html'],
-    reason: 'PARTIAL: only the "dev harness (both aspects)" describe is gated -- it drives the dev-only aspectdiag harness by a RELATIVE path (never mounts on a deployed target). The real-account describe (loginAsRealUser + Open in Overlay) still runs on staging.',
+    reason: 'PARTIAL: only the "dev harness (both aspects)" describe is gated -- it drives the dev-only aspectdiag harness by a RELATIVE path (never mounts on a deployed target). The real-account describe (loginAsRealUser + Open in Spotlight) still runs on staging.',
   },
   {
     file: 'T5860-collectionplayer-modal-backdrop.qa.spec.js',
