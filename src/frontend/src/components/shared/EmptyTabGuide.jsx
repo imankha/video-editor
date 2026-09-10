@@ -5,27 +5,30 @@ import { CLIP_UPLOAD } from '../../config/displayNames';
 import { FLOW_STEPS, EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 
 /**
- * EmptyTabGuide (T8980) - the shared empty state rendered by all four home tabs
- * (Games / In Progress Clips / In Progress Reels / Published) when they have
- * nothing in them. Replaces the four separate inline dead-end empty states with
- * one activation surface: a numbered flow strip (where this tab sits on the path
- * to a published reel), a headline + two-sentence body, an action block whose
- * primary CTA is ALWAYS enabled or carries a VISIBLE reason plus a working
- * cross-tab button (never a hover-only disabled reason), and a footer hint that
- * names the next tab in the flow.
+ * EmptyTabGuide (T8980, revised T9390) - the shared empty state rendered by all
+ * four home tabs (Games / In Progress Clips / In Progress Reels / Published) when
+ * they have nothing in them. One activation surface: a compact flow strip (sm+
+ * only) showing where this tab sits on the path to a published reel, a headline +
+ * one short line, an action block, and (Games only) a footer hint.
  *
- * Copy is APPROVED (2026-09-07) and branches per emptyStates.js on what the
- * account already has (games / clips / drafts) -- see EMPTY_TAB_GUIDE.
+ * T9390 (Decision 1): the strip is a 3-node NUMBERED path (Games/Clips/Published)
+ * with Reels demoted to an unnumbered, dashed "optional" pill between Clips and
+ * Published. The strip renders at sm+ only -- below sm it is dropped entirely (the
+ * lit tab bar directly above already orients the user; the "Reels is optional"
+ * message now lives in the Reels body line, not only in a graphic).
+ *
+ * T9390 (Decision 3): Clips at zero games shows Add Video ALONE (no cross-tab Add
+ * Game). Reels and Published are gated at the tab bar (ProjectManager) on hasClips,
+ * so the Reels empty guide's Build New Reel is always enabled here and the old
+ * "no clips" branch is gone; Published's zero-everything branch is gone too.
  *
  * @param {'games'|'clips'|'reels'|'published'} tab - which empty state to render
- * @param {number} gamesCount - the account's game count (branches Clips/Published)
+ * @param {number} gamesCount - the account's game count (branches Clips)
  * @param {number} clipCount  - single-clip drafts in progress (Reels "N ready",
  *                              Published "N in progress"); single source = the
  *                              same clipDrafts count the In Progress Clips badge uses
- * @param {boolean} hasClips  - whether a reel can be built (clip drafts OR clips
- *                              cut from a game); gates the Reels primary CTA
  * @param {(navId: string) => void} onNavigate - setActiveTab (frozen tab ids)
- * @param {() => void} onAddGame  - open the Add Game flow
+ * @param {() => void} onAddGame  - open the Add Game flow (Games tab only)
  * @param {() => void} onAddVideo - open the direct clip-upload (Add Video) flow
  * @param {() => void} onBuildReel - open the Build New Reel assembly modal
  * @param {'empty'|'partial'} variant - 'empty' (default) is the full-panel state
@@ -44,7 +47,6 @@ export function EmptyTabGuide({
   tab,
   gamesCount = 0,
   clipCount = 0,
-  hasClips = false,
   onNavigate,
   onAddGame,
   onAddVideo,
@@ -69,24 +71,11 @@ export function EmptyTabGuide({
       <div className="w-full mb-4">
         {tab === 'games' && <GamesActions onAddGame={onAddGame} />}
         {tab === 'clips' && (
-          <ClipsActions gamesCount={gamesCount} onNavigate={onNavigate} onAddGame={onAddGame} onAddVideo={onAddVideo} />
+          <ClipsActions gamesCount={gamesCount} onNavigate={onNavigate} onAddVideo={onAddVideo} />
         )}
-        {tab === 'reels' && (
-          <ReelsActions
-            hasClips={hasClips}
-            clipCount={clipCount}
-            gamesCount={gamesCount}
-            onNavigate={onNavigate}
-            onBuildReel={onBuildReel}
-          />
-        )}
+        {tab === 'reels' && <ReelsActions clipCount={clipCount} onBuildReel={onBuildReel} />}
         {tab === 'published' && (
-          <PublishedActions
-            clipCount={clipCount}
-            gamesCount={gamesCount}
-            onNavigate={onNavigate}
-            onAddGame={onAddGame}
-          />
+          <PublishedActions clipCount={clipCount} onNavigate={onNavigate} />
         )}
       </div>
 
@@ -104,13 +93,52 @@ const STEP_COLORS = {
   published: PUBLISHED.bg,
 };
 
+// T9390: decorative top accent border for the partial card, one per tab color.
+// Full class names (purge-safe); mirrors STEP_COLORS' hues as border-top colors.
+const STEP_ACCENT_BORDER = {
+  games: 'border-t-green-600',
+  clips: 'border-t-cyan-600',
+  reels: 'border-t-violet-600',
+  published: 'border-t-amber-600',
+};
+
+// T9390 flow strip: sm+ only. Games/Clips/Published are numbered nodes (1-2-3,
+// counting only the non-optional entries); Reels is an unnumbered dashed
+// "optional" pill, a visual detour rather than a step. The chevrons touching the
+// pill render lighter (a detour, not a step). Dropped entirely below sm -- the lit
+// tab bar above already orients the user and the "optional" message lives in the
+// Reels body line now.
 function FlowStrip({ tab }) {
+  let stepNum = 0;
   return (
     <div className="mb-6 w-full">
-      {/* sm+: full numbered 4-step row, the current step lit in its tab color */}
       <ol className="hidden sm:flex items-center justify-center gap-1.5">
         {FLOW_STEPS.map((step, i) => {
           const active = step.key === tab;
+          const isLast = i === FLOW_STEPS.length - 1;
+          const nextOptional = !isLast && FLOW_STEPS[i + 1].optional;
+          const dimChevron = step.optional || nextOptional;
+
+          if (step.optional) {
+            return (
+              <li key={step.key} className="flex items-center gap-1.5">
+                <span
+                  className={`flex items-center gap-1 border border-dashed border-gray-600 rounded-full px-2.5 py-1 ${
+                    active ? `${STEP_COLORS[step.key]} text-white` : 'text-gray-500'
+                  }`}
+                >
+                  <span className="text-sm font-medium">{step.label}</span>
+                  {/* "optional" stays muted even when the pill is lit -- the point
+                      is that it never disappears, including on the Reels tab. */}
+                  <span className="text-[10px] text-gray-500 uppercase tracking-wide">· optional</span>
+                </span>
+                {!isLast && <ChevronRight size={16} className="text-gray-700" />}
+              </li>
+            );
+          }
+
+          stepNum += 1;
+          const num = stepNum;
           return (
             <li key={step.key} className="flex items-center gap-1.5">
               <span className="flex items-center gap-1.5">
@@ -119,36 +147,19 @@ function FlowStrip({ tab }) {
                     active ? `${STEP_COLORS[step.key]} text-white` : 'bg-gray-700 text-gray-400'
                   }`}
                 >
-                  {i + 1}
+                  {num}
                 </span>
                 <span className={`text-sm font-medium ${active ? 'text-white' : 'text-gray-500'}`}>
                   {step.label}
                 </span>
               </span>
-              {i < FLOW_STEPS.length - 1 && <ChevronRight size={16} className="text-gray-600" />}
+              {!isLast && (
+                <ChevronRight size={16} className={dimChevron ? 'text-gray-700' : 'text-gray-600'} />
+              )}
             </li>
           );
         })}
       </ol>
-
-      {/* below sm: numbered dots, the current step lit in its tab color */}
-      <div className="sm:hidden flex flex-col items-center gap-2">
-        <ol className="flex items-center gap-2" aria-hidden="true">
-          {FLOW_STEPS.map((step, i) => {
-            const active = step.key === tab;
-            return (
-              <li
-                key={step.key}
-                className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
-                  active ? `${STEP_COLORS[step.key]} text-white` : 'bg-gray-700 text-gray-500'
-                }`}
-              >
-                {i + 1}
-              </li>
-            );
-          })}
-        </ol>
-      </div>
     </div>
   );
 }
@@ -165,21 +176,40 @@ function GamesActions({ onAddGame }) {
   );
 }
 
-function ClipsActions({ gamesCount, onNavigate, onAddGame, onAddVideo }) {
+function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
   const c = EMPTY_TAB_GUIDE.clips;
+
+  // T9390 (Decision 3): at zero games, Add Video is the ONLY path -- no cross-tab
+  // "Add Game" create action, just a caption stating a game is not a prerequisite.
+  // The clips-add-video tutorial anchor lives on this single button (T8380
+  // invariant: exactly one such node per render).
+  if (gamesCount === 0) {
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <Button
+          variant="success"
+          size="lg"
+          icon={Plus}
+          onClick={onAddVideo}
+          data-tutorial-target="clips-add-video"
+        >
+          {CLIP_UPLOAD.ADD_VIDEO}
+        </Button>
+        <p className="text-xs text-gray-500">{c.noGameCaption}</p>
+      </div>
+    );
+  }
+
+  // games > 0: a navigation link to the (existing) Games tab AND the Add Video
+  // upload path. A cross-tab NAV link to an existing tab was never the complaint;
+  // only surfacing a foreign tab's CREATE action was.
   return (
     <div className="flex flex-col items-center gap-3 w-full">
       <div className="flex flex-col items-center gap-2">
-        <p className="text-sm text-gray-400">{gamesCount > 0 ? c.openGameText : c.addGameText}</p>
-        {gamesCount > 0 ? (
-          <Button variant="secondary" size="lg" onClick={() => onNavigate('games')}>
-            Go to Games
-          </Button>
-        ) : (
-          <Button variant="success" size="lg" icon={Plus} onClick={onAddGame}>
-            Add Game
-          </Button>
-        )}
+        <p className="text-sm text-gray-400">{c.openGameText}</p>
+        <Button variant="secondary" size="lg" onClick={() => onNavigate('games')}>
+          Go to Games
+        </Button>
       </div>
 
       <div className="flex items-center gap-3 w-full my-1">
@@ -190,9 +220,6 @@ function ClipsActions({ gamesCount, onNavigate, onAddGame, onAddVideo }) {
 
       <div className="flex flex-col items-center gap-2">
         <p className="text-sm text-gray-400">{c.uploadText}</p>
-        {/* T8380 invariant: the clips-add-video tutorial target lives on exactly
-            one node. This empty-state Add Video button and the non-empty action
-            row (ProjectManager) are mutually exclusive, so the anchor is unique. */}
         <Button
           variant="success"
           size="lg"
@@ -207,7 +234,10 @@ function ClipsActions({ gamesCount, onNavigate, onAddGame, onAddVideo }) {
   );
 }
 
-function ReelsActions({ hasClips, clipCount, gamesCount, onNavigate, onBuildReel }) {
+// T9390 (Decision 3): the Reels tab is gated on hasClips at the tab bar, so this
+// empty guide only renders when a clip exists -- Build New Reel is always enabled
+// and the old "no clips" reason + cross-tab button branch was deleted as dead code.
+function ReelsActions({ clipCount, onBuildReel }) {
   const c = EMPTY_TAB_GUIDE.reels;
   return (
     <div className="flex flex-col items-center gap-2 w-full">
@@ -215,120 +245,91 @@ function ReelsActions({ hasClips, clipCount, gamesCount, onNavigate, onBuildReel
         variant="cyan"
         size="lg"
         icon={Plus}
-        disabled={!hasClips}
         onClick={onBuildReel}
         className="w-full max-w-xs"
       >
         Build New Reel
       </Button>
-      {hasClips ? (
-        <p className="text-xs text-gray-500">{c.hasClipsCaption(clipCount)}</p>
-      ) : (
-        <>
-          {/* Reason is VISIBLE text, never a hover-only title (T8980 rule). */}
-          <p className="text-sm text-gray-400">{c.noClipsReason}</p>
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={() => onNavigate(gamesCount > 0 ? 'games' : 'projects')}
-          >
-            {c.cutClipButton}
-          </Button>
-        </>
-      )}
+      <p className="text-xs text-gray-500">{c.hasClipsCaption(clipCount)}</p>
     </div>
   );
 }
 
-function PublishedActions({ clipCount, gamesCount, onNavigate, onAddGame }) {
+// T9390 (Decision 3): Published is gated on hasClips at the tab bar, so games (or
+// a clip) are guaranteed here -- the old zero-everything "Add Game" branch was
+// deleted as dead code. Two branches remain: drafts in progress, or "cut your
+// first clip" pointing back to Games.
+function PublishedActions({ clipCount, onNavigate }) {
   const c = EMPTY_TAB_GUIDE.published;
   if (clipCount > 0) {
     return (
       <div className="flex flex-col items-center gap-2 w-full">
         <p className="text-sm text-gray-400">{c.draftsText(clipCount)}</p>
         <Button variant="cyan" size="lg" onClick={() => onNavigate('projects')}>
-          Open In Progress Clips
-        </Button>
-      </div>
-    );
-  }
-  if (gamesCount > 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 w-full">
-        <p className="text-sm text-gray-400">{c.noClipsGamesText}</p>
-        <Button variant="secondary" size="lg" onClick={() => onNavigate('games')}>
-          Go to Games
+          Open Clips
         </Button>
       </div>
     );
   }
   return (
     <div className="flex flex-col items-center gap-2 w-full">
-      <p className="text-sm text-gray-400">{c.nothingText}</p>
-      <Button variant="success" size="lg" icon={Plus} onClick={onAddGame}>
-        Add Game
+      <p className="text-sm text-gray-400">{c.noClipsGamesText}</p>
+      <Button variant="secondary" size="lg" onClick={() => onNavigate('games')}>
+        Go to Games
       </Button>
     </div>
   );
 }
 
+// T9390 (Decision 2): footer kept ONLY on Games (the "a game is not a hard
+// prerequisite either" hint); Clips/Reels/Published dropped theirs.
 function Footer({ tab, onNavigate }) {
-  const copy = EMPTY_TAB_GUIDE[tab];
-  if (tab === 'games') {
-    return (
-      <p className="text-xs text-gray-500">
-        {copy.footerPrefix}
-        <button
-          type="button"
-          onClick={() => onNavigate('projects')}
-          className="text-cyan-400 hover:underline font-medium"
-        >
-          {copy.footerLink}
-        </button>
-      </p>
-    );
-  }
-  return <p className="text-xs text-gray-500">{copy.footer}</p>;
+  if (tab !== 'games') return null;
+  const copy = EMPTY_TAB_GUIDE.games;
+  return (
+    <p className="text-xs text-gray-500">
+      {copy.footerPrefix}
+      <button
+        type="button"
+        onClick={() => onNavigate('projects')}
+        className="text-cyan-400 hover:underline font-medium"
+      >
+        {copy.footerLink}
+      </button>
+    </p>
+  );
 }
 
 /**
- * PartialTabGuide (T8990) - the compact, tile-shaped variant. It fills the
- * leftover space in a tab's first row (a lone game's empty grid cell, or a
- * carousel filler beside a short row) with NEXT-STEP coaching, and retires
- * itself the moment the row fills (the caller stops rendering it, or the
- * carousel unmounts it once tiles overflow). No persisted state, no dismiss
- * control (decision 6): it disappears by construction, not by a gesture.
+ * PartialTabGuide (T8990, revised T9390) - the compact, tile-shaped variant. It
+ * fills the leftover space in a tab's first row (a lone game's empty grid cell, or
+ * a carousel filler beside a short row) with NEXT-STEP coaching, and retires
+ * itself the moment the row fills (the caller stops rendering it, or the carousel
+ * unmounts it once tiles overflow). No persisted state, no dismiss control: it
+ * disappears by construction, not by a gesture.
+ *
+ * T9390: the flow strip and footer are dropped from this variant entirely (they
+ * were the densest block in either variant). A decorative top accent border in the
+ * tab's color keeps continuity with the empty variant's visual language; a
+ * visually-hidden aria-label preserves the "what tab is this" context for screen
+ * reader users now that the visible step text is gone.
  *
  * An `aside` with an `h3` -- the enclosing group already owns the `h2` (a Games
- * month header, a Clips/Published game header). The flow strip is always in its
- * compact numbered-dots form (this slot is too small for the full 4-step row);
- * unlike the empty variant it is not breakpoint-gated, since the slot itself
- * only exists at widths where the dots fit.
+ * month header, a Clips/Published game header).
  */
 function PartialTabGuide({ tab, className = '', onAction }) {
   const copy = PARTIAL_TAB_GUIDE[tab];
   if (!copy) return null;
 
+  const stepLabel = FLOW_STEPS.find((s) => s.key === tab)?.label;
+
   return (
     <aside
+      aria-label={stepLabel ? `${stepLabel} guidance` : undefined}
       className={`flex flex-col items-center justify-center text-center overflow-hidden
-                  rounded-lg border border-gray-700 bg-gray-800/40 px-3 py-3 ${className}`}
+                  rounded-lg border border-gray-700 border-t-4 ${STEP_ACCENT_BORDER[tab]}
+                  bg-gray-800/40 px-3 py-3 ${className}`}
     >
-      <ol className="flex items-center gap-1.5 mb-2" aria-hidden="true">
-        {FLOW_STEPS.map((step, i) => {
-          const active = step.key === tab;
-          return (
-            <li
-              key={step.key}
-              className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
-                active ? `${STEP_COLORS[step.key]} text-white` : 'bg-gray-700 text-gray-500'
-              }`}
-            >
-              {i + 1}
-            </li>
-          );
-        })}
-      </ol>
       <h3 className="text-sm font-semibold text-white mb-1.5 leading-snug">{copy.headline}</h3>
       <p className="text-xs text-gray-400 leading-snug">{copy.body}</p>
       {copy.cta && onAction && (
@@ -338,7 +339,6 @@ function PartialTabGuide({ tab, className = '', onAction }) {
           </Button>
         </div>
       )}
-      <p className="text-[11px] text-gray-500 mt-3">{copy.footer}</p>
     </aside>
   );
 }

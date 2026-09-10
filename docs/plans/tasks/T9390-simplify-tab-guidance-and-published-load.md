@@ -399,6 +399,27 @@ Published as a decision artifact with an interactive Today/Proposed comparison. 
 with no amendments** — all three decisions LOCKED, the proposal section is now the binding spec.
 Ready for branch + implementation; not yet started.
 
+**2026-09-10 (T9390 implementation, Architect wiring note — Decision 3 only):**
+- `SegmentedTabButton`'s existing `disabled` prop (`ProjectManager.jsx:420`) is sufficient — it
+  already applies the greyed/`cursor-not-allowed` styling and blocks click + programmatic-onClick.
+  No new primitive.
+- `hasClips` (`ProjectManager.jsx:563`, `clipDrafts.length > 0 || games.some(g => g.clip_count > 0)`)
+  is the single correct gate for BOTH Reels and Published, per §3. Do NOT thread
+  `hasEverPublished`/`useCollections` summary in — deferred to a follow-up (§3 sequencing dependency).
+- Visible caption renders under the tab-bar `</div>` (`:1453`) whenever `!hasClips`, styled to
+  match the existing `addGameCaption` treatment (`text-xs text-gray-500 text-center`). `title` kept
+  on the two disabled buttons as a secondary hint, never the compliance mechanism (T8780).
+- **No redirect guard added (deliberate).** A `disabled` tab button blocks normal navigation; it
+  does not intercept a manual deep-link / refresh straight to `/home/reels-in-progress` or
+  `/home/published`. I evaluated bouncing such a landing to a safe tab, and REJECTED it: (a) it
+  would hide real content in the drafts-but-no-clips / published-then-deleted edges the spec
+  already defers, a worse regression than the cosmetic one it fixes; (b) it would fight the
+  `galleryStore.open()` publish-landing retarget (`:1121`). The spec models the tab as gated via
+  the disabled button and explicitly ships the simple gate, deferring edges — so a deep-link to a
+  gated tab renders a degraded-but-not-broken panel (Published's collapsed branch falls through to
+  "Go to Games"; Reels' always-enabled Build New Reel is the spec's own explicit choice). This is
+  faithful to the binding spec and avoids inventing a new edge regression.
+
 ## Acceptance Criteria
 
 - [ ] All four tabs (empty variant) read as noticeably shorter/less text-dense than today, per
