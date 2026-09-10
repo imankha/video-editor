@@ -1,6 +1,6 @@
 # T9330: Clipping a play keeps the editor open, with a stage-aware primary CTA
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-09-09
@@ -137,3 +137,14 @@ this class of layout/lifecycle change - see the T5380 precedent).
 - Beacon: T8140's `add_clip_opened_no_save` abandonment beacon fires on a close without a save.
   Keeping the editor open after a save changes what "close" means on this screen - verify the beacon
   does not start counting phantom abandonment.
+
+## Progress Log
+
+**2026-09-10**: Implemented per the approved design (`T9330-design.md`), merged PR #390.
+Supervisor live-verification (real browser, real account data) confirmed desktop's core
+mechanic works end-to-end and caught a genuine gap on first push - the mobile edit sheet had
+no stage CTA despite the design committing to one - which was fixed and re-verified live before
+merge. **Owed**: a real mobile DEVICE check of the create-then-close divergence itself (T5380
+precedent) - unit-tested and the CTA-in-edit-mode addition was live-verified in a real browser
+at a 390px viewport, but true touch-device behavior for the close-on-create path is not yet
+confirmed on hardware.
