@@ -180,6 +180,76 @@ describe('CardCarousel (T5672)', () => {
   });
 });
 
+describe('measurement is transform-independent (T9300 — no "Maximum update depth" loop)', () => {
+  // A helper: give a child a stable untransformed layout box (offsetWidth) plus a
+  // getBoundingClientRect that reports a DIFFERENT (transform-inflated / drifting)
+  // width. The component must read offsetWidth, so a hover/press scale transition on
+  // the tile can never perturb the peek-gap / filler verdicts (which would otherwise
+  // re-fire setGap/setFillerVisible in the no-deps post-render effect -> infinite loop).
+  const setBox = (el, { offsetWidth, rectWidth }) => {
+    Object.defineProperty(el, 'offsetWidth', { value: offsetWidth, configurable: true });
+    el.getBoundingClientRect = () => ({
+      width: typeof rectWidth === 'function' ? rectWidth() : rectWidth,
+      height: 0, top: 0, left: 0, right: 0, bottom: 0, x: 0, y: 0, toJSON() {},
+    });
+  };
+
+  it('computeGap reads the untransformed offsetWidth, not the scaled getBoundingClientRect', () => {
+    const { container } = render(
+      <CardCarousel ariaLabel="row"><div>a</div><div>b</div></CardCarousel>
+    );
+    const scrollDiv = container.querySelector('div[role="group"]');
+    Object.defineProperty(scrollDiv, 'clientWidth', { value: 390, configurable: true });
+    // 2-card phone row (72vw ~= 281px). Untransformed -> pickPeekGap(281,390,2) = 11px.
+    // Transformed by hover:scale-[1.03] -> 289.43px -> pickPeekGap gives 6px. They differ,
+    // so the applied gap tells us which width was measured.
+    setBox(scrollDiv.firstElementChild, { offsetWidth: 281, rectWidth: 289.43 });
+    expect(pickPeekGap(281, 390, 2)).toBe(11);
+    expect(pickPeekGap(289.43, 390, 2)).toBe(6);
+
+    fireEvent(window, new Event('resize')); // size-driven recompute -> computeGap
+    expect(scrollDiv.style.gap).toBe('11px'); // used offsetWidth, not the scaled rect
+  });
+
+  it('gap stays stable while a scale transition drifts the transformed width', () => {
+    const { container } = render(
+      <CardCarousel ariaLabel="row"><div>a</div><div>b</div></CardCarousel>
+    );
+    const scrollDiv = container.querySelector('div[role="group"]');
+    Object.defineProperty(scrollDiv, 'clientWidth', { value: 390, configurable: true });
+    // offsetWidth pinned; getBoundingClientRect() drifts wildly on each read (as it
+    // would every frame while `transition-all` eases the hover scale). Pre-fix this
+    // flipped the gap each render; post-fix the gap is fixed by the stable offsetWidth.
+    const drift = [281, 305, 258, 299, 271];
+    let i = 0;
+    setBox(scrollDiv.firstElementChild, {
+      offsetWidth: 281,
+      rectWidth: () => drift[i++ % drift.length],
+    });
+    for (let n = 0; n < 4; n++) fireEvent(window, new Event('resize'));
+    expect(scrollDiv.style.gap).toBe('11px'); // pickPeekGap(281,390,2) — never oscillates
+  });
+
+  it('computeFiller reads offsetWidth too, so a scale transition cannot flap the filler', () => {
+    const { container } = render(
+      <CardCarousel ariaLabel="row" fillerSlot={<div>coach-me</div>}>
+        <div>a</div>
+      </CardCarousel>
+    );
+    const scrollDiv = container.querySelector('div[role="group"]');
+    Object.defineProperty(scrollDiv, 'clientWidth', { value: 552, configurable: true });
+    // At container 552, one 260px tile fits the filler EXACTLY (260+12+280=552<=552).
+    // The scaled width 267.8 would push it over (559.8>552) and retire the filler —
+    // measuring offsetWidth keeps the verdict correct and stable.
+    setBox(scrollDiv.firstElementChild, { offsetWidth: 260, rectWidth: 267.8 });
+    expect(fillerFits(260, 552, 1)).toBe(true);
+    expect(fillerFits(267.8, 552, 1)).toBe(false);
+
+    fireEvent(window, new Event('resize'));
+    expect(screen.getByText('coach-me')).toBeTruthy(); // filler mounted (used offsetWidth)
+  });
+});
+
 describe('pickPeekGap (item 1 — always leave a peek)', () => {
   const PEEK_MIN = (tileW) => tileW * 0.12;
   const PEEK_MAX = (tileW) => tileW * 0.85;
