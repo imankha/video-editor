@@ -168,15 +168,19 @@ export function useCollections(isActive = false) {
     memberAbortsRef.current = {};
   }, [currentProfileId]);
 
-  // Fetch the summary when the tab becomes active (rising edge) or on first/idle.
-  const wasActiveRef = useRef(false);
+  // T9390: fetch the summary EAGERLY at mount (and after a profile-switch reset
+  // returns it to 'idle'), NOT lazily on tab-activate. Published's emptiness is
+  // the one tab whose "is it empty" check needs a network round trip; gating that
+  // fetch on isActive made the Published panel show a spinner on first visit while
+  // Games/Clips/Reels rendered their empty guide instantly from data Home already
+  // holds. The panel is always mounted, so fetching at mount closes that
+  // asymmetry -- by the time the user opens Published the summary is ready. Firing
+  // only from 'idle' also means activation never re-triggers a fetch (which would
+  // flip back to 'loading' and re-show the spinner on every revisit); the
+  // collectionsVersion effect below still refreshes on publish/unpublish.
   useEffect(() => {
-    const becameActive = isActive && !wasActiveRef.current;
-    wasActiveRef.current = isActive;
-    if (isActive && (becameActive || summaryState === 'idle')) {
-      fetchSummary();
-    }
-  }, [isActive, summaryState, fetchSummary]);
+    if (summaryState === 'idle') fetchSummary();
+  }, [summaryState, fetchSummary]);
 
   // Event-driven refresh: when the published-reels model changes (publish /
   // unpublish dispatches notifyCollectionsChanged), re-fetch while the tab is

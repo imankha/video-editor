@@ -218,7 +218,7 @@ describe('T8555: In Progress Reels tab shows ONLY unpublished multiclip drafts',
     // dead end. Headline resolves into the Build New Reel CTA below it (T8780
     // order preserved). The lone single-clip draft makes hasClips true, so the
     // button is enabled with the "1 clip ready to use" caption.
-    const message = screen.getByText('Reels stitch several clips into one highlight video');
+    const message = screen.getByText('Combine clips into one reel');
     const button = screen.getByRole('button', { name: /Build New Reel/i });
     expect(message).toBeTruthy();
     expect(button.disabled).toBe(false);
@@ -235,7 +235,9 @@ describe('T8555: Published tab renders the published gallery panel', () => {
   });
 
   it('clicking Published mounts the panel active with testid published-tab-panel', () => {
-    renderManager();
+    // T9390: Published is gated on hasClips, so the account needs a clip for the
+    // tab to be enabled and clickable.
+    renderManager({ projects: [singleclipDraft(9)] });
 
     fireEvent.click(publishedTab());
 
@@ -277,7 +279,7 @@ describe('T8990: Games partial-guide cell', () => {
     useGalleryStore.setState({ isOpen: false });
   });
 
-  const partialHeadline = 'Now cut your first play';
+  const partialHeadline = 'Cut your first play';
 
   it('renders the partial guide beside the tile at exactly one game', () => {
     renderManager({ games: [oneGame()] }, '/home/games');
@@ -370,5 +372,52 @@ describe('T8555: badge counts', () => {
     renderManager({ unseenReelsCount: 5 });
 
     expect(within(publishedTab()).getAllByText('5').length).toBeGreaterThan(0);
+  });
+});
+
+// T9390 (Decision 3): Reels and Published are disabled tabs until the account has
+// a clip -- gated on the SAME `hasClips` boolean that gates Build New Reel. Clips
+// and Games always stay reachable (Clips is the zero-game Add Video entry point).
+describe('T9390: Reels + Published tab gating on hasClips', () => {
+  const CAPTION = 'Reels and Published unlock once you have a clip. Cut one from a game, or use Add Video on Clips.';
+
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/home');
+    useGalleryStore.setState({ isOpen: false });
+  });
+
+  it('no clips at all: Reels and Published are disabled, Games and Clips are not', () => {
+    renderManager({ projects: [], games: [] });
+
+    expect(inProgressReelsTab().disabled).toBe(true);
+    expect(publishedTab().disabled).toBe(true);
+    expect(gamesTab().disabled).toBe(false);
+    expect(clipsTab().disabled).toBe(false);
+    // The disabled reason is a VISIBLE caption (T8780), not a hover-only title.
+    expect(screen.getByText(CAPTION)).toBeTruthy();
+  });
+
+  it('a single-clip draft (Add Video path) unlocks BOTH tabs and hides the caption', () => {
+    renderManager({ projects: [singleclipDraft(1)], games: [] });
+
+    expect(inProgressReelsTab().disabled).toBe(false);
+    expect(publishedTab().disabled).toBe(false);
+    expect(screen.queryByText(CAPTION)).toBeNull();
+  });
+
+  it('a game with cut clips (clip_count > 0) also unlocks both tabs', () => {
+    renderManager({ projects: [], games: [{ ...oneGame('gc'), clip_count: 2 }] });
+
+    expect(inProgressReelsTab().disabled).toBe(false);
+    expect(publishedTab().disabled).toBe(false);
+    expect(screen.queryByText(CAPTION)).toBeNull();
+  });
+
+  it('a game with zero cut clips does NOT unlock the tabs (games alone are not enough)', () => {
+    renderManager({ projects: [], games: [{ ...oneGame('g0'), clip_count: 0 }] });
+
+    expect(inProgressReelsTab().disabled).toBe(true);
+    expect(publishedTab().disabled).toBe(true);
+    expect(screen.getByText(CAPTION)).toBeTruthy();
   });
 });

@@ -11,11 +11,12 @@ const BASE = 'http://localhost:5173';
 const OUT = '/workspace/qa/T8980';
 fs.mkdirSync(OUT, { recursive: true });
 
+// T9390 updated the approved empty-variant headlines.
 const TABS = [
-  { id: 'games', short: 'Games', name: /^Games/, headline: 'Every highlight starts with a game' },
-  { id: 'clips', short: 'Clips', name: /^(In Progress )?Clips/, headline: 'Clips are the plays you cut from a game' },
-  { id: 'reels', short: 'Reels', name: /^(In Progress )?Reels/, headline: 'Reels stitch several clips into one highlight video' },
-  { id: 'published', short: 'Published', name: /^Published/, headline: 'Published reels are ready to share' },
+  { id: 'games', short: 'Games', name: /^Games/, headline: 'Start with a game' },
+  { id: 'clips', short: 'Clips', name: /^(In Progress )?Clips/, headline: 'Cut a clip, or upload one' },
+  { id: 'reels', short: 'Reels', name: /^(In Progress )?Reels/, headline: 'Combine clips into one reel' },
+  { id: 'published', short: 'Published', name: /^Published/, headline: 'Share what you publish' },
 ];
 
 const results = { screenshots: [], checks: [], heights: [] };

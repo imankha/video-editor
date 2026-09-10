@@ -1,8 +1,15 @@
-// T8980: copy for the shared EmptyTabGuide rendered by all four home tabs when
-// empty. Copy is APPROVED (2026-09-07) and binding -- do not paraphrase. No em
-// dashes anywhere (project-wide rule). Vocabulary is T8130's approved nouns
-// (Plays, Clips, Highlight Reels) + displayNames.js (SECTION_NAMES, CLIP_UPLOAD);
-// no new vocabulary is introduced here.
+// T8980/T9390: copy for the shared EmptyTabGuide rendered by all four home tabs.
+// Copy is APPROVED (T9390 binding spec, 2026-09-09) and binding -- do not
+// paraphrase. No em dashes anywhere (project-wide rule). Vocabulary is T8130's
+// approved nouns (Plays, Clips, Reels) + displayNames.js (SECTION_NAMES,
+// CLIP_UPLOAD); no new vocabulary is introduced here.
+//
+// T9390 (Decision 2) cut every empty-variant tab to a headline + ONE short line
+// (footer kept only on Games). Decision 1 demoted Reels to an unnumbered
+// "optional" pill in the flow strip. Decision 3 removed the cross-tab "Add Game"
+// action from Clips (zero games shows Add Video alone) and gates Reels/Published
+// at the tab bar, which let the Reels "no clips" branch and the Published
+// "nothing" branch be deleted as dead code (see EmptyTabGuide.jsx).
 
 import { SECTION_NAMES_SHORT } from './displayNames';
 
@@ -11,109 +18,98 @@ import { SECTION_NAMES_SHORT } from './displayNames';
 // is the short one-line step name (SECTION_NAMES_SHORT -- the same words the
 // sub-`sm` tab bar uses, single source); `navId` is the setActiveTab id that
 // switches to that tab (the frozen tab ids, note `clips` -> `projects` from
-// T8555's deep-link compat freeze).
+// T8555's deep-link compat freeze). T9390: Reels carries `optional: true` -- it
+// is a single publish for a full game/season, not a required step between Clips
+// and Published, so the strip renders it as an unnumbered detour pill. Numbering
+// (Games=1, Clips=2, Published=3) is computed by indexing the non-optional
+// entries only; Reels never gets a number, in code or on screen.
 export const FLOW_STEPS = [
   { key: 'games', label: SECTION_NAMES_SHORT.GAMES, navId: 'games' },
   { key: 'clips', label: SECTION_NAMES_SHORT.CLIPS, navId: 'projects' },
-  { key: 'reels', label: SECTION_NAMES_SHORT.REELS, navId: 'inProgressReels' },
+  { key: 'reels', label: SECTION_NAMES_SHORT.REELS, navId: 'inProgressReels', optional: true },
   { key: 'published', label: SECTION_NAMES_SHORT.PUBLISHED, navId: 'published' },
 ];
 
-// Per-tab copy. Count-interpolated captions are functions so the noun pluralizes
-// with the count ("1 clip" / "2 clips"), matching the existing CollectionsTab
-// pattern; every function branch only renders when its count is > 0.
+// Per-tab copy (empty variant). `body` is now a single short line (Decision 2).
+// Count-interpolated captions are functions so the noun pluralizes with the
+// count ("1 clip" / "2 clips"), matching the existing CollectionsTab pattern;
+// every function branch only renders when its count is > 0.
 export const EMPTY_TAB_GUIDE = {
   games: {
-    headline: 'Every highlight starts with a game',
-    body:
-      'Upload a full game recording, then open it and tap Add Play at each '
-      + 'moment worth keeping. Those plays become your clips, and clips become '
-      + 'the reels you share.',
-    addGameCaption: 'Video from your phone or computer. 2 credits, stored for 30 days.',
-    footerPrefix: 'Already have a short clip? ',
-    footerLink: 'Add it directly on In Progress Clips',
+    headline: 'Start with a game',
+    body: 'Upload a recording, then tap Add Play on the moments worth keeping.',
+    addGameCaption: 'From your phone or computer, 2 credits.',
+    // Footer kept ONLY on Games (Decision 2): it carries the "a game is not a
+    // hard prerequisite either" message -- the Games->Clips edge of the same
+    // "not everything here is mandatory" point Decision 1 makes for Clips->Reels.
+    footerPrefix: 'Have a clip already? ',
+    footerLink: 'Skip ahead on Clips.',
   },
   clips: {
-    headline: 'Clips are the plays you cut from a game',
-    body:
-      'Each clip gets an AI Focus pass to follow your athlete and an optional '
-      + 'Spotlight. Then publish it on its own, or build several into a reel.',
-    openGameText: 'Open a game and tap Add Play.', // games > 0
-    addGameText: 'Add a game and tap Add Play.', // games = 0
-    uploadText: 'Upload a short video you already have.',
-    footer: 'Published clips show up on the Published tab.',
+    headline: 'Cut a clip, or upload one',
+    body: 'Clips get a Focus pass, then publish alone or into a reel.',
+    openGameText: 'Open a game and tap Add Play.', // games > 0 (the Go to Games path)
+    uploadText: 'Already have a video?', // games > 0 (the Add Video path)
+    // games = 0: Add Video is the ONLY path (Decision 3 removed the cross-tab
+    // Add Game create action). This caption tells the user a game is not a
+    // prerequisite here, instead of tempting them into a foreign-tab create flow.
+    noGameCaption: 'No game needed.',
   },
   reels: {
-    headline: 'Reels stitch several clips into one highlight video',
-    body:
-      'Pick the plays you want, put them in order, and export once. A single '
-      + 'clip can be published on its own; a reel is for a full game or a season.',
-    noClipsReason: 'You need at least one clip first',
-    cutClipButton: 'Cut a clip from a game',
-    // Build New Reel is gated by hasClips (clipDrafts OR any game with
-    // clip_count > 0), but this count is clipDrafts only (the single-clip-draft
-    // number the In Progress Clips badge shows). Those populations differ: a
-    // game clip bumps its game's clip_count without necessarily creating a
-    // single-clip auto-draft, so an account with only game clips has hasClips
-    // true but clipCount 0. Never render "0 clips ready to use" under an enabled
-    // button -- drop the number in that case (the approved "N clips" copy is
-    // preserved verbatim whenever the count is real).
+    headline: 'Combine clips into one reel',
+    body: 'Order your clips and export once, or publish a single clip on its own.',
+    // Build New Reel is gated by hasClips at the TAB BAR now (Decision 3), so the
+    // empty Reels guide only renders when a clip exists -- the button is always
+    // enabled here and the old "no clips" branch was deleted as dead code.
+    // clipCount is clipDrafts-only (the In Progress Clips badge number); it can be
+    // 0 while hasClips is true (an account with only game clips), so drop the
+    // number in that case rather than print a contradictory "0 clips".
     hasClipsCaption: (n) =>
       n > 0 ? `You have ${n} clip${n === 1 ? '' : 's'} ready to use.` : 'You have clips ready to use.',
-    footer: 'Finished reels move to Published when you share them.',
   },
   published: {
-    headline: 'Published reels are ready to share',
-    body:
-      'When a clip or reel is finished, Publish moves it here, grouped by game, '
-      + 'with a link you can send to coaches, family and recruiters.',
+    headline: 'Share what you publish',
+    body: 'Every reel or clip gets a link for coaches, family and recruiters.',
     draftsText: (n) =>
-      `You have ${n} clip${n === 1 ? '' : 's'} in progress. Publish one to see it here.`,
-    noClipsGamesText: 'Cut your first clip from a game to get started.',
-    nothingText: 'Add a game to get started.',
-    footer: 'Every published reel gets its own link. Share it from the player or the card.',
+      `You have ${n} clip${n === 1 ? '' : 's'} in progress.`,
+    // Published is gated on hasClips too (Decision 3), so games are guaranteed
+    // here -- the old zero-everything "Add a game to get started" branch was
+    // deleted as dead code; this is the fall-through for "has a clip, nothing
+    // published yet".
+    noClipsGamesText: 'Cut your first clip to get started.',
   },
 };
 
-// T8990: copy for the PARTIAL state -- the compact, tile-shaped variant of
+// T8990/T9390: copy for the PARTIAL state -- the compact, tile-shaped variant of
 // EmptyTabGuide that keeps coaching a tab until its first row is full (one game,
-// or a carousel row the tiles have not yet filled). Copy is LOCKED (2026-09-08)
-// and binding -- do not paraphrase. No em dashes anywhere (project-wide rule).
-// Where the empty copy is written for absence, this is written for the NEXT step:
-// what to do with the thing you just made. `cta` is present only where a gesture
-// beyond "the tile is the action" is wanted (Games "Open game"); the other three
-// tabs already carry their action above the row (Add Video / Build New Reel), so
-// the partial guide there is copy-only.
+// or a carousel row the tiles have not yet filled). Copy is LOCKED and binding --
+// do not paraphrase. No em dashes anywhere (project-wide rule). Where the empty
+// copy is written for absence, this is written for the NEXT step: what to do with
+// the thing you just made. T9390 (Decision 2) trimmed each body to one short line
+// and dropped every footer (the "step N of M" framing they restated is gone once
+// Reels isn't numbered). `cta` is present only where a gesture beyond "the tile is
+// the action" is wanted (Games "Open game"); the other three tabs already carry
+// their action above the row (Add Video / Build New Reel), so the partial guide
+// there is copy-only.
 export const PARTIAL_TAB_GUIDE = {
   games: {
-    headline: 'Now cut your first play',
-    body:
-      'Open your game and tap Add Play at each moment worth keeping; each play '
-      + 'becomes a clip on In Progress Clips.',
+    headline: 'Cut your first play',
+    body: 'Tap Add Play on each moment worth keeping.',
     cta: 'Open game',
-    footer: 'Clips are step 2 of 4.',
   },
   clips: {
-    headline: 'Give each clip an AI Focus pass',
-    body:
-      'Open a clip to follow your athlete and add an optional Spotlight, then '
-      + 'publish it on its own or build several into a reel.',
-    footer: 'Published clips show up on the Published tab.',
+    headline: 'Give each clip a Focus pass',
+    body: 'Add an optional Spotlight, then publish it alone or into a reel.',
   },
   reels: {
-    headline: 'Finish your reel and export once',
-    body:
-      'Put the plays in order, export, then Publish moves it to the Published tab '
-      + 'with a link you can share.',
-    footer: 'Finished reels move to Published when you share them.',
+    headline: 'Finish and export',
+    body: 'Put your plays in order and export once to publish.',
   },
   published: {
     // Headline must READ as guidance, never as a control label (T8990 review): the
     // old "Share it" scanned as the real Share button. Name the affordances in the
     // BODY (they point at real controls), not the headline.
     headline: 'Ready for coaches and family',
-    body:
-      'Every published reel gets its own link. Use Share or Copy Link on any card.',
-    footer: 'Publish more clips to see them grouped by game here.',
+    body: 'Use Share or Copy Link on any card.',
   },
 };

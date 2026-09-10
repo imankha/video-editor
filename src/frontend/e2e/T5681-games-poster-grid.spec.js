@@ -42,9 +42,9 @@ async function openGamesTab(page) {
   // Either the grid's month header or the empty-state copy must appear.
   await Promise.race([
     page.getByText(/^\d{4}$|January|February|March|April|May|June|July|August|September|October|November|December/).first().waitFor({ timeout: 30000 }),
-    // T8980: the Games empty state is now the shared EmptyTabGuide (its
-    // approved headline replaces the old "No games yet" copy).
-    page.getByText('Every highlight starts with a game').waitFor({ timeout: 30000 }),
+    // T8980/T9390: the Games empty state is the shared EmptyTabGuide (its
+    // approved headline replaces the old "No games yet" copy; T9390 shortened it).
+    page.getByText('Start with a game').waitFor({ timeout: 30000 }),
   ]);
   // The app boot preloader (#preloader, index.html) overlays the DOM while it
   // fade-out animates; assertions against the underlying grid can pass while
