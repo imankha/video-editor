@@ -119,12 +119,25 @@ export default defineConfig({
           // (App.jsx) and the lazy route chunks, so rollup would otherwise keep them
           // inside the entry `index` chunk — which made a one-line App.jsx edit re-hash
           // `index` and cascade a fresh hash onto every route chunk that imports it.
-          // Pinning them to their own content-hashed chunks means a component-level
-          // deploy (the common case) leaves them untouched, so the routes don't
-          // re-download. Editing one of these dirs re-downloads only that dir's chunk.
-          if (id.includes('/src/stores/')) return 'app-stores';
-          if (id.includes('/src/utils/')) return 'app-utils';
-          if (id.includes('/src/config/')) return 'app-config';
+          // Pinning them out of `index` means a component-level deploy (the common
+          // case) leaves the foundation untouched, so the routes don't re-download.
+          //
+          // stores/utils/config MUST share ONE chunk, not three. They form a static
+          // import cycle (stores <-> utils, stores <-> config). Splitting a cycle
+          // across chunks turns rollup's safe intra-chunk module ordering into a
+          // cross-chunk ESM cycle whose eager evaluation hits a Temporal-Dead-Zone
+          // ReferenceError at boot — the entry throws before main.jsx registers the
+          // service worker, so registration never fires and the SW never activates
+          // (T6230's real-SW fixture caught exactly this: `.ready` hung 300s). Keeping
+          // the cycle inside one chunk restores the baseline single-`index` ordering
+          // rollup already proved correct. See the T6230 spec + task Progress Log.
+          if (
+            id.includes('/src/stores/') ||
+            id.includes('/src/utils/') ||
+            id.includes('/src/config/')
+          ) {
+            return 'app-foundation';
+          }
           return undefined;
         },
       },
