@@ -1,6 +1,6 @@
 # T9390: Simplify the four home-tab guidance screens + fix Published's slow first paint
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-09-09

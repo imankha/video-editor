@@ -1,6 +1,6 @@
 # T9330: Clipping a play keeps the editor open, with a stage-aware primary CTA
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-09-09
