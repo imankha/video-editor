@@ -1,6 +1,6 @@
 # T9390: Simplify the four home-tab guidance screens + fix Published's slow first paint
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-09-09
@@ -419,6 +419,16 @@ Ready for branch + implementation; not yet started.
   gated tab renders a degraded-but-not-broken panel (Published's collapsed branch falls through to
   "Go to Games"; Reels' always-enabled Build New Reel is the spec's own explicit choice). This is
   faithful to the binding spec and avoids inventing a new edge regression.
+
+## Progress Log (continued)
+
+**2026-09-10**: Implemented per the locked binding spec, merged PR #389. Two reviewer passes
+approved (0 defects), 129 relevant tests green, live QA at all 4 viewports. **Owed**: the
+Published throttled-network first-paint claim (acceptance criterion 4) is proven at the
+mechanism level (`useCollections` eager-at-mount fetch, unit-tested) but not yet verified live
+on a throttled connection against a real "has clips, nothing published" account — the worker's
+test-login fixture can't construct that data shape. Do a supervisor-side throttled-network
+check against a real such account before considering criterion 4 fully closed.
 
 ## Acceptance Criteria
 
