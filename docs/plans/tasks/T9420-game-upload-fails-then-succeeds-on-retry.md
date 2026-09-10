@@ -1,6 +1,6 @@
 # T9420: Game upload fails at ~15% ("Failed to fetch"), succeeds on retry
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-09-10

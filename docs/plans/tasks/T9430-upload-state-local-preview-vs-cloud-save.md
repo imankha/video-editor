@@ -1,6 +1,6 @@
 # T9430: Upload shows real Preparing/Uploading/Saved/Failed state; a local preview never implies saved
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-10
