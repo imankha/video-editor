@@ -83,7 +83,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
       ? (hasUnframedClips && isMultiClipMode && totalExtractedClips > 1
         ? `Export Focused Video (${totalExtractedClips - unframedCount}/${totalExtractedClips})`
         : 'Export Focused Video')
-      : 'Add Overlay';
+      : 'Add Spotlight';
 
   // LEFT status cell — progress / disconnected / error / failed / success / disabled
   // reason. Rendered in priority order but each independent block is preserved so the

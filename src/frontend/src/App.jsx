@@ -1022,10 +1022,10 @@ function App() {
       {/* Mode Switch Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={modeSwitchDialog.isOpen}
-        title={modeSwitchDialog.sourceMode === 'overlay' ? 'Uncommitted Overlay Changes' : 'Uncommitted Focus Changes'}
+        title={modeSwitchDialog.sourceMode === 'overlay' ? 'Uncommitted Spotlight Changes' : 'Uncommitted AI Focus Changes'}
         message={modeSwitchDialog.sourceMode === 'overlay'
-          ? 'You have overlay edits that haven\'t been exported yet.\n\n• Export: Create a new final video (GPU processing), then switch modes\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in overlay mode'
-          : 'You have Focus edits that haven\'t been exported yet.\n\n• Export: Re-export clip (GPU processing), then switch modes. This will reset any overlay work.\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in Focus mode'
+          ? 'You have Spotlight edits that haven\'t been exported yet.\n\n• Export: Create a new final video (GPU processing), then switch modes\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in Spotlight mode'
+          : 'You have AI Focus edits that haven\'t been exported yet.\n\n• Export: Re-export clip (GPU processing), then switch modes. This will reset any Spotlight work.\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in AI Focus mode'
         }
         onClose={handleModeSwitchCancel}
         buttons={[

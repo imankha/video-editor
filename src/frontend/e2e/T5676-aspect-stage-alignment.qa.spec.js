@@ -59,8 +59,8 @@ async function routeSamples(page) {
  *
  * TWO fixes fold into that helper (T6100 measured why the old `.first()` open hung
  * 240s here): (1) the "Clips" default view shows only Framing-incomplete
- * drafts, so an Overlay draft is reached via the "In Overlay (N)" status filter and
- * its per-tile "Open in Overlay" button; (2) crucially, several of imankh's In-Overlay
+ * drafts, so an Overlay draft is reached via the "In Spotlight (N)" status filter and
+ * its per-tile "Open in Spotlight" button; (2) crucially, several of imankh's In-Overlay
  * drafts carry DANGLING working_video refs (playback-url 200 but the R2 GET 404s), so
  * opening `.first()` blindly could pick one whose stage can NEVER hydrate. The helper
  * probes for a streamable draft (playback-url -> Range GET on the R2 URL) and opens
@@ -116,7 +116,7 @@ test.describe('T5676 aspect-aware video stage @staging-gate @gate-b', () => {
     // components/ExportButtonView.jsx:140. It must NEVER be clicked here: this
     // spec drives a REAL account (imankh@gmail.com) and clicking it fires a real,
     // costly render job against real user data with no test-scope justification.
-    // "In Overlay" drafts already carry restored highlight-region data (console:
+    // "In Spotlight" drafts already carry restored highlight-region data (console:
     // "Restored N highlight regions"), so the ellipse below renders from existing
     // data — no export needed.
 

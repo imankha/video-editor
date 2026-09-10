@@ -29,10 +29,10 @@ describe('EmptyTabGuide flow strip', () => {
     expect(fours.some((el) => el.className.includes('bg-amber-600'))).toBe(true);
   });
 
-  it('renders the collapsed dots variant naming only the current step', () => {
+  it('collapsed dots variant no longer prints the "Step N of M" line (T9320)', () => {
     render(<EmptyTabGuide tab="reels" hasClips gamesCount={1} clipCount={2} onNavigate={vi.fn()} onBuildReel={vi.fn()} />);
-    // The sub-sm collapsed strip names the current step (Reels = step 3 of 4).
-    expect(screen.getByText('Step 3 of 4: Reels')).toBeTruthy();
+    // T9320 removed the noisy "Step 3 of 4: Reels" sentence; the numbered dots stay.
+    expect(screen.queryByText(/Step \d+ of \d+/)).toBeNull();
   });
 });
 
@@ -206,9 +206,9 @@ describe('EmptyTabGuide - partial variant (T8990)', () => {
     expect(h3.textContent).toBe(PARTIAL_TAB_GUIDE.clips.headline);
   });
 
-  it('shows the compact flow-strip step label for the tab', () => {
+  it('no longer shows the compact "Step N of M" line (T9320)', () => {
     render(<EmptyTabGuide tab="reels" variant="partial" />);
-    expect(screen.getByText('Step 3 of 4: Reels')).toBeTruthy();
+    expect(screen.queryByText(/Step \d+ of \d+/)).toBeNull();
   });
 
   it('Games: renders the "Open game" CTA and fires onAction', () => {

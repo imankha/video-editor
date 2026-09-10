@@ -105,8 +105,6 @@ const STEP_COLORS = {
 };
 
 function FlowStrip({ tab }) {
-  const currentIndex = FLOW_STEPS.findIndex((s) => s.key === tab);
-  const current = FLOW_STEPS[currentIndex];
   return (
     <div className="mb-6 w-full">
       {/* sm+: full numbered 4-step row, the current step lit in its tab color */}
@@ -133,7 +131,7 @@ function FlowStrip({ tab }) {
         })}
       </ol>
 
-      {/* below sm: numbered dots, only the current step named below */}
+      {/* below sm: numbered dots, the current step lit in its tab color */}
       <div className="sm:hidden flex flex-col items-center gap-2">
         <ol className="flex items-center gap-2" aria-hidden="true">
           {FLOW_STEPS.map((step, i) => {
@@ -150,9 +148,6 @@ function FlowStrip({ tab }) {
             );
           })}
         </ol>
-        <span className="text-sm font-medium text-white">
-          Step {currentIndex + 1} of {FLOW_STEPS.length}: {current.label}
-        </span>
       </div>
     </div>
   );
@@ -313,8 +308,6 @@ function Footer({ tab, onNavigate }) {
 function PartialTabGuide({ tab, className = '', onAction }) {
   const copy = PARTIAL_TAB_GUIDE[tab];
   if (!copy) return null;
-  const currentIndex = FLOW_STEPS.findIndex((s) => s.key === tab);
-  const current = FLOW_STEPS[currentIndex];
 
   return (
     <aside
@@ -336,9 +329,6 @@ function PartialTabGuide({ tab, className = '', onAction }) {
           );
         })}
       </ol>
-      <p className="text-[11px] font-medium text-gray-400 mb-1.5">
-        Step {currentIndex + 1} of {FLOW_STEPS.length}: {current.label}
-      </p>
       <h3 className="text-sm font-semibold text-white mb-1.5 leading-snug">{copy.headline}</h3>
       <p className="text-xs text-gray-400 leading-snug">{copy.body}</p>
       {copy.cta && onAction && (

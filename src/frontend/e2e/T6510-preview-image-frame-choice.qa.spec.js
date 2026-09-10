@@ -53,7 +53,7 @@ const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
  * Open a streamable In-Overlay draft and gate on the real overlay ready-signal.
  * Delegates to the shared `openLoadableOverlayDraft`, which (T7750) now walks the
  * loadable candidates, handles the T6180 ready-to-publish kebab menu, and verifies
- * an "Open in Overlay" affordance actually exists before committing to a tile.
+ * an "Open in Spotlight" affordance actually exists before committing to a tile.
  */
 const openOverlayDraft = openLoadableOverlayDraft;
 

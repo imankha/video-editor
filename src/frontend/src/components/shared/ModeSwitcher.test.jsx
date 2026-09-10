@@ -44,7 +44,7 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
     fireEvent.click(screen.getByTestId('mode-overlay'));
 
     expect(onModeChange).not.toHaveBeenCalled();
-    expect(toastTitles()).toEqual(['Export from Focus first to enable Overlay mode']);
+    expect(toastTitles()).toEqual(['Export from AI Focus first to enable Spotlight mode']);
   });
 
   it('repeat taps dedupe to a single toast instead of stacking', () => {

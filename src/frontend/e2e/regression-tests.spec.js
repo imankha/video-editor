@@ -327,9 +327,9 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     const elapsed = Date.now() - startTime;
 
     // Check if export button returned to normal state (not "Exporting")
-    // Button text is "Frame Video" (framing mode) or "Add Overlay" (overlay mode)
+    // Button text is "Frame Video" (framing mode) or "Add Spotlight" (overlay mode)
     const frameVideoButton = page.locator('button:has-text("Frame Video")').first();
-    const addOverlayButton = page.locator('button:has-text("Add Overlay")').first();
+    const addOverlayButton = page.locator('button:has-text("Add Spotlight")').first();
     const exportingButton = page.locator('button:has-text("Exporting")');
     const loaderVisible = page.locator('.animate-spin').first();
 
@@ -337,7 +337,7 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     // 1. Export started (exportStarted=true)
     // 2. No "Exporting" button visible
     // 3. No loader visible
-    // 4. Export button is back and enabled ("Frame Video" or "Add Overlay")
+    // 4. Export button is back and enabled ("Frame Video" or "Add Spotlight")
     const isExporting = await exportingButton.isVisible().catch(() => false);
     const hasLoader = await loaderVisible.isVisible().catch(() => false);
     const frameButtonEnabled = await frameVideoButton.isEnabled({ timeout: 500 }).catch(() => false);
@@ -359,7 +359,7 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     }
 
     // Also check Overlay button as secondary signal (for when we transition modes)
-    const overlayButton = page.locator('button:has-text("Overlay")');
+    const overlayButton = page.locator('button:has-text("Spotlight")');
     const overlayEnabled = await overlayButton.isEnabled({ timeout: 500 }).catch(() => false);
     if (exportStarted && overlayEnabled && !isExporting && !hasLoader) {
       console.log('[Full] Export complete - Overlay button enabled');
@@ -1009,7 +1009,7 @@ async function ensureFocusMode(page) {
 
   // Wait for project context to be fully initialized
   // The Overlay button being visible indicates the project is properly loaded
-  const overlayButton = page.locator('button:has-text("Overlay")');
+  const overlayButton = page.locator('button:has-text("Spotlight")');
   await expect(overlayButton).toBeVisible({ timeout: 10000 });
 
   // Extra wait for React context to propagate
@@ -1551,7 +1551,7 @@ test.describe('Full Coverage Tests @full', () => {
     await ensureFocusMode(page);
 
     // Check initial state - Overlay button should be disabled (no working video yet)
-    const overlayButton = page.locator('button:has-text("Overlay")');
+    const overlayButton = page.locator('button:has-text("Spotlight")');
     const overlayInitiallyEnabled = await overlayButton.isEnabled({ timeout: 1000 }).catch(() => false);
     if (overlayInitiallyEnabled) {
       console.log('[Full] Warning: Overlay button was already enabled - may have working video from previous run');
@@ -1703,7 +1703,7 @@ test.describe('Full Coverage Tests @full', () => {
     // Note: Button may also say "Exporting..." if a previous export is still active
     const framingButton = page.locator('button:has-text("Frame Video")').first();
     const exportingFramingButton = page.locator('button:has-text("Exporting")').first();
-    const overlayButton = page.locator('button:has-text("Add Overlay")').first();
+    const overlayButton = page.locator('button:has-text("Add Spotlight")').first();
     const eitherButtonVisible = await Promise.race([
       framingButton.waitFor({ state: 'visible', timeout: 10000 }).then(() => 'framing'),
       exportingFramingButton.waitFor({ state: 'visible', timeout: 10000 }).then(() => 'framing-exporting'),
@@ -1848,7 +1848,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Check if we opened in Overlay mode (has working video from previous export)
     // If so, we need to switch to Framing mode for this test
-    const addOverlayButton = page.locator('button:has-text("Add Overlay")');
+    const addOverlayButton = page.locator('button:has-text("Add Spotlight")');
 
     if (await addOverlayButton.isVisible().catch(() => false)) {
       console.log('[Full] Project opened in Overlay mode, switching to Framing mode...');
@@ -1972,7 +1972,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Project may reopen in Overlay mode (if it has a working video from export).
     // Switch back to Framing mode if needed.
-    const addOverlayButtonReload = page.locator('button:has-text("Add Overlay")');
+    const addOverlayButtonReload = page.locator('button:has-text("Add Spotlight")');
     if (await addOverlayButtonReload.isVisible().catch(() => false)) {
       console.log('[Full] Project reopened in Overlay mode, switching to Framing mode...');
       const focusModeButtonReload = page.getByTestId('mode-framing').first();
@@ -2256,8 +2256,8 @@ test.describe('Full Coverage Tests @full', () => {
     if (alreadyInOverlay) {
       console.log('[Full Pipeline] Already in overlay mode (auto-switched after export)');
     } else {
-      // Click overlay mode button (use exact match to avoid "Add Overlay" button)
-      const overlayModeButton = page.getByRole('button', { name: 'Overlay', exact: true });
+      // Click overlay mode button (use exact match to avoid "Add Spotlight" button)
+      const overlayModeButton = page.getByRole('button', { name: 'Spotlight', exact: true });
       await expect(overlayModeButton).toBeEnabled({ timeout: 10000 });
       await overlayModeButton.click();
     }
@@ -2271,7 +2271,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // STEP 6: Run final export (overlay export)
     console.log('[Full Pipeline] Step 6: Running final export...');
-    const finalExportButton = page.locator('button:has-text("Add Overlay")');
+    const finalExportButton = page.locator('button:has-text("Add Spotlight")');
     await expect(finalExportButton).toBeVisible({ timeout: 10000 });
     await expect(finalExportButton).toBeEnabled({ timeout: 10000 });
     await finalExportButton.click();

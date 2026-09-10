@@ -91,7 +91,7 @@ export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProject
     duration: 6000,
     dedupKey: 'reel-created',
     action: {
-      label: 'Open Focus',
+      label: 'Open AI Focus',
       onClick: () => onOpenReelInFocus?.(projectId),
     },
   });

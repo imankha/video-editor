@@ -52,7 +52,7 @@ describe('announceReelCreated (T8480)', () => {
   it('the toast action opens Focus for the new project via the select+navigate gesture', () => {
     announceReelCreated(42, { onOpenReelInFocus, fetchProjects });
     const { action } = useToastStore.getState().toasts[0];
-    expect(action.label).toBe('Open Focus');
+    expect(action.label).toBe('Open AI Focus');
     action.onClick();
     expect(onOpenReelInFocus).toHaveBeenCalledWith(42);
   });

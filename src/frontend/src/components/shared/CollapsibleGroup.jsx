@@ -145,7 +145,7 @@ export function CollapsibleGroup({
               {showInOverlayLegend && (
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-sm bg-blue-300"></span>
-                  In Overlay
+                  In Spotlight
                 </span>
               )}
               {showNotStartedLegend && (

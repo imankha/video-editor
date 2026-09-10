@@ -105,9 +105,9 @@ export const FOCUS_ADD_SPOTLIGHT_TOAST = {
 export const OVERLAY_PUBLISH = {
   PUBLISH_LABEL: 'Publish Now',
   PUBLISH_CAPTION: 'Puts it in Highlight Reels so you can share it.',
-  REAPPLY_OVERLAY_LABEL: 'Reapply Overlay',
+  REAPPLY_OVERLAY_LABEL: 'Reapply Spotlight',
   REAPPLY_OVERLAY_CAPTION: 'Go back and redo the spotlight on your reel.',
-  REAPPLY_FOCUS_LABEL: 'Reapply Focus',
+  REAPPLY_FOCUS_LABEL: 'Reapply AI Focus',
   REAPPLY_FOCUS_CAPTION: 'Reframe and export again, uses credits.',
   PUBLISH_LATER_LABEL: 'Publish Later',
   PUBLISH_LATER_CAPTION: 'Save it as a draft and publish whenever you\'re ready.',
@@ -120,5 +120,5 @@ export const OVERLAY_PUBLISH = {
 // (highlight carry-forward, T4350/T4355) and that a fresh export follows.
 export const OVERLAY_REAPPLY_FOCUS_TOAST = {
   title: 'Spotlight saved',
-  message: 'Reframe your clip in Focus, then export again -- your spotlight carries over to the new reel.',
+  message: 'Reframe your clip in AI Focus, then export again -- your spotlight carries over to the new reel.',
 };

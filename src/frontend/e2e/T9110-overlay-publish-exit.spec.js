@@ -7,7 +7,7 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  * action bar (the Overlay sibling of T8390's Focus flow). A plain overlay export
  * now mounts the SAME preview-player shell (CollectionPlayer) with a new
  * OverlayPublishActionBar footer offering four equal-weight, gesture-driven
- * choices: Publish Now / Reapply Overlay / Reapply Focus / Publish Later.
+ * choices: Publish Now / Reapply Spotlight / Reapply AI Focus / Publish Later.
  *
  * WHY A DIAG HARNESS (t9110diag.html), NOT the real flow: identical reasoning to
  * T8520-T8530's spec — a real end-to-end run needs an uploaded game, annotated
@@ -34,7 +34,7 @@ skipOnDeployedTarget(
   'drives t9110diag.html dev-only harness (not in rollupOptions.input; 404 on a deployed CF Pages build)'
 );
 
-const LABELS = ['Publish Now', 'Reapply Overlay', 'Reapply Focus', 'Publish Later'];
+const LABELS = ['Publish Now', 'Reapply Spotlight', 'Reapply AI Focus', 'Publish Later'];
 
 // Count resolved grid-template-columns tracks (each track resolves to a px
 // value, so the token count == the column count). The measurement the task
@@ -70,7 +70,7 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
     for (const name of LABELS) {
       await expect(bar.getByRole('button', { name, exact: true })).toBeVisible();
     }
-    // Reapply Focus carries the honest paid-re-export cost warning caption.
+    // Reapply AI Focus carries the honest paid-re-export cost warning caption.
     await expect(bar.getByText(/uses credits/i)).toBeVisible();
     await saveEvidence(page, 'T9110-criterion-preview-actionbar-desktop');
 
@@ -79,9 +79,9 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'publish-now');
     await expect(page.getByText('Published', { exact: false })).toBeVisible();
 
-    // Reapply Focus -> its own confirming toast + closes.
+    // Reapply AI Focus -> its own confirming toast + closes.
     await page.getByTestId('diag-reopen').click();
-    await page.getByTestId('overlay-publish-action-bar').getByRole('button', { name: 'Reapply Focus', exact: true }).click();
+    await page.getByTestId('overlay-publish-action-bar').getByRole('button', { name: 'Reapply AI Focus', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'reapply-focus');
     await expect(page.getByText('Spotlight saved')).toBeVisible();
 
@@ -137,7 +137,7 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
     }
   });
 
-  test('X / Escape maps to Reapply Overlay (nevermind, no toast side effect)', async ({ page }) => {
+  test('X / Escape maps to Reapply Spotlight (nevermind, no toast side effect)', async ({ page }) => {
     await page.goto('/t9110diag.html');
     await page.waitForLoadState('domcontentloaded');
     await expect(page.getByTestId('overlay-publish-action-bar')).toBeVisible();

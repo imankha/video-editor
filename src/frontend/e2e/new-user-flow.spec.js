@@ -605,8 +605,8 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     expect(q2s3).toBeTruthy();
     console.log('[Q2.3] Framing export complete');
 
-    // --- Q2 Step 4: Add Overlay ---
-    console.log('[Q2.4] Add Overlay');
+    // --- Q2 Step 4: Add Spotlight ---
+    console.log('[Q2.4] Add Spotlight');
 
     // Reload page to ensure framing export result is reflected in UI
     await page.goto('/');
@@ -619,7 +619,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Switch to overlay mode -- wait for Overlay button to be enabled
     // (enabled only after framing export completes and working_video exists)
     let overlayExportDone = false;
-    const overlayModeBtn = page.locator('button:has-text("Overlay"):not([disabled])');
+    const overlayModeBtn = page.locator('button:has-text("Spotlight"):not([disabled])');
     const overlayVisible = await overlayModeBtn.first().isVisible().catch(() => false);
     console.log(`[Q2.4] Overlay button visible: ${overlayVisible}`);
 
@@ -627,10 +627,10 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
       await overlayModeBtn.first().click();
       await page.waitForTimeout(3000);
 
-      // Click Add Overlay to start overlay export
-      const addOverlayBtn = page.locator('button:has-text("Add Overlay")');
+      // Click Add Spotlight to start overlay export
+      const addOverlayBtn = page.locator('button:has-text("Add Spotlight")');
       const addOverlayVisible = await addOverlayBtn.first().isVisible().catch(() => false);
-      console.log(`[Q2.4] Add Overlay button visible: ${addOverlayVisible}`);
+      console.log(`[Q2.4] Add Spotlight button visible: ${addOverlayVisible}`);
 
       if (addOverlayVisible) {
         await addOverlayBtn.first().click();
@@ -644,7 +644,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
         overlayExportDone = !!q2s4;
         console.log(`[Q2.4] Overlay export result: ${overlayExportDone}`);
       } else {
-        console.log('[Q2.4] WARNING: Add Overlay button not visible');
+        console.log('[Q2.4] WARNING: Add Spotlight button not visible');
       }
     } else {
       console.log('[Q2.4] WARNING: Overlay mode button not visible/enabled');
@@ -741,12 +741,12 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     // Second overlay export
     let overlayExport2Done = false;
-    const overlayBtn2 = page.locator('button:has-text("Overlay"):not([disabled])');
+    const overlayBtn2 = page.locator('button:has-text("Spotlight"):not([disabled])');
     if (await overlayBtn2.first().isVisible().catch(() => false)) {
       await overlayBtn2.first().click();
       await page.waitForTimeout(3000);
 
-      const addOverlay2 = page.locator('button:has-text("Add Overlay")');
+      const addOverlay2 = page.locator('button:has-text("Add Spotlight")');
       if (await addOverlay2.first().isVisible().catch(() => false)) {
         await addOverlay2.first().click();
         await page.waitForTimeout(2000);
@@ -927,12 +927,12 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     if (reelExportDone) {
       console.log('[Q4.6] Overlay on reel');
 
-      const overlayBtn3 = page.locator('button:has-text("Overlay"):not([disabled])');
+      const overlayBtn3 = page.locator('button:has-text("Spotlight"):not([disabled])');
       if (await overlayBtn3.first().isVisible().catch(() => false)) {
         await overlayBtn3.first().click();
         await page.waitForTimeout(3000);
 
-        const addOverlay3 = page.locator('button:has-text("Add Overlay")');
+        const addOverlay3 = page.locator('button:has-text("Add Spotlight")');
         if (await addOverlay3.first().isVisible().catch(() => false)) {
           await addOverlay3.first().click();
           await page.waitForTimeout(2000);

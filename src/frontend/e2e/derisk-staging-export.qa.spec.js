@@ -109,12 +109,12 @@ async function openDraftCard(page, name) {
 }
 
 // T7800 (gate run 2026-08-26): the export button was RENAMED in ExportButtonView.jsx —
-// Framing mode reads "Export Focused Video( (n/m))?", Overlay mode reads "Add Overlay"
+// Framing mode reads "Export Focused Video( (n/m))?", Overlay mode reads "Add Spotlight"
 // (same onExport handler, different label). The old /^Export( \(\d+\/\d+\))?$/ matched
 // neither, which presented as a phantom "overlay panel never mounted" mount-logic FAIL
 // on a perfectly healthy screen.
 const FRAMING_EXPORT_BTN = /^Export Focused Video( \(\d+\/\d+\))?$/;
-const OVERLAY_EXPORT_BTN = /^Add Overlay$/;
+const OVERLAY_EXPORT_BTN = /^Add Spotlight$/;
 
 test('staging export pipeline + publish (smoke + durability) @staging-gate @gate-a', async ({ context, page }) => {
   test.setTimeout(900_000);

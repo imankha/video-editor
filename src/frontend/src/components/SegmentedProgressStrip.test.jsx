@@ -48,7 +48,7 @@ describe('SegmentedProgressStrip (T3540)', () => {
         project={makeProject({ has_overlay_edits: true, has_working_video: true })}
       />
     );
-    const overlay = getSegmentByTitle(container, 'Overlay');
+    const overlay = getSegmentByTitle(container, 'Spotlight');
     expect(overlay.className).not.toContain('bg-blue-500');
     expect(getHalfFill(overlay)).toBeTruthy();
   });
@@ -57,7 +57,7 @@ describe('SegmentedProgressStrip (T3540)', () => {
     const { container } = render(
       <SegmentedProgressStrip project={makeProject({ has_working_video: true })} />
     );
-    const framing = getSegmentByTitle(container, 'Focus');
+    const framing = getSegmentByTitle(container, 'AI Focus');
     expect(framing.className).toContain('bg-green-500');
     expect(getHalfFill(framing)).toBeNull();
   });
@@ -75,28 +75,28 @@ describe('SegmentedProgressStrip (T3540)', () => {
     const exporting = render(
       <SegmentedProgressStrip project={makeProject()} isExporting="framing" />
     );
-    const exportingSeg = getSegmentByTitle(exporting.container, 'Focus');
+    const exportingSeg = getSegmentByTitle(exporting.container, 'AI Focus');
     expect(exportingSeg.className).toContain('bg-amber-500');
     expect(getHalfFill(exportingSeg)).toBeNull();
 
     const failed = render(
       <SegmentedProgressStrip project={makeProject()} failedExportType="framing" />
     );
-    const failedSeg = getSegmentByTitle(failed.container, 'Focus');
+    const failedSeg = getSegmentByTitle(failed.container, 'AI Focus');
     expect(failedSeg.className).toContain('bg-orange-500');
     expect(getHalfFill(failedSeg)).toBeNull();
 
     const disconnected = render(
       <SegmentedProgressStrip project={makeProject()} isExporting="framing" isOffline={true} />
     );
-    const disconnectedSeg = getSegmentByTitle(disconnected.container, 'Focus');
+    const disconnectedSeg = getSegmentByTitle(disconnected.container, 'AI Focus');
     expect(disconnectedSeg.className).toContain('bg-gray-400');
     expect(getHalfFill(disconnectedSeg)).toBeNull();
 
     const ready = render(
       <SegmentedProgressStrip project={makeProject({ has_working_video: true })} />
     );
-    const readySeg = getSegmentByTitle(ready.container, 'Overlay');
+    const readySeg = getSegmentByTitle(ready.container, 'Spotlight');
     expect(readySeg.className).toContain('bg-blue-300');
     expect(getHalfFill(readySeg)).toBeNull();
   });
@@ -142,7 +142,7 @@ describe('SegmentedProgressStrip (T3540)', () => {
         })}
       />
     );
-    const framing = getSegmentByTitle(container, 'Focus');
+    const framing = getSegmentByTitle(container, 'AI Focus');
     expect(framing.className).not.toContain('ring-amber-400');
   });
 
@@ -153,10 +153,10 @@ describe('SegmentedProgressStrip (T3540)', () => {
       />
     );
     const clipSeg = getSegmentByTitle(container, 'Clip 1');
-    expect(clipSeg.getAttribute('title')).toContain('Started - export Focus to complete');
+    expect(clipSeg.getAttribute('title')).toContain('Started - export AI Focus to complete');
     expect(clipSeg.getAttribute('title')).not.toContain('Editing');
 
-    const overlaySeg = getSegmentByTitle(container, 'Overlay');
+    const overlaySeg = getSegmentByTitle(container, 'Spotlight');
     expect(overlaySeg.getAttribute('title')).toContain('Started - export to complete');
     expect(overlaySeg.getAttribute('title')).not.toContain('Editing');
   });

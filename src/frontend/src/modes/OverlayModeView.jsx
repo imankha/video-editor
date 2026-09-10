@@ -1123,18 +1123,18 @@ export function OverlayModeView({
         {showExportRequired && !isFullscreen && !mobileFs && (
           <div className="mt-6 bg-purple-900/30 border border-purple-500/50 rounded-lg p-6 text-center">
             <p className="text-purple-200 font-medium mb-2">
-              Export required for overlay mode
+              Export required for Spotlight mode
             </p>
             <p className="text-purple-300/70 text-sm mb-4">
               {hasMultipleClips
                 ? 'You have multiple clips loaded. Export first to combine them into a single video before adding overlays.'
-                : 'You have made edits in Focus mode. Export first to apply them before adding overlays.'}
+                : 'You have made edits in AI Focus mode. Export first to apply them before adding overlays.'}
             </p>
             <button
               onClick={onSwitchToFraming}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              Switch to Focus Mode
+              Switch to AI Focus Mode
             </button>
           </div>
         )}

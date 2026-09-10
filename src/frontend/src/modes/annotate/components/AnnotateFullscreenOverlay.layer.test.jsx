@@ -147,27 +147,27 @@ describe('AnnotateFullscreenOverlay — Layer control in the desktop strip (T860
 // so the "no rating yet" branch is exercised at the getRatingCaption unit-test
 // level (clipConstants.test.js), not through this component's initial render.
 describe('AnnotateFullscreenOverlay — rating caption (T8490)', () => {
-  it('rating 4 (default) shows the "Big play" caption, formBody layout', () => {
+  it('rating 4 (default) shows the "Good play" caption, formBody layout', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
-    expect(screen.getByText('Big play (!) - saved to your library.')).toBeTruthy();
+    expect(screen.getByText('Good play (!) - one more star creates a clip.')).toBeTruthy();
   });
 
-  it('rating 1-3 shows "Saved to your library.", formBody layout', () => {
+  it('rating 2 shows the "Technical lapse" learn-from caption, formBody layout', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
     fireEvent.click(screen.getByRole('button', { name: '2 stars' }));
-    expect(screen.getByText('Saved to your library.')).toBeTruthy();
+    expect(screen.getByText('Technical lapse (?) - a play to learn from.')).toBeTruthy();
   });
 
-  it('rating 5 + My Athlete shows the reel-will-be-created caption, formBody layout', () => {
+  it('rating 5 + My Athlete shows the clip-will-be-created caption, formBody layout', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
     fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
-    expect(screen.getByText("Can't-miss play (!!) - reel will be created.")).toBeTruthy();
+    expect(screen.getByText('Brilliant play (!!) - clip will be created from play.')).toBeTruthy();
   });
 
-  it('rating 5 + Team shows the team-clips-dont-start-reels caption, formBody layout', () => {
+  it('rating 5 + Team shows the team-plays-dont-create-clips caption, formBody layout', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={false} />);
     fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
-    expect(screen.getByText("Can't-miss team play (!!) - team clips don't start reels.")).toBeTruthy();
+    expect(screen.getByText("Brilliant team play (!!) - team plays don't create clips.")).toBeTruthy();
   });
 
   it('the caption never renders in edit mode (existingClip set)', () => {
@@ -177,14 +177,14 @@ describe('AnnotateFullscreenOverlay — rating caption (T8490)', () => {
         existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 5, tags: [], my_athlete: true }}
       />
     );
-    expect(screen.queryByText(/reel will be created/)).toBeNull();
-    expect(screen.queryByText(/saved to your library/i)).toBeNull();
+    expect(screen.queryByText(/clip will be created/)).toBeNull();
+    expect(screen.queryByText(/creates a clip/i)).toBeNull();
   });
 
-  it('rating 5 + My Athlete shows the reel-will-be-created caption, strip layout', () => {
+  it('rating 5 + My Athlete shows the clip-will-be-created caption, strip layout', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" surface="inline_desktop" newClipLayerIsMine={true} />);
     fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
-    expect(screen.getByText("Can't-miss play (!!) - reel will be created.")).toBeTruthy();
+    expect(screen.getByText('Brilliant play (!!) - clip will be created from play.')).toBeTruthy();
   });
 
   it('the caption never renders in edit mode, strip layout', () => {
@@ -196,6 +196,6 @@ describe('AnnotateFullscreenOverlay — rating caption (T8490)', () => {
         existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 5, tags: [], my_athlete: true }}
       />
     );
-    expect(screen.queryByText(/reel will be created/)).toBeNull();
+    expect(screen.queryByText(/clip will be created/)).toBeNull();
   });
 });

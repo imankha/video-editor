@@ -139,24 +139,24 @@ test.describe('T8490: rating caption — desktop strip', () => {
     const strip = page.locator('[data-testid="annotate-editor-strip"]');
     await expect(strip).toBeVisible();
 
-    // Default rating (4, "Good") — "Big play" caption.
-    await expect(strip).toContainText('Big play (!) - saved to your library.');
+    // Default rating (4, "Good") — "Good play" caption.
+    await expect(strip).toContainText('Good play (!) - one more star creates a clip.');
     await saveEvidence(page, 'T8490-strip-rating4-mine');
 
-    // Rating 2 -> generic "Saved to your library."
+    // Rating 2 -> "Technical lapse" learn-from caption
     await strip.locator('button[title="2 stars"]').click();
-    await expect(strip).toContainText('Saved to your library.');
+    await expect(strip).toContainText('Technical lapse (?) - a play to learn from.');
     await saveEvidence(page, 'T8490-strip-rating2');
 
-    // Rating 5 + My Athlete (default layer) -> "reel will be created."
+    // Rating 5 + My Athlete (default layer) -> "clip will be created from play."
     await strip.locator('button[title="5 stars"]').click();
-    await expect(strip).toContainText("Can't-miss play (!!) - reel will be created.");
+    await expect(strip).toContainText("Brilliant play (!!) - clip will be created from play.");
     await expect(strip.locator('button:has-text("Save")')).toBeVisible();
     await saveEvidence(page, 'T8490-strip-rating5-mine');
 
-    // Switch to Team layer -> "team clips don't start reels."
+    // Switch to Team layer -> "team plays do not create clips."
     await page.locator('[role="radio"][aria-label="Team layer"]').click();
-    await expect(strip).toContainText("Can't-miss team play (!!) - team clips don't start reels.");
+    await expect(strip).toContainText("Brilliant team play (!!) - team plays don't create clips.");
     await saveEvidence(page, 'T8490-strip-rating5-team');
 
     // Save stays reachable throughout (never covered/off-screen).
@@ -190,11 +190,11 @@ test.describe('T8490: rating caption — mobile bottom sheet', () => {
 
     const sheet = page.locator('[data-add-clip-form]');
     await expect(sheet).toBeVisible();
-    await expect(sheet).toContainText('Big play (!) - saved to your library.');
+    await expect(sheet).toContainText('Good play (!) - one more star creates a clip.');
     await saveEvidence(page, 'T8490-mobile-320-rating4-mine');
 
     await sheet.locator('button[title="5 stars"]').click();
-    await expect(sheet).toContainText("Can't-miss play (!!) - reel will be created.");
+    await expect(sheet).toContainText("Brilliant play (!!) - clip will be created from play.");
     await saveEvidence(page, 'T8490-mobile-320-rating5-mine');
 
     // The pinned footer keeps Save reachable without scrolling (T8140).

@@ -92,17 +92,17 @@ describe('ClipDetailsEditor — Layer control (T5700)', () => {
 // created" — the reel either already exists or the Reel control below is the
 // live action to create one.
 describe('ClipDetailsEditor — rating caption (T8490)', () => {
-  it('rating 1-3 shows "Saved to your library."', () => {
+  it('rating 2 shows the "Technical lapse" learn-from caption', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, rating: 2, my_athlete: true }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.getByText('Saved to your library.')).toBeTruthy();
+    expect(screen.getByText('Technical lapse (?) - a play to learn from.')).toBeTruthy();
   });
 
-  it('rating 4 shows the "Big play" caption', () => {
+  it('rating 4 shows the "Good play" one-more-star caption', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, rating: 4, my_athlete: true }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.getByText('Big play (!) - saved to your library.')).toBeTruthy();
+    expect(screen.getByText('Good play (!) - one more star creates a clip.')).toBeTruthy();
   });
 
-  it('rating 5 + My Athlete + no reel yet points at the Reel control below, never "will be created"', () => {
+  it('rating 5 + My Athlete + no clip yet points at the Clip control below, never "will be created"', () => {
     render(
       <ClipDetailsEditor
         region={{ ...baseRegion, rating: 5, my_athlete: true, autoProjectId: null }}
@@ -110,10 +110,10 @@ describe('ClipDetailsEditor — rating caption (T8490)', () => {
         onDelete={() => {}}
       />
     );
-    expect(screen.getByText("Can't-miss play (!!) - create a reel below.")).toBeTruthy();
+    expect(screen.getByText('Brilliant play (!!) - create a clip below.')).toBeTruthy();
   });
 
-  it('rating 5 + My Athlete + reel already exists says so, does not re-offer creation', () => {
+  it('rating 5 + My Athlete + clip already exists says so, does not re-offer creation', () => {
     render(
       <ClipDetailsEditor
         region={{ ...baseRegion, rating: 5, my_athlete: true, autoProjectId: 42 }}
@@ -121,10 +121,10 @@ describe('ClipDetailsEditor — rating caption (T8490)', () => {
         onDelete={() => {}}
       />
     );
-    expect(screen.getByText("Can't-miss play (!!) - reel already created.")).toBeTruthy();
+    expect(screen.getByText('Brilliant play (!!) - clip already created from play.')).toBeTruthy();
   });
 
-  it('rating 5 + Team shows the team-clips-dont-start-reels caption', () => {
+  it('rating 5 + Team shows the team-plays-dont-create-clips caption', () => {
     render(
       <ClipDetailsEditor
         region={{ ...baseRegion, rating: 5, my_athlete: false, autoProjectId: null }}
@@ -132,6 +132,6 @@ describe('ClipDetailsEditor — rating caption (T8490)', () => {
         onDelete={() => {}}
       />
     );
-    expect(screen.getByText("Can't-miss team play (!!) - team clips don't start reels.")).toBeTruthy();
+    expect(screen.getByText("Brilliant team play (!!) - team plays don't create clips.")).toBeTruthy();
   });
 });

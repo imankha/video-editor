@@ -100,7 +100,7 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
   // other tiles' hover rails carry "Rename reel"/"Delete reel" buttons.
   const menu = page.getByTestId('draft-kebab-menu');
   await expect(menu).toBeVisible();
-  for (const label of ['Rename', 'Open in Framing', 'Open in Overlay', 'Delete reel']) {
+  for (const label of ['Rename', 'Open in Framing', 'Open in Spotlight', 'Delete reel']) {
     await expect(menu.getByRole('button', { name: label, exact: true }), `kebab item: ${label}`).toBeVisible();
   }
   await saveEvidence(page, 'criterion-2-kebab-open');
