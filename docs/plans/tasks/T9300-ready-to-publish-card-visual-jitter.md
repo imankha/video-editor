@@ -1,6 +1,6 @@
 # T9300: "Ready to Publish" clip card visually twitches/jitters
 
-**Status:** WIP
+**Status:** STAGING (PR #385 merged 2026-09-10)
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-09
