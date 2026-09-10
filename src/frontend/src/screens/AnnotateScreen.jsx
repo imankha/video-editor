@@ -283,6 +283,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     annotateClipCount,
     isLoadingAnnotations,
     ANNOTATE_MAX_NOTES_LENGTH,
+    pendingProjectClipId,
     // T5700/T6400: which layer a new clip inherits (no toggle) + clip-list layer filter
     newClipLayerIsMine,
     layerFilter,
@@ -296,6 +297,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     handleFullscreenUpdateClip,
     handleOverlayClose,
     handleOverlayResume,
+    handleOverlayResumePlayback,
     handleSelectRegion: handleSelectAnnotateRegion,
     handleTimelineSeek,
     setAnnotatePlaybackSpeed,
@@ -847,6 +849,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         onFullscreenCreateClip={handleFullscreenCreateClip}
         onFullscreenUpdateClip={handleFullscreenUpdateClip}
         onOverlayResume={handleOverlayResume}
+        onOverlayResumePlayback={handleOverlayResumePlayback}
         onOverlayClose={handleOverlayClose}
         // Layer selection
         annotateSelectedLayer={annotateSelectedLayer}
@@ -857,6 +860,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         newClipLayerIsMine={newClipLayerIsMine}
         // T8600: desktop strip's Focus button (edit mode, existingClip.autoProjectId)
         onOpenClipInFocus={openClipInFocus}
+        // T9330: strip stage CTA Spotlight target + the in-flight pending-project clip
+        onOpenClipInOverlay={openClipInOverlay}
+        pendingProjectClipId={pendingProjectClipId}
         // T710: Annotation playback
         playback={playback}
         lockScrub={lockScrub}

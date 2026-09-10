@@ -142,6 +142,23 @@ describe('AnnotateFullscreenOverlay — abandonment beacon (T8140)', () => {
     rerender(<AnnotateFullscreenOverlay {...baseProps} isVisible={false} existingClip={clip} />);
     expect(recordUiImpression).not.toHaveBeenCalled();
   });
+
+  // T9330 §2.8: with stay-open, a create-save no longer closes the overlay
+  // (isVisible stays true) — instead existingClip flips from null to the new
+  // region (CREATING->EDITING). savedThisOpenRef is set synchronously inside
+  // handleSave, BEFORE that transition flips the overlay's own isEditMode
+  // (!!existingClip), so the beacon effect's cleanup (keyed on isEditMode)
+  // must see savedThisOpenRef already true and NOT fire — no phantom
+  // abandonment on a create-save that stays open.
+  it('does NOT fire when a create-save stays open (existingClip flips null -> new region, isVisible unchanged)', () => {
+    const { container, rerender } = render(
+      <AnnotateFullscreenOverlay {...baseProps} isVisible={true} existingClip={null} onCreateClip={() => {}} />
+    );
+    fireEvent.click(saveButton(container));
+    const newRegion = { id: 'new_1', startTime: 21, endTime: 33, rating: 4, tags: [], autoProjectId: null };
+    rerender(<AnnotateFullscreenOverlay {...baseProps} isVisible={true} existingClip={newRegion} />);
+    expect(recordUiImpression).not.toHaveBeenCalled();
+  });
 });
 
 // T8600 §2.5: `surface` is a required, no-silent-fallback discriminator so a

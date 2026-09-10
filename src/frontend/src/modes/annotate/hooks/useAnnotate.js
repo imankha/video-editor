@@ -241,7 +241,7 @@ function generateClipId() {
   return `clip_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-export default function useAnnotate(videoMetadata, { selectedRegionId = null, onSelect } = {}) {
+export default function useAnnotate(videoMetadata, { selectedRegionId = null, onSelect, onCreateSelect } = {}) {
   // Clip regions
   const [clipRegions, setClipRegions] = useState([]);
 
@@ -417,11 +417,15 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
 
     setClipRegions(prev => [...prev, newRegion]);
     setColorIndex(prev => prev + 1);
-    onSelect?.(newRegion.id);
+    // T9330: the create edge is DISTINCT from generic selection. When an
+    // onCreateSelect is provided the container routes it to a stay-open
+    // (CREATING->EDITING) or close (CREATING->SELECTED) transition per surface;
+    // falling back to onSelect keeps every other caller's semantics unchanged.
+    (onCreateSelect || onSelect)?.(newRegion.id);
     track('clip_add', { startTime: Math.round(clampedStart), endTime: Math.round(Math.min(actualEndTime, clampDuration)), rating }, { debugOnly: true });
 
     return newRegion;
-  }, [duration, colorIndex, onSelect]);
+  }, [duration, colorIndex, onSelect, onCreateSelect]);
 
   /**
    * Update a clip region's properties

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
+import { useProjectsStore } from '../../../stores/projectsStore';
 
 // T8960: desktop strip (layout="strip") layout-feedback rework —
 //  - item 2: name is the FIRST control, default + pencil, renames inline (both modes)
@@ -23,7 +24,10 @@ beforeEach(() => {
   });
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  useProjectsStore.setState({ projects: [] });
+});
 
 const baseProps = {
   isVisible: true,
@@ -110,5 +114,37 @@ describe('AnnotateFullscreenOverlay strip — details panel has no inner scroll 
     expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
     expect(container.querySelector('.overflow-y-auto')).toBeNull();
     expect(container.querySelector('.max-h-64')).toBeNull();
+  });
+});
+
+// T9330 §3.5: the strip's stage CTA row (L917-940) is replaced with a
+// FULL-WIDTH primary button driven by getClipStage — no longer a small
+// right-anchored chip that always says "AI Focus" regardless of stage.
+describe('AnnotateFullscreenOverlay strip — full-width stage-aware primary CTA (T9330)', () => {
+  it('renders the stage CTA full-width, not a small right-anchored chip', () => {
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps}
+        layout="strip"
+        existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
+      />
+    );
+    const cta = screen.getByRole('button', { name: 'Apply AI Focus' });
+    expect(cta.className).toMatch(/w-full/);
+  });
+
+  it('reflects the linked project stage (Spotlight), not a hardcoded "AI Focus" label', () => {
+    // linkedProject is looked up via useProjectsList (matching ClipDetailsEditor),
+    // so seed the store rather than passing a prop.
+    useProjectsStore.setState({ projects: [{ id: 42, has_working_video: true, has_final_video: false, is_published: false }] });
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps}
+        layout="strip"
+        existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
+      />
+    );
+    expect(screen.queryByRole('button', { name: 'Apply AI Focus' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Apply Spotlight' })).toBeTruthy();
   });
 });
