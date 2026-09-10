@@ -58,6 +58,44 @@ Two things make this worth measuring rather than assuming:
 - `src/frontend/e2e/update-gate.spec.js`
 - a production build must be diffed before and after, not just unit-tested
 
+## Progress Log
+
+**2026-09-10 — measured, fixed, re-measured (build config only).**
+
+Measurement method: build two production bundles that differ by one trivial source line,
+diff their Workbox precache manifests (`scripts/measure-update-download.mjs`). The delta =
+bytes a client on the old build must fetch to reach the new one.
+
+*Baseline (before):* the app rode in ONE ~1.14 MB `index` chunk mixing React + all vendor
++ app entry code. A one-line change re-downloaded **~73%** of the 2.1 MB precache regardless
+of which file changed — the `index` hash changed and cascaded a fresh hash onto every lazy
+route chunk that imported it (routes were byte-identical after stripping hashed import
+specifiers, yet re-downloaded).
+
+*Fix:* `manualChunks` splits the STABLE, always-eager vendor libs (react/react-dom,
+zustand/immer, lucide-react; @stripe already split) and the app-shared foundation
+(`src/stores`, `src/utils`, `src/config`) into their own content-hashed chunks. html2canvas /
+mp4box stay lazy (naming them would hoist them eager and regress cold start — T8570's goal).
+
+*After:*
+
+| Deploy edits… | Baseline | After | 
+|---|---|---|
+| a component / App.jsx (common case) | ~73% | **~47%** |
+| a store / util (foundational, wide fan-out) | ~73% | **~65%** |
+
+Cold-start eager load: 1161 KB → 1169 KB (**+8 KB / +0.7%** — negligible). Total precache
+unchanged (~2.1 MB). No new rollup warnings (baseline had 10 mixed-import warnings, this build
+has 8). SW correctness untouched: `cleanupOutdatedCaches`/`clientsClaim`/`globPatterns` all
+unchanged, so an activated bundle is still complete and self-consistent.
+
+*Stopping point:* the residual cost is the 696 KB `index` chunk (App.jsx + eager shared
+components) re-hashing on any eager-component edit, plus a store/util fan-out. Both are
+partly intrinsic to content-hash cache-busting over a wide import graph. Pushing further
+would require pinning `src/components` — which hoists lazy route-only components into an
+eager chunk (a real cold-start regression) for diminishing returns — or lazy-loading more
+of App.jsx's graph, which is runtime restructuring out of this task's scope.
+
 ## Notes
 
 - Tier M. Frontend build config only, no runtime logic.
