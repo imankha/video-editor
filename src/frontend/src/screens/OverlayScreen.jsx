@@ -1403,7 +1403,6 @@ export function OverlayScreen({
     regionHasDetections,
     showPlayerBoxes,
     togglePlayerBoxes,
-    enablePlayerBoxes,
     handlePlayerSelect,
     handleHighlightChange,
     handleHighlightComplete,
@@ -1738,7 +1737,6 @@ export function OverlayScreen({
       onPlayerSelect={handlePlayerSelect}
       showPlayerBoxes={showPlayerBoxes}
       onTogglePlayerBoxes={togglePlayerBoxes}
-      onEnablePlayerBoxes={enablePlayerBoxes}
       onDetectionMarkerClick={handleDetectionMarkerClick}
       // Zoom
       zoom={zoom}
