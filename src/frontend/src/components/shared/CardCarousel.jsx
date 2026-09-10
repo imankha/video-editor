@@ -179,7 +179,15 @@ export function CardCarousel({ children, ariaLabel, className = '', fillerSlot =
     if (!el) return;
     const firstChild = el.firstElementChild;
     if (!firstChild) return;
-    const tileW = firstChild.getBoundingClientRect().width;
+    // offsetWidth, NOT getBoundingClientRect().width: the latter reflects CSS
+    // transforms, and the tiles carry hover/press `scale` under a transition
+    // (DraftTile `hover:scale-[1.03] transition-all`). During that ease the
+    // transformed width drifts sub-pixel every frame, which flips pickPeekGap's
+    // threshold verdict back and forth, and the no-deps post-render effect below
+    // re-runs setGap on each flip -> "Maximum update depth" loop (T9300). The
+    // untransformed layout box (offsetWidth) is what the peek math actually wants
+    // and a scale transition can never perturb it.
+    const tileW = firstChild.offsetWidth;
     const containerW = el.clientWidth;
     // Exclude the trailing filler (T8990) from the peek-gap child count -- the
     // peek is a property of the real tiles, and counting the filler would let it
@@ -203,7 +211,11 @@ export function CardCarousel({ children, ariaLabel, className = '', fillerSlot =
       setFillerVisible((prev) => (prev === false ? prev : false));
       return;
     }
-    const tileW = tiles[0].getBoundingClientRect().width;
+    // offsetWidth (untransformed layout box), not getBoundingClientRect().width:
+    // same T9300 reason as computeGap -- a hover/press scale transition on the
+    // tile would otherwise drift the measured width across the fillerFits
+    // threshold every frame and re-fire setFillerVisible in a loop.
+    const tileW = tiles[0].offsetWidth;
     const containerW = el.clientWidth;
     if (tileW <= 0 || containerW <= 0) return;
     const fits = fillerFits(tileW, containerW, tiles.length);
