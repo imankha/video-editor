@@ -34,9 +34,16 @@ feedback_play_produces_clip_never_reel):** the thing `region.autoProjectId`/`lin
 is the CLIP'S OWN PROJECT, NOT a reel — Reel/Highlight Reel is the multi-clip published object only.
 New code uses project/clip words (getClipStage, pendingProjectClipId, "Clip created"); grandfathered
 persisted/store names are untouched (`autoProjectId`, `reelSourceStartTime/EndTime`,
-`notifyReelCreated`, `reelRequested`). **OWED: real-device mobile check** (T5380 precedent — jsdom
-can't verify the sheet close-on-create; unit tests cover the desktop strip only). Design:
-`docs/plans/tasks/T9330-design.md`. Prior:)
+`notifyReelCreated`, `reelRequested`). **Mobile parity (design §2.6, added after a live-verify gap):**
+the stage CTA is SHARED by the desktop strip AND the mobile edit sheet (`layout==='inline'`, both the
+bottom sheet and the portrait fullscreen sheet) — extracted as `stageCta` + `focusConfirmDialog` vars
+so both surfaces reuse the identical button + T8730 confirm-then-navigate. Edit mode only; mobile CREATE
+still closes on save (Save/Cancel, no in-flight CTA). AnnotateModeView threads `onOpenInFocus`/
+`onOpenInOverlay` to BOTH mobile render sites (they had none before). Test:
+`AnnotateFullscreenOverlay.mobileStageCta.test.jsx`. **Live status:** desktop strip stay-open +
+relabel CONFIRMED live (supervisor, real account); mobile edit CTA now present (was the gap).
+**STILL OWED: mobile CREATE-then-close live check** (touch-rating a fresh segment wasn't scriptable in
+time; unit tests cover it). Design: `docs/plans/tasks/T9330-design.md`. Prior:)
 updated: 2026-09-10 (T9350 moves the Add footage button OUT of the timeline header row into a NEW
 toolbar row above the video canvas (`AnnotateModeView.jsx`), paired with the existing `ZoomControls`
 on the right -- this SUPERSEDES the T8910 entry's "mounted in the non-fullscreen timeline header row"

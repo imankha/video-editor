@@ -703,6 +703,75 @@ export function AnnotateFullscreenOverlay({
     </div>
   );
 
+  // T9330: the stage-aware primary CTA (edit mode, project exists) — full-width,
+  // driven by getClipStage. SHARED by the desktop strip AND the mobile edit
+  // sheet (layout==='inline'), so both surfaces get one label/target. Unsaved
+  // edits route through the T8730 confirm-then-save-then-navigate dialog
+  // (focusConfirmDialog below), which every layout that renders this CTA must
+  // also render.
+  const stageCta = (isEditMode && existingClip?.autoProjectId && clipStage) ? (
+    <Button
+      variant="cyan"
+      size="lg"
+      icon={clipStage.action === 'overlay' ? Sparkles : Crop}
+      title={`Open the clip: ${clipStage.label}`}
+      className="w-full coarse-pointer:min-h-[44px]"
+      onClick={() => {
+        if (hasUnsavedEdits()) {
+          setFocusConfirmOpen(true);
+        } else if (clipStage.action === 'overlay') {
+          onOpenInOverlay?.(existingClip.autoProjectId);
+        } else {
+          onOpenInFocus?.(existingClip.autoProjectId);
+        }
+      }}
+    >
+      {clipStage.label}
+    </Button>
+  ) : null;
+
+  // T9330: create-in-flight — the project is being created but its id has not
+  // landed. A disabled "Apply AI Focus" that goes live once setAutoProjectId
+  // resolves (pure re-render). Desktop strip only: mobile create closes on save,
+  // so the sheet is never open during that window (focusPending stays false).
+  const stagePendingCta = (isEditMode && !existingClip?.autoProjectId && focusPending) ? (
+    <Button variant="cyan" size="lg" icon={Crop} disabled className="w-full coarse-pointer:min-h-[44px]">
+      Apply AI Focus
+    </Button>
+  ) : null;
+
+  // T8600 §2.8 / T9330: navigating mid-edit is never a silent discard — save
+  // first, then navigate. Copy is STAGE-AWARE ("Save & open AI Focus" /
+  // "Spotlight" / "Final" / "Published"); the stale "closes the Annotate editor"
+  // line is gone (the editor stays open). openStageName strips the CTA verb
+  // ("Apply AI Focus" -> "AI Focus", "View Final" -> "Final"). Rendered by every
+  // layout that shows stageCta (strip + mobile inline edit).
+  const focusConfirmDialog = (
+    <ConfirmationDialog
+      isOpen={focusConfirmOpen}
+      title="Save this play first?"
+      message={`We'll save your changes first, then open ${openStageName}.`}
+      onClose={() => setFocusConfirmOpen(false)}
+      impressionKey="focus_while_editing_play"
+      buttons={[
+        { label: 'Cancel', variant: 'secondary', onClick: () => setFocusConfirmOpen(false) },
+        {
+          label: `Save & open ${openStageName}`,
+          variant: 'primary',
+          onClick: async () => {
+            setFocusConfirmOpen(false);
+            await handleSave();
+            if (clipStage?.action === 'overlay') {
+              onOpenInOverlay?.(existingClip.autoProjectId);
+            } else {
+              onOpenInFocus?.(existingClip.autoProjectId);
+            }
+          },
+        },
+      ]}
+    />
+  );
+
   if (layout === 'strip') {
     // T8600 C2: the desktop under-canvas editor. Entirely separate markup
     // from formBody (like landscape-inline below) — full canvas width, tinted
@@ -951,84 +1020,12 @@ export function AnnotateFullscreenOverlay({
           )}
         </div>
 
-        {/* T9330: the stage-aware primary CTA (edit mode only), now FULL-WIDTH
-            and driven by getClipStage — one label/target across this strip and
-            ClipDetailsEditor. While a create is in flight (focusPending, no
-            autoProjectId yet) it shows a DISABLED "Apply AI Focus" that goes live
-            when the project id lands (pure re-render). Touch targets floor at
-            44px on coarse pointers (codebase convention — pointer type, not
-            viewport). */}
-        {isEditMode && existingClip?.autoProjectId && clipStage && (
-          <div className="mt-5">
-            <Button
-              variant="cyan"
-              size="lg"
-              icon={clipStage.action === 'overlay' ? Sparkles : Crop}
-              title={`Open the clip: ${clipStage.label}`}
-              className="w-full coarse-pointer:min-h-[44px]"
-              // T8730: only prompt to save when there are ACTUAL unsaved changes;
-              // otherwise navigate directly (no false-positive dialog).
-              onClick={() => {
-                if (hasUnsavedEdits()) {
-                  setFocusConfirmOpen(true);
-                } else if (clipStage.action === 'overlay') {
-                  onOpenInOverlay?.(existingClip.autoProjectId);
-                } else {
-                  onOpenInFocus?.(existingClip.autoProjectId);
-                }
-              }}
-            >
-              {clipStage.label}
-            </Button>
-          </div>
-        )}
-        {/* T9330: create-in-flight — the project is being created but its id has
-            not landed. A disabled "Apply AI Focus" that becomes live above once
-            setAutoProjectId resolves. Represented by focusPending (a gesture-
-            traced, memory-only signal), never a stored flag. */}
-        {isEditMode && !existingClip?.autoProjectId && focusPending && (
-          <div className="mt-5">
-            <Button
-              variant="cyan"
-              size="lg"
-              icon={Crop}
-              disabled
-              className="w-full coarse-pointer:min-h-[44px]"
-            >
-              Apply AI Focus
-            </Button>
-          </div>
-        )}
-
-        {/* T8600 §2.8: navigating mid-edit is never a silent discard. Save &
-            open awaits the same save handleSave/Enter/1-5 already use. T9330: the
-            copy is STAGE-AWARE ("Save & open AI Focus" / "Spotlight" / "Final" /
-            "Published") and the stale "closes the Annotate editor" line is gone —
-            the editor now stays open. openStageName strips the CTA verb
-            ("Apply AI Focus" -> "AI Focus", "View Final" -> "Final"). */}
-        <ConfirmationDialog
-          isOpen={focusConfirmOpen}
-          title="Save this play first?"
-          message={`We'll save your changes first, then open ${openStageName}.`}
-          onClose={() => setFocusConfirmOpen(false)}
-          impressionKey="focus_while_editing_play"
-          buttons={[
-            { label: 'Cancel', variant: 'secondary', onClick: () => setFocusConfirmOpen(false) },
-            {
-              label: `Save & open ${openStageName}`,
-              variant: 'primary',
-              onClick: async () => {
-                setFocusConfirmOpen(false);
-                await handleSave();
-                if (clipStage?.action === 'overlay') {
-                  onOpenInOverlay?.(existingClip.autoProjectId);
-                } else {
-                  onOpenInFocus?.(existingClip.autoProjectId);
-                }
-              },
-            },
-          ]}
-        />
+        {/* T9330: the full-width stage-aware primary CTA + the create-in-flight
+            disabled variant (extracted so the mobile inline edit sheet reuses the
+            exact same button + confirm-dialog logic). */}
+        {stageCta && <div className="mt-5">{stageCta}</div>}
+        {stagePendingCta && <div className="mt-5">{stagePendingCta}</div>}
+        {focusConfirmDialog}
       </>
     );
   }
@@ -1112,6 +1109,15 @@ export function AnnotateFullscreenOverlay({
     return (
       <div data-add-clip-form className="border-t border-gray-700 flex flex-col min-h-0 max-h-full">
         <div className="p-3 overflow-y-auto min-h-0 flex-1">{formBody}</div>
+        {/* T9330 (design §2.6): the mobile edit sheet gets the SAME stage-aware
+            CTA as the desktop strip (Apply AI Focus / Apply Spotlight / View
+            Final / View Published), so editing an existing clip-with-a-project on
+            a phone has a path into Focus/Spotlight/the finished video. Edit mode
+            only — mobile CREATE still closes on save (Save/Cancel below) and does
+            not surface the in-flight CTA. Its own row above the footer. */}
+        {stageCta && (
+          <div className="px-3 pt-3 border-t border-gray-700 bg-gray-900/95 flex-shrink-0">{stageCta}</div>
+        )}
         {/* T8790/F3: this sheet is `fixed bottom-0` but a `backdrop-blur` ancestor
             (AnnotateModeView's frosted card) becomes its containing block, so the
             sheet is anchored to that card's bottom (mid-screen), not the viewport, so
@@ -1136,6 +1142,9 @@ export function AnnotateFullscreenOverlay({
             onDone={() => setDetailsOpen(false)}
           />
         )}
+        {/* T9330: the stage CTA above can open the T8730 save-first dialog when
+            the edit form is dirty — render it here too (was strip-only). */}
+        {focusConfirmDialog}
       </div>
     );
   }

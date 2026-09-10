@@ -787,6 +787,9 @@ export function AnnotateModeView({
                     onScrubDragChange={setIsDraggingScrub}
                     newClipLayerIsMine={newClipLayerIsMine}
                     nextClipNumber={nextClipNumber}
+                    // T9330: mobile edit sheet gets the shared stage CTA (design §2.6)
+                    onOpenInFocus={onOpenClipInFocus}
+                    onOpenInOverlay={onOpenClipInOverlay}
                   />
                 </div>
               ) : (
@@ -935,6 +938,9 @@ export function AnnotateModeView({
               teammateSuggestions={teammateSuggestions}
               newClipLayerIsMine={newClipLayerIsMine}
               nextClipNumber={nextClipNumber}
+              // T9330: mobile edit sheet gets the shared stage CTA (design §2.6)
+              onOpenInFocus={onOpenClipInFocus}
+              onOpenInOverlay={onOpenClipInOverlay}
             />
           </div>
         )}
