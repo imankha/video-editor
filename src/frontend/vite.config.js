@@ -90,8 +90,55 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-stripe': ['@stripe/stripe-js', '@stripe/react-stripe-js'],
+        // T9370: split the STABLE, always-eager vendor libraries out of the app
+        // entry chunk so an app-only deploy (the common case) does not re-hash and
+        // re-download the vendor bytes. Before this, react/react-dom/lucide/zustand
+        // rode in the ~1.1MB `index` chunk, so a one-line source change invalidated
+        // the whole blob AND cascaded new hashes onto every route chunk that imported
+        // it (~73% of the precache re-downloaded on a trivial deploy). These libs
+        // change only when package.json does, so they now sit in their own chunks
+        // whose content hash is stable across app-code deploys.
+        //
+        // Only libs that are ALREADY loaded eagerly belong here. html2canvas, mp4box
+        // and @stripe are dynamic-import-only (lazy) and rollup already code-splits
+        // them; naming them here would hoist them into an eager vendor chunk and
+        // regress cold-start load. @stripe stays listed because it was already its
+        // own named chunk (loaded lazily from its own entry), not merged with eager code.
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('@stripe')) return 'vendor-stripe';
+            if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'vendor-react';
+            if (id.includes('zustand') || id.includes('immer')) return 'vendor-state';
+            if (id.includes('lucide-react')) return 'vendor-icons';
+            // html2canvas / mp4box / hash-wasm / axios: leave to rollup's default
+            // splitting. The first two are dynamic-import-only (lazy); naming them
+            // here would hoist them into an eager vendor chunk and regress cold start.
+            return undefined;
+          }
+          // App-shared foundation. These modules are imported by BOTH the eager entry
+          // (App.jsx) and the lazy route chunks, so rollup would otherwise keep them
+          // inside the entry `index` chunk — which made a one-line App.jsx edit re-hash
+          // `index` and cascade a fresh hash onto every route chunk that imports it.
+          // Pinning them out of `index` means a component-level deploy (the common
+          // case) leaves the foundation untouched, so the routes don't re-download.
+          //
+          // stores/utils/config MUST share ONE chunk, not three. They form a static
+          // import cycle (stores <-> utils, stores <-> config). Splitting a cycle
+          // across chunks turns rollup's safe intra-chunk module ordering into a
+          // cross-chunk ESM cycle whose eager evaluation hits a Temporal-Dead-Zone
+          // ReferenceError at boot — the entry throws before main.jsx registers the
+          // service worker, so registration never fires and the SW never activates
+          // (T6230's real-SW fixture caught exactly this: `.ready` hung 300s). Keeping
+          // the cycle inside one chunk restores the baseline single-`index` ordering
+          // rollup already proved correct. See the T6230 spec + task Progress Log.
+          if (
+            id.includes('/src/stores/') ||
+            id.includes('/src/utils/') ||
+            id.includes('/src/config/')
+          ) {
+            return 'app-foundation';
+          }
+          return undefined;
         },
       },
     },
