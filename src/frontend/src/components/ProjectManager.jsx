@@ -1430,8 +1430,17 @@ export function ProjectManager({
           activeBg={REEL.bg}
           activeBgDark={REEL.bgDark}
         />
+        {/* T9390 (Decision 3): Reels + Published are disabled until the account
+            has a clip -- gated on the SAME `hasClips` that gates Build New Reel
+            (no new data source). You cannot build a reel OR publish anything
+            without a clip first; Clips is the only tab requiring nothing (Add
+            Video is its own independent creation path). The `title` is a secondary
+            hint only -- the VISIBLE caption below is the compliance mechanism
+            (T8780: title is invisible on touch). */}
         <SegmentedTabButton
           active={activeTab === 'inProgressReels'}
+          disabled={!hasClips}
+          title={!hasClips ? 'Add a clip to unlock' : undefined}
           onClick={() => setActiveTab('inProgressReels')}
           Icon={Clapperboard}
           label={SECTION_NAMES.HIGHLIGHTS}
@@ -1442,6 +1451,8 @@ export function ProjectManager({
         />
         <SegmentedTabButton
           active={activeTab === 'published'}
+          disabled={!hasClips}
+          title={!hasClips ? 'Add a clip to unlock' : undefined}
           onClick={() => setActiveTab('published')}
           Icon={Send}
           label={SECTION_NAMES.PUBLISHED}
@@ -1451,6 +1462,16 @@ export function ProjectManager({
           activeBgDark={PUBLISHED.bgDark}
         />
       </div>
+
+      {/* T9390 (Decision 3): a persistent VISIBLE reason for the two disabled tabs
+          (never a hover-only title -- T8780). One caption covers both, since they
+          share one gate; it disappears the instant a clip exists. Pure function of
+          already-loaded `hasClips` -- nothing persisted. */}
+      {!hasClips && (
+        <p className="text-xs text-gray-500 text-center mt-1 mb-3">
+          Reels and Published unlock once you have a clip. Cut one from a game, or use Add Video on Clips.
+        </p>
+      )}
 
       {/* T8380: the T8780 disabled-Clips-tab caption was removed with the
           dead-end guard -- the tab is always reachable now, and its two-path
@@ -2059,7 +2080,6 @@ export function ProjectManager({
                an Add-Video-only account can build a reel. */
             <EmptyTabGuide
               tab="reels"
-              hasClips={hasClips}
               clipCount={clipDrafts.length}
               gamesCount={games.length}
               onNavigate={setActiveTab}

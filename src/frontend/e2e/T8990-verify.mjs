@@ -18,10 +18,11 @@ const record = (ok, label, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? '  ' + detail : ''}`);
 };
 
+// T9390 trimmed the partial headlines (Games/Reels); Clips/Published kept verbatim.
 const PARTIAL = {
-  games: 'Now cut your first play',
+  games: 'Cut your first play',
   clips: 'Give each clip a Focus pass',
-  reels: 'Finish your reel and export once',
+  reels: 'Finish and export',
   published: 'Ready for coaches and family',
 };
 

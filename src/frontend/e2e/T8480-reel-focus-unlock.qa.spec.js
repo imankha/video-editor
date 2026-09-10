@@ -185,17 +185,17 @@ test.describe('T8470 - one status story for a fresh draft (desktop)', () => {
     // Published tab: published-reels list is empty, but the empty state
     // is count-aware - it must never claim "No reels yet" while the draft exists
     // (T8470 Part C), and its button switches to the In Progress Clips tab.
-    // T8980: the empty state is now the shared EmptyTabGuide; with a draft it
-    // reads "You have N clip(s) in progress..." + an "Open In Progress Clips"
-    // button (the stale "the Clips tab" copy is gone).
+    // T8980/T9390: the empty state is now the shared EmptyTabGuide; with a draft
+    // it reads "You have N clip(s) in progress." + an "Open Clips" button (T9390
+    // trimmed the trailing "Publish one to see it here." and shortened the label).
     await page.getByRole('button', { name: /^Published/ }).click();
-    await expect(page.getByText(/1 clip in progress\. Publish one to see it here\./)).toBeVisible({ timeout: 10000 });
-    const draftLink = page.getByRole('button', { name: 'Open In Progress Clips' });
+    await expect(page.getByText(/1 clip in progress\./)).toBeVisible({ timeout: 10000 });
+    const draftLink = page.getByRole('button', { name: 'Open Clips' });
     await expect(draftLink).toBeVisible();
     await draftLink.click();
 
     // The drawer closed and the In Progress Clips tab is now active.
-    await expect(page.getByText(/clip in progress\. Publish one to see it here\./)).toHaveCount(0);
+    await expect(page.getByText(/clip in progress\./)).toHaveCount(0);
     await expect(page.getByTestId('project-card').first()).toBeVisible({ timeout: 10000 });
   });
 });
