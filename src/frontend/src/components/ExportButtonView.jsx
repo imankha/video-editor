@@ -83,9 +83,8 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // saturated element (centered, fixed 56px box — never resizes with the rail). The
   // LEFT status cell carries progress / failed-retry / disabled-reason (preserving
   // T8510's "reason next to the button" property); the RIGHT cost cell carries the
-  // credit estimate + high-fps note. The Focus audio toggle + build blurb move to the
-  // settings rail in a later step; until then they render as a compact strip above the
-  // band so audio stays reachable.
+  // credit estimate + high-fps note. The Focus audio toggle + build blurb now live in
+  // the settings rail's Reel group (desktop) / mobile drawer, not in this component.
 
   const ctaLabel = isCurrentlyExporting
     ? (isExternallyExporting && !isExporting ? 'Reel in progress...' : 'Creating reel...')

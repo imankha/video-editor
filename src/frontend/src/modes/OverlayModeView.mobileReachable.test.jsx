@@ -63,17 +63,27 @@ function renderView(overrides = {}) {
   return render(<OverlayModeView {...props} />);
 }
 
-describe('OverlayModeView export/settings reachability on mobile (T4880)', () => {
-  it('renders the overlay settings/export control and timeline on a mobile viewport', () => {
+describe('OverlayModeView export/settings reachability on mobile (T4880 / T9270)', () => {
+  // T9270: the "reachable" guarantee is now "above the fold" — the CTA renders in a
+  // `sticky bottom-0` action band pinned to the viewport bottom. The real geometry
+  // proof is in the T9270 e2e specs (jsdom has no layout); here we pin the mechanism.
+  it('renders the Add Overlay CTA inside the sticky-pinned band + the timeline on mobile', () => {
     isMobileMock.mockReturnValue(true);
     renderView();
-    expect(screen.getByTestId('overlay-export-button')).toBeTruthy();
+    const cta = screen.getByTestId('overlay-export-button');
+    expect(cta).toBeTruthy();
     expect(screen.getByTestId('overlay-timeline')).toBeTruthy();
+    const band = cta.closest('.sticky');
+    expect(band, 'CTA is wrapped by the sticky action band').toBeTruthy();
+    expect(band.className).toMatch(/bottom-0/);
   });
 
-  it('still renders the overlay export control on desktop (no regression)', () => {
+  it('keeps the CTA in the sticky band on desktop too (no regression)', () => {
     isMobileMock.mockReturnValue(false);
     renderView();
-    expect(screen.getByTestId('overlay-export-button')).toBeTruthy();
+    const cta = screen.getByTestId('overlay-export-button');
+    const band = cta.closest('.sticky');
+    expect(band, 'CTA is pinned at every width').toBeTruthy();
+    expect(band.className).toMatch(/bottom-0/);
   });
 });

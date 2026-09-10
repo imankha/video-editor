@@ -786,10 +786,14 @@ export function FocusModeView({
           flashed during the brief clip-load window. */}
 
       {/* T9270: the action band is the last flex:none child of the shell, spanning
-          the full width under the editor column (and, once it lands, the settings
-          rail). Hidden in fullscreen / mobile fullscreen. */}
+          the full width under the editor column and the settings rail. Hidden in
+          fullscreen / mobile fullscreen. `sticky bottom-0` pins it to the viewport
+          bottom against App's `flex-1 overflow-auto` scroll container so the CTA
+          paints above the fold at every width (generalizes T8790's mobile-only
+          sticky bar; the band's own solid bg + top-shadow read cleanly over the
+          content that scrolls behind it). */}
       {videoUrl && !isFullscreen && !mobileFs && (
-        <div className="mt-4 sm:mt-6 -mx-3 sm:-mx-6">
+        <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-6">
           <ExportButtonSection
             ref={exportButtonRef}
             videoFile={videoFile}

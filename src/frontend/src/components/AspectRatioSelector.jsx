@@ -30,7 +30,7 @@ export default function AspectRatioSelector({ aspectRatio, onAspectRatioChange }
               relative flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all
               coarse-pointer:min-h-11 coarse-pointer:min-w-11
               ${isSelected
-                ? 'bg-purple-600 ring-2 ring-purple-400'
+                ? 'bg-blue-600 ring-2 ring-blue-400'
                 : 'bg-gray-800 hover:bg-gray-700 border border-gray-600'
               }
             `}
@@ -41,7 +41,7 @@ export default function AspectRatioSelector({ aspectRatio, onAspectRatioChange }
             <div
               className={`
                 border-2 rounded-sm transition-colors
-                ${isSelected ? 'border-white bg-purple-500/30' : 'border-gray-400 bg-gray-700/50'}
+                ${isSelected ? 'border-white bg-blue-500/30' : 'border-gray-400 bg-gray-700/50'}
                 ${isRatioTall ? 'w-4 h-6' : 'w-6 h-4'}
               `}
             />

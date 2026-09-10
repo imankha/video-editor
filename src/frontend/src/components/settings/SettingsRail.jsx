@@ -36,19 +36,24 @@ import { ChevronRight, ChevronLeft, X } from 'lucide-react';
 const RAIL_TWEEN = 'width 320ms cubic-bezier(0.2, 0.8, 0.2, 1)';
 const DRAWER_TWEEN = 'transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1)';
 
-function TabButton({ tab, isActive, iconsOnly, onClick }) {
+function TabButton({ tab, isActive, iconsOnly, dimmed, dimTitle, onClick }) {
   const Icon = tab.icon;
+  // `dimmed` deprioritizes a tab (e.g. Overlay's Text tab when no text region is
+  // under the playhead) WITHOUT disabling it — never the native `disabled`/
+  // `aria-disabled`, which would block the click AND make the panel's own "add one"
+  // guidance unreachable (T6630 rationale, preserved from OverlaySettingsTabs).
+  const title = dimmed && dimTitle ? dimTitle : (iconsOnly ? tab.label : undefined);
   return (
     <button
       type="button"
       role="tab"
       aria-selected={isActive}
       data-testid={`settings-tab-${tab.id}`}
-      title={iconsOnly ? tab.label : undefined}
+      title={title}
       onClick={onClick}
       className={`flex items-center justify-center gap-1.5 px-2 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px coarse-pointer:min-h-11 ${
         iconsOnly ? 'w-full' : 'flex-1'
-      } ${
+      } ${dimmed && !isActive ? 'opacity-50' : ''} ${
         isActive
           ? 'border-blue-600 text-white bg-white/5'
           : 'border-transparent text-gray-400 hover:text-gray-200'
@@ -69,9 +74,12 @@ export default function SettingsRail({
   tabs = [],
   activeTab,
   onTabChange,
+  disabledTabIds = [],
+  disabledTabTitle,
   title = 'Settings',
   children,
 }) {
+  const isDimmed = (id) => disabledTabIds.includes(id);
   // ---- Mobile drawer: position:absolute, translateX only, never a width tween. ----
   if (isMobile) {
     return (
@@ -121,6 +129,8 @@ export default function SettingsRail({
                   key={tab.id}
                   tab={tab}
                   isActive={activeTab === tab.id}
+                  dimmed={isDimmed(tab.id)}
+                  dimTitle={disabledTabTitle}
                   iconsOnly={false}
                   onClick={() => onTabChange && onTabChange(tab.id)}
                 />
@@ -165,6 +175,8 @@ export default function SettingsRail({
                 key={tab.id}
                 tab={tab}
                 isActive={activeTab === tab.id}
+                dimmed={isDimmed(tab.id)}
+                dimTitle={disabledTabTitle}
                 iconsOnly={false}
                 onClick={() => onTabChange && onTabChange(tab.id)}
               />
@@ -181,6 +193,8 @@ export default function SettingsRail({
               key={tab.id}
               tab={tab}
               isActive={activeTab === tab.id}
+              dimmed={isDimmed(tab.id)}
+              dimTitle={disabledTabTitle}
               iconsOnly
               onClick={() => {
                 onTabChange && onTabChange(tab.id);

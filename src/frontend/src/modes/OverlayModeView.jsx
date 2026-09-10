@@ -749,6 +749,10 @@ export function OverlayModeView({
   ];
   const settingsRailBodies = { overlay: overlayPanel, text: textPanel, thumbnail: thumbnailPanel };
   const activeRailTab = settingsRailTabs.some((t) => t.id === activeTab) ? activeTab : 'overlay';
+  // Dim (never disable) the Text tab when no text region sits under the playhead —
+  // preserves the OverlaySettingsTabs affordance the rail replaced (T6630: dimmed =
+  // deprioritized, still clickable so the panel's "add one" guidance stays reachable).
+  const railDisabledTabIds = activeTextRegionsAtPlayhead.length === 0 ? ['text'] : [];
 
   // T9270: the mobile entry row's live-summary second line. DERIVED from the same
   // state the rows bind to — never a second stored copy.
@@ -902,6 +906,8 @@ export function OverlayModeView({
                   tabs={settingsRailTabs}
                   activeTab={activeRailTab}
                   onTabChange={setActiveTab}
+                  disabledTabIds={railDisabledTabIds}
+                  disabledTabTitle="No text region under the playhead"
                   title="Spotlight settings"
                 >
                   {settingsRailBodies[activeRailTab]}
@@ -919,6 +925,8 @@ export function OverlayModeView({
                   tabs={settingsRailTabs}
                   activeTab={activeRailTab}
                   onTabChange={setActiveTab}
+                  disabledTabIds={railDisabledTabIds}
+                  disabledTabTitle="No text region under the playhead"
                   title="Spotlight settings"
                 >
                   {settingsRailBodies[activeRailTab]}
@@ -1166,9 +1174,13 @@ export function OverlayModeView({
       </div>
 
       {/* T9270: the action band is the last flex:none child of the shell, spanning
-          the full width under the stage + settings rail. "Add Overlay" CTA. */}
+          the full width under the stage + settings rail. "Add Overlay" CTA.
+          `sticky bottom-0` pins it to the viewport bottom against App's
+          `flex-1 overflow-auto` scroll container so the CTA paints above the fold at
+          every width (generalizes T8790's mobile-only sticky bar; its solid bg +
+          top-shadow read cleanly over the taller portrait stage scrolling behind). */}
       {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
-        <div className="mt-4 sm:mt-6 -mx-3 sm:-mx-6">
+        <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-6">
           <OverlayExportButtonSection
             ref={exportButtonRef}
             videoFile={effectiveOverlayFile}
