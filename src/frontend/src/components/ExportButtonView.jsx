@@ -23,7 +23,6 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   isExporting,
   isExternallyExporting,
   displayProgress,
-  displayMessage,
   error,
   failedExport,
   disconnected,
@@ -41,17 +40,10 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   isButtonDisabled,
   buttonTitle,
 
-  // Toggle values
-  includeAudio,
-
   // Handlers
   onExport,
   onRetryConnection,
   onDismissExport,
-  onAudioToggle,
-
-  // Config/labels
-  EXPORT_CONFIG,
 
   // T530: Credit system
   showInsufficientCredits,
@@ -64,7 +56,6 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   sourceFps = null,
   // T525/T526: Stripe purchase
   showBuyCredits,
-  onOpenBuyCredits,
   onCloseBuyCredits,
   onPaymentSuccess,
 

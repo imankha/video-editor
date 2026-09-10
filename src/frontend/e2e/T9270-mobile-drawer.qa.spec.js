@@ -55,13 +55,23 @@ test.describe('T9270 mobile drawer @ 390x844', () => {
     await loginAsRealUser(context, AUDIT_EMAIL, AUDIT_PROFILE);
   });
 
+  // openFramingDraft resolves void / throws; openLoadableOverlayDraft RETURNS
+  // {ok, reason}. Normalize both to {ok, reason} and skip on !ok — do NOT
+  // `.then(()=>true)` the Overlay opener (a {ok:false} result is truthy, which is
+  // what made the supervisor QA time out on the home board instead of skipping).
   for (const screen of [
-    { name: 'Focus', open: (page) => openFramingDraft(page), missing: 'no Focus-openable draft on this account' },
-    { name: 'Overlay', open: (page) => openLoadableOverlayDraft(page), missing: 'no Overlay-openable draft on this account' },
+    {
+      name: 'Focus',
+      open: async (page) => {
+        try { await openFramingDraft(page); return { ok: true }; }
+        catch (e) { return { ok: false, reason: `no Focus-openable draft: ${e.message}` }; }
+      },
+    },
+    { name: 'Overlay', open: (page) => openLoadableOverlayDraft(page) },
   ]) {
     test(`${screen.name}: drawer closed on load, opens from the settings row, CTA unchanged, no backdrop close`, async ({ page }) => {
-      const opened = await screen.open(page).then(() => true).catch(() => false);
-      test.skip(!opened, screen.missing);
+      const res = await screen.open(page);
+      test.skip(!res.ok, res.reason || `no ${screen.name}-openable draft on this account`);
 
       const cta = page.getByTestId('primary-cta');
       await cta.waitFor({ state: 'visible', timeout: 20000 });
@@ -118,8 +128,8 @@ test.describe('T9270 mobile drawer @ 390x844', () => {
     });
 
     test(`${screen.name}: touch-target sweep over the entry row and every drawer control`, async ({ page }) => {
-      const opened = await screen.open(page).then(() => true).catch(() => false);
-      test.skip(!opened, screen.missing);
+      const res = await screen.open(page);
+      test.skip(!res.ok, res.reason || `no ${screen.name}-openable draft on this account`);
 
       // The entry row itself must clear the floor.
       const row = page.getByTestId('mobile-settings-row');
@@ -154,8 +164,8 @@ test.describe('T9270 mobile drawer @ 390x844', () => {
 
   // Criterion 13: Overlay's portrait stage is taller than the retired 40vh cap.
   test('Overlay: video stage is taller than the old 40vh cap', async ({ page }) => {
-    const opened = await openLoadableOverlayDraft(page).then(() => true).catch(() => false);
-    test.skip(!opened, 'no Overlay-openable draft on this account');
+    const res = await openLoadableOverlayDraft(page);
+    test.skip(!res.ok, res.reason || 'no Overlay-openable draft on this account');
     const stage = page.getByTestId('overlay-video-stage');
     await stage.waitFor({ state: 'visible', timeout: 20000 });
     const box = await stage.boundingBox();

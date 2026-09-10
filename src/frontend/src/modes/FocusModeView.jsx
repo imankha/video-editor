@@ -5,7 +5,7 @@ import { Controls } from '../components/Controls';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import ExportButtonView from '../components/ExportButtonView';
-import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
+import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import SettingsRail from '../components/settings/SettingsRail';
 import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
@@ -86,7 +86,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         isExporting={container.isExporting}
         isExternallyExporting={false}
         displayProgress={container.displayProgress}
-        displayMessage={container.displayMessage}
         error={container.error}
         failedExport={container.failedExport}
         disconnected={container.disconnected}
@@ -100,16 +99,13 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         isMultiClipMode={container.isMultiClipMode}
         isButtonDisabled={container.isButtonDisabled}
         buttonTitle={container.buttonTitle}
-        includeAudio={includeAudio}
         isHighlightEnabled={false}
         highlightEffectType={null}
         onExport={container.handleExport}
         onRetryConnection={container.handleRetryConnection}
         onDismissExport={container.handleDismissExport}
-        onAudioToggle={container.handleAudioToggle}
         onHighlightEffectTypeChange={null}
         HIGHLIGHT_EFFECT_LABELS={HIGHLIGHT_EFFECT_LABELS}
-        EXPORT_CONFIG={EXPORT_CONFIG}
         showInsufficientCredits={container.showInsufficientCredits}
         onCloseInsufficientCredits={container.onCloseInsufficientCredits}
         estimatedCredits={container.estimatedCredits}
@@ -117,7 +113,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         creditBalance={container.creditBalance}
         sourceFps={container.sourceFps}
         showBuyCredits={container.showBuyCredits}
-        onOpenBuyCredits={container.onOpenBuyCredits}
         onCloseBuyCredits={container.onCloseBuyCredits}
         onPaymentSuccess={container.onPaymentSuccess}
         handleExportRef={container.handleExportRef}
@@ -184,7 +179,6 @@ export function FocusModeView({
   framerate,
   selectedCropKeyframeIndex,
   copiedCrop,
-  dragCrop,
 
   // Crop handlers
   onCropChange,

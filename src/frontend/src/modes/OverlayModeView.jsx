@@ -11,7 +11,7 @@ import ThumbnailPanel from '../components/overlay/ThumbnailPanel';
 import TextManagementPanel from '../components/overlay/TextManagementPanel';
 import SettingsRail from '../components/settings/SettingsRail';
 import OverlaySpotlightPanel from '../components/settings/OverlaySpotlightPanel';
-import { ExportButtonContainer, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
+import { ExportButtonContainer } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
 import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft } from 'lucide-react';
@@ -27,7 +27,6 @@ import { isRegionUnderPlayhead } from '../utils/textRegionPlayhead';
  */
 const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSection({
   videoFile,
-  videoUrl,
   highlightRegions,
   highlightEffectType,
   onHighlightEffectTypeChange,
@@ -62,7 +61,6 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
         isExporting={container.isExporting}
         isExternallyExporting={false}
         displayProgress={container.displayProgress}
-        displayMessage={container.displayMessage}
         error={container.error}
         failedExport={container.failedExport}
         disconnected={container.disconnected}
@@ -76,12 +74,9 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
         isMultiClipMode={container.isMultiClipMode}
         isButtonDisabled={container.isButtonDisabled}
         buttonTitle={container.buttonTitle}
-        includeAudio={includeAudio}
         onExport={container.handleExport}
         onRetryConnection={container.handleRetryConnection}
         onDismissExport={container.handleDismissExport}
-        onAudioToggle={container.handleAudioToggle}
-        EXPORT_CONFIG={EXPORT_CONFIG}
         showInsufficientCredits={null}
         onCloseInsufficientCredits={null}
         handleExportRef={container.handleExportRef}
@@ -205,9 +200,7 @@ export function OverlayModeView({
   posterMarkerTime = null,
   posterSlowmoSection = null,
   posterUploaded = false,
-  posterMarkerTimeLabel = null,
   onPosterMarkerDragEnd,
-  onUseCurrentFrameAsCover,
   onRemoveUpload,
 
   // Player detection (auto-detected during framing export)
@@ -219,7 +212,6 @@ export function OverlayModeView({
   onPlayerSelect,
   showPlayerBoxes,
   onTogglePlayerBoxes,
-  onEnablePlayerBoxes,
   onDetectionMarkerClick,
 
   // Zoom
@@ -1184,7 +1176,6 @@ export function OverlayModeView({
           <OverlayExportButtonSection
             ref={exportButtonRef}
             videoFile={effectiveOverlayFile}
-            videoUrl={effectiveOverlayVideoUrl}
             highlightRegions={getRegionsForExport()}
             highlightEffectType={highlightEffectType}
             onHighlightEffectTypeChange={onHighlightEffectTypeChange}

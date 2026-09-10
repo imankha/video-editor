@@ -63,13 +63,25 @@ for (const vp of DESKTOP_VIEWPORTS) {
       await loginAsRealUser(context, AUDIT_EMAIL, AUDIT_PROFILE);
     });
 
+    // NOTE: the two openers have DIFFERENT contracts. openFramingDraft resolves void
+    // and THROWS if no draft opens, so it's wrapped to a {ok,reason}. openLoadable-
+    // OverlayDraft already RETURNS {ok, reason, projectId} and only rejects on an
+    // unexpected error — so it must be consumed by checking `.ok` (an earlier version
+    // did `.then(()=>true)`, which treated a {ok:false} "no loadable draft" result as
+    // success and then timed out on the home board — the T9270 supervisor QA failure).
     for (const screen of [
-      { name: 'Focus', open: (page) => openFramingDraft(page), missing: 'no Focus-openable draft on this account' },
-      { name: 'Overlay', open: (page) => openLoadableOverlayDraft(page), missing: 'no Overlay-openable draft on this account' },
+      {
+        name: 'Focus',
+        open: async (page) => {
+          try { await openFramingDraft(page); return { ok: true }; }
+          catch (e) { return { ok: false, reason: `no Focus-openable draft: ${e.message}` }; }
+        },
+      },
+      { name: 'Overlay', open: (page) => openLoadableOverlayDraft(page) },
     ]) {
       test(`${screen.name}: CTA above the fold and box invariant across rail collapse`, async ({ page }) => {
-        const opened = await screen.open(page).then(() => true).catch(() => false);
-        test.skip(!opened, screen.missing);
+        const res = await screen.open(page);
+        test.skip(!res.ok, res.reason || `no ${screen.name}-openable draft on this account`);
 
         const cta = page.getByTestId('primary-cta');
         await cta.waitFor({ state: 'visible', timeout: 20000 });
