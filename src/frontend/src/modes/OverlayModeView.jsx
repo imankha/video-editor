@@ -7,7 +7,6 @@ import ZoomControls from '../components/ZoomControls';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import ExportButtonView from '../components/ExportButtonView';
-import OverlaySettingsTabs from '../components/overlay/OverlaySettingsTabs';
 import ThumbnailPanel from '../components/overlay/ThumbnailPanel';
 import TextManagementPanel from '../components/overlay/TextManagementPanel';
 import SettingsRail from '../components/settings/SettingsRail';
@@ -15,8 +14,9 @@ import OverlaySpotlightPanel from '../components/settings/OverlaySpotlightPanel'
 import { ExportButtonContainer, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
-import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon } from 'lucide-react';
+import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
+import { HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
 import { isRegionUnderPlayhead } from '../utils/textRegionPlayhead';
 
@@ -739,21 +739,9 @@ export function OverlayModeView({
     />
   );
 
-  // T9270: mobile-stacked copy still uses the old tabbed section (Step 4 replaces it
-  // with the drawer). The desktop settings rail (below) owns its own tab chrome.
-  const settingsTabs = (
-    <OverlaySettingsTabs
-      activeTab={activeTab}
-      onTabChange={setActiveTab}
-      overlayPanel={overlayPanel}
-      textPanel={textPanel}
-      thumbnailPanel={thumbnailPanel}
-      disabledTabIds={activeTextRegionsAtPlayhead.length === 0 ? ['text'] : []}
-    />
-  );
-
   // T9270: the unified settings rail. Tabs live in the rail header (one activeTab
-  // source of truth); the body renders the active tab. One accent: blue-600.
+  // source of truth); the body renders the active tab. One accent: blue-600. Same
+  // component drives the desktop rail and the mobile translateX drawer (below).
   const settingsRailTabs = [
     { id: 'overlay', label: 'Spotlight', icon: Sparkles },
     { id: 'text', label: 'Text', icon: Type },
@@ -761,6 +749,13 @@ export function OverlayModeView({
   ];
   const settingsRailBodies = { overlay: overlayPanel, text: textPanel, thumbnail: thumbnailPanel };
   const activeRailTab = settingsRailTabs.some((t) => t.id === activeTab) ? activeTab : 'overlay';
+
+  // T9270: the mobile entry row's live-summary second line. DERIVED from the same
+  // state the rows bind to — never a second stored copy.
+  const colorLabel = HIGHLIGHT_COLOR_LABELS[highlightColor] || 'White';
+  const shapeLabel = highlightShape === 'ground' ? 'Ground spotlight' : 'Body ellipse';
+  const mobileSettingsSummary =
+    `${colorLabel} - ${shapeLabel} - Dim ${Math.round((dimStrength ?? 0) * 100)}%`;
 
   return (
     <div className="flex flex-col min-h-0">
@@ -881,7 +876,7 @@ export function OverlayModeView({
               {controlsEl}
             </div>
           ) : (
-            <div className="lg:flex lg:flex-row lg:items-start">
+            <div className="relative lg:flex lg:flex-row lg:items-start">
               {/* Video column — shrink-wraps the aspect box so Controls bind to the
                   video width (lg:w-fit); full width when stacked on mobile. T9270:
                   lg:flex-1 lets it GROW into the width the rail gives back when the
@@ -895,21 +890,40 @@ export function OverlayModeView({
                 </div>
                 {controlsEl}
               </div>
-              {/* T9270: the unified settings rail — desktop only, 300px in-flow box
-                  that width-tweens to a 64px icon strip when collapsed. Replaces the
-                  old lg:flex-1 settings column. Mobile renders its own copy above the
-                  Add Overlay button (Step 4 turns that into the translateX drawer). */}
-              <SettingsRail
-                isMobile={false}
-                collapsed={railCollapsed}
-                onToggleCollapse={() => setRailCollapsed((v) => !v)}
-                tabs={settingsRailTabs}
-                activeTab={activeRailTab}
-                onTabChange={setActiveTab}
-                title="Spotlight settings"
-              >
-                {settingsRailBodies[activeRailTab]}
-              </SettingsRail>
+              {/* T9270: the unified settings rail — desktop (fine pointer) only, a
+                  300px in-flow box that width-tweens to a 64px icon strip when
+                  collapsed. On mobile the SAME rail renders as the translateX drawer
+                  below. */}
+              {!isMobile && (
+                <SettingsRail
+                  isMobile={false}
+                  collapsed={railCollapsed}
+                  onToggleCollapse={() => setRailCollapsed((v) => !v)}
+                  tabs={settingsRailTabs}
+                  activeTab={activeRailTab}
+                  onTabChange={setActiveTab}
+                  title="Spotlight settings"
+                >
+                  {settingsRailBodies[activeRailTab]}
+                </SettingsRail>
+              )}
+              {/* T9270: mobile settings drawer — the SAME SettingsRail in translateX
+                  mode, position:absolute inside this relatively-positioned stage row
+                  so it never alters the stage box. Opened by the mobile-settings-row
+                  below; closed by its own 44x44 header close. */}
+              {isMobile && (
+                <SettingsRail
+                  isMobile
+                  open={drawerOpen}
+                  onCloseDrawer={() => setDrawerOpen(false)}
+                  tabs={settingsRailTabs}
+                  activeTab={activeRailTab}
+                  onTabChange={setActiveTab}
+                  title="Spotlight settings"
+                >
+                  {settingsRailBodies[activeRailTab]}
+                </SettingsRail>
+              )}
             </div>
           )}
 
@@ -1125,12 +1139,28 @@ export function OverlayModeView({
           </div>
         )}
 
-        {/* Settings tabs — mobile only (stacked above Add Spotlight). Desktop
-            renders the tabbed section beside the video in the two-column stage row. */}
-        {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
-          <div className="lg:hidden mt-6">
-            {settingsTabs}
-          </div>
+        {/* T9270: mobile settings entry row — a 64px full-width labelled button that
+            opens the drawer, with a derived live-summary second line. Hidden in mobile
+            fullscreen (as the toolbar was). Desktop uses the in-flow rail instead.
+            Replaces the old lg:hidden stacked settings copy. */}
+        {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && isMobile && (
+          <button
+            type="button"
+            data-testid="mobile-settings-row"
+            onClick={() => setDrawerOpen(true)}
+            className="mt-4 w-full h-16 flex items-center gap-3 rounded-[10px] px-3.5 text-left"
+            style={{ border: '1px solid #334155', background: '#0f172a' }}
+            aria-label="Open spotlight settings"
+          >
+            <Sparkles size={20} className="shrink-0 text-gray-300" aria-hidden="true" />
+            <span className="flex flex-col min-w-0 flex-1">
+              <span className="text-sm font-semibold text-gray-100">Spotlight settings</span>
+              <span data-testid="mobile-settings-summary" className="text-xs text-gray-400 truncate">
+                {mobileSettingsSummary}
+              </span>
+            </span>
+            <ChevronLeft size={18} className="shrink-0 text-gray-500" aria-hidden="true" />
+          </button>
         )}
 
       </div>

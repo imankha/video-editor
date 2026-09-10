@@ -89,13 +89,14 @@ describe('OverlayModeView aspect-fit stage (T5676)', () => {
     expect(stage.style.aspectRatio).toBe('');
   });
 
-  it('renders the desktop settings rail beside the video and the mobile-stacked tabs', () => {
+  it('renders the desktop settings rail beside the video, replacing the old tabbed section', () => {
     isMobileMock.mockReturnValue(false);
     renderView();
-    // T9270: the desktop settings column is now the unified SettingsRail
-    // (data-testid="settings-rail"); the mobile-stacked copy still uses the old
-    // tabbed section (data-testid="overlay-settings-tabs") until Step 4's drawer.
+    // T9270 step 4: the desktop settings column is the unified SettingsRail
+    // (data-testid="settings-rail"). The old stacked OverlaySettingsTabs
+    // (data-testid="overlay-settings-tabs") is fully retired — on mobile the same
+    // rail renders as the translateX drawer instead.
     expect(screen.getByTestId('settings-rail')).toBeTruthy();
-    expect(screen.getAllByTestId('overlay-settings-tabs')).toHaveLength(1);
+    expect(screen.queryByTestId('overlay-settings-tabs')).toBeNull();
   });
 });
