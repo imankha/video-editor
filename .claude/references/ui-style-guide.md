@@ -397,6 +397,42 @@ One horizontal, snap-scrolling row per group (e.g. a game's drafts). Presentatio
 └─────────────────────────────────────────────────┘
 ```
 
+### Action band + settings rail (Focus, Overlay — T9270)
+
+The governing rule: **one saturated element per screen, and it is the primary CTA.**
+The video is second; the settings rail is third and carries NO accent color. The CTA
+never lives inside the settings container, never resizes, never moves.
+
+- **`ActionBand`** (`components/ActionBand.jsx`): `flex-none w-full`, `min-h-[76px]`,
+  `background:#0b1220`, `border-top:1px solid rgba(255,255,255,.14)`,
+  `box-shadow:0 -8px 24px rgba(0,0,0,.35)`. Three cells: `flex-1` status (left:
+  progress / failed-retry / disabled reason), the CTA (`flex-none`, centered on the
+  viewport axis by the equal-flex sides), `flex-1` cost (right, `items-end`). It is
+  the last `flex:none` child of each view's `flex flex-col` shell, so it spans the
+  full width under BOTH the main column and the rail.
+- **`PrimaryCta`** (`components/PrimaryCta.jsx`): 56px tall, `padding:0 34px`,
+  `rounded-[10px]`, icon + label, 17px/600. Focus `#2563eb` (blue shadow), Overlay
+  `#9333ea` (purple). `data-testid="primary-cta"`. Its box is byte-identical across
+  rail-collapsed and drawer-open — nothing in its ancestry resizes with layout state.
+- **`SettingsRail`** (`components/settings/SettingsRail.jsx`): ONE component, two
+  layout modes on `isMobile` (from `useIsMobile()`). Desktop = a 300px in-flow box
+  that tweens its **width** to a 64px icon strip when `collapsed`
+  (`width 320ms cubic-bezier(0.2,0.8,0.2,1)`); the main column reflows for free.
+  Mobile = a 316px `position:absolute` drawer that slides in with
+  `transform:translateX()` ONLY (never a width tween, never alters the stage box),
+  opened by a 64px full-width `mobile-settings-row` (with a derived summary line),
+  closed by a 44x44 `drawer-close` in the drawer's own header. Scrim is
+  `pointer-events-none` — **no backdrop-tap close** (house rule).
+- **`SettingRow`** (`components/settings/SettingRow.jsx`): `flex items-center
+  justify-between`; left column `text-sm font-medium text-gray-200` label over
+  `text-xs text-gray-400` live value; control on the right. `stack` prop wraps wide
+  controls (swatches) to a second row. Grouped by **what a control changes** via
+  `SettingsPanel`: **Reel** / **This clip** (or **This spotlight**) / **View only**.
+- **One accent for "selected": `blue-600`** across both screens (retires the old four
+  competing accents).
+- Open/collapsed/drawer state is **ephemeral view state** — local `useState`, NEVER
+  persisted (no-persisted-view-state rule). No `useEffect` writes it.
+
 ### Timeline Layers
 
 ```jsx
