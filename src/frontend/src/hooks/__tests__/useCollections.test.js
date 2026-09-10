@@ -23,21 +23,35 @@ beforeEach(() => {
 });
 
 describe('useCollections', () => {
-  it('does not fetch the summary while inactive', () => {
+  // T9390: the summary is now fetched EAGERLY at mount, even while the Published
+  // tab is inactive, so its empty state paints in comparable time to the other
+  // three tabs (whose emptiness comes from data Home already holds). Previously
+  // this was gated on isActive, which produced the spinner-then-text asymmetry.
+  it('fetches the summary eagerly at mount even while inactive (T9390)', async () => {
     apiFetch.mockResolvedValue(jsonRes(SUMMARY));
-    renderHook(() => useCollections(false));
-    expect(apiFetch).not.toHaveBeenCalled();
-  });
-
-  it('fetches the summary once when activated', async () => {
-    apiFetch.mockResolvedValue(jsonRes(SUMMARY));
-    const { result } = renderHook(() => useCollections(true));
+    const { result } = renderHook(() => useCollections(false));
 
     await waitFor(() => expect(result.current.summaryState).toBe('ready'));
     const summaryCalls = apiFetch.mock.calls.filter(([url]) =>
       url.includes('/collections/summary'));
     expect(summaryCalls).toHaveLength(1);
     expect(result.current.summary).toEqual(SUMMARY);
+  });
+
+  it('fetches the summary exactly once, not again on activation (no re-spinner)', async () => {
+    apiFetch.mockResolvedValue(jsonRes(SUMMARY));
+    const { result, rerender } = renderHook(({ active }) => useCollections(active), {
+      initialProps: { active: false },
+    });
+    await waitFor(() => expect(result.current.summaryState).toBe('ready'));
+
+    // Activating the tab must NOT trigger a second summary fetch (which would
+    // flip summaryState back to 'loading' and re-show the spinner on every visit).
+    rerender({ active: true });
+    const summaryCalls = () => apiFetch.mock.calls.filter(([url]) =>
+      url.includes('/collections/summary'));
+    expect(summaryCalls()).toHaveLength(1);
+    expect(result.current.summaryState).toBe('ready');
   });
 
   it('sets error state when the summary fetch fails', async () => {
