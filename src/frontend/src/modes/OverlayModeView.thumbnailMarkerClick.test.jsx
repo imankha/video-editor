@@ -10,9 +10,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * OverlayMode is stubbed to CAPTURE the onPosterMarkerClick prop
  * OverlayModeView threads down (the real marker-click wiring is unit-tested in
  * PosterMarkerLayer.test.jsx); invoking it here exercises OverlayModeView's own
- * handlePosterMarkerClick handler end to end. OverlayModeView mounts its
- * settings-tabs section twice (desktop/mobile), so the panel query uses
- * getAllByTestId(...).
+ * handlePosterMarkerClick handler end to end. T9270 unified the settings tabs
+ * into ONE SettingsRail component (desktop rail / mobile drawer are mutually
+ * exclusive on `useIsMobile()`, mocked false below), so exactly one copy of
+ * each tab/panel renders and plain getByTestId/queryByTestId is correct.
  */
 
 let capturedOnPosterMarkerClick = null;
@@ -83,12 +84,12 @@ describe('OverlayModeView — clicking the thumbnail marker opens the Thumbnail 
     render(<OverlayModeView {...baseProps({ seek, currentTime: 0 })} />);
 
     // Default tab is 'overlay' -- the Thumbnail panel is not the active one yet.
-    expect(screen.queryByTestId('overlay-tabpanel-thumbnail')).toBeNull();
+    expect(screen.queryByTestId('settings-panel-thumbnail')).toBeNull();
 
     act(() => { capturedOnPosterMarkerClick(4.85); });
 
     // Switched to the Thumbnail tab...
-    expect(screen.getAllByTestId('overlay-tabpanel-thumbnail').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('settings-panel-thumbnail')).toBeTruthy();
     // ...and seeked to the marker's own time, unconverted (visual == seek space).
     expect(seek).toHaveBeenCalledTimes(1);
     expect(seek).toHaveBeenCalledWith(4.85);
@@ -97,6 +98,6 @@ describe('OverlayModeView — clicking the thumbnail marker opens the Thumbnail 
   it('does not throw when seek is absent (optional-chaining guard mirrors handleSelectRegion)', () => {
     render(<OverlayModeView {...baseProps({ seek: undefined })} />);
     expect(() => act(() => { capturedOnPosterMarkerClick(2.0); })).not.toThrow();
-    expect(screen.getAllByTestId('overlay-tabpanel-thumbnail').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('settings-panel-thumbnail')).toBeTruthy();
   });
 });

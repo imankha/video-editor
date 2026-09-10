@@ -1,6 +1,6 @@
 # T9385: Fix Overlay tab/panel tests after T9270's tab unification
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-10
@@ -62,10 +62,28 @@ test-id swap:
   finds a genuinely missing test-id, in which case adding one `data-testid` is still trivial.
 
 ## Acceptance Criteria
-- [ ] `npx vitest run src/modes/OverlayModeView.textTabPlayhead.test.jsx` passes 9/9 against the
+- [x] `npx vitest run src/modes/OverlayModeView.textTabPlayhead.test.jsx` passes 9/9 against the
       current `SettingsRail`-based `OverlayModeView`
-- [ ] `npx vitest run src/modes/OverlayModeView.thumbnailMarkerClick.test.jsx` passes 3/3
-- [ ] Every original assertion's intent is preserved (playhead-scoped region visibility,
+- [x] `npx vitest run src/modes/OverlayModeView.thumbnailMarkerClick.test.jsx` passes 3/3
+- [x] Every original assertion's intent is preserved (playhead-scoped region visibility,
       marker-click tab-switch + seek), not just made to pass mechanically
-- [ ] The `docs/testing/known-failures.md` row for these tests is deleted in the same commit
-- [ ] Tests pass
+- [x] The `docs/testing/known-failures.md` row for these tests is deleted in the same commit
+- [x] Tests pass
+
+## Progress Log
+
+**2026-09-10**: Fixed inline (supervisor session, not a container worker - S/M-tier scope did
+not justify one). Root cause was exactly as suspected: `SettingsRail.jsx` had no test-id on
+its body wrapper (`{children}`), and the old `overlay-tab-*`/`overlay-tabpanel-*` ids were
+gone. Added `data-testid={\`settings-panel-${activeTab}\`}` to both the mobile-drawer and
+desktop-rail body divs in `SettingsRail.jsx` (matches the existing `settings-tab-${tab.id}`
+naming convention exactly, benefits every SettingsRail consumer - Focus's rail included -
+not just Overlay). Updated both test files: `getAllByTestId(...)[0]` -> `getByTestId(...)`
+(no longer a real duplication now that desktop rail / mobile drawer are mutually exclusive on
+`useIsMobile()`, not both-mounted-CSS-hidden as the old pre-T9270 comment claimed), old
+test-ids swapped for the new `settings-tab-text`/`settings-panel-text`/
+`settings-panel-thumbnail` ones. `toBeInTheDocument()` (jest-dom, not installed in this
+project) swapped for `toBeTruthy()`. Verified: both files pass in full, plus
+`SettingsRail.test.jsx` (8/8, unaffected by the new attribute) and the broader
+`vitest related` sweep against `SettingsRail.jsx` (11 files / 48 tests, including Focus's own
+rail consumers). ESLint clean on all 3 changed files. `known-failures.md` row deleted.

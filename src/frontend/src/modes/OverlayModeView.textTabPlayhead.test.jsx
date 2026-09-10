@@ -12,10 +12,10 @@ import { describe, it, expect, vi } from 'vitest';
  *   - an already-active Text tab does NOT get force-navigated away when it
  *     becomes disabled (mid-playback boundary crossing)
  *
- * OverlayModeView renders its settings-tabs section TWICE (desktop/mobile
- * layout breakpoints, both mounted -- CSS hides one) -- every query below
- * uses getAllByTestId(...)[0] to consistently target the first copy rather
- * than tripping RTL's "multiple elements found" error.
+ * T9270 unified the settings tabs into ONE SettingsRail component (the desktop
+ * rail and the mobile drawer are mutually exclusive on `useIsMobile()`, not
+ * both-mounted-CSS-hidden as before) -- `useIsMobile` is mocked false below, so
+ * exactly one copy of each tab/panel renders and plain getByTestId is correct.
  */
 
 vi.mock('../components/VideoPlayer', () => ({ VideoPlayer: () => <div /> }));
@@ -78,7 +78,7 @@ function baseProps(overrides = {}) {
 }
 
 function firstTextTab() {
-  return screen.getAllByTestId('overlay-tab-text')[0];
+  return screen.getByTestId('settings-tab-text');
 }
 
 describe('OverlayModeView — Text tab scoped to the playhead (T6630 round 6 item 2)', () => {
@@ -159,19 +159,19 @@ describe('OverlayModeView — Text tab scoped to the playhead (T6630 round 6 ite
     expect(tab.getAttribute('title')).toMatch(/no text region/i);
     expect(tab.disabled).toBe(false);
     fireEvent.click(tab);
-    expect(screen.getAllByTestId('overlay-tabpanel-text').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('settings-panel-text')).toBeTruthy();
     expect(screen.getAllByText(/no text region under the playhead/i).length).toBeGreaterThan(0);
   });
 
   it('an already-active Text tab does not get yanked away when the playhead moves off every region', () => {
     const { rerender } = render(<OverlayModeView {...baseProps({ currentTime: 0.5 })} />);
     fireEvent.click(firstTextTab());
-    expect(screen.getAllByTestId('overlay-tabpanel-text').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('settings-panel-text')).toBeTruthy();
 
     rerender(<OverlayModeView {...baseProps({ currentTime: 3.5 })} />);
     // Still ON the text tab (not force-switched to overlay), now showing its
     // own natural empty state instead of vanishing out from under the user.
-    expect(screen.getAllByTestId('overlay-tabpanel-text').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('settings-panel-text')).toBeTruthy();
     expect(screen.getAllByText(/no text region under the playhead/i).length).toBeGreaterThan(0);
   });
 });
