@@ -1,6 +1,6 @@
 # T9320: Annotate copy pass - AI Focus, Spotlight, rating intent
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-09

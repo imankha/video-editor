@@ -1,24 +1,29 @@
-# T9385: Fix OverlayModeView.textTabPlayhead.test.jsx after T9270's tab unification
+# T9385: Fix Overlay tab/panel tests after T9270's tab unification
 
 **Status:** TODO
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-10
+**Updated:** 2026-09-10
 
 ## Problem
 
 T9270 (PR #384, merged 2026-09-10) unified Overlay's previously-duplicated settings tabs into
 the new `SettingsRail` component (`src/components/settings/SettingsRail.jsx`), fixing the exact
 bug `src/modes/OverlayModeView.textTabPlayhead.test.jsx` documents in its own header comment
-("OverlayModeView renders its settings-tabs section TWICE"). The test file predates the fix and
-still queries the old test-ids (`overlay-tab-text`, `overlay-tabpanel-text`), which no longer
-exist — the new tab buttons render `data-testid={\`settings-tab-${tab.id}\`}` (e.g.
-`settings-tab-text`), and there is no `overlay-tabpanel-*` equivalent for panel content.
+("OverlayModeView renders its settings-tabs section TWICE"). **Two** test files predate the fix
+and still query the old test-ids (`overlay-tab-text`, `overlay-tabpanel-text`,
+`overlay-tabpanel-thumbnail`), which no longer exist — the new tab buttons render
+`data-testid={\`settings-tab-${tab.id}\`}` (e.g. `settings-tab-text`), and there is no
+`overlay-tabpanel-*` equivalent for panel content:
+- `src/modes/OverlayModeView.textTabPlayhead.test.jsx` (9/9 tests fail)
+- `src/modes/OverlayModeView.thumbnailMarkerClick.test.jsx` (2/3 tests fail)
 
-**Confirmed as a real regression, not flake:** 9/9 tests in the file fail identically on a clean
-master checkout (`ed2031ad`), independent of any branch — first surfaced on T9350's unrelated
-Branch CI run (T9350 touches only `AnnotateModeView.jsx`/`AddFootageButton.jsx`). Tracked in
-`docs/testing/known-failures.md` in the meantime so it doesn't block other branches' CI triage.
+**Confirmed as a real regression, not flake:** both files fail identically on a clean master
+checkout (`ed2031ad`), independent of any branch — first surfaced on T9350's Branch CI (run
+34520026402, diff touches only `AnnotateModeView.jsx`/`AddFootageButton.jsx`) and confirmed
+again on T9320's (run 34524251428). Tracked in `docs/testing/known-failures.md` in the meantime
+so it doesn't block other branches' CI triage.
 
 ## Solution
 
@@ -42,7 +47,8 @@ test-id swap:
 ## Context
 
 ### Relevant Files
-- `src/frontend/src/modes/OverlayModeView.textTabPlayhead.test.jsx` — the test to fix
+- `src/frontend/src/modes/OverlayModeView.textTabPlayhead.test.jsx` — test to fix (9 cases)
+- `src/frontend/src/modes/OverlayModeView.thumbnailMarkerClick.test.jsx` — test to fix (2 cases)
 - `src/frontend/src/components/settings/SettingsRail.jsx` — the new tab/panel component T9270
   introduced (`settings-tab-${tab.id}`, `settings-drawer`, `settings-rail` test-ids)
 - `src/frontend/src/modes/OverlayModeView.jsx` — tab config at ~L738-740 (`id: 'text'`, etc.)
@@ -58,7 +64,8 @@ test-id swap:
 ## Acceptance Criteria
 - [ ] `npx vitest run src/modes/OverlayModeView.textTabPlayhead.test.jsx` passes 9/9 against the
       current `SettingsRail`-based `OverlayModeView`
-- [ ] Every original assertion's intent is preserved (playhead-scoped region visibility), not
-      just made to pass mechanically
-- [ ] The `docs/testing/known-failures.md` row for this test is deleted in the same commit
+- [ ] `npx vitest run src/modes/OverlayModeView.thumbnailMarkerClick.test.jsx` passes 3/3
+- [ ] Every original assertion's intent is preserved (playhead-scoped region visibility,
+      marker-click tab-switch + seek), not just made to pass mechanically
+- [ ] The `docs/testing/known-failures.md` row for these tests is deleted in the same commit
 - [ ] Tests pass
