@@ -1,6 +1,6 @@
 # T9370: Shrink the update download - a one-line deploy should not re-fetch the app
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-09-09
