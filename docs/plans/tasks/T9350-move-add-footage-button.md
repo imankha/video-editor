@@ -1,6 +1,6 @@
 # T9350: Move the Add footage button
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-09

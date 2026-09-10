@@ -1,6 +1,6 @@
 # T9270: Focus/Overlay CTA action band + unified collapsible settings rail
 
-**Status:** WIP
+**Status:** STAGING (PR #384 merged 2026-09-10)
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-09-08
