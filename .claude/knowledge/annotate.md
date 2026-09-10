@@ -1,5 +1,20 @@
 ---
 domain: annotate
+updated: 2026-09-10 (T9350 moves the Add footage button OUT of the timeline header row into a NEW
+toolbar row above the video canvas (`AnnotateModeView.jsx`), paired with the existing `ZoomControls`
+on the right -- this SUPERSEDES the T8910 entry's "mounted in the non-fullscreen timeline header row"
+placement (the render site moved; AddFootageButton's internals -- picker, credits line, upload
+progress, and the window-level drag-drop target -- are UNTOUCHED, only where it renders changed).
+The row is gated `annotateVideoUrl && !annotateFullscreen`; Add footage is gated additionally on
+`!underCanvasEditor` (hidden mid-edit, matching its old timeline-header visibility) and Zoom stays
+desktop-only (`hidden lg:block`) and still visible during editing. The ROW itself collapses to
+`hidden lg:flex` whenever Add footage isn't showing, so a Zoom-only row never leaves a dead gap above
+the canvas on mobile. STALE-PREMISE NOTE for future readers: the T9350 task file claimed Zoom was an
+"absolutely-positioned canvas overlay" needing to be lifted out of an overlay stack -- it was NOT;
+Zoom already rendered as a normal-flow, panel-surface (`bg-gray-800 border`), desktop-only bar
+directly above the canvas, so there was no overlay restacking and Zoom's behavior is byte-identical.
+AddFootageButton gained `coarse-pointer:min-h-[44px]` (T7350 touch-target floor). Guard test:
+`AnnotateModeView.toolbar.test.jsx`. Prior:)
 updated: 2026-09-08 (T8970 Playback Annotations mode bug fixes -- 3 gaps found by live-drive.
 **Item 1 (blank annotate video after exiting playback):** the annotate `<video>` nodes
 (AnnotateModeView.jsx multiVideo branch) UNMOUNT when `playback.isPlaybackMode` flips true (the

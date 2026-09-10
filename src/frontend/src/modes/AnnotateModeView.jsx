@@ -468,10 +468,26 @@ export function AnnotateModeView({
 
       {/* Main Editor Area */}
       <div className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'}`}>
-        {/* Controls Bar - hidden in fullscreen and on mobile */}
+        {/* T9350: toolbar row above the canvas — Add footage (left) + Zoom (right).
+            Reverses T8910's "Add footage lives with the timeline" placement so the
+            button sits above the fold on every viewport; Zoom joins it as a normal-
+            flow sibling (it already rendered here as a panel-surface bar, not an
+            over-video pill). Add footage hides mid-edit to match its old timeline-
+            header behavior; Zoom stays desktop-only and visible during editing,
+            exactly as before. */}
         {annotateVideoUrl && !annotateFullscreen && (
-          <div className="hidden lg:flex mb-6 gap-4 items-center">
-            <div className="ml-auto">
+          // Row collapses to desktop-only (hidden lg:flex, like the old Zoom bar)
+          // whenever Add footage isn't showing, so a Zoom-only row never leaves a
+          // dead gap above the canvas on mobile (Zoom itself is lg-only below).
+          <div className={`mb-4 items-center gap-4 ${addFootage && !underCanvasEditor ? 'flex' : 'hidden lg:flex'}`}>
+            {addFootage && !underCanvasEditor && (
+              <AddFootageButton
+                gameId={addFootage.gameId}
+                disabled={addFootage.disabled}
+                onFootageAttached={addFootage.onFootageAttached}
+              />
+            )}
+            <div className="ml-auto hidden lg:block">
               <ZoomControls
                 zoom={zoom}
                 onZoomIn={onZoomIn}
@@ -836,17 +852,8 @@ export function AnnotateModeView({
           {/* Annotate Mode Timeline - non-fullscreen (hidden while the under-canvas editor is open) */}
           {!annotateFullscreen && !underCanvasEditor && (
             <div className="mt-6">
-              {/* T8910: timeline header row — "Add footage" lives WITH the
-                  timeline (it acts on the timeline), not in UnifiedHeader. */}
-              {addFootage && (
-                <div className="mb-1 flex items-center justify-end">
-                  <AddFootageButton
-                    gameId={addFootage.gameId}
-                    disabled={addFootage.disabled}
-                    onFootageAttached={addFootage.onFootageAttached}
-                  />
-                </div>
-              )}
+              {/* T9350: "Add footage" moved OUT of this timeline header row into
+                  the toolbar row above the canvas (paired with Zoom). */}
               <AnnotateMode
                 currentTime={currentTime}
                 duration={duration || annotateVideoMetadata?.duration || 0}
