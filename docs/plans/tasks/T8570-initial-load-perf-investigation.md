@@ -1,6 +1,6 @@
 # T8570: Initial page load performance investigation (HAR capture + waterfall analysis)
 
-**Status:** WIP
+**Status:** STAGING (PR #383 merged 2026-09-10)
 **Impact:** 6
 **Complexity:** 5 (tentative — see Tier note below)
 **Created:** 2026-09-03
