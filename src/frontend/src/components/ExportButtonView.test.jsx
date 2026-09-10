@@ -87,8 +87,11 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     expect(btn.disabled).toBe(true);
     const caption = screen.getByTestId('export-unframed-caption');
     expect(caption.textContent).toContain('Set at least one focus point to export');
-    expect(caption.textContent).toContain('~12 credits');
     expect(caption.className).toContain('text-amber-400');
+    // T9270: the disabled reason (LEFT status cell) and the credit estimate (RIGHT
+    // cost cell) are now separate ActionBand cells — the reason no longer carries
+    // the credit suffix; the estimate renders in its own line.
+    expect(screen.getByTestId('export-credit-estimate').textContent).toContain('~12 credits');
   });
 
   it('(b) framed clip: button enabled, no caption', () => {
@@ -251,10 +254,7 @@ describe('ExportButtonView — T7580 reel vocabulary', () => {
     expect(screen.getByText('Reel ready! Find it in Highlight Reels.')).toBeTruthy();
   });
 
-  it('Focus Settings names the follow-your-athlete crop feature', () => {
-    render(<ExportButtonView {...baseProps} isFramingMode={true} />);
-    expect(screen.getByText('Set crop keyframes so the focus follows your athlete.')).toBeTruthy();
-    // Export-info subtext frames the render as building the reel + follow-focus crop.
-    expect(screen.getByText(/Builds your reel: applies your follow-focus/)).toBeTruthy();
-  });
+  // T9270: the "Focus Settings" card (audio toggle + build blurb) no longer lives in
+  // the ActionBand — those Reel settings move into the settings rail. The band is the
+  // CTA + status + cost cells only. The rail owns that copy now.
 });

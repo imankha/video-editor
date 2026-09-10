@@ -7,15 +7,16 @@ import ZoomControls from '../components/ZoomControls';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import ExportButtonView from '../components/ExportButtonView';
-import OverlaySettingsCard from '../components/OverlaySettingsCard';
-import OverlaySettingsTabs from '../components/overlay/OverlaySettingsTabs';
 import ThumbnailPanel from '../components/overlay/ThumbnailPanel';
 import TextManagementPanel from '../components/overlay/TextManagementPanel';
-import { ExportButtonContainer, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
+import SettingsRail from '../components/settings/SettingsRail';
+import OverlaySpotlightPanel from '../components/settings/OverlaySpotlightPanel';
+import { ExportButtonContainer } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
-import { Minimize, Maximize, RotateCcw } from 'lucide-react';
+import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
+import { HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
 import { isRegionUnderPlayhead } from '../utils/textRegionPlayhead';
 
@@ -26,7 +27,6 @@ import { isRegionUnderPlayhead } from '../utils/textRegionPlayhead';
  */
 const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSection({
   videoFile,
-  videoUrl,
   highlightRegions,
   highlightEffectType,
   onHighlightEffectTypeChange,
@@ -36,8 +36,8 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
   disabled,
 }, ref) {
 
-  // Container: all business logic. Tuning controls moved to <OverlaySettingsCard>
-  // (T5676); this section is now the "Add Spotlight" button + progress only.
+  // Container: all business logic. Tuning controls live in the settings rail
+  // (T9270, OverlaySpotlightPanel); this section is now the CTA + progress only.
   const container = ExportButtonContainer({
     videoFile,
     cropKeyframes: [],
@@ -52,16 +52,15 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
     onExportComplete,
   });
 
-  // View: pure presentation
+  // View: pure presentation.
+  // T9270: renders the full-width ActionBand (the CTA is "Add Overlay").
   return (
-    <div className="mt-6">
       <ExportButtonView
         ref={ref}
         isCurrentlyExporting={container.isCurrentlyExporting}
         isExporting={container.isExporting}
         isExternallyExporting={false}
         displayProgress={container.displayProgress}
-        displayMessage={container.displayMessage}
         error={container.error}
         failedExport={container.failedExport}
         disconnected={container.disconnected}
@@ -75,17 +74,13 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
         isMultiClipMode={container.isMultiClipMode}
         isButtonDisabled={container.isButtonDisabled}
         buttonTitle={container.buttonTitle}
-        includeAudio={includeAudio}
         onExport={container.handleExport}
         onRetryConnection={container.handleRetryConnection}
         onDismissExport={container.handleDismissExport}
-        onAudioToggle={container.handleAudioToggle}
-        EXPORT_CONFIG={EXPORT_CONFIG}
         showInsufficientCredits={null}
         onCloseInsufficientCredits={null}
         handleExportRef={container.handleExportRef}
       />
-    </div>
   );
 });
 
@@ -205,9 +200,7 @@ export function OverlayModeView({
   posterMarkerTime = null,
   posterSlowmoSection = null,
   posterUploaded = false,
-  posterMarkerTimeLabel = null,
   onPosterMarkerDragEnd,
-  onUseCurrentFrameAsCover,
   onRemoveUpload,
 
   // Player detection (auto-detected during framing export)
@@ -219,7 +212,6 @@ export function OverlayModeView({
   onPlayerSelect,
   showPlayerBoxes,
   onTogglePlayerBoxes,
-  onEnablePlayerBoxes,
   onDetectionMarkerClick,
 
   // Zoom
@@ -281,6 +273,13 @@ export function OverlayModeView({
   // below) so the on-screen panel updates in place — the panel has a CONSTANT
   // height, so this never reflows the timeline.
   const [activeTab, setActiveTab] = useState('overlay');
+
+  // T9270: ephemeral settings-rail view state. NEVER persisted (no-persisted-view-state
+  // rule; precedent T5610 circleEditActive / T5370 spotlightPlayMode). Desktop rail
+  // defaults EXPANDED (collapsed=false); the mobile drawer defaults CLOSED
+  // (drawerOpen=false). No useEffect writes these — gesture handlers only.
+  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // T6630 round 6/7 item 2/1: "all text settings should be for the text
   // regions the playhead is currently on" -- STRICT playhead scoping for the
@@ -667,9 +666,10 @@ export function OverlayModeView({
     return selectPosterFrame(openPlayWindow(posterSlowmoSection, dur), null, posterSlowmoSection);
   }, [posterMarkerTime, posterSlowmoSection, effectiveOverlayMetadata?.duration, duration]);
 
-  // --- Overlay tab: spotlight/highlight tuning (poster moved to Thumbnail tab). ---
+  // --- Spotlight tab: spotlight/highlight tuning (poster moved to Thumbnail tab). ---
+  // T9270: ported onto the shared SettingRow / SettingsPanel anatomy.
   const overlayPanel = (
-    <OverlaySettingsCard
+    <OverlaySpotlightPanel
       highlightColor={highlightColor}
       onHighlightColorChange={onHighlightColorChange}
       highlightShape={highlightShape}
@@ -731,19 +731,30 @@ export function OverlayModeView({
     />
   );
 
-  const settingsTabs = (
-    <OverlaySettingsTabs
-      activeTab={activeTab}
-      onTabChange={setActiveTab}
-      overlayPanel={overlayPanel}
-      textPanel={textPanel}
-      thumbnailPanel={thumbnailPanel}
-      disabledTabIds={activeTextRegionsAtPlayhead.length === 0 ? ['text'] : []}
-    />
-  );
+  // T9270: the unified settings rail. Tabs live in the rail header (one activeTab
+  // source of truth); the body renders the active tab. One accent: blue-600. Same
+  // component drives the desktop rail and the mobile translateX drawer (below).
+  const settingsRailTabs = [
+    { id: 'overlay', label: 'Spotlight', icon: Sparkles },
+    { id: 'text', label: 'Text', icon: Type },
+    { id: 'thumbnail', label: 'Thumbnail', icon: ImageIcon },
+  ];
+  const settingsRailBodies = { overlay: overlayPanel, text: textPanel, thumbnail: thumbnailPanel };
+  const activeRailTab = settingsRailTabs.some((t) => t.id === activeTab) ? activeTab : 'overlay';
+  // Dim (never disable) the Text tab when no text region sits under the playhead —
+  // preserves the OverlaySettingsTabs affordance the rail replaced (T6630: dimmed =
+  // deprioritized, still clickable so the panel's "add one" guidance stays reachable).
+  const railDisabledTabIds = activeTextRegionsAtPlayhead.length === 0 ? ['text'] : [];
+
+  // T9270: the mobile entry row's live-summary second line. DERIVED from the same
+  // state the rows bind to — never a second stored copy.
+  const colorLabel = HIGHLIGHT_COLOR_LABELS[highlightColor] || 'White';
+  const shapeLabel = highlightShape === 'ground' ? 'Ground spotlight' : 'Body ellipse';
+  const mobileSettingsSummary =
+    `${colorLabel} - ${shapeLabel} - Dim ${Math.round((dimStrength ?? 0) * 100)}%`;
 
   return (
-    <>
+    <div className="flex flex-col min-h-0">
       {/* T740: Outdated Focus banner */}
       {framingOutdated && !isFullscreen && (
         <div className="mb-3 flex items-center justify-between gap-3 bg-amber-900/40 border border-amber-500/30 rounded-lg px-4 py-2.5">
@@ -861,30 +872,58 @@ export function OverlayModeView({
               {controlsEl}
             </div>
           ) : (
-            <div className="lg:flex lg:flex-row lg:items-start lg:gap-6">
+            <div className="relative lg:flex lg:flex-row lg:items-start">
               {/* Video column — shrink-wraps the aspect box so Controls bind to the
-                  video width (lg:w-fit); full width when stacked on mobile.
-                  lg:flex-initial (not lg:flex-none) lets it yield width to the
-                  settings column instead of forcing it to 0 (T9150). lg:max-w is a
-                  PERCENTAGE of the row (this column's own parent has a definite
-                  width, so no circularity) leaving room for the settings column's
-                  lg:min-w-[20rem] + the row's lg:gap-6 (24px) — the stage box
-                  inside just respects whatever width this leaves it. */}
-              <div className="flex flex-col w-full lg:w-fit lg:flex-initial lg:min-w-0 lg:max-w-[calc(100%-22rem)]">
+                  video width (lg:w-fit); full width when stacked on mobile. T9270:
+                  lg:flex-1 lets it GROW into the width the rail gives back when the
+                  rail collapses (the rail is a shrink-0 sibling reserving exactly its
+                  own width, so no explicit max-w cap is needed — collapsing the rail
+                  reflows this column wider for free). The stage box inside just
+                  respects whatever width the column leaves it via max-w-full. */}
+              <div className="flex flex-col w-full lg:w-fit lg:flex-1 lg:min-w-0 lg:pr-6">
                 <div data-testid="overlay-video-stage" className={stageBoxClass} style={stageBoxStyle}>
                   {videoStageInner}
                 </div>
                 {controlsEl}
               </div>
-              {/* Settings column — reclaimed pillarbox width, desktop only. Mobile
-                  renders its own copy above the Add Spotlight button (below). The
-                  three-tab section (Overlay | Text | Thumbnail) has a constant
-                  height, so selecting a block swaps the Text tab in place without
-                  moving the timeline (T6630 round 2). lg:min-w floors it so a
-                  landscape stage can never starve it to 0px (T9150). */}
-              <div className="hidden lg:block lg:flex-1 lg:min-w-[20rem]">
-                {settingsTabs}
-              </div>
+              {/* T9270: the unified settings rail — desktop (fine pointer) only, a
+                  300px in-flow box that width-tweens to a 64px icon strip when
+                  collapsed. On mobile the SAME rail renders as the translateX drawer
+                  below. */}
+              {!isMobile && (
+                <SettingsRail
+                  isMobile={false}
+                  collapsed={railCollapsed}
+                  onToggleCollapse={() => setRailCollapsed((v) => !v)}
+                  tabs={settingsRailTabs}
+                  activeTab={activeRailTab}
+                  onTabChange={setActiveTab}
+                  disabledTabIds={railDisabledTabIds}
+                  disabledTabTitle="No text region under the playhead"
+                  title="Spotlight settings"
+                >
+                  {settingsRailBodies[activeRailTab]}
+                </SettingsRail>
+              )}
+              {/* T9270: mobile settings drawer — the SAME SettingsRail in translateX
+                  mode, position:absolute inside this relatively-positioned stage row
+                  so it never alters the stage box. Opened by the mobile-settings-row
+                  below; closed by its own 44x44 header close. */}
+              {isMobile && (
+                <SettingsRail
+                  isMobile
+                  open={drawerOpen}
+                  onCloseDrawer={() => setDrawerOpen(false)}
+                  tabs={settingsRailTabs}
+                  activeTab={activeRailTab}
+                  onTabChange={setActiveTab}
+                  disabledTabIds={railDisabledTabIds}
+                  disabledTabTitle="No text region under the playhead"
+                  title="Spotlight settings"
+                >
+                  {settingsRailBodies[activeRailTab]}
+                </SettingsRail>
+              )}
             </div>
           )}
 
@@ -1100,21 +1139,43 @@ export function OverlayModeView({
           </div>
         )}
 
-        {/* Settings tabs — mobile only (stacked above Add Spotlight). Desktop
-            renders the tabbed section beside the video in the two-column stage row. */}
-        {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
-          <div className="lg:hidden mt-6">
-            {settingsTabs}
-          </div>
+        {/* T9270: mobile settings entry row — a 64px full-width labelled button that
+            opens the drawer, with a derived live-summary second line. Hidden in mobile
+            fullscreen (as the toolbar was). Desktop uses the in-flow rail instead.
+            Replaces the old lg:hidden stacked settings copy. */}
+        {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && isMobile && (
+          <button
+            type="button"
+            data-testid="mobile-settings-row"
+            onClick={() => setDrawerOpen(true)}
+            className="mt-4 w-full h-16 flex items-center gap-3 rounded-[10px] px-3.5 text-left"
+            style={{ border: '1px solid #334155', background: '#0f172a' }}
+            aria-label="Open spotlight settings"
+          >
+            <Sparkles size={20} className="shrink-0 text-gray-300" aria-hidden="true" />
+            <span className="flex flex-col min-w-0 flex-1">
+              <span className="text-sm font-semibold text-gray-100">Spotlight settings</span>
+              <span data-testid="mobile-settings-summary" className="text-xs text-gray-400 truncate">
+                {mobileSettingsSummary}
+              </span>
+            </span>
+            <ChevronLeft size={18} className="shrink-0 text-gray-500" aria-hidden="true" />
+          </button>
         )}
 
-        {/* Add Spotlight button + export progress — full width at the bottom on
-            all widths (settings moved out to <OverlaySettingsCard>, T5676). */}
-        {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
+      </div>
+
+      {/* T9270: the action band is the last flex:none child of the shell, spanning
+          the full width under the stage + settings rail. "Add Overlay" CTA.
+          `sticky bottom-0` pins it to the viewport bottom against App's
+          `flex-1 overflow-auto` scroll container so the CTA paints above the fold at
+          every width (generalizes T8790's mobile-only sticky bar; its solid bg +
+          top-shadow read cleanly over the taller portrait stage scrolling behind). */}
+      {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
+        <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-6">
           <OverlayExportButtonSection
             ref={exportButtonRef}
             videoFile={effectiveOverlayFile}
-            videoUrl={effectiveOverlayVideoUrl}
             highlightRegions={getRegionsForExport()}
             highlightEffectType={highlightEffectType}
             onHighlightEffectTypeChange={onHighlightEffectTypeChange}
@@ -1123,8 +1184,8 @@ export function OverlayModeView({
             onExportComplete={onExportComplete}
             disabled={!effectiveOverlayFile && !effectiveOverlayVideoUrl}
           />
-        )}
-      </div>
-    </>
+        </div>
+      )}
+    </div>
   );
 }

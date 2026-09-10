@@ -1329,7 +1329,6 @@ export function FocusScreen({
       framerate={framerate}
       selectedCropKeyframeIndex={selectedCropKeyframeIndex}
       copiedCrop={copiedCrop}
-      dragCrop={dragCrop}
       onCropChange={framingHandleCropChange}
       onCropComplete={framingHandleCropComplete}
       onKeyframeClick={handleKeyframeClickWithIndex}

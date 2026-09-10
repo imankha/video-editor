@@ -1,6 +1,7 @@
 import { forwardRef, useImperativeHandle, lazy, Suspense } from 'react';
 import { Download, Loader, AlertCircle } from 'lucide-react';
-import { Button, Toggle } from './shared';
+import ActionBand from './ActionBand';
+import PrimaryCta from './PrimaryCta';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 import { SECTION_NAMES } from '../config/displayNames';
@@ -22,7 +23,6 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   isExporting,
   isExternallyExporting,
   displayProgress,
-  displayMessage,
   error,
   failedExport,
   disconnected,
@@ -40,17 +40,10 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   isButtonDisabled,
   buttonTitle,
 
-  // Toggle values
-  includeAudio,
-
   // Handlers
   onExport,
   onRetryConnection,
   onDismissExport,
-  onAudioToggle,
-
-  // Config/labels
-  EXPORT_CONFIG,
 
   // T530: Credit system
   showInsufficientCredits,
@@ -63,7 +56,6 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   sourceFps = null,
   // T525/T526: Stripe purchase
   showBuyCredits,
-  onOpenBuyCredits,
   onCloseBuyCredits,
   onPaymentSuccess,
 
@@ -78,140 +70,44 @@ const ExportButtonView = forwardRef(function ExportButtonView({
     isCurrentlyExporting
   }), [isExporting, isCurrentlyExporting, handleExportRef]);
 
-  return (
-    <div className="space-y-3">
-      {/* Framing Settings — Overlay tuning lives in <OverlaySettingsCard> now (T5676),
-          rendered beside the aspect-fit video by OverlayModeView. */}
-      {isFramingMode && (
-        <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
-          <div className="mb-3">
-            <div className="text-sm font-medium text-gray-300">Focus Settings</div>
-            <div className="text-xs text-gray-400">Set crop keyframes so the focus follows your athlete.</div>
-          </div>
+  // T9270: the export UI is now a full-width ActionBand. The primary CTA is the one
+  // saturated element (centered, fixed 56px box — never resizes with the rail). The
+  // LEFT status cell carries progress / failed-retry / disabled-reason (preserving
+  // T8510's "reason next to the button" property); the RIGHT cost cell carries the
+  // credit estimate + high-fps note. The Focus audio toggle + build blurb now live in
+  // the settings rail's Reel group (desktop) / mobile drawer, not in this component.
 
-          {/* Audio Toggle */}
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-gray-200">Audio</span>
-              <span className="text-xs text-gray-400">
-                {includeAudio ? 'Include audio in export' : 'Export video only'}
-              </span>
-            </div>
-            <Toggle
-              checked={includeAudio}
-              onChange={onAudioToggle}
-              disabled={isCurrentlyExporting}
-            />
-          </div>
+  const ctaLabel = isCurrentlyExporting
+    ? (isExternallyExporting && !isExporting ? 'Reel in progress...' : 'Creating reel...')
+    : isFramingMode
+      ? (hasUnframedClips && isMultiClipMode && totalExtractedClips > 1
+        ? `Export Focused Video (${totalExtractedClips - unframedCount}/${totalExtractedClips})`
+        : 'Export Focused Video')
+      : 'Add Overlay';
 
-          {/* Export Info */}
-          <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
-            {`Builds your reel: applies your follow-focus crop, trim, and speed, upscaled with AI at ${EXPORT_CONFIG?.targetFps || 30}fps.`}
-          </div>
-        </div>
-      )}
-
-      {/* T740: Extraction status message removed — extraction merged into framing export */}
-
-      {/* Unframed clips warning - Framing mode only */}
-      {isFramingMode && hasUnframedClips && (
-        <div className="text-amber-400 text-sm bg-amber-900/20 border border-amber-700 rounded p-2 flex items-center gap-2">
-          <AlertCircle size={14} />
-          <span>
-            {isMultiClipMode
-              ? (unframedCount === totalExtractedClips
-                  ? (totalExtractedClips === 1
-                      ? 'This clip has not been framed yet.'
-                      : 'No clips have been framed yet.')
-                  : `${unframedCount} of ${totalExtractedClips} clip${unframedCount > 1 ? 's' : ''} need${unframedCount === 1 ? 's' : ''} framing. Select and add crop keyframes.`)
-              : 'This clip has not been framed yet.'
-            }
-          </span>
-        </div>
-      )}
-
-      {/* Single Export button for both modes */}
-      <Button
-        variant="primary"
-        size="lg"
-        fullWidth
-        icon={isCurrentlyExporting ? Loader : Download}
-        onClick={onExport}
-        disabled={isButtonDisabled}
-        className={isCurrentlyExporting ? '[&>svg]:animate-spin' : ''}
-        title={buttonTitle}
-      >
-        {isCurrentlyExporting
-          ? (isExternallyExporting && !isExporting ? 'Reel in progress...' : 'Creating reel...')
-          : isFramingMode
-            ? (hasUnframedClips && isMultiClipMode && totalExtractedClips > 1
-              ? `Export Focused Video (${totalExtractedClips - unframedCount}/${totalExtractedClips})`
-              : 'Export Focused Video')
-            : 'Add Overlay'
-        }
-      </Button>
-
-      {/* T8510: inline reason the export button is disabled (Option A guard, reverses
-          T3700 P0). The amber banner above can sit far off-screen on tall panels, so the
-          reason also renders right under the button, styled like the credit-estimate row.
-          The per-clip "Needs focus" chip in the clip list stays the wayfinding to WHICH
-          clip. */}
+  // LEFT status cell — progress / disconnected / error / failed / success / disabled
+  // reason. Rendered in priority order but each independent block is preserved so the
+  // existing testids and copy are byte-identical.
+  const statusCell = (
+    <>
+      {/* Unframed clips warning + disabled reason (T8510) */}
       {isFramingMode && hasUnframedClips && !isCurrentlyExporting && (
         <div
           data-testid="export-unframed-caption"
-          className="flex items-center justify-center gap-1.5 text-xs text-amber-400 text-center"
+          className="flex items-center gap-1.5 text-xs text-amber-400"
         >
           <AlertCircle size={12} className="shrink-0" />
           <span>
             {(isMultiClipMode && totalExtractedClips > 1
               ? 'Set at least one focus point on every clip to export'
-              : 'Set at least one focus point to export')
-              + (estimatedCredits != null
-                ? ` — ~${estimatedCredits} credit${estimatedCredits === 1 ? '' : 's'}`
-                : '')}
-          </span>
-        </div>
-      )}
-
-      {/* T5790: pre-flight credit-cost estimate — Framing only. Derived from the SAME
-          effectiveDuration + Math.ceil the click-time credit check uses, so this number
-          matches the insufficient-credits modal. Hidden while exporting and when the
-          output duration is unknown (no fabricated number). Amber when it exceeds the
-          balance so the user learns BEFORE clicking; the click still runs the
-          authoritative backend check (refresh balance -> 402 -> buy credits). */}
-      {isFramingMode && !isCurrentlyExporting && estimatedCredits != null && (
-        <div
-          data-testid="export-credit-estimate"
-          className={`flex items-center justify-center gap-1.5 text-xs ${
-            insufficientForEstimate ? 'text-amber-400' : 'text-gray-400'
-          }`}
-        >
-          {insufficientForEstimate && <AlertCircle size={12} />}
-          <span>
-            {`~${estimatedCredits} credit${estimatedCredits === 1 ? '' : 's'} · balance ${creditBalance}`}
-            {insufficientForEstimate ? ' — add credits to export' : ''}
-          </span>
-        </div>
-      )}
-
-      {/* T8280 (Option B-simple): static note when the source is high-fps —
-          the export is still 30fps (cheaper, smaller file), no toggle, no
-          second "native" price. The credit estimate ABOVE is unchanged. */}
-      {isFramingMode && !isCurrentlyExporting && estimatedCredits != null &&
-        sourceFps != null && sourceFps >= HIGH_FPS_THRESHOLD && (
-        <div
-          data-testid="export-high-fps-note"
-          className="flex items-center justify-center gap-1.5 text-xs text-gray-400"
-        >
-          <span>
-            {`Recorded at ${sourceFps}fps — exported at 30fps for a smaller, cheaper file.`}
+              : 'Set at least one focus point to export')}
           </span>
         </div>
       )}
 
       {/* Disconnected state - recoverable, not an error */}
       {disconnected && !error && (
-        <div className="text-amber-400 text-sm bg-amber-900/20 border border-amber-800 rounded p-2">
+        <div className="text-amber-400 text-xs bg-amber-900/20 border border-amber-800 rounded p-2 w-full">
           {reconnectionFailed ? (
             <>
               <div className="flex items-center gap-2">
@@ -256,24 +152,79 @@ const ExportButtonView = forwardRef(function ExportButtonView({
 
       {/* Error message */}
       {error && (
-        <div className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded p-2">
+        <div className="text-red-400 text-xs bg-red-900/20 border border-red-800 rounded p-2 w-full">
           {error}
         </div>
       )}
 
       {/* Persistent failed export from store (survives navigation) */}
       {!error && failedExport && (
-        <div className="text-orange-400 text-sm bg-orange-900/20 border border-orange-800 rounded p-2">
+        <div className="text-orange-400 text-xs bg-orange-900/20 border border-orange-800 rounded p-2 w-full">
           Export failed: {failedExport.error || 'Unknown error'}
         </div>
       )}
 
       {/* Success message */}
       {displayProgress === 100 && !isCurrentlyExporting && (
-        <div className="text-green-400 text-sm bg-green-900/20 border border-green-800 rounded p-2">
+        <div className="text-green-400 text-xs bg-green-900/20 border border-green-800 rounded p-2 w-full">
           {`Reel ready! Find it in ${SECTION_NAMES.LIBRARY}.`}
         </div>
       )}
+    </>
+  );
+
+  // RIGHT cost cell — credit estimate + high-fps note (Framing only).
+  const costCell = (
+    <>
+      {/* T5790: pre-flight credit-cost estimate — Framing only. */}
+      {isFramingMode && !isCurrentlyExporting && estimatedCredits != null && (
+        <div
+          data-testid="export-credit-estimate"
+          className={`flex items-center gap-1.5 text-xs ${
+            insufficientForEstimate ? 'text-amber-400' : 'text-gray-400'
+          }`}
+        >
+          {insufficientForEstimate && <AlertCircle size={12} />}
+          <span>
+            {`~${estimatedCredits} credit${estimatedCredits === 1 ? '' : 's'} · balance ${creditBalance}`}
+            {insufficientForEstimate ? ' — add credits to export' : ''}
+          </span>
+        </div>
+      )}
+
+      {/* T8280: static note when the source is high-fps. */}
+      {isFramingMode && !isCurrentlyExporting && estimatedCredits != null &&
+        sourceFps != null && sourceFps >= HIGH_FPS_THRESHOLD && (
+        <div
+          data-testid="export-high-fps-note"
+          className="flex items-center gap-1.5 text-xs text-gray-400"
+        >
+          <span>
+            {`Recorded at ${sourceFps}fps — exported at 30fps for a smaller, cheaper file.`}
+          </span>
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <>
+      <ActionBand
+        status={statusCell}
+        cta={
+          <PrimaryCta
+            accent={isFramingMode ? 'focus' : 'overlay'}
+            icon={isCurrentlyExporting ? Loader : Download}
+            iconClassName={isCurrentlyExporting ? 'animate-spin' : ''}
+            onClick={onExport}
+            disabled={isButtonDisabled}
+            title={buttonTitle}
+          >
+            {ctaLabel}
+          </PrimaryCta>
+        }
+        cost={costCell}
+      />
 
       {/* T525: Buy Credits Modal (merged with insufficient credits info) */}
       {showBuyCredits && (
@@ -285,7 +236,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           />
         </Suspense>
       )}
-    </div>
+    </>
   );
 });
 
