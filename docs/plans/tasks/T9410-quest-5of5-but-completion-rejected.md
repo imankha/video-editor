@@ -1,6 +1,6 @@
 # T9410: Guide shows 5/5 while Continue rejects 'watch_annotate_tutorial'
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-09-10
