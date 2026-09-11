@@ -152,6 +152,60 @@ export function sendUploadFailureBeacon(payload) {
 }
 
 /**
+ * T9420: auto-retry the idempotent front-half API legs on a transient network
+ * reject. The diagnosed cause of "upload fails at ~15% (Failed to fetch), succeeds
+ * on retry" is a bare `fetch()` REJECT (never an HTTP response) on
+ * `POST /api/games` (createGame) or `POST /api/games/prepare-upload` — a rejected
+ * fetch() is a TypeError whose Chromium message is literally "Failed to fetch".
+ * The R2 part PUTs (XHR) already retry; these two API calls did not.
+ *
+ * Safe because both legs are idempotent (create_game reuses the pending game by
+ * blake3_hash; prepare-upload HEAD-dedups/resumes the multipart), so a retry after
+ * an AMBIGUOUS reject cannot create a second game, charge, or R2 object.
+ *
+ * Retries ONLY a thrown network reject — an HTTP error RESPONSE (`res.ok === false`,
+ * e.g. 402/422/500) is returned untouched for the caller's existing handling, never
+ * retried. Bounded so a genuinely-down backend still surfaces failure. Each reject
+ * fires the failure beacon, closing the observability gap where a pre-response
+ * reject threw before the old `!res.ok` beacon and left zero server evidence.
+ *
+ * @param {string} url
+ * @param {Object} options - fetch options
+ * @param {Object} meta - { phase, beacon } beacon = extra payload fields (hash/size/etc.)
+ */
+export const NETWORK_RETRY_MAX = 2;         // extra attempts after the first
+const NETWORK_RETRY_BACKOFF_MS = 500;       // linear: 500ms, 1000ms
+
+// A rejected fetch() is a TypeError across browsers (Chromium "Failed to fetch",
+// Firefox "NetworkError when attempting to fetch resource", Safari "Load failed").
+// An HTTP error is a resolved Response, so it never lands here.
+function isNetworkReject(err) {
+  return err instanceof TypeError;
+}
+
+export async function apiFetchWithNetworkRetry(url, options, { phase, beacon } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= NETWORK_RETRY_MAX; attempt++) {
+    try {
+      return await apiFetch(url, options);
+    } catch (err) {
+      if (!isNetworkReject(err)) throw err; // not a transport reject: caller owns it
+      lastErr = err;
+      sendUploadFailureBeacon({
+        ...(beacon || {}),
+        phase,
+        reason: 'fetch_rejected',
+        attempt: attempt + 1,
+      });
+      if (attempt < NETWORK_RETRY_MAX) {
+        await new Promise((r) => setTimeout(r, NETWORK_RETRY_BACKOFF_MS * (attempt + 1)));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * Hash a file using BLAKE3 with sampling for speed (T81)
  *
  * Instead of hashing the entire file, we hash:
@@ -644,11 +698,15 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   if (options.kind) {
     prepareBody.kind = options.kind;
   }
-  const prepareRes = await apiFetch(`${API_BASE}/api/games/prepare-upload`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(prepareBody),
-  });
+  const prepareRes = await apiFetchWithNetworkRetry(
+    `${API_BASE}/api/games/prepare-upload`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(prepareBody),
+    },
+    { phase: 'preparing', beacon: { blake3_hash: hash, file_size: uploadSize, kind: options.kind } },
+  );
 
   if (!prepareRes.ok) {
     const error = await prepareRes.json().catch(() => ({}));
@@ -839,11 +897,15 @@ async function createGame(options, videos, status) {
   if (status) {
     body.status = status;
   }
-  const res = await apiFetch(`${API_BASE}/api/games`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const res = await apiFetchWithNetworkRetry(
+    `${API_BASE}/api/games`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    { phase: 'creating', beacon: { blake3_hash: videos?.[0]?.blake3_hash, status } },
+  );
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
