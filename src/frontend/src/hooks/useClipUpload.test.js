@@ -105,6 +105,41 @@ describe('useClipUpload', () => {
     expect(outcome.results.some((r) => r.blake3_hash === 'hash-b' && r.ok === true)).toBe(true);
   });
 
+  // T9640 regression guard: a direct clip upload must reach framing (Focus) as a
+  // standalone clip project and must NEVER route through game creation. The clip
+  // path is defined by (a) landing the source as kind:'clip' (not game footage),
+  // (b) finalizing through the clips endpoint (uploadClipsBatch = POST
+  // /api/clips/upload), never a game activate/create call, and (c) selecting the
+  // created project so Focus unlocks. If a future refactor accidentally sent a
+  // direct clip through the game pipeline, one of these three would break.
+  it('reaches framing (selects the clip project) without creating a game — T9640', async () => {
+    ensureVideoInR2.mockResolvedValue({ blake3_hash: 'hash-solo', file_size: 333, uploaded: true });
+    uploadClipsBatch.mockResolvedValue({
+      results: [{ ok: true, blake3_hash: 'hash-solo', raw_clip_id: 9, project_id: 77 }],
+      charged: 2,
+      balance: 40,
+    });
+
+    const { result } = renderHook(() => useClipUpload());
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.uploadClips([makeFile('solo.mp4')]);
+    });
+
+    // (a) uploaded as a CLIP source, never game footage.
+    expect(ensureVideoInR2.mock.calls[0][2]).toEqual({ kind: 'clip' });
+    // (b) finalized through the clips batch endpoint only — the game pipeline is
+    // a different call the clip path never touches.
+    expect(uploadClipsBatch).toHaveBeenCalledTimes(1);
+    // (c) the created clip project is selected + the list force-refreshed, which is
+    // exactly how Focus (framing) unlocks for the new draft.
+    expect(selectProject).toHaveBeenCalledWith(77);
+    expect(fetchProjects).toHaveBeenCalledWith({ force: true });
+    // The outcome is a standalone clip project (carries project_id), not a game.
+    const created = outcome.results.find((r) => r.ok);
+    expect(created.project_id).toBe(77);
+  });
+
   it('never calls the batch endpoint when every file fails to land in R2', async () => {
     ensureVideoInR2.mockRejectedValue(new Error('network'));
 

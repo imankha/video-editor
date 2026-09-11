@@ -18,7 +18,7 @@ import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS } from '../config/displayNames';
+import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, UPLOAD_ENTRY_HINT } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { useClipUpload } from '../hooks/useClipUpload';
 import { GAME, REEL, HIGHLIGHT, PUBLISHED } from '../config/themeColors';
@@ -1498,6 +1498,10 @@ export function ProjectManager({
           >
             {LIBRARY_ACTIONS.UPLOAD_GAME}
           </Button>
+          {/* T9640: state the game-vs-clip distinction at the entry point itself,
+              not only in the empty-state guide (the EmptyTabGuide already pairs its
+              buttons with captions; this covers the populated tab). */}
+          <p className="text-xs text-gray-500 mt-1.5">{UPLOAD_ENTRY_HINT.GAME}</p>
         </div>
       )}
 
@@ -1517,6 +1521,9 @@ export function ProjectManager({
           >
             {CLIP_UPLOAD.UPLOAD_CLIP}
           </Button>
+          {/* T9640: parallel to the Games entry above -- a short clip skips play
+              marking and goes straight to Focus, stated at the entry point. */}
+          <p className="text-xs text-gray-500 mt-1.5">{UPLOAD_ENTRY_HINT.CLIP}</p>
         </div>
       )}
 
