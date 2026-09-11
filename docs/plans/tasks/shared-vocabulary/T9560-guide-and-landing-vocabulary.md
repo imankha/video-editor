@@ -1,6 +1,6 @@
 # T9560: Onboarding guide, error and landing vocabulary
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-10
