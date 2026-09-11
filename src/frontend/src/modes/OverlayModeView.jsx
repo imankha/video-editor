@@ -478,7 +478,7 @@ export function OverlayModeView({
     onTogglePlay: onPlaySpotlight || togglePlay,
     isLooping: spotlightPlayMode === 'loop' && !!spotlightSpan,
     secondaryPlay: spotlightSpan
-      ? { onClick: onPlayFull, title: 'Play full clip', active: spotlightPlayMode === 'full' }
+      ? { onClick: onPlayFull, title: 'Play clip', active: spotlightPlayMode === 'full' }
       : undefined,
   };
 

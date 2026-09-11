@@ -35,7 +35,7 @@ describe('My Athlete Filter', () => {
   it('renders My Athlete and All Clips toggle buttons', async () => {
     renderModal();
     await waitFor(() => {
-      expect(screen.getByText('My Athlete')).toBeDefined();
+      expect(screen.getByText('My player')).toBeDefined();
       expect(screen.getByText('All Clips')).toBeDefined();
     });
   });
@@ -43,7 +43,7 @@ describe('My Athlete Filter', () => {
   it('defaults to My Athlete selected', async () => {
     renderModal();
     await waitFor(() => {
-      const btn = screen.getByText('My Athlete');
+      const btn = screen.getByText('My player');
       expect(btn.className).toContain('bg-amber-600');
     });
   });

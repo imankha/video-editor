@@ -216,7 +216,7 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
               disabled={!selectedFile || isAttaching}
               className="w-full"
             >
-              {isAttaching ? 'Adding Video…' : 'Add Video'}
+              {isAttaching ? 'Adding footage…' : 'Add footage'}
             </Button>
           </div>
         </div>

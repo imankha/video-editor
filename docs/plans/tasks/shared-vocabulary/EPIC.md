@@ -62,20 +62,28 @@ drift.
 
 | ID | Task | Status |
 |----|------|--------|
-| T9520 | [Annotate surface vocabulary](T9520-annotate-vocabulary.md) | TODO |
-| T9530 | [Library tabs, objects and destinations](T9530-library-tabs-and-objects.md) | TODO |
-| T9540 | [Render, job, progress and completion labels](T9540-render-and-job-labels.md) | TODO |
-| T9550 | [Editor-stage inner strings](T9550-editor-stage-strings.md) | TODO |
-| T9560 | [Onboarding guide, errors and landing vocabulary](T9560-guide-and-landing-vocabulary.md) | TODO |
-| T9570 | [Cross-surface naming audit](T9570-cross-surface-naming-audit.md) | TODO |
+| T9520 | [Annotate surface vocabulary](T9520-annotate-vocabulary.md) | STAGING |
+| T9530 | [Library tabs, objects and destinations](T9530-library-tabs-and-objects.md) | STAGING |
+| T9540 | [Render, job, progress and completion labels](T9540-render-and-job-labels.md) | STAGING |
+| T9550 | [Editor-stage inner strings](T9550-editor-stage-strings.md) | STAGING |
+| T9560 | [Onboarding guide, errors and landing vocabulary](T9560-guide-and-landing-vocabulary.md) | STAGING |
+| T9570 | [Cross-surface naming audit](T9570-cross-surface-naming-audit.md) | WIP |
 
 Row order is execution order. T9570 closes the epic and must run last.
 
 ## Completion Criteria
 
-- [ ] All six children complete
-- [ ] A Clips menu never says "Delete reel"
-- [ ] Every completion message identifies which stage finished
-- [ ] All first-time guide labels match the actual controls
-- [ ] No internal API, route, store key or analytics name was renamed for UI consistency
-- [ ] All 47 naming groups are marked applied, overridden (with reason) or not-applicable in T9570
+- [x] All six children complete (five merged to master; T9570 audit branch ready)
+- [x] A Clips menu never says "Delete reel" (T9570 verified `DraftTile.jsx` object-conditional)
+- [x] Every completion message identifies which stage finished (T9540 `EXPORT_JOBS`, verified)
+- [x] All first-time guide labels match the actual controls (EmptyTabGuide + QuestPanel header
+      verified; the quest STEP *walkthrough narrative* residuals are filed as **T9575**)
+- [x] No internal API, route, store key or analytics name was renamed for UI consistency (T9570
+      confirmed: `my_athlete`, `EDITOR_MODES`, routes, `FLOW_EVENTS`, tab ids all untouched)
+- [x] All 47 naming groups are marked applied, overridden (with reason) or not-applicable in T9570
+      (see [T9570-audit-results.md](T9570-audit-results.md))
+
+**Two audit residuals tracked outside this epic (by design):** the post-export action-bar labels
+(N23/N24/N25/N44) were listed in T9540's table but its landed scope deferred them to **T9590** (WIP);
+the quest-walkthrough narrative + `QuestPanel` "quest" toast + FE/BE title sync are filed as
+**T9575**. Both are recorded in the audit results.
