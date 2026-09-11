@@ -4,7 +4,7 @@ import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { ensureUniqueName } from '../utils/uniqueName';
-import { LIBRARY_ACTIONS } from '../config/displayNames';
+import { LIBRARY_ACTIONS, ANNOTATE } from '../config/displayNames';
 import { getClipDisplayName } from '../utils/clipDisplayName';
 
 const API_BASE_URL = `${API_BASE}/api`;
@@ -596,7 +596,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
                     </label>
                     <div className="flex gap-2">
                       {[
-                        { value: true, label: 'My Athlete' },
+                        { value: true, label: ANNOTATE.LAYER_MINE },
                         { value: false, label: 'All Clips' },
                       ].map(option => (
                         <button

@@ -403,7 +403,7 @@ export function ClipSelectorSidebar({
             fullWidth
             onClick={() => setShowAddMenu(true)}
           >
-            Add Play
+            Add clip
           </Button>
         )}
 
