@@ -1,6 +1,6 @@
 # T9530: Library tabs, objects and destinations
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-09-10
