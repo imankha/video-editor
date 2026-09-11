@@ -324,6 +324,23 @@ describe('T8990: Games partial-guide cell', () => {
     expect(screen.getByTestId('reference-card')).toBeTruthy();
     expect(screen.queryByText(partialHeadline)).toBeNull();
   });
+
+  // T9440: the "cut your first play" coaching is derived from PERSISTED progress
+  // (the game's saved-play count), not the game COUNT. A lone game that already
+  // has saved plays (clip_count > 0 -- Andrew's two rated/tagged plays) has done
+  // this step, so re-offering "Now cut your first play" contradicts the game
+  // card's "2 annotations" and the quest panel. It must not render.
+  it('does NOT render for a lone game that already has saved plays (clip_count > 0)', () => {
+    renderManager({ games: [{ ...oneGame('gDone'), clip_count: 2 }] }, '/home/games');
+    // The game tile still renders; only the first-play coaching is gone.
+    expect(screen.getByTestId('game-tile')).toBeTruthy();
+    expect(screen.queryByText(partialHeadline)).toBeNull();
+  });
+
+  it('still renders for a lone game with no saved plays yet (clip_count === 0)', () => {
+    renderManager({ games: [{ ...oneGame('gNew'), clip_count: 0 }] }, '/home/games');
+    expect(screen.getByText(partialHeadline)).toBeTruthy();
+  });
 });
 
 describe('T8990: clips-add-video tutorial target stays unique (T8380 invariant)', () => {
