@@ -573,8 +573,17 @@ export function AnnotateModeView({
                 /* T2750: Dual video elements for multi-video scrub */
                 <div className={annotateFullscreen ? 'absolute inset-0' : 'relative'}
                      style={annotateFullscreen ? undefined : { aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}` }}>
+                  {/* T9510: same ARIA contract as the playback dual-video (see
+                      note above) — these editing/scrub elements share the A/B
+                      source-swap churn and onError handler, so an author label +
+                      aria-busy prevents the native "Unable to play media" name
+                      leaking during a transient scrub-load, and aria-hidden keeps
+                      only the on-screen element exposed. */}
                   <video
                     ref={videoController._renderRefs.attachA || videoController._renderRefs.videoARef}
+                    aria-label={multiVideo.isLoading ? 'Loading video' : 'Annotation video'}
+                    aria-busy={multiVideo.isLoading}
+                    aria-hidden={multiVideo.activeVideoLabel !== 'A'}
                     className="absolute inset-0 w-full h-full object-contain bg-black"
                     style={{
                       opacity: multiVideo.activeVideoLabel === 'A' ? 1 : 0,
@@ -589,6 +598,9 @@ export function AnnotateModeView({
                   />
                   <video
                     ref={videoController._renderRefs.attachB || videoController._renderRefs.videoBRef}
+                    aria-label={multiVideo.isLoading ? 'Loading video' : 'Annotation video'}
+                    aria-busy={multiVideo.isLoading}
+                    aria-hidden={multiVideo.activeVideoLabel !== 'B'}
                     className="absolute inset-0 w-full h-full object-contain bg-black"
                     style={{
                       opacity: multiVideo.activeVideoLabel === 'B' ? 1 : 0,

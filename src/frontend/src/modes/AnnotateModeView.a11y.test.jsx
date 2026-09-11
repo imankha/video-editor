@@ -150,3 +150,34 @@ describe('T9510 — Playback Annotations does not announce a transient media err
     expect(videoB.getAttribute('aria-hidden')).toBe('true');
   });
 });
+
+const multiVideoBase = {
+  activeVideoLabel: 'A',
+  isLoading: false,
+  error: null,
+  retry: vi.fn(),
+  videoHandlers: { onError: vi.fn(), onWaiting: vi.fn(), onCanPlay: vi.fn() },
+};
+
+describe('T9510 — multi-video scrub (editing) path shares the same ARIA contract', () => {
+  it('during a scrub load: both scrub videos are labeled + busy and never expose the native error name', () => {
+    const { container } = renderView({ multiVideo: { ...multiVideoBase, isLoading: true, activeVideoLabel: 'A' } });
+    const videos = Array.from(container.querySelectorAll('video'));
+    expect(videos.length).toBe(2);
+    for (const v of videos) {
+      const label = v.getAttribute('aria-label') || '';
+      expect(label).not.toMatch(/unable to play media/i);
+      expect(label.length).toBeGreaterThan(0);
+    }
+    expect(videos[0].getAttribute('aria-busy')).toBe('true');
+    expect(videos[0].getAttribute('aria-hidden')).toBe('false');
+    expect(videos[1].getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('a genuine scrub failure announces once via a role=alert region with a recovery action', () => {
+    renderView({ multiVideo: { ...multiVideoBase, error: 'Video failed to load' } });
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toMatch(/failed to load/i);
+    expect(alert.querySelector('button')).toBeTruthy();
+  });
+});
