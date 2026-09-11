@@ -86,3 +86,76 @@ misconfiguration and a universal payload-size bug look identical from the modal.
 - [ ] Staging and production report delivery are each exercised and recorded
 - [ ] Relevant test set (curated ~10, per CLAUDE.md Test Scope Policy) green, with output attached
 - [ ] Branch CI green
+
+## Progress Log
+
+### 2026-09-11 - Root cause established (live curl against staging + prod)
+
+The container is NOT network-blocked (the prior "BLOCKED" note was wrong): both backends are
+directly reachable. `report-problem` is a plain HTTP endpoint, so it was probed with curl, no
+browser needed.
+
+**Established cause: a blocking, synchronous R2 asset upload inside the request path stalls the
+whole report when R2 outbound is slow (reproduced on a cold Fly staging machine).**
+
+The handler (`routers/auth.py` `report_problem`) does, in order: (1) INSERT the bug row into
+Postgres, (2) upload the screenshot to R2, (3) upload formatted console logs to R2, (4) UPDATE
+the row with the R2 keys. Steps 2-3 call `retry_r2_call(..., **TIER_2)` = 3 attempts with up to
+a 30s `read_timeout` each plus exponential backoff, so a stalled R2 blocks the request for up to
+~90s. That is far longer than the browser's fetch will wait, so the client aborts with a network
+`TypeError` and shows the generic "Failed to send report."
+
+Evidence (all payloads labelled `[QA TEST - T9400 investigation, safe to ignore]`):
+
+| Probe | Staging | Prod |
+|-------|---------|------|
+| `/api/health` | 200 in 1.15s (cold) | 200 in 0.11s |
+| small payload **with** 1 log line (277 bytes) | **timed out >30s** (first heavy POST, cold machine) | 200 in 3.0s |
+| payload with **empty** `logs` (PG insert only, R2 skipped) | 200 in 0.42s | - |
+| blank description | 400 fast ("A description is required.") | - |
+| 6 warm repeats with logs | all 200 in <0.7s | - |
+
+- **H1 (payload size) REFUTED:** a 277-byte body hung; size is irrelevant. The trigger is the
+  R2 upload path (present on every real report, which always carries logs and usually a
+  screenshot), not body size. There is also no server body-size cap anywhere.
+- **H2 (PG INSERT failure) REFUTED:** the insert-only path returns in 0.42s; the row commits
+  fine. The stall is in the R2 step that runs *after* the insert.
+- The hang was a **cold-start artifact**: the first heavy POST to a suspended/just-woken staging
+  machine stalled on the outbound R2 TLS connection; every warm request since is fast. Andrew hit
+  it because his report was the first heavy request after the staging machine had auto-stopped.
+- **Side effect:** the whole handler runs inside the `with get_pg()` block, which commits at
+  block exit (`pg.py:518`) *after* the R2 step; the R2 uploads are wrapped in their own
+  try/except so an R2 error is caught and never rolls the row back. Net effect: a stalled report
+  still commits a `bug_reports` row (just late, after the client has already given up), so a naive
+  retry files a duplicate - which is why the dedup acceptance criterion matters. The fix must
+  split the INSERT+commit from the R2 upload (background it), which newly creates a
+  "row committed, assets pending" state that a retry can duplicate - hence a DB-enforced
+  idempotency key.
+
+Fix direction: the report is "sent" the moment its diagnosable text+metadata is committed to
+Postgres; R2 asset uploads must not be able to sink that (background them / bound them) so R2
+health never determines report success. Frontend: keep the honest+recoverable failure UX
+(preserve text, Retry, Copy details) for the residual failure modes, and dedup retries.
+
+### 2026-09-11 - QA evidence (per acceptance criterion)
+
+The fix is committed on the branch but NOT yet deployed. Some criteria are verified now (live
+curl + automated tests); the live browser walkthrough of the new UX against a DEPLOYED build is
+a post-merge step, because staging deploys on merge and the new `client_report_id` column needs
+the postgres migration (`POST /api/admin/migrate-postgres`) after deploy.
+
+| # | Criterion | Evidence |
+|---|-----------|----------|
+| 1 | Real cause established, written up | Done - see the root-cause entry above (live curl, staging + prod). |
+| 2 | Failed send preserves report + diagnostics | Frontend test: after a failed send the textarea stays mounted with the typed text; `clearClientLogs` runs only on success. |
+| 3 | Copy details works offline, excludes credentials, previewed | Blob built client-side (no fetch, so works when the service is down); scrub test covers 3 leak shapes (key=value, Bearer value, JSON-quoted `access_token`/`session_id`); preview shown in a readonly textarea before any clipboard write. |
+| 4 | Retry after ambiguous failure files exactly one | Real-Postgres test `test_dedup_files_exactly_one_row_against_real_postgres` (resend same `client_report_id` -> one row, same id); frontend test proves the id is stable across the retry. |
+| 5 | Staging + prod delivery each exercised | CURRENT deployed delivery exercised via live curl: prod accepted `bug_id=54` (3.0s); staging accepted `bug_id=7,8` + 6 warm repeats (<0.7s). All probes are labelled `[QA TEST - T9400 investigation, safe to ignore]` in the admin bug list (cleanup: they can be deleted from admin). NEW-flow live walkthrough on a deployed build is pending merge + `migrate-postgres` (supervisor/operator). |
+| 6 | Relevant test set green | 10 backend (T9400 + T7560) + 6 frontend (failure + gate) + 27 migration-guard (real PG) green; ruff + eslint clean. |
+| 7 | Branch CI green | Pending push (supervisor). |
+
+**Operator note (post-merge):** after deploy, run `POST /api/admin/migrate-postgres` (postgres
+track is deploy/admin-triggered, no per-user seam) to apply v028 `bug_reports.client_report_id`.
+Fresh deploys get it from `_SCHEMA_DDL` automatically. Also: the cold-start stall itself is an
+infra property of the staging machine (auto-stop suspend, min_machines_running=0) - this fix makes
+the report survive it; it does not (by design) keep the machine warm.

@@ -59,7 +59,9 @@ def test_real_description_passes_validation_and_inserts():
     validation does NOT reject a genuine report and the row is written.
     """
     fake_cur = MagicMock()
-    fake_cur.fetchone.return_value = {"id": 12345}
+    # T9400: the INSERT now RETURNs (id, inserted) via ON CONFLICT; inserted=True
+    # for a genuine first submission.
+    fake_cur.fetchone.return_value = {"id": 12345, "inserted": True}
     fake_conn = MagicMock()
     fake_conn.cursor.return_value = fake_cur
     fake_ctx = MagicMock()

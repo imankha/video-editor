@@ -330,6 +330,7 @@ CREATE TABLE IF NOT EXISTS bug_reports (
     status TEXT NOT NULL DEFAULT 'new',
     duplicate_of INTEGER REFERENCES bug_reports(id),
     admin_notes TEXT,
+    client_report_id TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     resolved_at TIMESTAMPTZ
@@ -337,6 +338,14 @@ CREATE TABLE IF NOT EXISTS bug_reports (
 CREATE INDEX IF NOT EXISTS idx_bug_reports_status ON bug_reports(status);
 CREATE INDEX IF NOT EXISTS idx_bug_reports_created ON bug_reports(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bug_reports_duplicate ON bug_reports(duplicate_of);
+-- T9400: idempotent report submission. NULLs are distinct in Postgres, so
+-- legacy/anonymous rows never collide; a real client always sends a UUID and is
+-- deduped via INSERT ... ON CONFLICT (client_report_id). The explicit ALTER
+-- makes this self-healing on an already-existing bug_reports table (CREATE TABLE
+-- IF NOT EXISTS above is a no-op there, so the column line alone would not add
+-- it and the index below would reference a missing column).
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS client_report_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bug_reports_client_id ON bug_reports(client_report_id);
 
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY,
