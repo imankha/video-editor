@@ -232,6 +232,14 @@ export function VideoPlayer({
               ref={videoRef}
               src={clipRange ? `${videoUrl}#t=${clipRange.clipOffset},${clipRange.clipOffset + clipRange.clipDuration}` : videoUrl}
               muted={muted}
+              // T9510: a stable author-supplied accessible name overrides Blink's
+              // computed <video> fallback name, so the name never flips to the
+              // native "Unable to play media" when video.error is momentarily set
+              // during the T5620 format-error retry race (a transient decode
+              // race on a valid file). aria-busy tracks the existing loading flag
+              // that brackets that whole transient window.
+              aria-label="Video player"
+              aria-busy={isVideoElementLoading}
               className={`object-contain ${
                 isFullscreen ? 'w-full h-full' : 'max-w-full max-h-full'
               }`}
@@ -276,9 +284,13 @@ export function VideoPlayer({
           {/* Render any overlays passed by the mode */}
           {overlays}
 
-          {/* Video error overlay */}
+          {/* Video error overlay. T9510: role="alert" + assertive live region so
+              an ESTABLISHED failure (our `error` is set only after the T5620
+              retries are exhausted) announces ONCE to AT, with its recovery
+              action inside the region. The transient retry path never sets
+              `error`, so this never fires during a normal load. */}
           {error && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
+            <div role="alert" aria-live="assertive" className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
               <div className="text-center max-w-md px-4">
                 <div className="text-red-500 text-4xl mb-4">⚠️</div>
                 <p className="text-red-400 font-semibold mb-2">Video failed to load</p>
@@ -317,7 +329,7 @@ export function VideoPlayer({
           })()}
         </div>
       ) : error ? (
-        <div className="flex items-center justify-center h-[40vh] sm:h-[60vh] bg-black/70">
+        <div role="alert" aria-live="assertive" className="flex items-center justify-center h-[40vh] sm:h-[60vh] bg-black/70">
           <div className="text-center max-w-md px-4">
             <div className="text-red-500 text-4xl mb-4">⚠️</div>
             <p className="text-red-400 font-semibold mb-2">Video failed to load</p>
