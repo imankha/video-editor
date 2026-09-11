@@ -78,7 +78,7 @@ function OverlayPublishExitHarness({
             onPublishNow={handlePublishNow}
             onReapplyOverlay={handleReapplyOverlay}
             onReapplyFocus={handleReapplyFocus}
-            onPublishLater={handlePublishLater}
+            onSaveDraft={handlePublishLater}
           />
         </div>
       )}
@@ -141,7 +141,7 @@ describe('T9110 Overlay post-export completion preview + publish-exit action bar
     expect(screen.getByRole('button', { name: OVERLAY_PUBLISH.PUBLISH_LABEL })).toBeTruthy();
     expect(screen.getByRole('button', { name: OVERLAY_PUBLISH.REAPPLY_OVERLAY_LABEL })).toBeTruthy();
     expect(screen.getByRole('button', { name: OVERLAY_PUBLISH.REAPPLY_FOCUS_LABEL })).toBeTruthy();
-    expect(screen.getByRole('button', { name: OVERLAY_PUBLISH.PUBLISH_LATER_LABEL })).toBeTruthy();
+    expect(screen.getByRole('button', { name: OVERLAY_PUBLISH.SAVE_DRAFT_LABEL })).toBeTruthy();
 
     const panel = screen.getByTestId('export-complete-preview');
     expect(panel.textContent.toLowerCase()).not.toContain('skip');
@@ -203,11 +203,11 @@ describe('T9110 Overlay post-export completion preview + publish-exit action bar
     expect(deps.goToProjectManager).not.toHaveBeenCalled();
   });
 
-  it('"Publish Later" shows the MULTI-CLIP toast and navigates home; no publish, no re-export', () => {
+  it('"Save draft" shows the MULTI-CLIP toast and navigates home; no publish, no re-export', () => {
     const deps = makeDeps();
     render(<OverlayPublishExitHarness deps={deps} startOpen isAutoCreated={false} />);
 
-    fireEvent.click(screen.getByRole('button', { name: OVERLAY_PUBLISH.PUBLISH_LATER_LABEL }));
+    fireEvent.click(screen.getByRole('button', { name: OVERLAY_PUBLISH.SAVE_DRAFT_LABEL }));
 
     expect(deps.toastSuccess).toHaveBeenCalledWith(
       'Saved to Highlight Reels, under Highlights',
@@ -218,11 +218,11 @@ describe('T9110 Overlay post-export completion preview + publish-exit action bar
     expect(deps.setEditorMode).not.toHaveBeenCalled();
   });
 
-  it('"Publish Later" shows the SINGLE-CLIP toast when is_auto_created', () => {
+  it('"Save draft" shows the SINGLE-CLIP toast when is_auto_created', () => {
     const deps = makeDeps();
     render(<OverlayPublishExitHarness deps={deps} startOpen isAutoCreated />);
 
-    fireEvent.click(screen.getByRole('button', { name: OVERLAY_PUBLISH.PUBLISH_LATER_LABEL }));
+    fireEvent.click(screen.getByRole('button', { name: OVERLAY_PUBLISH.SAVE_DRAFT_LABEL }));
 
     expect(deps.toastSuccess).toHaveBeenCalledWith('Saved to Clips', expect.objectContaining({ duration: 10000 }));
   });

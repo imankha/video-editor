@@ -5,9 +5,10 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 /**
  * T9110 QA evidence — Overlay's post-export completion preview + publish-exit
  * action bar (the Overlay sibling of T8390's Focus flow). A plain overlay export
- * now mounts the SAME preview-player shell (CollectionPlayer) with a new
- * OverlayPublishActionBar footer offering four equal-weight, gesture-driven
- * choices: Publish Now / Reapply Spotlight / Reapply AI Focus / Publish Later.
+ * mounts the SAME preview-player shell (CollectionPlayer) with an
+ * OverlayPublishActionBar footer. T9590 (2026-09-10) re-hierarchized it: a
+ * dominant PRIMARY (Publish) + two graded cards (Reapply spotlight, Reapply AI
+ * Focus) + a quiet Save-draft link OUTSIDE the card grid (was "Publish Later").
  *
  * WHY A DIAG HARNESS (t9110diag.html), NOT the real flow: identical reasoning to
  * T8520-T8530's spec — a real end-to-end run needs an uploaded game, annotated
@@ -17,13 +18,13 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  * just finished" premise + the video source are synthetic.
  *
  * The load-bearing assertions here are the LIVE DOM MEASUREMENTS the two T8390
- * landmines demand (see the component doc comment + the task file):
+ * landmines demand (carried through the T9590 restructure):
  *   1. No title ever wraps / the row never overflows at sm: and up — proven by
  *      the grid's own scrollWidth <= clientWidth at 768/1024/1280, i.e. the
  *      min-content column floor holds and no nowrap title is forcing a scrollbar.
- *   2. The single-row (4-across) stage is gated at xl: (1280px), NOT sm: —
- *      proven by counting the resolved grid-template-columns tracks: 1 at 375,
- *      2 at 768 and 1024, 4 only at 1280.
+ *   2. The single-row (now 3-across) stage is gated at lg: (1024px), NOT sm: —
+ *      proven by counting the resolved grid-template-columns tracks: 1 below lg,
+ *      3 at 1024 and up.
  *
  * Run:
  *   bash scripts/dev-verify.sh e2e/T9110-overlay-publish-exit.spec.js --reporter=line
@@ -34,7 +35,8 @@ skipOnDeployedTarget(
   'drives t9110diag.html dev-only harness (not in rollupOptions.input; 404 on a deployed CF Pages build)'
 );
 
-const LABELS = ['Publish Now', 'Reapply Spotlight', 'Reapply AI Focus', 'Publish Later'];
+// The three IN-GRID choices (Save draft is a quiet link outside the card grid).
+const LABELS = ['Publish', 'Reapply spotlight', 'Reapply AI Focus'];
 
 // Count resolved grid-template-columns tracks (each track resolves to a px
 // value, so the token count == the column count). The measurement the task
@@ -58,7 +60,7 @@ async function gridOverflowPx(bar) {
 }
 
 test.describe('T9110: Overlay post-export completion preview + publish-exit action bar', () => {
-  test('preview mounts with all four equal-weight choices; each fires + closes', async ({ page }) => {
+  test('preview mounts with the hierarchy (dominant Publish + graded cards + quiet Save draft); each fires + closes', async ({ page }) => {
     await page.goto('/t9110diag.html');
     await page.waitForLoadState('domcontentloaded');
 
@@ -70,12 +72,16 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
     for (const name of LABELS) {
       await expect(bar.getByRole('button', { name, exact: true })).toBeVisible();
     }
+    // The quiet Save-draft link is present but OUTSIDE the card grid.
+    await expect(page.getByTestId('overlay-save-draft')).toBeVisible();
+    // Publish is the dominant PRIMARY (its card is the tinted/ringed cyan one).
+    await expect(page.getByTestId('overlay-choice-primary').getByRole('button', { name: 'Publish', exact: true })).toBeVisible();
     // Reapply AI Focus carries the honest paid-re-export cost warning caption.
     await expect(bar.getByText(/uses credits/i)).toBeVisible();
     await saveEvidence(page, 'T9110-criterion-preview-actionbar-desktop');
 
-    // Publish Now -> confirming toast + closes.
-    await bar.getByRole('button', { name: 'Publish Now', exact: true }).click();
+    // Publish -> confirming toast + closes.
+    await bar.getByRole('button', { name: 'Publish', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'publish-now');
     await expect(page.getByText('Published', { exact: false })).toBeVisible();
 
@@ -85,26 +91,26 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'reapply-focus');
     await expect(page.getByText('Spotlight saved')).toBeVisible();
 
-    // Publish Later -> explainer toast (multi-clip copy — harness default) + closes.
+    // Save draft -> explainer toast (multi-clip copy — harness default) + closes.
     await page.getByTestId('diag-reopen').click();
-    await page.getByTestId('overlay-publish-action-bar').getByRole('button', { name: 'Publish Later', exact: true }).click();
+    await page.getByTestId('overlay-save-draft').click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'publish-later');
     await expect(page.getByText('Saved to Highlight Reels, under Highlights')).toBeVisible();
   });
 
-  test('LIVE DOM measurement: no title wraps / no row overflow at sm:+; single row gated at xl: (1280), not sm:', async ({ page }) => {
+  test('LIVE DOM measurement: no title wraps / no row overflow at sm:+; single row gated at lg: (1024), not sm:', async ({ page }) => {
     await page.goto('/t9110diag.html');
     await page.waitForLoadState('domcontentloaded');
     const bar = page.getByTestId('overlay-publish-action-bar');
     await expect(bar).toBeVisible();
 
     // Landmine #2 — the exact breakpoint the task calls out: verify the resolved
-    // column count at each width, NOT just one large viewport. 4-across only at xl.
+    // column count at each width, NOT just one large viewport. 3-across only at lg+.
     const expectedColumns = [
       { width: 375, height: 812, cols: 1, name: '375' },
-      { width: 768, height: 1024, cols: 2, name: '768-ipad-portrait' },
-      { width: 1024, height: 768, cols: 2, name: '1024' },
-      { width: 1280, height: 800, cols: 4, name: '1280' },
+      { width: 768, height: 1024, cols: 1, name: '768-ipad-portrait' },
+      { width: 1024, height: 768, cols: 3, name: '1024' },
+      { width: 1280, height: 800, cols: 3, name: '1280' },
     ];
 
     for (const vp of expectedColumns) {
@@ -146,10 +152,10 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'reapply-overlay');
   });
 
-  test('Publish Later toast: single-clip copy when is_auto_created', async ({ page }) => {
+  test('Save draft toast: single-clip copy when is_auto_created', async ({ page }) => {
     await page.goto('/t9110diag.html#isAutoCreated=1');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByTestId('overlay-publish-action-bar').getByRole('button', { name: 'Publish Later', exact: true }).click();
+    await page.getByTestId('overlay-save-draft').click();
     await expect(page.getByText('Saved to Clips')).toBeVisible();
     await saveEvidence(page, 'T9110-criterion-single-clip-toast');
   });

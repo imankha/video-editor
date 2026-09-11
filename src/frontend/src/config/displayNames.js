@@ -193,23 +193,32 @@ export const EXPORT_PROGRESS = {
   FINDING_PLAYERS: 'Finding players for spotlight', // detecting_players
 };
 
-// T8390: Focus's post-export publish-exit action bar (FocusPublishActionBar).
-// Labels renamed 2026-09-08 (product owner): "Publish" -> "Publish Now" and
-// "Add Spotlight" -> "Add Spotlight Now" so the two "now" choices read as a
-// matched pair against "Add Spotlight Later". REFOCUS_CAPTION is new (below).
+// T8390 / re-hierarchized T9590: Focus's post-export publish-exit action bar
+// (FocusPublishActionBar). T9590 (2026-09-10) DELIBERATELY REVERSES T8390's flat
+// four-equal-weight layout (and the 2026-09-08 "Publish Now"/"Add Spotlight Now"
+// pairing that supported it) into a three-level hierarchy + a quiet Save-draft --
+// product owner decision, recorded with the conflict at filing:
+//   PRIMARY   Add spotlight             (dominant; opens the Spotlight editor, no export)
+//   SECONDARY Publish without spotlight (publishes the framed reel as-is)
+//   TERTIARY  Edit framing              (back into AI Focus; the paid re-export path)
+//   QUIET     Save draft                (defer; replaces the old "Add Spotlight Later",
+//                                        whose spotlight-framed destination is gone)
+// Captions state each destination + the honest cost/audience BEFORE the click
+// (T9590 acceptance). PUBLISH_CAPTION's audience wording is verified against the
+// real endpoints (downloads.py publish -> lands the reel in Highlight Reels;
+// shares.py -> a share link is public, "anyone with the link" -- matches the
+// post-publish toast). T9670 owns the confirmed publish-audience contract and is
+// not done yet, so RE-VERIFY this wording once T9670 lands. EDIT_FRAMING_CAPTION
+// keeps the honest "uses credits" re-export warning.
 export const FOCUS_PUBLISH = {
-  PUBLISH_LABEL: 'Publish Now',
-  PUBLISH_CAPTION: 'Puts it in Highlight Reels so you can share it, as is without a spotlight.',
-  ADD_SPOTLIGHT_LABEL: 'Add Spotlight Now',
-  ADD_SPOTLIGHT_LATER_LABEL: 'Add Spotlight Later',
+  ADD_SPOTLIGHT_LABEL: 'Add spotlight',
   SPOTLIGHT_CAPTION: 'A spotlight is a glowing highlight that follows your athlete.',
-  // 2026-09-08 round 5: split out of the old single string 'Refocus (reframe
-  // and export again, uses credits)' into a title + caption pair, matching
-  // the other three cards' structure (title Button + caption <p>) exactly —
-  // product owner explicitly asked for the parenthetical to become a real
-  // caption line, not button text.
-  REFOCUS_LABEL: 'Refocus',
-  REFOCUS_CAPTION: 'Reframe and export again, uses credits.',
+  PUBLISH_LABEL: 'Publish without spotlight',
+  PUBLISH_CAPTION: 'Adds it to your Highlight Reels as is -- anyone with the link can watch it.',
+  EDIT_FRAMING_LABEL: 'Edit framing',
+  EDIT_FRAMING_CAPTION: 'Reframe and export again, uses credits.',
+  SAVE_DRAFT_LABEL: 'Save draft',
+  SAVE_DRAFT_CAPTION: 'Keep it in your drafts and finish it whenever you want.',
 };
 
 // T8390: "Add Spotlight Later" toast copy, routed by is_auto_created (T8360 split).
@@ -235,22 +244,29 @@ export const FOCUS_ADD_SPOTLIGHT_TOAST = {
   message: 'Now add a spotlight to your reel -- you can still publish it whenever you\'re ready.',
 };
 
-// T9110: Overlay's post-export publish-exit action bar (OverlayPublishActionBar).
-// Mirrors FOCUS_PUBLISH (see above) for the Overlay completion screen. Four
-// equal-weight choices, no hierarchy (same product decision as T8390 round 2).
-// The two "reapply" choices send the user back into an edit mode; "Publish
-// Later" defers. REAPPLY_FOCUS_CAPTION carries the same honest cost warning as
-// Focus's REFOCUS_CAPTION (a Focus re-frame forces a fresh paid overlay
-// re-export afterward), verbatim so the two read as one system.
+// T9110 / re-hierarchized T9590: Overlay's post-export publish-exit action bar
+// (OverlayPublishActionBar). T9590 re-hierarchizes IN LOCKSTEP with FOCUS_PUBLISH
+// above (REVERSES T9110's flat four-equal-weight mirror). On THIS screen the
+// spotlight is already applied, so the promoted forward action is Publish (Focus
+// promotes "Add spotlight" instead -- the hierarchy tracks pipeline position, not
+// a fixed action):
+//   PRIMARY   Publish           (dominant; the reel is finished)
+//   SECONDARY Reapply spotlight (back into Spotlight editing)
+//   TERTIARY  Reapply AI Focus  (reframe; the paid re-export path)
+//   QUIET     Save draft        (defer; replaces the old "Publish Later")
+// PUBLISH_CAPTION states the audience BEFORE the tap (verified against
+// downloads.py publish + shares.py, matching the post-publish "anyone with the
+// link" toast; re-verify once T9670 lands). REAPPLY_FOCUS_CAPTION keeps the honest
+// "uses credits" warning, verbatim with Focus's so the two read as one system.
 export const OVERLAY_PUBLISH = {
-  PUBLISH_LABEL: 'Publish Now',
-  PUBLISH_CAPTION: 'Puts it in Highlight Reels so you can share it.',
-  REAPPLY_OVERLAY_LABEL: 'Reapply Spotlight',
+  PUBLISH_LABEL: 'Publish',
+  PUBLISH_CAPTION: 'Adds it to your Highlight Reels -- anyone with the link can watch it.',
+  REAPPLY_OVERLAY_LABEL: 'Reapply spotlight',
   REAPPLY_OVERLAY_CAPTION: 'Go back and redo the spotlight on your reel.',
   REAPPLY_FOCUS_LABEL: 'Reapply AI Focus',
   REAPPLY_FOCUS_CAPTION: 'Reframe and export again, uses credits.',
-  PUBLISH_LATER_LABEL: 'Publish Later',
-  PUBLISH_LATER_CAPTION: 'Save it as a draft and publish whenever you\'re ready.',
+  SAVE_DRAFT_LABEL: 'Save draft',
+  SAVE_DRAFT_CAPTION: 'Save it as a draft and publish whenever you\'re ready.',
 };
 
 // T9110: "Reapply Focus" confirmation toast. Mirrors FOCUS_ADD_SPOTLIGHT_TOAST's

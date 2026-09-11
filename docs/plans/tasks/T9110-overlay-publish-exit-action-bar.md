@@ -5,6 +5,14 @@
 **Complexity:** 4
 **Created:** 2026-09-08
 
+> **Partially reversed by [T9590](T9590-post-focus-choice-hierarchy.md) (2026-09-10).**
+> This task mirrored T8390's flat four-equal-weight layout into `OverlayPublishActionBar`.
+> T9590 re-hierarchized both bars together (leaving one flat would recreate the exact
+> inconsistency): on THIS screen the spotlight is already applied, so the dominant PRIMARY
+> is Publish, then SECONDARY Reapply spotlight / TERTIARY Reapply AI Focus + a quiet
+> Save-draft link (the old "Publish Later" card). Handlers/analytics unchanged; labels,
+> copy, and visual weight moved. Product owner decision, recorded with the conflict at filing.
+
 ## Problem
 
 [T8390](T8390-focus-publish-exit.md) gave Focus a preview-first completion screen with a flat,

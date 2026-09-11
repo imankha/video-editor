@@ -100,7 +100,7 @@ function OverlayPublishExitDiagHarness() {
               onPublishNow={handlePublishNow}
               onReapplyOverlay={handleReapplyOverlay}
               onReapplyFocus={handleReapplyFocus}
-              onPublishLater={handlePublishLater}
+              onSaveDraft={handlePublishLater}
             />
           )}
         />

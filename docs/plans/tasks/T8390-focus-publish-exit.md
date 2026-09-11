@@ -5,6 +5,15 @@
 **Complexity:** 3
 **Created:** 2026-09-02
 
+> **Partially reversed by [T9590](T9590-post-focus-choice-hierarchy.md) (2026-09-10).**
+> This task's flat four-equal-weight `FocusPublishActionBar` layout (and Round 2's
+> "no single choice should look more important than the others" rule, plus the
+> 2026-09-08 "Publish Now"/"Add Spotlight Now" pairing) was DELIBERATELY re-hierarchized
+> by T9590 into: PRIMARY Add spotlight / SECONDARY Publish without spotlight / TERTIARY
+> Edit framing + a quiet Save-draft link (the old "Add Spotlight Later" destination is
+> gone). Product owner decision, recorded with the conflict at filing. The gesture
+> handlers and analytics events are unchanged; only labels, copy, and visual weight moved.
+
 App design change **R3 from the approved T7620 guided-Help design** (user accepted
 2026-09-02; rationale + rule wiring in [T7620-design.md](T7620-design.md) sections 17
 and 17.1). Filed as a standalone task per the design's argument: it is a product win on

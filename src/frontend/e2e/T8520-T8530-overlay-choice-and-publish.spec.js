@@ -9,14 +9,15 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  * T8390 (supersedes T8520's 3-button completion-choice card): a Focus
  * (framing) export now mounts the SAME preview-player shell DraftReelPreview
  * uses, immediately, full-screen, over the working video — no decision first.
- * A new `actionBar` footer (FocusPublishActionBar) offers four gesture-driven
- * outcomes: Publish (one-tap: fires the render then auto-completes the
- * publish gesture, no second tap) / Add Spotlight / Add Spotlight Later /
- * Refocus, each recording its own analytics event
- * (overlay_offered/overlay_deferred/overlay_declined) via
- * POST /api/quests/achievements/{key} (questStore.recordAchievement). Add
- * Spotlight Later also shows an explainer toast routed by is_auto_created
- * (T8360's split).
+ * A `actionBar` footer (FocusPublishActionBar) offers the gesture-driven
+ * outcomes. T9590 (2026-09-10) re-hierarchized them: a dominant PRIMARY (Add
+ * spotlight) + Publish without spotlight (one-tap: fires the render then auto-
+ * completes the publish gesture, no second tap) + Edit framing, plus a quiet
+ * Save-draft link OUTSIDE the card grid (was "Add Spotlight Later"). Each still
+ * records its own analytics event (overlay_offered/overlay_deferred/
+ * overlay_declined) via POST /api/quests/achievements/{key}
+ * (questStore.recordAchievement). Save draft also shows an explainer toast
+ * routed by is_auto_created (T8360's split).
  *
  * T8530 (unchanged by T8390): once the OVERLAY (final) export completes,
  * App.jsx's handleExportComplete opens DraftReelPreview (a CollectionPlayer
@@ -65,7 +66,7 @@ skipOnDeployedTarget(
 );
 
 test.describe('T8390: Focus post-export preview + publish-exit action bar', () => {
-  test('preview mounts immediately (no decision first); all 4 choices present; data-tutorial-target once; each path fires its event', async ({ page }) => {
+  test('preview mounts immediately (no decision first); the hierarchy + quiet Save draft present; data-tutorial-target once; each path fires its event', async ({ page }) => {
     const achievementCalls = [];
     page.on('request', (req) => {
       const m = req.url().match(/\/api\/quests\/achievements\/(overlay_\w+)/);
@@ -85,11 +86,13 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
     // (guided-path rule 30 anchors here; a duplicate would break the anchor).
     await expect(page.locator('[data-tutorial-target="focus-publish"]')).toHaveCount(1);
 
-    // Acceptance: all four choices visible.
-    await expect(bar.getByRole('button', { name: 'Publish Now', exact: true })).toBeVisible();
-    await expect(bar.getByRole('button', { name: 'Add Spotlight Now', exact: true })).toBeVisible();
-    await expect(bar.getByRole('button', { name: 'Add Spotlight Later' })).toBeVisible();
-    await expect(bar.getByText(/^Refocus/)).toBeVisible();
+    // Acceptance: all four choices visible, with ONE dominant primary (Add spotlight).
+    await expect(bar.getByRole('button', { name: 'Add spotlight', exact: true })).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'Publish without spotlight', exact: true })).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'Edit framing', exact: true })).toBeVisible();
+    await expect(page.getByTestId('focus-save-draft')).toBeVisible();
+    // Add spotlight is the dominant PRIMARY (its card is the tinted/ringed cyan one).
+    await expect(page.getByTestId('focus-choice-primary').getByRole('button', { name: 'Add spotlight', exact: true })).toBeVisible();
 
     await saveEvidence(page, 'T8390-criterion-preview-actionbar-desktop');
 
@@ -99,10 +102,10 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
       await page.waitForTimeout(200);
       await assertNoHorizontalOverflow(page);
       for (const locatorFn of [
-        () => bar.getByRole('button', { name: 'Publish Now', exact: true }),
-        () => bar.getByRole('button', { name: 'Add Spotlight Now', exact: true }),
-        () => bar.getByRole('button', { name: 'Add Spotlight Later' }),
-        () => bar.getByText(/^Refocus/),
+        () => bar.getByRole('button', { name: 'Add spotlight', exact: true }),
+        () => bar.getByRole('button', { name: 'Publish without spotlight', exact: true }),
+        () => bar.getByRole('button', { name: 'Edit framing', exact: true }),
+        () => page.getByTestId('focus-save-draft'),
       ]) {
         const el = locatorFn();
         await expect(el).toBeVisible();
@@ -121,17 +124,17 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
     // harness's initial mount does not replay — verified instead by the unit
     // test screens/__tests__/focusPublishExit.test.jsx). ----
 
-    // ---- Path B: "Add Spotlight Later" -> overlay_deferred, preview closes ----
-    await bar.getByRole('button', { name: 'Add Spotlight Later' }).click();
+    // ---- Path B: "Save draft" -> overlay_deferred, preview closes ----
+    await page.getByTestId('focus-save-draft').click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'add-spotlight-later');
     // Explainer toast (multi-clip copy — the harness defaults isAutoCreated=0).
     await expect(page.getByText('Saved to Highlight Reels, under Highlights')).toBeVisible();
-    await saveEvidence(page, 'T8390-pathB-add-spotlight-later-closed');
+    await saveEvidence(page, 'T8390-pathB-save-draft-closed');
 
-    // ---- Path C: "Publish Now" -> overlay_declined + publish-intent staked, preview closes ----
+    // ---- Path C: "Publish without spotlight" -> overlay_declined + publish-intent staked, preview closes ----
     await page.getByTestId('diag-reopen').click();
     await expect(page.getByTestId('focus-publish-action-bar')).toBeVisible();
-    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Publish Now', exact: true }).click();
+    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Publish without spotlight', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'publish');
     const staked = await page.evaluate(() => window.__t8390PublishIntentStore.getState().projectId);
     expect(staked).toBe(424242);
@@ -142,7 +145,7 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
     // already covers entry per the task's own design) ----
     await page.getByTestId('diag-reopen').click();
     await expect(page.getByTestId('focus-publish-action-bar')).toBeVisible();
-    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Add Spotlight Now', exact: true }).click();
+    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Add spotlight', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'add-spotlight');
     await saveEvidence(page, 'T8390-pathA-add-spotlight-closed');
 
@@ -178,10 +181,10 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'refocus');
   });
 
-  test('Add Spotlight Later toast: single-clip copy when is_auto_created', async ({ page }) => {
+  test('Save draft toast: single-clip copy when is_auto_created', async ({ page }) => {
     await page.goto('/t8520diag.html#isAutoCreated=1');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Add Spotlight Later' }).click();
+    await page.getByTestId('focus-save-draft').click();
     await expect(page.getByText('Saved to Clips')).toBeVisible();
     await saveEvidence(page, 'T8390-criterion-single-clip-toast');
   });

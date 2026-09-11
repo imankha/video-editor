@@ -1820,7 +1820,7 @@ export function OverlayScreen({
               publishLoading={isPublishing}
               onReapplyOverlay={handleReapplyOverlay}
               onReapplyFocus={handleReapplyFocus}
-              onPublishLater={handlePublishLater}
+              onSaveDraft={handlePublishLater}
             />
           )}
         />

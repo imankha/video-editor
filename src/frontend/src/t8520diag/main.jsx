@@ -117,8 +117,8 @@ function FocusPublishExitDiagHarness() {
             <FocusPublishActionBar
               onPublish={handlePublish}
               onAddSpotlight={handleAddSpotlight}
-              onAddSpotlightLater={handleAddSpotlightLater}
               onRefocus={handleRefocus}
+              onSaveDraft={handleAddSpotlightLater}
             />
           )}
         />
