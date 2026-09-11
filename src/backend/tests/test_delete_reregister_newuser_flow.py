@@ -143,7 +143,13 @@ def test_progress_and_claim_agree_for_user_scoped_completed_quest(hermetic):
 
 
 def test_claim_still_blocked_for_unearned_quest(hermetic):
-    """Guard against loosening: a quest that is neither claimed nor step-complete still 400s."""
+    """Guard against loosening: a quest that is neither claimed nor step-complete still 400s.
+
+    T9410: the block now lands on the first REAL user-facing step (upload_game) —
+    the hidden `watch_annotate_tutorial` step is vacuously satisfied while tutorial
+    videos are disabled, so it is no longer the rejecting step. The detail is now a
+    structured object carrying the step id for diagnostics.
+    """
     from app.routers.quests import claim_reward
 
     uid = _uid("fresh")
@@ -153,7 +159,7 @@ def test_claim_still_blocked_for_unearned_quest(hermetic):
     with pytest.raises(HTTPException) as ei:
         asyncio.run(claim_reward("quest_1"))
     assert ei.value.status_code == 400
-    assert "watch_annotate_tutorial" in ei.value.detail
+    assert ei.value.detail["step_id"] == "upload_game"
 
 
 # ---------------------------------------------------------------------------

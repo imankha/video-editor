@@ -265,7 +265,16 @@ export function QuestPanel({ inline = false }) {
         }
       }
     } catch (err) {
-      toast.error('Something went wrong', { message: err.message });
+      // T9410: name the HUMAN task that is still incomplete, never the internal
+      // step id. The step id stays a diagnostic (console now; N39/N40 will surface
+      // it in expandable detail — T9560 owns the final error vocabulary).
+      const humanTask = err.stepId ? STEP_TITLES[err.stepId] : null;
+      if (humanTask) {
+        toast.error('One step to go', { message: `Finish "${humanTask}" first, then tap Continue.` });
+        console.warn(`[Quests] claim blocked: step '${err.stepId}' incomplete`);
+      } else {
+        toast.error('Something went wrong', { message: err.message });
+      }
     } finally {
       setClaiming(false);
     }

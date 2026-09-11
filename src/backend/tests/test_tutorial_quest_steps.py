@@ -94,8 +94,15 @@ def test_tutorial_achievement_accepted():
         )
 
 
-def test_tutorial_step_derives_from_achievement():
-    """_check_all_steps returns True for tutorial step when achievement is recorded."""
+def test_tutorial_step_derives_from_achievement(monkeypatch):
+    """_check_all_steps returns True for tutorial step when achievement is recorded.
+
+    T9410: this achievement-derived gate only exists while tutorial videos are
+    ENABLED; with them off the step is vacuously satisfied. Force the flag on so
+    this test covers the real gate mechanism (see test_t9410_tutorial_step_gating
+    for the disabled-feature behavior).
+    """
+    monkeypatch.setattr(quest_config, "TUTORIAL_VIDEOS_ENABLED", True)
     from app.database import get_db_connection
     for quest_id, step_id, achievement_key in TUTORIAL_STEPS:
         with get_db_connection() as conn:
@@ -129,8 +136,14 @@ def test_tutorial_step_derives_from_achievement():
             conn.commit()
 
 
-def test_claim_blocked_without_tutorial_step():
-    """Quest claim fails when tutorial step is incomplete (step not in computed steps)."""
+def test_claim_blocked_without_tutorial_step(monkeypatch):
+    """Quest claim fails when tutorial step is incomplete (step not in computed steps).
+
+    T9410: the tutorial step is only a real gate while videos are ENABLED — force
+    the flag on. With videos off the step auto-satisfies and quest_1 blocks instead
+    on the first real step (covered by test_t9410_tutorial_step_gating).
+    """
+    monkeypatch.setattr(quest_config, "TUTORIAL_VIDEOS_ENABLED", True)
     from app.database import get_db_connection
     from fastapi import HTTPException
 

@@ -12,6 +12,7 @@ import time
 
 from fastapi import APIRouter, HTTPException
 
+from .. import quest_config
 from ..database import column_exists, get_db_connection
 from ..quest_config import QUEST_DEFINITIONS
 from ..services.credit_ledger import get_credit_balance
@@ -193,11 +194,18 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set | None = None) -> d
     steps = {}
 
     # --- Quest 1: Get Started ---
-    # T4780: tutorial-watch steps — derived purely from their achievement keys
-    steps["watch_annotate_tutorial"] = 'watched_annotate_tutorial' in achieved
-    steps["watch_framing_tutorial"]  = 'watched_framing_tutorial' in achieved
-    steps["watch_overlay_tutorial"]  = 'watched_overlay_tutorial' in achieved
-    steps["watch_publish_tutorial"]  = 'watched_publish_tutorial' in achieved
+    # T4780: tutorial-watch steps — derived purely from their achievement keys.
+    # T9410: while tutorial videos are disabled (quest_config.TUTORIAL_VIDEOS_ENABLED,
+    # read live so tests/ops can toggle it) their CTAs are hidden, so no user can
+    # ever fire the `watched_*_tutorial` achievement — the step is then vacuously
+    # satisfied rather than an unsatisfiable gate. This is THE choke point every
+    # quest read shares, so /progress and /claim-reward stay in lockstep. When the
+    # flag is on the OR drops out and the real achievement is required again.
+    tutorials_off = not quest_config.TUTORIAL_VIDEOS_ENABLED
+    steps["watch_annotate_tutorial"] = tutorials_off or 'watched_annotate_tutorial' in achieved
+    steps["watch_framing_tutorial"]  = tutorials_off or 'watched_framing_tutorial' in achieved
+    steps["watch_overlay_tutorial"]  = tutorials_off or 'watched_overlay_tutorial' in achieved
+    steps["watch_publish_tutorial"]  = tutorials_off or 'watched_publish_tutorial' in achieved
 
     # T5330: exclude games materialized from a share (games.shared_by set at
     # materialization). Own games have shared_by NULL, so a genuine upload still
@@ -406,7 +414,18 @@ async def claim_reward(quest_id: str):
 
     for sid in qdef["step_ids"]:
         if not all_steps.get(sid, False):
-            raise HTTPException(status_code=400, detail=f"Quest not complete: step '{sid}' is incomplete")
+            # T9410: structured detail so the client can name the HUMAN task that is
+            # incomplete (via its own STEP_TITLES map) and keep the internal step id
+            # for diagnostics only (N39/N40) — never surfacing the raw id as user copy.
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "quest_step_incomplete",
+                    "quest_id": quest_id,
+                    "step_id": sid,
+                    "message": f"Quest not complete: step '{sid}' is incomplete",
+                },
+            )
 
     # T8120: per-quest credit rewards are RETIRED — the whole chain total is
     # granted upfront (credit_ledger.grant_quest_chain_credits, at signup / next
