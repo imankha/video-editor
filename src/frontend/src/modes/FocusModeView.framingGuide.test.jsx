@@ -81,6 +81,14 @@ describe('FocusModeView framing guide (T9610)', () => {
     expect(screen.getByTestId('framing-instructions-toggle').getAttribute('aria-expanded')).toBe('true');
   });
 
+  it('does not render the guide without a video or in fullscreen', () => {
+    const { unmount } = renderView({ videoUrl: '', keyframes: [kf(10)] });
+    expect(screen.queryByTestId('framing-instructions')).toBeNull();
+    unmount();
+    renderView({ isFullscreen: true, keyframes: [kf(10)] });
+    expect(screen.queryByTestId('framing-instructions')).toBeNull();
+  });
+
   it('lets the user expand the guide after success (gesture override)', () => {
     renderView({ keyframes: [kf(10), kf(40)] });
     const toggle = screen.getByTestId('framing-instructions-toggle');

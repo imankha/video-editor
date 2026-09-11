@@ -141,9 +141,12 @@ export default function SegmentLayer({
               width: `calc((100% - ${edgePadding * 2}px) * ${visualWidthPercent / 100})`
             }}
           >
-            {/* Segment background */}
+            {/* Segment background. `relative overflow-hidden` clips the speed readout
+                to THIS segment's box so a narrow segment's label can't spill onto its
+                neighbours or the boundary markers (the change-speed buttons sit OUTSIDE
+                this div, so they are never clipped). */}
             <div
-              className={`h-8 lg:h-12 transition-all ${hoveredSegmentIndex === segment.index ? 'bg-purple-500 bg-opacity-30' : ''}`}
+              className={`relative overflow-hidden h-8 lg:h-12 transition-all ${hoveredSegmentIndex === segment.index ? 'bg-purple-500 bg-opacity-30' : ''}`}
               title={`Segment ${segment.index + 1}: ${segment.speed}x (${segment.actualDuration.toFixed(1)}s → ${segment.visualDuration.toFixed(1)}s)`}
             >
               {/* T9610: current speed as a STATE readout, not an action. Always shown
