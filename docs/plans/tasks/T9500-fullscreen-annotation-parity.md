@@ -1,6 +1,6 @@
 # T9500: Fullscreen annotation still uses the pre-T8600 interface
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-10
