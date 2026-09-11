@@ -158,16 +158,18 @@ describe('DraftTile (T5672)', () => {
   });
 
   // Re-pinned from the old badge-shape test (T6180). Old contract: a single 10px
-  // corner <button> labelled "Ready" that published. New contract: "Ready to share"
-  // (T8470 qualified the bare "Ready") is a NON-interactive status badge, and a
-  // DISTINCT emphasized primary button names the verb. T9530 (N12) made that verb
-  // name its own object: a reel (is_auto_created === false, baseProject) publishes
-  // as "Publish reel" (was "Publish to Highlight Reels"); a clip as "Publish clip".
-  it('makes "Ready to share" a non-interactive badge and a distinct primary button the publish verb (T6180)', () => {
+  // corner <button> labelled "Ready" that published. New contract: "Ready to Publish"
+  // (T8470 qualified the bare "Ready"; T9600 routes the word through draftStage's
+  // READY label so a private draft is never labelled as already shared) is a
+  // NON-interactive status badge, and a DISTINCT emphasized primary button names the
+  // verb. T9530 (N12) made that verb name its own object: a reel (is_auto_created ===
+  // false, baseProject) publishes as "Publish reel" (was "Publish to Highlight
+  // Reels"); a clip as "Publish clip".
+  it('makes the "Ready to Publish" status a non-interactive badge and a distinct primary button the publish verb (T6180)', () => {
     renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
-    // "Ready to share" is a status, not a control — no button carries that accessible name.
-    expect(screen.queryByRole('button', { name: /^ready to share$/i })).toBeNull();
-    expect(screen.getByText('Ready to share')).toBeTruthy();
+    // "Ready to Publish" is a status, not a control — no button carries that accessible name.
+    expect(screen.queryByRole('button', { name: /^ready to publish$/i })).toBeNull();
+    expect(screen.getByText('Ready to Publish')).toBeTruthy();
     // The primary action's accessible name names the object, but its visible label
     // is shortened to "Publish" (matches CollectionPlayer's button).
     const primary = screen.getByRole('button', { name: 'Publish reel' });

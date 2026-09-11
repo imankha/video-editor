@@ -20,7 +20,7 @@ import { formatGameClock } from '../utils/timeFormat';
 import { SECTION_NAMES, LIBRARY_ACTIONS } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
-import { rendersSourceAspect } from '../utils/draftStage';
+import { rendersSourceAspect, DRAFT_STAGE, DRAFT_STAGE_LABELS } from '../utils/draftStage';
 import { staleClipCount } from '../utils/reelStaleness';
 
 /**
@@ -487,7 +487,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       )}
 
       {/* Multi-clip marker — only shown when the draft has more than 1 clip. On a
-          ready tile the top-left hosts the "Ready" badge, so the count shifts to the
+          ready tile the top-left hosts the "Ready to Publish" badge, so the count shifts to the
           top-right corner freed by the suppressed status chip (T6180). */}
       {project.clip_count > 1 && (
         <span
@@ -502,21 +502,23 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         </span>
       )}
 
-      {/* "Ready to share" is a STATUS, not a control (T6180): a non-interactive
-          badge. The publish gesture is the primary button in the bottom action
-          bar. T8470 qualifies the bare "Ready" (it had a final video but was not
-          yet shared) so it can never read as the ambiguous lifecycle word. */}
+      {/* The "Ready to Publish" badge is a STATUS, not a control (T6180): a
+          non-interactive badge. The publish gesture is the primary button in the
+          bottom action bar. T8470 qualified the bare "Ready" (it had a final
+          video but was not yet published); T9600 routes the word through
+          draftStage's READY label so a private draft is never described as
+          already shared. */}
       {isReadyToPublish && (
         <span
           className="absolute top-1.5 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-black/60 backdrop-blur-sm text-cyan-300 shadow"
         >
           <CheckCircle size={11} />
-          Ready to share
+          {DRAFT_STAGE_LABELS[DRAFT_STAGE.READY]}
         </span>
       )}
 
       {/* Status chip (Q7) — suppressed in the ready state (Q1): a ready tile shows
-          only the top-left "Ready to share" badge. Every other state is byte-for-byte unchanged. */}
+          only the top-left "Ready to Publish" badge. Every other state is byte-for-byte unchanged. */}
       {!isReadyToPublish && (
         <span className={`absolute top-1.5 right-1.5 z-20 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-black/60 backdrop-blur-sm ${statusTint}`}>
           {statusLabel}

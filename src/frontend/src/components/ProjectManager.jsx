@@ -1389,12 +1389,18 @@ export function ProjectManager({
                   <div className="hidden sm:block text-xs text-gray-500">
                     {recentItems.recentProject.clip_count} clip{recentItems.recentProject.clip_count !== 1 ? 's' : ''}
                     {' · '}
-                    {/* T8470: one status story - a fresh record is a Draft, not
-                        "Not Started". Terminal 'Complete' keeps its own CheckCircle
-                        cue above and covers both ready + published finals. */}
-                    {recentItems.recentProject.has_final_video ? 'Complete' :
-                     recentItems.recentProject.has_working_video ? 'Draft - in Overlay' :
-                     recentItems.recentProject.clips_in_progress > 0 ? 'Draft - in Focus' : 'Draft'}
+                    {/* T9600: reel-level status is the SAME domain as draftStage, so
+                        route it through the single source instead of hardcoding words
+                        that drifted from it (the pre-T8470 'Overlay'/'Focus' vs
+                        'Spotlight'/'AI Focus'). draftStage's READY bucket spans BOTH
+                        published and ready-to-publish finals, so keep DraftTile's
+                        published/ready split here (terminal 'Done' when already
+                        published, T8470's word) — otherwise a live reel would read
+                        'Ready to Publish', a fresh contradiction. The green
+                        CheckCircle above still carries the completion cue. */}
+                    {recentItems.recentProject.has_final_video && recentItems.recentProject.is_published
+                      ? 'Done'
+                      : DRAFT_STAGE_LABELS[getDraftStage(recentItems.recentProject)]}
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-gray-500 flex-shrink-0" />
