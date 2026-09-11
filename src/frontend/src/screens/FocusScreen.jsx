@@ -1231,7 +1231,6 @@ export function FocusScreen({
     onAddFromLibrary: handleAddFromLibrary,
     existingRawClipIds: clips.map(c => c.raw_clip_id).filter(Boolean),
     games,
-    clipMetadataCache,
   };
 
   return (

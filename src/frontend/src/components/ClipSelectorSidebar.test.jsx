@@ -57,6 +57,38 @@ describe('ClipSelectorSidebar', () => {
     expect(clipItem.className).not.toContain('opacity-60');
   });
 
+  // T9460: on a freshly created draft (Annotate save -> Focus open), the clip is
+  // loaded via fetchClips WITHOUT a clipMetadataCache entry. The sidebar must still
+  // show the real duration derived from the clip's own boundaries, never 0.0s.
+  describe('duration on the freshly-created-draft path (T9460)', () => {
+    it('shows the real duration from clip boundaries when the metadata cache is empty', () => {
+      const clip = makeClip({ start_time: 3, end_time: 9 });
+      render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} clipMetadataCache={{}} />);
+      expect(screen.getByText('6.0s')).toBeTruthy();
+      expect(screen.queryByText('0.0s')).toBeNull();
+    });
+
+    it('still shows the duration from the metadata cache when present (revisit path)', () => {
+      const clip = makeClip({ id: 1, start_time: 3, end_time: 9 });
+      render(
+        <ClipSelectorSidebar
+          {...defaultProps}
+          clips={[clip]}
+          clipMetadataCache={{ 1: { duration: 6 } }}
+        />
+      );
+      expect(screen.getByText('6.0s')).toBeTruthy();
+      expect(screen.queryByText('0.0s')).toBeNull();
+    });
+
+    it('renders a loading state, never 0.0s, when the duration is genuinely unknown', () => {
+      const clip = makeClip({ start_time: null, end_time: null });
+      render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} clipMetadataCache={{}} />);
+      expect(screen.queryByText('0.0s')).toBeNull();
+      expect(screen.getByText('Loading…')).toBeTruthy();
+    });
+  });
+
   // T8350: TERTIARY staleness cue — a per-clip amber dot beside the framing
   // status indicator, for the screen where boundaries are actually edited.
   describe('staleness dot (T8350)', () => {

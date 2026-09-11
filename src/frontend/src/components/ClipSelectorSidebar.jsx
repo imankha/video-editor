@@ -5,7 +5,7 @@ import { UploadClipModal } from './UploadClipModal';
 import { Button } from './shared/Button';
 import { getRatingDisplay, formatDuration } from './shared/clipConstants';
 import { createGameLookup } from '../utils/gameNameLookup';
-import { clipCropKeyframes } from '../utils/clipSelectors';
+import { clipCropKeyframes, clipSourceDuration } from '../utils/clipSelectors';
 import { getClipDisplayName } from '../utils/clipDisplayName';
 import { isClipStale } from '../utils/reelStaleness';
 
@@ -54,7 +54,6 @@ export function ClipSelectorSidebar({
   onUploadWithMetadata,
   existingRawClipIds = [],
   games = [],
-  clipMetadataCache = {},
 }) {
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
@@ -210,7 +209,6 @@ export function ClipSelectorSidebar({
           // A clip is "worked on" if it has any saved framing edits
           const hasCrop = clipCropKeyframes(clip)?.length > 0;
           const isFramed = hasCrop || hasUserSegmentEdits(clip);
-          const meta = clipMetadataCache[clip.id];
           const isStale = isClipStale(clip);
 
           return (
@@ -289,7 +287,15 @@ export function ClipSelectorSidebar({
                               <span>•</span>
                             </>
                           )}
-                          <span>{formatDuration(meta?.duration || 0)}</span>
+                          {(() => {
+                            // T9460: one duration source (the clip itself). Never a
+                            // confident 0.0s before the metadata cache is built —
+                            // show an honest loading state when truly unknown.
+                            const durationSec = clipSourceDuration(clip);
+                            return (
+                              <span>{durationSec != null ? formatDuration(durationSec) : 'Loading…'}</span>
+                            );
+                          })()}
                         </div>
                       </>
                     );
@@ -435,7 +441,13 @@ export function ClipSelectorSidebar({
       {/* Total duration */}
       {clips.length > 1 && (
         <div className="px-4 py-2 border-t border-gray-700 text-xs text-gray-500 text-center">
-          Total: {formatDuration(clips.reduce((sum, clip) => sum + (clipMetadataCache[clip.id]?.duration || 0), 0))}
+          {(() => {
+            // T9460: same single duration source as the per-clip rows. If any clip's
+            // duration is not yet known, show loading rather than an understated total.
+            const durations = clips.map(clipSourceDuration);
+            if (durations.some((d) => d == null)) return 'Total: Loading…';
+            return `Total: ${formatDuration(durations.reduce((sum, d) => sum + d, 0))}`;
+          })()}
         </div>
       )}
     </div>
