@@ -1,6 +1,6 @@
 # T9610: Teach framing with a visible sequence and a preview before a paid render
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-10
