@@ -63,7 +63,7 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
     // The video autoplays on load. AnnotateContainer auto-DESELECTS a SELECTED
     // (not yet EDITING) clip the instant the playhead drifts outside its
     // start/end range -- so a playing video racing the click below intermittently
-    // wiped the selection before "Edit Play" could be clicked. Pause first.
+    // wiped the selection before "Edit play" could be clicked. Pause first.
     await page.locator('video').first().evaluate((v) => v.pause());
 
     // Select the target clip via its sidebar row (desktop: whole row clickable)
@@ -72,10 +72,10 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
     await expect(row).toBeVisible({ timeout: 15000 });
     await row.click();
 
-    // The primary CTA flips from "Add Play" to "Edit Play" once a clip is
+    // The primary CTA flips from "Mark play" to "Edit play" once a clip is
     // SELECTED (AnnotateModeView.jsx:889); clicking it opens the strip editor
     // (EDITING state -> showAnnotateOverlay=true -> desktopEditorOpen strip).
-    const editButton = page.getByRole('button', { name: 'Edit Play' });
+    const editButton = page.getByRole('button', { name: 'Edit play' });
     await expect(editButton).toBeVisible({ timeout: 10000 });
     await editButton.click();
 
@@ -107,7 +107,7 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
 
   test('name edit is detected as dirty @staging-gate @gate-a', async ({ page }) => {
     // T8760: the edit-mode name field is inline in the header — open via pencil.
-    await page.getByTitle('Rename this play').click();
+    await page.getByTitle('Rename clip').click();
     const nameInput = page.getByLabel('Clip name');
     await expect(nameInput).toBeVisible();
     await nameInput.fill(`${targetClip.name} EDITED T8730`);
@@ -132,8 +132,8 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
   });
 
   test('teammate tag (typed AND Enter-committed) is detected as dirty @staging-gate @gate-a', async ({ page }) => {
-    // Teammates require the Team layer.
-    await page.getByRole('radio', { name: 'Team layer' }).click();
+    // Teammates require the Team category.
+    await page.getByRole('radio', { name: 'Team' }).click();
     const tagInput = page.getByPlaceholder('Tag a teammate...');
     await expect(tagInput).toBeVisible({ timeout: 5000 });
     await tagInput.fill('T8730 QA Teammate');
@@ -148,7 +148,7 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
   test('teammate tag typed but NOT Enter-committed is still detected as dirty @staging-gate @gate-a', async ({ page }) => {
     // Regression guard for the specific false-negative risk called out in
     // review: a pending (un-Entered) teammate must still count as dirty.
-    await page.getByRole('radio', { name: 'Team layer' }).click();
+    await page.getByRole('radio', { name: 'Team' }).click();
     const tagInput = page.getByPlaceholder('Tag a teammate...');
     await expect(tagInput).toBeVisible({ timeout: 5000 });
     await tagInput.fill('T8730 QA Pending NoEnter'); // deliberately no Enter press
@@ -160,7 +160,7 @@ test.describe('T8730 — Focus button dirty-check: no false negatives, no false 
   });
 
   test('dialog copy says "Annotate", not "the play editor" @staging-gate @gate-a', async ({ page }) => {
-    await page.getByTitle('Rename this play').click();
+    await page.getByTitle('Rename clip').click();
     await page.getByLabel('Clip name').fill(`${targetClip.name} EDITED`);
     await page.getByTitle('Open in AI Focus mode').click();
     await expect(page.getByText('Opening Focus closes the Annotate editor.')).toBeVisible({ timeout: 5000 });

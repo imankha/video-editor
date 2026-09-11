@@ -8,6 +8,7 @@ import AngleSwitcherBadge from './annotate/AngleSwitcherBadge';
 import FixTimingStrip from './annotate/FixTimingStrip';
 import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
+import { ANNOTATE } from '../config/displayNames';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
 import { useCurrentProfile, useProfileStore } from '../stores';
 import PlaybackControls from './annotate/components/PlaybackControls';
@@ -291,7 +292,7 @@ export function AnnotateModeView({
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 text-xs font-semibold tracking-wide backdrop-blur-sm"
           >
             <Play size={12} className="fill-cyan-300 text-cyan-300" />
-            Playback Annotations
+            {ANNOTATE.PREVIEW_PLAYS}
           </span>
         </div>
         {/* Video container */}
@@ -1017,10 +1018,10 @@ export function AnnotateModeView({
                 data-testid="annotate-primary-cta"
                 title={
                   isSourceExpired
-                    ? 'Source video expired — cannot add plays'
+                    ? 'Source video expired — cannot mark plays'
                     : isEditMode
                     ? 'Edit the selected play'
-                    : 'Add a play ending at the current time'
+                    : 'Mark a play ending at the current time'
                 }
                 className={`w-full min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg ${
                   isSourceExpired
@@ -1031,15 +1032,16 @@ export function AnnotateModeView({
                 }`}
               >
                 {isEditMode ? <Pencil size={22} /> : <Plus size={22} />}
-                {isEditMode ? 'Edit Play' : 'Add Play'}
+                {isEditMode ? ANNOTATE.EDIT_PLAY : ANNOTATE.MARK_PLAY}
               </button>
 
               {/* First-use teaching hint — shown only before the first clip exists.
                   One static sentence, not a coach-mark system (tutorial-redesign
-                  owns the full guided flow). */}
+                  owns the full guided flow). T9520 N05: name the concrete capture
+                  window (9s before + 3s after the tap = 12s). */}
               {!hasAnnotateClips && (
                 <p className="text-sm text-gray-300 text-center px-2">
-                  When something great happens, tap &mdash; we grab the last few seconds.
+                  When something great happens, tap &mdash; {ANNOTATE.MARK_PLAY_HELPER.toLowerCase()}.
                 </p>
               )}
 
@@ -1057,7 +1059,7 @@ export function AnnotateModeView({
                       }`}
                     >
                       <Play size={18} />
-                      <span>Playback Annotations</span>
+                      <span>{ANNOTATE.PREVIEW_PLAYS}</span>
                     </button>
                     {onShare && (
                       <button
@@ -1091,7 +1093,7 @@ export function AnnotateModeView({
                     className="text-xs text-gray-600 cursor-not-allowed flex items-center gap-1"
                   >
                     <Play size={12} />
-                    <span>Playback Annotations</span>
+                    <span>{ANNOTATE.PREVIEW_PLAYS}</span>
                   </button>
                   {onShare && (
                     <button

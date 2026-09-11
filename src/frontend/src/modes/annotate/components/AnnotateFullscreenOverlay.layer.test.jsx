@@ -36,12 +36,12 @@ const baseProps = {
 describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
   it('create mode defaults the Layer control from newClipLayerIsMine=true (My Athlete)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
-    expect(screen.getByRole('radio', { name: 'My Athlete layer' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'My player' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('create mode defaults the Layer control from newClipLayerIsMine=false (Team)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={false} />);
-    expect(screen.getByRole('radio', { name: 'Team layer' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Team' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('edit mode hydrates the Layer control from the existing clip, ignoring the mode toggle', () => {
@@ -52,7 +52,7 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
         existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], my_athlete: false }}
       />
     );
-    expect(screen.getByRole('radio', { name: 'Team layer' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Team' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('a new clip is saved with my_athlete matching the mode toggle', () => {
@@ -73,8 +73,8 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
           existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], my_athlete: false, shared_by: 'Dana Smith' }}
         />
       );
-      const mine = screen.getByRole('radio', { name: /^My Athlete layer/ });
-      const team = screen.getByRole('radio', { name: /^Team layer/ });
+      const mine = screen.getByRole('radio', { name: /^My player/ });
+      const team = screen.getByRole('radio', { name: /^Team/ });
       expect(mine.disabled).toBe(true);
       expect(team.disabled).toBe(true);
     });
@@ -88,8 +88,8 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
           onUpdateClip={onUpdateClip}
         />
       );
-      fireEvent.click(screen.getByRole('radio', { name: /^My Athlete layer/ }));
-      fireEvent.click(screen.getByRole('button', { name: 'Update' }));
+      fireEvent.click(screen.getByRole('radio', { name: /^My player/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Update play' }));
       expect(onUpdateClip).toHaveBeenCalledTimes(1);
       expect(onUpdateClip.mock.calls[0][1]).toMatchObject({ my_athlete: false });
     });
@@ -106,14 +106,14 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
     it('a 5-star My Athlete clip DOES auto-enable the clip toggle', () => {
       render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
       fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
-      expect(screen.getByText('Clip Play to focus on your player')).toBeTruthy();
+      expect(screen.getByText('Create an editable clip')).toBeTruthy();
     });
 
     it('switching the Layer control to Team after a 5-star rating turns the clip toggle off', () => {
       render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
       fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
-      expect(screen.getByText('Clip Play to focus on your player')).toBeTruthy();
-      fireEvent.click(screen.getByRole('radio', { name: 'Team layer' }));
+      expect(screen.getByText('Create an editable clip')).toBeTruthy();
+      fireEvent.click(screen.getByRole('radio', { name: 'Team' }));
       expect(screen.getByText('Just save this play')).toBeTruthy();
     });
   });
@@ -125,7 +125,7 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
 describe('AnnotateFullscreenOverlay — Layer control in the desktop strip (T8600)', () => {
   it('the strip button row shows the Layer control, defaulted from newClipLayerIsMine', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" surface="inline_desktop" newClipLayerIsMine={false} />);
-    expect(screen.getByRole('radio', { name: 'Team layer' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Team' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('locks both radios for an imported clip (shared_by set) in the strip', () => {
@@ -137,8 +137,8 @@ describe('AnnotateFullscreenOverlay — Layer control in the desktop strip (T860
         existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], my_athlete: false, shared_by: 'Dana Smith' }}
       />
     );
-    expect(screen.getByRole('radio', { name: /^My Athlete layer/ }).disabled).toBe(true);
-    expect(screen.getByRole('radio', { name: /^Team layer/ }).disabled).toBe(true);
+    expect(screen.getByRole('radio', { name: /^My player/ }).disabled).toBe(true);
+    expect(screen.getByRole('radio', { name: /^Team/ }).disabled).toBe(true);
   });
 });
 

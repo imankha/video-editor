@@ -252,12 +252,12 @@ test.describe('T690: Clip Selection State Machine', () => {
     expect(addHiddenStable).toBe(true);
 
     // T8130: the full-width primary CTA must reflect the same selection state
-    // as the transport-bar Add button - it flips to "Edit Play" rather than
-    // silently staying "Add Play" while its click handler actually edits the
+    // as the transport-bar Add button - it flips to "Edit play" rather than
+    // silently staying "Mark play" while its click handler actually edits the
     // selected clip (regression guard for a review finding: a mislabeled CTA
     // both misleads the user and undercounts add_clip_opened).
     const primaryCta = page.locator('[data-testid="annotate-primary-cta"]');
-    await expect(primaryCta).toHaveText(/Edit Play/);
+    await expect(primaryCta).toHaveText(/Edit play/);
     await expect(primaryCta).toHaveAttribute('title', 'Edit the selected play');
 
     // ========================================================================
@@ -298,32 +298,32 @@ test.describe('T690: Clip Selection State Machine', () => {
     await page.waitForTimeout(500);
 
     const addVisSel = await addBtn.isVisible().catch(() => false);
-    const editVisSel = await page.locator('button:has-text("Edit Play")').isVisible().catch(() => false);
+    const editVisSel = await page.locator('button:has-text("Edit play")').isVisible().catch(() => false);
     console.log(`[Test] REQ 4: SELECTED — Add: ${addVisSel}, Edit: ${editVisSel} (expect both false)`);
 
     // ========================================================================
-    // T8590: Non-FS Edit Play opens EDIT mode, not CREATE. Regression guard for
+    // T8590: Non-FS Edit play opens EDIT mode, not CREATE. Regression guard for
     // a bug where ClipsSidePanel's inline (non-fullscreen) overlay render
-    // omitted existingClip, so clicking Edit Play silently opened a fresh
-    // "Add Play" form and Save created a duplicate clip instead of updating
+    // omitted existingClip, so clicking Edit play silently opened a fresh
+    // "Mark play" form and Save created a duplicate clip instead of updating
     // the selected one. The T8130 guard above only asserted the CTA label, not
     // what opens after the click, so it never caught this.
     // ========================================================================
-    console.log('\n[Test] === T8590: Non-FS Edit Play opens edit mode, Save updates (no duplicate) ===');
+    console.log('\n[Test] === T8590: Non-FS Edit play opens edit mode, Save updates (no duplicate) ===');
 
     const clipCountBeforeEdit = await page.locator('[data-testid="clip-row"]').count();
     console.log(`[Test] T8590: clip count before edit-open: ${clipCountBeforeEdit}`);
 
     const primaryCtaT8590 = page.locator('[data-testid="annotate-primary-cta"]');
-    await expect(primaryCtaT8590).toHaveText(/Edit Play/);
+    await expect(primaryCtaT8590).toHaveText(/Edit play/);
     await primaryCtaT8590.click();
     await page.waitForTimeout(800);
 
-    // Inline overlay must open in EDIT mode: heading "Edit Play", the clip's
+    // Inline overlay must open in EDIT mode: heading "Edit play", the clip's
     // own name pre-filled (not the fresh-clip default "Play N"), and an
     // "Update" action button (CREATE mode reads "Save").
-    const overlayHeading = page.locator('h3', { hasText: /Edit Play|Add Play/ }).first();
-    await expect(overlayHeading).toHaveText('Edit Play');
+    const overlayHeading = page.locator('h3', { hasText: /Edit play|Mark play/ }).first();
+    await expect(overlayHeading).toHaveText('Edit play');
 
     // .first(): at this viewport (900x600), AnnotateModeView's own mobileInlineForm
     // (useIsMobile is width<1024, a different breakpoint than the sidebar's `sm:`
@@ -380,7 +380,7 @@ test.describe('T690: Clip Selection State Machine', () => {
       // --- REQ 7: Buttons hidden during overlay ---
       console.log('\n  --- REQ 7: Buttons hidden during overlay ---');
       const addOv = await page.locator('button[title="Add play ending at current time (A)"]').isVisible().catch(() => false);
-      const editOv = await page.locator('button:has-text("Edit Play")').isVisible().catch(() => false);
+      const editOv = await page.locator('button:has-text("Edit play")').isVisible().catch(() => false);
       console.log(`  REQ 7: Add: ${addOv}, Edit: ${editOv} (expect both false)`);
 
       // --- REQ 12: Close overlay keeps selection ---
@@ -402,7 +402,7 @@ test.describe('T690: Clip Selection State Machine', () => {
 
       // --- REQ 5: Edit Clip visible in FS + SELECTED ---
       console.log('\n  --- REQ 5: Edit Clip in FS + SELECTED ---');
-      const editBtnFS = page.locator('button:has-text("Edit Play")').first();
+      const editBtnFS = page.locator('button:has-text("Edit play")').first();
       const editVisFS = await editBtnFS.isVisible().catch(() => false);
       const addBtnFSHidden = !(await page.locator('button[title="Add play ending at current time (A)"]').isVisible().catch(() => false));
       console.log(`  REQ 5: "Edit Clip" visible: ${editVisFS}, "Add Clip" hidden: ${addBtnFSHidden}`);

@@ -3,7 +3,7 @@ import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth.js';
 import { saveEvidence } from './helpers/qa.js';
 
 /**
- * T8960 QA — live-drive verification of the Add/Edit Play strip layout rework
+ * T8960 QA — live-drive verification of the Mark/Edit play strip layout rework
  * (9 items) against a real account's real data.
  *
  * Run: bash scripts/dev-verify.sh e2e/T8960-play-editor-strip-layout.qa.spec.js --reporter=line
@@ -37,23 +37,23 @@ test.describe('T8960 — play editor strip layout: live QA', () => {
     console.log(`[T8960] driving active game id=${target.id} (${target.opponent_name})`);
 
     await openGameInAnnotate(page, target.id);
-    // The video must be ready before we can Add Play.
+    // The video must be ready before we can Mark play.
     await expect(page.locator('video').first()).toBeVisible({ timeout: 30000 });
     await page.waitForTimeout(1500);
   });
 
-  test('items 2-6,8,9 — Add Play (create mode) @gate-a', async ({ page }) => {
-    // Open the strip in CREATE mode via the real "Add Play" CTA.
+  test('items 2-6,8,9 — Mark play (create mode) @gate-a', async ({ page }) => {
+    // Open the strip in CREATE mode via the real "Mark play" CTA.
     const addPlay = page.locator('[data-testid="annotate-primary-cta"]');
     await expect(addPlay).toBeVisible({ timeout: 10000 });
-    await expect(addPlay).toHaveText(/Add Play/);
+    await expect(addPlay).toHaveText(/Mark play/);
     await addPlay.click();
 
     const strip = page.locator('[data-testid="annotate-editor-strip"]');
     await expect(strip).toBeVisible({ timeout: 10000 });
 
     // --- Item 2: name-first, default + pencil, no standalone name input ---
-    const rename = strip.locator('button[title="Rename this play"]');
+    const rename = strip.locator('button[title="Rename clip"]');
     await expect(rename).toBeVisible();
     expect(await strip.locator('input[aria-label="Clip name"]:visible').count()).toBe(0);
     await rename.click();
@@ -61,23 +61,23 @@ test.describe('T8960 — play editor strip layout: live QA', () => {
     await saveEvidence(page, 'T8960-2-name-pencil-inline');
     await page.keyboard.press('Escape'); // closes inline edit only
 
-    // --- Item 3: centered "+ Adding new play" title row ---
-    await expect(strip.getByText('Adding new play')).toBeVisible();
+    // --- Item 3: centered "+ Marking a play" title row ---
+    await expect(strip.getByText('Marking a play')).toBeVisible();
 
-    // --- Item 5: My Athlete | Team layer control on the top line (header) ---
-    await expect(strip.getByRole('radio', { name: /My Athlete layer/ })).toBeVisible();
-    await expect(strip.getByRole('radio', { name: /Team layer/ })).toBeVisible();
+    // --- Item 5: My player | Team layer control on the top line (header) ---
+    await expect(strip.getByRole('radio', { name: /My player/ })).toBeVisible();
+    await expect(strip.getByRole('radio', { name: /Team/ })).toBeVisible();
     await saveEvidence(page, 'T8960-3-5-title-and-layer-in-header');
 
     // --- Item 4: "Clip" toggle-button with stateful copy ---
-    const toggleOff = strip.getByText("Don't Clip Play");
-    const toggleOn = strip.getByText('Clip Play to focus on your player');
+    const toggleOff = strip.getByText('Just save this play');
+    const toggleOn = strip.getByText('Create an editable clip');
     // Whichever state it starts in, both copies must be reachable.
     if (await toggleOff.count()) {
       await toggleOff.click();
       await expect(toggleOn).toBeVisible();
       await toggleOn.click();
-      await expect(strip.getByText("Don't Clip Play")).toBeVisible();
+      await expect(strip.getByText('Just save this play')).toBeVisible();
     } else {
       await expect(toggleOn).toBeVisible();
     }
@@ -138,24 +138,24 @@ test.describe('T8960 — play editor strip layout: live QA', () => {
     await saveEvidence(page, 'T8960-6-details-no-scroll');
   });
 
-  test('items 7,9 — Edit Play (edit mode) button + hidden skips @gate-a', async ({ page }) => {
+  test('items 7,9 — Edit play (edit mode) button + hidden skips @gate-a', async ({ page }) => {
     const marker = page.locator('.clip-marker').first();
     test.skip(!(await marker.count()), '[T8960] no clip markers to edit');
     await marker.click();
     await page.waitForTimeout(300);
     const editPlay = page.locator('[data-testid="annotate-primary-cta"]');
-    await expect(editPlay).toHaveText(/Edit Play/, { timeout: 5000 });
+    await expect(editPlay).toHaveText(/Edit play/, { timeout: 5000 });
     await editPlay.click();
 
     const strip = page.locator('[data-testid="annotate-editor-strip"]');
     await expect(strip).toBeVisible({ timeout: 10000 });
 
-    // --- Item 7: edit-mode button reads "Clip Play", never "Clip Out Play" ---
+    // --- Item 7: edit-mode button reads "Create clip", never "Clip Out Play" ---
     await expect(strip.getByText('Clip Out Play')).toHaveCount(0);
-    const clipPlay = strip.getByRole('button', { name: 'Clip Play' });
-    const reeled = await strip.getByText('Reel created').count();
+    const clipPlay = strip.getByRole('button', { name: 'Create clip' });
+    const reeled = await strip.getByText('Clip created').count();
     if (reeled) {
-      console.log('[T8960] item7: clip already reeled ("Reel created") — button not shown, expected');
+      console.log('[T8960] item7: clip already has a clip ("Clip created") — button not shown, expected');
     } else {
       await expect(clipPlay).toBeVisible();
     }

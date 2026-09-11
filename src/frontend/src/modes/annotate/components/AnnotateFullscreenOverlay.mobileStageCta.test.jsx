@@ -102,6 +102,6 @@ describe('AnnotateFullscreenOverlay mobile inline sheet — stage CTA (T9330 §2
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={null} />);
     expect(screen.queryByRole('button', { name: 'Apply AI Focus' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Apply Spotlight|View Final|View Published/ })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Save play/ })).toBeTruthy();
   });
 });

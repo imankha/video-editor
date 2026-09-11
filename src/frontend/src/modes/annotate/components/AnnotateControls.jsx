@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Rewind, RotateCcw, Maximize, Minimize, Plus, Pencil, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
 import { formatTime } from '../../../utils/timeFormat';
+import { ANNOTATE } from '../../../config/displayNames';
 
 // YouTube-style speed options
 const SPEED_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -213,10 +214,10 @@ export function AnnotateControls({
             size="sm"
             icon={isEditMode ? Pencil : Plus}
             onClick={onAddClip}
-            title={isEditMode ? 'Edit selected play (A)' : 'Add play ending at current time (A)'}
+            title={isEditMode ? 'Edit selected play (A)' : 'Mark play ending at current time (A)'}
             className="hidden sm:flex"
           >
-            {isEditMode ? 'Edit Play' : 'Add Play'}
+            {isEditMode ? ANNOTATE.EDIT_PLAY : ANNOTATE.MARK_PLAY}
           </Button>
         )}
         {/* Mobile: icon-only Add/Edit Clip (fullscreen only, see above) */}
@@ -227,7 +228,7 @@ export function AnnotateControls({
             icon={isEditMode ? Pencil : Plus}
             iconOnly
             onClick={onAddClip}
-            title={isEditMode ? 'Edit selected play (A)' : 'Add play ending at current time (A)'}
+            title={isEditMode ? 'Edit selected play (A)' : 'Mark play ending at current time (A)'}
             className="flex sm:hidden"
           />
         )}

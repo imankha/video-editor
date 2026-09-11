@@ -93,7 +93,7 @@ describe('ClipDetailsEditor — clear-on-switch to My Athlete (T5725)', () => {
         onDelete={() => {}}
       />
     );
-    fireEvent.click(screen.getByRole('radio', { name: 'My Athlete layer' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'My player' }));
     expect(onUpdate).toHaveBeenCalledTimes(1);
     expect(onUpdate).toHaveBeenCalledWith({ my_athlete: true, tagged_teammates: [] });
   });
@@ -101,7 +101,7 @@ describe('ClipDetailsEditor — clear-on-switch to My Athlete (T5725)', () => {
   it('switching TO Team sends ONLY my_athlete (no spurious tag write)', () => {
     const onUpdate = vi.fn();
     render(<ClipDetailsEditor region={{ ...baseRegion, my_athlete: true }} onUpdate={onUpdate} onDelete={() => {}} />);
-    fireEvent.click(screen.getByRole('radio', { name: 'Team layer' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Team' }));
     expect(onUpdate).toHaveBeenCalledTimes(1);
     expect(onUpdate).toHaveBeenCalledWith({ my_athlete: false });
   });

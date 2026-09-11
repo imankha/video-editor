@@ -1,5 +1,5 @@
 import React from 'react';
-import { RATING_NOTATION, RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
+import { RATING_NOTATION, getRatingLabel } from '../../../components/shared/clipConstants';
 
 // Rating colors for border (matching ClipRegionLayer)
 const RATING_COLORS = {
@@ -67,7 +67,7 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, isVisible,
             <span className="tabular-nums text-[#666] sm:absolute sm:left-0 sm:top-0">{gameClock}</span>
           )}
           {notation && (
-            <span className="text-[#666] sm:mr-1.5" aria-label={RATING_ADJECTIVES[rating]}>
+            <span className="text-[#666] sm:mr-1.5" aria-label={getRatingLabel(rating)}>
               {notation}
             </span>
           )}

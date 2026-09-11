@@ -75,6 +75,17 @@ export function getEditRatingCaption(rating, mine, hasReel) {
     : `Brilliant play (${RATING_NOTATION[5]}) - create a clip below.`;
 }
 
+// T9520 N35: the ONE documented star-to-descriptor mapping, e.g. "4 stars · Good".
+// Single source used across the play list, the play editor and playback so the
+// rating reads identically everywhere (previously each surface showed a different
+// mix of chess notation / bare adjective / "(4/5)"). Pairs the star count with the
+// canonical RATING_ADJECTIVES word.
+export function getRatingLabel(rating) {
+  const r = rating || DEFAULT_RATING;
+  const stars = `${r} star${r === 1 ? '' : 's'}`;
+  return `${stars} · ${RATING_ADJECTIVES[r]}`;
+}
+
 /**
  * Get rating display info for a given rating value
  * @param {number} rating - Rating value (1-5)

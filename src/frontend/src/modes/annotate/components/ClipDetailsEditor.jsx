@@ -13,6 +13,7 @@ import { Button } from '../../../components/shared/Button';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { getEditRatingCaption } from '../../../components/shared/clipConstants';
 import { getClipStage, CLIP_STAGE } from '../clipStage';
+import { ANNOTATE } from '../../../config/displayNames';
 
 // Rating-based background colors (used for tinting the details panel)
 const RATING_COLORS = {
@@ -291,7 +292,7 @@ export function ClipDetailsEditor({
             value={displayName}
             onChange={handleNameChange}
             className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-            placeholder="Clip name"
+            placeholder={ANNOTATE.CLIP_NAME}
           />
         </div>
 
@@ -322,7 +323,7 @@ export function ClipDetailsEditor({
             someone else's annotation into it would misattribute content and
             regress T5330 quest-blindness (T5700, epic decision 2). */}
         <div className="flex items-center gap-2">
-          <label className="text-gray-400 text-xs w-16 shrink-0">Layer</label>
+          <label className="text-gray-400 text-xs w-16 shrink-0">{ANNOTATE.LAYER_LABEL}</label>
           <LayerSegmentedControl
             size="sm"
             value={region.my_athlete ?? true}
@@ -382,7 +383,7 @@ export function ClipDetailsEditor({
                   onUpdate({ createProject: true });
                 }}
               >
-                {reelRequested ? 'Clip Created' : 'Create Clip'}
+                {reelRequested ? ANNOTATE.CLIP_CREATED : ANNOTATE.CREATE_CLIP}
               </Button>
             ) : (
               <Button
@@ -423,7 +424,9 @@ export function ClipDetailsEditor({
             className="w-full px-3 py-1.5 bg-gray-700 hover:bg-red-600 text-gray-300 hover:text-white rounded text-sm flex items-center justify-center gap-1.5 transition-colors"
           >
             <Trash2 className="w-4 h-4" />
-            <span>Delete Clip</span>
+            {/* T9520 N14: a play that produced a clip deletes a "clip"; a bare
+                marked play deletes a "play". */}
+            <span>{region.autoProjectId ? ANNOTATE.DELETE_CLIP : ANNOTATE.DELETE_PLAY}</span>
           </button>
         )}
       </div>

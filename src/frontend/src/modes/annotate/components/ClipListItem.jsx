@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { Info, Play, Users, Share2, Video } from 'lucide-react';
-import { getRatingDisplay, RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
+import { getRatingDisplay, getRatingLabel } from '../../../components/shared/clipConstants';
 import { generateClipName } from '../../../utils/clipDisplayName';
+import { ANNOTATE } from '../../../config/displayNames';
 
 /**
  * LayerChip - icon-only amber "Team" marker for a clip-list row (T5700 follow-up).
@@ -21,7 +22,7 @@ function LayerChip({ isMine }) {
     <span
       className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full
                  bg-amber-500 text-amber-950"
-      aria-label="Team layer"
+      aria-label={ANNOTATE.LAYER_TEAM}
     >
       <Users size={12} />
     </span>
@@ -106,8 +107,8 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
             textShadow: '0 1px 2px rgba(0,0,0,0.5)',
             fontSize: isMobile ? '11px' : '10px',
           }}
-          title={`${RATING_ADJECTIVES[rating]} (${rating}/5)`}
-          aria-label={`${RATING_ADJECTIVES[rating]} (${rating}/5)`}
+          title={getRatingLabel(rating)}
+          aria-label={getRatingLabel(rating)}
         >
           {notation}
         </div>

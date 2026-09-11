@@ -2,7 +2,8 @@ import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Video } from 'lucide-react';
 import { generateClipName } from '../../../utils/clipDisplayName';
-import { RATING_NOTATION, RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
+import { RATING_NOTATION, getRatingLabel } from '../../../components/shared/clipConstants';
+import { ANNOTATE } from '../../../config/displayNames';
 
 // T8890: violet-400 accent for a clip cut from an "angle" (non-backbone source).
 // Backbone clips get NONE of this treatment — the common case stays clean.
@@ -75,7 +76,7 @@ const layerColorFor = (region) => (region.my_athlete === false ? LAYER_COLORS.te
 // T6400: the layer NAME is deliberately no longer shown in the hover tooltip
 // (color/underline signal the layer). It survives only as the marker's
 // aria-label (accessible name) so the layer isn't conveyed by color alone.
-const layerNameFor = (region) => (region.my_athlete === false ? 'Team' : 'My Athlete');
+const layerNameFor = (region) => (region.my_athlete === false ? ANNOTATE.LAYER_TEAM : ANNOTATE.LAYER_MINE);
 
 /**
  * ClipRegionLayer - Timeline layer displaying clip markers with rating notation
@@ -193,7 +194,7 @@ export default function ClipRegionLayer({
                 if (el) markerRefs.current.set(region.id, el);
                 else markerRefs.current.delete(region.id);
               }}
-              aria-label={`${displayName || `Clip ${region.index + 1}`} - ${layerName} layer`}
+              aria-label={`${displayName || `Clip ${region.index + 1}`} - ${layerName}`}
               className="clip-marker absolute top-1/2 cursor-pointer transition-all duration-150"
               style={{
                 left: `${left}%`,
@@ -243,8 +244,8 @@ export default function ClipRegionLayer({
                   ...(isAngle && { borderTop: `2px solid ${ANGLE_ACCENT}` }),
                   boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                 }}
-                title={isAngle ? `${RATING_ADJECTIVES[rating]} — from an angle` : RATING_ADJECTIVES[rating]}
-                aria-label={isAngle ? `${RATING_ADJECTIVES[rating]} — angle clip` : RATING_ADJECTIVES[rating]}
+                title={isAngle ? `${getRatingLabel(rating)} — from an angle` : getRatingLabel(rating)}
+                aria-label={isAngle ? `${getRatingLabel(rating)} — angle clip` : getRatingLabel(rating)}
               >
                 {notation}
                 {isAngle && (

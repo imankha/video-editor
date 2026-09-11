@@ -62,14 +62,14 @@ test.describe('T8760 — clip editor single-playhead + rename: live QA', () => {
   });
 
   test('items 1-7: single play control, clip-scoped loop, playhead, spacebar parity, readout, rename @gate-a', async ({ page }) => {
-    // Open the desktop under-canvas editor via the real "Edit Play" gesture
-    // after selecting a clip (Non-FS: onAddClip becomes "Edit Play" once a
+    // Open the desktop under-canvas editor via the real "Edit play" gesture
+    // after selecting a clip (Non-FS: onAddClip becomes "Edit play" once a
     // clip is selected — AnnotateControls.jsx).
     await page.locator('.clip-marker').first().click();
     await page.waitForTimeout(300);
     const editPlayBtn = page.locator('[data-testid="annotate-primary-cta"]');
     await expect(editPlayBtn).toBeVisible({ timeout: 5000 });
-    await expect(editPlayBtn).toHaveText(/Edit Play/);
+    await expect(editPlayBtn).toHaveText(/Edit play/);
     await editPlayBtn.click();
 
     const strip = page.locator('[data-testid="annotate-editor-strip"]');
@@ -81,7 +81,7 @@ test.describe('T8760 — clip editor single-playhead + rename: live QA', () => {
     // is hidden in edit mode) — the standalone duplicate name field is gone.
     const nameInputs = strip.locator('input[aria-label="Clip name"]:visible');
     expect(await nameInputs.count()).toBe(0); // input only appears once pencil clicked
-    const pencilRenameBtn = strip.locator('button[title="Rename this play"]');
+    const pencilRenameBtn = strip.locator('button[title="Rename clip"]');
     await expect(pencilRenameBtn).toBeVisible();
     await saveEvidence(page, 'T8760-6-header-pencil-no-editing-prefix');
     await pencilRenameBtn.click();
@@ -159,9 +159,9 @@ test.describe('T8760 — clip editor single-playhead + rename: live QA', () => {
     await expect(page.locator('button[title="Play"]:visible')).toBeVisible();
     await saveEvidence(page, 'T8760-4-spacebar-pause-matches-button');
 
-    // --- Item 7: reel action button (T8960 renamed "Clip Out Play" -> "Clip
-    // Play"; only shown if not already reeled) ---
-    const clipOutBtn = strip.getByRole('button', { name: 'Clip Play' });
+    // --- Item 7: reel action button (T9520 renamed the edit-mode create button
+    // to "Create clip"; only shown if not already reeled) ---
+    const clipOutBtn = strip.getByRole('button', { name: 'Create clip' });
     const alreadyReeled = await strip.getByText('Reel created').count();
     if (await clipOutBtn.count()) {
       await expect(clipOutBtn).toBeVisible();

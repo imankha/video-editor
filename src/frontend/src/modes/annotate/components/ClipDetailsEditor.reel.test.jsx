@@ -37,16 +37,16 @@ const baseRegion = {
 describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () => {
   it('shows an enabled "Create Clip" button when no project exists yet (NO_PROJECT)', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: null }} onUpdate={() => {}} onDelete={() => {}} />);
-    const button = screen.getByRole('button', { name: 'Create Clip' });
+    const button = screen.getByRole('button', { name: 'Create clip' });
     expect(button.disabled).toBe(false);
   });
 
   it('clicking "Create Clip" fires onUpdate({ createProject: true }) and shows a disabled transitional state while the request is in flight', () => {
     const onUpdate = vi.fn();
     render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: null }} onUpdate={onUpdate} onDelete={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create Clip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create clip' }));
     expect(onUpdate).toHaveBeenCalledWith({ createProject: true });
-    const button = screen.getByRole('button', { name: 'Clip Created' });
+    const button = screen.getByRole('button', { name: 'Clip created' });
     expect(button.disabled).toBe(true);
   });
 

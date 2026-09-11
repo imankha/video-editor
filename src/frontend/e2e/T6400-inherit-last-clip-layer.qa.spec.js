@@ -9,7 +9,7 @@ import { gotoGame } from './helpers/annotateClips.js';
  * the user assigned. REAL-BROWSER QA.
  *
  * T7770: the two inherit-from-previous tests that used to live here (assign Team
- * then a new clip inherits Team; assign My Athlete then inherit My Athlete) were
+ * then a new clip inherits Team; assign My player then inherit My player) were
  * MERGED into T5700-team-layer-interactive.qa.spec.js's "add-clip form layer"
  * describe block, alongside the explicit-set tests they overlap with — both drive
  * the SAME add-clip-form Layer control + landing lane, differing only in how the
