@@ -1,6 +1,6 @@
 # T9690: Failure-path regression coverage for onboarding and reporting
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-10
