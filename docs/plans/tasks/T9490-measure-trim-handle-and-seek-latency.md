@@ -1,6 +1,6 @@
 # T9490: Measure trim-handle and seek latency against the prior build
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-10
