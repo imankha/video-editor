@@ -5,6 +5,27 @@ import { toast } from './shared';
 import { ExportStatus } from '../constants/exportStatus';
 import { useWebShare } from '../hooks/useWebShare';
 import { track } from '../utils/analytics';
+import { EXPORT_JOBS } from '../config/displayNames';
+import { exportProgressLabel } from '../utils/exportProgressPresentation';
+
+/**
+ * T9540: resolve the stage vocabulary for an export by its `type` ('framing' | 'overlay').
+ * Annotate/unknown types have no render-stage vocabulary — callers fall back to generic copy.
+ */
+function jobVocab(exp) {
+  return EXPORT_JOBS[exp?.type] || null;
+}
+
+/**
+ * T9540 (N37): the honest progress line for an export row — friendly phase copy with the
+ * optional counter as secondary detail (e.g. "Rendering · 150/180"). Falls back to a plain
+ * "Processing..." only when there's truly nothing to show.
+ */
+function progressLine(exp) {
+  const resolved = exportProgressLabel(exp?.progress?.phase, exp?.progress?.message);
+  if (!resolved) return 'Processing...';
+  return resolved.detail ? `${resolved.primary} · ${resolved.detail}` : resolved.primary;
+}
 
 // T8510: honesty rules for the linear ETA extrapolation below. Once an estimate's
 // promised completion time has passed by this grace period, the number is a lie -
@@ -97,7 +118,8 @@ export function resolveEtaDisplay(exp, now, deadlines, percentTracks) {
   return {
     stale: pastPromise || stalledUnderMinute,
     formatted: eta.formatted,
-    fallbackText: exp.progress?.message || 'Still working...',
+    // T9540: honest stage copy (not the raw engineering message) when the estimate busts.
+    fallbackText: progressLine(exp),
   };
 }
 
@@ -211,13 +233,16 @@ export function GlobalExportIndicator() {
             }
           },
         } : undefined;
-        toast.success('Export Complete', {
-          message: `${projectLabel} - ${exp.type} export finished successfully`,
+        // T9540 (N21): title names the STAGE that finished (AI Focus ready / Clip ready);
+        // the message names the object instance (the reel/clip name).
+        const completeVocab = jobVocab(exp);
+        toast.success(completeVocab ? completeVocab.completed : 'Export complete', {
+          message: projectLabel,
           action: shareAction,
           duration: 8000,
         });
       } else if (exp.status === ExportStatus.ERROR) {
-        toast.error('Export Failed', {
+        toast.error('Export failed', {
           message: `${projectLabel} - ${exp.error || 'An error occurred during export'}`,
           duration: 8000,
         });
@@ -348,8 +373,8 @@ export function GlobalExportIndicator() {
                   <div className="flex items-center gap-2">
                     {getStatusIcon(exp.status)}
                     <div>
-                      <div className="text-sm font-medium text-white capitalize">
-                        {exp.type} Export
+                      <div className="text-sm font-medium text-white">
+                        {jobVocab(exp) ? jobVocab(exp).jobNoun : `${exp.type} export`}
                       </div>
                       <div className="text-xs text-gray-400 truncate max-w-[180px]">
                         {getExportLabel(exp)}
@@ -373,7 +398,7 @@ export function GlobalExportIndicator() {
                 {(exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING) && (
                   <div className="mt-2">
                     <div className="flex justify-between text-xs text-gray-400 mb-1">
-                      <span>{exp.progress?.message || 'Processing...'}</span>
+                      <span>{progressLine(exp)}</span>
                       <span>{exp.progress?.percent >= 0 ? `${exp.progress.percent}%` : ''}</span>
                     </div>
                     <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
@@ -407,10 +432,10 @@ export function GlobalExportIndicator() {
                   </div>
                 )}
 
-                {/* Completion message */}
+                {/* Completion message — N21: name the stage that finished */}
                 {exp.status === ExportStatus.COMPLETE && (
                   <div className="mt-2 text-xs text-green-400">
-                    Completed {new Date(exp.completedAt).toLocaleTimeString()}
+                    {jobVocab(exp) ? jobVocab(exp).completed : 'Completed'} · {new Date(exp.completedAt).toLocaleTimeString()}
                   </div>
                 )}
               </div>

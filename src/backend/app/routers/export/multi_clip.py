@@ -2080,29 +2080,27 @@ async def export_multi_clip(
 
     logger.info(f"[Multi-Clip Export] Starting export {export_id}")
 
-    # T890: Regress status + create export_jobs in single atomic transaction
+    # T890/T9540: create the export_jobs row via the atomic per-(project, type)
+    # in-flight guard. A double-click generates a second export_id, so dedup on
+    # (project, 'framing') BEFORE the credit reservation below -- an active job
+    # already present -> 409, reserve nothing, so the duplicate can't double-charge.
+    # T4010: do NOT null the pointers here; they stay valid for the whole in-flight
+    # export (success repoints, failure restores). The 'processing' row is the
+    # in-progress signal the UI keys on.
     if project_id:
-        try:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                # T4010: do NOT null the pointers here. They stay valid for the whole
-                # in-flight export; success repoints working_video_id and a failure
-                # restores both (see _run_multi_clip_background). The 'processing'
-                # export_jobs row is the in-progress signal the UI keys on.
-                cursor.execute("""
-                    INSERT INTO export_jobs (id, project_id, type, status, input_data)
-                    VALUES (?, ?, 'framing', 'processing', '{}')
-                """, (export_id, project_id))
-                conn.commit()
-            logger.info(f"[Multi-Clip Export] Regressed project {project_id} and created export_jobs record: {export_id}")
-            # Notify frontend that export job exists so quest progress can refresh
-            await manager.send_progress(export_id, {
-                "progress": 5,
-                "message": "Starting export...",
-                "status": "processing"
-            })
-        except Exception as e:
-            logger.warning(f"[Multi-Clip Export] Failed to regress status / create export_jobs: {e}")
+        from app.services.export_helpers import insert_export_job_if_none_active
+        if not insert_export_job_if_none_active(export_id, project_id, "framing"):
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "export_in_flight", "message": "An export for this clip is already running."},
+            )
+        logger.info(f"[Multi-Clip Export] Created export_jobs record: {export_id} for project {project_id}")
+        # Notify frontend that export job exists so quest progress can refresh
+        await manager.send_progress(export_id, {
+            "progress": 5,
+            "message": "Starting export...",
+            "status": "processing"
+        })
 
     # Parse form data to get video files
     form = await request.form()

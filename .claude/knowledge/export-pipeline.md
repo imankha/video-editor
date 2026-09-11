@@ -1,6 +1,13 @@
 ---
 domain: export-pipeline
-updated: 2026-09-04 (T8390 FOCUS PUBLISH EXIT, preview-first + one-tap Publish: SUPERSEDES T8520's
+updated: 2026-09-11 (T9540 RENDER/JOB LABELS + DOUBLE-DISPATCH GUARD: single-source render/job/progress/
+completion copy in displayNames.js EXPORT_JOBS/EXPORT_PROGRESS keyed on export type; Focus stage noun
+"AI Focus" (completion exactly "AI Focus ready"), overlay "Export clip with effects"/"Clip ready" + a
+backend-confirmed free-cost caption; N37 phase->copy presenter (utils/exportProgressPresentation.js) so
+Modal-baked counters need no redeploy; NEW export_helpers.insert_export_job_if_none_active atomic
+per-(project,type) in-flight guard at all 3 render entries -> 409 export_in_flight before any reservation
+(closes double-click double-charge; T7210 CAS guarded finalize, not dispatch) + FE inFlightRef latch/409
+swallow; no schema/migration, no Modal change. See § Render/job labels below); 2026-09-04 (T8390 FOCUS PUBLISH EXIT, preview-first + one-tap Publish: SUPERSEDES T8520's
 3-button `ConfirmationDialog` completion card with an immediate CollectionPlayer preview + a new
 `actionBar` (FocusPublishActionBar) footer -- decision comes after the user watches, not before.
 Publish is one tap (fires the render, auto-completes the publish gesture via a new ephemeral
@@ -67,6 +74,52 @@ The problem: `working_videos.highlights_data` is the SOLE home of user overlay-e
 - **T4947 — disposable stitched-download cache (NO DB row, NO migration; existence fully derivable from the R2 key).** `download_collection` caches its composed MP4 at `{r2_prefix}/collection_downloads/{sha256(fingerprint)}.mp4` (same per-user prefix as the Modal stitch scratch, so it is disposable + torn down with the account). **HEAD-before-build** (`r2_head_object_global` → on hit, `download_from_r2_global` and stream, NO stitch/compose run at all); **write-after-build** on a miss (new `storage.upload_file_to_r2_global`, a local-file counterpart of `upload_bytes_to_r2_global`). Helpers: `_collection_download_cache_key`, `_card_content_hash`, shared `_stream_file_and_cleanup`. **Cache-key fingerprint = EVERYTHING that changes the composed bytes:** ordered member ids + each member's filename + resolved intro card id (`card_row["id"]`, post `resolve_intro_card_id` 0/dangling→None) + the card's content hash (`updated_at` + content columns, so a same-id card EDIT invalidates) + **the burned intro FACTS** (`_load_field_values`: profile `full_name` + shown fields — these live in `user.sqlite`, NOT the card row, so a profile rename never bumps the card's `updated_at`; folded in only when a card is attached, `asyncio.to_thread`-offloaded per T7040) + `outro_enabled()` (the `BRANDED_OUTRO_ENABLED` flag is what `compose_serve_time` ACTUALLY honors, not the literal `outro=True`) + `budget_sec`. **Two concurrency/degradation invariants:** (1) **race-safe** — an R2 object PUT is atomic (key visible only on completion) AND each request streams its OWN freshly-built local `serve_path` (never the key it just wrote), so two concurrent uncached requests can't corrupt each other's output; no temp-key/rename dance needed (R2 PUT ≠ filesystem partial write). (2) **degraded builds are NOT cached** — `compose_serve_time` is non-fatal (a transient intro/outro/concat hiccup degrades to the bare stitch but still returns True); it now takes an optional `report` out-dict setting `report["full_fidelity"]`, and the endpoint caches ONLY when full-fidelity, so a transient degradation streams to that one caller but never freezes outro-less bytes into the cache (the next request re-misses + rebuilds). Regression: `test_t4947_cache_stitched_downloads.py` (hit-no-recompute incl. Modal branch; one miss test per dimension incl. card-content edit + burned-fact edit; degraded-not-cached; asyncio-gather race with a `threading.Barrier`). Downloads are FREE (Decision 4) so there is no charge to skip on a hit.
 
 **Credits:** GPU exports reserve → insert job → confirm before dispatch (`framing.py:446-478`, `multi_clip.py:1927-1958`, `exports.py:536-595`); failure paths refund (`multi_clip.py:1760-1829`, `export_worker.py:206-219`). **T8280 (2026-09-02):** the flat `math.ceil(video_seconds)` formula at `framing.py:493`/`multi_clip.py:2155` is now `compute_export_credits(video_seconds, output_fps)` (`highlight_transform.py`, `HIGH_FPS_THRESHOLD=31`) — both live call sites still pass `target_fps=30` (Option B: 30fps cost-saving choice only, no native price shipped), so pricing is unchanged today; the fps-scaled branch (`ceil(seconds*max(1,fps/30))`) is a tested-but-unreachable seed for a future native-delivery task. `list_project_clips` (`clips.py`) now falls back `wc.fps or gv.fps` (mirrors the multi-clip DB-resolve fallback below) so the Focus screen can surface source fps for a "recorded at Nfps, exported at 30fps" note (`ExportButtonView`'s `export-high-fps-note`) — no schema change, no persisted choice. See modal-gpu.md § Active/upcoming work T8280 for the paired read-loop GPU optimization.
+
+## Render/job labels + double-dispatch guard (T9540, 2026-09-11)
+
+Shared Vocabulary epic (N19-N21/N37). The render-action / job / progress / completion COPY is a
+single source keyed on export `type`, and a NEW backend guard closes the double-click double-charge.
+
+- **Vocabulary single source: `config/displayNames.js` `EXPORT_JOBS` + `EXPORT_PROGRESS`.**
+  `EXPORT_JOBS[type]` ('framing' | 'overlay') gives `{action, inProgress, completed, jobNoun}` (+
+  overlay `costNote`), read by the button (`ExportButtonView` CTA), the job list + toast +
+  completion line (`GlobalExportIndicator`), and the container progress strings — so all four
+  surfaces name the SAME object+stage. **Focus stage noun is "AI Focus"** (carried from the T9320
+  mode rename), render VERB "Generate" (`Generate AI Focus`), completion EXACTLY **"AI Focus ready"**
+  — deliberately distinct from the T9330 navigate gesture "Apply AI Focus" (annotate.md). Overlay:
+  `Export clip with effects` / `Exporting clip...` / `Clip ready`. Mode names ("AI Focus"/"Spotlight")
+  and the FOCUS_PUBLISH/OVERLAY_PUBLISH action-bar labels (T9590) are NOT this task's — untouched.
+- **N37 progress copy: `utils/exportProgressPresentation.js::exportProgressLabel(phase, message)`**
+  maps the backend `phase` (from `make_progress_data`, the single payload builder — now also threaded
+  into `exportStore`'s first-create progress branch) to the four honest phrases (Preparing video /
+  Uploading / Rendering / Finding players for spotlight), with the counter ("150/180") extracted as
+  OPTIONAL secondary detail. Phase-keyed with a message-keyword fallback — **deliberately on the
+  frontend so the Modal-baked "frame N/M" strings need no redeploy.** Mirrors `uploadPresentation.js`.
+- **Overlay effects render is FREE (backend-confirmed: zero `reserve_credits` in `overlay.py`).**
+  Surfaced honestly via `EXPORT_JOBS.overlay.costNote` = "No credits · effects are free"
+  (`export-free-cost-note` testid). Framing stays paid (per-second, unchanged).
+- **Double-click / duplicate-charge guard (the substantive half):** `export_jobs` is keyed on the
+  CLIENT `export_id`, so two clicks = two ids = two jobs = two charges. The T7210
+  `_claim_stage_for_finalize` CAS guards double-FINALIZE of ONE job, NOT double-DISPATCH — it does
+  not cover this. Fix = **`export_helpers.insert_export_job_if_none_active(export_id, project_id,
+  type)`**: an atomic `INSERT ... SELECT ... WHERE NOT EXISTS (active job for this project+type)`
+  (true CAS under the per-user write lock), returning False when an active ('pending'/'processing')
+  job already exists. Wired at the top of all three render entries (`framing.py` /render,
+  `multi_clip.py` /multi-clip [type 'framing'], `overlay.py` /render-overlay [type 'overlay']),
+  BEFORE any credit reservation → **409 `{"code":"export_in_flight"}`, reserve nothing.** Keyed on
+  (project, type): blocks a duplicate Focus render, allows the legit Focus→Overlay sequence, and
+  allows a re-render after a terminal job (which correctly re-charges). Unlike `create_export_job`
+  it does NOT swallow DB errors (a swallowed insert would let the duplicate charge through). FE
+  backstop: a synchronous `inFlightRef` latch at the top of `handleExport` (before the pre-dispatch
+  awaits, where the button is still enabled) makes the rapid double-click a no-op; the container's
+  `catch` SWALLOWS the 409 (drops the redundant export_id, no toast — the first job drives the UI).
+- **Cross-nav visibility / no annotate lock: already structural, unchanged.** `/api/exports/active`
+  (`export_jobs` rows) + store hydration keep jobs visible everywhere; the button disable is
+  per-project (`exportingProject.projectId === selectedProjectId`), never a global lock.
+- **No schema change / no migration** (reuses `export_jobs.status`). No Modal change.
+- Tests: `tests/test_t9540_double_dispatch_guard.py` (helper matrix + /render & /render-overlay 409
+  wiring); frontend `exportProgressPresentation.test.js`, updated `ExportButtonView.test.jsx` /
+  `GlobalExportIndicator.test.jsx`. Old-copy e2e locators + quest copy (`questDefinitions.jsx`) updated.
 
 ## Data flow
 ```mermaid

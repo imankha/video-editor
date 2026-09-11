@@ -81,7 +81,8 @@ describe('resolveEtaDisplay — honest ETA (T8510)', () => {
     const deadlines = new Map([[exp.exportId, NOW - ETA_BUST_GRACE_MS - 1000]]);
     const display = resolveEtaDisplay(exp, NOW, deadlines, new Map());
     expect(display.stale).toBe(true);
-    expect(display.fallbackText).toBe('Upscaling...');
+    // T9540: the raw engineering message is now mapped to honest N37 copy (upscaling -> Rendering).
+    expect(display.fallbackText).toBe('Rendering');
   });
 
   it('stays live inside the 15s grace window past the deadline', () => {
@@ -108,7 +109,8 @@ describe('resolveEtaDisplay — honest ETA (T8510)', () => {
   it('falls back to "Still working..." when no stage message is available', () => {
     const exp = makeExport({ percent: 95, elapsedSec: 60, message: '' });
     const deadlines = new Map([[exp.exportId, NOW - ETA_BUST_GRACE_MS - 1000]]);
-    expect(resolveEtaDisplay(exp, NOW, deadlines, new Map()).fallbackText).toBe('Still working...');
+    // T9540: no phase + empty message -> the presenter yields the generic 'Processing...' line.
+    expect(resolveEtaDisplay(exp, NOW, deadlines, new Map()).fallbackText).toBe('Processing...');
   });
 
   it('returns null when there is not enough data to estimate (percent < 5)', () => {
@@ -149,6 +151,6 @@ describe('GlobalExportIndicator — rendered labels and stale-ETA switch (T8510)
       vi.advanceTimersByTime(20000);
     });
     expect(document.body.textContent).not.toContain('Less than a minute');
-    expect(document.body.textContent).toContain('Upscaling...');
+    expect(document.body.textContent).toContain('Rendering');
   });
 });

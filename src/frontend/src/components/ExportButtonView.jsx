@@ -4,7 +4,7 @@ import ActionBand from './ActionBand';
 import PrimaryCta from './PrimaryCta';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
-import { SECTION_NAMES } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_JOBS } from '../config/displayNames';
 import { HIGH_FPS_THRESHOLD } from '../constants/exportFps';
 
 /**
@@ -21,7 +21,8 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // Display state
   isCurrentlyExporting,
   isExporting,
-  isExternallyExporting,
+  // T9540: isExternallyExporting no longer changes the CTA copy (one stage, one label from
+  // EXPORT_JOBS) — the container still owns the external-vs-own distinction for other state.
   displayProgress,
   error,
   failedExport,
@@ -77,13 +78,18 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // credit estimate + high-fps note. The Focus audio toggle + build blurb now live in
   // the settings rail's Reel group (desktop) / mobile drawer, not in this component.
 
+  // T9540: button / in-progress copy resolve from the ONE EXPORT_JOBS table, keyed on
+  // the export stage (framing = AI Focus render, overlay = effects render), so the button
+  // names the same object+stage as the job list, toast and completion message.
+  const job = EXPORT_JOBS[isFramingMode ? 'framing' : 'overlay'];
+
   const ctaLabel = isCurrentlyExporting
-    ? (isExternallyExporting && !isExporting ? 'Reel in progress...' : 'Creating reel...')
+    ? job.inProgress
     : isFramingMode
       ? (hasUnframedClips && isMultiClipMode && totalExtractedClips > 1
-        ? `Export Focused Video (${totalExtractedClips - unframedCount}/${totalExtractedClips})`
-        : 'Export Focused Video')
-      : 'Add Spotlight';
+        ? `${job.action} (${totalExtractedClips - unframedCount}/${totalExtractedClips})`
+        : job.action)
+      : job.action;
 
   // LEFT status cell — progress / disconnected / error / failed / success / disabled
   // reason. Rendered in priority order but each independent block is preserved so the
@@ -164,18 +170,29 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         </div>
       )}
 
-      {/* Success message */}
+      {/* Success message — N21: names the stage that finished (AI Focus / Clip) */}
       {displayProgress === 100 && !isCurrentlyExporting && (
         <div className="text-green-400 text-xs bg-green-900/20 border border-green-800 rounded p-2 w-full">
-          {`Reel ready! Find it in ${SECTION_NAMES.LIBRARY}.`}
+          {`${job.completed}. Find it in ${SECTION_NAMES.LIBRARY}.`}
         </div>
       )}
     </>
   );
 
-  // RIGHT cost cell — credit estimate + high-fps note (Framing only).
+  // RIGHT cost cell — credit estimate + high-fps note (Framing only), or the
+  // T9540/Q1 backend-confirmed free-cost caption (Overlay effects render is $0).
   const costCell = (
     <>
+      {/* T9540 (Q1): the effects render charges zero credits — say so honestly. */}
+      {!isFramingMode && !isCurrentlyExporting && (
+        <div
+          data-testid="export-free-cost-note"
+          className="flex items-center gap-1.5 text-xs text-gray-400"
+        >
+          <span>{EXPORT_JOBS.overlay.costNote}</span>
+        </div>
+      )}
+
       {/* T5790: pre-flight credit-cost estimate — Framing only. */}
       {isFramingMode && !isCurrentlyExporting && estimatedCredits != null && (
         <div

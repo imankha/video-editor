@@ -154,7 +154,7 @@ for (const vp of CTA_VIEWPORTS) {
       }
     });
 
-    // --- Surface 3: Focus panel (Export Focused Video) -----------------------
+    // --- Surface 3: Focus panel (Generate AI Focus) -----------------------
     // FINDING T8550-F1 (live-verify owed) — the headline bug from the 2026-09-03
     // user report ("export buttons sit below the scroll line"): the Export Focused
     // Video button sits ~400px below the fold at EVERY phone width (950/957/1028/
@@ -174,7 +174,7 @@ for (const vp of CTA_VIEWPORTS) {
       await framingChip.click();
       await page.locator('.crop-handle').first().waitFor({ timeout: 90000 });
 
-      const exportBtn = page.getByRole('button', { name: /Export Focused Video/ });
+      const exportBtn = page.getByRole('button', { name: /Generate AI Focus/ });
       await exportBtn.first().waitFor({ state: 'visible', timeout: 20000 });
       await assertCtaInViewport(page, exportBtn.first());
       await saveEvidence(page, `cta-focus-export_${vp.name}`);

@@ -628,7 +628,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
       await page.waitForTimeout(3000);
 
       // Click Add Spotlight to start overlay export
-      const addOverlayBtn = page.locator('button:has-text("Add Spotlight")');
+      const addOverlayBtn = page.locator('button:has-text("Export clip with effects")');
       const addOverlayVisible = await addOverlayBtn.first().isVisible().catch(() => false);
       console.log(`[Q2.4] Add Spotlight button visible: ${addOverlayVisible}`);
 
@@ -746,7 +746,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
       await overlayBtn2.first().click();
       await page.waitForTimeout(3000);
 
-      const addOverlay2 = page.locator('button:has-text("Add Spotlight")');
+      const addOverlay2 = page.locator('button:has-text("Export clip with effects")');
       if (await addOverlay2.first().isVisible().catch(() => false)) {
         await addOverlay2.first().click();
         await page.waitForTimeout(2000);
@@ -932,7 +932,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
         await overlayBtn3.first().click();
         await page.waitForTimeout(3000);
 
-        const addOverlay3 = page.locator('button:has-text("Add Spotlight")');
+        const addOverlay3 = page.locator('button:has-text("Export clip with effects")');
         if (await addOverlay3.first().isVisible().catch(() => false)) {
           await addOverlay3.first().click();
           await page.waitForTimeout(2000);

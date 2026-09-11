@@ -7,7 +7,7 @@ import { useCreditStore } from '../stores/creditStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { SECTION_NAMES } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_PROGRESS } from '../config/displayNames';
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { clipCropKeyframes } from '../utils/clipSelectors';
@@ -158,6 +158,7 @@ export function ExportButtonContainer({
   };
 
   const handleExportEnd = () => {
+    inFlightRef.current = false; // T9540: release the double-click latch when the export ends
     if (onExportEndProp) {
       onExportEndProp();
     } else {
@@ -184,6 +185,13 @@ export function ExportButtonContainer({
   const handleExportRef = useRef(null);
   const exportTimingRef = useRef(null);
   const backgroundExportRef = useRef(false); // T760: tracks if export was dispatched as 202 background
+  // T9540: synchronous in-flight latch. `isExporting`/`isCurrentlyExporting` only disable the
+  // button on the NEXT render, so a second click during the pre-dispatch `await` window (credit
+  // refresh, health check) can slip through and create a duplicate job/charge. This ref flips
+  // synchronously at the top of handleExport so the duplicate never even issues a POST; the
+  // backend 409 export_in_flight guard is the durable backstop. Cleared in handleExportEnd + at
+  // every pre-dispatch early return.
+  const inFlightRef = useRef(false);
   const disconnectedRef = useRef(false); // Sync mirror of `disconnected` state for catch-block reads
   const overlayTransitionFiredRef = useRef(false); // Guard: prevent duplicate onProceedToOverlay from WS + HTTP race
 
@@ -438,6 +446,15 @@ export function ExportButtonContainer({
    * Main export handler
    */
   const handleExport = async () => {
+    // T9540: reject a re-entrant (double-click) trigger synchronously, before any await
+    // opens a window where the button is still enabled. Cleared in handleExportEnd and at
+    // each pre-dispatch early return below.
+    if (inFlightRef.current) {
+      console.warn('[ExportButtonContainer] Duplicate export trigger ignored (already in flight)');
+      return;
+    }
+    inFlightRef.current = true;
+
     // T4900/31p export gate: if overlay edits failed to persist, the DB holds
     // stale highlight data — rendering now would silently ignore the user's
     // manual keyframes (the exact "Add Spotlight ignored my keyframes" bug).
@@ -446,6 +463,7 @@ export function ExportButtonContainer({
         useOverlayActionStore.getState().failedActions.length > 0) {
       setError("Some edits haven't saved. Retrying now — please export again once they save.");
       useOverlayActionStore.getState().retryFailedOverlayActions();
+      inFlightRef.current = false;
       return;
     }
 
@@ -454,6 +472,7 @@ export function ExportButtonContainer({
                                    (editorMode === EDITOR_MODES.FRAMING && hasProjectClips);
     if (!videoFile && !isBackendAuthoritative) {
       setError('No video file loaded');
+      inFlightRef.current = false;
       return;
     }
 
@@ -467,6 +486,7 @@ export function ExportButtonContainer({
       // crop is applied on export. Only block when there's no backend-authoritative source.
       if ((!cropKeyframes || cropKeyframes.length === 0) && !isBackendAuthoritative) {
         setError('No crop keyframes defined. Please add at least one crop keyframe.');
+        inFlightRef.current = false;
         return;
       }
 
@@ -495,19 +515,21 @@ export function ExportButtonContainer({
           videoSeconds: totalVideoSeconds,
         });
         setShowBuyCredits(true);
+        inFlightRef.current = false;
         return;
       }
       // Fail-closed: if we still can't determine duration, block export
       if (!totalVideoSeconds || totalVideoSeconds <= 0) {
         console.error('[ExportButtonContainer] Cannot determine video duration for credit check');
         setError('Cannot determine video duration. Please reload and try again.');
+        inFlightRef.current = false;
         return;
       }
     }
 
     setIsExporting(true);
     setLocalProgress(0);
-    setProgressMessage('Checking server...');
+    setProgressMessage(EXPORT_PROGRESS.PREPARING);
     setError(null);
     setDisconnected(false);
     setReconnectionFailed(false);
@@ -555,7 +577,7 @@ export function ExportButtonContainer({
       return;
     }
 
-    setProgressMessage('Uploading...');
+    setProgressMessage(EXPORT_PROGRESS.UPLOADING);
 
     const exportId = generateExportId();
     exportIdRef.current = exportId;
@@ -628,7 +650,7 @@ export function ExportButtonContainer({
           }
 
           console.log('[ExportButtonContainer] Using backend-authoritative render');
-          setProgressMessage('Saving edits...');
+          setProgressMessage(EXPORT_PROGRESS.PREPARING);
 
           try {
             await saveCurrentClipState();
@@ -640,10 +662,10 @@ export function ExportButtonContainer({
 
           endpoint = `${API_BASE}/api/export/render`;
 
-          setProgressMessage('Connecting...');
+          setProgressMessage(EXPORT_PROGRESS.PREPARING);
           await connectWebSocket(exportId);
 
-          setProgressMessage('Starting render...');
+          setProgressMessage(EXPORT_PROGRESS.RENDERING);
           const renderResponse = await axios.post(endpoint, {
             project_id: projectId,
             export_id: exportId,
@@ -660,7 +682,7 @@ export function ExportButtonContainer({
           if (renderResponse.status === 202) {
             console.log('[ExportButtonContainer] Render accepted (202), waiting for WebSocket completion');
             backgroundExportRef.current = true;
-            setProgressMessage('Processing...');
+            setProgressMessage(EXPORT_PROGRESS.RENDERING);
             return;
           }
 
@@ -691,10 +713,10 @@ export function ExportButtonContainer({
         if (projectId) {
           console.log('[ExportButtonContainer] Using backend-authoritative overlay render');
 
-          setProgressMessage('Connecting...');
+          setProgressMessage(EXPORT_PROGRESS.PREPARING);
           await connectWebSocket(exportId);
 
-          setProgressMessage('Starting render...');
+          setProgressMessage(EXPORT_PROGRESS.RENDERING);
           const renderResponse = await axios.post(`${API_BASE}/api/export/render-overlay`, {
             project_id: projectId,
             export_id: exportId,
@@ -706,7 +728,7 @@ export function ExportButtonContainer({
           if (renderResponse.status === 202) {
             console.log('[ExportButtonContainer] Overlay render accepted (202), waiting for WebSocket completion');
             backgroundExportRef.current = true;
-            setProgressMessage('Processing...');
+            setProgressMessage(EXPORT_PROGRESS.RENDERING);
             return;
           }
 
@@ -759,7 +781,7 @@ export function ExportButtonContainer({
                 (progressEvent.loaded * 10) / progressEvent.total
               );
               setLocalProgress(uploadPercent);
-              setProgressMessage('Uploading video...');
+              setProgressMessage(EXPORT_PROGRESS.UPLOADING);
 
               if (progressEvent.loaded === progressEvent.total) {
                 uploadCompleteRef.current = true;
@@ -779,7 +801,7 @@ export function ExportButtonContainer({
         if (response.status === 202) {
           console.log('[ExportButtonContainer] Multi-clip export accepted (202), waiting for WebSocket completion');
           backgroundExportRef.current = true;
-          setProgressMessage('Processing...');
+          setProgressMessage(EXPORT_PROGRESS.RENDERING);
           return;
         }
 
@@ -878,6 +900,23 @@ export function ExportButtonContainer({
         setProgressMessage('Connection lost — export continues on server...');
         // Don't call setIsExporting(false), failExportInStore, or disconnect WS.
         // The WS manager will reconnect and onComplete/onError callbacks will finish the flow.
+        return;
+      }
+
+      // T9540: 409 export_in_flight — a duplicate dispatch the backend refused because an
+      // active job for this (project, stage) already exists. This is NOT a failure: the first
+      // job already drives the UI. Silently drop this redundant export_id, no toast/error.
+      if (err.response?.status === 409 && err.response.data?.detail?.code === 'export_in_flight') {
+        console.log('[ExportButtonContainer] Duplicate export refused by backend (export_in_flight) — ignoring');
+        if (exportIdRef.current) {
+          exportWebSocketManager.disconnect(exportIdRef.current);
+          removeExportFromStore(exportIdRef.current);
+          exportIdRef.current = null;
+        }
+        setIsExporting(false);
+        setLocalProgress(0);
+        setProgressMessage('');
+        handleExportEnd();
         return;
       }
 

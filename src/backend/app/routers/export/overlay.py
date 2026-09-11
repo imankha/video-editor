@@ -2891,6 +2891,18 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         "status": "processing"
     }
 
+    # T9540: atomic per-(project, type) in-flight guard. A double-click on "Export clip
+    # with effects" generates a second export_id, so dedup on (project, 'overlay') here.
+    # This render is free (no credit reservation), so the guard only prevents a duplicate
+    # job row; an active job already present -> 409.
+    if project_id:
+        from app.services.export_helpers import insert_export_job_if_none_active
+        if not insert_export_job_if_none_active(export_id, project_id, "overlay"):
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "export_in_flight", "message": "An export for this clip is already running."},
+            )
+
     # Get project info and working video
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -2924,15 +2936,9 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             'dim_strength': project['dim_strength'],
         }
 
-        # Create export_jobs record
-        try:
-            cursor.execute("""
-                INSERT INTO export_jobs (id, project_id, type, status, input_data)
-                VALUES (?, ?, 'overlay', 'processing', '{}')
-            """, (export_id, project_id))
-            conn.commit()
-        except Exception as e:
-            logger.warning(f"[Overlay Render] Failed to create export_jobs record: {e}")
+        # T9540: the export_jobs row was already created atomically by the in-flight
+        # guard at the top of this handler (insert_export_job_if_none_active) -- no
+        # second insert here (a duplicate would double-count the job).
 
     # Parse highlight regions and normalize to canonical snake_case keys.
     # T4900: the Modal renderer reads region["start_time"] directly (KeyError
