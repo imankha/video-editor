@@ -37,6 +37,16 @@ export function ratioGlyph(ratio) {
   return RATIO_META[ratio]?.glyph ?? '';
 }
 
+/**
+ * "Portrait (9:16)" — the descriptive word alongside the raw ratio (N32, T9550).
+ * The editor aspect picker keeps the numbers (creators know 9:16/16:9) but leads
+ * with the plain word. An unknown ratio (e.g. 1:1) falls back to the bare ratio.
+ */
+export function ratioWithName(ratio) {
+  const label = ratioLabel(ratio);
+  return label === ratio ? ratio : `${label} (${ratio})`;
+}
+
 /** "▯ Portrait" — glyph + word, the canonical ratio display string. */
 export function ratioDisplay(ratio) {
   const glyph = ratioGlyph(ratio);

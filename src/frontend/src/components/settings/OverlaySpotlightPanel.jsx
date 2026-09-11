@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react';
 import { HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS } from '../../constants/highlightColors';
 import { HighlightEffect } from '../../constants/highlightEffects';
+import { EDITOR_PANELS } from '../../config/displayNames';
 import SettingRow from './SettingRow';
 import SettingsPanel from './SettingsPanel';
 
@@ -31,9 +32,9 @@ export default function OverlaySpotlightPanel({
 }) {
   return (
     <SettingsPanel title="This spotlight">
-      {/* Highlight Color — the six swatches stack under the label (wide control). */}
+      {/* Spotlight color — the six swatches stack under the label (wide control). */}
       <SettingRow
-        label="Highlight Color"
+        label={EDITOR_PANELS.SPOTLIGHT_COLOR}
         value={HIGHLIGHT_COLOR_LABELS[highlightColor] || 'White'}
         stack
       >
@@ -78,14 +79,16 @@ export default function OverlaySpotlightPanel({
 
       {isHighlightEnabled ? (
         <>
-          {/* Shape — segmented control, blue-600 on. */}
+          {/* Shape — segmented control saying WHERE the spotlight sits vs the player. */}
           <SettingRow
             label="Shape"
-            value={highlightShape === 'ground' ? 'Ground spotlight' : 'Body ellipse'}
+            value={highlightShape === 'ground'
+              ? EDITOR_PANELS.SPOTLIGHT_UNDER_PLAYER
+              : EDITOR_PANELS.SPOTLIGHT_AROUND_PLAYER}
           >
             {[
-              { id: 'body', label: 'Body' },
-              { id: 'ground', label: 'Ground' },
+              { id: 'body', label: EDITOR_PANELS.SPOTLIGHT_AROUND_PLAYER },
+              { id: 'ground', label: EDITOR_PANELS.SPOTLIGHT_UNDER_PLAYER },
             ].map(({ id, label }) => (
               <button
                 key={id}
@@ -102,8 +105,8 @@ export default function OverlaySpotlightPanel({
             ))}
           </SettingRow>
 
-          {/* Stroke Width */}
-          <SettingRow label="Stroke Width" value={`${strokeWidth ?? 3}px`}>
+          {/* Outline thickness */}
+          <SettingRow label={EDITOR_PANELS.OUTLINE_THICKNESS} value={`${strokeWidth ?? 3}px`}>
             <input
               type="range"
               min="1"
@@ -116,8 +119,8 @@ export default function OverlaySpotlightPanel({
             />
           </SettingRow>
 
-          {/* Fill Opacity */}
-          <SettingRow label="Fill" value={`${Math.round((fillOpacity ?? 0) * 100)}%`}>
+          {/* Spotlight fill opacity */}
+          <SettingRow label={EDITOR_PANELS.SPOTLIGHT_FILL} value={`${Math.round((fillOpacity ?? 0) * 100)}%`}>
             <input
               type="range"
               min="0"
@@ -134,8 +137,8 @@ export default function OverlaySpotlightPanel({
             />
           </SettingRow>
 
-          {/* Outside Dim Strength */}
-          <SettingRow label="Outside Dim" value={`${Math.round((dimStrength ?? 0) * 100)}%`}>
+          {/* Dim background strength */}
+          <SettingRow label={EDITOR_PANELS.DIM_BACKGROUND} value={`${Math.round((dimStrength ?? 0) * 100)}%`}>
             <input
               type="range"
               min="0"

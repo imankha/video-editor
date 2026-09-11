@@ -17,6 +17,7 @@ import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPrevi
 import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
 import { HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
+import { EDITOR_PANELS } from '../config/displayNames';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
 import { isRegionUnderPlayhead } from '../utils/textRegionPlayhead';
 
@@ -737,7 +738,7 @@ export function OverlayModeView({
   const settingsRailTabs = [
     { id: 'overlay', label: 'Spotlight', icon: Sparkles },
     { id: 'text', label: 'Text', icon: Type },
-    { id: 'thumbnail', label: 'Thumbnail', icon: ImageIcon },
+    { id: 'thumbnail', label: EDITOR_PANELS.COVER_IMAGE, icon: ImageIcon },
   ];
   const settingsRailBodies = { overlay: overlayPanel, text: textPanel, thumbnail: thumbnailPanel };
   const activeRailTab = settingsRailTabs.some((t) => t.id === activeTab) ? activeTab : 'overlay';
@@ -749,7 +750,9 @@ export function OverlayModeView({
   // T9270: the mobile entry row's live-summary second line. DERIVED from the same
   // state the rows bind to — never a second stored copy.
   const colorLabel = HIGHLIGHT_COLOR_LABELS[highlightColor] || 'White';
-  const shapeLabel = highlightShape === 'ground' ? 'Ground spotlight' : 'Body ellipse';
+  const shapeLabel = highlightShape === 'ground'
+    ? EDITOR_PANELS.SPOTLIGHT_UNDER_PLAYER
+    : EDITOR_PANELS.SPOTLIGHT_AROUND_PLAYER;
   const mobileSettingsSummary =
     `${colorLabel} - ${shapeLabel} - Dim ${Math.round((dimStrength ?? 0) * 100)}%`;
 
