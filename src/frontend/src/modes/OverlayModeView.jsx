@@ -14,12 +14,17 @@ import OverlaySpotlightPanel from '../components/settings/OverlaySpotlightPanel'
 import { ExportButtonContainer } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
-import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft } from 'lucide-react';
+import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, MousePointerClick } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
 import { HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { EDITOR_PANELS } from '../config/displayNames';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
 import { isRegionUnderPlayhead } from '../utils/textRegionPlayhead';
+import {
+  countDetectionAssignments,
+  detectableDetections,
+  isDetectionAssigned,
+} from './overlay/utils/detectionAssignment';
 
 /**
  * ExportButtonSection - Container+View composition for Overlay mode export
@@ -403,9 +408,50 @@ export function OverlayModeView({
   // `editable` on.
   const editable = !showPlayerBoxes || circleEditActive;
 
+  // T9620 (UX-10): the spotlight editor leads with PICKING A PLAYER, not the
+  // styling controls. Assignment progress is DERIVED from highlightRegions (the
+  // single source of truth for keyframes/detections) — no second store, no new
+  // metadata source (the T9100/T9150 landmine: detection dims stay on the atomic
+  // detectionVideoWidth/Height props, untouched here).
+  const { total: totalDetections, assigned: assignedDetections } = useMemo(
+    () => countDetectionAssignments(highlightRegions),
+    [highlightRegions]
+  );
+  // Onboarding phase: detection frames exist (boxes are clickable) but the user
+  // hasn't picked anyone yet. Gates the "Click your player" prompt + hides styling.
+  const awaitingPlayerSelection =
+    playerDetectionEnabled && totalDetections > 0 && assignedDetections === 0;
+
+  // The region under the playhead. Before a player is picked, getHighlightAtTime
+  // returns a CENTERED DEFAULT ellipse for a region with no keyframes
+  // (useHighlightRegions) — the "unassigned ellipse on the grass". Suppress that
+  // scaffolding per-region until at least one of its detection frames is assigned;
+  // once assigned, the interpolated spotlight follows the picked player.
+  const currentRegion = useMemo(
+    () =>
+      (highlightRegions || []).find(
+        (r) => r.enabled !== false && currentTime >= r.startTime && currentTime <= r.endTime
+      ) || null,
+    [highlightRegions, currentTime]
+  );
+  const currentRegionAwaitsPick = useMemo(() => {
+    const dets = detectableDetections(currentRegion);
+    return dets.length > 0 && !dets.some((d) => isDetectionAssigned(currentRegion, d));
+  }, [currentRegion]);
+
+  // The stated primary task (never a tooltip): if boxes are on screen right now,
+  // point at them; otherwise route the user to a timeline marker to surface them.
+  const showSelectPlayerPrompt = awaitingPlayerSelection && showPlayerBoxes;
+  const selectPlayerPromptText = playerDetections?.length > 0
+    ? (isMobile ? EDITOR_PANELS.SELECT_PLAYER_TAP : EDITOR_PANELS.SELECT_PLAYER_CLICK)
+    : EDITOR_PANELS.SELECT_PLAYER_FIND;
+
   // Is the spotlight circle visible right now (a region exists at the current time and it
-  // renders)? Mirrors HighlightOverlay's own render gate.
-  const hasVisibleSpotlight = !!currentHighlightState && isTimeInEnabledRegion(currentTime);
+  // renders)? Mirrors HighlightOverlay's own render gate — including the T9620
+  // "no ellipse on unassigned ground" suppression, so the override hint never
+  // fires over a suppressed spotlight.
+  const hasVisibleSpotlight =
+    !!currentHighlightState && isTimeInEnabledRegion(currentTime) && !currentRegionAwaitsPick;
 
   // T5250: the entrance/exit reveal envelope for the spotlight, derived from the ACTIVE
   // region's [startTime, endTime] and currentTime via the shared spec (mirrored on the
@@ -509,7 +555,9 @@ export function OverlayModeView({
         handlers={handlers}
         fitToAspect={useAspectStage}
         overlays={[
-          currentHighlightState && effectiveOverlayMetadata && (
+          // T9620: suppress the scaffolding ellipse for a region whose players
+          // aren't picked yet — no spotlight floats on unassigned ground.
+          currentHighlightState && effectiveOverlayMetadata && !currentRegionAwaitsPick && (
             <HighlightOverlay
               key="highlight"
               videoRef={videoRef}
@@ -593,6 +641,20 @@ export function OverlayModeView({
         onRetryVideo={onRetryVideo}
         loadingMessage={loadingMessage}
       />
+
+      {/* T9620 (UX-10): the PRIMARY task, stated on screen (not a hover tooltip).
+          A prominent top-center banner while a player is still unpicked; pointer
+          -events-none so it never intercepts a click on the player boxes beneath
+          it. Adapts to whether boxes are already visible or the user must first
+          open a detection frame from the timeline. */}
+      {showSelectPlayerPrompt && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none max-w-[90%]">
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-600/95 text-white text-sm font-semibold shadow-lg ring-1 ring-white/20">
+            <MousePointerClick size={16} aria-hidden="true" className="shrink-0" />
+            <span data-testid="select-player-prompt">{selectPlayerPromptText}</span>
+          </div>
+        </div>
+      )}
 
       {/* Fullscreen exit button - desktop only */}
       {isFullscreen && !mobileFs && (
@@ -685,6 +747,12 @@ export function OverlayModeView({
       onHighlightEffectTypeChange={onHighlightEffectTypeChange}
       isHighlightEnabled={highlightRegions.length > 0}
       disabled={settingsDisabled}
+      // T9620: sequence styling AFTER player selection — the panel shows the
+      // "pick your player" guidance while unpicked, then the styling controls
+      // plus a "N of M players selected" progress line once assignment begins.
+      awaitingPlayerSelection={awaitingPlayerSelection}
+      assignedCount={assignedDetections}
+      totalDetections={totalDetections}
     />
   );
 

@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { Check, MousePointerClick } from 'lucide-react';
 import { HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS } from '../../constants/highlightColors';
 import { HighlightEffect } from '../../constants/highlightEffects';
 import { EDITOR_PANELS } from '../../config/displayNames';
@@ -29,9 +29,47 @@ export default function OverlaySpotlightPanel({
   onHighlightEffectTypeChange,
   isHighlightEnabled,
   disabled = false,
+  // T9620 (UX-10): player-selection-first sequencing. While a player is still
+  // unpicked the styling controls are hidden behind the "pick your player"
+  // guidance; once assignment begins they appear, with a progress line naming
+  // any remaining detection frames still to assign.
+  awaitingPlayerSelection = false,
+  assignedCount = 0,
+  totalDetections = 0,
 }) {
+  // Pre-selection: no styling controls, just the stated next step (on-screen
+  // text, not a tooltip). Detection COUNT copy always says "player(s)" so the
+  // number can't be mistaken for a jersey identity.
+  if (awaitingPlayerSelection) {
+    return (
+      <SettingsPanel title={EDITOR_PANELS.SELECT_PLAYER_TITLE}>
+        <div className="flex flex-col items-center text-center gap-2 py-4">
+          <MousePointerClick size={22} className="text-blue-400" aria-hidden="true" />
+          <p className="text-sm font-medium text-gray-100">
+            {EDITOR_PANELS.SELECT_PLAYER_CLICK}
+          </p>
+          <p className="text-xs text-gray-400">
+            {EDITOR_PANELS.SELECT_PLAYER_STYLING_HINT}
+          </p>
+        </div>
+      </SettingsPanel>
+    );
+  }
+
+  const remaining = totalDetections - assignedCount;
+  const showProgress = totalDetections > 1 && assignedCount > 0 && remaining > 0;
+
   return (
     <SettingsPanel title="This spotlight">
+      {/* T9620: after the first pick, name any detection frames still unassigned
+          so the user knows more checkpoints need a player. Derived from the same
+          assignment counts — never a second stored copy. */}
+      {showProgress && (
+        <p data-testid="assignment-progress" className="text-xs text-blue-300">
+          {assignedCount} of {totalDetections} players selected — click the remaining
+          {remaining === 1 ? ' player' : ' players'} to spotlight {remaining === 1 ? 'them' : 'each'} too.
+        </p>
+      )}
       {/* Spotlight color — the six swatches stack under the label (wide control). */}
       <SettingRow
         label={EDITOR_PANELS.SPOTLIGHT_COLOR}
