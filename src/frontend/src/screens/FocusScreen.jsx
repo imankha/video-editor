@@ -1405,8 +1405,8 @@ export function FocusScreen({
             <FocusPublishActionBar
               onPublish={handlePublish}
               onAddSpotlight={handleAddSpotlight}
-              onAddSpotlightLater={handleAddSpotlightLater}
               onRefocus={handleRefocus}
+              onSaveDraft={handleAddSpotlightLater}
             />
           )}
         />

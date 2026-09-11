@@ -77,8 +77,8 @@ function FocusPublishExitHarness({ deps, startOpen = false, isAutoCreated = fals
           <FocusPublishActionBar
             onPublish={handlePublish}
             onAddSpotlight={handleAddSpotlight}
-            onAddSpotlightLater={handleAddSpotlightLater}
             onRefocus={handleRefocus}
+            onSaveDraft={handleAddSpotlightLater}
           />
         </div>
       )}
@@ -127,8 +127,8 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
 
     expect(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL })).toBeTruthy();
     expect(screen.getByRole('button', { name: FOCUS_PUBLISH.ADD_SPOTLIGHT_LABEL })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Add Spotlight Later' })).toBeTruthy();
-    expect(screen.getByText(/^Refocus/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: FOCUS_PUBLISH.SAVE_DRAFT_LABEL })).toBeTruthy();
+    expect(screen.getByRole('button', { name: FOCUS_PUBLISH.EDIT_FRAMING_LABEL })).toBeTruthy();
 
     const panel = screen.getByTestId('export-complete-preview');
     expect(panel.textContent.toLowerCase()).not.toContain('skip');
@@ -152,11 +152,11 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     );
   });
 
-  it('"Add Spotlight Later" records overlay_deferred, shows the MULTI-CLIP toast, and navigates home; no render', () => {
+  it('"Save draft" records overlay_deferred, shows the MULTI-CLIP toast, and navigates home; no render', () => {
     const deps = makeDeps();
     render(<FocusPublishExitHarness deps={deps} startOpen isAutoCreated={false} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Spotlight Later' }));
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.SAVE_DRAFT_LABEL }));
 
     expect(deps.recordAchievement).toHaveBeenCalledTimes(1);
     expect(deps.recordAchievement).toHaveBeenCalledWith('overlay_deferred');
@@ -169,11 +169,11 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     expect(deps.triggerExport).not.toHaveBeenCalled();
   });
 
-  it('"Add Spotlight Later" shows the SINGLE-CLIP toast when is_auto_created', () => {
+  it('"Save draft" shows the SINGLE-CLIP toast when is_auto_created', () => {
     const deps = makeDeps();
     render(<FocusPublishExitHarness deps={deps} startOpen isAutoCreated />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Spotlight Later' }));
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.SAVE_DRAFT_LABEL }));
 
     expect(deps.toastSuccess).toHaveBeenCalledWith(
       'Saved to Clips',
@@ -181,11 +181,11 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     );
   });
 
-  it('Refocus (and the X/onClose it also drives) just closes the preview — no achievement/toast/navigation', () => {
+  it('Edit framing (and the X/onClose it also drives) just closes the preview — no achievement/toast/navigation', () => {
     const deps = makeDeps();
     render(<FocusPublishExitHarness deps={deps} startOpen />);
 
-    fireEvent.click(screen.getByText(/^Refocus/));
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.EDIT_FRAMING_LABEL }));
 
     expect(screen.queryByTestId('export-complete-preview')).toBeNull();
     expect(deps.recordAchievement).not.toHaveBeenCalled();
@@ -239,12 +239,12 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     expect(usePublishIntentStore.getState().projectId).toBeNull();
   });
 
-  it('T8390 review: Refocus/Add Spotlight/Add Spotlight Later abandon a stale publish intent for the SAME project', () => {
+  it('T8390 review: Edit framing/Add spotlight/Save draft abandon a stale publish intent for the SAME project', () => {
     const deps = makeDeps();
     usePublishIntentStore.getState().set(42);
 
     render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
-    fireEvent.click(screen.getByText(/^Refocus/));
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.EDIT_FRAMING_LABEL }));
 
     expect(usePublishIntentStore.getState().projectId).toBeNull();
   });

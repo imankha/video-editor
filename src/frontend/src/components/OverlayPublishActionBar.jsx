@@ -3,69 +3,72 @@ import { Button } from './shared/Button';
 import { OVERLAY_PUBLISH } from '../config/displayNames';
 
 /**
- * OverlayPublishActionBar (T9110) — the `actionBar` footer CollectionPlayer
- * renders for Overlay's post-export completion preview. The Overlay sibling of
- * FocusPublishActionBar (T8390): same preview-first shell, same strictly-
- * presentational contract (all copy/routing lives in the caller, OverlayScreen).
+ * OverlayPublishActionBar (T9110, re-hierarchized T9590) — the `actionBar`
+ * footer CollectionPlayer renders for Overlay's post-export completion preview.
+ * The Overlay sibling of FocusPublishActionBar: same preview-first shell, same
+ * strictly-presentational contract (all copy/routing lives in OverlayScreen).
  *
- * The four choices differ from Focus's (Publish Now / Reapply Overlay / Reapply
- * Focus / Publish Later), but the LAYOUT is an exact mirror of
- * FocusPublishActionBar — read that component's doc comment for the full,
- * authoritative rationale behind the flat/no-hierarchy decision, the three-stage
- * responsive grid, the `min-content` (NOT `max-content`) column floor, the
- * `whitespace-nowrap` title span, and why there is deliberately no
- * `overflow-x-auto` safety net. Those are hard-won T8390 decisions; this
- * component reproduces them verbatim rather than re-deriving them.
+ * HIERARCHY (T9590, 2026-09-10). Both bars re-hierarchize together — leaving one
+ * flat while the other is tiered recreates the exact inconsistency this task
+ * removes (REVERSES T9110's flat four-equal-weight mirror of T8390). The hierarchy
+ * tracks PIPELINE POSITION, so the dominant action differs from Focus's on
+ * purpose: here the spotlight is ALREADY applied and the reel is finished, so the
+ * promoted forward action is Publish (Focus promotes "Add spotlight" instead,
+ * because on that screen the spotlight hasn't been added yet):
  *
- * ABSTRACTION NOTE (T9110): a shared `<FlatChoiceActionBar>` taking a list of
- * `{icon, label, caption, onClick}` is the natural extraction, but with only
- * TWO call sites (Focus + Overlay) it would be premature per the project's
- * rule-of-three (abstract on the 3rd duplication, never the 1st/2nd — premature
- * indirection hides code paths from grep). When a 3rd flat action bar appears,
- * extract then and fold both of these onto it. Until then the layout lives in
- * two places on purpose.
+ *   PRIMARY   Publish           — visually dominant (filled cyan `lg` button in a
+ *                                 tinted+ringed card); caption states the audience.
+ *   SECONDARY Reapply spotlight — normal gray card; back into Spotlight editing.
+ *   TERTIARY  Reapply AI Focus  — quiet outline card; reframe. Caption carries the
+ *                                 honest paid-re-export ("uses credits") warning.
+ *   QUIET     Save draft        — a small ghost link below the grid, NOT a fourth
+ *                                 competing card. Replaces T9110's "Publish Later".
  *
- * DELIBERATELY FLAT / NO HIERARCHY (same product decision as T8390 round 2): all
- * four choices render as the SAME `Button variant="secondary" size="lg"` inside
- * identically-styled cards (title + caption). Nothing is bigger, brighter, or
- * more saturated than anything else; the only differentiators are icon + text.
+ * Tab order follows the visual hierarchy for free (DOM order primary→secondary→
+ * tertiary, then the Save-draft link — dominant action focused first).
  *
- * Icons match established app conventions rather than inventing new ones:
- * `FolderInput` is the app's "publish" icon (DraftTile), `Sparkles` the
- * "Spotlight" icon (Overlay tab / ModeSwitcher), `Crop` the Focus/framing icon
- * (DraftTile "Open in Focus", ModeSwitcher), `Clock` the "later/defer" icon
- * (DraftTile's in-progress marker).
+ * GRID: shares FocusPublishActionBar's mechanism verbatim — one CSS grid,
+ * `grid-cols-1` stacked on mobile, the full 3-across row gated at `lg:` (1024px,
+ * the three cards' content need sits well under it), a `minmax(min-content, 1fr)`
+ * column floor (NOT `max-content`: the T8390 round-6 scrollbar landmine), titles
+ * in `<span className="whitespace-nowrap">`, and deliberately NO `overflow-x-auto`
+ * safety net. Read FocusPublishActionBar's doc comment for the full rationale.
  *
- * NO TITLE MAY EVER WRAP at `sm:` and up; captions MAY wrap freely — enforced by
- * the two complementary mechanisms documented on FocusPublishActionBar (the
- * `whitespace-nowrap` title span + the `minmax(min-content, 1fr)` column floor).
- * The single-row stage is gated at `xl:` (1280px), NOT `sm:` — verified via live
- * DOM measurement for this bar's own copy (see the T9110 QA log), same reason
- * Focus's bar uses `xl:`.
+ * ABSTRACTION NOTE (still true post-T9590): a shared `<TieredChoiceActionBar>` is
+ * the natural extraction, but with only TWO call sites it stays premature per the
+ * rule-of-three. When a 3rd tiered action bar appears, extract then.
  *
- * @param {Function} onPublishNow      - required. Publish Now tap handler.
- * @param {boolean=} publishLoading    - spins + disables Publish Now.
- * @param {Function} onReapplyOverlay  - required. Back into Overlay editing.
- * @param {Function} onReapplyFocus    - required. Back into Focus (reframe).
- * @param {Function} onPublishLater    - required. Defer; lands on drafts.
+ * Icons match established app conventions: `FolderInput` = publish (DraftTile),
+ * `Sparkles` = Spotlight (Overlay tab), `Crop` = Focus/framing (ModeSwitcher),
+ * `Clock` = later/defer (DraftTile in-progress marker).
+ *
+ * @param {Function} onPublishNow     - required. Primary. Publish the finished reel.
+ * @param {boolean=} publishLoading   - spins + disables Publish only.
+ * @param {Function} onReapplyOverlay - required. Secondary. Back into Spotlight editing.
+ * @param {Function} onReapplyFocus   - required. Tertiary. Reframe (paid re-export).
+ * @param {Function} onSaveDraft      - required. Quiet defer-to-drafts (was Publish Later).
  */
 export function OverlayPublishActionBar({
   onPublishNow,
   publishLoading = false,
   onReapplyOverlay,
   onReapplyFocus,
-  onPublishLater,
+  onSaveDraft,
 }) {
   return (
     <div
       data-testid="overlay-publish-action-bar"
       className="border-t border-gray-800 bg-gray-900 px-4 py-6 sm:px-6 sm:py-8"
     >
-      <div className="mx-auto grid w-full max-w-xl grid-cols-1 gap-3 sm:max-w-2xl sm:grid-cols-[repeat(2,minmax(min-content,1fr))] sm:gap-4 xl:max-w-5xl xl:grid-cols-[repeat(4,minmax(min-content,1fr))]">
-        {/* Publish Now — same weight as the rest; leads by position only. */}
-        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-800 bg-gray-800/40 p-5 text-center">
+      <div className="mx-auto grid w-full max-w-md grid-cols-1 gap-4 lg:max-w-4xl lg:grid-cols-[repeat(3,minmax(min-content,1fr))]">
+        {/* PRIMARY — Publish. Dominant: filled cyan lg button, tinted+ringed
+            card; caption states the audience/access BEFORE the tap. */}
+        <div
+          data-testid="overlay-choice-primary"
+          className="flex h-full flex-col justify-between gap-4 rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-5 text-center ring-1 ring-cyan-500/20"
+        >
           <Button
-            variant="secondary"
+            variant="cyan"
             size="lg"
             icon={FolderInput}
             loading={publishLoading}
@@ -75,32 +78,34 @@ export function OverlayPublishActionBar({
           >
             <span className="whitespace-nowrap">{OVERLAY_PUBLISH.PUBLISH_LABEL}</span>
           </Button>
-          <p className="text-sm italic leading-relaxed text-gray-400">{OVERLAY_PUBLISH.PUBLISH_CAPTION}</p>
+          <p className="text-sm italic leading-relaxed text-gray-300">{OVERLAY_PUBLISH.PUBLISH_CAPTION}</p>
         </div>
 
-        {/* Reapply Overlay — go back and redo the spotlight. */}
-        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-800 bg-gray-800/40 p-5 text-center">
-          <Button variant="secondary" size="lg" icon={Sparkles} onClick={onReapplyOverlay} className="w-full">
+        {/* SECONDARY — Reapply spotlight. Normal gray card; redo the spotlight. */}
+        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-700 bg-gray-800/40 p-5 text-center">
+          <Button variant="secondary" size="md" icon={Sparkles} onClick={onReapplyOverlay} className="w-full">
             <span className="whitespace-nowrap">{OVERLAY_PUBLISH.REAPPLY_OVERLAY_LABEL}</span>
           </Button>
           <p className="text-sm italic leading-relaxed text-gray-400">{OVERLAY_PUBLISH.REAPPLY_OVERLAY_CAPTION}</p>
         </div>
 
-        {/* Reapply Focus — reframe; caption carries the honest cost warning. */}
-        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-800 bg-gray-800/40 p-5 text-center">
-          <Button variant="secondary" size="lg" icon={Crop} onClick={onReapplyFocus} className="w-full">
+        {/* TERTIARY — Reapply AI Focus. Quiet outline card; caption carries the
+            honest "uses credits" re-export warning BEFORE the tap. */}
+        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-800 bg-gray-800/20 p-5 text-center">
+          <Button variant="outline" size="md" icon={Crop} onClick={onReapplyFocus} className="w-full">
             <span className="whitespace-nowrap">{OVERLAY_PUBLISH.REAPPLY_FOCUS_LABEL}</span>
           </Button>
           <p className="text-sm italic leading-relaxed text-gray-400">{OVERLAY_PUBLISH.REAPPLY_FOCUS_CAPTION}</p>
         </div>
+      </div>
 
-        {/* Publish Later — defer; lands on the drafts surface. */}
-        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-800 bg-gray-800/40 p-5 text-center">
-          <Button variant="secondary" size="lg" icon={Clock} onClick={onPublishLater} className="w-full">
-            <span className="whitespace-nowrap">{OVERLAY_PUBLISH.PUBLISH_LATER_LABEL}</span>
-          </Button>
-          <p className="text-sm italic leading-relaxed text-gray-400">{OVERLAY_PUBLISH.PUBLISH_LATER_CAPTION}</p>
-        </div>
+      {/* QUIET — Save draft. Small ghost link below the grid; caption states the
+          drafts destination. */}
+      <div className="mx-auto mt-5 flex max-w-md flex-col items-center gap-1 text-center">
+        <Button variant="ghost" size="sm" icon={Clock} onClick={onSaveDraft} data-testid="overlay-save-draft">
+          <span className="whitespace-nowrap">{OVERLAY_PUBLISH.SAVE_DRAFT_LABEL}</span>
+        </Button>
+        <p className="text-xs text-gray-500">{OVERLAY_PUBLISH.SAVE_DRAFT_CAPTION}</p>
       </div>
     </div>
   );

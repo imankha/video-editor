@@ -1,131 +1,98 @@
-import { FolderInput, Sparkles, Pencil } from 'lucide-react';
+import { FolderInput, Sparkles, Pencil, Clock } from 'lucide-react';
 import { Button } from './shared/Button';
 import { FOCUS_PUBLISH } from '../config/displayNames';
 
 /**
- * FocusPublishActionBar (T8390) — the `actionBar` footer CollectionPlayer
- * renders for Focus's post-export preview. Strictly presentational (mirrors
- * CollectionPlayer's own contract): all copy/routing lives in the caller
- * (FocusScreen), this component only lays out the four choices.
+ * FocusPublishActionBar (T8390, re-hierarchized T9590) — the `actionBar` footer
+ * CollectionPlayer renders for Focus's post-export preview. Strictly
+ * presentational (mirrors CollectionPlayer's own contract): all copy/routing
+ * lives in the caller (FocusScreen); this component only lays out the choices.
  *
- * DELIBERATELY FLAT / NO HIERARCHY (product owner, round 2: "no single
- * choice should look more important than the others" — overrides the
- * original T8390 design, which made Publish the sole full-width primary and
- * Refocus a quiet de-emphasized ghost link). All four choices — Add
- * Spotlight Now, Publish Now, Add Spotlight Later, Refocus — render as the
- * SAME `Button` variant/size inside identically-styled cards, each with a
- * title (the Button) and a caption (`<p>` below it). Nothing is bigger,
- * brighter, or more saturated than anything else; the only differentiators
- * are icon + label/caption text.
+ * HIERARCHY (T9590, 2026-09-10 — DELIBERATELY REVERSES T8390's flat "no single
+ * choice looks more important than the others" layout, and the 2026-09-08
+ * "Publish Now"/"Add Spotlight Now" pairing that supported it). The product
+ * owner recorded the conflict at filing and chose to re-hierarchize anyway:
  *
- * Layout: one CSS grid, ONE DOM instance per choice, same DOM/visual order
- * at every width — no `order-*` classes, no duplicate mobile/desktop trees,
- * nothing to reorder, ever. Three stages of the SAME four nodes: `grid-cols-1`
- * stacks them (below `sm`), `sm:` pairs them 2-up, `xl:` lays out the full
- * single row. Reading order: Add Spotlight Now, Publish Now, Add Spotlight
- * Later, Refocus — Add Spotlight Now leads because the product owner named it
- * the conceptually-expected choice, but it leads only by POSITION, never by
- * size or color (the "UX designer places them" ask, round 2).
+ *   PRIMARY   Add spotlight             — visually dominant (filled cyan `lg`
+ *                                          button, tinted+ringed card). Opens the
+ *                                          Spotlight editor and NEVER starts an
+ *                                          export on its own (behavior constraint,
+ *                                          not just weight — handler is a pure
+ *                                          setEditorMode('overlay')).
+ *   SECONDARY Publish without spotlight — normal gray card. Publishes the framed
+ *                                          reel as-is; caption states audience.
+ *   TERTIARY  Edit framing              — quiet outline card. Back into AI Focus;
+ *                                          caption carries the paid-re-export
+ *                                          ("uses credits") warning BEFORE the tap.
+ *   QUIET     Save draft                — NOT a competing card: a small ghost
+ *                                          link below the grid. Replaces T8390's
+ *                                          fourth "Add Spotlight Later" card (that
+ *                                          spotlight-framed destination is gone;
+ *                                          this is a generic defer-to-drafts).
  *
- * The single-row stage is gated at `xl:` (1280px), not `sm:` (640px) —
- * Reviewer-caught bug (round 6 fix): the row's real measured content need is
- * ~930px, but `sm:` triggers at 640px, so a naive `sm:grid-cols-4` (or even
- * the `min-content`-floored version below) would overflow on every real
- * width from 640px up to roughly 1030px — iPad portrait (768px) included —
- * reintroducing the exact horizontal-scroll bug this component was just
- * fixed for, just at a different width. `sm:` and `lg:` both get the 2-up
- * stage instead, which only needs about half the row's width and comfortably
- * fits from 640px up. `xl:` (1280px) is the first breakpoint verified (via
- * live DOM measurement, not eyeballing) to actually fit the four-across row.
+ * Tab order follows the visual hierarchy for free: the three cards are in
+ * DOM order primary→secondary→tertiary, then the Save-draft link, so keyboard
+ * focus lands on the dominant action first (T9590 acceptance) with no tabIndex.
  *
- * `data-tutorial-target="focus-publish"` lives on the Publish Now button
- * (guided-tutorial rule 30 anchor, must resolve to exactly one element at
- * any viewport) — an invisible attribute, so it carries no visual weight.
+ * GRID (kept from T9110's mechanism, restructured for 3 cards): one CSS grid,
+ * one DOM instance per card, same order at every width. `grid-cols-1` stacks
+ * on mobile; the full single row is gated at `lg:` (1024px) — the three cards'
+ * measured content need (~590px) sits comfortably under 1024, so unlike the
+ * four-card bar (which needed `xl:`) there is no overflow risk at `lg:`, and
+ * the intermediate 2-up stage is dropped because an odd card count orphans the
+ * third cell. The column floor stays `minmax(min-content, 1fr)` (NOT
+ * `max-content`: T8390's round-6 landmine — `max-content` sizes columns off the
+ * WRAPPABLE caption instead of the title, forcing a real horizontal scrollbar at
+ * desktop widths). Titles render inside `<span className="whitespace-nowrap">`
+ * so their min-content contribution equals their full unwrapped width; captions
+ * wrap freely. There is deliberately NO `overflow-x-auto` safety net (it would
+ * fail OPEN, hiding this exact class of overflow bug from tests).
  *
- * Icons match existing app conventions rather than inventing new ones:
- * `FolderInput` is the app's established "publish" icon (DraftTile's
- * Publish button); `Sparkles` is the established "Spotlight" icon (Overlay
- * mode's tab); `Pencil` is the established "edit again" icon
- * (CollectionPlayer's Re-edit button) — Refocus is conceptually the same
- * action (reframe = edit again).
+ * `data-tutorial-target="focus-publish"` stays on the Publish button (guided-
+ * tutorial rule 30 anchor, must resolve to exactly one element) — invisible, so
+ * it carries no visual weight and does not compete with the primary action.
  *
- * Captions: every card has one, all styled identically (`text-sm italic
- * leading-relaxed text-gray-400` — bigger and qualitatively distinct from
- * the bold/white/upright button title, not just smaller). `SPOTLIGHT_CAPTION`
- * is shown under BOTH spotlight buttons (shared meaning; splitting it across
- * only one of the two would make that card visibly shorter than its twin).
- * `REFOCUS_CAPTION` ("Reframe and export again, uses credits.") carries the
- * cost warning that used to be crammed as a parenthetical into the Refocus
- * button's own label — round 5 split it into a real caption so Refocus's
- * card structure finally matches the other three exactly (title + caption),
- * closing an asymmetry that was contributing to uneven card contents.
+ * Icons match established app conventions: `Sparkles` = Spotlight (Overlay tab),
+ * `FolderInput` = publish (DraftTile), `Pencil` = edit-again (CollectionPlayer
+ * Re-edit), `Clock` = later/defer (DraftTile in-progress marker).
  *
- * NO TITLE MAY EVER WRAP, at `sm:` and up (product owner, round 5 — a
- * harder requirement than "shouldn't usually wrap"); captions MAY wrap
- * freely (product owner, round 6: "you can wrap the description text, just
- * dont wrap the title"). Two mechanisms, and they are COMPLEMENTARY, not
- * redundant — mechanism 2 only works because of mechanism 1:
- *   1. Each title renders inside `<span className="whitespace-nowrap">` —
- *      CSS cannot break the line inside that span. This is what makes the
- *      title's own min-content contribution equal its FULL unwrapped width
- *      (without it, min-content would collapse to the title's longest single
- *      word, and mechanism 2 below would stop protecting against wrapping).
- *   2. Every grid stage's column-sizing floor is `minmax(min-content, 1fr)`,
- *      deliberately `min-content`, NOT `max-content`. Round 6 landmine
- *      (found via live DOM measurement, not visual inspection): `max-content`
- *      measures a card's intrinsic width as if NOTHING inside it could wrap,
- *      including the caption `<p>` — so with `max-content` the (wrappable)
- *      caption sentence was silently setting the column floor instead of the
- *      (non-wrappable) title, forcing every column ~150-200px wider than the
- *      title actually needed and causing a real horizontal scrollbar at
- *      1440px viewport width. `min-content` correctly reduces the caption's
- *      contribution to its longest unbreakable word while the title's own
- *      `white-space: nowrap` still forces ITS min-content to equal its full
- *      unwrapped width — so the column floor is driven by the title alone,
- *      exactly as intended, and the caption wraps to fit.
- * There is deliberately no `overflow-x-auto` safety net: Reviewer flagged
- * that an overflow-absorbing scroll container makes this exact class of bug
- * undetectable by any test that only checks the document/viewport for
- * overflow (a permissive fallback that fails OPEN) — so a future regression
- * must show up as an actual failure (visible clipping/scroll), not something
- * silently absorbed. `sm:max-w-5xl` is an upper aesthetic cap so the row
- * doesn't stretch to extreme widths on ultra-wide monitors; `sm:px-6` outer
- * padding matches the UI style guide's documented "Modal section: px-6 py-4".
- *
- * @param {Function} onPublish            - required. Publish Now tap handler.
- * @param {boolean=} publishLoading       - spins + disables Publish Now.
- * @param {Function} onAddSpotlight       - required.
- * @param {Function} onAddSpotlightLater  - required.
- * @param {Function} onRefocus            - required.
+ * @param {Function} onAddSpotlight  - required. Primary. Opens the Spotlight editor.
+ * @param {Function} onPublish       - required. Secondary. Publish without spotlight.
+ * @param {boolean=} publishLoading  - spins + disables Publish only.
+ * @param {Function} onRefocus       - required. Tertiary "Edit framing" tap handler.
+ * @param {Function} onSaveDraft     - required. Quiet defer-to-drafts (was Add Spotlight Later).
  */
 export function FocusPublishActionBar({
+  onAddSpotlight,
   onPublish,
   publishLoading = false,
-  onAddSpotlight,
-  onAddSpotlightLater,
   onRefocus,
+  onSaveDraft,
 }) {
   return (
     <div
       data-testid="focus-publish-action-bar"
       className="border-t border-gray-800 bg-gray-900 px-4 py-6 sm:px-6 sm:py-8"
     >
-      <div className="mx-auto grid w-full max-w-xl grid-cols-1 gap-3 sm:max-w-2xl sm:grid-cols-[repeat(2,minmax(min-content,1fr))] sm:gap-4 xl:max-w-5xl xl:grid-cols-[repeat(4,minmax(min-content,1fr))]">
-        {/* Add Spotlight Now — first in reading order (the conceptually-
-            expected choice), but same size/color as the other three. */}
-        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-800 bg-gray-800/40 p-5 text-center">
-          <Button variant="secondary" size="lg" icon={Sparkles} onClick={onAddSpotlight} className="w-full">
+      <div className="mx-auto grid w-full max-w-md grid-cols-1 gap-4 lg:max-w-4xl lg:grid-cols-[repeat(3,minmax(min-content,1fr))]">
+        {/* PRIMARY — Add spotlight. Dominant: filled cyan lg button in a
+            tinted, ringed card. Opens the editor; never exports on its own. */}
+        <div
+          data-testid="focus-choice-primary"
+          className="flex h-full flex-col justify-between gap-4 rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-5 text-center ring-1 ring-cyan-500/20"
+        >
+          <Button variant="cyan" size="lg" icon={Sparkles} onClick={onAddSpotlight} className="w-full">
             <span className="whitespace-nowrap">{FOCUS_PUBLISH.ADD_SPOTLIGHT_LABEL}</span>
           </Button>
-          <p className="text-sm italic leading-relaxed text-gray-400">{FOCUS_PUBLISH.SPOTLIGHT_CAPTION}</p>
+          <p className="text-sm italic leading-relaxed text-gray-300">{FOCUS_PUBLISH.SPOTLIGHT_CAPTION}</p>
         </div>
 
-        {/* Publish Now — same weight as the rest; only the tutorial-anchor
-            attribute (invisible) marks it as different. */}
-        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-800 bg-gray-800/40 p-5 text-center">
+        {/* SECONDARY — Publish without spotlight. Normal gray card; caption
+            states the audience/access BEFORE the tap. */}
+        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-700 bg-gray-800/40 p-5 text-center">
           <Button
             variant="secondary"
-            size="lg"
+            size="md"
             icon={FolderInput}
             loading={publishLoading}
             onClick={onPublish}
@@ -137,24 +104,23 @@ export function FocusPublishActionBar({
           <p className="text-sm italic leading-relaxed text-gray-400">{FOCUS_PUBLISH.PUBLISH_CAPTION}</p>
         </div>
 
-        {/* Add Spotlight Later — same caption as Add Spotlight Now (shared
-            meaning), kept for card parity across the grid. */}
-        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-800 bg-gray-800/40 p-5 text-center">
-          <Button variant="secondary" size="lg" icon={Sparkles} onClick={onAddSpotlightLater} className="w-full">
-            <span className="whitespace-nowrap">{FOCUS_PUBLISH.ADD_SPOTLIGHT_LATER_LABEL}</span>
+        {/* TERTIARY — Edit framing. Quiet outline card; caption carries the
+            "uses credits" re-export warning BEFORE the tap. */}
+        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-800 bg-gray-800/20 p-5 text-center">
+          <Button variant="outline" size="md" icon={Pencil} onClick={onRefocus} className="w-full">
+            <span className="whitespace-nowrap">{FOCUS_PUBLISH.EDIT_FRAMING_LABEL}</span>
           </Button>
-          <p className="text-sm italic leading-relaxed text-gray-400">{FOCUS_PUBLISH.SPOTLIGHT_CAPTION}</p>
+          <p className="text-sm italic leading-relaxed text-gray-400">{FOCUS_PUBLISH.EDIT_FRAMING_CAPTION}</p>
         </div>
+      </div>
 
-        {/* Refocus — a real equal-weight button now (was a quiet ghost
-            link). Cost-warning copy moved to its own caption (round 5), so
-            this card's structure finally matches the other three exactly. */}
-        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-800 bg-gray-800/40 p-5 text-center">
-          <Button variant="secondary" size="lg" icon={Pencil} onClick={onRefocus} className="w-full">
-            <span className="whitespace-nowrap">{FOCUS_PUBLISH.REFOCUS_LABEL}</span>
-          </Button>
-          <p className="text-sm italic leading-relaxed text-gray-400">{FOCUS_PUBLISH.REFOCUS_CAPTION}</p>
-        </div>
+      {/* QUIET — Save draft. A small ghost link below the grid, deliberately not
+          a fourth competing card; its caption states the drafts destination. */}
+      <div className="mx-auto mt-5 flex max-w-md flex-col items-center gap-1 text-center">
+        <Button variant="ghost" size="sm" icon={Clock} onClick={onSaveDraft} data-testid="focus-save-draft">
+          <span className="whitespace-nowrap">{FOCUS_PUBLISH.SAVE_DRAFT_LABEL}</span>
+        </Button>
+        <p className="text-xs text-gray-500">{FOCUS_PUBLISH.SAVE_DRAFT_CAPTION}</p>
       </div>
     </div>
   );
