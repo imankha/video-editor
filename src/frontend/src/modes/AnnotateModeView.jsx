@@ -310,8 +310,18 @@ export function AnnotateModeView({
               } : undefined}
             >
               {/* Video A */}
+              {/* T9510: author-supplied aria-label sits above the browser's
+                  native accessible-name fallback, so an unlabeled <video> can no
+                  longer leak Chromium's "Unable to play media" name to assistive
+                  technology during the transient error window at load init.
+                  aria-busy reflects the honest loading state; the inactive
+                  crossfade element is aria-hidden so only the on-screen video is
+                  exposed (no double announcement of the A/B pair). */}
               <video
                 ref={playback.videoARef}
+                aria-label={playback.isLoading ? 'Preparing annotation playback' : 'Annotation playback'}
+                aria-busy={playback.isLoading}
+                aria-hidden={activeLabel !== 'A'}
                 className="absolute inset-0 w-full h-full object-contain"
                 style={{
                   opacity: activeLabel === 'A' ? 1 : 0,
@@ -323,8 +333,12 @@ export function AnnotateModeView({
                 fetchpriority="high"
               />
               {/* Video B */}
+              {/* T9510: same labeling as video A — see note above. */}
               <video
                 ref={playback.videoBRef}
+                aria-label={playback.isLoading ? 'Preparing annotation playback' : 'Annotation playback'}
+                aria-busy={playback.isLoading}
+                aria-hidden={activeLabel !== 'B'}
                 className="absolute inset-0 w-full h-full object-contain"
                 style={{
                   opacity: activeLabel === 'B' ? 1 : 0,
@@ -337,8 +351,10 @@ export function AnnotateModeView({
               />
 
               {/* Loading overlay */}
+              {/* T9510: polite status region so init announces "Preparing..."
+                  (a loading state) instead of a media error. */}
               {playback.isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-30">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-30" role="status" aria-live="polite">
                   <div className="text-center">
                     <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-600 border-t-green-500" />
                     <p className="mt-3 text-sm text-gray-300">Preparing playback...</p>
@@ -590,8 +606,10 @@ export function AnnotateModeView({
                     <VideoLoadingOverlay simple />
                   )}
                   {/* T3050: Error overlay with retry */}
+                  {/* T9510: role="alert" so a genuine, established failure is
+                      announced once to AT, paired with the Retry action. */}
                   {multiVideo.error && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50" role="alert">
                       <div className="text-center max-w-md px-4">
                         <div className="text-red-500 text-4xl mb-4">{'⚠️'}</div>
                         <p className="text-red-400 font-semibold mb-2">Video failed to load</p>
