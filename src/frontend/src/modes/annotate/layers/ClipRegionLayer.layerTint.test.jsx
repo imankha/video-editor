@@ -74,8 +74,8 @@ describe('ClipRegionLayer — layer tint (T5700)', () => {
       { id: 'mine', startTime: 10, endTime: 15, rating: 4, name: 'Solo run', my_athlete: true },
     ];
     render(<ClipRegionLayer regions={regions} duration={100} selectedRegionId={null} onSelectRegion={() => {}} />);
-    expect(screen.getByLabelText('Great press - Team layer')).toBeTruthy();
-    expect(screen.getByLabelText('Solo run - My Athlete layer')).toBeTruthy();
+    expect(screen.getByLabelText('Great press - Team')).toBeTruthy();
+    expect(screen.getByLabelText('Solo run - My player')).toBeTruthy();
   });
 
   // T5700 follow-up: an empty per-layer lane (Annotate's two-lane desktop split) still

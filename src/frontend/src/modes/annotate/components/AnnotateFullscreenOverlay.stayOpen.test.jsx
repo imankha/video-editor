@@ -71,8 +71,8 @@ describe('AnnotateFullscreenOverlay — stays open on the new clip after create-
     rerender(<AnnotateFullscreenOverlay {...baseProps} existingClip={newRegion} focusPending={true} />);
 
     // Overlay renders EDIT mode UI for the new clip (existingClip truthy).
-    expect(screen.getByText('Edit Play')).toBeTruthy();
-    expect(screen.queryByText('Adding new play')).toBeNull();
+    expect(screen.getByText('Edit play')).toBeTruthy();
+    expect(screen.queryByText('Marking a play')).toBeNull();
 
     // The strip's Focus-family CTA must be visible even though autoProjectId
     // is still null — it renders disabled "Apply AI Focus" while focusPending

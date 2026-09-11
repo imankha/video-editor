@@ -5,6 +5,12 @@
 **Complexity:** 6
 **Created:** 2026-09-04
 
+> **Reversed by T9520 (Shared Vocabulary epic, user-adopted naming model, 2026-09-10):** the
+> "Create Reel" -> **"Clip Out Play"** rename shipped here (N09) was reversed to **"Create clip"**
+> (the edit-mode action button), and the create-mode "Clip Play" toggle became **"Create an
+> editable clip"**. Deliberate decision, not drift — a play produces a CLIP, never a reel. See
+> `docs/plans/tasks/shared-vocabulary/T9520-annotate-vocabulary.md`.
+
 User feedback (2026-09-04), live-testing on staging-bound branches, three screenshots with
 annotations. Bundled into one task because all changes land in the same clip-editing surface
 (`AnnotateFullscreenOverlay.jsx` + the timeline/scrub/transport components it composes) and

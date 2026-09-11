@@ -68,7 +68,7 @@ describe('AnnotateTimeline — two clip lanes (T5700 follow-up)', () => {
     render(<AnnotateTimeline {...baseProps} regions={[regions[0]]} />);
 
     expect(screen.getByTestId('clip-lane-label-team')).toBeTruthy();
-    expect(screen.getByText('No Team clips yet')).toBeTruthy();
+    expect(screen.getByText('No Team plays yet')).toBeTruthy();
   });
 
   it('phone (390px-class): collapses to the single tinted Clips track', () => {

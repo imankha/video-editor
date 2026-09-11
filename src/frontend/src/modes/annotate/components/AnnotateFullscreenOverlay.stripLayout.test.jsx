@@ -47,7 +47,7 @@ const editClip = { id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], my_
 describe('AnnotateFullscreenOverlay strip — name-first header (T8960 items 2+3)', () => {
   it('create mode shows a default name behind a pencil (no inline input yet)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" nextClipNumber={7} />);
-    const rename = screen.getByTitle('Rename this play');
+    const rename = screen.getByTitle('Rename clip');
     // The default "Play N" name is shown (auto-gen may override, but the pencil affordance is present).
     expect(rename).toBeTruthy();
     // Not an input until clicked.
@@ -56,29 +56,29 @@ describe('AnnotateFullscreenOverlay strip — name-first header (T8960 items 2+3
 
   it('clicking the pencil opens an inline name input (create mode)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
-    fireEvent.click(screen.getByTitle('Rename this play'));
+    fireEvent.click(screen.getByTitle('Rename clip'));
     const input = screen.getByLabelText('Clip name');
     expect(input).toBeTruthy();
     fireEvent.change(input, { target: { value: 'Banger' } });
     expect(input.value).toBe('Banger');
   });
 
-  it('centers the "+ Adding new play" title on its own row in create mode', () => {
+  it('centers the "Marking a play" title on its own row in create mode', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
-    expect(screen.getByText('Adding new play')).toBeTruthy();
+    expect(screen.getByText('Marking a play')).toBeTruthy();
   });
 
-  it('edit mode shows the clip name behind the pencil and NO "Adding new play" title', () => {
+  it('edit mode shows the clip name behind the pencil and NO "Marking a play" title', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={editClip} />);
     expect(screen.getByText('My cool play')).toBeTruthy();
-    expect(screen.queryByText('Adding new play')).toBeNull();
+    expect(screen.queryByText('Marking a play')).toBeNull();
   });
 });
 
 describe('AnnotateFullscreenOverlay strip — layer control on the top line (T8960 item 5)', () => {
   it('renders the My Athlete | Team control (header row 1)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" newClipLayerIsMine={false} />);
-    expect(screen.getByRole('radio', { name: 'Team layer' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Team' }).getAttribute('aria-checked')).toBe('true');
   });
 });
 
@@ -90,7 +90,7 @@ describe('AnnotateFullscreenOverlay strip — "Clip" toggle copy (T8960 item 4, 
     const toggle = screen.getByText('Just save this play');
     expect(toggle).toBeTruthy();
     fireEvent.click(toggle);
-    expect(screen.getByText('Clip Play to focus on your player')).toBeTruthy();
+    expect(screen.getByText('Create an editable clip')).toBeTruthy();
   });
 
   it('never shows a double-negative label in either state, and drops the stale reel tooltip (T9450)', () => {
@@ -105,15 +105,16 @@ describe('AnnotateFullscreenOverlay strip — "Clip" toggle copy (T8960 item 4, 
   it('a 5-star My Athlete clip auto-enables the toggle ("Clip Play to focus on your player")', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" newClipLayerIsMine={true} />);
     fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
-    expect(screen.getByText('Clip Play to focus on your player')).toBeTruthy();
+    expect(screen.getByText('Create an editable clip')).toBeTruthy();
   });
 });
 
-describe('AnnotateFullscreenOverlay strip — edit-mode "Clip Play" button (T8960 item 7)', () => {
-  it('reads "Clip Play" (no "Clip Out Play") when the clip has no reel yet', () => {
+describe('AnnotateFullscreenOverlay strip — edit-mode "Create clip" button (T8960 item 7, T9520 N09)', () => {
+  it('reads "Create clip" (no "Clip Out Play"/"Clip Play") when the clip has no reel yet', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={editClip} />);
-    expect(screen.getByText('Clip Play')).toBeTruthy();
+    expect(screen.getByText('Create clip')).toBeTruthy();
     expect(screen.queryByText('Clip Out Play')).toBeNull();
+    expect(screen.queryByText('Clip Play')).toBeNull();
   });
 });
 

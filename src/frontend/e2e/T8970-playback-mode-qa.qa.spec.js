@@ -1,5 +1,5 @@
 /**
- * T8970 QA: Playback Annotations mode — item 1 (blank video on exit), item 2
+ * T8970 QA: Preview plays mode — item 1 (blank video on exit), item 2
  * (mutating clip editor still active during playback), item 3 (active-clip
  * highlight tracks playback), item 4 (mode visually unambiguous).
  *
@@ -16,7 +16,7 @@ import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth';
 const API_BASE = process.env.E2E_API_BASE || '/api';
 const PROFILE = process.env.E2E_REAL_PROFILE;
 
-test('T8970: Playback Annotations mode is fixed (items 1-4) @staging-gate @gate-b', async ({ context, page }) => {
+test('T8970: Preview plays mode is fixed (items 1-4) @staging-gate @gate-b', async ({ context, page }) => {
   test.setTimeout(120000);
   await loginAsRealUser(context, process.env.E2E_REAL_EMAIL || 'imankh@gmail.com', PROFILE);
 
@@ -34,8 +34,8 @@ test('T8970: Playback Annotations mode is fixed (items 1-4) @staging-gate @gate-
   await openGameInAnnotate(page, target.id);
   await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 20000 });
 
-  // --- Enter Playback Annotations ---
-  await page.getByText(/Playback Annotations/i).first().click();
+  // --- Enter Preview plays ---
+  await page.getByText(/Preview plays/i).first().click();
   await page.waitForTimeout(1500);
   await page.screenshot({ path: 'qa/T8970-01-playback-entered.png', fullPage: false });
 
@@ -43,7 +43,7 @@ test('T8970: Playback Annotations mode is fixed (items 1-4) @staging-gate @gate-
   await expect(page.getByTestId('playback-mode-badge')).toBeVisible();
 
   // --- Item 2: the mutating clip DETAILS EDITOR must NOT be present during playback ---
-  const deleteClip = page.getByText(/Delete Clip/i);
+  const deleteClip = page.getByText(/Delete clip/i);
   const createReel = page.getByRole('button', { name: /Create Reel|Reel Created/i });
   expect(await deleteClip.count() === 0 || !(await deleteClip.first().isVisible().catch(() => false)),
     'Delete-Clip must not be visible during playback').toBeTruthy();

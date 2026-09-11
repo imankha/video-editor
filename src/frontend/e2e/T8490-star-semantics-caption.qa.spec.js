@@ -148,19 +148,21 @@ test.describe('T8490: rating caption — desktop strip', () => {
     await expect(strip).toContainText('Technical lapse (?) - a play to learn from.');
     await saveEvidence(page, 'T8490-strip-rating2');
 
-    // Rating 5 + My Athlete (default layer) -> "clip will be created from play."
+    // Rating 5 + My player (default layer) -> "clip will be created from play."
     await strip.locator('button[title="5 stars"]').click();
     await expect(strip).toContainText("Brilliant play (!!) - clip will be created from play.");
     await expect(strip.locator('button:has-text("Save")')).toBeVisible();
     await saveEvidence(page, 'T8490-strip-rating5-mine');
 
-    // Switch to Team layer -> "team plays do not create clips."
-    await page.locator('[role="radio"][aria-label="Team layer"]').click();
+    // Switch to Team -> "team plays do not create clips."
+    await page.locator('[role="radio"][aria-label="Team"]').click();
     await expect(strip).toContainText("Brilliant team play (!!) - team plays don't create clips.");
     await saveEvidence(page, 'T8490-strip-rating5-team');
 
-    // Save stays reachable throughout (never covered/off-screen).
-    await expect(strip.locator('button:has-text("Save")')).toBeInViewport();
+    // Save stays reachable throughout (never covered/off-screen). Scope to the
+    // footer Save button (T9520: "Save play"/"Save play and create clip") so the
+    // match is unambiguous — the toggle's "Just save this play" also contains "save".
+    await expect(strip.getByRole('button', { name: /^Save play/ })).toBeInViewport();
   });
 });
 

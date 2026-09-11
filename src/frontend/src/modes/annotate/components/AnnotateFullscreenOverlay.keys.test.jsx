@@ -70,7 +70,7 @@ describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unc
   it('typing "1" in the clip name field does not change the rating', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
     // T8960: the name is a pencil button until clicked; open the inline input.
-    fireEvent.click(screen.getByTitle('Rename this play'));
+    fireEvent.click(screen.getByTitle('Rename clip'));
     const nameInput = screen.getByLabelText('Clip name');
     fireEvent.keyDown(nameInput, { key: '1' });
     // Default rating notation for 4 stars is "!"; unaffected by the keypress.

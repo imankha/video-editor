@@ -1,5 +1,6 @@
 import React from 'react';
 import { User, Users } from 'lucide-react';
+import { ANNOTATE } from '../../../config/displayNames';
 
 /**
  * LayerSegmentedControl - Two-value My Athlete | Team segmented control.
@@ -18,7 +19,7 @@ export function LayerSegmentedControl({
   className = '',
   disabled = false,
   disabledReason = '',
-  ariaLabel = 'Clip layer',
+  ariaLabel = ANNOTATE.LAYER_LABEL,
 }) {
   const isMine = value !== false;
   const seg = 'flex-1 inline-flex items-center justify-center gap-1.5 rounded-md ' +
@@ -40,7 +41,7 @@ export function LayerSegmentedControl({
         type="button"
         role="radio"
         aria-checked={isMine}
-        aria-label={disabled ? `My Athlete layer — ${disabledReason}` : 'My Athlete layer'}
+        aria-label={disabled ? `${ANNOTATE.LAYER_MINE} — ${disabledReason}` : ANNOTATE.LAYER_MINE}
         disabled={disabled}
         title={disabled ? disabledReason : undefined}
         onClick={() => onChange(true)}
@@ -50,13 +51,13 @@ export function LayerSegmentedControl({
             : 'bg-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
         }`}
       >
-        <User size={14} /> My Athlete
+        <User size={14} /> {ANNOTATE.LAYER_MINE}
       </button>
       <button
         type="button"
         role="radio"
         aria-checked={!isMine}
-        aria-label={disabled ? `Team layer — ${disabledReason}` : 'Team layer'}
+        aria-label={disabled ? `${ANNOTATE.LAYER_TEAM} — ${disabledReason}` : ANNOTATE.LAYER_TEAM}
         disabled={disabled}
         title={disabled ? disabledReason : undefined}
         onClick={() => onChange(false)}
@@ -66,7 +67,7 @@ export function LayerSegmentedControl({
             : 'bg-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/60'
         }`}
       >
-        <Users size={14} /> Team
+        <Users size={14} /> {ANNOTATE.LAYER_TEAM}
       </button>
     </div>
   );

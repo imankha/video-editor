@@ -4,6 +4,7 @@ import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBa
 import ClipRegionLayer from './layers/ClipRegionLayer';
 import AngleLanes from './AngleLanes';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { ANNOTATE } from '../../config/displayNames';
 
 /**
  * AnnotateTimeline - Mode-specific timeline for Annotate mode.
@@ -123,7 +124,7 @@ export function AnnotateTimeline({
         >
           <div className="flex items-center gap-1 px-2 text-green-400">
             <Scissors size={16} />
-            <span className="text-xs">Clips</span>
+            <span className="text-xs">{ANNOTATE.PLAYS_HEADING}</span>
           </div>
         </div>
       ) : (
@@ -137,7 +138,7 @@ export function AnnotateTimeline({
           >
             <div className="flex items-center gap-1 px-2 text-cyan-400">
               <Scissors size={16} />
-              <span className="text-xs">My Athlete</span>
+              <span className="text-xs">{ANNOTATE.LAYER_MINE}</span>
             </div>
           </div>
           <div
@@ -148,7 +149,7 @@ export function AnnotateTimeline({
           >
             <div className="flex items-center gap-1 px-2 text-amber-400">
               <Scissors size={16} />
-              <span className="text-xs">Team</span>
+              <span className="text-xs">{ANNOTATE.LAYER_TEAM}</span>
             </div>
           </div>
         </>
@@ -213,7 +214,7 @@ export function AnnotateTimeline({
               onSelectRegion={onSelectRegion}
               onDeleteRegion={onDeleteRegion}
               edgePadding={EDGE_PADDING}
-              emptyMessage="No My Athlete clips yet"
+              emptyMessage={`No ${ANNOTATE.LAYER_MINE} plays yet`}
               angleSequences={angleData?.angleSequences}
             />
           </div>
@@ -225,7 +226,7 @@ export function AnnotateTimeline({
               onSelectRegion={onSelectRegion}
               onDeleteRegion={onDeleteRegion}
               edgePadding={EDGE_PADDING}
-              emptyMessage="No Team clips yet"
+              emptyMessage={`No ${ANNOTATE.LAYER_TEAM} plays yet`}
               angleSequences={angleData?.angleSequences}
             />
           </div>

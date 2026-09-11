@@ -17,7 +17,7 @@ test('T4070: annotation banner shows soccer-notation time @staging-gate @gate-b'
   await loginAsRealUser(context, process.env.E2E_REAL_EMAIL || 'imankh@gmail.com', PROFILE);
 
   // Target an ACTIVE game (FIXTURE-CONTRACT §1): an EXPIRED game's card plays its recap
-  // instead of loading Annotate and its "Playback Annotations" is DISABLED, so a hardcoded
+  // instead of loading Annotate and its "Preview plays" is DISABLED, so a hardcoded
   // id could land on one and hang the click. Discover an active game from /api/games; skip
   // LOUDLY if the account has none (never a silent pass) rather than hard-timeout (T5420 —
   // the old hardcoded game 5 was expired/unavailable on staging).
@@ -38,7 +38,7 @@ test('T4070: annotation banner shows soccer-notation time @staging-gate @gate-b'
   await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 20000 });
 
   // Enter annotation playback.
-  await page.getByText(/Playback Annotations/i).first().click();
+  await page.getByText(/Preview plays/i).first().click();
 
   // The active-clip banner shows the in-match clock.
   const clock = page.getByText(CLOCK).first();

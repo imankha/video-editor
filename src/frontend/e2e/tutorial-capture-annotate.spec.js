@@ -126,7 +126,7 @@ test('capture annotate tutorial footage @tutorial-capture', async ({ browser }) 
     step('card click did not navigate — falling back to direct annotate open');
     await openGameInAnnotate(page, GAME_ID);
   }
-  const addClip = page.getByRole('button', { name: 'Add Play', exact: true }).first();
+  const addClip = page.getByRole('button', { name: 'Mark play', exact: true }).first();
   await addClip.waitFor({ timeout: 45000 });
   await videosReady(1, 25000);
   await dwell(1.5);
@@ -221,12 +221,12 @@ test('capture annotate tutorial footage @tutorial-capture', async ({ browser }) 
   } catch { step('note skipped'); }
   await dwell(0.8);
 
-  // --- line 10: My Athlete toggle ------------------------------------------------------------------------
+  // --- line 10: My player toggle ------------------------------------------------------------------------
   step('my athlete');
   await mark(10, 'toggle');
   try {
     const toggle = page.locator(
-      'xpath=//label[normalize-space()="My Athlete"]/following-sibling::button[1]').first();
+      'xpath=//label[normalize-space()="My player"]/following-sibling::button[1]').first();
     await ring(toggle, 8);
     const b = await toggle.boundingBox({ timeout: 4000 });
     await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 15 });
@@ -280,9 +280,9 @@ test('capture annotate tutorial footage @tutorial-capture', async ({ browser }) 
   await dwell(3);
   await clearRing();
 
-  // --- line 15: click Playback Annotations -------------------------------------------------------------------------
+  // --- line 15: click Preview plays -------------------------------------------------------------------------
   step('playback');
-  const playback = page.getByRole('button', { name: /Playback Annotations/ }).first();
+  const playback = page.getByRole('button', { name: /Preview plays/ }).first();
   await ring(playback, 8);
   await dwell(0.8);
   await mark(15, 'click');

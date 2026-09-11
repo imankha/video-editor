@@ -120,7 +120,7 @@ for (const vp of CTA_VIEWPORTS) {
       await saveEvidence(page, `cta-add-game-keyboard_${vp.name}`);
     });
 
-    // --- Surface 2: Add Play sheet (Save) ------------------------------------
+    // --- Surface 2: Mark play sheet (Save) ------------------------------------
     // FINDING T8550-F3 (live-verify owed): the T8140 sticky footer IS working (Save
     // is pinned at the bottom of the sheet), but at the two SHORTEST heights the
     // sheet content pushes Save just under the simulated-keyboard line — 363>340 at
@@ -128,7 +128,7 @@ for (const vp of CTA_VIEWPORTS) {
     // passes at every width. Prescribed fix (policy #3): trim the sheet's vertical
     // padding at the narrow breakpoints so Save clears the keyboard band on the
     // short phones. Un-fixme once the fix lands and re-runs green.
-    test('Add Play sheet: Save CTA above the fold', async ({ page }) => {
+    test('Mark play sheet: Save CTA above the fold', async ({ page }) => {
       await openGameInAnnotate(page, AUDIT_GAME_ID);
       await page.locator('video').first().waitFor({ state: 'attached', timeout: 40000 });
 

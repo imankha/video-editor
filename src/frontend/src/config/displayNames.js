@@ -1,3 +1,41 @@
+// T9520 (Shared Vocabulary epic — naming groups N04-N35): the canonical
+// Annotate-surface vocabulary, single source. One object model across every
+// Annotate label: a GAME holds PLAYS (marked time ranges with rating/tags/notes);
+// a PLAY can produce a CLIP (an editable video). Reels are multi-clip objects and
+// live OFF this surface (Library), so "reel" never appears in Annotate copy — a
+// play produces a CLIP, never a reel. Internal names (the `my_athlete` field,
+// `autoProjectId`, EDITOR_MODES, routes, analytics events) are deliberately NOT
+// renamed to match — deep links and greppability beat cosmetic consistency.
+// Editor mode names stay "AI Focus" / "Spotlight" (epic override, not this file).
+export const ANNOTATE = {
+  MODE_DESCRIPTION: 'Mark plays',          // N04 — mode-switcher description
+  MARK_PLAY: 'Mark play',                  // N05 — primary create CTA
+  EDIT_PLAY: 'Edit play',                  // N05 — edit CTA
+  // N05 helper: the default capture window is 9s before + 3s after the tap = 12s
+  // (DEFAULT_CLIP_BEFORE + DEFAULT_CLIP_AFTER in AnnotateFullscreenOverlay).
+  MARK_PLAY_HELPER: 'Captures the previous 12 seconds',
+  MARKING_PLAY_TITLE: 'Marking a play',    // N05 — create-editor header title
+  PLAYS_HEADING: 'Plays',                  // N06 — sidebar list heading
+  // N07 — create-an-editable-clip toggle. Positive polarity both states (T9450):
+  // ON produces a clip, OFF just saves the play. Never a "Don't …" double negative.
+  CREATE_EDITABLE_CLIP: 'Create an editable clip',
+  JUST_SAVE_PLAY: 'Just save this play',
+  SAVE_PLAY: 'Save play',                  // N08 — save a play only
+  SAVE_PLAY_AND_CLIP: 'Save play and create clip', // N08 — save + produce a clip
+  UPDATE_PLAY: 'Update play',              // N08 — edit-mode save
+  CREATE_CLIP: 'Create clip',              // N09 — manual create-clip action
+  CLIP_CREATED: 'Clip created',            // N09 — created indicator
+  DELETE_CLIP: 'Delete clip',              // N14 — delete a play that has a clip
+  DELETE_PLAY: 'Delete play',              // N14 — delete a bare play marker
+  RENAME_CLIP: 'Rename clip',              // N15 — rename action
+  CLIP_NAME: 'Clip name',                  // N15 — name field
+  PREVIEW_PLAYS: 'Preview plays',          // N26 — playback-all button (was "Playback Annotations")
+  PREVIEW_CLIP: 'Preview clip',            // N26 — per-clip preview (unchanged)
+  LAYER_LABEL: 'Play category',            // N28 — the control formerly "Clip layer"/"Layer"
+  LAYER_MINE: 'My player',                 // N28 — was "My Athlete"
+  LAYER_TEAM: 'Team',                      // N28 — unchanged
+};
+
 export const SECTION_NAMES = {
   // In-progress single-clip auto-draft tab (Home). Tab id stays `projects` /
   // URL `/home/reels` (frozen for deep-link compat); the LABEL is

@@ -29,7 +29,7 @@ const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-carlsbad-trimmed.mp4');
 // a backend account: POST /api/games dedupes by blake3_hash (games.py:307-341 and
 // :343-382), so a second test uploading the same fixture lands back in the FIRST
 // test's game, WITH its clips. A clip under the playhead then auto-selects
-// (AnnotateContainer.jsx:1216) and flips the CTA to "Edit Play" - the strip opens
+// (AnnotateContainer.jsx:1216) and flips the CTA to "Edit play" - the strip opens
 // in edit mode and there is no "Save" button. (clip-selection-state-machine.spec.js
 // can use one module-scoped id because it has a single test.)
 let testUserSeq = 0;
@@ -110,7 +110,7 @@ async function enterAnnotateMode(page) {
 
   // Every test in this file assumes a virgin account (see newTestUserId) - a
   // leaked shared account would auto-select a pre-existing clip under the
-  // playhead and silently flip Add Play into Edit Play. Fail fast and legibly
+  // playhead and silently flip Mark play into Edit play. Fail fast and legibly
   // here instead of hanging 300s waiting for a "Save" button that will never
   // appear in that state.
   await expect(page.locator('[data-testid="clip-row"]')).toHaveCount(0);
@@ -147,7 +147,7 @@ test.describe('T8600: Desktop inline play editor strip', () => {
     await clearBrowserState(page);
   });
 
-  test('Add Play opens the strip in place of the timeline; one-tap Save lands "Play 1" @t8600', async ({ page }) => {
+  test('Mark play opens the strip in place of the timeline; one-tap Save lands "Play 1" @t8600', async ({ page }) => {
     await enterAnnotateMode(page);
     await ensurePaused(page);
     await seekVideoDirect(page, 10);
@@ -157,16 +157,16 @@ test.describe('T8600: Desktop inline play editor strip', () => {
     await expect(timeline).toBeVisible();
     await expect(getStrip(page)).toHaveCount(0);
 
-    // Open via the primary CTA — Add Play (no selection yet).
+    // Open via the primary CTA — Mark play (no selection yet).
     const primaryCta = page.locator('[data-testid="annotate-primary-cta"]');
-    await expect(primaryCta).toHaveText(/Add Play/);
+    await expect(primaryCta).toHaveText(/Mark play/);
     await primaryCta.click();
     await page.waitForTimeout(800);
 
     // Strip replaces the timeline; green tint (create mode).
     const strip = getStrip(page);
     await expect(strip).toBeVisible();
-    await expect(strip).toContainText('Adding new play');
+    await expect(strip).toContainText('Marking a play');
     await expect(timeline).toHaveCount(0);
 
     // One-tap Save — no fields touched.
@@ -177,7 +177,7 @@ test.describe('T8600: Desktop inline play editor strip', () => {
     await expect(page.locator('[data-testid="clip-row"]', { hasText: 'Play 1' })).toBeVisible();
   });
 
-  test('Edit Play opens the yellow strip prefilled; Update does not duplicate @t8600', async ({ page }) => {
+  test('Edit play opens the yellow strip prefilled; Update does not duplicate @t8600', async ({ page }) => {
     await enterAnnotateMode(page);
     await ensurePaused(page);
     await seekVideoDirect(page, 10);
@@ -190,11 +190,11 @@ test.describe('T8600: Desktop inline play editor strip', () => {
 
     const clipCountBefore = await page.locator('[data-testid="clip-row"]').count();
 
-    // Select the clip, then Edit Play.
+    // Select the clip, then Edit play.
     await page.locator('[data-testid="clip-row"]').first().click();
     await page.waitForTimeout(500);
     const primaryCta = page.locator('[data-testid="annotate-primary-cta"]');
-    await expect(primaryCta).toHaveText(/Edit Play/);
+    await expect(primaryCta).toHaveText(/Edit play/);
     await primaryCta.click();
     await page.waitForTimeout(800);
 
@@ -202,7 +202,7 @@ test.describe('T8600: Desktop inline play editor strip', () => {
     await expect(strip).toBeVisible();
     // T8760 item 4: the header dropped "Editing:"; the pencil ("Rename this
     // play") is the one name-edit affordance.
-    await expect(strip.locator('[title="Rename this play"]')).toBeVisible();
+    await expect(strip.locator('[title="Rename clip"]')).toBeVisible();
     await expect(strip.locator('button:has-text("Update")')).toBeVisible();
 
     await strip.locator('button:has-text("Update")').click();

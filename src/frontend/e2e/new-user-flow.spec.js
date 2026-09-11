@@ -27,7 +27,7 @@ import { openGameDetailsDisclosure } from './helpers/gameDetails.js';
  *   - quest-walkthrough.spec.js — covers the same 4-quest flow but as a report-generating
  *     walkthrough, not an assertion-based test. Generates screenshots + markdown report.
  *   - full-workflow.spec.js — tests "Add Game → Annotate → TSV import" flow (test #2)
- *     and "Playback Annotations" (test #4), which overlap with Quest 1 steps.
+ *     and "Preview plays" (test #4), which overlap with Quest 1 steps.
  *   - regression-tests.spec.js — "Annotate: video first frame loads" and "TSV import shows
  *     clips" smoke tests overlap with Quest 1 game creation + annotation steps.
  *
@@ -513,7 +513,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // --- Q1 Step 3: Watch Your Clips Back ---
     console.log('[Q1.3] Watch Your Clips Back (Playback Annotations)');
 
-    const playbackBtn = page.locator('button:has-text("Playback Annotations")');
+    const playbackBtn = page.locator('button:has-text("Preview plays")');
     await expect(playbackBtn).toBeVisible({ timeout: 10000 });
     await playbackBtn.click();
     // Wait for playback mode to record the achievement (triggers after 0.5s)

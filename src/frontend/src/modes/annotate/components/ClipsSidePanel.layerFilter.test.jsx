@@ -68,12 +68,12 @@ describe('ClipsSidePanel — layer filter (T5700) + no "New clips go to" toggle 
 
   it('shows a layer-specific empty state when the filter yields zero rows (clips DO exist)', () => {
     render(<ClipsSidePanel {...baseProps} clipRegions={clipRegions.filter((r) => r.my_athlete !== false)} boundaryOffsets={[]} layerFilter="team" />);
-    expect(screen.getByText('No Team clips')).toBeTruthy();
+    expect(screen.getByText('No Team plays')).toBeTruthy();
     expect(screen.queryByTestId('row')).toBeNull();
   });
 
-  it('an empty game (no clips at all) still shows the generic "No clips yet" message', () => {
+  it('an empty game (no clips at all) still shows the generic "No plays yet" message', () => {
     render(<ClipsSidePanel {...baseProps} clipRegions={[]} boundaryOffsets={[]} layerFilter="team" />);
-    expect(screen.getByText('No clips yet')).toBeTruthy();
+    expect(screen.getByText('No plays yet')).toBeTruthy();
   });
 });

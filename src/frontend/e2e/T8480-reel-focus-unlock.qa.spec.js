@@ -219,7 +219,7 @@ test.describe('T8480 - touch-visible explanations + unlock (390x844)', () => {
 
     const form = await openAddClipForm(page);
 
-    // Mobile hides the reel toggle; rating 5 (My Athlete) auto-enables it.
+    // Mobile hides the reel toggle; rating 5 (My player) auto-enables it.
     await form.locator('button[title="5 stars"]').click();
     const result = await saveClip(page, form);
     expect(result.project_created).toBeTruthy();

@@ -4,7 +4,7 @@
  * bug 27p: when a game's source video has expired (R2 source hard-deleted
  * post-grace), the Annotate screen must show a deliberate "source video expired"
  * state instead of mounting a <video> against the dead source. Annotations stay
- * readable and "Playback Annotations" is disabled. A non-expired game must still
+ * readable and "Preview plays" is disabled. A non-expired game must still
  * mount a normal player (regression).
  *
  * bug 28p: the Games-menu per-game details row must read Clips -> Quality -> Tags.
@@ -74,9 +74,9 @@ test.describe('bug 27p expired-source Annotate + bug 28p games-menu order', () =
     // 2. No <video> mounts against the dead source.
     await expect(page.locator('video')).toHaveCount(0);
 
-    // 3. "Playback Annotations" is disabled (its enterPlaybackMode is the only
+    // 3. "Preview plays" is disabled (its enterPlaybackMode is the only
     //    entry to the playback tree that would mount dual <video>).
-    const playbackBtn = page.getByRole('button', { name: /playback annotations/i });
+    const playbackBtn = page.getByRole('button', { name: /preview plays/i });
     await expect(playbackBtn).toBeVisible();
     await expect(playbackBtn).toBeDisabled();
 

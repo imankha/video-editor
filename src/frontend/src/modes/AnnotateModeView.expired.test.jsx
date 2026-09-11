@@ -106,14 +106,14 @@ describe('AnnotateModeView source-expired state (bug 27p)', () => {
     // playback mounts dual <video> against the hard-deleted source.
     renderView({ isSourceExpired: true, hasAnnotateClips: true });
 
-    const btn = screen.getByRole('button', { name: /playback annotations/i });
+    const btn = screen.getByRole('button', { name: /preview plays/i });
     expect(btn.disabled).toBe(true);
   });
 
   it('keeps "Playback Annotations" enabled for a non-expired game with clips', () => {
     renderView({ isSourceExpired: false, hasAnnotateClips: true });
 
-    const btn = screen.getByRole('button', { name: /playback annotations/i });
+    const btn = screen.getByRole('button', { name: /preview plays/i });
     expect(btn.disabled).toBe(false);
   });
 });

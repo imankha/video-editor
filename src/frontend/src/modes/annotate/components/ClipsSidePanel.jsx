@@ -5,17 +5,18 @@ import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
 import { validateTsvContent, generateTsvContent } from '../hooks/useAnnotate';
 import { clipGameClock } from '../../../utils/timeFormat';
+import { ANNOTATE } from '../../../config/displayNames';
 
 // T5700: clip-list layer filter — ephemeral, screen-owned, reset on game open.
 const LAYER_FILTER_OPTIONS = [
   { value: 'all', label: 'All', activeCls: 'bg-gray-600 text-white' },
-  { value: 'mine', label: 'My Athlete', activeCls: 'bg-cyan-600 text-white' },
-  { value: 'team', label: 'Team', activeCls: 'bg-amber-600 text-white' },
+  { value: 'mine', label: ANNOTATE.LAYER_MINE, activeCls: 'bg-cyan-600 text-white' },
+  { value: 'team', label: ANNOTATE.LAYER_TEAM, activeCls: 'bg-amber-600 text-white' },
 ];
 
 const EMPTY_FILTER_COPY = {
-  mine: 'No My Athlete clips',
-  team: 'No Team clips',
+  mine: `No ${ANNOTATE.LAYER_MINE} plays`,
+  team: `No ${ANNOTATE.LAYER_TEAM} plays`,
 };
 
 /**
@@ -108,7 +109,7 @@ export function ClipsSidePanel({
         setImportErrors(result.errors);
       } else {
         const count = await onImportAnnotations(result.annotations, videoDuration);
-        setImportSuccess(`Imported ${count} clip${count !== 1 ? 's' : ''}`);
+        setImportSuccess(`Imported ${count} play${count !== 1 ? 's' : ''}`);
         // Clear success message after 3 seconds
         setTimeout(() => setImportSuccess(null), 3000);
       }
@@ -152,7 +153,7 @@ export function ClipsSidePanel({
             <button
               onClick={() => setMobileForceList(true)}
               className="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors"
-              title="Back to clips"
+              title="Back to plays"
             >
               <ArrowLeft size={20} />
             </button>
@@ -179,7 +180,7 @@ export function ClipsSidePanel({
           <div className="p-4 border-b border-gray-700">
             <div className="flex items-center gap-2 mb-2">
               <Scissors size={18} className="text-green-400" />
-              <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Clips</h2>
+              <h2 className="text-sm font-semibold text-white uppercase tracking-wide">{ANNOTATE.PLAYS_HEADING}</h2>
               <span className="ml-auto text-xs text-gray-500">{clipCount}</span>
             </div>
 
@@ -218,7 +219,7 @@ export function ClipsSidePanel({
                   icon={Upload}
                   className="flex-1"
                   onClick={handleImportClick}
-                  title="Import clips from TSV file"
+                  title="Import plays from TSV file"
                 >
                   Import
                 </Button>
@@ -285,15 +286,15 @@ export function ClipsSidePanel({
             {isLoading ? (
               <div className="p-4 text-gray-400 text-sm text-center flex flex-col items-center gap-2">
                 <Loader size={20} className="animate-spin text-green-400" />
-                <span>Loading clips...</span>
+                <span>Loading plays...</span>
               </div>
             ) : clipRegions.length === 0 ? (
               <div className="p-4 text-gray-500 text-sm text-center">
-                No clips yet
+                No plays yet
               </div>
             ) : filteredRegions.length === 0 ? (
               <div className="p-4 text-gray-500 text-sm text-center">
-                {EMPTY_FILTER_COPY[layerFilter] || 'No clips match this filter'}
+                {EMPTY_FILTER_COPY[layerFilter] || 'No plays match this filter'}
               </div>
             ) : (
               // Sort by in-match start time so the list matches the timeline and

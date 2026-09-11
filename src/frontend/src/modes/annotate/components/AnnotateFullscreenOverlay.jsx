@@ -15,7 +15,8 @@ import { Toggle, Button } from '../../../components/shared/Button';
 import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialog';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
-import { RATING_NOTATION, RATING_ADJECTIVES, getRatingCaption } from '../../../components/shared/clipConstants';
+import { RATING_NOTATION, getRatingCaption, getRatingLabel } from '../../../components/shared/clipConstants';
+import { ANNOTATE } from '../../../config/displayNames';
 
 // Persists across mounts within the same page session
 let savedDockPosition = 'left';
@@ -69,8 +70,8 @@ function StarRating({ rating, onRatingChange, size = 24 }) {
       ))}
       <span
         className="ml-2 text-lg font-bold text-white"
-        title={RATING_ADJECTIVES[rating]}
-        aria-label={RATING_ADJECTIVES[rating]}
+        title={getRatingLabel(rating)}
+        aria-label={getRatingLabel(rating)}
       >
         {RATING_NOTATION[rating]}
       </span>
@@ -483,7 +484,7 @@ export function AnnotateFullscreenOverlay({
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h3 className={`${layout === 'inline' ? 'text-sm' : 'text-lg'} font-semibold text-white`}>
-            {isEditMode ? 'Edit Play' : 'Add Play'}
+            {isEditMode ? ANNOTATE.EDIT_PLAY : ANNOTATE.MARK_PLAY}
           </h3>
           <div className="flex items-center gap-2">
             {layout === 'overlay' && (
@@ -578,7 +579,7 @@ export function AnnotateFullscreenOverlay({
         {/* Clip Name - always rendered to keep panel height stable */}
         <div className="mb-4">
           <label className="block text-gray-400 text-sm mb-2">
-            Clip Name
+            {ANNOTATE.CLIP_NAME}
             {!isNameManuallyEdited && selectedTags.length > 0 && (
               <span className="text-gray-500 ml-2">(auto-generated)</span>
             )}
@@ -613,7 +614,7 @@ export function AnnotateFullscreenOverlay({
             read-only, for imported clips (shared_by set) — they can never be
             promoted onto the My Athlete layer (T5700, epic decision 2). */}
         <div className="mb-4">
-          <label className="block text-gray-400 text-sm mb-2">Layer</label>
+          <label className="block text-gray-400 text-sm mb-2">{ANNOTATE.LAYER_LABEL}</label>
           <LayerSegmentedControl
             size={isMobile ? 'md' : 'sm'}
             value={myAthlete}
@@ -655,7 +656,7 @@ export function AnnotateFullscreenOverlay({
             <label className="text-gray-400 text-sm">Clip</label>
             {isEditMode ? (
               existingClip?.autoProjectId ? (
-                <span className="text-green-400 text-sm">Clip created</span>
+                <span className="text-green-400 text-sm">{ANNOTATE.CLIP_CREATED}</span>
               ) : (
                 <Button
                   variant="cyan"
@@ -663,13 +664,13 @@ export function AnnotateFullscreenOverlay({
                   icon={Plus}
                   onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
                 >
-                  Clip Play
+                  {ANNOTATE.CREATE_CLIP}
                 </Button>
               )
             ) : (
               <div className="flex items-center gap-2">
                 <span className={`text-sm ${createProject ? 'text-cyan-400' : 'text-gray-500'}`}>
-                  {createProject ? 'Clip Play to focus on your player' : 'Just save this play'}
+                  {createProject ? ANNOTATE.CREATE_EDITABLE_CLIP : ANNOTATE.JUST_SAVE_PLAY}
                 </span>
                 <Toggle
                   checked={createProject}
@@ -694,7 +695,7 @@ export function AnnotateFullscreenOverlay({
         onClick={handleSave}
         className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
       >
-        {isEditMode ? 'Update' : 'Save'}
+        {isEditMode ? ANNOTATE.UPDATE_PLAY : (createProject ? ANNOTATE.SAVE_PLAY_AND_CLIP : ANNOTATE.SAVE_PLAY)}
       </button>
       <button
         onClick={onClose}
@@ -826,7 +827,7 @@ export function AnnotateFullscreenOverlay({
                 <button
                   type="button"
                   onClick={() => setIsEditingName(true)}
-                  title="Rename this play"
+                  title={ANNOTATE.RENAME_CLIP}
                   className="flex items-center gap-2 min-w-0 group"
                 >
                   <Pencil size={16} className={`shrink-0 ${isEditMode ? 'text-yellow-400 group-hover:text-yellow-300' : 'text-green-400 group-hover:text-green-300'}`} />
@@ -861,14 +862,14 @@ export function AnnotateFullscreenOverlay({
           {!isEditMode ? (
             <div className="px-4 pt-2 flex items-center justify-center gap-1.5">
               <Plus size={16} className="text-green-400 shrink-0" />
-              <span className="text-sm font-semibold text-white">Adding new play</span>
+              <span className="text-sm font-semibold text-white">{ANNOTATE.MARKING_PLAY_TITLE}</span>
             </div>
           ) : (
             // T9330: symmetric edit-mode title — the editor now stays open after a
             // create and lands here, so the surface names what it is doing.
             <div className="px-4 pt-2 flex items-center justify-center gap-1.5">
               <Pencil size={14} className="text-yellow-400 shrink-0" />
-              <span className="text-sm font-semibold text-white">Edit Play</span>
+              <span className="text-sm font-semibold text-white">{ANNOTATE.EDIT_PLAY}</span>
             </div>
           )}
 
@@ -913,7 +914,7 @@ export function AnnotateFullscreenOverlay({
               // created", not "Reel created" (vocabulary: this is the clip's own
               // project, never a reel).
               (existingClip?.autoProjectId || focusPending) ? (
-                <span className="text-xs text-green-400 shrink-0">Clip created</span>
+                <span className="text-xs text-green-400 shrink-0">{ANNOTATE.CLIP_CREATED}</span>
               ) : (
                 <Button
                   variant="cyan"
@@ -921,7 +922,7 @@ export function AnnotateFullscreenOverlay({
                   icon={Plus}
                   onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
                 >
-                  Clip Play
+                  {ANNOTATE.CREATE_CLIP}
                 </Button>
               )
             ) : (
@@ -935,7 +936,7 @@ export function AnnotateFullscreenOverlay({
                     : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600'
                 }`}
               >
-                {createProject ? 'Clip Play to focus on your player' : 'Just save this play'}
+                {createProject ? ANNOTATE.CREATE_EDITABLE_CLIP : ANNOTATE.JUST_SAVE_PLAY}
               </button>
             )}
 
@@ -969,7 +970,7 @@ export function AnnotateFullscreenOverlay({
                 onClick={handleSave}
                 className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
               >
-                {isEditMode ? 'Update' : 'Save'}
+                {isEditMode ? ANNOTATE.UPDATE_PLAY : (createProject ? ANNOTATE.SAVE_PLAY_AND_CLIP : ANNOTATE.SAVE_PLAY)}
               </button>
               <button
                 onClick={onClose}
@@ -1057,8 +1058,8 @@ export function AnnotateFullscreenOverlay({
           <StarRating rating={rating} onRatingChange={handleRatingChange} size={20} />
           <span
             className="text-xs text-gray-500 w-4 text-center"
-            title={RATING_ADJECTIVES[rating]}
-            aria-label={RATING_ADJECTIVES[rating]}
+            title={getRatingLabel(rating)}
+            aria-label={getRatingLabel(rating)}
           >
             {RATING_NOTATION[rating]}
           </span>
@@ -1082,7 +1083,7 @@ export function AnnotateFullscreenOverlay({
             onClick={handleSave}
             className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
           >
-            {isEditMode ? 'Update' : 'Save'}
+            {isEditMode ? ANNOTATE.UPDATE_PLAY : (createProject ? ANNOTATE.SAVE_PLAY_AND_CLIP : ANNOTATE.SAVE_PLAY)}
           </button>
           <button
             onClick={onClose}

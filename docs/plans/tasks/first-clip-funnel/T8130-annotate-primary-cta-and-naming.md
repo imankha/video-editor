@@ -6,6 +6,10 @@
 **Created:** 2026-08-31
 **Epic:** [First-Clip Funnel](EPIC.md)
 
+> **Reversed by T9520 (Shared Vocabulary epic, user-adopted naming model, 2026-09-10):** the
+> "Add Play" primary CTA name chosen here (N05) was reversed to **"Mark play"**. Deliberate
+> decision, not drift — see `docs/plans/tasks/shared-vocabulary/T9520-annotate-vocabulary.md`.
+
 ## Problem
 
 The first-clip action is the visually weakest interactive element on the screen, and the

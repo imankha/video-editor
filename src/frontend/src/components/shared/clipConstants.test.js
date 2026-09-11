@@ -1,5 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { getRatingCaption, getEditRatingCaption } from './clipConstants';
+import { getRatingCaption, getEditRatingCaption, getRatingLabel } from './clipConstants';
+
+// T9520 N35: the ONE documented star-to-descriptor mapping ("4 stars · Good"),
+// used for the rating title/aria across the play list, the play editor and the
+// timeline markers. Asserted here as the single source; render sites reuse it.
+describe('getRatingLabel (N35 star-to-descriptor mapping)', () => {
+  it('pairs the star count (singular at 1) with the canonical adjective', () => {
+    expect(getRatingLabel(1)).toBe('1 star · Mental Lapse');
+    expect(getRatingLabel(2)).toBe('2 stars · Technical Lapse');
+    expect(getRatingLabel(3)).toBe('3 stars · Interesting');
+    expect(getRatingLabel(4)).toBe('4 stars · Good');
+    expect(getRatingLabel(5)).toBe('5 stars · Brilliant');
+  });
+
+  it('falls back to the default rating (3) when none is set', () => {
+    expect(getRatingLabel(null)).toBe('3 stars · Interesting');
+    expect(getRatingLabel(0)).toBe('3 stars · Interesting');
+  });
+});
 
 // T8490 / T9320: the caption table (task file "Rating caption rewrite") as pure
 // function tests — the render sites (AnnotateFullscreenOverlay, ClipDetailsEditor)

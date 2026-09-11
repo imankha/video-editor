@@ -107,7 +107,7 @@ describe('AnnotateModeView — persistent Playback Annotations badge (T8970 item
     renderView({ playback: playbackActive });
     const badge = screen.getByTestId('playback-mode-badge');
     expect(badge).toBeTruthy();
-    expect(badge.textContent).toMatch(/Playback Annotations/i);
+    expect(badge.textContent).toMatch(/Preview plays/i);
   });
 
   it('does NOT render the mode badge in normal annotate mode', () => {

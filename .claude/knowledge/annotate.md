@@ -1,5 +1,31 @@
 ---
 domain: annotate
+updated: 2026-09-11 (T9520 — Annotate surface VOCABULARY is now the Shared-Vocabulary object model,
+single-sourced in `config/displayNames.js` `ANNOTATE`. One model: a GAME holds PLAYS (marked
+ranges); a PLAY can produce a CLIP (editable video); reels are multi-clip and live OFF this surface,
+so "reel" NEVER appears in Annotate copy. Canonical labels (import `ANNOTATE`, never inline): primary
+CTA **Mark play** / **Edit play** (was "Add Play"/"Edit Play") with helper **"Captures the previous 12
+seconds"** (= DEFAULT_CLIP_BEFORE 9 + DEFAULT_CLIP_AFTER 3); sidebar + timeline list heading **Plays**
+(was "Clips"); create-editable-clip toggle **"Create an editable clip"** ON / **"Just save this play"**
+OFF (positive polarity, T9450 unchanged); Save gesture **Save play** / **Save play and create clip**
+(when createProject on) / **Update play** (was "Save"/"Update"); manual create action **Create clip** +
+indicator **Clip created** (was "Clip Play"/"Clip Out Play"/"Create Reel"); delete is CONDITIONAL —
+**Delete clip** when `region.autoProjectId` else **Delete play**; name field **Clip name** + pencil
+tooltip **Rename clip**; playback-all button + mode badge **Preview plays** (was "Playback Annotations");
+ModeSwitcher description **Mark plays** (was "Clip extraction"). **N28 layer rename:** the control is
+**Play category** (label + aria, was "Clip layer"/"Layer"), value **My player** (was "My Athlete", ~everywhere:
+LayerSegmentedControl/AnnotateTimeline lanes/ClipsSidePanel filter+empty/ClipListItem+ClipRegionLayer aria),
+**Team** unchanged; radio aria-labels are now bare **"My player"/"Team"** (dropped the " layer" suffix),
+ClipRegionLayer marker aria is `{name} - My player`/`{name} - Team`. **N35:** ONE rating descriptor
+`getRatingLabel(r)` in `clipConstants.js` → **"4 stars · Good"** form (1=`1 star · Mental Lapse` … 5=`5 stars ·
+Brilliant`), used for star title/aria across the list (ClipListItem), editor (AnnotateFullscreenOverlay
+StarRating + landscape) AND timeline markers (ClipRegionLayer) — do not reintroduce bare-adjective/"(4/5)".
+INTERNAL names deliberately UNCHANGED: `my_athlete` field, `autoProjectId`, EDITOR_MODES, routes, analytics,
+the reel-created toast's "In Progress Clips" tab name (T9530's scope), and the Focus/Spotlight stage CTA
+labels (T9320). N05 reversed T8130's "Add Play"; N09 reversed T8760's "Clip Out Play" (pointer lines added
+to both task files). "Play full clip" (OverlayModeView/Spotlight) + guide copy (questDefinitions/emptyStates)
++ Focus clip selector + reel-assembly modal left to the sibling children (T9550/T9560/T9530).
+Prior:)
 updated: 2026-09-10 (T9330 — clipping a play KEEPS THE EDITOR OPEN + one stage-aware CTA shared by
 the strip and the sidebar. **Stay-open:** `addClipRegion` (useAnnotate.js) gained an `onCreateSelect`
 option; the container wires it to `editClip(newRegion.id)` so the create edge is CREATING->EDITING

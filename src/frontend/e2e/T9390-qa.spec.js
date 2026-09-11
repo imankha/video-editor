@@ -67,7 +67,7 @@ test('T9390: four-tab empty guides, strip, and gating across viewports', async (
     // --- Games tab (default landing, empty) ---
     // New shortened headline + kept Games-only footer link.
     await expect(page.getByText('Start with a game')).toBeVisible();
-    await expect(page.getByText('Upload a recording, then tap Add Play on the moments worth keeping.')).toBeVisible();
+    await expect(page.getByText('Upload a recording, then tap Mark play on the moments worth keeping.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Skip ahead on Clips.' })).toBeVisible();
 
     // Decision 3: Reels + Published disabled; Games + Clips reachable; caption shown.

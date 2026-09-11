@@ -33,18 +33,18 @@ const baseRegion = {
 describe('ClipDetailsEditor — Layer control (T5700)', () => {
   it('defaults to My Athlete selected when my_athlete is undefined/null (legacy rule)', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, my_athlete: undefined }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.getByRole('radio', { name: 'My Athlete layer' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'My player' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('shows Team selected when my_athlete is false', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, my_athlete: false }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.getByRole('radio', { name: 'Team layer' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Team' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('calls onUpdate({ my_athlete }) with ONLY that field on click (gesture-based surgical save)', () => {
     const onUpdate = vi.fn();
     render(<ClipDetailsEditor region={{ ...baseRegion, my_athlete: true }} onUpdate={onUpdate} onDelete={() => {}} />);
-    fireEvent.click(screen.getByRole('radio', { name: 'Team layer' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Team' }));
     expect(onUpdate).toHaveBeenCalledTimes(1);
     expect(onUpdate).toHaveBeenCalledWith({ my_athlete: false });
   });
@@ -58,8 +58,8 @@ describe('ClipDetailsEditor — Layer control (T5700)', () => {
           onDelete={() => {}}
         />
       );
-      const mine = screen.getByRole('radio', { name: /^My Athlete layer/ });
-      const team = screen.getByRole('radio', { name: /^Team layer/ });
+      const mine = screen.getByRole('radio', { name: /^My player/ });
+      const team = screen.getByRole('radio', { name: /^Team/ });
       expect(mine.disabled).toBe(true);
       expect(team.disabled).toBe(true);
       expect(screen.getByRole('radiogroup').getAttribute('title')).toContain('Dana Smith');
@@ -74,16 +74,16 @@ describe('ClipDetailsEditor — Layer control (T5700)', () => {
           onDelete={() => {}}
         />
       );
-      fireEvent.click(screen.getByRole('radio', { name: /^My Athlete layer/ }));
-      fireEvent.click(screen.getByRole('radio', { name: /^Team layer/ }));
+      fireEvent.click(screen.getByRole('radio', { name: /^My player/ }));
+      fireEvent.click(screen.getByRole('radio', { name: /^Team/ }));
       expect(onUpdate).not.toHaveBeenCalled();
     });
   });
 
   it('a non-imported clip (no shared_by) stays interactive', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, my_athlete: false, shared_by: null }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.getByRole('radio', { name: /^My Athlete layer/ }).disabled).toBe(false);
-    expect(screen.getByRole('radio', { name: /^Team layer/ }).disabled).toBe(false);
+    expect(screen.getByRole('radio', { name: /^My player/ }).disabled).toBe(false);
+    expect(screen.getByRole('radio', { name: /^Team/ }).disabled).toBe(false);
   });
 });
 

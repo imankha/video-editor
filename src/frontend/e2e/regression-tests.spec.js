@@ -922,12 +922,12 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   await page.locator('button:has-text("Build New Reel")').click();
   await page.waitForTimeout(500);
 
-  // Wait for clips to load in the modal (should show clip buttons or "No clips" message)
-  // The modal starts with "Loading clips..." and then shows actual clips
+  // Wait for clips to load in the modal (should show clip buttons or "No plays" message)
+  // The modal starts with "Loading plays..." and then shows actual clips
   // All clips are selected by default - just need to verify they loaded and click Create
 
-  // Wait for "Loading clips..." to disappear
-  const loadingText = page.locator('text="Loading clips..."');
+  // Wait for "Loading plays..." to disappear
+  const loadingText = page.locator('text="Loading plays..."');
   await expect(loadingText).toBeHidden({ timeout: 15000 });
   await page.waitForTimeout(1000); // Extra wait for clips to render
 

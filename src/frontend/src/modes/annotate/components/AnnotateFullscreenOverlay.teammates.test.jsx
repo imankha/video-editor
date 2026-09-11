@@ -91,12 +91,12 @@ describe('AnnotateFullscreenOverlay — clear-on-switch to My Athlete (T5725)', 
     expect(screen.getByText('Alex')).toBeTruthy();
 
     // Switch to My Athlete: the control (and its chip) disappear immediately.
-    fireEvent.click(screen.getByRole('radio', { name: 'My Athlete layer' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'My player' }));
     expect(screen.queryByText(TEAMMATES_LABEL)).toBeNull();
     expect(screen.queryByText('Alex')).toBeNull();
 
     // Save persists my_athlete=true with cleared teammate tags.
-    fireEvent.click(screen.getByRole('button', { name: 'Update' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update play' }));
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip.mock.calls[0][1]).toMatchObject({ my_athlete: true, tagged_teammates: [] });
   });
@@ -147,7 +147,7 @@ describe('AnnotateFullscreenOverlay — auto-commit pending teammate tag on Save
     // (bg-transparent — the clip-name input is bg-gray-800).
     expect(screen.getByText('Jake')).toBeTruthy();
     fireEvent.change(container.querySelector('input.bg-transparent'), { target: { value: 'Alex' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Update' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update play' }));
 
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip.mock.calls[0][1]).toMatchObject({ tagged_teammates: ['Jake', 'Alex'] });
@@ -192,11 +192,11 @@ describe('AnnotateFullscreenOverlay — Teammates in the desktop strip (T8600)',
     );
     expect(screen.getByText('Alex')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('radio', { name: 'My Athlete layer' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'My player' }));
     expect(screen.queryByPlaceholderText('Tag a teammate...')).toBeNull();
     expect(screen.queryByText('Alex')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Update' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update play' }));
     expect(onUpdateClip.mock.calls[0][1]).toMatchObject({ my_athlete: true, tagged_teammates: [] });
   });
 });

@@ -3,6 +3,7 @@ import { useAppState } from '../../contexts';
 import { GAME, REEL } from '../../config/themeColors';
 import { SCREENS } from '../../stores/editorStore';
 import { toast } from './Toast';
+import { ANNOTATE } from '../../config/displayNames';
 
 /**
  * ModeSwitcher - Tab toggle for switching between editor modes.
@@ -48,7 +49,7 @@ export function ModeSwitcher({
       id: 'annotate',
       label: SCREENS.ANNOTATE.label,
       icon: Scissors,
-      description: 'Clip extraction',
+      description: ANNOTATE.MODE_DESCRIPTION,
       available: hasAnnotateVideo || mode === 'annotate',
       color: 'game',
     },

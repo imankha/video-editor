@@ -12,7 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USER_DATA_BASE = path.resolve(__dirname, '..', '..', '..', 'user_data');
 
 /**
- * T5700 — Team / My Athlete layer in Annotate: interactive REAL-BROWSER QA.
+ * T5700 — Team / My player layer in Annotate: interactive REAL-BROWSER QA.
  *
  * Drives the REAL account (imankh@gmail.com, game 6 — active storage, real
  * video, 32 real annotated clips, all starting after t=100s) via dev-login.
@@ -77,28 +77,28 @@ test.describe('T5700/T6400 — add-clip form layer: new clips land on the chosen
     for (const id of createdIds) await deleteClip(context, id);
   });
 
-  test('Team layer chosen -> new clip gets my_athlete=false, TEAM chip, amber marker foot', async ({ page }) => {
+  test('Team chosen -> new clip gets my_athlete=false, TEAM chip, amber marker foot', async ({ page }) => {
     // T6400: layer is set in the add-clip form's own Layer control (no sidebar toggle).
-    const id = await createClipViaUI(page, 'Team layer');
+    const id = await createClipViaUI(page, 'Team');
     createdIds.push(id);
 
-    await expect(page.locator('[data-testid="clip-row"] [aria-label="Team layer"]').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid="clip-row"] [aria-label="Team"]').first()).toBeVisible({ timeout: 5000 });
     await saveEvidence(page, 'criterion-new-clip-team-layer');
   });
 
-  test('My Athlete layer chosen -> new clip gets my_athlete=true and NO layer marker (unmarked default)', async ({ page }) => {
-    const teamMarkersBefore = await page.locator('[data-testid="clip-row"] [aria-label="Team layer"]').count();
+  test('My player chosen -> new clip gets my_athlete=true and NO layer marker (unmarked default)', async ({ page }) => {
+    const teamMarkersBefore = await page.locator('[data-testid="clip-row"] [aria-label="Team"]').count();
 
-    const id = await createClipViaUI(page, 'My Athlete layer');
+    const id = await createClipViaUI(page, 'My player');
     createdIds.push(id);
 
     // Only Team rows are marked now, so the layer is proven via the per-clip
     // editor control (which reflects the just-created, now-selected clip) plus
     // the absence of any NEW Team marker in the list.
     await expect(
-      page.locator('[data-clip-details]').getByRole('radio', { name: /^My Athlete layer/ })
+      page.locator('[data-clip-details]').getByRole('radio', { name: /^My player/ })
     ).toHaveAttribute('aria-checked', 'true', { timeout: 5000 });
-    expect(await page.locator('[data-testid="clip-row"] [aria-label="Team layer"]').count()).toBe(teamMarkersBefore);
+    expect(await page.locator('[data-testid="clip-row"] [aria-label="Team"]').count()).toBe(teamMarkersBefore);
     await saveEvidence(page, 'criterion-new-clip-my-athlete-layer');
   });
 
@@ -111,33 +111,33 @@ test.describe('T5700/T6400 — add-clip form layer: new clips land on the chosen
     // Clip A — save with whatever the game seeds; then assign it to Team.
     const formA = await openAddClipForm(page);
     createdIds.push(await saveClipForm(page, formA));
-    await setSelectedClipLayer(page, 'Team layer');
+    await setSelectedClipLayer(page, 'Team');
 
     // Clip B — the add-clip form must already show Team as the inherited default.
     const formB = await openAddClipForm(page, SECOND_CLIP_GAPS);
-    await expect(formB.getByRole('radio', { name: 'Team layer' })).toHaveAttribute('aria-checked', 'true');
+    await expect(formB.getByRole('radio', { name: 'Team' })).toHaveAttribute('aria-checked', 'true');
     createdIds.push(await saveClipForm(page, formB));
 
     // And B actually lands on Team: its per-clip editor + an amber Team marker.
-    await expect(page.locator('[data-clip-details]:visible').getByRole('radio', { name: 'Team layer' }))
+    await expect(page.locator('[data-clip-details]:visible').getByRole('radio', { name: 'Team' }))
       .toHaveAttribute('aria-checked', 'true', { timeout: 5000 });
-    await expect(page.locator('[data-testid="clip-row"] [aria-label="Team layer"]').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid="clip-row"] [aria-label="Team"]').first()).toBeVisible({ timeout: 5000 });
     await saveEvidence(page, 'criterion-inherit-team');
   });
 
-  test('assign a clip to My Athlete, then a NEW clip inherits My Athlete (inherit-from-previous)', async ({ page }) => {
+  test('assign a clip to My player, then a NEW clip inherits My player (inherit-from-previous)', async ({ page }) => {
     const formA = await openAddClipForm(page);
     createdIds.push(await saveClipForm(page, formA));
-    // Prove inheritance both ways: first push it to Team, then to My Athlete, so
+    // Prove inheritance both ways: first push it to Team, then to My player, so
     // the final default is unambiguously the LAST assignment, not a stale seed.
-    await setSelectedClipLayer(page, 'Team layer');
-    await setSelectedClipLayer(page, 'My Athlete layer');
+    await setSelectedClipLayer(page, 'Team');
+    await setSelectedClipLayer(page, 'My player');
 
     const formB = await openAddClipForm(page, SECOND_CLIP_GAPS);
-    await expect(formB.getByRole('radio', { name: 'My Athlete layer' })).toHaveAttribute('aria-checked', 'true');
+    await expect(formB.getByRole('radio', { name: 'My player' })).toHaveAttribute('aria-checked', 'true');
     createdIds.push(await saveClipForm(page, formB));
 
-    await expect(page.locator('[data-clip-details]:visible').getByRole('radio', { name: 'My Athlete layer' }))
+    await expect(page.locator('[data-clip-details]:visible').getByRole('radio', { name: 'My player' }))
       .toHaveAttribute('aria-checked', 'true', { timeout: 5000 });
     await saveEvidence(page, 'criterion-inherit-my-athlete');
   });
@@ -184,7 +184,7 @@ test.describe('T5700 — per-clip switch: gesture-based surgical save + survives
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    clipId = await createClipViaUI(page); // defaults to My Athlete (toggle default on fresh game open)
+    clipId = await createClipViaUI(page); // defaults to My player (toggle default on fresh game open)
   });
 
   test.afterEach(async ({ context }) => {
@@ -194,18 +194,18 @@ test.describe('T5700 — per-clip switch: gesture-based surgical save + survives
   test('switching a clip to Team sends ONLY {my_athlete:false} and persists across reload', async ({ page }) => {
     const editor = page.locator('[data-clip-details]');
     await expect(editor).toBeVisible({ timeout: 5000 });
-    await expect(editor.getByRole('radio', { name: 'My Athlete layer' })).toHaveAttribute('aria-checked', 'true');
+    await expect(editor.getByRole('radio', { name: 'My player' })).toHaveAttribute('aria-checked', 'true');
 
     const [putReq] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
-      editor.getByRole('radio', { name: 'Team layer' }).click(),
+      editor.getByRole('radio', { name: 'Team' }).click(),
     ]);
     const putBody = putReq.postDataJSON();
     expect(putBody).toEqual({ my_athlete: false });
 
     await page.reload();
     await gotoGame(page);
-    await expect(page.locator('[data-clip-details]').getByRole('radio', { name: 'Team layer' }))
+    await expect(page.locator('[data-clip-details]').getByRole('radio', { name: 'Team' }))
       .toHaveAttribute('aria-checked', 'true', { timeout: 10000 });
     await saveEvidence(page, 'criterion-per-clip-switch-persists');
   });
@@ -217,8 +217,8 @@ test.describe('T5700 — filter pills', () => {
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    mineId = await createClipViaUI(page, 'My Athlete layer');
-    teamId = await createClipViaUI(page, 'Team layer', SECOND_CLIP_GAPS); // distinct gap so it lands outside the first clip's span
+    mineId = await createClipViaUI(page, 'My player');
+    teamId = await createClipViaUI(page, 'Team', SECOND_CLIP_GAPS); // distinct gap so it lands outside the first clip's span
   });
 
   test.afterEach(async ({ context }) => {
@@ -226,14 +226,14 @@ test.describe('T5700 — filter pills', () => {
     await deleteClip(context, teamId);
   });
 
-  test('My Athlete / Team / All filters produce the right row sets', async ({ page }) => {
-    // Only Team rows carry a marker now, so My Athlete rows are counted as
+  test('My player / Team / All filters produce the right row sets', async ({ page }) => {
+    // Only Team rows carry a marker now, so My player rows are counted as
     // "rows without a Team marker" rather than by a marker of their own.
     const countRows = async () => page.getByTestId('clip-row').count();
-    const countTeam = async () => page.locator('[data-testid="clip-row"] [aria-label="Team layer"]').count();
+    const countTeam = async () => page.locator('[data-testid="clip-row"] [aria-label="Team"]').count();
     const countMine = async () => (await countRows()) - (await countTeam());
 
-    await page.getByRole('button', { name: 'My Athlete', exact: true }).click();
+    await page.getByRole('button', { name: 'My player', exact: true }).click();
     expect(await countMine()).toBeGreaterThanOrEqual(1);
     expect(await countTeam()).toBe(0);
 
@@ -291,8 +291,8 @@ test.describe('T5700 — imported clip: layer control locked, no request sent', 
     const editor = page.locator('[data-clip-details]');
     await expect(editor).toBeVisible({ timeout: 5000 });
 
-    const mine = editor.getByRole('radio', { name: /^My Athlete layer/ });
-    const team = editor.getByRole('radio', { name: /^Team layer/ });
+    const mine = editor.getByRole('radio', { name: /^My player/ });
+    const team = editor.getByRole('radio', { name: /^Team/ });
     await expect(mine).toBeDisabled();
     await expect(team).toBeDisabled();
     await expect(team).toHaveAttribute('aria-checked', 'true');
@@ -336,7 +336,7 @@ test.describe('T5700 — mobile (390px): create on both layers', () => {
     // T6400: no sidebar mode toggle. On mobile the add-clip form (the fullscreen
     // overlay) carries its own Layer control, so the layer is chosen right there —
     // createClipViaUI sets it in the visible [data-add-clip-form] before saving.
-    const id = await createClipViaUI(page, 'Team layer');
+    const id = await createClipViaUI(page, 'Team');
     createdIds.push(id);
 
     // The clip-list chip lives in the mobile sidebar drawer, which is closed
@@ -344,7 +344,7 @@ test.describe('T5700 — mobile (390px): create on both layers', () => {
     await page.locator('button[title="Show clips"]').click();
     // The CSS-hidden desktop sidebar (`hidden sm:flex`) stays mounted and
     // renders its own chip too — scope to the :visible one.
-    await expect(page.locator('[data-testid="clip-row"] [aria-label="Team layer"]:visible').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid="clip-row"] [aria-label="Team"]:visible').first()).toBeVisible({ timeout: 5000 });
     await assertNoHorizontalOverflow(page);
     await saveEvidence(page, 'criterion-mobile-390-create-team-layer');
   });
@@ -396,7 +396,7 @@ test.describe('T5700 — clip-list row: layer chip + Shared-by coexistence (long
   }
 
   test('desktop (352px sidebar): chip + inline Shared-by pill stay fully visible; the NAME truncates', async ({ page }) => {
-    const chip = page.locator('[data-testid="clip-row"] [aria-label="Team layer"]:visible').first();
+    const chip = page.locator('[data-testid="clip-row"] [aria-label="Team"]:visible').first();
     const sharedPill = page.locator('[title="Shared by Dana Smith"]:visible').first();
     await expect(chip).toBeVisible();
     await expect(sharedPill).toBeVisible();
@@ -412,7 +412,7 @@ test.describe('T5700 — clip-list row: layer chip + Shared-by coexistence (long
     await page.setViewportSize({ width: 390, height: 800 });
     await page.locator('button[title="Show clips"]').click();
 
-    const chip = page.locator('[data-testid="clip-row"] [aria-label="Team layer"]:visible').first();
+    const chip = page.locator('[data-testid="clip-row"] [aria-label="Team"]:visible').first();
     await expect(chip).toBeVisible();
     // The desktop inline PILL (rounded-full "Shared by" badge) is scoped
     // `!isMobile` in ClipListItem — it must NOT render on the mobile row.
