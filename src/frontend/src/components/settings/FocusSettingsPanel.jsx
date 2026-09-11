@@ -4,7 +4,7 @@ import ZoomControls from '../ZoomControls';
 import { Toggle } from '../shared';
 import SettingRow from './SettingRow';
 import SettingsPanel from './SettingsPanel';
-import { ratioLabel } from '../../constants/aspectRatios';
+import { ratioWithName } from '../../constants/aspectRatios';
 
 /**
  * FocusSettingsPanel (T9270) — the Focus "Settings" tab body. Re-homes the controls
@@ -41,7 +41,7 @@ export default function FocusSettingsPanel({
   return (
     <>
       <SettingsPanel title="Reel">
-        <SettingRow label="Aspect ratio" value={`${globalAspectRatio} ${ratioLabel(globalAspectRatio)}`}>
+        <SettingRow label="Aspect ratio" value={ratioWithName(globalAspectRatio)}>
           <AspectRatioSelector
             aspectRatio={globalAspectRatio}
             onAspectRatioChange={onAspectRatioChange}

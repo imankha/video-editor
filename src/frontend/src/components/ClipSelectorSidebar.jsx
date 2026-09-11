@@ -8,6 +8,7 @@ import { createGameLookup } from '../utils/gameNameLookup';
 import { clipCropKeyframes, clipSourceDuration } from '../utils/clipSelectors';
 import { getClipDisplayName } from '../utils/clipDisplayName';
 import { isClipStale } from '../utils/reelStaleness';
+import { EDITOR_PANELS } from '../config/displayNames';
 
 /** Check if clip has real user segment edits (speed changes, trims, or splits) */
 function hasUserSegmentEdits(clip) {
@@ -317,7 +318,7 @@ export function ClipSelectorSidebar({
                 {/* Framing status indicator */}
                 <div
                   className={`ml-2 flex-shrink-0 ${isFramed ? 'text-green-400' : 'text-gray-600'}`}
-                  title={isFramed ? 'Framed' : 'Needs focus — add crop keyframes'}
+                  title={isFramed ? 'Framed' : `Needs focus — set a ${EDITOR_PANELS.FOCUS_POINT.toLowerCase()}`}
                 >
                   {isFramed ? (
                     <Check size={16} className="stroke-[3]" />

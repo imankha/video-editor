@@ -248,3 +248,34 @@ export const OVERLAY_REAPPLY_FOCUS_TOAST = {
   title: 'Spotlight saved',
   message: 'Reframe your clip in AI Focus, then export again -- your spotlight carries over to the new reel.',
 };
+
+// T9550 (Shared Vocabulary epic, N16-N32): the editor-stage IN-PANEL vocabulary,
+// single source. These name the CONTROLS you tune once inside AI Focus / Spotlight
+// -- the focus point, the styling sliders, the cover image. Deliberately NOT here:
+// the mode NAMES ("AI Focus" / "Spotlight", editorStore SCREENS -- epic override,
+// unchanged) and the render-action strings (EXPORT_JOBS, T9540) -- a mode names a
+// PLACE you edit, a job names a THING YOU DO, and this block names the controls in
+// between. One noun per primitive so T9610/T9620's instructional copy reuses these
+// exact words. "player" is the canonical subject noun (matches ANNOTATE.LAYER_MINE
+// 'My player', T9520 -- do not reintroduce "athlete" here). "keyframe" is
+// intentionally absent as a primary label: it survives only as advanced help in
+// component tooltips (FocusTimeline), per the task's "demote, don't ban" rule.
+export const EDITOR_PANELS = {
+  // N17 -- the crop primitive is a "focus point"; its timeline track is the
+  // "Framing timeline". "crop keyframe" stays only in advanced help/tooltips.
+  FOCUS_POINT: 'Focus point',
+  FRAMING_TIMELINE: 'Framing timeline',
+  // N29 -- spotlight styling. "Highlight Color" mixed brand + generic for one thing:
+  // the spotlight. The shape options say WHERE the spotlight sits vs the player.
+  SPOTLIGHT_COLOR: 'Spotlight color',
+  SPOTLIGHT_AROUND_PLAYER: 'Around player', // was "Body" / "Body ellipse"
+  SPOTLIGHT_UNDER_PLAYER: 'Under player',   // was "Ground" / "Ground spotlight"
+  // N30 -- styling sliders in plain words; the component keeps the live px/% readout.
+  OUTLINE_THICKNESS: 'Outline thickness',   // was "Stroke Width"
+  SPOTLIGHT_FILL: 'Spotlight fill',         // was "Fill"
+  DIM_BACKGROUND: 'Dim background',          // was "Outside Dim"
+  // N31 -- the share still is a "Cover image"; the timeline marker CHOOSES its frame.
+  COVER_IMAGE: 'Cover image',                // was "Thumbnail"
+  CHOOSE_COVER_FRAME: 'Choose cover frame',  // was "Thumbnail marker"
+  COVER_IMAGE_HELPER: 'The still people see before playing.',
+};

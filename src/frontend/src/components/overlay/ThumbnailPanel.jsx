@@ -1,15 +1,17 @@
 import { ImageOff } from 'lucide-react';
 import PosterFramePreview from '../PosterFramePreview';
 import { formatTimeSimple } from '../shared/clipConstants';
+import { EDITOR_PANELS } from '../../config/displayNames';
 
 /**
- * ThumbnailPanel (T6590) — the "Thumbnail" tab body. Shows the still a share link
+ * ThumbnailPanel (T6590) — the "Cover image" tab body. Shows the still a share link
  * unfurls to, as FEEDBACK, not as a control.
  *
- * NOTE ON NAMING: the UI says "thumbnail" everywhere on Overlay (T6590); the data
- * model still calls this datum `poster_frame_time` / `poster_filename` (poster_*)
- * — a model rename carries migration cost and is out of scope. This one boundary
- * comment is the bridge; props keep the `poster*` names to match the model.
+ * NOTE ON NAMING: the UI term is "cover image" (T9550, N31 — was "thumbnail" T6590);
+ * the data model still calls this datum `poster_frame_time` / `poster_filename`
+ * (poster_*) — a model rename carries migration cost and is out of scope. This one
+ * boundary comment is the bridge; props keep the `poster*` names to match the model,
+ * and the component FILE keeps its name (no component-file rename, epic rule).
  *
  * T6590 deleted the "Use current frame" button: the ONLY way to set the frame is
  * dragging the marker on the timeline. This panel therefore has no frame-setting
@@ -29,15 +31,15 @@ export default function ThumbnailPanel({
   // (posterWindow.js's selectPosterFrame), never literally "the middle" --
   // that was stale copy from before round 7 replaced the midpoint default.
   // Show the actual time instead of a location claim that can be wrong.
-  const autoLabel = `Auto-picked · ${formatTimeSimple(posterPreviewTime)}. Drag the thumbnail marker on the timeline to change it.`;
+  const autoLabel = `Auto-picked · ${formatTimeSimple(posterPreviewTime)}. Drag the marker on the timeline to change it.`;
   return (
     <div className="space-y-3">
       <div className="flex flex-col">
         <span
           className="text-sm font-medium text-gray-200"
-          title="The thumbnail is what people see when you share the link."
+          title={EDITOR_PANELS.COVER_IMAGE_HELPER}
         >
-          Thumbnail
+          {EDITOR_PANELS.COVER_IMAGE}
         </span>
         <span className="text-xs text-gray-400">
           {posterUploaded
@@ -63,7 +65,7 @@ export default function ThumbnailPanel({
       {/* Feedback caption: no frame-setting control here — the marker owns that. */}
       {!posterUploaded && (
         <p className="text-xs text-gray-500">
-          Drag the thumbnail marker on the timeline to choose the frame.
+          Drag the marker on the timeline to choose the cover frame.
         </p>
       )}
 

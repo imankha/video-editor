@@ -177,8 +177,8 @@ describe('PosterMarkerLayer (T5410)', () => {
   it('greys out and shows the inactive state when a custom image is in use', () => {
     renderMarker({ isUploaded: true });
     const marker = screen.getByTestId('poster-marker');
-    // T6590: UI term is "thumbnail" (not "preview image"/"cover photo").
-    expect(marker.title).toMatch(/thumbnail/i);
+    // T9550 (N31): UI term is now "cover image" (was "thumbnail" T6590).
+    expect(marker.title).toMatch(/cover/i);
     expect(marker.title).toMatch(/inactive/i);
   });
 

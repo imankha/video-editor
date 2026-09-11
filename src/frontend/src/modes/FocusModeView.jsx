@@ -12,6 +12,7 @@ import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
 import FocusClipsPanel from '../components/settings/FocusClipsPanel';
 import { FocusMode, CropOverlay } from './focus';
 import { formatTimeSimple } from '../components/shared/clipConstants';
+import { ratioWithName } from '../constants/aspectRatios';
 
 /**
  * OutputLengthChip - live post-trim/post-speed output duration (T5780).
@@ -308,7 +309,7 @@ export function FocusModeView({
   // T9270: the mobile entry row's live-summary second line. DERIVED from the same
   // state the rows bind to — never a second stored copy. Straighten reads "Level"
   // when no angle is set, else "Straightened".
-  const aspectSummary = globalAspectRatio === '16:9' ? '16:9 wide' : '9:16 vertical';
+  const aspectSummary = ratioWithName(globalAspectRatio);
   const mobileSettingsSummary =
     `${aspectSummary} - Audio ${includeAudio ? 'on' : 'off'} - ${rotation ? 'Straightened' : 'Level'}`;
 

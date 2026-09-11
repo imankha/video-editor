@@ -45,9 +45,10 @@ export default function AspectRatioSelector({ aspectRatio, onAspectRatioChange }
                 ${isRatioTall ? 'w-4 h-6' : 'w-6 h-4'}
               `}
             />
-            {/* Ratio label */}
-            <span className={`text-xs font-medium ${isSelected ? 'text-white' : 'text-gray-400'}`}>
-              {value}
+            {/* Descriptive word (N32, T9550) leads; the raw ratio stays below it. */}
+            <span className={`flex flex-col items-center leading-tight text-center ${isSelected ? 'text-white' : 'text-gray-400'}`}>
+              <span className="text-xs font-medium">{ratioLabel(value)}</span>
+              <span className="text-[10px] opacity-80">{value}</span>
             </span>
           </button>
         );

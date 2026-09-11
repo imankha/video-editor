@@ -350,7 +350,7 @@ export function OverlayMode({
               />
             </div>
 
-            {/* Thumbnail marker (T5410; T6590 round 3) -- lives in the video track's
+            {/* Cover-image marker (T5410; T6590 round 3; "cover image" UI term T9550) -- lives in the video track's
                 TOP band (user decision: "on top of the timeline and draggable").
                 Never clipped (positive top offset only) and never occluded by the
                 playhead (explicit z-40 + opaque halo) -- see PosterMarkerLayer's

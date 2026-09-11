@@ -3,6 +3,7 @@ import { Image, ImageOff } from 'lucide-react';
 import { formatTimeSimple } from '../../../components/shared/clipConstants';
 import { useIsCoarsePointer } from '../../../hooks/useIsMobile';
 import { computeFollowScrollTarget } from '../../../components/timeline/TimelineBase';
+import { EDITOR_PANELS } from '../../../config/displayNames';
 
 // Pointer travel (px) below which a pointerdown->up is a CLICK, not a drag, and
 // commits nothing. Small enough that any intended drag clears it, large enough
@@ -10,8 +11,9 @@ import { computeFollowScrollTarget } from '../../../components/timeline/Timeline
 const DRAG_THRESHOLD_PX = 4;
 
 /**
- * PosterMarkerLayer - the THUMBNAIL marker on the overlay timeline (T5410; UI term
- * "thumbnail" since T6590 -- the data model still calls it poster_*).
+ * PosterMarkerLayer - the COVER-IMAGE marker on the overlay timeline (T5410; UI term
+ * "cover image" since T9550 (N31), "thumbnail" T6590 -- the data model still calls
+ * it poster_*, and this component file keeps its name per the epic no-rename rule).
  *
  * PLACEMENT (T6590 round 3 -- user decision 2026-08-06: "it should be on top of
  * the timeline and draggable"). The marker lives in the VIDEO TRACK's own top
@@ -370,18 +372,18 @@ export default function PosterMarkerLayer({
   if (timelineDuration <= 0) return null;
 
   const sourceTimeLabel = formatTimeSimple(visualTimeToSourceTime(shownVisualTime));
-  // UI term is "thumbnail" (T6590); the model still calls it poster_*. The
-  // tooltip/aria STATE THE INTERACTION (drag to choose the frame), not a noun.
+  // UI term is "cover image" (T9550, N31); the model still calls it poster_*. The
+  // tooltip/aria STATE THE INTERACTION (drag to choose the cover frame), not a noun.
   // T6630 round 8: the resting-state copy used to claim "the middle of the
   // open-play slow-mo" unconditionally -- stale since round 7 moved the
   // default off the midpoint (and this component has no way to know WHERE
   // the marker sits without re-deriving it); state the actual current time
   // instead, which this component already computes for the chip's own label.
   const label = isUploaded
-    ? 'Custom thumbnail image in use. This marker is inactive.'
+    ? 'Custom cover image in use. This marker is inactive.'
     : isDragging
-      ? `Thumbnail frame: ${sourceTimeLabel}`
-      : `Drag to choose which frame is the thumbnail — the still people see when you share. Currently at ${sourceTimeLabel}.`;
+      ? `Cover frame: ${sourceTimeLabel}`
+      : `Drag to choose the cover frame — the still people see before playing. Currently at ${sourceTimeLabel}.`;
 
   // T6590 round 3: the marker lives in the VIDEO TRACK's top band -- see the
   // component docstring for the full CUT-OFF / OCCLUDED reasoning. `top-0` on
@@ -399,7 +401,7 @@ export default function PosterMarkerLayer({
       ref={trackRef}
       data-testid="poster-marker"
       role="slider"
-      aria-label="Thumbnail marker — drag to choose the thumbnail frame"
+      aria-label={`${EDITOR_PANELS.CHOOSE_COVER_FRAME} — drag the cover-image marker on the timeline`}
       aria-valuetext={sourceTimeLabel}
       aria-disabled={disabled}
       tabIndex={disabled ? -1 : 0}
