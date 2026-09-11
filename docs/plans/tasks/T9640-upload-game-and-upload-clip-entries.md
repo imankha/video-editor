@@ -1,6 +1,6 @@
 # T9640: Give game and direct-clip upload clear, keyboard-reachable entries
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-10
