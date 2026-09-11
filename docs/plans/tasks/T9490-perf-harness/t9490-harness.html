@@ -1,0 +1,176 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>T9490 latency harness</title>
+<style>
+  body { margin:0; background:#111; font-family:monospace; color:#ddd; }
+  #video { width:640px; height:360px; background:#000; display:block; }
+  #track { position:relative; height:40px; background:#1f2937; border-radius:8px;
+           user-select:none; touch-action:none; margin:8px 0; width:900px; }
+  .region { position:absolute; top:0; height:100%; background:rgba(34,197,94,.2);
+            border-top:1px solid rgba(34,197,94,.3); border-bottom:1px solid rgba(34,197,94,.3); }
+  .handle { position:absolute; top:0; height:100%; width:12px; margin-left:-6px;
+            background:#22c55e; border-radius:2px; cursor:col-resize; touch-action:none; }
+</style>
+</head>
+<body>
+<video id="video" muted playsinline preload="auto"></video>
+<div id="track" data-testid="scrub-track">
+  <div class="region" id="region"></div>
+  <div class="handle" id="startHandle" data-testid="start-handle"></div>
+  <div class="handle" id="endHandle" data-testid="end-handle"></div>
+</div>
+<script>
+// ============================================================================
+// T9490 measurement harness. Faithfully reproduces the TWO distinct code paths
+// the report conflates, so each is measured on its own:
+//
+//   (A) pointer-to-handle  = pointermove -> the green handle visually moving
+//       In the app: handlePointerMove -> onStartTimeChange/onEndTimeChange ->
+//       React state -> new left%. Handle render is decoupled from the seek.
+//       (ClipScrubRegion.jsx handlePointerMove, lines ~214-242)
+//
+//   (B) pointer-to-preview = the pointermove that issued a seek -> the video
+//       element actually PRESENTING that seeked frame.
+//       In the app: onSeek -> useVideo.seek() -> video.currentTime = target,
+//       frame-present confirmed via requestVideoFrameCallback.
+//       (useVideo.js seek(), lines ~421-499)
+//
+// MODE (query param `mode`):
+//   current   = issue a seek on EVERY pointermove (current app behavior:
+//               ClipScrubRegion calls onSeek(clamped) inside handlePointerMove)
+//   coalesced = handle moves every frame, but at most ONE seek is in flight;
+//               moves while a seek is pending are dropped, and a final settle
+//               seek fires on release. (proposed fix)
+// ============================================================================
+const params = new URLSearchParams(location.search);
+const MODE = params.get('mode') || 'current';
+const SRC = params.get('src');
+const DURATION = 90;            // matches the generated test file
+const WIN_START = 0, WIN_END = DURATION;
+const video = document.getElementById('video');
+const track = document.getElementById('track');
+const startHandle = document.getElementById('startHandle');
+const endHandle = document.getElementById('endHandle');
+const region = document.getElementById('region');
+
+video.src = SRC;
+
+// --- metrics ---------------------------------------------------------------
+const M = {
+  mode: MODE,
+  handleLatencies: [],   // ms: pointermove handler -> next paint (handle moved)
+  previewLatencies: [],  // ms: seek issued -> requestVideoFrameCallback present
+  seeksIssued: 0,
+  framesPresented: 0,    // via requestVideoFrameCallback (paint-confirmed)
+  seekedEvents: 0,       // via 'seeked' event (browser completed a seek op)
+  seekedLatencies: [],   // ms: seek issued -> 'seeked' for that (or a later) target
+  maxBacklog: 0,         // peak (seeksIssued - framesPresented) during drag
+  movesSeen: 0,
+};
+window.__M = M;
+
+// --- state ---------------------------------------------------------------
+let startTime = 30, endTime = 60;
+let dragging = null;           // 'start' | 'end'
+let seekInFlight = false;      // for coalesced mode
+let pendingSeekTime = null;    // last dropped seek target (coalesced settle)
+let rvfcSupported = typeof video.requestVideoFrameCallback === 'function';
+let lastSeekT0 = null;
+// 'seeked' fires reliably when the browser COMPLETES a seek operation (even for
+// a paused video, unlike rvfc in headless). Counting these during a drag tells
+// us how many times the preview frame actually advanced.
+video.addEventListener('seeked', () => {
+  M.seekedEvents++;
+  if (lastSeekT0 !== null) M.seekedLatencies.push(performance.now() - lastSeekT0);
+  seekInFlight = false;
+  // coalesced: advance to the most recent target the user moved to while this
+  // seek was in flight (one catch-up seek, not the whole backlog). Driven off
+  // 'seeked' because it is the reliable completion signal (rvfc is flaky for a
+  // paused video in headless).
+  if (MODE === 'coalesced' && pendingSeekTime !== null){
+    const next = pendingSeekTime; pendingSeekTime = null;
+    issueSeek(next);
+  }
+});
+
+function pct(t){ return ((t - WIN_START) / (WIN_END - WIN_START)) * 100; }
+function pixelToTime(clientX){
+  const r = track.getBoundingClientRect();
+  const p = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+  return WIN_START + p * (WIN_END - WIN_START);
+}
+function renderHandles(){
+  startHandle.style.left = pct(startTime) + '%';
+  endHandle.style.left = pct(endTime) + '%';
+  region.style.left = pct(startTime) + '%';
+  region.style.width = (pct(endTime) - pct(startTime)) + '%';
+}
+renderHandles();
+
+// Faithful mirror of useVideo.seek(): sets video.currentTime and confirms the
+// presented frame via requestVideoFrameCallback (same paint-confirmed signal
+// the app uses, useVideo.js lines ~458-476).
+function issueSeek(t){
+  M.seeksIssued++;
+  const backlog = M.seeksIssued - M.framesPresented;
+  if (backlog > M.maxBacklog) M.maxBacklog = backlog;
+  const t0 = performance.now();
+  lastSeekT0 = t0;
+  seekInFlight = true;
+  video.currentTime = t;
+  // rvfc = paint-confirmed present (a second, best-effort signal for preview
+  // latency). Coalesced advancement is driven off 'seeked' (above), not here.
+  if (rvfcSupported) video.requestVideoFrameCallback(() => {
+    M.framesPresented++;
+    M.previewLatencies.push(performance.now() - t0);
+  });
+}
+
+function requestSeek(t){
+  if (MODE === 'current'){
+    issueSeek(t);                 // app behavior: one seek per pointermove
+  } else {
+    if (seekInFlight){ pendingSeekTime = t; }  // drop, remember latest
+    else issueSeek(t);
+  }
+}
+
+function onMove(e){
+  if (!dragging) return;
+  M.movesSeen++;
+  const t = pixelToTime(e.clientX);
+  // (A) handle render path: update position + measure move->paint latency.
+  const th = performance.now();
+  if (dragging === 'start') startTime = Math.max(0, Math.min(t, endTime - 0.5));
+  else endTime = Math.min(DURATION, Math.max(t, startTime + 0.5));
+  renderHandles();
+  requestAnimationFrame(() => { M.handleLatencies.push(performance.now() - th); });
+  // (B) preview path: issue (or coalesce) the seek.
+  requestSeek(dragging === 'start' ? startTime : endTime);
+}
+
+function onDown(handle, e){
+  dragging = handle;
+  issueSeek(handle === 'start' ? startTime : endTime); // seek on grab (app parity)
+  try { e.target.setPointerCapture(e.pointerId); } catch(_){}
+}
+function onUp(){
+  if (!dragging) return;
+  // coalesced mode settles accurately on release.
+  if (MODE === 'coalesced'){
+    const t = dragging === 'start' ? startTime : endTime;
+    if (!seekInFlight) issueSeek(t); else pendingSeekTime = t;
+  }
+  dragging = null;
+}
+startHandle.addEventListener('pointerdown', e => onDown('start', e));
+endHandle.addEventListener('pointerdown', e => onDown('end', e));
+window.addEventListener('pointermove', onMove);
+window.addEventListener('pointerup', onUp);
+
+// signal readiness once the video can seek
+video.addEventListener('loadeddata', () => { window.__READY = true; });
+video.addEventListener('error', () => { window.__ERR = (video.error && video.error.code) || 'err'; });
+</script>
+</body>
+</html>
