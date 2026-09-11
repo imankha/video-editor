@@ -34,19 +34,19 @@ describe('announceReelCreated (T8480)', () => {
     expect(selectProject).toHaveBeenCalledWith(42);
   });
 
-  it('fires one success toast naming the clip and its new home (In Progress Clips)', () => {
+  it('fires one success toast naming the clip and its new home (Clips)', () => {
     announceReelCreated(42, { onOpenReelInFocus, fetchProjects, clipName: 'Brilliant Interception' });
     const toasts = useToastStore.getState().toasts;
     expect(toasts).toHaveLength(1);
     expect(toasts[0].type).toBe('success');
-    expect(toasts[0].title).toBe('Brilliant Interception is now in In Progress Clips');
+    expect(toasts[0].title).toBe('Brilliant Interception is now in Clips');
     expect(toasts[0].duration).toBe(6000);
   });
 
   it('falls back to a generic clip name when none is supplied', () => {
     announceReelCreated(42, { onOpenReelInFocus, fetchProjects });
     const toasts = useToastStore.getState().toasts;
-    expect(toasts[0].title).toBe('Your clip is now in In Progress Clips');
+    expect(toasts[0].title).toBe('Your clip is now in Clips');
   });
 
   it('the toast action opens Focus for the new project via the select+navigate gesture', () => {

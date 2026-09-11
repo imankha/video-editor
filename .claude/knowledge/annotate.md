@@ -1,5 +1,30 @@
 ---
 domain: annotate
+updated: 2026-09-11 (T9530 — LIBRARY-surface vocabulary (Shared Vocabulary epic, N01-N03/N10-N15/N33/N46).
+Canonical tab labels are now **Games / Clips / Reels / Published** at EVERY breakpoint (unnumbered):
+`SECTION_NAMES.CLIPS`='Clips' and `SECTION_NAMES.HIGHLIGHTS`='Reels' (dropped T8555's "In Progress"
+prefix, reversing part of T8555 — pointer added to its task file), so `SECTION_NAMES` and
+`SECTION_NAMES_SHORT` now render the SAME words. Tab **ids**/URLs (`projects`/`/home/reels`,
+`inProgressReels`) stay FROZEN — labels only. NEW single source `config/displayNames.js`
+`LIBRARY_ACTIONS`: object actions name their OWN object via `DraftTile`'s
+`isReel = project.is_auto_created === false` discriminator — a single-clip auto-draft (Clips tab,
+is_auto_created===true, DEFAULT when the flag is absent) is **Delete clip / Rename clip / Publish clip**;
+an assembled multi-clip draft (Reels tab, is_auto_created===false) is **Delete reel / Rename reel /
+Publish reel**. This fixes the "Delete reel in a Clips menu" bug (N14). DELETE_CLIP/RENAME_CLIP reuse
+ANNOTATE's canonical strings (no drift). Other renames: **Upload game** (N01, was "Add Game"/"Add New
+Game"; GameDetailsModal + ProjectManager + EmptyTabGuide — modal HEADING and CTA now share the string,
+so tests target it by role heading vs button), **Upload clip** (N02, `CLIP_UPLOAD.UPLOAD_CLIP`, key
+renamed from ADD_VIDEO), **Add footage to game** (N03, AddFootageButton COPY), **Create reel** +
+**Create reel (N clips)** (N13, `LIBRARY_ACTIONS.CREATE_REEL`/`CREATE_REEL_WITH_COUNT`; ProjectManager
+"Build New Reel", EmptyTabGuide ReelsActions, GameClipSelectorModal header+submit — disabled at zero
+clips), **By status / By game** (N33, ProjectManager filter; `value` ids 'phase'/'game' unchanged),
+**unnumbered flow strip** (N46, EmptyTabGuide FlowStrip dropped the 1-2-3 step numbers — peers +
+Reels' dashed "optional" pill remain). The reel-created toast in AnnotateContainer ("... is now in
+Clips") now imports SECTION_NAMES (was a literal "In Progress Clips"). LEFT for sibling children /
+audit (NOT this task): SECTION_NAMES.LIBRARY='Highlight Reels' destination noun (GalleryButton/
+ExportButtonView/quests — T9560/T9570); AttachVideoModal's "Add Video"/"Add a video" (a per-game attach
+flow, distinct from N02's standalone clip upload); CollectionPlayer/DraftReelPreview publish buttons
+still say "Publish to Highlight Reels" (published-gallery surface, not the DraftTile card). Prior:)
 updated: 2026-09-11 (T9520 — Annotate surface VOCABULARY is now the Shared-Vocabulary object model,
 single-sourced in `config/displayNames.js` `ANNOTATE`. One model: a GAME holds PLAYS (marked
 ranges); a PLAY can produce a CLIP (editable video); reels are multi-clip and live OFF this surface,

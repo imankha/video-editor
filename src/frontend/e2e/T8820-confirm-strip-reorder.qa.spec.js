@@ -13,7 +13,7 @@
  *     "9 min break" gap connector);
  *   - every row is draggable immediately (no separate "Adjust order" mode) and a
  *     real pointer drag reorders, flipping the trust line to "Order set by you";
- *   - submit ("Add Game") is NEVER gated by ordering — enabled throughout;
+ *   - submit ("Upload game") is NEVER gated by ordering — enabled throughout;
  *   - no horizontal overflow at 360 / 390 / 428 px.
  *
  * Emulates phone VIEWPORTS on the chromium engine (the honest limit documented in
@@ -74,7 +74,7 @@ async function openAddGameModalWithFootage(page) {
   const addCta = page.getByRole('button', { name: /^Add Game$/ }).first();
   await addCta.waitFor({ state: 'visible', timeout: 30000 });
   await addCta.click();
-  await expect(page.getByText('Add New Game')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Upload game' })).toBeVisible();
 
   // Feed the four segments through the (hidden) multi-select input.
   await page.setInputFiles('[data-testid="footage-file-input"]', fixturePaths);

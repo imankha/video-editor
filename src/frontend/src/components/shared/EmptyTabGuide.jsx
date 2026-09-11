@@ -1,7 +1,7 @@
 import { ChevronRight, Plus } from 'lucide-react';
 import { Button } from './Button';
 import { GAME, REEL, HIGHLIGHT, PUBLISHED } from '../../config/themeColors';
-import { CLIP_UPLOAD } from '../../config/displayNames';
+import { CLIP_UPLOAD, LIBRARY_ACTIONS } from '../../config/displayNames';
 import { FLOW_STEPS, EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 
 /**
@@ -102,14 +102,15 @@ const STEP_ACCENT_BORDER = {
   published: 'border-t-amber-600',
 };
 
-// T9390 flow strip: sm+ only. Games/Clips/Published are numbered nodes (1-2-3,
-// counting only the non-optional entries); Reels is an unnumbered dashed
-// "optional" pill, a visual detour rather than a step. The chevrons touching the
-// pill render lighter (a detour, not a step). Dropped entirely below sm -- the lit
-// tab bar above already orients the user and the "optional" message lives in the
-// Reels body line now.
+// Flow strip: sm+ only. T9530 (N46, 2026-09-10) removed the step NUMBERS: the
+// numbered 1-2-3 nodes read as a mandatory pipeline ("a clip must pass through a
+// reel before it can be published"), which is false — a single clip publishes on
+// its own. The four destinations now render as unnumbered peer labels
+// (Games . Clips . Reels . Published), the active one lit in its tab color, so the
+// strip orients without prescribing a required order. Reels keeps its dashed
+// "optional" pill (it is a genuine detour, not part of the single-clip path).
+// Dropped entirely below sm -- the lit tab bar above already orients the user.
 function FlowStrip({ tab }) {
-  let stepNum = 0;
   return (
     <div className="mb-6 w-full">
       <ol className="hidden sm:flex items-center justify-center gap-1.5">
@@ -137,21 +138,14 @@ function FlowStrip({ tab }) {
             );
           }
 
-          stepNum += 1;
-          const num = stepNum;
           return (
             <li key={step.key} className="flex items-center gap-1.5">
-              <span className="flex items-center gap-1.5">
-                <span
-                  className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
-                    active ? `${STEP_COLORS[step.key]} text-white` : 'bg-gray-700 text-gray-400'
-                  }`}
-                >
-                  {num}
-                </span>
-                <span className={`text-sm font-medium ${active ? 'text-white' : 'text-gray-500'}`}>
-                  {step.label}
-                </span>
+              <span
+                className={`text-sm font-medium px-2.5 py-1 rounded-full ${
+                  active ? `${STEP_COLORS[step.key]} text-white` : 'text-gray-500'
+                }`}
+              >
+                {step.label}
               </span>
               {!isLast && (
                 <ChevronRight size={16} className={dimChevron ? 'text-gray-700' : 'text-gray-600'} />
@@ -169,7 +163,7 @@ function GamesActions({ onAddGame }) {
   return (
     <div className="flex flex-col items-center gap-2">
       <Button variant="success" size="lg" icon={Plus} onClick={onAddGame}>
-        Add Game
+        {LIBRARY_ACTIONS.UPLOAD_GAME}
       </Button>
       <p className="text-xs text-gray-500">{c.addGameCaption}</p>
     </div>
@@ -193,7 +187,7 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
           onClick={onAddVideo}
           data-tutorial-target="clips-add-video"
         >
-          {CLIP_UPLOAD.ADD_VIDEO}
+          {CLIP_UPLOAD.UPLOAD_CLIP}
         </Button>
         <p className="text-xs text-gray-500">{c.noGameCaption}</p>
       </div>
@@ -227,7 +221,7 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
           onClick={onAddVideo}
           data-tutorial-target="clips-add-video"
         >
-          {CLIP_UPLOAD.ADD_VIDEO}
+          {CLIP_UPLOAD.UPLOAD_CLIP}
         </Button>
       </div>
     </div>
@@ -248,7 +242,7 @@ function ReelsActions({ clipCount, onBuildReel }) {
         onClick={onBuildReel}
         className="w-full max-w-xs"
       >
-        Build New Reel
+        {LIBRARY_ACTIONS.CREATE_REEL}
       </Button>
       <p className="text-xs text-gray-500">{c.hasClipsCaption(clipCount)}</p>
     </div>

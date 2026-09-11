@@ -1,4 +1,4 @@
-// T8380 new-account E2E — the "Add Video" entry point makes the In Progress
+// T8380 new-account E2E — the "Upload clip" entry point makes the In Progress
 // Clips tab a valid clip-creation surface, so a brand-new user (zero games, zero
 // clips) must be able to REACH it and see the Add Video CTA, while Games stays
 // the default landing tab. This is the highest-risk part of T8380 (it removes the
@@ -25,7 +25,7 @@ const TEST_VIDEO = path.resolve(__dirname, '../../../formal annotations/test.sho
 const TEST_USER_ID = `e2e_t8380_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 const gamesTab = (p) => p.getByRole('button', { name: /^Games/i });
-const clipsTab = (p) => p.getByRole('button', { name: /^In Progress Clips/i });
+const clipsTab = (p) => p.getByRole('button', { name: /^Clips/i });
 
 async function authFreshUser(page) {
   await page.setExtraHTTPHeaders({ 'X-User-ID': TEST_USER_ID, 'X-Test-Mode': 'true' });
@@ -85,7 +85,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
 
     // Games is the default LANDING tab for a zero-content account.
     await expect(gamesTab(page)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add Game' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Upload game' })).toBeVisible();
 
     // The In Progress Clips tab is NOT disabled (the T6830 dead-end guard is gone),
     // and the old "Extract clips from a game first..." caption is not shown.
@@ -96,7 +96,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
 
     // Clicking in reveals the two-path empty state with the Add Video CTA.
     await tab.click();
-    const addVideo = page.getByRole('button', { name: 'Add Video' });
+    const addVideo = page.getByRole('button', { name: 'Upload clip' });
     await expect(addVideo).toBeVisible();
     await expect(addVideo).toHaveAttribute('data-tutorial-target', 'clips-add-video');
     // Path B guidance (extract in Annotate) is present alongside. T8960 renamed
@@ -115,7 +115,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Add Video' }).click();
+    await page.getByRole('button', { name: 'Upload clip' }).click();
 
     // The one-time consequence notice appears (never a hard gate): Cancel + Continue.
     const notice = page.getByRole('alertdialog');
@@ -136,7 +136,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     await expect(notice).toBeHidden();
 
     // Cancel path also works without side effects.
-    await page.getByRole('button', { name: 'Add Video' }).click();
+    await page.getByRole('button', { name: 'Upload clip' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByRole('alertdialog')).toBeHidden();
   });
@@ -146,7 +146,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Add Video' }).click();
+    await page.getByRole('button', { name: 'Upload clip' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 
@@ -186,7 +186,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     // network call `ensureVideoInR2` makes for a clip upload.
     await page.route('**/api/games/prepare-upload', (route) => route.abort('failed'));
 
-    await page.getByRole('button', { name: 'Add Video' }).click();
+    await page.getByRole('button', { name: 'Upload clip' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 

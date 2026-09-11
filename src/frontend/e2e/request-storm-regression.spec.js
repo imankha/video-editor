@@ -108,7 +108,7 @@ test.describe.serial('request storm regression', () => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.locator('button:has-text("Add Game")').click();
+    await page.locator('button:has-text("Upload game")').click();
     await page.waitForTimeout(500);
 
     await openGameDetailsDisclosure(page);
@@ -121,7 +121,7 @@ test.describe.serial('request storm regression', () => {
     await videoInput.setInputFiles(TEST_VIDEO);
     await page.waitForTimeout(1000);
 
-    const createButton = page.locator('form button:has-text("Add Game")');
+    const createButton = page.locator('form button:has-text("Upload game")');
     await expect(createButton).toBeEnabled({ timeout: 5000 });
     await createButton.click();
 

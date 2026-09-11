@@ -68,7 +68,7 @@ test('quest/help panel does not occlude the Add Game modal at 390x844', async ({
 
   // Open the modal.
   await addCta.click();
-  await expect(page.getByText('Add New Game')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Upload game' })).toBeVisible();
 
   // 1) Occlusion contract: the quest/help surface auto-hides fully while the modal
   //    is open — no quest overlay remains in the DOM over the modal.

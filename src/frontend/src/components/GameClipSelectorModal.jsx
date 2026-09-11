@@ -4,6 +4,7 @@ import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { ensureUniqueName } from '../utils/uniqueName';
+import { LIBRARY_ACTIONS } from '../config/displayNames';
 import { getClipDisplayName } from '../utils/clipDisplayName';
 
 const API_BASE_URL = `${API_BASE}/api`;
@@ -502,7 +503,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
       <div className="bg-gray-800 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-hidden border border-gray-700">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white">Create Reel from Clips</h2>
+          <h2 className="text-xl font-bold text-white">{LIBRARY_ACTIONS.CREATE_REEL}</h2>
           <Button
             variant="ghost"
             size="sm"
@@ -843,7 +844,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
             disabled={!projectName.trim() || preview.clip_count === 0 || creating}
             loading={creating}
           >
-            {creating ? 'Creating...' : `Create with ${preview.clip_count} Clips`}
+            {creating ? 'Creating...' : LIBRARY_ACTIONS.CREATE_REEL_WITH_COUNT(preview.clip_count)}
           </Button>
         </div>
       </div>

@@ -99,7 +99,7 @@ test('desktop: upload preview shows cost + 30 days before activation', async ({ 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/home/games');
   await page.getByRole('button', { name: /Add Game/ }).click();
-  await expect(page.getByText('Add New Game')).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('heading', { name: 'Upload game' })).toBeVisible({ timeout: 15000 });
 
   await page.locator('input[type="file"][accept*="video"]').last().setInputFiles({
     name: 'game.mp4',
@@ -123,7 +123,7 @@ test('mobile 375: buy-credits + upload preview render', async ({ context, page }
   // Fresh navigation to the games tab for the upload preview.
   await page.goto('/home/games');
   await page.getByRole('button', { name: /Add Game/ }).click();
-  await expect(page.getByText('Add New Game')).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('heading', { name: 'Upload game' })).toBeVisible({ timeout: 15000 });
   await page.locator('input[type="file"][accept*="video"]').last().setInputFiles({
     name: 'game.mp4',
     mimeType: 'video/mp4',

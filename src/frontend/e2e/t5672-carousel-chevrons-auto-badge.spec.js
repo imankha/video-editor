@@ -208,7 +208,7 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
     // T8080: the Clips screen now defaults to By-Phase classification, which
     // does NOT render the game-group stage rows this test pins (T6810). Switch to
     // By Game explicitly so the assertions below exercise what they're named for.
-    await page.getByRole('button', { name: 'By Game' }).click();
+    await page.getByRole('button', { name: 'By game' }).click();
 
     // Splice synthetic drafts under an existing group_key to exercise the
     // T6810 stage rows DETERMINISTICALLY (the real account's stages vary):

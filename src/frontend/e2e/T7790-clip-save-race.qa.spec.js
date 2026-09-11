@@ -86,7 +86,7 @@ test('TSV import that races game creation still saves every clip (T7790)', async
   // Open the Add Game modal and fill it.
   await page.locator('button:has-text("Games")').click();
   await page.waitForTimeout(500);
-  await page.locator('button:has-text("Add Game")').click();
+  await page.locator('button:has-text("Upload game")').click();
   await page.waitForTimeout(500);
   await openGameDetailsDisclosure(page);
   await page.getByPlaceholder('e.g., Carlsbad SC').fill('T7790 Race');
@@ -94,7 +94,7 @@ test('TSV import that races game creation still saves every clip (T7790)', async
   await page.getByRole('button', { name: 'Home' }).click();
   await page.locator('form input[type="file"][accept*="video"]').setInputFiles(TEST_VIDEO);
   await page.waitForTimeout(500);
-  const createButton = page.locator('form button:has-text("Add Game")');
+  const createButton = page.locator('form button:has-text("Upload game")');
   await expect(createButton).toBeEnabled({ timeout: 5000 });
   await createButton.click();
 

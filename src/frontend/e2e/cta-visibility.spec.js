@@ -77,7 +77,7 @@ for (const vp of CTA_VIEWPORTS) {
     test('Add Game modal: submit CTA above the fold', async ({ page }) => {
       await reachHome(page);
       await openTab(page, /^Games/);
-      await page.getByRole('button', { name: 'Add Game', exact: true }).first().click();
+      await page.getByRole('button', { name: 'Upload game', exact: true }).first().click();
 
       // T8955 removed the "More options" disclosure this used to anchor on;
       // the dropzone heading is a stable, always-present anchor instead.
@@ -109,7 +109,7 @@ for (const vp of CTA_VIEWPORTS) {
     test.fixme('Add Game modal: submit above the keyboard-open fold (needs visualViewport resize)', async ({ page }) => {
       await reachHome(page);
       await openTab(page, /^Games/);
-      await page.getByRole('button', { name: 'Add Game', exact: true }).first().click();
+      await page.getByRole('button', { name: 'Upload game', exact: true }).first().click();
       const form = page.locator('form:has-text("Drop any game video here")');
       await form.waitFor({ state: 'visible', timeout: 15000 });
       const submit = form.locator('button[type="submit"]');
@@ -236,7 +236,7 @@ for (const vp of CTA_VIEWPORTS) {
       await openTab(page, /^Reels/); // T8980: sub-`sm` short tab label
       await page.getByTestId('in-progress-reels-tab-panel')
         .waitFor({ state: 'visible', timeout: 15000 });
-      const build = page.getByRole('button', { name: 'Build New Reel' }).first();
+      const build = page.getByRole('button', { name: 'Create reel' }).first();
       await build.waitFor({ state: 'visible', timeout: 15000 });
       await assertCtaInViewport(page, build);
       await saveEvidence(page, `cta-in-progress-reels_${vp.name}`);

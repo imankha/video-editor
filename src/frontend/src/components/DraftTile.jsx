@@ -17,7 +17,7 @@ import { openFinishedReel } from '../utils/finishedReelNav';
 import { API_BASE } from '../config';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
-import { SECTION_NAMES } from '../config/displayNames';
+import { SECTION_NAMES, LIBRARY_ACTIONS } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
 import { rendersSourceAspect } from '../utils/draftStage';
@@ -277,6 +277,16 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   const isComplete = project.has_final_video;
   const isReadyToPublish = isComplete && !project.is_published;
 
+  // T9530 (N12/N14/N15): every per-card action names its OWN object. A single-
+  // clip auto-draft (is_auto_created === true, lives on the Clips tab) is a Clip;
+  // an assembled multi-clip draft (is_auto_created === false, on the Reels tab)
+  // is a Reel. Default to the CLIP labels when the flag is absent so a Clips-tab
+  // item never reads "Delete reel"/"Rename reel" -- the exact bug N14 leads with.
+  const isReel = project.is_auto_created === false;
+  const deleteLabel = isReel ? LIBRARY_ACTIONS.DELETE_REEL : LIBRARY_ACTIONS.DELETE_CLIP;
+  const renameLabel = isReel ? LIBRARY_ACTIONS.RENAME_REEL : LIBRARY_ACTIONS.RENAME_CLIP;
+  const publishLabel = isReel ? LIBRARY_ACTIONS.PUBLISH_REEL : LIBRARY_ACTIONS.PUBLISH_CLIP;
+
   // T8350: multi-clip staleness cue -- badge-only carrier for the produced/ready
   // states, where the strip below is collapsed or suppressed (see reelStaleness.js).
   // Scoped to multi-clip tiles (decision 3a) so it never duplicates Annotate's
@@ -407,7 +417,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           second calls onDelete and the tile unmounts. Never closes on the first tap. */}
       <button onClick={(e) => { e.stopPropagation(); handleDelete(e); }} className={`${menuItemClass} hover:bg-red-900/40`}>
         <Trash2 size={18} className="text-red-400 flex-shrink-0" />
-        <span className="text-red-400">{showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'}</span>
+        <span className="text-red-400">{showDeleteConfirm ? 'Click again to confirm' : deleteLabel}</span>
       </button>
     </>
   );
@@ -586,8 +596,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
             <button
               type="button"
               onClick={handleStartRename}
-              title="Rename reel"
-              aria-label="Rename reel"
+              title={renameLabel}
+              aria-label={renameLabel}
               className="flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[32px] min-w-[32px] coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"
             >
               <Pencil size={14} />
@@ -642,7 +652,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           {isComplete && !isReadyToPublish && (
             <Button variant="secondary" size="sm" icon={EyeOff} iconOnly loading={isPublishing} onClick={handleHideFromDrafts} title={`Hide from Drafts (stays in ${SECTION_NAMES.LIBRARY})`} className={actionBtnClass} />
           )}
-          <Button variant={showDeleteConfirm ? 'danger' : 'secondary'} size="sm" icon={Trash2} iconOnly onClick={handleDelete} title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'} className={actionBtnClass} />
+          <Button variant={showDeleteConfirm ? 'danger' : 'secondary'} size="sm" icon={Trash2} iconOnly onClick={handleDelete} title={showDeleteConfirm ? 'Click again to confirm' : deleteLabel} className={actionBtnClass} />
         </div>
       )}
 
@@ -710,8 +720,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
             type="button"
             onClick={handlePublishToMyReels}
             disabled={isPublishing}
-            aria-label={`Publish to ${SECTION_NAMES.LIBRARY}`}
-            title={`Publish to ${SECTION_NAMES.LIBRARY}`}
+            aria-label={publishLabel}
+            title={publishLabel}
             className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-semibold tracking-tight bg-cyan-500 text-gray-950 shadow-lg shadow-cyan-500/25 hover:bg-cyan-400 active:scale-[0.98] disabled:opacity-60 transition-all coarse-pointer:min-h-[44px]"
           >
             {isPublishing ? <Loader2 size={14} className="animate-spin" /> : <FolderInput size={14} />}

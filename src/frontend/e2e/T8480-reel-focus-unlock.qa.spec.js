@@ -14,7 +14,7 @@ import { openAddClipForm } from './helpers/annotateClips.js';
  * Proves, against the running app (empty test-session bypass, local stack):
  *   - save with reel ON -> the Focus tab is enabled immediately (new project
  *     auto-selected), zero extra gestures
- *   - the toast confirms the clip is now in "In Progress Clips" (T8760) and
+ *   - the toast confirms the clip is now in "Clips" (T8760) and
  *     its action opens Focus for the new reel
  *   - saving does NOT navigate away from Annotate or reload its video
  *   - tapping a locked tab fires a visible explanation toast (390x844 too)
@@ -30,7 +30,7 @@ const TEST_DATA_DIR = path.resolve(__dirname, '../../../formal annotations/test.
 const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-carlsbad-trimmed.mp4');
 
 // T8760: the reel-created toast now names the clip and confirms its home tab.
-const TOAST_COPY = /is now in In Progress Clips/;
+const TOAST_COPY = /is now in Clips/;
 
 /** Fresh throwaway user per test run so reruns never collide. */
 function makeUserId(tag) {
@@ -76,14 +76,14 @@ async function setupAnnotateWithGame(page, userId) {
   // Add a game with the short test video and land in Annotate.
   await page.locator('button:has-text("Games")').click();
   await page.waitForTimeout(500);
-  await page.locator('button:has-text("Add Game")').click();
+  await page.locator('button:has-text("Upload game")').click();
   await page.waitForTimeout(500);
   await page.getByPlaceholder('e.g., Carlsbad SC').fill('T8480 Reel Unlock');
   await page.locator('input[type="date"]').fill(new Date().toISOString().split('T')[0]);
   await page.getByRole('button', { name: 'Home' }).click();
   await page.locator('form input[type="file"][accept*="video"]').setInputFiles(TEST_VIDEO);
   await page.waitForTimeout(500);
-  const createButton = page.locator('form button:has-text("Add Game")');
+  const createButton = page.locator('form button:has-text("Upload game")');
   await expect(createButton).toBeEnabled({ timeout: 5000 });
   await createButton.click();
 }
@@ -178,7 +178,7 @@ test.describe('T8470 - one status story for a fresh draft (desktop)', () => {
     await expect(continueCard).not.toContainText('Not Started');
 
     // In Progress Clips tab: the chip counts the same single-clip draft.
-    await page.getByRole('button', { name: /^In Progress Clips/ }).click();
+    await page.getByRole('button', { name: /^Clips/ }).click();
     await expect(page.getByTestId('project-card').first()).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId('project-card').getByText('Draft', { exact: true })).toBeVisible();
 

@@ -4,7 +4,7 @@
  * Bug (reports #18 @352x541, #46 @320x498, iPhone Safari): a new user taps "Add
  * Game" on an empty Games tab, the GameDetailsModal opens, but the form is taller
  * than a short iPhone viewport and the panel was fixed-centered with NO max-height
- * and NO internal scroll. So the primary "Add Game" submit button overflowed BELOW
+ * and NO internal scroll. So the primary "Upload game" submit button overflowed BELOW
  * the fold and the close "X" overflowed ABOVE it, and because the panel is
  * `position: fixed` there is nothing to scroll — both were unreachable. Dead end:
  * the user can fill the visible fields but can neither submit nor dismiss.
@@ -56,7 +56,7 @@ async function openAddGameModal(page) {
   const addCta = page.getByRole('button', { name: /^Add Game$/ }).first();
   await addCta.waitFor({ state: 'visible', timeout: 30000 });
   await addCta.click();
-  await expect(page.getByText('Add New Game')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Upload game' })).toBeVisible();
 }
 
 /** True when the element's box sits fully inside [0, viewportHeight]. */
@@ -100,7 +100,7 @@ for (const vp of SHORT_VIEWPORTS) {
     // never-disabled X, so the empty test session's eventual redirect can't race
     // a form-fill/enable step.)
 
-    // 3) The submit "Add Game" button (bottom of the form) scrolls into view.
+    // 3) The submit "Upload game" button (bottom of the form) scrolls into view.
     const submit = page.locator('div.max-w-md button[type="submit"]').first();
     await submit.scrollIntoViewIfNeeded();
     expect(within(await submit.boundingBox(), vp.height)).toBe(true);

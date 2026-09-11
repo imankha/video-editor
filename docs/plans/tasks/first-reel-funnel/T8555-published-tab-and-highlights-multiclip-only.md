@@ -5,6 +5,14 @@
 **Complexity:** 5
 **Created:** 2026-09-04
 
+> **Partially reversed by T9530** (Shared Vocabulary epic, N10/N11, 2026-09-10): the
+> **"In Progress" tab-bar prefixes this task introduced were removed** — the two middle tabs
+> now read **"Clips"** and **"Reels"** at every breakpoint (status is shown per item, not in the
+> tab name). The four-tab IA, tab **ids**/URLs (`projects`/`inProgressReels`), the
+> `is_auto_created` split, and this task's actual bug fix (published reels off the Reels tab) all
+> stand unchanged — only the visible labels were shortened. See
+> `docs/plans/tasks/shared-vocabulary/T9530-library-tabs-and-objects.md`.
+
 ## Problem
 
 User-reported bug (2026-09-04), found live on staging: the "Highlights" tab (T8545) shows

@@ -67,7 +67,7 @@ const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
  *
  * Flow (updated for Add Game modal):
  * 1. Navigate to home (ProjectsScreen)
- * 2. Click "Games" tab then "Add Game" to open modal
+ * 2. Click "Games" tab then "Upload game" to open modal
  * 3. Fill modal form: opponent, date, game type, video
  * 4. Click "Create Game" to submit and enter annotate mode
  * 5. Import TSV file
@@ -82,7 +82,7 @@ async function enterAnnotateModeWithClips(page) {
   await page.waitForTimeout(500);
 
   // Click Add Game to open the modal
-  await page.locator('button:has-text("Add Game")').click();
+  await page.locator('button:has-text("Upload game")').click();
   await page.waitForTimeout(500);
 
   // Fill in the Add Game modal form
@@ -108,7 +108,7 @@ async function enterAnnotateModeWithClips(page) {
   await page.waitForTimeout(1000);
 
   // Click Create Game button
-  const createButton = page.locator('form button:has-text("Add Game")');
+  const createButton = page.locator('form button:has-text("Upload game")');
   await expect(createButton).toBeEnabled({ timeout: 5000 });
   await createButton.click();
 
@@ -212,7 +212,7 @@ test.describe('Full Workflow Tests', () => {
     await expect(page.locator('button:has-text("Clips")')).toBeVisible();
 
     // Games tab is the default for fresh users - verify it loads first
-    await expect(page.locator('button:has-text("Add Game")')).toBeVisible();
+    await expect(page.locator('button:has-text("Upload game")')).toBeVisible();
 
     // T6830: for a fresh zero-clip account the Clips tab is a deliberate
     // dead end (clicking in can only show an empty list), so it renders

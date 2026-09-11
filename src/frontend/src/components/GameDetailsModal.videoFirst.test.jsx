@@ -97,7 +97,7 @@ describe('GameDetailsModal — T8500 video-first', () => {
 
   it('disables submit until a file is selected, then enables it with zero typing', () => {
     const { container } = renderModal();
-    const submit = screen.getByRole('button', { name: 'Add Game' });
+    const submit = screen.getByRole('button', { name: 'Upload game' });
     expect(submit.disabled).toBe(true);
 
     pickFile(container);
@@ -109,7 +109,7 @@ describe('GameDetailsModal — T8500 video-first', () => {
     const { container } = renderModal({ onCreateGame });
 
     const file = pickFile(container);
-    fireEvent.click(screen.getByRole('button', { name: 'Add Game' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
 
     await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
     // T8810: uniform ordered list — a single file is a 1-element list, no videoMode.
@@ -132,7 +132,7 @@ describe('GameDetailsModal — T8500 video-first', () => {
     fireEvent.change(screen.getByPlaceholderText('e.g., Carlsbad SC'), {
       target: { value: 'Carlsbad SC' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Game' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
 
     await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
     expect(onCreateGame.mock.calls[0][0].opponentName).toBe('Carlsbad SC');

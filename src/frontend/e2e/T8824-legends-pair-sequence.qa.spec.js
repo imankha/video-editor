@@ -68,7 +68,7 @@ test.describe('T8824 — Legends-shaped overlap is an artifact, not an angle', (
     const addCta = page.getByRole('button', { name: /^Add Game$/ }).first();
     await addCta.waitFor({ state: 'visible', timeout: 30000 });
     await addCta.click();
-    await expect(page.getByText('Add New Game')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Upload game' })).toBeVisible();
 
     await page.setInputFiles('[data-testid="footage-file-input"]', fixturePaths);
     await expect(page.getByTestId('footage-list')).toBeVisible({ timeout: 30000 });

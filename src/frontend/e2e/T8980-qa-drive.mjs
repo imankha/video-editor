@@ -85,7 +85,7 @@ async function run() {
   for (const w of [320, 375, 390, 428]) {
     await page.setViewportSize({ width: w, height: 700 });
     await gotoTab(page, TABS[0]);
-    const cta = page.getByRole('button', { name: 'Add Game' }).first();
+    const cta = page.getByRole('button', { name: 'Upload game' }).first();
     const box = await cta.boundingBox();
     const inView = box && box.y >= 0 && box.y + box.height <= 700;
     record(!!inView, `[fine ${w}] Games primary CTA in viewport without scrolling`,

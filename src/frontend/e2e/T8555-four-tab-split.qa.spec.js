@@ -1,4 +1,4 @@
-// T8555 live QA — "Published" is its own tab; "In Progress Reels" is multiclip-only.
+// T8555 live QA — "Published" is its own tab; "Reels" is multiclip-only.
 // Drives the REAL account (imankh@gmail.com, profile 9fa7378c) so the published
 // gallery has real reels to prove the content-separation AC:
 //   - In Progress Reels shows ZERO published content (only DraftTiles)
@@ -13,8 +13,8 @@ const REAL_PROFILE = '9fa7378c';
 const SHOT = '/tmp/t8555-shots';
 
 const gamesTab = (p) => p.getByRole('button', { name: /^Games/i });
-const clipsTab = (p) => p.getByRole('button', { name: /^In Progress Clips/i });
-const reelsTab = (p) => p.getByRole('button', { name: /^In Progress Reels/i });
+const clipsTab = (p) => p.getByRole('button', { name: /^Clips/i });
+const reelsTab = (p) => p.getByRole('button', { name: /^Reels/i });
 const publishedTab = (p) => p.getByRole('button', { name: /^Published/i });
 
 test('T8555: four-tab split, content separation, badges, responsive', async ({ context, page }) => {
@@ -49,7 +49,7 @@ test('T8555: four-tab split, content separation, badges, responsive', async ({ c
   await page.waitForTimeout(400);
   await expect(page.getByTestId('in-progress-reels-tab-panel')).toBeVisible();
   // The assembly button lives here with the gate-approved copy.
-  await expect(page.getByRole('button', { name: 'Build New Reel' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create reel' })).toBeVisible();
   // ZERO published ReelTiles under this tab (drafts use a different tile).
   const reelTilesUnderInProgress = await page
     .getByTestId('in-progress-reels-tab-panel')

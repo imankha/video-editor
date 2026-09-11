@@ -134,8 +134,8 @@ function renderManager(props = {}, path = '/home') {
 // "{label}{count}", never digit-first). Anchor on the label prefix per the
 // ui-spec's own locator guidance (Sec 4).
 const gamesTab = () => screen.getByRole('button', { name: /^Games/i });
-const clipsTab = () => screen.getByRole('button', { name: /^In Progress Clips/i });
-const inProgressReelsTab = () => screen.getByRole('button', { name: /^In Progress Reels/i });
+const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
+const inProgressReelsTab = () => screen.getByRole('button', { name: /^Reels/i });
 const publishedTab = () => screen.getByRole('button', { name: /^Published/i });
 
 const multiclipDraft = (id, name = `Highlight Draft ${id}`) => ({
@@ -157,7 +157,7 @@ describe('T8555: four peer tabs render with exact labels', () => {
     useGalleryStore.setState({ isOpen: false });
   });
 
-  it('renders Games, In Progress Clips, In Progress Reels, and Published as four peer tabs', () => {
+  it('renders Games, Clips, Reels, and Published as four peer tabs', () => {
     renderManager();
 
     expect(gamesTab()).toBeTruthy();
@@ -171,7 +171,7 @@ describe('T8555: four peer tabs render with exact labels', () => {
 
     // Old T8545 label must be gone -- greppability AC ("zero remaining
     // references to a Highlights *tab*"). A loose /^Highlights/ match would
-    // wrongly pass once renamed to "In Progress Reels" (different prefix), so
+    // wrongly pass once renamed to "Reels" (different prefix), so
     // this assertion is meaningful evidence, not a tautology.
     expect(screen.queryByRole('button', { name: /^Highlights/i })).toBeNull();
   });
@@ -183,7 +183,7 @@ describe('T8555: In Progress Reels tab shows ONLY unpublished multiclip drafts',
     useGalleryStore.setState({ isOpen: false });
   });
 
-  it('shows highlightDrafts (is_auto_created === false) and the Build New Reel button, no published content', () => {
+  it('shows highlightDrafts (is_auto_created === false) and the Create reel button, no published content', () => {
     renderManager({
       projects: [multiclipDraft(1, 'My Multiclip Draft'), singleclipDraft(2, 'My Single Clip')],
     });
@@ -197,10 +197,9 @@ describe('T8555: In Progress Reels tab shows ONLY unpublished multiclip drafts',
     expect(screen.queryByText('My Single Clip')).toBeNull();
 
     // The assembly button lives inline on this tab now (moved out of
-    // DownloadsPanel per the design's mechanical-move decision). T8780
-    // renamed it to "Build New Reel" -- "Highlight Reel" is reserved for
-    // published reels elsewhere in the app (displayNames.js).
-    expect(screen.getByRole('button', { name: 'Build New Reel' })).toBeTruthy();
+    // DownloadsPanel per the design's mechanical-move decision). T9530 (N13)
+    // renamed it "Build New Reel" -> "Create reel" (LIBRARY_ACTIONS.CREATE_REEL).
+    expect(screen.getByRole('button', { name: 'Create reel' })).toBeTruthy();
 
     // No published-gallery content (ConfidenceBanner / CollectionsTab /
     // published-tab-panel testid) leaks into this tab's body. (dataset.active,
@@ -209,17 +208,17 @@ describe('T8555: In Progress Reels tab shows ONLY unpublished multiclip drafts',
     expect(screen.queryByTestId('published-tab-panel')?.dataset.active).not.toBe('true');
   });
 
-  it('empty state shows the EmptyTabGuide reels headline + Build New Reel, button below the message', () => {
+  it('empty state shows the EmptyTabGuide reels headline + Create reel, button below the message', () => {
     renderManager({ projects: [singleclipDraft(2)] });
 
     fireEvent.click(inProgressReelsTab());
 
     // T8980: the shared EmptyTabGuide replaces the old "No reels in progress"
-    // dead end. Headline resolves into the Build New Reel CTA below it (T8780
+    // dead end. Headline resolves into the Create reel CTA below it (T8780
     // order preserved). The lone single-clip draft makes hasClips true, so the
     // button is enabled with the "1 clip ready to use" caption.
     const message = screen.getByText('Combine clips into one reel');
-    const button = screen.getByRole('button', { name: /Build New Reel/i });
+    const button = screen.getByRole('button', { name: /Create reel/i });
     expect(message).toBeTruthy();
     expect(button.disabled).toBe(false);
     expect(screen.getByText(/1 clip ready to use/i)).toBeTruthy();
@@ -396,7 +395,7 @@ describe('T8555: badge counts', () => {
 // a clip -- gated on the SAME `hasClips` boolean that gates Build New Reel. Clips
 // and Games always stay reachable (Clips is the zero-game Add Video entry point).
 describe('T9390: Reels + Published tab gating on hasClips', () => {
-  const CAPTION = 'Reels and Published unlock once you have a clip. Cut one from a game, or use Add Video on Clips.';
+  const CAPTION = 'Reels and Published unlock once you have a clip. Cut one from a game, or use Upload clip on Clips.';
 
   beforeEach(() => {
     window.history.replaceState(null, '', '/home');

@@ -116,12 +116,12 @@ describe('ProjectManager — T7890 add_game_opened funnel beacon', () => {
   it('fires add_game_opened AND opens the picker on the Add Game gesture', async () => {
     renderManager();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Game' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
 
     // Picker (GameDetailsModal) opened, and the beacon fired exactly once — the
     // beacon is fire-and-forget (session-deduped in the real store) and never gates
     // the picker (opened in the same synchronous gesture).
-    await waitFor(() => expect(screen.getByText('Add New Game')).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Upload game' })).toBeTruthy());
     expect(recordAchievementSpy).toHaveBeenCalledWith('add_game_opened');
     expect(recordAchievementSpy).toHaveBeenCalledTimes(1);
   });
@@ -132,9 +132,9 @@ describe('ProjectManager — T7890 add_game_opened funnel beacon', () => {
     requireAuthImpl.authed = false;
     renderManager();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Game' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
 
-    expect(screen.queryByText('Add New Game')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Upload game' })).toBeNull();
     expect(recordAchievementSpy).not.toHaveBeenCalled();
   });
 });

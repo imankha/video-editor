@@ -35,7 +35,7 @@ async function reachHome(page) {
 /** Open the first Framing-ready reel draft; ready once the crop editor loaded. */
 async function reachFocus(page) {
   await reachHome(page);
-  const drafts = page.getByRole('button', { name: /^In Progress Clips/ }).first();
+  const drafts = page.getByRole('button', { name: /^Clips/ }).first();
   await drafts.waitFor({ state: 'visible', timeout: 15000 });
   await drafts.click();
   const framingChip = page.getByTitle(/\[.+\]: .*\(click to open\)/).first();
@@ -64,8 +64,8 @@ export const SCREENS = [
     setup: reachHome,
     actions: [
       { label: 'Games tab', locator: (p) => p.locator('button:has-text("Games")').first() },
-      { label: 'In Progress Clips tab', locator: (p) => p.getByRole('button', { name: /^In Progress Clips/ }).first() },
-      { label: 'In Progress Reels tab', locator: (p) => p.getByRole('button', { name: /^In Progress Reels/ }).first() },
+      { label: 'Clips tab', locator: (p) => p.getByRole('button', { name: /^Clips/ }).first() },
+      { label: 'Reels tab', locator: (p) => p.getByRole('button', { name: /^Reels/ }).first() },
       { label: 'Published tab', locator: (p) => p.getByRole('button', { name: /^Published/ }).first() },
     ],
   },
