@@ -1,6 +1,6 @@
 # T9700: Verify framing and spotlight persistence and previews
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-10
