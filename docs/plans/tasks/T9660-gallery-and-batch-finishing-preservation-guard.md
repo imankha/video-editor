@@ -1,6 +1,6 @@
 # T9660: Preserve the full-width gallery and batch finishing while the rest of this work lands
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-10
