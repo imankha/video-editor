@@ -18,6 +18,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
@@ -213,6 +214,10 @@ export function AnnotateContainer({
   annotateGameIdRef.current = annotateGameId;
 
   useWakeLock();
+
+  // T9500: desktop keeps the editor OPEN when exiting fullscreen (it lands in the
+  // under-canvas strip); only mobile still closes it (mobile has no strip surface).
+  const isMobile = useIsMobile();
 
   // T82: Multi-video state (null = single video, array = multi-video)
   const [gameVideos, setGameVideos] = useState(null);
@@ -1155,10 +1160,12 @@ export function AnnotateContainer({
     setAnnotateFullscreen(newFS);
     if (newFS && selectionState.type === 'SELECTED') {
       editClip(selectionState.clipId);
-    } else if (!newFS && (selectionState.type === 'EDITING' || selectionState.type === 'CREATING')) {
+    } else if (!newFS && isMobile && (selectionState.type === 'EDITING' || selectionState.type === 'CREATING')) {
+      // T9500: mobile only. On desktop the editor persists into the under-canvas
+      // strip (same fiber), so an in-progress play survives exiting fullscreen.
       closeOverlay();
     }
-  }, [annotateFullscreen, setAnnotateFullscreen, selectionState, editClip, closeOverlay]);
+  }, [annotateFullscreen, setAnnotateFullscreen, selectionState, editClip, closeOverlay, isMobile]);
 
   // T740: After clipRegions update from importAnnotations, select the clip matching pendingSelectSeekTime
   // Used by both Framing→Annotate navigation and share link navigation.
@@ -1723,7 +1730,9 @@ export function AnnotateContainer({
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && annotateFullscreen) {
         setAnnotateFullscreen(false);
-        if (selectionState.type === 'EDITING' || selectionState.type === 'CREATING') {
+        // T9500: match handleToggleFullscreen — only mobile closes the editor on
+        // fullscreen exit; desktop keeps it open in the under-canvas strip.
+        if (isMobile && (selectionState.type === 'EDITING' || selectionState.type === 'CREATING')) {
           closeOverlay();
         }
       }
@@ -1731,7 +1740,7 @@ export function AnnotateContainer({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [annotateFullscreen, setAnnotateFullscreen, selectionState, closeOverlay]);
+  }, [annotateFullscreen, setAnnotateFullscreen, selectionState, closeOverlay, isMobile]);
 
   // Track playing state for other effects that may need it
   useEffect(() => {

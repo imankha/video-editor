@@ -177,8 +177,16 @@ export function AnnotateModeView({
   // the add/edit overlay is open and we're not in fullscreen. `isMobile`
   // partitions the two device halves, so they're mutually exclusive by
   // construction — "two editors open at once" is impossible at this level.
+  // `underCanvasEditor` stays !annotateFullscreen-scoped: it drives the
+  // windowed-only timeline/CTA hides (below) which must NOT change in fullscreen.
   const underCanvasEditor = showAnnotateOverlay && !annotateFullscreen;
-  const desktopEditorOpen = underCanvasEditor && !isMobile;
+  // T9500: the desktop strip is now the SINGLE editor surface for BOTH windowed
+  // and fullscreen desktop (fullscreen dropped its old side dock). Because this
+  // is ONE strip element at ONE JSX position, toggling fullscreen preserves its
+  // fiber, so an unsaved note + selected times survive the transition. Hence
+  // this drops the `!annotateFullscreen` term the old `underCanvasEditor`-based
+  // derivation carried.
+  const desktopEditorOpen = showAnnotateOverlay && !isMobile;
   const mobileInlineForm = underCanvasEditor && isMobile;
 
   // T8140: one-tap first clip helpers.
@@ -685,30 +693,11 @@ export function AnnotateModeView({
               )}
             </div>
 
-            {/* AnnotateFullscreenOverlay - only rendered in fullscreen mode.
-                In non-fullscreen, the form renders in the sidebar (ClipsSidePanel).
-                Rendered outside VideoPlayer to avoid <video> GPU compositing painting over the panel (see T755) */}
-            {showAnnotateOverlay && annotateFullscreen && !isMobile && (
-              <AnnotateFullscreenOverlay
-                isVisible={showAnnotateOverlay}
-                currentTime={currentTime}
-                videoDuration={duration || annotateVideoMetadata?.duration || 0}
-                existingClip={existingClip}
-                onCreateClip={handleCreateClipWithSportPrompt}
-                onUpdateClip={onFullscreenUpdateClip}
-                onResume={onOverlayResume}
-                onClose={onOverlayClose}
-                onSeek={seek}
-                videoController={videoController}
-                isFullscreen={annotateFullscreen}
-                surface="dock_fullscreen"
-                activeSourceName={activeSourceName}
-                teammateSuggestions={teammateSuggestions}
-                onScrubDragChange={isMobile ? setIsDraggingScrub : undefined}
-                newClipLayerIsMine={newClipLayerIsMine}
-                nextClipNumber={nextClipNumber}
-              />
-            )}
+            {/* T9500: the desktop fullscreen side dock is gone. Desktop fullscreen
+                now renders the SAME bottom-center strip as windowed desktop (the
+                `desktopEditorOpen` block below), so both surfaces share one editor
+                (labels, stage CTA, save/stay-open) and the strip's fiber survives
+                the fullscreen toggle. Mobile fullscreen keeps its own inline sheet. */}
 
             {/* Controls + timeline inside video container for desktop fullscreen & non-fullscreen */}
             {!mobileFs && (
@@ -883,10 +872,16 @@ export function AnnotateModeView({
             </div>
           )}
 
-          {/* T8600: desktop under-canvas editor strip — replaces the timeline
-              in place while Add Play / Edit Play is open (desktop, non-fullscreen). */}
+          {/* T8600: desktop under-canvas editor strip — replaces the timeline in
+              place while Add Play / Edit Play is open (windowed desktop).
+              T9500: also the fullscreen desktop editor now (was the side dock). In
+              fullscreen the fixed container (annotateContainerRef) is a flex column;
+              the strip becomes a bottom shrink-0 row below the video+transport, so
+              it sits bottom-center and stays clear of the video. `max-h-[45vh]` +
+              scroll keeps a details-expanded strip from squeezing the video (the
+              fullscreen container has no page scroll). Windowed keeps its `mt-6`. */}
           {desktopEditorOpen && (
-            <div className="mt-6">
+            <div className={annotateFullscreen ? 'w-full shrink-0 overflow-y-auto max-h-[45vh]' : 'mt-6'}>
               <AnnotateFullscreenOverlay
                 isVisible={showAnnotateOverlay}
                 currentTime={currentTime}
@@ -899,7 +894,7 @@ export function AnnotateModeView({
                 onClose={onOverlayClose}
                 onSeek={seek}
                 videoController={videoController}
-                isFullscreen={false}
+                isFullscreen={annotateFullscreen}
                 layout="strip"
                 surface="inline_desktop"
                 activeSourceName={activeSourceName}
