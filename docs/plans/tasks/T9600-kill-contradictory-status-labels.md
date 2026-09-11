@@ -1,6 +1,6 @@
 # T9600: One private draft must not read Complete, Ready to share and Ready to Publish at once
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-10
