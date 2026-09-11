@@ -31,6 +31,7 @@ import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
 import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInput';
 import { generateClipName } from '../utils/clipDisplayName';
+import { SECTION_NAMES } from '../config/displayNames';
 import { setPendingGame } from '../utils/pendingNavigation';
 import { beginGameVideoLoad, computeResumePosition, seekVideoElementWhenReady } from './annotateVideoLoad';
 
@@ -84,11 +85,12 @@ async function resolveImportGameId(gameIdRef, timeoutMs = IMPORT_AWAIT_GAME_ID_T
  */
 export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProjects, clipName } = {}) {
   useProjectsStore.getState().selectProject(projectId);
-  // T8760 item 2: name the clip and confirm its new home — the "In Progress
-  // Clips" tab (T8555). The "Open Focus" action still carries T8480's
-  // Focus-unlock affordance. `dedupKey` unchanged so it collapses duplicates.
+  // T8760 item 2: name the clip and confirm its new home — the Clips tab (T8555;
+  // T9530/N10 dropped the "In Progress" prefix, single-sourced via SECTION_NAMES).
+  // The "Open Focus" action still carries T8480's Focus-unlock affordance.
+  // `dedupKey` unchanged so it collapses duplicates.
   const name = (clipName && clipName.trim()) ? clipName.trim() : 'Your clip';
-  toast.success(`${name} is now in In Progress Clips`, {
+  toast.success(`${name} is now in ${SECTION_NAMES.CLIPS}`, {
     duration: 6000,
     dedupKey: 'reel-created',
     action: {

@@ -59,7 +59,7 @@ async function enterAnnotateMode(page) {
 
   await page.locator('button:has-text("Games")').click();
   await page.waitForTimeout(500);
-  await page.locator('button:has-text("Add Game")').click();
+  await page.locator('button:has-text("Upload game")').click();
   await page.waitForTimeout(500);
 
   console.log('[Setup] Filling Add Game modal...');
@@ -74,7 +74,7 @@ async function enterAnnotateMode(page) {
   await videoInput.setInputFiles(TEST_VIDEO);
   await page.waitForTimeout(1000);
 
-  const addGameButton = page.locator('form button[type="submit"], button:has-text("Add Game")').last();
+  const addGameButton = page.locator('form button[type="submit"], button:has-text("Upload game")').last();
   await expect(addGameButton).toBeEnabled({ timeout: 5000 });
   await addGameButton.click();
 

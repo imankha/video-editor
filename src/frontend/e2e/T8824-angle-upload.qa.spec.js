@@ -1,7 +1,7 @@
 /**
  * T8824 QA (a) — the epic's headline scenario, end to end against a REAL backend
  * and REAL R2: a main camera + a genuinely overlapping second camera go through
- * the real "Add Game" upload path and come out the other side as an ANGLE, not a
+ * the real "Upload game" upload path and come out the other side as an ANGLE, not a
  * discarded/blind chain.
  *
  * Before T8824 this was unreachable (docs/plans/tasks/T8824-design.md §1.3.1):
@@ -75,7 +75,7 @@ test.describe('T8824 — real overlapping upload becomes a real angle', () => {
     const addCta = page.getByRole('button', { name: /^Add Game$/ }).first();
     await addCta.waitFor({ state: 'visible', timeout: 30000 });
     await addCta.click();
-    await expect(page.getByText('Add New Game')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Upload game' })).toBeVisible();
 
     // Feed BOTH real files through the real intake probe.
     await page.setInputFiles('[data-testid="footage-file-input"]', [mainPath, sidelinePath]);

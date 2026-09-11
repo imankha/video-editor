@@ -20,9 +20,10 @@ import { SECTION_NAMES_SHORT } from './displayNames';
 // switches to that tab (the frozen tab ids, note `clips` -> `projects` from
 // T8555's deep-link compat freeze). T9390: Reels carries `optional: true` -- it
 // is a single publish for a full game/season, not a required step between Clips
-// and Published, so the strip renders it as an unnumbered detour pill. Numbering
-// (Games=1, Clips=2, Published=3) is computed by indexing the non-optional
-// entries only; Reels never gets a number, in code or on screen.
+// and Published, so the strip renders it as a detour pill. T9530 (N46) removed
+// step numbering entirely: the four destinations render as unnumbered peers, so
+// no step gets a number in code or on screen (the `optional` flag now only drives
+// Reels' dashed-pill styling, not a number-skip).
 export const FLOW_STEPS = [
   { key: 'games', label: SECTION_NAMES_SHORT.GAMES, navId: 'games' },
   { key: 'clips', label: SECTION_NAMES_SHORT.CLIPS, navId: 'projects' },

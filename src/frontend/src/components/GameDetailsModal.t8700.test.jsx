@@ -85,7 +85,7 @@ describe('GameDetailsModal — T8700 test 12 (Opponent/Date stable contract)', (
 
   it('submit is enabled once a video is picked, with opponent/date left untouched', () => {
     const { container } = renderModal();
-    const submit = screen.getByRole('button', { name: 'Add Game' });
+    const submit = screen.getByRole('button', { name: 'Upload game' });
     expect(submit.disabled).toBe(true);
 
     pickFile(container);
@@ -99,7 +99,7 @@ describe('GameDetailsModal — T8700 test 12 (Opponent/Date stable contract)', (
     const { container } = renderModal({ onCreateGame });
 
     pickFile(container);
-    fireEvent.click(screen.getByRole('button', { name: 'Add Game' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
 
     await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
     // Whatever the final default opponent string / date format the
@@ -145,7 +145,7 @@ describe('GameDetailsModal — T8700 test 12 (Opponent/Date stable contract)', (
     expect(dateInput).toBeTruthy();
 
     fireEvent.change(opponentInput, { target: { value: 'Carlsbad SC' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Game' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
 
     await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
     expect(onCreateGame.mock.calls[0][0].opponentName).toBe('Carlsbad SC');

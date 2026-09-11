@@ -99,7 +99,7 @@ async function setupAuthedGuest(page) {
   });
   await page.reload({ waitUntil: 'domcontentloaded' });
   // Wait for the home to hydrate (the Add Game entry point renders).
-  await expect(page.locator('button:has-text("Add Game")').first()).toBeVisible({ timeout: 20000 });
+  await expect(page.locator('button:has-text("Upload game")').first()).toBeVisible({ timeout: 20000 });
 }
 
 const step = (m) => console.log(`[T7920:step] ${m}`);
@@ -107,12 +107,12 @@ const step = (m) => console.log(`[T7920:step] ${m}`);
 /** Upload the short test video via the Add Game modal, land in Annotate. */
 async function uploadGameAndEnterAnnotate(page) {
   // Games tab is best-effort (a zero-games home may not surface it); the top-level
-  // "Add Game" CTA is the reliable entry point.
+  // "Upload game" CTA is the reliable entry point.
   step('click Games tab (best-effort)');
   await page.locator('button:has-text("Games")').first().click({ timeout: 3000 }).catch(() => {});
   await page.waitForTimeout(300);
   step('click Add Game');
-  await page.locator('button:has-text("Add Game")').first().click();
+  await page.locator('button:has-text("Upload game")').first().click();
   await openGameDetailsDisclosure(page);
   await expect(page.getByPlaceholder('e.g., Carlsbad SC')).toBeVisible({ timeout: 8000 });
   step('Add Game modal open');
@@ -137,10 +137,10 @@ async function uploadGameAndEnterAnnotate(page) {
     const { useCreditStore } = await import('/src/stores/creditStore.js');
     useCreditStore.setState({ balance: 1_000_000, loaded: true });
   });
-  // The submit button is the LAST "Add Game" button in the modal footer; scope to
+  // The submit button is the LAST "Upload game" button in the modal footer; scope to
   // the enabled one and bound the click so a mid-transition relabel can't hang the
   // whole test. Fall back to submitting the form via Enter.
-  const createButton = page.locator('form button:has-text("Add Game")').last();
+  const createButton = page.locator('form button:has-text("Upload game")').last();
   await expect(createButton).toBeEnabled({ timeout: 8000 });
   step('click Create (submit Add Game)');
   const clicked = await createButton.click({ timeout: 12000 }).then(() => true).catch(() => false);

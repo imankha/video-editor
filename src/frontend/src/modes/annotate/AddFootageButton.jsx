@@ -18,9 +18,13 @@ const BuyCreditsModal = lazy(() =>
 );
 
 // Approved microcopy (artifact section 09). Literals next to use.
+// T9530 (N03, 2026-09-10): the button + tooltip read "Add footage to game" (was
+// "Add footage" / "Add footage to this game") so the action names its object.
+// The modal heading stays the terse "Add footage" — you are already inside the
+// game when it opens, so the object is unambiguous there.
 const COPY = {
-  label: 'Add footage',
-  title: 'Add footage to this game',
+  label: 'Add footage to game',
+  title: 'Add footage to game',
   modalHeading: 'Add footage',
   intro:
     "Add another half, a sideline angle, or a clip you got later. It's placed by when it was filmed and appends to this game — your existing plays stay put.",

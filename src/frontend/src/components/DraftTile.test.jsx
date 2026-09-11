@@ -160,16 +160,17 @@ describe('DraftTile (T5672)', () => {
   // Re-pinned from the old badge-shape test (T6180). Old contract: a single 10px
   // corner <button> labelled "Ready" that published. New contract: "Ready to share"
   // (T8470 qualified the bare "Ready") is a NON-interactive status badge, and a
-  // DISTINCT emphasized primary button names the verb ("Publish to Highlight
-  // Reels", T8530 renamed from "Move to ...") and publishes on click.
+  // DISTINCT emphasized primary button names the verb. T9530 (N12) made that verb
+  // name its own object: a reel (is_auto_created === false, baseProject) publishes
+  // as "Publish reel" (was "Publish to Highlight Reels"); a clip as "Publish clip".
   it('makes "Ready to share" a non-interactive badge and a distinct primary button the publish verb (T6180)', () => {
     renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
     // "Ready to share" is a status, not a control — no button carries that accessible name.
     expect(screen.queryByRole('button', { name: /^ready to share$/i })).toBeNull();
     expect(screen.getByText('Ready to share')).toBeTruthy();
-    // The primary action's accessible name still carries the full destination, but
-    // its visible label is shortened to "Publish" (matches CollectionPlayer's button).
-    const primary = screen.getByRole('button', { name: 'Publish to Highlight Reels' });
+    // The primary action's accessible name names the object, but its visible label
+    // is shortened to "Publish" (matches CollectionPlayer's button).
+    const primary = screen.getByRole('button', { name: 'Publish reel' });
     expect(primary).toBeTruthy();
     expect(primary.textContent).toMatch(/^publish$/i);
   });
@@ -184,7 +185,7 @@ describe('DraftTile (T5672)', () => {
     const { useQuestStore } = await import('../stores/questStore');
     renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Publish to Highlight Reels' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
     });
     expect(apiFetch).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/downloads\/publish\/7$/),
@@ -193,9 +194,9 @@ describe('DraftTile (T5672)', () => {
     expect(useQuestStore.getState().recordAchievement).toHaveBeenCalledWith('moved_to_my_reels');
   });
 
-  it('has no primary "Publish to Highlight Reels" action once the reel is published', () => {
+  it('has no primary "Publish reel" action once the reel is published', () => {
     renderTile({ has_final_video: true, final_video_id: 99, is_published: true });
-    expect(screen.queryByRole('button', { name: /publish to highlight reels/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /publish reel/i })).toBeNull();
   });
 
   // T6180 — the five secondary actions collapse behind a kebab in the ready state,
@@ -614,5 +615,51 @@ describe('DraftTile (T5672)', () => {
       expect(chip.textContent).toMatch(/source expired/i);
       expect(chip.textContent).not.toMatch(/3d/);
     });
+  });
+});
+
+// T9530 (N12/N14/N15): every per-card action names its OWN object. A single-clip
+// auto-draft (is_auto_created === true, lives on the Clips tab) is a Clip; an
+// assembled multi-clip draft (is_auto_created === false) is a Reel. This is the
+// exact "Delete reel in a Clips menu" object-model mismatch the naming report
+// leads with.
+describe('DraftTile names its own object (T9530 N12/N14/N15)', () => {
+  const renderReady = (overrides) => render(
+    <DraftTile
+      project={{ ...baseProject, has_final_video: true, final_video_id: 99, is_published: false, ...overrides }}
+      onSelect={vi.fn()}
+      onSelectWithMode={vi.fn()}
+      onDelete={vi.fn()}
+    />
+  );
+
+  it('a single-clip auto-draft (is_auto_created: true) renames as a CLIP, never a reel', () => {
+    render(
+      <DraftTile
+        project={{ ...baseProject, is_auto_created: true }}
+        onSelect={vi.fn()}
+        onSelectWithMode={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Rename clip' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Rename reel' })).toBeNull();
+  });
+
+  it('a clip in the ready state deletes + publishes as a CLIP (never "reel")', () => {
+    renderReady({ is_auto_created: true });
+    expect(screen.getByRole('button', { name: 'Publish clip' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Publish reel' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    expect(screen.getByRole('button', { name: /delete clip/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /delete reel/i })).toBeNull();
+  });
+
+  it('a multi-clip draft (is_auto_created: false) keeps the reel wording', () => {
+    renderReady({ is_auto_created: false });
+    expect(screen.getByRole('button', { name: 'Publish reel' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    expect(screen.getByRole('button', { name: /delete reel/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /delete clip/i })).toBeNull();
   });
 });

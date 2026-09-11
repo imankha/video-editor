@@ -110,8 +110,8 @@ async function injectProject(page, projectOverrides) {
 
 async function openInProgressReelsPanel(page) {
   await page.goto('/home');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^In Progress Reels/ }) });
-  await page.getByRole('button', { name: /^In Progress Reels/ }).first().click();
+  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Reels/ }) });
+  await page.getByRole('button', { name: /^Reels/ }).first().click();
   await expect(page.getByTestId('in-progress-reels-tab-panel')).toBeVisible({ timeout: 10000 });
 }
 
@@ -194,7 +194,7 @@ test('AC2: TERTIARY Focus clip-list dot on exactly the drifted clip', async ({ p
   // project id to load; the drifted values are route-injected onto its clips
   // response, same non-destructive pattern as the tile tests above).
   await page.goto('/home/reels');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^In Progress Clips/ }) });
+  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Clips/ }) });
 
   const projects = await page.evaluate(async () => {
     const r = await fetch('/api/projects', { credentials: 'include' });

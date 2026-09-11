@@ -114,7 +114,7 @@ function renderOnClipsTab(props = {}) {
   );
 }
 
-const clipsTab = () => screen.getByRole('button', { name: /^In Progress Clips/i });
+const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
 const mp4 = (name) => new File(['bytes'], name, { type: 'video/mp4' });
 
 describe('ProjectManager Add Video flow (T8380)', () => {
@@ -130,7 +130,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     renderOnClipsTab();
     fireEvent.click(clipsTab());
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Video' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload clip' }));
 
     // The notice appears; nothing has been uploaded yet.
     expect(screen.getByRole('alertdialog')).toBeTruthy();
@@ -151,7 +151,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     });
     renderOnClipsTab();
     fireEvent.click(clipsTab());
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Video' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload clip' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     const input = screen.getByTestId('clip-upload-input');
@@ -171,7 +171,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     });
     renderOnClipsTab();
     fireEvent.click(clipsTab());
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Video' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload clip' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     fireEvent.change(screen.getByTestId('clip-upload-input'), { target: { files: [mp4('bad.mp4')] } });
@@ -191,7 +191,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
   it('Add Video also appears as an action row when clips already exist', async () => {
     renderOnClipsTab({ projects: [{ id: 7, name: 'A clip', game_ids: [], is_auto_created: true }] });
     // Lands on Clips (drafts present); the action-row button carries the anchor.
-    const addVideo = await screen.findByRole('button', { name: 'Add Video' });
+    const addVideo = await screen.findByRole('button', { name: 'Upload clip' });
     expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
   });
 });

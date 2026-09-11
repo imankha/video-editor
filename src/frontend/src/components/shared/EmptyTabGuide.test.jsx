@@ -9,41 +9,47 @@ import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 // the DOM regardless of breakpoint; T9390 dropped the sub-sm dot row entirely, so
 // only the one sm+ strip node exists now.)
 
-describe('EmptyTabGuide flow strip (T9390: 3 numbered nodes + optional Reels pill)', () => {
-  it('numbers only Games/Clips/Published (1-2-3); Reels is an unnumbered "optional" pill', () => {
+describe('EmptyTabGuide flow strip (T9530/N46: unnumbered peer destinations + optional Reels pill)', () => {
+  it('renders Games/Clips/Reels/Published as peers with NO step numbers', () => {
     render(<EmptyTabGuide tab="games" gamesCount={0} onAddGame={vi.fn()} onNavigate={vi.fn()} />);
 
-    // Exactly the three real steps carry digits -- Reels never does.
-    expect(screen.getByText('1')).toBeTruthy();
-    expect(screen.getByText('2')).toBeTruthy();
-    expect(screen.getByText('3')).toBeTruthy();
+    // All four destinations appear as peer labels...
+    expect(screen.getByText('Games')).toBeTruthy();
+    expect(screen.getByText('Clips')).toBeTruthy();
+    expect(screen.getByText('Reels')).toBeTruthy();
+    expect(screen.getByText('Published')).toBeTruthy();
+
+    // ...and NONE of them carries a step number (N46: the numbered 1-2-3 nodes
+    // read as a mandatory pipeline and were removed).
+    expect(screen.queryByText('1')).toBeNull();
+    expect(screen.queryByText('2')).toBeNull();
+    expect(screen.queryByText('3')).toBeNull();
     expect(screen.queryByText('4')).toBeNull();
 
-    // The Reels detour is a dashed "optional" pill, always muted.
+    // The Reels detour keeps its dashed "optional" pill.
     expect(screen.getByText(/optional/i)).toBeTruthy();
   });
 
-  it('lights the current step in its own tab color, others muted (Games -> green)', () => {
+  it('lights the current destination in its own tab color, others muted (Games -> green)', () => {
     render(<EmptyTabGuide tab="games" gamesCount={0} onAddGame={vi.fn()} onNavigate={vi.fn()} />);
-    const one = screen.getByText('1');
-    expect(one.className.includes('bg-green-600')).toBe(true);
-    const two = screen.getByText('2');
-    expect(two.className.includes('bg-cyan-600')).toBe(false);
-    expect(two.className.includes('bg-gray-700')).toBe(true);
+    const games = screen.getByText('Games');
+    expect(games.className.includes('bg-green-600')).toBe(true);
+    // An inactive peer is muted text, never lit in its color.
+    const clips = screen.getByText('Clips');
+    expect(clips.className.includes('bg-cyan-600')).toBe(false);
+    expect(clips.className.includes('text-gray-500')).toBe(true);
   });
 
-  it('Published is step 3 (not 4) now that Reels is unnumbered, lit amber', () => {
+  it('lights Published in amber when it is the active tab', () => {
     render(<EmptyTabGuide tab="published" clipCount={0} gamesCount={1} onNavigate={vi.fn()} />);
-    const three = screen.getByText('3');
-    expect(three.className.includes('bg-amber-600')).toBe(true);
-    expect(screen.queryByText('4')).toBeNull();
+    const published = screen.getByText('Published');
+    expect(published.className.includes('bg-amber-600')).toBe(true);
   });
 
-  it('never prints the "Step N of M" line (T9320) nor a sub-sm numbered dot duplicate (T9390)', () => {
+  it('never prints a "Step N of M" line (T9320) nor any step digit', () => {
     render(<EmptyTabGuide tab="reels" clipCount={2} onNavigate={vi.fn()} onBuildReel={vi.fn()} />);
     expect(screen.queryByText(/Step \d+ of \d+/)).toBeNull();
-    // T9390 dropped the sub-sm dot row -> each digit appears exactly once.
-    expect(screen.getAllByText('1')).toHaveLength(1);
+    expect(screen.queryByText(/^\d+$/)).toBeNull();
   });
 });
 
@@ -57,7 +63,7 @@ describe('EmptyTabGuide - Games tab', () => {
     expect(screen.getByText(EMPTY_TAB_GUIDE.games.body)).toBeTruthy();
     expect(screen.getByText(EMPTY_TAB_GUIDE.games.addGameCaption)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Game' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
     expect(onAddGame).toHaveBeenCalledTimes(1);
 
     // Footer link (Games only) switches to the Clips tab (id 'projects').
@@ -78,7 +84,7 @@ describe('EmptyTabGuide - Clips tab (T9390: no cross-tab Add Game)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Go to Games' }));
     expect(onNavigate).toHaveBeenCalledWith('games');
 
-    const addVideo = screen.getByRole('button', { name: 'Add Video' });
+    const addVideo = screen.getByRole('button', { name: 'Upload clip' });
     expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
     fireEvent.click(addVideo);
     expect(onAddVideo).toHaveBeenCalledTimes(1);
@@ -91,11 +97,11 @@ describe('EmptyTabGuide - Clips tab (T9390: no cross-tab Add Game)', () => {
     );
 
     // The cross-tab "Add Game" create action is gone at zero games (Decision 3).
-    expect(screen.queryByRole('button', { name: 'Add Game' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Upload game' })).toBeNull();
     expect(screen.getByText(EMPTY_TAB_GUIDE.clips.noGameCaption)).toBeTruthy();
 
     // Exactly one Add Video button, still carrying the unique tutorial anchor.
-    const addVideos = screen.getAllByRole('button', { name: 'Add Video' });
+    const addVideos = screen.getAllByRole('button', { name: 'Upload clip' });
     expect(addVideos).toHaveLength(1);
     expect(addVideos[0].getAttribute('data-tutorial-target')).toBe('clips-add-video');
     fireEvent.click(addVideos[0]);
@@ -108,7 +114,7 @@ describe('EmptyTabGuide - Reels tab (T9390: tab is gated, so Build New Reel is a
     render(
       <EmptyTabGuide tab="reels" clipCount={0} onNavigate={vi.fn()} onBuildReel={vi.fn()} />,
     );
-    expect(screen.getByRole('button', { name: 'Build New Reel' }).disabled).toBe(false);
+    expect(screen.getByRole('button', { name: 'Create reel' }).disabled).toBe(false);
     expect(screen.getByText('You have clips ready to use.')).toBeTruthy();
     expect(screen.queryByText(/0 clip/)).toBeNull();
   });
@@ -118,7 +124,7 @@ describe('EmptyTabGuide - Reels tab (T9390: tab is gated, so Build New Reel is a
     render(
       <EmptyTabGuide tab="reels" clipCount={3} onNavigate={vi.fn()} onBuildReel={onBuildReel} />,
     );
-    const build = screen.getByRole('button', { name: 'Build New Reel' });
+    const build = screen.getByRole('button', { name: 'Create reel' });
     expect(build.disabled).toBe(false);
     expect(screen.getByText('You have 3 clips ready to use.')).toBeTruthy();
     fireEvent.click(build);
@@ -153,7 +159,7 @@ describe('EmptyTabGuide - Published tab (T9390: nothing-branch deleted, tab is g
 
   it('offers NO cross-tab Add Game (the zero-everything branch was deleted)', () => {
     render(<EmptyTabGuide tab="published" clipCount={0} gamesCount={0} onNavigate={vi.fn()} onAddGame={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: 'Add Game' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Upload game' })).toBeNull();
     // Falls through to the Go to Games branch instead of the retired Add Game one.
     expect(screen.getByRole('button', { name: 'Go to Games' })).toBeTruthy();
   });
@@ -235,7 +241,7 @@ describe('EmptyTabGuide - partial variant', () => {
 
   it('Clips partial renders NO Add Video button and NO tutorial target (T8380 invariant)', () => {
     const { container } = render(<EmptyTabGuide tab="clips" variant="partial" />);
-    expect(screen.queryByRole('button', { name: 'Add Video' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Upload clip' })).toBeNull();
     expect(container.querySelector('[data-tutorial-target="clips-add-video"]')).toBeNull();
     expect(container.querySelector('button')).toBeNull();
   });

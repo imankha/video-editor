@@ -407,7 +407,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Click Games tab and Add Game
     await page.locator('button:has-text("Games")').click();
     await page.waitForTimeout(500);
-    await page.locator('button:has-text("Add Game")').click();
+    await page.locator('button:has-text("Upload game")').click();
     await page.waitForTimeout(500);
 
     // T8500: cost line + 30-day expiry render BEFORE any file is selected.
@@ -431,8 +431,8 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await videoInput.setInputFiles(GAME1_VIDEO);
     await page.waitForTimeout(1000);
 
-    // Click Create Game (button text is "Add Game" inside the form)
-    const createButton = page.getByRole('button', { name: 'Add Game' }).last();
+    // Click Create Game (button text is "Upload game" inside the form)
+    const createButton = page.getByRole('button', { name: 'Upload game' }).last();
     await expect(createButton).toBeEnabled({ timeout: 5000 });
     await createButton.click();
 
@@ -552,7 +552,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^In Progress Clips/ }).click();
+    await page.getByRole('button', { name: /^Clips/ }).click();
     await page.waitForTimeout(1000);
 
     // Click the auto-generated project from the 5-star clip
@@ -586,7 +586,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Reload to pick up framing data, re-enter project
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^In Progress Clips/ }).click();
+    await page.getByRole('button', { name: /^Clips/ }).click();
     await page.waitForTimeout(1000);
     await page.locator('.bg-gray-800.rounded-lg h3.text-white').first().click();
     await page.waitForTimeout(3000);
@@ -611,7 +611,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Reload page to ensure framing export result is reflected in UI
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^In Progress Clips/ }).click();
+    await page.getByRole('button', { name: /^Clips/ }).click();
     await page.waitForTimeout(1000);
     await page.locator('.bg-gray-800.rounded-lg h3.text-white').first().click();
     await page.waitForTimeout(3000);
@@ -712,7 +712,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Navigate to project and trigger export
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^In Progress Clips/ }).click();
+    await page.getByRole('button', { name: /^Clips/ }).click();
     await page.waitForTimeout(1000);
 
     const q3ProjectCards = page.locator('.bg-gray-800.rounded-lg h3.text-white');
@@ -792,7 +792,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await page.waitForLoadState('domcontentloaded');
     await page.locator('button:has-text("Games")').click();
     await page.waitForTimeout(500);
-    await page.locator('button:has-text("Add Game")').click();
+    await page.locator('button:has-text("Upload game")').click();
     await page.waitForTimeout(500);
 
     // T8500 zero-typing path: pick a file and submit with NO other input -
@@ -804,7 +804,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await videoInput2.setInputFiles(GAME2_VIDEO);
     await page.waitForTimeout(1000);
 
-    const createBtn2 = page.getByRole('button', { name: 'Add Game' }).last();
+    const createBtn2 = page.getByRole('button', { name: 'Upload game' }).last();
     await expect(createBtn2).toBeEnabled({ timeout: 5000 });
     await createBtn2.click();
 
@@ -850,10 +850,10 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // to that tab instead.
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^In Progress Reels/ }).first().click();
+    await page.getByRole('button', { name: /^Reels/ }).first().click();
     await page.waitForTimeout(1000);
 
-    const newProjectBtn = page.locator('button:has-text("Build New Reel")');
+    const newProjectBtn = page.locator('button:has-text("Create reel")');
     await expect(newProjectBtn).toBeVisible();
     await newProjectBtn.click();
     await page.waitForTimeout(1500);
@@ -897,7 +897,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // section (T8545: that tab, was a drawer).
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^In Progress Reels/ }).first().click();
+    await page.getByRole('button', { name: /^Reels/ }).first().click();
     await page.waitForTimeout(1000);
 
     const reelCards = page.locator('.bg-gray-800.rounded-lg h3.text-white');

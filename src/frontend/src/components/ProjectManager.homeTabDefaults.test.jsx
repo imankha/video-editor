@@ -103,10 +103,10 @@ function renderManager(props = {}, path = '/home') {
   );
 }
 
-// Prefix match on the tab's own accessible name. T8555: the Clips tab label is
-// now "In Progress Clips" with the count chip digit appended directly (no
-// separating space, e.g. "In Progress Clips1"), so match the prefix.
-const clipsTab = () => screen.getByRole('button', { name: /^In Progress Clips/i });
+// Prefix match on the tab's own accessible name. T9530 (N10): the Clips tab
+// label is now just "Clips" with the count chip digit appended directly (no
+// separating space, e.g. "Clips1"), so match the prefix.
+const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
 
 describe('ProjectManager home tab defaults (T6830)', () => {
   beforeEach(() => {
@@ -121,11 +121,11 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     // headline resolves into the Add Game CTA directly below it (T8780 order,
     // preserved), same shape as the Reels/Published guides.
     const message = screen.getByText('Start with a game');
-    const addGameButton = screen.getByRole('button', { name: 'Add Game' });
+    const addGameButton = screen.getByRole('button', { name: 'Upload game' });
     expect(message.compareDocumentPosition(addGameButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The "Build New Reel" assembly button is NOT shown on the Games tab
     // (T8555: it lives on the In Progress Reels tab body only).
-    expect(screen.queryByRole('button', { name: 'Build New Reel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Create reel' })).toBeNull();
 
     // T8380: the In Progress Clips tab is no longer a dead end -- "Add Video"
     // makes it a valid clip-creation entry point, so it must be reachable even
@@ -139,13 +139,13 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     // (game path OR upload directly), including the Add Video CTA + tutorial
     // anchor. With no games yet the game path reads "Add a game and tap Add Play."
     fireEvent.click(tab);
-    const addVideo = await screen.findByRole('button', { name: 'Add Video' });
+    const addVideo = await screen.findByRole('button', { name: 'Upload clip' });
     expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
     expect(screen.getByText('Cut a clip, or upload one')).toBeTruthy();
     // T9390 (Decision 3): at zero games Clips shows Add Video ALONE (no cross-tab
     // Add Game create action), with the "No game needed." caption.
     expect(screen.getByText('No game needed.')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Add Game' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Upload game' })).toBeNull();
   });
 
   it('games still loading: "Add Game" stays visible (does not wait for the empty check to resolve)', async () => {
@@ -153,7 +153,7 @@ describe('ProjectManager home tab defaults (T6830)', () => {
 
     // T8780: gamesEmptyConfirmed is gated on !gamesLoading, so the button
     // shouldn't disappear mid-fetch just because `games` is momentarily [].
-    expect(screen.getByRole('button', { name: 'Add Game' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Upload game' })).toBeTruthy();
   });
 
   it('/home/reels deep link on a zero-content account STAYS on Clips (T8380: no dead-end redirect)', async () => {
@@ -162,7 +162,7 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     // T8380: the old redirect effect (bounce off the dead-end Clips tab onto
     // Games) was removed -- /home/reels is now a valid landing surface, so the
     // Add Video CTA is shown in place and the URL is not rewritten to Games.
-    const addVideo = await screen.findByRole('button', { name: 'Add Video' });
+    const addVideo = await screen.findByRole('button', { name: 'Upload clip' });
     expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
     expect(window.location.pathname).toBe('/home/reels');
     expect(clipsTab().disabled).toBe(false);
@@ -189,7 +189,7 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     await waitFor(() => {
       expect(within(tab).getAllByText('1').length).toBeGreaterThan(0);
     });
-    expect(screen.queryByRole('button', { name: 'Build New Reel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Create reel' })).toBeNull();
   });
 
   it('user with only multi-clip (In Progress Reels) drafts: Clips tab is still reachable (T8380)', async () => {

@@ -10,6 +10,7 @@ import { useCreditStore } from '../stores/creditStore';
 import { useQuestStore } from '../stores/questStore';
 import { calculateUploadCost } from '../utils/storageCost';
 import { API_BASE } from '../config';
+import { LIBRARY_ACTIONS } from '../config/displayNames';
 import apiFetch from '../utils/apiFetch';
 
 // Local calendar day as YYYY-MM-DD for the date input's default. NOT
@@ -190,7 +191,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
             <div className="p-2 bg-green-600/20 rounded-lg">
               <Gamepad2 size={20} className="text-green-400" />
             </div>
-            <h2 className="text-lg font-semibold text-white">Add New Game</h2>
+            <h2 className="text-lg font-semibold text-white">{LIBRARY_ACTIONS.UPLOAD_GAME}</h2>
           </div>
           <button
             onClick={handleClose}
@@ -376,7 +377,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
               disabled={!isValid || isSubmitting}
               className="w-full"
             >
-              {isSubmitting ? 'Adding Game...' : 'Add Game'}
+              {isSubmitting ? LIBRARY_ACTIONS.UPLOADING_GAME : LIBRARY_ACTIONS.UPLOAD_GAME}
             </Button>
           </div>
         </form>

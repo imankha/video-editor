@@ -90,8 +90,8 @@ for (const viewport of RUNS) {
       // Still no alertdialog -- this is a passive card, not a gate.
       await expect(page.locator(ALERTDIALOG)).toHaveCount(0);
 
-      // The primary always-present home CTA (T8380/T8500 renamed it "Add Game" ->
-      // "Add Video") is not covered by anything -- the exact regression this task
+      // The primary always-present home CTA (T8380/T8500 renamed it "Upload game" ->
+      // "Upload clip") is not covered by anything -- the exact regression this task
       // fixes (prod bug #18).
       const primaryCta = page.getByRole('button', { name: /add video/i }).first();
       await expect(primaryCta).toBeVisible();

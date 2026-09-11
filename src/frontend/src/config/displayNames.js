@@ -37,36 +37,67 @@ export const ANNOTATE = {
 };
 
 export const SECTION_NAMES = {
-  // In-progress single-clip auto-draft tab (Home). Tab id stays `projects` /
-  // URL `/home/reels` (frozen for deep-link compat); the LABEL is
-  // "In Progress Clips" as of T8555 (was "Clips" T8360, "Reel Drafts" before).
-  CLIPS: 'In Progress Clips',
+  // Single-clip auto-draft tab (Home). Tab id stays `projects` / URL
+  // `/home/reels` (frozen for deep-link compat). T9530 (Shared Vocabulary epic,
+  // N10, 2026-09-10) dropped the "In Progress" prefix — status is shown per item,
+  // not baked into the object name — so the label is now just "Clips" (was
+  // "In Progress Clips" T8555, "Clips" T8360, "Reel Drafts" before). This makes
+  // the full label match SECTION_NAMES_SHORT.CLIPS universally.
+  CLIPS: 'Clips',
   CLIPS_LOWER: 'clips',
 
-  // In-progress multi-clip assemblies (T8360). T8555 promoted this to its own
-  // top-level tab labeled "In Progress Reels" (was "Highlights"); this is the
-  // in-progress-drafts surface only -- published reels live under PUBLISHED.
-  HIGHLIGHTS: 'In Progress Reels',
-  HIGHLIGHTS_LOWER: 'in progress reels',
+  // Multi-clip assemblies (T8360). T8555 promoted this to its own top-level tab;
+  // T9530 (N11) dropped the "In Progress" prefix so the label is now "Reels"
+  // (was "In Progress Reels" T8555, "Highlights" before). In-progress-drafts
+  // surface only -- published reels live under PUBLISHED.
+  HIGHLIGHTS: 'Reels',
+  HIGHLIGHTS_LOWER: 'reels',
 
   // Published reels tab (T8555) -- every published reel regardless of single-
   // or multi-clip origin (the old gallery/DownloadsPanel published list,
   // relocated to its own top-level tab).
   PUBLISHED: 'Published',
 
-  // Published-reel NOUN used off the tab bar (DraftTile publish button, export
+  // Published-reel NOUN used off the tab bar (Hide-from-Drafts hint, export
   // toasts, GalleryButton, quests). NOT a tab label -- deliberately keeps the
-  // "Highlight Reel(s)" term (T8555 retired it only from the tab bar).
+  // "Highlight Reel(s)" term (T8555 retired it only from the tab bar; T9530
+  // renamed the per-card publish ACTION to Publish clip/Publish reel, see
+  // LIBRARY_ACTIONS, but left this destination noun for cross-surface copy the
+  // sibling children T9560/T9570 still own).
   LIBRARY: 'Highlight Reels',
 };
 
-// T8980: one-line short tab labels shown BELOW `sm`. The two-word SECTION_NAMES
-// ("In Progress Clips/Reels") don't fit a ~70px column at 320px, and their
-// shared "In Progress" prefix carries no distinguishing information. Full
-// SECTION_NAMES labels still show at `sm`+ (responsive shortening, not a
-// rename). "Published" sitting next to "Reels" is what reads the middle two as
-// in-progress. These are ALSO the EmptyTabGuide flow-strip step labels
-// (emptyStates.js FLOW_STEPS) -- same words, single source.
+// T9530 (Shared Vocabulary epic, N01-N03/N12-N15): the Library-surface object
+// action vocabulary, single source. Object model: you UPLOAD a game or a clip
+// (source ingest), ADD footage to an existing game, and CREATE a reel by
+// assembling multiple clips. Per-card actions name their OWN object — a Clip
+// (a single-clip auto-draft, project.is_auto_created === true) is deleted /
+// renamed / published as a clip; a Reel (assembled multi-clip, is_auto_created
+// === false) as a reel. The two clip strings reuse ANNOTATE's canonical values
+// so a single datum never drifts across surfaces (one canonical location rule).
+export const LIBRARY_ACTIONS = {
+  UPLOAD_GAME: 'Upload game',              // N01 — was "Add Game"/"Add New Game"
+  UPLOADING_GAME: 'Uploading game...',     // N01 — submit busy state
+  ADD_FOOTAGE: 'Add footage to game',      // N03 — was "Add footage"/"Add footage to this game"
+  CREATE_REEL: 'Create reel',              // N13 — was "Build New Reel"/"Create Reel from Clips"
+  // N13 — assembly submit, shows the selected count; button is disabled at zero.
+  CREATE_REEL_WITH_COUNT: (n) => `Create reel (${n} clip${n === 1 ? '' : 's'})`,
+  DELETE_CLIP: ANNOTATE.DELETE_CLIP,       // N14 — 'Delete clip'
+  DELETE_REEL: 'Delete reel',              // N14
+  RENAME_CLIP: ANNOTATE.RENAME_CLIP,       // N15 — 'Rename clip'
+  RENAME_REEL: 'Rename reel',              // N15
+  PUBLISH_CLIP: 'Publish clip',            // N12
+  PUBLISH_REEL: 'Publish reel',            // N12
+};
+
+// T8980: one-line short tab labels shown BELOW `sm`. T9530 (N10/N11) collapsed
+// SECTION_NAMES onto these exact words at every breakpoint — the full labels no
+// longer carry an "In Progress" prefix, so SECTION_NAMES and SECTION_NAMES_SHORT
+// now render the SAME set (Games / Clips / Reels / Published). This constant is
+// kept as the single source the EmptyTabGuide flow-strip step labels
+// (emptyStates.js FLOW_STEPS) read from; "Published" sitting next to "Reels" is
+// what reads the middle two as in-progress, so status lives per item, never in
+// the tab name.
 export const SECTION_NAMES_SHORT = {
   GAMES: 'Games',
   CLIPS: 'Clips',
@@ -74,14 +105,15 @@ export const SECTION_NAMES_SHORT = {
   PUBLISHED: 'Published',
 };
 
-// T8380: direct clip upload ("Add Video") on the In Progress Clips tab. A
-// separate group from SECTION_NAMES (tab labels) -- this is the upload GESTURE
-// plus its one-time consequence notice. "New Clip" (T8130) stays reserved; the
-// user chose "Add Video" for this direct-upload entry point. The notice copy was
-// user-approved 2026-09-05 (softened from an absolute "can't" claim; the "add to
-// a Game instead" pointer was dropped for a terser notice).
+// T8380: direct clip upload on the Clips tab. A separate group from
+// SECTION_NAMES (tab labels) -- this is the upload GESTURE plus its one-time
+// consequence notice. T9530 (N02, 2026-09-10) renamed the CTA "Add Video" ->
+// "Upload clip" (object-model verb: you UPLOAD a clip), and renamed the key
+// ADD_VIDEO -> UPLOAD_CLIP to keep the constant greppable by its new label. The
+// notice copy was user-approved 2026-09-05 (softened from an absolute "can't"
+// claim; the "add to a Game instead" pointer was dropped for a terser notice).
 export const CLIP_UPLOAD = {
-  ADD_VIDEO: 'Add Video',
+  UPLOAD_CLIP: 'Upload clip',
   NOTICE_TITLE: 'Heads up: these clips won’t be linked to a game',
   NOTICE_BODY:
     'Uploading here adds videos straight to your clips, ready to Focus and publish. '

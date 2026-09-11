@@ -77,7 +77,7 @@ async function setupAuthedGuest(page) {
     useAuthStore.setState({ isAuthenticated: true, email: 't7922@e2e.local', showAuthModal: false });
   });
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await expect(page.locator('button:has-text("Add Game")').first()).toBeVisible({ timeout: 20000 });
+  await expect(page.locator('button:has-text("Upload game")').first()).toBeVisible({ timeout: 20000 });
 }
 
 /** Force the current profile's sport to no_sport so each viewport hits the picker branch. */
@@ -97,7 +97,7 @@ async function uploadGameAndEnterAnnotate(page) {
   await page.locator('button:has-text("Games")').first().click({ timeout: 3000 }).catch(() => {});
   await page.waitForTimeout(300);
   step('click Add Game');
-  await page.locator('button:has-text("Add Game")').first().click();
+  await page.locator('button:has-text("Upload game")').first().click();
   await openGameDetailsDisclosure(page);
   await expect(page.getByPlaceholder('e.g., Carlsbad SC')).toBeVisible({ timeout: 8000 });
 
@@ -116,7 +116,7 @@ async function uploadGameAndEnterAnnotate(page) {
     const { useCreditStore } = await import('/src/stores/creditStore.js');
     useCreditStore.setState({ balance: 1_000_000, loaded: true });
   });
-  const createButton = page.locator('form button:has-text("Add Game")').last();
+  const createButton = page.locator('form button:has-text("Upload game")').last();
   await expect(createButton).toBeEnabled({ timeout: 8000 });
   step('click Create (submit Add Game)');
   const clicked = await createButton.click({ timeout: 12000 }).then(() => true).catch(() => false);

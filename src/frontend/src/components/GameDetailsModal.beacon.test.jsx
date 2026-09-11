@@ -74,7 +74,7 @@ describe('GameDetailsModal — T7890 upload_file_selected beacon', () => {
     renderModal();
     // Modal is open (its own gesture add_game_opened is ProjectManager's job), but
     // no file picked yet -> no File Selected footprint.
-    expect(screen.getByText('Add New Game')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Upload game' })).toBeTruthy();
     expect(recordAchievementSpy).not.toHaveBeenCalled();
   });
 });

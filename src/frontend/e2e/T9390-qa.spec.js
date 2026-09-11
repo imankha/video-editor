@@ -16,7 +16,7 @@ import { test, expect } from '@playwright/test';
  */
 
 const TEST_USER_ID = `e2e_t9390_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-const CAPTION = 'Reels and Published unlock once you have a clip. Cut one from a game, or use Add Video on Clips.';
+const CAPTION = 'Reels and Published unlock once you have a clip. Cut one from a game, or use Upload clip on Clips.';
 const VIEWPORTS = [
   { w: 320, h: 720, label: '320' },
   { w: 390, h: 844, label: '390' },
@@ -98,7 +98,7 @@ test('T9390: four-tab empty guides, strip, and gating across viewports', async (
     await expect(page.getByText('No game needed.')).toBeVisible();
     const addVideo = page.locator('[data-tutorial-target="clips-add-video"]');
     await expect(addVideo).toHaveCount(1); // T8380 invariant: exactly one node
-    await expect(page.getByRole('button', { name: 'Add Game' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Upload game' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Go to Games' })).toHaveCount(0); // games=0
 
     await page.screenshot({ path: `qa/t9390-clips-${vp.label}.png`, fullPage: true });

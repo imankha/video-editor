@@ -521,7 +521,7 @@ async function navigateToProjectManager(page) {
   // moved to the In Progress Reels tab (was a top-right icon button opening a drawer;
   // now a peer tab alongside Games/Clips). Switch to it to reach it, instead
   // of the Reel Drafts/Clips tab.
-  const newProjectButton = page.locator('button:has-text("Build New Reel")');
+  const newProjectButton = page.locator('button:has-text("Create reel")');
   if (await newProjectButton.isVisible().catch(() => false)) {
     return; // Already on the In Progress Reels tab
   }
@@ -534,7 +534,7 @@ async function navigateToProjectManager(page) {
   }
 
   // Switch to the In Progress Reels tab, which now hosts the Create button.
-  const inProgressReelsTab = page.getByRole('button', { name: /^In Progress Reels/ }).first();
+  const inProgressReelsTab = page.getByRole('button', { name: /^Reels/ }).first();
   if (await inProgressReelsTab.isVisible().catch(() => false)) {
     await inProgressReelsTab.click();
     await page.waitForTimeout(500);
@@ -550,7 +550,7 @@ async function navigateToProjectManager(page) {
  * Navigates there if needed and loads test files.
  *
  * Flow (updated for Add Game modal):
- * 1. Click "Add Game" to open modal
+ * 1. Click "Upload game" to open modal
  * 2. Fill form: opponent, date, game type, video
  * 3. Click "Create Game" to enter annotate mode
  * 4. Import TSV file
@@ -570,7 +570,7 @@ async function ensureAnnotateModeWithClips(page) {
   // Click Games tab and Add Game button to open modal
   await page.locator('button:has-text("Games")').click();
   await page.waitForTimeout(500);
-  await page.locator('button:has-text("Add Game")').click();
+  await page.locator('button:has-text("Upload game")').click();
   await page.waitForTimeout(500);
 
   // Fill in the Add Game modal form
@@ -594,7 +594,7 @@ async function ensureAnnotateModeWithClips(page) {
   await page.waitForTimeout(1000);
 
   // Click Create Game button (triggers upload + game creation)
-  const createButton = page.locator('form button:has-text("Add Game")');
+  const createButton = page.locator('form button:has-text("Upload game")');
   await expect(createButton).toBeEnabled({ timeout: 5000 });
   await createButton.click();
 
@@ -648,7 +648,7 @@ async function ensureAnnotateModeWithClips(page) {
 
   if (!clipsSaved) {
     // T7790: fail FAST and accurately here instead of continuing. Previously this
-    // only warned, so a downstream step (e.g. clicking a "Build New Reel" button that
+    // only warned, so a downstream step (e.g. clicking a "Create reel" button that
     // clipsTabDisabled correctly disables when 0 clips exist) hung until the hard
     // 5-minute cap. The clip-save race this guarded is now fixed at the source
     // (importAnnotationsWithRawClips waits for the in-flight upload's game id), so a
@@ -676,13 +676,13 @@ async function navigateToProjectFromHome(page) {
   // T7790b: 2000ms was FLAKY (~1/3 failures here). The `Promise.race` above can
   // resolve on `domcontentloaded` BEFORE React has hydrated and painted the nav bar,
   // and this stack's session-init + first /api/games can take 1-3s (see [REQ_TIMING]
-  // logs), so the "In Progress Clips" tab legitimately appears a beat later. T7780's
+  // logs), so the "Clips" tab legitimately appears a beat later. T7780's
   // conversion turned the old no-op `isVisible({timeout:2000})` (which never actually
   // waited) into a HARD 2s requirement it never had to meet before. Bounded at 5000ms
   // to match this helper's own sibling waits (projectCard 3000 / clipSegment 5000) and
   // to comfortably cover post-navigation hydration — still fails fast if the tab
   // genuinely never renders.
-  const projectsTab = page.getByRole('button', { name: /^In Progress Clips/ });
+  const projectsTab = page.getByRole('button', { name: /^Clips/ });
   await projectsTab.waitFor({ state: 'visible', timeout: 5000 });
   await projectsTab.click();
   await page.waitForTimeout(500);
@@ -867,7 +867,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
       // Go to project manager first
       await page.goto('/');
       await page.waitForLoadState('domcontentloaded');
-      await page.getByRole('button', { name: /^In Progress Clips/ }).click();
+      await page.getByRole('button', { name: /^Clips/ }).click();
       await page.waitForTimeout(500);
 
       // Click the first clip link that says "click to open" in its title/aria-label
@@ -915,11 +915,11 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   // to that tab instead.
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2000);
-  await page.getByRole('button', { name: /^In Progress Reels/ }).first().click();
+  await page.getByRole('button', { name: /^Reels/ }).first().click();
   await page.waitForTimeout(500);
 
   // Click New Project to open the modal
-  await page.locator('button:has-text("Build New Reel")').click();
+  await page.locator('button:has-text("Create reel")').click();
   await page.waitForTimeout(500);
 
   // Wait for clips to load in the modal (should show clip buttons or "No plays" message)
@@ -957,7 +957,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   await createButton.click();
 
   // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
-  await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
+  await expect(page.locator('text="Create reel"')).not.toBeVisible({ timeout: 30000 });
 
   // Navigate to the project in Framing mode
   await navigateToFocusAndWaitForVideo(page);
@@ -1111,7 +1111,7 @@ test.describe('Smoke Tests @smoke', () => {
     // Click Games tab and Add Game to open modal
     await page.locator('button:has-text("Games")').click();
     await page.waitForTimeout(500);
-    await page.locator('button:has-text("Add Game")').click();
+    await page.locator('button:has-text("Upload game")').click();
     await page.waitForTimeout(500);
 
     // Fill in the Add Game modal form
@@ -1128,7 +1128,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForTimeout(1000);
 
     // Click Create Game
-    const createButton = page.locator('form button:has-text("Add Game")');
+    const createButton = page.locator('form button:has-text("Upload game")');
     await expect(createButton).toBeEnabled({ timeout: 5000 });
     await createButton.click();
 
@@ -1143,7 +1143,7 @@ test.describe('Smoke Tests @smoke', () => {
     // Click Games tab and Add Game to open modal
     await page.locator('button:has-text("Games")').click();
     await page.waitForTimeout(500);
-    await page.locator('button:has-text("Add Game")').click();
+    await page.locator('button:has-text("Upload game")').click();
     await page.waitForTimeout(500);
 
     // Fill in the Add Game modal form
@@ -1160,7 +1160,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForTimeout(1000);
 
     // Click Create Game
-    const createButton = page.locator('form button:has-text("Add Game")');
+    const createButton = page.locator('form button:has-text("Upload game")');
     await expect(createButton).toBeEnabled({ timeout: 5000 });
     await createButton.click();
 
@@ -1189,7 +1189,7 @@ test.describe('Smoke Tests @smoke', () => {
     // Click Games tab and Add Game to open modal
     await page.locator('button:has-text("Games")').click();
     await page.waitForTimeout(500);
-    await page.locator('button:has-text("Add Game")').click();
+    await page.locator('button:has-text("Upload game")').click();
     await page.waitForTimeout(500);
 
     // Fill in the Add Game modal form
@@ -1206,7 +1206,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForTimeout(1000);
 
     // Click Create Game
-    const createButton = page.locator('form button:has-text("Add Game")');
+    const createButton = page.locator('form button:has-text("Upload game")');
     await expect(createButton).toBeEnabled({ timeout: 5000 });
     await createButton.click();
 
@@ -1256,11 +1256,11 @@ test.describe('Smoke Tests @smoke', () => {
 
     // Switch to the In Progress Reels tab (T8545: Create Highlight Reel moved here
     // from the Clips Home tab, was a top-right icon button opening a drawer).
-    await page.getByRole('button', { name: /^In Progress Reels/ }).first().click();
+    await page.getByRole('button', { name: /^Reels/ }).first().click();
     await page.waitForTimeout(500);
 
     // Create project from clips
-    await page.locator('button:has-text("Build New Reel")').click();
+    await page.locator('button:has-text("Create reel")').click();
     await page.waitForTimeout(500);
 
     // The "Create Project from Clips" modal should now show clips
@@ -1270,7 +1270,7 @@ test.describe('Smoke Tests @smoke', () => {
     await createButton.click();
 
     // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
-    await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text="Create reel"')).not.toBeVisible({ timeout: 30000 });
 
     // Navigate to framing and wait for video to load
     await navigateToFocusAndWaitForVideo(page, { videoTimeout: 60000 });
@@ -1312,11 +1312,11 @@ test.describe('Smoke Tests @smoke', () => {
 
     // Switch to the In Progress Reels tab (T8545: Create Highlight Reel moved here
     // from the Clips Home tab, was a top-right icon button opening a drawer).
-    await page.getByRole('button', { name: /^In Progress Reels/ }).first().click();
+    await page.getByRole('button', { name: /^Reels/ }).first().click();
     await page.waitForTimeout(500);
 
     // Create project from clips
-    await page.locator('button:has-text("Build New Reel")').click();
+    await page.locator('button:has-text("Create reel")').click();
     await page.waitForTimeout(500);
 
     // The "Create Project from Clips" modal should now show clips
@@ -1325,7 +1325,7 @@ test.describe('Smoke Tests @smoke', () => {
     await createButton.click();
 
     // Wait for modal to close - now stays on Projects page
-    await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text="Create reel"')).not.toBeVisible({ timeout: 30000 });
 
     // Navigate to framing and wait for video
     await navigateToFocusAndWaitForVideo(page, { waitForVideo: true, videoTimeout: 60000 });
@@ -1357,11 +1357,11 @@ test.describe('Smoke Tests @smoke', () => {
 
     // Switch to the In Progress Reels tab (T8545: Create Highlight Reel moved here
     // from the Clips Home tab, was a top-right icon button opening a drawer).
-    await page.getByRole('button', { name: /^In Progress Reels/ }).first().click();
+    await page.getByRole('button', { name: /^Reels/ }).first().click();
     await page.waitForTimeout(500);
 
     // Create project from clips
-    await page.locator('button:has-text("Build New Reel")').click();
+    await page.locator('button:has-text("Create reel")').click();
     await page.waitForTimeout(500);
 
     // The "Create Project from Clips" modal should now show clips
@@ -1370,7 +1370,7 @@ test.describe('Smoke Tests @smoke', () => {
     await createButton.click();
 
     // Wait for modal to close - now stays on Projects page
-    await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text="Create reel"')).not.toBeVisible({ timeout: 30000 });
 
     // Navigate to framing and wait for video
     await navigateToFocusAndWaitForVideo(page, { waitForVideo: true, videoTimeout: 60000 });
@@ -1454,7 +1454,7 @@ test.describe('Full Coverage Tests @full', () => {
     // Click Games tab and Add Game to open modal
     await page.locator('button:has-text("Games")').click();
     await page.waitForTimeout(500);
-    await page.locator('button:has-text("Add Game")').click();
+    await page.locator('button:has-text("Upload game")').click();
     await page.waitForTimeout(500);
 
     // Fill in the Add Game modal form
@@ -1471,7 +1471,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(1000);
 
     // Click Create Game
-    const createButton = page.locator('form button:has-text("Add Game")');
+    const createButton = page.locator('form button:has-text("Upload game")');
     await expect(createButton).toBeEnabled({ timeout: 5000 });
     await createButton.click();
 
@@ -1500,11 +1500,11 @@ test.describe('Full Coverage Tests @full', () => {
     console.log('[Full] Step 2: Creating project from library clips...');
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^In Progress Reels/ }).first().click();
+    await page.getByRole('button', { name: /^Reels/ }).first().click();
     await page.waitForTimeout(500);
 
     // Click New Project to open the Create Project from Clips modal
-    await page.locator('button:has-text("Build New Reel")').click();
+    await page.locator('button:has-text("Create reel")').click();
     await page.waitForTimeout(500);
 
     // Modal should show clips from library
@@ -1513,7 +1513,7 @@ test.describe('Full Coverage Tests @full', () => {
     await createProjectButton.click();
 
     // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
-    await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text="Create reel"')).not.toBeVisible({ timeout: 30000 });
 
     // Verify project was created via API
     const projects = await page.evaluate(async () => {
@@ -1666,7 +1666,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(1000);
 
     // Verify we're at project manager
-    await expect(page.locator('button:has-text("Build New Reel")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('button:has-text("Create reel")')).toBeVisible({ timeout: 5000 });
 
     // Re-open the same project
     const projectCard = page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ clip/i') }).first();
@@ -1958,7 +1958,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(1000);
 
     // Verify we're at project manager
-    await expect(page.locator('button:has-text("Build New Reel")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('button:has-text("Create reel")')).toBeVisible({ timeout: 5000 });
 
     // STEP 5: Reload the same project
     console.log('[Full] Step 5: Reloading project...');
@@ -2098,7 +2098,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     await page.locator('button:has-text("Games")').click();
     await page.waitForTimeout(500);
-    await page.locator('button:has-text("Add Game")').click();
+    await page.locator('button:has-text("Upload game")').click();
     await page.waitForTimeout(500);
 
     // Fill modal form
@@ -2115,7 +2115,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(1000);
 
     // Create game
-    const createGameButton = page.locator('form button:has-text("Add Game")');
+    const createGameButton = page.locator('form button:has-text("Upload game")');
     await expect(createGameButton).toBeEnabled({ timeout: 5000 });
     await createGameButton.click();
 
@@ -2171,11 +2171,11 @@ test.describe('Full Coverage Tests @full', () => {
     console.log('[Full Pipeline] Step 3: Creating project from library clips...');
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^In Progress Reels/ }).first().click();
+    await page.getByRole('button', { name: /^Reels/ }).first().click();
     await page.waitForTimeout(500);
 
     // Click New Project to open the Create Project from Clips modal
-    await page.locator('button:has-text("Build New Reel")').click();
+    await page.locator('button:has-text("Create reel")').click();
     await page.waitForTimeout(500);
 
     // Modal should show clips from library - create project
@@ -2184,7 +2184,7 @@ test.describe('Full Coverage Tests @full', () => {
     await createProjectButton.click();
 
     // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
-    await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text="Create reel"')).not.toBeVisible({ timeout: 30000 });
 
     // Navigate to the project in Framing mode
     console.log('[Full Pipeline] Navigating to framing mode...');

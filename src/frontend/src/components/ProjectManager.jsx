@@ -18,7 +18,7 @@ import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD } from '../config/displayNames';
+import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { useClipUpload } from '../hooks/useClipUpload';
 import { GAME, REEL, HIGHLIGHT, PUBLISHED } from '../config/themeColors';
@@ -444,15 +444,15 @@ function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, sho
           name computation follows document order, not CSS. `order-first` on
           the icon span moves it to the FRONT visually (stacked-top on mobile,
           row-start on desktop) while staying LAST in the DOM. */}
-      {/* T8980: responsive label SHORTENING (not a rename). The full two-word
-          SECTION_NAMES label shows at `sm`+ (content-width bar); below `sm` a
-          one-line 12px short label (Games/Clips/Reels/Published) replaces the
-          old 10px wrapping label -- 10px is below the iOS/Material floor and the
-          shared "In Progress" prefix wasted the ~70px column. Both spans precede
-          the icon+badge so the count stays last in the accessible name; only the
-          breakpoint-visible span contributes to the name in a real browser
-          (display:none is excluded from name computation). Full label first so
-          the existing "{full label}" locators still anchor. */}
+      {/* T8980: two spans, one per breakpoint. T9530 (N10/N11) dropped the
+          "In Progress" prefix, so the full SECTION_NAMES label and the short
+          SECTION_NAMES_SHORT label are now the SAME words (Games/Clips/Reels/
+          Published) -- the `sm`+ span renders at a larger size, the sub-`sm` span
+          at a compact 12px, but neither shortens the other any more (kept as two
+          spans for the size/whitespace difference, not a rename). Both spans
+          precede the icon+badge so the count stays last in the accessible name;
+          only the breakpoint-visible span contributes to the name in a real
+          browser (display:none is excluded from name computation). */}
       <span className="hidden sm:inline text-sm leading-tight text-center whitespace-normal break-words">{label}</span>
       <span className="sm:hidden text-xs leading-tight text-center whitespace-nowrap">{shortLabel}</span>
       <span className="order-first relative">
@@ -1469,7 +1469,7 @@ export function ProjectManager({
           already-loaded `hasClips` -- nothing persisted. */}
       {!hasClips && (
         <p className="text-xs text-gray-500 text-center mt-1 mb-3">
-          Reels and Published unlock once you have a clip. Cut one from a game, or use Add Video on Clips.
+          Reels and Published unlock once you have a clip. Cut one from a game, or use Upload clip on Clips.
         </p>
       )}
 
@@ -1490,7 +1490,7 @@ export function ProjectManager({
             icon={Plus}
             onClick={handleAddGameClick}
           >
-            Add Game
+            {LIBRARY_ACTIONS.UPLOAD_GAME}
           </Button>
         </div>
       )}
@@ -1509,7 +1509,7 @@ export function ProjectManager({
             onClick={handleAddVideoClick}
             data-tutorial-target="clips-add-video"
           >
-            {CLIP_UPLOAD.ADD_VIDEO}
+            {CLIP_UPLOAD.UPLOAD_CLIP}
           </Button>
         </div>
       )}
@@ -1925,8 +1925,8 @@ export function ProjectManager({
               {filteredProjects.length > 0 && (
                 <div className="flex items-center gap-1 bg-white/5 rounded-lg p-0.5">
                   {[
-                    { value: 'phase', label: 'By Phase' },
-                    { value: 'game', label: 'By Game' },
+                    { value: 'phase', label: 'By status' },
+                    { value: 'game', label: 'By game' },
                   ].map(opt => (
                     <button
                       key={opt.value}
@@ -2104,7 +2104,7 @@ export function ProjectManager({
                 onClick={() => setShowAssemblyModal(true)}
                 className="w-full"
               >
-                Build New Reel
+                {LIBRARY_ACTIONS.CREATE_REEL}
               </Button>
             </div>
             <CardCarousel ariaLabel={`${SECTION_NAMES.HIGHLIGHTS} in progress`} fillerSlot={REELS_PARTIAL_FILLER}>

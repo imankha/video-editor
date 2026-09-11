@@ -57,7 +57,7 @@ async function expectInAnnotateMode(page) {
   const clipMarker = page.locator('.clip-marker').first();
   await expect(video.or(clipMarker)).toBeVisible({ timeout: 15000 });
   // And NOT still on the project manager.
-  await expect(page.locator('button:has-text("Add Game")')).toHaveCount(0);
+  await expect(page.locator('button:has-text("Upload game")')).toHaveCount(0);
 }
 
 test.describe('Game Loading @staging-gate @gate-b', () => {
