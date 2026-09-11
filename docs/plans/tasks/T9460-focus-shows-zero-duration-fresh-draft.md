@@ -1,6 +1,6 @@
 # T9460: Focus sidebar shows 0.0s for a six-second clip on a freshly created draft
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-10

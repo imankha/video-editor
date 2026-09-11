@@ -1,6 +1,6 @@
 # T9510: Transient "Unable to play media" is exposed to assistive technology during a normal load
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-10
