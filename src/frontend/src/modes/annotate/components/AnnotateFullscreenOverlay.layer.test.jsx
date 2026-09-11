@@ -96,24 +96,25 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
   });
 
   describe('5-star auto-project coupling', () => {
-    it('a 5-star Team clip does NOT auto-enable Create Reel', () => {
+    it('a 5-star Team clip does NOT auto-enable the clip toggle', () => {
       render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={false} />);
       fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
-      expect(screen.getByText("Don't Create Reel")).toBeTruthy();
+      // T9450: positive polarity — off state reads "Just save this play", never "Don't Create Reel".
+      expect(screen.getByText('Just save this play')).toBeTruthy();
     });
 
-    it('a 5-star My Athlete clip DOES auto-enable Create Reel', () => {
+    it('a 5-star My Athlete clip DOES auto-enable the clip toggle', () => {
       render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
       fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
-      expect(screen.getByText('Create Reel')).toBeTruthy();
+      expect(screen.getByText('Clip Play to focus on your player')).toBeTruthy();
     });
 
-    it('switching the Layer control to Team after a 5-star rating turns Create Reel off', () => {
+    it('switching the Layer control to Team after a 5-star rating turns the clip toggle off', () => {
       render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
       fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
-      expect(screen.getByText('Create Reel')).toBeTruthy();
+      expect(screen.getByText('Clip Play to focus on your player')).toBeTruthy();
       fireEvent.click(screen.getByRole('radio', { name: 'Team layer' }));
-      expect(screen.getByText("Don't Create Reel")).toBeTruthy();
+      expect(screen.getByText('Just save this play')).toBeTruthy();
     });
   });
 });

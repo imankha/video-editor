@@ -82,14 +82,24 @@ describe('AnnotateFullscreenOverlay strip — layer control on the top line (T89
   });
 });
 
-describe('AnnotateFullscreenOverlay strip — "Clip" toggle copy (T8960 item 4)', () => {
-  it('create mode toggle reads "Don\'t Clip Play" when off and flips copy on click', () => {
+describe('AnnotateFullscreenOverlay strip — "Clip" toggle copy (T8960 item 4, T9450 positive polarity)', () => {
+  it('create mode toggle reads a positive off-state ("Just save this play") and flips to the clip copy on click', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" newClipLayerIsMine={true} />);
-    // Default rating 4 (not 5) + My Athlete -> createProject off -> "Don't Clip Play".
-    const toggle = screen.getByText("Don't Clip Play");
+    // Default rating 4 (not 5) + My Athlete -> createProject off. T9450: the off
+    // state is phrased positively ("Just save this play"), never "Don't Clip Play".
+    const toggle = screen.getByText('Just save this play');
     expect(toggle).toBeTruthy();
     fireEvent.click(toggle);
     expect(screen.getByText('Clip Play to focus on your player')).toBeTruthy();
+  });
+
+  it('never shows a double-negative label in either state, and drops the stale reel tooltip (T9450)', () => {
+    const { container } = render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" newClipLayerIsMine={true} />);
+    expect(screen.queryByText("Don't Clip Play")).toBeNull();
+    fireEvent.click(screen.getByText('Just save this play'));
+    expect(screen.queryByText("Don't Clip Play")).toBeNull();
+    // The stale "reel" tooltip is gone (a play produces a clip, not a reel).
+    expect(container.querySelector('[title="Auto-create a reel from this play"]')).toBeNull();
   });
 
   it('a 5-star My Athlete clip auto-enables the toggle ("Clip Play to focus on your player")', () => {
