@@ -3,6 +3,7 @@ import { EyeOff, AlertTriangle } from 'lucide-react';
 import { API_BASE } from '../config';
 import { CollectionPlayer } from './collections/CollectionPlayer';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
+import { useEditorStore } from '../stores/editorStore';
 import { useQuestStore } from '../stores/questStore';
 import { usePublishProject } from '../hooks/usePublishProject';
 import { useWebShare } from '../hooks/useWebShare';
@@ -27,11 +28,31 @@ import { toast } from './shared/Toast';
  */
 export function DraftReelPreview() {
   const payload = useReelPreviewStore((s) => s.payload);
+  const close = useReelPreviewStore((s) => s.close);
+  const editorMode = useEditorStore((s) => s.editorMode);
 
-  if (!payload) return null;
+  // T9470: scope the fullscreen overlay to the screen it was opened on. The
+  // preview is a single top-level mount (rendered on BOTH the home and editor
+  // returns in App.jsx), and its payload is a snapshot that outlives navigation.
+  // Without scoping, clicking Preview on the drafts (home) screen and then
+  // navigating into an editor screen before the video finished loading surfaced
+  // the player late OVER that unrelated screen. `openMode` is stamped by
+  // finishedReelNav at open time (always PROJECT_MANAGER); once the live editor
+  // mode moves off it, the user has navigated away, so we discard the snapshot.
+  // The render guard below prevents any one-frame flash; this effect clears the
+  // now-orphaned snapshot from the store so it can never re-surface. A payload
+  // with no openMode (legacy/dev diag direct-open) is never treated as off-page.
+  const offPage = payload != null && payload.openMode != null && payload.openMode !== editorMode;
+  useEffect(() => {
+    if (offPage) close();
+  }, [offPage, close]);
+
+  if (!payload || offPage) return null;
   // Key on the finalVideoId so a fresh open (a different reel) remounts and resets
   // the local publish/published state — but a publish of the SAME reel does NOT
-  // change the key, so the video is never reloaded on publish (§4.7).
+  // change the key, so the video is never reloaded on publish (§4.7). A repeat
+  // click on the SAME draft rebuilds an equivalent snapshot with the same
+  // finalVideoId, so the player is not remounted and no duplicate request fires.
   return <DraftReelPreviewInner key={payload.finalVideoId} payload={payload} />;
 }
 
