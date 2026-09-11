@@ -67,7 +67,7 @@ drift.
 | T9540 | [Render, job, progress and completion labels](T9540-render-and-job-labels.md) | STAGING |
 | T9550 | [Editor-stage inner strings](T9550-editor-stage-strings.md) | STAGING |
 | T9560 | [Onboarding guide, errors and landing vocabulary](T9560-guide-and-landing-vocabulary.md) | STAGING |
-| T9570 | [Cross-surface naming audit](T9570-cross-surface-naming-audit.md) | WIP |
+| T9570 | [Cross-surface naming audit](T9570-cross-surface-naming-audit.md) | STAGING |
 
 Row order is execution order. T9570 closes the epic and must run last.
 
