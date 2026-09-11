@@ -1,6 +1,6 @@
 # T9400: "Report a problem" fails to send, and the failure has no fallback
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 4
 **Created:** 2026-09-10
