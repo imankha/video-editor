@@ -61,6 +61,7 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    2026-08-06T16:40 STAGE_DONE qa "evidence per criterion in qa/"
    2026-08-06T17:40 BLOCKED "design gate: two card-layout options, need user pick"
    2026-08-06T19:12 PUSHREADY feature/T5215-intro-attachment 7d10b3e
+   2026-09-11T08:05 AUTH_DEAD probe failed: Not logged in - Please run /login
    ```
    - The worker's FINAL act is always `PUSHREADY <branch> <sha>` (commit done, QA evidence
      complete, ready for the supervisor to `task.sh push`) or `BLOCKED <reason>`. A worker is
@@ -70,11 +71,23 @@ generated the kickoff, and checked file-ownership against other live workers. `S
      drive call that returned WITHOUT a new status line = the worker died mid-stage
      (quota/auth) or ended its turn early — resume it (step 3 resume rules), don't forensically
      re-read transcripts.
+   - **`AUTH_DEAD`** is written automatically by `task.sh drive` (step 3), not by the worker —
+     it means the pre-dispatch auth probe failed EVEN AFTER re-seeding the container from the
+     host's credentials, so the host login itself is likely stale. This should be rare (the
+     per-dispatch re-seed in step 3 closes the concurrent-refresh race that used to cause this
+     silently — see `project_dotask_quota_hit_corrupts_container_credentials` memory); if it
+     fires, check the host CLI is actually logged in (`claude -p "ok"` on the host) before
+     retrying the dispatch, rather than assuming it's this container's problem.
 
-3. **Drive** with headless CLI calls; ALWAYS `run_in_background: true` so other workers and
-   the supervisor keep moving:
+3. **Drive** with headless CLI calls via `task.sh drive` (NOT raw `docker exec ... claude -p`
+   — it re-seeds this container's credentials from the host and runs a pre-dispatch probe
+   from a safe cwd before every call, closing the concurrent-refresh auth-corruption race
+   documented in `project_dotask_quota_hit_corrupts_container_credentials`; a failed probe
+   writes `AUTH_DEAD` to the status file and exits non-zero instead of dispatching into a dead
+   container). ALWAYS `run_in_background: true` so other workers and the supervisor keep
+   moving:
    ```
-   docker exec -u dev reel-task-<SLUG> bash -lc 'cd /workspace && claude -p <MODEL_FLAGS> "<instruction>"'
+   bash scripts/task.sh drive <SLUG> <MODEL_FLAGS> "<instruction>"
    ```
    **Pick `<MODEL_FLAGS>` from the task's TIER** (quota control — always pass the flag
    EXPLICITLY; never rely on the account/session default, which varies):
@@ -96,12 +109,12 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    - **Resume rules (`-c` vs fresh — the re-context tax is real):** `-c` re-uses the session
      but after the prompt cache expires (~1h idle) it RE-WRITES the entire conversation as
      cache-creation tokens (~the full context, 100-400k). So: continue with
-     `claude -p -c "<next instruction>"` only when the last worker activity was recent
-     (status-file timestamp < ~1h old). Otherwise send a FRESH `claude -p` seeded from files:
-     "Read /workspace/.dotask-kickoff.md and /workspace/.dotask-status. Branch <branch> has
-     commits through <sha>. Continue from the last STAGE_DONE line." (~5k tokens vs ~400k.)
-     `-c` is per-container-safe (own ~/.claude volume); pre-fix shared-volume containers
-     always get the fresh-seed form.
+     `bash scripts/task.sh drive <SLUG> -c "<next instruction>"` only when the last worker
+     activity was recent (status-file timestamp < ~1h old). Otherwise send a FRESH dispatch
+     seeded from files: `bash scripts/task.sh drive <SLUG> "Read /workspace/.dotask-kickoff.md
+     and /workspace/.dotask-status. Branch <branch> has commits through <sha>. Continue from
+     the last STAGE_DONE line."` (~5k tokens vs ~400k.) `-c` is per-container-safe (own
+     ~/.claude volume); pre-fix shared-volume containers always get the fresh-seed form.
    - **Worker turn budget ~300:** a worker grinding past ~300 turns without PUSHREADY is a
      signal (mis-tiered task, stuck loop), not normal. Stop it, read the status file, and
      either re-scope or resume fresh from the checkpoint — don't let it run to quota death.

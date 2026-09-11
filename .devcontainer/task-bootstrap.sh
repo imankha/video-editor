@@ -20,17 +20,42 @@ JSON
 fi
 
 # Seed/refresh the host CLI login (host ~/.claude is mounted read-only at
-# /host-claude). `cp -u` takes whichever copy is NEWER, which is the only rule
-# that satisfies both requirements: an in-container `/login` still wins (it
-# writes a newer file), but a container copy can no longer rot.
+# /host-claude). `cp -u` (take whichever copy is NEWER) replaced an
+# only-when-absent rule that silently killed long-running workers: the host CLI
+# refreshes its token on its own schedule, so a container copy left from days
+# ago eventually failed with "Not logged in - please run /login" mid-task.
 #
-# Seeding only-when-absent was the old rule, and it silently killed long-running
-# workers: the host CLI refreshes its token on its own schedule, so a container
-# copy left from days ago eventually fails with "Not logged in - please run
-# /login", mid-task, after the worker has already made uncommitted edits.
+# But mtime alone isn't a valid freshness signal: when two containers redeem
+# the same OAuth refresh token near-simultaneously (e.g. both waking up at a
+# subscription reset window), the server accepts one and rejects the other --
+# and the loser's own CLI writes back a truncated/blank credentials file with a
+# mtime NEWER than the host's healthy copy. `cp -u` then refuses to fix it
+# forever, because a corrupted file is indistinguishable from a real newer
+# /login by timestamp alone (see project_dotask_quota_hit_corrupts_container_credentials
+# memory). So validate CONTENT first: only a structurally invalid container
+# copy gets force-overwritten regardless of mtime; a healthy one still wins on
+# `cp -u` so a real in-container /login is respected.
+creds_healthy() {
+  [ -s "$1" ] && python3 - "$1" <<'PY' 2>/dev/null
+import json, sys
+try:
+    raw = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(1)
+# The CLI's on-disk shape has shifted before; accept either a nested
+# claudeAiOauth wrapper or flat top-level fields rather than assuming one.
+d = raw.get("claudeAiOauth", raw) if isinstance(raw, dict) else {}
+sys.exit(0 if d.get("accessToken") and d.get("refreshToken") and d.get("expiresAt") else 1)
+PY
+}
 if [ -f /host-claude/.credentials.json ]; then
-  cp -u /host-claude/.credentials.json "$HOME/.claude/.credentials.json" 2>/dev/null || true
-  chmod 600 "$HOME/.claude/.credentials.json" 2>/dev/null || true
+  DEST="$HOME/.claude/.credentials.json"
+  if [ -f "$DEST" ] && ! creds_healthy "$DEST"; then
+    cp -f /host-claude/.credentials.json "$DEST" 2>/dev/null || true
+  else
+    cp -u /host-claude/.credentials.json "$DEST" 2>/dev/null || true
+  fi
+  chmod 600 "$DEST" 2>/dev/null || true
 fi
 
 # Migrate a loose ~/.claude.json onto the persisted config dir once.

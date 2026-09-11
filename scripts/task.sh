@@ -10,6 +10,7 @@
 #   bash scripts/task.sh <id>          # up + open a permission-free Claude session (common path)
 #   bash scripts/task.sh <id> --prompt-file <path>   # ...and feed Claude that prompt as its first message
 #   bash scripts/task.sh up <id>       # ensure the task's checkout + container are running (no Claude)
+#   bash scripts/task.sh drive <id> <claude -p args...>  # re-seed host creds + probe, then run a headless claude -p dispatch (use this, not raw docker exec, for spawn-worker's drive calls)
 #   bash scripts/task.sh claude <id>   # open ANOTHER Claude session in the task (run N times for N chats)
 #   bash scripts/task.sh code <id> [--prompt-file <path>]  # open VS Code ATTACHED to the container (GUI Claude + image paste; optionally seed a kickoff)
 #   bash scripts/task.sh stack <id>    # start the app (backend+frontend) in the container on offset ports
@@ -216,6 +217,51 @@ claude_session() {
     $WINPTY docker exec -it -u dev "$cn" bash -lc 'cd /workspace && exec claude "$@"' _ "$@"
 }
 
+# --- credential pre-flight (force-copy, bypassing mtime entirely) ------------
+# Bakes the previously-manual "docker cp + chown + chmod" incident recovery in
+# as an UNCONDITIONAL step run before every dispatch, instead of a runbook a
+# human has to remember to run reactively after noticing a container went
+# silent. See project_dotask_quota_hit_corrupts_container_credentials memory:
+# concurrent containers redeeming the same OAuth refresh token race at spawn or
+# at a subscription reset window; the loser writes a corrupted local
+# credentials.json whose mtime looks newer than the host copy, so
+# task-bootstrap.sh's up-time `cp -u` can't fix it. Re-copying from the host
+# before every dispatch (not just at container `up`) closes that window.
+seed_creds() {
+  local cn="$1"
+  MSYS_NO_PATHCONV=1 docker cp "$(winpath "$HOME/.claude/.credentials.json")" "$cn:/home/dev/.claude/.credentials.json" \
+    || die "failed to copy host credentials into $cn (is the host CLI logged in?)"
+  MSYS_NO_PATHCONV=1 docker exec -u root "$cn" chown dev:dev /home/dev/.claude/.credentials.json
+  MSYS_NO_PATHCONV=1 docker exec -u root "$cn" chmod 600 /home/dev/.claude/.credentials.json
+}
+
+# --- drive: seed + probe + the real headless dispatch, in one non-silent call -
+# Replaces raw `docker exec ... claude -p` from spawn-worker. The probe runs
+# from /tmp, NEVER /workspace -- a probe session created in /workspace would
+# become the target of the worker's next `-c` resume for that cwd and silently
+# hijack/orphan the real implementation session (2026-08-02 incident, see
+# project_dotask_container_401_empty_refreshtoken memory). A dead probe writes
+# an AUTH_DEAD line to the task's status file and exits non-zero -- exit-0
+# silence is exactly the failure mode that let T9530 sit dead for 7 hours, so
+# this call must never swallow that.
+drive() {
+  local id="$1"; shift || true; [ -n "$id" ] || die "usage: task drive <id> <claude -p args...>"
+  local cn; cn="$(cname "$id")"
+  container_running "$id" || up "$id" >/dev/null
+  seed_creds "$cn"
+
+  local dir status; dir="$(taskdir "$id")"; status="$dir/.dotask-status"
+  local probe
+  probe="$(MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" bash -lc 'cd /tmp && claude -p --model haiku "ok"' 2>&1)" || true
+  if echo "$probe" | grep -qiE 'not logged in|please run /login|session limit'; then
+    [ -d "$dir" ] && echo "$(date -u +%FT%H:%M) AUTH_DEAD $(echo "$probe" | tr '\n' ' ' | cut -c1-200)" >> "$status"
+    die "auth probe failed in $cn even after re-seeding host credentials -- host login itself may be stale; see $status"
+  fi
+
+  echo "[task] driving $cn: claude -p $*" >&2
+  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker exec -u dev "$cn" bash -lc 'cd /workspace && exec claude -p "$@"' _ "$@"
+}
+
 stack() {
   local id="$1"; [ -n "$id" ] || die "usage: task stack <id>"
   local cn dir off; cn="$(cname "$id")"; dir="$(taskdir "$id")"
@@ -362,8 +408,9 @@ list() {
 # --- dispatch ----------------------------------------------------------------
 cmd="${1:-}"; shift || true
 case "$cmd" in
-  ""|-h|--help) sed -n '2,24p' "$0" ;;
+  ""|-h|--help) sed -n '2,25p' "$0" ;;
   up)     up "$@" >/dev/null ;;
+  drive)  drive "$@" ;;
   claude) claude_session "$@" ;;
   stack)  stack "$@" ;;
   test)   e2e_test "$@" ;;
