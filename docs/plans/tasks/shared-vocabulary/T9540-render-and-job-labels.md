@@ -1,6 +1,6 @@
 # T9540: Render, job, progress and completion labels
 
-**Status:** WIP — design approved (with an AI Focus wording correction on N19/N21), implementation resumed
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-10
