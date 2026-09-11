@@ -23,6 +23,26 @@ and is deliberately the historical sum of what the four quests used to award
 # the zeroed `reward` fields) so retiring the drip did not silently zero the grant.
 QUEST_CHAIN_CREDIT_TOTAL = 80
 
+# T9410: server-side mirror of the frontend TUTORIAL_VIDEOS_ENABLED gate
+# (src/frontend/src/config/questDefinitions.jsx). T8690 turned the tutorial videos
+# off and hid the four `watch_*_tutorial` step CTAs from the checklist, but left
+# those steps in the quest_config step_ids below — so a genuinely fresh account
+# could never fire the `watched_*_tutorial` achievement (no CTA to click) yet
+# claim_reward still gated on it, producing "step 'watch_annotate_tutorial' is
+# incomplete" 400s under a panel showing 5/5 (T9410).
+#
+# The fix lives in quests._check_all_steps, the SINGLE source of truth every quest
+# read shares: while videos are off, the four watch steps are treated as satisfied
+# (there is no video to watch, so the requirement is vacuously met). Because
+# /progress, /claim-reward, and /bootstrap all derive from that one function, a
+# displayed-complete quest and a rejected claim can no longer disagree — and the
+# guarantee holds regardless of what the frontend chooses to render, so it does not
+# depend on this flag and the frontend one staying in lockstep. Flip to True (in
+# BOTH places) to bring the tutorial steps back as real, user-completable gates.
+# The four gated steps (one per quest) are spelled out explicitly at the
+# quests._check_all_steps seam.
+TUTORIAL_VIDEOS_ENABLED = False
+
 QUEST_DEFINITIONS = [
     {
         "id": "quest_1",

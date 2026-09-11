@@ -142,8 +142,18 @@ export const useQuestStore = create((set, get) => ({
       method: 'POST',
     });
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Failed to claim reward');
+      const body = await res.json().catch(() => ({}));
+      // T9410: the backend now sends a structured detail
+      // {code, quest_id, step_id, message} for an incomplete step. Preserve the
+      // step_id on the thrown error so the panel can name the HUMAN task (via
+      // STEP_TITLES) instead of leaking the internal step id as user copy. Older
+      // string-detail responses still surface as the message.
+      const detail = body?.detail;
+      const err = new Error(
+        (typeof detail === 'string' ? detail : detail?.message) || 'Failed to claim reward'
+      );
+      if (detail && typeof detail === 'object') err.stepId = detail.step_id;
+      throw err;
     }
     const data = await res.json();
     track('quest_reward_claimed', { questId });
