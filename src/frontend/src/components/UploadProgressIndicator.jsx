@@ -4,6 +4,8 @@ import {
   useQueuedUploads,
   useFailedUploads,
 } from '../stores/uploadStore';
+import { uploadUiState, uploadStateLabel } from '../utils/uploadPresentation';
+import { UPLOAD_STATE } from '../config/displayNames';
 
 /**
  * Global upload progress indicator, bottom-right, visible on every screen.
@@ -51,11 +53,15 @@ const CARD_CLASS = 'bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-4'
 
 function ActiveUploadRow({ upload }) {
   const fileSizeMB = (upload.fileSize / (1024 * 1024)).toFixed(0);
+  // T9430: lead with the honest four-state label (Preparing / Uploading), not "Saved"
+  // until the server acknowledges. "Saved" is signalled by the completion toast when
+  // the entry retires, so it is never shown as an in-flight row here.
+  const stateLabel = uploadStateLabel(uploadUiState(upload)) || UPLOAD_STATE.UPLOADING;
   return (
-    <div className={CARD_CLASS}>
+    <div className={CARD_CLASS} data-testid="active-upload-row" data-upload-state={uploadUiState(upload)}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium text-gray-200 truncate flex-1 mr-2">
-          Uploading {upload.fileName}
+          {stateLabel}: {upload.fileName}
         </span>
         <span className="text-xs text-gray-400">{fileSizeMB} MB</span>
       </div>
@@ -75,10 +81,10 @@ function ActiveUploadRow({ upload }) {
 
 function FailedUploadRow({ upload, onRetry, onDismiss }) {
   return (
-    <div className={CARD_CLASS}>
+    <div className={CARD_CLASS} data-testid="failed-upload-row" data-upload-state="failed">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium text-gray-200 truncate flex-1 mr-2">
-          Uploading {upload.fileName}
+          {UPLOAD_STATE.FAILED}: {upload.fileName}
         </span>
       </div>
       <div className="flex items-center justify-between gap-2">
@@ -90,7 +96,7 @@ function FailedUploadRow({ upload, onRetry, onDismiss }) {
             onClick={onRetry}
             className="text-xs font-medium text-blue-400 hover:text-blue-300 underline"
           >
-            Retry
+            {UPLOAD_STATE.RETRY_UPLOAD}
           </button>
           <button
             onClick={onDismiss}

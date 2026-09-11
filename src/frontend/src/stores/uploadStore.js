@@ -400,6 +400,18 @@ export const useActiveUploadBlobUrl = () => useUploadStore(
   state => selectActiveUpload(state)?.blobUrl ?? null,
 );
 
+// T9430: the upload entry (active OR errored) whose local preview is on screen for a
+// given game — powers the honest "Local preview - not saved online yet" / "Upload
+// failed" banner. Subscribed ONLY inside the isolated UploadPreviewNotice component,
+// never in AnnotateScreen directly: it re-renders on each progress tick, exactly the
+// T7280 landmine that must not touch AnnotateScreen's redirect/restore effects.
+// gameId falsy (before onGameCreated) -> the sole active upload is the one on screen.
+export const useUploadForGame = (gameId) => useUploadStore(
+  state => (gameId
+    ? (state.uploads.find(u => u.gameId === gameId) || null)
+    : selectActiveUpload(state)),
+);
+
 // Filtered lists — new array refs each call, so wrap in useShallow to avoid the React 18
 // useSyncExternalStore infinite-loop on unstable snapshots.
 export const useQueuedUploads = () => useUploadStore(
