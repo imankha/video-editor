@@ -58,9 +58,42 @@ wasted task - record what was already satisfied.
 
 ## Acceptance Criteria
 
-- [ ] Both upload entries are visible without hover and keyboard-accessible
-- [ ] The game-versus-clip distinction is stated in plain language at the entry point
-- [ ] A direct clip still reaches framing without creating a game
-- [ ] Anything already satisfied by T8370/T8380/T8700/T8500 is recorded as such, not reimplemented
-- [ ] Relevant test set (curated ~10, per CLAUDE.md Test Scope Policy) green, with output attached
+- [x] Both upload entries are visible without hover and keyboard-accessible
+- [x] The game-versus-clip distinction is stated in plain language at the entry point
+- [x] A direct clip still reaches framing without creating a game
+- [x] Anything already satisfied by T8370/T8380/T8700/T8500 is recorded as such, not reimplemented
+- [x] Relevant test set (curated ~10, per CLAUDE.md Test Scope Policy) green, with output attached
 - [ ] Branch CI green
+
+## Verification findings (2026-09-11, feature/T9640-upload-entries)
+
+Scope shrank as predicted. What was **already satisfied** (verified live in code, not
+reimplemented):
+
+- **Keyboard-reachability + visible focus (AC1).** Both entries render as the shared
+  `<Button>` (native `<button>`, `focus:outline-none focus:ring-2 ...`) at every surface --
+  the populated-tab action rows (`ProjectManager.jsx`) and the empty-state `EmptyTabGuide`.
+  Never a hover-only reveal (no `group-hover`/`opacity-0` gating anywhere). Labels
+  "Upload game"/"Upload clip" already correct via T9530. No code change needed for AC1.
+- **Sport context asked when unknown, without blocking.** Sport is a per-profile attribute
+  surfaced by the always-visible, non-blocking `ProfileSportButton` in the header (opens the
+  profile manager to set/switch sport). Upload flows never block on sport. Already satisfied
+  by the profile-sport model; no change needed.
+- **Direct clip -> framing without a game (AC3 capability).** `useClipUpload` lands sources as
+  `kind:'clip'` and finalizes through `uploadClipsBatch` (POST /api/clips/upload), then selects
+  the created clip project to unlock Focus -- it never touches the game pipeline (T8370/T8380).
+
+What this task **added** (the genuine remaining gap):
+
+- **AC2 -- distinction stated at the entry point.** The empty-state guide already paired each
+  button with a caption; the *populated* Games/Clips tab action rows showed a bare CTA. Added a
+  one-line `UPLOAD_ENTRY_HINT` beneath each (`displayNames.js` + `ProjectManager.jsx`): a full
+  game needs plays marked to become clips; a short clip skips straight to Focus, no game needed.
+- **AC3 -- explicit regression guard.** New test in `useClipUpload.test.js` locking the clip
+  path to `kind:'clip'` + clips-batch finalize + project-select (Focus), so a future refactor
+  cannot route a direct clip through game creation. Plus jsdom coverage of both entry captions.
+
+Evidence: 66 relevant unit tests green (useClipUpload + ProjectManager.addVideo/fourTabIA/
+homeTabDefaults + EmptyTabGuide). Live QA (`scripts/dev-verify.sh`,
+`e2e/T9640-upload-entries.qa.spec.js`): both entries keyboard-focused with a visible ring and
+the distinction copy present -- screenshots in `qa/criterion1-2-*.png`.

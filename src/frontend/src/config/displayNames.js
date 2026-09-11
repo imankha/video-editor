@@ -126,6 +126,18 @@ export const SECTION_NAMES_SHORT = {
 // ADD_VIDEO -> UPLOAD_CLIP to keep the constant greppable by its new label. The
 // notice copy was user-approved 2026-09-05 (softened from an absolute "can't"
 // claim; the "add to a Game instead" pointer was dropped for a terser notice).
+// T9640: one-line game-vs-clip distinction shown BENEATH each upload entry on the
+// populated Games/Clips tabs (the empty-state EmptyTabGuide already pairs its
+// buttons with captions; these give the same plain-language distinction at the
+// non-empty entry points, where the CTA otherwise stands alone). Parallel phrasing
+// states the choice: a full game must have plays marked to yield clips; a short
+// clip skips that and goes straight to Focus. No em dashes (project-wide rule);
+// "Focus" is the current framing-mode name.
+export const UPLOAD_ENTRY_HINT = {
+  GAME: 'A full game needs plays marked before it becomes clips.',
+  CLIP: 'A short clip skips straight to Focus, no game needed.',
+};
+
 export const CLIP_UPLOAD = {
   UPLOAD_CLIP: 'Upload clip',
   NOTICE_TITLE: 'Heads up: these clips won’t be linked to a game',
