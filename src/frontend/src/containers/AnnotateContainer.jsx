@@ -1322,6 +1322,13 @@ export function AnnotateContainer({
           if (result.project_created) {
             setAutoProjectId(newRegion.id, result.project_id);
             notifyReelCreated(result.project_id, reelToastClipName(newRegion));
+          } else {
+            // T9450: a saved confirmation gated on the REAL persistence response
+            // (this Save gesture's saveClip resolving with a raw_clip_id), never a
+            // pre-save claim. A failed save (null result / sync_failed 503) skips
+            // this branch, so the user's on-screen edits are retained un-"saved".
+            // The project_created path already confirms via notifyReelCreated.
+            toast.success('Saved to your library');
           }
         }
       }

@@ -647,13 +647,15 @@ export function AnnotateFullscreenOverlay({
           </div>
         )}
 
-        {/* Create Reel — desktop only; toggle in create mode, button in edit mode */}
+        {/* Clip toggle — desktop only; toggle in create mode, button in edit mode.
+            T9450: positive polarity (no "Don't …" double negative) + clip vocabulary
+            (a play produces a clip, never a reel), matching the strip layout. */}
         {!isMobile && (
           <div className="mb-4 flex items-center justify-between">
-            <label className="text-gray-400 text-sm">Reel</label>
+            <label className="text-gray-400 text-sm">Clip</label>
             {isEditMode ? (
               existingClip?.autoProjectId ? (
-                <span className="text-green-400 text-sm">Reel already created</span>
+                <span className="text-green-400 text-sm">Clip created</span>
               ) : (
                 <Button
                   variant="cyan"
@@ -667,7 +669,7 @@ export function AnnotateFullscreenOverlay({
             ) : (
               <div className="flex items-center gap-2">
                 <span className={`text-sm ${createProject ? 'text-cyan-400' : 'text-gray-500'}`}>
-                  {createProject ? 'Create Reel' : "Don't Create Reel"}
+                  {createProject ? 'Clip Play to focus on your player' : 'Just save this play'}
                 </span>
                 <Toggle
                   checked={createProject}
@@ -927,14 +929,13 @@ export function AnnotateFullscreenOverlay({
                 type="button"
                 onClick={() => { setCreateProject(!createProject); setCreateProjectManuallySet(true); }}
                 aria-pressed={createProject}
-                title="Auto-create a reel from this play"
                 className={`shrink-0 px-3 py-1.5 rounded text-sm font-medium border transition-colors ${
                   createProject
                     ? 'bg-cyan-600/20 border-cyan-500/60 text-cyan-300 hover:bg-cyan-600/30'
                     : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600'
                 }`}
               >
-                {createProject ? 'Clip Play to focus on your player' : "Don't Clip Play"}
+                {createProject ? 'Clip Play to focus on your player' : 'Just save this play'}
               </button>
             )}
 

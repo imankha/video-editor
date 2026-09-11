@@ -138,7 +138,10 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     expect(playback.className).toMatch(/py-3/);
     expect(playback.disabled).toBe(false);
     expect(screen.queryByText(/we grab the last few seconds/i)).toBeNull();
-    expect(screen.getByText(/automatically saved to your library/i)).toBeTruthy();
+    // T9450: the standing "automatically saved to your library" reassurance was
+    // removed. A saved confirmation now fires only after a real save succeeds
+    // (a toast in AnnotateContainer), never as a pre-save claim on the surface.
+    expect(screen.queryByText(/automatically saved to your library/i)).toBeNull();
   });
 
   it('no alternate-instruction copy: nothing on the surface says "Add Clip"', () => {

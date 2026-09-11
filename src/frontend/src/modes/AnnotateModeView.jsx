@@ -1053,10 +1053,10 @@ export function AnnotateModeView({
                       </button>
                     )}
                   </div>
-
-                  <p className="text-xs text-gray-500 text-center">
-                    Clips are automatically saved to your library as you annotate
-                  </p>
+                  {/* T9450: the standing "automatically saved to your library"
+                      reassurance was removed — it claimed persistence on an unsaved
+                      surface. A saved confirmation now fires only after a real save
+                      succeeds (a toast in AnnotateContainer), never pre-save. */}
                 </>
               ) : (
                 <div className="flex items-center justify-center gap-4">
