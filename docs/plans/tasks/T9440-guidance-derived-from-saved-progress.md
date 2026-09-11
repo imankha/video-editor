@@ -1,6 +1,6 @@
 # T9440: Next-step guidance derived from saved progress, not navigation ("Now cut your first play" after two plays)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-10
