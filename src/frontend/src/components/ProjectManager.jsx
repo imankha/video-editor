@@ -59,7 +59,12 @@ import { StorageExpiryBanner } from './StorageExpiryBanner';
 // loaded games grid AND its loading skeleton both consume these so the skeleton
 // can never drift from the real layout again (the T6310 bug). If the grid shape
 // changes, change it here and both surfaces move together.
-const GAMES_GRID_CONTAINER_CLASS = 'w-full max-w-6xl 2xl:max-w-7xl';
+// T9660: exported so the full-width-gallery preservation guard can assert this
+// stays a viewport-following width (max-w-6xl+) and never regresses to a narrow
+// fixed content column -- the exact regression the first-clip work risked. Both
+// the Games poster grid AND the Clips carousels (the "full-width responsive
+// gallery" Andrew praised) render inside this one class, so they move together.
+export const GAMES_GRID_CONTAINER_CLASS = 'w-full max-w-6xl 2xl:max-w-7xl';
 
 // T7330: the desktop column count now follows the data (see gamesGridColumns), so the grid
 // class is SELECTED from this map, never built by interpolation -- Tailwind's purge only
@@ -1356,9 +1361,15 @@ export function ProjectManager({
               </button>
             )}
 
-            {/* Recent Reel (right) */}
+            {/* Recent Reel (right) — T9660: this is the persistent, non-blocking
+                finish-clips entry. It's an always-available inline button (never a
+                first-time wizard/modal) that resumes the most-recent in-progress clip
+                straight into finishing (Overlay if a working video needs spotlighting,
+                else Focus). The preservation guard asserts it stays a plain button and
+                that no blocking wizard intercepts the experienced user. */}
             {recentItems.recentProject && (
               <button
+                data-testid="continue-finishing-clip"
                 onClick={() => {
                   const p = recentItems.recentProject;
                   const needsOverlay = p.has_working_video && (
@@ -1846,9 +1857,10 @@ export function ProjectManager({
           />
         ) : (
           /* Drafts tab widens to max-w-6xl so the carousels use the viewport (Q1 /
-             audit finding #13 desktop dead-space fix); the Games tab now uses the same
-             GAMES_GRID_CONTAINER_CLASS width (max-w-6xl 2xl:max-w-7xl) for its poster grid. */
-          <div className="w-full max-w-6xl 2xl:max-w-7xl">
+             audit finding #13 desktop dead-space fix); the Games tab uses the same
+             GAMES_GRID_CONTAINER_CLASS width for its poster grid. T9660: single-sourced
+             to that constant so the Clips gallery can never drift narrow on its own. */
+          <div className={GAMES_GRID_CONTAINER_CLASS} data-testid="clips-gallery">
             {/* Filters - only show when useful. Groups sit inline (gap-x) when they fit,
                 and wrap onto their own line when they don't. */}
             {showFilters && (

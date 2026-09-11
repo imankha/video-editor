@@ -67,4 +67,27 @@ describe('announceReelCreated (T8480)', () => {
     announceReelCreated(42, { onOpenReelInFocus, fetchProjects });
     expect(fetchProjects).toHaveBeenCalledWith({ force: true });
   });
+
+  // T9660 (preservation guard): Andrew praised being able to keep marking plays
+  // without interruption, so repeated Save must NEVER pull the user into another
+  // editor on its own. announceReelCreated is the ONLY navigation seam in the
+  // Save path (handleFullscreenCreateClip otherwise stays open per T9330, and its
+  // selectProject is memory-only — Annotate is inert to selection, so the playhead
+  // does not move). This asserts that seam only OFFERS Focus (via the toast action
+  // the user must click), and never auto-opens it — the regression a forced
+  // first-clip wizard would introduce.
+  it('repeated saves never auto-open Focus; the playhead stays in Annotate until the user clicks Open Focus (T9660)', () => {
+    // Three back-to-back project-created saves (marking play after play).
+    announceReelCreated(42, { onOpenReelInFocus, fetchProjects });
+    announceReelCreated(43, { onOpenReelInFocus, fetchProjects });
+    announceReelCreated(44, { onOpenReelInFocus, fetchProjects });
+
+    // No save navigated into the Focus editor on its own.
+    expect(onOpenReelInFocus).not.toHaveBeenCalled();
+
+    // The only route to Focus is the explicit toast-action click (a user gesture).
+    const { action } = useToastStore.getState().toasts[0];
+    action.onClick();
+    expect(onOpenReelInFocus).toHaveBeenCalledTimes(1);
+  });
 });

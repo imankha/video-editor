@@ -29,9 +29,9 @@
  *   - Data-gated surfaces (a Ready-to-share draft tile, a published reel) skip
  *     loudly when the seeded account lacks that state.
  */
-import { test } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth.js';
-import { assertCtaInViewport, CTA_VIEWPORTS, saveEvidence } from './helpers/qa.js';
+import { assertCtaInViewport, assertNoHorizontalOverflow, CTA_VIEWPORTS, saveEvidence } from './helpers/qa.js';
 
 const AUDIT_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const AUDIT_PROFILE = process.env.E2E_PROFILE_ID || '9fa7378c';
@@ -257,6 +257,9 @@ for (const vp of CTA_VIEWPORTS) {
     });
 
     // --- Surface 9: Add Video button (T8380, In Progress Clips tab) ----------
+    // T9660 also leans on this: "direct clip upload stays visible" is exactly the
+    // clips-add-video entry being present + in-viewport, not hidden behind any new
+    // first-clip gating. If a future task gates it, this fails at every phone width.
     test('Add Video CTA above the fold', async ({ page }) => {
       await reachHome(page);
       await openTab(page, /^Clips/); // T8980: sub-`sm` short tab label
@@ -266,8 +269,53 @@ for (const vp of CTA_VIEWPORTS) {
       await assertCtaInViewport(page, addVideo.first());
       await saveEvidence(page, `cta-add-video_${vp.name}`);
     });
+
+    // --- Surface 10: Clips gallery reflow (T9660) ----------------------------
+    // Preservation guard: the full-width gallery must REFLOW on mobile — cards
+    // wrap, they never spill horizontally into a shrunken fixed column. Populated
+    // only (the gallery grid renders when clip drafts exist); honest-skip otherwise.
+    test('Clips gallery reflows without horizontal overflow', async ({ page }) => {
+      await reachHome(page);
+      await openTab(page, /^Clips/);
+      const gallery = page.getByTestId('clips-gallery');
+      const populated = await gallery.waitFor({ state: 'visible', timeout: 15000 })
+        .then(() => true).catch(() => false);
+      test.skip(!populated, 'no clip drafts on this account (gallery grid not rendered)');
+      await assertNoHorizontalOverflow(page);
+      await saveEvidence(page, `gallery-reflow_${vp.name}`);
+    });
   });
 }
+
+// T9660 — full-width gallery at DESKTOP. Separate from the phone sweep above: the
+// preservation requirement is that the gallery USES THE AVAILABLE WIDTH on a wide
+// screen (Andrew's praise), never a narrow reading column. A max-w-md/2xl-column
+// regression would clamp this well under the assertion floor. Populated-only;
+// honest-skip when the audit account has no clip drafts.
+test.describe('Clips gallery uses available width @ desktop-1440', () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test.beforeEach(async ({ context }) => {
+    test.setTimeout(120_000);
+    await loginAsRealUser(context, AUDIT_EMAIL, AUDIT_PROFILE);
+  });
+
+  test('gallery spans the available desktop width, not a narrow column', async ({ page }) => {
+    await reachHome(page);
+    await openTab(page, /^Clips/);
+    const gallery = page.getByTestId('clips-gallery');
+    const populated = await gallery.waitFor({ state: 'visible', timeout: 15000 })
+      .then(() => true).catch(() => false);
+    test.skip(!populated, 'no clip drafts on this account (gallery grid not rendered)');
+
+    const box = await gallery.boundingBox();
+    // max-w-6xl is 1152px; a narrow reading-column regression (max-w-md 448 /
+    // max-w-2xl 672) would fall far below 900. This distinguishes full-width from
+    // any fixed narrow column without pinning the exact px (padding-tolerant).
+    expect(box.width, 'clips gallery narrower than a full-width layout').toBeGreaterThanOrEqual(900);
+    await saveEvidence(page, 'gallery-desktop-width_1440');
+  });
+});
 
 /**
  * Reveal the first published reel tile on the Published tab and return its
