@@ -1,6 +1,6 @@
 # T9540: Render, job, progress and completion labels
 
-**Status:** WIP
+**Status:** WAITING ON USER — design doc awaiting approval, see `T9540-design.md` (2 open questions)
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-10
