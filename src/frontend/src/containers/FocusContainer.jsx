@@ -2,7 +2,7 @@ import { useEffect, useCallback, useMemo, useRef } from 'react';
 import { FocusMode, CropOverlay } from '../modes/focus';
 import { API_BASE } from '../config';
 import * as focusActions from '../api/focusActions';
-import { clipCropKeyframes } from '../utils/clipSelectors';
+import { clipCropKeyframes, clipSourceDuration } from '../utils/clipSelectors';
 import { resolveTargetFrame } from '../utils/keyframeUtils';
 import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
 import { toast } from '../components/shared';
@@ -211,9 +211,10 @@ export function FocusContainer({
     const currentClipExportKeyframes = getKeyframesForExport();
 
     return clips.map(clip => {
-      // Ensure duration is always set from the metadata cache (raw clips from
-      // backend don't include duration — it's extracted from the video file)
-      const clipDuration = clipMetadataCache[clip.id]?.duration ?? clip.duration;
+      // Prefer the metadata-cache duration when built; otherwise derive from the
+      // clip's own boundaries via the shared SSOT selector (T9460) — the same source
+      // the sidebar reads, so the surfaces never disagree on a freshly-created draft.
+      const clipDuration = clipMetadataCache[clip.id]?.duration ?? clipSourceDuration(clip);
 
       if (clip.id === selectedClipId) {
         // Only override cropKeyframes when the hook has initialized.

@@ -7,6 +7,7 @@ import { useOverlayStore } from '../stores/overlayStore';
 import { useVideoStore } from '../stores/videoStore';
 // T1500: metadata probe removed from project load — dims live on working_clips.
 import { getClipDisplayName } from '../utils/clipDisplayName';
+import { clipSourceDuration } from '../utils/clipSelectors';
 import { extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
 import { seedClipVersion } from '../api/focusActions';
 
@@ -174,9 +175,8 @@ export function useProjectLoader() {
           }
         }
 
-        const duration = clip.duration
-          ?? (clip.start_time != null && clip.end_time != null ? clip.end_time - clip.start_time : null)
-          ?? (clip.video_duration ?? 0);
+        // T9460: one derivation for a clip's duration (shared with the sidebar).
+        const duration = clipSourceDuration(clip) ?? 0;
 
         metadataCache[clip.id] = {
           duration,

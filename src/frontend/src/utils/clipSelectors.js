@@ -42,6 +42,30 @@ export const clipSegments = (clip, duration) => {
   return typeof clip.segments_data === 'object' ? clip.segments_data : defaults;
 };
 
+/**
+ * The clip's source duration in seconds, derived from the clip's OWN data — the
+ * single source every surface reads so they never disagree (T9460).
+ *
+ * Raw backend clips carry their boundaries (start_time/end_time) and, for uploads,
+ * video_duration. The clipMetadataCache duration is just a memoized copy of this
+ * same derivation, and it is NOT built on the freshly-created-draft path (Annotate
+ * save -> Focus open loads clips via fetchClips, which never populates the cache).
+ * Reading the cache there yielded a confident `0.0s` while the header — which falls
+ * back to the clip — correctly showed the real length. Deriving from the clip fixes
+ * that class of drift.
+ *
+ * Returns `null` (never a fabricated 0) when the duration is genuinely unknown, so
+ * callers render an honest loading state instead of a wrong zero (no silent
+ * fallbacks for internal data).
+ */
+export const clipSourceDuration = (clip) => {
+  if (!clip) return null;
+  if (clip.duration != null) return clip.duration;
+  if (clip.start_time != null && clip.end_time != null) return clip.end_time - clip.start_time;
+  if (clip.video_duration != null) return clip.video_duration;
+  return null;
+};
+
 export const clipTrimRange = (clip) => {
   if (!clip.timing_data) return null;
   return clip.timing_data.trimRange || null;

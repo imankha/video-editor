@@ -14,7 +14,7 @@ vi.mock('../config', async (importOriginal) => ({
   API_BASE: API_HOST,
 }));
 
-import { clipFileUrl } from './clipSelectors';
+import { clipFileUrl, clipSourceDuration } from './clipSelectors';
 
 describe('clipFileUrl (T5890 split-host)', () => {
   it('prefers a presigned absolute file_url unchanged', () => {
@@ -28,5 +28,26 @@ describe('clipFileUrl (T5890 split-host)', () => {
     expect(url).toBe(`${API_HOST}/api/clips/projects/99/clips/7/file`);
     expect(url.startsWith(API_HOST)).toBe(true);
     expect(url.startsWith('/api/')).toBe(false);
+  });
+});
+
+describe('clipSourceDuration (T9460)', () => {
+  it('prefers the explicit clip.duration when present', () => {
+    expect(clipSourceDuration({ duration: 6, start_time: 3, end_time: 9 })).toBe(6);
+  });
+
+  it('derives duration from start/end boundaries when clip.duration is absent', () => {
+    // The freshly-created-draft path: the clip carries its play boundaries but no
+    // clipMetadataCache entry has been built yet, so duration must come from these.
+    expect(clipSourceDuration({ start_time: 3, end_time: 9 })).toBe(6);
+  });
+
+  it('falls back to video_duration when neither duration nor boundaries exist', () => {
+    expect(clipSourceDuration({ video_duration: 12 })).toBe(12);
+  });
+
+  it('returns null (never 0) when the duration is genuinely unknown', () => {
+    expect(clipSourceDuration({})).toBeNull();
+    expect(clipSourceDuration(null)).toBeNull();
   });
 });
