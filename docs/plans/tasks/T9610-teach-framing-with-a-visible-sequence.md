@@ -1,6 +1,12 @@
 # T9610: Teach framing with a visible sequence and a preview before a paid render
 
 **Status:** WIP
+**Investigation (T9610, 2026-09-11):** the movement preview ALREADY EXISTS as ordinary
+playback — `FocusScreen.jsx` computes `currentCropState = dragCrop || interpolateCrop(currentTime)`
+(memoized on `currentTime`), the `CropOverlay` reticule renders it over the video, and
+`useVideo.js`'s rAF loop advances `currentTime` ~60fps during playback, so the crop box smoothly
+follows the `interpolateCropSpline` path between focus points as the clip plays. Gap was prominence
+only (nothing told a parent to press play and watch). Fix stayed M-tier: a prompt, no new machinery.
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-10
