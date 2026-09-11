@@ -1,6 +1,6 @@
 # T9580: Persistent first-clip CTA and an explicit save-play contract
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-09-10
