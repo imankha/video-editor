@@ -2,6 +2,7 @@ import React from 'react';
 import { RefreshCw } from 'lucide-react';
 import { getClipDisplayName } from '../../utils/clipDisplayName';
 import { isClipStale } from '../../utils/reelStaleness';
+import { DRAFT_STAGE, DRAFT_STAGE_LABELS } from '../../utils/draftStage';
 
 /**
  * SegmentedProgressStrip - Visual progress indicator with segments
@@ -193,7 +194,12 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
                 segment.status === 'disconnected' ? 'Not Connected' :
                 segment.status === 'exporting' ? 'Exporting...' :
                 segment.status === 'in_progress' ? (isOverlay ? 'Started - export to complete' : 'Started - export AI Focus to complete') :
-                segment.status === 'ready' ? 'Ready to share' :
+                // T9600: the 'ready' spotlight segment is a working-video-only reel
+                // (draftStage IN_OVERLAY), not a shared one — route through the single
+                // source instead of the old "Ready to share" literal that read as
+                // already-published. Other per-STEP words here ('Complete', etc.) are a
+                // separate domain draftStage does not model, so they stay as-is.
+                segment.status === 'ready' ? DRAFT_STAGE_LABELS[DRAFT_STAGE.IN_OVERLAY] :
                 'Draft'
               } (click to open)${segment.stale ? ' — clip edited since this reel was made' : ''}`}
             >
