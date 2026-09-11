@@ -46,7 +46,7 @@ TUTORIAL_VIDEOS_ENABLED = False
 QUEST_DEFINITIONS = [
     {
         "id": "quest_1",
-        "title": "Get Started",
+        "title": "Getting started",  # T9560 (N38/N39): one onboarding name across guide/action/error
         "reward": 0,  # T8120: retired — credits granted upfront (QUEST_CHAIN_CREDIT_TOTAL)
         "step_ids": [
             "watch_annotate_tutorial",
@@ -109,3 +109,39 @@ QUEST_DEFINITIONS = [
 
 QUEST_BY_ID = {q["id"]: q for q in QUEST_DEFINITIONS}
 ALL_STEP_IDS = [s for q in QUEST_DEFINITIONS for s in q["step_ids"]]
+
+# T9560 (Shared Vocabulary epic, N39/N40): human-readable step titles for the one
+# piece of backend copy that names a step — the claim-reward "Step not complete"
+# error. It must name the VISIBLE task, never the raw internal step id (which stays
+# in the structured `step_id` field for support diagnostics). Internal ids (the dict
+# KEYS) are unchanged. This mirrors the frontend STEP_TITLES
+# (src/frontend/src/config/questDefinitions.jsx) plain-string labels and must stay in
+# sync with it, exactly like the quest titles/step_ids already duplicated across the
+# two layers. N40: `playback_annotations` uses the one established action label
+# "Preview plays" (displayNames.ANNOTATE.PREVIEW_PLAYS) so guide, action, and error agree.
+STEP_TITLES = {
+    "watch_annotate_tutorial": "Watch Annotate Tutorial",
+    "watch_framing_tutorial": "Watch AI Focus Tutorial",
+    "watch_overlay_tutorial": "Watch Spotlight Tutorial",
+    "watch_publish_tutorial": "Watch Publish Tutorial",
+    "upload_game": "Add Your First Game",
+    "add_clip": "Find an Amazing Play",
+    "rate_clip": "Rate & Tag the Play",
+    "annotate_brilliant": "Save Your Reel",
+    "playback_annotations": "Preview plays",  # N40
+    "return_home": "Head Back Home",
+    "open_framing": "Open Your Reel",
+    "position_crop": "Keep Your Player in Frame",
+    "add_slowmo": "Add a Slow-Mo Moment",
+    "export_framing": "Export Your Highlight",
+    "wait_for_export": "Crisp It Up to 1080p",
+    "open_overlay": "Open in Spotlight",
+    "select_players": "Pick Your Player",
+    "choose_color": "Pick Your Highlight Color",
+    "choose_shape": "Choose the Spotlight Shape",
+    "export_overlay": "Add the Spotlight",
+    "wait_for_overlay": "Render the Spotlight",
+    "preview_draft": "Watch Your Preview",
+    "move_to_my_reels": "Move to Highlight Reels",
+    "view_gallery_video": "Watch Your Reel",
+}

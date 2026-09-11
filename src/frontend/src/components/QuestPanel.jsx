@@ -87,7 +87,7 @@ function getPositionForMode(editorMode, isSm, addClipFormOpen) {
 /**
  * QuestPanel — self-contained floating overlay with collapsed/expanded states (T540).
  *
- * Collapsed: icon + quest title + progress (e.g., "Get Started  2/5")
+ * Collapsed: icon + quest title + progress (e.g., "Getting started  2/5")
  * Expanded: full step checklist + reward
  *
  * No header button needed — this component handles its own visibility,

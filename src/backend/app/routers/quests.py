@@ -414,16 +414,19 @@ async def claim_reward(quest_id: str):
 
     for sid in qdef["step_ids"]:
         if not all_steps.get(sid, False):
-            # T9410: structured detail so the client can name the HUMAN task that is
-            # incomplete (via its own STEP_TITLES map) and keep the internal step id
-            # for diagnostics only (N39/N40) — never surfacing the raw id as user copy.
+            # T9410/T9560: structured detail so the client can name the HUMAN task
+            # that is incomplete (via its own STEP_TITLES map) and keep the internal
+            # step id for diagnostics only — never surfacing the raw id as user copy.
+            # T9560 (N39/N40): the `message` string itself now names the visible task
+            # ("Step not complete: ...", never "quest", never the raw sid); the raw
+            # `step_id` stays for support/diagnostics.
             raise HTTPException(
                 status_code=400,
                 detail={
                     "code": "quest_step_incomplete",
                     "quest_id": quest_id,
                     "step_id": sid,
-                    "message": f"Quest not complete: step '{sid}' is incomplete",
+                    "message": f'Step not complete: "{quest_config.STEP_TITLES.get(sid, sid)}"',
                 },
             )
 
