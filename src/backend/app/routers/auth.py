@@ -26,7 +26,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
@@ -845,13 +845,131 @@ class ProblemReportRequest(BaseModel):
     build: str | None = None       # frontend commit hash
     actions: list[dict] | None = None  # [{action, detail, ts}, ...]
     editor_context: dict | None = None  # snapshot of editor state at report time
+    client_report_id: str | None = None  # T9400: client-generated UUID, stable across retries (idempotency key)
+
+
+async def _upload_bug_assets(bug_id: int, screenshot_data_url: str | None, logs: list[dict] | None):
+    """T9400: best-effort R2 upload of a bug report's screenshot + formatted
+    console logs, run AFTER the report row is already committed.
+
+    Runs in a FastAPI BackgroundTask so R2 latency never blocks the report
+    response (the original bug: a synchronous ~90s R2 retry loop stalled the
+    whole request on a cold Fly machine). Every blocking boto3 call is offloaded
+    via ``asyncio.to_thread`` so it also never blocks the event loop.
+
+    A failure here loses ONLY the R2 assets (the screenshot, and the
+    pretty-printed console-logs.txt); the report text, ``console_logs`` JSONB and
+    ``editor_context`` are already durable in the row. So it degrades LOUDLY (a
+    WARNING carrying the bug_id, greppable) rather than failing the report.
+    """
+    import base64 as _b64
+    import binascii
+
+    from app.storage import R2_BUCKET, get_r2_client, r2_global_key
+    from app.utils.retry import TIER_2, retry_r2_call
+
+    screenshot_r2_key = None
+    logs_r2_key = None
+
+    # 1. Screenshot -> R2
+    if screenshot_data_url and screenshot_data_url.startswith("data:image/"):
+        try:
+            parts = screenshot_data_url.split(",", 1)
+            if len(parts) != 2 or not parts[1]:
+                logger.warning(f"[Auth] Bug screenshot has malformed data URL (no base64 payload), bug_id={bug_id}")
+            else:
+                screenshot_bytes = _b64.b64decode(parts[1])
+                max_bytes = 10 * 1024 * 1024
+                if len(screenshot_bytes) > max_bytes:
+                    def _downscale(raw: bytes) -> bytes:
+                        from io import BytesIO
+
+                        from PIL import Image
+                        img = Image.open(BytesIO(raw))
+                        out = raw
+                        quality = 60
+                        while len(out) > max_bytes and quality >= 10:
+                            w, h = img.size
+                            img = img.resize((w * 3 // 4, h * 3 // 4), Image.LANCZOS)
+                            buf = BytesIO()
+                            img.save(buf, format="JPEG", quality=quality)
+                            out = buf.getvalue()
+                            quality -= 10
+                        return out
+                    screenshot_bytes = await asyncio.to_thread(_downscale, screenshot_bytes)
+                    logger.info(f"[Auth] Bug screenshot downscaled to {len(screenshot_bytes) / (1024*1024):.1f}MB, bug_id={bug_id}")
+                client = get_r2_client()
+                if client:
+                    key = r2_global_key(f"bugs/{bug_id}/screenshot.jpg")
+                    await asyncio.to_thread(
+                        retry_r2_call,
+                        client.put_object,
+                        Bucket=R2_BUCKET, Key=key,
+                        Body=screenshot_bytes, ContentType="image/jpeg",
+                        operation=f"bug_screenshot {bug_id}", **TIER_2,
+                    )
+                    screenshot_r2_key = key
+        except binascii.Error as e:
+            logger.warning(f"[Auth] Bug screenshot has invalid base64: {e}, bug_id={bug_id}")
+        except Exception as e:
+            logger.warning(f"[Auth] Bug screenshot upload failed (report already saved): {type(e).__name__}: {e}, bug_id={bug_id}")
+
+    # 2. Formatted console logs -> R2
+    if logs:
+        try:
+            from app.services.email import format_log_text
+            log_text = format_log_text(logs)
+            client = get_r2_client()
+            if client:
+                key = r2_global_key(f"bugs/{bug_id}/console-logs.txt")
+                await asyncio.to_thread(
+                    retry_r2_call,
+                    client.put_object,
+                    Bucket=R2_BUCKET, Key=key,
+                    Body=log_text.encode("utf-8"), ContentType="text/plain",
+                    operation=f"bug_logs {bug_id}", **TIER_2,
+                )
+                logs_r2_key = key
+        except Exception as e:
+            logger.warning(f"[Auth] Bug logs upload failed (report already saved): {type(e).__name__}: {e}, bug_id={bug_id}")
+
+    # 3. Link the R2 keys onto the already-committed row. Offloaded to a thread
+    #    like the boto3 calls so the (synchronous) psycopg2 write never blocks
+    #    the event loop the background task runs on.
+    if screenshot_r2_key or logs_r2_key:
+        try:
+            def _link_keys():
+                from app.services.pg import get_pg
+                with get_pg() as conn:
+                    cur = conn.cursor()
+                    cur.execute(
+                        "UPDATE bug_reports SET screenshot_r2_key = %s, logs_r2_key = %s WHERE id = %s",
+                        (screenshot_r2_key, logs_r2_key, bug_id),
+                    )
+            await asyncio.to_thread(_link_keys)
+        except Exception as e:
+            logger.warning(f"[Auth] Bug asset-key UPDATE failed (assets uploaded, keys not linked): {type(e).__name__}: {e}, bug_id={bug_id}")
+
+    logger.info(f"[Auth] Bug #{bug_id} assets uploaded: "
+                f"screenshot={'yes' if screenshot_r2_key else 'no'}, "
+                f"logs={'yes' if logs_r2_key else 'no'}")
 
 
 @router.post("/report-problem")
-async def report_problem(body: ProblemReportRequest, request: Request):
-    """Accept a client-side problem report: store in Postgres, upload assets to R2, send notification email.
+async def report_problem(body: ProblemReportRequest, request: Request, background_tasks: BackgroundTasks):
+    """Accept a client-side problem report: commit it to Postgres, then upload
+    assets to R2 in the background.
 
     Gated by ENABLE_PROBLEM_REPORT env var (default: enabled).
+
+    T9400: the report is "sent" the moment its diagnosable core (description +
+    console_logs JSONB + editor_context) is committed to Postgres. The R2 asset
+    upload (screenshot, pretty-printed logs) is deferred to a background task so
+    a slow/stalled R2 can never sink the report (the original bug was a
+    synchronous ~90s R2 retry loop that stalled the whole request on a cold Fly
+    machine). Retries are deduped via a client-supplied ``client_report_id``:
+    INSERT ... ON CONFLICT files exactly one row even if an ambiguous failure
+    (row committed, response lost) prompts the client to resend.
     """
     if not _ENABLE_PROBLEM_REPORT:
         raise HTTPException(status_code=404, detail="Not found")
@@ -866,21 +984,31 @@ async def report_problem(body: ProblemReportRequest, request: Request):
 
     req_id = request.headers.get("x-request-id", "?")
 
-    # 1. Insert bug into Postgres
-    import base64 as _b64
-
     from psycopg2.extras import Json
 
     from app.services.pg import get_pg
 
+    # Commit the report row and RETURN before any R2 work. ON CONFLICT makes a
+    # resend with the same client_report_id idempotent; ``(xmax = 0) AS inserted``
+    # is true only for a genuine insert, so a deduped retry does NOT re-schedule
+    # the asset upload (the first attempt already did).
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO bug_reports
                 (reporter_email, description, page_url, user_agent, build,
-                 editor_context, actions, console_logs)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
+                 editor_context, actions, console_logs, client_report_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            -- The DO UPDATE is a deliberate no-op (sets reporter_email to the
+            -- value it already has): a bare DO NOTHING returns no row, so
+            -- fetchone() would be None on a conflicting resend. Do NOT simplify
+            -- this to DO NOTHING -- the RETURNING below depends on a row coming
+            -- back. `xmax = 0` is true only for a genuine INSERT and false for a
+            -- conflict-UPDATE, so `inserted` tells a first submission apart from
+            -- a deduped retry.
+            ON CONFLICT (client_report_id)
+            DO UPDATE SET reporter_email = EXCLUDED.reporter_email
+            RETURNING id, (xmax = 0) AS inserted
         """, (
             body.email,
             body.description,
@@ -890,91 +1018,20 @@ async def report_problem(body: ProblemReportRequest, request: Request):
             Json(body.editor_context) if body.editor_context is not None else None,
             Json(body.actions) if body.actions is not None else None,
             Json(body.logs) if body.logs is not None else None,
+            body.client_report_id,
         ))
-        bug_id = cur.fetchone()["id"]
+        row = cur.fetchone()
+        bug_id = row["id"]
+        inserted = row["inserted"]
 
-        # 2. Upload screenshot to R2 if present
-        import binascii
+    if not inserted:
+        logger.info(f"[Auth] Bug #{bug_id} resubmission deduped "
+                    f"(client_report_id={body.client_report_id}), req_id={req_id}")
+        return {"sent": True, "bug_id": bug_id}
 
-        from app.storage import R2_BUCKET, get_r2_client, r2_global_key
-        from app.utils.retry import TIER_2, retry_r2_call
-
-        screenshot_r2_key = None
-        if body.screenshot and body.screenshot.startswith("data:image/"):
-            try:
-                parts = body.screenshot.split(",", 1)
-                if len(parts) != 2 or not parts[1]:
-                    logger.warning(f"[Auth] Bug screenshot has malformed data URL (no base64 payload), bug_id={bug_id}")
-                else:
-                    screenshot_bytes = _b64.b64decode(parts[1])
-                    max_bytes = 10 * 1024 * 1024
-                    if len(screenshot_bytes) > max_bytes:
-                        from io import BytesIO
-
-                        from PIL import Image
-                        img = Image.open(BytesIO(screenshot_bytes))
-                        quality = 60
-                        while len(screenshot_bytes) > max_bytes and quality >= 10:
-                            w, h = img.size
-                            img = img.resize((w * 3 // 4, h * 3 // 4), Image.LANCZOS)
-                            buf = BytesIO()
-                            img.save(buf, format="JPEG", quality=quality)
-                            screenshot_bytes = buf.getvalue()
-                            quality -= 10
-                        logger.info(f"[Auth] Bug screenshot downscaled to {len(screenshot_bytes) / (1024*1024):.1f}MB, bug_id={bug_id}")
-                    client = get_r2_client()
-                    if client:
-                        key = r2_global_key(f"bugs/{bug_id}/screenshot.jpg")
-                        retry_r2_call(
-                            client.put_object,
-                            Bucket=R2_BUCKET, Key=key,
-                            Body=screenshot_bytes, ContentType="image/jpeg",
-                            operation=f"bug_screenshot {bug_id}", **TIER_2,
-                        )
-                        screenshot_r2_key = key
-            except binascii.Error as e:
-                logger.warning(f"[Auth] Bug screenshot has invalid base64: {e}, bug_id={bug_id}")
-            except Exception as e:
-                error_type = type(e).__name__
-                if "AccessDenied" in str(e) or "NoSuchBucket" in str(e):
-                    logger.error(f"[Auth] R2 config error uploading bug screenshot: {error_type}: {e}, bug_id={bug_id}")
-                else:
-                    logger.error(f"[Auth] Bug screenshot upload failed after retries: {error_type}: {e}, bug_id={bug_id}")
-
-        # 3. Upload formatted console logs to R2
-        logs_r2_key = None
-        if body.logs:
-            try:
-                from app.services.email import format_log_text
-                log_text = format_log_text(body.logs)
-                client = get_r2_client()
-                if client:
-                    key = r2_global_key(f"bugs/{bug_id}/console-logs.txt")
-                    retry_r2_call(
-                        client.put_object,
-                        Bucket=R2_BUCKET, Key=key,
-                        Body=log_text.encode("utf-8"), ContentType="text/plain",
-                        operation=f"bug_logs {bug_id}", **TIER_2,
-                    )
-                    logs_r2_key = key
-            except Exception as e:
-                error_type = type(e).__name__
-                if "AccessDenied" in str(e) or "NoSuchBucket" in str(e):
-                    logger.error(f"[Auth] R2 config error uploading bug logs: {error_type}: {e}, bug_id={bug_id}")
-                else:
-                    logger.error(f"[Auth] Bug logs upload failed after retries: {error_type}: {e}, bug_id={bug_id}")
-
-        # 4. Update row with R2 keys
-        if screenshot_r2_key or logs_r2_key:
-            cur.execute(
-                "UPDATE bug_reports SET screenshot_r2_key = %s, logs_r2_key = %s WHERE id = %s",
-                (screenshot_r2_key, logs_r2_key, bug_id),
-            )
-
+    background_tasks.add_task(_upload_bug_assets, bug_id, body.screenshot, body.logs)
     logger.info(f"[Auth] Bug #{bug_id} reported: from={body.email or 'anonymous'}, "
-                f"screenshot={'yes' if screenshot_r2_key else 'no'}, "
-                f"logs={'yes' if logs_r2_key else 'no'}, "
-                f"log_count={len(body.logs)}, req_id={req_id}")
+                f"log_count={len(body.logs)}, req_id={req_id} (assets uploading in background)")
     return {"sent": True, "bug_id": bug_id}
 
 

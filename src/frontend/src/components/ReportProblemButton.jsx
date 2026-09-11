@@ -84,13 +84,69 @@ async function captureScreenshot() {
  * 134px pill sprawling across the video's lower-right, where it read as colliding
  * with the player controls. Presentational only — the modal/report flow is unchanged.
  */
+/**
+ * T9400: scrub credentials/session tokens out of any text that goes to the
+ * clipboard via "Copy error details". This is a conservative, over-scrubbing
+ * pass -- it errs toward redacting too much, since the blob is shared by hand.
+ */
+const _SECRET_KEYS =
+  'rb_session|set[-_]?cookie|cookie|session[-_]?id|sessionid|session|token|password|passwd|secret|' +
+  'api[-_]?key|access[-_]?token|id[-_]?token|refresh[-_]?token|authorization|auth|code|state';
+
+function scrubSecrets(text) {
+  if (!text) return text;
+  let out = String(text);
+  // "Bearer <jwt>" / "Basic <creds>" -- redact the VALUE after the scheme word,
+  // not just the word (the token, including its dots, is the secret).
+  out = out.replace(/\b(bearer|basic)\s+[\w.\-+/=]+/gi, '$1 [redacted]');
+  // key=value / key: value / "key": "value" (JSON) where the key looks
+  // credential-ish. The optional quote after the key (`"?`) catches JSON-quoted
+  // keys like "access_token": "..."; the value stops at whitespace/quote/delim.
+  const KV = new RegExp(`\\b(${_SECRET_KEYS})\\b"?(\\s*[=:]\\s*)("?)([^\\s"&,;]+)\\3`, 'gi');
+  out = out.replace(KV, (_m, key, sep) => `${key}${sep}[redacted]`);
+  return out;
+}
+
+/** Strip sensitive query params / fragments from a URL for safe sharing. */
+function scrubUrl(url) {
+  if (!url) return url;
+  const SENSITIVE = new Set([
+    'code', 'state', 'token', 'id_token', 'access_token', 'refresh_token', 'session',
+    'session_id', 'sessionid', 'api_key', 'apikey', 'password', 'secret', 'auth', 'authorization',
+  ]);
+  try {
+    const u = new URL(url);
+    let changed = false;
+    SENSITIVE.forEach((k) => {
+      if (u.searchParams.has(k)) { u.searchParams.set(k, '[redacted]'); changed = true; }
+    });
+    if (u.hash && /(?:token|code|state|id_token|access_token)/i.test(u.hash)) {
+      u.hash = '#[redacted]';
+      changed = true;
+    }
+    return changed ? u.toString() : url;
+  } catch {
+    // Not a parseable URL -- fall back to the key=value scrub.
+    return scrubSecrets(url);
+  }
+}
+
 export function ReportProblemButton({ className = '', compact = false }) {
   const email = useAuthStore((s) => s.email);
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState('');
   const [state, setState] = useState('idle'); // idle | sending | sent | error
+  const [errorInfo, setErrorInfo] = useState(null); // { kind: 'network'|'http', status?, message }
+  const [showDetails, setShowDetails] = useState(false);
+  const [dropScreenshot, setDropScreenshot] = useState(false);
+  const [copied, setCopied] = useState(false);
   const screenshotRef = useRef(null);
   const textareaRef = useRef(null);
+  // T9400: a client-generated idempotency key, stable across retries of the SAME
+  // composed report so a successful retry after an ambiguous failure files
+  // exactly one row (backend dedups via INSERT ... ON CONFLICT). Regenerated only
+  // when a genuinely new report is opened.
+  const clientReportIdRef = useRef(null);
 
   // Focus textarea when modal opens. Declared here (before the early return
   // below) so the hook runs unconditionally per rules-of-hooks.
@@ -115,8 +171,15 @@ export function ReportProblemButton({ className = '', compact = false }) {
   const handleOpen = () => {
     setDescription('');
     setState('idle');
+    setErrorInfo(null);
+    setShowDetails(false);
+    setDropScreenshot(false);
+    setCopied(false);
     setOpen(true);
     screenshotRef.current = null;
+    clientReportIdRef.current = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     captureScreenshot().then((shot) => { screenshotRef.current = shot; });
   };
 
@@ -124,7 +187,12 @@ export function ReportProblemButton({ className = '', compact = false }) {
     setOpen(false);
     setDescription('');
     screenshotRef.current = null;
+    clientReportIdRef.current = null;
     setState('idle');
+    setErrorInfo(null);
+    setShowDetails(false);
+    setDropScreenshot(false);
+    setCopied(false);
   };
 
   // T7560: a report with no words captures nothing diagnosable (prod row #46
@@ -133,32 +201,68 @@ export function ReportProblemButton({ className = '', compact = false }) {
   // is a sentence to anchor them.
   const canSend = description.trim().length > 0 && state !== 'sending';
 
+  // Build the credential-scrubbed text that "Copy error details" shows and copies.
+  // Runs entirely client-side, so it works even when the reporting service is down.
+  const buildErrorDetails = () => {
+    const logs = getClientLogs();
+    const logLines = logs
+      .map((l) => scrubSecrets(`[${l.level || 'log'}] ${l.message ?? ''}`))
+      .join('\n');
+    const statusLine = errorInfo?.kind === 'http'
+      ? `server rejected the report (status ${errorInfo.status})`
+      : 'could not reach the server (network error)';
+    return [
+      'ReelBallers problem report (send failed -- known credentials removed; please review before sharing)',
+      `Report ID: ${clientReportIdRef.current || '(none)'}`,
+      `Status: ${statusLine}`,
+      `Page: ${scrubUrl(window.location.href)}`,
+      `Build: ${typeof __COMMIT_HASH__ !== 'undefined' ? __COMMIT_HASH__ : '(dev)'}`,
+      `Browser: ${navigator.userAgent}`,
+      `Reporter: ${email || '(anonymous)'}`,
+      '',
+      'Your message:',
+      description.trim() || '(empty)',
+      '',
+      'Recent logs (credentials removed):',
+      logLines || '(none)',
+      '',
+      '(Screenshot omitted from copied details.)',
+    ].join('\n');
+  };
+
   const handleSend = async () => {
     if (!description.trim()) return; // gate (belt-and-braces with the disabled button)
     setState('sending');
+    setShowDetails(false);
+    setCopied(false);
     try {
       const logs = getClientLogs();
       const actions = getActionLog();
       const editorContext = getEditorContext();
       const url = `${API_BASE}/api/auth/report-problem`;
+      // T9400: drop the screenshot on a degraded retry (large base64 on a slow
+      // uplink is the classic mid-flight failure). The ref is kept intact so a
+      // later full retry can still include it.
+      const screenshot = dropScreenshot ? null : screenshotRef.current;
       const payload = {
         logs,
         user_agent: navigator.userAgent,
         page_url: window.location.href,
         email: email || null,
         description: description.trim(),
-        screenshot: screenshotRef.current ? '(base64 image)' : null,
+        screenshot: screenshot ? '(base64 image)' : null,
         build: typeof __COMMIT_HASH__ !== 'undefined' ? __COMMIT_HASH__ : null,
         actions,
         editor_context: editorContext,
+        client_report_id: clientReportIdRef.current,
       };
-      console.warn(`[ReportProblem] POST ${url} logCount=${logs.length} hasScreenshot=${!!screenshotRef.current} email=${email || 'anon'}`);
+      console.warn(`[ReportProblem] POST ${url} logCount=${logs.length} hasScreenshot=${!!screenshot} email=${email || 'anon'} reportId=${clientReportIdRef.current}`);
       const res = await apiFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...payload,
-          screenshot: screenshotRef.current,
+          screenshot,
         }),
         rbNonDataWrite: true, // T6020 follow-up: support-ticket write, not user-data
       });
@@ -172,13 +276,16 @@ export function ReportProblemButton({ className = '', compact = false }) {
           ? ' (backend error -- check server logs)'
           : '';
         console.error(`[ReportProblem] ${res.status} ${res.url}:`, data, hint);
-        throw new Error(data.detail || `Failed (${res.status})`);
+        setErrorInfo({ kind: 'http', status: res.status, message: data.detail || `Failed (${res.status})` });
+        setState('error');
+        return;
       }
       clearClientLogs();
       setState('sent');
     } catch (err) {
       const isNetwork = err.name === 'TypeError';
-      console.error(`[ReportProblem] Failed: ${err.message}${isNetwork ? ' (network error -- is the backend running on port 8000?)' : ''}`);
+      console.error(`[ReportProblem] Failed: ${err.message}${isNetwork ? ' (network error -- is the backend reachable?)' : ''}`);
+      setErrorInfo({ kind: isNetwork ? 'network' : 'http', message: err.message });
       setState('error');
     }
   };
@@ -223,19 +330,22 @@ export function ReportProblemButton({ className = '', compact = false }) {
                 Close
               </button>
             </div>
-          ) : state === 'error' ? (
-            <div className="text-center py-6">
-              <p className="text-red-400 font-medium mb-1">Failed to send report</p>
-              <p className="text-gray-400 text-sm">Please try again.</p>
-              <button
-                onClick={() => setState('idle')}
-                className="mt-4 px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg"
-              >
-                Try again
-              </button>
-            </div>
           ) : (
             <>
+              {/* T9400: on failure the typed report stays mounted and editable --
+                  the error is a banner above it, never a dead-end that hides the
+                  text. Nothing the user wrote is lost. */}
+              {state === 'error' && (
+                <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 space-y-1">
+                  <p className="text-red-400 font-medium text-sm">Report not sent</p>
+                  <p className="text-gray-300 text-xs">
+                    {errorInfo?.kind === 'http'
+                      ? `The server rejected the report (status ${errorInfo.status}). Your message is safe -- retry below.`
+                      : "We couldn't reach the server. Your message is safe -- retry below."}
+                  </p>
+                </div>
+              )}
+
               <textarea
                 ref={textareaRef}
                 value={description}
@@ -259,9 +369,62 @@ export function ReportProblemButton({ className = '', compact = false }) {
                   title={!canSend && state !== 'sending' ? 'Add a short description first' : undefined}
                   className="shrink-0 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                 >
-                  {state === 'sending' ? 'Sending...' : 'Send report'}
+                  {state === 'sending' ? 'Sending...' : state === 'error' ? 'Retry report' : 'Send report'}
                 </button>
               </div>
+
+              {state === 'error' && (
+                <div className="space-y-2 border-t border-gray-700 pt-3">
+                  {screenshotRef.current && (
+                    <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={dropScreenshot}
+                        onChange={e => setDropScreenshot(e.target.checked)}
+                        className="accent-blue-500"
+                      />
+                      Retry without the screenshot (smaller, more likely to send)
+                    </label>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => { setShowDetails(v => !v); setCopied(false); }}
+                    className="text-xs text-gray-400 hover:text-gray-200 underline"
+                  >
+                    {showDetails ? 'Hide error details' : 'Copy error details'}
+                  </button>
+
+                  {showDetails && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-gray-500">
+                        This is exactly what will be copied. Known credentials are removed -- glance over it before sharing. Paste it to us if retrying keeps failing.
+                      </p>
+                      <textarea
+                        readOnly
+                        aria-label="Error details preview"
+                        value={buildErrorDetails()}
+                        rows={7}
+                        className="w-full px-2 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-[11px] font-mono text-gray-300 resize-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(buildErrorDetails());
+                            setCopied(true);
+                          } catch {
+                            setCopied(false);
+                          }
+                        }}
+                        className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded-lg"
+                      >
+                        {copied ? 'Copied' : 'Copy to clipboard'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
