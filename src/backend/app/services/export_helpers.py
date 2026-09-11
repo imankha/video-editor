@@ -76,6 +76,67 @@ def create_export_job(
     return export_id
 
 
+def insert_export_job_if_none_active(
+    export_id: str,
+    project_id: int,
+    export_type: str,
+    input_data: dict | None = None,
+) -> bool:
+    """T9540: atomic per-(project, type) in-flight guard against duplicate render
+    dispatch (double-click -> two jobs -> two charges).
+
+    Inserts the export_jobs row ONLY when no active ('pending'/'processing') job
+    already exists for this (project_id, type). The single conditional
+    ``INSERT ... SELECT ... WHERE NOT EXISTS`` is atomic under the per-user SQLite
+    write lock, so it is a true compare-and-set with no check-then-insert TOCTOU.
+
+    Returns:
+        True  -> the row was inserted; the caller proceeds to reserve credits +
+                 dispatch the render.
+        False -> an active job for this (project, type) already exists; the caller
+                 must reserve NOTHING and return 409 export_in_flight.
+
+    Keyed on (project_id, type) so a duplicate Focus render is blocked while the
+    legitimate Focus->Overlay sequence (different type) is allowed, and a fresh
+    render AFTER a terminal ('complete'/'error') job is allowed (and re-charges).
+
+    Unlike ``create_export_job`` this does NOT swallow failures into a "continue
+    anyway" — a swallowed insert here would let the duplicate charge through, so
+    a DB error propagates to the caller (which fails the dispatch cleanly).
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO export_jobs (id, project_id, type, status, input_data)
+            SELECT ?, ?, ?, 'processing', ?
+            WHERE NOT EXISTS (
+                SELECT 1 FROM export_jobs
+                WHERE project_id = ? AND type = ? AND status IN ('pending', 'processing')
+            )
+            """,
+            (
+                export_id,
+                project_id,
+                export_type,
+                encode_data(input_data) if input_data else encode_data({}),
+                project_id,
+                export_type,
+            ),
+        )
+        inserted = cursor.rowcount == 1
+        conn.commit()
+
+    if inserted:
+        logger.info(f"[Export] Created job {export_id} (type={export_type}, project={project_id})")
+    else:
+        logger.info(
+            f"[Export] Duplicate dispatch blocked: active {export_type} job already exists "
+            f"for project {project_id} (export_id {export_id} dropped)"
+        )
+    return inserted
+
+
 def complete_export_job(
     export_id: str,
     output_filename: str | None = None,

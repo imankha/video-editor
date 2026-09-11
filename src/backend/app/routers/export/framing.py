@@ -388,23 +388,20 @@ async def render_project(request: RenderRequest, http_request: Request):
 
     export_progress[export_id] = {"progress": 5, "message": "Validating project...", "status": "processing"}
 
-    # Regress project status + create export_jobs atomically
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            # T4010: do NOT null working_video_id / final_video_id here. The old
-            # pointers stay valid for the whole in-flight render; the success path
-            # repoints working_video_id and a failure restores both (see
-            # _run_render_background). The 'processing' export_jobs row below is the
-            # in-progress signal -- the UI keys on it, not on a nulled pointer.
-            cursor.execute("""
-                INSERT INTO export_jobs (id, project_id, type, status, input_data)
-                VALUES (?, ?, 'framing', 'processing', '{}')
-            """, (export_id, project_id))
-            conn.commit()
-        await manager.send_progress(export_id, {"progress": 5, "message": "Starting export...", "status": "processing"})
-    except Exception as e:
-        logger.warning(f"[Render] export_jobs INSERT FAILED: {e}")
+    # T9540: atomic per-(project, type) in-flight guard. A double-click generates a
+    # SECOND export_id, so dedup on (project, 'framing') here -- BEFORE the credit
+    # reservation below -- never on export_id. If an active job already exists, reserve
+    # nothing and 409, so the duplicate click can never double-charge.
+    # T4010: do NOT null working_video_id / final_video_id here. The old pointers stay
+    # valid for the whole in-flight render (success repoints, failure restores); the
+    # 'processing' export_jobs row is the in-progress signal the UI keys on.
+    from app.services.export_helpers import insert_export_job_if_none_active
+    if not insert_export_job_if_none_active(export_id, project_id, "framing"):
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "export_in_flight", "message": "An export for this clip is already running."},
+        )
+    await manager.send_progress(export_id, {"progress": 5, "message": "Starting export...", "status": "processing"})
 
     # Query project + clips
     with get_db_connection() as conn:

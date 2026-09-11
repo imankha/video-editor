@@ -109,12 +109,13 @@ async function openDraftCard(page, name) {
 }
 
 // T7800 (gate run 2026-08-26): the export button was RENAMED in ExportButtonView.jsx —
-// Framing mode reads "Export Focused Video( (n/m))?", Overlay mode reads "Add Spotlight"
-// (same onExport handler, different label). The old /^Export( \(\d+\/\d+\))?$/ matched
-// neither, which presented as a phantom "overlay panel never mounted" mount-logic FAIL
-// on a perfectly healthy screen.
-const FRAMING_EXPORT_BTN = /^Export Focused Video( \(\d+\/\d+\))?$/;
-const OVERLAY_EXPORT_BTN = /^Add Spotlight$/;
+// the old /^Export( \(\d+\/\d+\))?$/ matched neither label, which presented as a phantom
+// "overlay panel never mounted" mount-logic FAIL on a perfectly healthy screen.
+// T9540 (2026-09-11): render actions renamed again — Framing reads
+// "Generate AI Focus( (n/m))?", Overlay reads "Export clip with effects" (same onExport
+// handler, different label). "Add Spotlight" is now only the action-bar label (T9590).
+const FRAMING_EXPORT_BTN = /^Generate AI Focus( \(\d+\/\d+\))?$/;
+const OVERLAY_EXPORT_BTN = /^Export clip with effects$/;
 
 test('staging export pipeline + publish (smoke + durability) @staging-gate @gate-a', async ({ context, page }) => {
   test.setTimeout(900_000);

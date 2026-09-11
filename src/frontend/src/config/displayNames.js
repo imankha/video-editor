@@ -139,6 +139,46 @@ export const UPLOAD_STATE = {
   RETRY_UPLOAD: 'Retry upload',
 };
 
+// T9540 (Shared Vocabulary epic, N19-N21/N37): render-action / job / progress /
+// completion vocabulary, single source. Keyed on the export `type` ('framing' |
+// 'overlay') the store + WS payload already carry, so the button, the job list, the
+// toast and the completion message never disagree about the stage (one object, one
+// stage). Mode names ("AI Focus" / "Spotlight") are deliberately NOT here -- a mode
+// names a PLACE you edit, a job names a THING YOU DO. The post-export action-bar
+// labels (FOCUS_PUBLISH / OVERLAY_PUBLISH below) are T9590 territory, untouched here.
+//
+// Focus stage NOUN is "AI Focus" (the mode was renamed Framing -> AI Focus, T9320);
+// the render VERB is "Generate", deliberately NOT "Apply": "Apply AI Focus" (T9330) is
+// a DIFFERENT gesture that NAVIGATES INTO the mode, so reusing it here would confuse
+// entering the mode with paying to render inside it. Completion is exactly "AI Focus ready".
+export const EXPORT_JOBS = {
+  framing: {
+    action: 'Generate AI Focus',              // N19 — render CTA, was "Export Focused Video"
+    inProgress: 'Generating AI Focus...',     // N19 — progress/job label, was "Creating reel..."
+    completed: 'AI Focus ready',              // N21 — names the stage that finished, was "Export Complete"
+    jobNoun: 'AI Focus',                       // job-list row noun, was "Framing Export"
+  },
+  overlay: {
+    action: 'Export clip with effects',       // N20 — render CTA, was "Add Spotlight"
+    inProgress: 'Exporting clip...',          // N20
+    completed: 'Clip ready',                  // N21
+    jobNoun: 'Effects',                        // job-list row noun, was "Overlay Export"
+    // Q1 (approved): the effects render charges ZERO credits (backend-confirmed: no
+    // reserve_credits in overlay.py). Surface that honestly instead of staying silent.
+    costNote: 'No credits · effects are free',
+  },
+};
+
+// N37 — export PROGRESS vocabulary. Honest user copy that replaces engineering strings
+// ("Detecting players", "frame 150/180", "Processing frames..."). Mapped from the backend
+// `phase` (see utils/exportProgressPresentation.js); counters stay as OPTIONAL detail.
+export const EXPORT_PROGRESS = {
+  PREPARING: 'Preparing video',                // init/queued/validating/downloading
+  UPLOADING: 'Uploading',                      // upload
+  RENDERING: 'Rendering',                      // processing/modal_processing/rendering/upscaling
+  FINDING_PLAYERS: 'Finding players for spotlight', // detecting_players
+};
+
 // T8390: Focus's post-export publish-exit action bar (FocusPublishActionBar).
 // Labels renamed 2026-09-08 (product owner): "Publish" -> "Publish Now" and
 // "Add Spotlight" -> "Add Spotlight Now" so the two "now" choices read as a

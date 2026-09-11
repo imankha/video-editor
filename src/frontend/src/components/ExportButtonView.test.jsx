@@ -74,7 +74,7 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} estimatedCredits={9} creditBalance={42} />);
     expect(screen.queryByTestId('export-credit-estimate')).toBeNull();
     // Overlay primary CTA applies the configured overlay (T7700 reverses T7580's "Create Reel").
-    expect(screen.getByRole('button', { name: 'Add Spotlight' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Export clip with effects' })).toBeTruthy();
   });
 });
 
@@ -83,7 +83,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     render(<ExportButtonView {...baseProps}
       hasUnframedClips={true} unframedCount={1} isButtonDisabled={true}
       estimatedCredits={12} creditBalance={42} />);
-    const btn = screen.getByRole('button', { name: /Export Focused Video/ });
+    const btn = screen.getByRole('button', { name: /Generate AI Focus/ });
     expect(btn.disabled).toBe(true);
     const caption = screen.getByTestId('export-unframed-caption');
     expect(caption.textContent).toContain('Set at least one focus point to export');
@@ -98,7 +98,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     render(<ExportButtonView {...baseProps}
       hasUnframedClips={false} isButtonDisabled={false}
       estimatedCredits={9} creditBalance={42} />);
-    expect(screen.getByRole('button', { name: /Export Focused Video/ }).disabled).toBe(false);
+    expect(screen.getByRole('button', { name: /Generate AI Focus/ }).disabled).toBe(false);
     expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
   });
 
@@ -107,7 +107,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
       isMultiClipMode={true} totalExtractedClips={3} unframedCount={1}
       hasUnframedClips={true} isButtonDisabled={true}
       estimatedCredits={20} creditBalance={42} />);
-    const btn = screen.getByRole('button', { name: /Export Focused Video \(2\/3\)/ });
+    const btn = screen.getByRole('button', { name: /Generate AI Focus \(2\/3\)/ });
     expect(btn.disabled).toBe(true);
     expect(screen.getByTestId('export-unframed-caption').textContent)
       .toContain('Set at least one focus point on every clip to export');
@@ -117,7 +117,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     render(<ExportButtonView {...baseProps}
       isFramingMode={false} hasUnframedClips={true} isButtonDisabled={false} />);
     expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Add Spotlight' }).disabled).toBe(false);
+    expect(screen.getByRole('button', { name: 'Export clip with effects' }).disabled).toBe(false);
   });
 
   it('caption is hidden while an export is in progress', () => {
@@ -206,13 +206,13 @@ describe('ExportButtonView — T8280 high-fps 30fps-choice note (Option B-simple
   });
 });
 
-describe('ExportButtonView — T7580 reel vocabulary', () => {
-  it('Focus primary CTA reads "Export Focused Video" (T7700)', () => {
+describe('ExportButtonView — T9540 render/job vocabulary (supersedes T7580)', () => {
+  it('Focus primary CTA reads "Generate AI Focus" (N19)', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={true} />);
-    expect(screen.getByRole('button', { name: 'Export Focused Video' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate AI Focus' })).toBeTruthy();
   });
 
-  it('Focus CTA keeps the framed-count suffix on the "Export Focused Video" label', () => {
+  it('Focus CTA keeps the framed-count suffix on the "Generate AI Focus" label', () => {
     render(
       <ExportButtonView
         {...baseProps}
@@ -223,21 +223,21 @@ describe('ExportButtonView — T7580 reel vocabulary', () => {
         unframedCount={1}
       />
     );
-    expect(screen.getByRole('button', { name: 'Export Focused Video (2/3)' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate AI Focus (2/3)' })).toBeTruthy();
   });
 
-  it('Overlay primary CTA is "Add Spotlight" (applies the configured overlay) (T7700)', () => {
+  it('Overlay primary CTA is "Export clip with effects" (N20 — the render action, not "Add")', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} />);
-    expect(screen.getByRole('button', { name: 'Add Spotlight' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Create Reel' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Export clip with effects' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add Spotlight' })).toBeNull();
   });
 
-  it('in-progress label reads "Creating reel..." for the user\'s own export', () => {
+  it('in-progress Focus label reads "Generating AI Focus..." for the user\'s own export', () => {
     render(<ExportButtonView {...baseProps} isCurrentlyExporting={true} isExporting={true} />);
-    expect(screen.getByRole('button', { name: 'Creating reel...' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generating AI Focus...' })).toBeTruthy();
   });
 
-  it('in-progress label reads "Reel in progress..." for an externally-triggered export', () => {
+  it('in-progress Focus label is the same for an externally-triggered export (one stage, one label)', () => {
     render(
       <ExportButtonView
         {...baseProps}
@@ -246,12 +246,35 @@ describe('ExportButtonView — T7580 reel vocabulary', () => {
         isExternallyExporting={true}
       />
     );
-    expect(screen.getByRole('button', { name: 'Reel in progress...' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generating AI Focus...' })).toBeTruthy();
   });
 
-  it('success state announces the reel is ready and points at My Reels', () => {
+  it('in-progress Overlay label reads "Exporting clip..." (N20)', () => {
+    render(<ExportButtonView {...baseProps} isFramingMode={false} isCurrentlyExporting={true} isExporting={true} />);
+    expect(screen.getByRole('button', { name: 'Exporting clip...' })).toBeTruthy();
+  });
+
+  it('Focus success state names the stage that finished: "AI Focus ready" (N21)', () => {
     render(<ExportButtonView {...baseProps} displayProgress={100} isCurrentlyExporting={false} />);
-    expect(screen.getByText('Reel ready! Find it in Highlight Reels.')).toBeTruthy();
+    expect(screen.getByText('AI Focus ready. Find it in Highlight Reels.')).toBeTruthy();
+  });
+
+  it('Overlay success state reads "Clip ready" (N21)', () => {
+    render(<ExportButtonView {...baseProps} isFramingMode={false} displayProgress={100} isCurrentlyExporting={false} />);
+    expect(screen.getByText('Clip ready. Find it in Highlight Reels.')).toBeTruthy();
+  });
+
+  it('Overlay cost cell shows the backend-confirmed free caption (Q1), Focus does not', () => {
+    const { rerender } = render(<ExportButtonView {...baseProps} isFramingMode={false} />);
+    expect(screen.getByTestId('export-free-cost-note').textContent).toContain('No credits · effects are free');
+    // Framing mode never shows the free caption (it is a paid stage).
+    rerender(<ExportButtonView {...baseProps} isFramingMode={true} />);
+    expect(screen.queryByTestId('export-free-cost-note')).toBeNull();
+  });
+
+  it('Overlay free caption is hidden while an export is in progress', () => {
+    render(<ExportButtonView {...baseProps} isFramingMode={false} isCurrentlyExporting={true} />);
+    expect(screen.queryByTestId('export-free-cost-note')).toBeNull();
   });
 
   // T9270: the "Focus Settings" card (audio toggle + build blurb) no longer lives in

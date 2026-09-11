@@ -329,7 +329,7 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     // Check if export button returned to normal state (not "Exporting")
     // Button text is "Frame Video" (framing mode) or "Add Spotlight" (overlay mode)
     const frameVideoButton = page.locator('button:has-text("Frame Video")').first();
-    const addOverlayButton = page.locator('button:has-text("Add Spotlight")').first();
+    const addOverlayButton = page.locator('button:has-text("Export clip with effects")').first();
     const exportingButton = page.locator('button:has-text("Exporting")');
     const loaderVisible = page.locator('.animate-spin').first();
 
@@ -1703,7 +1703,7 @@ test.describe('Full Coverage Tests @full', () => {
     // Note: Button may also say "Exporting..." if a previous export is still active
     const framingButton = page.locator('button:has-text("Frame Video")').first();
     const exportingFramingButton = page.locator('button:has-text("Exporting")').first();
-    const overlayButton = page.locator('button:has-text("Add Spotlight")').first();
+    const overlayButton = page.locator('button:has-text("Export clip with effects")').first();
     const eitherButtonVisible = await Promise.race([
       framingButton.waitFor({ state: 'visible', timeout: 10000 }).then(() => 'framing'),
       exportingFramingButton.waitFor({ state: 'visible', timeout: 10000 }).then(() => 'framing-exporting'),
@@ -1848,7 +1848,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Check if we opened in Overlay mode (has working video from previous export)
     // If so, we need to switch to Framing mode for this test
-    const addOverlayButton = page.locator('button:has-text("Add Spotlight")');
+    const addOverlayButton = page.locator('button:has-text("Export clip with effects")');
 
     if (await addOverlayButton.isVisible().catch(() => false)) {
       console.log('[Full] Project opened in Overlay mode, switching to Framing mode...');
@@ -1972,7 +1972,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Project may reopen in Overlay mode (if it has a working video from export).
     // Switch back to Framing mode if needed.
-    const addOverlayButtonReload = page.locator('button:has-text("Add Spotlight")');
+    const addOverlayButtonReload = page.locator('button:has-text("Export clip with effects")');
     if (await addOverlayButtonReload.isVisible().catch(() => false)) {
       console.log('[Full] Project reopened in Overlay mode, switching to Framing mode...');
       const focusModeButtonReload = page.getByTestId('mode-framing').first();
@@ -2271,7 +2271,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // STEP 6: Run final export (overlay export)
     console.log('[Full Pipeline] Step 6: Running final export...');
-    const finalExportButton = page.locator('button:has-text("Add Spotlight")');
+    const finalExportButton = page.locator('button:has-text("Export clip with effects")');
     await expect(finalExportButton).toBeVisible({ timeout: 10000 });
     await expect(finalExportButton).toBeEnabled({ timeout: 10000 });
     await finalExportButton.click();

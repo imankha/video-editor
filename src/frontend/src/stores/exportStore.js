@@ -203,6 +203,7 @@ export const useExportStore = create((set, get) => ({
                 total: progress.total || 100,
                 percent: progress.percent || Math.round((progress.current / progress.total) * 100) || 0,
                 message: progress.message || '',
+                phase: progress.phase || null, // T9540: kept so the progress presenter can map phase->copy
               },
               startedAt: new Date().toISOString(),
               completedAt: null,

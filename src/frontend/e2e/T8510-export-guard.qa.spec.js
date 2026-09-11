@@ -3,7 +3,7 @@
  * inline reason caption, live-driven at the phone viewport the walkthrough used.
  *
  * With a Focus draft whose clip has zero user crop keyframes (an un-started draft):
- *   - the Export Focused Video button is DISABLED (no zero-effort credit burn), and
+ *   - the Generate AI Focus button is DISABLED (no zero-effort credit burn), and
  *   - the reason caption renders AT the button and is visible in-viewport at 390x844
  *     (the 2026-09-02 walkthrough showed the old amber banner scrolled far above the
  *     button on tall panels). Feeds T8550's mobile-CTA assertion set.
@@ -20,7 +20,7 @@ import { loginAsRealUser } from './helpers/realAuth.js';
 import { saveEvidence } from './helpers/qa.js';
 
 const CAPTION = '[data-testid="export-unframed-caption"]';
-const EXPORT_BUTTON = 'button:has-text("Export Focused Video")';
+const EXPORT_BUTTON = 'button:has-text("Generate AI Focus")';
 
 test('T8510: unframed clip disables export with an in-viewport reason at 390x844', async ({ context, page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
