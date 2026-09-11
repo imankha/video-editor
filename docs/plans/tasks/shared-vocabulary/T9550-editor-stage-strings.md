@@ -1,6 +1,6 @@
 # T9550: Editor-stage inner strings: focus points, spotlight styling, aspect, cover
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-10
