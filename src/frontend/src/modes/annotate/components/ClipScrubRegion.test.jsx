@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { useState } from 'react';
 import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
 import { ClipScrubRegion } from './ClipScrubRegion';
 
@@ -232,6 +233,109 @@ describe('ClipScrubRegion click-to-seek (T8960 item 8)', () => {
     fireEvent.pointerDown(track, { clientX: x, clientY: 20 });
     fireEvent.pointerUp(track, { clientX: x, clientY: 20 });
     expect(onSeek).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * T9490 — coalesced drag-seek. The regression this guards: handlePointerMove
+ * used to call onSeek on EVERY pointermove, so a trim drag issued one
+ * `video.currentTime =` per move. The browser collapses those into a single
+ * completed seek, so the preview frame stays frozen for the whole drag and only
+ * catches up at release (measured 1.2-2.4s of preview lag on a long/streaming
+ * file, real-Chromium harness). The fix keeps the HANDLE immediate (onStart/
+ * EndTimeChange still fires every move) but coalesces the SEEK to at most one in
+ * flight (a RAF pump issues the newest target only when el.seeking is false),
+ * and settles exactly on release.
+ *
+ * jsdom has no real seek timing (T5380 landmine), so this asserts the COALESCING
+ * LOGIC deterministically -- how many times onSeek is called and with what -- by
+ * driving the controllable RAF and a settable `el.seeking` flag. The felt
+ * latency itself is measured separately in the real-browser harness.
+ */
+describe('ClipScrubRegion coalesced drag-seek (T9490)', () => {
+  const RECT = { left: 0, top: 0, width: 300, height: 40, right: 300, bottom: 40 };
+  // create-mode window is anchor(100) +/- 30 = 70..130 over 300px.
+  const xForTime = (t) => ((t - 70) / 60) * 300;
+
+  // A controller whose media element exposes a settable `seeking` flag (the
+  // native "a seek is still in flight" signal the pump gates on).
+  function makeSeekingController() {
+    const el = { addEventListener: () => {}, removeEventListener: () => {}, paused: true, seeking: false };
+    const state = { time: 100, paused: true };
+    return {
+      el, state,
+      play: vi.fn(), pause: vi.fn(() => { state.paused = true; }),
+      seek: vi.fn((t) => { state.time = t; }),
+      getCurrentTime: () => state.time,
+      isPaused: () => state.paused,
+      getActiveElement: () => el,
+      setVolume: () => {}, setMuted: () => {},
+    };
+  }
+
+  // Controlled parent: mirrors the real MVC owner so startTime/endTime props
+  // (and thus the internal startTimeRef the release settle reads) actually move
+  // as the handle is dragged.
+  function Harness({ controller, onSeek, onStartTimeChange }) {
+    const [s, setS] = useState(98);
+    const [en] = useState(104);
+    return (
+      <ClipScrubRegion
+        {...baseProps(controller)}
+        clipEditorActive
+        startTime={s}
+        endTime={en}
+        onStartTimeChange={(t) => { onStartTimeChange(t); setS(t); }}
+        onSeek={onSeek}
+      />
+    );
+  }
+
+  it('renders the handle every move but coalesces seeks to one in flight, settling on release', () => {
+    const controller = makeSeekingController();
+    const onSeek = vi.fn();
+    const onStartTimeChange = vi.fn();
+    render(<Harness controller={controller} onSeek={onSeek} onStartTimeChange={onStartTimeChange} />);
+
+    const handle = document.querySelectorAll('.cursor-col-resize')[0]; // start handle
+    handle.setPointerCapture = () => {};
+    const track = screen.getByTestId('scrub-track');
+    track.getBoundingClientRect = () => RECT;
+
+    // Grab the start handle at t=98 -> immediate grab seek, pump starts.
+    fireEvent.pointerDown(handle, { clientX: xForTime(98), clientY: 20, pointerId: 1 });
+    expect(onSeek).toHaveBeenCalledTimes(1);
+    expect(onSeek.mock.calls[0][0]).toBeCloseTo(98, 1);
+
+    // A seek is now in flight.
+    controller.el.seeking = true;
+
+    // Two moves while the seek is in flight: the handle follows both, but NO new
+    // seek is issued (coalesced).
+    fireEvent.pointerMove(window, { clientX: xForTime(100), clientY: 20 });
+    flushFrame();
+    fireEvent.pointerMove(window, { clientX: xForTime(102), clientY: 20 });
+    flushFrame();
+    expect(onStartTimeChange).toHaveBeenCalledTimes(2);      // handle immediate every move
+    expect(onStartTimeChange.mock.calls.map((c) => Math.round(c[0]))).toEqual([100, 102]);
+    expect(onSeek).toHaveBeenCalledTimes(1);                 // still only the grab seek
+
+    // The in-flight seek completes: the pump issues ONLY the newest target
+    // (102), never the superseded 100.
+    controller.el.seeking = false;
+    flushFrame();
+    expect(onSeek).toHaveBeenCalledTimes(2);
+    expect(onSeek.mock.calls[1][0]).toBeCloseTo(102, 1);
+    expect(onSeek.mock.calls.some((c) => Math.round(c[0]) === 100)).toBe(false);
+
+    // Release settles exactly on the final handle position and stops the pump.
+    fireEvent.pointerUp(window, { clientX: xForTime(102), clientY: 20 });
+    expect(onSeek).toHaveBeenCalledTimes(3);
+    expect(onSeek.mock.calls[2][0]).toBeCloseTo(102, 1);
+
+    // Pump is stopped: further frames issue no more seeks.
+    flushFrame();
+    expect(onSeek).toHaveBeenCalledTimes(3);
   });
 });
 

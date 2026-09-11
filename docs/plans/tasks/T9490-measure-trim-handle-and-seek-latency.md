@@ -64,3 +64,51 @@ behavior (T5380). Use Playwright against a real browser.
 - [ ] If not reproducible: the report is retained with tested conditions and the evidence still needed
 - [ ] Relevant test set (curated ~10, per CLAUDE.md Test Scope Policy) green, with output attached
 - [ ] Branch CI green
+
+## Progress Log
+
+### 2026-09-11 - Measured (real Chromium), symptom reproduced, fix applied
+
+**Method.** Real-browser Playwright + Chromium harness (NOT jsdom, per T5380). A 90s /
+1080p / ~6 Mbps / 10s-GOP file (generated with ffmpeg; heavier than Andrew's 45.8 MB /
+1:29 file, so an upper bound), served locally, throttled to 8 Mbps / 40 ms RTT for the
+COLD case and fully buffered for WARM. A 70-move end-handle trim drag over ~1.6 s. The
+two mechanisms were measured SEPARATELY. Harness + full numbers archived in
+`docs/plans/tasks/T9490-perf-harness/`.
+
+**Pointer-to-handle (render latency): NOT the problem.** p95 0.2-0.6 ms in every mode /
+cache combination -- far inside any feel-good budget. The green handle tracks the pointer
+immediately.
+
+**Pointer-to-preview (seek latency): the real issue, reproduced.** The current code calls
+`onSeek` on every pointermove (`ClipScrubRegion.handlePointerMove` -> `videoController.seek`
+-> `video.currentTime = t`, `AnnotateContainer.jsx:322`). The browser collapses the 71
+rapid `currentTime` writes into a SINGLE completed seek, so the seeked frame does not paint
+for ~1177 ms cold / ~1240 ms warm on average (p95 ~2.2 s, max ~2.4 s) -- the preview
+effectively freezes for the whole drag and only catches up at release. This is exactly the
+"delay before the video updates" report. It reproduces even WARM (fully buffered), so it is
+decode-bound, not just a network/cold-cache effect.
+
+**Regression vs candidate.** This is NOT a code regression against a prior build of this
+component -- per-move seeking has existed since T650 (the ClipScrubRegion that replaced the
+old duration slider); T690 only made it optional for the sidebar. "Less smooth than before"
+most likely compares against that pre-T650 duration slider, which never live-seeked at all.
+But the absolute preview lag (1.2-2.4 s) is clearly outside a reasonable budget, so per the
+kickoff's step 3 ("or clearly outside a reasonable feel-good budget") the fix path applies.
+
+**Fix (applied).** Coalesced drag-seek in `ClipScrubRegion.jsx`: the handle still renders
+every pointermove (immediate feedback, unchanged), but the SEEK is coalesced to at most one
+in flight -- a RAF pump issues only the newest target, and only once the previous seek has
+completed (`el.seeking === false`); pointerup settles exactly on the released handle
+position (preserving the T8960 clamp: playhead lands inside the green span). In the harness
+this turns the single frozen settle into a smooth step-through (each buffered seek completes
+in single-digit ms). CI guard: `ClipScrubRegion coalesced drag-seek (T9490)` (jsdom asserts
+the coalescing LOGIC deterministically; felt latency is measured only in the real browser).
+
+**Still needed for a like-for-like confirmation of Andrew's exact experience.** His browser /
+OS / device, the in-app (Codex) browser build, and a screen recording -- none were supplied.
+The harness confirms the mechanism and the fix on an upper-bound synthetic file; it does not
+prove his device hit the same numbers.
+
+**Tests.** `ClipScrubRegion.test.jsx` 18/18 green (incl. the new T9490 guard). Curated
+relevant set via `vitest related` on the changed file: 31 files / 218 tests green.

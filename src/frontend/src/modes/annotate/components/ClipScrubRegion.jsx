@@ -162,6 +162,19 @@ export function ClipScrubRegion({
   // track press is in flight.
   const trackPressRef = useRef(null);
 
+  // T9490: coalesced drag-seek state. During a handle drag we do NOT seek on
+  // every pointermove -- that issues one `video.currentTime =` per move, which
+  // the browser collapses into a SINGLE completed seek at release, so the
+  // preview frame appears frozen for the whole drag (measured 1.2-2.4s on a
+  // long/streaming file). Instead the handle still renders every move (immediate
+  // feedback), but the seek is coalesced to AT MOST ONE in flight: a RAF pump
+  // issues the newest target only once the previous seek has completed
+  // (el.seeking === false), so the preview steps through frames during the drag
+  // and settles exactly on release.
+  const desiredSeekRef = useRef(null);      // latest handle time the user wants shown
+  const lastIssuedSeekRef = useRef(null);   // last time actually sent to onSeek
+  const dragSeekRafRef = useRef(null);      // the coalescing RAF handle
+
   // Stable refs for callbacks so window listeners never go stale
   const onStartTimeChangeRef = useRef(onStartTimeChange);
   const onEndTimeChangeRef = useRef(onEndTimeChange);
@@ -184,6 +197,23 @@ export function ClipScrubRegion({
     }
   }, [videoController]);
 
+  // T9490: the coalescing pump. Runs (via RAF) only while a handle drag is in
+  // flight. Each frame it issues the newest desired target, but ONLY when no
+  // seek is still running on the media element -- keeping at most one seek in
+  // flight so the preview steps through frames instead of the browser thrashing
+  // a seek per pointermove. When `getActiveElement` / `.seeking` is unavailable
+  // (e.g. a stub controller) it degrades to a plain per-frame throttle, still
+  // far fewer seeks than per-pointermove.
+  const pumpDragSeek = useCallback(() => {
+    const el = videoController?.getActiveElement?.();
+    const desired = desiredSeekRef.current;
+    if (desired !== null && desired !== lastIssuedSeekRef.current && !(el && el.seeking)) {
+      lastIssuedSeekRef.current = desired;
+      onSeekRef.current?.(desired);
+    }
+    dragSeekRafRef.current = requestAnimationFrame(pumpDragSeek);
+  }, [videoController]);
+
   // Handle pointer down on a handle
   const handlePointerDown = useCallback((handle, e) => {
     e.preventDefault();
@@ -202,13 +232,20 @@ export function ClipScrubRegion({
     dragOffsetRef.current = clickTime - handleTime;
     // Notify parent that drag is starting (e.g. to suppress auto-deselect)
     onDragStartRef.current?.();
-    // Seek immediately so the video shows this handle's frame (no jump on first move)
+    // Seek immediately so the video shows this handle's frame (no jump on first
+    // move). This grab seek counts as the first in-flight seek, so the pump does
+    // not re-issue it (T9490).
+    desiredSeekRef.current = handleTime;
+    lastIssuedSeekRef.current = handleTime;
     onSeekRef.current?.(handleTime);
     // Set ref immediately (no async state delay)
     draggingRef.current = handle;
     setDragging(handle);
     e.target.setPointerCapture(e.pointerId);
-  }, [isPreviewing, stopPreview, pixelToTime, videoController]);
+    // Start the coalescing pump for the duration of the drag.
+    if (dragSeekRafRef.current) cancelAnimationFrame(dragSeekRafRef.current);
+    dragSeekRafRef.current = requestAnimationFrame(pumpDragSeek);
+  }, [isPreviewing, stopPreview, pixelToTime, videoController, pumpDragSeek]);
 
   // Handle pointer move — reads everything from refs, never stale
   const handlePointerMove = useCallback((e) => {
@@ -227,17 +264,19 @@ export function ClipScrubRegion({
         Math.min(time, en - MIN_REGION_DURATION)
       );
       onStartTimeChangeRef.current(clamped);
-      // T8960 item 1: seeking to the dragged handle IS the playhead clamp — it
+      // T8960 item 1: seeking to the dragged handle IS the playhead clamp -- it
       // pulls the playhead to the new start, so it can never be left outside the
-      // green span (e.g. when the user drags start PAST where the playhead was).
-      onSeekRef.current?.(clamped);
+      // green span. T9490: record the target instead of seeking every move; the
+      // pump issues it (one in flight) and pointerup settles exactly, so the
+      // clamp still holds on release.
+      desiredSeekRef.current = clamped;
     } else if (d === 'end') {
       const clamped = Math.min(
         Math.min(videoDuration, windowEnd),
         Math.max(time, s + MIN_REGION_DURATION)
       );
       onEndTimeChangeRef.current(clamped);
-      onSeekRef.current?.(clamped);
+      desiredSeekRef.current = clamped;
     }
   }, [pixelToTime, windowStart, windowEnd, videoDuration]);
 
@@ -245,6 +284,21 @@ export function ClipScrubRegion({
   const handlePointerUp = useCallback((e) => {
     if (draggingRef.current) {
       e.preventDefault();
+      // T9490: stop the coalescing pump and settle EXACTLY on the released
+      // handle's final position. This guarantees the frame the user let go on is
+      // the one shown, regardless of whether a coalesced seek was mid-flight,
+      // and preserves the T8960 clamp (playhead lands inside the green span).
+      if (dragSeekRafRef.current) {
+        cancelAnimationFrame(dragSeekRafRef.current);
+        dragSeekRafRef.current = null;
+      }
+      const finalT = draggingRef.current === 'start'
+        ? startTimeRef.current
+        : endTimeRef.current;
+      onSeekRef.current?.(finalT);
+      desiredSeekRef.current = null;
+      lastIssuedSeekRef.current = null;
+
       onDragEndRef.current?.(startTimeRef.current, endTimeRef.current);
       draggingRef.current = null;
       setDragging(null);
@@ -289,6 +343,11 @@ export function ClipScrubRegion({
       window.removeEventListener('pointerup', onUp);
     };
   }, [handlePointerMove, handlePointerUp]);
+
+  // T9490: cancel the coalescing pump if the component unmounts mid-drag.
+  useEffect(() => () => {
+    if (dragSeekRafRef.current) cancelAnimationFrame(dragSeekRafRef.current);
+  }, []);
 
   // T8780: Preview play — sidebar only (clipEditorActive false). Loops
   // [startTime, endTime] with its own RAF, independent of the edit-mode
