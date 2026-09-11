@@ -1,6 +1,6 @@
 # T9520: Annotate surface vocabulary
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-10
