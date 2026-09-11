@@ -320,4 +320,13 @@ export const EDITOR_PANELS = {
   COVER_IMAGE: 'Cover image',                // was "Thumbnail"
   CHOOSE_COVER_FRAME: 'Choose cover frame',  // was "Thumbnail marker"
   COVER_IMAGE_HELPER: 'The still people see before playing.',
+  // T9620 (UX-10) -- the spotlight editor leads with PICKING YOUR PLAYER, not the
+  // styling controls. These name that primary task (stated on screen, never a
+  // tooltip) and gate the styling copy behind it. The word "player" keeps the
+  // detection COUNTS unmistakable as counts, not jersey identities.
+  SELECT_PLAYER_TITLE: 'Pick your player',
+  SELECT_PLAYER_CLICK: 'Click your player to add a spotlight',
+  SELECT_PLAYER_TAP: 'Tap your player to add a spotlight',
+  SELECT_PLAYER_FIND: 'Tap a green marker on the timeline to find your player',
+  SELECT_PLAYER_STYLING_HINT: 'Spotlight color, shape, and dimming appear once you pick a player.',
 };

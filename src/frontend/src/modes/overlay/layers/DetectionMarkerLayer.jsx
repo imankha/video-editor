@@ -1,5 +1,5 @@
 import React from 'react';
-import { Crosshair, Check } from 'lucide-react';
+import { Crosshair, Check, Users } from 'lucide-react';
 import { frameToTime } from '../../../utils/videoUtils';
 import { isDetectionAssigned } from '../utils/detectionAssignment';
 
@@ -151,15 +151,20 @@ export default function DetectionMarkerLayer({
                 ? <Check size={15} className="text-white" strokeWidth={3} />
                 : <Crosshair size={14} className="text-white" />}
             </div>
-            {/* Bottom-right badge: detected-player count until assigned, then a check */}
-            <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full text-white text-[10px] font-bold flex items-center justify-center border ${
+            {/* Bottom-right badge: detected-player COUNT until assigned, then a check.
+                T9620 (UX-10): the count is paired with a Users glyph (and reads as
+                "N people") so it can't be mistaken for a jersey number — the bare
+                digit alone read as an identity (10/13/14). */}
+            <div className={`absolute -bottom-1 -right-1 h-4 min-w-4 px-0.5 rounded-full text-white text-[9px] font-bold flex items-center justify-center gap-0.5 border ${
               isDisabled
                 ? 'bg-gray-500 border-gray-400'
                 : marker.assigned
                   ? 'bg-emerald-400 border-emerald-200'
                   : 'bg-green-500 border-green-300'
             }`}>
-              {marker.assigned ? <Check size={10} className="text-white" strokeWidth={4} /> : marker.boxCount}
+              {marker.assigned
+                ? <Check size={10} className="text-white" strokeWidth={4} />
+                : <><Users size={8} className="text-white" aria-hidden="true" /><span>{marker.boxCount}</span></>}
             </div>
           </button>
         ))}

@@ -1,0 +1,21 @@
+<!doctype html>
+<!--
+  T9620 DEV-ONLY diagnostic harness for player-selection-first sequencing.
+  NOT a production page: not listed in vite build rollupOptions.input (only
+  index.html is), so it never ships in the built app. Served by the dev server
+  only, for the Playwright real-browser QA screenshots.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>T9620 player-selection diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #0b1220; }
+    </style>
+  </head>
+  <body>
+    <div id="t9620diag-root"></div>
+    <script type="module" src="/src/t9620diag/main.jsx"></script>
+  </body>
+</html>
