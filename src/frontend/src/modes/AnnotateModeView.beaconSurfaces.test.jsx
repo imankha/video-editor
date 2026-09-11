@@ -96,11 +96,14 @@ function renderView(overrides = {}) {
 }
 
 describe('AnnotateFullscreenOverlay render-site inventory (T8600 §2.5, T8590)', () => {
-  it('desktop fullscreen dock: surface=dock_fullscreen, existingClip present', () => {
+  // T9500: desktop fullscreen now renders the shared strip (surface=inline_desktop,
+  // layout=strip), not the old dock (dock_fullscreen). Parity with normal mode.
+  it('desktop fullscreen: shared strip surface=inline_desktop, existingClip present', () => {
     mockIsMobile = false;
     renderView({ annotateFullscreen: true });
     const el = screen.getByTestId('overlay-render');
-    expect(el.dataset.surface).toBe('dock_fullscreen');
+    expect(el.dataset.surface).toBe('inline_desktop');
+    expect(el.dataset.layout).toBe('strip');
     expect(el.textContent).toBe('existingClip:c1');
   });
 

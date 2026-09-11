@@ -59,8 +59,8 @@ const clipRegions = [
   { id: 'c1', startTime: 10, endTime: 20, videoSequence: 1, my_athlete: true, name: 'Great Pass', rating: 5 },
 ];
 
-function renderView(overrides = {}) {
-  const props = {
+function buildProps(overrides = {}) {
+  return {
     videoController: { _renderRefs: { videoARef: { current: null }, videoBRef: { current: null } } },
     annotateVideoUrl: '/api/games/1/video',
     annotateVideoMetadata: { width: 1920, height: 1080, duration: 100, format: 'mp4', size: 0 },
@@ -99,7 +99,10 @@ function renderView(overrides = {}) {
     hasUnsentShares: false,
     ...overrides,
   };
-  return render(<AnnotateModeView {...props} />);
+}
+
+function renderView(overrides = {}) {
+  return render(<AnnotateModeView {...buildProps(overrides)} />);
 }
 
 describe('AnnotateModeView — desktop under-canvas editor strip (T8600)', () => {
@@ -130,9 +133,30 @@ describe('AnnotateModeView — desktop under-canvas editor strip (T8600)', () =>
     expect(screen.getByTestId('strip').dataset.surface).toBe('inline_desktop');
   });
 
-  it('does not render the strip in fullscreen (fullscreen keeps its own docked/mobile surfaces)', () => {
+  // T9500: desktop fullscreen now uses the SAME bottom-center strip as normal
+  // mode (parity), not the old side dock. The dock render site is gone.
+  it('renders the shared strip in desktop fullscreen (T9500 parity, was the old dock)', () => {
     renderView({ showAnnotateOverlay: true, annotateFullscreen: true });
-    expect(screen.queryByTestId('strip')).toBeNull();
+    const strip = screen.getByTestId('strip');
+    expect(strip.dataset.layout).toBe('strip');
+    expect(strip.dataset.surface).toBe('inline_desktop');
+    expect(screen.queryByTestId('overlay')).toBeNull();
+  });
+
+  // T9500: because the strip is ONE element at ONE JSX position for both
+  // fullscreen and windowed desktop, toggling fullscreen preserves the fiber
+  // (same DOM node) — that is the mechanism by which an unsaved note + selected
+  // times survive entering/exiting fullscreen. A remount would return a new node.
+  it('keeps the SAME strip DOM node across the fullscreen toggle (draft survives)', () => {
+    const { rerender } = render(
+      <AnnotateModeView {...buildProps({ showAnnotateOverlay: true, annotateSelectedRegionId: null })} />,
+    );
+    const before = screen.getByTestId('strip');
+    rerender(
+      <AnnotateModeView {...buildProps({ showAnnotateOverlay: true, annotateSelectedRegionId: null, annotateFullscreen: true })} />,
+    );
+    const after = screen.getByTestId('strip');
+    expect(after).toBe(before);
   });
 
   it('suppresses the transport-bar Add button while the strip is open', () => {
