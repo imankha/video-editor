@@ -1,7 +1,7 @@
 export const QUEST_DEFINITIONS = [
   {
     id: 'quest_1',
-    title: 'Get Started',
+    title: 'Getting started',  // T9560 (N38/N39): one onboarding name (kept in sync with quest_config.py)
     // T8120: per-quest rewards retired — the full chain total is granted upfront.
     reward: 0,
     step_ids: [

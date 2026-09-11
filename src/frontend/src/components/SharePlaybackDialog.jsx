@@ -6,6 +6,7 @@ import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { Z } from '../constants/zLayers';
+import { SHARING } from '../config/displayNames';
 
 export function SharePlaybackDialog({ gameId, gameName, onClose }) {
   const [emails, setEmails] = useState([]);
@@ -62,7 +63,7 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
       <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white truncate pr-4">
-            Share Annotations: {gameName}
+            {SHARING.SETTINGS}: {gameName}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <X size={20} />

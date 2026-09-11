@@ -11,7 +11,7 @@
  */
 
 import { Image, Play, Plus, Star, Film, Crosshair, FolderOpen, CheckCircle, Video } from 'lucide-react';
-import { SECTION_NAMES } from './displayNames';
+import { SECTION_NAMES, ANNOTATE } from './displayNames';
 import { useTutorialStore } from '../stores/useTutorialStore';
 
 /** Inline icon — small version of the actual UI icon, styled to sit inline with text */
@@ -134,7 +134,10 @@ export const STEP_TITLES = {
   add_clip: 'Find an Amazing Play',
   rate_clip: 'Rate & Tag the Play',
   annotate_brilliant: 'Save Your Reel',
-  playback_annotations: 'Watch Your Clips Back',
+  // N40 (T9560): one label in guide, action, AND error — reuse the established
+  // "Preview plays" action label (displayNames.ANNOTATE.PREVIEW_PLAYS) instead of a
+  // second name ("Watch Your Clips Back") for the same action.
+  playback_annotations: ANNOTATE.PREVIEW_PLAYS,
   // Quest 2 — Frame Your Highlight
   return_home: 'Head Back Home',
   open_framing: 'Open Your Reel',
@@ -167,7 +170,7 @@ export const STEP_DESCRIPTIONS = {
   add_clip: <>Find an amazing play, then click <MiniButton icon={Plus} variant="green">Add Play</MiniButton> to start a highlight.</>,
   rate_clip: <>Set start time and end time precisely to isolate the action. Rate the play <span className="whitespace-nowrap"><FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /></span> and tag it, maybe add a note.</>,
   annotate_brilliant: <>Notice <strong>My Athlete</strong> and <strong>Create Reel</strong> are switched on. Then <strong>Save</strong>. We'll create a reel you can edit and share automatically.</>,
-  playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
+  playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">{ANNOTATE.PREVIEW_PLAYS}</MiniButton> to watch your plays</>,
   // Quest 2 — Frame Your Highlight
   return_home: <>Nice reel! Now head back to the home screen, where the reel you just saved is waiting for you to frame it.</>,
   open_framing: <>Switch to <MiniButton icon={FolderOpen} variant="gray">{SECTION_NAMES.CLIPS}</MiniButton> and tap your reel's card to start framing.</>,

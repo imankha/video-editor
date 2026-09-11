@@ -46,6 +46,30 @@ task, its toast in another, its destination heading in a third. This task owns t
 Search the codebase for **every observed variant** in the report's table, not just the recommended
 replacements - the point is to find the stragglers the feature tasks missed.
 
+## Handoff from T9560 (2026-09-11)
+
+Recorded here so the cross-audit can reconcile them without re-deriving:
+
+- **N45 (Report not sent / Retry report) — ALREADY SATISFIED by T9400.** Verified live in
+  `ReportProblemButton.jsx` (`Report not sent`, `Retry report`). Mark applied; do not re-implement.
+- **N47 (fullscreen control parity) — ALREADY SATISFIED by T9500.** A full parity pass unified
+  normal/fullscreen controls. Mark applied; do not re-audit.
+- **UX-01 (landing copy) — DEFERRED, blocked on T9680 (still TODO).** T9560 deliberately shipped no
+  `src/landing/` copy ("no landing copy ships ahead of T9680's confirmed rules"). This satisfies
+  T9560's criterion; the landing copy itself is T9650/T9680 territory.
+- **N34/N38/N39/N40 — APPLIED by T9560.** "Getting started" is the one onboarding name; the backend
+  claim error now reads `Step not complete: "{visible task}"` (raw step id kept only in the
+  structured `step_id` diagnostic field); `playback_annotations` reuses `ANNOTATE.PREVIEW_PLAYS`;
+  sharing controls split action (`Share plays`) vs state-neutral (`Sharing settings`).
+- **Two residual "quest" words the audit should sweep (T9560 left them as out-of-scope):**
+  1. `QuestPanel.jsx` success toast still reads `Quest complete!` / `more quests await!` — the only
+     place the user still meets the word "quest" on the SUCCESS path (N39 targeted the failure path,
+     which is fixed). Decide: reword (e.g. "Step complete!") or record as an accepted internal-noun
+     exception.
+  2. Backend `quest_config.STEP_TITLES["move_to_my_reels"]` hardcodes `"Move to Highlight Reels"`
+     where the frontend derives it from `SECTION_NAMES.LIBRARY`. They agree today; flag as a
+     manual FE/BE sync point so a future `LIBRARY` rename doesn't drift the backend error copy.
+
 ## Acceptance Criteria
 
 - [ ] All 47 groups are marked applied, overridden with reason, or not applicable

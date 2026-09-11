@@ -36,6 +36,20 @@ export const ANNOTATE = {
   LAYER_TEAM: 'Team',                      // N28 — unchanged
 };
 
+// T9560 (Shared Vocabulary epic, N34): the Annotate share controls, single source.
+// The old copy ("Share Annotations" / "Shared w/ Tagged Teammates") both said
+// "Annotations" (off the play/clip object model) and, worse, the "Shared …" state
+// label read as a claim that sharing had already happened when it may not have.
+// Split cleanly: SHARE_PLAYS is the ACTION (open the share flow); SETTINGS is the
+// state-neutral label for managing an existing share (opens the same dialog without
+// re-implying a fresh share). Never imply sharing that has not occurred.
+export const SHARING = {
+  SHARE_PLAYS: 'Share plays',       // the action — open the sharing flow
+  SHARE_PLAYS_SHORT: 'Share',       // narrow-viewport action label
+  SETTINGS: 'Sharing settings',     // state-neutral: manage/adjust an existing share
+  SETTINGS_SHORT: 'Sharing',        // narrow-viewport state label
+};
+
 export const SECTION_NAMES = {
   // Single-clip auto-draft tab (Home). Tab id stays `projects` / URL
   // `/home/reels` (frozen for deep-link compat). T9530 (Shared Vocabulary epic,

@@ -13,7 +13,7 @@ const { questState, tutorialFlag } = vi.hoisted(() => ({
   // Mutable so each test picks the store shape it needs.
   questState: {
     definitions: [
-      { id: 'quest_1', title: 'Get Started', reward: 50, step_ids: ['upload_game', 'watch_annotate_tutorial'] },
+      { id: 'quest_1', title: 'Getting started', reward: 50, step_ids: ['upload_game', 'watch_annotate_tutorial'] },
     ],
     quests: [
       { id: 'quest_1', steps: { upload_game: false, watch_annotate_tutorial: false }, reward_claimed: false },
@@ -201,7 +201,7 @@ describe('QuestPanel — collapse to Help button + persistence (T8120)', () => {
 
     const { queryByText } = render(<QuestPanel inline />);
     // Panel is fully hidden — the quest title is not in the document.
-    expect(queryByText('Get Started')).toBeNull();
+    expect(queryByText('Getting started')).toBeNull();
 
     document.body.removeChild(modal);
   });

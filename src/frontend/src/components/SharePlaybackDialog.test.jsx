@@ -92,7 +92,7 @@ describe('SharePlaybackDialog', () => {
   describe('Rendering', () => {
     it('renders dialog with game name in title', () => {
       render(<SharePlaybackDialog {...defaultProps} />);
-      expect(screen.getByText('Share Annotations: Big Game')).toBeTruthy();
+      expect(screen.getByText('Sharing settings: Big Game')).toBeTruthy();
     });
 
     it('renders email input', () => {
@@ -212,7 +212,7 @@ describe('SharePlaybackDialog', () => {
     it('does not close on backdrop click', () => {
       const onClose = vi.fn();
       render(<SharePlaybackDialog {...defaultProps} onClose={onClose} />);
-      const backdrop = screen.getByText('Share Annotations: Big Game').closest('.fixed');
+      const backdrop = screen.getByText('Sharing settings: Big Game').closest('.fixed');
       fireEvent.click(backdrop);
       expect(onClose).not.toHaveBeenCalled();
     });
@@ -220,7 +220,7 @@ describe('SharePlaybackDialog', () => {
     it('does not close on inner dialog click', () => {
       const onClose = vi.fn();
       render(<SharePlaybackDialog {...defaultProps} onClose={onClose} />);
-      const dialog = screen.getByText('Share Annotations: Big Game').closest('.bg-gray-800');
+      const dialog = screen.getByText('Sharing settings: Big Game').closest('.bg-gray-800');
       fireEvent.click(dialog);
       expect(onClose).not.toHaveBeenCalled();
     });

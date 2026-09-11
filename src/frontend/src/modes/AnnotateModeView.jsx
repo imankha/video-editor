@@ -8,7 +8,7 @@ import AngleSwitcherBadge from './annotate/AngleSwitcherBadge';
 import FixTimingStrip from './annotate/FixTimingStrip';
 import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
-import { ANNOTATE } from '../config/displayNames';
+import { ANNOTATE, SHARING } from '../config/displayNames';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
 import { useCurrentProfile, useProfileStore } from '../stores';
 import PlaybackControls from './annotate/components/PlaybackControls';
@@ -458,8 +458,8 @@ export function AnnotateModeView({
                 className="flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white"
               >
                 <Share2 size={18} />
-                <span className="hidden sm:inline">Share Annotations</span>
-                <span className="sm:hidden">Share</span>
+                <span className="hidden sm:inline">{SHARING.SHARE_PLAYS}</span>
+                <span className="sm:hidden">{SHARING.SHARE_PLAYS_SHORT}</span>
               </button>
             )}
           </div>
@@ -1072,10 +1072,14 @@ export function AnnotateModeView({
                       >
                         <Share2 size={18} />
                         <span className="hidden sm:inline">
-                          {hasUnsentShares ? 'Share w/ Tagged Teammates' : 'Shared w/ Tagged Teammates'}
+                          {/* N34 (T9560): action vs state — a pending share is the
+                              ACTION ("Share plays"); once shared, the state-neutral
+                              "Sharing settings" manages it without re-implying a fresh
+                              share. Never "Shared …", which claimed sharing had occurred. */}
+                          {hasUnsentShares ? SHARING.SHARE_PLAYS : SHARING.SETTINGS}
                         </span>
                         <span className="sm:hidden">
-                          {hasUnsentShares ? 'Share' : 'Shared'}
+                          {hasUnsentShares ? SHARING.SHARE_PLAYS_SHORT : SHARING.SETTINGS_SHORT}
                         </span>
                       </button>
                     )}
@@ -1101,7 +1105,9 @@ export function AnnotateModeView({
                       className="text-xs text-gray-400 hover:text-gray-200 flex items-center gap-1"
                     >
                       <Share2 size={12} />
-                      <span>{hasUnsentShares ? 'Share' : 'Shared'}</span>
+                      {/* N34 (T9560): same action/state split as the promoted button
+                          above — never the banned "Shared" state literal. */}
+                      <span>{hasUnsentShares ? SHARING.SHARE_PLAYS_SHORT : SHARING.SETTINGS_SHORT}</span>
                     </button>
                   )}
                 </div>
