@@ -139,6 +139,27 @@ gesture lands — no save/export.
   `/api/credits` zero-balance so no real render fires, responsive 375/desktop).
 
 ## Invariants & rules
+- **The movement "preview" is ORDINARY PLAYBACK, not a separate mechanism (T9610, 2026-09-11).**
+  `FocusScreen.jsx:787` computes `currentCropState = dragCrop || interpolateCrop(currentTime)`
+  (memoized on `currentTime`); the `CropOverlay` reticule renders `currentCrop` over the video, and
+  `useVideo.js:785`'s rAF loop advances `currentTime` ~60fps during playback. So pressing play makes
+  the crop box smoothly follow the `interpolateCropSpline` path between focus points BEFORE any paid
+  render — there is no distinct "preview" state/render to build, and none should be added. T9610's
+  contribution was PROMINENCE only: a `FramingInstructions` component
+  (`src/frontend/src/modes/focus/FramingInstructions.jsx`) mounted at the top of FocusModeView's
+  editor column (non-fullscreen) — a 3-step visible sequence (move the box → step forward → move it
+  again) that names the primitive with `EDITOR_PANELS.FOCUS_POINT` ("Focus point", NEVER "keyframe"
+  in parent copy) and a "press play to preview … before you export" prompt. It shows expanded until
+  the first framing success (2 non-`trim` keyframes), then collapses to the preview prompt;
+  expand/collapse is EPHEMERAL view state (`guideOverride ?? focusPointCount < 2`, gesture override,
+  no useEffect — precedent T5641 straightenVisible). Coverage: `FramingInstructions.test.jsx`,
+  `FocusModeView.framingGuide.test.jsx`, `e2e/T9610-teach-framing.qa.spec.js`.
+- **Segment speed reads as a STATE, not only an action (T9610).** `SegmentLayer.jsx` shows a
+  persistent current-speed readout on each segment ("Normal speed" at 1x / "{speed}x slow-mo" when
+  slowed), anchored TOP-LEFT so it never collides with the centered "Split Segments…" placeholder;
+  the speed buttons below still CHANGE it. Before T9610 the current speed only appeared (centered) for
+  non-1x segments, so a novice read the action buttons as the current state. Coverage:
+  `SegmentLayer.test.jsx`.
 - **Registering the mounted `saveCurrentClipState` MUST be stable, never keyed on the handler
   identity (T6190, 2026-07-31 regression fix).** `FocusScreen` subscribes to the WHOLE
   `focusStore` (selector-less `useFocusStore()`, FocusScreen.jsx:59-66). The effect that

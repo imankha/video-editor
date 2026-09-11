@@ -11,6 +11,7 @@ import SettingsRail from '../components/settings/SettingsRail';
 import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
 import FocusClipsPanel from '../components/settings/FocusClipsPanel';
 import { FocusMode, CropOverlay } from './focus';
+import FramingInstructions from './focus/FramingInstructions';
 import { formatTimeSimple } from '../components/shared/clipConstants';
 import { ratioWithName } from '../constants/aspectRatios';
 
@@ -274,6 +275,16 @@ export function FocusModeView({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [railTab, setRailTab] = useState('settings');
 
+  // T9610: the three-step framing guide's expand/collapse. Focus points a parent
+  // places are 'user'-origin keyframes; 'trim'-origin ones are trim-boundary residue,
+  // not a placed point. Default: expanded until the first framing success (two focus
+  // points), then collapsed to the preview prompt. EPHEMERAL view state — a gesture
+  // override on top of the derived default, NEVER a useEffect that syncs to it
+  // (no-persisted-view-state rule, precedent T5641 straightenVisible).
+  const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
+  const [guideOverride, setGuideOverride] = useState(null);
+  const guideExpanded = guideOverride ?? focusPointCount < 2;
+
   // T9270: the Focus settings-rail tabs (Clips | Settings) and their bodies. The
   // Settings tab re-homes the old above-video toolbar (aspect, audio, straighten,
   // background dim, zoom) into Reel / This clip / View-only groups. `desktopOnly`
@@ -404,6 +415,18 @@ export function FocusModeView({
             positioning so the row collapses to just the (gated-off) rail. */}
         <div className="lg:flex lg:flex-row lg:items-start">
         <div className="flex flex-col w-full lg:flex-1 lg:min-w-0 lg:pr-6">
+        {/* T9610: the three-step framing guide — the first thing a first-time parent
+            sees in the editor column, teaching the frame → step → adjust sequence and
+            prompting a play-to-preview before a paid render. Non-fullscreen only. */}
+        {videoUrl && !isFullscreen && !mobileFs && (
+          <div className="mb-3">
+            <FramingInstructions
+              focusPointCount={focusPointCount}
+              expanded={guideExpanded}
+              onToggle={() => setGuideOverride(!guideExpanded)}
+            />
+          </div>
+        )}
         {/* Fullscreen container - uses fixed positioning to overlay viewport */}
         <div
           ref={fullscreenContainerRef}

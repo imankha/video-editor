@@ -141,19 +141,28 @@ export default function SegmentLayer({
               width: `calc((100% - ${edgePadding * 2}px) * ${visualWidthPercent / 100})`
             }}
           >
-            {/* Segment background */}
+            {/* Segment background. `relative overflow-hidden` clips the speed readout
+                to THIS segment's box so a narrow segment's label can't spill onto its
+                neighbours or the boundary markers (the change-speed buttons sit OUTSIDE
+                this div, so they are never clipped). */}
             <div
-              className={`h-8 lg:h-12 transition-all ${hoveredSegmentIndex === segment.index ? 'bg-purple-500 bg-opacity-30' : ''}`}
+              className={`relative overflow-hidden h-8 lg:h-12 transition-all ${hoveredSegmentIndex === segment.index ? 'bg-purple-500 bg-opacity-30' : ''}`}
               title={`Segment ${segment.index + 1}: ${segment.speed}x (${segment.actualDuration.toFixed(1)}s → ${segment.visualDuration.toFixed(1)}s)`}
             >
-              {/* Speed indicator (show if speed != 1) */}
-              {segment.speed !== 1 && (
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-                  <div className="bg-purple-600 text-white text-xs px-2 py-0.5 rounded font-semibold">
-                    {segment.speed}x
-                  </div>
+              {/* T9610: current speed as a STATE readout, not an action. Always shown
+                  (including 1x) so the speed reads as a current setting; the buttons
+                  below CHANGE it. Anchored top-left so it never collides with the
+                  centered "Split Segments" placeholder. Subtle at normal speed,
+                  emphasized when slowed. */}
+              <div className="absolute top-1 left-1 pointer-events-none">
+                <div
+                  className={`text-xs px-2 py-0.5 rounded font-semibold whitespace-nowrap ${
+                    segment.speed === 1 ? 'bg-gray-700/80 text-gray-300' : 'bg-purple-600 text-white'
+                  }`}
+                >
+                  {segment.speed === 1 ? 'Normal speed' : `${segment.speed}x slow-mo`}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Segment controls - always visible below the segment */}
