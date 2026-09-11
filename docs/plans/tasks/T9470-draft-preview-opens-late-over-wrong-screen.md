@@ -1,6 +1,6 @@
 # T9470: Draft Preview appears to do nothing, then opens a dialog over a different screen
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-10
