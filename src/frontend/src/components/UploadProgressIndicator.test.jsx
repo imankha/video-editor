@@ -46,8 +46,8 @@ describe('UploadProgressIndicator — user-visible T4100 messages', () => {
     // Actionable phrasing (not the bare "Finalize failed: 500").
     expect(screen.getByText(/finalize failed, status 500/)).toBeTruthy();
     expect(screen.getByText(/please try uploading again/)).toBeTruthy();
-    // Error surface offers recovery affordances.
-    expect(screen.getByText('Retry')).toBeTruthy();
+    // Error surface offers recovery affordances (T9430: "Retry upload" copy).
+    expect(screen.getByText('Retry upload')).toBeTruthy();
     expect(screen.getByText('Dismiss')).toBeTruthy();
   });
 
@@ -68,10 +68,14 @@ describe('UploadProgressIndicator — queue stack (T7360)', () => {
   it('renders one card only when a single upload runs (parity with pre-queue UI)', () => {
     setUpload({ phase: UPLOAD_PHASE.UPLOADING, progress: 30, message: 'Uploading...' });
     render(<UploadProgressIndicator />);
-    expect(screen.getByText('Uploading clip.mp4')).toBeTruthy();
+    // T9430: honest state-led label ("Uploading: clip.mp4"), split across nodes.
+    const active = screen.getByTestId('active-upload-row');
+    expect(active.getAttribute('data-upload-state')).toBe('uploading');
+    expect(active.textContent).toContain('Uploading');
+    expect(active.textContent).toContain('clip.mp4');
     // No "Queued" row and no Retry/Dismiss when only one healthy upload runs.
     expect(screen.queryByText('Queued')).toBeNull();
-    expect(screen.queryByText('Retry')).toBeNull();
+    expect(screen.queryByText('Retry upload')).toBeNull();
   });
 
   it('stacks the active upload, a failed upload, and a queued upload together', () => {
@@ -83,8 +87,9 @@ describe('UploadProgressIndicator — queue stack (T7360)', () => {
       ],
     });
     render(<UploadProgressIndicator />);
-    expect(screen.getByText('Uploading active.mp4')).toBeTruthy(); // active card
-    expect(screen.getByText('Retry')).toBeTruthy();                // failed row
+    expect(screen.getByTestId('active-upload-row').textContent).toContain('active.mp4'); // active card
+    expect(screen.getByTestId('failed-upload-row').textContent).toContain('failed.mp4'); // failed row
+    expect(screen.getByText('Retry upload')).toBeTruthy();         // failed row action
     expect(screen.getByText('waiting.mp4')).toBeTruthy();          // queued row
     expect(screen.getByText('Queued')).toBeTruthy();
     expect(screen.getByText('Cancel')).toBeTruthy();

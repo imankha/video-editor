@@ -7,6 +7,7 @@ import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
 import { UnifiedHeader } from '../components/shared/UnifiedHeader';
+import { UploadPreviewNotice } from '../components/UploadPreviewNotice';
 import { ConfirmationDialog } from '../components/shared/ConfirmationDialog';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
@@ -801,6 +802,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               </button>
             </div>
           )}
+          {/* T9430: honest upload-state banner next to the local preview. The local
+              preview must never read as "saved online" while the upload is still in
+              flight (or has failed). Isolated component so its per-tick re-render never
+              reaches AnnotateScreen's redirect/restore effects (T7280 landmine). */}
+          <UploadPreviewNotice gameId={annotateGameId} />
           {/* T2750: Tab UI removed -- unified timeline replaces half switching */}
           <AnnotateModeView
         // Video state

@@ -53,6 +53,22 @@ export const CLIP_UPLOAD = {
   NOTICE_CANCEL: 'Cancel',
 };
 
+// T9430: honest upload-state vocabulary shown next to the local preview. The four
+// states map from the real uploadManager phase machine (see utils/uploadPresentation
+// .js), NOT engineering copy ("Computing hash" / "15%"). A visible local preview must
+// never read as "saved online": LOCAL_PREVIEW_NOTICE labels it not-yet-persisted until
+// the server acknowledges (COMPLETE, only after activate_game returns). N37's progress
+// vocabulary ("Preparing video / Uploading / Rendering") is owned by T9540; these are
+// this task's state labels, kept independent of that rename. Single source (T8555/T8380).
+export const UPLOAD_STATE = {
+  PREPARING: 'Preparing',
+  UPLOADING: 'Uploading',
+  SAVED: 'Saved',
+  FAILED: 'Upload failed',
+  LOCAL_PREVIEW_NOTICE: 'Local preview - not saved online yet',
+  RETRY_UPLOAD: 'Retry upload',
+};
+
 // T8390: Focus's post-export publish-exit action bar (FocusPublishActionBar).
 // Labels renamed 2026-09-08 (product owner): "Publish" -> "Publish Now" and
 // "Add Spotlight" -> "Add Spotlight Now" so the two "now" choices read as a
