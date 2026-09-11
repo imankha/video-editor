@@ -134,6 +134,14 @@ export function CollectionPlayer({
   // skeleton in the reserved aspect box until the element can actually paint
   // (loadeddata), then reveal the real frame — no fabricated placeholder frame.
   const [videoReady, setVideoReady] = useState(false);
+  // T9470: a slow or failed stream must offer a way out instead of an indefinite
+  // skeleton. `loadError` flips on the <video> error event (failed load);
+  // `stalled` flips if the first frame has not painted after STALL_MS (slow
+  // load). Either one surfaces the retry overlay below. `reloadNonce` re-arms the
+  // reset/stall effects on Retry even though the src (identity) is unchanged.
+  const [loadError, setLoadError] = useState(false);
+  const [stalled, setStalled] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   const handleAllEnded = useCallback(() => onEnded?.(), [onEnded]);
   const handleReelChange = useCallback(
@@ -223,9 +231,36 @@ export function CollectionPlayer({
     return () => panel.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Reset the skeleton whenever the source changes so a newly-loaded reel also
-  // waits for its first paintable frame instead of flashing the prior video.
-  useEffect(() => { setVideoReady(false); }, [activeReel?.streamUrl]);
+  // Reset the skeleton (and any prior load-failure/stall state) whenever the
+  // source changes so a newly-loaded reel waits for its own first paintable frame
+  // instead of flashing the prior video. reloadNonce re-runs this on an explicit
+  // Retry too (the src is unchanged, so the dep needs the nonce).
+  useEffect(() => {
+    setVideoReady(false);
+    setLoadError(false);
+    setStalled(false);
+  }, [activeReel?.streamUrl, reloadNonce]);
+
+  // T9470: slow-load detection. If the active reel has not painted its first
+  // frame within STALL_MS, surface the retry overlay alongside the skeleton so a
+  // stuck stream is never an indefinite dead-end. Cleared/re-armed on ready,
+  // source change, or Retry.
+  useEffect(() => {
+    if (videoReady || loadError) return undefined;
+    const STALL_MS = 10000;
+    const timer = setTimeout(() => setStalled(true), STALL_MS);
+    return () => clearTimeout(timer);
+  }, [videoReady, loadError, activeReel?.streamUrl, reloadNonce]);
+
+  // Retry a failed/stalled load: reset the gates and force the element to re-fetch
+  // (the src is unchanged, so React alone won't reload it — .load() re-attempts).
+  const handleReload = useCallback(() => {
+    setLoadError(false);
+    setStalled(false);
+    setVideoReady(false);
+    setReloadNonce((n) => n + 1);
+    videoRef.current?.load?.();
+  }, []);
 
   // BLOCKING #2: surface live reel progress to a composite bar (IntroStoryPlayer)
   // whenever it changes. `activeIndex`/`segmentProgress` are ALREADY driven by
@@ -465,10 +500,30 @@ export function CollectionPlayer({
           playsInline
           autoPlay
           onLoadedData={() => setVideoReady(true)}
+          onError={() => setLoadError(true)}
           className={`max-h-full max-w-full object-contain transition-opacity duration-150 ${
             isPortrait ? 'h-full' : 'w-full'
           } ${videoReady ? 'opacity-100' : 'opacity-0'}`}
         />
+
+        {/* T9470: retry surface for a failed (onError) or slow (STALL_MS) load,
+            shown over the skeleton until the first frame paints. Additive: it never
+            appears on a healthy load, so every existing caller is unchanged in the
+            happy path. */}
+        {(loadError || stalled) && !videoReady && (
+          <div
+            data-testid="collection-player-load-error"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center px-6"
+            role="alert"
+          >
+            <span className="text-sm text-gray-200">
+              {loadError ? "Couldn't load this video." : 'Still loading...'}
+            </span>
+            <Button variant="secondary" size="sm" title="Retry" onClick={handleReload}>
+              Retry
+            </Button>
+          </div>
+        )}
 
         {/* Per-reel title overlay, fades in on reel change */}
         {activeReel.name && (

@@ -67,6 +67,7 @@ vi.mock('./collections/CollectionPlayer', async () => {
 import { DraftReelPreview } from './DraftReelPreview';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
 import { useQuestStore } from '../stores/questStore';
+import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 
 const jsonResponse = (status, body) => ({
   ok: status >= 200 && status < 300,
@@ -185,5 +186,77 @@ describe('DraftReelPreview (T8530)', () => {
       act(() => vi.advanceTimersByTime(1000));
       expect(useQuestStore.getState().recordAchievement).not.toHaveBeenCalledWith('previewed_draft_reel_1s');
     });
+  });
+});
+
+// T9470: the reported bug was "Preview does nothing, then a dialog opens over a
+// DIFFERENT screen." Root cause (code_expert): openFinishedReel navigates HOME
+// first, but the preview was mounted only in the editor return, so a click on
+// the drafts (home) screen set the snapshot with no consumer, and the overlay
+// then surfaced late over whatever editor screen the user opened next. The fix
+// mounts DraftReelPreview on home too AND scopes the snapshot to the screen it
+// opened on (openMode) so a late arrival on another screen is discarded, never
+// rendered. These tests drive the REAL editorStore so the openMode-vs-editorMode
+// scoping is exercised end to end, not stubbed.
+const scopedSnapshot = { ...snapshot, openMode: EDITOR_MODES.PROJECT_MANAGER };
+const openScoped = () => act(() => { useReelPreviewStore.getState().open(scopedSnapshot); });
+
+describe('DraftReelPreview (T9470 open-on-click + navigate-away scoping)', () => {
+  beforeEach(() => {
+    mountSpy.mockReset();
+    act(() => useReelPreviewStore.getState().close());
+    // The preview opens on the drafts/home screen (openFinishedReel navigates
+    // there first). Reset to it so each test starts on the opening screen.
+    act(() => useEditorStore.setState({ editorMode: EDITOR_MODES.PROJECT_MANAGER }));
+  });
+  afterEach(() => {
+    // Don't leak a navigated-away editorMode into the other suites' tests.
+    act(() => useEditorStore.setState({ editorMode: EDITOR_MODES.PROJECT_MANAGER }));
+  });
+
+  // 1) The click has an IMMEDIATE visible consequence: the player shell renders
+  //    synchronously on open (the "does nothing" half of the bug).
+  it('opens the player shell immediately on the screen it was opened on', () => {
+    act(() => useEditorStore.setState({ editorMode: EDITOR_MODES.PROJECT_MANAGER }));
+    render(<DraftReelPreview />);
+    openScoped();
+    expect(screen.getByTestId('mock-player')).toBeTruthy();
+  });
+
+  // 2) A second click on the same draft rebuilds an equivalent snapshot with the
+  //    same finalVideoId, so the keyed inner is NOT remounted and the video
+  //    (its stream request) is not re-created: no duplicate dialog/request.
+  it('a repeat open of the same draft does not remount the player (no duplicate request)', () => {
+    render(<DraftReelPreview />);
+    openScoped();
+    expect(mountSpy).toHaveBeenCalledTimes(1);
+    openScoped();
+    expect(mountSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // 3) THE SUBSTANTIVE ONE: navigating to another screen while the preview is
+  //    still up must discard the snapshot, never render the player over that
+  //    unrelated screen. An immediate shell alone would hide this bug.
+  it('discards the snapshot when the user navigates away, never rendering over another screen', () => {
+    render(<DraftReelPreview />);
+    openScoped();
+    expect(screen.getByTestId('mock-player')).toBeTruthy();
+
+    // User leaves the drafts screen for an editor screen before it finished.
+    act(() => useEditorStore.setState({ editorMode: EDITOR_MODES.ANNOTATE }));
+
+    // The player is gone (not rendered over Annotate) AND the orphaned snapshot
+    // is cleared from the store so it can never re-surface on a later screen.
+    expect(screen.queryByTestId('mock-player')).toBeNull();
+    expect(useReelPreviewStore.getState().payload).toBeNull();
+  });
+
+  // A payload with no openMode (legacy/dev direct-open) must NOT be treated as
+  // off-page — it renders wherever it is opened, unchanged from pre-T9470.
+  it('a payload without openMode is never treated as off-page', () => {
+    act(() => useEditorStore.setState({ editorMode: EDITOR_MODES.ANNOTATE }));
+    render(<DraftReelPreview />);
+    openPreview(); // snapshot has no openMode
+    expect(screen.getByTestId('mock-player')).toBeTruthy();
   });
 });

@@ -925,6 +925,14 @@ function App() {
         <SyncStatusIndicator />
         {/* T430: Account Settings panel */}
         <AccountSettings />
+        {/* T9470: draft preview player — ALSO mounted on the home/Drafts screen,
+            which is where Preview is actually clicked (openFinishedReel lands on
+            PROJECT_MANAGER before opening). It was previously only mounted in the
+            editor return, so a click here set the snapshot with no consumer to
+            render it, then the overlay surfaced late over the first editor screen
+            the user opened. DraftReelPreview self-scopes by openMode, so the two
+            mounts are mutually exclusive at runtime (home vs editor return). */}
+        <DraftReelPreview />
         {/* T1780: Shared video overlay */}
         {sharedToken && <SharedVideoOverlay shareToken={sharedToken} onClose={handleCloseShared} />}
         {/* T4780: Tutorial video modal — also available on home screen */}
@@ -999,10 +1007,13 @@ function App() {
       )}
 
 
-      {/* T8530: draft preview player — a single top-level mount, opened via the
-          ephemeral reelPreviewStore (finishedReelNav) after an overlay export
-          completes. Survives the post-publish fetchProjects drop because its
-          payload is a snapshot, not a live store lookup. */}
+      {/* T8530: draft preview player — opened via the ephemeral reelPreviewStore
+          (finishedReelNav) after an overlay export completes. Survives the
+          post-publish fetchProjects drop because its payload is a snapshot, not a
+          live store lookup. T9470: also mounted on the home return above; the two
+          are mutually exclusive at runtime. This editor-side mount renders null for
+          a home-opened preview (openMode mismatch) and clears the orphaned snapshot
+          when the user navigates from Drafts into an editor while it was loading. */}
       <DraftReelPreview />
 
       {/* Global Export Indicator - shows progress across all screens */}

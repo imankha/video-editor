@@ -28,6 +28,13 @@ import { useReelPreviewStore } from '../stores/reelPreviewStore';
 export function openFinishedReel(project, { alreadyPublished = false } = {}) {
   // No-op if already home; the preview is a fullscreen overlay over the manager.
   useEditorStore.getState().goToProjectManager();
+  // T9470: stamp the preview with the screen it opens on (always PROJECT_MANAGER,
+  // since we just navigated there). DraftReelPreview scopes the fullscreen overlay
+  // to this mode: if the user navigates to another screen while the video is still
+  // loading, the snapshot is discarded instead of surfacing the player late over an
+  // unrelated screen (the reported "Preview does nothing, then opens over Annotate"
+  // bug). Read AFTER goToProjectManager so it reflects the post-nav mode.
+  const openMode = useEditorStore.getState().editorMode;
   useReelPreviewStore.getState().open({
     projectId: project.id,
     finalVideoId: project.final_video_id,
@@ -37,5 +44,6 @@ export function openFinishedReel(project, { alreadyPublished = false } = {}) {
     gameName: project.game_names?.[0] ?? null,
     gameStartTime: project.clip_game_start_time ?? null,
     alreadyPublished,
+    openMode,
   });
 }
