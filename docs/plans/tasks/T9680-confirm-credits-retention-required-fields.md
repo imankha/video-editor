@@ -102,6 +102,19 @@ credit count it sits next to (e.g. show the un-rounded seconds, or the same ceil
 Source of truth: `highlight_transform.py:176-192` (`compute_export_credits`), call sites
 `export/framing.py:489-490`, `export/multi_clip.py:2147-2153`.
 
+> **Superseded by T9750 (2026-09-12).** The product owner reviewed the finding above and
+> chose to CHANGE the rule rather than just document it ("personally i rather round"). The
+> render/export charging rule is now **round-half-up with a 1-credit floor for any positive
+> duration** (`round_credits_half_up(video_seconds) = max(1, math.floor(video_seconds + 0.5))`
+> in `highlight_transform.py`), NOT `ceil`. Consequence for the walkthrough's own repro case:
+> **6.027s now bills as 6 credits, not 7.** Round-half-up (`math.floor(x + 0.5)`) is used
+> deliberately, NOT Python's `round()` (banker's rounding rounds `.5` to even). Both charge
+> sites (`highlight_transform.compute_export_credits` and `routers/exports.py`'s inline
+> reservation) now call the ONE shared `round_credits_half_up` helper. User-facing copy was
+> updated to state the rounding rule explicitly, and `BuyCreditsModal.jsx:467` now shows the
+> charged credit count as the seconds number too (agree by construction, not coincidence).
+> The `ceil` finding above is left INTACT as the record of what was originally confirmed.
+
 ### 3. Retry charging
 
 **Uploads are idempotent** (never double-charged): stable idempotency keys per gesture

@@ -28,7 +28,7 @@ export { calculateEffectiveDuration, buildClipMetadata };
  *
  * Uses the SAME calculator + rounding the click-time credit check uses
  * (`handleExport` below → `sumEffectiveDurations` → `creditStore.getRequiredCredits`,
- * i.e. `Math.ceil` of output seconds), so the number shown on the button never
+ * i.e. round-half-up of output seconds per T9750), so the number shown on the button never
  * disagrees with the insufficient-credits modal or the backend charge (EPIC.md:
  * "one cost calculator").
  *

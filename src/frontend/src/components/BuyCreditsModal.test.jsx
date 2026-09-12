@@ -57,10 +57,32 @@ describe('BuyCreditsModal (T4940)', () => {
     expect(screen.queryByText('260 credits')).toBeNull();
   });
 
-  it('states the 1-credit-per-second rule', async () => {
+  it('states the per-second rule WITH the rounding rule (T9750)', async () => {
     render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
     await waitFor(() => expect(screen.getByText('80 credits')).toBeTruthy());
-    expect(screen.getByText(/1 credit = 1 second/)).toBeTruthy();
+    // Was a flat "1 credit = 1 second"; now states rounding explicitly.
+    expect(screen.getAllByText(/1 credit per second/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/rounded to the nearest second/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/1 credit = 1 second/)).toBeNull();
+  });
+
+  it('insufficient-credits notice shows the SAME number for credits and seconds (T9750)', async () => {
+    // required IS the round-half-up credit count from the backend; since
+    // 1 credit = 1 second by policy, the seconds display must be that same
+    // number -- no separately-rounded raw seconds that could contradict it.
+    render(
+      <BuyCreditsModal
+        onClose={vi.fn()}
+        onPaymentSuccess={vi.fn()}
+        insufficientCredits={{ required: 6, available: 2, videoSeconds: 6.027 }}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('80 credits')).toBeTruthy());
+    // "6 credits (6s of video)" -- both 6, never the old "6 credits (6s)" vs a 7 charge.
+    expect(screen.getByText(/6 credits/)).toBeTruthy();
+    expect(screen.getByText(/\(6s of video\)/)).toBeTruthy();
+    // The old contradiction (a 7 credit charge shown next to "6s") must not appear.
+    expect(screen.queryByText(/7 credits/)).toBeNull();
   });
 
   it('shows an honest per-pack exported-video conversion', async () => {

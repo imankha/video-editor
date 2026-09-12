@@ -14,7 +14,6 @@ Key design principles:
 
 import json
 import logging
-import math
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +25,7 @@ from pydantic import BaseModel
 from ..analytics import record_milestone
 from ..constants import ExportStatus
 from ..database import get_db_connection, get_user_data_path
+from ..highlight_transform import round_credits_half_up
 from ..profile_context import get_current_profile_id
 from ..user_context import get_current_user_id
 from ..utils.encoding import encode_data
@@ -553,7 +553,10 @@ async def start_framing_export(
 
     user_id = get_current_user_id()
     video_seconds = get_video_duration(str(staged_video_path))
-    credits_required = math.ceil(video_seconds)
+    # T9750: round-half-up + 1-credit floor via the SAME shared helper the
+    # framing/multi-clip charge sites use (highlight_transform.compute_export_credits),
+    # so both charge sites state ONE rounding rule. Was math.ceil(video_seconds).
+    credits_required = round_credits_half_up(video_seconds)
     credits_deducted = 0
 
     # Step 1: Reserve credits (atomic in Postgres)
