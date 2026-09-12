@@ -10,14 +10,6 @@ const MIN_REGION_DURATION = 0.5; // minimum clip duration in seconds
 // forgiving of hand tremor but a real scrub gesture never seeks by accident.
 const CLICK_MOVE_THRESHOLD_PX = 4;
 
-/**
- * Format seconds to MM:SS.s
- */
-function formatTime(seconds) {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins.toString().padStart(2, '0')}:${secs.toFixed(1).padStart(4, '0')}`;
-}
 
 /**
  * ClipScrubRegion - Mini-timeline with two draggable handles for selecting clip start/end.
@@ -477,9 +469,9 @@ export function ClipScrubRegion({
     return (
       <div className="flex items-center gap-2">
         <div className="text-xs font-mono whitespace-nowrap">
-          <span className="text-white">{formatTime(startTime)}</span>
+          <span className="text-white">{formatInstant(startTime, PRECISION.TENTH)}</span>
           <span className="text-gray-500 mx-0.5">-</span>
-          <span className="text-white">{formatTime(endTime)}</span>
+          <span className="text-white">{formatInstant(endTime, PRECISION.TENTH)}</span>
         </div>
         <div
           ref={trackRef}
@@ -549,9 +541,9 @@ export function ClipScrubRegion({
       {/* Time display */}
       <div className="flex items-center justify-between mb-2">
         <div className="text-sm text-gray-400">
-          <span className="font-mono text-white">{formatTime(startTime)}</span>
+          <span className="font-mono text-white">{formatInstant(startTime, PRECISION.TENTH)}</span>
           {' '}&rarr;{' '}
-          <span className="font-mono text-white">{formatTime(endTime)}</span>
+          <span className="font-mono text-white">{formatInstant(endTime, PRECISION.TENTH)}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm font-mono text-gray-400">{formatLength(clipDuration, PRECISION.TENTH)}</span>
@@ -676,8 +668,8 @@ export function ClipScrubRegion({
       {/* Window range label — game-context only, hidden while editing (item 8) */}
       {!isEditing && (
         <div className="flex justify-between mt-1">
-          <span className="text-[10px] text-gray-500 font-mono">{formatTime(windowStart)}</span>
-          <span className="text-[10px] text-gray-500 font-mono">{formatTime(windowEnd)}</span>
+          <span className="text-[10px] text-gray-500 font-mono">{formatInstant(windowStart, PRECISION.TENTH)}</span>
+          <span className="text-[10px] text-gray-500 font-mono">{formatInstant(windowEnd, PRECISION.TENTH)}</span>
         </div>
       )}
     </div>
