@@ -45,7 +45,7 @@ export const QUEST_DEFINITIONS = [
   },
   {
     id: 'quest_4',
-    title: 'Publish Your Reel',
+    title: 'Publish your clip',  // T9575: single-clip onboarding object is a clip, not a "reel" (synced with quest_config.py)
     reward: 0,  // T8120: retired — granted upfront
     step_ids: [
       'watch_publish_tutorial',

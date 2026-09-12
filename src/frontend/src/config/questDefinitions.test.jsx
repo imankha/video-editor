@@ -1,7 +1,13 @@
 import { render } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { STEP_DESCRIPTIONS, STEP_TITLES } from './questDefinitions.jsx';
+import { SECTION_NAMES } from './displayNames';
 import { QUEST_DEFINITIONS } from '../data/questDefinitions.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // T3780: open_framing text wayfinding ("Click the Home button... open Drafts")
 // replaced with a clickable "Open your reel" deep link.
@@ -41,8 +47,8 @@ describe('questDefinitions copy (T5160 export-wait)', () => {
     expect(container.textContent).toMatch(/spotlight/i);
   });
 
-  it('leaves the wait_for_export title unchanged', () => {
-    expect(STEP_TITLES.wait_for_export).toBe('Crisp It Up to 1080p');
+  it('keeps the wait_for_export title (sentence-cased by T9575)', () => {
+    expect(STEP_TITLES.wait_for_export).toBe('Crisp it up to 1080p');
   });
 });
 
@@ -51,14 +57,16 @@ describe('questDefinitions copy (T5160 export-wait)', () => {
 // wrapped so the "*****" run never breaks across a line in the narrow panel.
 describe('questDefinitions rate_clip split (T5150)', () => {
   it('resolves a title + description for the new rate_clip step', () => {
-    expect(STEP_TITLES.rate_clip).toBe('Rate & Tag the Play');
+    expect(STEP_TITLES.rate_clip).toBe('Rate & tag the play');
     expect(STEP_DESCRIPTIONS.rate_clip).toBeTruthy();
     const { container } = render(<>{STEP_DESCRIPTIONS.rate_clip}</>);
     expect(container.textContent).toMatch(/rate the play/i);
   });
 
   it('retitles annotate_brilliant to the Save step', () => {
-    expect(STEP_TITLES.annotate_brilliant).toBe('Save Your Reel');
+    // T9575: epic vocabulary — the step saves a PLAY (which produces a clip), so
+    // the title is "Save your play", not the old single-clip-"reel" wording.
+    expect(STEP_TITLES.annotate_brilliant).toBe('Save your play');
     const { container } = render(<>{STEP_DESCRIPTIONS.annotate_brilliant}</>);
     expect(container.textContent).toMatch(/save/i);
   });
@@ -69,9 +77,11 @@ describe('questDefinitions rate_clip split (T5150)', () => {
     // Rating copy lives on rate_clip, not on the Save step
     expect(rate).toMatch(/start time and end time/i);
     expect(save).not.toMatch(/rate the play/i);
-    // Save/toggle copy lives on annotate_brilliant, not on rate_clip
-    expect(save).toMatch(/create reel/i);
-    expect(rate).not.toMatch(/create reel/i);
+    // Save/toggle copy lives on annotate_brilliant, not on rate_clip. T9575: the
+    // toggle is the epic's "Create an editable clip", never the old "Create Reel".
+    expect(save).toMatch(/create an editable clip/i);
+    expect(save).not.toMatch(/create reel/i);
+    expect(rate).not.toMatch(/create an editable clip/i);
   });
 
   it('wraps all five rating stars in a single non-wrapping container', () => {
@@ -172,7 +182,7 @@ describe('questDefinitions preview step (T6840)', () => {
   });
 
   it('resolves a title + description for preview_draft', () => {
-    expect(STEP_TITLES.preview_draft).toBe('Watch Your Preview');
+    expect(STEP_TITLES.preview_draft).toBe('Watch your preview');
     const { container } = render(<>{STEP_DESCRIPTIONS.preview_draft}</>);
     expect(container.textContent).toMatch(/preview/i);
   });
@@ -182,5 +192,77 @@ describe('questDefinitions preview step (T6840)', () => {
     // move step keeps the publish gesture, no longer the "Press play... to preview" nudge
     expect(container.textContent).toMatch(/Move to/i);
     expect(container.textContent).not.toMatch(/press play/i);
+  });
+});
+
+// T9575: the onboarding quest walkthrough was the last live cluster of pre-Shared-
+// Vocabulary-epic copy. Every step now uses the epic object model (play / clip /
+// reel / player) and never calls a single-clip object a "reel" or a player an
+// "athlete".
+describe('questDefinitions vocabulary sweep (T9575)', () => {
+  const renderedText = (node) => render(<>{node}</>).container.textContent;
+  // Plain-space separator (a NUL byte here once made ripgrep treat this whole file
+  // as binary and skip it — reviewer-caught; keep it ASCII spaces).
+  const everyStepText = () =>
+    [...Object.values(STEP_TITLES), ...Object.values(STEP_DESCRIPTIONS).map(renderedText)]
+      .join('   ');
+
+  it('never calls a single-clip object a "reel" in the walkthrough copy', () => {
+    // "Highlight Reels" is the published-destination noun (SECTION_NAMES.LIBRARY),
+    // the only place "reel" legitimately survives — strip it before scanning.
+    const scrubbed = everyStepText().replaceAll(SECTION_NAMES.LIBRARY, '');
+    expect(scrubbed).not.toMatch(/\breels?\b/i);
+  });
+
+  it('never calls a player an "athlete"', () => {
+    expect(everyStepText()).not.toMatch(/athlete/i);
+  });
+
+  // The sweep scans questDefinitions copy, but the quest_4 completion modal copy
+  // lives in QuestPanel.jsx (reviewer-caught: "You published your first reel").
+  // Scan that source too so a single-clip object is never called a "reel" (nor a
+  // player an "athlete") on that surface either.
+  it('QuestPanel.jsx never calls a single-clip object a "reel" or a player an "athlete"', () => {
+    const panelPath = path.join(__dirname, '..', 'components', 'QuestPanel.jsx');
+    const src = readFileSync(panelPath, 'utf8').replaceAll(SECTION_NAMES.LIBRARY, '');
+    expect(src).not.toMatch(/\breels?\b/i);
+    expect(src).not.toMatch(/athlete/i);
+  });
+
+  it('names the epic controls by their live labels', () => {
+    const save = renderedText(STEP_DESCRIPTIONS.annotate_brilliant);
+    expect(save).toMatch(/My player/);                 // ANNOTATE.LAYER_MINE (was "My Athlete")
+    expect(save).toMatch(/Create an editable clip/);   // ANNOTATE.CREATE_EDITABLE_CLIP (was "Create Reel")
+    expect(renderedText(STEP_DESCRIPTIONS.add_clip)).toMatch(/Mark play/); // ANNOTATE.MARK_PLAY (was "Add Play")
+    expect(renderedText(STEP_DESCRIPTIONS.choose_shape)).toMatch(/Around player/); // EDITOR_PANELS (was "Body")
+    expect(STEP_TITLES.export_overlay).toBe('Export clip with effects'); // EXPORT_JOBS.overlay.action
+  });
+});
+
+// T9575 residual #2: the backend quest_config STEP_TITLES hand-mirrors the frontend
+// STEP_TITLES across the JS/Python boundary with NO shared constant — they agree
+// only because someone keeps them equal. Several frontend values are even DERIVED
+// (move_to_my_reels from SECTION_NAMES.LIBRARY, export_overlay/playback_annotations
+// from displayNames constants), so a rename there would silently drift the backend
+// claim-reward error copy. Parse the Python source and pin the WHOLE dict in sync.
+describe('FE/BE STEP_TITLES sync (T9575)', () => {
+  const parseBackendStepTitles = () => {
+    const qcPath = path.join(__dirname, '..', '..', '..', 'backend', 'app', 'quest_config.py');
+    const src = readFileSync(qcPath, 'utf8');
+    const block = src.match(/STEP_TITLES\s*=\s*\{([\s\S]*?)\n\}/);
+    if (!block) throw new Error('STEP_TITLES dict not found in quest_config.py');
+    const titles = {};
+    for (const m of block[1].matchAll(/"([a-z_]+)":\s*"([^"]*)"/g)) {
+      titles[m[1]] = m[2];
+    }
+    return titles;
+  };
+
+  it('backend quest_config STEP_TITLES mirrors the frontend dict exactly (every key + value)', () => {
+    expect(parseBackendStepTitles()).toEqual(STEP_TITLES);
+  });
+
+  it('keeps move_to_my_reels derived from SECTION_NAMES.LIBRARY on the frontend', () => {
+    expect(STEP_TITLES.move_to_my_reels).toBe(`Move to ${SECTION_NAMES.LIBRARY}`);
   });
 });

@@ -11,7 +11,7 @@
  */
 
 import { Image, Play, Plus, Star, Film, Crosshair, FolderOpen, CheckCircle, Video } from 'lucide-react';
-import { SECTION_NAMES, ANNOTATE } from './displayNames';
+import { SECTION_NAMES, ANNOTATE, EDITOR_PANELS, EXPORT_JOBS } from './displayNames';
 import { useTutorialStore } from '../stores/useTutorialStore';
 
 /** Inline icon — small version of the actual UI icon, styled to sit inline with text */
@@ -124,38 +124,40 @@ function MiniButton({ icon: IconComponent, children, variant = 'purple' }) {
 
 /** Step titles keyed by step ID — plain strings */
 export const STEP_TITLES = {
-  // Quest tutorial steps — T4780
-  watch_annotate_tutorial: 'Watch Annotate Tutorial',
-  watch_framing_tutorial: 'Watch AI Focus Tutorial',
-  watch_overlay_tutorial: 'Watch Spotlight Tutorial',
-  watch_publish_tutorial: 'Watch Publish Tutorial',
+  // Quest tutorial steps — T4780. T9575: titles are sentence case across the whole
+  // checklist; mode/feature proper nouns (Annotate, AI Focus, Spotlight, Publish,
+  // Highlight Reels) keep their capitals, the "spotlight" EFFECT stays lowercase.
+  watch_annotate_tutorial: 'Watch Annotate tutorial',
+  watch_framing_tutorial: 'Watch AI Focus tutorial',
+  watch_overlay_tutorial: 'Watch Spotlight tutorial',
+  watch_publish_tutorial: 'Watch Publish tutorial',
   // Quest 1 — Get Started
-  upload_game: 'Add Your First Game',
-  add_clip: 'Find an Amazing Play',
-  rate_clip: 'Rate & Tag the Play',
-  annotate_brilliant: 'Save Your Reel',
+  upload_game: 'Upload your first game',
+  add_clip: 'Mark an amazing play',
+  rate_clip: 'Rate & tag the play',
+  annotate_brilliant: 'Save your play',
   // N40 (T9560): one label in guide, action, AND error — reuse the established
   // "Preview plays" action label (displayNames.ANNOTATE.PREVIEW_PLAYS) instead of a
   // second name ("Watch Your Clips Back") for the same action.
   playback_annotations: ANNOTATE.PREVIEW_PLAYS,
   // Quest 2 — Frame Your Highlight
-  return_home: 'Head Back Home',
-  open_framing: 'Open Your Reel',
-  position_crop: 'Keep Your Player in Frame',
-  add_slowmo: 'Add a Slow-Mo Moment',
-  export_framing: 'Export Your Highlight',
-  wait_for_export: 'Crisp It Up to 1080p',
+  return_home: 'Head back home',
+  open_framing: 'Open your clip',
+  position_crop: 'Keep your player in frame',
+  add_slowmo: 'Add a slow-mo moment',
+  export_framing: 'Export your highlight',
+  wait_for_export: 'Crisp it up to 1080p',
   // Quest 3 — Configure Your Spotlight
   open_overlay: 'Open in Spotlight',
-  select_players: 'Pick Your Player',
-  choose_color: 'Pick Your Highlight Color',
-  choose_shape: 'Choose the Spotlight Shape',
-  // Quest 4 — Publish Your Reel
-  export_overlay: 'Add the Spotlight',
-  wait_for_overlay: 'Render the Spotlight',
-  preview_draft: 'Watch Your Preview',
+  select_players: 'Pick your player',
+  choose_color: 'Pick your spotlight color',
+  choose_shape: 'Choose the spotlight shape',
+  // Quest 4 — Publish your clip
+  export_overlay: EXPORT_JOBS.overlay.action,
+  wait_for_overlay: 'Render the spotlight',
+  preview_draft: 'Watch your preview',
   move_to_my_reels: `Move to ${SECTION_NAMES.LIBRARY}`,
-  view_gallery_video: 'Watch Your Reel',
+  view_gallery_video: 'Watch your clip',
 };
 
 /** Step descriptions keyed by step ID — JSX with inline icons */
@@ -164,29 +166,29 @@ export const STEP_DESCRIPTIONS = {
   watch_annotate_tutorial: 'Watch how to clip your best plays from a game.',
   watch_framing_tutorial: 'Watch how to put the focus on your player.',
   watch_overlay_tutorial: 'Watch how to spotlight your player on the highlight.',
-  watch_publish_tutorial: 'Watch how to publish your finished reel.',
+  watch_publish_tutorial: 'Watch how to publish your finished clip.',
   // Quest 1 — Get Started
-  upload_game: 'Add a game to start clipping highlights',
-  add_clip: <>Find an amazing play, then click <MiniButton icon={Plus} variant="green">Add Play</MiniButton> to start a highlight.</>,
+  upload_game: 'Upload a game to start marking plays',
+  add_clip: <>Find an amazing play, then click <MiniButton icon={Plus} variant="green">{ANNOTATE.MARK_PLAY}</MiniButton> to capture it.</>,
   rate_clip: <>Set start time and end time precisely to isolate the action. Rate the play <span className="whitespace-nowrap"><FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /></span> and tag it, maybe add a note.</>,
-  annotate_brilliant: <>Notice <strong>My Athlete</strong> and <strong>Create Reel</strong> are switched on. Then <strong>Save</strong>. We'll create a reel you can edit and share automatically.</>,
+  annotate_brilliant: <>Notice <strong>{ANNOTATE.LAYER_MINE}</strong> and <strong>{ANNOTATE.CREATE_EDITABLE_CLIP}</strong> are switched on. Then <strong>{ANNOTATE.SAVE_PLAY_AND_CLIP}</strong>. We'll create a clip you can edit and share automatically.</>,
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">{ANNOTATE.PREVIEW_PLAYS}</MiniButton> to watch your plays</>,
   // Quest 2 — Frame Your Highlight
-  return_home: <>Nice reel! Now head back to the home screen, where the reel you just saved is waiting for you to frame it.</>,
-  open_framing: <>Switch to <MiniButton icon={FolderOpen} variant="gray">{SECTION_NAMES.CLIPS}</MiniButton> and tap your reel's card to start framing.</>,
+  return_home: <>Nice clip! Now head back to the home screen, where the clip you just saved is waiting for you to frame it.</>,
+  open_framing: <>Switch to <MiniButton icon={FolderOpen} variant="gray">{SECTION_NAMES.CLIPS}</MiniButton> and tap your clip's card to start framing.</>,
   position_crop: <>Drag and resize the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
   add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. Splitting near a clip's start or end also lets you trim it.</>,
-  export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Generate AI Focus</MiniButton> and we'll render your close-up in crisp 1080p.</>,
-  wait_for_export: 'We are upscaling your highlight to crisp 1080p -- this takes a minute. Sit tight; next you will add a spotlight to your player on this same reel.',
+  export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>{EXPORT_JOBS.framing.action}</MiniButton> and we'll render your close-up in crisp 1080p.</>,
+  wait_for_export: 'We are upscaling your highlight to crisp 1080p. This takes a minute. Sit tight; next you will add a spotlight to your player on this same clip.',
   // Quest 3 — Spotlight Your Player
-  open_overlay: <>Click the reel's card under <strong>{SECTION_NAMES.CLIPS}</strong> to open it in Spotlight mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows AI Focus complete (green) and Spotlight not yet started (blue).</>,
+  open_overlay: <>Click the clip's card under <strong>{SECTION_NAMES.CLIPS}</strong> to open it in Spotlight mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows AI Focus complete (green) and Spotlight not yet started (blue).</>,
   select_players: <>Click each <GreenSquare /> green marker on the timeline and tap your player. Can't spot them? Drag the circle right onto them.</>,
-  choose_color: 'Pick a highlight color that pops against the jerseys.',
-  choose_shape: 'Spotlight around your player, or a glow on the ground? Pick Body or Ground.',
-  // Quest 4 — Publish Your Reel
-  export_overlay: <>Click <MiniButton>Export clip with effects</MiniButton> to render your highlight with the spotlight on your player.</>,
+  choose_color: 'Pick a spotlight color that pops against the jerseys.',
+  choose_shape: <>Spotlight around your player, or a glow under them? Pick <strong>{EDITOR_PANELS.SPOTLIGHT_AROUND_PLAYER}</strong> or <strong>{EDITOR_PANELS.SPOTLIGHT_UNDER_PLAYER}</strong>.</>,
+  // Quest 4 — Publish your clip
+  export_overlay: <>Click <MiniButton>{EXPORT_JOBS.overlay.action}</MiniButton> to render your highlight with the spotlight on your player.</>,
   wait_for_overlay: 'We are rendering your highlight with the spotlight burned in.',
-  preview_draft: <>Press play on the <DoneBadge /> Clip to preview your finished reel. Watch it back for a moment to make sure it looks just how you want.</>,
-  move_to_my_reels: <>Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> to publish your reel. If you spot an issue, redo the framing or overlay first.</>,
-  view_gallery_video: <>Hit the play button on the card to watch your finished reel. Once it's perfect, you can download and share it.</>,
+  preview_draft: <>Press play on the <DoneBadge /> Clip to preview your finished clip. Watch it back for a moment to make sure it looks just how you want.</>,
+  move_to_my_reels: <>Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> to publish your clip. If you spot an issue, redo the framing or overlay first.</>,
+  view_gallery_video: <>Hit the play button on the card to watch your finished clip. Once it's perfect, you can download and share it.</>,
 };

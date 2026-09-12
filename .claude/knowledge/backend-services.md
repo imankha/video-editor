@@ -1,5 +1,15 @@
 ---
 domain: backend-services
+updated: 2026-09-12 (T9575: **FE/BE quest-copy duplication is a live naming-sync LANDMINE.**
+`app/quest_config.py` `STEP_TITLES` (used only for the claim-reward "Step not complete" error copy,
+T9560/N39) hand-mirrors the frontend `questDefinitions.jsx` `STEP_TITLES` across the JS/Python
+boundary — there is NO shared constant, so the two agree only because someone kept them equal. The
+sharpest case is `move_to_my_reels`: the FRONTEND derives its title as `Move to ${SECTION_NAMES.LIBRARY}`
+(= "Move to Highlight Reels") while the backend HARDCODES the literal "Move to Highlight Reels" — a
+future `SECTION_NAMES.LIBRARY` rename silently drifts the backend error string. Pinned by a
+frontend test (`src/frontend/src/config/questDefinitions.test.jsx` → "FE/BE move_to_my_reels title
+sync", which reads `quest_config.py` and compares). Quest step_ids + quest titles are likewise
+duplicated FE/BE; when editing quest copy, change BOTH layers and keep the internal step_ids frozen.)
 updated: 2026-09-09 (T9135: closed the two cold-path boot blockers T9120 measured OUTSIDE the T9130
 Publish burst — `POST /api/auth/init`'s `init_session` (auth.py) now offloads `user_session_init` via
 `run_in_context` instead of calling it inline (measured 2145ms cold on the literal first request of a
