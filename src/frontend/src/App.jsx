@@ -16,6 +16,7 @@ import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { DraftReelPreview } from './components/DraftReelPreview';
 import { openFinishedReel } from './utils/finishedReelNav';
 import { usePublishIntentStore } from './stores/publishIntentStore';
+import { scheduleOverlayPublishExport } from './utils/scheduleExportWhenReady';
 import { usePublishProject } from './hooks/usePublishProject';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
@@ -378,9 +379,12 @@ function App() {
               if (data.status === 'credits_granted' || data.status === 'already_processed') {
                 const credits = data.credits || 0;
                 toast.success(`${credits} credits added to your balance!`);
-                // Auto-trigger export if user was mid-export when redirected
+                // Auto-trigger export if user was mid-export when redirected.
+                // T9740: pick the ref for the mode we restored to, so we trigger
+                // the button that actually mounts in that mode.
                 if (autoExport) {
-                  setTimeout(() => exportButtonRef.current?.triggerExport(), 500);
+                  const returnRef = returnMode === EDITOR_MODES.OVERLAY ? overlayExportButtonRef : focusExportButtonRef;
+                  setTimeout(() => returnRef.current?.triggerExport(), 500);
                 }
               } else {
                 toast.info('Payment is still processing. Your credits will appear shortly.');
@@ -566,8 +570,18 @@ function App() {
     }
   }, [editorMode, isCheckingSession, annotateBrilliantDone]);
 
-  // Export button ref (for triggering export programmatically from mode switch dialog)
-  const exportButtonRef = useRef(null);
+  // Export button refs (for triggering export programmatically from the mode
+  // switch dialog, the payment-return auto-export, and Focus's one-tap Publish).
+  // T9740: ONE ref per mode, never shared. Focus's export button and Overlay's
+  // export button are two semantically different instances (framing render vs
+  // overlay render, distinct endpoints) that mount/unmount independently as the
+  // editor mode swaps. Sharing a single ref let a readiness poll be satisfied by
+  // whichever button happened to still be mounted on tick zero (Focus's, during
+  // the framing->overlay transition), firing the WRONG render — the PR #417
+  // regression. Separate refs make "is Overlay's button mounted?" answerable by
+  // construction, with no mode tag or timing dependency.
+  const focusExportButtonRef = useRef(null);
+  const overlayExportButtonRef = useRef(null);
 
   // T8390: Focus's one-tap Publish. `publishIntentProjectId` is read reactively
   // (not just via getState()) so `publishFocusExit` below stays bound to the
@@ -592,6 +606,22 @@ function App() {
     // this callback from export start, so closure values can be stale.
     const currentMode = useEditorStore.getState().editorMode;
     const currentProjectId = useProjectsStore.getState().selectedProjectId;
+    // T9740: named assertion (log only, no behavior change). A one-tap publish
+    // stakes the intent for a project and MUST complete via the OVERLAY render.
+    // If a NON-overlay (framing) completion arrives while that project's intent
+    // is still staked, the wrong export button fired — exactly the PR #417
+    // regression. This turns any future recurrence of that bug class into a loud
+    // console error instead of the previous silent no-op.
+    if (
+      completed?.mode !== EDITOR_MODES.OVERLAY &&
+      usePublishIntentStore.getState().projectId === completed?.projectId
+    ) {
+      console.error(
+        '[App] T9740: non-overlay export completed while a one-tap publish intent was staked for project',
+        completed?.projectId,
+        `(mode="${completed?.mode}") — the wrong export button fired.`,
+      );
+    }
     if (
       completed?.mode === EDITOR_MODES.OVERLAY &&
       currentMode === EDITOR_MODES.OVERLAY &&
@@ -631,6 +661,25 @@ function App() {
       // openFinishedReel; that landing is superseded by the in-screen action bar.)
     }
   }, [fetchProjects, publishFocusExit]);
+
+  // T9740: Focus's "Publish without spotlight" one-tap trigger. Schedules the
+  // OVERLAY export button's render as soon as it mounts (it isn't mounted at
+  // click time — Overlay hydrates the just-rendered working video async). Bound
+  // to `overlayExportButtonRef` specifically so the poll can never be satisfied
+  // by Focus's own still-mounted button. `onAbandon` fires only if the poll
+  // gives up (publish-intent stake expired before Overlay's button ever
+  // mounted) — surface a loud error + a recovery toast instead of the old
+  // silent stranding.
+  const handleScheduleOverlayPublishExport = useCallback((projectId) => {
+    scheduleOverlayPublishExport({
+      overlayExportButtonRef,
+      projectId,
+      onAbandon: () => {
+        console.error('[App] T9740: one-tap publish abandoned - overlay export button never mounted for project', projectId);
+        toast.error("Couldn't start the render", { message: 'Tap Export clip with effects to finish publishing.' });
+      },
+    });
+  }, []);
 
   // Handler for loading saved games from ProjectManager
   // Sets pendingGameId in sessionStorage and navigates to annotate mode
@@ -754,8 +803,11 @@ function App() {
     const sourceMode = modeSwitchDialog.sourceMode;
     closeModeSwitchDialog();
     console.log('[App] User chose to export first - triggering export');
-    if (exportButtonRef.current?.triggerExport) {
-      exportButtonRef.current.triggerExport();
+    // T9740: the dialog exports the mode the user is LEAVING, so trigger that
+    // mode's own button ref.
+    const ref = sourceMode === EDITOR_MODES.OVERLAY ? overlayExportButtonRef : focusExportButtonRef;
+    if (ref.current?.triggerExport) {
+      ref.current.triggerExport();
     }
     // Clear the "changed" flag since we triggered an export - user shouldn't be prompted again
     if (sourceMode === EDITOR_MODES.FRAMING) {
@@ -988,7 +1040,8 @@ function App() {
             <Suspense fallback={null}>
               <FocusScreen
                 onExportComplete={handleExportComplete}
-                exportButtonRef={exportButtonRef}
+                exportButtonRef={focusExportButtonRef}
+                onPublishWithoutSpotlight={handleScheduleOverlayPublishExport}
               />
             </Suspense>
           )}
@@ -997,7 +1050,7 @@ function App() {
             <Suspense fallback={null}>
               <OverlayScreen
                 onExportComplete={handleExportComplete}
-                exportButtonRef={exportButtonRef}
+                exportButtonRef={overlayExportButtonRef}
               />
             </Suspense>
           )}
