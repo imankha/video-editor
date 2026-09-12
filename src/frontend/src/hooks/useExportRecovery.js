@@ -5,6 +5,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { ExportStatus } from '../constants/exportStatus';
 import { initSession } from '../utils/sessionInit';
+import { reportRecoveredCompletion } from '../utils/recoveredExportCompletion';
 
 // Re-poll Modal status after this many ms of WebSocket silence
 const SILENCE_TIMEOUT_MS = 60000; // 60 seconds
@@ -97,6 +98,16 @@ export function useExportRecovery() {
                 },
                 onComplete: () => {
                   clearSilenceTimeout(exp.job_id);
+                  // T9285: still-mounted recovery WS connection completing —
+                  // no FocusScreen owns this (it was never dispatched from
+                  // this page session, design §1.5), so route it through the
+                  // same seam the other two completion sites use.
+                  reportRecoveredCompletion({
+                    jobId: exp.job_id,
+                    projectId: exp.project_id,
+                    projectName: exp.project_name,
+                    type: exp.type,
+                  });
                 },
                 onError: () => {
                   clearSilenceTimeout(exp.job_id);
@@ -124,6 +135,22 @@ export function useExportRecovery() {
           for (const exp of completedExports) {
             if (exp.status === ExportStatus.COMPLETE) {
               completeExport(exp.job_id, exp.output_video_id, exp.output_filename);
+              reportRecoveredCompletion({
+                jobId: exp.job_id,
+                projectId: exp.project_id,
+                projectName: exp.project_name,
+                type: exp.type,
+              });
+              // T9285 §6a: a completed FRAMING job's acknowledge is deferred to
+              // the View/Dismiss gesture (resumeFocusCompletion /
+              // FocusCompletionRecovery) instead of firing unconditionally
+              // here. A second tab discard between the card rendering and the
+              // user acting on it must re-prompt on the next load, not
+              // silently lose the completion-preview moment — the exact
+              // mobile failure mode this task fixes, recurring one level up.
+              // Overlay/annotate completions, and FRAMING errors (no card to
+              // act on), keep the existing unconditional mount-time acknowledge.
+              if (exp.type === 'framing') continue;
             } else if (exp.status === ExportStatus.ERROR) {
               failExport(exp.job_id, exp.error || 'Export failed');
             }
@@ -207,6 +234,14 @@ export function useExportRecovery() {
           console.log(`[ExportRecovery] Export ${exp.job_id} completed on Modal`);
           // Update store — GlobalExportIndicator handles the toast
           completeExport(exp.job_id, data.working_video_id, data.output_filename);
+          // T9285: a still-running export found COMPLETE on Modal — same
+          // "no FocusScreen owned this" predicate as the other two sites.
+          reportRecoveredCompletion({
+            jobId: exp.job_id,
+            projectId: exp.project_id,
+            projectName: exp.project_name,
+            type: exp.type,
+          });
           return false;
         } else if (data.status === 'running') {
           // Still running on Modal - resume progress simulation

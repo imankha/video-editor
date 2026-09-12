@@ -14,6 +14,7 @@ import { getTutorialAssets } from './config/tutorialVideos';
 import { ReportProblemButton } from './components/ReportProblemButton';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { DraftReelPreview } from './components/DraftReelPreview';
+import { FocusCompletionRecovery } from './components/FocusCompletionRecovery';
 import { openFinishedReel } from './utils/finishedReelNav';
 import { usePublishIntentStore } from './stores/publishIntentStore';
 import { scheduleOverlayPublishExport } from './utils/scheduleExportWhenReady';
@@ -943,6 +944,10 @@ function App() {
             the user opened. DraftReelPreview self-scopes by openMode, so the two
             mounts are mutually exclusive at runtime (home vs editor return). */}
         <DraftReelPreview />
+        {/* T9285: recovered Focus completion (post-reload/tab-discard, no
+            FocusScreen to show it) — also double-mounted, same pattern as
+            DraftReelPreview above. */}
+        <FocusCompletionRecovery />
         {/* T1780: Shared video overlay */}
         {sharedToken && <SharedVideoOverlay shareToken={sharedToken} onClose={handleCloseShared} />}
         {/* T4780: Tutorial video modal — also available on home screen */}
@@ -1026,6 +1031,9 @@ function App() {
           a home-opened preview (openMode mismatch) and clears the orphaned snapshot
           when the user navigates from Drafts into an editor while it was loading. */}
       <DraftReelPreview />
+
+      {/* T9285: recovered Focus completion — see the home-return mount above. */}
+      <FocusCompletionRecovery />
 
       {/* Global Export Indicator - shows progress across all screens */}
       <GlobalExportIndicator />
