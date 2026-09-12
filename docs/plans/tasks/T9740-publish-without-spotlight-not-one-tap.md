@@ -1,6 +1,6 @@
 # T9740: "Publish without spotlight" doesn't publish in one tap
 
-**Status:** WIP
+**Status:** STAGING — fix v3 merged (PR #419). **4th attempt; live-staging AC2 re-verification STILL REQUIRED and NOT yet done.**
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-12
