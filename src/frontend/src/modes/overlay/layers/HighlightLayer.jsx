@@ -2,6 +2,7 @@ import React from 'react';
 import { useHighlightContext } from '../contexts/HighlightContext';
 import { frameToTime } from '../../../utils/videoUtils';
 import { KeyframeMarker } from '../../../components/timeline/KeyframeMarker';
+import { formatLength, PRECISION } from '../../../utils/timeFormat';
 
 /**
  * HighlightLayer component - displays highlight keyframes on the timeline
@@ -256,7 +257,7 @@ export default function HighlightLayer({
             <span className="text-xs text-gray-400 whitespace-nowrap">
               Duration
               <span className="ml-1 text-orange-400 font-mono">
-                {highlightDuration.toFixed(1)}s
+                {formatLength(highlightDuration, PRECISION.TENTH)}
               </span>
             </span>
           </div>

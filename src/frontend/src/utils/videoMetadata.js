@@ -410,7 +410,6 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
       elapsedMs,
       moovLocation,
       contentLength,
-      durationFormatted: `${Math.floor(metadata.duration / 60)}:${(metadata.duration % 60).toFixed(2)}`,
       resolution: `${metadata.width}x${metadata.height}`,
     });
   }
@@ -531,7 +530,6 @@ export async function extractVideoMetadata(videoSource) {
       console.log('[videoMetadata] Extracted video metadata:', {
         ...metadata,
         sizeFormatted: `${(metadata.size / (1024 * 1024)).toFixed(2)} MB`,
-        durationFormatted: `${Math.floor(metadata.duration / 60)}:${(metadata.duration % 60).toFixed(2)}`,
         resolution: `${metadata.width}x${metadata.height}`,
       });
 
