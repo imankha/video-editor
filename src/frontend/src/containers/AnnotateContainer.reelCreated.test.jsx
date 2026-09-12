@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { announceReelCreated } from './AnnotateContainer';
+import { announceReelCreated, announcePlaySaved } from './AnnotateContainer';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useToastStore } from '../components/shared/Toast';
 
@@ -89,5 +89,30 @@ describe('announceReelCreated (T8480)', () => {
     const { action } = useToastStore.getState().toasts[0];
     action.onClick();
     expect(onOpenReelInFocus).toHaveBeenCalledTimes(1);
+  });
+});
+
+// T9580 AC #1: the bare-play save (createProject off) must SAY WHICH object it
+// created — the play — rather than the old generic "Saved to your library".
+describe('announcePlaySaved (T9580 AC #1)', () => {
+  beforeEach(() => useToastStore.setState({ toasts: [] }));
+  afterEach(() => useToastStore.setState({ toasts: [] }));
+
+  it('names the play it saved', () => {
+    announcePlaySaved('Brilliant Interception');
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0].type).toBe('success');
+    expect(toasts[0].title).toBe('Saved play "Brilliant Interception"');
+  });
+
+  it('falls back to a generic (but still object-named) confirmation when unnamed', () => {
+    announcePlaySaved('');
+    expect(useToastStore.getState().toasts[0].title).toBe('Play saved');
+  });
+
+  it('does not claim a clip/home the bare play does not have (no "in Clips")', () => {
+    announcePlaySaved('Nutmeg');
+    expect(useToastStore.getState().toasts[0].title).not.toMatch(/in Clips/i);
   });
 });

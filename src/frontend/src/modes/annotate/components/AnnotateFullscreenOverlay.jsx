@@ -18,6 +18,16 @@ import { AddDetailsPopup } from './AddDetailsPopup';
 import { RATING_NOTATION, getRatingCaption, getRatingLabel } from '../../../components/shared/clipConstants';
 import { ANNOTATE } from '../../../config/displayNames';
 
+// T9580: the "Save & open …" confirm-dialog destination noun, keyed by stage
+// (decoupled from the CTA button label, which N41 reworded FOCUS to "Frame this
+// clip"). Module scope — a static map, no per-render recreation.
+const STAGE_OPEN_NAME = {
+  [CLIP_STAGE.FOCUS]: 'AI Focus',
+  [CLIP_STAGE.SPOTLIGHT]: 'Spotlight',
+  [CLIP_STAGE.FINAL]: 'Final',
+  [CLIP_STAGE.PUBLISHED]: 'Published',
+};
+
 // Persists across mounts within the same page session
 let savedDockPosition = 'left';
 
@@ -171,12 +181,6 @@ export function AnnotateFullscreenOverlay({
   // decoupled this from the button LABEL (which N41 reworded FOCUS to "Frame this
   // clip") — derive it from the stage so the dialog copy stays grammatical
   // ("...then open AI Focus"), independent of the CTA wording.
-  const STAGE_OPEN_NAME = {
-    [CLIP_STAGE.FOCUS]: 'AI Focus',
-    [CLIP_STAGE.SPOTLIGHT]: 'Spotlight',
-    [CLIP_STAGE.FINAL]: 'Final',
-    [CLIP_STAGE.PUBLISHED]: 'Published',
-  };
   const openStageName = STAGE_OPEN_NAME[clipStage?.stage] || 'AI Focus';
   // T8140: one-tap first clip — a nameless new clip defaults to "Play N" so the
   // user can save without typing a name. Display-and-persist default (memory-only
