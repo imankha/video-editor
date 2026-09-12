@@ -17,17 +17,25 @@ showExportCompletePreview/exportPreviewUrl useState replaced by a focusCompletio
 live path's silent no-render on a null preview URL is now a loud console.error (extracted to
 screens/focusCompletionOffer.js for testability). Post-implementation review caught 5 landmines
 before merge, all fixed same-day: the openMode staleness guard moved from FocusScreen (dead code
-there -- can only observe editorMode===openMode while mounted) to the always-mounted
-FocusCompletionRecovery; Option C's auto-open ref-claim moved to fire BEFORE the idle-check (not
-only after it passes) so a passive-card job can't retroactively auto-open on the user's own later
-navigation; resumeFocusCompletion's already-in-Focus branch gained a refreshProject call (stale
+there -- can only observe editorMode===openMode while mounted) to FocusCompletionRecovery; Option
+C's auto-open ref-claim moved to fire BEFORE the idle-check (not only after it passes) so a
+passive-card job can't retroactively auto-open on the user's own later navigation;
+resumeFocusCompletion's already-in-Focus branch gained a refreshProject call (stale
 working_video_id risk); the whole resumeFocusCompletion sequence wrapped in try/catch (loadProject
 rethrows); test coverage added for FocusCompletionRecovery (previously none) plus a corrected e2e
 re-prompt proof (the original conflated Option C's legitimate post-open acknowledge with the
-mount-time-reconciliation-never-acknowledges claim §6a actually makes). See § Recovery-path
-Focus completion preview below. App.jsx:551-557/handleOverlayExportCompletion.js/
-ExportButtonContainer.jsx/publishIntentStore.js/focusOverlayTransition.js (T9280) untouched, no
-schema change); 2026-09-11 (T9740 PUBLISH-WITHOUT-SPOTLIGHT ONE-TAP fix v3, frontend-only: the no-keyframes
+mount-time-reconciliation-never-acknowledges claim §6a actually makes). A SECOND review round then
+caught the auto-open ref-claim was still per-component-instance (a `useRef`), not per-app --
+`App.jsx` mounts `FocusCompletionRecovery` in two structurally different trees (home vs. editor
+return) with NO single persistent instance across them, so a home<->editor navigation unmounts one
+and mounts a fresh one, resetting the ref and re-arming the "first observation" auto-open check for
+a job that had already correctly shown as a passive card. Fixed by hoisting the one-shot tracking
+(`autoTriedJobId`) and the in-flight `resuming` flag into focusCompletionStore itself (survives the
+remount, same store both mount sites share); also stopped clearing the card on a FAILED resume
+(leaves View retryable instead of deleting the user's only affordance) and added an in-flight guard
+on Dismiss. See § Recovery-path Focus completion preview below. App.jsx:551-557/
+handleOverlayExportCompletion.js/ExportButtonContainer.jsx/publishIntentStore.js/
+focusOverlayTransition.js (T9280) untouched, no schema change); 2026-09-11 (T9740 PUBLISH-WITHOUT-SPOTLIGHT ONE-TAP fix v3, frontend-only: the no-keyframes
 overlay render is DUAL-TRANSPORT (backend sends the WS complete frame THEN returns a synchronous 200),
 so onExportComplete fired TWICE -> App.jsx handleExportComplete ran twice -> racing fetchProjects({force})
 aborts the in-flight fetch (abort catch returns STALE get().projects, no set()) -> first invocation read
@@ -190,27 +198,48 @@ recovery-path gap it left open.
   (deliberately, per the abstract-on-3rd-duplication rule) the minimal
   select→mode→load sequence `ProjectsScreen.jsx:257-302`'s
   `handleSelectProjectWithMode` also runs.
-- `components/FocusCompletionRecovery.jsx` — the App-level surface (mounted
-  on both `App.jsx` returns, same double-mount pattern as `DraftReelPreview`).
-  Renders `null` when `recovered` is null; otherwise a bottom-right card
-  (stacked above `GlobalExportIndicator`'s slot so the two never overlap)
-  showing `EXPORT_JOBS.framing.completed` ("AI Focus ready") + the project
-  name, with View/Dismiss. **Option C (approved):** auto-invokes View exactly
-  when the completion was discovered while the user is idle on Clips home with
-  nothing selected (`editorMode === PROJECT_MANAGER && !selectedProjectId`) —
-  every other case (a different project selected, mid-annotate, etc.) shows
-  the passive card only. Mirrors the policy `handleOverlayExportCompletion.js`
+- `components/FocusCompletionRecovery.jsx` — the App-level surface, mounted
+  on both `App.jsx` returns (home ~:950, editor ~:1036) — but as TWO
+  structurally different subtrees, not one persistent instance: navigating
+  home<->editor unmounts one and mounts a fresh one (NOT the same
+  double-mount-but-effectively-continuous pattern `DraftReelPreview` gets from
+  living in a stable position in both returns — this component's own mount
+  point differs enough between the two trees that React tears it down). Renders
+  `null` when `recovered` is null; otherwise a bottom-right card (stacked above
+  `GlobalExportIndicator`'s slot so the two never overlap) showing
+  `EXPORT_JOBS.framing.completed` ("AI Focus ready") + the project name, with
+  View/Dismiss. **Option C (approved):** auto-invokes View exactly when the
+  completion was discovered while the user is idle on Clips home with nothing
+  selected (`editorMode === PROJECT_MANAGER && !selectedProjectId`) — every
+  other case (a different project selected, mid-annotate, etc.) shows the
+  passive card only. Mirrors the policy `handleOverlayExportCompletion.js`
   already uses for the sibling Overlay completion ("only hijack the screen if
-  the user is still where the app put them"). **Landmine (caught in review,
-  fixed before merge):** the auto-open decision must be claimed (the
-  per-job `autoTriedJobIdRef`) at FIRST OBSERVATION of a job, before the
-  idle-check runs — not only after the idle-check passes. Claiming it only on
-  a pass left a job discovered while the user was elsewhere (correctly showing
-  the passive card) still "untried" the next time that user happened to
-  navigate back to an empty home ON THEIR OWN, retroactively promoting a
-  passive-card case into an auto-open hijack — exactly what Option C exists to
-  prevent. Also owns `view()`'s outer catch (defense-in-depth: the auto-open
-  effect calls `view()` with no `.catch()` attached).
+  the user is still where the app put them").
+  **Landmine (caught in review, fixed before merge):** the auto-open decision
+  must be claimed at FIRST OBSERVATION of a job, before the idle-check runs —
+  not only after the idle-check passes. Claiming it only on a pass left a job
+  discovered while the user was elsewhere (correctly showing the passive card)
+  still "untried" the next time that user happened to navigate back to an
+  empty home ON THEIR OWN, retroactively promoting a passive-card case into an
+  auto-open hijack — exactly what Option C exists to prevent.
+  **Landmine #2 (caught in a SECOND review round, fixed before merge):** that
+  claim was first implemented as a `useRef` — which does NOT survive the
+  unmount+remount described above. A job shown as a passive card in the
+  editor tree, followed by the user tapping Home, unmounted that instance and
+  mounted a fresh one with a NULL ref — re-arming the "first observation"
+  check and firing the exact hijack the first landmine's fix was supposed to
+  prevent. Fixed by hoisting the tracking into `focusCompletionStore.autoTriedJobId`
+  (+ setter), which both mount sites share and which survives the remount.
+  The in-flight `resuming` flag was hoisted into the same store for the same
+  reason (an in-flight resume kicked off by one mount must still read as
+  in-flight if the user navigates to the other tree mid-resume — a
+  component-local flag would silently re-enable View/Dismiss on the fresh
+  mount). `view()` no longer clears `recovered` on a FAILED resume (leaves
+  the card up so View is retryable — the job stays unacknowledged either way,
+  so nothing is lost by leaving it); `handleDismiss` gained the same in-flight
+  guard as `view()` against a double-tap. `view()`'s outer catch remains
+  defense-in-depth (the auto-open effect calls `view()` with no `.catch()`
+  attached).
 - **Acknowledge-timing split (§6a):** `useExportRecovery.js`'s unacknowledged-
   jobs loop SKIPS `/api/exports/acknowledge` for a COMPLETE **framing** job
   specifically (still calls `reportRecoveredCompletion`) — every other job
@@ -248,8 +277,15 @@ recovery-path gap it left open.
   inside `FocusScreen` — that component only mounts while `editorMode ===
   FRAMING`, which is also always this feature's `openMode`, so
   `openMode !== editorMode` could never be observed there (dead code by
-  construction). The guard lives in the always-mounted `FocusCompletionRecovery`
-  instead, which can actually see the user navigate away (e.g. the mobile back
+  construction). The guard lives in `FocusCompletionRecovery` instead — see
+  that component's own entry above for the caveat that it is NOT a single
+  persistent instance across the home/editor split (it remounts), which is
+  exactly why this particular guard (a plain reactive effect re-evaluated on
+  every render, not a one-shot claim) is unaffected by that remount but the
+  Option C auto-open tracking WAS (landmine #2 above) — the guard here just
+  needs to see the CURRENT `editorMode` vs. the payload's `openMode` on
+  whichever instance happens to be mounted, not remember anything across a
+  remount. It can observe the user navigating away (e.g. the mobile back
   button via `editorStore.setEditorModeFromPopState`, which doesn't itself
   clear the preview) and drop the orphaned `preview` payload before it can
   resurrect over a live editor on a later, unrelated re-entry into the same

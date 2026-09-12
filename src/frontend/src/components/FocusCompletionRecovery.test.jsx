@@ -44,7 +44,7 @@ describe('FocusCompletionRecovery (T9285)', () => {
     resumeFocusCompletionMock.mockResolvedValue({ opened: true, navigated: true });
     apiFetchMock.mockClear();
     toastErrorMock.mockClear();
-    useFocusCompletionStore.setState({ recovered: null, preview: null });
+    useFocusCompletionStore.setState({ recovered: null, preview: null, autoTriedJobId: null, resuming: false });
     useEditorStore.setState({ editorMode: EDITOR_MODES.PROJECT_MANAGER });
     useProjectsStore.setState({ selectedProjectId: null, selectedProject: null });
   });
@@ -99,6 +99,33 @@ describe('FocusCompletionRecovery (T9285)', () => {
     expect(screen.getByTestId('focus-completion-recovery')).toBeTruthy();
   });
 
+  it('REGRESSION (follow-up review, finding #3): the one-shot decision survives an unmount+remount of the component — App.jsx mounts this in TWO structurally different trees (home vs. editor return), so navigating between them unmounts one instance and mounts a fresh one', async () => {
+    useProjectsStore.setState({ selectedProjectId: 99 }); // elsewhere -> passive card
+    const { unmount } = render(<FocusCompletionRecovery />);
+    noteRecovered('job-remount', 5);
+    await screen.findByTestId('focus-completion-recovery');
+    expect(resumeFocusCompletionMock).not.toHaveBeenCalled();
+
+    // Simulate the home<->editor navigation: this component's instance is
+    // torn down (App.jsx does not keep one persistent instance across the
+    // two returns) and a fresh one mounts in its place. `recovered` is
+    // untouched (it lives in the store, not this component) and the user
+    // has now landed on home with nothing selected.
+    unmount();
+    act(() => {
+      useProjectsStore.setState({ selectedProjectId: null });
+    });
+    render(<FocusCompletionRecovery />);
+    await new Promise((r) => setTimeout(r, 20));
+
+    // A component-local ref would see this as a fresh "first observation" of
+    // the still-`recovered` job and auto-open it — the exact hijack Option C
+    // exists to prevent. The store-backed autoTriedJobId must have already
+    // consumed the one-shot decision before the remount.
+    expect(resumeFocusCompletionMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('focus-completion-recovery')).toBeTruthy();
+  });
+
   it('a NEW job discovered later still gets its own fresh auto-open decision (per-job, not a global one-shot)', async () => {
     // First job: idle on home, auto-opens and clears.
     render(<FocusCompletionRecovery />);
@@ -124,7 +151,7 @@ describe('FocusCompletionRecovery (T9285)', () => {
     await waitFor(() => expect(screen.queryByTestId('focus-completion-recovery')).toBeNull());
   });
 
-  it('REVIEW FINDING #5: a rejecting resumeFocusCompletion never escapes view() as an unhandled rejection, and still clears the card', async () => {
+  it('REVIEW FINDING #5: a rejecting resumeFocusCompletion never escapes view() as an unhandled rejection, and re-enables the buttons for a retry', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     resumeFocusCompletionMock.mockRejectedValue(new Error('unexpected wiring bug'));
     useProjectsStore.setState({ selectedProjectId: 99 });
@@ -134,8 +161,26 @@ describe('FocusCompletionRecovery (T9285)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'View' }));
 
-    await waitFor(() => expect(screen.queryByTestId('focus-completion-recovery')).toBeNull());
-    expect(errorSpy).toHaveBeenCalled();
+    // Follow-up review fix: a FAILED resume must NOT delete the user's only
+    // affordance — the card stays up (job stays unacknowledged either way)
+    // so View can be retried, instead of vanishing until the next reload.
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled());
+    expect(screen.getByTestId('focus-completion-recovery')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'View' }).disabled).toBe(false);
+  });
+
+  it('a resolved-but-unsuccessful resume ({opened: false}, e.g. no preview URL) also leaves the card up for a retry', async () => {
+    resumeFocusCompletionMock.mockResolvedValue({ opened: false, navigated: false });
+    useProjectsStore.setState({ selectedProjectId: 99 });
+    render(<FocusCompletionRecovery />);
+    noteRecovered('job-6b', 5);
+    await screen.findByTestId('focus-completion-recovery');
+
+    fireEvent.click(screen.getByRole('button', { name: 'View' }));
+
+    await waitFor(() => expect(resumeFocusCompletionMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('focus-completion-recovery')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'View' }).disabled).toBe(false);
   });
 
   it('REVIEW FINDING #7: Dismiss acknowledges the job and clears the card WITHOUT navigating', async () => {
@@ -152,6 +197,21 @@ describe('FocusCompletionRecovery (T9285)', () => {
       expect.objectContaining({ method: 'POST', body: JSON.stringify(['job-7']) }),
     );
     expect(resumeFocusCompletionMock).not.toHaveBeenCalled();
+  });
+
+  it('optional polish: a double-tap on Dismiss only acknowledges once (in-flight guard)', async () => {
+    useProjectsStore.setState({ selectedProjectId: 99 });
+    render(<FocusCompletionRecovery />);
+    noteRecovered('job-7b', 5);
+    await screen.findByTestId('focus-completion-recovery');
+
+    const dismissBtn = screen.getByRole('button', { name: 'Dismiss' });
+    fireEvent.click(dismissBtn);
+    fireEvent.click(dismissBtn); // same tick, before the card unmounts
+
+    await waitFor(() => expect(screen.queryByTestId('focus-completion-recovery')).toBeNull());
+    const ackCalls = apiFetchMock.mock.calls.filter(([url]) => String(url).includes('/api/exports/acknowledge'));
+    expect(ackCalls).toHaveLength(1);
   });
 
   it('REVIEW FINDING #1/#2: clears a stale `preview` payload once editorMode moves off its openMode, even though this component never renders `preview` itself', async () => {
