@@ -1,12 +1,40 @@
 # T9740: "Publish without spotlight" doesn't publish in one tap
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-12
 **Updated:** 2026-09-12
 
-## ⚠ CONFIRMED REGRESSION — one-tap contract still broken, now via a WORSE mechanism
+## ⚠ Fix v2 MERGED (PR #418) — root cause was ref-sharing, not timing; live-staging re-verify still owed
+
+**2026-09-12, superseding the "CONFIRMED REGRESSION" banner below.** A second expert-agent (Opus)
+consult identified the real, deterministic mechanism: `App.jsx` handed ONE `exportButtonRef` to
+BOTH Focus's and Overlay's export buttons, so a readiness poll checking only `!!ref.current` was
+satisfied on tick zero by whichever button happened to still be mounted (always Focus's, during the
+transition) — this reproduced 100%, not intermittently, and no amount of "waiting smarter" (the v1
+fix's approach) could have found it, since the ref itself carried no identity. **Fix: split into
+`focusExportButtonRef`/`overlayExportButtonRef`** so the poll is satisfied by construction only once
+Overlay's own button exists. Full mechanism, rejected alternatives (notably: gating on
+`editorMode === OVERLAY` is ALSO provably broken — investigated and explicitly rejected, not just
+untried), and test evidence are in "Resolution — Fix v2" below.
+
+**Independently re-verified by the supervisor session** (not taken on the implementer's word, given
+two prior "tests pass" rounds both failed live): genuine red on the pre-fix commit (4 tests fail
+exactly on `scheduleOverlayPublishExport is not a function`), genuine green after
+restore (39/39), the provably-broken `editorMode` gate pattern grepped absent from the diff, the two
+refs confirmed as genuinely separate objects, `handleAddSpotlight` confirmed untouched, lint 0
+errors, build clean. Branch CI failure was the already-documented pre-existing
+`uploadManager.attachVideo.test.js` flake (`known-failures.md` row 30, this diff never touches
+`uploadManager.js`) — merged per this project's merge-when-provably-verified policy.
+
+**Still NOT closed**: this is the THIRD attempt at this acceptance criterion. The first two both
+passed their own test suites and then failed live on staging (the exact class of bug — real
+Modal-render timing / React mount ordering — that a dev-container sandbox cannot reproduce). **A
+live-staging re-verification pass is running now; do not treat this task as done, and do not
+re-promote it past STAGING, until that lands with a PASS.**
+
+## ⚠ SUPERSEDED — v1 regression record (kept for history, do not re-read as current status)
 
 **2026-09-12 live staging re-drive found the merged fix (PR #417, `0e9ae01f`) does NOT deliver
 one-tap publish, and is arguably worse than the original bug.** The specific race originally
