@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Play, Square } from 'lucide-react';
 import { formatInstant, formatLength, PRECISION } from '../../../utils/timeFormat';
 import { clampTrim, clampToVisibleWindow } from '../trimBounds';
+import { TrimTimeField } from './TrimTimeField';
 
 const WINDOW_BEFORE = 30; // seconds before anchor
 const WINDOW_AFTER = 30;  // seconds after anchor
@@ -467,10 +468,26 @@ export function ClipScrubRegion({
   if (compact) {
     return (
       <div className="flex items-center gap-2">
-        <div className="text-xs font-mono whitespace-nowrap">
-          <span className="text-white">{formatInstant(startTime, PRECISION.TENTH)}</span>
+        <div className="text-xs font-mono whitespace-nowrap flex items-center">
+          <TrimTimeField
+            value={startTime}
+            edge="start"
+            otherValue={endTime}
+            mediaBounds={{ mediaStart: 0, mediaEnd: videoDuration }}
+            onCommit={onStartTimeChange}
+            onSeek={onSeek}
+            compact
+          />
           <span className="text-gray-500 mx-0.5">-</span>
-          <span className="text-white">{formatInstant(endTime, PRECISION.TENTH)}</span>
+          <TrimTimeField
+            value={endTime}
+            edge="end"
+            otherValue={startTime}
+            mediaBounds={{ mediaStart: 0, mediaEnd: videoDuration }}
+            onCommit={onEndTimeChange}
+            onSeek={onSeek}
+            compact
+          />
         </div>
         <div
           ref={trackRef}
@@ -539,10 +556,24 @@ export function ClipScrubRegion({
     <div className="mb-4">
       {/* Time display */}
       <div className="flex items-center justify-between mb-2">
-        <div className="text-sm text-gray-400">
-          <span className="font-mono text-white">{formatInstant(startTime, PRECISION.TENTH)}</span>
+        <div className="text-sm text-gray-400 flex items-center">
+          <TrimTimeField
+            value={startTime}
+            edge="start"
+            otherValue={endTime}
+            mediaBounds={{ mediaStart: 0, mediaEnd: videoDuration }}
+            onCommit={onStartTimeChange}
+            onSeek={onSeek}
+          />
           {' '}&rarr;{' '}
-          <span className="font-mono text-white">{formatInstant(endTime, PRECISION.TENTH)}</span>
+          <TrimTimeField
+            value={endTime}
+            edge="end"
+            otherValue={startTime}
+            mediaBounds={{ mediaStart: 0, mediaEnd: videoDuration }}
+            onCommit={onEndTimeChange}
+            onSeek={onSeek}
+          />
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm font-mono text-gray-400">{formatLength(clipDuration, PRECISION.TENTH)}</span>
