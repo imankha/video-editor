@@ -1,10 +1,16 @@
 # T9285: Focus's export-recovery path never shows the publish-exit preview after a mobile tab discard
 
-**Status:** WAITING ON USER
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-09
 **Updated:** 2026-09-12
+
+**Design approved 2026-09-12**: `docs/plans/tasks/T9285-design.md`, Option C (§6) plus the
+acknowledge-timing refinement (§6a, deferring the framing-job acknowledge to the View/Dismiss
+gesture instead of mount-time, following a second Opus-expert trace confirming no WebSocket
+replay-on-reconnect mechanism exists in this codebase to substitute for the `export_jobs` read).
+Tier L. Next: Test First then Implementation per the design.
 
 ## Problem
 

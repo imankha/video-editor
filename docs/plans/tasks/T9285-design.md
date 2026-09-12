@@ -442,7 +442,53 @@ server returning an explicit age instead.
 
 ---
 
+## 6a. DECIDED: Option C, plus a refinement to the acknowledge timing (2026-09-12)
+
+**User approved Option C** (auto-open only when the completion was discovered while the user is
+still on Clips home with nothing selected; a passive card otherwise).
+
+**Also approved, following a second Opus-expert trace of the actual WebSocket/reconnect code**
+(confirming no push/replay channel exists in this codebase that could substitute for the
+`export_jobs` read - see that consult's verdict for the full evidence trail: the one WS endpoint
+in the backend is fire-and-forget with zero replay on reconnect, and its own fallback path is
+itself an `export_jobs` HTTP poll): **defer the `POST /api/exports/acknowledge` write for
+FRAMING jobs specifically from mount-time to the View/Dismiss gesture**, instead of this design's
+original unconditional mount-time acknowledge.
+
+**Why:** today `useExportRecovery.js:133-140` acknowledges every unacknowledged job the instant
+the app loads, flagged `rbNonDataWrite: true // mount-time reconciliation, not a user gesture`.
+Combined with this design's own §5 risk ("Missed surface is gone forever... the job is
+acknowledged on the same load"), a SECOND tab discard between the card rendering and the user
+tapping View would permanently lose the completion-preview moment - the exact mobile failure mode
+this task exists to fix, recurring one level up.
+
+**Revised behavior for framing jobs only** (overlay/annotate jobs keep the existing unconditional
+mount-time acknowledge - this refinement is scoped to the bug this task fixes, not a general
+policy change):
+- On discovering an unacknowledged FRAMING job, do NOT call `/api/exports/acknowledge` yet.
+  Still call `reportRecoveredCompletion(...)` -> `focusCompletionStore.noteRecovered(...)` as
+  designed.
+- Acknowledge only when the user acts: the View gesture (inside `resumeFocusCompletion`, after
+  `openPreview` fires) or the Dismiss gesture (inside `FocusCompletionRecovery`'s dismiss
+  handler) calls `POST /api/exports/acknowledge` at that point instead.
+- Net effect: a second discard before the user acts simply means the card reappears next load -
+  "re-prompt until seen" - rather than the completion vanishing. This converts a reconciliation
+  write into a real user-gesture write, which is a BETTER fit for CLAUDE.md's persistence
+  invariant ("every DB write must trace to a named user gesture"), not a deviation from it.
+- No change to the 24-hour `completed_at >= now() - interval '24 hours'` window in
+  `GET /api/exports/unacknowledged` (`exports.py:715-768`) - an old job past that window still
+  ages out normally; this refinement only affects jobs still inside that window.
+
+**File-level delta from §3.1**: `useExportRecovery.js`'s framing branch of the unacknowledged-jobs
+loop skips its acknowledge call (still calls `reportRecoveredCompletion`); `resumeFocusCompletion.js`
+gains an `acknowledgeJob(jobId)` injected dependency, called after `openPreview` succeeds;
+`FocusCompletionRecovery`'s Dismiss handler calls the same `acknowledgeJob(jobId)` before
+`clearRecovered()`. No new modules, no schema change - same three new files as §3.1, same edit
+surface, this only moves WHEN one existing HTTP call fires for one job type.
+
+---
+
 ## 7. Approval
 
-Nothing is implemented. On approval of the target architecture **and** an answer to section 6, the next
-stage is Test First (red proof on master), then implementation.
+**APPROVED 2026-09-12** - Option C plus the §6a acknowledge-timing refinement. Next stage: Test
+First (red proof on master), then implementation.
