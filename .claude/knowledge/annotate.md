@@ -1,5 +1,49 @@
 ---
 domain: annotate
+updated: 2026-09-12 (T9480 — one time-format rule, exact trim entry, and honest billable
+duration. **The rule (utils/timeFormat.js, extended not replaced):** a time value is either an
+INSTANT (a position) or a LENGTH (a span). Instants FLOOR at the shown precision
+(`formatInstant(seconds, PRECISION.SECOND|TENTH|MILLI, opts)`); lengths ROUND HALF-UP
+(`formatLength(seconds, precision, {style: 'unit'|'clock'|'human'|'plain'})`, matching
+`creditStore.roundCreditsHalfUp`'s `floor(x+0.5)` idiom exactly — a whole-second length IS the
+billed second count, by construction). `roundHalfUp(value, decimals)` is the shared rounding
+primitive; `parseTimeInput(text)` accepts `H:MM:SS.s`/`M:SS.s`/bare seconds and returns `null`
+(never `0`) on garbage; `UI_STEP_FPS = 30` is a NAMED UI step granularity, not a claim about real
+source fps (`videoUtils.getFramerate` is a hardcoded 30 — this rule doesn't pretend otherwise);
+`snapToStep(seconds)` quantizes to that grid. **19 named + 6 inline duplicate formatters
+consolidated** onto these two functions across 13 files (full inventory:
+`docs/plans/tasks/T9480-design.md` section 1.2) — `clipConstants.js`'s `formatDuration`/
+`formatTimeSimple` and `components/collections/format.js` are DELETED outright (their importers
+call the canonical functions directly); `useDownloads`'s dead `formatDuration` export deleted.
+**The game clock deliberately still floors** (`formatGameClock`/`clipGameClock`, UNCHANGED) — it's
+an INSTANT (a position on the match clock), not a length, so it was never part of the bug and
+stays pinned by `timeFormat.test.js`'s existing "floors fractional seconds" test; do not "fix" it
+into rounding. **Fixed bug:** `ClipScrubRegion`'s local `formatTime` (rounded, `59.97 → "00:60.0"`
+overflow) deleted → `formatInstant(s, TENTH)`, so trim details now floor like everything else
+(`2.973 → "0:02.9"`, not `"00:03.0"`). **NEW `modes/annotate/trimBounds.js`:**
+`MIN_REGION_DURATION` (moved here, one owner) + `clampTrim({start,end,edge,mediaStart,mediaEnd})`
+— the ONE trim-bounds policy (min-duration invariant first, true media bounds win last, never
+selectable outside the actual video even if that leaves a sub-MIN span at a clip's edge; never
+swaps start/end). `clampToVisibleWindow({value,edge,windowStart,windowEnd})` is a SEPARATE,
+drag-only view constraint (the visible ±30s/edit-zoom window is not a media bound — conflating the
+two was why a parent could "fight the drag handle": the window, not the media, was the real
+limit). `ClipScrubRegion`'s two inline drag clamps now call both, in that order; behavior-preserving
+for the existing drag path. **NEW `modes/annotate/components/TrimTimeField.jsx`:** exact start/end
+entry (AC2). At rest renders `formatInstant(value, TENTH)` — byte-identical to the trim-detail
+readout. Click/focus → input; Enter/blur commits via `parseTimeInput → snapToStep → clampTrim →`
+the SAME `onStartTimeChange`/`onEndTimeChange` the drag path calls `→ onSeek` (one write path,
+final preview matches the released value). Escape discards, no write. Arrow keys step
+±1/`UI_STEP_FPS`; Shift+Arrow steps ±1s. A clamp that moves the typed value shows why (never
+silently). `ClipScrubRegion` renders two instances: the full editor gets step-button chevrons
+(`coarse-pointer:min-h-[44px]`, T7350 floor); `compact` (sidebar + landscape strip) drops them —
+click-to-edit in place, zero added footprint. **Billable-duration disclosure (AC3):** single-sourced
+in `config/displayNames.js` `CREDITS` (`PER_SECOND_RULE`, `MIN_CHARGE`, `billableLine`), consumed by
+`BuyCreditsModal` (3 sites, refactored not duplicated) and `ExportButtonView`'s new second line
+(`ExportButtonContainer` exposes `estimatedSeconds` alongside `estimatedCredits`; the line shows
+only when rounding actually changed the number — see keyframes-framing.md's export-button-estimate
+section for the exact numeric-comparison rule). Annotate's own span readout gets
+`data-testid="clip-length"` but names NO cost — Annotate charges nothing; inventing one there would
+be a new lie. Design: `docs/plans/tasks/T9480-design.md`. Prior:)
 updated: 2026-09-12 (T9630 — rating/tags/notes/saved-state presentation cleanup, 4 acceptance
 criteria. **AC1 (one rating mapping everywhere) — was NOT fully satisfied despite N35's
 `getRatingLabel` already existing.** `AnnotateFullscreenOverlay.jsx`'s local `StarRating` rendered
