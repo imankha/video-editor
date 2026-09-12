@@ -1,6 +1,6 @@
 # T9580: Persistent first-clip CTA and an explicit save-play contract
 
-**Status:** WIP
+**Status:** WAITING ON USER (implementation + review + live QA complete; branch ready for supervisor push/merge)
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-09-10
@@ -114,10 +114,18 @@ one dismiss affordance. No new state machinery is needed, so this stays M-tier.*
 
 ## Acceptance Criteria
 
-- [ ] Save play persists the marker and says which object it created
-- [ ] The first-clip CTA persists until used or dismissed
-- [ ] Repeating the action opens the same clip, never a duplicate
-- [ ] A second play can be saved without forced navigation, with the playhead preserved
-- [ ] Overlap with T9330 is resolved explicitly before implementation
-- [ ] Relevant test set (curated ~10, per CLAUDE.md Test Scope Policy) green, with output attached
-- [ ] Branch CI green
+- [x] Save play persists the marker and says which object it created (`announcePlaySaved`, live-verified)
+- [x] The first-clip CTA persists until used or dismissed (T9330 mechanism + N41 "Frame this clip" / "Keep marking plays")
+- [x] Repeating the action opens the same clip, never a duplicate (getClipStage/autoProjectId reuse, unchanged from T9330)
+- [x] A second play can be saved without forced navigation, with the playhead preserved (T9330 stay-open + dismiss -> closeOverlay, no seek)
+- [x] Overlap with T9330 is resolved explicitly before implementation (see Overlap Resolution section above)
+- [x] Relevant test set (curated ~10, per CLAUDE.md Test Scope Policy) green, with output attached (10 files / 87 tests)
+- [ ] Branch CI green (pending push — not run in this container)
+
+## Progress Log
+
+**2026-09-12**: Implemented per the investigation above. Reviewer (fresh-context) found one MAJOR
+(bare-play save toast did not name the object, contradicting this file's own committed delta) —
+fixed via `announcePlaySaved()`; approved after fix. Live QA (`dev-verify.sh`, real account
+imankh@gmail.com) confirmed all 4 behavioral criteria end-to-end; evidence in `qa/T9580-*.png`.
+Commits: 086aa23a (impl), b1375db9 (review fix), b52b0aaa (QA spec).
