@@ -1,10 +1,10 @@
 # T9380: Shrink time-to-activate - the handover from waiting bundle to running code
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-09
-**Updated:** 2026-09-09
+**Updated:** 2026-09-12
 
 **Epic:** [Fast App Update](EPIC.md), child 4/4. **Blocked on [T9340](T9340-version-update-latency-investigation.md)'s measurement.**
 
@@ -68,3 +68,28 @@ Gated on T9340's numbers. Do not tune a constant without evidence it is the one 
 
 Tier M for items 1 and 2. Item 3 is L with an Architect gate and should only be opened if T9340 shows
 the reload itself is the dominant cost.
+
+## Progress Log
+
+**2026-09-12**: Container worker investigated Q1/Q2 in-container (Chromium only, unit tests green,
+54 passed, no branch needed since neither question yielded a verifiable code change):
+- **Q1** (is the Safari 3.5s escalation normal or exceptional): on Chromium the `controllerchange`
+  event fires normally and activation completes in ~1s — the escalation path is NOT hit. Whether
+  it's normal on real iOS Safari is exactly the number this container cannot produce (same
+  real-device gap T9340 already flagged). The only code change worth making — detect the Safari
+  condition and skip straight to manual bust-and-reload — would change the SW activation mechanism
+  itself, which is real-device-verification + Architect territory, not an M-tier in-container fix.
+  Tuning `SW_ACTIVATE_TIMEOUT_MS` blind is barred by T9340/CLAUDE.md's no-fallback-without-evidence
+  rule.
+- **Q2** (quiescence wait's real cost): the input-idle-specific cost is the ~5s floor from Gap A
+  (re-polled every 2s per Gap B) — seconds, not minutes. Multi-minute waits users may perceive come
+  from export/upload/modal conditions, which are the INTENDED never-reload-mid-work floor, not a bug.
+  Per the task's own invariant, this stays as-is.
+- **Item 3** not opened — no evidence surfaced here that the reload is the dominant cost (T9340
+  already ranked activation as the smallest of the three legs), so there's no basis to open an
+  Architect gate for it now.
+
+**Recommendation:** DEFER this task until a real iOS Safari activation-timing number exists (matches
+T9340's own guidance that a leg shown to be noise may be dropped outright). No branch or commit was
+made. Flipped to WAITING ON USER — decide whether to (a) get a real iOS Safari number to unblock a
+real fix for Q1, or (b) drop this task per the epic's own "may be noise" allowance.

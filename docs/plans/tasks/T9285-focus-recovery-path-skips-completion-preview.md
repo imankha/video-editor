@@ -1,9 +1,10 @@
 # T9285: Focus's export-recovery path never shows the publish-exit preview after a mobile tab discard
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-09
+**Updated:** 2026-09-12
 
 ## Problem
 
@@ -77,3 +78,36 @@ to the same preview-first screen desktop/foreground gets, instead of silently la
 - [ ] No regression to the still-mounted (non-discarded) completion path T9280 covers
 - [ ] Regression test reproducing the recovery-path gap
 - [ ] Tests pass
+
+## Progress Log
+
+**2026-09-12**: Container worker's mandatory Code Expert re-read (required because T9740, PR #419,
+rewrote all three files this task names) found the task's own hypothesis is now WRONG, not just
+stale:
+
+- `handleExportComplete` is now `App.jsx:604-621`, a thin wrapper delegating to
+  `utils/handleOverlayExportCompletion.js`. It IS wired to both FRAMING and OVERLAY, but a FRAMING
+  export hits an `!isOneTapPublish` early-return today — a no-op for this path either way.
+- **`publishIntentStore.js` is NOT a viable reuse target** — it's a 3-line in-memory Zustand store
+  (`projectId` + `set` + `clear`) whose own header says it is NEVER persisted. It is destroyed by
+  the exact reload/tab-discard this task is about, so extending it carries nothing across the
+  reload — the task's central proposed mechanism doesn't work.
+- `useExportRecovery.js` (lines 126/209) calls only `completeExport(...)` — it has `project_id` and
+  `type` on the completed export available but never uses them to navigate or trigger a preview.
+  `GlobalExportIndicator` is toast-only, no navigation.
+- The only DURABLE record that survives the reload is server-side `export_jobs` via
+  `/api/exports/unacknowledged` — nothing in the current SW/recovery machinery carries a
+  completion-preview intent across a reload today.
+- The redirect this task needs to defeat is now `App.jsx:551-557` (fires for FRAMING or OVERLAY
+  when `selectedProjectId` is falsy).
+
+**Conclusion: this is not an M-tier task.** A correct fix needs a materially new mechanism — a
+mount-time consumer that derives completion intent from the durable `export_jobs` record,
+re-selects the project, defeats the App.jsx redirect, and relocates the preview out of
+`FocusScreen`-local state (`showExportCompletePreview`). It also carries an open product question:
+should a recovered completion hijack the screen after the user already navigated away post-reload
+(mirrors the nav-vs-publish tension T9740 resolved for a different path)? No code was committed.
+**Recommend re-classifying to Tier L with an Architect design gate** (and possibly another Opus
+expert consult given the async/reload-timing nature), per CLAUDE.md's escalation rule rather than
+forcing the originally-hypothesized reuse. Flipped to WAITING ON USER pending a decision on how to
+proceed (spawn Architect now vs. defer).
