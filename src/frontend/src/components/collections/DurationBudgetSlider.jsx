@@ -1,6 +1,6 @@
 import React from 'react';
 import { Clock } from 'lucide-react';
-import { formatDuration } from './format';
+import { formatLength, PRECISION } from '../../utils/timeFormat';
 import { snapToStep } from './budget';
 
 /**
@@ -29,7 +29,7 @@ export function DurationBudgetSlider({ cap, value, onChange }) {
         aria-label="Maximum highlight length"
       />
       <span className="text-xs text-gray-300 w-10 text-right tabular-nums">
-        {formatDuration(value)}
+        {formatLength(value, PRECISION.SECOND, { style: 'clock' })}
       </span>
     </div>
   );

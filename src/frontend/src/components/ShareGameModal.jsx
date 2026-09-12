@@ -17,17 +17,17 @@ import {
 } from '../constants/shareClipScope';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { formatInstant, PRECISION } from '../utils/timeFormat';
 
 // Public link lifecycle within this modal session. Starts UNKNOWN (we don't
 // hydrate prior state on open — see Phase B note), becomes ACTIVE on copy/create
 // and REVOKED after a confirmed revoke, which drives the General access UI.
 const LINK_STATUS = { UNKNOWN: 'unknown', ACTIVE: 'active', REVOKED: 'revoked' };
 
+// A clip preview position -- an instant. T9480 Stage C2: mechanical move.
 function fmtTimestamp(seconds) {
   if (seconds == null || Number.isNaN(seconds)) return '';
-  const s = Math.max(0, Math.floor(seconds));
-  const m = Math.floor(s / 60);
-  return `${m}:${String(s % 60).padStart(2, '0')}`;
+  return formatInstant(Math.max(0, seconds), PRECISION.SECOND);
 }
 
 // Which clip list the recipient receives for the currently-selected scope.

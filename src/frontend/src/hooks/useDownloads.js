@@ -3,6 +3,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useProfileStore } from '../stores/profileStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
+import { formatLength, PRECISION } from '../utils/timeFormat';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -339,15 +340,7 @@ export function useDownloads(isOpen = false) {
    */
   const formatDuration = useCallback((seconds) => {
     if (seconds == null || isNaN(seconds)) return null;
-    const totalSeconds = Math.round(seconds);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
-
-    if (hours > 0) {
-      return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    }
-    return `${minutes}:${String(secs).padStart(2, '0')}`;
+    return formatLength(seconds, PRECISION.SECOND, { style: 'clock' });
   }, []);
 
   /**

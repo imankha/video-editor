@@ -3,7 +3,7 @@ import { Trophy, ChevronRight, Lock } from 'lucide-react';
 import { fetchRankConfidence } from '../../utils/rankConfidence';
 import { RATIO_ORDER, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
-import { formatDurationHuman } from '../collections/format';
+import { formatLength, PRECISION } from '../../utils/timeFormat';
 import { LockedReasonModal, LOCKED_KINDS } from '../collections/LockedReasonModal';
 import { ConfidenceGauge } from './ConfidenceGauge';
 
@@ -99,14 +99,14 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
                 <Lock size={13} className="text-amber-400 shrink-0" />
               </div>
               <div className="text-xs text-gray-400 mt-1 leading-snug">
-                {SORT_PURPOSE} Locked until you have {formatDurationHuman(COLLECTION_MIN_DURATION_SEC)} of clips.
+                {SORT_PURPOSE} Locked until you have {formatLength(COLLECTION_MIN_DURATION_SEC, PRECISION.SECOND, { style: 'human' })} of clips.
               </div>
               <div className="mt-2 flex items-center gap-2">
                 <div className="h-1.5 flex-1 rounded-full bg-gray-700 overflow-hidden">
                   <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${unlockPct}%` }} />
                 </div>
                 <span className="text-xs text-amber-300/80 shrink-0 tabular-nums">
-                  {formatDurationHuman(state.contentSec) || '0s'} / {formatDurationHuman(COLLECTION_MIN_DURATION_SEC)}
+                  {formatLength(state.contentSec, PRECISION.SECOND, { style: 'human' }) || '0s'} / {formatLength(COLLECTION_MIN_DURATION_SEC, PRECISION.SECOND, { style: 'human' })}
                 </span>
               </div>
             </div>

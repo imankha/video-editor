@@ -4,17 +4,19 @@ import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { createGameLookup, formatClipDisplayName } from '../utils/gameNameLookup';
+import { formatInstant, PRECISION } from '../utils/timeFormat';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
 /**
- * Format duration in seconds to readable string
+ * Format duration in seconds to readable string. Both callers pass a LENGTH
+ * (a total/clip duration), but formatInstant's floor-and-M:SS shape is what
+ * this display has always shown (T9480 Stage C2: mechanical move, guard kept
+ * as-is -- removed in Stage D4).
  */
 function formatDuration(seconds) {
   if (!seconds || seconds <= 0) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
+  return formatInstant(seconds, PRECISION.SECOND);
 }
 
 /**

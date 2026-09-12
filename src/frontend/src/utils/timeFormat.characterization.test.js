@@ -10,10 +10,6 @@ import {
   formatDuration as ccFormatDuration,
   formatTimeSimple as ccFormatTimeSimple,
 } from '../components/shared/clipConstants';
-import {
-  formatDuration as collFormatDuration,
-  formatDurationHuman as collFormatDurationHuman,
-} from '../components/collections/format';
 
 /**
  * T9480 Stage A -- characterization suite.
@@ -132,6 +128,33 @@ function uaFormatTimestampForName(seconds) {
   return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+/** components/collections/format.js:4 -- module DELETED in Stage C2 (its 7
+ *  importers now call formatLength(..., {style:'clock'}) directly). */
+function collFormatDuration(seconds) {
+  if (seconds == null || isNaN(seconds)) return null;
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/** components/collections/format.js:19 -- module DELETED in Stage C2 (its
+ *  importers now call formatLength(..., {style:'human'}) directly). */
+function collFormatDurationHuman(seconds) {
+  if (seconds == null || isNaN(seconds)) return null;
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  if (m > 0) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  return `${s}s`;
+}
+
 // ---- shared-module formatters (module funcs #1-#10, unchanged by Stage C moves) ----
 
 pin('timeFormat.formatTime (#1)', tfFormatTime, [
@@ -244,7 +267,7 @@ pin('useAnnotate.formatTimestampForName (#19, name generator, untouched)', uaFor
 
 const POSITIVE_INPUTS = [0, 0.4, 0.5, 2.973, 6.027, 59.97, 60, 3599.9, 3600];
 
-describe('ClipScrubRegion.jsx:541,556 inline `${clipDuration.toFixed(1)}s`', () => {
+describe('ClipScrubRegion.jsx:541,556 inline clipDuration.toFixed(1) + "s"', () => {
   const expected = ['0.0s', '0.4s', '0.5s', '3.0s', '6.0s', '60.0s', '60.0s', '3599.9s', '3600.0s'];
   POSITIVE_INPUTS.forEach((v, i) => {
     it(`(${v}) -> ${expected[i]}`, () => {
@@ -270,7 +293,7 @@ describe('AnnotateControls.jsx:194 inline elapsed/clipLength', () => {
   });
 });
 
-describe('HighlightLayer.jsx:259 inline `${highlightDuration.toFixed(1)}s`', () => {
+describe('HighlightLayer.jsx:259 inline highlightDuration.toFixed(1) + "s"', () => {
   const expected = ['0.0s', '0.4s', '0.5s', '3.0s', '6.0s', '60.0s', '60.0s', '3599.9s', '3600.0s'];
   POSITIVE_INPUTS.forEach((v, i) => {
     it(`(${v}) -> ${expected[i]}`, () => {
