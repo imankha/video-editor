@@ -66,7 +66,7 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
     const onOpenInFocus = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={onOpenInFocus} />);
     dirtyEdit();
-    fireEvent.click(screen.getByRole('button', { name: /focus/i }));
+    fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
     expect(onOpenInFocus).not.toHaveBeenCalled();
     expect(screen.getByText('Save this play first?')).toBeTruthy();
   });
@@ -74,7 +74,7 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
   it('exactly two buttons: "Save & open AI Focus" and "Cancel" (no Discard, Q2)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={vi.fn()} />);
     dirtyEdit();
-    fireEvent.click(screen.getByRole('button', { name: /focus/i }));
+    fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
     const dialog = dialogScope();
     expect(dialog.getByRole('button', { name: 'Save & open AI Focus' })).toBeTruthy();
     expect(dialog.getByRole('button', { name: 'Cancel' })).toBeTruthy();
@@ -87,7 +87,7 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
     const onOpenInFocus = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} onOpenInFocus={onOpenInFocus} />);
     dirtyEdit();
-    fireEvent.click(screen.getByRole('button', { name: /focus/i }));
+    fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
     fireEvent.click(dialogScope().getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByText('Save this play first?')).toBeNull();
     expect(onUpdateClip).not.toHaveBeenCalled();
@@ -99,7 +99,7 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
     const onOpenInFocus = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} onOpenInFocus={onOpenInFocus} />);
     dirtyEdit();
-    fireEvent.click(screen.getByRole('button', { name: /focus/i }));
+    fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Save & open AI Focus' }));
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(onOpenInFocus).toHaveBeenCalledWith(42));
@@ -111,7 +111,7 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
   it('does NOT say the editor closes (T9330 — the editor stays open, decision 4)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={vi.fn()} />);
     dirtyEdit();
-    fireEvent.click(screen.getByRole('button', { name: /focus/i }));
+    fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
     expect(screen.queryByText('Opening AI Focus closes the Annotate editor.')).toBeNull();
     expect(screen.queryByText(/closes the annotate editor/i)).toBeNull();
     expect(screen.queryByText(/play editor/i)).toBeNull();
@@ -125,7 +125,7 @@ describe('AnnotateFullscreenOverlay — stage-aware confirm dialog copy (T9330)'
   it('FOCUS stage: dialog button reads "Save & open AI Focus"', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={vi.fn()} />);
     dirtyEdit();
-    fireEvent.click(screen.getByRole('button', { name: /focus/i }));
+    fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
     expect(dialogScope().getByRole('button', { name: 'Save & open AI Focus' })).toBeTruthy();
   });
 
@@ -158,7 +158,7 @@ describe('AnnotateFullscreenOverlay — Focus with no unsaved changes navigates 
     const onOpenInFocus = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} onOpenInFocus={onOpenInFocus} />);
     // No edits — click Focus straight away.
-    fireEvent.click(screen.getByRole('button', { name: /focus/i }));
+    fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
     expect(screen.queryByText('Save this play first?')).toBeNull();
     expect(onUpdateClip).not.toHaveBeenCalled();
     expect(onOpenInFocus).toHaveBeenCalledWith(42);
@@ -169,7 +169,7 @@ describe('AnnotateFullscreenOverlay — Focus with no unsaved changes navigates 
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={onOpenInFocus} />);
     // Change the rating (4 -> 5): a genuine edit, so the prompt must appear.
     fireEvent.click(screen.getByTitle('5 stars'));
-    fireEvent.click(screen.getByRole('button', { name: /focus/i }));
+    fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
     expect(screen.getByText('Save this play first?')).toBeTruthy();
     expect(onOpenInFocus).not.toHaveBeenCalled();
   });

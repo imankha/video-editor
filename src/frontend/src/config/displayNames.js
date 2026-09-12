@@ -34,6 +34,13 @@ export const ANNOTATE = {
   LAYER_LABEL: 'Play category',            // N28 — the control formerly "Clip layer"/"Layer"
   LAYER_MINE: 'My player',                 // N28 — was "My Athlete"
   LAYER_TEAM: 'Team',                      // N28 — unchanged
+  // N41 (T9580) — the first-clip invitation after a saved play. FRAME_THIS_CLIP
+  // is the FOCUS-stage primary CTA (single-sourced into clipStage.getClipStage,
+  // so the desktop strip and the sidebar share it); KEEP_MARKING_PLAYS is its
+  // dismiss secondary (closes the editor, playhead preserved). Later stages keep
+  // their T9320/T9330 labels (Apply Spotlight / View Final / View Published).
+  FRAME_THIS_CLIP: 'Frame this clip',      // N41 — FOCUS-stage primary CTA
+  KEEP_MARKING_PLAYS: 'Keep marking plays', // N41 — invitation dismiss secondary
 };
 
 // T9560 (Shared Vocabulary epic, N34): the Annotate share controls, single source.

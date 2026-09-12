@@ -15,6 +15,12 @@
 //     a genuine nudge is a real drift). A drift demotes back to FOCUS.
 //   - T8470 Part D: a fresh draft project (no snapshot, no produced video) is a
 //     live link into Focus, never an actionable "create" dead end.
+//
+// T9580 (N41): the FOCUS-stage label is "Frame this clip" (the first-clip
+// invitation wording), single-sourced from displayNames.ANNOTATE so the desktop
+// strip and the sidebar share it. Later stages keep their T9320/T9330 labels.
+
+import { ANNOTATE } from '../../config/displayNames';
 
 export const CLIP_STAGE = {
   // The clip has no project yet — manual-create territory (ClipDetailsEditor's
@@ -76,14 +82,14 @@ export function getClipStage(region, linkedProject) {
     return { stage: CLIP_STAGE.SPOTLIGHT, label: 'Apply Spotlight', action: 'overlay' };
   }
   if (projectReflectsClip) {
-    return { stage: CLIP_STAGE.FOCUS, label: 'Apply AI Focus', action: 'focus' };
+    return { stage: CLIP_STAGE.FOCUS, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
   }
   if (projectIsFreshDraft) {
     // Subsumes the old "Open clip (Draft)" label.
-    return { stage: CLIP_STAGE.FOCUS, label: 'Apply AI Focus', action: 'focus' };
+    return { stage: CLIP_STAGE.FOCUS, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
   }
   // Drifted (non-null snapshot, boundaries moved) OR below-migration (produced
   // video but null snapshot): the project EXISTS, so it should open — never fall
   // back to offering to re-create it (T9330 deliberate change).
-  return { stage: CLIP_STAGE.FOCUS, label: 'Apply AI Focus', action: 'focus' };
+  return { stage: CLIP_STAGE.FOCUS, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
 }

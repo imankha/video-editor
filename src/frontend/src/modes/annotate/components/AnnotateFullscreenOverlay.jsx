@@ -7,7 +7,7 @@ import { TagSelector } from '../../../components/shared/TagSelector';
 import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
 import { TeammateTagInput, commitPendingTeammateText, hasUncommittedTeammateText } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile, useProfileStore, useProjectsList } from '../../../stores';
-import { getClipStage } from '../clipStage';
+import { getClipStage, CLIP_STAGE } from '../clipStage';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { recordUiImpression } from '../../../utils/uiTelemetry';
 import { ClipScrubRegion } from './ClipScrubRegion';
@@ -167,9 +167,17 @@ export function AnnotateFullscreenOverlay({
     ? projects.find(p => p.id === existingClip.autoProjectId)
     : null;
   const clipStage = existingClip ? getClipStage(existingClip, linkedProject) : null;
-  // T9330: the stage's noun for the "Save & open …" dialog — the CTA label minus
-  // its verb ("Apply AI Focus" -> "AI Focus", "View Final" -> "Final").
-  const openStageName = (clipStage?.label || 'AI Focus').replace(/^(Apply|View)\s+/, '');
+  // T9330: the destination-mode noun for the "Save & open …" dialog. T9580
+  // decoupled this from the button LABEL (which N41 reworded FOCUS to "Frame this
+  // clip") — derive it from the stage so the dialog copy stays grammatical
+  // ("...then open AI Focus"), independent of the CTA wording.
+  const STAGE_OPEN_NAME = {
+    [CLIP_STAGE.FOCUS]: 'AI Focus',
+    [CLIP_STAGE.SPOTLIGHT]: 'Spotlight',
+    [CLIP_STAGE.FINAL]: 'Final',
+    [CLIP_STAGE.PUBLISHED]: 'Published',
+  };
+  const openStageName = STAGE_OPEN_NAME[clipStage?.stage] || 'AI Focus';
   // T8140: one-tap first clip — a nameless new clip defaults to "Play N" so the
   // user can save without typing a name. Display-and-persist default (memory-only
   // until the Save gesture); never applied in edit mode.
@@ -734,12 +742,37 @@ export function AnnotateFullscreenOverlay({
   ) : null;
 
   // T9330: create-in-flight — the project is being created but its id has not
-  // landed. A disabled "Apply AI Focus" that goes live once setAutoProjectId
-  // resolves (pure re-render). Desktop strip only: mobile create closes on save,
-  // so the sheet is never open during that window (focusPending stays false).
+  // landed. A disabled FOCUS-stage CTA ("Frame this clip" since T9580/N41) that
+  // goes live once setAutoProjectId resolves (pure re-render). Desktop strip
+  // only: mobile create closes on save, so the sheet is never open during that
+  // window (focusPending stays false).
   const stagePendingCta = (isEditMode && !existingClip?.autoProjectId && focusPending) ? (
     <Button variant="cyan" size="lg" icon={Crop} disabled className="w-full coarse-pointer:min-h-[44px]">
-      Apply AI Focus
+      {ANNOTATE.FRAME_THIS_CLIP}
+    </Button>
+  ) : null;
+
+  // T9580 (N41): the first-clip invitation's dismiss secondary — "Keep marking
+  // plays". Paired with the FOCUS-stage primary CTA (live "Frame this clip" once
+  // the project lands, or the disabled pending variant while it is being
+  // created), so the invitation reads as the intended two-choice prompt rather
+  // than a single button. Wired to onClose (-> closeOverlay, a pure EDITING->
+  // SELECTED transition with NO seek), so dismissing preserves the playhead and
+  // drops the user straight back to marking. Only at the FOCUS moment: once a
+  // clip has a working video the single stage CTA suffices.
+  const showFocusInvitation =
+    isEditMode && (
+      (existingClip?.autoProjectId && clipStage?.stage === CLIP_STAGE.FOCUS) ||
+      (!existingClip?.autoProjectId && focusPending)
+    );
+  const keepMarkingCta = showFocusInvitation ? (
+    <Button
+      variant="ghost"
+      size="lg"
+      className="w-full coarse-pointer:min-h-[44px]"
+      onClick={onClose}
+    >
+      {ANNOTATE.KEEP_MARKING_PLAYS}
     </Button>
   ) : null;
 
@@ -1027,6 +1060,7 @@ export function AnnotateFullscreenOverlay({
             exact same button + confirm-dialog logic). */}
         {stageCta && <div className="mt-5">{stageCta}</div>}
         {stagePendingCta && <div className="mt-5">{stagePendingCta}</div>}
+        {keepMarkingCta && <div className="mt-2">{keepMarkingCta}</div>}
         {focusConfirmDialog}
       </>
     );
@@ -1119,6 +1153,11 @@ export function AnnotateFullscreenOverlay({
             not surface the in-flight CTA. Its own row above the footer. */}
         {stageCta && (
           <div className="px-3 pt-3 border-t border-gray-700 bg-gray-900/95 flex-shrink-0">{stageCta}</div>
+        )}
+        {/* T9580 (N41): the mobile EDIT sheet shares the FOCUS-stage invitation, so
+            it gets the "Keep marking plays" dismiss beside "Frame this clip". */}
+        {keepMarkingCta && (
+          <div className="px-3 pt-2 bg-gray-900/95 flex-shrink-0">{keepMarkingCta}</div>
         )}
         {/* T8790/F3: this sheet is `fixed bottom-0` but a `backdrop-blur` ancestor
             (AnnotateModeView's frosted card) becomes its containing block, so the

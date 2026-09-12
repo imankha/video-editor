@@ -7,7 +7,7 @@ import { useProjectsStore } from '../../../stores/projectsStore';
 // open (desktop), landing EDITING on the NEWLY CREATED region atomically
 // (never a transient close). The freshly created clip must read CLEAN (not
 // dirty) the instant it opens — hasUnsavedEdits() must not trip the T8730
-// confirm-then-navigate dialog. The CTA is disabled ("Apply AI Focus",
+// confirm-then-navigate dialog. The CTA is disabled ("Frame this clip",
 // focusPending) until the late setAutoProjectId lands, then goes live via a
 // pure re-render (no reactive write).
 
@@ -75,16 +75,16 @@ describe('AnnotateFullscreenOverlay — stays open on the new clip after create-
     expect(screen.queryByText('Marking a play')).toBeNull();
 
     // The strip's Focus-family CTA must be visible even though autoProjectId
-    // is still null — it renders disabled "Apply AI Focus" while focusPending
+    // is still null — it renders disabled "Frame this clip" while focusPending
     // (createProject was requested at save time). Clicking it must NOT open
     // the T8730 "Save this play first?" dialog: a freshly created clip reads
     // clean instantly (rehydrate-only population path).
-    const cta = screen.getByRole('button', { name: 'Apply AI Focus' });
+    const cta = screen.getByRole('button', { name: 'Frame this clip' });
     expect(cta.disabled).toBe(true);
     expect(screen.queryByText('Save this play first?')).toBeNull();
   });
 
-  it('the disabled "Apply AI Focus" CTA becomes enabled once the late setAutoProjectId lands (pure re-render, no write)', () => {
+  it('the disabled "Frame this clip" CTA becomes enabled once the late setAutoProjectId lands (pure re-render, no write)', () => {
     const newRegionPending = {
       id: 'new_clip_1', startTime: 21, endTime: 33, rating: 4, tags: [], notes: '',
       name: '', tagged_teammates: [], my_athlete: true, autoProjectId: null,
@@ -92,7 +92,7 @@ describe('AnnotateFullscreenOverlay — stays open on the new clip after create-
     const { rerender } = render(
       <AnnotateFullscreenOverlay {...baseProps} existingClip={newRegionPending} focusPending={true} />
     );
-    expect(screen.getByRole('button', { name: 'Apply AI Focus' }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Frame this clip' }).disabled).toBe(true);
 
     // saveClip resolves -> setAutoProjectId(newRegion.id, project_id) -> the
     // region gains autoProjectId and pendingProjectClipId clears (focusPending
@@ -101,7 +101,7 @@ describe('AnnotateFullscreenOverlay — stays open on the new clip after create-
     const newRegionResolved = { ...newRegionPending, autoProjectId: 42 };
     rerender(<AnnotateFullscreenOverlay {...baseProps} existingClip={newRegionResolved} focusPending={false} />);
 
-    const cta = screen.getByRole('button', { name: 'Apply AI Focus' });
+    const cta = screen.getByRole('button', { name: 'Frame this clip' });
     expect(cta.disabled).toBe(false);
   });
 
@@ -116,13 +116,13 @@ describe('AnnotateFullscreenOverlay — stays open on the new clip after create-
     const newRegionResolved = { ...newRegionPending, autoProjectId: 42 };
     rerender(<AnnotateFullscreenOverlay {...baseProps} existingClip={newRegionResolved} focusPending={false} />);
 
-    // Live stage now derives FOCUS ("Apply AI Focus", enabled) from the helper.
+    // Live stage now derives FOCUS ("Frame this clip", enabled) from the helper.
     // Clicking must navigate directly (no unsaved edits) rather than prompting.
     const onOpenInFocus = vi.fn();
     rerender(
       <AnnotateFullscreenOverlay {...baseProps} existingClip={newRegionResolved} focusPending={false} onOpenInFocus={onOpenInFocus} />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Apply AI Focus' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Frame this clip' }));
     expect(screen.queryByText('Save this play first?')).toBeNull();
     expect(onOpenInFocus).toHaveBeenCalledWith(42);
   });

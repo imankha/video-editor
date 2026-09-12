@@ -30,7 +30,7 @@ const baseRegion = {
 
 // T9330: ClipDetailsEditor now consumes the shared getClipStage(region,
 // linkedProject) helper instead of its own nested-ternary stage machine, and
-// the CTA labels are Apply AI Focus / Apply Spotlight / View Final / View
+// the CTA labels are Frame this clip / Apply Spotlight / View Final / View
 // Published — superseding T9320's AI Focus / Spotlight / Completed /
 // Published / Open clip (Draft). The manual "Create Clip" affordance
 // (NO_PROJECT case) is unchanged.
@@ -50,14 +50,14 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
     expect(button.disabled).toBe(true);
   });
 
-  it('shows an enabled "Apply AI Focus" button once region.autoProjectId is set (FOCUS stage)', () => {
+  it('shows an enabled "Frame this clip" button once region.autoProjectId is set (FOCUS stage)', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }} onUpdate={() => {}} onDelete={() => {}} />);
     expect(screen.queryByRole('button', { name: 'Clip Created' })).toBeNull();
-    const button = screen.getByRole('button', { name: 'Apply AI Focus' });
+    const button = screen.getByRole('button', { name: 'Frame this clip' });
     expect(button.disabled).toBe(false);
   });
 
-  it('clicking "Apply AI Focus" calls onOpenInFocus with the clip\'s autoProjectId', () => {
+  it('clicking "Frame this clip" calls onOpenInFocus with the clip\'s autoProjectId', () => {
     const onOpenInFocus = vi.fn();
     render(
       <ClipDetailsEditor
@@ -67,7 +67,7 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
         onOpenInFocus={onOpenInFocus}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Apply AI Focus' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Frame this clip' }));
     expect(onOpenInFocus).toHaveBeenCalledTimes(1);
     expect(onOpenInFocus).toHaveBeenCalledWith(42);
   });
@@ -77,10 +77,10 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
       useProjectsStore.setState({ projects: [] });
     });
 
-    it('still shows "Apply AI Focus" when the linked project has not been exported yet', () => {
+    it('still shows "Frame this clip" when the linked project has not been exported yet', () => {
       useProjectsStore.setState({ projects: [{ id: 42, has_working_video: false, has_final_video: false, is_published: false }] });
       render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }} onUpdate={() => {}} onDelete={() => {}} />);
-      expect(screen.getByRole('button', { name: 'Apply AI Focus' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Frame this clip' })).toBeTruthy();
     });
 
     it('shows "Apply Spotlight" once Focus has been exported (has_working_video)', () => {
@@ -94,7 +94,7 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
           onOpenInOverlay={onOpenInOverlay}
         />
       );
-      expect(screen.queryByRole('button', { name: 'Apply AI Focus' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Frame this clip' })).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'Apply Spotlight' }));
       expect(onOpenInOverlay).toHaveBeenCalledWith(42);
     });
@@ -112,7 +112,7 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
       );
       const button = screen.getByRole('button', { name: 'View Final' });
       expect(button).toBeTruthy();
-      expect(screen.queryByRole('button', { name: 'Apply AI Focus' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Frame this clip' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Apply Spotlight' })).toBeNull();
       fireEvent.click(button);
       expect(onOpenInFocus).toHaveBeenCalledWith(42);
@@ -127,7 +127,7 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
 
   // T8070: the produced stage is shown ONLY while the clip's current boundaries
   // still match the window the project was built from (reelSourceStartTime/EndTime).
-  // Drifted/below-migration now render "Apply AI Focus" (opens the existing
+  // Drifted/below-migration now render "Frame this clip" (opens the existing
   // project) instead of falling back to the manual "Create Clip" — T9330
   // deliberate behavior change (a project that EXISTS should open, not offer
   // to re-create).
@@ -151,7 +151,7 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
       expect(screen.queryByRole('button', { name: 'Create Clip' })).toBeNull();
     });
 
-    it('falls back to "Apply AI Focus" (not "Create Clip") when the START time drifted from the reel-source window', () => {
+    it('falls back to "Frame this clip" (not "Create Clip") when the START time drifted from the reel-source window', () => {
       useProjectsStore.setState({ projects: [completedProject] });
       render(
         <ClipDetailsEditor
@@ -162,10 +162,10 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
       );
       expect(screen.queryByRole('button', { name: 'View Final' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Create Clip' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'Apply AI Focus' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Frame this clip' })).toBeTruthy();
     });
 
-    it('falls back to "Apply AI Focus" when the END time drifted from the reel-source window', () => {
+    it('falls back to "Frame this clip" when the END time drifted from the reel-source window', () => {
       useProjectsStore.setState({ projects: [completedProject] });
       render(
         <ClipDetailsEditor
@@ -175,10 +175,10 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
         />
       );
       expect(screen.queryByRole('button', { name: 'View Final' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'Apply AI Focus' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Frame this clip' })).toBeTruthy();
     });
 
-    it('stays on "Apply AI Focus" (not Create Clip) when a not-yet-exported project has drifted boundaries', () => {
+    it('stays on "Frame this clip" (not Create Clip) when a not-yet-exported project has drifted boundaries', () => {
       useProjectsStore.setState({ projects: [{ id: 42, has_working_video: false, has_final_video: false, is_published: false }] });
       render(
         <ClipDetailsEditor
@@ -187,7 +187,7 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
           onDelete={() => {}}
         />
       );
-      expect(screen.getByRole('button', { name: 'Apply AI Focus' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Frame this clip' })).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Create Clip' })).toBeNull();
     });
 
@@ -204,7 +204,7 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
       expect(screen.getByRole('button', { name: 'View Final' })).toBeTruthy();
     });
 
-    it('shows "Apply AI Focus" (not "Create Clip") when the snapshot is null (below-migration project with a produced video)', () => {
+    it('shows "Frame this clip" (not "Create Clip") when the snapshot is null (below-migration project with a produced video)', () => {
       useProjectsStore.setState({ projects: [completedProject] });
       render(
         <ClipDetailsEditor
@@ -215,19 +215,19 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
       );
       expect(screen.queryByRole('button', { name: 'View Final' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Create Clip' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'Apply AI Focus' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Frame this clip' })).toBeTruthy();
     });
   });
 
   // T8470 (Part D): a project exists the moment project_created lands, but a
   // fresh draft has no reel-source snapshot and no produced video. That state
-  // maps to FOCUS/"Apply AI Focus" (subsumes the old "Open clip (Draft)" label).
-  describe('fresh draft project — subsumed into "Apply AI Focus" (T8470 Part D)', () => {
+  // maps to FOCUS/"Frame this clip" (subsumes the old "Open clip (Draft)" label).
+  describe('fresh draft project — subsumed into "Frame this clip" (T8470 Part D)', () => {
     afterEach(() => {
       useProjectsStore.setState({ projects: [] });
     });
 
-    it('shows "Apply AI Focus" (not "Create Clip") right after creation, before the projects list refreshes', () => {
+    it('shows "Frame this clip" (not "Create Clip") right after creation, before the projects list refreshes', () => {
       // linkedProject not yet in the store (fetchProjects still in flight)
       render(
         <ClipDetailsEditor
@@ -237,10 +237,10 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
         />
       );
       expect(screen.queryByRole('button', { name: 'Create Clip' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'Apply AI Focus' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Frame this clip' })).toBeTruthy();
     });
 
-    it('shows "Apply AI Focus" for a linked draft with no produced video yet', () => {
+    it('shows "Frame this clip" for a linked draft with no produced video yet', () => {
       useProjectsStore.setState({ projects: [{ id: 42, has_working_video: false, has_final_video: false, is_published: false }] });
       render(
         <ClipDetailsEditor
@@ -249,10 +249,10 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
           onDelete={() => {}}
         />
       );
-      expect(screen.getByRole('button', { name: 'Apply AI Focus' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Frame this clip' })).toBeTruthy();
     });
 
-    it('clicking "Apply AI Focus" opens Focus for the project via onOpenInFocus', () => {
+    it('clicking "Frame this clip" opens Focus for the project via onOpenInFocus', () => {
       const onOpenInFocus = vi.fn();
       render(
         <ClipDetailsEditor
@@ -262,11 +262,11 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
           onOpenInFocus={onOpenInFocus}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: 'Apply AI Focus' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Frame this clip' }));
       expect(onOpenInFocus).toHaveBeenCalledWith(42);
     });
 
-    it('a below-migration project WITH a produced video but null snapshot shows "Apply AI Focus", not the manual Create Clip', () => {
+    it('a below-migration project WITH a produced video but null snapshot shows "Frame this clip", not the manual Create Clip', () => {
       useProjectsStore.setState({ projects: [{ id: 42, has_working_video: true, has_final_video: true, is_published: false }] });
       render(
         <ClipDetailsEditor
@@ -276,7 +276,7 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
         />
       );
       expect(screen.queryByRole('button', { name: 'Create Clip' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'Apply AI Focus' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Frame this clip' })).toBeTruthy();
     });
   });
 
@@ -294,9 +294,9 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
       });
     });
 
-    it('never renders the stage control (Create Clip or Apply AI Focus) — desktop only', () => {
+    it('never renders the stage control (Create Clip or Frame this clip) — desktop only', () => {
       render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }} onUpdate={() => {}} onDelete={() => {}} />);
-      expect(screen.queryByRole('button', { name: 'Apply AI Focus' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Frame this clip' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Create Clip' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Clip Created' })).toBeNull();
     });
