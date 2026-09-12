@@ -18,7 +18,6 @@ import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
 import { FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST } from '../config/displayNames';
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
-import { scheduleExportWhenReady } from '../utils/scheduleExportWhenReady';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
@@ -49,6 +48,7 @@ export function FocusScreen({
   onExportComplete,
   onProceedToOverlay,
   exportButtonRef: externalExportButtonRef,
+  onPublishWithoutSpotlight,
 }) {
   const setEditorMode = useEditorStore(state => state.setEditorMode);
 
@@ -1126,18 +1126,19 @@ export function FocusScreen({
   // second tap — see publishIntentStore.js for why a store (not a plain ref)
   // is the right shape for a cross-component signal here.
   //
-  // T9740: the cross-mode trigger used to be a bare `setTimeout(..., 500)` —
-  // a race against Overlay's async workingVideo hydration (FocusScreen just
-  // nulled workingVideo above so OverlayScreen's loader can repopulate fresh
-  // metadata for the just-rendered video; see FocusScreen's export-complete
-  // callback). exportButtonRef only attaches once that hydration finishes and
-  // Overlay's export button mounts (`effectiveOverlayVideoUrl` gate in
-  // OverlayModeView/OverlayScreen), which routinely takes longer than 500ms
-  // for a freshly rendered clip — the timeout fired into a null ref and
-  // silently no-op'd, stranding the user on the Overlay editor. Fixed by
-  // polling for readiness instead of betting on one fixed delay; see
-  // scheduleExportWhenReady's docstring for why the existing publish-intent
-  // stake (not a new deadline) is what bounds the poll.
+  // T9740: fire OVERLAY's export button, not Focus's own. The bug this fixes
+  // (twice — original + PR #417's regression) was NEVER "the delay was too
+  // short". It was that Focus's own export button and Overlay's export button
+  // shared ONE ref: `setEditorMode('overlay')` is a synchronous Zustand set,
+  // but React hasn't yet unmounted Focus / mounted Overlay when the readiness
+  // poll's first (synchronous) tick runs, so a poll keyed on "some button is
+  // mounted" was satisfied on tick zero by Focus's STILL-MOUNTED button and
+  // fired the framing render endpoint instead of the overlay one. App.jsx now
+  // owns two separate refs (focus vs overlay) and hands us a scheduler bound to
+  // OVERLAY's ref specifically via `onPublishWithoutSpotlight`, so the poll can
+  // only ever be satisfied by Overlay's button — by construction, in any tick,
+  // under any React scheduling. Called UNGUARDED: a missing prop must crash
+  // loudly (no-silent-fallbacks), never no-op the one-tap promise away.
   const handlePublish = useCallback(() => {
     // Re-entrancy guard: two Publish clicks landing in the same tick (before
     // React unmounts the button on setShowExportCompletePreview(false)) must
@@ -1152,18 +1153,14 @@ export function FocusScreen({
     // Safety net: ExportButtonContainer exposes no onError callback here, so
     // a render that fails leaves no precise clear point — expire the stake
     // instead of leaving it staked forever (see PUBLISH_INTENT_TIMEOUT_MS).
-    // This is also the bound scheduleExportWhenReady's poll below relies on:
-    // once the stake clears, the poll stops trying on its own.
+    // This is also the bound the overlay-publish poll relies on: once the
+    // stake clears, the poll stops trying (and reports abandonment) on its own.
     setTimeout(() => {
       if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     }, PUBLISH_INTENT_TIMEOUT_MS);
     setEditorMode('overlay');
-    scheduleExportWhenReady({
-      isReady: () => !!exportButtonRef.current,
-      fire: () => exportButtonRef.current.triggerExport(),
-      shouldContinue: () => usePublishIntentStore.getState().projectId === projectId,
-    });
-  }, [setEditorMode, exportButtonRef, projectId]);
+    onPublishWithoutSpotlight(projectId);
+  }, [setEditorMode, onPublishWithoutSpotlight, projectId]);
 
   // T8390: Refocus — go back and reframe. The preview is an overlay ON TOP of
   // the still-mounted Focus editor, so closing it IS "back to editing"; no new
