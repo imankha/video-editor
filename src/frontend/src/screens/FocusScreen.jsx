@@ -29,6 +29,7 @@ import { useProjectDataStore, useFocusStore, useEditorStore, EDITOR_MODES, useOv
 import { useFocusCompletionStore } from '../stores/focusCompletionStore';
 import { useProject } from '../contexts/ProjectContext';
 import { shouldPersistFocusForOverlayTransition, shouldSkipFocusCompletionPreview } from './focusOverlayTransition';
+import { offerFocusCompletionPreview } from './focusCompletionOffer';
 
 // T8390: safety-net expiry for a staked publish intent (see handlePublish).
 // ExportButtonContainer exposes no onError callback to this screen, so a
@@ -105,7 +106,6 @@ export function FocusScreen({
   const openPreview = useFocusCompletionStore((s) => s.openPreview);
   const closePreview = useFocusCompletionStore((s) => s.closePreview);
   const previewOpen = completionPreview?.projectId === projectId;
-  const editorMode = useEditorStore((s) => s.editorMode);
   // T9100: FocusScreen no longer READS the shared workingVideo record (the
   // post-export preview now uses the completion store); it still WRITES it via
   // setWorkingVideo. So the reactive selector is gone, but the store action stays.
@@ -935,16 +935,14 @@ export function FocusScreen({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isFullscreen]);
 
-  // T9285: openMode staleness-scoping, same 3-line pattern DraftReelPreview.jsx
-  // (T9470) already uses for the sibling "overlay outlived its screen" problem.
-  // The completion payload can be written by the App-level recovery path
-  // before this screen (re)mounts; once editorMode moves off the mode it was
-  // opened for, drop it so it can never resurrect on a later, unrelated entry.
-  useEffect(() => {
-    if (completionPreview && completionPreview.openMode !== editorMode) {
-      closePreview();
-    }
-  }, [completionPreview, editorMode, closePreview]);
+  // T9285 review fix: the openMode staleness-scoping guard used to live here,
+  // but this effect can only run while FocusScreen is mounted, which requires
+  // editorMode === FRAMING — and `openMode` is always FRAMING too for this
+  // payload, so `completionPreview.openMode !== editorMode` could never be
+  // true during this component's lifetime (dead code). The guard now lives in
+  // the always-mounted `FocusCompletionRecovery` (same App-level double-mount
+  // as DraftReelPreview), which can actually observe the user navigating away
+  // (e.g. the mobile back button) and clear the payload before it resurrects.
 
   // Handle file selection (local upload - not from library)
   const handleFileSelect = async (file) => {
@@ -1054,20 +1052,18 @@ export function FocusScreen({
       // completion callback (below) and needs a playable URL now, not just
       // the refreshed working_video_id pointer — resolve it (degrades
       // gracefully to no preview on failure; see resolveWorkingVideoPreviewUrl).
+      // T9285: setWorkingVideo(null) above stays as-is so OverlayScreen's real
+      // loader (OverlayScreen.jsx:487) runs on entry and populates metadata +
+      // clears the loading spinner. The preview itself opens via
+      // focusCompletionStore, the same store the recovery path writes.
       const previewUrl = await resolveWorkingVideoPreviewUrl(projectId);
-      if (previewUrl) {
-        // T9285: setWorkingVideo(null) above stays as-is so OverlayScreen's
-        // real loader (OverlayScreen.jsx:487) runs on entry and populates
-        // metadata + clears the loading spinner. The preview itself now opens
-        // via focusCompletionStore, the same store the recovery path writes.
-        openPreview({ projectId, previewUrl, openMode: EDITOR_MODES.FRAMING });
-        useQuestStore.getState().recordAchievement('overlay_offered');
-      } else {
-        // T9285: this used to be a silent no-render (the compound
-        // showExportCompletePreview && exportPreviewUrl gate just stayed
-        // false) — a no-silent-fallback violation. Fail loudly instead.
-        console.error('[FocusScreen] export completed but no preview URL for project', projectId);
-      }
+      offerFocusCompletionPreview({
+        projectId,
+        previewUrl,
+        openMode: EDITOR_MODES.FRAMING,
+        openPreview,
+        recordAchievement: (id) => useQuestStore.getState().recordAchievement(id),
+      });
 
       workingVideoSet = true;
     }

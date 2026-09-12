@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { useEffect } from 'react';
 import { useFocusCompletionStore } from '../../stores/focusCompletionStore';
+import { offerFocusCompletionPreview } from '../focusCompletionOffer';
 
 // T9285 — FocusScreen's post-export preview moves from two local useState hooks
 // (showExportCompletePreview/exportPreviewUrl) to a focusCompletionStore read
@@ -10,27 +10,22 @@ import { useFocusCompletionStore } from '../../stores/focusCompletionStore';
 // preview state lives — a smell the design calls out, §1.6), this harness reads
 // the REAL focusCompletionStore, so a regression that reverts to local state
 // (or that stops deriving previewOpen from the store) fails this test.
+//
+// The openMode staleness-scoping guard is NOT tested here — a review fix moved
+// it out of FocusScreen (this harness's render gate can only observe it while
+// mounted, which is exactly the "can never fire" bug the review caught) and
+// into the always-mounted FocusCompletionRecovery. See
+// components/FocusCompletionRecovery.test.jsx for that guard's real coverage.
 
 /**
  * Mirrors FocusScreen.jsx's render gate + four handlers (§3.2/§3.3), wired to
- * the REAL focusCompletionStore instead of local useState. `deps` injects the
- * side-effecting collaborators (setEditorMode, achievements, toasts,
- * navigation) so those remain spies, exactly like focusPublishExit's harness.
+ * the REAL focusCompletionStore instead of local useState.
  */
 function FocusCompletionPreviewHarness({ deps, projectId = 42 }) {
   const completionPreview = useFocusCompletionStore((s) => s.preview);
   const openPreview = useFocusCompletionStore((s) => s.openPreview);
   const closePreview = useFocusCompletionStore((s) => s.closePreview);
   const previewOpen = completionPreview?.projectId === projectId;
-
-  // Hard invariant (T9285 kickoff): openMode staleness-scoping, same 3-line
-  // pattern DraftReelPreview.jsx:45-50 uses — clears an orphaned payload once
-  // editorMode moves off the mode it was opened for.
-  useEffect(() => {
-    if (completionPreview && completionPreview.openMode !== deps.editorMode) {
-      closePreview();
-    }
-  }, [completionPreview, deps.editorMode, closePreview]);
 
   const handleAddSpotlight = () => { closePreview(); deps.setEditorMode('overlay'); };
   const handleAddSpotlightLater = () => { closePreview(); deps.goToProjectManager(); };
@@ -57,7 +52,6 @@ function FocusCompletionPreviewHarness({ deps, projectId = 42 }) {
 
 function makeDeps(overrides = {}) {
   return {
-    editorMode: 'framing',
     setEditorMode: vi.fn(),
     goToProjectManager: vi.fn(),
     triggerExport: vi.fn(),
@@ -104,53 +98,39 @@ describe('T9285 FocusScreen completion preview reads focusCompletionStore', () =
     expect(screen.queryByTestId('export-complete-preview')).toBeNull();
     expect(useFocusCompletionStore.getState().preview).toBeNull();
   });
-
-  it('openMode staleness-scoping: editorMode moving off openMode clears the payload (DraftReelPreview.jsx:45-50 pattern)', () => {
-    const deps = makeDeps({ editorMode: 'framing' });
-    const { rerender } = render(<FocusCompletionPreviewHarness deps={deps} projectId={42} />);
-    fireEvent.click(screen.getByText('open-preview'));
-    expect(screen.getByTestId('export-complete-preview')).toBeTruthy();
-
-    // Editor mode moves off the mode this payload was opened for.
-    rerender(<FocusCompletionPreviewHarness deps={{ ...deps, editorMode: 'overlay' }} projectId={42} />);
-
-    expect(useFocusCompletionStore.getState().preview).toBeNull();
-  });
 });
 
-// T9285: the live completion path's silent no-render becomes a loud
-// console.error (design §3.2) — a real no-silent-fallback fix, not a pure
-// refactor. Reproduced verbatim (both branches) mirroring the established
-// runNullBlobBranch pattern in focusPublishExit.test.jsx, since FocusScreen
-// cannot be mounted standalone.
-async function runLiveCompletionOfferBranch({ previewUrl, openPreview, recordAchievement }) {
-  const projectId = 42;
-  if (previewUrl) {
-    openPreview({ projectId, previewUrl, openMode: 'framing' });
-    recordAchievement('overlay_offered');
-  } else {
-    console.error('[FocusScreen] export completed but no preview URL for project', projectId);
-  }
-}
-
-describe('T9285 live completion offer: no silent no-render', () => {
-  it('a resolved preview URL opens the preview and records the achievement', async () => {
+// T9285 review fix: the previous version of this suite tested
+// `runLiveCompletionOfferBranch`, a verbatim COPY of FocusScreen's decision
+// logic defined inside the test file itself — reverting the real FocusScreen
+// change (or breaking `offerFocusCompletionPreview`) would have left it green.
+// FocusScreen's null-blob branch now calls the REAL, extracted
+// `offerFocusCompletionPreview` (screens/focusCompletionOffer.js), so this
+// drives that real import directly — no duplicated logic.
+describe('T9285 offerFocusCompletionPreview: no silent no-render (real import)', () => {
+  it('a resolved preview URL opens the preview and records the achievement', () => {
     const openPreview = vi.fn();
     const recordAchievement = vi.fn();
 
-    await runLiveCompletionOfferBranch({ previewUrl: 'blob://x', openPreview, recordAchievement });
+    const opened = offerFocusCompletionPreview({
+      projectId: 42, previewUrl: 'blob://x', openMode: 'framing', openPreview, recordAchievement,
+    });
 
+    expect(opened).toBe(true);
     expect(openPreview).toHaveBeenCalledWith({ projectId: 42, previewUrl: 'blob://x', openMode: 'framing' });
     expect(recordAchievement).toHaveBeenCalledWith('overlay_offered');
   });
 
-  it('a null preview URL (resolveWorkingVideoPreviewUrl failure) logs loudly instead of silently doing nothing', async () => {
+  it('a null preview URL (resolveWorkingVideoPreviewUrl failure) logs loudly instead of silently doing nothing', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const openPreview = vi.fn();
     const recordAchievement = vi.fn();
 
-    await runLiveCompletionOfferBranch({ previewUrl: null, openPreview, recordAchievement });
+    const opened = offerFocusCompletionPreview({
+      projectId: 42, previewUrl: null, openMode: 'framing', openPreview, recordAchievement,
+    });
 
+    expect(opened).toBe(false);
     expect(openPreview).not.toHaveBeenCalled();
     expect(recordAchievement).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalledTimes(1);

@@ -14,7 +14,17 @@ COMPLETE framing job's /api/exports/acknowledge defers from mount-time to the Vi
 (overlay/annotate/framing-errors keep the unconditional mount-time acknowledge), so a second tab
 discard before the user acts re-prompts instead of losing the completion moment. FocusScreen.jsx's
 showExportCompletePreview/exportPreviewUrl useState replaced by a focusCompletionStore read; the
-live path's silent no-render on a null preview URL is now a loud console.error. See § Recovery-path
+live path's silent no-render on a null preview URL is now a loud console.error (extracted to
+screens/focusCompletionOffer.js for testability). Post-implementation review caught 5 landmines
+before merge, all fixed same-day: the openMode staleness guard moved from FocusScreen (dead code
+there -- can only observe editorMode===openMode while mounted) to the always-mounted
+FocusCompletionRecovery; Option C's auto-open ref-claim moved to fire BEFORE the idle-check (not
+only after it passes) so a passive-card job can't retroactively auto-open on the user's own later
+navigation; resumeFocusCompletion's already-in-Focus branch gained a refreshProject call (stale
+working_video_id risk); the whole resumeFocusCompletion sequence wrapped in try/catch (loadProject
+rethrows); test coverage added for FocusCompletionRecovery (previously none) plus a corrected e2e
+re-prompt proof (the original conflated Option C's legitimate post-open acknowledge with the
+mount-time-reconciliation-never-acknowledges claim §6a actually makes). See § Recovery-path
 Focus completion preview below. App.jsx:551-557/handleOverlayExportCompletion.js/
 ExportButtonContainer.jsx/publishIntentStore.js/focusOverlayTransition.js (T9280) untouched, no
 schema change); 2026-09-11 (T9740 PUBLISH-WITHOUT-SPOTLIGHT ONE-TAP fix v3, frontend-only: the no-keyframes
@@ -158,29 +168,49 @@ recovery-path gap it left open.
   `FocusPublishActionBar`) and `recovered` (a completion `reportRecoveredCompletion`
   found with no screen to show it, `{jobId, projectId, projectName}`).
 - `utils/resumeFocusCompletion.js::resumeFocusCompletion({jobId, projectId}, deps)`
-  — carries a recovered completion into the live preview: resolves the
-  preview URL first (loud `console.error` + toast on failure, no navigation);
-  if already standing in Focus for that exact project, opens in place
-  (skips `selectProject`/`loadProject`, which reset 4 stores, so a live editor
-  is never reset under the user); otherwise `selectProject` (sets
-  `selectedProjectId` SYNCHRONOUSLY, satisfying `App.jsx:551-557`'s redirect
-  precondition — the redirect itself is untouched) **then** `setEditorMode`
-  **then** `loadProject(project, {mode: 'framing'})` with an EXPLICIT mode
-  (landmine: `useProjectLoader.js:117-120` defaults to `'overlay'` whenever
+  — carries a recovered completion into the live preview: if already standing
+  in Focus for that exact project, refreshes it (`refreshSelectedProject`,
+  landmine caught in review: without this the "already in Focus" shortcut
+  could act on a stale `working_video_id` from before the render finished —
+  mirrors `FocusScreen.jsx`'s own `refreshProject()` before resolving the
+  preview URL) then opens in place (skips `selectProject`/`loadProject`, which
+  reset 4 stores, so a live editor is never reset under the user); otherwise
+  `selectProject` (sets `selectedProjectId` SYNCHRONOUSLY, satisfying
+  `App.jsx:551-557`'s redirect precondition — the redirect itself is
+  untouched) **then** `setEditorMode` **then**
+  `loadProject(project, {mode: 'framing'})` with an EXPLICIT mode (landmine:
+  `useProjectLoader.js:117-120` defaults to `'overlay'` whenever
   `working_video_id` is set with no final video — exactly the post-framing-
-  render state). All collaborators injected, mirrors
-  `handleOverlayExportCompletion.js`'s testable-injection pattern.
+  render state). The WHOLE sequence is wrapped in try/catch (review fix:
+  `loadProject` rethrows on failure, and an unhandled rejection here would
+  strand the UI mid-transition with stores already reset and no toast shown) —
+  a caught failure reports loudly, toasts, and leaves the job unacknowledged so
+  it re-prompts next load. All collaborators injected, mirrors
+  `handleOverlayExportCompletion.js`'s testable-injection pattern; duplicates
+  (deliberately, per the abstract-on-3rd-duplication rule) the minimal
+  select→mode→load sequence `ProjectsScreen.jsx:257-302`'s
+  `handleSelectProjectWithMode` also runs.
 - `components/FocusCompletionRecovery.jsx` — the App-level surface (mounted
   on both `App.jsx` returns, same double-mount pattern as `DraftReelPreview`).
   Renders `null` when `recovered` is null; otherwise a bottom-right card
-  (`EXPORT_JOBS.framing.completed` = "AI Focus ready" + the project name) with
-  View/Dismiss. **Option C (approved):** auto-invokes View exactly when the
-  completion was discovered while the user is idle on Clips home with nothing
-  selected (`editorMode === PROJECT_MANAGER && !selectedProjectId`) — every
-  other case (a different project selected, mid-annotate, etc.) shows the
-  passive card only. Mirrors the policy `handleOverlayExportCompletion.js`
+  (stacked above `GlobalExportIndicator`'s slot so the two never overlap)
+  showing `EXPORT_JOBS.framing.completed` ("AI Focus ready") + the project
+  name, with View/Dismiss. **Option C (approved):** auto-invokes View exactly
+  when the completion was discovered while the user is idle on Clips home with
+  nothing selected (`editorMode === PROJECT_MANAGER && !selectedProjectId`) —
+  every other case (a different project selected, mid-annotate, etc.) shows
+  the passive card only. Mirrors the policy `handleOverlayExportCompletion.js`
   already uses for the sibling Overlay completion ("only hijack the screen if
-  the user is still where the app put them").
+  the user is still where the app put them"). **Landmine (caught in review,
+  fixed before merge):** the auto-open decision must be claimed (the
+  per-job `autoTriedJobIdRef`) at FIRST OBSERVATION of a job, before the
+  idle-check runs — not only after the idle-check passes. Claiming it only on
+  a pass left a job discovered while the user was elsewhere (correctly showing
+  the passive card) still "untried" the next time that user happened to
+  navigate back to an empty home ON THEIR OWN, retroactively promoting a
+  passive-card case into an auto-open hijack — exactly what Option C exists to
+  prevent. Also owns `view()`'s outer catch (defense-in-depth: the auto-open
+  effect calls `view()` with no `.catch()` attached).
 - **Acknowledge-timing split (§6a):** `useExportRecovery.js`'s unacknowledged-
   jobs loop SKIPS `/api/exports/acknowledge` for a COMPLETE **framing** job
   specifically (still calls `reportRecoveredCompletion`) — every other job
@@ -188,7 +218,11 @@ recovery-path gap it left open.
   unconditional mount-time acknowledge (`rbNonDataWrite` reconciliation write).
   The framing job's acknowledge instead fires from `resumeFocusCompletion`
   (after `openPreview` succeeds) or `FocusCompletionRecovery`'s Dismiss
-  handler — i.e. a real user gesture, not a mount-time reconciliation. Why: an
+  handler, tied to View/Dismiss rather than mount-time reconciliation.
+  **Caveat:** the View arm also fires from Option C's auto-open effect, which
+  is the app deciding to show the preview, not a literal click — a defensible
+  exception (the preview genuinely was shown, so "acknowledged" stays honest),
+  but not a literal user gesture the way Dismiss is. Why defer at all: an
   unconditional mount-time acknowledge combined with "the card is gone once
   acknowledged" means a SECOND tab discard between the card rendering and the
   user tapping View would permanently lose the completion-preview moment — the
@@ -205,11 +239,21 @@ recovery-path gap it left open.
   projectId`, derived, never stored twice). The live completion path's old
   silent no-render (compound `showExportCompletePreview && exportPreviewUrl`
   gate just stayed false when `resolveWorkingVideoPreviewUrl` returned null)
-  is now a loud `console.error` — a real no-silent-fallback fix riding along
-  with the store move. Also gained the `openMode` staleness-scoping effect
-  (same 3-line pattern `DraftReelPreview.jsx:45-50` uses) so a leftover
-  `preview` payload can't resurrect on a later, unrelated entry into Focus for
-  the same project.
+  is now a loud `console.error` via the extracted `screens/focusCompletionOffer.js::offerFocusCompletionPreview`
+  (pulled out for unit-testability, mirroring `handleOverlayExportCompletion.js`) —
+  a real no-silent-fallback fix riding along with the store move.
+  **Landmine (caught in review, fixed before merge):** the `openMode`
+  staleness-scoping guard (mirrors `DraftReelPreview.jsx:45-50`'s "clear a
+  payload once the mode it was opened for is no longer current") must NOT live
+  inside `FocusScreen` — that component only mounts while `editorMode ===
+  FRAMING`, which is also always this feature's `openMode`, so
+  `openMode !== editorMode` could never be observed there (dead code by
+  construction). The guard lives in the always-mounted `FocusCompletionRecovery`
+  instead, which can actually see the user navigate away (e.g. the mobile back
+  button via `editorStore.setEditorModeFromPopState`, which doesn't itself
+  clear the preview) and drop the orphaned `preview` payload before it can
+  resurrect over a live editor on a later, unrelated re-entry into the same
+  project.
 - **QA gotcha for the next task touching this area:** `useExportRecovery`
   consumes `window.__bootstrapExports` (set by `App.jsx`'s
   `POST /api/bootstrap` response) BEFORE ever falling back to a direct

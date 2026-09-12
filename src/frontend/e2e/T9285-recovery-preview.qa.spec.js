@@ -66,19 +66,30 @@ function unacknowledgedFramingJob(projectId, projectName, jobId = 'e2e-job-1') {
   };
 }
 
-async function stubUnacknowledged(page, jobs) {
+async function stubUnacknowledged(page, jobs, { delayMs = 0 } = {}) {
   // T3370: the app's bootstrap payload already carries `exports.unacknowledged`
   // and useExportRecovery consumes THAT (window.__bootstrapExports) before ever
   // hitting this REST endpoint directly (it only falls back to the discrete
   // fetch if bootstrap didn't populate it in time) — so both must be stubbed,
   // or a reload never reaches this route at all.
-  await page.route('**/api/exports/unacknowledged', (route) => {
+  //
+  // `delayMs` (review fix): recovery discovery resolves fast enough after a
+  // reload that a `page.evaluate` call issued right after
+  // `waitForLoadState('domcontentloaded')` can lose the race against it —
+  // i.e. the app may already have decided idle-on-home (and auto-opened, per
+  // Option C) before a test gets to change that state. Delaying the response
+  // this route stub controls gives a subsequent evaluate() call a reliable
+  // window to win that race deterministically.
+  const delay = () => (delayMs > 0 ? new Promise((r) => setTimeout(r, delayMs)) : Promise.resolve());
+  await page.route('**/api/exports/unacknowledged', async (route) => {
+    await delay();
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ exports: jobs }) });
   });
   await page.route('**/api/bootstrap', async (route) => {
     const response = await route.fetch();
     const data = await response.json();
     data.exports = { ...(data.exports || {}), unacknowledged: jobs };
+    await delay();
     await route.fulfill({ response, contentType: 'application/json', body: JSON.stringify(data) });
   });
 }
@@ -112,7 +123,7 @@ test.describe('T9285: recovered Focus completion reaches the publish-exit previe
     await page.screenshot({ path: 'test-results/T9285-auto-open-preview.png' });
   });
 
-  test('(a) passive card when the completion is discovered while the user is elsewhere; (c) View opens the same action bar; (d) Dismiss acknowledges and clears', async ({ page }) => {
+  test('(a) passive card when the completion is discovered while the user is elsewhere; (c) View opens the same action bar', async ({ page }) => {
     const userId = makeUserId('passive');
     await loginTestUser(page, userId);
     const projectId = await createProject(page, userId, 'Passive Card Reel');
@@ -160,30 +171,106 @@ test.describe('T9285: recovered Focus completion reaches the publish-exit previe
     await page.screenshot({ path: 'test-results/T9285-passive-card-view.png' });
   });
 
-  test('(e) §6a re-prompt: a second discard BEFORE acting shows the card again, not vanished', async ({ page }) => {
+  test('(d) Dismiss acknowledges the job and clears the card WITHOUT navigating', async ({ page }) => {
+    const userId = makeUserId('dismiss');
+    await loginTestUser(page, userId);
+    const projectId = await createProject(page, userId, 'Dismiss Reel');
+    const otherProjectId = await createProject(page, userId, 'Currently Editing');
+
+    // Elsewhere, same as the passive-card scenario, so Dismiss is exercised
+    // against the passive card (not the auto-open path).
+    await page.evaluate(async (id) => {
+      const { useProjectsStore } = await import('/src/stores/projectsStore.js');
+      await useProjectsStore.getState().selectProject(id);
+    }, otherProjectId);
+    await page.waitForTimeout(300);
+
+    const ackRequests = [];
+    page.on('request', (req) => {
+      if (req.url().includes('/api/exports/acknowledge')) ackRequests.push(req.postDataJSON());
+    });
+    await page.evaluate(async ({ jobId, projectId, projectName }) => {
+      const { useFocusCompletionStore } = await import('/src/stores/focusCompletionStore.js');
+      useFocusCompletionStore.getState().noteRecovered({ jobId, projectId, projectName });
+    }, { jobId: 'e2e-job-dismiss', projectId, projectName: 'Dismiss Reel' });
+
+    const card = page.getByTestId('focus-completion-recovery');
+    await expect(card).toBeVisible({ timeout: 5000 });
+
+    await card.getByRole('button', { name: 'Dismiss' }).click();
+
+    await expect(page.getByTestId('focus-completion-recovery')).toHaveCount(0);
+    // No navigation: the action bar for the dismissed reel never appears, and
+    // the user's current selection (otherProjectId) is untouched.
+    await expect(page.getByRole('button', { name: /Publish without spotlight/i })).toHaveCount(0);
+    await expect.poll(() => ackRequests.flat()).toContain('e2e-job-dismiss');
+    await page.screenshot({ path: 'test-results/T9285-dismiss.png' });
+  });
+
+  test('(e) §6a re-prompt: repeated discovery BEFORE the user acts never silently acknowledges, and the card persists', async ({ page }) => {
     const userId = makeUserId('reprompt');
     await loginTestUser(page, userId);
     const projectId = await createProject(page, userId, 'Reprompt Reel');
+    const otherProjectId = await createProject(page, userId, 'Currently Editing');
+    const jobId = 'e2e-job-3';
 
-    const job = unacknowledgedFramingJob(projectId, 'Reprompt Reel', 'e2e-job-3');
-    await stubUnacknowledged(page, [job]);
+    // T9285 review fix: the earlier version of this test used TWO idle-on-home
+    // reloads, so Option C auto-opened on the FIRST one — and Option C's
+    // auto-open legitimately DOES acknowledge after opening (that's a real,
+    // separate, already-covered behavior — see test (a)/(b)'s "acknowledge
+    // fires AFTER View succeeds"). Asserting "never acknowledged" against that
+    // scenario was asserting something the app doesn't even claim.
+    //
+    // §6a's actual claim is narrower: the RECONCILIATION step itself
+    // (useExportRecovery's unacknowledged-jobs loop) must never acknowledge a
+    // framing completion on its own, no matter how many times it re-discovers
+    // the SAME still-unacknowledged job — only a real View/Dismiss gesture
+    // (including Option C's auto-invoked View) may. Staying "elsewhere" (a
+    // project selected) for the whole test keeps Option C from ever firing,
+    // isolating that claim: the card must persist across repeated discovery,
+    // and zero acknowledge requests may ever contain this job id.
+    const ackRequests = [];
+    page.on('request', (req) => {
+      if (req.url().includes('/api/exports/acknowledge')) ackRequests.push(req.postDataJSON());
+    });
+
+    const selectOtherProject = () => page.evaluate(async (id) => {
+      const { useProjectsStore } = await import('/src/stores/projectsStore.js');
+      await useProjectsStore.getState().selectProject(id);
+    }, otherProjectId);
+
+    await selectOtherProject();
+    await page.waitForTimeout(300);
+
+    const job = unacknowledgedFramingJob(projectId, 'Reprompt Reel', jobId);
+    // Delayed (see stubUnacknowledged): discovery resolves fast enough after a
+    // reload that re-selecting "elsewhere" right after domcontentloaded can
+    // otherwise lose the race and land on idle-on-home's auto-open instead.
+    await stubUnacknowledged(page, [job], { delayMs: 500 });
     await stubPreviewUrl(page, projectId, 'https://example.com/fake-preview-3.mp4');
 
-    // First discard: auto-opens (idle on home). Do NOT act on it.
+    // First discard: a genuine reload drives the REAL recovery path (not a
+    // manually-injected store call). Re-select "elsewhere" immediately after
+    // the reload — before the app's own (deliberately delayed) recovery
+    // discovery resolves — so this lands on the passive-card case, not auto-open.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /Publish without spotlight/i })).toBeVisible({ timeout: 15000 });
+    await selectOtherProject();
 
-    // A SECOND simulated discard before the user acted: the job is STILL
-    // unacknowledged server-side (framing acknowledge is deferred, §6a), so the
-    // same stub is faithful to what the real server would return.
+    await expect(page.getByTestId('focus-completion-recovery')).toBeVisible({ timeout: 15000 });
+    expect(ackRequests.flat(), 'discovery alone must never acknowledge').not.toContain(jobId);
+
+    // A SECOND discard before the user ever tapped View/Dismiss — the job is
+    // (correctly) STILL unacknowledged server-side, so the same stub is
+    // faithful to what a real reload would find.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
+    await selectOtherProject();
 
-    // The completion-preview moment must not have vanished: either the passive
-    // card reappears or (idle-on-home, same as before) it auto-opens again —
-    // either way the user still gets a path to the same action bar.
-    await expect(page.getByRole('button', { name: /Publish without spotlight/i })).toBeVisible({ timeout: 15000 });
+    // The completion-preview moment did not vanish — the card is back.
+    await expect(page.getByTestId('focus-completion-recovery')).toBeVisible({ timeout: 15000 });
+    expect(ackRequests.flat(), 'the framing job must never be mount-time-acknowledged').not.toContain(jobId);
+
     await page.screenshot({ path: 'test-results/T9285-reprompt-after-second-discard.png' });
   });
 });

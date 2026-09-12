@@ -43,11 +43,24 @@ async function acknowledgeJob(jobId) {
  * was discovered while the user is still idle on Clips home with nothing
  * selected — the app's own redirect put them there, so restoring the screen
  * is repair, not hijack. Every other case shows the passive card.
+ *
+ * Also owns the `preview` payload's staleness-scoping guard (review fix,
+ * mirroring DraftReelPreview.jsx:45-50). FocusScreen only mounts while
+ * editorMode === FRAMING, which is also always the `openMode` this feature
+ * stamps — so a guard placed INSIDE FocusScreen can never observe
+ * `openMode !== editorMode` (it would already be unmounted). This component
+ * is the always-mounted sibling (same double-mount as DraftReelPreview), so
+ * it is the one place that can actually see the user navigate away (e.g. the
+ * mobile back button via `editorStore.setEditorModeFromPopState`, which does
+ * not itself clear the preview) and clear the now-orphaned payload before it
+ * can resurrect over a live editor on a later, unrelated re-entry.
  */
 export function FocusCompletionRecovery() {
   const recovered = useFocusCompletionStore((s) => s.recovered);
   const clearRecovered = useFocusCompletionStore((s) => s.clearRecovered);
+  const completionPreview = useFocusCompletionStore((s) => s.preview);
   const openPreview = useFocusCompletionStore((s) => s.openPreview);
+  const closePreview = useFocusCompletionStore((s) => s.closePreview);
   const editorMode = useEditorStore((s) => s.editorMode);
   const selectedProjectId = useProjectsStore((s) => s.selectedProjectId);
   const { loadProject } = useProjectLoader();
@@ -65,6 +78,10 @@ export function FocusCompletionRecovery() {
           selectProject: (id) => useProjectsStore.getState().selectProject(id),
           setEditorMode: (mode) => useEditorStore.getState().setEditorMode(mode),
           loadProject,
+          // Mirrors FocusScreen.jsx's live completion path (refreshProject
+          // before resolving the preview URL) — same underlying store action
+          // FocusScreen's own `useProject().refresh` calls.
+          refreshProject: () => useProjectsStore.getState().refreshSelectedProject(),
           resolvePreviewUrl: resolveWorkingVideoPreviewUrl,
           openPreview,
           acknowledgeJob,
@@ -73,23 +90,42 @@ export function FocusCompletionRecovery() {
           EDITOR_MODES,
         },
       );
+    } catch (err) {
+      // resumeFocusCompletion already catches its own failures and reports
+      // them (loud log + toast); this is a last-resort net so a bug in the
+      // wiring above can never surface as an unhandled rejection — the auto-
+      // open effect below calls `view()` with no attached `.catch()`.
+      console.error('[FocusCompletionRecovery] view() failed unexpectedly', err);
     } finally {
       clearRecovered();
       setResuming(false);
     }
   }, [loadProject, openPreview, clearRecovered]);
 
-  // Option C auto-open: only when idle on home with nothing selected, and only
-  // once per recovered job (a dismissed/viewed job clears `recovered`, so this
-  // never re-fires for the same completion).
+  // Option C auto-open: only when idle on home with nothing selected. The
+  // decision is made ONCE, at first observation of a given job — the ref is
+  // claimed BEFORE the idle-on-home check, not after it passes. Claiming it
+  // only on a pass meant a job discovered while the user was elsewhere (shows
+  // the passive card, correctly) would still be "untried" the NEXT time the
+  // user happened to land back on home with nothing selected — even if that
+  // later visit was the user's own deliberate navigation, not the app's
+  // redirect. That retroactively promoted a passive-card case into a hijack,
+  // exactly what Option C exists to avoid.
   useEffect(() => {
     if (!recovered) return;
     if (autoTriedJobIdRef.current === recovered.jobId) return;
+    autoTriedJobIdRef.current = recovered.jobId;
     const idleOnHome = editorMode === EDITOR_MODES.PROJECT_MANAGER && !selectedProjectId;
     if (!idleOnHome) return;
-    autoTriedJobIdRef.current = recovered.jobId;
     view(recovered.jobId, recovered.projectId);
   }, [recovered, editorMode, selectedProjectId, view]);
+
+  // Staleness-scoping guard for the `preview` payload (see class doc above).
+  useEffect(() => {
+    if (completionPreview && completionPreview.openMode !== editorMode) {
+      closePreview();
+    }
+  }, [completionPreview, editorMode, closePreview]);
 
   if (!recovered) return null;
 
@@ -99,7 +135,10 @@ export function FocusCompletionRecovery() {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-40" data-testid="focus-completion-recovery">
+    // T9285: stacked ABOVE GlobalExportIndicator's bottom-4/right-4 slot (design
+    // §5 risk: "two bottom-right surfaces collide") so a concurrent export
+    // indicator never renders on top of this card.
+    <div className="fixed bottom-24 right-4 z-40" data-testid="focus-completion-recovery">
       <div className="bg-gray-800 border border-gray-600 rounded-lg shadow-xl px-4 py-3 w-64">
         <div className="text-sm font-medium text-white">{EXPORT_JOBS.framing.completed}</div>
         <div className="text-xs text-gray-400 truncate mb-3">{recovered.projectName || 'Your reel'}</div>
