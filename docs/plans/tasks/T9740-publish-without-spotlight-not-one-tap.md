@@ -1,10 +1,33 @@
 # T9740: "Publish without spotlight" doesn't publish in one tap
 
-**Status:** STAGING
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-12
 **Updated:** 2026-09-12
+
+## ⚠ CONFIRMED REGRESSION — one-tap contract still broken, now via a WORSE mechanism
+
+**2026-09-12 live staging re-drive found the merged fix (PR #417, `0e9ae01f`) does NOT deliver
+one-tap publish, and is arguably worse than the original bug.** The specific race originally
+diagnosed (`exportButtonRef` null at the 500ms mark) is genuinely fixed — the scheduled poll now
+reliably finds a non-null ref. But it finds the WRONG ref: `scheduleExportWhenReady`'s first
+readiness check runs SYNCHRONOUSLY on the same tick as the click, before React has even processed
+the `setEditorMode('overlay')` state change — so it fires against Focus's own still-mounted export
+button (the "Generate AI Focus" control, which shares the same ref) instead of waiting for
+Overlay's. This silently POSTs to the FRAMING render endpoint (`/api/export/render`) instead of the
+overlay one (`/api/export/render-overlay`), **burning a real ~90s render** that produces a
+`working_video` update with no `final_video_id`, then the UI silently reverts to the plain
+pre-export button with no toast, no error, no completion dialog — the user is stranded on Overlay
+exactly as before, just via a new mechanism that also wastes a real render. See "Staging
+Verification (2026-09-12)" near the end of this file for full evidence and a code-supported
+root-cause hypothesis (the ref-sharing/tick-timing mechanism, not just "still racy").
+
+**Status set to WIP, not STAGING** — this is a confirmed, reproducible regression on the currently
+merged code, not a "still unverified" gap. Per this project's model policy, a second implementation
+attempt should not be another Sonnet guess: the first fix already went through an expert-agent
+design consult and still missed this. **Escalate to the expert agent again with this specific
+finding before attempting another fix.**
 
 ## Source
 
@@ -121,3 +144,118 @@ merged per this project's merge-when-provably-verified policy (genuine red->gree
 modulo the known pre-existing flake), consistent with "staging IS the test phase."
 
 PR: #417 (merged, `0e9ae01f`). Branch: `feature/T9740-publish-without-spotlight-not-one-tap` (deleted post-merge).
+
+## Staging Verification (2026-09-12)
+
+**Verdict: FAIL** on the "Publish without spotlight completes in one tap" acceptance criterion.
+**PASS** on the "Add spotlight path continues to work" acceptance criterion (no regression).
+
+Performed the same live-browser re-drive T9710 used to originally find this bug: real
+`dev-login` (`X-Test-Mode: true`) as the same disposable staging fixtures, a real AI-Focus render
+against real staging infra (Modal), watching the network log through the Overlay transition.
+Confirmed running against the actual merged build the whole time (`x-app-version:
+0e9ae01f42b261cc6b0fc69bdb9a62b70740d056`, console `[Build] 0e9ae01f (#5007)`).
+
+### Setup
+
+- **Accounts** (same as T9710, no new accounts created): publisher `e2e@test.local` (user
+  `90625c7c-0b82-481d-85f7-2b9308beb831`, profile `a1e7e514`); viewer `e2e-gate@test.local` was not
+  needed this round (AC4 link-access was already verified by T9710 and is out of scope here — this
+  task only reopens AC2/AC3).
+- **Game**: the same disposable fixture game T9710 used, "Vs Carlsbad SC Aug 30" (game id 1,
+  90s test video). The parent walkthrough's own game/objects were never opened.
+- **New test objects created** (non-overlapping timecodes, clear of T9710's existing annotations at
+  0-3s, 3.996-15.996s, 29.997-41.997s, 49.177-61.177s):
+  - **project 5, "T9740 TEST clip (no spotlight)"** — play marked 1:06-1:18.
+  - **project 6, "T9740 TEST clip (add spotlight)"** — play marked 1:17-1:29.
+- Both clips completed a real AI-Focus render (one manually-placed crop keyframe, ~65-95s render
+  including Modal player-detection) before reaching the T9590 post-Focus dialog.
+
+### AC2 — Publish without spotlight (project 5) — FAIL
+
+Clicked **Publish without spotlight** from the T9590 dialog. Watched the network log continuously
+through the Overlay transition (no fixed wait — polled every few seconds):
+
+1. Navigated to `/overlay` as expected.
+2. Within ~3s, a SECOND `POST /api/export/render` fired automatically
+   (`export_id=export_1789182958506_xx8pit1`, body `{project_id:5, export_mode:"fast",
+   target_fps:30, include_audio:true}`) — **this is new**: on the original bug, nothing fired for
+   90+ seconds. `scheduleExportWhenReady`'s fix to the null-ref race genuinely works: the poll DOES
+   find a non-null `exportButtonRef.current` quickly and DOES call `triggerExport()`.
+3. The render progressed visibly (30% -> 90% "Uploading" -> complete) and **did** update the
+   project: `GET /api/projects/5` afterward showed `working_video_id: 5` (a fresh render,
+   timestamped `2026-09-12 03:16:50`), confirming a real render completed successfully.
+4. **But `final_video_id` stayed `null`, `has_final_video: false`.** No `/api/downloads/publish`
+   call ever fired. No completion dialog appeared. After the render finished, the UI silently
+   reverted to the plain pre-export **"Export clip with effects"** button — as if nothing had
+   happened. Waited 35+ seconds past completion; no change, no toast, no error.
+5. This is a **contract failure, not merely "still slow"**: the wrong export endpoint fired.
+   `/api/export/render` is the FRAMING/AI-Focus render endpoint; the Overlay/spotlight-less render
+   the "one tap" mechanism needs is `POST /api/export/render-overlay` (confirmed distinct endpoint,
+   `src/backend/app/routers/export/overlay.py:2856`). The auto-triggered call hit the FRAMING
+   endpoint, so the backend only ever updated `working_video`, never produced a `final_video`, and
+   `App.jsx`'s `handleExportComplete` (`src/frontend/src/App.jsx:582-633`) — which gates the
+   auto-publish on `completed?.mode === EDITOR_MODES.OVERLAY` — never even entered its auto-publish
+   branch, because the completion it received reported `mode: 'framing'`.
+6. Manually clicking **Export clip with effects** afterward (on the SAME project, now in a genuine
+   Overlay-mounted state) worked correctly: fired `POST /api/export/render-overlay` (200), showed
+   the proper T9110 completion dialog with a **Publish** primary action, and clicking it fired
+   `POST /api/downloads/publish/5` (200) — clip published normally. This isolates the bug to the
+   AUTO-TRIGGER specifically, not the Overlay export/publish mechanism in general.
+
+**Root-cause hypothesis (code-supported, not breakpoint-confirmed — flagging as hypothesis per
+this project's convention, same as T9740's own original "Root Cause" section):**
+`scheduleExportWhenReady`'s `isReady: () => !!exportButtonRef.current` check is necessary but not
+sufficient. `exportButtonRef` is a SINGLE ref shared across mode-specific button instances — Focus's
+own `ExportButtonSection` (the "Generate AI Focus" control, `FocusScreen.jsx`
+`FocusModeView.jsx:813-829`) stays mounted and bound to that ref for as long as `videoUrl` is set
+and the view isn't fullscreen — which spans the ENTIRE time the T9590 dialog is showing on top of
+it (the dialog is explicitly "an overlay ON TOP of the still-mounted Focus editor" per the
+`handleRefocus` comment) and beyond. `scheduleExportWhenReady`'s `tick()` runs SYNCHRONOUSLY once,
+immediately, before returning (`FocusScreen.jsx:1160-1165` calls `setEditorMode('overlay')` then
+`scheduleExportWhenReady({...})` with no `await`/deferral in between) — so its first readiness
+check runs on the SAME tick as the click handler, before React has even processed the
+`setEditorMode('overlay')` state change, let alone unmounted Focus / mounted Overlay. At that
+instant `exportButtonRef.current` is non-null, but it's still FOCUS's instance (closed over
+`editorMode === FRAMING`), so `fire()` calls `triggerExport()` on it, and
+`ExportButtonContainer.jsx`'s FRAMING branch (`:601-710`) posts to `/api/export/render` — exactly
+matching what was observed. The fix's premise ("exportButtonRef only attaches once Overlay's export
+button mounts") assumed the ref starts out null before Overlay mounts; in reality it starts
+non-null (Focus's own button) and stays non-null straight through the mode switch, so the poll
+"succeeds" on tick zero against the wrong target instead of ever waiting for Overlay. A correct
+`isReady` would need to confirm identity/mode (e.g. that the CURRENT `editorMode` store state is
+already `overlay`, or that Overlay's button specifically — not just some button — has attached),
+not just non-nullness.
+
+### AC3 — Add spotlight (project 6) — PASS, no regression
+
+Clicked **Add spotlight** from the T9590 dialog (project 6). Confirmed no auto-export fired (by
+design — `handleAddSpotlight` never calls `scheduleExportWhenReady`): waited 3s in Overlay mode,
+only the plain "Export clip with effects" button was present, no export in progress. Manually
+clicked it: `POST /api/export/render` (48) for the earlier AI-Focus stage, then
+`POST /api/export/render-overlay` (69, 200) for the actual spotlight export, completion dialog
+appeared with **Publish** primary, clicked it, `POST /api/downloads/publish/6` (200) — published
+correctly in a clean two-click flow (Export -> Publish) exactly matching T9710's original AC3
+finding. **The T9740 fix did not regress this path.**
+
+### Cleanup
+
+- No share links were created for either test clip (this task's scope was AC2/AC3 only, not AC4
+  link access, which T9710 already verified) — nothing to revoke.
+- Both `T9740 TEST clip *` objects (project 5, project 6) were left in place on the disposable
+  `e2e@test.local` fixture account, both now published, clearly labelled, same disposition T9710
+  used for its own test objects. The parent walkthrough's objects and T9710's own test clips were
+  never opened or touched.
+
+### Recommendation
+
+This is more than "still unverified" — it's a confirmed, reproducible failure of the acceptance
+criterion under real staging conditions, with a different (and arguably worse — it now burns a
+real render silently) failure mode than the one originally diagnosed. Recommend a follow-up fix
+task before promoting this task past STAGING: `scheduleExportWhenReady`'s readiness check needs to
+distinguish "a button is mounted" from "the OVERLAY button is mounted," most likely by gating on
+the store's `editorMode === EDITOR_MODES.OVERLAY` in addition to `!!exportButtonRef.current`, or by
+having Overlay's `ExportButtonSection` claim the ref through a mechanism that can't be satisfied by
+Focus's still-mounted instance (e.g. a generation/identity token bumped on mount). Per this
+project's async-timing escalation policy, this warrants another expert-agent consult rather than a
+second Sonnet guess, given the first fix already went through that process and still missed this.
