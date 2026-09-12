@@ -1,6 +1,6 @@
 # T9760: New signups are not receiving the 80-credit quest_upfront grant on production
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-09-12

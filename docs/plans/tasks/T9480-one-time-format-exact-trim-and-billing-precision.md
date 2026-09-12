@@ -1,10 +1,10 @@
 # T9480: One time-format rule, exact trim entry, and honest billable duration
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-09-10
-**Updated:** 2026-09-10
+**Updated:** 2026-09-12
 
 ## Source
 
