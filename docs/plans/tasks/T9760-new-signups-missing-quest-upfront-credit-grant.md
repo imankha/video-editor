@@ -1,10 +1,77 @@
-# T9760: New signups are not receiving the 80-credit quest_upfront grant on production
+# T9760: Production backend is 744 commits / 11 days behind master (found via missing quest_upfront grant)
 
-**Status:** WIP
+**Status:** WAITING ON USER - root cause confirmed, no code fix needed, needs a deploy decision
 **Impact:** 8
-**Complexity:** 4
+**Complexity:** 1 (was 4 - root cause is a deploy gap, not a code bug)
 **Created:** 2026-09-12
 **Updated:** 2026-09-12
+
+## ROOT CAUSE CONFIRMED (2026-09-12): not a code bug - production is running stale code
+
+Expert investigation (pure code-reading, no prod DB access) found the grant code on master is
+correct and unconditional (`session_init.py:305-329`, `credit_ledger.py:706-737` - both added by
+T8120, merged 2026-09-01T17:24:36-07:00, commit `7b8a27fc`).
+
+**Production's last backend deploy is commit `d9621161`, 2026-09-01T05:16:49-07:00** (tag
+`deploy/backend/2026-09-01`) - confirmed live via an unauthenticated `GET
+https://reel-ballers-api.fly.dev/api/version` returning `{"version":"d9621161...", "build":4290}`.
+That deploy happened **~12 hours BEFORE T8120 merged**. `git merge-base --is-ancestor 7b8a27fc
+deploy/backend/2026-09-01` confirms T8120 is not an ancestor of the deployed commit. Master HEAD
+is build 5034 - **prod is 744 commits behind**.
+
+Prod is still running the PRE-T8120 drip model (`quest_config.py` at `d9621161`): 8 credits
+upfront + 80 more earned incrementally across the 4 walkthrough quests (`source='quest_reward'`,
+key `quest:{quest_id}`), never `questbank:{user_id}`. The verification query searching for
+`idempotency_key LIKE 'questbank:%'` correctly returns nothing for every prod user, **by
+construction** - those rows cannot exist under the model actually running. This isn't broken code;
+it's an accurate description of a superseded product decision that hasn't shipped yet.
+
+The **frontend** deploy is equally stale (`deploy/frontend/2026-09-01`) and agrees with the stale
+backend - only `src/landing` auto-deploys on every master push (`deploy-landing.yml`), which is
+why the landing page's copy can describe a model production doesn't actually run.
+
+### The fix is a deploy, not a code change
+
+1. Run `scripts/deploy_production.sh` (full deploy; it also runs pending prod migrations).
+2. **Existing users self-heal automatically - no remediation script needed.**
+   `grant_quest_chain_credits` computes the remainder as `QUEST_CHAIN_CREDIT_TOTAL -
+   already_granted(quest_reward + quest_upfront)` and runs on every user's next
+   `_init_slow_path` - a signup-only user gets the full 80 on next login post-deploy, someone who
+   already earned some quest rewards gets only their remainder, no double-credit, no script.
+3. Post-deploy verification: re-run `scripts/verify_t9680_credits.py`, confirm `/api/version`
+   build > 4329 and a fresh signup shows `questbank_amt=80`.
+
+### Critical cross-contamination: this invalidates part of T9680's "current" framing
+
+**T9750's round-half-up rounding fix (PR #420) has ALSO not reached production** - it merged to
+master well after the 2026-09-01 prod deploy tag. T9680's Decision Record's "superseded by T9750"
+note describes master, not what users are actually experiencing right now. **The original
+walkthrough complaint (6.027s clip charged 7 credits via `ceil`) is still the LIVE production
+behavior today**, not a historical/fixed finding. Any copy work (T9480, T9650) citing the
+round-half-up rule as current must not ship user-facing claims ahead of an actual prod deploy - or
+must explicitly sequence itself after one.
+
+**Every other T9680 production-verification finding should be treated as a description of build
+4290 (2026-09-01), not master** - re-read them with that lens before relying on them further.
+
+### AC #2 answer: independent issue, and the two interact in a way that INVERTS T9680's recommended fix
+
+Not the same root cause as T9680's homepage-vs-in-app wording mismatch (that's real code/copy
+drift, unrelated to deploy staleness). But they interact: T9680 recommended dropping the homepage's
+"just for finishing the walkthroughs" qualifier as inaccurate - **that qualifier is currently
+ACCURATE for the backend actually serving production**. Dropping it now (before a deploy) would
+create a customer-facing lie in the other direction. **Sequence any homepage copy change (T9650)
+after the prod deploy, not before.**
+
+### One item still open before treating this as fully closed
+
+Confidence that prod lacks the T8120 code is certain (version-endpoint + git-ancestry proof).
+Confidence that deploying fixes it is high but not yet proven live. Cheapest discriminator not yet
+run: query STAGING (which has run master since 2026-09-01) for any `questbank:%` row on an account
+created since then - if staging ALSO shows none, there is a second real bug underneath this one.
+Recommend running that staging check before/alongside the prod deploy decision.
+
+---
 
 ## Source
 
