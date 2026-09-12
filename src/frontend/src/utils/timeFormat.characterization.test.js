@@ -175,9 +175,12 @@ pin('timeFormat.formatTime (#1)', tfFormatTime, [
   '00:00:00.000', '00:00:00.000', '00:00:00.000',
 ]);
 
-pin('timeFormat.formatTimeSimple (#2)', tfFormatTimeSimple, [
+// T9480 Stage D2: formatTimeSimple gained the hours case (a timeline hover
+// past 1h used to read "60:00.000"; it now reads "1:00:00.000") -- this row
+// is intentionally UPDATED, not preserved, to document that flip.
+pin('timeFormat.formatTimeSimple (#2, post-Stage-D2)', tfFormatTimeSimple, [
   '0:00.000', '0:00.400', '0:00.500', '0:02.972', '0:06.027',
-  '0:59.969', '1:00.000', '59:59.900', '60:00.000',
+  '0:59.969', '1:00.000', '59:59.900', '1:00:00.000',
   '0:00.000', '0:00.000', '0:00.000',
 ]);
 

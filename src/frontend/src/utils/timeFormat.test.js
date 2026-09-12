@@ -10,6 +10,7 @@ import {
   parseTimeInput,
   UI_STEP_FPS,
   snapToStep,
+  formatTimeSimple,
 } from './timeFormat';
 
 describe('formatGameClock (T3920 soccer notation)', () => {
@@ -205,6 +206,17 @@ describe('parseTimeInput (T9480 -- never returns 0 for garbage)', () => {
   it('a genuinely-typed zero parses to 0, distinguishable from garbage-> null', () => {
     expect(parseTimeInput('0')).toBe(0);
     expect(parseTimeInput('0:00')).toBe(0);
+  });
+});
+
+describe('formatTimeSimple (T9480 Stage D2 -- gained the hours case)', () => {
+  it('stays M:SS.mmm under an hour (unchanged)', () => {
+    expect(formatTimeSimple(62.5)).toBe('1:02.500');
+  });
+
+  it('shows H:MM:SS.mmm past an hour instead of uncapped minutes', () => {
+    // 5703.5s = 1h 35m 3.5s -- used to read "95:03.500"; now "1:35:03.500".
+    expect(formatTimeSimple(5703.5)).toBe('1:35:03.500');
   });
 });
 

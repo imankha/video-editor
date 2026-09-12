@@ -35,12 +35,18 @@ export function formatTimeSimple(seconds) {
     return '0:00.000';
   }
 
-  const minutes = Math.floor(seconds / 60);
+  // T9480 Stage D2: gained the hours case -- a timeline hover past 1h used to
+  // read "95:03.123" (uncapped minutes); it now reads "1:35:03.123".
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
   const secs = Math.floor(seconds % 60);
   const millis = Math.floor((seconds % 1) * 1000);
   const ss = String(secs).padStart(2, '0');
   const mmm = String(millis).padStart(3, '0');
 
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${ss}.${mmm}`;
+  }
   return `${minutes}:${ss}.${mmm}`;
 }
 
