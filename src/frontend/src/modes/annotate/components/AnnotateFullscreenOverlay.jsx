@@ -15,7 +15,7 @@ import { Toggle, Button } from '../../../components/shared/Button';
 import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialog';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
-import { RATING_NOTATION, getRatingCaption, getRatingLabel } from '../../../components/shared/clipConstants';
+import { getRatingCaption, getRatingLabel } from '../../../components/shared/clipConstants';
 import { ANNOTATE } from '../../../config/displayNames';
 
 // T9580: the "Save & open …" confirm-dialog destination noun, keyed by stage
@@ -78,12 +78,15 @@ function StarRating({ rating, onRatingChange, size = 24 }) {
           />
         </button>
       ))}
+      {/* T9630 N35: the visible text IS the canonical mapping (was the bare
+          chess-notation glyph sitting next to the stars — the literal "four
+          stars and an exclamation mark compete" bug the report named). */}
       <span
-        className="ml-2 text-lg font-bold text-white"
+        className="ml-2 text-sm font-bold text-white"
         title={getRatingLabel(rating)}
         aria-label={getRatingLabel(rating)}
       >
-        {RATING_NOTATION[rating]}
+        {getRatingLabel(rating)}
       </span>
     </div>
   );
@@ -107,6 +110,25 @@ function CutFromAngleChip({ name }) {
       </span>
       <p className="text-xs text-violet-300/80">This play will be cut from {name}.</p>
     </div>
+  );
+}
+
+// T9630: labels/colors for the Unsaved/Saving/Saved/error tri-state — derived
+// from real persistence state (see `displayStatus` below), never asserted.
+const SAVE_STATUS_COPY = {
+  unsaved: { text: 'Unsaved changes', className: 'text-amber-400' },
+  saving: { text: 'Saving...', className: 'text-gray-400' },
+  saved: { text: 'Saved', className: 'text-green-400' },
+  error: { text: "Couldn't save — try again", className: 'text-red-400' },
+};
+
+function SaveStatusBadge({ status }) {
+  const copy = SAVE_STATUS_COPY[status];
+  if (!copy) return null;
+  return (
+    <span data-testid="save-status" className={`text-xs ${copy.className}`}>
+      {copy.text}
+    </span>
   );
 }
 
@@ -254,11 +276,30 @@ export function AnnotateFullscreenOverlay({
   // create-mode open that ends without a save (see effect below). Set true by
   // handleSave so a saved open never beacons.
   const savedThisOpenRef = useRef(false);
+  // T9630: real persistence state for the Unsaved/Saving/Saved indicator,
+  // driven ONLY by the Save gesture's promise (never a reactive write) —
+  // 'idle' | 'saving' | 'saved' | 'error'. A rejected/failed save leaves this
+  // at 'error' AND skips the close/resume call below, so the form (and every
+  // field the user typed) stays exactly as it was — no reset, no silent claim
+  // of success.
+  const [saveStatus, setSaveStatus] = useState('idle');
+  // T9630: the desktop-strip CREATE save stays open and rehydrates from the
+  // just-saved region (T9330) — that rehydration is THIS save's own
+  // existingClip transition, not a switch to a different clip, so the reset
+  // effect below must not wipe the 'saved' status it just set. Armed only in
+  // that one branch of handleSave, consumed on the very next existingClip
+  // change.
+  const skipNextStatusResetRef = useRef(false);
 
   // Reset form when existingClip changes (switching between create/edit mode)
   useEffect(() => {
     const t = currentTimeRef.current;
     setIsEditingName(false); // T8760: close inline name editing on clip switch
+    if (skipNextStatusResetRef.current) {
+      skipNextStatusResetRef.current = false;
+    } else {
+      setSaveStatus('idle');
+    }
     if (existingClip) {
       setRating(existingClip.rating || DEFAULT_RATING);
       setSelectedTags(existingClip.tags || []);
@@ -384,8 +425,11 @@ export function AnnotateFullscreenOverlay({
     setIsNameManuallyEdited(true);
   };
 
-  const handleSave = () => {
-    // T8140: this open ended in a save — suppress the abandonment beacon.
+  const handleSave = async () => {
+    // T8140: this open ended in a save ATTEMPT — suppress the abandonment
+    // beacon. Set synchronously (not after the await below) since the beacon's
+    // own cleanup can fire on the very next render (e.g. a rerender that flips
+    // isVisible before the save promise settles).
     savedThisOpenRef.current = true;
     // T7540: auto-commit any teammate text typed but not Enter-committed (same
     // effect as pressing Enter) so a pending tag never dead-ends Save. Teammates
@@ -433,6 +477,26 @@ export function AnnotateFullscreenOverlay({
       };
       savePromise = onCreateClip(clipData);
     }
+    // T9630: derive Unsaved/Saving/Saved from the REAL persistence outcome —
+    // wait for the save to actually land before claiming success. A save that
+    // resolves to exactly `false` (onCreateClip/onUpdateClip's real
+    // create/update result) failed: show the error state, leave every field
+    // exactly as the user left it, and do NOT close or resume — a failure must
+    // never look identical to a success. Anything else (true, or the bare
+    // `undefined` older callers/tests resolve with) is a success.
+    setSaveStatus('saving');
+    let success;
+    try {
+      success = await savePromise;
+    } catch (err) {
+      console.error('[AnnotateFullscreenOverlay] save threw', err);
+      success = false;
+    }
+    if (success === false) {
+      setSaveStatus('error');
+      return false;
+    }
+    setSaveStatus('saved');
     // T9330: NO form reset here anymore. On the desktop strip the editor STAYS
     // OPEN after a create and rehydrates from the just-saved region via the
     // [existingClip] effect (the single form-population path) — resetting to
@@ -443,11 +507,14 @@ export function AnnotateFullscreenOverlay({
     // T9330: resume playback. The desktop strip's CREATE save keeps the editor
     // open (resume playback only); everything else closes as before.
     if (!isEditMode && layout === 'strip') {
+      // T9630: this save's own existingClip rehydration is about to fire the
+      // reset effect — don't let it wipe the 'saved' status we just set.
+      skipNextStatusResetRef.current = true;
       (onResumePlaybackOnly || onResume)();
     } else {
       onResume();
     }
-    return savePromise;
+    return true;
   };
   handleSaveRef.current = handleSave;
 
@@ -482,6 +549,24 @@ export function AnnotateFullscreenOverlay({
   };
 
   if (!isVisible) return null;
+
+  // T9630: the Unsaved/Saving/Saved indicator — Saving/error come straight
+  // from the last Save gesture's real outcome; a genuine unsaved edit ALWAYS
+  // wins over a stale 'saved' from an earlier save (hasUnsavedEdits() is
+  // re-derived from current field state every render, so this can never claim
+  // "Saved" while the form no longer matches what was persisted). Create mode
+  // has no persisted baseline to diff against — it only ever shows
+  // saving/saved/error, never a standing "Unsaved" (the T8140 reassurance line
+  // already covers that a fresh form isn't yet saved).
+  const displayStatus = saveStatus === 'saving'
+    ? 'saving'
+    : saveStatus === 'error'
+      ? 'error'
+      : (isEditMode && hasUnsavedEdits())
+        ? 'unsaved'
+        : saveStatus === 'saved'
+          ? 'saved'
+          : null;
 
   // T8600: shared disclosure label — surfaces existing tag/note content so an
   // edit-mode user can see there's hidden content before opening it.
@@ -702,19 +787,24 @@ export function AnnotateFullscreenOverlay({
   // always visible without scrolling (390x844 mobile) — the body scrolls, the
   // footer does not. Shared by the inline and overlay layouts.
   const actionsFooter = (
-    <div className="flex gap-3">
-      <button
-        onClick={handleSave}
-        className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
-      >
-        {isEditMode ? ANNOTATE.UPDATE_PLAY : (createProject ? ANNOTATE.SAVE_PLAY_AND_CLIP : ANNOTATE.SAVE_PLAY)}
-      </button>
-      <button
-        onClick={onClose}
-        className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
-      >
-        Cancel
-      </button>
+    <div>
+      {displayStatus && (
+        <div className="mb-1.5"><SaveStatusBadge status={displayStatus} /></div>
+      )}
+      <div className="flex gap-3">
+        <button
+          onClick={handleSave}
+          className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+        >
+          {isEditMode ? ANNOTATE.UPDATE_PLAY : (createProject ? ANNOTATE.SAVE_PLAY_AND_CLIP : ANNOTATE.SAVE_PLAY)}
+        </button>
+        <button
+          onClick={onClose}
+          className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 
@@ -800,7 +890,10 @@ export function AnnotateFullscreenOverlay({
           variant: 'primary',
           onClick: async () => {
             setFocusConfirmOpen(false);
-            await handleSave();
+            // T9630: a failed save must not navigate away — that would discard
+            // the failure silently and leave the user thinking it saved.
+            const saved = await handleSave();
+            if (!saved) return;
             if (clipStage?.action === 'overlay') {
               onOpenInOverlay?.(existingClip.autoProjectId);
             } else {
@@ -1018,6 +1111,14 @@ export function AnnotateFullscreenOverlay({
             </div>
           </div>
 
+          {/* T9630: Unsaved/Saving/Saved — own row so it never widens the
+              flex-wrap controls row above. */}
+          {displayStatus && (
+            <div className="px-4 pb-2 -mt-2">
+              <SaveStatusBadge status={displayStatus} />
+            </div>
+          )}
+
           {/* T8490: create-mode-only caption, own row below Controls so it
               never widens the flex-wrap row and risks pushing Save off-screen. */}
           {!isEditMode && (
@@ -1093,14 +1194,10 @@ export function AnnotateFullscreenOverlay({
           compact
         />
         <div className="flex items-center gap-2 mt-1.5">
+          {/* T9630 N35: the standalone notation span that used to sit here was
+              a straight duplicate of the label StarRating already renders —
+              two rating indicators for one value on the tightest layout. */}
           <StarRating rating={rating} onRatingChange={handleRatingChange} size={20} />
-          <span
-            className="text-xs text-gray-500 w-4 text-center"
-            title={getRatingLabel(rating)}
-            aria-label={getRatingLabel(rating)}
-          >
-            {RATING_NOTATION[rating]}
-          </span>
           <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
           <div className="flex-1 overflow-x-auto scrollbar-hide">
             {tagSet ? (
@@ -1131,6 +1228,13 @@ export function AnnotateFullscreenOverlay({
             <X size={18} className="text-gray-400" />
           </button>
         </div>
+        {/* T9630: same real Unsaved/Saving/Saved/error state as the other two
+            layouts — this is the one surface that previously had NO save
+            feedback at all. Own line so it never competes with the button row
+            on the height-starved landscape layout. */}
+        {displayStatus && (
+          <p className="mt-1"><SaveStatusBadge status={displayStatus} /></p>
+        )}
         {/* T8490: create-mode-only caption. Single truncated line — this
             layout is the most height-starved surface (landscape phone, T5700
             two-lane note), so no wrapping. */}

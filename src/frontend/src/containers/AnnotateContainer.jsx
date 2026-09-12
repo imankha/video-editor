@@ -1285,6 +1285,11 @@ export function AnnotateContainer({
       videoSeq,
       { tagged_teammates: clipData.tagged_teammates, my_athlete: clipData.my_athlete, videoDuration: segmentDuration },
     );
+    // T9630: real persistence outcome for the overlay's Unsaved/Saving/Saved
+    // indicator — same true/false contract as updateClipRegionWithSync below
+    // (true = durably saved, or nothing needed saving; false = it did not
+    // land). Starts false: a rejected/never-created region is a real failure.
+    let saveOk = false;
     if (newRegion) {
       console.log('[CreateClip] Stored region:', newRegion.id, 'actual:', newRegion.startTime, '-', newRegion.endTime, 'seq:', newRegion.videoSequence);
       // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek
@@ -1311,6 +1316,7 @@ export function AnnotateContainer({
           my_athlete: newRegion.my_athlete,
           ...(clipData.createProject != null && { create_project: clipData.createProject }),
         });
+        saveOk = !!result?.raw_clip_id;
 
         // T9330: the create round trip has answered — release the pending CTA in
         // EVERY case, including saveClip returning null (dedup guard, sync_failed
@@ -1353,6 +1359,11 @@ export function AnnotateContainer({
             announcePlaySaved(reelToastClipName(newRegion));
           }
         }
+      } else {
+        // T9630: no game record to save against yet — nothing was attempted,
+        // so this is not a failure (mirrors updateClipRegionWithSync's
+        // equivalent branch).
+        saveOk = true;
       }
     }
     // T9330: the editor STAYS OPEN after a create — addClipRegion routes the
@@ -1360,6 +1371,7 @@ export function AnnotateContainer({
     // the editor on the new region. handleSave resumes playback WITHOUT closing on
     // the desktop strip; the mobile sheet still closes (its save path calls the
     // close-bearing onResume). The CTA lights up when setAutoProjectId lands above.
+    return saveOk;
   }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, isOverlapTimeline, activeSourceSequence, gameVideos, notifyReelCreated]);
 
   /**
@@ -1371,7 +1383,7 @@ export function AnnotateContainer({
     const region = clipRegions.find(r => r.id === regionId);
     if (!region) {
       console.warn('[AnnotateContainer] Region not found for update:', regionId);
-      return;
+      return false;
     }
 
     if (updates.createProject != null) {
@@ -1416,7 +1428,9 @@ export function AnnotateContainer({
       if (updates.createProject != null) {
         console.warn('[CreateReel] ABORT: no annotateGameId, cannot sync to backend');
       }
-      return;
+      // T9630: nothing to persist yet (no game record) — the local update above
+      // always applies, so this is not a failure for the caller's save-status UI.
+      return true;
     }
 
     // If clip doesn't have rawClipId, save it to backend first
@@ -1453,7 +1467,13 @@ export function AnnotateContainer({
           setAutoProjectId(region.id, result.project_id);
           notifyReelCreated(result.project_id, reelToastClipName(region));
         }
+        // T9630: real persistence outcome for the caller's tri-state save UI.
+        return true;
       }
+      // T9630: saveClip returned null (dedup guard / sync_failed 503 / thrown
+      // error — useRawClipSave already surfaced its own toast/retry) or
+      // {notFound: true} (ghost game) — either way this update did NOT land.
+      return false;
     } else {
       // Clip already has rawClipId, just update
       const backendUpdates = {};
@@ -1486,20 +1506,31 @@ export function AnnotateContainer({
           setAutoProjectId(region.id, result.project_id);
           notifyReelCreated(result.project_id, reelToastClipName(region));
         }
+        // T9630: updateClipRemote (useRawClipSave.updateClip) returns null on
+        // any failure (thrown error / sync_failed 503, already toasted there).
+        return !!result;
       } else if (updates.createProject != null) {
         console.warn('[CreateReel] ABORT: backendUpdates was empty, nothing sent to backend');
+        return false;
       }
+      // Nothing needed persisting (e.g. a redundant update) — not a failure.
+      return true;
     }
   }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, activeSourceSequence, fullTimeline, isOverlapTimeline, effectiveCurrentTime, notifyReelCreated]);
 
   /**
-   * Handle updating an existing clip from fullscreen overlay
-   * Uses updateClipRegionWithSync for backend sync
+   * Handle updating an existing clip from fullscreen overlay.
+   * Uses updateClipRegionWithSync for backend sync.
+   *
+   * T9630: no longer closes the overlay itself — it returns the real
+   * persistence outcome (true/false) so the overlay's own Save gesture
+   * (AnnotateFullscreenOverlay.handleSave) can decide whether to close. A
+   * failed save must leave the form open with the user's edits intact rather
+   * than closing unconditionally and silently discarding the failure.
    */
-  const handleFullscreenUpdateClip = useCallback(async (regionId, updates) => {
-    await updateClipRegionWithSync(regionId, updates);
-    closeOverlay();
-  }, [updateClipRegionWithSync, closeOverlay]);
+  const handleFullscreenUpdateClip = useCallback((regionId, updates) => {
+    return updateClipRegionWithSync(regionId, updates);
+  }, [updateClipRegionWithSync]);
 
   /**
    * Delete a clip region - syncs to backend if the clip has been saved

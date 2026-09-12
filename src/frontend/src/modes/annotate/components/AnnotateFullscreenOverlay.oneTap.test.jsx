@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
 
 // T8140: one-tap first clip — form defaults ("Play N" auto-name), platform-aware
@@ -127,11 +127,16 @@ describe('AnnotateFullscreenOverlay — abandonment beacon (T8140)', () => {
     expect(recordUiImpression).toHaveBeenCalledWith('dialog', 'add_clip_opened_no_save:dock_fullscreen');
   });
 
-  it('does NOT fire when the open ends in a save', () => {
+  it('does NOT fire when the open ends in a save', async () => {
     const { container, rerender } = render(
       <AnnotateFullscreenOverlay {...baseProps} isVisible={true} onCreateClip={() => {}} />
     );
-    fireEvent.click(saveButton(container));
+    // T9630: handleSave is now async (awaits the real save outcome before
+    // deciding to close) — flush that microtask so the assertion below
+    // doesn't race a pending state update.
+    await act(async () => {
+      fireEvent.click(saveButton(container));
+    });
     rerender(<AnnotateFullscreenOverlay {...baseProps} isVisible={false} />);
     expect(recordUiImpression).not.toHaveBeenCalled();
   });
@@ -150,11 +155,13 @@ describe('AnnotateFullscreenOverlay — abandonment beacon (T8140)', () => {
   // (!!existingClip), so the beacon effect's cleanup (keyed on isEditMode)
   // must see savedThisOpenRef already true and NOT fire — no phantom
   // abandonment on a create-save that stays open.
-  it('does NOT fire when a create-save stays open (existingClip flips null -> new region, isVisible unchanged)', () => {
+  it('does NOT fire when a create-save stays open (existingClip flips null -> new region, isVisible unchanged)', async () => {
     const { container, rerender } = render(
       <AnnotateFullscreenOverlay {...baseProps} isVisible={true} existingClip={null} onCreateClip={() => {}} />
     );
-    fireEvent.click(saveButton(container));
+    await act(async () => {
+      fireEvent.click(saveButton(container));
+    });
     const newRegion = { id: 'new_1', startTime: 21, endTime: 33, rating: 4, tags: [], autoProjectId: null };
     rerender(<AnnotateFullscreenOverlay {...baseProps} isVisible={true} existingClip={newRegion} />);
     expect(recordUiImpression).not.toHaveBeenCalled();

@@ -204,11 +204,15 @@ export function AnnotateModeView({
   const [sportQuestionOpen, setSportQuestionOpen] = useState(false);
   const sportAskedRef = useRef(false);
   const handleCreateClipWithSportPrompt = useCallback((clipData) => {
-    onFullscreenCreateClip(clipData);
+    // T9630: return the save promise — the overlay's handleSave awaits/derives
+    // its Unsaved/Saving/Saved state from this; a dropped return silently made
+    // every create-mode save look instantly "done".
+    const savePromise = onFullscreenCreateClip(clipData);
     if (isMobile && currentSport === NO_SPORT && !sportAskedRef.current) {
       sportAskedRef.current = true;
       setSportQuestionOpen(true);
     }
+    return savePromise;
   }, [onFullscreenCreateClip, isMobile, currentSport]);
 
   // Playback fullscreen — independent from annotate fullscreen (CSS fixed positioning)
