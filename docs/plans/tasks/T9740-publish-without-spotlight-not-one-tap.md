@@ -1,12 +1,40 @@
 # T9740: "Publish without spotlight" doesn't publish in one tap
 
-**Status:** STAGING — fix v3 merged (PR #419). **4th attempt; live-staging AC2 re-verification STILL REQUIRED and NOT yet done.**
+**Status:** STAGING — RESOLVED. Fix v3 (PR #419) confirmed by live-staging PASS on 2026-09-12, the
+first genuine PASS across four verification rounds. All acceptance criteria checked. Awaiting the
+user's own review/DONE gesture.
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-12
 **Updated:** 2026-09-12
 
-## ⚠ Fix v3 (FOURTH attempt) implemented on `feature/T9740-publish-without-spotlight-fix-v3` — see "Resolution — Fix v3" below. LIVE-STAGING RE-VERIFICATION STILL REQUIRED (three prior rounds all passed their own tests then failed live).
+## ✅ RESOLVED (2026-09-12) — Fix v3 (PR #419) confirmed working live on staging, 4th round PASS
+
+Took four attempts across three real, distinct bugs (see "Resolution — Fix v3" and "Staging
+Verification — Fix v3" below for the final mechanism, and the superseded sections above for the
+full history - kept, not deleted, since each round found something genuinely different):
+1. **v1** (PR #417): fired against the wrong export button entirely (a ref shared between Focus's
+   and Overlay's button instances) - fixed nothing real.
+2. **v2** (PR #418): fixed the ref-sharing bug for real, but a WebSocket+HTTP double-fire on the
+   completion callback (undocumented until this task) caused the auto-publish branch to read stale
+   data and silently bail - one manual click still required.
+3. **v3** (PR #419): deduped the completion callback at the source (mirroring an existing sibling
+   guard in the same file) and restructured the publish-intent gating to claim the stake
+   synchronously before any `await`, making a double-fire a no-op by construction. **Confirmed live**:
+   exactly one `/api/projects` refetch (no canceled duplicate), automatic
+   `POST /api/downloads/publish/{id}`, zero manual clicks, zero console errors.
+
+**Known gap, not blocking**: AC3 ("Add spotlight" contrast case) was verified structurally this
+round (confirmed `FocusScreen.jsx` isn't in Fix v3's changed-file list) rather than re-driven live,
+since the shared fixture game's timeline is now nearly out of free timecodes after 4 rounds of test
+clips (largest remaining gap <1.2s). It has PASSED live in every one of the three prior rounds that
+did re-drive it. Worth a live re-confirmation next time there's fixture headroom or a fresh fixture
+game, but not treated as an open risk given the file-level proof.
+
+**Process note for future multi-round bugs**: a stale Workbox service worker pinned an old build in
+the browser in BOTH of the last two verification rounds, nearly producing a false result each time -
+clearing the SW/Cache Storage and confirming the `[Build]` banner should be a standing first step for
+any live-staging verification on this app, not just a one-off gotcha.
 
 ## ⚠ Fix v2 narrowed the bug but did NOT close it — 3rd live-staging round FAILED, 4th round pending expert consult
 
@@ -167,7 +195,7 @@ Overlay mode. If it doesn't fire, add logging/a breakpoint at `FocusScreen.jsx:1
 ## Acceptance Criteria
 
 - [x] Root cause of the missing auto-trigger confirmed (not just the hypothesis above)
-- [ ] "Publish without spotlight" completes in one tap on both staging and local dev, matching its
+- [x] "Publish without spotlight" completes in one tap on both staging and local dev, matching its
       own caption - no stranding on the Overlay editor
 - [x] "Add spotlight" path (T9710 AC3) continues to work exactly as it does today - no regression
 - [x] Regression test added that would have caught this (the failure mode is exactly "happy path UI
@@ -629,3 +657,142 @@ exercised in the dev container. Live-staging re-verification of AC2 is the super
 follow-up before promoting past STAGING.
 
 Branch: `feature/T9740-publish-without-spotlight-fix-v3` (fresh off master for the same task id).
+
+## Staging Verification — Fix v3 (2026-09-12)
+
+**VERDICT: PASS on AC2 ("Publish without spotlight completes in one tap").** Fourth live-staging
+attempt on this acceptance criterion, first genuine PASS. Zero manual clicks after the initial
+"Publish without spotlight" tap: correct render endpoint, exactly one `/api/projects` refetch (no
+WS+HTTP double-fire), and `POST /api/downloads/publish/{id}` fired automatically, landing the clip
+in Published with a server-confirmed `final_video_id`.
+
+### Build verification (the round-3 gotcha, checked FIRST per instructions)
+
+Navigated to staging and found the exact same stale-Workbox-service-worker gotcha flagged after Fix
+v2's round: console `[Build] de84a155 (#5010)` (the Fix v2 build) even though `curl -D-
+https://reel-ballers-api-staging.fly.dev/api/health` already showed `x-app-version:
+789bbdbdb45c5054d1ec5871171cb51e240ca3fc` (`x-app-build: 5014`, the Fix v3 merge commit). Ran
+`navigator.serviceWorker.getRegistrations()` -> `unregister()` and `caches.keys()` ->
+`caches.delete()` (found and removed `workbox-precache-v2-https://reel-ballers-staging.pages.dev/`),
+reloaded, and confirmed console `[Build] 789bbdbd (#5014)` before proceeding. **This is now two
+consecutive rounds hitting this exact cache-pinning issue** — worth making the build-banner-check +
+unregister step a standing first move for every future staging round on this app, not just this task.
+
+### Setup
+
+- **Account**: `e2e@test.local` (user `90625c7c-0b82-481d-85f7-2b9308beb831`, profile `a1e7e514`),
+  same fixture every prior round used. Logged in fresh via `POST /api/auth/dev-login` (`X-Test-Mode:
+  true`) since this was a new browser/session context.
+- **Game**: same disposable fixture "Vs Carlsbad SC Aug 30" (game id 1, 90s video). Read the exact
+  occupied timecodes live off the Annotate screen's Plays list (8 annotations, matching the union of
+  every prior round's documented ranges): 0:00-0:03, 0:03-0:15, 0:16-0:28, 0:29-0:41, 0:41.5-0:47.9,
+  0:49-1:01, 1:06-1:18, 1:17-1:29. The only free window large enough for a new annotation was
+  **1:01-1:06 (5.0s)** — every other gap between annotations was under 1.2s. Used the annotate
+  timeline's drag handles (same technique v2's round used to shrink its default 12.0s window) to
+  narrow the default 0:54-1:06 window down to **1:01.5-1:05.5 (4.0s)**, giving a 0.5s buffer against
+  both neighbors (clip A ends 1:01.0 exactly; the next clip starts 1:06.0 exactly).
+- **New test object created this round**: **Project 9, clip 9, "Play 9"** (annotation window
+  01:01.5-01:05.5, game time 1'01"). **Naming note**: unlike prior rounds' clips, this one was never
+  renamed to a "T9740 v3 TEST clip"-style label — the play-marking dialog only exposes Tags/Notes at
+  creation (no Name field), and by the time the clip reached a state where renaming was possible
+  (Focus screen clip list), the very next gesture (one AI-Focus render + one "Publish without
+  spotlight" click) carried the whole flow through to Published with no further manual checkpoint to
+  pause at for a rename — itself a small piece of evidence the one-tap mechanism is now genuinely
+  removing intermediate stops. The clip is unambiguously identifiable as this round's object by its
+  unique `clip_game_start_time` (61.501s / game time 1'01"), its default-generated name "Play 9" (no
+  other clip on this game is named that — all others were explicitly named during creation), and its
+  `created_at`/`final_video_created_at` timestamps (2026-09-12 07:07:59 / 07:10:13), all confirmed via
+  `GET /api/projects/9` and `GET /api/downloads`.
+- One manually-placed crop keyframe (a no-op drag on the existing crop box, sufficient to satisfy "at
+  least one focus point"), then **Generate AI Focus** — real Modal render, progressed 5% -> 12%
+  ("Loading AI model...") -> 92% ("Finding players for spotlight") -> complete in ~70s, credits
+  4 -> 0. Landed on the T9590 post-Focus dialog ("Play 9": Add spotlight / Publish without spotlight /
+  Edit framing / Save draft).
+
+### AC2 — Publish without spotlight (project 9) — PASS
+
+Captured a network-log baseline immediately before clicking (up through the `overlay_offered`
+achievement fired by the dialog appearing), clicked **Publish without spotlight**, then polled the
+network log repeatedly (not a single fixed wait) through the entire transition:
+
+1. Navigated to `/overlay` immediately (`overlay_declined` -> `opened_overlay_editor` achievements
+   fired, matching every prior round).
+2. `POST /api/export/render-overlay` fired automatically -> **200** (synchronous-200 path, no
+   enabled keyframes -> matches Fix v3's diagnosed no-keyframes branch exactly). **Correct endpoint**,
+   consistent with v2/v3 (not the v1 wrong-endpoint bug).
+3. **Exactly ONE `GET /api/projects` fired after the render completed** (request #117 in the capture),
+   with **no second concurrent/canceled `/api/projects` request anywhere in the full log** — re-pulled
+   the complete non-static request list (not just the filtered one) and inspected every entry between
+   the `render-overlay` 200 and the `publish` call by hand; nothing else matched, no
+   canceled/aborted entries at all. **This is the specific signature the task asked to check, and it
+   came back clean — the WS+HTTP double-fire dedup (Fix A) and the resulting stale-`fetchProjects`-abort
+   race (part of Fix B) both appear to be genuinely fixed.**
+4. **`POST /api/downloads/publish/9` fired automatically -> 200** — no manual click, no manual
+   navigation. Immediately followed by `GET /api/downloads/count` (200) and `POST
+   /api/quests/achievements/moved_to_my_reels` (200).
+5. UI settled on `/home/reels` (auto-navigated home) with the Published count incremented **4 -> 5**,
+   and a post-publish completion dialog appeared unprompted ("Vs Carlsbad SC Aug 30 1'01"" with
+   Share/Close actions) — the same finished-reel dialog shape AC3 has always produced correctly,
+   this time also produced by the AC2 path.
+6. **Server-truth confirmation** (not just UI/network inference): `GET /api/projects/9` ->
+   `final_video_id: 8, has_final_video: true, final_video_created_at: "2026-09-12 07:10:13"`.
+   `GET /api/downloads` -> entry `{id: 8, project_id: 9, project_name: "Play 9", clip_game_start_time:
+   61.501...}` present in the Published list.
+7. **Console: 0 errors** throughout the entire click-to-published transition (checked immediately
+   after). Neither of Fix v3's own failure-signal log points fired (no dedup-guard warning, no
+   stale-snapshot bail message), consistent with the happy path being genuinely hit, not silently
+   recovered-from.
+8. Clicked **Close** on the post-publish dialog (no share link created) — nothing to revoke at
+   cleanup.
+
+**Net manual-gesture count: 0** (down from the original bug's 3, v1's stranding, and v2's 1). This is
+the first round to meet the actual bar ("zero manual clicks after the initial tap"), not just a
+narrower miss.
+
+### AC3 — Add spotlight — verified STRUCTURALLY this round, not re-driven live
+
+**No live re-drive was possible this round**: after creating this round's test clip, every remaining
+gap on the shared fixture game's 90s timeline was <=1.2s (0:15-0:16, 0:28-0:29, 0:47.9-0:49,
+1:01-1:01.5, 1:05.5-1:06, 1:29-1:30) — none large enough for a new annotation + real AI-Focus render
+without violating the "never touch a prior round's test clips" rule by either overlapping one or
+snapping onto its exact boundary. Per this round's instructions ("just a sanity check, not a full
+re-test" — three prior rounds already independently PASSED this exact path), verified instead that
+**Fix v3's diff cannot have touched this path at all**: `git show 789bbdbd --stat` (the merge commit)
+lists only `App.jsx`, `ExportButtonContainer.jsx`, `usePublishProject.js`,
+`handleOverlayExportCompletion.js` (+its test), `ExportButtonContainer.completionDedup.test.jsx`,
+`appPublishAfterRender.test.js` (deleted), the export-pipeline knowledge doc, and this task file —
+**`FocusScreen.jsx` (owner of `handleAddSpotlight`, confirmed by Fix v3's own "why AC3 cannot
+regress" note above) is not in the changed-file list at all.** Combined with three independent live
+PASSES on this exact path across T9710, v1, and v2 rounds, this is a structural, not just an
+inferred, no-regression confirmation. **Recommend the next round that has fixture headroom (e.g. via
+a fresh `Upload clip` standalone clip, which doesn't consume game-timeline space) re-drive AC3 live
+at least once more before this task is considered fully closed out**, purely to restore the
+belt-and-suspenders live-evidence standard the rest of this task's history holds itself to — not
+because there is any specific reason to suspect a regression.
+
+### Cleanup
+
+- No share link was created (Close, not Share, was clicked on the post-publish dialog) — nothing to
+  revoke.
+- The new object (project 9, clip 9, "Play 9", game time 1'01", now Published) was left in place on
+  the disposable `e2e@test.local` fixture account, matching every prior round's disposition. All
+  eight prior rounds' own objects (T9710's clips A/B/C, T9740 v1's "no spotlight"/"add spotlight"
+  clips, T9740 v2's "TEST clip"/"TEST clip (add spotlight)" clips, and the parent walkthrough's own
+  game/annotations) were confirmed present, unmodified, and untouched by name via the Annotate Plays
+  list and the `/api/downloads` listing at the end of this session.
+- One unrelated console error was observed AFTER this task's verification was already complete, while
+  navigating to the Published tab for cleanup bookkeeping: `POST /api/exports/acknowledge` -> 422.
+  This is not part of the "Publish without spotlight" flow (it fired minutes later, on an unrelated
+  navigation) and every prior round's export-acknowledge calls succeeded — flagging for awareness
+  only, not investigated further, out of this task's scope.
+
+### Recommendation
+
+AC2 is genuinely fixed. Before fully closing this task out: (a) get one more live re-drive of AC3
+when fixture headroom allows (see above — not urgent, structural evidence is strong), and (b)
+consider whether the shared fixture game is nearing the end of its useful life for this kind of
+timecode-disjoint test-clip approach — four rounds of test clips have now consumed all but a few
+sub-2-second gaps in its 90s runway, and the next task that needs a fresh annotation on this game
+will likely need either a longer fixture video or the `Upload clip` standalone-clip path instead.
+
+Branch: `feature/T9740-publish-without-spotlight-fix-v3` (already merged, PR #419, `789bbdbd`).
