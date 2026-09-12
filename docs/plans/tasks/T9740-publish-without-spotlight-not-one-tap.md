@@ -1,12 +1,45 @@
 # T9740: "Publish without spotlight" doesn't publish in one tap
 
-**Status:** STAGING
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-12
 **Updated:** 2026-09-12
 
-## ⚠ Fix v2 MERGED (PR #418) — root cause was ref-sharing, not timing; live-staging re-verify still owed
+## ⚠ Fix v2 narrowed the bug but did NOT close it — 3rd live-staging round FAILED, 4th round pending expert consult
+
+**2026-09-12, current status.** Fix v2 (merged, PR #418) genuinely fixed the ref-sharing bug: the
+auto-triggered export now correctly hits `/api/export/render-overlay`, completes successfully, and
+produces a real `final_video` with zero waste. **But the publish call itself never auto-fires** -
+the user still needs one manual "Publish" click on the resulting "Ready to Publish" card. See
+"Staging Verification — Fix v2" near the end of this file for full evidence (network log confirms
+`/api/downloads/publish/7` never fires; neither of Fix v2's own new failure-signal branches
+(`onAbandon`, the wrong-mode assertion) fired either - meaning the render pipeline is now fully
+correct and the gap is specifically downstream, in the auto-publish handoff itself).
+
+**Leading hypothesis for the 4th attempt** (not yet confirmed - hand to the expert agent to verify):
+`App.jsx`'s `handleExportComplete` (~line 625-628) gates the auto-publish branch on THREE
+conditions: `completed.mode === OVERLAY`, a freshly-read `currentMode === OVERLAY`, AND
+`completed.projectId === currentProjectId` where `currentProjectId` comes from
+`useProjectsStore.getState().selectedProjectId` - NOT from the publish-intent stake. In the
+"Publish without spotlight" one-tap flow, the project was never explicitly "selected" via normal
+navigation (the user clicked a dialog button, `scheduleOverlayPublishExport` fired the render
+programmatically) - so `selectedProjectId` may simply not equal the staked project, and the whole
+auto-publish branch never gets entered, regardless of the publish-intent stake being perfectly
+correct. If true, gating on the publish-intent stake's own `projectId` (which IS reliably set) rather
+than requiring `selectedProjectId` to independently match would be the more surgical fix - but this
+needs verification against how `selectedProjectId` actually behaves in this specific flow, not
+another guess.
+
+**Per user decision 2026-09-12: proceed with one more expert consult + 4th fix attempt** (not
+parking this task). Net progress across 3 rounds: 3 manual gestures (original) -> 2 wasted + stranded
+(v1) -> 1 manual click (v2, current). Do not re-promote past WIP until a 4th round achieves a
+genuine zero-click PASS on live staging.
+
+## ⚠ SUPERSEDED — Fix v2 STAGING banner (kept for history, do not re-read as current status)
+
+Fix v2 merged and briefly sat at STAGING pending its 3rd live-verification round, which came back
+FAIL (see above) - status corrected back to WIP.
 
 **2026-09-12, superseding the "CONFIRMED REGRESSION" banner below.** A second expert-agent (Opus)
 consult identified the real, deterministic mechanism: `App.jsx` handed ONE `exportButtonRef` to
@@ -353,3 +386,157 @@ acceptance criterion.**
 
 Branch: `feature/T9740-publish-without-spotlight-fix-v2` (fresh branch off master for the same task id;
 PR #417's branch was deleted post-merge). Status stays WIP until this merges (supervisor sets STAGING).
+
+## Staging Verification — Fix v2 (2026-09-12)
+
+**⚠ VERDICT: FAIL on AC2 ("Publish without spotlight completes in one tap") — THIRD consecutive miss
+on this acceptance criterion, across three independent fix attempts (original bug, PR #417/v1, PR
+#418/v2). Flagging prominently per this round's instructions: do not attempt a fourth fix without a
+human or another expert-agent decision on next steps.**
+
+**However, this is real, measurable progress, not a repeat of either prior failure mode** — the
+specific mechanism Fix v2 targeted (the shared `exportButtonRef` firing on the wrong, still-mounted
+Focus button) is **confirmed genuinely fixed**. The auto-triggered export this round hit the
+**correct** endpoint (`/api/export/render-overlay`), completed successfully, and produced a real
+`final_video`. What still doesn't happen automatically is the LAST step: the publish call itself. Net
+manual-gesture count is now **1** (a single manual "Publish" click) versus the **3** manual gestures
+of the original bug and the **2 wasted + stranded** outcome of v1 — real narrowing, but the acceptance
+criterion is "zero manual clicks after the initial tap," and that is not met.
+
+### Build verification
+
+Confirmed running the actual merged build the whole time, on both halves of the stack:
+- **Backend**: `curl -D- https://reel-ballers-api-staging.fly.dev/api/health` →
+  `x-app-version: de84a1551b0bba50987dafd3f8631e400011a18f` (the Fix v2 commit) from the very start.
+- **Frontend — caught a real gotcha, not just a checkbox**: the first page load showed console
+  `[Build] 0e9ae01f (#5007)` — the OLD v1 build — even though `curl`ing the live `index.html` directly
+  (bypassing the browser) already referenced fresh asset hashes. Root cause: a Workbox
+  service worker (`workbox-precache-v2-https://reel-ballers-staging.pages.dev/`) from an earlier
+  session was serving a stale cached app shell. Confirmed via `GET Deploy Frontend` GitHub Actions run
+  history that the v2 deploy (`de84a155`) had genuinely already run and succeeded — this was a client
+  cache issue, not a bad deploy. Unregistered the service worker + cleared the Cache Storage entry via
+  `navigator.serviceWorker.getRegistrations()`/`caches.delete`, reloaded, and got the correct
+  `[Build] de84a155 (#5010)`. **Flagging this as a standing risk for future staging verification
+  rounds**: a persistent Playwright/browser profile can silently pin an old PWA build past a real
+  deploy, making a genuine fix look unfixed (or, worse, making a genuine regression look fine if the
+  cached build happens to predate it) unless the SW/cache is explicitly cleared and the build banner
+  double-checked after every navigation to staging.
+
+### Setup
+
+- **Account**: publisher `e2e@test.local` (user `90625c7c-0b82-481d-85f7-2b9308beb831`, profile
+  `a1e7e514`) — already had a live session cookie in this browser profile from prior rounds; no fresh
+  `dev-login` needed, confirmed identity via `GET /api/auth/me` and `GET /api/bootstrap` before doing
+  anything else.
+- **Game**: same disposable fixture "Vs Carlsbad SC Aug 30" (game id 1). Before this round it carried
+  6 annotations spanning roughly 0:00–0:03, 0:04–0:16, 0:29–0:41, 0:49–0:61, 1:06–1:18, 1:17–1:29 (the
+  parent walkthrough's own annotation is not on this game; T9710's and T9740 v1's test clips are).
+  The only gap large enough for a new 12s "Mark play" annotation without overlapping any prior round's
+  object was 0:16–0:29 (~13s).
+- **New test objects created this round** (both clearly labelled, non-overlapping with every prior
+  round's annotations):
+  - **Project 7, "T9740 v2 TEST clip"** — annotation window 0:16.3–0:28.3 (12.0s, the tool's fixed
+    default), used for the AC2 "Publish without spotlight" drive.
+  - **Project 8, "T9740 v2 TEST clip (add spotlight)"** — annotation window 0:41.5–0:47.9 (6.4s).
+    The default 12s window didn't fit in the remaining ~8s gap (0:41–0:49); the Annotate marking
+    overlay's mini-timeline has real drag handles (`cursor-col-resize`) on the highlighted region, and
+    dragging the start handle right shrank it to 6.4s, clear of both neighbors. Used for the AC3
+    contrast check.
+  - Both clips completed a real AI-Focus render (one manually-placed crop keyframe each, real Modal
+    player-detection, ~50–65s and ~45s respectively) before reaching the T9590 post-Focus dialog.
+- **Note on a UI quirk hit while creating these** (not part of the bug under test, flagging for
+  awareness): pressing the `A` hotkey to mark a new play does NOT anchor the window to the current
+  seek position if a clip is already selected — it reopens editing on whatever clip is currently
+  `SELECTED` instead of creating a new one (`AnnotateContainer.handleAddClipFromButton`:
+  `selectionState.type === 'SELECTED' ? editClip(...) : startCreating()`). Two clips were very briefly
+  auto-selected mid-session by an "auto-select clip at playhead" effect while the video was
+  inadvertently left playing (`T9710 TEST clip C`, `T9710 TEST clip A`) — both were opened only via
+  `Cancel (Esc)` with no field ever edited, and both were re-confirmed unchanged by name immediately
+  after. Neither was modified.
+
+### AC2 — Publish without spotlight (project 7) — FAIL (narrower failure than both prior rounds)
+
+Clicked **Publish without spotlight** from the T9590 dialog on project 7. Watched the network log
+continuously (polled every few seconds, never a single fixed wait) through the entire transition:
+
+1. Navigated to `/overlay` as expected (`overlay_offered` → `overlay_declined` →
+   `opened_overlay_editor` achievements fired, same sequence as both prior rounds).
+2. Within seconds, `POST /api/export/render-overlay` fired automatically — **the correct endpoint**,
+   not `/api/export/render` (v1's bug). Response: `200`.
+3. `GET /api/projects/7` immediately after confirmed a real, successful render:
+   `working_video_id: 7`, `final_video_id: 6`, `has_final_video: true`,
+   `final_video_created_at: 2026-09-12 06:09:27`. No wasted render, no wrong `mode` — this is a
+   genuinely correct overlay export, unlike v1 where the same moment produced a framing-mode
+   `working_video` with `final_video_id: null`.
+4. **No `POST /api/downloads/publish/7` (or any `/publish` URL) ever fired** — confirmed by filtering
+   the full network log for `publish` (regex, case-sensitive on an all-lowercase URL): zero matches
+   for the entire session, from the initial click onward.
+5. The UI settled on `/home/reels` showing project 7 under a **"Ready to Publish"** bucket with an
+   explicit manual **"Publish clip"** button — not the Published bucket, and not the T9110 completion
+   dialog with its own Publish action (that dialog DID appear and fire correctly in the AC3 run below,
+   so its absence here is notable).
+6. Waited an additional 15s past the point `final_video_created_at` was already stamped, then
+   re-fetched `/api/projects/7` and re-checked the network log: identical state, no new `publish`
+   call, no further transitions. This is a **stable, settled end state**, not a slow-arriving
+   auto-publish that simply needed more time.
+7. Console showed **0 errors** throughout (25 warnings, all pre-existing video-buffering/slow-fetch
+   noise unrelated to this flow). Notably, this means Fix v2's two new named log points **neither**
+   fired: no `onAbandon` (`console.error` + toast — would mean the poll gave up before Overlay's
+   button ever mounted) and no `handleExportComplete` wrong-mode assertion (would mean a non-overlay
+   completion arrived while a publish intent was staked). Both of those absences are consistent with
+   the render pipeline working correctly end-to-end through "produce a final video" — the gap is
+   specifically that nothing downstream of a **successful, correctly-moded** completion calls
+   `/api/downloads/publish`.
+8. Manually clicking **Publish** on the "Ready to Publish" card afterward completes the flow
+   correctly (not separately re-verified this round beyond confirming the button and card are present
+   and correctly labelled — re-driving that manual path wasn't necessary to establish the FAIL
+   verdict, and the task's own scope is the AUTO-trigger, not the manual fallback's correctness, which
+   was never in question).
+
+**Framing relative to prior rounds, for whoever picks this up next:** the failure surface has
+narrowed twice now — original bug: 3 manual gestures, one through spotlight-editing UI the user
+declined; v1: correct number of intended auto-steps but wrong button fired, burning a real render and
+silently stranding the user with zero forward progress (had to manually export from scratch); v2 (this
+round): the auto-export is now fully correct and produces the real final asset with zero waste, but
+the handoff from "export finished" to "call publish" does not fire. This suggests the remaining gap is
+specifically in the auto-publish trigger path (`App.jsx`'s `handleExportComplete` / whatever reads
+`publishIntentStore` after a completion is confirmed overlay-moded) rather than anywhere in the
+`scheduleOverlayPublishExport` poll or the ref-splitting fix itself — but per this round's
+instructions, that is a hypothesis for the next investigation, not a diagnosis to act on here.
+
+### AC3 — Add spotlight (project 8) — PASS, no regression
+
+Clicked **Add spotlight** from the T9590 dialog (project 8). Confirmed no auto-export fired (by
+design): checked the network log immediately after landing on `/overlay` — only the earlier AI-Focus
+`/api/export/render` call was present, no `render-overlay` call yet. Manually clicked **Export clip
+with effects**: `POST /api/export/render-overlay` fired (200), the T9110 completion dialog appeared
+correctly with **Publish** as the primary action and caption *"Adds it to your Highlight Reels --
+anyone with the link can watch it"*, clicked it, `POST /api/downloads/publish/8` fired (200), and the
+Published count on the home screen incremented from 3 to 4. Clean two-gesture flow (Export → Publish),
+exactly matching both prior rounds' findings for this path. **No regression from Fix v2** — consistent
+with the diff review's earlier static confirmation that `handleAddSpotlight` is untouched.
+
+### Cleanup
+
+- No share links were created for either test clip this round. A post-publish "Play 8" dialog offered
+  **Share**/**Close** after the AC3 publish; **Close** was clicked, no share link generated — nothing
+  to revoke.
+- Both new objects (project 7 "T9740 v2 TEST clip", still Ready-to-Publish; project 8 "T9740 v2 TEST
+  clip (add spotlight)", now Published) were left in place on the disposable `e2e@test.local` fixture
+  account, clearly labelled, matching the disposition both prior rounds used for their own test
+  clips. Every prior round's own objects (T9710's clips A/B/C, T9740 v1's "no spotlight"/"add
+  spotlight" clips, the parent walkthrough's own game/annotations) were confirmed present and
+  unmodified by name at the end of this session.
+
+### Recommendation
+
+Do not attempt a fourth Sonnet-driven fix on this acceptance criterion without a human decision or a
+fresh expert-agent consult first — that is what this round's instructions asked for, and three misses
+on one AC (two of them past an expert-agent design review) is exactly the pattern CLAUDE.md's
+escalation policy exists for. Worth putting in front of that review: (a) the concrete, narrowed
+symptom above (correct render, correct final_video, zero downstream publish call, 0 console errors —
+i.e., nothing is loudly failing, the auto-publish call is just never attempted), and (b) whether the
+underlying approach — a client-side poll auto-firing a chain of "when X mounts, do Y; when Y
+completes, do Z" — is the right shape at all for a promise as strong as "zero manual clicks," given
+this is the third distinct way that chain has broken (missing ref identity, then wrong ref identity,
+now an apparently missing or non-firing final link) without ever failing a unit test first.
