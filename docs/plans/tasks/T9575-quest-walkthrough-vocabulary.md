@@ -1,10 +1,21 @@
 # T9575: Onboarding quest-walkthrough vocabulary sweep
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-11
-**Updated:** 2026-09-11
+**Updated:** 2026-09-12
+
+## Progress Log
+
+**2026-09-12**: Implemented in a container worker, reviewed (fresh-context Reviewer caught 5
+MAJOR issues - a committed NUL byte, two missed single-clip "reel" strings, inconsistent
+capitalization, a too-narrow FE/BE sync guard - all fixed and re-verified), and merged
+(PR #421, commit 408ec030). Supervisor produced an independent red-before/green-after proof
+(checked out master's pre-fix source with the new tests in place: 9 failed; restored the fix:
+33/33 passed) before merging. Branch CI's sole failure was the pre-existing
+`uploadManager.attachVideo.test.js` flake, attributed in known-failures.md. Live-drive on a real
+stack still owed (no Postgres in the container) - verify on staging.
 
 ## Source
 
