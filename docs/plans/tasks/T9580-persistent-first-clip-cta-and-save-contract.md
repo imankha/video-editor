@@ -1,6 +1,6 @@
 # T9580: Persistent first-clip CTA and an explicit save-play contract
 
-**Status:** WIP
+**Status:** WAITING ON USER (implementation + review + live QA complete; branch ready for supervisor push/merge)
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-09-10
@@ -62,12 +62,70 @@ yanked into an editor.
 Persistence rule: the clip is created by the *gesture*, not by a `useEffect` reacting to a saved
 play. Reuse must be keyed on the play, so a double click cannot produce two clips.
 
+## Overlap Resolution (T9330) — investigation, written BEFORE implementation
+
+Live-read of the shipped code (T9330 merged, STAGING) plus a full grep for the N41 strings.
+**Verdict: T9330 already delivers ~90% of this task's mechanism; the genuine delta is wording +
+one dismiss affordance. No new state machinery is needed, so this stays M-tier.** Details:
+
+### What T9330 already provides (verified against code, not assumed)
+
+| T9580 ask | Already covered by T9330? | Evidence |
+|-----------|---------------------------|----------|
+| Save play persists the marker | **Yes** | `handleFullscreenCreateClip` (`AnnotateContainer.jsx:1234`) adds the region then `saveClip`s it; T9450 gave the toggle positive polarity. |
+| Says which object it created | **Yes (create path)** | On `project_created`, `notifyReelCreated` -> toast `"{name} is now in Clips"` (`announceReelCreated:93`). Bare-play save (no clip) toasts `"Saved to your library"` — confirms persistence but does not name the object; tightened to name the play in this task. |
+| Persistent inline invitation, not only a disappearing toast | **Yes (desktop)** | After a create the editor STAYS OPEN on the new clip (`onCreateSelect -> editClip`, CREATING->EDITING) and renders a **full-width primary stage CTA** (`stageCta`, `AnnotateFullscreenOverlay.jsx:715`) that persists in the open editor until closed/navigated. The 6s toast is additive, never the only path. |
+| Reuse — repeated action opens the SAME clip, never a duplicate | **Yes** | The clip's project is created once by the Save gesture and its id stored on the region (`setAutoProjectId`). The CTA calls `onOpenInFocus(existingClip.autoProjectId)` — it navigates to the existing project; it never re-creates. `pendingProjectClipId` also guards the in-flight window. |
+| Second play saved without forced navigation, playhead preserved | **Yes** | Desktop strip stays open (`handleOverlayResumePlayback` plays without closing); `Mark play` stays reachable. |
+| Dismissal preserves playhead | **Yes (mechanically)** | `onClose -> closeOverlay` (`useClipSelection.js:52`) is a pure state transition (EDITING->SELECTED) with **no seek**, so the playhead is untouched. |
+
+### The genuine delta (what is NOT already there)
+
+1. **N41 wording does not exist anywhere.** `grep -rn "Frame this clip\|Keep marking"` over
+   `src/` returns nothing. The kickoff's premise that "T9520 already renamed these per N41" is
+   **false** — T9520 shipped naming groups N04-N35, not N41. So this task, which carries handoff
+   item N41, is the place that introduces `"Frame this clip"` / `"Keep marking plays"`.
+2. **No secondary "Keep marking plays" affordance** paired with the primary CTA — the invitation
+   currently reads as a single button, not the intended two-choice prompt. (A generic `Cancel`
+   exists in the controls row, but that is an edit-cancel, not the invitation's dismiss.)
+
+### Design decision (kept small, single-vocabulary)
+
+- The persistent invitation **is** T9330's existing full-width stage CTA. Per the kickoff directive
+  ("wire N41's exact wording onto the existing CTA"), the **FOCUS-stage** label in the shared
+  `getClipStage` helper becomes **"Frame this clip"** (single source, so the desktop strip and the
+  sidebar stay unified — the one-vocabulary principle T9330 established). Later stages
+  (Spotlight / Final / Published) keep their T9320/T9330 user-decided labels unchanged.
+  Authorization for the rename is handoff item **N41**, which this task owns.
+- The confirm-dialog `openStageName` is decoupled from the button label (derived from
+  `clipStage.stage`, not by stripping an "Apply/View" prefix) so the dialog copy stays correct
+  ("...then open AI Focus") after the FOCUS label changes.
+- A **"Keep marking plays"** secondary is added beside the primary CTA in the editor invitation
+  (FOCUS stage, edit mode) and wired to `onClose` (dismiss -> `closeOverlay`, playhead preserved).
+- No persistence change: every write still traces to the Save gesture; no `useEffect` reacts to a
+  saved play. Reuse continues to key on the region's `autoProjectId`.
+
+### Explicitly out of scope (noted, not built)
+
+- **Mobile CREATE-then-close.** T9330 deliberately keeps mobile create closing on save (the
+  persistent in-editor CTA is desktop-strip + mobile EDIT only). The walkthrough was a desktop
+  browser; expanding the invitation to the mobile create path is T9330-owed follow-up, not this
+  task. The mobile EDIT sheet already shares `stageCta`, so it inherits the N41 label automatically.
+
 ## Acceptance Criteria
 
-- [ ] Save play persists the marker and says which object it created
-- [ ] The first-clip CTA persists until used or dismissed
-- [ ] Repeating the action opens the same clip, never a duplicate
-- [ ] A second play can be saved without forced navigation, with the playhead preserved
-- [ ] Overlap with T9330 is resolved explicitly before implementation
-- [ ] Relevant test set (curated ~10, per CLAUDE.md Test Scope Policy) green, with output attached
-- [ ] Branch CI green
+- [x] Save play persists the marker and says which object it created (`announcePlaySaved`, live-verified)
+- [x] The first-clip CTA persists until used or dismissed (T9330 mechanism + N41 "Frame this clip" / "Keep marking plays")
+- [x] Repeating the action opens the same clip, never a duplicate (getClipStage/autoProjectId reuse, unchanged from T9330)
+- [x] A second play can be saved without forced navigation, with the playhead preserved (T9330 stay-open + dismiss -> closeOverlay, no seek)
+- [x] Overlap with T9330 is resolved explicitly before implementation (see Overlap Resolution section above)
+- [x] Relevant test set (curated ~10, per CLAUDE.md Test Scope Policy) green, with output attached (10 files / 87 tests)
+- [ ] Branch CI green (pending push — not run in this container)
+
+## Progress Log
+
+**2026-09-12**: Implemented per the investigation above. Reviewer (fresh-context) found one MAJOR
+(bare-play save toast did not name the object, contradicting this file's own committed delta) —
+fixed via `announcePlaySaved()`; approved after fix. Live QA (`dev-verify.sh`, real account
+imankh@gmail.com) confirmed all 4 behavioral criteria end-to-end; evidence in `qa/T9580-*.png`.
+Commits: 086aa23a (impl), b1375db9 (review fix), b52b0aaa (QA spec).

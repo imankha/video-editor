@@ -113,6 +113,18 @@ function reelToastClipName(region) {
 }
 
 /**
+ * T9580 (AC #1): the bare-play save path (createProject off — a saved marker, no
+ * clip produced) confirms WHICH object the Save gesture persisted, mirroring
+ * announceReelCreated's naming for the clip path. A play is not "in Clips" (it
+ * only becomes a clip when the user opts in), so the toast just names the play
+ * rather than claiming a clip/home that does not exist.
+ */
+export function announcePlaySaved(clipName) {
+  const name = (clipName && clipName.trim()) ? clipName.trim() : '';
+  toast.success(name ? `Saved play "${name}"` : 'Play saved');
+}
+
+/**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
  *
  * This container manages:
@@ -1336,8 +1348,9 @@ export function AnnotateContainer({
             // (this Save gesture's saveClip resolving with a raw_clip_id), never a
             // pre-save claim. A failed save (null result / sync_failed 503) skips
             // this branch, so the user's on-screen edits are retained un-"saved".
-            // The project_created path already confirms via notifyReelCreated.
-            toast.success('Saved to your library');
+            // The project_created path already confirms via notifyReelCreated;
+            // this bare-play path names the play it saved (T9580 AC #1).
+            announcePlaySaved(reelToastClipName(newRegion));
           }
         }
       }

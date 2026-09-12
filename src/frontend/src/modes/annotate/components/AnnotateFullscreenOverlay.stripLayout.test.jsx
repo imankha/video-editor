@@ -140,7 +140,7 @@ describe('AnnotateFullscreenOverlay strip — full-width stage-aware primary CTA
         existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
       />
     );
-    const cta = screen.getByRole('button', { name: 'Apply AI Focus' });
+    const cta = screen.getByRole('button', { name: 'Frame this clip' });
     expect(cta.className).toMatch(/w-full/);
   });
 
@@ -155,7 +155,7 @@ describe('AnnotateFullscreenOverlay strip — full-width stage-aware primary CTA
         existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
       />
     );
-    expect(screen.queryByRole('button', { name: 'Apply AI Focus' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Frame this clip' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Apply Spotlight' })).toBeTruthy();
   });
 });

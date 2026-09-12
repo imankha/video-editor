@@ -4,7 +4,7 @@ import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
 import { useProjectsStore } from '../../../stores/projectsStore';
 
 // T9330 (design §2.6): the MOBILE edit sheet (layout="inline") must carry the
-// SAME stage-aware CTA as the desktop strip — Apply AI Focus / Apply Spotlight /
+// SAME stage-aware CTA as the desktop strip — Frame this clip / Apply Spotlight /
 // View Final / View Published — so editing a clip-with-a-project on a phone has a
 // path into Focus/Spotlight/the finished video. A live-verification gap found the
 // mobile sheet only rendered Update/Cancel. Edit mode only: mobile CREATE still
@@ -46,14 +46,14 @@ const editClip = {
 };
 
 describe('AnnotateFullscreenOverlay mobile inline sheet — stage CTA (T9330 §2.6)', () => {
-  it('edit mode with a fresh-draft project renders "Apply AI Focus" in the mobile sheet', () => {
+  it('edit mode with a fresh-draft project renders "Frame this clip" in the mobile sheet', () => {
     render(
       <AnnotateFullscreenOverlay
         {...baseProps}
         existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: null, reelSourceEndTime: null }}
       />
     );
-    expect(screen.getByRole('button', { name: 'Apply AI Focus' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Frame this clip' })).toBeTruthy();
   });
 
   it('reflects the linked project stage (Spotlight) on mobile too', () => {
@@ -64,7 +64,7 @@ describe('AnnotateFullscreenOverlay mobile inline sheet — stage CTA (T9330 §2
         existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
       />
     );
-    expect(screen.queryByRole('button', { name: 'Apply AI Focus' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Frame this clip' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Apply Spotlight' })).toBeTruthy();
   });
 
@@ -77,7 +77,7 @@ describe('AnnotateFullscreenOverlay mobile inline sheet — stage CTA (T9330 §2
         onOpenInFocus={onOpenInFocus}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Apply AI Focus' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Frame this clip' }));
     expect(screen.queryByText('Save this play first?')).toBeNull();
     expect(onOpenInFocus).toHaveBeenCalledWith(42);
   });
@@ -93,14 +93,14 @@ describe('AnnotateFullscreenOverlay mobile inline sheet — stage CTA (T9330 §2
     );
     // Make the form dirty (rating 4 -> 5), then tap the CTA: must prompt, not navigate.
     fireEvent.click(screen.getByTitle('5 stars'));
-    fireEvent.click(screen.getByRole('button', { name: 'Apply AI Focus' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Frame this clip' }));
     expect(screen.getByText('Save this play first?')).toBeTruthy();
     expect(onOpenInFocus).not.toHaveBeenCalled();
   });
 
   it('create mode (no existing clip) shows NO stage CTA — just Save/Cancel', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={null} />);
-    expect(screen.queryByRole('button', { name: 'Apply AI Focus' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Frame this clip' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Apply Spotlight|View Final|View Published/ })).toBeNull();
     expect(screen.getByRole('button', { name: /^Save play/ })).toBeTruthy();
   });

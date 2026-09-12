@@ -20,7 +20,7 @@ describe('getClipStage (T9330)', () => {
     });
   });
 
-  it('fresh draft (autoProjectId set, no reelSource snapshot, no produced video) -> FOCUS, "Apply AI Focus"', () => {
+  it('fresh draft (autoProjectId set, no reelSource snapshot, no produced video) -> FOCUS, "Frame this clip"', () => {
     const region = {
       ...baseRegion,
       autoProjectId: 42,
@@ -30,12 +30,12 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: false, has_final_video: false, is_published: false };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
-      label: 'Apply AI Focus',
+      label: 'Frame this clip',
       action: 'focus',
     });
   });
 
-  it('drifted (T8070): reelSource snapshot non-null but boundaries moved -> FOCUS, "Apply AI Focus"', () => {
+  it('drifted (T8070): reelSource snapshot non-null but boundaries moved -> FOCUS, "Frame this clip"', () => {
     const region = {
       ...baseRegion,
       startTime: 3, // moved from the reelSource snapshot's 2
@@ -47,12 +47,12 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: true, has_final_video: true, is_published: false };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
-      label: 'Apply AI Focus',
+      label: 'Frame this clip',
       action: 'focus',
     });
   });
 
-  it('below-migration (has_final_video true but reelSource snapshot null) -> FOCUS, "Apply AI Focus"', () => {
+  it('below-migration (has_final_video true but reelSource snapshot null) -> FOCUS, "Frame this clip"', () => {
     const region = {
       ...baseRegion,
       autoProjectId: 42,
@@ -62,7 +62,7 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: true, has_final_video: true, is_published: false };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
-      label: 'Apply AI Focus',
+      label: 'Frame this clip',
       action: 'focus',
     });
   });
@@ -128,7 +128,7 @@ describe('getClipStage (T9330)', () => {
       const linkedProject = { has_working_video: true, has_final_video: true, is_published: true };
       expect(getClipStage(region, linkedProject)).toEqual({
         stage: CLIP_STAGE.FOCUS,
-        label: 'Apply AI Focus',
+        label: 'Frame this clip',
         action: 'focus',
       });
     });
@@ -145,7 +145,7 @@ describe('getClipStage (T9330)', () => {
       const linkedProject = { has_working_video: true, has_final_video: true, is_published: false };
       expect(getClipStage(region, linkedProject)).toEqual({
         stage: CLIP_STAGE.FOCUS,
-        label: 'Apply AI Focus',
+        label: 'Frame this clip',
         action: 'focus',
       });
     });
