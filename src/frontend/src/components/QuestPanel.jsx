@@ -257,9 +257,12 @@ export function QuestPanel({ inline = false }) {
           setShowCompletionModal(true);
         } else {
           // T8120: credits are granted upfront, not per quest — celebrate the
-          // milestone without a credit claim message.
-          toast.success('Quest complete!', {
-            message: 'Keep going — more quests await!',
+          // milestone without a credit claim message. T9575: user-facing copy
+          // drops the internal word "quest" (and the banned em-dash) — this is
+          // the last success-path surface that still said it (N39 fixed only the
+          // failure path).
+          toast.success('Nice work!', {
+            message: 'Keep going, more steps await.',
             duration: 6000,
           });
         }

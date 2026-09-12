@@ -124,24 +124,30 @@ STEP_TITLES = {
     "watch_framing_tutorial": "Watch AI Focus Tutorial",
     "watch_overlay_tutorial": "Watch Spotlight Tutorial",
     "watch_publish_tutorial": "Watch Publish Tutorial",
-    "upload_game": "Add Your First Game",
-    "add_clip": "Find an Amazing Play",
+    "upload_game": "Upload your first game",
+    "add_clip": "Mark an amazing play",
     "rate_clip": "Rate & Tag the Play",
-    "annotate_brilliant": "Save Your Reel",
+    "annotate_brilliant": "Save your play",
     "playback_annotations": "Preview plays",  # N40
     "return_home": "Head Back Home",
-    "open_framing": "Open Your Reel",
+    "open_framing": "Open your clip",
     "position_crop": "Keep Your Player in Frame",
     "add_slowmo": "Add a Slow-Mo Moment",
     "export_framing": "Export Your Highlight",
     "wait_for_export": "Crisp It Up to 1080p",
     "open_overlay": "Open in Spotlight",
     "select_players": "Pick Your Player",
-    "choose_color": "Pick Your Highlight Color",
+    "choose_color": "Pick your spotlight color",
     "choose_shape": "Choose the Spotlight Shape",
-    "export_overlay": "Add the Spotlight",
+    "export_overlay": "Export clip with effects",
     "wait_for_overlay": "Render the Spotlight",
     "preview_draft": "Watch Your Preview",
+    # T9575 residual #2: this title hardcodes the FE-derived `Move to
+    # ${SECTION_NAMES.LIBRARY}` string. They agree by COINCIDENCE across the
+    # JS/Python boundary (no shared constant), so a future `LIBRARY` rename would
+    # silently drift this backend error copy. The FE/BE agreement is pinned by
+    # questDefinitions.test.jsx ("FE/BE move_to_my_reels title sync") — update
+    # both together if the destination noun changes.
     "move_to_my_reels": "Move to Highlight Reels",
-    "view_gallery_video": "Watch Your Reel",
+    "view_gallery_video": "Watch your clip",
 }

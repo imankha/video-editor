@@ -1,6 +1,9 @@
 import { render } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { STEP_DESCRIPTIONS, STEP_TITLES } from './questDefinitions.jsx';
+import { SECTION_NAMES } from './displayNames';
 import { QUEST_DEFINITIONS } from '../data/questDefinitions.js';
 
 // T3780: open_framing text wayfinding ("Click the Home button... open Drafts")
@@ -58,7 +61,9 @@ describe('questDefinitions rate_clip split (T5150)', () => {
   });
 
   it('retitles annotate_brilliant to the Save step', () => {
-    expect(STEP_TITLES.annotate_brilliant).toBe('Save Your Reel');
+    // T9575: epic vocabulary — the step saves a PLAY (which produces a clip), so
+    // the title is "Save your play", not the old single-clip-"reel" wording.
+    expect(STEP_TITLES.annotate_brilliant).toBe('Save your play');
     const { container } = render(<>{STEP_DESCRIPTIONS.annotate_brilliant}</>);
     expect(container.textContent).toMatch(/save/i);
   });
@@ -69,9 +74,11 @@ describe('questDefinitions rate_clip split (T5150)', () => {
     // Rating copy lives on rate_clip, not on the Save step
     expect(rate).toMatch(/start time and end time/i);
     expect(save).not.toMatch(/rate the play/i);
-    // Save/toggle copy lives on annotate_brilliant, not on rate_clip
-    expect(save).toMatch(/create reel/i);
-    expect(rate).not.toMatch(/create reel/i);
+    // Save/toggle copy lives on annotate_brilliant, not on rate_clip. T9575: the
+    // toggle is the epic's "Create an editable clip", never the old "Create Reel".
+    expect(save).toMatch(/create an editable clip/i);
+    expect(save).not.toMatch(/create reel/i);
+    expect(rate).not.toMatch(/create an editable clip/i);
   });
 
   it('wraps all five rating stars in a single non-wrapping container', () => {
@@ -182,5 +189,57 @@ describe('questDefinitions preview step (T6840)', () => {
     // move step keeps the publish gesture, no longer the "Press play... to preview" nudge
     expect(container.textContent).toMatch(/Move to/i);
     expect(container.textContent).not.toMatch(/press play/i);
+  });
+});
+
+// T9575: the onboarding quest walkthrough was the last live cluster of pre-Shared-
+// Vocabulary-epic copy. Every step now uses the epic object model (play / clip /
+// reel / player) and never calls a single-clip object a "reel" or a player an
+// "athlete".
+describe('questDefinitions vocabulary sweep (T9575)', () => {
+  const renderedText = (node) => render(<>{node}</>).container.textContent;
+  const everyStepText = () =>
+    [...Object.values(STEP_TITLES), ...Object.values(STEP_DESCRIPTIONS).map(renderedText)]
+      .join('   ');
+
+  it('never calls a single-clip object a "reel" in the walkthrough copy', () => {
+    // "Highlight Reels" is the published-destination noun (SECTION_NAMES.LIBRARY),
+    // the only place "reel" legitimately survives — strip it before scanning.
+    const scrubbed = everyStepText().replaceAll(SECTION_NAMES.LIBRARY, '');
+    expect(scrubbed).not.toMatch(/\breels?\b/i);
+  });
+
+  it('never calls a player an "athlete"', () => {
+    expect(everyStepText()).not.toMatch(/athlete/i);
+  });
+
+  it('names the epic controls by their live labels', () => {
+    const save = renderedText(STEP_DESCRIPTIONS.annotate_brilliant);
+    expect(save).toMatch(/My player/);                 // ANNOTATE.LAYER_MINE (was "My Athlete")
+    expect(save).toMatch(/Create an editable clip/);   // ANNOTATE.CREATE_EDITABLE_CLIP (was "Create Reel")
+    expect(renderedText(STEP_DESCRIPTIONS.add_clip)).toMatch(/Mark play/); // ANNOTATE.MARK_PLAY (was "Add Play")
+    expect(renderedText(STEP_DESCRIPTIONS.choose_shape)).toMatch(/Around player/); // EDITOR_PANELS (was "Body")
+    expect(STEP_TITLES.export_overlay).toBe('Export clip with effects'); // EXPORT_JOBS.overlay.action
+  });
+});
+
+// T9575 residual #2: the backend quest_config STEP_TITLES["move_to_my_reels"]
+// hardcodes "Move to Highlight Reels" while the frontend DERIVES the same words
+// from SECTION_NAMES.LIBRARY. They agree only by coincidence across the JS/Python
+// boundary (no shared constant), so a future LIBRARY rename would silently drift
+// the backend claim-reward error copy. This test reads the Python source and pins
+// the two in sync.
+describe('FE/BE move_to_my_reels title sync (T9575)', () => {
+  it('backend quest_config title matches the frontend SECTION_NAMES.LIBRARY-derived title', () => {
+    const expected = `Move to ${SECTION_NAMES.LIBRARY}`;
+    // Frontend side derives it from the single source.
+    expect(STEP_TITLES.move_to_my_reels).toBe(expected);
+    // Backend side hardcodes it — read the source and compare. Vitest runs with
+    // cwd = src/frontend, so the backend module sits one level up under src/backend.
+    const qcPath = resolve(process.cwd(), '../backend/app/quest_config.py');
+    const src = readFileSync(qcPath, 'utf8');
+    const m = src.match(/"move_to_my_reels":\s*"([^"]*)"/);
+    expect(m, 'move_to_my_reels not found in quest_config.py STEP_TITLES').toBeTruthy();
+    expect(m[1]).toBe(expected);
   });
 });
