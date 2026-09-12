@@ -1,6 +1,6 @@
 # T9380: Shrink time-to-activate - the handover from waiting bundle to running code
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-09

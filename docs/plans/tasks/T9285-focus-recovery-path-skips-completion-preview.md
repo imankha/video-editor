@@ -1,6 +1,6 @@
 # T9285: Focus's export-recovery path never shows the publish-exit preview after a mobile tab discard
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-09

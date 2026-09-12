@@ -1,6 +1,6 @@
 # T9575: Onboarding quest-walkthrough vocabulary sweep
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-11
