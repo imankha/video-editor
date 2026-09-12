@@ -1,6 +1,23 @@
 ---
 domain: export-pipeline
-updated: 2026-09-11 (T9740 PUBLISH-WITHOUT-SPOTLIGHT ONE-TAP fix v3, frontend-only: the no-keyframes
+updated: 2026-09-12 (T9285 RECOVERY-PATH FOCUS COMPLETION PREVIEW, frontend-only: a Focus export
+completing via useExportRecovery.js post-reload/tab-discard called only exportStore.completeExport,
+a silent no-op for a job never in activeExports -- zero user signal. NEW single completion seam
+utils/recoveredExportCompletion.js::reportRecoveredCompletion (routes all 3 useExportRecovery
+completion sites, one-shot per job_id, framing-only) -> NEW ephemeral stores/focusCompletionStore.js
+(preview + recovered slices, never persisted) -> NEW utils/resumeFocusCompletion.js carries the
+recovered completion into the SAME FocusScreen preview the live path shows (selectProject before
+setEditorMode, loadProject gets explicit {mode:'framing'} per the useProjectLoader.js:117-120
+overlay-default landmine) -> NEW components/FocusCompletionRecovery.jsx (App-level card, Option C:
+auto-opens only when idle on Clips home with nothing selected). Acknowledge-timing split (6a): a
+COMPLETE framing job's /api/exports/acknowledge defers from mount-time to the View/Dismiss gesture
+(overlay/annotate/framing-errors keep the unconditional mount-time acknowledge), so a second tab
+discard before the user acts re-prompts instead of losing the completion moment. FocusScreen.jsx's
+showExportCompletePreview/exportPreviewUrl useState replaced by a focusCompletionStore read; the
+live path's silent no-render on a null preview URL is now a loud console.error. See § Recovery-path
+Focus completion preview below. App.jsx:551-557/handleOverlayExportCompletion.js/
+ExportButtonContainer.jsx/publishIntentStore.js/focusOverlayTransition.js (T9280) untouched, no
+schema change); 2026-09-11 (T9740 PUBLISH-WITHOUT-SPOTLIGHT ONE-TAP fix v3, frontend-only: the no-keyframes
 overlay render is DUAL-TRANSPORT (backend sends the WS complete frame THEN returns a synchronous 200),
 so onExportComplete fired TWICE -> App.jsx handleExportComplete ran twice -> racing fetchProjects({force})
 aborts the in-flight fetch (abort catch returns STALE get().projects, no set()) -> first invocation read
@@ -103,6 +120,108 @@ The problem: `working_videos.highlights_data` is the SOLE home of user overlay-e
 - **T4947 — disposable stitched-download cache (NO DB row, NO migration; existence fully derivable from the R2 key).** `download_collection` caches its composed MP4 at `{r2_prefix}/collection_downloads/{sha256(fingerprint)}.mp4` (same per-user prefix as the Modal stitch scratch, so it is disposable + torn down with the account). **HEAD-before-build** (`r2_head_object_global` → on hit, `download_from_r2_global` and stream, NO stitch/compose run at all); **write-after-build** on a miss (new `storage.upload_file_to_r2_global`, a local-file counterpart of `upload_bytes_to_r2_global`). Helpers: `_collection_download_cache_key`, `_card_content_hash`, shared `_stream_file_and_cleanup`. **Cache-key fingerprint = EVERYTHING that changes the composed bytes:** ordered member ids + each member's filename + resolved intro card id (`card_row["id"]`, post `resolve_intro_card_id` 0/dangling→None) + the card's content hash (`updated_at` + content columns, so a same-id card EDIT invalidates) + **the burned intro FACTS** (`_load_field_values`: profile `full_name` + shown fields — these live in `user.sqlite`, NOT the card row, so a profile rename never bumps the card's `updated_at`; folded in only when a card is attached, `asyncio.to_thread`-offloaded per T7040) + `outro_enabled()` (the `BRANDED_OUTRO_ENABLED` flag is what `compose_serve_time` ACTUALLY honors, not the literal `outro=True`) + `budget_sec`. **Two concurrency/degradation invariants:** (1) **race-safe** — an R2 object PUT is atomic (key visible only on completion) AND each request streams its OWN freshly-built local `serve_path` (never the key it just wrote), so two concurrent uncached requests can't corrupt each other's output; no temp-key/rename dance needed (R2 PUT ≠ filesystem partial write). (2) **degraded builds are NOT cached** — `compose_serve_time` is non-fatal (a transient intro/outro/concat hiccup degrades to the bare stitch but still returns True); it now takes an optional `report` out-dict setting `report["full_fidelity"]`, and the endpoint caches ONLY when full-fidelity, so a transient degradation streams to that one caller but never freezes outro-less bytes into the cache (the next request re-misses + rebuilds). Regression: `test_t4947_cache_stitched_downloads.py` (hit-no-recompute incl. Modal branch; one miss test per dimension incl. card-content edit + burned-fact edit; degraded-not-cached; asyncio-gather race with a `threading.Barrier`). Downloads are FREE (Decision 4) so there is no charge to skip on a hit.
 
 **Credits:** GPU exports reserve → insert job → confirm before dispatch (`framing.py:446-478`, `multi_clip.py:1927-1958`, `exports.py:536-595`); failure paths refund (`multi_clip.py:1760-1829`, `export_worker.py:206-219`). **T8280 (2026-09-02):** the flat `math.ceil(video_seconds)` formula at `framing.py:493`/`multi_clip.py:2155` is now `compute_export_credits(video_seconds, output_fps)` (`highlight_transform.py`, `HIGH_FPS_THRESHOLD=31`) — both live call sites still pass `target_fps=30` (Option B: 30fps cost-saving choice only, no native price shipped), so pricing is unchanged today; the fps-scaled branch (`ceil(seconds*max(1,fps/30))`) is a tested-but-unreachable seed for a future native-delivery task. `list_project_clips` (`clips.py`) now falls back `wc.fps or gv.fps` (mirrors the multi-clip DB-resolve fallback below) so the Focus screen can surface source fps for a "recorded at Nfps, exported at 30fps" note (`ExportButtonView`'s `export-high-fps-note`) — no schema change, no persisted choice. See modal-gpu.md § Active/upcoming work T8280 for the paired read-loop GPU optimization.
+
+## Recovery-path Focus completion preview (T9285, 2026-09-12)
+
+**The bug:** a Focus (framing) export completing via `useExportRecovery.js` (the
+recovery path — a page reload/mobile-tab-discard mid-render, or the export
+finishing while the tab was dead) called only `exportStore.completeExport`,
+which is a **silent no-op** for a job discovered via the unacknowledged loop —
+`setExportsFromServer` had already overwritten the store with the
+pending/processing list, which by definition excludes an already-completed
+job, so there is no entry to complete. Net effect: `GlobalExportIndicator`'s
+toast effect never even iterates it, `/api/exports/acknowledge` still fires
+(job marked seen), and the user gets **zero signal** their render finished —
+not a missing preview, total silence. Separately, `App.jsx:551-557` (T5677)
+redirects a reload landing in an editor mode with no selected project straight
+to Clips home, so `FocusScreen` (and T9280's guard inside it) never mounts —
+T9280 fixed the STILL-MOUNTED completion path only; this task closes the
+recovery-path gap it left open.
+
+**The fix, one seam + one carrier:**
+- `utils/recoveredExportCompletion.js::reportRecoveredCompletion({jobId,
+  projectId, projectName, type})` — the single completion seam for all 3 of
+  `useExportRecovery.js`'s completion sites (WS `onComplete`, the
+  unacknowledged-jobs loop, `checkModalStatusOnce`'s COMPLETE branch — the
+  live WS path AND the "still running at reload" sub-case both funnel through
+  it). One-shot per `job_id` via a module-scope `Set` (WS + the 60s-silence
+  modal-status re-poll can both report the same job). **Framing-only** —
+  overlay/annotate completions return `false` and keep their existing
+  toast-only handling (`GlobalExportIndicator`). A framing job missing
+  `project_id` logs a loud `console.error` (no-silent-fallback) instead of
+  quietly declining.
+- `stores/focusCompletionStore.js` — ephemeral, NEVER persisted (same family
+  as `publishIntentStore`/`reelPreviewStore`). Two slices: `preview` (the open
+  completion preview, `{projectId, previewUrl, openMode}`, written by BOTH the
+  live path — `FocusScreen.handleProceedToOverlayInternal` — and the recovered
+  path, so there is exactly one renderer: `FocusScreen`'s `CollectionPlayer` +
+  `FocusPublishActionBar`) and `recovered` (a completion `reportRecoveredCompletion`
+  found with no screen to show it, `{jobId, projectId, projectName}`).
+- `utils/resumeFocusCompletion.js::resumeFocusCompletion({jobId, projectId}, deps)`
+  — carries a recovered completion into the live preview: resolves the
+  preview URL first (loud `console.error` + toast on failure, no navigation);
+  if already standing in Focus for that exact project, opens in place
+  (skips `selectProject`/`loadProject`, which reset 4 stores, so a live editor
+  is never reset under the user); otherwise `selectProject` (sets
+  `selectedProjectId` SYNCHRONOUSLY, satisfying `App.jsx:551-557`'s redirect
+  precondition — the redirect itself is untouched) **then** `setEditorMode`
+  **then** `loadProject(project, {mode: 'framing'})` with an EXPLICIT mode
+  (landmine: `useProjectLoader.js:117-120` defaults to `'overlay'` whenever
+  `working_video_id` is set with no final video — exactly the post-framing-
+  render state). All collaborators injected, mirrors
+  `handleOverlayExportCompletion.js`'s testable-injection pattern.
+- `components/FocusCompletionRecovery.jsx` — the App-level surface (mounted
+  on both `App.jsx` returns, same double-mount pattern as `DraftReelPreview`).
+  Renders `null` when `recovered` is null; otherwise a bottom-right card
+  (`EXPORT_JOBS.framing.completed` = "AI Focus ready" + the project name) with
+  View/Dismiss. **Option C (approved):** auto-invokes View exactly when the
+  completion was discovered while the user is idle on Clips home with nothing
+  selected (`editorMode === PROJECT_MANAGER && !selectedProjectId`) — every
+  other case (a different project selected, mid-annotate, etc.) shows the
+  passive card only. Mirrors the policy `handleOverlayExportCompletion.js`
+  already uses for the sibling Overlay completion ("only hijack the screen if
+  the user is still where the app put them").
+- **Acknowledge-timing split (§6a):** `useExportRecovery.js`'s unacknowledged-
+  jobs loop SKIPS `/api/exports/acknowledge` for a COMPLETE **framing** job
+  specifically (still calls `reportRecoveredCompletion`) — every other job
+  (overlay/annotate completions, framing errors) keeps the pre-existing
+  unconditional mount-time acknowledge (`rbNonDataWrite` reconciliation write).
+  The framing job's acknowledge instead fires from `resumeFocusCompletion`
+  (after `openPreview` succeeds) or `FocusCompletionRecovery`'s Dismiss
+  handler — i.e. a real user gesture, not a mount-time reconciliation. Why: an
+  unconditional mount-time acknowledge combined with "the card is gone once
+  acknowledged" means a SECOND tab discard between the card rendering and the
+  user tapping View would permanently lose the completion-preview moment — the
+  exact mobile failure mode this task fixes, recurring one level up. Deferring
+  the write converts a reconciliation write into a gesture-triggered one (a
+  BETTER fit for the project's persistence invariant, not a deviation from
+  it): a second discard before the user acts just means the card/auto-open
+  reappears next load, never vanishes. No change to the 24h
+  `completed_at >= now() - interval '24 hours'` window in
+  `GET /api/exports/unacknowledged` — this only affects jobs still inside it.
+- `FocusScreen.jsx` no longer holds `showExportCompletePreview`/
+  `exportPreviewUrl` as local `useState` — both replaced by a
+  `focusCompletionStore.preview` read (`previewOpen = preview?.projectId ===
+  projectId`, derived, never stored twice). The live completion path's old
+  silent no-render (compound `showExportCompletePreview && exportPreviewUrl`
+  gate just stayed false when `resolveWorkingVideoPreviewUrl` returned null)
+  is now a loud `console.error` — a real no-silent-fallback fix riding along
+  with the store move. Also gained the `openMode` staleness-scoping effect
+  (same 3-line pattern `DraftReelPreview.jsx:45-50` uses) so a leftover
+  `preview` payload can't resurrect on a later, unrelated entry into Focus for
+  the same project.
+- **QA gotcha for the next task touching this area:** `useExportRecovery`
+  consumes `window.__bootstrapExports` (set by `App.jsx`'s
+  `POST /api/bootstrap` response) BEFORE ever falling back to a direct
+  `GET /api/exports/unacknowledged` fetch — stubbing only the discrete REST
+  endpoint in a test/QA harness is silently ineffective; the bootstrap
+  response's `exports.unacknowledged` field must be stubbed too (see
+  `e2e/T9285-recovery-preview.qa.spec.js`'s `stubUnacknowledged` helper).
+- **Untouched by design:** `App.jsx:551-557`'s redirect (satisfied, not
+  special-cased), `handleOverlayExportCompletion.js`, `ExportButtonContainer.jsx`,
+  `publishIntentStore.js`, `scheduleExportWhenReady.js`,
+  `focusOverlayTransition.js` (T9280's guard — its test stays green,
+  unmodified). No schema/DB change.
 
 ## Render/job labels + double-dispatch guard (T9540, 2026-09-11)
 
