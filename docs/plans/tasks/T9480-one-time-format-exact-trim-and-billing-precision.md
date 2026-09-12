@@ -6,6 +6,14 @@
 **Created:** 2026-09-10
 **Updated:** 2026-09-12
 
+**Design approved 2026-09-12**: `docs/plans/tasks/T9480-design.md`, full scope (including Stage
+D3 shared-player default and D4 falsy-guard removal). Real count of duplicate time formatters:
+19 named + 6 inline across 13 files (task file's own "~8" estimate was low), plus a live bug
+(`59.97s` renders `"00:60.0"`) and a `formatTimeSimple` name collision across two modules. One
+documented rule: instants floor, lengths round-half-up (matching the credit charge exactly).
+Staged refactor: characterize (A) -> build canonical module (B) -> mechanical moves (C) ->
+isolated behavior changes (D) -> feature work/exact entry+disclosure (E) -> docs (F). Tier L.
+
 ## Source
 
 2026-09-09/10 first-time-parent walkthrough of **staging** (`reel-ballers-staging.pages.dev`),
