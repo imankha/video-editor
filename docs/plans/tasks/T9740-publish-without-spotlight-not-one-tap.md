@@ -1,6 +1,6 @@
 # T9740: "Publish without spotlight" doesn't publish in one tap
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-12
