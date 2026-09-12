@@ -3,6 +3,7 @@ import { Info, Play, Users, Share2, Video, Tag, StickyNote } from 'lucide-react'
 import { getRatingDisplay, getRatingLabel } from '../../../components/shared/clipConstants';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { ANNOTATE } from '../../../config/displayNames';
+import { formatInstant, PRECISION } from '../../../utils/timeFormat';
 
 /**
  * LayerChip - icon-only amber "Team" marker for a clip-list row (T5700 follow-up).
@@ -58,16 +59,9 @@ function TagsNotesIndicator({ tags, notes }) {
   );
 }
 
-// Format seconds to MM:SS or HH:MM:SS
-const formatTime = (seconds) => {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  if (hrs > 0) {
-    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-};
+// T9480: the clip's end time is a POSITION on the game timeline (an instant), not
+// a span -- floors at second precision via the shared formatInstant.
+const formatTime = (seconds) => formatInstant(seconds, PRECISION.SECOND);
 
 /**
  * ClipListItem - Individual clip item in the side panel list

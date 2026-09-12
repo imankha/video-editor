@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useVideoProxy } from '../../../hooks/useVideoProxy';
+import { UI_STEP_FPS } from '../../../utils/timeFormat';
 
 /**
  * useMultiVideoScrub -- Dual-video scrub for unified multi-video annotate mode.
@@ -157,20 +158,18 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
     if (!proxy.timeline) return;
     const activeEl = proxy.videoController.getActiveElement();
     if (!activeEl) return;
-    const fps = 30;
-    const currentFrame = Math.round(proxy.virtualTime * fps);
+    const currentFrame = Math.round(proxy.virtualTime * UI_STEP_FPS);
     const nextFrame = currentFrame + 1;
-    const maxFrame = Math.floor(proxy.timeline.totalDuration * fps);
-    const newVt = Math.min(nextFrame, maxFrame) / fps;
+    const maxFrame = Math.floor(proxy.timeline.totalDuration * UI_STEP_FPS);
+    const newVt = Math.min(nextFrame, maxFrame) / UI_STEP_FPS;
     proxy.videoController.seek(newVt);
   }, [proxy.timeline, proxy.virtualTime, proxy.videoController]);
 
   const stepBackward = useCallback(() => {
     if (!proxy.timeline) return;
-    const fps = 30;
-    const currentFrame = Math.round(proxy.virtualTime * fps);
+    const currentFrame = Math.round(proxy.virtualTime * UI_STEP_FPS);
     const prevFrame = Math.max(currentFrame - 1, 0);
-    const newVt = prevFrame / fps;
+    const newVt = prevFrame / UI_STEP_FPS;
     proxy.videoController.seek(newVt);
   }, [proxy.timeline, proxy.virtualTime, proxy.videoController]);
 

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Play, Square } from 'lucide-react';
+import { formatInstant, formatLength, PRECISION } from '../../../utils/timeFormat';
 
 const WINDOW_BEFORE = 30; // seconds before anchor
 const WINDOW_AFTER = 30;  // seconds after anchor
@@ -538,7 +539,7 @@ export function ClipScrubRegion({
             </div>
           </div>
         </div>
-        <span className="text-xs font-mono text-gray-400 whitespace-nowrap">{clipDuration.toFixed(1)}s</span>
+        <span className="text-xs font-mono text-gray-400 whitespace-nowrap">{formatLength(clipDuration, PRECISION.TENTH)}</span>
       </div>
     );
   }
@@ -553,7 +554,7 @@ export function ClipScrubRegion({
           <span className="font-mono text-white">{formatTime(endTime)}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-mono text-gray-400">{clipDuration.toFixed(1)}s</span>
+          <span className="text-sm font-mono text-gray-400">{formatLength(clipDuration, PRECISION.TENTH)}</span>
           {/* T8780: preview button restored for the sidebar only. The fullscreen
               edit overlay (clipEditorActive) intentionally has no button here --
               its single main-transport control auto-loops the clip instead
@@ -600,7 +601,7 @@ export function ClipScrubRegion({
                 >
                   <div className="w-px h-2 bg-gray-600" />
                   <span className="text-[9px] text-gray-600 mt-0.5 font-mono">
-                    {Math.floor(t / 60)}:{String(Math.floor(t % 60)).padStart(2, '0')}
+                    {formatInstant(t, PRECISION.SECOND)}
                   </span>
                 </div>
               );

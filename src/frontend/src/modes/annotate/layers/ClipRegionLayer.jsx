@@ -4,6 +4,7 @@ import { Video } from 'lucide-react';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { RATING_NOTATION, getRatingLabel } from '../../../components/shared/clipConstants';
 import { ANNOTATE } from '../../../config/displayNames';
+import { formatInstant, PRECISION } from '../../../utils/timeFormat';
 
 // T8890: violet-400 accent for a clip cut from an "angle" (non-backbone source).
 // Backbone clips get NONE of this treatment — the common case stays clean.
@@ -45,16 +46,9 @@ function MarkerTooltip({ anchorRect, accentColor, children }) {
   );
 }
 
-// Format seconds to MM:SS or HH:MM:SS
-const formatTime = (seconds) => {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  if (hrs > 0) {
-    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-};
+// T9480: the active region's end time is a POSITION on the game timeline (an
+// instant), not a span -- floors at second precision via the shared formatInstant.
+const formatTime = (seconds) => formatInstant(seconds, PRECISION.SECOND);
 
 // Rating to color map (color-blind safe palette)
 // Brightness scales from darkest (1⭐) to brightest (5⭐)
