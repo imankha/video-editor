@@ -11,7 +11,7 @@ import { useIsMobile } from '../../../hooks/useIsMobile';
 import ClipScrubRegion from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
-import { getEditRatingCaption } from '../../../components/shared/clipConstants';
+import { getEditRatingCaption, getRatingLabel } from '../../../components/shared/clipConstants';
 import { getClipStage, CLIP_STAGE } from '../clipStage';
 import { ANNOTATE } from '../../../config/displayNames';
 
@@ -38,7 +38,15 @@ const RATING_BORDER_COLORS = {
  */
 function StarRating({ rating, onRatingChange }) {
   return (
-    <div className="flex items-center gap-0.5">
+    <div
+      className="flex items-center gap-0.5"
+      // T9630 N35: this sidebar had its own StarRating with no tie to the
+      // canonical getRatingLabel mapping (per-star title said only "N stars",
+      // never the adjective the list/editor/timeline all show) — bring it in
+      // line without duplicating the visible caption already rendered below.
+      title={getRatingLabel(rating)}
+      aria-label={getRatingLabel(rating)}
+    >
       {[1, 2, 3, 4, 5].map((starNum) => (
         <button
           key={starNum}

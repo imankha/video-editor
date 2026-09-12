@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Info, Play, Users, Share2, Video } from 'lucide-react';
+import { Info, Play, Users, Share2, Video, Tag, StickyNote } from 'lucide-react';
 import { getRatingDisplay, getRatingLabel } from '../../../components/shared/clipConstants';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { ANNOTATE } from '../../../config/displayNames';
@@ -25,6 +25,35 @@ function LayerChip({ isMine }) {
       aria-label={ANNOTATE.LAYER_TEAM}
     >
       <Users size={12} />
+    </span>
+  );
+}
+
+/**
+ * TagsNotesIndicator (T9630 AC4) - compact glyph cluster signalling a saved
+ * clip carries tags and/or a note. Renders nothing when both are empty, so a
+ * plain clip's row is byte-identical to before this task.
+ */
+function TagsNotesIndicator({ tags, notes }) {
+  const tagCount = tags?.length || 0;
+  const hasNote = !!notes?.trim();
+  if (!tagCount && !hasNote) return null;
+  const label = [
+    tagCount ? `${tagCount} tag${tagCount > 1 ? 's' : ''}: ${tags.join(', ')}` : null,
+    hasNote ? 'has a note' : null,
+  ].filter(Boolean).join(' — ');
+  return (
+    <span
+      className="shrink-0 inline-flex items-center gap-1 text-gray-400"
+      title={label}
+      aria-label={label}
+    >
+      {tagCount > 0 && (
+        <span className="inline-flex items-center gap-0.5 text-[10px]">
+          <Tag size={10} />{tagCount}
+        </span>
+      )}
+      {hasNote && <StickyNote size={10} />}
     </span>
   );
 }
@@ -148,6 +177,11 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
               <Share2 size={9} /> {region.shared_by}
             </span>
           )}
+          {/* T9630 AC4: the compact row previously gave zero signal that a
+              saved clip carries tags/notes — the only way to find out was to
+              open the details editor. shrink-0 so the name still truncates
+              first, matching the angle/shared-by pills. */}
+          <TagsNotesIndicator tags={region.tags} notes={region.notes} />
         </div>
 
         {/* Desktop: in-match soccer-notation time, right-aligned (T4080) */}

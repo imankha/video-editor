@@ -1,5 +1,69 @@
 ---
 domain: annotate
+updated: 2026-09-12 (T9630 — rating/tags/notes/saved-state presentation cleanup, 4 acceptance
+criteria. **AC1 (one rating mapping everywhere) — was NOT fully satisfied despite N35's
+`getRatingLabel` already existing.** `AnnotateFullscreenOverlay.jsx`'s local `StarRating` rendered
+the gold star row AND the bare chess-notation glyph (`RATING_NOTATION[rating]`, e.g. `!`) side by
+side — the literal "four stars and an exclamation mark compete" bug the report named, with the full
+`getRatingLabel` string reachable only via title/aria on hover. The landscape-compact layout
+duplicated the notation a SECOND time (a genuine bug, not just a UX gap) — two identical glyphs for
+one rating. Fix: `StarRating`'s visible span now renders `getRatingLabel(rating)` text itself (e.g.
+"4 stars · Good"), and the landscape duplicate was deleted (StarRating already covers it).
+Separately, `ClipDetailsEditor.jsx` (the sidebar) has ALWAYS had its OWN local `StarRating` —
+different component, same name, different file — with ZERO tie to `getRatingLabel`: hovering a
+star there said only "3 stars", never the adjective every other surface shows. Added
+`title`/`aria-label={getRatingLabel(rating)}` to its wrapper div (no visible text change — the
+adjacent `getEditRatingCaption` sentence already carries the word visibly). Literal "Big play"
+string: confirmed absent from the codebase (grepped `clipConstants.js`/`tagRegistry.js`/both
+components) — almost certainly the reporter's informal description of the 5-star "Brilliant" tier,
+not a real UI string; nothing to fix. **AC2 (notes must never replace a custom title) — investigated,
+NOT reproducible, no code change.** `AnnotateFullscreenOverlay`'s auto-generate-name effect gates on
+`!isNameManuallyEdited && !existingClip?.name` — the SECOND clause reads `existingClip` directly
+(not local state), so it survives the React-batching race the effect's own comment warns about.
+`ClipDetailsEditor`'s notes handler (`handleNotesChange`) and `useAnnotate.updateClipRegion` both do
+surgical single-field merges — a `{notes: ...}` patch never touches `name`. Regression tests added
+for both surfaces pin this (`AnnotateFullscreenOverlay.namePreservation.test.jsx`). **Found but
+NOT fixed (separate, deeper issue, flagged for a follow-up task):** `updateClipRegionWithSync`'s
+"no rawClipId yet" branch reads `region` from the closure captured at call time — two field-specific
+edits on the SAME not-yet-backend-persisted clip, fired before either's save round-trip completes
+(no re-render in between), could theoretically save with a stale `name`. This is a general async-race
+in the unsaved-clip save path, not specific to notes, and needs the Expert agent per CLAUDE.md's
+async-timing escalation rule if it's ever confirmed live. **AC3 (real Unsaved/Saving/Saved, never
+asserted) — was a real, substantial gap.** `handleSave`'s `savePromise` was silently vacuous: THREE
+separate missing-`return` bugs (`AnnotateModeView.handleCreateClipWithSportPrompt` discarded
+`onFullscreenCreateClip`'s return; `AnnotateContainer.handleFullscreenCreateClip` never returned its
+`saveClip` result; `updateClipRegionWithSync` never returned anything, and `handleFullscreenUpdateClip`
+called `closeOverlay()` unconditionally regardless of outcome) meant the overlay's "Saving" state
+could never be derived — a network failure (503 sync_failed, thrown error) was indistinguishable from
+success at the UI layer, closing the form immediately either way. Fixed: all three functions now
+return a strict boolean (`true` = durably saved OR nothing needed saving, `false` = did not land —
+`updateClipRegionWithSync` returns this in all 6 exit branches). `handleSave` is now `async`: sets
+'saving', awaits the real result, and calls `onResume()`/`onResumePlaybackOnly()` (the ONLY thing that
+closes/resumes the overlay) ONLY when the result is not exactly `false` — a failed or thrown save
+leaves the form open with every field exactly as typed, showing a `SaveStatusBadge`
+('Saving...'/'Saved'/"Couldn't save — try again"/'Unsaved changes', the last derived live from the
+existing `hasUnsavedEdits()`). `skipNextStatusResetRef` prevents the `[existingClip]` reset effect
+from wiping a just-set 'saved' status when T9330's stay-open create flow rehydrates onto the new
+region (that rehydration is the SAME save's own transition, not a clip switch). Wired at all 3
+Save-button render sites (overlay/mobile footer, desktop strip, landscape-compact — the last
+previously had NO save feedback of any kind). Pure local `useState`, gesture-driven only — no
+reactive persistence write. Regression tests:
+`AnnotateFullscreenOverlay.saveStatus.test.jsx`. **Known limitation (by design, not a gap):** in edit
+mode a successful save still closes the overlay immediately (T9330's existing resume-vs-close split
+is unchanged), so the 'saved' badge is visible for one render at most there — only the desktop-strip
+CREATE path (which stays open) shows it meaningfully; edit-mode failures DO stay visible since the
+close is now conditional on success. **AC4 (tags/notes stay visible after saving) — was a real gap.**
+`ClipListItem.jsx`'s compact row showed only the rating badge + title, with zero signal that a saved
+clip carried tags/notes. Added `TagsNotesIndicator` (small tag-count + note glyph, `lucide-react`
+`Tag`/`StickyNote`), rendering nothing when both are empty (byte-identical for a plain clip).
+Confirmed T8600's "Add details" disclosure state (`detailsOpen`) already survives a save — it is
+deliberately excluded from the `[existingClip]` reset effect (T8600 comment), and the desktop-strip
+component instance never unmounts across a create-save (T9330). Regression test:
+`ClipListItem.detailsIndicator.test.jsx`. **QA note:** this container had no docker/Postgres and no
+prebuilt Python wheels for this platform (pip fell back to compiling torch from source) — live-drive
+QA against a real running stack was not possible here; verification is 109 passing tests across 14
+files (existing regression suite + the new tests above) plus a fresh-context Reviewer pass (0
+BLOCKING/MAJOR, 3 MINOR, all accepted as-is). A live-drive pass on staging is still owed. Prior:)
 updated: 2026-09-11 (T9530 — LIBRARY-surface vocabulary (Shared Vocabulary epic, N01-N03/N10-N15/N33/N46).
 Canonical tab labels are now **Games / Clips / Reels / Published** at EVERY breakpoint (unnumbered):
 `SECTION_NAMES.CLIPS`='Clips' and `SECTION_NAMES.HIGHLIGHTS`='Reels' (dropped T8555's "In Progress"

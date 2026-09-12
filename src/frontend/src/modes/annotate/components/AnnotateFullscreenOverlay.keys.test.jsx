@@ -73,8 +73,8 @@ describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unc
     fireEvent.click(screen.getByTitle('Rename clip'));
     const nameInput = screen.getByLabelText('Clip name');
     fireEvent.keyDown(nameInput, { key: '1' });
-    // Default rating notation for 4 stars is "!"; unaffected by the keypress.
-    expect(screen.getByText('!')).toBeTruthy();
+    // Default rating (4 stars) label is "4 stars · Good" (T9630 N35); unaffected by the keypress.
+    expect(screen.getByText('4 stars · Good')).toBeTruthy();
   });
 
   it('Enter (not typing) triggers Save', () => {
