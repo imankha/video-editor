@@ -5,6 +5,21 @@ import apiFetch from '../utils/apiFetch';
 let _fetchPromise = null;
 
 /**
+ * Credit cost for a video duration: round-half-up with a 1-credit floor for any
+ * positive duration (T9750). MIRRORS the backend `round_credits_half_up` in
+ * highlight_transform.py and MUST stay in sync with it -- this is the optimistic
+ * client-side estimate feeding the pre-flight affordability check and the
+ * insufficient-credits modal number; the backend remains authoritative.
+ *
+ * Uses `Math.floor(x + 0.5)` (not `Math.round`) to match the backend idiom
+ * exactly and keep the billing rule unambiguous: an exact `.5` always rounds UP.
+ */
+export function roundCreditsHalfUp(videoSeconds) {
+  if (!(videoSeconds > 0)) return 0;
+  return Math.max(1, Math.floor(videoSeconds + 0.5));
+}
+
+/**
  * Credit Store - Manages credit balance (T530)
  *
  * Backend is authoritative — this store provides optimistic checks
@@ -52,8 +67,8 @@ export const useCreditStore = create((set, get) => ({
   // Optimistic check — backend is authoritative
   canAffordExport: (videoSeconds) => {
     const { balance } = get();
-    return balance >= Math.ceil(videoSeconds);
+    return balance >= roundCreditsHalfUp(videoSeconds);
   },
 
-  getRequiredCredits: (videoSeconds) => Math.ceil(videoSeconds),
+  getRequiredCredits: (videoSeconds) => roundCreditsHalfUp(videoSeconds),
 }));

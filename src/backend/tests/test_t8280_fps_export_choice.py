@@ -235,17 +235,18 @@ class TestComputeExportCredits:
     the identity/regression case.
     """
 
-    def test_matches_todays_ceil_for_target_fps_30(self):
+    def test_identity_at_target_fps_30_is_round_half_up(self):
         """Both live call sites (framing.py, multi_clip.py) pass target_fps=30
-        for the whole of Option B's scope -- this must be BYTE-IDENTICAL to
-        today's bare `math.ceil(video_seconds)` for every existing test."""
-        from app.highlight_transform import compute_export_credits
+        for the whole of Option B's scope -- at fps=30 the result must be
+        exactly the shared `round_credits_half_up` helper. (T9750 changed this
+        rule from `ceil`; the fps=30 identity is now round-half-up + 1-floor.)"""
+        from app.highlight_transform import compute_export_credits, round_credits_half_up
 
         cases = [0, 0.001, 1, 1.5, 9.999, 10, 17.26, 28.77, 100.0001]
         for seconds in cases:
-            assert compute_export_credits(seconds, 30) == (
-                math.ceil(seconds) if seconds > 0 else 0
-            ), f"mismatch for {seconds}s"
+            assert compute_export_credits(seconds, 30) == round_credits_half_up(seconds), (
+                f"mismatch for {seconds}s"
+            )
 
     def test_zero_or_negative_seconds_returns_zero(self):
         from app.highlight_transform import compute_export_credits
@@ -269,13 +270,13 @@ class TestComputeExportCredits:
 
     def test_sub_30_output_fps_clamps_to_1x_never_a_discount(self):
         """max(1, ...) clamp: a sub-30 output_fps (e.g. 25) must NEVER produce
-        a price below the flat ceil(seconds) -- there is no GPU-cost discount
+        a price below the round-half-up baseline -- there is no GPU-cost discount
         for sub-30 sources (design doc Q3: 'you cannot skip frames you do not
-        have')."""
-        from app.highlight_transform import compute_export_credits
+        have'). Baseline is round_credits_half_up (T9750), formerly ceil."""
+        from app.highlight_transform import compute_export_credits, round_credits_half_up
 
-        assert compute_export_credits(10, 25) == math.ceil(10 * 1) == 10
-        assert compute_export_credits(17.26, 25) == math.ceil(17.26)
+        assert compute_export_credits(10, 25) == round_credits_half_up(10) == 10
+        assert compute_export_credits(17.26, 25) == round_credits_half_up(17.26) == 17
 
 
 class TestHighFpsThreshold:

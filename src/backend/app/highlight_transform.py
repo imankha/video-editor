@@ -173,23 +173,45 @@ def to_splits_only(segments_data: dict | None) -> dict | None:
 HIGH_FPS_THRESHOLD = 31
 
 
+def round_credits_half_up(video_seconds: float) -> int:
+    """Credit cost for a duration: round-half-up, with a 1-credit floor for any
+    positive duration (T9750 -- the product owner switched the render/export
+    charging rule from ceil to round-to-nearest on 2026-09-12).
+
+    Round-half-up is `math.floor(x + 0.5)`, used DELIBERATELY instead of
+    Python's built-in `round()`, which is banker's rounding (round-half-to-even:
+    `round(2.5) == 2`, `round(3.5) == 4`) -- wrong for a billing rule where a
+    user expects an exact `.5` to always round up. The `max(1, ...)` floor
+    mirrors `storage_credits.calculate_storage_cost`'s `max(1, ceil(...))`: any
+    positive-duration render costs at least 1 credit, never a free render.
+    Zero or negative duration returns 0 (matches the pre-T9750 early return).
+
+    This is the ONE shared implementation both charge sites call
+    (`compute_export_credits` below, and `routers/exports.py`'s inline
+    reservation) -- do NOT reintroduce a second inline rounding formula.
+    """
+    if video_seconds <= 0:
+        return 0
+    return max(1, math.floor(video_seconds + 0.5))
+
+
 def compute_export_credits(video_seconds: float, output_fps: int = 30) -> int:
     """Credit cost for an export (T8280 Stage 2): shared pure helper replacing
     the duplicated inline `math.ceil(video_seconds)` at framing.py and
-    multi_clip.py's credit-reservation call sites.
+    multi_clip.py's credit-reservation call sites. T9750 switched the rounding
+    from ceil to round-half-up (see `round_credits_half_up`).
 
     `output_fps` parameterizes the ratio the design doc's Q1 resolution
     describes as `max(1, output_fps/30)` -- i.e. "the fps this render actually
     costs GPU-time as if it were". Both live call sites always pass
     target_fps=30 for the whole of Option B's scope, which is exactly
-    `compute_export_credits(seconds, 30) == ceil(seconds)` -- the
-    identity/regression case. The max(1, ...) clamp means a sub-30 output_fps
-    never produces a price below the flat ceil(seconds) -- no GPU-cost
-    discount for sub-30 sources (you cannot skip frames you do not have).
+    `compute_export_credits(seconds, 30) == round_credits_half_up(seconds)` --
+    the identity case (round-half-up + 1-credit floor; formerly `ceil(seconds)`
+    pre-T9750). The `max(1, ...)` fps clamp means a sub-30 output_fps never
+    produces a price below the round-half-up baseline -- no GPU-cost discount
+    for sub-30 sources (you cannot skip frames you do not have).
     """
-    if video_seconds <= 0:
-        return 0
-    return math.ceil(video_seconds * max(1, output_fps / 30))
+    return round_credits_half_up(video_seconds * max(1, output_fps / 30))
 
 
 def get_output_duration(segments_data: dict | None, source_duration: float = None) -> float:

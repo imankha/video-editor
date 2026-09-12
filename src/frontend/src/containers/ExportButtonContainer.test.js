@@ -178,9 +178,11 @@ describe('ExportButtonContainer', () => {
       expect(estimateExportCredits([trimmed])).toBeLessThan(estimateExportCredits([clip6sPlus3sSlowMo]));
     });
 
-    it('rounds up fractional output seconds (Math.ceil)', () => {
-      // 5.1s clip, no edits -> 5.1s output -> 6 credits.
-      expect(estimateExportCredits([{ id: 'c1', duration: 5.1 }])).toBe(6);
+    it('rounds fractional output seconds to nearest (T9750 round-half-up)', () => {
+      // 5.1s clip -> 5.1s output -> 5 credits (below .5, rounds down; was 6 under ceil).
+      expect(estimateExportCredits([{ id: 'c1', duration: 5.1 }])).toBe(5);
+      // 5.5s -> exactly half rounds UP to 6.
+      expect(estimateExportCredits([{ id: 'c2', duration: 5.5 }])).toBe(6);
     });
 
     it('sums across a multi-clip project', () => {

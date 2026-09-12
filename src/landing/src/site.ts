@@ -71,7 +71,7 @@ export const FACTS = {
   pricingSummary: 'Free to start.',
   /** New-account signup bonus (8) plus all four onboarding quest rewards (15+25+25+15). Source of truth: quest_config.py + storage_credits.NEW_ACCOUNT_CREDITS. */
   freeCredits: 88,
-  /** Flat render cost: 1 credit per second of finished, exported video -- same rate regardless of resolution, upscaling, or overlays. Source of truth: credits_required = ceil(video_seconds) in exports.py. */
+  /** Flat render cost: 1 credit per second of finished, exported video, rounded to the nearest second -- same rate regardless of resolution, upscaling, or overlays. Source of truth: round_credits_half_up(video_seconds) (round-half-up + 1-credit floor, T9750) in highlight_transform.py. */
   creditsPerExportSecond: 1,
 } as const
 
