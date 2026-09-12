@@ -300,7 +300,7 @@ export function QuestPanel({ inline = false }) {
           <div className="text-center mb-6 sm:mb-10">
             <div className="text-4xl sm:text-6xl mb-3 sm:mb-5">🎉</div>
             <h2 className="text-2xl sm:text-4xl font-bold text-white mb-2 sm:mb-3">Congratulations!</h2>
-            <p className="text-green-400 font-semibold text-xl sm:text-2xl">You published your first reel</p>
+            <p className="text-green-400 font-semibold text-xl sm:text-2xl">You published your first clip</p>
           </div>
           <div className="space-y-3 sm:space-y-5 text-gray-300 text-base sm:text-xl leading-relaxed">
             <p>Annotate every touch so your baller can take their game to the next level.</p>

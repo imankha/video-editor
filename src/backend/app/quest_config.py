@@ -93,7 +93,7 @@ QUEST_DEFINITIONS = [
     },
     {
         "id": "quest_4",
-        "title": "Publish Your Reel",
+        "title": "Publish your clip",  # T9575: single-clip onboarding object is a clip, not a "reel"
         "reward": 0,  # T8120: retired — credits granted upfront
         "step_ids": [
             "watch_publish_tutorial",
@@ -120,28 +120,32 @@ ALL_STEP_IDS = [s for q in QUEST_DEFINITIONS for s in q["step_ids"]]
 # two layers. N40: `playback_annotations` uses the one established action label
 # "Preview plays" (displayNames.ANNOTATE.PREVIEW_PLAYS) so guide, action, and error agree.
 STEP_TITLES = {
-    "watch_annotate_tutorial": "Watch Annotate Tutorial",
-    "watch_framing_tutorial": "Watch AI Focus Tutorial",
-    "watch_overlay_tutorial": "Watch Spotlight Tutorial",
-    "watch_publish_tutorial": "Watch Publish Tutorial",
+    # T9575: sentence case across the whole checklist, mirroring the frontend
+    # STEP_TITLES exactly (pinned by questDefinitions.test.jsx "FE/BE STEP_TITLES
+    # sync"). Mode/feature proper nouns (Annotate, AI Focus, Spotlight, Publish,
+    # Highlight Reels) keep their capitals; the "spotlight" EFFECT stays lowercase.
+    "watch_annotate_tutorial": "Watch Annotate tutorial",
+    "watch_framing_tutorial": "Watch AI Focus tutorial",
+    "watch_overlay_tutorial": "Watch Spotlight tutorial",
+    "watch_publish_tutorial": "Watch Publish tutorial",
     "upload_game": "Upload your first game",
     "add_clip": "Mark an amazing play",
-    "rate_clip": "Rate & Tag the Play",
+    "rate_clip": "Rate & tag the play",
     "annotate_brilliant": "Save your play",
     "playback_annotations": "Preview plays",  # N40
-    "return_home": "Head Back Home",
+    "return_home": "Head back home",
     "open_framing": "Open your clip",
-    "position_crop": "Keep Your Player in Frame",
-    "add_slowmo": "Add a Slow-Mo Moment",
-    "export_framing": "Export Your Highlight",
-    "wait_for_export": "Crisp It Up to 1080p",
+    "position_crop": "Keep your player in frame",
+    "add_slowmo": "Add a slow-mo moment",
+    "export_framing": "Export your highlight",
+    "wait_for_export": "Crisp it up to 1080p",
     "open_overlay": "Open in Spotlight",
-    "select_players": "Pick Your Player",
+    "select_players": "Pick your player",
     "choose_color": "Pick your spotlight color",
-    "choose_shape": "Choose the Spotlight Shape",
+    "choose_shape": "Choose the spotlight shape",
     "export_overlay": "Export clip with effects",
-    "wait_for_overlay": "Render the Spotlight",
-    "preview_draft": "Watch Your Preview",
+    "wait_for_overlay": "Render the spotlight",
+    "preview_draft": "Watch your preview",
     # T9575 residual #2: this title hardcodes the FE-derived `Move to
     # ${SECTION_NAMES.LIBRARY}` string. They agree by COINCIDENCE across the
     # JS/Python boundary (no shared constant), so a future `LIBRARY` rename would

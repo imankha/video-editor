@@ -1,10 +1,13 @@
 import { render } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { STEP_DESCRIPTIONS, STEP_TITLES } from './questDefinitions.jsx';
 import { SECTION_NAMES } from './displayNames';
 import { QUEST_DEFINITIONS } from '../data/questDefinitions.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // T3780: open_framing text wayfinding ("Click the Home button... open Drafts")
 // replaced with a clickable "Open your reel" deep link.
@@ -44,8 +47,8 @@ describe('questDefinitions copy (T5160 export-wait)', () => {
     expect(container.textContent).toMatch(/spotlight/i);
   });
 
-  it('leaves the wait_for_export title unchanged', () => {
-    expect(STEP_TITLES.wait_for_export).toBe('Crisp It Up to 1080p');
+  it('keeps the wait_for_export title (sentence-cased by T9575)', () => {
+    expect(STEP_TITLES.wait_for_export).toBe('Crisp it up to 1080p');
   });
 });
 
@@ -54,7 +57,7 @@ describe('questDefinitions copy (T5160 export-wait)', () => {
 // wrapped so the "*****" run never breaks across a line in the narrow panel.
 describe('questDefinitions rate_clip split (T5150)', () => {
   it('resolves a title + description for the new rate_clip step', () => {
-    expect(STEP_TITLES.rate_clip).toBe('Rate & Tag the Play');
+    expect(STEP_TITLES.rate_clip).toBe('Rate & tag the play');
     expect(STEP_DESCRIPTIONS.rate_clip).toBeTruthy();
     const { container } = render(<>{STEP_DESCRIPTIONS.rate_clip}</>);
     expect(container.textContent).toMatch(/rate the play/i);
@@ -179,7 +182,7 @@ describe('questDefinitions preview step (T6840)', () => {
   });
 
   it('resolves a title + description for preview_draft', () => {
-    expect(STEP_TITLES.preview_draft).toBe('Watch Your Preview');
+    expect(STEP_TITLES.preview_draft).toBe('Watch your preview');
     const { container } = render(<>{STEP_DESCRIPTIONS.preview_draft}</>);
     expect(container.textContent).toMatch(/preview/i);
   });
@@ -198,9 +201,11 @@ describe('questDefinitions preview step (T6840)', () => {
 // "athlete".
 describe('questDefinitions vocabulary sweep (T9575)', () => {
   const renderedText = (node) => render(<>{node}</>).container.textContent;
+  // Plain-space separator (a NUL byte here once made ripgrep treat this whole file
+  // as binary and skip it — reviewer-caught; keep it ASCII spaces).
   const everyStepText = () =>
     [...Object.values(STEP_TITLES), ...Object.values(STEP_DESCRIPTIONS).map(renderedText)]
-      .join('   ');
+      .join('   ');
 
   it('never calls a single-clip object a "reel" in the walkthrough copy', () => {
     // "Highlight Reels" is the published-destination noun (SECTION_NAMES.LIBRARY),
@@ -213,6 +218,17 @@ describe('questDefinitions vocabulary sweep (T9575)', () => {
     expect(everyStepText()).not.toMatch(/athlete/i);
   });
 
+  // The sweep scans questDefinitions copy, but the quest_4 completion modal copy
+  // lives in QuestPanel.jsx (reviewer-caught: "You published your first reel").
+  // Scan that source too so a single-clip object is never called a "reel" (nor a
+  // player an "athlete") on that surface either.
+  it('QuestPanel.jsx never calls a single-clip object a "reel" or a player an "athlete"', () => {
+    const panelPath = path.join(__dirname, '..', 'components', 'QuestPanel.jsx');
+    const src = readFileSync(panelPath, 'utf8').replaceAll(SECTION_NAMES.LIBRARY, '');
+    expect(src).not.toMatch(/\breels?\b/i);
+    expect(src).not.toMatch(/athlete/i);
+  });
+
   it('names the epic controls by their live labels', () => {
     const save = renderedText(STEP_DESCRIPTIONS.annotate_brilliant);
     expect(save).toMatch(/My player/);                 // ANNOTATE.LAYER_MINE (was "My Athlete")
@@ -223,23 +239,30 @@ describe('questDefinitions vocabulary sweep (T9575)', () => {
   });
 });
 
-// T9575 residual #2: the backend quest_config STEP_TITLES["move_to_my_reels"]
-// hardcodes "Move to Highlight Reels" while the frontend DERIVES the same words
-// from SECTION_NAMES.LIBRARY. They agree only by coincidence across the JS/Python
-// boundary (no shared constant), so a future LIBRARY rename would silently drift
-// the backend claim-reward error copy. This test reads the Python source and pins
-// the two in sync.
-describe('FE/BE move_to_my_reels title sync (T9575)', () => {
-  it('backend quest_config title matches the frontend SECTION_NAMES.LIBRARY-derived title', () => {
-    const expected = `Move to ${SECTION_NAMES.LIBRARY}`;
-    // Frontend side derives it from the single source.
-    expect(STEP_TITLES.move_to_my_reels).toBe(expected);
-    // Backend side hardcodes it — read the source and compare. Vitest runs with
-    // cwd = src/frontend, so the backend module sits one level up under src/backend.
-    const qcPath = resolve(process.cwd(), '../backend/app/quest_config.py');
+// T9575 residual #2: the backend quest_config STEP_TITLES hand-mirrors the frontend
+// STEP_TITLES across the JS/Python boundary with NO shared constant — they agree
+// only because someone keeps them equal. Several frontend values are even DERIVED
+// (move_to_my_reels from SECTION_NAMES.LIBRARY, export_overlay/playback_annotations
+// from displayNames constants), so a rename there would silently drift the backend
+// claim-reward error copy. Parse the Python source and pin the WHOLE dict in sync.
+describe('FE/BE STEP_TITLES sync (T9575)', () => {
+  const parseBackendStepTitles = () => {
+    const qcPath = path.join(__dirname, '..', '..', '..', 'backend', 'app', 'quest_config.py');
     const src = readFileSync(qcPath, 'utf8');
-    const m = src.match(/"move_to_my_reels":\s*"([^"]*)"/);
-    expect(m, 'move_to_my_reels not found in quest_config.py STEP_TITLES').toBeTruthy();
-    expect(m[1]).toBe(expected);
+    const block = src.match(/STEP_TITLES\s*=\s*\{([\s\S]*?)\n\}/);
+    if (!block) throw new Error('STEP_TITLES dict not found in quest_config.py');
+    const titles = {};
+    for (const m of block[1].matchAll(/"([a-z_]+)":\s*"([^"]*)"/g)) {
+      titles[m[1]] = m[2];
+    }
+    return titles;
+  };
+
+  it('backend quest_config STEP_TITLES mirrors the frontend dict exactly (every key + value)', () => {
+    expect(parseBackendStepTitles()).toEqual(STEP_TITLES);
+  });
+
+  it('keeps move_to_my_reels derived from SECTION_NAMES.LIBRARY on the frontend', () => {
+    expect(STEP_TITLES.move_to_my_reels).toBe(`Move to ${SECTION_NAMES.LIBRARY}`);
   });
 });
