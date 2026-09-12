@@ -1,6 +1,6 @@
 # T9750: Round render/export credits to nearest second, not always up
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-12
