@@ -56,15 +56,23 @@ export function usePublishProject(project) {
     return () => { mountedRef.current = false; };
   }, []);
 
-  const publish = useCallback(async ({ openGallery }) => {
+  // T9740 (fix v3): accept an explicit `projectId` override. App.jsx's one-tap
+  // publish reads the target from the completion payload itself, not from this
+  // hook's `project.id` binding — that binding comes from a reactive
+  // publishIntentStore selector inside a callback the export-websocket manager
+  // holds from export start, i.e. exactly the stale-closure-over-time construct
+  // that has bitten this task. `targetId` falls back to `project.id` so every
+  // existing caller (DraftTile, DraftReelPreview) is unchanged.
+  const publish = useCallback(async ({ openGallery, projectId } = {}) => {
+    const targetId = projectId ?? project.id;
     if (mountedRef.current) setIsPublishing(true);
     // T4050 publish tracing: card removal is driven by fetchProjects re-reading
     // backend state below (NOT an optimistic local removal). These [Publish] logs
     // let a real publish attempt be traced end-to-end (click -> POST -> 200 ->
     // refetch) and correlated with the backend [Publish]/[SYNC] log lines.
-    console.log(`[Publish] click project=${project.id} openGallery=${openGallery} -> POST publish`);
+    console.log(`[Publish] click project=${targetId} openGallery=${openGallery} -> POST publish`);
     try {
-      const response = await apiFetch(`${API_BASE}/api/downloads/publish/${project.id}`, {
+      const response = await apiFetch(`${API_BASE}/api/downloads/publish/${targetId}`, {
         method: 'POST',
       });
       // T4050: a durable sync failure means the publish committed locally but never
@@ -74,7 +82,7 @@ export function usePublishProject(project) {
       if (response.status === 503) {
         const error = await response.json().catch(() => ({}));
         if (error.code === 'sync_failed') {
-          console.warn(`[Publish] project=${project.id} sync_failed (503) - card kept, offering Retry`);
+          console.warn(`[Publish] project=${targetId} sync_failed (503) - card kept, offering Retry`);
           if (mountedRef.current) setPublishRetry({ openGallery });
           return false;
         }
@@ -83,20 +91,20 @@ export function usePublishProject(project) {
         const error = await response.json();
         // Card is NOT removed on failure: we throw before fetchProjects, the catch
         // toasts, and the draft stays put.
-        console.warn(`[Publish] project=${project.id} FAILED status=${response.status} - card kept in Drafts`);
+        console.warn(`[Publish] project=${targetId} FAILED status=${response.status} - card kept in Drafts`);
         throw new Error(error.detail || 'Failed to publish');
       }
       const result = await response.json();
       if (mountedRef.current) setPublishRetry(null);
-      console.log(`[Publish] project=${project.id} 200 ok archived=${result.archived} final_video_id=${result.final_video_id}`);
+      console.log(`[Publish] project=${targetId} 200 ok archived=${result.archived} final_video_id=${result.final_video_id}`);
       if (!result.archived) {
-        console.warn(`[ProjectCard] Project ${project.id} published but archive failed - card stays in Drafts.`);
+        console.warn(`[ProjectCard] Project ${targetId} published but archive failed - card stays in Drafts.`);
       }
       // Model changed (a reel was published) -> update count badge + dispatch the
       // collections-changed event so the My Reels list refreshes itself.
       useGalleryStore.getState().fetchCount({ force: true });
       useGalleryStore.getState().notifyCollectionsChanged();
-      console.log(`[Publish] project=${project.id} refetching projects (card removal reflects backend state)`);
+      console.log(`[Publish] project=${targetId} refetching projects (card removal reflects backend state)`);
       useProjectsStore.getState().fetchProjects({ force: true });
       // quest_4 "Move to My Reels" step — the publish gesture completes it.
       useQuestStore.getState().recordAchievement('moved_to_my_reels');
@@ -115,7 +123,7 @@ export function usePublishProject(project) {
     } finally {
       if (mountedRef.current) setIsPublishing(false);
     }
-  }, [project.id]);
+  }, [project.id]); // targetId falls back to project.id; an explicit override is a call arg, not a dep
 
   return { publish, isPublishing, publishRetry, setPublishRetry };
 }

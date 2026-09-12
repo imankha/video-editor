@@ -17,6 +17,7 @@ import { DraftReelPreview } from './components/DraftReelPreview';
 import { openFinishedReel } from './utils/finishedReelNav';
 import { usePublishIntentStore } from './stores/publishIntentStore';
 import { scheduleOverlayPublishExport } from './utils/scheduleExportWhenReady';
+import { handleOverlayExportCompletion } from './utils/handleOverlayExportCompletion';
 import { usePublishProject } from './hooks/usePublishProject';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
@@ -593,73 +594,30 @@ function App() {
 
   // Export completion callback - used by Screen components to refresh data.
   // `completed` identifies which export finished: { projectId, mode }.
-  const handleExportComplete = useCallback(async (completed) => {
-    await fetchProjects({ force: true });
-    // Downloads count is auto-refreshed by DownloadsPanel via galleryStore
-    // T540: Refresh quest progress after any export completes
-    useQuestStore.getState().fetchProgress();
-    // T770: Navigate home after an overlay export completes — but only when
-    // the user is still in the Overlay editor for the project that exported.
-    // If they moved on to editing another project, stay put; the
-    // GlobalExportIndicator toast announces the completion instead.
-    // Read mode/project fresh from stores: the export WebSocket manager holds
-    // this callback from export start, so closure values can be stale.
-    const currentMode = useEditorStore.getState().editorMode;
-    const currentProjectId = useProjectsStore.getState().selectedProjectId;
-    // T9740: named assertion (log only, no behavior change). A one-tap publish
-    // stakes the intent for a project and MUST complete via the OVERLAY render.
-    // If a NON-overlay (framing) completion arrives while that project's intent
-    // is still staked, the wrong export button fired — exactly the PR #417
-    // regression. This turns any future recurrence of that bug class into a loud
-    // console error instead of the previous silent no-op.
-    if (
-      completed?.mode !== EDITOR_MODES.OVERLAY &&
-      usePublishIntentStore.getState().projectId === completed?.projectId
-    ) {
-      console.error(
-        '[App] T9740: non-overlay export completed while a one-tap publish intent was staked for project',
-        completed?.projectId,
-        `(mode="${completed?.mode}") — the wrong export button fired.`,
-      );
-    }
-    if (
-      completed?.mode === EDITOR_MODES.OVERLAY &&
-      currentMode === EDITOR_MODES.OVERLAY &&
-      completed.projectId === currentProjectId
-    ) {
-      // T9110: distinguish Focus's one-tap Publish render (publish intent staked
-      // by FocusScreen.handlePublish BEFORE triggering) from a PLAIN overlay
-      // export. Fresh getState() read (not the reactive selector above) so the
-      // match is against the CURRENT flag at the moment this callback runs,
-      // exactly like the currentMode/currentProjectId reads above.
-      const publishIntent = usePublishIntentStore.getState();
-      if (publishIntent.projectId === completed.projectId) {
-        // Focus one-tap Publish: auto-complete the publish gesture + land the
-        // user ON the finished reel, instead of another decision screen (T8390).
-        // Atomic transition: clear selection + reset video + switch mode together
-        // so an in-flight project refresh can't resurrect the selection afterward.
-        useEditorStore.getState().goToProjectManager();
-        // T8530: SINGLE call site of openFinishedReel for this path. Re-read the
-        // project AFTER the forced fetchProjects above, so final_video_id (set by
-        // the overlay export) is present in the snapshot the preview opens with.
-        const finishedProject = useProjectsStore
-          .getState()
-          .projects?.find((p) => p.id === completed.projectId);
-        if (finishedProject?.final_video_id) {
-          publishIntent.clear();
-          const published = await publishFocusExit({ openGallery: false });
-          if (published) {
-            toast.success('Published', { message: 'Anyone with the link can watch it.' });
-          }
-          openFinishedReel(finishedProject, { alreadyPublished: published });
-        }
-      }
-      // PLAIN overlay export (no publish intent): OverlayScreen owns the
-      // completion experience now — it raises its own preview + publish-exit
-      // action bar (T9110). App does NOT navigate away, so the OverlayScreen
-      // preview stays mounted. (Pre-T9110, this branch auto-navigated home +
-      // openFinishedReel; that landing is superseded by the in-screen action bar.)
-    }
+  //
+  // T9740 (fix v3): the decision logic lives in `handleOverlayExportCompletion`
+  // (utils/) so it is unit-tested against the REAL implementation, not a
+  // hand-copied replica. This wrapper only wires live store getters + the publish
+  // fn to it. The stake is claimed SYNCHRONOUSLY at the top of that module (before
+  // its first await), so the WS+HTTP double-fire of the no-keyframes overlay path
+  // is a no-op by construction — the race that stranded three prior rounds.
+  const handleExportComplete = useCallback((completed) => {
+    return handleOverlayExportCompletion(completed, {
+      EDITOR_MODES,
+      getPublishIntentState: () => usePublishIntentStore.getState(),
+      fetchProjects,
+      refreshQuestProgress: () => useQuestStore.getState().fetchProgress(),
+      getEditorMode: () => useEditorStore.getState().editorMode,
+      getSelectedProjectId: () => useProjectsStore.getState().selectedProjectId,
+      getProjects: () => useProjectsStore.getState().projects,
+      // Pass the explicit target from the completion payload — never rely on the
+      // reactive publishIntent selector binding, which can go stale in this
+      // long-lived callback (see usePublishProject's projectId override).
+      publish: publishFocusExit,
+      goToProjectManager: () => useEditorStore.getState().goToProjectManager(),
+      openFinishedReel,
+      toastSuccess: (title, opts) => toast.success(title, opts),
+    });
   }, [fetchProjects, publishFocusExit]);
 
   // T9740: Focus's "Publish without spotlight" one-tap trigger. Schedules the

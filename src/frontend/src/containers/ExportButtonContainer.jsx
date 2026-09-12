@@ -194,6 +194,16 @@ export function ExportButtonContainer({
   const inFlightRef = useRef(false);
   const disconnectedRef = useRef(false); // Sync mirror of `disconnected` state for catch-block reads
   const overlayTransitionFiredRef = useRef(false); // Guard: prevent duplicate onProceedToOverlay from WS + HTTP race
+  // T9740 (fix v3): one-shot guard for onExportComplete, the SIBLING race to
+  // overlayTransitionFiredRef above. The no-keyframes overlay render takes the
+  // backend synchronous-200 path (overlay.py `if not has_keyframes and not
+  // has_text`), which sends the WS `status:"complete"` frame FIRST and THEN
+  // returns HTTP 200 — so `connectWebSocket` (opened before the POST) and the
+  // HTTP-200 branch BOTH deliver the same completion, firing onExportComplete
+  // TWICE. All 6 call sites route through `fireExportComplete` below so the
+  // second delivery is a no-op. Reset per-export (not per-mount) beside
+  // overlayTransitionFiredRef.
+  const completionFiredRef = useRef(false);
 
   // Get progress from the global export store for this project
   const currentExportFromStore = Object.values(activeExports)
@@ -265,6 +275,20 @@ export function ExportButtonContainer({
   }, [segmentData, audioExplicitlySet, includeAudio, onIncludeAudioChange]);
 
   /**
+   * T9740 (fix v3): fire onExportComplete AT MOST ONCE per export. The
+   * backend's no-keyframes overlay path double-delivers completion (WS complete
+   * frame + HTTP 200), and every one of the 6 completion call sites below funnels
+   * through here so the duplicate collapses to a no-op. `completionFiredRef` is
+   * reset per-export (see handleExport), so a later export in the same mount
+   * fires again normally.
+   */
+  const fireExportComplete = useCallback(async (payload) => {
+    if (!onExportComplete || completionFiredRef.current) return;
+    completionFiredRef.current = true;
+    await onExportComplete(payload);
+  }, [onExportComplete]);
+
+  /**
    * Connect to WebSocket for real-time progress updates using the global manager.
    */
   const connectWebSocket = useCallback(async (exportId) => {
@@ -296,12 +320,10 @@ export function ExportButtonContainer({
           overlayTransitionFiredRef.current = true;
           await onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
         }
-        if (onExportComplete) {
-          // Pass which export finished: closure values capture the mode and
-          // project this export was started from, even if the user has since
-          // navigated elsewhere.
-          await onExportComplete({ projectId, mode: editorMode });
-        }
+        // Pass which export finished: closure values capture the mode and
+        // project this export was started from, even if the user has since
+        // navigated elsewhere. One-shot guarded (WS + HTTP double-fire).
+        await fireExportComplete({ projectId, mode: editorMode });
       },
       onError: (serverError, meta = {}) => {
         // Server reported a terminal error — show it. T4110: a retryable
@@ -336,7 +358,7 @@ export function ExportButtonContainer({
     });
 
     return { connected };
-  }, [editorMode, projectId, projectName, clips, onProceedToOverlay, onExportComplete]);
+  }, [editorMode, projectId, projectName, clips, onProceedToOverlay, fireExportComplete]);
 
   /**
    * Retry connection: manually check Modal status and re-establish WS.
@@ -370,7 +392,7 @@ export function ExportButtonContainer({
           overlayTransitionFiredRef.current = true;
           await onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
         }
-        if (onExportComplete) await onExportComplete({ projectId, mode: editorMode });
+        await fireExportComplete({ projectId, mode: editorMode });
       } else if (status === 'error' || modal_status === 'error') {
         disconnectedRef.current = false;
         setDisconnected(false);
@@ -396,7 +418,7 @@ export function ExportButtonContainer({
     } finally {
       setRetrying(false);
     }
-  }, [connectWebSocket, completeExportInStore, onExportComplete, onProceedToOverlay, editorMode, clips, projectId]);
+  }, [connectWebSocket, completeExportInStore, fireExportComplete, onProceedToOverlay, editorMode, clips, projectId]);
 
   /**
    * Dismiss export UI when reconnection has failed and user gives up.
@@ -582,6 +604,7 @@ export function ExportButtonContainer({
     const exportId = generateExportId();
     exportIdRef.current = exportId;
     overlayTransitionFiredRef.current = false;
+    completionFiredRef.current = false; // T9740: one-shot onExportComplete guard, reset per export
     handleExportStart(exportId);
 
     let renderRequestAccepted = false;
@@ -701,9 +724,7 @@ export function ExportButtonContainer({
             overlayTransitionFiredRef.current = true;
             onProceedToOverlay(null, buildClipMetadata(clips), projectId);
           }
-          if (onExportComplete) {
-            onExportComplete({ projectId, mode: editorMode });
-          }
+          fireExportComplete({ projectId, mode: editorMode });
 
           setIsExporting(false);
           return;
@@ -734,9 +755,7 @@ export function ExportButtonContainer({
 
           console.log('[ExportButtonContainer] Overlay render complete:', renderResponse.data);
 
-          if (onExportComplete) {
-            onExportComplete({ projectId, mode: editorMode });
-          }
+          fireExportComplete({ projectId, mode: editorMode });
 
           handleExportEnd();
           setLocalProgress(100);
@@ -809,9 +828,7 @@ export function ExportButtonContainer({
           const result = response.data;
           console.log('[ExportButtonContainer] Framing export complete:', result);
 
-          if (onExportComplete) {
-            onExportComplete({ projectId, mode: editorMode });
-          }
+          fireExportComplete({ projectId, mode: editorMode });
 
           setLocalProgress(100);
           setProgressMessage('Loading into Spotlight mode...');
@@ -867,9 +884,7 @@ export function ExportButtonContainer({
 
             console.log('[ExportButtonContainer] Saved final video to DB:', saveResponse.data);
 
-            if (onExportComplete) {
-              onExportComplete({ projectId, mode: editorMode });
-            }
+            fireExportComplete({ projectId, mode: editorMode });
           } catch (saveErr) {
             console.error('[ExportButtonContainer] Failed to save final video to DB:', saveErr);
           }
