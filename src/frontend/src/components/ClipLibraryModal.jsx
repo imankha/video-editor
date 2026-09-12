@@ -284,7 +284,7 @@ export function ClipLibraryModal({
             </span>
             <span className="flex items-center gap-1">
               <Clock size={14} />
-              {preview.totalDuration > 0 ? formatInstant(preview.totalDuration, PRECISION.SECOND) : '0:00'}
+              {formatInstant(preview.totalDuration, PRECISION.SECOND)}
             </span>
           </div>
         </div>
@@ -349,9 +349,7 @@ export function ClipLibraryModal({
                           {/* Duration */}
                           {clip.start_time !== undefined && clip.end_time !== undefined && (
                             <span className="text-xs">
-                              {(clip.end_time - clip.start_time) > 0
-                                ? formatInstant(clip.end_time - clip.start_time, PRECISION.SECOND)
-                                : '0:00'}
+                              {formatInstant(clip.end_time - clip.start_time, PRECISION.SECOND)}
                             </span>
                           )}
                           {/* Tags */}
