@@ -111,6 +111,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         showInsufficientCredits={container.showInsufficientCredits}
         onCloseInsufficientCredits={container.onCloseInsufficientCredits}
         estimatedCredits={container.estimatedCredits}
+        estimatedSeconds={container.estimatedSeconds}
         insufficientForEstimate={container.insufficientForEstimate}
         creditBalance={container.creditBalance}
         sourceFps={container.sourceFps}

@@ -7,6 +7,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useEditorStore, useProjectsStore } from '../stores';
 import { CREDITS } from '../config/displayNames';
+import { formatLength, PRECISION } from '../utils/timeFormat';
 
 /**
  * BuyCreditsModal - Two-step inline payment flow (T526)
@@ -117,6 +118,7 @@ function CreditsExplainer() {
         <p className="text-gray-400">Credits are spent on:</p>
         <ul className="list-disc list-inside text-gray-300">
           <li>Exporting video ({CREDITS.PER_SECOND_RULE})</li>
+          <li>{CREDITS.MIN_CHARGE}</li>
           <li>Uploading a game (storage for 30 days)</li>
         </ul>
       </div>
@@ -465,8 +467,9 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
             <p>
               This export requires{' '}
               <strong className="text-white">{insufficientCredits.required} credits</strong>{' '}
-              ({insufficientCredits.required}s of video).
+              for {formatLength(insufficientCredits.videoSeconds, PRECISION.TENTH)} of video.
             </p>
+            <p className="text-gray-400 text-xs mt-0.5">{CREDITS.PER_SECOND_RULE}.</p>
             <p className="mt-1">
               Your balance:{' '}
               <strong className="text-white">{insufficientCredits.available} credits</strong>.

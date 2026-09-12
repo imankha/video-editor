@@ -547,7 +547,7 @@ export function ClipScrubRegion({
             </div>
           </div>
         </div>
-        <span className="text-xs font-mono text-gray-400 whitespace-nowrap">{formatLength(clipDuration, PRECISION.TENTH)}</span>
+        <span className="text-xs font-mono text-gray-400 whitespace-nowrap" data-testid="clip-length">{formatLength(clipDuration, PRECISION.TENTH)}</span>
       </div>
     );
   }
@@ -576,7 +576,7 @@ export function ClipScrubRegion({
           />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-mono text-gray-400">{formatLength(clipDuration, PRECISION.TENTH)}</span>
+          <span className="text-sm font-mono text-gray-400" data-testid="clip-length">{formatLength(clipDuration, PRECISION.TENTH)}</span>
           {/* T8780: preview button restored for the sidebar only. The fullscreen
               edit overlay (clipEditorActive) intentionally has no button here --
               its single main-transport control auto-loops the clip instead

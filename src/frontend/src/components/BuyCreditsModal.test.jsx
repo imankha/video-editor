@@ -18,6 +18,7 @@ vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
 
 import apiFetch from '../utils/apiFetch';
 import { BuyCreditsModal } from './BuyCreditsModal';
+import { CREDITS } from '../config/displayNames';
 
 const CONFIG = {
   publishable_key: 'pk_test_x',
@@ -66,10 +67,12 @@ describe('BuyCreditsModal (T4940)', () => {
     expect(screen.queryByText(/1 credit = 1 second/)).toBeNull();
   });
 
-  it('insufficient-credits notice shows the SAME number for credits and seconds (T9750)', async () => {
-    // required IS the round-half-up credit count from the backend; since
-    // 1 credit = 1 second by policy, the seconds display must be that same
-    // number -- no separately-rounded raw seconds that could contradict it.
+  it('insufficient-credits notice shows the actual video length, not the credit count relabeled (T9480)', async () => {
+    // T9480: the old copy repeated `required` as a fake "Xs of video" (the
+    // SAME number as the credit count) to dodge a contradiction with the old
+    // ceil-billing bug. Now that billing is round-half-up (T9750) and this
+    // task discloses the TRUE exact seconds, "6 credits" and "6.0s of video"
+    // are shown honestly -- no need to fake the seconds to avoid a mismatch.
     render(
       <BuyCreditsModal
         onClose={vi.fn()}
@@ -78,10 +81,9 @@ describe('BuyCreditsModal (T4940)', () => {
       />,
     );
     await waitFor(() => expect(screen.getByText('80 credits')).toBeTruthy());
-    // "6 credits (6s of video)" -- both 6, never the old "6 credits (6s)" vs a 7 charge.
     expect(screen.getByText(/6 credits/)).toBeTruthy();
-    expect(screen.getByText(/\(6s of video\)/)).toBeTruthy();
-    // The old contradiction (a 7 credit charge shown next to "6s") must not appear.
+    expect(screen.getByText(/6\.0s of video/)).toBeTruthy();
+    expect(screen.getAllByText(new RegExp(CREDITS.PER_SECOND_RULE)).length).toBeGreaterThan(0);
     expect(screen.queryByText(/7 credits/)).toBeNull();
   });
 

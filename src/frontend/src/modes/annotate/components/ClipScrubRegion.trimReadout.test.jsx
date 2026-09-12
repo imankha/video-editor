@@ -66,4 +66,12 @@ describe('ClipScrubRegion trim readout (T9480 Stage D1 -- floors, does not round
     expect(screen.getByText('0:02.9')).toBeTruthy();
     expect(screen.getByText('0:09.0')).toBeTruthy();
   });
+
+  it('the span readout carries data-testid="clip-length" and names no cost (T9480 Stage E4 -- Annotate charges nothing)', () => {
+    const controller = makeController(2.973);
+    render(<ClipScrubRegion {...baseProps(controller, { startTime: 2.973, endTime: 9 })} />);
+    const lengthEl = screen.getByTestId('clip-length');
+    expect(lengthEl.textContent).toBe('6.0s');
+    expect(lengthEl.textContent).not.toMatch(/credit/i);
+  });
 });
