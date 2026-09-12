@@ -56,7 +56,7 @@ function formatDate(str) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function formatTime(str) {
+function formatIsoTimestamp(str) {
   if (!str) return '';
   const d = new Date(str);
   const hh = String(d.getHours()).padStart(2, '0');
@@ -359,7 +359,7 @@ export function UserDetailPanel({ data, onClose }) {
                       {showDate ? curDate : ''}
                     </td>
                     <td className="px-2 py-1.5 text-gray-400 font-mono">
-                      {formatTime(action.created_at)}
+                      {formatIsoTimestamp(action.created_at)}
                     </td>
                     <td className="px-2 py-1.5 text-gray-200 font-mono">
                       {action.action}

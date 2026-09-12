@@ -1,6 +1,6 @@
 import { ImageOff } from 'lucide-react';
 import PosterFramePreview from '../PosterFramePreview';
-import { formatTimeSimple } from '../shared/clipConstants';
+import { formatInstant, PRECISION } from '../../utils/timeFormat';
 import { EDITOR_PANELS } from '../../config/displayNames';
 
 /**
@@ -31,7 +31,7 @@ export default function ThumbnailPanel({
   // (posterWindow.js's selectPosterFrame), never literally "the middle" --
   // that was stale copy from before round 7 replaced the midpoint default.
   // Show the actual time instead of a location claim that can be wrong.
-  const autoLabel = `Auto-picked · ${formatTimeSimple(posterPreviewTime)}. Drag the marker on the timeline to change it.`;
+  const autoLabel = `Auto-picked · ${formatInstant(posterPreviewTime, PRECISION.SECOND)}. Drag the marker on the timeline to change it.`;
   return (
     <div className="space-y-3">
       <div className="flex flex-col">

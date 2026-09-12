@@ -12,7 +12,7 @@ import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
 import FocusClipsPanel from '../components/settings/FocusClipsPanel';
 import { FocusMode, CropOverlay } from './focus';
 import FramingInstructions from './focus/FramingInstructions';
-import { formatTimeSimple } from '../components/shared/clipConstants';
+import { formatInstant, PRECISION } from '../utils/timeFormat';
 import { ratioWithName } from '../constants/aspectRatios';
 
 /**
@@ -35,7 +35,7 @@ function OutputLengthChip({ seconds, emphasized, label = 'Output', className = '
         ? 'Output length after slow-motion / trim — what you export and are billed for'
         : 'Output length (matches source — no speed or trim changes)'}
     >
-      {label}: {formatTimeSimple(seconds)}
+      {label}: {formatInstant(seconds, PRECISION.SECOND)}
     </span>
   );
 }
@@ -381,7 +381,7 @@ export function FocusModeView({
               <span>{metadata.width}x{metadata.height}</span>
               <>
                 <span className="text-gray-600">•</span>
-                <span>{formatTimeSimple(duration || clipDuration)}</span>
+                <span>{formatInstant(duration || clipDuration, PRECISION.SECOND)}</span>
               </>
               {selectedClipEffectiveDuration != null && (
                 <>

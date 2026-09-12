@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, ImageOff } from 'lucide-react';
-import { formatTimeSimple } from '../../../components/shared/clipConstants';
+import { formatInstant, PRECISION } from '../../../utils/timeFormat';
 import { useIsCoarsePointer } from '../../../hooks/useIsMobile';
 import { computeFollowScrollTarget } from '../../../components/timeline/TimelineBase';
 import { EDITOR_PANELS } from '../../../config/displayNames';
@@ -371,7 +371,7 @@ export default function PosterMarkerLayer({
 
   if (timelineDuration <= 0) return null;
 
-  const sourceTimeLabel = formatTimeSimple(visualTimeToSourceTime(shownVisualTime));
+  const sourceTimeLabel = formatInstant(visualTimeToSourceTime(shownVisualTime), PRECISION.SECOND);
   // UI term is "cover image" (T9550, N31); the model still calls it poster_*. The
   // tooltip/aria STATE THE INTERACTION (drag to choose the cover frame), not a noun.
   // T6630 round 8: the resting-state copy used to claim "the middle of the

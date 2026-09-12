@@ -15,7 +15,7 @@ import { ExportButtonContainer } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
 import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, MousePointerClick } from 'lucide-react';
-import { formatTimeSimple } from '../components/shared/clipConstants';
+import { formatInstant, PRECISION } from '../utils/timeFormat';
 import { HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { EDITOR_PANELS } from '../config/displayNames';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
@@ -790,7 +790,7 @@ export function OverlayModeView({
   const thumbnailPanel = (
     <ThumbnailPanel
       posterMarkerTimeLabel={
-        !posterUploaded && posterMarkerTime != null ? formatTimeSimple(posterMarkerTime) : null
+        !posterUploaded && posterMarkerTime != null ? formatInstant(posterMarkerTime, PRECISION.SECOND) : null
       }
       posterUploaded={posterUploaded}
       posterPreviewVideoUrl={effectiveOverlayVideoUrl}
@@ -871,7 +871,7 @@ export function OverlayModeView({
               {(duration > 0 || effectiveOverlayMetadata.duration > 0) && (
                 <>
                   <span className="text-gray-600">•</span>
-                  <span>{formatTimeSimple(duration || effectiveOverlayMetadata.duration)}</span>
+                  <span>{formatInstant(duration || effectiveOverlayMetadata.duration, PRECISION.SECOND)}</span>
                 </>
               )}
               {effectiveOverlayMetadata.framerate && (

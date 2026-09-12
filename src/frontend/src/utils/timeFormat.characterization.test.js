@@ -6,11 +6,6 @@ import {
   formatClock as tfFormatClock,
   formatGameClock,
 } from './timeFormat';
-import {
-  formatDuration as ccFormatDuration,
-  formatTimeSimple as ccFormatTimeSimple,
-} from '../components/shared/clipConstants';
-
 /**
  * T9480 Stage A -- characterization suite.
  *
@@ -126,6 +121,23 @@ function uaFormatTimestampForName(seconds) {
   const mins = Math.floor((seconds % 3600) / 60);
   const secs = Math.floor(seconds % 60);
   return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+/** clipConstants.js:108 -- formatDuration DELETED in Stage C3 (its 1 importer,
+ *  ClipSelectorSidebar, now calls formatLength(..., TENTH) directly). */
+function ccFormatDuration(seconds) {
+  if (!seconds || isNaN(seconds)) return '0.0s';
+  return `${seconds.toFixed(1)}s`;
+}
+
+/** clipConstants.js:118 -- formatTimeSimple DELETED in Stage C3 (its 5
+ *  importers now call formatInstant(..., SECOND) directly; this was also the
+ *  #2/#8 name collision the design flagged as the worst smell in the set). */
+function ccFormatTimeSimple(seconds) {
+  if (!seconds || isNaN(seconds)) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 /** components/collections/format.js:4 -- module DELETED in Stage C2 (its 7

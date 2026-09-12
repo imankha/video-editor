@@ -9,17 +9,6 @@ import { formatInstant, PRECISION } from '../utils/timeFormat';
 const API_BASE_URL = `${API_BASE}/api`;
 
 /**
- * Format duration in seconds to readable string. Both callers pass a LENGTH
- * (a total/clip duration), but formatInstant's floor-and-M:SS shape is what
- * this display has always shown (T9480 Stage C2: mechanical move, guard kept
- * as-is -- removed in Stage D4).
- */
-function formatDuration(seconds) {
-  if (!seconds || seconds <= 0) return '0:00';
-  return formatInstant(seconds, PRECISION.SECOND);
-}
-
-/**
  * ClipLibraryModal - Select clips from the raw clips library with filters
  *
  * Features:
@@ -295,7 +284,7 @@ export function ClipLibraryModal({
             </span>
             <span className="flex items-center gap-1">
               <Clock size={14} />
-              {formatDuration(preview.totalDuration)}
+              {preview.totalDuration > 0 ? formatInstant(preview.totalDuration, PRECISION.SECOND) : '0:00'}
             </span>
           </div>
         </div>
@@ -360,7 +349,9 @@ export function ClipLibraryModal({
                           {/* Duration */}
                           {clip.start_time !== undefined && clip.end_time !== undefined && (
                             <span className="text-xs">
-                              {formatDuration(clip.end_time - clip.start_time)}
+                              {(clip.end_time - clip.start_time) > 0
+                                ? formatInstant(clip.end_time - clip.start_time, PRECISION.SECOND)
+                                : '0:00'}
                             </span>
                           )}
                           {/* Tags */}

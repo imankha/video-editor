@@ -3,7 +3,6 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useProfileStore } from '../stores/profileStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
-import { formatLength, PRECISION } from '../utils/timeFormat';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -334,16 +333,6 @@ export function useDownloads(isOpen = false) {
   }, []);
 
   /**
-   * Format duration for display (T56)
-   * @param {number} seconds - Duration in seconds
-   * @returns {string} Formatted duration (e.g., "1:23" or "1:05:23")
-   */
-  const formatDuration = useCallback((seconds) => {
-    if (seconds == null || isNaN(seconds)) return null;
-    return formatLength(seconds, PRECISION.SECOND, { style: 'clock' });
-  }, []);
-
-  /**
    * Format date for display
    */
   const formatDate = useCallback((dateString) => {
@@ -574,7 +563,6 @@ export function useDownloads(isOpen = false) {
 
     // Utilities
     formatFileSize,
-    formatDuration,
     formatDate
   };
 }

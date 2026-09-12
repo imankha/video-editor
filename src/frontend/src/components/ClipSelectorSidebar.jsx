@@ -3,7 +3,8 @@ import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, Check, Cro
 import { ClipLibraryModal } from './ClipLibraryModal';
 import { UploadClipModal } from './UploadClipModal';
 import { Button } from './shared/Button';
-import { getRatingDisplay, formatDuration } from './shared/clipConstants';
+import { getRatingDisplay } from './shared/clipConstants';
+import { formatLength, PRECISION } from '../utils/timeFormat';
 import { createGameLookup } from '../utils/gameNameLookup';
 import { clipCropKeyframes, clipSourceDuration } from '../utils/clipSelectors';
 import { getClipDisplayName } from '../utils/clipDisplayName';
@@ -294,7 +295,7 @@ export function ClipSelectorSidebar({
                             // show an honest loading state when truly unknown.
                             const durationSec = clipSourceDuration(clip);
                             return (
-                              <span>{durationSec != null ? formatDuration(durationSec) : 'Loading…'}</span>
+                              <span>{durationSec != null ? formatLength(durationSec, PRECISION.TENTH) : 'Loading…'}</span>
                             );
                           })()}
                         </div>
@@ -447,7 +448,7 @@ export function ClipSelectorSidebar({
             // duration is not yet known, show loading rather than an understated total.
             const durations = clips.map(clipSourceDuration);
             if (durations.some((d) => d == null)) return 'Total: Loading…';
-            return `Total: ${formatDuration(durations.reduce((sum, d) => sum + d, 0))}`;
+            return `Total: ${formatLength(durations.reduce((sum, d) => sum + d, 0), PRECISION.TENTH)}`;
           })()}
         </div>
       )}
