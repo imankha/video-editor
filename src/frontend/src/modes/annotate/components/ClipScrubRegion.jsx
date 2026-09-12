@@ -1,10 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Play, Square } from 'lucide-react';
 import { formatInstant, formatLength, PRECISION } from '../../../utils/timeFormat';
+import { clampTrim, clampToVisibleWindow } from '../trimBounds';
 
 const WINDOW_BEFORE = 30; // seconds before anchor
 const WINDOW_AFTER = 30;  // seconds after anchor
-const MIN_REGION_DURATION = 0.5; // minimum clip duration in seconds
 // T8960 item 8: a pointerdown+up on the track that moves less than this many
 // pixels counts as a click (seek), not a drag. Small so a deliberate click is
 // forgiving of hand tremor but a real scrub gesture never seeks by accident.
@@ -252,10 +252,11 @@ export function ClipScrubRegion({
     const en = endTimeRef.current;
 
     if (d === 'start') {
-      const clamped = Math.max(
-        Math.max(0, windowStart),
-        Math.min(time, en - MIN_REGION_DURATION)
-      );
+      // T9480: clampTrim owns the true media bounds + min-duration policy
+      // (shared with typed entry and step buttons); clampToVisibleWindow is
+      // the drag-only VIEW constraint on top of it.
+      const { value } = clampTrim({ start: time, end: en, edge: 'start', mediaStart: 0, mediaEnd: videoDuration });
+      const clamped = clampToVisibleWindow({ value, edge: 'start', windowStart, windowEnd });
       onStartTimeChangeRef.current(clamped);
       // T8960 item 1: seeking to the dragged handle IS the playhead clamp -- it
       // pulls the playhead to the new start, so it can never be left outside the
@@ -264,10 +265,8 @@ export function ClipScrubRegion({
       // clamp still holds on release.
       desiredSeekRef.current = clamped;
     } else if (d === 'end') {
-      const clamped = Math.min(
-        Math.min(videoDuration, windowEnd),
-        Math.max(time, s + MIN_REGION_DURATION)
-      );
+      const { value } = clampTrim({ start: s, end: time, edge: 'end', mediaStart: 0, mediaEnd: videoDuration });
+      const clamped = clampToVisibleWindow({ value, edge: 'end', windowStart, windowEnd });
       onEndTimeChangeRef.current(clamped);
       desiredSeekRef.current = clamped;
     }
