@@ -1,8 +1,14 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Play, Pause, RotateCcw, Volume2, VolumeX, Maximize, Minimize, List } from 'lucide-react';
-import { formatTimeCompact } from '../../utils/timeFormat';
+import { formatInstant, PRECISION } from '../../utils/timeFormat';
 import { ProgressTrack } from './ProgressTrack';
 import { PlayheadHandle } from './PlayheadHandle';
+
+// T9480 Stage D3: the shared player's default time display now shows clock
+// notation ("2:05.3") instead of bare decimal seconds ("125.3") -- a playback
+// position is an instant, floors, tenth precision. Consumers that need the
+// old plain-seconds look can still pass their own `formatTime` override.
+const defaultFormatTime = (seconds) => formatInstant(seconds, PRECISION.TENTH);
 
 /** Speed picker — tap-friendly popup above the button */
 function SpeedMenu({ rates, playbackRate, onPlaybackRate }) {
@@ -48,7 +54,7 @@ function SpeedMenu({ rates, playbackRate, onPlaybackRate }) {
 }
 
 /** Chapter menu — tap-friendly popup list of chapter titles */
-function ChapterMenu({ chapters, onSeekChapter, formatTime = formatTimeCompact }) {
+function ChapterMenu({ chapters, onSeekChapter, formatTime = defaultFormatTime }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -123,7 +129,7 @@ export function VideoControls({
   onToggleSubtitles, // () => void
   chapters,          // [{startTime, title}] — absent or [] = no chapter UI
   onSeekChapter,     // (startTime) => void
-  formatTime = formatTimeCompact, // time display formatter; default keeps existing decimal-seconds
+  formatTime = defaultFormatTime, // time display formatter; default is clock notation (T9480)
   // Optional sport-ball scrub handle (T5130): a plain emoji string (e.g. '⚽').
   // Present → the glyph rides the progress in place of the purple dot. Absent →
   // byte-identical to today's plain purple dot. Stays store-free: consumers
