@@ -1,6 +1,6 @@
 # T9740: "Publish without spotlight" doesn't publish in one tap
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-12
@@ -80,12 +80,44 @@ Overlay mode. If it doesn't fire, add logging/a breakpoint at `FocusScreen.jsx:1
 
 ## Acceptance Criteria
 
-- [ ] Root cause of the missing auto-trigger confirmed (not just the hypothesis above)
+- [x] Root cause of the missing auto-trigger confirmed (not just the hypothesis above)
 - [ ] "Publish without spotlight" completes in one tap on both staging and local dev, matching its
       own caption - no stranding on the Overlay editor
-- [ ] "Add spotlight" path (T9710 AC3) continues to work exactly as it does today - no regression
-- [ ] Regression test added that would have caught this (the failure mode is exactly "happy path UI
+- [x] "Add spotlight" path (T9710 AC3) continues to work exactly as it does today - no regression
+- [x] Regression test added that would have caught this (the failure mode is exactly "happy path UI
       looks fine, the async auto-trigger silently no-ops" - inject/observe the actual async
       completion, don't just assert the button click doesn't throw)
-- [ ] Relevant test set (curated ~10, per CLAUDE.md Test Scope Policy) green, with output attached
-- [ ] Branch CI green
+- [x] Relevant test set (curated ~10, per CLAUDE.md Test Scope Policy) green, with output attached
+- [x] Branch CI green (red only on the already-documented pre-existing `uploadManager.attachVideo.test.js`
+      flake, unrelated to this diff - see `docs/testing/known-failures.md`)
+
+## Resolution (2026-09-12)
+
+**Confirmed root cause**: `FocusScreen.handlePublish`'s fixed `setTimeout(() => exportButtonRef.current?.triggerExport(), 500)`
+raced Overlay mode's async video hydration. `workingVideo` is explicitly nulled by `FocusScreen`
+(~line 1030-1032) before the overlay mount, and hydrating it again takes 2+ async fetches -
+`OverlayScreen.effectiveOverlayVideoUrl` (which gates whether `OverlayExportButtonSection`, and
+therefore `exportButtonRef`, mounts at all) routinely stays null past the 500ms mark, so
+`exportButtonRef.current` was `null` and `triggerExport()` silently no-opped. 500ms was never a
+safe margin, not a value that needed re-tuning. (StrictMode double-render and `setEditorMode`
+batching timing were both investigated and ruled out.)
+
+**Fix**: extracted a bounded readiness-poll scheduler (`src/frontend/src/utils/scheduleExportWhenReady.js`)
+that waits for the export button to actually be ready before firing, using the existing
+`publishIntentStore` stake as its sole stop condition (no new deadline/magic number to re-tune
+later). Chosen over a reactive `useEffect` (wrong causality/edge-trigger fragility) and a new
+`onReady` callback prop (over-built, new prop chain) after an Opus expert-agent design consult, per
+this project's async-timing escalation policy. Reviewed by a fresh-context Reviewer: APPROVED, 0
+blocking/major, 3 minor (2 applied as doc polish).
+
+**Verification gap, needs staging confirmation**: full end-to-end live-drive of the actual race
+(real AI-Focus render -> Overlay hydration -> auto-trigger -> Published) could not be exercised in
+the dev-container sandbox (Modal disabled, no seeded fixture data - an existing, already-documented
+sandbox limitation per `e2e/T8520-T8530-overlay-choice-and-publish.spec.js`'s header, not new to
+this task). Verified instead via a real red->green proof against the actual `scheduleExportWhenReady.js`
+module (not a mock/argument-shape check) plus the full curated relevant test set green. **The "one
+tap on staging" criterion above is left unchecked until someone live-drives it on staging** -
+merged per this project's merge-when-provably-verified policy (genuine red->green proof + CI green
+modulo the known pre-existing flake), consistent with "staging IS the test phase."
+
+PR: #417 (merged, `0e9ae01f`). Branch: `feature/T9740-publish-without-spotlight-not-one-tap` (deleted post-merge).
