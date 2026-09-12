@@ -259,3 +259,69 @@ having Overlay's `ExportButtonSection` claim the ref through a mechanism that ca
 Focus's still-mounted instance (e.g. a generation/identity token bumped on mount). Per this
 project's async-timing escalation policy, this warrants another expert-agent consult rather than a
 second Sonnet guess, given the first fix already went through that process and still missed this.
+
+## Resolution — Fix v2 (2026-09-12)
+
+**Confirmed root cause (this time by construction, not hypothesis):** exactly the ref-sharing /
+tick-zero mechanism the Staging Verification section above hypothesized. `App.jsx` created ONE
+`exportButtonRef` and handed the SAME object to both `<FocusScreen>` and `<OverlayScreen>`. Focus's
+own export button stays mounted on that ref while the T9590 dialog sits on top of the Focus editor,
+so the ref is NON-NULL from the instant Publish is clicked. `FocusScreen.handlePublish` called the
+readiness scheduler synchronously in the same tick as `setEditorMode('overlay')`, so
+`scheduleExportWhenReady`'s first (synchronous) `tick()` ran BEFORE React swapped Focus out for
+Overlay — `isReady: () => !!exportButtonRef.current` was satisfied on tick zero by Focus's still-mounted
+FRAMING button, firing `POST /api/export/render` (framing) instead of the overlay render. 100%
+reproducible, not a race.
+
+**Fix — split the ref, do NOT "wait smarter":** give each mode its own export button ref
+(`focusExportButtonRef`, `overlayExportButtonRef` in `App.jsx`), passed to their respective screens.
+A new `scheduleOverlayPublishExport({ overlayExportButtonRef, projectId, onAbandon })` (in
+`src/frontend/src/utils/scheduleExportWhenReady.js`) binds the poll to Overlay's ref specifically, so
+`isReady` becomes true BY CONSTRUCTION only once Overlay's own button mounts — no tag to keep in sync,
+no reliance on React scheduling.
+
+**The Staging Verification section's own "Recommendation" (gate on `editorMode === EDITOR_MODES.OVERLAY`
+in addition to `!!ref.current`) was REJECTED as provably broken:** `setEditorMode` is a synchronous
+Zustand `set()`, so `editorMode` is ALREADY `'overlay'` on the tick-zero check while a shared
+`exportButtonRef.current` is STILL Focus's handle — the compound check `editorMode === OVERLAY &&
+!!ref.current` is true at t=0 and fires on the framing button exactly as before. This was confirmed
+by a second Opus expert-agent consult (per the async-timing escalation policy) before implementation.
+Also rejected: deferring the first check via microtask/rAF (Overlay is `React.lazy` behind Suspense,
+so the swap can span multiple commits — narrows the window by luck only), and having Overlay's mount
+write to `publishIntentStore` (banned reactive-persistence-on-mount).
+
+**Also added:**
+- `scheduleExportWhenReady` gained an `onAbandon` callback that fires exactly once if the poll gives
+  up before ever firing (the publish-intent stake expired before Overlay's button mounted). `App.jsx`
+  wires it to a loud `console.error` + a recovery `toast.error` ("Couldn't start the render — Tap
+  Export clip with effects to finish publishing."), turning the old silent stranding into a visible
+  failure with a recovery path.
+- `App.jsx handleExportComplete` gained a log-only named assertion: if a NON-overlay completion
+  arrives while a publish intent is staked for that project, the wrong button fired — logs
+  `console.error` (no behavior change), so any future recurrence of this bug class is loud, not silent.
+
+**Tests (the first fix's tests could not have caught this):** the merged fix's scheduler tests drove
+`isReady` from a boolean that STARTS `false` (presupposing the gate begins closed), and
+`focusPublishExit.test.jsx` wired a SINGLE identity-free `triggerExport` spy — so a poll that fired the
+WRONG button on tick zero still read as "fired once", green. New coverage:
+`scheduleExportWhenReady.test.js` now exercises `scheduleOverlayPublishExport` with TWO separate ref
+objects (focus non-null from the start, overlay null until it mounts) and a NEGATIVE CONTROL against
+the old single-shared-ref predicate proving it DOES fire the focus button on tick zero; plus onAbandon
+unit tests. A new RTL test (`scheduleOverlayPublishExport.rtl.test.jsx`) uses real
+`forwardRef`/`useImperativeHandle` FakeButtons so React's actual attach/detach ordering runs, asserting
+the framing button is never triggered through the transition and the overlay button fires once its
+video hydration lets it mount. Red/green proven literally against the pre-fix scheduler (4 tests fail —
+`scheduleOverlayPublishExport` undefined — while the negative control passes; all green after the fix).
+
+**Verification status — NOT fully verified in-container:** build (vite, exit 0) + lint (0 errors) +
+the curated relevant set green (39 tests: `scheduleExportWhenReady.test.js` 13, RTL 1,
+`focusPublishExit.test.jsx` 15 confirming the "Add spotlight" contrast path is unregressed,
+`overlayPublishExit.test.jsx` 10). The REAL race (real Modal AI-Focus render → Overlay hydration →
+auto-trigger → Published) CANNOT be exercised in the dev-container sandbox (Modal disabled, no seeded
+fixtures) — the same documented limitation that let this exact bug slip past unit tests twice. **A
+live-staging re-verification pass (re-drive AC2 "Publish without spotlight completes in one tap" the
+way the Staging Verification section above did) is still required after merge before checking that
+acceptance criterion.**
+
+Branch: `feature/T9740-publish-without-spotlight-fix-v2` (fresh branch off master for the same task id;
+PR #417's branch was deleted post-merge). Status stays WIP until this merges (supervisor sets STAGING).
