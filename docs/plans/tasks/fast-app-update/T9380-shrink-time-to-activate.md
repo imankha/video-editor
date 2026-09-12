@@ -1,6 +1,6 @@
 # T9380: Shrink time-to-activate - the handover from waiting bundle to running code
 
-**Status:** WAITING ON USER
+**Status:** ICE
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-09
@@ -93,3 +93,9 @@ the reload itself is the dominant cost.
 T9340's own guidance that a leg shown to be noise may be dropped outright). No branch or commit was
 made. Flipped to WAITING ON USER — decide whether to (a) get a real iOS Safari number to unblock a
 real fix for Q1, or (b) drop this task per the epic's own "may be noise" allowance.
+
+**2026-09-12 (user decision): DROPPED.** User chose to drop rather than chase a real iOS Safari
+number. Parked as ICE — the epic's own text ("the other two may be dropped outright if the
+measurement says they are noise") already anticipated this outcome. Reopen only if a real iOS
+Safari activation number surfaces from elsewhere (bug report, future device-testing pass) and
+shows the 3.5s escalation is the normal path rather than the exception.
