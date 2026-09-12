@@ -6,6 +6,8 @@
 **Created:** 2026-09-12
 **Updated:** 2026-09-12
 
+## ⚠ Fix v3 (FOURTH attempt) implemented on `feature/T9740-publish-without-spotlight-fix-v3` — see "Resolution — Fix v3" below. LIVE-STAGING RE-VERIFICATION STILL REQUIRED (three prior rounds all passed their own tests then failed live).
+
 ## ⚠ Fix v2 narrowed the bug but did NOT close it — 3rd live-staging round FAILED, 4th round pending expert consult
 
 **2026-09-12, current status.** Fix v2 (merged, PR #418) genuinely fixed the ref-sharing bug: the
@@ -540,3 +542,90 @@ underlying approach — a client-side poll auto-firing a chain of "when X mounts
 completes, do Z" — is the right shape at all for a promise as strong as "zero manual clicks," given
 this is the third distinct way that chain has broken (missing ref identity, then wrong ref identity,
 now an apparently missing or non-firing final link) without ever failing a unit test first.
+
+## Resolution — Fix v3 (2026-09-11)
+
+**⚠ LIVE-STAGING RE-VERIFICATION IS STILL REQUIRED. This is the FOURTH attempt; the three prior
+rounds each passed their own unit tests and then failed live on real staging (real Modal render ->
+Overlay hydration -> auto-trigger -> Published), a race the dev-container sandbox cannot reproduce
+(Modal disabled, no seeded fixtures). The unit/RTL coverage below is the in-container proof; the
+supervisor/user must re-drive AC2 on staging before this AC can be checked.**
+
+**Confirmed root cause (WS+HTTP double-fire -> fetchProjects abort -> stale snapshot -> silent bail).**
+A "publish without spotlight" overlay render has NO enabled highlight keyframes, so the backend takes
+the **synchronous-200 path** in `src/backend/app/routers/export/overlay.py` (`if not has_keyframes and
+not has_text`, ~lines 3051-3125): it sends the WebSocket `status:"complete"` frame FIRST
+(`await manager.send_progress(...)`) and THEN returns HTTP 200. `ExportButtonContainer.jsx` opens the
+WebSocket (`await connectWebSocket`) BEFORE the POST, so BOTH transports deliver the same completion
+and `onExportComplete` fired **TWICE** (all 6 of its call sites were unguarded — the sibling
+`overlayTransitionFiredRef` one-shot guard existed for `onProceedToOverlay` but `onExportComplete`
+never got the same protection). Both invocations of `App.jsx handleExportComplete` call
+`fetchProjects({ force: true })`, and in `projectsStore.js` a forced fetch ABORTS any in-flight fetch;
+the abort catch path returns `get().projects` (STALE) with no `set()`. Whichever invocation resolves
+first reads the stale snapshot where `final_video_id` is still `null`, passes the outer gate, calls
+`goToProjectManager()` (navigating home), then **silently bailed** at `if (finishedProject?.final_video_id)`.
+The second invocation then found `currentMode` no longer `overlay` (the first already navigated home)
+and its outer gate failed. Net: navigated home, publish never called, **zero console errors**, project
+stranded in "Ready to Publish" — exactly the staging observation, three rounds running.
+
+**The two-half fix (shipped together):**
+
+- **Fix A — one-shot `onExportComplete` per export** (`src/frontend/src/containers/ExportButtonContainer.jsx`):
+  new `completionFiredRef` (reset per-export beside `overlayTransitionFiredRef.current = false`, NOT
+  per-mount) + a single `fireExportComplete(payload)` helper that no-ops on the second call. ALL SIX
+  completion call sites (WS `onComplete`, retry-connection, framing-single sync-200, overlay sync-200,
+  multi-clip framing, overlay legacy `/final`) now route through it. Grep-proven: the only bare
+  `onExportComplete` references left are the prop declaration, the guard/await inside the helper, and
+  dependency arrays.
+- **Fix B — restructured completion decision, EXTRACTED to a testable module**
+  (`src/frontend/src/utils/handleOverlayExportCompletion.js`, called by a thin `App.jsx handleExportComplete`
+  wrapper). Three structural moves: (1) **claim the publish-intent stake SYNCHRONOUSLY, before any
+  `await`** — the stake IS the idempotency token, so any future double-fire from any transport is a
+  no-op by construction; (2) **split the NAVIGATION decision from the PUBLISH decision** — publish is
+  gated ONLY on the one-tap stake (wandering to another screen mid-render suppresses only the
+  screen-hijack navigation, never the publish), while `goToProjectManager()`/`openFinishedReel` stay
+  gated on the mode/id check; (3) **DELETE `finishedProject?.final_video_id` as a publish precondition**
+  — it was a proxy read off a possibly-stale in-memory snapshot and guards nothing the server does not
+  guard better (`downloads.py` returns a loud 404 off the real `final_videos` row). `finishedProject`
+  is kept only as the preview-snapshot object; if missing, `console.error` + skip the preview but STILL
+  publish. **No silent bails anywhere** — every decline-to-publish / decline-to-navigate path logs a
+  named, greppable `console.error`.
+- **Hardening** (`src/frontend/src/hooks/usePublishProject.js`): `publish` accepts an explicit
+  `projectId` override (`targetId = projectId ?? project.id`); `App.jsx` passes `completed.projectId`
+  from the completion payload, so the publish target never comes from the reactive
+  `publishIntentStore` selector binding that could go stale in a long-lived callback.
+
+**Why AC3 ("Add spotlight") cannot regress:** `FocusScreen.handleAddSpotlight` (lines 1085-1099)
+CLEARS any publish-intent stake for the project and never stakes one, so `isOneTapPublish` is `false`
+there, the new publish block is never entered, and `OverlayScreen` keeps owning the completion
+experience. Fix A only removes a DUPLICATE invocation that was already a no-op on its second firing
+for that path. Locked by test case (d).
+
+**Tests + RED->GREEN proof (mandatory, produced explicitly):**
+- Deleted the flawed `appPublishAfterRender.test.js` (it hand-copied the decision branch into a local
+  replica AND hard-coded `finishedProject = { final_video_id: 999 }` — the exact precondition that
+  FAILS in production; a landmine, not coverage).
+- `ExportButtonContainer.completionDedup.test.jsx` (Test 1): mounts the REAL container in overlay
+  mode; a mocked 200 POST + a mocked WS `complete` frame for the same export_id -> asserts
+  `onExportComplete` called EXACTLY ONCE; plus a 202-then-WS-only regression case (also once).
+- `handleOverlayExportCompletion.test.js` (Test 2, against the REAL extracted module with a real
+  `publishIntentStore`): (a) intent staked + snapshot MISSING `final_video_id` -> publish STILL fires
+  (**THE production bug**); (b) intent staked + navigated away -> publish fires, no nav/preview;
+  (c) handler invoked twice concurrently -> publish fires exactly once; (d) no intent staked -> publish
+  NEVER called (AC3 lock).
+- **RED first, GREEN after (unchanged tests):** against the pre-fix source (master
+  `ExportButtonContainer.jsx` + a buggy-baseline module mirroring old App.jsx) — Test 1 sync-200 FAILED
+  ("onExportComplete called 2 times"), Test 2 (a) FAILED ("publish called 0 times"), (b) FAILED
+  ("publish not called"); after restoring the fix, all 6 GREEN.
+- Curated relevant set (12 files / 112 tests) GREEN: the two new files +
+  `ExportButtonContainer.doubleClick.test.jsx`, `ExportButtonContainer.test.js`, `ExportButtonView.test.jsx`,
+  `usePublishProject.test.jsx`, `DraftReelPreview.test.jsx`, `focusPublishExit.test.jsx`,
+  `overlayPublishExit.test.jsx`, `scheduleExportWhenReady.test.js`,
+  `scheduleOverlayPublishExport.rtl.test.jsx`, `publishIntentStore.test.js`. eslint 0 errors, vite
+  build exit 0.
+
+**Verification gap (unchanged from all prior rounds, stated plainly):** the REAL race cannot be
+exercised in the dev container. Live-staging re-verification of AC2 is the supervisor's/user's
+follow-up before promoting past STAGING.
+
+Branch: `feature/T9740-publish-without-spotlight-fix-v3` (fresh off master for the same task id).

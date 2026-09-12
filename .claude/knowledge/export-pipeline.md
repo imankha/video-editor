@@ -1,6 +1,16 @@
 ---
 domain: export-pipeline
-updated: 2026-09-11 (T9540 RENDER/JOB LABELS + DOUBLE-DISPATCH GUARD: single-source render/job/progress/
+updated: 2026-09-11 (T9740 PUBLISH-WITHOUT-SPOTLIGHT ONE-TAP fix v3, frontend-only: the no-keyframes
+overlay render is DUAL-TRANSPORT (backend sends the WS complete frame THEN returns a synchronous 200),
+so onExportComplete fired TWICE -> App.jsx handleExportComplete ran twice -> racing fetchProjects({force})
+aborts the in-flight fetch (abort catch returns STALE get().projects, no set()) -> first invocation read
+a stale final_video_id=null snapshot and silently bailed. Fix: completionFiredRef/fireExportComplete
+one-shot guard on all 6 onExportComplete call sites in ExportButtonContainer.jsx; extracted the completion
+decision to utils/handleOverlayExportCompletion.js which claims the publishIntentStore stake SYNCHRONOUSLY
+before any await (stake = idempotency token), gates publish ONLY on the stake (not on a stale final_video_id
+snapshot; deleted that precondition), splits the navigation decision from the publish decision, and logs
+every no-publish/no-nav path (no silent bails); usePublishProject.publish gained an explicit projectId
+override. See § Progress T9740 note. LIVE-STAGING RE-VERIFY STILL OWED (4th attempt)); 2026-09-11 (T9540 RENDER/JOB LABELS + DOUBLE-DISPATCH GUARD: single-source render/job/progress/
 completion copy in displayNames.js EXPORT_JOBS/EXPORT_PROGRESS keyed on export type; Focus stage noun
 "AI Focus" (completion exactly "AI Focus ready"), overlay "Export clip with effects"/"Clip ready" + a
 backend-confirmed free-cost caption; N37 phase->copy presenter (utils/exportProgressPresentation.js) so
@@ -68,6 +78,25 @@ The problem: `working_videos.highlights_data` is the SOLE home of user overlay-e
 - `manager.send_progress` is fire-and-forget — dropped if no client connected (`websocket.py:123-126`); last frame mirrored into the in-memory `export_progress` dict for late polls.
 - `websocket.py:21 make_progress_data` is the single payload builder: `status`/`done` derive from `phase`; `phase in (complete,done,error)` → `done=True`.
 - Durable state lives ONLY in `export_jobs` rows (`GET /api/exports/active|recent|unacknowledged`); recovery/reconnect flows poll those, never the WS.
+- **T9740 — the no-keyframes overlay path is DUAL-TRANSPORT (WS complete frame + HTTP 200), so every
+  export-completion callback MUST be one-shot guarded.** `overlay.py`'s `render_overlay` no-keyframes
+  branch (`if not has_keyframes and not has_text`) `await manager.send_progress(export_id, complete)`
+  FIRST, THEN returns a synchronous `JSONResponse({"status":"success"})` (200, not 202).
+  `ExportButtonContainer.jsx` opens the WebSocket (`await connectWebSocket`) BEFORE the POST, so BOTH
+  transports deliver the SAME completion — `onExportComplete` (and `onProceedToOverlay`) would fire
+  TWICE without a guard. Guards: `overlayTransitionFiredRef` (onProceedToOverlay, pre-existing) and
+  `completionFiredRef`/`fireExportComplete` (onExportComplete, T9740 fix v3) — both reset **per-export**
+  (beside each other, at `handleExport`'s dispatch point), NOT per-mount. Any NEW completion call site
+  added to that container must route through `fireExportComplete`, never call `onExportComplete`
+  directly. **Landmine (cost three fix rounds):** the double-fire drove `App.jsx handleExportComplete`
+  twice; each calls `fetchProjects({force:true})`, and `projectsStore.js`'s forced fetch ABORTS any
+  in-flight fetch, whose catch returns `get().projects` (STALE) with **no `set()`** — so the
+  first-resolving invocation read a stale snapshot (`final_video_id` still null) and silently bailed.
+  The fix claims the `publishIntentStore` stake SYNCHRONOUSLY before the first `await`
+  (`utils/handleOverlayExportCompletion.js`), making the stake the idempotency token so any
+  double-fire is a no-op by construction. Never gate a publish/finalize decision on an in-memory
+  projects-snapshot field read after a forced fetch; the server (`downloads.py` publish) guards
+  "no final video" with its own 404 off the real `final_videos` row.
 - **T7040 — `GET /api/exports/active` must NOT block the event loop.** `list_active_exports` (async) offloads the whole `get_active_exports()` chain via `await anyio.to_thread.run_sync(get_active_exports)` (`exports.py:617`). That chain runs `cleanup_stale_exports()` → for every stale job with a `modal_call_id`, a BLOCKING Modal round-trip (`check_modal_job_running` → `call.get(timeout=0)`, a control-plane hit even at timeout=0) in a SEQUENTIAL loop. Running it inline on uvicorn's single-worker loop froze EVERY other concurrent request for the sweep's duration (observed 31s), which starved a racing collection download until the browser abandoned it as a bare `TypeError: Failed to fetch`. `cleanup_stale_exports`/`check_modal_job_running` stay plain `def` (they are MEANT to run in a thread); the offload relies on anyio copying request contextvars (user/profile) into the worker so `get_db_connection()` still resolves the caller's per-user DB (fresh sqlite connection opened in-thread, no cross-thread affinity). Invariant: a blocking SDK/network call inside an `async def` route must be `anyio.to_thread.run_sync`-offloaded. Regression: `test_t7040_collection_download_event_loop.py` (a ticker coroutine must keep ticking during the sweep — FAILS inline, PASSES offloaded).
 - **T7040 stub note:** the "clean 500" test stubs `evaluate_collection_members` — its stub member must carry an `id` (real return is `{id, name, duration, filename}`), since T4947's cache key reads `m["id"]`.
 
