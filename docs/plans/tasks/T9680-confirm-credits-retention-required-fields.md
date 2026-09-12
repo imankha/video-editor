@@ -1,10 +1,10 @@
 # T9680: Confirm credits, retention and required upload fields
 
-**Status:** TODO
+**Status:** WIP - all code-side answers confirmed; production verification pending (blocked on user, see below)
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-09-10
-**Updated:** 2026-09-10
+**Updated:** 2026-09-12
 
 ## Source
 
