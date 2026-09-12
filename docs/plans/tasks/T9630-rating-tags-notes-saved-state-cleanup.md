@@ -1,6 +1,6 @@
 # T9630: Rating, tags, notes and saved-state presentation cleanup
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-10
