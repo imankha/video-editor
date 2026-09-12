@@ -125,6 +125,164 @@ export function compareGameTime(a, b) {
   return a - b;
 }
 
+// ---------------------------------------------------------------------------
+// T9480 -- THE one time-format rule.
+//
+// A time value is either an INSTANT (a position on a timeline) or a LENGTH
+// (a span). Instants FLOOR at the shown precision -- a clock must never show
+// a moment that hasn't happened yet. Lengths ROUND HALF-UP at the shown
+// precision, matching the backend's `round_credits_half_up` (highlight_
+// transform.py) exactly, so a whole-second length reads as the billed
+// second count. See docs/plans/tasks/T9480-design.md section 2.1-2.2.
+// ---------------------------------------------------------------------------
+
+export const PRECISION = { SECOND: 0, TENTH: 1, MILLI: 3 };
+
+/**
+ * Round-half-up at `decimals` places. The ONE rounding mode for lengths;
+ * matches the backend's `round_credits_half_up`'s `floor(x + 0.5)` idiom
+ * exactly (an exact .5 always rounds up), not `Math.round` (which agrees for
+ * positive values but diverges on negatives -- irrelevant here since every
+ * real duration is non-negative).
+ */
+export function roundHalfUp(value, decimals = 0) {
+  const factor = 10 ** decimals;
+  return Math.floor(value * factor + 0.5) / factor;
+}
+
+/**
+ * An INSTANT (position). FLOORS at `precision` -- never emits ":60", because
+ * the whole value is floored to `precision` BEFORE being split into
+ * hours/minutes/seconds (rather than flooring each component independently).
+ *
+ * @param {number} seconds
+ * @param {number} [precision] - PRECISION.SECOND | TENTH | MILLI
+ * @param {{hours?: 'auto'|'always'|'never'}} [opts]
+ * @returns {string|null} null (+ console.warn) on non-finite/negative input --
+ *   no silent fallback; callers that legitimately have "no value yet" handle
+ *   null explicitly (same contract as formatGameClock).
+ */
+export function formatInstant(seconds, precision = PRECISION.SECOND, opts = {}) {
+  const { hours = 'auto' } = opts;
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    console.warn(`formatInstant: non-finite or negative input (${seconds})`);
+    return null;
+  }
+
+  const factor = 10 ** precision;
+  const floored = Math.floor(seconds * factor) / factor;
+  const totalWhole = Math.floor(floored);
+  const h = Math.floor(totalWhole / 3600);
+  const m = Math.floor((totalWhole % 3600) / 60);
+  const s = totalWhole % 60;
+  const frac = floored - totalWhole;
+
+  const secWhole = String(s).padStart(2, '0');
+  const secondsStr = precision === PRECISION.SECOND
+    ? secWhole
+    : `${secWhole}.${frac.toFixed(precision).slice(2)}`;
+
+  const showHours = hours === 'always' || (hours === 'auto' && h > 0);
+  if (showHours) {
+    return `${h}:${String(m).padStart(2, '0')}:${secondsStr}`;
+  }
+  return `${m}:${secondsStr}`;
+}
+
+/**
+ * A LENGTH (span). ROUNDS HALF-UP at `precision` -- the whole-second form is
+ * the same rule the credit charge uses (see billingParity test).
+ *
+ * @param {number} seconds
+ * @param {number} [precision] - PRECISION.SECOND | TENTH | MILLI
+ * @param {{style?: 'unit'|'clock'|'human'|'plain'}} [opts]
+ *   'unit'  (default) "6.0s"
+ *   'clock' "0:06" / "1:02:03"
+ *   'human' "1m 30s" / "1h 2m" / "30s"
+ *   'plain' "6.0" -- the bare rounded number as a string, for numeric comparison
+ * @returns {string|null} null (+ console.warn) on non-finite/negative input.
+ */
+export function formatLength(seconds, precision = PRECISION.TENTH, opts = {}) {
+  const { style = 'unit' } = opts;
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    console.warn(`formatLength: non-finite or negative input (${seconds})`);
+    return null;
+  }
+
+  const decimals = precision;
+  const rounded = roundHalfUp(seconds, decimals);
+
+  if (style === 'plain') {
+    return rounded.toFixed(decimals);
+  }
+  if (style === 'unit') {
+    return `${rounded.toFixed(decimals)}s`;
+  }
+
+  // 'clock' and 'human' render the whole-second count -- a rounded LENGTH is
+  // read/billed in whole seconds once it takes clock/human form.
+  const total = Math.round(rounded);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+
+  if (style === 'clock') {
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+  if (style === 'human') {
+    if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+    if (m > 0) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+    return `${s}s`;
+  }
+
+  throw new Error(`formatLength: unknown style "${style}"`);
+}
+
+/**
+ * Inverse of formatInstant. Accepts "H:MM:SS.s" | "M:SS.s" | "SS.s" | "SS".
+ * Returns a Number, or null when unparseable -- NEVER 0 (a 0 would be
+ * indistinguishable from a genuinely-typed zero; no silent fallback).
+ */
+export function parseTimeInput(text) {
+  if (text == null) return null;
+  const trimmed = String(text).trim();
+  if (trimmed === '') return null;
+
+  // Bare seconds: "129.5" or "129"
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    return Number(trimmed);
+  }
+
+  // "H:MM:SS.s" or "M:SS.s" -- colon-separated, only the last part may carry a decimal
+  const parts = trimmed.split(':');
+  if (parts.length < 2 || parts.length > 3) return null;
+  if (!parts.every((p) => /^\d+(\.\d+)?$/.test(p))) return null;
+
+  const nums = parts.map(Number);
+  const seconds = nums.length === 3
+    ? nums[0] * 3600 + nums[1] * 60 + nums[2]
+    : nums[0] * 60 + nums[1];
+
+  return Number.isFinite(seconds) ? seconds : null;
+}
+
+/**
+ * UI_STEP_FPS is a chosen UI STEP GRANULARITY, not a measured source frame
+ * rate. (We do not detect fps -- videoUtils.getFramerate is a hardcoded 30.)
+ * It is the grid that drag, typed entry and the step buttons all snap to, so
+ * all three produce values from the SAME set. Handy property: at 30 the
+ * 0.1s entry precision is exactly 3 steps, so a typed tenth lands exactly on
+ * the grid.
+ */
+export const UI_STEP_FPS = 30;
+
+/** Quantize to the app's UI step grid (see UI_STEP_FPS). */
+export function snapToStep(seconds) {
+  if (!Number.isFinite(seconds)) return seconds;
+  return Math.round(seconds * UI_STEP_FPS) / UI_STEP_FPS;
+}
+
 /**
  * Convert pixel position to time
  * @param {number} pixel - X coordinate relative to timeline

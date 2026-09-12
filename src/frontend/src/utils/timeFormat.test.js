@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { formatGameClock, clipGameClock, compareGameTime } from './timeFormat';
+import {
+  formatGameClock,
+  clipGameClock,
+  compareGameTime,
+  PRECISION,
+  roundHalfUp,
+  formatInstant,
+  formatLength,
+  parseTimeInput,
+  UI_STEP_FPS,
+  snapToStep,
+} from './timeFormat';
 
 describe('formatGameClock (T3920 soccer notation)', () => {
   it('formats exact zero as 0\'00"', () => {
@@ -86,5 +97,128 @@ describe('compareGameTime (T4080 in-game ordering)', () => {
 
   it('returns 0 when both are null', () => {
     expect(compareGameTime(null, null)).toBe(0);
+  });
+});
+
+describe('roundHalfUp (T9480 the one rounding mode for lengths)', () => {
+  it('rounds an exact .5 up, matching the backend floor(x+0.5) idiom', () => {
+    expect(roundHalfUp(6.5)).toBe(7);
+    expect(roundHalfUp(0.5)).toBe(1);
+  });
+
+  it('rounds at a given decimal place', () => {
+    expect(roundHalfUp(2.973, 1)).toBe(3);
+    expect(roundHalfUp(6.027, 1)).toBe(6);
+    expect(roundHalfUp(6.05, 1)).toBe(6.1);
+  });
+
+  it('floors below .5', () => {
+    expect(roundHalfUp(6.49)).toBe(6);
+  });
+});
+
+describe('formatInstant (T9480 -- INSTANTS floor)', () => {
+  it('floors fractional seconds, never rounds', () => {
+    expect(formatInstant(2.973, PRECISION.SECOND)).toBe('0:02');
+    expect(formatInstant(2.973, PRECISION.TENTH)).toBe('0:02.9');
+  });
+
+  it('59.97 never renders ":60" at any precision -- the reported bug, fixed', () => {
+    expect(formatInstant(59.97, PRECISION.SECOND)).toBe('0:59');
+    expect(formatInstant(59.97, PRECISION.TENTH)).toBe('0:59.9');
+    expect(formatInstant(59.97, PRECISION.MILLI)).toBe('0:59.970');
+  });
+
+  it('adds hours automatically past 3600s', () => {
+    expect(formatInstant(3600, PRECISION.SECOND)).toBe('1:00:00');
+    expect(formatInstant(3599.9, PRECISION.TENTH)).toBe('59:59.9');
+  });
+
+  it('opts.hours "always" forces the hour segment even under an hour', () => {
+    expect(formatInstant(65, PRECISION.SECOND, { hours: 'always' })).toBe('0:01:05');
+  });
+
+  it('returns null (not a placeholder string) for non-finite/negative input', () => {
+    expect(formatInstant(NaN)).toBeNull();
+    expect(formatInstant(-1)).toBeNull();
+    expect(formatInstant(Infinity)).toBeNull();
+  });
+
+  it('a whole-second instant matches the exact string a length would show at second precision', () => {
+    // Applied case from the design doc: end 9.000 reads identically as instant or length
+    expect(formatInstant(9, PRECISION.SECOND)).toBe('0:09');
+  });
+});
+
+describe('formatLength (T9480 -- LENGTHS round-half-up, matching the credit rule)', () => {
+  it('rounds half-up at the shown precision', () => {
+    expect(formatLength(2.973, PRECISION.TENTH)).toBe('3.0s');
+    expect(formatLength(6.027, PRECISION.TENTH)).toBe('6.0s');
+  });
+
+  it('whole-second rounding matches roundCreditsHalfUp exactly (the point of AC3)', () => {
+    expect(formatLength(6.027, PRECISION.SECOND, { style: 'plain' })).toBe('6');
+    expect(formatLength(6.5, PRECISION.SECOND, { style: 'plain' })).toBe('7');
+  });
+
+  it('style "clock" renders M:SS / H:MM:SS', () => {
+    expect(formatLength(65, PRECISION.SECOND, { style: 'clock' })).toBe('1:05');
+    expect(formatLength(3665, PRECISION.SECOND, { style: 'clock' })).toBe('1:01:05');
+  });
+
+  it('style "human" renders conversational copy', () => {
+    expect(formatLength(90, PRECISION.SECOND, { style: 'human' })).toBe('1m 30s');
+    expect(formatLength(30, PRECISION.SECOND, { style: 'human' })).toBe('30s');
+  });
+
+  it('returns null (not a placeholder string) for non-finite/negative input', () => {
+    expect(formatLength(NaN)).toBeNull();
+    expect(formatLength(-1)).toBeNull();
+  });
+});
+
+describe('parseTimeInput (T9480 -- never returns 0 for garbage)', () => {
+  it('parses bare seconds', () => {
+    expect(parseTimeInput('129.5')).toBe(129.5);
+    expect(parseTimeInput('6')).toBe(6);
+  });
+
+  it('parses M:SS.s and H:MM:SS.s', () => {
+    expect(parseTimeInput('2:09.5')).toBe(129.5);
+    expect(parseTimeInput('1:02:03')).toBe(3723);
+  });
+
+  it('round-trips with formatInstant at tenth precision', () => {
+    const seconds = 129.5;
+    const text = formatInstant(seconds, PRECISION.TENTH);
+    expect(parseTimeInput(text)).toBeCloseTo(seconds, 5);
+  });
+
+  it('returns null, never 0, on garbage input', () => {
+    expect(parseTimeInput('not a time')).toBeNull();
+    expect(parseTimeInput('')).toBeNull();
+    expect(parseTimeInput(null)).toBeNull();
+    expect(parseTimeInput(undefined)).toBeNull();
+    expect(parseTimeInput('1:2:3:4')).toBeNull();
+  });
+
+  it('a genuinely-typed zero parses to 0, distinguishable from garbage-> null', () => {
+    expect(parseTimeInput('0')).toBe(0);
+    expect(parseTimeInput('0:00')).toBe(0);
+  });
+});
+
+describe('UI_STEP_FPS / snapToStep (T9480 -- one grid for drag, entry and steps)', () => {
+  it('UI_STEP_FPS is 30, a chosen UI granularity (see comment for the fps-honesty rationale)', () => {
+    expect(UI_STEP_FPS).toBe(30);
+  });
+
+  it('snaps to the nearest 1/30s step', () => {
+    expect(snapToStep(2.973)).toBeCloseTo(2.9666666666666, 5);
+  });
+
+  it('a typed tenth lands exactly on the grid', () => {
+    const snapped = snapToStep(2.9);
+    expect(snapped * UI_STEP_FPS).toBeCloseTo(Math.round(snapped * UI_STEP_FPS), 10);
   });
 });
