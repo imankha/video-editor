@@ -31,12 +31,25 @@ limit). `ClipScrubRegion`'s two inline drag clamps now call both, in that order;
 for the existing drag path. **NEW `modes/annotate/components/TrimTimeField.jsx`:** exact start/end
 entry (AC2). At rest renders `formatInstant(value, TENTH)` — byte-identical to the trim-detail
 readout. Click/focus → input; Enter/blur commits via `parseTimeInput → snapToStep → clampTrim →`
-the SAME `onStartTimeChange`/`onEndTimeChange` the drag path calls `→ onSeek` (one write path,
-final preview matches the released value). Escape discards, no write. Arrow keys step
-±1/`UI_STEP_FPS`; Shift+Arrow steps ±1s. A clamp that moves the typed value shows why (never
-silently). `ClipScrubRegion` renders two instances: the full editor gets step-button chevrons
-(`coarse-pointer:min-h-[44px]`, T7350 floor); `compact` (sidebar + landscape strip) drops them —
-click-to-edit in place, zero added footprint. **Billable-duration disclosure (AC3):** single-sourced
+the SAME `onStartTimeChange`/`onEndTimeChange` the drag path calls `→ onSeek`. Escape discards, no
+write. Arrow keys step ±1/`UI_STEP_FPS` (via `snapToStep`, so an off-grid dragged value snaps back
+onto the grid on the first step — **drag itself is deliberately NOT snapped**, only typed entry
+and steps share the grid; the `UI_STEP_FPS` comment says so explicitly, don't "fix" drag to snap
+too). Shift+Arrow steps ±1s. A clamp that moves the typed value shows why (never silently). Also
+fires `onCommitComplete(finalStart, finalEnd)` after a non-rejected commit/step — `ClipScrubRegion`
+wires this to the SAME `onDragEnd` the drag path calls, so typed entry and step buttons actually
+PERSIST (not just preview) in every host, including `ClipDetailsEditor`'s sidebar editor (its own
+`onStartTimeChange`/`onEndTimeChange` are local-preview-only; `handleDragEnd` is the real
+`onUpdate` call — found missing in review round 1, this is what closes that gap). Optional
+`mediaBounds` prop threads the ACTIVE ANGLE's span (not the whole video) when
+`activeSourceSequence` is set — derived in `AnnotateModeView.jsx` from `angleData.angles` (the
+same `fullTimeline.angles`/`wallToVirtual` values `clampToSource` already clamps between, no
+second source-clamping implementation), falls back to `{0, videoDuration}` when absent. The
+sidebar (`ClipDetailsEditor`) does not thread `mediaBounds` today, so its typed entry can still
+exceed a virtual clip's own source span (same as drag's pre-existing behavior there; noted as a
+follow-up, not this task's scope). `ClipScrubRegion` renders two instances: the full editor gets
+step-button chevrons (`coarse-pointer:min-h-[44px]`, T7350 floor); `compact` (sidebar + landscape
+strip) drops them — click-to-edit in place, zero added footprint. **Billable-duration disclosure (AC3):** single-sourced
 in `config/displayNames.js` `CREDITS` (`PER_SECOND_RULE`, `MIN_CHARGE`, `billableLine`), consumed by
 `BuyCreditsModal` (3 sites, refactored not duplicated) and `ExportButtonView`'s new second line
 (`ExportButtonContainer` exposes `estimatedSeconds` alongside `estimatedCredits`; the line shows

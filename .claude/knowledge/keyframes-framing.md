@@ -119,8 +119,11 @@ project total into a credit estimate, and the backend charge must use the same m
   emphasized (blue) only when output differs from source length (slow-mo present), else subtle gray.
   A `Total` chip renders near the export area only for multi-clip projects (redundant for one clip).
   The playback timer is deliberately UNCHANGED — it shows source-timeline position; only the chip
-  reflects output length. Reuses `formatInstant(s, PRECISION.SECOND)` from `utils/timeFormat` (T9480 --
-  it's a LENGTH but keeps its historical floor display, unlike the credit disclosure below, which rounds).
+  reflects output length. Reuses `formatLength(s, PRECISION.SECOND, {style:'clock'})` from
+  `utils/timeFormat` (T9480 -- it's a LENGTH, so it rounds half-up, matching `roundCreditsHalfUp`
+  exactly. It used to reuse `formatInstant` and silently floor here -- the one billing-adjacent
+  surface where that was live in production as the walkthrough's original 6-vs-7-credit complaint;
+  fixed during T9480's review, not left as a documented exception).
 - Coverage: Vitest `src/utils/effectiveDuration.test.js` (15: 6s+3s@0.5x→9s, trim, multi-clip
   sum→23, live-over-saved precedence, DB-array format, fail-closed NaN) + real-browser
   `e2e/T5780-framing-effective-duration.qa.spec.js` (live speed tick, trim drop, source-timeline
