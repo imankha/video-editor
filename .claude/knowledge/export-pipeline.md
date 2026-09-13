@@ -201,10 +201,15 @@ recovery-path gap it left open.
 - `components/FocusCompletionRecovery.jsx` — the App-level surface, mounted
   on both `App.jsx` returns (home ~:950, editor ~:1036) — but as TWO
   structurally different subtrees, not one persistent instance: navigating
-  home<->editor unmounts one and mounts a fresh one (NOT the same
-  double-mount-but-effectively-continuous pattern `DraftReelPreview` gets from
-  living in a stable position in both returns — this component's own mount
-  point differs enough between the two trees that React tears it down). Renders
+  home<->editor unmounts one and mounts a fresh one. `DraftReelPreview`
+  remounts the same way (different position in each return, only
+  `ConnectionStatus` sits in the one slot stable enough to survive, per the
+  T6190 comment at `App.jsx:906-910`) — the difference is `DraftReelPreview`
+  keeps no component-local one-shot state, so its remount is harmless, while
+  this component's `autoTriedJobId`/`resuming` one-shot tracking is
+  store-backed specifically BECAUSE a `useRef` here would reset on every
+  remount and silently re-arm Option C's auto-open for an already-offered job
+  (found + fixed during T9285's review). Renders
   `null` when `recovered` is null; otherwise a bottom-right card (stacked above
   `GlobalExportIndicator`'s slot so the two never overlap) showing
   `EXPORT_JOBS.framing.completed` ("AI Focus ready") + the project name, with
