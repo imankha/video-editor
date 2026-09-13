@@ -333,24 +333,6 @@ export function useDownloads(isOpen = false) {
   }, []);
 
   /**
-   * Format duration for display (T56)
-   * @param {number} seconds - Duration in seconds
-   * @returns {string} Formatted duration (e.g., "1:23" or "1:05:23")
-   */
-  const formatDuration = useCallback((seconds) => {
-    if (seconds == null || isNaN(seconds)) return null;
-    const totalSeconds = Math.round(seconds);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
-
-    if (hours > 0) {
-      return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    }
-    return `${minutes}:${String(secs).padStart(2, '0')}`;
-  }, []);
-
-  /**
    * Format date for display
    */
   const formatDate = useCallback((dateString) => {
@@ -581,7 +563,6 @@ export function useDownloads(isOpen = false) {
 
     // Utilities
     formatFileSize,
-    formatDuration,
     formatDate
   };
 }

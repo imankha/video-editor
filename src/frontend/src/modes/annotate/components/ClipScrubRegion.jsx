@@ -1,22 +1,16 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Play, Square } from 'lucide-react';
+import { formatInstant, formatLength, PRECISION } from '../../../utils/timeFormat';
+import { clampTrim, clampToVisibleWindow } from '../trimBounds';
+import { TrimTimeField } from './TrimTimeField';
 
 const WINDOW_BEFORE = 30; // seconds before anchor
 const WINDOW_AFTER = 30;  // seconds after anchor
-const MIN_REGION_DURATION = 0.5; // minimum clip duration in seconds
 // T8960 item 8: a pointerdown+up on the track that moves less than this many
 // pixels counts as a click (seek), not a drag. Small so a deliberate click is
 // forgiving of hand tremor but a real scrub gesture never seeks by accident.
 const CLICK_MOVE_THRESHOLD_PX = 4;
 
-/**
- * Format seconds to MM:SS.s
- */
-function formatTime(seconds) {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins.toString().padStart(2, '0')}:${secs.toFixed(1).padStart(4, '0')}`;
-}
 
 /**
  * ClipScrubRegion - Mini-timeline with two draggable handles for selecting clip start/end.
@@ -74,7 +68,17 @@ export function ClipScrubRegion({
   // readout also goes clip-relative (showAnnotateOverlay), and never leak into
   // the merely-SELECTED sidebar state (where playback stays whole-game).
   clipEditorActive = false,
+  // T9480 review fix (MAJOR #5): the true media bound for TrimTimeField's
+  // typed entry/step buttons -- {mediaStart, mediaEnd} in the SAME coordinate
+  // space as startTime/endTime. Passed by the caller when an angle is active
+  // (the angle's own virtual span, EPIC decision 10: a clip is cut from ONE
+  // source); null/absent falls back to the whole timeline (videoDuration),
+  // matching the previous hardcoded behavior for every backbone/angle-free
+  // game. Drag stays clamped to the visible window (clampToVisibleWindow)
+  // regardless -- this only widens/narrows what TYPED entry can reach.
+  mediaBounds = null,
 }) {
+  const trimFieldMediaBounds = mediaBounds ?? { mediaStart: 0, mediaEnd: videoDuration };
   const trackRef = useRef(null);
   const [dragging, setDragging] = useState(null); // 'start' | 'end' | null
   // T8780: restored for the sidebar (clipEditorActive=false) only -- the
@@ -259,10 +263,11 @@ export function ClipScrubRegion({
     const en = endTimeRef.current;
 
     if (d === 'start') {
-      const clamped = Math.max(
-        Math.max(0, windowStart),
-        Math.min(time, en - MIN_REGION_DURATION)
-      );
+      // T9480: clampTrim owns the true media bounds + min-duration policy
+      // (shared with typed entry and step buttons); clampToVisibleWindow is
+      // the drag-only VIEW constraint on top of it.
+      const { value } = clampTrim({ start: time, end: en, edge: 'start', mediaStart: 0, mediaEnd: videoDuration });
+      const clamped = clampToVisibleWindow({ value, edge: 'start', windowStart, windowEnd });
       onStartTimeChangeRef.current(clamped);
       // T8960 item 1: seeking to the dragged handle IS the playhead clamp -- it
       // pulls the playhead to the new start, so it can never be left outside the
@@ -271,10 +276,8 @@ export function ClipScrubRegion({
       // clamp still holds on release.
       desiredSeekRef.current = clamped;
     } else if (d === 'end') {
-      const clamped = Math.min(
-        Math.min(videoDuration, windowEnd),
-        Math.max(time, s + MIN_REGION_DURATION)
-      );
+      const { value } = clampTrim({ start: s, end: time, edge: 'end', mediaStart: 0, mediaEnd: videoDuration });
+      const clamped = clampToVisibleWindow({ value, edge: 'end', windowStart, windowEnd });
       onEndTimeChangeRef.current(clamped);
       desiredSeekRef.current = clamped;
     }
@@ -475,10 +478,28 @@ export function ClipScrubRegion({
   if (compact) {
     return (
       <div className="flex items-center gap-2">
-        <div className="text-xs font-mono whitespace-nowrap">
-          <span className="text-white">{formatTime(startTime)}</span>
+        <div className="text-xs font-mono whitespace-nowrap flex items-center">
+          <TrimTimeField
+            value={startTime}
+            edge="start"
+            otherValue={endTime}
+            mediaBounds={trimFieldMediaBounds}
+            onCommit={onStartTimeChange}
+            onSeek={onSeek}
+            onCommitComplete={onDragEnd}
+            compact
+          />
           <span className="text-gray-500 mx-0.5">-</span>
-          <span className="text-white">{formatTime(endTime)}</span>
+          <TrimTimeField
+            value={endTime}
+            edge="end"
+            otherValue={startTime}
+            mediaBounds={trimFieldMediaBounds}
+            onCommit={onEndTimeChange}
+            onSeek={onSeek}
+            onCommitComplete={onDragEnd}
+            compact
+          />
         </div>
         <div
           ref={trackRef}
@@ -538,7 +559,7 @@ export function ClipScrubRegion({
             </div>
           </div>
         </div>
-        <span className="text-xs font-mono text-gray-400 whitespace-nowrap">{clipDuration.toFixed(1)}s</span>
+        <span className="text-xs font-mono text-gray-400 whitespace-nowrap" data-testid="clip-length">{formatLength(clipDuration, PRECISION.TENTH)}</span>
       </div>
     );
   }
@@ -547,13 +568,29 @@ export function ClipScrubRegion({
     <div className="mb-4">
       {/* Time display */}
       <div className="flex items-center justify-between mb-2">
-        <div className="text-sm text-gray-400">
-          <span className="font-mono text-white">{formatTime(startTime)}</span>
+        <div className="text-sm text-gray-400 flex items-center">
+          <TrimTimeField
+            value={startTime}
+            edge="start"
+            otherValue={endTime}
+            mediaBounds={trimFieldMediaBounds}
+            onCommit={onStartTimeChange}
+            onSeek={onSeek}
+            onCommitComplete={onDragEnd}
+          />
           {' '}&rarr;{' '}
-          <span className="font-mono text-white">{formatTime(endTime)}</span>
+          <TrimTimeField
+            value={endTime}
+            edge="end"
+            otherValue={startTime}
+            mediaBounds={trimFieldMediaBounds}
+            onCommit={onEndTimeChange}
+            onSeek={onSeek}
+            onCommitComplete={onDragEnd}
+          />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-mono text-gray-400">{clipDuration.toFixed(1)}s</span>
+          <span className="text-sm font-mono text-gray-400" data-testid="clip-length">{formatLength(clipDuration, PRECISION.TENTH)}</span>
           {/* T8780: preview button restored for the sidebar only. The fullscreen
               edit overlay (clipEditorActive) intentionally has no button here --
               its single main-transport control auto-loops the clip instead
@@ -600,7 +637,7 @@ export function ClipScrubRegion({
                 >
                   <div className="w-px h-2 bg-gray-600" />
                   <span className="text-[9px] text-gray-600 mt-0.5 font-mono">
-                    {Math.floor(t / 60)}:{String(Math.floor(t % 60)).padStart(2, '0')}
+                    {formatInstant(t, PRECISION.SECOND)}
                   </span>
                 </div>
               );
@@ -675,8 +712,8 @@ export function ClipScrubRegion({
       {/* Window range label — game-context only, hidden while editing (item 8) */}
       {!isEditing && (
         <div className="flex justify-between mt-1">
-          <span className="text-[10px] text-gray-500 font-mono">{formatTime(windowStart)}</span>
-          <span className="text-[10px] text-gray-500 font-mono">{formatTime(windowEnd)}</span>
+          <span className="text-[10px] text-gray-500 font-mono">{formatInstant(windowStart, PRECISION.TENTH)}</span>
+          <span className="text-[10px] text-gray-500 font-mono">{formatInstant(windowEnd, PRECISION.TENTH)}</span>
         </div>
       )}
     </div>

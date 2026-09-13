@@ -1082,6 +1082,15 @@ export function ExportButtonContainer({
     return credits;
   }, [isFramingMode, clips]);
 
+  // T9480: the EXACT seconds behind estimatedCredits (same calculator, same
+  // clips) -- needed by the View to decide whether rounding actually changed
+  // the number (AC3 disclosure), not just to display the integer.
+  const estimatedSeconds = useMemo(() => {
+    if (!isFramingMode) return null;
+    const seconds = sumEffectiveDurations(clips);
+    return (seconds == null || Number.isNaN(seconds) || seconds <= 0) ? null : seconds;
+  }, [isFramingMode, clips]);
+
   // Optimistic warning: estimate exceeds the (already-in-container) balance. Informational
   // only — the click still runs the authoritative refresh-balance → 402 → buy-credits flow.
   const insufficientForEstimate = estimatedCredits != null && estimatedCredits > creditBalance;
@@ -1182,6 +1191,7 @@ export function ExportButtonContainer({
     creditBalance,
     // T5790: pre-flight credit-cost estimate (Framing only, derived — no new state)
     estimatedCredits,
+    estimatedSeconds,
     insufficientForEstimate,
     // T8280: source fps for the high-fps 30fps-choice note (Option B-simple)
     sourceFps,

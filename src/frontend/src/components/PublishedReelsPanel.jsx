@@ -18,7 +18,6 @@ import { useIntroCardStore } from '../stores/introCardStore';
 import { IntroCardPicker } from './introcards/IntroCardPicker';
 import { collectionIntroKey } from './collections/introBadgeKey';
 import { RATIO_ORDER } from '../constants/aspectRatios';
-import { formatDurationHuman } from './collections/format';
 import { useWebShare } from '../hooks/useWebShare';
 import { useGalleryStore } from '../stores/galleryStore';
 import { SourceType } from '../constants/sourceTypes';
@@ -28,7 +27,7 @@ import { toast } from './shared/Toast';
 import { track } from '../utils/analytics';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { formatGameClock } from '../utils/timeFormat';
+import { formatGameClock, formatLength, PRECISION } from '../utils/timeFormat';
 import { sportEmoji } from '../modes/annotate/constants/tagRegistry';
 
 /**
@@ -702,7 +701,7 @@ export function PublishedReelsPanel({
   // A compact metadata line for the tile scrim: date · duration · game-time.
   const reelMetaLine = (download) => [
     formatDate(download.created_at),
-    formatDurationHuman(download.duration),
+    formatLength(download.duration, PRECISION.SECOND, { style: 'human' }),
     formatGameClock(download.clip_game_start_time),
   ].filter(Boolean).join(' · ');
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Lock } from 'lucide-react';
 import { ratioGlyph, ratioLabel, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
-import { formatDurationHuman } from './format';
+import { formatLength, PRECISION } from '../../utils/timeFormat';
 import { CardStack } from '../shared/MediaCard';
 
 /**
@@ -54,7 +54,7 @@ export function LockedCollectionCard({ name, subtitle, ratio, currentSec, onClic
               <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
             </div>
             <span className="text-xs text-amber-300/80 shrink-0 tabular-nums">
-              {formatDurationHuman(currentSec) || '0s'} / {formatDurationHuman(COLLECTION_MIN_DURATION_SEC)}
+              {formatLength(currentSec, PRECISION.SECOND, { style: 'human' }) || '0s'} / {formatLength(COLLECTION_MIN_DURATION_SEC, PRECISION.SECOND, { style: 'human' })}
             </span>
           </div>
         </div>

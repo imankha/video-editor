@@ -4,18 +4,9 @@ import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { createGameLookup, formatClipDisplayName } from '../utils/gameNameLookup';
+import { formatLength, PRECISION } from '../utils/timeFormat';
 
 const API_BASE_URL = `${API_BASE}/api`;
-
-/**
- * Format duration in seconds to readable string
- */
-function formatDuration(seconds) {
-  if (!seconds || seconds <= 0) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
 
 /**
  * ClipLibraryModal - Select clips from the raw clips library with filters
@@ -293,7 +284,8 @@ export function ClipLibraryModal({
             </span>
             <span className="flex items-center gap-1">
               <Clock size={14} />
-              {formatDuration(preview.totalDuration)}
+              {/* T9480 review fix: a total duration is a LENGTH -- rounds, not floors. */}
+              {formatLength(preview.totalDuration, PRECISION.SECOND, { style: 'clock' })}
             </span>
           </div>
         </div>
@@ -358,7 +350,7 @@ export function ClipLibraryModal({
                           {/* Duration */}
                           {clip.start_time !== undefined && clip.end_time !== undefined && (
                             <span className="text-xs">
-                              {formatDuration(clip.end_time - clip.start_time)}
+                              {formatLength(clip.end_time - clip.start_time, PRECISION.SECOND, { style: 'clock' })}
                             </span>
                           )}
                           {/* Tags */}

@@ -1,3 +1,5 @@
+import { formatLength, PRECISION } from '../utils/timeFormat';
+
 // T9520 (Shared Vocabulary epic — naming groups N04-N35): the canonical
 // Annotate-surface vocabulary, single source. One object model across every
 // Annotate label: a GAME holds PLAYS (marked time ranges with rating/tags/notes);
@@ -336,4 +338,15 @@ export const EDITOR_PANELS = {
   SELECT_PLAYER_TAP: 'Tap your player to add a spotlight',
   SELECT_PLAYER_FIND: 'Tap a green marker on the timeline to find your player',
   SELECT_PLAYER_STYLING_HINT: 'Spotlight color, shape, and dimming appear once you pick a player.',
+};
+
+// T9480 -- single source for the billing-rule copy, verbatim from
+// BuyCreditsModal's shipped T9750 wording (round-HALF-UP, NOT ceil). Every
+// disclosure surface reads from here so the copy cannot drift from what's
+// actually charged (creditStore.roundCreditsHalfUp / getRequiredCredits).
+export const CREDITS = {
+  PER_SECOND_RULE: '1 credit per second, rounded to the nearest second',
+  MIN_CHARGE: 'Any render costs at least 1 credit.',
+  billableLine: (exactSeconds, credits) =>
+    `${formatLength(exactSeconds, PRECISION.TENTH)} of video · ${credits} credit${credits === 1 ? '' : 's'} · ${CREDITS.PER_SECOND_RULE}.`,
 };

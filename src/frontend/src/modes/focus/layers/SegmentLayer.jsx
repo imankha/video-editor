@@ -1,6 +1,7 @@
 import { Trash2 } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { PLAYHEAD_WIDTH_PX } from '../../../components/timeline/TimelineBase';
+import { formatLength, PRECISION } from '../../../utils/timeFormat';
 
 /**
  * SegmentLayer component - displays video segments with speed control and trimming
@@ -147,7 +148,7 @@ export default function SegmentLayer({
                 this div, so they are never clipped). */}
             <div
               className={`relative overflow-hidden h-8 lg:h-12 transition-all ${hoveredSegmentIndex === segment.index ? 'bg-purple-500 bg-opacity-30' : ''}`}
-              title={`Segment ${segment.index + 1}: ${segment.speed}x (${segment.actualDuration.toFixed(1)}s → ${segment.visualDuration.toFixed(1)}s)`}
+              title={`Segment ${segment.index + 1}: ${segment.speed}x (${formatLength(segment.actualDuration, PRECISION.TENTH)} → ${formatLength(segment.visualDuration, PRECISION.TENTH)})`}
             >
               {/* T9610: current speed as a STATE readout, not an action. Always shown
                   (including 1x) so the speed reads as a current setting; the buttons

@@ -3,7 +3,7 @@ import { Lock, X } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { Z } from '../../constants/zLayers';
 import { ratioDisplay, ratioLabel, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
-import { formatDurationHuman } from './format';
+import { formatLength, PRECISION } from '../../utils/timeFormat';
 
 /**
  * The four amber "locked" surfaces in My Reels (T7650) look identical, so the
@@ -111,8 +111,8 @@ export function LockedReasonModal({ name, ratio, currentSec, onClose, kind = LOC
     name,
     ratio,
     remaining,
-    thresholdText: formatDurationHuman(COLLECTION_MIN_DURATION_SEC),
-    remainingText: formatDurationHuman(remaining),
+    thresholdText: formatLength(COLLECTION_MIN_DURATION_SEC, PRECISION.SECOND, { style: 'human' }),
+    remainingText: formatLength(remaining, PRECISION.SECOND, { style: 'human' }),
   });
 
   return (
@@ -141,8 +141,8 @@ export function LockedReasonModal({ name, ratio, currentSec, onClose, kind = LOC
             <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
           </div>
           <div className="mt-1 flex items-center justify-between text-xs text-amber-300/80 tabular-nums">
-            <span>{formatDurationHuman(cur) || '0s'} so far</span>
-            <span>{formatDurationHuman(COLLECTION_MIN_DURATION_SEC)}</span>
+            <span>{formatLength(cur, PRECISION.SECOND, { style: 'human' }) || '0s'} so far</span>
+            <span>{formatLength(COLLECTION_MIN_DURATION_SEC, PRECISION.SECOND, { style: 'human' })}</span>
           </div>
         </div>
 

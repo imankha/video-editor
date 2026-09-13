@@ -188,6 +188,12 @@ export function AnnotateFullscreenOverlay({
   // game. Non-null => this play is being cut from an angle; render the "cut from"
   // chip + microcopy. Null => zero pixels (angle-free games stay byte-identical).
   activeSourceName = null,
+  // T9480 review fix (MAJOR #5): the active angle's true media bound
+  // ({mediaStart, mediaEnd} in virtual time, from buildGameTimeline's own
+  // angles[].virtualStart/virtualEnd via AnnotateModeView), or null for the
+  // backbone / an angle-free game -- ClipScrubRegion falls back to the whole
+  // timeline (videoDuration) when this is null.
+  mediaBounds = null,
 }) {
   const isEditMode = !!existingClip;
   const isMobile = useIsMobile();
@@ -619,6 +625,7 @@ export function AnnotateFullscreenOverlay({
           onDragStart={() => onScrubDragChange?.(true)}
           onDragEnd={() => onScrubDragChange?.(false)}
           videoController={videoController}
+          mediaBounds={mediaBounds}
           clipEditorActive
         />
 
@@ -1024,6 +1031,7 @@ export function AnnotateFullscreenOverlay({
               onDragStart={() => onScrubDragChange?.(true)}
               onDragEnd={() => onScrubDragChange?.(false)}
               videoController={videoController}
+          mediaBounds={mediaBounds}
               clipEditorActive
             />
           </div>
@@ -1190,6 +1198,7 @@ export function AnnotateFullscreenOverlay({
           onDragStart={() => onScrubDragChange?.(true)}
           onDragEnd={() => onScrubDragChange?.(false)}
           videoController={videoController}
+          mediaBounds={mediaBounds}
           clipEditorActive
           compact
         />

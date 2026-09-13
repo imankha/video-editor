@@ -4,8 +4,9 @@ import ActionBand from './ActionBand';
 import PrimaryCta from './PrimaryCta';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
-import { SECTION_NAMES, EXPORT_JOBS } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_JOBS, CREDITS } from '../config/displayNames';
 import { HIGH_FPS_THRESHOLD } from '../constants/exportFps';
+import { formatLength, PRECISION } from '../utils/timeFormat';
 
 /**
  * ExportButtonView - Pure presentational component for export UI
@@ -51,6 +52,8 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   onCloseInsufficientCredits,
   // T5790: pre-flight credit-cost estimate (Framing only)
   estimatedCredits = null,
+  // T9480: the exact seconds behind estimatedCredits (AC3 disclosure)
+  estimatedSeconds = null,
   insufficientForEstimate = false,
   creditBalance = 0,
   // T8280: source fps, for the high-fps 30fps-choice note (Option B-simple)
@@ -206,6 +209,20 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             {`~${estimatedCredits} credit${estimatedCredits === 1 ? '' : 's'} · balance ${creditBalance}`}
             {insufficientForEstimate ? ' — add credits to export' : ''}
           </span>
+        </div>
+      )}
+
+      {/* T9480 (AC3): a second, muted disclosure line — ONLY when rounding
+          actually changed the number, i.e. the whole-second reading differs
+          NUMERICALLY from the tenth-second reading (compared via the 'plain'
+          style so "6.0s -> 6" -- same number, no real rounding -- stays
+          noise-free, while "6.5s -> 7" gets the disclosure). The disclosed
+          integer is never re-derived: it's the SAME estimatedCredits shown above. */}
+      {isFramingMode && !isCurrentlyExporting && estimatedCredits != null && estimatedSeconds != null &&
+        Number(formatLength(estimatedSeconds, PRECISION.SECOND, { style: 'plain' })) !==
+          Number(formatLength(estimatedSeconds, PRECISION.TENTH, { style: 'plain' })) && (
+        <div data-testid="export-billable-disclosure" className="flex items-center gap-1.5 text-xs text-gray-500">
+          <span>{CREDITS.billableLine(estimatedSeconds, estimatedCredits)}</span>
         </div>
       )}
 

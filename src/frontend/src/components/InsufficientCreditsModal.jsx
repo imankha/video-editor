@@ -1,5 +1,7 @@
 import { X, Coins } from 'lucide-react';
 import { Button } from './shared/Button';
+import { CREDITS } from '../config/displayNames';
+import { formatLength, PRECISION } from '../utils/timeFormat';
 
 /**
  * InsufficientCreditsModal - Blocking modal shown when user lacks credits (T530)
@@ -10,10 +12,21 @@ import { Button } from './shared/Button';
  *   videoSeconds: number - video duration in seconds
  *   onClose: () => void - close handler
  *   onBuyCredits: () => void - open BuyCreditsModal (T525)
+ *
+ * T9480 review fix (MINOR #9): the real caller (ProjectsScreen, game-upload
+ * storage credits) always passes `description` -- the `videoSeconds` fallback
+ * below is not exercised in production today, but is single-sourced via
+ * CREDITS/formatLength (not a bare Math.round with no stated rule) so it
+ * can't drift if a future export-credits caller relies on it. The old
+ * unconditional "1 credit = 1 second of exported video" footer was REMOVED:
+ * it stated the per-second export rule even when this modal is showing a
+ * storage-credit (not export) shortfall, and was already stale versus
+ * T9750's round-half-up rule (BuyCreditsModal fixed its own copy of this
+ * exact line; this sibling was missed).
  */
 export function InsufficientCreditsModal({ required, available, videoSeconds, description, onClose, onBuyCredits }) {
   const detail = description
-    || `This export requires ${required} credits (${Math.round(videoSeconds)}s of video).`;
+    || `This export requires ${required} credits for ${formatLength(videoSeconds, PRECISION.TENTH)} of video (${CREDITS.PER_SECOND_RULE}).`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -36,9 +49,6 @@ export function InsufficientCreditsModal({ required, available, videoSeconds, de
           <p>
             Your balance:{' '}
             <strong className="text-white">{available} credits</strong>.
-          </p>
-          <p className="text-xs text-gray-400">
-            <span className="text-yellow-400 font-medium">1 credit = 1 second</span> of exported video.
           </p>
         </div>
 

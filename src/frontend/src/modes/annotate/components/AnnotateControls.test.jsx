@@ -29,7 +29,7 @@ describe('AnnotateControls time readout (T8760)', () => {
     expect(screen.getByText(/1:40/)).toBeTruthy();
   });
 
-  it('shows clip-relative elapsed / clip-duration when editing a clip', () => {
+  it('shows clip-relative elapsed / clip-duration when editing a clip (T9480: elapsed is an instant -> floors + clock notation; length rounds)', () => {
     // Clip [97.8, 105.1] -> length 7.3s; playhead 101 -> elapsed 3.2s.
     render(
       <AnnotateControls
@@ -39,11 +39,11 @@ describe('AnnotateControls time readout (T8760)', () => {
       />,
     );
     const readout = screen.getByTestId('clip-relative-time');
-    expect(readout.textContent).toBe('3.2s / 7.3s');
+    expect(readout.textContent).toBe('0:03.2 / 7.3s');
   });
 
   it('clamps clip-relative elapsed to [0, clip-length]', () => {
-    // Playhead before the clip start -> elapsed floored at 0.0s.
+    // Playhead before the clip start -> elapsed floored at 0.0.
     render(
       <AnnotateControls
         {...baseProps}
@@ -51,7 +51,7 @@ describe('AnnotateControls time readout (T8760)', () => {
         clipEditBounds={{ start: 97.8, end: 105.1 }}
       />,
     );
-    expect(screen.getByTestId('clip-relative-time').textContent).toBe('0.0s / 7.3s');
+    expect(screen.getByTestId('clip-relative-time').textContent).toBe('0:00.0 / 7.3s');
   });
 });
 

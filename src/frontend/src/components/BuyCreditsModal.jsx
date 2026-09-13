@@ -6,6 +6,8 @@ import { CreditHistoryModal } from './CreditHistoryModal';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useEditorStore, useProjectsStore } from '../stores';
+import { CREDITS } from '../config/displayNames';
+import { formatLength, PRECISION } from '../utils/timeFormat';
 
 /**
  * BuyCreditsModal - Two-step inline payment flow (T526)
@@ -111,11 +113,12 @@ function CreditsExplainer() {
   return (
     <div className="mt-3 p-3 rounded-lg bg-gray-900/60 border border-white/10 text-xs text-gray-300 space-y-2">
       <p className="text-white font-medium">How credits work</p>
-      <p><span className="text-yellow-400 font-medium">1 credit per second</span> of exported video, rounded to the nearest second.</p>
+      <p>Exported video costs <span className="text-yellow-400 font-medium">{CREDITS.PER_SECOND_RULE}</span>.</p>
       <div>
         <p className="text-gray-400">Credits are spent on:</p>
         <ul className="list-disc list-inside text-gray-300">
-          <li>Exporting video (1 credit per second, rounded to the nearest second)</li>
+          <li>Exporting video ({CREDITS.PER_SECOND_RULE})</li>
+          <li>{CREDITS.MIN_CHARGE}</li>
           <li>Uploading a game (storage for 30 days)</li>
         </ul>
       </div>
@@ -454,7 +457,7 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
         {/* The rule, stated up front — value-forward (T4940) */}
         <div className="mb-3 p-3 rounded-lg bg-purple-900/20 border border-purple-500/20 text-sm">
           <p className="text-white">
-            <span className="text-yellow-400 font-semibold">1 credit per second</span> of exported video, rounded to the nearest second.
+            Exported video costs <span className="text-yellow-400 font-semibold">{CREDITS.PER_SECOND_RULE}</span>.
           </p>
           <p className="text-gray-400 text-xs mt-0.5">Your credits go further now.</p>
         </div>
@@ -464,8 +467,9 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
             <p>
               This export requires{' '}
               <strong className="text-white">{insufficientCredits.required} credits</strong>{' '}
-              ({insufficientCredits.required}s of video).
+              for {formatLength(insufficientCredits.videoSeconds, PRECISION.TENTH)} of video.
             </p>
+            <p className="text-gray-400 text-xs mt-0.5">{CREDITS.PER_SECOND_RULE}.</p>
             <p className="mt-1">
               Your balance:{' '}
               <strong className="text-white">{insufficientCredits.available} credits</strong>.

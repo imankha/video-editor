@@ -119,7 +119,11 @@ project total into a credit estimate, and the backend charge must use the same m
   emphasized (blue) only when output differs from source length (slow-mo present), else subtle gray.
   A `Total` chip renders near the export area only for multi-clip projects (redundant for one clip).
   The playback timer is deliberately UNCHANGED — it shows source-timeline position; only the chip
-  reflects output length. Reuses `formatTimeSimple` from `components/shared/clipConstants` (floors).
+  reflects output length. Reuses `formatLength(s, PRECISION.SECOND, {style:'clock'})` from
+  `utils/timeFormat` (T9480 -- it's a LENGTH, so it rounds half-up, matching `roundCreditsHalfUp`
+  exactly. It used to reuse `formatInstant` and silently floor here -- the one billing-adjacent
+  surface where that was live in production as the walkthrough's original 6-vs-7-credit complaint;
+  fixed during T9480's review, not left as a documented exception).
 - Coverage: Vitest `src/utils/effectiveDuration.test.js` (15: 6s+3s@0.5x→9s, trim, multi-clip
   sum→23, live-over-saved precedence, DB-array format, fail-closed NaN) + real-browser
   `e2e/T5780-framing-effective-duration.qa.spec.js` (live speed tick, trim drop, source-timeline
@@ -131,12 +135,13 @@ project total into a credit estimate, and the backend charge must use the same m
 The Focus Export button shows a live credit-cost estimate under it (`~9 credits · balance 42`,
 `ExportButtonView` `data-testid="export-credit-estimate"`). Derived at render — NO new state
 (no-redundant-state / T350). `estimateExportCredits(clips)` (exported from `ExportButtonContainer.jsx`)
-= `sumEffectiveDurations(clips)` → `creditStore.getRequiredCredits` (`Math.ceil` of output seconds,
-`creditStore.js:58`) — the SAME calculator + rounding the click-time credit check in `handleExport`
+= `sumEffectiveDurations(clips)` → `creditStore.getRequiredCredits` → `roundCreditsHalfUp`
+(**round-HALF-UP with a 1-credit floor, NOT `Math.ceil`** — T9750 changed the rule;
+`creditStore.js:17,73`) — the SAME calculator + rounding the click-time credit check in `handleExport`
 uses, so the button number NEVER disagrees with the insufficient-credits modal or the backend charge
-(EPIC.md "one cost calculator"). The container's `clips` prop is `clipsWithCurrentState` (live
-selected-clip segments + saved others), so the estimate ticks the instant a speed/trim/split/clip-count
-gesture lands — no save/export.
+(EPIC.md "one cost calculator"; backend twin `round_credits_half_up`, `highlight_transform.py:176`).
+The container's `clips` prop is `clipsWithCurrentState` (live selected-clip segments + saved others),
+so the estimate ticks the instant a speed/trim/split/clip-count gesture lands — no save/export.
 - **Focus ONLY.** Gated on `isFramingMode` in both container (returns null otherwise) and view
   (line hidden). Overlay export runs no per-second credit check → button byte-identical.
 - **Fail-closed (no fabricated number):** unknown/NaN/≤0 effective duration → `estimateExportCredits`
@@ -146,12 +151,22 @@ gesture lands — no save/export.
   line amber (`AlertCircle` + "add credits to export") so the user learns BEFORE clicking; the click
   still runs the authoritative refresh-balance → 402 → buy-credits flow. Balance stays on existing
   gestures (mount/export/purchase) — the estimate does NOT poll/`fetchCredits` on edits.
+- **Billable-duration disclosure (T9480, AC3).** The container also exposes `estimatedSeconds` (the
+  exact seconds behind `estimatedCredits`, same calculator, no new state). The View renders a second,
+  muted line (`data-testid="export-billable-disclosure"`, `displayNames.CREDITS.billableLine`) ONLY
+  when the whole-second reading differs NUMERICALLY from the tenth-second reading (compared via
+  `formatLength(..., {style:'plain'})` so the common "6.0s → 6" case — no real rounding — stays
+  noise-free, while "6.5s → 7" gets the disclosure). The disclosed integer is never re-derived — it is
+  always the same `estimatedCredits` shown on the first line. See annotate.md's T9480 entry for the
+  one time-format rule (`utils/timeFormat.js` `formatInstant`/`formatLength`) this button and every
+  other time display in the app now share.
 - Coverage: Vitest `src/containers/ExportButtonContainer.test.js` (`estimateExportCredits`: 6s+3s@0.5x
-  →9 == modal required, trim reduces, Math.ceil, multi-clip sum→23, fail-closed null, empty/null) +
+  →9 == modal required, trim reduces, round-half-up, multi-clip sum→23, fail-closed null, empty/null) +
   `src/components/ExportButtonView.test.jsx` (line shown/singularized/amber-warning/hidden-when-null/
-  hidden-while-exporting/absent-in-Overlay) + real-browser
-  `e2e/T5790-export-credit-cost-estimate.qa.spec.js` (estimate == ceil(track total), live tick on
-  speed/trim, amber warning at balance 0, click-time modal "required" == button number via a stubbed
+  hidden-while-exporting/absent-in-Overlay) + `ExportButtonView.billableDisclosure.test.jsx` (T9480:
+  disclosure shown/hidden per the numeric-rounding check) + real-browser
+  `e2e/T5790-export-credit-cost-estimate.qa.spec.js` (estimate == round-half-up(track total), live tick
+  on speed/trim, amber warning at balance 0, click-time modal "required" == button number via a stubbed
   `/api/credits` zero-balance so no real render fires, responsive 375/desktop).
 
 ## Invariants & rules

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Rewind, RotateCcw, Maximize, Minimize, Plus, Pencil, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
-import { formatTime } from '../../../utils/timeFormat';
+import { formatTime, formatInstant, formatLength, PRECISION } from '../../../utils/timeFormat';
 import { ANNOTATE } from '../../../config/displayNames';
 
 // YouTube-style speed options
@@ -191,7 +191,7 @@ export function AnnotateControls({
           const elapsed = Math.max(0, Math.min(currentTime - clipEditBounds.start, clipLength));
           return (
             <div className="text-white font-mono text-xs" data-testid="clip-relative-time">
-              {elapsed.toFixed(1)}s<span> / {clipLength.toFixed(1)}s</span>
+              {formatInstant(elapsed, PRECISION.TENTH)}<span> / {formatLength(clipLength, PRECISION.TENTH)}</span>
             </div>
           );
         })()

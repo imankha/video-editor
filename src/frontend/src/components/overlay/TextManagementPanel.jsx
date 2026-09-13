@@ -3,7 +3,7 @@ import { Plus, Trash2, Eye, EyeOff, ChevronDown, ChevronRight } from 'lucide-rea
 import { TextSpecEditor } from '../textspec/TextSpecEditor';
 import { OVERLAY_FONT_KEYS } from '../../constants/textSpec';
 import PositionPresetGrid from './PositionPresetGrid';
-import { formatTimeSimple } from '../shared/clipConstants';
+import { formatInstant, PRECISION } from '../../utils/timeFormat';
 
 /**
  * TextManagementPanel (T6630 round 3/4/5/6) -- the Text tab's body: element
@@ -167,7 +167,7 @@ export default function TextManagementPanel({
                         `region.index` is 0-based (useTextOverlays.js's
                         textOverlaysWithLayout, SAME source TextLayer.jsx's
                         on-lane blocks use), so +1 for a 1-based label. */}
-                    Region {region.index + 1} · {formatTimeSimple(region.startTime)}–{formatTimeSimple(region.endTime)}
+                    Region {region.index + 1} · {formatInstant(region.startTime, PRECISION.SECOND)}–{formatInstant(region.endTime, PRECISION.SECOND)}
                   </span>
                   <button
                     type="button"

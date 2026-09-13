@@ -1,5 +1,4 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { formatTimeSimple } from '../../../utils/timeFormat';
 import { getAllSupportedTagNames } from '../constants/tagRegistry';
 import { track } from '../../../utils/analytics';
 import { setAnnotateSnapshot } from '../../../utils/editorContext';

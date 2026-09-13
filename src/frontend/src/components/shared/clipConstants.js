@@ -100,24 +100,6 @@ export function getRatingDisplay(rating) {
   };
 }
 
-/**
- * Format duration as compact string (e.g., "12.5s")
- * @param {number} seconds - Duration in seconds
- * @returns {string} - Formatted duration
- */
-export function formatDuration(seconds) {
-  if (!seconds || isNaN(seconds)) return '0.0s';
-  return `${seconds.toFixed(1)}s`;
-}
-
-/**
- * Format time as MM:SS (for start/end times)
- * @param {number} seconds - Time in seconds
- * @returns {string} - Formatted time
- */
-export function formatTimeSimple(seconds) {
-  if (!seconds || isNaN(seconds)) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
+// T9480: formatDuration/formatTimeSimple moved to utils/timeFormat.js's
+// formatLength/formatInstant (Stage C3) -- see that module for the one
+// time-format rule. All 6 importers updated in the same commit.
