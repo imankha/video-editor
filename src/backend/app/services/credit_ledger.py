@@ -735,3 +735,72 @@ def grant_quest_chain_credits(user_id: str) -> dict:
         f"applied={result['applied']} balance={result['balance']}"
     )
     return {"applied": result["applied"], "granted": granted, "balance": result["balance"]}
+
+
+def backfill_quest_upfront_credits(limit: int = 1000, dry_run: bool = True) -> dict:
+    """Admin-triggered one-off (T9760): top up every existing user to the current
+    QUEST_CHAIN_CREDIT_TOTAL, for accounts that signed up while production was
+    still running the pre-T8120 code (which never wrote a `quest_upfront` grant).
+
+    This does NOT reimplement the grant logic — it just calls the SAME
+    `grant_quest_chain_credits(user_id)` every login already calls (JIT), for
+    every existing user right away instead of waiting for their next login.
+    That matters because an idle/churned account would otherwise sit under-
+    credited indefinitely (CLAUDE.md's JIT "long-tail property" is a deliberate
+    design for schema migrations, but a wrong DOLLAR-VALUE credit balance is a
+    real user-facing harm, not a shape-of-data non-issue, so this task proactively
+    backfills instead of waiting).
+
+    Idempotent and safe to re-run: `grant_quest_chain_credits` no-ops for any
+    user who already has the full total (a fresh signup post-deploy, or a user
+    already topped up by a prior backfill call). `dry_run=True` (the default)
+    only PEEKS the remainder per user via a read-only query — it issues zero
+    writes and zero credit_transactions rows.
+    """
+    from ..quest_config import QUEST_CHAIN_CREDIT_TOTAL
+    from .auth_db import get_all_users_for_admin
+
+    result = {
+        "limit": limit,
+        "dry_run": dry_run,
+        "scanned": 0,
+        "topped_up": [],
+        "already_full": 0,
+        "failed": [],
+        "partial": False,
+    }
+    budget = limit
+
+    for user in get_all_users_for_admin():
+        if budget <= 0:
+            result["partial"] = True
+            break
+        user_id = user["user_id"]
+        result["scanned"] += 1
+        try:
+            if dry_run:
+                with get_pg() as conn:
+                    cur = conn.cursor()
+                    already = _granted_quest_chain_credits(cur, user_id)
+                remainder = QUEST_CHAIN_CREDIT_TOTAL - already
+                if remainder > 0:
+                    result["topped_up"].append({"user_id": user_id, "would_grant": remainder})
+                    budget -= 1
+                else:
+                    result["already_full"] += 1
+            else:
+                grant_result = grant_quest_chain_credits(user_id)
+                if grant_result["applied"]:
+                    result["topped_up"].append({
+                        "user_id": user_id,
+                        "granted": grant_result["granted"],
+                        "balance": grant_result["balance"],
+                    })
+                    budget -= 1
+                else:
+                    result["already_full"] += 1
+        except Exception as exc:
+            logger.exception(f"[CreditLedger] quest-chain backfill failed user={user_id}")
+            result["failed"].append({"user_id": user_id, "error": str(exc)})
+
+    return result

@@ -1192,6 +1192,29 @@ async def backfill_share_posters_status():
             "last_result": _POSTER_BACKFILL_STATE["last_result"]}
 
 
+@router.post("/backfill-quest-upfront-credits")
+def backfill_quest_upfront_credits(limit: int = Query(1000, ge=1, le=10000),
+                                    dry_run: bool = Query(True)):
+    """Top up existing users to the current quest-chain credit total (T9760).
+
+    Production ran the pre-T8120 code for a window after T8120 merged, so
+    real signups in that window received the 8-credit `new_account_bonus`
+    but never the `quest_upfront` grant. Run this once, right after deploying
+    the fix, so those users are corrected immediately rather than waiting for
+    their next login (the JIT grant at session init already self-heals on
+    login -- this just reaches idle accounts too).
+
+    Unlike the poster backfill, this is Postgres-only (no per-profile SQLite,
+    no R2, no ffmpeg) -- each user is one indexed SELECT (dry run) or one
+    INSERT-if-remainder (real run), so it runs synchronously, not batched in
+    the background. `dry_run=True` (the default) issues zero writes.
+    Idempotent -- safe to re-run; a user already at the full total is a no-op.
+    """
+    _require_admin()
+    from ..services.credit_ledger import backfill_quest_upfront_credits as _backfill
+    return _backfill(limit=limit, dry_run=dry_run)
+
+
 # ---------------------------------------------------------------------------
 # Analytics dashboards (T3030)
 # ---------------------------------------------------------------------------

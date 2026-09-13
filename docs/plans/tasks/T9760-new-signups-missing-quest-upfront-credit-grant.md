@@ -1,10 +1,55 @@
 # T9760: Production backend is 744 commits / 11 days behind master (found via missing quest_upfront grant)
 
-**Status:** WAITING ON USER - root cause confirmed, no code fix needed, needs a deploy decision
+**Status:** WIP - runbook prep in progress (deploy itself still pending, part of the next production deploy)
 **Impact:** 8
 **Complexity:** 1 (was 4 - root cause is a deploy gap, not a code bug)
 **Created:** 2026-09-12
-**Updated:** 2026-09-12
+**Updated:** 2026-09-13
+
+## Decision Record (2026-09-13)
+
+**Free-credit total: KEEP 88** (8 `new_account_bonus` + 80 `quest_upfront`, current code, no change).
+Cost/usage research before deciding: a credit costs the business ~$0.006 blended (~94% render
+mix), so 88 credits ≈ **$0.50 real infra cost** per signup - cheap regardless of choice. A
+realistic full first-game journey (upload + mark plays + render clips + publish a reel, the reel
+export itself charged again at its own duration) lands around **~82 credits** - so 88 already
+covers exactly one full activation with a small buffer, which lines up with the app's own
+activation success metric (40%+ of signups export a reel within 14 days). The original intended
+mechanic (T780, never shipped: 80 sized to run OUT before the reel step, forcing a purchase) no
+longer applies since T8120 grants it all upfront and T4940 doubled the Starter pack - so 88 today
+functions as "enough for one full activation," not a scarcity lever, and that's the right target
+given the stated goals. No billing-side coupling (pure app-side constant, no Stripe coupling) -
+confirmed changeable later with no Stripe-side migration if the number is ever revisited.
+
+## Remediation shipped (2026-09-13): proactive credit backfill
+
+Rather than rely solely on the JIT self-heal (`grant_quest_chain_credits`, called at every
+session init - correct but only reaches a user on their NEXT login, so an idle/churned account
+would sit under-credited indefinitely), added `backfill_quest_upfront_credits()`
+(`src/backend/app/services/credit_ledger.py`) + `POST /api/admin/backfill-quest-upfront-credits`
+(`src/backend/app/routers/admin.py`). Walks every existing user and calls the SAME
+`grant_quest_chain_credits(user_id)` JIT already uses - no reimplemented grant logic, just run
+proactively for everyone instead of waiting. Postgres-only (no per-profile SQLite/R2/ffmpeg like
+the poster backfill), so it runs synchronously, not batched in the background. `dry_run=True` by
+default (zero writes, peek-only), idempotent (safe to re-run - a fully-granted user is a no-op).
+8 new tests in `test_t9760_quest_credit_backfill.py`, all green against real dev Postgres
+(dry-run write-nothing, tops-up-signup-only-user, never-double-grants-a-repeat-run,
+mid-quest-user-gets-remainder-only, multi-user scan, one-user-failure-does-not-stop-scan,
+limit-partials-the-scan).
+
+## Next deploy runbook (this task's remaining scope)
+
+1. Run `scripts/deploy_production.sh` (full deploy - the actual T8120/T9750/etc. code fix).
+2. Immediately after, call `POST /api/admin/backfill-quest-upfront-credits?dry_run=true` first -
+   review the `topped_up`/`already_full`/`failed` counts (this is also the "rough estimate of user
+   impact" this task's acceptance criteria asks for).
+3. Call it again with `dry_run=false` to actually apply. Re-run (idempotent) if `partial: true`
+   with a higher `limit` until every existing user is corrected.
+4. Verify: re-run `scripts/verify_t9680_credits.py`, confirm `/api/version` build > 4329 and a
+   fresh signup shows `questbank_amt=80`.
+5. One open discriminator not yet run: query STAGING for any `questbank:%` row on an account
+   created since 2026-09-01 - if staging is ALSO empty, there's a second bug underneath this one
+   worth finding before or during the deploy.
 
 ## ROOT CAUSE CONFIRMED (2026-09-12): not a code bug - production is running stale code
 
