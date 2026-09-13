@@ -146,4 +146,19 @@ describe('TrimTimeField via ClipScrubRegion (T9480 Stage E2, AC2)', () => {
     fireEvent.keyDown(input, { key: 'ArrowDown', shiftKey: true });
     expect(onStartTimeChange).toHaveBeenLastCalledWith(5 - 1);
   });
+
+  it('T9480 review fix (MAJOR #4): stepping from an off-grid (e.g. dragged) value snaps onto the UI_STEP_FPS grid, not just offsets it', () => {
+    const onStartTimeChange = vi.fn();
+    const onSeek = vi.fn();
+    // 5.01 is NOT on the 1/30s grid (5.01 * 30 = 150.3) -- simulates a value
+    // left off-grid by a real drag, which is deliberately unsnapped.
+    renderField({ onStartTimeChange, onSeek, startTime: 5.01, endTime: 10 });
+    const stepButtons = screen.getAllByTitle('Step one frame (1/30 s)');
+    fireEvent.click(stepButtons[1]); // step forward on the start field
+
+    const committed = onStartTimeChange.mock.calls[0][0];
+    // The result must land exactly on a 1/30s grid point (an integer number
+    // of steps), not merely be 5.01 + 1/30 (which would stay off-grid).
+    expect(committed * 30).toBeCloseTo(Math.round(committed * 30), 10);
+  });
 });

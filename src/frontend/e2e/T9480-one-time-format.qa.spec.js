@@ -218,3 +218,38 @@ test('one time-format rule: drag + exact entry stay consistent, billing matches 
   }, exactSeconds);
   expect(frontendCredits).toBe(expectedCredits);
 });
+
+test('Escape genuinely discards without writing, even if the input unmount fires a real blur (T9480 review fix, MINOR #10)', async ({ page }) => {
+  test.setTimeout(300000);
+
+  // jsdom cannot prove this: removing a focused element (React unmounting the
+  // <input> back to the rest-state <button> when Escape flips `editing` to
+  // false) can fire a REAL blur/focusout event in an actual browser that
+  // jsdom does not reliably simulate. If that blur reached TrimTimeField's
+  // onBlur={() => commit(draft)} handler, a garbage/valid-looking draft typed
+  // right before Escape could still commit -- silently, after the user
+  // explicitly cancelled. This is a real-browser-only proof of the negative.
+  await setupAuthedGuest(page);
+  await uploadGameAndEnterAnnotate(page);
+  const form = await openMarkPlayForm(page);
+
+  const originalStart = await form.getByTestId('trim-field-start').innerText();
+
+  await form.getByTestId('trim-field-start').click();
+  const input = form.getByTestId('trim-field-input-start');
+  await input.fill('999');
+  await input.press('Escape');
+  await page.waitForTimeout(500); // let any stray/delayed blur commit resolve, if one fires
+
+  // The field must be back to its ORIGINAL value, not the typed 999 -- and
+  // the input must be gone (rest mode), not still open/erroring.
+  expect(await page.getByTestId('trim-field-input-start').count()).toBe(0);
+  expect(await form.getByTestId('trim-field-start').innerText()).toBe(originalStart);
+
+  // Clicking away and re-reading again catches a DELAYED write (e.g. a
+  // straggling async commit that lands after this check but before the next
+  // interaction) -- click the span readout area (a no-op target) and re-check.
+  await form.getByTestId('clip-length').click({ trial: true }).catch(() => {});
+  await page.waitForTimeout(300);
+  expect(await form.getByTestId('trim-field-start').innerText()).toBe(originalStart);
+});

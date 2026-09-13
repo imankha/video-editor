@@ -141,6 +141,20 @@ export function AnnotateModeView({
     return angleData.angles.find(a => a.sequence === angleData.activeSourceSequence)?.name ?? null;
   }, [angleData]);
 
+  // T9480 review fix (MAJOR #5, design section 2.6): when an angle is active,
+  // the true media bound for typed entry/step-button trim editing is the
+  // ANGLE'S OWN virtual span, not the whole backbone timeline (EPIC decision
+  // 10: a clip is cut from ONE source). Reuses buildGameTimeline's own
+  // angles[].virtualStart/virtualEnd (the SAME values clampToSource derives
+  // from) -- no second source-clamping implementation. Null for backbone /
+  // angle-free games, so ClipScrubRegion falls back to the whole-timeline
+  // bound exactly as before (byte-identical for every non-overlap game).
+  const activeSourceMediaBounds = useMemo(() => {
+    if (!angleData || angleData.activeSourceSequence == null) return null;
+    const angle = angleData.angles.find(a => a.sequence === angleData.activeSourceSequence);
+    return angle ? { mediaStart: angle.virtualStart, mediaEnd: angle.virtualEnd } : null;
+  }, [angleData]);
+
   // Derive existingClip from state machine's selectedRegionId.
   // EDITING(clipId) keeps the ID stable during scrub, so no frozen ref needed.
   const existingClip = useMemo(() => {
@@ -807,6 +821,7 @@ export function AnnotateModeView({
                     layout={isLandscape ? 'landscape-inline' : 'inline'}
                     surface="fullscreen_mobile"
                     activeSourceName={activeSourceName}
+                    mediaBounds={activeSourceMediaBounds}
                     teammateSuggestions={teammateSuggestions}
                     onScrubDragChange={setIsDraggingScrub}
                     newClipLayerIsMine={newClipLayerIsMine}
@@ -933,6 +948,7 @@ export function AnnotateModeView({
                 layout="strip"
                 surface="inline_desktop"
                 activeSourceName={activeSourceName}
+                mediaBounds={activeSourceMediaBounds}
                 teammateSuggestions={teammateSuggestions}
                 newClipLayerIsMine={newClipLayerIsMine}
                 nextClipNumber={nextClipNumber}
@@ -965,6 +981,7 @@ export function AnnotateModeView({
               layout="inline"
               surface="sheet_mobile"
               activeSourceName={activeSourceName}
+              mediaBounds={activeSourceMediaBounds}
               teammateSuggestions={teammateSuggestions}
               newClipLayerIsMine={newClipLayerIsMine}
               nextClipNumber={nextClipNumber}

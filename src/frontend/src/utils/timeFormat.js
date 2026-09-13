@@ -50,14 +50,17 @@ export function formatTimeSimple(seconds) {
   return `${minutes}:${ss}.${mmm}`;
 }
 
-export function formatTimeCompact(seconds) {
-  if (isNaN(seconds) || seconds < 0) return '0.0';
-  return seconds.toFixed(1);
-}
+// T9480 review fix (MINOR #7): formatTimeCompact deleted -- Stage D3 moved its
+// only consumer (VideoControls' default time display) to formatInstant, and
+// it rounds a POSITION (violates the one rule: instants floor). Zero
+// importers remained; a formatter sitting in the canonical module that
+// contradicts the module's own rule is exactly the clutter this task exists
+// to remove. See timeFormat.characterization.test.js for its pinned
+// pre-deletion behavior (#3 in the design's formatter inventory).
 
 /**
  * Format seconds to clock notation M:SS (or H:MM:SS past an hour) for player
- * time displays — e.g. 62.3 -> "1:02". No decimals, unlike formatTimeCompact.
+ * time displays — e.g. 62.3 -> "1:02".
  */
 export function formatClock(seconds) {
   if (isNaN(seconds) || seconds < 0) return '0:00';
@@ -215,19 +218,21 @@ export function formatLength(seconds, precision = PRECISION.TENTH, opts = {}) {
     return null;
   }
 
-  const decimals = precision;
-  const rounded = roundHalfUp(seconds, decimals);
-
   if (style === 'plain') {
-    return rounded.toFixed(decimals);
+    return roundHalfUp(seconds, precision).toFixed(precision);
   }
   if (style === 'unit') {
-    return `${rounded.toFixed(decimals)}s`;
+    return `${roundHalfUp(seconds, precision).toFixed(precision)}s`;
   }
 
-  // 'clock' and 'human' render the whole-second count -- a rounded LENGTH is
-  // read/billed in whole seconds once it takes clock/human form.
-  const total = Math.round(rounded);
+  // 'clock' and 'human' render the whole-second count. Round ONCE, directly
+  // from the raw seconds, straight to a whole number -- `precision` is not
+  // meaningful for these two styles and MUST be ignored for the rounding
+  // step (T9480 review fix: rounding to `precision` first and then to a
+  // whole number double-rounds, e.g. formatLength(2.45, TENTH, {style:
+  // 'clock'}) used to give "0:03" via 2.45->2.5->3, where the correct
+  // single-step half-up answer is "0:02").
+  const total = roundHalfUp(seconds, 0);
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
@@ -276,10 +281,14 @@ export function parseTimeInput(text) {
 /**
  * UI_STEP_FPS is a chosen UI STEP GRANULARITY, not a measured source frame
  * rate. (We do not detect fps -- videoUtils.getFramerate is a hardcoded 30.)
- * It is the grid that drag, typed entry and the step buttons all snap to, so
- * all three produce values from the SAME set. Handy property: at 30 the
- * 0.1s entry precision is exactly 3 steps, so a typed tenth lands exactly on
- * the grid.
+ * It is the grid that TYPED ENTRY and the STEP BUTTONS both snap to (via
+ * `snapToStep`), so those two produce values from the SAME set -- a typed
+ * tenth lands exactly on the grid (0.1s is exactly 3 steps at 30fps), and
+ * stepping from a typed value stays on it. T9480 review fix: DRAGGING is
+ * deliberately NOT snapped to this grid -- it stays continuous, exactly as
+ * it was before this task, so an existing drag gesture's feel/precision is
+ * unchanged. A drag handle released off-grid is a real, distinct value; the
+ * first step-button press or typed edit after a drag snaps it onto the grid.
  */
 export const UI_STEP_FPS = 30;
 

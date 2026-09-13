@@ -162,6 +162,21 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
 
   // Format duration for display. T9480 Stage D2: gained the hours case -- a
   // >1h total used to read "63:20" (uncapped minutes); it now reads "1:03:20".
+  //
+  // T9480 review fix (MINOR #8): DELIBERATELY DEFERRED, not migrated to
+  // formatInstant/formatLength, despite being exactly reproducible by
+  // formatInstant(seconds, PRECISION.SECOND) at floor semantics. Reason:
+  // this ONE function is called with MIXED instant/length inputs across its
+  // 4 real sites -- preview.total_duration/clipDuration/(end-start) are
+  // LENGTHS, but the paired call at line ~945
+  // (`formatDuration(previewCurrentTime)} / {formatDuration(clipDur)}`) mixes
+  // an INSTANT (playhead position) and a LENGTH on the same line. A correct
+  // migration needs the SAME per-call-site instant/length split already done
+  // for the OutputLengthChip sibling fix (BLOCKING #2 in this review round),
+  // not a blind 1:1 rename -- deferred to a follow-up rather than rushed
+  // here. Floor-only semantics (this function never rounds) means it's safe
+  // as-is for now; no user-visible bug, only a greppability gap (this name
+  // still shows up outside utils/timeFormat.js).
   const formatDuration = (seconds) => {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);

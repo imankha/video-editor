@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   formatTime as tfFormatTime,
   formatTimeSimple as tfFormatTimeSimple,
-  formatTimeCompact as tfFormatTimeCompact,
   formatClock as tfFormatClock,
   formatGameClock,
+  formatInstant,
+  formatLength,
+  PRECISION,
 } from './timeFormat';
 /**
  * T9480 Stage A -- characterization suite.
@@ -128,6 +130,17 @@ function uaFormatTimestampForName(seconds) {
 function ccFormatDuration(seconds) {
   if (!seconds || isNaN(seconds)) return '0.0s';
   return `${seconds.toFixed(1)}s`;
+}
+
+/** timeFormat.js:53 (module func #3) -- formatTimeCompact DELETED (T9480
+ *  review fix, MINOR #7): Stage D3 moved its only consumer (VideoControls'
+ *  default time display) to formatInstant, leaving it with zero real
+ *  importers -- a formatter that ROUNDS a position, sitting unused in the
+ *  very module whose point is "instants floor", was clutter this task exists
+ *  to remove. */
+function tfFormatTimeCompact(seconds) {
+  if (isNaN(seconds) || seconds < 0) return '0.0';
+  return seconds.toFixed(1);
 }
 
 /** clipConstants.js:118 -- formatTimeSimple DELETED in Stage C3 (its 5
@@ -333,5 +346,131 @@ describe('videoMetadata.js:413 inline durationFormatted (debug log only)', () =>
     it(`(${v}) -> ${expected[i]}`, () => {
       expect(`${Math.floor(v / 60)}:${(v % 60).toFixed(2)}`).toBe(expected[i]);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T9480 review fix (MAJOR #3) -- Stage C EQUIVALENCE PROOFS.
+//
+// The `pin()` tables above only prove the hand-copied OLD-behavior replica
+// (frozen, since the real function is deleted) matches a literal table --
+// that literal table was correct at Stage A authoring time, but after Stage
+// C's commits (f406ff6a, 61601ef7) replaced the imports of the REAL
+// clipConstants/collections/format functions with these same replicas IN THE
+// SAME COMMIT as deleting them, nothing in this file any longer compares
+// against the REAL current canonical function. The blocks below close that
+// gap: for every migrated pair, assert `oldReplica(v) === realCanonicalFn(v)`
+// using the ACTUAL imported formatInstant/formatLength (called with the exact
+// precision/style used at the real call site), over the realistic
+// (non-negative, finite) input range every real call site ever sees. Divergs
+// on NaN/negative/null are DOCUMENTED, pre-existing, and intentionally
+// excluded here (see the Stage C/D4 commit messages) -- they are about
+// silent-fallback removal, not migration correctness.
+// ---------------------------------------------------------------------------
+
+function assertEquivalence(name, oldFn, newFn, inputs = POSITIVE_INPUTS) {
+  describe(`Stage C equivalence: ${name}`, () => {
+    inputs.forEach((v) => {
+      it(`oldFn(${v}) === realCanonicalFn(${v})`, () => {
+        expect(newFn(v)).toBe(oldFn(v));
+      });
+    });
+  });
+}
+
+// Inputs under the 1-hour boundary, for pairs where formatInstant's built-in
+// (always-on) hours support is a KNOWN, documented divergence from an old
+// formatter that never had an hours branch -- asserted separately below,
+// not silently dropped.
+const POSITIVE_INPUTS_UNDER_1H = POSITIVE_INPUTS.filter((v) => v < 3600);
+
+// #12/#13 ClipListItem/ClipRegionLayer.formatTime -> formatInstant(v, SECOND)
+// (both real call sites are game-timeline positions well under 1h in practice;
+// no hours-boundary divergence has been observed/documented for these two).
+assertEquivalence(
+  'ClipListItem/ClipRegionLayer.formatTime (#12/#13) vs formatInstant(v, SECOND)',
+  cliFormatTime,
+  (v) => formatInstant(v, PRECISION.SECOND),
+);
+
+// #14 ClipLibraryModal.formatDuration -- Stage C2's ACTUAL migration target
+// was formatInstant(v, SECOND) (proven here, byte-identical under 1h, same
+// documented hours-gain above 1h as #8/#17 below). The review round's
+// BLOCKING #2 fix later moved ClipLibraryModal's TWO real call sites off
+// formatInstant onto formatLength(v, SECOND, {style:'clock'}) (a length
+// should round, not floor) -- a SEPARATE, deliberate, later divergence from
+// this Stage C proof, covered by ClipLibraryModal.honestZero.test.jsx and the
+// FocusModeView.outputLengthChip.test.jsx sibling-fix pattern, not by this
+// characterization file (whose job is pinning what Stage C itself did).
+assertEquivalence(
+  'ClipLibraryModal.formatDuration (#14) vs formatInstant(v, SECOND) [Stage C2 proof]',
+  clmFormatDuration,
+  (v) => formatInstant(v, PRECISION.SECOND),
+  POSITIVE_INPUTS_UNDER_1H,
+);
+
+// #17 ShareGameModal.fmtTimestamp -> formatInstant(max(0, v), SECOND)
+assertEquivalence(
+  'ShareGameModal.fmtTimestamp (#17) vs formatInstant(max(0,v), SECOND)',
+  sgmFmtTimestamp,
+  (v) => formatInstant(Math.max(0, v), PRECISION.SECOND),
+  POSITIVE_INPUTS_UNDER_1H,
+);
+
+// #9 collections/format.formatDuration -> formatLength(v, SECOND, {style:'clock'})
+assertEquivalence(
+  'collections/format.formatDuration (#9) vs formatLength(v, SECOND, {style:"clock"})',
+  collFormatDuration,
+  (v) => formatLength(v, PRECISION.SECOND, { style: 'clock' }),
+);
+
+// #10 collections/format.formatDurationHuman -> formatLength(v, SECOND, {style:'human'})
+assertEquivalence(
+  'collections/format.formatDurationHuman (#10) vs formatLength(v, SECOND, {style:"human"})',
+  collFormatDurationHuman,
+  (v) => formatLength(v, PRECISION.SECOND, { style: 'human' }),
+);
+
+// #7 clipConstants.formatDuration -> formatLength(v, TENTH) (default 'unit' style)
+assertEquivalence(
+  'clipConstants.formatDuration (#7) vs formatLength(v, TENTH)',
+  ccFormatDuration,
+  (v) => formatLength(v, PRECISION.TENTH),
+);
+
+// #8 clipConstants.formatTimeSimple -> formatInstant(v, SECOND)
+assertEquivalence(
+  'clipConstants.formatTimeSimple (#8) vs formatInstant(v, SECOND)',
+  ccFormatTimeSimple,
+  (v) => formatInstant(v, PRECISION.SECOND),
+  POSITIVE_INPUTS_UNDER_1H,
+);
+
+// #16 useDownloads.formatDuration -- fully DELETED (dead code, no live
+// consumer), not migrated to a canonical call -- no real function remains to
+// assert equivalence against; the deletion itself is the fix (Stage C2).
+
+describe('Stage C documented divergence: formatInstant gains an implicit hours case past 3600s (#8, #14-at-Stage-C2, #17)', () => {
+  // None of clipConstants.formatTimeSimple (#8), the ORIGINAL Stage C2
+  // formatInstant migration target for ClipLibraryModal (#14), or
+  // ShareGameModal.fmtTimestamp (#17) ever had an hours branch -- formatInstant
+  // ALWAYS shows hours past 3600s (opts.hours defaults to 'auto'). This is a
+  // real, low-risk, arguably-correct side effect of the migration (never a
+  // silent regression -- more information, not less) for any real call site
+  // whose value can exceed 1h. Documented here explicitly rather than
+  // silently dropped from the equivalence loops above.
+  it('#8: old "60:00" vs formatInstant "1:00:00" at exactly 3600s', () => {
+    expect(ccFormatTimeSimple(3600)).toBe('60:00');
+    expect(formatInstant(3600, PRECISION.SECOND)).toBe('1:00:00');
+  });
+
+  it('#14 (Stage C2 target): old "60:00" vs formatInstant "1:00:00" at exactly 3600s', () => {
+    expect(clmFormatDuration(3600)).toBe('60:00');
+    expect(formatInstant(3600, PRECISION.SECOND)).toBe('1:00:00');
+  });
+
+  it('#17: old "60:00" vs formatInstant "1:00:00" at exactly 3600s', () => {
+    expect(sgmFmtTimestamp(3600)).toBe('60:00');
+    expect(formatInstant(3600, PRECISION.SECOND)).toBe('1:00:00');
   });
 });

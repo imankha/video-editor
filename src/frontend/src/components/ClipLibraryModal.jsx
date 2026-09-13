@@ -4,7 +4,7 @@ import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { createGameLookup, formatClipDisplayName } from '../utils/gameNameLookup';
-import { formatInstant, PRECISION } from '../utils/timeFormat';
+import { formatLength, PRECISION } from '../utils/timeFormat';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -284,7 +284,8 @@ export function ClipLibraryModal({
             </span>
             <span className="flex items-center gap-1">
               <Clock size={14} />
-              {formatInstant(preview.totalDuration, PRECISION.SECOND)}
+              {/* T9480 review fix: a total duration is a LENGTH -- rounds, not floors. */}
+              {formatLength(preview.totalDuration, PRECISION.SECOND, { style: 'clock' })}
             </span>
           </div>
         </div>
@@ -349,7 +350,7 @@ export function ClipLibraryModal({
                           {/* Duration */}
                           {clip.start_time !== undefined && clip.end_time !== undefined && (
                             <span className="text-xs">
-                              {formatInstant(clip.end_time - clip.start_time, PRECISION.SECOND)}
+                              {formatLength(clip.end_time - clip.start_time, PRECISION.SECOND, { style: 'clock' })}
                             </span>
                           )}
                           {/* Tags */}

@@ -176,6 +176,17 @@ describe('formatLength (T9480 -- LENGTHS round-half-up, matching the credit rule
     expect(formatLength(NaN)).toBeNull();
     expect(formatLength(-1)).toBeNull();
   });
+
+  it('T9480 review fix: clock/human styles round ONCE from raw seconds, ignoring the passed precision (no double-round)', () => {
+    // Default precision is TENTH; rounding 2.45 to a tenth first (2.5) and
+    // THEN to a whole number (3) would double-round to the wrong answer.
+    // The correct single-step half-up whole-second answer is 2.
+    expect(formatLength(2.45, undefined, { style: 'clock' })).toBe('0:02');
+    expect(formatLength(2.45, PRECISION.TENTH, { style: 'clock' })).toBe('0:02');
+    expect(formatLength(2.45, PRECISION.TENTH, { style: 'human' })).toBe('2s');
+    // Still agrees with roundCreditsHalfUp regardless of the precision argument.
+    expect(formatLength(6.5, PRECISION.TENTH, { style: 'clock' })).toBe('0:07');
+  });
 });
 
 describe('parseTimeInput (T9480 -- never returns 0 for garbage)', () => {

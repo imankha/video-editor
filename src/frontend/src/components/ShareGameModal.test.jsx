@@ -44,6 +44,15 @@ const PREVIEW = {
     tagged: [],
     tagged_has_mapping: false,
   },
+  'longgame@test.com': {
+    // T9480 review fix (MINOR #11): Stage C moved fmtTimestamp's private
+    // floor logic (no hours branch, e.g. old "65:07") onto formatInstant,
+    // which always shows hours past 3600s -- a real, documented display
+    // change for any game long enough to have a clip start past 1h.
+    all_team: [{ id: 1, name: 'Long clip', rating: 4, start_time: 3907 }],
+    tagged: [{ id: 1, name: 'Long clip', rating: 4, start_time: 3907 }],
+    tagged_has_mapping: true,
+  },
 };
 
 let apiMock;
@@ -117,6 +126,16 @@ describe('ShareGameModal — per-recipient clip scope', () => {
     fireEvent.click(screen.getByLabelText('Show clips'));
     expect(screen.getByText('Fast break')).toBeTruthy();
     expect(screen.getByText('Steal')).toBeTruthy();
+  });
+
+  it('shows the hours case for a clip past 1h (T9480 review fix, MINOR #11: "1:05:07", not the old uncapped "65:07")', async () => {
+    render(<ShareGameModal {...props} />);
+    await addRecipient('longgame@test.com');
+    await waitFor(() => expect(screen.getByText('1 clip')).toBeTruthy());
+
+    fireEvent.click(screen.getByLabelText('Show clips'));
+    expect(screen.getByText('1:05:07')).toBeTruthy();
+    expect(screen.queryByText('65:07')).toBeNull();
   });
 
   it('warns inline AND in a send-time banner when a tagged-only recipient gets 0 clips', async () => {

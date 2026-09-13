@@ -13,8 +13,15 @@ const INVALID_INPUT_MESSAGE = 'Use M:SS.s (e.g. 2:09.5)';
  * byte-identical in every layout. It becomes an input on click/Enter/focus.
  *
  * Commit path: parseTimeInput -> snapToStep -> clampTrim -> onCommit -> onSeek
- * -- the SAME onStartTimeChange/onEndTimeChange the drag path already calls,
- * so there is one write path for a trim boundary (drag, entry, steps).
+ * -> onCommitComplete -- the SAME onStartTimeChange/onEndTimeChange the drag
+ * path already calls, so there is one write path for a trim boundary (drag,
+ * entry, steps). `onCommitComplete` fires the SAME "this edit is finished"
+ * signal the drag path's `onDragEnd(finalStart, finalEnd)` fires -- some
+ * callers (e.g. ClipDetailsEditor's sidebar) only PERSIST on that signal
+ * (`onCommit` there is local-state-only, mirroring the drag path's
+ * intermediate updates), so a typed/step commit that never fires it would
+ * update the on-screen preview and then silently be discarded the moment the
+ * parent re-syncs local state from a clip switch.
  *
  * @param {number} value - this field's own current boundary (start or end)
  * @param {'start'|'end'} edge - which boundary this field controls
@@ -22,10 +29,13 @@ const INVALID_INPUT_MESSAGE = 'Use M:SS.s (e.g. 2:09.5)';
  * @param {{mediaStart?: number, mediaEnd: number}} mediaBounds - true media bounds
  * @param {(value: number) => void} onCommit - the existing onStartTimeChange/onEndTimeChange
  * @param {(value: number) => void} onSeek - seeks the preview to the committed value (AC2)
+ * @param {(finalStart: number, finalEnd: number) => void} [onCommitComplete] -
+ *   fired after a real (non-rejected) commit/step, with BOTH final boundaries
+ *   -- the same shape as ClipScrubRegion's onDragEnd
  * @param {boolean} [compact] - sidebar/landscape-strip layout: click-to-edit in
  *   place, no step-button chevrons (zero added footprint)
  */
-export function TrimTimeField({ value, edge, otherValue, mediaBounds, onCommit, onSeek, compact = false }) {
+export function TrimTimeField({ value, edge, otherValue, mediaBounds, onCommit, onSeek, onCommitComplete, compact = false }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState(null);
@@ -50,6 +60,16 @@ export function TrimTimeField({ value, edge, otherValue, mediaBounds, onCommit, 
     return clampTrim({ start, end, edge, mediaStart, mediaEnd });
   }, [edge, otherValue, mediaStart, mediaEnd]);
 
+  // Fires onCommitComplete with BOTH final boundaries -- the same shape as
+  // ClipScrubRegion's onDragEnd(finalStart, finalEnd) -- so a caller that
+  // only persists on that signal (ClipDetailsEditor's sidebar) sees the
+  // typed/step commit, not just the drag path's.
+  const signalCommitComplete = useCallback((committedValue) => {
+    const finalStart = edge === 'start' ? committedValue : otherValue;
+    const finalEnd = edge === 'end' ? committedValue : otherValue;
+    onCommitComplete?.(finalStart, finalEnd);
+  }, [edge, otherValue, onCommitComplete]);
+
   const commit = useCallback((text) => {
     const parsed = parseTimeInput(text);
     if (parsed == null) {
@@ -66,16 +86,23 @@ export function TrimTimeField({ value, edge, otherValue, mediaBounds, onCommit, 
     setMessage(r.clamped ? r.message : null);
     onCommit(r.value);
     onSeek(r.value);
+    signalCommitComplete(r.value);
     setEditing(false);
-  }, [applyClamp, onCommit, onSeek]);
+  }, [applyClamp, onCommit, onSeek, signalCommitComplete]);
 
   const step = useCallback((deltaSeconds) => {
-    const r = applyClamp(value + deltaSeconds);
+    // T9480 review fix: snap the STEPPED result too, so stepping from an
+    // off-grid value (dragging is deliberately NOT snapped, see UI_STEP_FPS)
+    // lands back on the UI_STEP_FPS grid instead of staying off-grid forever
+    // -- typed entry and step buttons both produce values from the same grid.
+    const snapped = snapToStep(value + deltaSeconds);
+    const r = applyClamp(snapped);
     if (r.rejected) return;
     setMessage(r.clamped ? r.message : null);
     onCommit(r.value);
     onSeek(r.value);
-  }, [applyClamp, value, onCommit, onSeek]);
+    signalCommitComplete(r.value);
+  }, [applyClamp, value, onCommit, onSeek, signalCommitComplete]);
 
   const handleKeyDown = useCallback((e) => {
     // Keyboard safety: AnnotateScreen's keydown handler already disables

@@ -15,7 +15,7 @@ import { ExportButtonContainer } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
 import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, MousePointerClick } from 'lucide-react';
-import { formatInstant, PRECISION } from '../utils/timeFormat';
+import { formatInstant, formatLength, PRECISION } from '../utils/timeFormat';
 import { HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { EDITOR_PANELS } from '../config/displayNames';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
@@ -871,7 +871,8 @@ export function OverlayModeView({
               {(duration > 0 || effectiveOverlayMetadata.duration > 0) && (
                 <>
                   <span className="text-gray-600">•</span>
-                  <span>{formatInstant(duration || effectiveOverlayMetadata.duration, PRECISION.SECOND)}</span>
+                  {/* T9480 review fix: the video's duration is a LENGTH -- rounds, not floors. */}
+                  <span>{formatLength(duration || effectiveOverlayMetadata.duration, PRECISION.SECOND, { style: 'clock' })}</span>
                 </>
               )}
               {effectiveOverlayMetadata.framerate && (

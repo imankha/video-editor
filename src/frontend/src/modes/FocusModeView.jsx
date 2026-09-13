@@ -12,7 +12,7 @@ import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
 import FocusClipsPanel from '../components/settings/FocusClipsPanel';
 import { FocusMode, CropOverlay } from './focus';
 import FramingInstructions from './focus/FramingInstructions';
-import { formatInstant, PRECISION } from '../utils/timeFormat';
+import { formatLength, PRECISION } from '../utils/timeFormat';
 import { ratioWithName } from '../constants/aspectRatios';
 
 /**
@@ -23,6 +23,12 @@ import { ratioWithName } from '../constants/aspectRatios';
  * that output length (what the user gets, and is billed for). Emphasized (blue) only when
  * the output differs from the source length; otherwise a subtle gray so an un-edited clip
  * doesn't shout. Purely presentational — the value is derived upstream, never persisted.
+ *
+ * T9480 review fix (BLOCKING #2): this is a LENGTH on the exact billing-adjacent
+ * surface (the tooltip literally says "what you export and are billed for"), so it
+ * ROUNDS half-up via formatLength, not formatInstant's floor -- identical by
+ * construction to roundCreditsHalfUp (a 6.6s output now reads "0:07", matching the
+ * 7 credits charged, not the floored "0:06" that reproduced the original complaint).
  */
 function OutputLengthChip({ seconds, emphasized, label = 'Output', className = '', testId = 'output-length-chip' }) {
   return (
@@ -35,7 +41,7 @@ function OutputLengthChip({ seconds, emphasized, label = 'Output', className = '
         ? 'Output length after slow-motion / trim — what you export and are billed for'
         : 'Output length (matches source — no speed or trim changes)'}
     >
-      {label}: {formatInstant(seconds, PRECISION.SECOND)}
+      {label}: {formatLength(seconds, PRECISION.SECOND, { style: 'clock' })}
     </span>
   );
 }
@@ -382,7 +388,8 @@ export function FocusModeView({
               <span>{metadata.width}x{metadata.height}</span>
               <>
                 <span className="text-gray-600">•</span>
-                <span>{formatInstant(duration || clipDuration, PRECISION.SECOND)}</span>
+                {/* T9480 review fix: the clip's source duration is a LENGTH -- rounds, not floors. */}
+                <span>{formatLength(duration || clipDuration, PRECISION.SECOND, { style: 'clock' })}</span>
               </>
               {selectedClipEffectiveDuration != null && (
                 <>

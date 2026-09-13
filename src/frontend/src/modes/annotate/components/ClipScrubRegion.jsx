@@ -68,7 +68,17 @@ export function ClipScrubRegion({
   // readout also goes clip-relative (showAnnotateOverlay), and never leak into
   // the merely-SELECTED sidebar state (where playback stays whole-game).
   clipEditorActive = false,
+  // T9480 review fix (MAJOR #5): the true media bound for TrimTimeField's
+  // typed entry/step buttons -- {mediaStart, mediaEnd} in the SAME coordinate
+  // space as startTime/endTime. Passed by the caller when an angle is active
+  // (the angle's own virtual span, EPIC decision 10: a clip is cut from ONE
+  // source); null/absent falls back to the whole timeline (videoDuration),
+  // matching the previous hardcoded behavior for every backbone/angle-free
+  // game. Drag stays clamped to the visible window (clampToVisibleWindow)
+  // regardless -- this only widens/narrows what TYPED entry can reach.
+  mediaBounds = null,
 }) {
+  const trimFieldMediaBounds = mediaBounds ?? { mediaStart: 0, mediaEnd: videoDuration };
   const trackRef = useRef(null);
   const [dragging, setDragging] = useState(null); // 'start' | 'end' | null
   // T8780: restored for the sidebar (clipEditorActive=false) only -- the
@@ -473,9 +483,10 @@ export function ClipScrubRegion({
             value={startTime}
             edge="start"
             otherValue={endTime}
-            mediaBounds={{ mediaStart: 0, mediaEnd: videoDuration }}
+            mediaBounds={trimFieldMediaBounds}
             onCommit={onStartTimeChange}
             onSeek={onSeek}
+            onCommitComplete={onDragEnd}
             compact
           />
           <span className="text-gray-500 mx-0.5">-</span>
@@ -483,9 +494,10 @@ export function ClipScrubRegion({
             value={endTime}
             edge="end"
             otherValue={startTime}
-            mediaBounds={{ mediaStart: 0, mediaEnd: videoDuration }}
+            mediaBounds={trimFieldMediaBounds}
             onCommit={onEndTimeChange}
             onSeek={onSeek}
+            onCommitComplete={onDragEnd}
             compact
           />
         </div>
@@ -561,18 +573,20 @@ export function ClipScrubRegion({
             value={startTime}
             edge="start"
             otherValue={endTime}
-            mediaBounds={{ mediaStart: 0, mediaEnd: videoDuration }}
+            mediaBounds={trimFieldMediaBounds}
             onCommit={onStartTimeChange}
             onSeek={onSeek}
+            onCommitComplete={onDragEnd}
           />
           {' '}&rarr;{' '}
           <TrimTimeField
             value={endTime}
             edge="end"
             otherValue={startTime}
-            mediaBounds={{ mediaStart: 0, mediaEnd: videoDuration }}
+            mediaBounds={trimFieldMediaBounds}
             onCommit={onEndTimeChange}
             onSeek={onSeek}
+            onCommitComplete={onDragEnd}
           />
         </div>
         <div className="flex items-center gap-2">
