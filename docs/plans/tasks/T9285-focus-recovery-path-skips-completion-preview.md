@@ -1,10 +1,22 @@
 # T9285: Focus's export-recovery path never shows the publish-exit preview after a mobile tab discard
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-09
-**Updated:** 2026-09-12
+**Updated:** 2026-09-13
+
+## Progress Log
+
+**2026-09-13**: Implemented per the approved design, merged (PR #422, commit a903e5a8) after 3
+review rounds. Round 1: 1 blocking + 3 major fixed (dead-code staleness guard relocated, stale
+project refresh added, try/catch around loadProject, one-shot tracking made durable). Round 2:
+the one-shot fix was found to reset on component remount (App.jsx mounts
+`FocusCompletionRecovery` in two structurally different trees) - hoisted into the shared store.
+Round 3: independently verified via revert-and-retest, approved with 0 blocking/major. Branch
+CI's sole failure was the pre-existing `uploadManager.attachVideo.test.js` flake (7th confirmed
+hit), attributed in known-failures.md. Live-drive on staging still owed per the design's own
+noted gap (real mobile tab-discard isn't reproducible in Playwright) - verify on staging.
 
 **Design approved 2026-09-12**: `docs/plans/tasks/T9285-design.md`, Option C (§6) plus the
 acknowledge-timing refinement (§6a, deferring the framing-job acknowledge to the View/Dismiss
