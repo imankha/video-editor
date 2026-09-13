@@ -1,10 +1,23 @@
 # T9480: One time-format rule, exact trim entry, and honest billable duration
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-09-10
-**Updated:** 2026-09-12
+**Updated:** 2026-09-13
+
+## Progress Log
+
+**2026-09-13**: Implemented per the approved design (full scope), merged (PR #423, commit
+c05096d0) after 2 review rounds. Round 1: 2 blocking (sidebar typed-entry/step buttons silently
+not persisting; the "output length" chip - labeled "what you export and are billed for" - still
+flooring instead of rounding, reproducing the original bug on the billing-adjacent surface) + 4
+major (a characterization suite proving nothing, an unhonored step-grid claim, an unimplemented
+angle-aware bound, a double-rounding landmine) all fixed. Round 2: independently mutation-tested
+all 6 fixes (reverted each, confirmed its test genuinely fails; restored, confirmed it passes) -
+one stale knowledge-doc line fixed directly by the supervisor. Branch CI's sole failure was the
+pre-existing `uploadManager.attachVideo.test.js` flake (8th confirmed hit), attributed in
+known-failures.md.
 
 **Design approved 2026-09-12**: `docs/plans/tasks/T9480-design.md`, full scope (including Stage
 D3 shared-player default and D4 falsy-guard removal). Real count of duplicate time formatters:
