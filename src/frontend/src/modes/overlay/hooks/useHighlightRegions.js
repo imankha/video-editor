@@ -269,7 +269,15 @@ export default function useHighlightRegions(videoMetadata) {
           radiusY: kf.radiusY,
           strokeOpacity: kf.strokeOpacity,
           fillOpacity: kf.fillOpacity,
-          color: kf.color
+          color: kf.color,
+          // T9780: `fromDetection` is the SOLE marker of a real player
+          // assignment (detectionAssignment.isDetectionAssigned treats a
+          // boundary keyframe without it as unassigned scaffolding). The key
+          // whitelist above silently dropped it, so every reload / Overlay
+          // remount re-showed "Pick your player" despite correct DB geometry.
+          // Carry it ADDITIVELY — never fabricate the marker on a keyframe that
+          // never had one (mirrors T9770's backend rule).
+          ...(kf.fromDetection ? { fromDetection: true } : {}),
         };
       });
 
