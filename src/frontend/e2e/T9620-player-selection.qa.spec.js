@@ -32,12 +32,12 @@ test.describe('T9620 player-selection-first (QA)', () => {
 
     // 1. Primary task stated on screen (not a tooltip).
     const stage = page.getByTestId('stage');
-    await expect(stage.getByText('Click your player to add a spotlight')).toBeVisible();
+    await expect(stage.getByText('Click your athlete to add a spotlight')).toBeVisible();
     await shot(stage, 'T9620-1-primary-task.png');
 
     // 2. Before selection: guidance shown, styling controls absent.
     const awaiting = page.getByTestId('panel-awaiting');
-    await expect(awaiting.getByText('Pick your player')).toBeVisible();
+    await expect(awaiting.getByText('Pick your athlete')).toBeVisible();
     await expect(awaiting.getByText('Outline thickness')).toHaveCount(0);
     await shot(awaiting, 'T9620-2-panel-before-selection.png');
 

@@ -64,8 +64,8 @@ test.describe('T8960 — play editor strip layout: live QA', () => {
     // --- Item 3: centered "+ Marking a play" title row ---
     await expect(strip.getByText('Marking a play')).toBeVisible();
 
-    // --- Item 5: My player | Team layer control on the top line (header) ---
-    await expect(strip.getByRole('radio', { name: /My player/ })).toBeVisible();
+    // --- Item 5: My athlete | Team layer control on the top line (header) ---
+    await expect(strip.getByRole('radio', { name: /My athlete/ })).toBeVisible();
     await expect(strip.getByRole('radio', { name: /Team/ })).toBeVisible();
     await saveEvidence(page, 'T8960-3-5-title-and-layer-in-header');
 
