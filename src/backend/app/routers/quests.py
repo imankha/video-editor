@@ -237,7 +237,19 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set | None = None) -> d
     # save a reel without rating a clip, so a reel is proof the step was satisfied.
     steps["rate_clip"] = 'clip_rated' in achieved or rc["reels"] >= 1
     steps["annotate_brilliant"] = rc["reels"] >= 1
-    steps["playback_annotations"] = 'played_annotations' in achieved
+    # T9850: this last step used to gate SOLELY on entering Preview-plays mode
+    # inside Annotate (`played_annotations`) — a control that only exists on the
+    # Annotate screen. A user who saved a clip and moved on to Focus/Spotlight/
+    # Library was pinned at "4/5" with the guide pointing at an unavailable control
+    # (B05·R4). Per the brief, first-result guidance completes on saved playable
+    # VALUE, not a mandatory source-preview click, so OR-satisfy it with a genuine
+    # saved result — reusing the same `rc["reels"] >= 1` (own auto-project clip)
+    # signal annotate_brilliant/rate_clip already key off. Preview plays stays a
+    # sufficient path (so nothing that already completed regresses); this only ever
+    # makes completion EASIER to reach, and because it derives here — the single
+    # choke point /progress and /claim-reward share — the displayed and claimable
+    # state can never disagree (the T9410 invariant holds).
+    steps["playback_annotations"] = 'played_annotations' in achieved or rc["reels"] >= 1
 
     # --- Quest 2: Frame Your Highlight ---
     # T5195: return_home — completed when the user lands on the home (games) screen

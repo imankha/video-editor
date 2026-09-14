@@ -510,6 +510,16 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     expect(q1s2).toBeTruthy();
     console.log('[Q1.2] annotate_brilliant (Create a Reel) step verified');
 
+    // T9850: first-result guidance completes on saved playable VALUE, not a
+    // mandatory Preview-plays click. The saved clip that just satisfied
+    // annotate_brilliant (rc.reels >= 1) also satisfies playback_annotations via
+    // the same signal — so the guide is already complete here, BEFORE any Preview
+    // plays interaction below. This is the acceptance proof for "direct export
+    // completes first-result guidance without a Preview-plays detour".
+    const q1s3EarlyViaSave = await waitForQuestStep(page, 'playback_annotations');
+    expect(q1s3EarlyViaSave).toBeTruthy();
+    console.log('[Q1.T9850] playback_annotations complete via saved clip, no Preview plays needed');
+
     // --- Q1 Step 3: Watch Your Clips Back ---
     console.log('[Q1.3] Watch Your Clips Back (Playback Annotations)');
 

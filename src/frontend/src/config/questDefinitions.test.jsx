@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { STEP_DESCRIPTIONS, STEP_TITLES } from './questDefinitions.jsx';
-import { SECTION_NAMES } from './displayNames';
+import { SECTION_NAMES, ANNOTATE } from './displayNames';
 import { QUEST_DEFINITIONS } from '../data/questDefinitions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -236,6 +236,25 @@ describe('questDefinitions vocabulary sweep (T9575)', () => {
     expect(renderedText(STEP_DESCRIPTIONS.add_clip)).toMatch(/Mark play/); // ANNOTATE.MARK_PLAY (was "Add Play")
     expect(renderedText(STEP_DESCRIPTIONS.choose_shape)).toMatch(/Around player/); // EDITOR_PANELS (was "Body")
     expect(STEP_TITLES.export_overlay).toBe('Export clip with effects'); // EXPORT_JOBS.overlay.action
+  });
+});
+
+// T9850: first-result guidance must not instruct a REQUIRED Preview-plays click —
+// that control only exists on the Annotate screen, so the guide pointed at an
+// unavailable action once the user moved to Focus/Spotlight/Library (B05·R4,
+// acceptance criterion "no route references an unavailable control"). The step's
+// description now points at the persistent next actions that travel with a saved
+// clip (Frame this clip / Keep marking plays, the T9580 labels).
+describe('playback_annotations guidance points at persistent actions (T9850)', () => {
+  const renderedText = (node) => render(<>{node}</>).container.textContent;
+
+  it('names the persistent next actions instead of requiring Preview plays', () => {
+    const text = renderedText(STEP_DESCRIPTIONS.playback_annotations);
+    expect(text).toMatch(new RegExp(ANNOTATE.FRAME_THIS_CLIP));
+    expect(text).toMatch(new RegExp(ANNOTATE.KEEP_MARKING_PLAYS));
+    // The old copy told the user to go click "Preview plays" — a control absent on
+    // every screen but Annotate. It must no longer appear in this step's guidance.
+    expect(text).not.toMatch(new RegExp(ANNOTATE.PREVIEW_PLAYS));
   });
 });
 
