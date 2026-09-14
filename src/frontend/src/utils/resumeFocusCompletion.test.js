@@ -48,8 +48,10 @@ describe('resumeFocusCompletion (T9285)', () => {
       expect.objectContaining({ mode: 'framing' }),
     );
     expect(deps.setEditorMode).toHaveBeenCalledWith('framing');
+    // T9790: the preview payload now carries the job id (so the live-path
+    // gesture handlers can acknowledge it) — the recovered path stamps it too.
     expect(deps.openPreview).toHaveBeenCalledWith({
-      projectId: 42, previewUrl: 'https://cdn.example/preview.mp4', openMode: 'framing',
+      projectId: 42, previewUrl: 'https://cdn.example/preview.mp4', openMode: 'framing', jobId: 'job-1',
     });
     expect(deps.recordAchievement).toHaveBeenCalledWith('overlay_offered');
     expect(deps.acknowledgeJob).toHaveBeenCalledWith('job-1');
@@ -87,7 +89,7 @@ describe('resumeFocusCompletion (T9285)', () => {
     // completion path's own refreshProject-then-resolve ordering.
     expect(calls).toEqual(['refreshProject', 'openPreview', 'acknowledgeJob']);
     expect(deps.openPreview).toHaveBeenCalledWith({
-      projectId: 42, previewUrl: 'https://cdn.example/preview.mp4', openMode: 'framing',
+      projectId: 42, previewUrl: 'https://cdn.example/preview.mp4', openMode: 'framing', jobId: 'job-3',
     });
     expect(deps.recordAchievement).toHaveBeenCalledWith('overlay_offered');
     expect(result).toEqual({ opened: true, navigated: false });

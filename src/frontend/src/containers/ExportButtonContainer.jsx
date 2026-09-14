@@ -318,7 +318,7 @@ export function ExportButtonContainer({
 
         if (onProceedToOverlay && editorMode === EDITOR_MODES.FRAMING && !overlayTransitionFiredRef.current) {
           overlayTransitionFiredRef.current = true;
-          await onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
+          await onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId, exportId);
         }
         // Pass which export finished: closure values capture the mode and
         // project this export was started from, even if the user has since
@@ -390,7 +390,7 @@ export function ExportButtonContainer({
         // T1670: Transition to overlay on retry path (same as WS onComplete)
         if (onProceedToOverlay && editorMode === EDITOR_MODES.FRAMING && !overlayTransitionFiredRef.current) {
           overlayTransitionFiredRef.current = true;
-          await onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
+          await onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId, exportId);
         }
         await fireExportComplete({ projectId, mode: editorMode });
       } else if (status === 'error' || modal_status === 'error') {
@@ -722,7 +722,7 @@ export function ExportButtonContainer({
 
           if (onProceedToOverlay && !overlayTransitionFiredRef.current) {
             overlayTransitionFiredRef.current = true;
-            onProceedToOverlay(null, buildClipMetadata(clips), projectId);
+            onProceedToOverlay(null, buildClipMetadata(clips), projectId, exportId);
           }
           fireExportComplete({ projectId, mode: editorMode });
 
@@ -845,7 +845,7 @@ export function ExportButtonContainer({
 
           if (onProceedToOverlay && !overlayTransitionFiredRef.current) {
             overlayTransitionFiredRef.current = true;
-            await onProceedToOverlay(null, clipMetadata, projectId);
+            await onProceedToOverlay(null, clipMetadata, projectId, exportId);
           }
 
           setIsExporting(false);

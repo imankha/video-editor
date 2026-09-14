@@ -100,27 +100,40 @@ async function stubPreviewUrl(page, projectId, url) {
   });
 }
 
-test.describe('T9285: recovered Focus completion reaches the publish-exit preview', () => {
-  test('(a)+(b) Option C auto-open: idle-on-home discovery lands directly on the preview', async ({ page }) => {
-    const userId = makeUserId('auto');
+test.describe('T9285/T9790: recovered Focus completion reaches the publish-exit preview', () => {
+  test('T9790: idle-on-home discovery shows the PASSIVE card, never an auto-navigate (reload stays on the library route)', async ({ page }) => {
+    const userId = makeUserId('passivehome');
     await loginTestUser(page, userId);
-    const projectId = await createProject(page, userId, 'Auto Open Reel');
+    const projectId = await createProject(page, userId, 'Cold Reload Reel');
     expect(projectId).toBeTruthy();
 
-    await stubUnacknowledged(page, [unacknowledgedFramingJob(projectId, 'Auto Open Reel')]);
+    const ackRequests = [];
+    page.on('request', (req) => {
+      if (req.url().includes('/api/exports/acknowledge')) ackRequests.push(req.postDataJSON());
+    });
+
+    await stubUnacknowledged(page, [unacknowledgedFramingJob(projectId, 'Cold Reload Reel')]);
     await stubPreviewUrl(page, projectId, 'https://example.com/fake-preview.mp4');
 
     // The reload-mid-export approximation: the app boots fresh, idle on Clips
-    // home with nothing selected — exactly the state App.jsx:551-557's redirect
-    // produces after a real tab discard.
+    // home with nothing selected — exactly the state a genuine cold reload onto
+    // the library lands in. BEFORE T9790, Option C auto-opened here and clobbered
+    // the requested route. Now the card is passive and the library route stays.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
 
-    // Option C: auto-invoked View — no click needed. Lands on the SAME
-    // CollectionPlayer + FocusPublishActionBar the live path shows.
+    // Passive card appears; NO auto-navigate into the completion screen.
+    await expect(page.getByTestId('focus-completion-recovery')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: /Publish without spotlight/i })).toHaveCount(0);
+    // Discovery alone never acknowledges — the §6a re-prompt property holds.
+    expect(ackRequests.length, 'no acknowledge before any gesture').toBe(0);
+    await page.screenshot({ path: 'test-results/T9790-idle-home-passive-card.png' });
+
+    // View still works: a real click opens the same action bar the live path shows.
+    await page.getByTestId('focus-completion-recovery').getByRole('button', { name: 'View' }).click();
     await expect(page.getByRole('button', { name: /Publish without spotlight/i })).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('button', { name: /Add spotlight/i })).toBeVisible();
-    await page.screenshot({ path: 'test-results/T9285-auto-open-preview.png' });
+    await expect.poll(() => ackRequests.flat()).toContain('e2e-job-1');
   });
 
   test('(a) passive card when the completion is discovered while the user is elsewhere; (c) View opens the same action bar', async ({ page }) => {
@@ -214,21 +227,14 @@ test.describe('T9285: recovered Focus completion reaches the publish-exit previe
     const otherProjectId = await createProject(page, userId, 'Currently Editing');
     const jobId = 'e2e-job-3';
 
-    // T9285 review fix: the earlier version of this test used TWO idle-on-home
-    // reloads, so Option C auto-opened on the FIRST one — and Option C's
-    // auto-open legitimately DOES acknowledge after opening (that's a real,
-    // separate, already-covered behavior — see test (a)/(b)'s "acknowledge
-    // fires AFTER View succeeds"). Asserting "never acknowledged" against that
-    // scenario was asserting something the app doesn't even claim.
-    //
-    // §6a's actual claim is narrower: the RECONCILIATION step itself
-    // (useExportRecovery's unacknowledged-jobs loop) must never acknowledge a
-    // framing completion on its own, no matter how many times it re-discovers
-    // the SAME still-unacknowledged job — only a real View/Dismiss gesture
-    // (including Option C's auto-invoked View) may. Staying "elsewhere" (a
-    // project selected) for the whole test keeps Option C from ever firing,
-    // isolating that claim: the card must persist across repeated discovery,
-    // and zero acknowledge requests may ever contain this job id.
+    // §6a's claim: the RECONCILIATION step itself (useExportRecovery's
+    // unacknowledged-jobs loop) must never acknowledge a framing completion on
+    // its own, no matter how many times it re-discovers the SAME still-
+    // unacknowledged job — only a real View/Dismiss gesture may. T9790 removed
+    // Option C's auto-navigate entirely, so this now holds in every state
+    // (idle-on-home included); staying "elsewhere" (a project selected) simply
+    // keeps the scenario focused on repeated discovery: the card must persist
+    // across reloads, and zero acknowledge requests may ever contain this job id.
     const ackRequests = [];
     page.on('request', (req) => {
       if (req.url().includes('/api/exports/acknowledge')) ackRequests.push(req.postDataJSON());

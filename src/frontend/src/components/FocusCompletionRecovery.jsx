@@ -4,28 +4,9 @@ import { useEditorStore, EDITOR_MODES, useProjectsStore, useQuestStore } from '.
 import { useProjectLoader } from '../hooks/useProjectLoader';
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
 import { resumeFocusCompletion } from '../utils/resumeFocusCompletion';
+import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
 import { toast } from './shared';
 import { EXPORT_JOBS } from '../config/displayNames';
-import { API_BASE } from '../config';
-import apiFetch from '../utils/apiFetch';
-
-/**
- * acknowledgeJob (T9285 §6a) — the framing-specific deferred acknowledge:
- * useExportRecovery's unacknowledged-jobs loop skips this call for a framing
- * job (see useExportRecovery.js), so it fires here instead, on the View or
- * Dismiss gesture. Same endpoint/body shape as the existing mount-time call.
- */
-async function acknowledgeJob(jobId) {
-  try {
-    await apiFetch(`${API_BASE}/api/exports/acknowledge`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify([jobId]),
-    });
-  } catch (err) {
-    console.error('[FocusCompletionRecovery] Failed to acknowledge job', jobId, err);
-  }
-}
 
 /**
  * FocusCompletionRecovery (T9285) — the App-level surface for a Focus export
@@ -39,10 +20,15 @@ async function acknowledgeJob(jobId) {
  * metadata change. A leaf that renders a small card (or null) contains that
  * subscription instead.
  *
- * Option C (approved, design §6/§6a): auto-invokes View when the completion
- * was discovered while the user is still idle on Clips home with nothing
- * selected — the app's own redirect put them there, so restoring the screen
- * is repair, not hijack. Every other case shows the passive card.
+ * T9790: the Option-C auto-navigate was REMOVED. It auto-invoked View whenever
+ * the user was idle on Clips home with nothing selected, on the premise that
+ * "the app's own redirect put them there." But that state is indistinguishable
+ * from a user's genuine cold reload onto their library, and a companion defect
+ * (the live Focus path never acknowledged its completion, so a still-recoverable
+ * job was found on essentially every reload) made the auto-open fire far more
+ * often than intended — hijacking the requested library route into an old Focus
+ * completion screen. This component now ONLY ever shows the passive,
+ * dismissable card; navigation happens solely on a real View/Dismiss click.
  *
  * Also owns the `preview` payload's staleness-scoping guard (review fix,
  * mirroring DraftReelPreview.jsx:45-50). FocusScreen only mounts while
@@ -58,9 +44,8 @@ async function acknowledgeJob(jobId) {
  * (e.g. the mobile back button via `editorStore.setEditorModeFromPopState`,
  * which does not itself clear the preview) and clear the now-orphaned
  * payload before it can resurrect over a live editor on a later, unrelated
- * re-entry. The SAME remount is exactly why the Option C one-shot decision
- * below cannot live in a component-local ref — see `autoTriedJobId` in
- * focusCompletionStore.js.
+ * re-entry. The same remount is why the in-flight `resuming` flag lives in the
+ * store rather than a component-local ref (see focusCompletionStore.js).
  */
 export function FocusCompletionRecovery() {
   const recovered = useFocusCompletionStore((s) => s.recovered);
@@ -68,8 +53,6 @@ export function FocusCompletionRecovery() {
   const completionPreview = useFocusCompletionStore((s) => s.preview);
   const openPreview = useFocusCompletionStore((s) => s.openPreview);
   const closePreview = useFocusCompletionStore((s) => s.closePreview);
-  const autoTriedJobId = useFocusCompletionStore((s) => s.autoTriedJobId);
-  const setAutoTriedJobId = useFocusCompletionStore((s) => s.setAutoTriedJobId);
   // Store-backed, not component-local useState (review polish): a resume
   // kicked off by one mount (e.g. the home tree) must still read as in-flight
   // if the user navigates to the OTHER tree mid-resume — it's the same
@@ -78,7 +61,6 @@ export function FocusCompletionRecovery() {
   const resuming = useFocusCompletionStore((s) => s.resuming);
   const setResuming = useFocusCompletionStore((s) => s.setResuming);
   const editorMode = useEditorStore((s) => s.editorMode);
-  const selectedProjectId = useProjectsStore((s) => s.selectedProjectId);
   const { loadProject } = useProjectLoader();
 
   const view = useCallback(async (jobId, projectId) => {
@@ -99,7 +81,7 @@ export function FocusCompletionRecovery() {
           refreshProject: () => useProjectsStore.getState().refreshSelectedProject(),
           resolvePreviewUrl: resolveWorkingVideoPreviewUrl,
           openPreview,
-          acknowledgeJob,
+          acknowledgeJob: acknowledgeExportJob,
           recordAchievement: (id) => useQuestStore.getState().recordAchievement(id),
           toastError: (title, opts) => toast.error(title, opts),
           EDITOR_MODES,
@@ -114,34 +96,18 @@ export function FocusCompletionRecovery() {
     } catch (err) {
       // resumeFocusCompletion already catches its own failures and reports
       // them (loud log + toast); this is a last-resort net so a bug in the
-      // wiring above can never surface as an unhandled rejection — the auto-
-      // open effect below calls `view()` with no attached `.catch()`. Leave
-      // the card up here too, for the same retry reason as the `else` above.
+      // wiring above can never surface as an unhandled rejection. Leave the
+      // card up here too, for the same retry reason as the `if` above.
       console.error('[FocusCompletionRecovery] view() failed unexpectedly', err);
     } finally {
       setResuming(false);
     }
   }, [loadProject, openPreview, clearRecovered, setResuming]);
 
-  // Option C auto-open: only when idle on home with nothing selected. The
-  // decision is made ONCE, at first observation of a given job — claimed in
-  // focusCompletionStore (survives this component's remount between the home
-  // and editor trees, see class doc) BEFORE the idle-on-home check, not after
-  // it passes. Claiming it only on a pass meant a job discovered while the
-  // user was elsewhere (shows the passive card, correctly) would still be
-  // "untried" the NEXT time the user happened to land back on home with
-  // nothing selected — even if that later visit was the user's own
-  // deliberate navigation (or, pre-fix, just a remount from switching
-  // screens), not the app's redirect. That retroactively promoted a
-  // passive-card case into a hijack, exactly what Option C exists to avoid.
-  useEffect(() => {
-    if (!recovered) return;
-    if (autoTriedJobId === recovered.jobId) return;
-    setAutoTriedJobId(recovered.jobId);
-    const idleOnHome = editorMode === EDITOR_MODES.PROJECT_MANAGER && !selectedProjectId;
-    if (!idleOnHome) return;
-    view(recovered.jobId, recovered.projectId);
-  }, [recovered, editorMode, selectedProjectId, view, autoTriedJobId, setAutoTriedJobId]);
+  // T9790: the Option-C auto-open effect was removed here — see the class doc.
+  // Navigation into the completion preview now happens only on a real View
+  // click (below), never automatically, so a cold reload onto the library
+  // stays on the requested route.
 
   // Staleness-scoping guard for the `preview` payload (see class doc above).
   useEffect(() => {
@@ -156,7 +122,7 @@ export function FocusCompletionRecovery() {
     if (useFocusCompletionStore.getState().resuming) return; // in-flight guard, mirrors view()
     setResuming(true);
     try {
-      await acknowledgeJob(recovered.jobId);
+      await acknowledgeExportJob(recovered.jobId);
       clearRecovered();
     } finally {
       setResuming(false);
