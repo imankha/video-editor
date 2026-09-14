@@ -129,15 +129,9 @@ Bugs reported by users on production. Populated from Postgres `bug_reports` tabl
 |------|------|------|------|------|------|------|------|
 | T10070 | [Reels exported from Team-layer clips never appear in Gallery/My Reels](tasks/T10070-team-clip-reels-invisible-in-gallery.md) | 9 | 5 | 1.8 | TODO | [ ] | P1. Reported by sarkarati@gmail.com 2026-09-14 (also filed in-app 2026-09-13, not yet located — see T10090). Root cause found: `exclude_teammate_reels_clause()` (`queries.py:173-193`) filters `raw_clips.my_athlete = 0` (Team layer) out of every Gallery/Collections/Rank query, meant to fix bug 22 (teammate-shared reels leaking into another athlete's gallery) but also hiding an athlete's OWN exports of Team-layer footage. Credits already spent, reel unreachable. Needs expert agent for the correct ownership predicate; likely affects other users too, not just this account. |
 | T10080 | [Exported 16:9 reels block Overlay menu options (layout)](tasks/T10080-16x9-reel-blocks-overlay-menu.md) | 3 | 2 | 1.5 | TODO | [ ] | Lower priority. Same reporter, same 2026-09-14 email, separate issue. Reporter himself flagged it may already be moot given the in-progress Focus/export/Overlay redesign — check that first. |
-| T10090 | [Task board bug panels silently disconnected (expired session cookies)](tasks/T10090-task-board-bug-connectivity.md) | 6 | 1 | 6.0 | WAITING ON USER | [ ] | Why T10070 wasn't seen sooner: both `prod_session` and `staging_session` in `.task-manager-config.json` are expired (401), and the "Session expired" indicator was easy to mistake for "0 bugs". Visibility fix shipped 2026-09-14 (red banner, click-to-reconnect); needs the user to paste fresh `rb_session` cookies for both environments via Bug Config. |
+| T10090 | [Task board bug panel silently disconnected (expired session cookie)](tasks/T10090-task-board-bug-connectivity.md) | 6 | 1 | 6.0 | WAITING ON USER | [ ] | Why T10070 wasn't seen sooner: `prod_session` in `.task-manager-config.json` is expired (401), and the "Session expired" indicator was easy to mistake for "0 bugs". Visibility fix shipped 2026-09-14 (red banner, click-to-reconnect); needs the user to paste a fresh `rb_session` cookie via Bug Config. Staging bug-report support removed entirely 2026-09-14 (user decision - not needed). |
 
 *Bug 46p: the NULL-description half shipped as [T7560](tasks/T7560-bug-report-null-description.md); the UI-confusion half (inert quest step + triple prompt) is [T7840](tasks/T7840-quest-step-actionable-empty-state.md) under Next Up.*
-
-### Staging Reported Bugs
-
-Bugs reported or discovered on staging. Populated from Postgres `bug_reports` table via task board API. Use "Copy Kickoff Prompt" to investigate.
-
-*All tasks in this section are complete — rows archived to [PLAN-archive.md](PLAN-archive.md).* (Note: the task board's staging admin-bug fetch returned 403 on 2026-08-24 - `scripts/.task-manager-config.json`'s `staging_session` isn't currently admin-privileged. User confirmed 2026-08-24 there are no staging bugs to worry about; re-authenticate that session before relying on the task board's staging panel again.)
 
 ### Milestone TOP: Durable Sync — stop active prod data loss
 

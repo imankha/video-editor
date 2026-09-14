@@ -919,7 +919,6 @@ HTML = r"""<!DOCTYPE html>
 
   /* Bug milestone styles */
   .bug-milestone { border-left: 3px solid var(--coral); }
-  .bug-milestone.staging { border-left-color: var(--yellow); }
   .bug-milestone .milestone-header { gap: 10px; }
   .bug-env-icon { font-size: 10px; }
   .bug-offline {
@@ -1068,11 +1067,6 @@ HTML = r"""<!DOCTYPE html>
     <input type="text" id="prod-session" placeholder="Paste rb_session cookie from prod">
     <span class="config-status unknown" id="prod-status" title="Unknown">&#9679;</span>
   </div>
-  <div class="config-row">
-    <label>Staging:</label>
-    <input type="text" id="staging-session" placeholder="Paste rb_session cookie from staging">
-    <span class="config-status unknown" id="staging-status" title="Unknown">&#9679;</span>
-  </div>
   <div class="config-actions">
     <button class="btn" id="save-config-btn">Save &amp; Reload Bugs</button>
   </div>
@@ -1088,7 +1082,7 @@ let saving = false;
 let pendingSave = false;
 let collapseState = {}; // {msId: bool, epicId: bool} — persists across renders
 let branchMap = {}; // {T5683: [{name, local, remote, merged, via}]} — derived from git, not PLAN.md
-let bugData = null; // {prod: {groups, error}, staging: {groups, error}}
+let bugData = null; // {prod: {groups, error}}
 
 function copyText(text, el) {
   const orig = el.textContent;
@@ -1345,7 +1339,7 @@ async function updateBugStatusRaw(bugId, env, updates) {
 function renderBugMilestones(app) {
   if (!bugData) return;
 
-  ['prod', 'staging'].forEach(env => {
+  ['prod'].forEach(env => {
     const envData = bugData[env];
     if (!envData) return;
 
@@ -1353,7 +1347,7 @@ function renderBugMilestones(app) {
     const accentVar = env === 'prod' ? 'var(--coral)' : 'var(--yellow)';
 
     const div = document.createElement('div');
-    div.className = 'milestone bug-milestone' + (env === 'staging' ? ' staging' : '');
+    div.className = 'milestone bug-milestone';
 
     const msKey = 'ms-bugs-' + env;
     const msCollapsed = collapseState[msKey];
@@ -1475,7 +1469,7 @@ async function loadBugs() {
       updateConfigStatus();
       render();
       // Auth/config errors won't fix themselves; connection errors might (cold start)
-      const transientError = ['prod', 'staging'].some(env => {
+      const transientError = ['prod'].some(env => {
         const err = bugData[env] && bugData[env].error;
         return err && !err.includes('Auth') && !err.includes('configured');
       });
@@ -1496,7 +1490,7 @@ async function loadBugs() {
 
 function updateConfigStatus() {
   if (!bugData) return;
-  ['prod', 'staging'].forEach(env => {
+  ['prod'].forEach(env => {
     const el = document.getElementById(env + '-status');
     if (!el) return;
     const envData = bugData[env];
@@ -2414,7 +2408,6 @@ async function loadConfig() {
     if (resp.ok) {
       const cfg = await resp.json();
       document.getElementById('prod-session').value = cfg.prod_session || '';
-      document.getElementById('staging-session').value = cfg.staging_session || '';
     }
   } catch(e) {}
 }
@@ -2462,7 +2455,6 @@ document.getElementById('config-btn').onclick = () => {
 document.getElementById('save-config-btn').onclick = async () => {
   const cfg = {
     prod_session: document.getElementById('prod-session').value.trim(),
-    staging_session: document.getElementById('staging-session').value.trim(),
   };
   try {
     const resp = await fetch('/api/bug-config', {
@@ -2534,7 +2526,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {'content': content})
         elif self.path == '/api/bugs':
             result = {}
-            for env in ('prod', 'staging'):
+            for env in ('prod',):
                 bugs, err = fetch_remote_bugs(env)
                 if err:
                     result[env] = {'groups': [], 'error': err}
@@ -2552,9 +2544,7 @@ class Handler(BaseHTTPRequestHandler):
             config = load_config()
             safe = {
                 'prod_session': config.get('prod_session', ''),
-                'staging_session': config.get('staging_session', ''),
                 'prod_url': config.get('prod_url', ''),
-                'staging_url': config.get('staging_url', ''),
             }
             self._json(200, safe)
         elif self.path.startswith('/api/branches'):
@@ -2680,8 +2670,6 @@ class Handler(BaseHTTPRequestHandler):
             config = load_config()
             if 'prod_session' in body:
                 config['prod_session'] = body['prod_session']
-            if 'staging_session' in body:
-                config['staging_session'] = body['staging_session']
             save_bug_config(config)
             self._json(200, {'ok': True})
         elif self.path == '/api/open-file':
