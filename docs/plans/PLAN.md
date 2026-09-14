@@ -28,41 +28,98 @@ rest. This is a sequenced campaign with design approvals, NOT a parallel fan-out
 
 **Landing Page:** Already live at `reelballers.com`
 
-### Next Work: September 12–13 Evaluation Handoff
+### Next Work: September 12-13 Evaluation Handoff
 
-**NEXT BATCH (user-ordered 2026-09-13): T9770–T10030.** Work this batch before the older pending backlog below, subject to existing WIP/deployment safety prerequisites. The [integration epic and ID mapping](tasks/evaluation-2026-09-13/EPIC.md) carries all 27 tasks from the [full source plan](tasks/evaluation-2026-09-13/source/plan.md), including six epics, local screenshots and standalone visual briefs. Source priority/readiness are explicit below; TODO means pending, not dependency-ready. Impact/complexity/ratio are unestimated. All work starts unverified; reconcile prior walkthrough fixes and current deployed versions before changing code.
+**NEXT BATCH (user-ordered 2026-09-13): 20 live tasks in T9770-T9970 + T10010.** Work this batch
+before the older pending backlog below. The [integration epic and ID
+mapping](tasks/evaluation-2026-09-13/EPIC.md) carries all 27 imported tasks and the [full source
+plan](tasks/evaluation-2026-09-13/source/plan.md); its **Reconciliation and scope decisions**
+section records what was verified against code and the decisions taken 2026-09-13.
 
-**Sequence:** core repairs → prerequisite-complete release gate → first-result workflow → measurement and real research → optional gated discoveries. Policy, quality and telemetry audits may start independently when inputs exist. Apply the epic's naming/status conflict reconciliation before broad copy changes. This dated ordering supersedes older “next” ordering notes for pending work; existing task history and statuses are retained.
+**Reconciliation result (2026-09-13).** Both the Sept 9-10 and the Sept 12-13 evaluations tested
+**staging**, not prod - the evaluator's 88-credit account is only producible by master-side code
+(T8120's `quest_upfront` grant), and prod was pinned at build 4290 / `d9621161`. Findings are
+therefore LIVE against master, and four of the evaluator's quoted strings were confirmed still
+present in the tree. **4 imported tasks dropped as already-shipped or duplicated** (T9910, T10000,
+T10020, T10030), **1 folded** (T9940 into T9860), **2 deferred to their own epic** (T9980, T9990).
+
+**User decisions 2026-09-13:**
+
+- **Deploy first.** Prod was 744 commits / 12 days behind master with 138 tasks sitting at STAGING,
+  including 34 from the Sept 9-10 walkthrough. Deployed before starting this batch.
+- **Vocabulary: Clip and Reel both stand.** "Highlight" is a MODIFIER, not a third object. This
+  REVERSES the intake's proposed Clip -> Highlight rename (source N02/N06) and leaves the 2026-09-10
+  object model intact. Standing rule: **short form in controls** (`Clips`, `Reels`), **long form in
+  prose** (highlight clip, highlight reel). Never one sibling carrying the modifier while its
+  sibling does not - today's `Clips` tab beside the `Highlight Reels` noun is the actual defect.
+- **AI Focus becomes Framing**, lifting the 2026-09-10 override. That override's recorded reason was
+  that the name should say the reframing is automatic. It is not: framing is manual crop keyframes
+  joined by a spline. Mode noun = **Framing**; screen instruction = "Frame your athlete" (a sentence
+  cannot be a mode name - it has to work in a tab, a switcher and a status chip).
+- **Relocate the AI claim to where the AI actually runs.** "AI" appears in exactly ONE parent-facing
+  place today (the mode name), and that is the one step with no AI in it - which is why users report
+  the app "has no AI". Real AI: `AIVideoUpscaler` (Real-ESRGAN, every framing export) and YOLO player
+  detection on a T4 GPU (Spotlight). Name those steps: "Finding players", "Enhancing video".
+  **Name the step, never promise the outcome** - no "Enhanced to HD" or equivalent quality claim
+  until T9970 has measured whether it holds.
+- **Statuses: T8470's Draft/Shared stands** (2026-09-10 override upheld). Take source N11 as
+  PRESENTATION only, not a new state machine: add a plain-language second half to each existing
+  state - `Draft / Not exported yet`, `Private / Ready to watch`, `Shared / Anyone with the link`.
+  `draftStage.js` remains the single source and T9600 keeps its job.
+- **Capture window = 6s before + 2s after** (8s total, replacing today's 9+3=12). The code was never
+  broken: `DEFAULT_CLIP_BEFORE=9` + `DEFAULT_CLIP_AFTER=3` straddling the tap produced exactly the
+  0:00-0:06 the evaluator reported at a 0:03 tap. Only the word "previous" was false. The post-roll
+  is deliberate (parents tap AFTER they see the play), so 2s of it is preserved. Copy becomes
+  "Captures 6 seconds before and 2 after".
+- **Spotlight stays optional, but encouraged.** Its real reason - 22 kids in the same kit, and this
+  is how anyone watching knows which one is yours - is the strongest sentence in the product and is
+  currently written as a definition rather than a reason.
+- **Every stage states its point in one sentence, and no explanation may use the feature's own name
+  as the reason for the feature.** The framing copy failed this test ("so you can focus the clip
+  around your player" is circular), and so does every other screen: they teach the mechanics and
+  never state the point. T9860 owns the sweep.
+- **One UI iteration, not several.** All copy-shaped work folds into T9860 so six tasks do not each
+  edit their own corner and reintroduce the exact inconsistency both evaluations found.
+
+**Sequence:** P1 repairs (T9770, T9790, T9800, T9810, T9820, T9840, T9920; T9780 after T9770) ->
+T9860 copy and concept sweep -> the P2 UX tier -> T9970 quality benchmark and T10010 telemetry, both
+independent and startable any time -> the existing release gate T9720 (which absorbed T10020).
+T9980/T9990 follow afterwards in the [Capability Discovery
+epic](tasks/evaluation-2026-09-13/EPIC-discovery.md).
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T9770 | [Persist Spotlight selection, settings and timing](tasks/evaluation-2026-09-13/T9770.md) |  |  |  | TODO | [ ] | P1 / Fix; source T01 (EP01). **READY**; requires none. Reconcile T9700, T9620 against current code before implementing. |
-| T9790 | [Stop old export completions hijacking reload](tasks/evaluation-2026-09-13/T9790.md) |  |  |  | TODO | [ ] | P1 / Fix / investigate; source T03 (EP01). **READY**; requires none. Reconcile T9470 against current code before implementing. |
-| T9800 | [Remove false export-required loading warning](tasks/evaluation-2026-09-13/T9800.md) |  |  |  | TODO | [ ] | P1 / Fix; source T04 (EP01). **READY**; requires none. Reconcile T9510, T9540, T9600 against current code before implementing. |
-| T9810 | [Repair both game-invitation entry points](tasks/evaluation-2026-09-13/T9810.md) |  |  |  | TODO | [ ] | P1 / Fix; source T05 (EP01). **READY**; requires none. Reconcile T9560 against current code before implementing. |
-| T9820 | [Correct rating and clip-creation helper immediately](tasks/evaluation-2026-09-13/T9820.md) |  |  |  | TODO | [ ] | P1 / Fix; source T06 (EP02). **READY**; requires none. Reconcile T9450, T9520, T9630 against current code before implementing. |
-| T9840 | [Make capture ranges and source clocks consistent](tasks/evaluation-2026-09-13/T9840.md) |  |  |  | TODO | [ ] | P1 / Fix; source T08 (EP02). **READY**; requires none. Reconcile T9480 against current code before implementing. |
-| T9920 | [Repair narrow and fullscreen editor layouts](tasks/evaluation-2026-09-13/T9920.md) |  |  |  | TODO | [ ] | P1 / Fix / responsive UX; source T16 (EP04). **READY**; requires none. Reconcile T9500, T8600 against current code before implementing. |
-| T9780 | [Bind saved preview to the correct effects export](tasks/evaluation-2026-09-13/T9780.md) |  |  |  | TODO | [ ] | P1 / Fix / investigate; source T02 (EP01). **WAITING_FOR_DEPENDENCIES**; requires T9770. Reconcile T9700, T9710, T8070 against current code before implementing. |
-| T10020 | [Run the cross-feature first-highlight release gate](tasks/evaluation-2026-09-13/T10020.md) |  |  |  | TODO | [ ] | P1 / Verification gate; source T26 (EP06). **WAITING_FOR_DEPENDENCIES**; requires T9770, T9780, T9790, T9800, T9810, T9820, T9840, T9920. Reconcile T9690, T9700, T9710, T9720 against current code before implementing. |
-| T9910 | [Verify credit and storage rules; reconcile action copy](tasks/evaluation-2026-09-13/T9910.md) |  |  |  | TODO | [ ] | P2 / Investigate then implement verified copy; source T15 (EP04). **READY**; requires none. Reconcile T9650, T9680, T9750 against current code before implementing. |
-| T9970 | [Establish highlight quality benchmark and calibrated fallback](tasks/evaluation-2026-09-13/T9970.md) |  |  |  | TODO | [ ] | P2 / Investigation / quality gate; source T21 (EP05). **READY**; requires none. Reconcile T9700 against current code before implementing. |
-| T10010 | [Define activation metrics and instrument the missing funnel](tasks/evaluation-2026-09-13/T10010.md) |  |  |  | TODO | [ ] | P2 / Analytics implementation; source T25 (EP06). **READY**; requires none. Reconcile T7515, T8110 against current code before implementing. |
-| T9940 | [Replace unsupported speed and tracking expectations](tasks/evaluation-2026-09-13/T9940.md) |  |  |  | TODO | [ ] | P2 / Copy / capability verification; source T18 (EP04). **READY**; requires none. Reconcile T9320, T9560, T9650 against current code before implementing. |
-| T9830 | [Offer Create highlight and Save play only as explicit outcomes](tasks/evaluation-2026-09-13/T9830.md) |  |  |  | TODO | [ ] | P1 / UX implementation; source T07 (EP02). **WAITING_FOR_DEPENDENCIES**; requires T9820. Reconcile T9580, T9520 against current code before implementing. |
-| T9850 | [Replace stale onboarding with route-aware next actions](tasks/evaluation-2026-09-13/T9850.md) |  |  |  | TODO | [ ] | P1 / UX implementation; source T09 (EP02). **WAITING_FOR_DEPENDENCIES**; requires T9830. Reconcile T9440, T9410, T9390 against current code before implementing. |
-| T9860 | [Apply one vocabulary and stable highlight identity](tasks/evaluation-2026-09-13/T9860.md) |  |  |  | TODO | [ ] | P2 / UX implementation; source T10 (EP03). **READY**; requires none. Reconcile T9520–T9570, T9320, T8470 against current code before implementing. |
-| T9870 | [Autosave edits and retain finished private results](tasks/evaluation-2026-09-13/T9870.md) |  |  |  | TODO | [ ] | P2 / UX / persistence implementation; source T11 (EP03). **WAITING_FOR_DEPENDENCIES**; requires T9770, T9780, T9790. Reconcile T9670, T9700, T9740 against current code before implementing. |
-| T9880 | [Separate private replay, publication and link sharing](tasks/evaluation-2026-09-13/T9880.md) |  |  |  | TODO | [ ] | P2 / UX implementation; source T12 (EP03). **WAITING_FOR_DEPENDENCIES**; requires T9780, T9860, T9870. Reconcile T9670, T9710, T9740 against current code before implementing. |
-| T9890 | [Make all result entry points recover and replay consistently](tasks/evaluation-2026-09-13/T9890.md) |  |  |  | TODO | [ ] | P2 / Integration implementation; source T13 (EP03). **WAITING_FOR_DEPENDENCIES**; requires T9780, T9860, T9870. Reconcile T9470, T9710 against current code before implementing. |
-| T9900 | [Make progress and saving status readable and persistent](tasks/evaluation-2026-09-13/T9900.md) |  |  |  | TODO | [ ] | P2 / UX implementation; source T14 (EP04). **WAITING_FOR_DEPENDENCIES**; requires T9800. Reconcile T9430, T9540, T9600 against current code before implementing. |
-| T9930 | [Simplify upload and remove fresh-home distractions](tasks/evaluation-2026-09-13/T9930.md) |  |  |  | TODO | [ ] | P2 / UX implementation; source T17 (EP04). **READY**; requires none. Reconcile T9640, T8700, T8500, T9390 against current code before implementing. |
-| T9950 | [Simplify manual framing and preview actual output before export](tasks/evaluation-2026-09-13/T9950.md) |  |  |  | TODO | [ ] | P2 / UX implementation; source T19 (EP05). **WAITING_FOR_DEPENDENCIES**; requires T9940. Reconcile T9610, T9550 against current code before implementing. |
-| T9960 | [Make single-athlete Spotlight a clear optional step](tasks/evaluation-2026-09-13/T9960.md) |  |  |  | TODO | [ ] | P2 / UX implementation; source T20 (EP05). **WAITING_FOR_DEPENDENCIES**; requires T9770, T9780. Reconcile T9620, T9740 against current code before implementing. |
-| T10030 | [Validate parent success and stage measurable rollout decisions](tasks/evaluation-2026-09-13/T10030.md) |  |  |  | TODO | [ ] | P2 / Human research / rollout planning; source T27 (EP06). **WAITING_FOR_RESEARCH_INPUTS**; requires T10010, T10020. Reconcile T9730 against current code before implementing. |
-| T9980 | [Investigate automatic athlete tracking before committing to build](tasks/evaluation-2026-09-13/T9980.md) |  |  |  | TODO | [ ] | P3 / Gated discovery; source T22 (EP05). **GATED_DISCOVERY**; requires T9970. Reconcile T9610 against current code before implementing. |
-| T9990 | [Investigate a combined framing and Spotlight export](tasks/evaluation-2026-09-13/T9990.md) |  |  |  | TODO | [ ] | P3 / Gated discovery; source T23 (EP05). **GATED_DISCOVERY**; requires T9770, T9780, T9970. Reconcile T9540, T9740 against current code before implementing. |
-| T10000 | [Verify download capability and prepare a bounded delivery decision](tasks/evaluation-2026-09-13/T10000.md) |  |  |  | TODO | [ ] | P3 / Gated discovery; source T24 (EP05). **GATED_DISCOVERY**; requires T9780. Reconcile Collection Download epic against current code before implementing. |
+| T9770 | [Persist Spotlight selection, settings and timing](tasks/evaluation-2026-09-13/T9770.md) |  |  |  | TODO | [ ] | P1 / Fix; source T01 (EP01). **READY**. **CONFIRMED LIVE 2026-09-13**: T9700 ticked "selected player survives reopen", but that pass came from the `t9620diag.html` dev harness, and its one live reopen probe covered Focus crop handles and speed, NOT a Spotlight player. Permissive harness fails open (`feedback_harness_must_match_production_geometry`). Verify on a real reopen, not a harness. |
+| T9780 | [Bind saved preview to the correct effects export](tasks/evaluation-2026-09-13/T9780.md) |  |  |  | TODO | [ ] | P1 / Fix / investigate; source T02 (EP01). Requires T9770. **CONFIRMED LIVE 2026-09-13**: T9700 states outright it did not run a live byte comparison ("no full paid export was run in-container") and leaned on architecture instead. Needs an actual export-bytes check. |
+| T9790 | [Stop old export completions hijacking reload](tasks/evaluation-2026-09-13/T9790.md) |  |  |  | TODO | [ ] | P1 / Fix / investigate; source T03 (EP01). **REPRODUCE FIRST**: observed once and never reproduced; T9470 (STAGING) already covers the same shape. Establish the mechanism before cutting a branch. |
+| T9800 | [Remove false export-required loading warning](tasks/evaluation-2026-09-13/T9800.md) |  |  |  | TODO | [ ] | P1 / Fix; source T04 (EP01). **CONFIRMED LIVE 2026-09-13** at `src/modes/OverlayModeView.jsx:1198` - "Export required for Spotlight mode", gated on a dirty-state predicate that races the media load. |
+| T9810 | [Repair both game-invitation entry points](tasks/evaluation-2026-09-13/T9810.md) |  |  |  | TODO | [ ] | P1 / Fix; source T05 (EP01). **CONFIRMED LIVE 2026-09-13, strong lead**: `SharePlaybackDialog` has two mount points - `screens/AnnotateScreen.jsx:919` (the direct path that failed three times) and `components/RecapPlayerModal.jsx:751` (the Preview plays path that worked). Matches the report exactly. |
+| T9820 | [Correct rating and clip-creation helper immediately](tasks/evaluation-2026-09-13/T9820.md) |  |  |  | TODO | [ ] | P1 / Fix; source T06 (EP02). **CONFIRMED LIVE 2026-09-13** at `components/shared/clipConstants.js:52,56,67,71` - the star-threshold copy ("one more star creates a clip") was never removed. |
+| T9840 | [Make capture ranges and source clocks consistent](tasks/evaluation-2026-09-13/T9840.md) |  |  |  | TODO | [ ] | P1 / Fix; source T08 (EP02). **DECIDED 2026-09-13: 6s before + 2s after** (8s total). The code was NOT broken - `DEFAULT_CLIP_BEFORE=9`/`DEFAULT_CLIP_AFTER=3` straddle the tap and correctly produced 0:00-0:06 at a 0:03 tap; only the word "previous" was false. Change both constants and the helper copy together; keep source vs play-relative clocks labelled. |
+| T9920 | [Repair narrow and fullscreen editor layouts](tasks/evaluation-2026-09-13/T9920.md) |  |  |  | TODO | [ ] | P1 / Fix / responsive UX; source T16 (EP04). **RE-MEASURE FIRST** against current master: T9500 (fullscreen parity) and T8600 (inline play editor) both restructure this surface and are at STAGING, so the 699px overflow may already differ. |
+| T9860 | [Copy and concept sweep: one vocabulary, one reason per screen](tasks/evaluation-2026-09-13/T9860.md) |  |  |  | TODO | [ ] | P2 / UX copy; source T10 (EP03), **absorbs T9940**. **THE single UI copy pass** (user: "one iteration, not several"). Carries all the vocabulary/concept decisions above: parallel construction for Clips/Reels, AI Focus -> Framing, relocating the AI claim to the upscale and detection steps, the status second-half labels, the state-the-point rule, and Spotlight's real reason. **Reconcile against the 2026-09-10 shared-vocabulary epic before editing** - five of its children are already at STAGING and must not be undone. Single cutover or not at all. |
+| T9830 | [Offer Create highlight and Save play only as explicit outcomes](tasks/evaluation-2026-09-13/T9830.md) |  |  |  | TODO | [ ] | P1 / UX implementation; source T07 (EP02). Requires T9820. Behavior only - its copy belongs to T9860. |
+| T9850 | [Replace stale onboarding with route-aware next actions](tasks/evaluation-2026-09-13/T9850.md) |  |  |  | TODO | [ ] | P1 / UX implementation; source T09 (EP02). Requires T9830. The guide pointed at an unavailable Preview plays route. Copy belongs to T9860. |
+| T9870 | [Autosave edits and retain finished private results](tasks/evaluation-2026-09-13/T9870.md) |  |  |  | TODO | [ ] | P2 / UX / persistence; source T11 (EP03). Requires T9770, T9780, T9790. **Gesture-persistence rule applies** - autosave must trace to a named gesture, never a `useEffect` watching state. |
+| T9880 | [Separate private replay, publication and link sharing](tasks/evaluation-2026-09-13/T9880.md) |  |  |  | TODO | [ ] | P2 / UX implementation; source T12 (EP03). Requires T9780, T9860, T9870. **Also picks up the dropped T10000 scope**: Collection Download (T4945-T4947) already shipped, so surface the existing download on the result page rather than investigating whether one is possible. |
+| T9890 | [Make all result entry points recover and replay consistently](tasks/evaluation-2026-09-13/T9890.md) |  |  |  | TODO | [ ] | P2 / Integration; source T13 (EP03). Requires T9780, T9860, T9870. |
+| T9900 | [Make progress and saving status readable and persistent](tasks/evaluation-2026-09-13/T9900.md) |  |  |  | TODO | [ ] | P2 / UX implementation; source T14 (EP04). Requires T9800. Real plumbing (per-object persistent status), distinct from T9860's label wording; the two must agree on the same status vocabulary. |
+| T9930 | [Simplify upload and remove fresh-home distractions](tasks/evaluation-2026-09-13/T9930.md) |  |  |  | TODO | [ ] | P2 / UX implementation; source T17 (EP04). **READY**. Collapse optional upload metadata, and move the global Invite to a secondary menu after establishing what it actually does. |
+| T9950 | [Simplify manual framing and preview actual output before export](tasks/evaluation-2026-09-13/T9950.md) |  |  |  | TODO | [ ] | P2 / UX implementation; source T19 (EP05). Was gated on T9940; now gated on T9860 for its copy. Carries the honest "why frame" answer: wide source footage has to become a phone-shaped video, and framing is the parent choosing what survives the crop. |
+| T9960 | [Make single-athlete Spotlight a clear optional step](tasks/evaluation-2026-09-13/T9960.md) |  |  |  | TODO | [ ] | P2 / UX implementation; source T20 (EP05). Requires T9770, T9780. **NARROWED 2026-09-13**: the "select the remaining players" copy this task was filed against is already gone from master (removed by T9620). Remaining scope is the adjustable, previewable effect interval plus **optional-but-encouraged** framing (user decision 2026-09-13). |
+| T9970 | [Establish highlight quality benchmark and calibrated fallback](tasks/evaluation-2026-09-13/T9970.md) |  |  |  | TODO | [ ] | P2 / Investigation / quality gate; source T21 (EP05). **READY, independent.** **Blocks any outcome-level quality claim** - the "Enhancing video" step may be named, but nothing may promise HD or improved sharpness until this measures it. Also gates the deferred T9980/T9990 discoveries. |
+| T10010 | [Define activation metrics and instrument the missing funnel](tasks/evaluation-2026-09-13/T10010.md) |  |  |  | TODO | [ ] | P2 / Analytics; source T25 (EP06). **READY, independent.** Reconcile T7515, T8110 first. Aggregates-only, no new Postgres state (`feedback_analytics_in_house_aggregates_only`). |
+
+**Dropped from the intake 2026-09-13** (rationale in
+[EPIC.md](tasks/evaluation-2026-09-13/EPIC.md); task files retained as provenance):
+
+| Imported | Why it was dropped |
+|------|------|
+| T9910 | Credit/storage policy is already ANSWERED: T9680's decision record is complete on all six questions and was verified against production 2026-09-12; T9750 fixed the rounding rule; T9760 explains the credit discrepancy. Residual copy work is T9650, already on the board. |
+| T10000 | Premise is stale - the Collection Download epic (T4945/T4946/T4947) shipped and is archived, so download capability exists. The evaluator simply could not find it, which is discoverability. Folded into T9880. |
+| T10020 | Duplicates T9720, the existing end-to-end and failure-path release check. Merge the new checklist into T9720 rather than running two gates. |
+| T10030 | Overlaps T9730 (product review and traceability sign-off). Both need real participants, which are not currently queued. |
+| T9940 | Folded into T9860 - it is the same AI/capability copy problem, and splitting it would produce two passes over the same strings. |
 
 ### Production Reported Bugs
 
