@@ -31,23 +31,75 @@ export async function saveEvidence(page, name) {
   return file;
 }
 
-/** Fails if the page scrolls horizontally (the classic mobile-breakage signal). */
+/**
+ * Fails if the page scrolls horizontally (the classic mobile-breakage signal).
+ *
+ * T9920: the app shell is `h-dvh overflow-hidden` (App.jsx) with ALL scrolling
+ * delegated to inner `flex-1 overflow-auto` panes, so `document.scrollingElement`
+ * can NEVER report horizontal overflow — the old check here failed open, which is
+ * why 13+ Branch CI runs missed the parked-drawer and fixed-panel overflow bugs.
+ * We now measure the actual scrolling ancestors: any LARGE scroll container (one
+ * filling most of the viewport — i.e. a main content pane, not a small by-design
+ * horizontal strip like a timeline) whose scrollWidth exceeds its clientWidth is a
+ * real leak. `overflow-x: clip` containers are not scrollable, so a properly
+ * clipped offender is correctly not flagged.
+ */
 export async function assertNoHorizontalOverflow(page) {
   const m = await page.evaluate(() => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const offenders = [];
+    for (const el of document.querySelectorAll('*')) {
+      const ox = getComputedStyle(el).overflowX;
+      if (ox !== 'auto' && ox !== 'scroll') continue;
+      // Only a MAIN content pane: tall enough to fill most of the viewport height,
+      // never a short by-design horizontal strip (timeline scrubber). Keyed on
+      // height, not width — a wide in-flow sidebar can legitimately shrink the pane
+      // below half the viewport WIDTH (the pre-fix Bug B state at ~699px), so a
+      // width gate would miss the very offender we are hunting.
+      const big = el.clientHeight >= vh * 0.5;
+      if (!big) continue;
+      const overflow = el.scrollWidth - el.clientWidth;
+      if (overflow > 1) {
+        offenders.push({
+          overflow,
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+          label:
+            el.getAttribute('data-testid') ||
+            `${el.tagName}.${String(el.className).slice(0, 40)}`,
+        });
+      }
+    }
+    // The document root can still overflow on some screens — check it too.
     const doc = document.scrollingElement || document.documentElement;
-    return { scrollWidth: doc.scrollWidth, innerWidth: window.innerWidth };
+    const docOverflow = doc.scrollWidth - vw;
+    return { offenders, docOverflow, vw, docScrollWidth: doc.scrollWidth };
   });
-  if (m.scrollWidth > m.innerWidth + 1) {
+  if (m.docOverflow > 1) {
     throw new Error(
-      `[qa] horizontal overflow: scrollWidth ${m.scrollWidth} > viewport ${m.innerWidth}`
+      `[qa] horizontal overflow on document: scrollWidth ${m.docScrollWidth} > viewport ${m.vw}`
+    );
+  }
+  if (m.offenders.length) {
+    const o = m.offenders.sort((a, b) => b.overflow - a.overflow)[0];
+    throw new Error(
+      `[qa] horizontal overflow on <${o.label}>: scrollWidth ${o.scrollWidth} > clientWidth ${o.clientWidth} (by ${o.overflow}px)`
     );
   }
 }
 
-/** Viewport matrix per the responsiveness skill (mobile-first 360-428px). */
+/**
+ * Viewport matrix: mobile-first phone widths, the narrow-desktop dead zone that
+ * T9920 targets (699/768), and the desktop breakpoints (1024/1440).
+ */
 export const VIEWPORTS = [
-  { name: 'mobile-375', width: 375, height: 812 },
-  { name: 'desktop-1280', width: 1280, height: 800 },
+  { name: 'mobile-360', width: 360, height: 800 },
+  { name: 'mobile-390', width: 390, height: 844 },
+  { name: 'narrow-699', width: 699, height: 900 },
+  { name: 'tablet-768', width: 768, height: 1024 },
+  { name: 'desktop-1024', width: 1024, height: 800 },
+  { name: 'desktop-1440', width: 1440, height: 900 },
 ];
 
 /**

@@ -18,6 +18,7 @@ import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from './ProjectsScreen';
 import { hasPendingGame, consumePendingGame } from '../utils/pendingNavigation';
+import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 
 /**
  * AnnotateScreen - Self-contained screen for Annotate mode
@@ -65,6 +66,16 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const isLoadingRef = useRef(false);
   // Mobile sidebar toggle
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  // T9920: the plays panel follows useIsMobile() (mobile through 1023px) so it becomes
+  // a dismissable off-canvas drawer across the whole 640-1023px range, NOT the raw `sm:`
+  // (640px) CSS gate — which left a dead zone where a narrow desktop/tablet window showed
+  // a permanent, undismissable 352px panel that squeezed the canvas to ~250px. This
+  // matches how the settings rail already switches on every other editor surface.
+  // T4933 carve-out: landscape phones (>=640px wide but short) keep the in-flow desktop
+  // panel with its inner scrollers, so they must NOT fall into the drawer branch.
+  const isMobile = useIsMobile();
+  const isLandscape = useIsLandscape();
+  const useMobileClipPanel = isMobile && !isLandscape;
   // T2820: Share with tagged players modal
   const [showShareModal, setShowShareModal] = useState(false);
   // T2905: Share annotated playback via email link
@@ -688,8 +699,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
 
   return (
     <>
-      {/* Sidebar - hidden on mobile, visible on sm+ */}
-      <div className="hidden sm:flex">
+      {/* In-flow desktop plays panel (shrink-0 so it never gives its 352px back to the
+          flex-1 canvas sibling). Shown for desktop widths and landscape phones (T4933);
+          narrow desktop/tablet gets the off-canvas drawer below instead (T9920). */}
+      {!useMobileClipPanel && (
+      <div className="flex shrink-0">
         <ClipsSidePanel
           clipRegions={virtualClipRegions}
           selectedRegionId={playback?.isPlaybackMode ? playback.activeClipId : annotateSelectedRegionId}
@@ -719,9 +733,10 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           getAngleName={getAngleName}
         />
       </div>
+      )}
       {/* Mobile sidebar overlay */}
-      {showMobileSidebar && (
-        <div className="fixed inset-0 z-50 flex sm:hidden">
+      {useMobileClipPanel && showMobileSidebar && (
+        <div className="fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileSidebar(false)} />
           <div className="relative w-[85vw] max-w-[352px] h-full">
             <ClipsSidePanel
@@ -781,14 +796,16 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
             hasOverlayVideo={false}
             hasAnnotateVideo={true}
             extraControls={
-              <button
-                onClick={() => setShowMobileSidebar(true)}
-                className="flex sm:hidden items-center gap-1.5 px-2.5 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300"
-                title="Show clips"
-              >
-                <List size={16} />
-                <span className="text-xs font-medium">{clipCountDisplay}</span>
-              </button>
+              useMobileClipPanel ? (
+                <button
+                  onClick={() => setShowMobileSidebar(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300"
+                  title="Show clips"
+                >
+                  <List size={16} />
+                  <span className="text-xs font-medium">{clipCountDisplay}</span>
+                </button>
+              ) : null
             }
           />
           {/* T2840: Share attribution banner */}

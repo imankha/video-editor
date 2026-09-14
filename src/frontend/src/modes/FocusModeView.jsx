@@ -421,7 +421,14 @@ export function FocusModeView({
         {/* T9270: desktop stage row — the editor column (video + timeline) beside the
             settings rail. In fullscreen / mobileFs the container escapes via fixed
             positioning so the row collapses to just the (gated-off) rail. */}
-        <div className="lg:flex lg:flex-row lg:items-start">
+        {/* T9920: `relative` makes this the containing block for the parked mobile
+            settings drawer + its `absolute inset-0` scrim below (the comment there
+            long claimed it already was — now the code matches). `overflow-x-clip`
+            keeps the drawer's off-canvas translateX(316px) from growing a horizontal
+            scrollbar on the app's inner scroll pane. Clip, not hidden: `overflow-x:
+            hidden` would force overflow-y to auto and trap the sticky/absolute
+            children in this row. */}
+        <div className="relative overflow-x-clip lg:flex lg:flex-row lg:items-start">
         <div className="flex flex-col w-full lg:flex-1 lg:min-w-0 lg:pr-6">
         {/* T9610: the three-step framing guide — the first thing a first-time parent
             sees in the editor column, teaching the frame → step → adjust sequence and
@@ -819,7 +826,13 @@ export function FocusModeView({
           sticky bar; the band's own solid bg + top-shadow read cleanly over the
           content that scrolls behind it). */}
       {videoUrl && !isFullscreen && !mobileFs && (
-        <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-6">
+        // T9920: the bleed MUST match App's content container padding (`px-3 sm:px-4`,
+        // App.jsx) — the band spans to the container edge, not 8px past it. The old
+        // `sm:-mx-6` over-bled by 8px/side; harmless while `mx-auto` gutters absorbed
+        // it, but at the `md` boundary (768px) — and again at `lg` (1024px) — the
+        // container is full-width with a zero gutter, so those 8px leaked as a
+        // horizontal scrollbar on App's inner overflow-auto pane.
+        <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-4">
           <ExportButtonSection
             ref={exportButtonRef}
             videoFile={videoFile}

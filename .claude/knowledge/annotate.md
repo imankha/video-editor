@@ -1847,10 +1847,13 @@ The full checklist for an 11th→Nth sport:
   before assuming load is read-only.
 - **Upload duplicates game state**: one-time upload-store restore effect (`[]` deps, L280-298) +
   active-upload video restore (L323-333) re-hydrate state when navigating back mid-upload.
-- **Landscape-phone renders the DESKTOP clip sidebar (T4933 landmine).** The `sm` breakpoint is
-  width-only: a phone in LANDSCAPE ≥640px wide (iPhone 14 844×390, Pixel 7 915×412) trips
-  `hidden sm:flex` (AnnotateScreen.jsx:599) and `useIsMobile()` → false, so it gets the full
-  desktop `ClipsSidePanel` (`w-[352px]`, ClipsSidePanel.jsx:115) with ALL editor fields
+- **Landscape-phone renders the DESKTOP clip sidebar (T4933 landmine).** A phone in LANDSCAPE
+  ≥640px wide (iPhone 14 844×390, Pixel 7 915×412) is `useIsMobile()` → **true** (its
+  `max-width: 1023px` query matches 844px — do NOT claim it returns false here), so the panel
+  branch is gated on `useMobileClipPanel = isMobile && !isLandscape` (AnnotateScreen.jsx). Because
+  `useIsLandscape()` (`orientation: landscape and max-height: 500px`) is true for these short
+  landscape phones, they are excluded from the off-canvas drawer and keep the full in-flow
+  desktop `ClipsSidePanel` (`w-[352px] shrink-0`, ClipsSidePanel.jsx) with ALL editor fields
   (~546px tall), NOT the mobile off-canvas drawer — inside the `h-dvh overflow-hidden` app shell
   (App.jsx:726) whose landscape height is only ~390px. **Sidebar scroll-region pattern (T4933):**
   each bottom pane owns its own scroller so its controls stay reachable — clip list is
