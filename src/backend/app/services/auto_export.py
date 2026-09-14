@@ -79,10 +79,42 @@ RECAP_PRESET = "fast"
 _LEGACY_RECAP_DIMENSIONS = (854, 480)
 
 
+def _sync_or_unsynced(user_id: str, profile_id: str, game_id: int, settled_status: str) -> str:
+    """Sync the just-written status to R2 and confirm it actually landed before
+    reporting it as the game's settled outcome (T10121 D6 / mechanism E).
+
+    Previously the three write paths in auto_export_game discarded
+    sync_db_to_r2_explicit's return value -- a CONFLICT (R2 replaces the local
+    DB with a newer copy, discarding the just-written row) or FAILED sync let
+    the caller report 'complete'/'skipped'/'failed' as if it were durable when
+    R2 never actually got the write. The LOCAL row is left exactly as
+    `settled_status` regardless of the sync outcome (never rewritten to
+    'failed' here) -- only the RETURN value degrades to 'unsynced', so a
+    caller like the sweep keeps the game's storage ref instead of trusting an
+    unconfirmed status.
+    """
+    from ..database import SyncResult
+
+    result = sync_db_to_r2_explicit(user_id, profile_id)
+    if result != SyncResult.OK:
+        logger.critical(
+            f"[AutoExport] SYNC_UNCONFIRMED user={user_id[:8]} profile={profile_id[:8]} "
+            f"game={game_id} settled_status={settled_status} sync_result={result.value}"
+        )
+        return 'unsynced'
+    return settled_status
+
+
 def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
     """Auto-export brilliant clips and generate recap for a game.
 
-    Returns status: 'complete', 'skipped', 'failed'.
+    Returns status: 'complete', 'skipped', 'failed', or 'unsynced' (T10121 D6
+    -- RETURN-ONLY, never persisted to games.auto_export_status; see
+    _sync_or_unsynced). 'unsynced' means the settled local write (whichever of
+    the three above it would otherwise have been) happened, but the R2 sync
+    that followed it did not confirm OK -- the caller must not trust the DB
+    row as durable and should keep the game's storage ref instead of treating
+    it as settled.
     """
     from ..database import ensure_database
 
@@ -123,9 +155,9 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
 
         if not annotated_clips:
             _set_game_status(game_id, 'skipped')
-            sync_db_to_r2_explicit(user_id, profile_id)
+            status = _sync_or_unsynced(user_id, profile_id, game_id, 'skipped')
             logger.info(f"[AutoExport] game={game_id} no clips, skipped in {time.perf_counter() - t0:.2f}s")
-            return 'skipped'
+            return status
 
         brilliant_clips = [c for c in annotated_clips if c['rating'] == 5]
         if not brilliant_clips:
@@ -165,16 +197,15 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
             )
             conn.commit()
 
-        sync_db_to_r2_explicit(user_id, profile_id)
+        status = _sync_or_unsynced(user_id, profile_id, game_id, 'complete')
         elapsed = time.perf_counter() - t0
         logger.info(f"[AutoExport] game={game_id} complete in {elapsed:.2f}s ({len(brilliant_clips)} brilliant, {len(annotated_clips)} total)")
-        return 'complete'
+        return status
 
     except Exception as e:
         logger.error(f"[AutoExport] game={game_id} failed after {time.perf_counter() - t0:.2f}s: {e}")
         _set_game_status(game_id, 'failed')
-        sync_db_to_r2_explicit(user_id, profile_id)
-        return 'failed'
+        return _sync_or_unsynced(user_id, profile_id, game_id, 'failed')
 
 
 def _get_annotated_clips(game_id: int, layer: str | None = None) -> list[dict]:

@@ -157,10 +157,12 @@ def isolated_profile_db(tmp_path):
     conn.commit()
     conn.close()
 
+    from app.database import SyncResult
+
     with patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.database._initialized_users", {USER_ID}), \
          patch("app.database.R2_ENABLED", False), \
-         patch(f"{M}.sync_db_to_r2_explicit", return_value=True) as mock_sync:
+         patch(f"{M}.sync_db_to_r2_explicit", return_value=SyncResult.OK) as mock_sync:
         yield {
             "db_path": db_path,
             "tmp_path": tmp_path,
@@ -369,6 +371,36 @@ class TestAutoExportGame:
         assert result == "failed"
         assert _get_game_status(db, game_id)["auto_export_status"] == "failed"
         isolated_profile_db["mock_sync"].assert_called()
+
+    @patch(f"{M}._generate_recap", return_value="recaps/1.mp4")
+    @patch(f"{M}._export_brilliant_clip")
+    def test_unconfirmed_sync_after_complete_returns_unsynced_and_logs_critical(
+        self, mock_brilliant, mock_recap, isolated_profile_db, caplog
+    ):
+        """T10121 D6 / mechanism E: a non-OK SyncResult after the 'complete'
+        write must not be reported as durable. Previously the return value of
+        sync_db_to_r2_explicit was discarded entirely, so a CONFLICT/FAILED
+        sync (R2 replacing the local DB with a newer copy, or a genuine upload
+        failure) still returned 'complete' as if it were confirmed durable."""
+        import logging
+
+        from app.database import SyncResult
+        from app.services.auto_export import auto_export_game
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_clip(db, game_id, rating=5)
+        isolated_profile_db["mock_sync"].return_value = SyncResult.CONFLICT
+
+        with caplog.at_level(logging.CRITICAL, logger="app.services.auto_export"):
+            result = auto_export_game(USER_ID, PROFILE_ID, game_id)
+
+        assert result == "unsynced"
+        # The local row is NOT rewritten to 'failed' -- it stays whatever the
+        # settled write was ('complete' here), only the RETURN value degrades.
+        assert _get_game_status(db, game_id)["auto_export_status"] == "complete"
+        assert "SYNC_UNCONFIRMED" in caplog.text
+        assert f"game={game_id}" in caplog.text
 
     @patch(f"{M}._generate_recap", side_effect=RuntimeError("concat failed"))
     @patch(f"{M}._export_brilliant_clip")
