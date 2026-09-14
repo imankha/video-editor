@@ -245,7 +245,8 @@ export const EXPORT_JOBS = {
 export const EXPORT_PROGRESS = {
   PREPARING: 'Preparing video',                // init/queued/validating/downloading
   UPLOADING: 'Uploading',                      // upload
-  RENDERING: 'Rendering',                      // processing/modal_processing/rendering/upscaling
+  RENDERING: 'Rendering',                      // processing/modal_processing/rendering/analyzing
+  ENHANCING: 'Enhancing video',                // upscaling/ai_upscale (T9860 3.3: put the AI claim where the AI runs)
   FINDING_PLAYERS: 'Finding players for spotlight', // detecting_players
 };
 
@@ -271,7 +272,7 @@ export const EXPORT_PROGRESS = {
 // EDIT_FRAMING_CAPTION keeps the honest "uses credits" re-export warning.
 export const FOCUS_PUBLISH = {
   ADD_SPOTLIGHT_LABEL: 'Add spotlight',
-  SPOTLIGHT_CAPTION: 'A spotlight is a glowing highlight that follows your athlete.',
+  SPOTLIGHT_CAPTION: STAGE_REASONS.SPOTLIGHT,
   PUBLISH_LABEL: 'Publish without spotlight',
   PUBLISH_CAPTION: `Files it under Published as is. ${STAGE_REASONS.PUBLISH}`,
   EDIT_FRAMING_LABEL: 'Edit framing',

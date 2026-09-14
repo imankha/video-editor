@@ -8,7 +8,7 @@ import AngleSwitcherBadge from './annotate/AngleSwitcherBadge';
 import FixTimingStrip from './annotate/FixTimingStrip';
 import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
-import { ANNOTATE, SHARING } from '../config/displayNames';
+import { ANNOTATE, SHARING, STAGE_REASONS } from '../config/displayNames';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
 import { useCurrentProfile, useProfileStore } from '../stores';
 import PlaybackControls from './annotate/components/PlaybackControls';
@@ -67,6 +67,7 @@ export function AnnotateModeView({
   annotateRegionsWithLayout,
   annotateSelectedRegionId,
   hasAnnotateClips,
+  annotateClipCount = 0,
   clipRegions,
   isEditMode,
 
@@ -1060,13 +1061,15 @@ export function AnnotateModeView({
                 {isEditMode ? ANNOTATE.EDIT_PLAY : ANNOTATE.MARK_PLAY}
               </button>
 
-              {/* First-use teaching hint — shown only before the first clip exists.
-                  One static sentence, not a coach-mark system (tutorial-redesign
-                  owns the full guided flow). T9520 N05: name the concrete capture
-                  window (6s before + 2s after the tap = 8s). */}
-              {!hasAnnotateClips && (
+              {/* Teaching hint, shown through the first three saved plays (T9860 D2:
+                  the widened gate; derived from annotateClipCount, not a new store or
+                  effect). Line 1 is the stage reason (why bookmark now, edit later);
+                  line 2, the 6s/2s capture-window mechanic, stays a second sentence
+                  in the same paragraph on the very first play only. */}
+              {annotateClipCount < 3 && (
                 <p className="text-sm text-gray-300 text-center px-2">
-                  When something great happens, tap &mdash; {ANNOTATE.MARK_PLAY_HELPER.toLowerCase()}.
+                  {STAGE_REASONS.MARK_PLAY}
+                  {!hasAnnotateClips && ` ${ANNOTATE.MARK_PLAY_HELPER}.`}
                 </p>
               )}
 

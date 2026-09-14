@@ -146,7 +146,7 @@ export const STEP_TITLES = {
   position_crop: 'Keep your athlete in frame',
   add_slowmo: 'Add a slow-mo moment',
   export_framing: 'Export your highlight',
-  wait_for_export: 'Crisp it up to 1080p',
+  wait_for_export: 'Enhance the video',
   // Quest 3 — Configure Your Spotlight
   open_overlay: 'Open in Spotlight',
   select_players: 'Pick your athlete',
@@ -183,8 +183,8 @@ export const STEP_DESCRIPTIONS = {
   open_framing: <>Switch to <MiniButton icon={FolderOpen} variant="gray">{SECTION_NAMES.CLIPS}</MiniButton> and tap your clip's card to start framing.</>,
   position_crop: <>Drag and resize the box to keep your athlete <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
   add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. Splitting near a clip's start or end also lets you trim it.</>,
-  export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>{EXPORT_JOBS.framing.action}</MiniButton> and we'll render your close-up in crisp 1080p.</>,
-  wait_for_export: 'We are upscaling your highlight to crisp 1080p. This takes a minute. Sit tight; next you will add a spotlight to your athlete on this same clip.',
+  export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>{EXPORT_JOBS.framing.action}</MiniButton> and we'll render your close-up.</>,
+  wait_for_export: 'We are enhancing your video. This takes a minute. Sit tight; next you will add a spotlight to your athlete on this same clip.',
   // Quest 3 — Spotlight Your Player
   open_overlay: <>Click the clip's card under <strong>{SECTION_NAMES.CLIPS}</strong> to open it in Spotlight mode and add a spotlight to your athlete. On the card, the progress strip <MiniStrip /> shows {MODE_NAMES.FRAMING} complete (green) and Spotlight not yet started (blue).</>,
   select_players: <>Click each <GreenSquare /> green marker on the timeline and tap your athlete. Can't spot them? Drag the circle right onto them.</>,

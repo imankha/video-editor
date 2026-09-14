@@ -138,7 +138,7 @@ STEP_TITLES = {
     "position_crop": "Keep your athlete in frame",
     "add_slowmo": "Add a slow-mo moment",
     "export_framing": "Export your highlight",
-    "wait_for_export": "Crisp it up to 1080p",
+    "wait_for_export": "Enhance the video",
     "open_overlay": "Open in Spotlight",
     "select_players": "Pick your athlete",
     "choose_color": "Pick your spotlight color",

@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Play } from 'lucide-react';
-import { EDITOR_PANELS } from '../../config/displayNames';
+import { EDITOR_PANELS, STAGE_REASONS } from '../../config/displayNames';
 
 /**
  * FramingInstructions (T9610) — a visible three-step sequence that teaches a
@@ -63,6 +63,9 @@ export default function FramingInstructions({ focusPointCount = 0, expanded, onT
 
       {expanded && (
         <div className="px-3 pb-3">
+          {/* T9860 3.5: one reason per stage, stated before the mechanics. */}
+          <p className="mt-2 text-xs text-gray-400">{STAGE_REASONS.FRAMING}</p>
+
           <ol className="flex flex-col gap-1.5">
             {steps.map((text, i) => (
               <li key={i} className="flex items-center gap-2.5 text-sm text-gray-200">
