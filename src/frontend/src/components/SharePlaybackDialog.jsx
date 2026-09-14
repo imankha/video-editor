@@ -11,14 +11,30 @@ import { SHARING } from '../config/displayNames';
 export function SharePlaybackDialog({ gameId, gameName, onClose }) {
   const [emails, setEmails] = useState([]);
   const [contacts, setContacts] = useState([]);
+  const [contactsFailed, setContactsFailed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // T9810: the dialog cannot POST invitations without a game context. Missing
+  // gameId is an internal wiring bug, not a valid state — fail VISIBLY with an
+  // actionable message instead of firing at /api/games/null/share-playback.
+  const canOpen = gameId != null;
+
   useEffect(() => {
+    if (!canOpen) return undefined;
+    let cancelled = false;
     apiFetch(`${API_BASE}/api/gallery/contacts`)
       .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data) setContacts(data.contacts); })
-      .catch(() => {});
-  }, []);
+      .then((data) => {
+        if (cancelled) return;
+        if (data) setContacts(data.contacts);
+        else setContactsFailed(true);
+      })
+      // T9810: contacts are an external autocomplete convenience (not required to
+      // send an invitation), so a failure is non-blocking — but never swallowed
+      // silently: surface a small note so the user knows suggestions are missing.
+      .catch(() => { if (!cancelled) setContactsFailed(true); });
+    return () => { cancelled = true; };
+  }, [canOpen]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -58,17 +74,45 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
     }
   };
 
+  // T9810: open-failure state — an actionable error instead of a broken form,
+  // satisfying "one click opens the same game form OR an actionable error".
+  if (!canOpen) {
+    return (
+      <div className={`fixed inset-0 ${Z.SHARE} flex items-center justify-center bg-black/60 backdrop-blur-sm`}>
+        <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-white truncate pr-4">
+              {SHARING.SHARE_PLAYS}
+            </h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-white">
+              <X size={20} />
+            </button>
+          </div>
+          <p className="text-sm text-gray-300 mb-4">{SHARING.OPEN_ERROR}</p>
+          <div className="flex justify-end">
+            <Button variant="ghost" onClick={onClose}>Close</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`fixed inset-0 ${Z.SHARE} flex items-center justify-center bg-black/60 backdrop-blur-sm`}>
       <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white truncate pr-4">
-            {SHARING.SETTINGS}: {gameName}
+            {SHARING.SHARE_PLAYS}: {gameName}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <X size={20} />
           </button>
         </div>
+
+        {/* T9810: honest permission-scope disclosure. Verified server-side against
+            share-playback -> _copy_game + _materialize_clips: recipients get the full
+            game recording plus every marked play. */}
+        <p className="text-sm text-gray-400 mb-4">{SHARING.SCOPE_DISCLOSURE}</p>
 
         <div className="mb-4">
           <label className="block text-sm text-gray-400 mb-1.5">Add people</label>
@@ -80,6 +124,11 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
           />
           {emails.length === 0 && (
             <p className="text-xs text-gray-500 mt-1">Type an email and press Enter to add</p>
+          )}
+          {contactsFailed && (
+            <p className="text-xs text-amber-400/80 mt-1">
+              {"Couldn't load your contacts — you can still type email addresses."}
+            </p>
           )}
         </div>
 

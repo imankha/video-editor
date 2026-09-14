@@ -17,6 +17,37 @@ comment at `AnnotateModeView.jsx:1062` updated too. **Billable duration (T9480 c
 code change needed — `ExportButtonContainer`'s `estimatedSeconds`/`estimatedCredits` derive from the
 clip's actual start/end via `sumEffectiveDurations`/`estimateExportCredits(clips)`, so they follow the
 new window automatically; there was never a separately hardcoded 12. Prior:)
+updated: 2026-09-14 (T9810 — repaired the game-invitation entry points + documented the
+two-share-features split. **THE LANDMINE (this is the thing a future task trips over):** the
+Annotate action bar has TWO DIFFERENT share features that look like one. (1) **Game invitations**
+(T2905): `onSharePlayback` → unconditionally renders `SharePlaybackDialog` (email a game so the
+recipient gets the FULL game recording + every marked play — verified against
+`share-playback` → `_copy_game`/`_materialize_clips`). (2) **Tagged-player sharing** (T2820):
+`onShare` → `ShareWithTeammatesModal`, whose render is SILENTLY gated
+`showShareModal && hasTaggedClips` in `AnnotateScreen.jsx`. The bug: the normal-view promoted
+(`AnnotateModeView.jsx` ~1096) AND compact (~1143) buttons were wired to `onShare` while labeled
+with game-invitation copy (`SHARING.SHARE_PLAYS`/`SETTINGS`) — so with zero tagged clips a click
+set state that rendered NOTHING (the reported "three clicks, no response", screenshots E48/E50/E53).
+The fullscreen-exit bar (`AnnotateModeView.jsx` ~477) and `RecapPlayerModal` (~741/751) were
+already correctly on `onSharePlayback` — that's why "Preview plays → Share plays" worked once.
+**FIX (before → after):** BEFORE = one overloaded button (`onShare`, label toggled
+SHARE_PLAYS/SETTINGS on `hasUnsentShares`). AFTER = promoted + compact buttons call
+`onSharePlayback` with a STABLE `SHARING.SHARE_PLAYS` label (dropped the N34 SETTINGS state-swap:
+the button is now always the game-invite ACTION); tagged-player sharing kept via its OWN affordance
+(`Users` icon, `SHARING.TAGGED_SHARE`), rendered ONLY when `onShare && hasTaggedClips` so it can
+never no-op — it still keeps the cyan `hasUnsentShares` highlight. `hasTaggedClips` is now threaded
+`AnnotateScreen.jsx:408 → AnnotateModeView` (default `false`). All three surfaces now open the SAME
+`SharePlaybackDialog`. **SharePlaybackDialog also gained:** a verified permission-scope disclosure
+line (`SHARING.SCOPE_DISCLOSURE`), an open-failure state (`!gameId` → `SHARING.OPEN_ERROR` +
+Close, fail-visible instead of POSTing to `/api/games/null/...`), header retitled to
+`SHARE_PLAYS: {gameName}`, and non-silent contacts-fetch handling (`contactsFailed` note instead of
+`.catch(() => {})`). Cancel/Escape/Close remain side-effect-free (only `handleSubmit` calls the API).
+**Dead but deliberately kept:** `SHARING.SETTINGS`/`SETTINGS_SHORT` now have no production callers —
+left in place to avoid merge friction with T9840's concurrent `displayNames.js` edit. Tests:
+`AnnotateModeView.shareWiring.test.jsx` (4) + `SharePlaybackDialog.test.jsx` (disclosure/open-error/
+contacts). QA: no backend/browser in this container (same limit as T9630) — real-browser live-drive
+on staging owed; unit tests fire real clicks on the rendered buttons, which is the fix's actual
+mechanism. Prior:)
 updated: 2026-09-12 (T9480 — one time-format rule, exact trim entry, and honest billable
 duration. **The rule (utils/timeFormat.js, extended not replaced):** a time value is either an
 INSTANT (a position) or a LENGTH (a span). Instants FLOOR at the shown precision

@@ -53,10 +53,25 @@ export const ANNOTATE = {
 // state-neutral label for managing an existing share (opens the same dialog without
 // re-implying a fresh share). Never imply sharing that has not occurred.
 export const SHARING = {
-  SHARE_PLAYS: 'Share plays',       // the action — open the sharing flow
+  SHARE_PLAYS: 'Share plays',       // the action — open the game-invitation flow
   SHARE_PLAYS_SHORT: 'Share',       // narrow-viewport action label
   SETTINGS: 'Sharing settings',     // state-neutral: manage/adjust an existing share
   SETTINGS_SHORT: 'Sharing',        // narrow-viewport state label
+  // T9810: the "Share plays" buttons (fullscreen bar + normal-view promoted/compact)
+  // all open the game-scoped SharePlaybackDialog now. Tagged-player sharing (T2820,
+  // ShareWithTeammatesModal) keeps its OWN honest affordance, rendered only when
+  // tagged clips exist so it can never silently no-op.
+  TAGGED_SHARE: 'Share with tagged players',       // T2820 tagged-player sharing entry
+  TAGGED_SHARE_SHORT: 'Tagged players',            // narrow-viewport label
+  // T9810: scope disclosure for the game-invitation dialog. VERIFIED against
+  // POST /api/games/{id}/share-playback -> materialize_game_share/_copy_game +
+  // _materialize_clips: a recipient receives the FULL game recording (blake3_hash +
+  // all game_videos) PLUS every marked play (all raw_clips for the game), not a
+  // subset. Do NOT narrow this to "only invited plays" without re-checking that grant.
+  SCOPE_DISCLOSURE: "Anyone you invite can watch this entire game recording and every play you've marked in it.",
+  // T9810: open-failure state (dialog reached without a game context). Distinct from
+  // the per-recipient send-failure toast ("Failed to send to: ...").
+  OPEN_ERROR: "Game invitations couldn't open. Try again.",
 };
 
 export const SECTION_NAMES = {
