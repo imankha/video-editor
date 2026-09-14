@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 /**
  * T9620 (UX-10): the spotlight editor leads with PICKING A PLAYER.
- * - "Click your player" is stated on screen (not a hover tooltip) while unpicked.
+ * - "Click your athlete" (T9860 D3) is stated on screen (not a hover tooltip) while unpicked.
  * - The spotlight scaffolding ellipse is suppressed until a player is assigned
  *   (HighlightOverlay does not render), so nothing floats on unassigned ground.
  * - Both are lifted once a detection frame carries an assignment keyframe.
