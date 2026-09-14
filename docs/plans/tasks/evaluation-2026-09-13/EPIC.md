@@ -2,6 +2,125 @@
 
 Filed 2026-09-13 at the user's request. All 27 source tasks are queued under unique project IDs T9770–T10030. This is planning work only. Main [PLAN.md](../../PLAN.md) is the execution queue; each project task owns its current outcome record. The unchanged [source plan](source/plan.md) retains all six epics, shared implementation contracts, source coverage and detailed sequencing. Source Markdown and standalone HTML briefs plus all assets are included.
 
+## Reconciliation and scope decisions (2026-09-13)
+
+Filed the same day the intake arrived. Every one of the 27 imported tasks was checked against the
+working tree before any of it was scheduled. **This section, not the imported table below, is the
+current state.** The mapping table and the `source/` package are retained as provenance.
+
+### Which build was evaluated
+
+The package does not say, and it decides whether the findings are current. It is answerable from
+the evidence: the evaluator's account opened with **88 credits**, which only master-side code
+produces (8 `new_account_bonus` + 80 `quest_upfront`, added by T8120). Production could not have
+produced it - prod was pinned at build 4290 / `d9621161` (2026-09-01), which predates that grant,
+and that gap is exactly what T9760 filed.
+
+**Conclusion: the evaluator tested staging, so the findings are live against master.** Confirmed by
+grepping four of the evaluator's quoted strings, all still present in the tree on 2026-09-13:
+`clipConstants.js:52,56,67,71` (star threshold), `OverlayModeView.jsx:1198` (export required),
+`ModeSwitcher.jsx:94` (Select a reel first), `displayNames.js:336` (Pick your player).
+
+Note this is the SECOND staging evaluation in a week. The Sept 9-10 walkthrough produced T9400-T9760
+(34 of them at STAGING and undeployed at the time of this intake). Overlap was therefore expected and
+had to be established item by item rather than assumed.
+
+### Per-task verification result
+
+| Group | Tasks | Finding |
+|---|---|---|
+| **Confirmed live** | T9770, T9780, T9800, T9810, T9820, T9840, T9860 | Evidence located in the tree; see each PLAN.md row for the file and line. |
+| **Reproduce or re-measure first** | T9790, T9920 | T9790 was observed once and never reproduced (T9470 covers the same shape). T9920's surface is restructured by T9500 and T8600, both at STAGING. |
+| **Dropped** | T9910, T10000, T10020, T10030 | Already answered or duplicated existing board rows. Rationale in the table below. |
+| **Folded** | T9940 | Into T9860 - same AI/capability copy, and splitting it would mean two passes over the same strings. |
+| **Deferred** | T9980, T9990 | Moved to [EPIC-discovery.md](EPIC-discovery.md), to run after this batch. |
+| **Net new, kept** | T9830, T9850, T9870, T9880, T9890, T9900, T9930, T9950, T9960, T9970, T10010 | Genuine scope, scheduled behind the P1 repairs. |
+
+Two of the "confirmed live" entries deserve their reasoning recorded, because a prior task appears
+to contradict them:
+
+- **T9770 vs T9700.** T9700 ticked "selected player survives reopen", but that pass came from the
+  `t9620diag.html` dev-only harness, and its single live reopen probe covered Focus crop handles and
+  speed, not a Spotlight player. A permissive harness fails OPEN
+  (`feedback_harness_must_match_production_geometry`). The gap is real; verify on a real reopen.
+- **T9780 vs T9700.** T9700 states outright that it did not run a live byte comparison ("no full paid
+  export was run in-container") and relied on architecture instead. The preview-to-export binding has
+  never actually been checked against output bytes.
+
+### Dropped, with rationale
+
+| Imported | Why |
+|---|---|
+| T9910 | Credit/storage policy is ANSWERED. T9680's decision record is complete on all six questions and was verified against production 2026-09-12; T9750 fixed the rounding rule; T9760 explains the credit discrepancy. Residual copy work is T9650, already on the board. |
+| T10000 | Premise is stale. The Collection Download epic (T4945/T4946/T4947) shipped and is archived, so download capability exists - the evaluator could not FIND it, which is discoverability. Folded into T9880. |
+| T10020 | Duplicates T9720, the existing end-to-end and failure-path release check. Merge the new checklist into T9720 rather than running two gates. |
+| T10030 | Overlaps T9730 (product review and traceability sign-off). Both need real participants, not currently queued. |
+
+### Product decisions (user, 2026-09-13)
+
+The intake proposed reversing three naming calls made on 2026-09-10. Two were taken, one was
+rejected, and one was taken in a different form than proposed. Recorded here so the history reads as
+decision rather than drift, per the epic convention.
+
+1. **Clip and Reel both stand. The proposed Clip -> Highlight rename is REJECTED** (source N02/N06).
+   "Highlight" is a modifier, not a third object: a reel is a series of clips, and everything the
+   product makes is a highlight. The 2026-09-10 object model (Game / Play / Clip / Reel / Published)
+   is intact and the five STAGING shared-vocabulary children stand.
+   **Standing rule:** short form in controls (`Clips`, `Reels`), long form in prose (highlight clip,
+   highlight reel). Never one sibling carrying the modifier while its sibling does not - today's
+   `Clips` tab beside the `Highlight Reels` noun is the actual defect, and it is small.
+
+2. **AI Focus becomes Framing. The 2026-09-10 override is LIFTED.** That override's recorded reason
+   was that the name should say the reframing is automatic. It is not: framing is manual crop
+   keyframes joined by a spline, with no tracking in it. Mode noun is **Framing**; the screen
+   instruction is "Frame your athlete". The intake's own label is not used as the mode name, because
+   a sentence cannot serve in a tab, a switcher and a status chip.
+
+3. **Relocate the AI claim to where the AI runs.** Diagnosis: "AI" appears in exactly ONE
+   parent-facing place today, the mode name, and that is the one step with no AI in it. This is why
+   users report the app "has no AI" while the code is full of it. Real AI: `AIVideoUpscaler`
+   (Real-ESRGAN, runs on every framing export) and YOLO player detection on a T4 GPU (drives
+   Spotlight). Both currently hide behind the generic word "Rendering" or say nothing at all.
+   Name those steps: **"Finding players"**, **"Enhancing video"**.
+   **Name the step, never promise the outcome.** No "Enhanced to HD" or equivalent quality claim
+   until T9970 has measured whether it holds - fixing a credibility problem with a second unverified
+   promise would put us back where we started.
+
+4. **Statuses: T8470's Draft/Shared stands** (2026-09-10 override UPHELD). Source N11 is taken as
+   PRESENTATION only, not a new state machine: each existing state gains a plain-language second
+   half - `Draft / Not exported yet`, `Private / Ready to watch`, `Shared / Anyone with the link`.
+   `draftStage.js` remains the single source and T9600 keeps its job.
+
+5. **Capture window becomes 6s before + 2s after** (8s total, replacing 9+3=12).
+   **The code was never broken.** `DEFAULT_CLIP_BEFORE=9` + `DEFAULT_CLIP_AFTER=3` straddle the tap
+   and correctly produced the 0:00-0:06 the evaluator reported at a 0:03 tap. Only the word
+   "previous" in `MARK_PLAY_HELPER` was false. The post-roll is deliberate - parents tap AFTER they
+   see the play - so 2s of it is preserved rather than going to a literal 8+0. Copy becomes
+   "Captures 6 seconds before and 2 after". Constants and copy change together.
+
+6. **Spotlight stays optional, but encouraged.** Its real reason - 22 kids in the same kit, and this
+   is how anyone watching knows which one is yours - is the strongest sentence in the product and is
+   currently written as a definition rather than a reason.
+
+7. **Every stage states its point in one sentence, and no explanation may use the feature's own name
+   as the reason for the feature.** The framing copy fails this test today ("so you can focus the
+   clip around your player" is circular, so a parent who did not already know ends up no wiser), and
+   so does every other screen: they teach the mechanics and never state the point. The honest answers
+   exist and are concrete - framing is needed because wide sideline footage has to become a
+   phone-shaped video and someone must choose what survives the crop.
+
+8. **One UI iteration, not several.** All copy-shaped work folds into **T9860**, which becomes the
+   single copy and concept sweep across every screen. Six tasks each editing their own corner is how
+   the mixed vocabulary both evaluations found got there in the first place. Single cutover or not
+   at all.
+
+### Deploy decision
+
+Prod was **744 commits / 12 days behind master**, with 138 tasks at STAGING including 34 from the
+Sept 9-10 walkthrough - so every fix from the previous evaluation was invisible to real users, and
+both evaluations had been measuring code nobody had shipped. Deployed 2026-09-13 before starting
+this batch (backend build 4290 -> 5068; Postgres migrated 25 -> 28).
+
 ## Execution sequence
 
 Start T9770, T9790, T9800, T9810, T9820, T9840 and T9920 (core repairs); T9780 follows T9770. Run T10020 after all eight listed prerequisites are implemented and verified. T9910 policy, T9970 quality and T10010 telemetry audits can begin independently when inputs exist; T9940 capability copy does not wait for tracking.
