@@ -1,5 +1,5 @@
 /**
- * T6300 QA — ReelTile persistent actions (Highlight Reels drawer).
+ * T6300 QA — ReelTile persistent actions (Published drawer).
  *
  * The bug (user report): every action on a published-reel tile — including the
  * kebab — was invisible until hover (`opacity-0 pointer-events-none` at rest),
@@ -346,7 +346,7 @@ test.describe('T6300 ReelTile persistent actions (real account)', () => {
     await context.close();
   });
 
-  test('responsive sweep: Highlight Reels drawer has no horizontal overflow at 375px + desktop', async ({ browser }) => {
+  test('responsive sweep: Published drawer has no horizontal overflow at 375px + desktop', async ({ browser }) => {
     test.setTimeout(120_000);
     const context = await browser.newContext();
     await loginAsRealUser(context, EMAIL, PROFILE);

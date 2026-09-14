@@ -154,7 +154,7 @@ for (const vp of CTA_VIEWPORTS) {
       }
     });
 
-    // --- Surface 3: Focus panel (Generate AI Focus) -----------------------
+    // --- Surface 3: Focus panel (Generate Framing) -----------------------
     // FINDING T8550-F1 (live-verify owed) — the headline bug from the 2026-09-03
     // user report ("export buttons sit below the scroll line"): the Export Focused
     // Video button sits ~400px below the fold at EVERY phone width (950/957/1028/
@@ -174,7 +174,7 @@ for (const vp of CTA_VIEWPORTS) {
       await framingChip.click();
       await page.locator('.crop-handle').first().waitFor({ timeout: 90000 });
 
-      const exportBtn = page.getByRole('button', { name: /Generate AI Focus/ });
+      const exportBtn = page.getByRole('button', { name: /Generate Framing/ });
       await exportBtn.first().waitFor({ state: 'visible', timeout: 20000 });
       await assertCtaInViewport(page, exportBtn.first());
       await saveEvidence(page, `cta-focus-export_${vp.name}`);
@@ -194,7 +194,7 @@ for (const vp of CTA_VIEWPORTS) {
       await reachHome(page);
       await openTab(page, /^Clips/); // T8980: sub-`sm` short tab label
       const publish = page.getByTestId('ready-actions')
-        .getByRole('button', { name: 'Publish to Highlight Reels' }).first();
+        .getByRole('button', { name: /Publish (clip|reel)/i }).first();
       const hasReady = await publish.waitFor({ state: 'visible', timeout: 15000 })
         .then(() => true).catch(() => false);
       test.skip(!hasReady, 'no Ready-to-share draft tile on this account');

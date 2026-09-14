@@ -24,9 +24,10 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590)', () => {
     expect(screen.getByRole('button', { name: 'Edit framing' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeTruthy();
 
-    expect(screen.getByText('A spotlight is a glowing highlight that follows your athlete.')).toBeTruthy();
-    // Audience/access stated on the publish choice BEFORE the tap (T9590).
-    expect(screen.getByText('Adds it to your Highlight Reels as is -- anyone with the link can watch it.')).toBeTruthy();
+    expect(screen.getByText('Twenty-two kids in the same kit: this is how anyone watching knows which one is yours.')).toBeTruthy();
+    // Destination + honest precondition stated on the publish choice BEFORE the
+    // tap (T9590); T9860 (D5) dropped the false "anyone with the link" claim.
+    expect(screen.getByText('Files it under Published as is. Nobody else can see this until you share a link.')).toBeTruthy();
     // Re-render charge stated on the edit-framing choice BEFORE the tap (T9590).
     expect(screen.getByText('Reframe and export again, uses credits.')).toBeTruthy();
     expect(screen.getByText('Keep it in your drafts and finish it whenever you want.')).toBeTruthy();

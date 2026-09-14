@@ -2,20 +2,20 @@ import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 
 /**
- * T4190 - Highlight Reels game group surfaces new reels + real game names (LIVE GUARDRAIL).
+ * T4190 - Published game group surfaces new reels + real game names (LIVE GUARDRAIL).
  *
  * Drives the app AS THE REAL USER (imankh@gmail.com, prod-copied into dev) and
- * asserts the RENDERED Highlight Reels panel against the live collections summary:
+ * asserts the RENDERED Published panel against the live collections summary:
  *
  *   1. Game group headers show the real game name (opponent + date) - never the
  *      anonymous "Game Highlights" that hid which game a reel belonged to.
  *   2. A COLLAPSED game group that contains unwatched reels renders an "N new"
- *      chip on its header, so the Highlight Reels badge always has a visible on-screen
+ *      chip on its header, so the Published badge always has a visible on-screen
  *      counterpart (a new reel nested in a collapsed group is no longer hidden).
  *
  * Expected values are read from GET /api/collections/summary at runtime (not
  * hardcoded), then checked against the DOM the app renders inside the DownloadsPanel
- * ("Highlight Reels" slide-out). All locators are SCOPED to that panel so they cannot
+ * ("Published" slide-out). All locators are SCOPED to that panel so they cannot
  * match the ProjectManager's project-group headers (which reuse CollapsibleGroup
  * with status counts but no new-chip) rendered underneath the panel.
  *
@@ -34,7 +34,7 @@ const PROFILE_ID = process.env.E2E_REAL_PROFILE || '9fa7378c';
 // calls at E2E_API_BASE (staging Fly API); locally it stays relative (Vite proxy).
 const API_BASE = process.env.E2E_API_BASE || '/api';
 
-test('T4190: Highlight Reels group headers show real game names + collapsed-group new chip @staging-gate @gate-b', async ({ context, page }) => {
+test('T4190: Published group headers show real game names + collapsed-group new chip @staging-gate @gate-b', async ({ context, page }) => {
   // --- auth + read the live summary the UI will render from ------------------
   await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
 

@@ -31,7 +31,7 @@ const baseRegion = {
 // T9330: ClipDetailsEditor now consumes the shared getClipStage(region,
 // linkedProject) helper instead of its own nested-ternary stage machine, and
 // the CTA labels are Frame this clip / Apply Spotlight / View Final / View
-// Published — superseding T9320's AI Focus / Spotlight / Completed /
+// Published — superseding T9320's old mode-noun / Spotlight / Completed /
 // Published / Open clip (Draft). The manual "Create Clip" affordance
 // (NO_PROJECT case) is unchanged.
 describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () => {

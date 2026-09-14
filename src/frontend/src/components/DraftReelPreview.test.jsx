@@ -54,7 +54,7 @@ vi.mock('./collections/CollectionPlayer', async () => {
         <span data-testid="stream-url">{reels[0].streamUrl}</span>
         {statusBanner}
         {onPublish && (
-          <button title="Publish to Highlight Reels" disabled={publishLoading} onClick={onPublish}>Publish</button>
+          <button title="Publish reel" disabled={publishLoading} onClick={onPublish}>Publish</button>
         )}
         {onShare && <button title="Share" onClick={() => onShare(reels[0])}>Share</button>}
         <button title="Close" onClick={onClose}>Close</button>
@@ -107,7 +107,7 @@ describe('DraftReelPreview (T8530)', () => {
     openPreview();
     expect(screen.getByTestId('draft-preview-banner').textContent)
       .toMatch(/only you can see this/i);
-    expect(screen.getByTitle('Publish to Highlight Reels')).toBeTruthy();
+    expect(screen.getByTitle('Publish reel')).toBeTruthy();
     expect(screen.queryByTitle('Share')).toBeNull();
   });
 
@@ -119,15 +119,15 @@ describe('DraftReelPreview (T8530)', () => {
     const urlBefore = screen.getByTestId('stream-url').textContent;
     expect(mountSpy).toHaveBeenCalledTimes(1);
 
-    await act(async () => { fireEvent.click(screen.getByTitle('Publish to Highlight Reels')); });
+    await act(async () => { fireEvent.click(screen.getByTitle('Publish reel')); });
 
     // Slot swap: Publish gone, Share present.
-    await waitFor(() => expect(screen.queryByTitle('Publish to Highlight Reels')).toBeNull());
+    await waitFor(() => expect(screen.queryByTitle('Publish reel')).toBeNull());
     expect(screen.getByTitle('Share')).toBeTruthy();
     // Banner unmounts once published.
     expect(screen.queryByTestId('draft-preview-banner')).toBeNull();
     // Success toast.
-    expect(toastSuccessMock).toHaveBeenCalledWith('Published', { message: 'Anyone with the link can watch it.' });
+    expect(toastSuccessMock).toHaveBeenCalledWith('Published', { message: 'Nobody else can see this until you share a link.' });
     // §4.7 coherence: SAME final_video_id / same stream URL, player NOT remounted.
     expect(screen.getByTestId('stream-url').textContent).toBe(urlBefore);
     expect(mountSpy).toHaveBeenCalledTimes(1);
@@ -138,7 +138,7 @@ describe('DraftReelPreview (T8530)', () => {
     act(() => { useReelPreviewStore.getState().open({ ...snapshot, alreadyPublished: true }); });
 
     // No "landing on another decision screen": Publish never appears, Share does.
-    expect(screen.queryByTitle('Publish to Highlight Reels')).toBeNull();
+    expect(screen.queryByTitle('Publish reel')).toBeNull();
     expect(screen.getByTitle('Share')).toBeTruthy();
     expect(screen.queryByTestId('draft-preview-banner')).toBeNull();
   });
@@ -150,7 +150,7 @@ describe('DraftReelPreview (T8530)', () => {
     render(<DraftReelPreview />);
     openPreview();
 
-    await act(async () => { fireEvent.click(screen.getByTitle('Publish to Highlight Reels')); });
+    await act(async () => { fireEvent.click(screen.getByTitle('Publish reel')); });
 
     const banner = await screen.findByTestId('draft-preview-banner');
     expect(banner.textContent).toMatch(/couldn't save to the cloud\./i);

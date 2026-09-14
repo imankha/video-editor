@@ -91,7 +91,7 @@ describe('AnnotateFullscreenOverlay — clear-on-switch to My Athlete (T5725)', 
     expect(screen.getByText('Alex')).toBeTruthy();
 
     // Switch to My Athlete: the control (and its chip) disappear immediately.
-    fireEvent.click(screen.getByRole('radio', { name: 'My player' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'My athlete' }));
     expect(screen.queryByText(TEAMMATES_LABEL)).toBeNull();
     expect(screen.queryByText('Alex')).toBeNull();
 
@@ -192,7 +192,7 @@ describe('AnnotateFullscreenOverlay — Teammates in the desktop strip (T8600)',
     );
     expect(screen.getByText('Alex')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('radio', { name: 'My player' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'My athlete' }));
     expect(screen.queryByPlaceholderText('Tag a teammate...')).toBeNull();
     expect(screen.queryByText('Alex')).toBeNull();
 

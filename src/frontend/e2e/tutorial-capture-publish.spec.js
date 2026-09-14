@@ -61,8 +61,8 @@ test('capture publish tutorial footage @tutorial-capture', async ({ browser }) =
   // target the staged 'Brilliant Pass' card specifically (other Done drafts may exist)
   const card = page.locator('[data-testid="project-card"]')
     .filter({ hasText: 'Brilliant Pass' })
-    .filter({ has: page.getByRole('button', { name: 'Move to Highlight Reels' }) }).first();
-  const moveBtn = card.getByRole('button', { name: 'Move to Highlight Reels' });
+    .filter({ has: page.getByRole('button', { name: /Publish (clip|reel)/i }) }).first();
+  const moveBtn = card.getByRole('button', { name: /Publish (clip|reel)/i });
   await moveBtn.waitFor({ timeout: 20000 });
   await card.scrollIntoViewIfNeeded();
   await card.hover();
@@ -83,7 +83,7 @@ test('capture publish tutorial footage @tutorial-capture', async ({ browser }) =
   await page.keyboard.press('Escape');
   await dwell(1.5);
 
-  // --- line 3: click Move to Highlight Reels ----------------------------------------------
+  // --- line 3: click Publish ----------------------------------------------
   await ring(moveBtn, 8);
   await dwell(1);
   await mark(3, 'Move');
@@ -91,7 +91,7 @@ test('capture publish tutorial footage @tutorial-capture', async ({ browser }) =
   await clearRing();
   await dwell(3.5);
 
-  // --- line 4: in Highlight Reels under the game name ---------------------------------------
+  // --- line 4: in Published under the game name ---------------------------------------
   await mark(4);
   step('Published tab (auto-switches on publish)');
   const drawerHeading = page.getByTestId('published-tab-panel').first();

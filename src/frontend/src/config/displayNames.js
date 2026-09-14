@@ -79,7 +79,8 @@ export const SHARING = {
 // single source. Was declared per-mode in editorStore.SCREENS[].label (a store
 // owning a UI string) plus duplicated across draftStage, SegmentedProgressStrip,
 // DraftTile, AnnotateFullscreenOverlay and quest_config.py. FRAMING replaces the
-// prior "AI Focus" epic override (see the T9550 comment below, superseded).
+// prior epic override that had named this mode noun after the render engine
+// (see the T9550 comment below, superseded).
 export const MODE_NAMES = {
   ANNOTATE: 'Annotate',
   FRAMING: 'Framing',
@@ -216,8 +217,8 @@ export const UPLOAD_STATE = {
 // action-bar labels (FOCUS_PUBLISH / OVERLAY_PUBLISH below) are T9590 territory,
 // untouched here.
 //
-// Focus stage NOUN is MODE_NAMES.FRAMING (T9860 renamed the mode from "AI Focus" to
-// "Framing"); the render VERB is "Generate", deliberately NOT "Apply": "Apply Framing"
+// Focus stage NOUN is MODE_NAMES.FRAMING (T9860 renamed the mode noun off the render
+// engine to "Framing"); the render VERB is "Generate", deliberately NOT "Apply": "Apply Framing"
 // (T9330) is a DIFFERENT gesture that NAVIGATES INTO the mode, so reusing it here would
 // confuse entering the mode with paying to render inside it. Completion is exactly
 // "Framing ready".

@@ -81,8 +81,9 @@ describe('resolveEtaDisplay — honest ETA (T8510)', () => {
     const deadlines = new Map([[exp.exportId, NOW - ETA_BUST_GRACE_MS - 1000]]);
     const display = resolveEtaDisplay(exp, NOW, deadlines, new Map());
     expect(display.stale).toBe(true);
-    // T9540: the raw engineering message is now mapped to honest N37 copy (upscaling -> Rendering).
-    expect(display.fallbackText).toBe('Rendering');
+    // T9540: the raw engineering message is now mapped to honest N37 copy.
+    // T9860 (3.3): upscaling now maps to its own "Enhancing video" phase, not Rendering.
+    expect(display.fallbackText).toBe('Enhancing video');
   });
 
   it('stays live inside the 15s grace window past the deadline', () => {
@@ -151,6 +152,6 @@ describe('GlobalExportIndicator — rendered labels and stale-ETA switch (T8510)
       vi.advanceTimersByTime(20000);
     });
     expect(document.body.textContent).not.toContain('Less than a minute');
-    expect(document.body.textContent).toContain('Rendering');
+    expect(document.body.textContent).toContain('Enhancing video');
   });
 });

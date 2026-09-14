@@ -8,7 +8,7 @@
 // specific words in this file as a VOCABULARY CORRECTION mandated by a later
 // decision, not a paraphrase of the T9390 spec: "tap/Tap Add Play" was stale
 // (T9520 renamed the control to ANNOTATE.MARK_PLAY, this file was missed) and
-// "Focus pass" follows the mode rename (AI Focus -> Framing). The rest of the
+// "Focus pass" follows the mode noun rename to MODE_NAMES.FRAMING. The rest of the
 // T9390 spec is still binding.
 //
 // T9390 (Decision 2) cut every empty-variant tab to a headline + ONE short line

@@ -5,7 +5,7 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  * Collections tab E2E (T3610).
  *
  * Covers the single-view shell + mobile responsiveness (data-independent):
- *   - One Highlight Reels view: no Collections/All switcher, no source-type filter pills
+ *   - One Published view: no Collections/All switcher, no source-type filter pills
  *   - No horizontal overflow at 360px
  *
  * The data-dependent assertions (game attribution, ratio-as-identity eligibility,
@@ -36,7 +36,7 @@ async function setupAndAuth(page) {
 }
 
 async function openGallery(page) {
-  // T8545/T8555: Highlight Reels is now the Published tab (was a top-right icon
+  // T8545/T8555: this view is now the Published tab (was a top-right icon
   // button opening a drawer). Click the real tab so the app's own store
   // instance switches (a page.evaluate import would resolve a separate
   // Zustand module instance).
@@ -50,7 +50,7 @@ test.afterEach(async ({ request }) => {
   } catch { /* best-effort cleanup */ }
 });
 
-test.describe('Highlight Reels single view', () => {
+test.describe('Published single view', () => {
   // T5420: setup bypasses the auth gate by import()ing /src/stores/authStore.js in-page
   // and drives an EMPTY test-login session — the Vite-dev /src path 404s on a deployed
   // CF Pages BUILD, and the empty-session premise means it can't migrate to the real

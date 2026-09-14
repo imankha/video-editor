@@ -94,13 +94,13 @@ function renderView(overrides = {}) {
 }
 
 describe('OverlayModeView player-selection-first (T9620)', () => {
-  it('states "Click your player" and suppresses the spotlight before selection', () => {
+  it('states "Click your athlete" and suppresses the spotlight before selection', () => {
     renderView({ highlightRegions: [regionUnassigned()] });
     const prompt = screen.getByTestId('select-player-prompt');
     expect(prompt.textContent).toBe(EDITOR_PANELS.SELECT_PLAYER_CLICK);
     // No ellipse on unassigned ground: HighlightOverlay must not mount.
     expect(screen.queryByTestId('highlight-overlay')).toBeNull();
-    // Styling controls hidden; the panel shows the pick-your-player guidance.
+    // Styling controls hidden; the panel shows the pick-your-athlete guidance.
     expect(screen.getByText(EDITOR_PANELS.SELECT_PLAYER_TITLE)).toBeTruthy();
     expect(screen.queryByText(EDITOR_PANELS.OUTLINE_THICKNESS)).toBeNull();
   });

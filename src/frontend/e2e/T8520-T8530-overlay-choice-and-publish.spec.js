@@ -128,7 +128,7 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
     await page.getByTestId('focus-save-draft').click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'add-spotlight-later');
     // Explainer toast (multi-clip copy — the harness defaults isAutoCreated=0).
-    await expect(page.getByText('Saved to Highlight Reels, under Highlights')).toBeVisible();
+    await expect(page.getByText('Saved to Reels')).toBeVisible();
     await saveEvidence(page, 'T8390-pathB-save-draft-closed');
 
     // ---- Path C: "Publish without spotlight" -> overlay_declined + publish-intent staked, preview closes ----
@@ -230,7 +230,7 @@ test.describe('T8530: draft preview publish surface', () => {
     await expect(banner).toBeVisible();
     await expect(banner).toContainText('Only you can see this');
 
-    const publishBtn = page.getByRole('button', { name: 'Publish to Highlight Reels' });
+    const publishBtn = page.getByRole('button', { name: 'Publish reel' });
     await expect(publishBtn).toBeVisible();
     await saveEvidence(page, 'T8530-criterion-draft-banner-publish-visible');
   });
@@ -241,7 +241,7 @@ test.describe('T8530: draft preview publish surface', () => {
     const video = page.getByTestId('collection-player-video');
     const srcBefore = await video.getAttribute('src').catch(() => null);
 
-    const publishBtn = page.getByRole('button', { name: 'Publish to Highlight Reels' });
+    const publishBtn = page.getByRole('button', { name: 'Publish reel' });
     await publishBtn.click();
 
     await expect(page.getByText('Published', { exact: false })).toBeVisible({ timeout: 5000 }).catch(() => {});
@@ -249,7 +249,7 @@ test.describe('T8530: draft preview publish surface', () => {
 
     const shareBtn = page.getByRole('button', { name: /^Share$/i });
     await expect(shareBtn).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Publish to Highlight Reels' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Publish reel' })).toHaveCount(0);
 
     const srcAfter = await video.getAttribute('src').catch(() => null);
     if (srcBefore !== null) expect(srcAfter).toBe(srcBefore);
@@ -260,14 +260,14 @@ test.describe('T8530: draft preview publish surface', () => {
   test('503 sync_failed shows amber retry banner, Publish stays visible', async ({ page }) => {
     await gotoDiag(page, { failFirst: true });
 
-    const publishBtn = page.getByRole('button', { name: 'Publish to Highlight Reels' });
+    const publishBtn = page.getByRole('button', { name: 'Publish reel' });
     await publishBtn.click();
 
     const banner = page.getByTestId('draft-preview-banner');
     await expect(banner).toBeVisible();
     await expect(banner).toContainText("Couldn't save to the cloud");
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Publish to Highlight Reels' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Publish reel' })).toBeVisible();
 
     await saveEvidence(page, 'T8530-criterion-503-amber-retry-banner');
   });
@@ -276,7 +276,7 @@ test.describe('T8530: draft preview publish surface', () => {
     await gotoDiag(page, { failFirst: false });
     await expect(page.getByTestId('draft-preview-banner')).toBeVisible();
     await responsiveSweep(page, async (vp) => {
-      const publishBtn = page.getByRole('button', { name: 'Publish to Highlight Reels' });
+      const publishBtn = page.getByRole('button', { name: 'Publish reel' });
       await expect(publishBtn).toBeVisible();
       const box = await publishBtn.boundingBox();
       expect(box.y + box.height).toBeLessThanOrEqual(vp.height);
@@ -284,12 +284,12 @@ test.describe('T8530: draft preview publish surface', () => {
   });
 });
 
-// T8530 board fallback (DraftTile's renamed "Publish to Highlight Reels" primary
+// T8530 board fallback (DraftTile's "Publish clip"/"Publish reel" primary
 // button) is NOT covered here. DraftTile requires ~6 store mocks (projectsStore,
 // syncStore, exportStore, questStore, profileStore, galleryStore) that
 // DraftTile.test.jsx already wires via vi.mock — reproducing that contract in a
 // real-browser diag harness would need a fourth dedicated Vite entry for one
 // button-label assertion the Vitest suite already proves live (110/110 green,
-// including 'makes "Ready to share" a non-interactive badge and a distinct
-// primary button the publish verb (T8530)' in DraftTile.test.jsx). See the
+// including 'makes the "Private" status a non-interactive badge and a distinct
+// primary button the publish verb (T6180)' in DraftTile.test.jsx). See the
 // acceptance-criteria map in the QA report for how this criterion is evidenced.

@@ -13,9 +13,14 @@ describe('FramingInstructions (T9610)', () => {
     // Three numbered steps, in plain language (no "keyframe").
     const steps = screen.getByTestId('framing-instructions').querySelectorAll('ol li');
     expect(steps).toHaveLength(3);
-    expect(screen.queryByText(/move the box over your player/i)).not.toBeNull();
+    expect(screen.queryByText(/move the box over your athlete/i)).not.toBeNull();
     expect(screen.queryByText(/step forward in the video/i)).not.toBeNull();
     expect(screen.queryByText(/move the box again to follow them/i)).not.toBeNull();
+
+    // T9860 3.5: the stage reason is stated above the step list.
+    expect(screen.getByTestId('framing-instructions').textContent).toMatch(
+      /framing is you choosing what survives the crop/i
+    );
 
     // The preview prompt points at ordinary playback, before export.
     const prompt = screen.getByTestId('framing-preview-prompt').textContent;

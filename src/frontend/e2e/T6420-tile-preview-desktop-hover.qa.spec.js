@@ -1,7 +1,7 @@
 /**
- * T6420 QA — TilePreviewVideo primitive + desktop hover preview (Highlight Reels).
+ * T6420 QA — TilePreviewVideo primitive + desktop hover preview (Published).
  *
- * Drives the REAL account (dev-login) against Highlight Reels, which reliably has
+ * Drives the REAL account (dev-login) against Published, which reliably has
  * published reel tiles, and proves the acceptance criteria with NETWORK-TAB
  * evidence (a request counter over /api/downloads/{id}/stream) for the
  * request-count / timing claims the task file names as required evidence:

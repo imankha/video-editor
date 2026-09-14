@@ -129,7 +129,7 @@ describe('AnnotateFullscreenOverlay strip — details panel has no inner scroll 
 
 // T9330 §3.5: the strip's stage CTA row (L917-940) is replaced with a
 // FULL-WIDTH primary button driven by getClipStage — no longer a small
-// right-anchored chip that always says "AI Focus" regardless of stage.
+// right-anchored chip that always says "Framing" regardless of stage.
 describe('AnnotateFullscreenOverlay strip — full-width stage-aware primary CTA (T9330)', () => {
   it('renders the stage CTA full-width, not a small right-anchored chip', () => {
     render(
@@ -143,7 +143,7 @@ describe('AnnotateFullscreenOverlay strip — full-width stage-aware primary CTA
     expect(cta.className).toMatch(/w-full/);
   });
 
-  it('reflects the linked project stage (Spotlight), not a hardcoded "AI Focus" label', () => {
+  it('reflects the linked project stage (Spotlight), not a hardcoded "Framing" label', () => {
     // linkedProject is looked up via useProjectsList (matching ClipDetailsEditor),
     // so seed the store rather than passing a prop.
     useProjectsStore.setState({ projects: [{ id: 42, has_working_video: true, has_final_video: false, is_published: false }] });

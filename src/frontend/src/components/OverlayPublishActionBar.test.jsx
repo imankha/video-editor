@@ -27,16 +27,19 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590)', () => {
     expect(screen.getByText(OVERLAY_PUBLISH.SAVE_DRAFT_CAPTION)).toBeTruthy();
   });
 
-  // The publish choice states the audience/access BEFORE the tap (T9590).
-  it('Publish caption states the audience before the tap', () => {
+  // The publish choice states the destination + honest precondition BEFORE the
+  // tap (T9590); T9860 (D5) replaced the false "anyone with the link" claim
+  // (publishing grants no audience by itself -- sharing is a separate gesture).
+  it('Publish caption states the destination and the honest precondition before the tap', () => {
     render(<OverlayPublishActionBar {...makeHandlers()} />);
-    expect(OVERLAY_PUBLISH.PUBLISH_CAPTION).toMatch(/anyone with the link/i);
-    expect(screen.getByText(/anyone with the link/i)).toBeTruthy();
+    expect(OVERLAY_PUBLISH.PUBLISH_CAPTION).not.toMatch(/anyone with the link/i);
+    expect(OVERLAY_PUBLISH.PUBLISH_CAPTION).toMatch(/nobody else can see this until you share a link/i);
+    expect(screen.getByText(OVERLAY_PUBLISH.PUBLISH_CAPTION)).toBeTruthy();
   });
 
-  // The "Reapply AI Focus" caption must stay honest about the paid re-export,
+  // The "Reapply Framing" caption must stay honest about the paid re-export,
   // mirroring Focus's edit-framing caption verbatim (acceptance criterion).
-  it('Reapply AI Focus caption warns it costs credits (honest paid re-export)', () => {
+  it('Reapply Framing caption warns it costs credits (honest paid re-export)', () => {
     render(<OverlayPublishActionBar {...makeHandlers()} />);
     expect(OVERLAY_PUBLISH.REAPPLY_FOCUS_CAPTION).toMatch(/uses credits/i);
     expect(screen.getByText(/uses credits/i)).toBeTruthy();
@@ -92,7 +95,7 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590)', () => {
     expect(saveDraft.className).toMatch(/bg-transparent/);
   });
 
-  it('reads Publish, Reapply spotlight, Reapply AI Focus, Save draft in that DOM/tab order, no order-* juggling', () => {
+  it('reads Publish, Reapply spotlight, Reapply Framing, Save draft in that DOM/tab order, no order-* juggling', () => {
     const { container } = render(<OverlayPublishActionBar {...makeHandlers()} />);
     const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent);
     expect(buttons).toEqual([

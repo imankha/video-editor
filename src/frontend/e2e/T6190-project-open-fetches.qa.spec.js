@@ -331,7 +331,7 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
   });
 
   // ---- Downloads "re-edit reel" -> Framing (the path the removed mount fetch served) ----
-  test('re-edit reel from Highlight Reels opens Framing with a populated clip list', async ({ browser }) => {
+  test('re-edit reel from Published opens Framing with a populated clip list', async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     await loginAsRealUser(context, EMAIL, PROFILE);
     const page = await context.newPage();
@@ -351,19 +351,19 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
     // the Home screen (e.g. a Clips-tab project-card) can't be matched instead.
     const panel = page.getByTestId('published-tab-panel');
     await panel.waitFor({ timeout: 15000 }).catch(() => {});
-    // The Highlight Reels panel groups reels "By game" (CollapsibleGroup, collapsed by default) —
+    // The Published panel groups reels "By game" (CollapsibleGroup, collapsed by default) —
     // individual ReelTile cards (and their "More actions" kebab) only render once a game
     // group is expanded. Expand the first one.
     const groupHeader = panel.locator('[data-testid="collapsible-group-header"]').first();
     const hasGroup = await groupHeader.count();
-    test.skip(!hasGroup, 'no game group in Highlight Reels on this account data — seed a published reel');
+    test.skip(!hasGroup, 'no game group in Published on this account data — seed a published reel');
     await groupHeader.click();
 
     // Scope to the panel so the click can't hit an unrelated same-page element.
     const moreActions = panel.getByRole('button', { name: 'More actions' }).first();
     await moreActions.waitFor({ timeout: 15000 }).catch(() => {});
     const hasMoreActions = await moreActions.count();
-    console.log(`[T6190] Highlight Reels "More actions" buttons found (after group expand) = ${hasMoreActions}`);
+    console.log(`[T6190] Published "More actions" buttons found (after group expand) = ${hasMoreActions}`);
     test.skip(!hasMoreActions, 'no reel card in the expanded group on this account data — seed a published reel with an editable project');
     await moreActions.scrollIntoViewIfNeeded();
     await moreActions.click();
@@ -371,7 +371,7 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
     const reEdit = page.getByText('Open as Draft', { exact: true }).first();
     const hasReEdit = await reEdit.count();
     console.log(`[T6190] "Open as Draft" menu items found = ${hasReEdit}`);
-    test.skip(!hasReEdit, 'no re-editable reel (no reel with an attached project_id) in Highlight Reels on this account data');
+    test.skip(!hasReEdit, 'no re-editable reel (no reel with an attached project_id) in Published on this account data');
 
     // After navigation, Framing must open with clips (the onOpenProject invalidateClips fix).
     const clickAt = Date.now();
