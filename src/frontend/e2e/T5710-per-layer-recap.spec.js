@@ -88,7 +88,7 @@ test.describe('T5710 per-layer recaps @staging-gate @gate-c', () => {
     await tile.waitFor({ timeout: 30000 });
     await tile.hover();
     await tile.locator('[data-game-kebab]').click();
-    await page.getByRole('button', { name: 'Watch recap', exact: true }).click();
+    await page.getByRole('button', { name: 'Watch annotations', exact: true }).click();
     await page.locator('video').first().waitFor({ timeout: 30000 });
 
     // Scope every assertion to the modal itself -- Create Clip below adds a

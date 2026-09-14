@@ -50,3 +50,41 @@ def test_clip_count_counts_total_but_badges_filter():
     assert stats[1]["clip_count"] == 2       # total
     assert stats[1]["brilliant_count"] == 1  # only the my_athlete clip
     assert stats[1]["good_count"] == 0       # shared clip excluded from badges
+
+
+# T10120: per-layer clip counts let the Games tile tell a fully-annotated team-only
+# game (recap_video_url is athlete-layer-only, so NULL) apart from an empty one, and
+# open its recap on the tab that has content.
+def test_per_layer_clip_counts_mixed_game():
+    conn = _conn()
+    _add(conn, 1, 5, 1)   # athlete
+    _add(conn, 1, 4, 1)   # athlete
+    _add(conn, 1, 3, 0)   # team (shared)
+    stats = _compute_athlete_stats(conn.cursor(), [1])
+    assert stats[1]["clip_count"] == 3
+    assert stats[1]["athlete_clip_count"] == 2
+    assert stats[1]["team_clip_count"] == 1
+
+
+def test_per_layer_clip_counts_team_only_game():
+    # The bug-52 shape: every clip is team-layer (my_athlete=0), so there is no
+    # athlete recap -> the tile must still know annotations exist (clip_count > 0)
+    # and open on the team tab (athlete_clip_count == 0).
+    conn = _conn()
+    _add(conn, 1, 5, 0)
+    _add(conn, 1, 4, 0)
+    stats = _compute_athlete_stats(conn.cursor(), [1])
+    assert stats[1]["clip_count"] == 2
+    assert stats[1]["athlete_clip_count"] == 0
+    assert stats[1]["team_clip_count"] == 2
+
+
+def test_per_layer_clip_counts_null_my_athlete_is_athlete():
+    # A NULL my_athlete counts as athlete, matching the rating-badge filter.
+    conn = _conn()
+    conn.execute(
+        "INSERT INTO raw_clips (game_id, rating, tags, my_athlete) VALUES (1, 5, NULL, NULL)"
+    )
+    stats = _compute_athlete_stats(conn.cursor(), [1])
+    assert stats[1]["athlete_clip_count"] == 1
+    assert stats[1]["team_clip_count"] == 0

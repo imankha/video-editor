@@ -54,8 +54,9 @@ async function openRecap(page) {
   await page.waitForLoadState('domcontentloaded');
   // T5681's poster grid (aeb803ae) removed the flat per-tile "Recap" button: every
   // tile action now sits behind ONE kebab opening a portal menu, where the recap
-  // entry is labeled "Watch recap". It is CONDITIONAL on game.recap_video_url, so
-  // resolve the target game from SERVER TRUTH first and skip LOUDLY on a fixture gap
+  // entry is labeled "Watch annotations" (T10120; it is CONDITIONAL on clip_count,
+  // but a game with recap_video_url always has clips). Resolve the target game with
+  // recap_video_url from SERVER TRUTH first and skip LOUDLY on a fixture gap
   // (FIXTURE-CONTRACT.md) -- deciding from the API rather than by driving the UI
   // means a data gap can never be mistaken for a layout regression, and nothing is
   // left in flight when the test skips.
@@ -74,7 +75,7 @@ async function openRecap(page) {
   await tile.hover();
   await tile.locator('[data-game-kebab]').click();
   // The menu renders in a PORTAL (fixed position, outside the tile) -> locate from `page`.
-  await page.getByRole('button', { name: 'Watch recap', exact: true }).click();
+  await page.getByRole('button', { name: 'Watch annotations', exact: true }).click();
   await page.locator('video').first().waitFor({ timeout: 30000 });
   // Best-effort: let the recap video report its intrinsic 16:9 dimensions so the
   // measured element width reflects the real layout (tolerated if R2 is slow).

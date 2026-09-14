@@ -1249,6 +1249,7 @@ BADGE_TAGS = frozenset({
 
 _EMPTY_ATHLETE_STATS = {
     'clip_count': 0,
+    'athlete_clip_count': 0, 'team_clip_count': 0,
     'brilliant_count': 0, 'good_count': 0, 'interesting_count': 0,
     'mistake_count': 0, 'blunder_count': 0, 'aggregate_score': 0,
     'tag_badges': {},
@@ -1266,6 +1267,7 @@ def _compute_athlete_stats(cursor, game_ids: list) -> dict:
     from collections import defaultdict
     per_game = defaultdict(lambda: {
         'clip_count': 0,
+        'athlete_clip_count': 0, 'team_clip_count': 0,
         'brilliant_count': 0, 'good_count': 0, 'interesting_count': 0,
         'mistake_count': 0, 'blunder_count': 0,
         'tag_badges': defaultdict(int),
@@ -1278,8 +1280,16 @@ def _compute_athlete_stats(cursor, game_ids: list) -> dict:
         # my_athlete-filtered below.
         per_game[gid]['clip_count'] += 1
 
+        # T10120: per-layer clip counts, derived on read (never stored) so the
+        # Games tile can tell a fully-annotated team-only game (recap_video_url is
+        # athlete-layer-only, so NULL here) apart from a genuinely empty one, and
+        # open the recap on the tab that actually has content. A NULL my_athlete
+        # counts as athlete, matching the rating-badge filter below.
         is_athlete = row['my_athlete'] is None or bool(row['my_athlete'])
-        if not is_athlete:
+        if is_athlete:
+            per_game[gid]['athlete_clip_count'] += 1
+        else:
+            per_game[gid]['team_clip_count'] += 1
             continue
 
         stats = per_game[gid]
@@ -1308,6 +1318,8 @@ def _compute_athlete_stats(cursor, game_ids: list) -> dict:
         bl = stats['blunder_count']
         result[gid] = {
             'clip_count': stats['clip_count'],
+            'athlete_clip_count': stats['athlete_clip_count'],
+            'team_clip_count': stats['team_clip_count'],
             'brilliant_count': b,
             'good_count': g,
             'interesting_count': stats['interesting_count'],
@@ -1547,6 +1559,8 @@ async def _list_games_impl(skip_presigned_urls=False):
             'blake3_hash': blake3,
             'video_url': video_url,
             'clip_count': stats['clip_count'],  # derived live from raw_clips, not the stale stored column
+            'athlete_clip_count': stats['athlete_clip_count'],  # T10120: derived live; my_athlete-true (or NULL) clips
+            'team_clip_count': stats['team_clip_count'],  # T10120: derived live; my_athlete=0 (shared/team) clips
             'reel_count': reel_counts.get(row['id'], 0),  # T8260: published reels for this game, derived live
             'brilliant_count': stats['brilliant_count'],
             'good_count': stats['good_count'],
