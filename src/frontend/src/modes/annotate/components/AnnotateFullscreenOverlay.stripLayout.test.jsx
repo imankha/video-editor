@@ -82,30 +82,29 @@ describe('AnnotateFullscreenOverlay strip — layer control on the top line (T89
   });
 });
 
-describe('AnnotateFullscreenOverlay strip — "Clip" toggle copy (T8960 item 4, T9450 positive polarity)', () => {
-  it('create mode toggle reads a positive off-state ("Just save this play") and flips to the clip copy on click', () => {
+// T9830: the create-mode "Clip" toggle is replaced by two always-visible,
+// always-enabled Save outcomes — "Create an editable clip" and "Save play". The
+// primary action never switches on rating or a prior toggle.
+describe('AnnotateFullscreenOverlay strip — two explicit create outcomes (T9830)', () => {
+  it('create mode shows both outcome buttons, enabled, with NO toggle', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" newClipLayerIsMine={true} />);
-    // Default rating 4 (not 5) + My Athlete -> createProject off. T9450: the off
-    // state is phrased positively ("Just save this play"), never "Don't Clip Play".
-    const toggle = screen.getByText('Just save this play');
-    expect(toggle).toBeTruthy();
-    fireEvent.click(toggle);
-    expect(screen.getByText('Create an editable clip')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Create an editable clip' }).disabled).toBe(false);
+    expect(screen.getByRole('button', { name: 'Save play' }).disabled).toBe(false);
+    // The old toggle off-state label is gone.
+    expect(screen.queryByText('Just save this play')).toBeNull();
   });
 
-  it('never shows a double-negative label in either state, and drops the stale reel tooltip (T9450)', () => {
+  it('never shows a double-negative label, and drops the stale reel tooltip (T9450)', () => {
     const { container } = render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" newClipLayerIsMine={true} />);
     expect(screen.queryByText("Don't Clip Play")).toBeNull();
-    fireEvent.click(screen.getByText('Just save this play'));
-    expect(screen.queryByText("Don't Clip Play")).toBeNull();
-    // The stale "reel" tooltip is gone (a play produces a clip, not a reel).
     expect(container.querySelector('[title="Auto-create a reel from this play"]')).toBeNull();
   });
 
-  it('a 5-star My Athlete clip auto-enables the toggle ("Clip Play to focus on your player")', () => {
+  it('a 5-star My Athlete moment shows the SAME two buttons (no rating-driven default)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" newClipLayerIsMine={true} />);
-    fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
-    expect(screen.getByText('Create an editable clip')).toBeTruthy();
+    fireEvent.keyDown(window, { key: '5' }); // rating shortcut — no inline stars to click
+    expect(screen.getByRole('button', { name: 'Create an editable clip' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save play' })).toBeTruthy();
   });
 });
 

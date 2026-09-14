@@ -1,32 +1,37 @@
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { NO_SPORT } from '../constants/tagRegistry';
-import { TagSelector } from '../../../components/shared/TagSelector';
+import { DetailsFields } from './DetailsFields';
 import { Z } from '../../../constants/zLayers';
 
 /**
- * AddDetailsPopup (T8600 C1) — mobile-only full-screen takeover for Tags +
- * Notes, opened from the "Add details" disclosure inside AnnotateFullscreenOverlay's
- * mobile (`layout="inline"`, isMobile) form body. Not the mobile version of the
- * desktop expand-in-place panel (that one is inline JSX inside the strip) — this
- * is its own standalone component, portaled to `document.body` so it can escape
- * the T8140 bottom sheet's own stacking context (a z-index cannot escape an
- * ancestor's stacking context, the T5700 clip-marker-tooltip landmine).
+ * AddDetailsPopup (T8600 C1) — mobile-only full-screen takeover for the
+ * "Optional details" disclosure, opened from the "Add details" button inside
+ * AnnotateFullscreenOverlay's mobile (`layout="inline"`, isMobile) form body.
+ * Not the mobile version of the desktop expand-in-place panel (that one is inline
+ * JSX inside the strip / formBody) — this is its own standalone component,
+ * portaled to `document.body` so it can escape the T8140 bottom sheet's own
+ * stacking context (a z-index cannot escape an ancestor's stacking context, the
+ * T5700 clip-marker-tooltip landmine).
  *
  * No backdrop-close — dismissal is Done or X only (project's standing rule).
  * Does NOT save; the sheet's pinned Save footer stays the only save gesture.
  *
- * The no_sport amber warning is deliberately NOT rendered here (T8140: mobile
- * stays clean, the full-screen sport question fires at first save instead) —
- * a sport-less mobile clip simply shows no Tags block until a sport is picked.
+ * T9830: now carries Rating + the (de-ambered) Sport prompt alongside Tags +
+ * Notes via the shared DetailsFields — rating is an OPTIONAL detail now, so it
+ * lives behind the disclosure on mobile too. The old T8140 "mobile stays clean,
+ * no in-form sport picker" rule is superseded: the picker is de-ambered and one
+ * tap behind the disclosure, not an amber wall on the first-clip path.
  */
 export function AddDetailsPopup({
   isEditMode,
+  rating,
+  onRatingChange,
   tagSet,
   sport,
   positions,
   selectedTags,
   onTagToggle,
+  onSetSport,
   notes,
   onNotesChange,
   onDone,
@@ -56,29 +61,19 @@ export function AddDetailsPopup({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        {tagSet && sport !== NO_SPORT && (
-          <div className="mb-4">
-            <label className="block text-gray-400 text-sm mb-2">Tags</label>
-            <TagSelector
-              positions={positions}
-              tagsByPosition={tagSet.tags}
-              selectedTags={selectedTags}
-              onTagToggle={onTagToggle}
-              size="lg"
-            />
-          </div>
-        )}
-
-        <div>
-          <label className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
-          <textarea
-            value={notes}
-            onChange={onNotesChange}
-            placeholder="Add a note about this clip..."
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500 resize-none"
-            rows={4}
-          />
-        </div>
+        <DetailsFields
+          rating={rating}
+          onRatingChange={onRatingChange}
+          tagSet={tagSet}
+          sport={sport}
+          positions={positions}
+          selectedTags={selectedTags}
+          onTagToggle={onTagToggle}
+          onSetSport={onSetSport}
+          notes={notes}
+          onNotesChange={onNotesChange}
+          notesRows={4}
+        />
       </div>
     </div>,
     document.body

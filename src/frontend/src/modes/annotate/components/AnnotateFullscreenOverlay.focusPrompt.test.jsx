@@ -168,6 +168,8 @@ describe('AnnotateFullscreenOverlay — Focus with no unsaved changes navigates 
     const onOpenInFocus = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={onOpenInFocus} />);
     // Change the rating (4 -> 5): a genuine edit, so the prompt must appear.
+    // T9830: rating lives behind the Optional details disclosure now.
+    fireEvent.click(screen.getByTestId('add-details-button'));
     fireEvent.click(screen.getByTitle('5 stars'));
     fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
     expect(screen.getByText('Save this play first?')).toBeTruthy();

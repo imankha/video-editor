@@ -1,5 +1,44 @@
 ---
 domain: annotate
+updated: 2026-09-14 (T9830 — the play editor now offers TWO explicit, always-visible, always-enabled
+create outcomes instead of a rating-driven default. **What was removed:** the create-mode "Clip"
+toggle (desktop formBody + strip), the label-switching single Save button (SAVE_PLAY vs
+SAVE_PLAY_AND_CLIP at 4 render sites), the THREE rating/layer auto-flip sites
+(`if (!createProjectManuallySet) setCreateProject(rating===5 && mine)` — create seed, rating handler,
+two layer handlers) and the `createProjectManuallySet` bookkeeping. **What replaced it:** two buttons
+in EVERY layout (desktop strip, desktop formBody/overlay footer, mobile inline footer,
+landscape-inline bar) — "Create an editable clip" (cyan, `ANNOTATE.CREATE_EDITABLE_CLIP`, createProject
+true) and "Save play" (green, `ANNOTATE.SAVE_PLAY`, createProject false). NO new copy — reused existing
+constants (T9860 owns vocabulary). `handleSave(createProjectIntent)`: create mode uses the clicked
+button's intent; EDIT mode ignores it and keeps `createProject` state (= existingClip.autoProjectId,
+still read by the edit payload + hasUnsavedEdits); the Enter shortcut defaults to save-play-only (no
+draft). **Rating + the sport prompt moved into the existing `detailsOpen` disclosure** in every layout
+via a NEW shared `DetailsFields.jsx` (rating + tags/sport + notes), rendered by 3 hosts: desktop strip
+panel, desktop formBody expand-in-place panel (formBody's "Add details" button is now unconditional,
+not `isMobile`-only), and the mobile `AddDetailsPopup` (extended to carry rating + sport). Only ONE
+DetailsFields mounts at a time (hosts are mutually exclusive by layout/viewport) so the `clip-notes`
+id stays unique. **Landscape-inline keeps rating INLINE** (deviation): it never had the T8600
+disclosure and is the most height-starved surface — documented in the T9830 outcome record. **In-flight
+save guard:** `saveInFlightRef` (a ref, set synchronously at the top of handleSave, cleared in a
+`finally`) no-ops a second Save while one is awaiting its round trip — fixes the real double-click bug
+(useRawClipSave's pendingSaves dedup returned null → false "Couldn't save" for a duplicate of a
+succeeding save, and in create mode addClipRegion ran before the dedup, leaving an orphan region).
+**Shared `StarRating.jsx` gained an OPT-IN `showLabel` prop** (default false) — the overlay's old LOCAL
+labeled StarRating was extracted to shared, but a shared StarRating already existed (used by
+UploadClipModal with NO label); showLabel keeps UploadClipModal byte-identical while the Annotate
+surfaces pass `showLabel`. **`NoSportTagWarning` de-ambered** once (shared, 4 call sites: overlay
+formBody/strip/landscape + ClipDetailsEditor:289) — amber AlertTriangle → neutral gray Tag; sport is
+optional now. **`getRatingCaption` (clipConstants.js) is now DEAD in production** (all 3 overlay call
+sites removed) but left intact + unit-tested — T9820 owns it; the two explicit buttons carry the
+outcome, so no create-mode caption. Backend: clips.py creation was ALREADY idempotent-by-natural-key
+and never gated on rating — only stale "5 stars automatically creates a project" docstrings fixed
+(clips.py save/update/`_create_auto_project_for_clip` + log; useRawClipSave saveClip/updateClip). Tests:
+`AnnotateFullscreenOverlay.explicitOutcomes.test.jsx` (new, 8 — AC map: same-two-buttons per rating,
+save-play=no-draft, create=empty-form-ok, double-click one-create, all 4 layouts) + rewrote the
+obsolete toggle/caption/auto-flip assertions in layer/stripLayout/oneTap/keys/saveStatus/focusPrompt/
+mobileStageCta tests. QA: container has no browser/backend (same limit as T9630/T9820) — no live-drive;
+434 relevant unit/integration tests green across desktop-strip + mobile-inline + landscape layouts.
+Prior:)
 updated: 2026-09-14 (T9840 — capture-window numbers made consistent, copy fixed. The "Mark play"
 tap-to-range DEFAULT is now **6s before + 2s after the tap = 8s total** (was 9+3=12). The window
 still STRADDLES the tap on purpose (post-roll kept, NOT reduced to 0): parents tap after they see a

@@ -108,7 +108,10 @@ export function useRawClipSave(activeGameIdRef = null) {
   /**
    * Save a new raw clip during annotation.
    * Extracts the clip from the game video and saves to library.
-   * If rating is 5, automatically creates a 9:16 project.
+   * Creates a 9:16 editable-clip project only when `create_project` is set —
+   * an EXPLICIT caller choice, never inferred from the rating (T9830). The
+   * rating is descriptive metadata; "Create an editable clip" and "Save play"
+   * are two separate Save outcomes now.
    *
    * @param {number} gameId - The game ID to extract from
    * @param {object} clipData - Clip data including start_time, end_time, etc.
@@ -198,10 +201,12 @@ export function useRawClipSave(activeGameIdRef = null) {
 
   /**
    * Update a raw clip's metadata.
-   * Handles 5-star sync automatically:
-   * - Rating changed TO 5: Creates auto-project
-   * - Rating changed FROM 5: Deletes auto-project (if unmodified)
+   * Clip/project creation is driven ONLY by an explicit `create_project` flag
+   * in `updates` (T9830), never by the rating:
+   * - create_project set, no project yet: Creates auto-project
    * - Duration changed: Re-extracts clip
+   * (The old "5-star sync" that created/deleted a project as the rating crossed
+   * 5 lived in a since-removed frontend default, not the backend.)
    *
    * @param {number} clipId - The raw clip ID to update
    * @param {object} updates - Partial update object
