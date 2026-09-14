@@ -21,7 +21,7 @@ import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth.js';
 import { openFramingDraft } from './helpers/framingDraft.js';
 import { openLoadableOverlayDraft } from './helpers/overlayDraft.js';
-import { saveEvidence } from './helpers/qa.js';
+import { saveEvidence, assertNoHorizontalOverflow } from './helpers/qa.js';
 
 const AUDIT_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const AUDIT_PROFILE = process.env.E2E_PROFILE_ID || '9fa7378c';
@@ -159,6 +159,30 @@ test.describe('T9270 mobile drawer @ 390x844', () => {
       }
       expect(undersized, `${screen.name}: drawer controls below the ${TOUCH_FLOOR}px floor: ${JSON.stringify(undersized)}`).toEqual([]);
       await saveEvidence(page, `t9270-touch-targets_${screen.name}`);
+    });
+
+    // T9920 Bug A regression: the PARKED (closed) settings drawer is translated
+    // translateX(316px) past the right edge of its containing block. Without
+    // `overflow-x-clip` on the stage row it grows a horizontal scrollbar on the
+    // app's inner `flex-1 overflow-auto` pane (never the shell, so the old
+    // document.scrollingElement check failed open). Sweep the narrow widths in this
+    // task's acceptance matrix with the drawer CLOSED and assert no horizontal leak.
+    test(`${screen.name}: parked settings drawer never overflows horizontally (narrow widths)`, async ({ page }) => {
+      const res = await screen.open(page);
+      test.skip(!res.ok, res.reason || `no ${screen.name}-openable draft on this account`);
+
+      const drawer = page.getByTestId('settings-drawer');
+      await drawer.waitFor({ state: 'attached', timeout: 20000 });
+
+      for (const width of [360, 390, 699, 768, 1023]) {
+        await page.setViewportSize({ width, height: 844 });
+        await page.waitForTimeout(300); // let the responsive reflow settle
+        // Drawer is parked (closed) — confirm, then assert no horizontal overflow.
+        const tx = await translateXOf(drawer);
+        expect(tx, `${screen.name} @ ${width}px: drawer parked off-screen`).toBeGreaterThan(100);
+        await assertNoHorizontalOverflow(page);
+      }
+      await saveEvidence(page, `t9920-bugA_${screen.name}_no-overflow`);
     });
   }
 

@@ -421,7 +421,14 @@ export function FocusModeView({
         {/* T9270: desktop stage row — the editor column (video + timeline) beside the
             settings rail. In fullscreen / mobileFs the container escapes via fixed
             positioning so the row collapses to just the (gated-off) rail. */}
-        <div className="lg:flex lg:flex-row lg:items-start">
+        {/* T9920: `relative` makes this the containing block for the parked mobile
+            settings drawer + its `absolute inset-0` scrim below (the comment there
+            long claimed it already was — now the code matches). `overflow-x-clip`
+            keeps the drawer's off-canvas translateX(316px) from growing a horizontal
+            scrollbar on the app's inner scroll pane. Clip, not hidden: `overflow-x:
+            hidden` would force overflow-y to auto and trap the sticky/absolute
+            children in this row. */}
+        <div className="relative overflow-x-clip lg:flex lg:flex-row lg:items-start">
         <div className="flex flex-col w-full lg:flex-1 lg:min-w-0 lg:pr-6">
         {/* T9610: the three-step framing guide — the first thing a first-time parent
             sees in the editor column, teaching the frame → step → adjust sequence and

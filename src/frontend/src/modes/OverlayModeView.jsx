@@ -951,7 +951,7 @@ export function OverlayModeView({
               {controlsEl}
             </div>
           ) : (
-            <div className="relative lg:flex lg:flex-row lg:items-start">
+            <div className="relative overflow-x-clip lg:flex lg:flex-row lg:items-start">
               {/* Video column — shrink-wraps the aspect box so Controls bind to the
                   video width (lg:w-fit); full width when stacked on mobile. T9270:
                   lg:flex-1 lets it GROW into the width the rail gives back when the
