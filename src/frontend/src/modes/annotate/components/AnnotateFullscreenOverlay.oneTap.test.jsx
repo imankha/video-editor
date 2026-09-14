@@ -45,7 +45,10 @@ const baseProps = {
   surface: 'dock_fullscreen',
 };
 
-const saveButton = (container) => container.querySelector('button.bg-green-600');
+// T9830: create mode now has two Save outcomes; the green button is "Save play"
+// (create no draft). Target it by name so it is unambiguous next to the cyan
+// "Create an editable clip".
+const saveButton = () => screen.getByRole('button', { name: 'Save play' });
 
 describe('AnnotateFullscreenOverlay — one-tap defaults (T8140)', () => {
   it('a nameless new clip saves with the "Play N" default name in one tap', () => {
@@ -54,7 +57,7 @@ describe('AnnotateFullscreenOverlay — one-tap defaults (T8140)', () => {
       <AnnotateFullscreenOverlay {...baseProps} onCreateClip={onCreateClip} nextClipNumber={3} />
     );
     // No typing, no field changes — just Save.
-    fireEvent.click(saveButton(container));
+    fireEvent.click(saveButton());
     expect(onCreateClip).toHaveBeenCalledTimes(1);
     expect(onCreateClip.mock.calls[0][0]).toMatchObject({ name: 'Play 3' });
   });
@@ -72,7 +75,7 @@ describe('AnnotateFullscreenOverlay — one-tap defaults (T8140)', () => {
       <AnnotateFullscreenOverlay {...baseProps} onCreateClip={onCreateClip} nextClipNumber={2} />
     );
     fireEvent.change(screen.getByPlaceholderText('Enter clip name...'), { target: { value: 'My banger' } });
-    fireEvent.click(saveButton(container));
+    fireEvent.click(saveButton());
     expect(onCreateClip.mock.calls[0][0]).toMatchObject({ name: 'My banger' });
   });
 
@@ -89,15 +92,21 @@ describe('AnnotateFullscreenOverlay — one-tap defaults (T8140)', () => {
   });
 });
 
-describe('AnnotateFullscreenOverlay — platform-aware rating copy (T8140)', () => {
-  it('desktop keeps the "(press 1-5)" keyboard hint', () => {
+// T9830: rating moved into the "Optional details" disclosure. The platform-aware
+// keyboard hint still rides with the rating label — kept on the desktop
+// expand-in-place panel, dropped in the mobile popup.
+describe('AnnotateFullscreenOverlay — platform-aware rating copy (T8140/T9830)', () => {
+  it('desktop keeps the "(press 1-5)" keyboard hint (inside details)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} />);
+    expect(screen.queryByText('Rating (press 1-5)')).toBeNull(); // collapsed
+    fireEvent.click(screen.getByTestId('add-details-button'));
     expect(screen.getByText('Rating (press 1-5)')).toBeTruthy();
   });
 
-  it('mobile drops the keyboard hint', () => {
+  it('mobile drops the keyboard hint (inside the details popup)', () => {
     mockViewport(true);
-    render(<AnnotateFullscreenOverlay {...baseProps} />);
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" />);
+    fireEvent.click(screen.getByTestId('add-details-button'));
     expect(screen.queryByText('Rating (press 1-5)')).toBeNull();
     expect(screen.getByText('Rating')).toBeTruthy();
   });
@@ -112,8 +121,11 @@ describe('AnnotateFullscreenOverlay — no amber no_sport wall on mobile (T8140)
     expect(screen.queryByText('Pick your sport to tag this clip')).toBeNull();
   });
 
-  it('desktop no_sport create form keeps the in-form picker (T7922 preserved)', () => {
+  it('desktop no_sport create form keeps the in-form picker (T7922 preserved), inside details', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} />);
+    // T9830: the sport prompt is now an optional detail — behind the disclosure.
+    expect(screen.queryByText('Pick your sport to tag this clip')).toBeNull();
+    fireEvent.click(screen.getByTestId('add-details-button'));
     expect(screen.getByText('Pick your sport to tag this clip')).toBeTruthy();
   });
 });
@@ -135,7 +147,7 @@ describe('AnnotateFullscreenOverlay — abandonment beacon (T8140)', () => {
     // deciding to close) — flush that microtask so the assertion below
     // doesn't race a pending state update.
     await act(async () => {
-      fireEvent.click(saveButton(container));
+      fireEvent.click(saveButton());
     });
     rerender(<AnnotateFullscreenOverlay {...baseProps} isVisible={false} />);
     expect(recordUiImpression).not.toHaveBeenCalled();
@@ -160,7 +172,7 @@ describe('AnnotateFullscreenOverlay — abandonment beacon (T8140)', () => {
       <AnnotateFullscreenOverlay {...baseProps} isVisible={true} existingClip={null} onCreateClip={() => {}} />
     );
     await act(async () => {
-      fireEvent.click(saveButton(container));
+      fireEvent.click(saveButton());
     });
     const newRegion = { id: 'new_1', startTime: 24, endTime: 32, rating: 4, tags: [], autoProjectId: null };
     rerender(<AnnotateFullscreenOverlay {...baseProps} isVisible={true} existingClip={newRegion} />);

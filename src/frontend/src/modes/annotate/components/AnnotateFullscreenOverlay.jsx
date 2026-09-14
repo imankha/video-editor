@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Star, X, Plus, Pencil, Crop, Sparkles, ChevronDown, ChevronUp, Video } from 'lucide-react';
+import { X, Plus, Pencil, Crop, Sparkles, ChevronDown, ChevronUp, Video } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
@@ -11,11 +11,13 @@ import { getClipStage, CLIP_STAGE } from '../clipStage';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { recordUiImpression } from '../../../utils/uiTelemetry';
 import { ClipScrubRegion } from './ClipScrubRegion';
-import { Toggle, Button } from '../../../components/shared/Button';
+import { Button } from '../../../components/shared/Button';
+import { StarRating } from '../../../components/shared/StarRating';
 import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialog';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
-import { getRatingCaption, getRatingLabel, DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../../../components/shared/clipConstants';
+import { DetailsFields } from './DetailsFields';
+import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../../../components/shared/clipConstants';
 import { ANNOTATE } from '../../../config/displayNames';
 
 // T9580: the "Save & open …" confirm-dialog destination noun, keyed by stage
@@ -57,41 +59,6 @@ function DockPositionSelector({ position, onPositionChange }) {
 // single-sourced in clipConstants.js (T9840) and imported above, so this
 // overlay's default and useAnnotate's addClipRegion default stay one policy.
 const DEFAULT_RATING = 4; // "Good"
-
-/**
- * StarRating - Clickable star rating
- */
-function StarRating({ rating, onRatingChange, size = 24 }) {
-  return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((starNum) => (
-        <button
-          key={starNum}
-          onClick={() => onRatingChange(starNum)}
-          className="p-0.5 hover:scale-110 transition-transform"
-          title={`${starNum} star${starNum > 1 ? 's' : ''}`}
-        >
-          <Star
-            size={size}
-            fill={starNum <= rating ? '#fbbf24' : 'transparent'}
-            color={starNum <= rating ? '#fbbf24' : '#6b7280'}
-            strokeWidth={1.5}
-          />
-        </button>
-      ))}
-      {/* T9630 N35: the visible text IS the canonical mapping (was the bare
-          chess-notation glyph sitting next to the stars — the literal "four
-          stars and an exclamation mark compete" bug the report named). */}
-      <span
-        className="ml-2 text-sm font-bold text-white"
-        title={getRatingLabel(rating)}
-        aria-label={getRatingLabel(rating)}
-      >
-        {getRatingLabel(rating)}
-      </span>
-    </div>
-  );
-}
 
 /**
  * CutFromAngleChip (T8892) — while the active source is a non-backbone angle, the
@@ -274,11 +241,22 @@ export function AnnotateFullscreenOverlay({
   // open form, so the Focus button opens this confirm-then-save-then-navigate
   // prompt instead of navigating directly.
   const [focusConfirmOpen, setFocusConfirmOpen] = useState(false);
+  // T9830: `createProject` is now ONLY meaningful in edit mode, where it mirrors
+  // whether the clip already has a project (`autoProjectId`) — the edit payload
+  // and `hasUnsavedEdits` read it. In CREATE mode there is no rating-driven
+  // default and no toggle anymore: the two explicit Save buttons ("Create an
+  // editable clip" / "Save play") pass their intent straight into handleSave, so
+  // this state is never read to decide a create outcome. The three rating/layer
+  // auto-flip sites and the `createProjectManuallySet` bookkeeping they needed
+  // are gone.
   const [createProject, setCreateProject] = useState(false);
-  const [createProjectManuallySet, setCreateProjectManuallySet] = useState(false);
-  const notesRef = useRef(null);
   const handleSaveRef = useRef(null);
   const handleRatingChangeRef = useRef(null);
+  // T9830: in-flight guard so a fast double-click (or Enter during a save)
+  // no-ops the second Save instead of firing a duplicate create — set
+  // synchronously (a ref, not state) so the second click can never slip through
+  // before a re-render. Cleared in handleSave's finally.
+  const saveInFlightRef = useRef(false);
   // T8140: fires the `add_clip_opened_no_save` impression exactly once per
   // create-mode open that ends without a save (see effect below). Set true by
   // handleSave so a saved open never beacons.
@@ -318,7 +296,6 @@ export function AnnotateFullscreenOverlay({
       setTaggedTeammates(existingClip.tagged_teammates || []);
       setMyAthlete(existingClip.my_athlete ?? true);
       setCreateProject(!!existingClip.autoProjectId);
-      setCreateProjectManuallySet(!!existingClip.autoProjectId);
     } else {
       setRating(DEFAULT_RATING);
       setSelectedTags([]);
@@ -329,8 +306,9 @@ export function AnnotateFullscreenOverlay({
       setNotes('');
       setTaggedTeammates([]);
       setMyAthlete(newClipLayerIsMineRef.current);
-      setCreateProject(DEFAULT_RATING === 5 && newClipLayerIsMineRef.current);
-      setCreateProjectManuallySet(false);
+      // T9830: no rating-driven create default anymore — the create-mode Save
+      // outcome is chosen at click time by the two explicit buttons.
+      setCreateProject(false);
     }
   }, [existingClip]);
 
@@ -346,12 +324,9 @@ export function AnnotateFullscreenOverlay({
     }
   }, [rating, selectedTags, notes, isNameManuallyEdited, existingClip?.name, defaultClipName]);
 
-  // Focus notes input when overlay appears
-  useEffect(() => {
-    if (isVisible && notesRef.current) {
-      notesRef.current.focus();
-    }
-  }, [isVisible]);
+  // T9830: the notes field moved into the "Optional details" disclosure (it is
+  // no longer a primary create-form control), so there is no field to autofocus
+  // on open — the old notes-autofocus effect is gone.
 
   // T8140: measure in-form abandonment. When the Add Clip form is opened in
   // CREATE mode, fire a single `add_clip_opened_no_save` dialog impression on
@@ -411,10 +386,9 @@ export function AnnotateFullscreenOverlay({
   }, [isVisible, onClose, detailsOpen]);
 
   const handleRatingChange = (newRating) => {
+    // T9830: rating no longer flips a create-clip default — it is descriptive
+    // metadata now. Just record it (and the quest-progress side effect).
     setRating(newRating);
-    if (!createProjectManuallySet) {
-      setCreateProject(newRating === 5 && myAthlete);
-    }
     maybeRecordRatedAndTagged(newRating, selectedTags);
   };
   handleRatingChangeRef.current = handleRatingChange;
@@ -432,7 +406,21 @@ export function AnnotateFullscreenOverlay({
     setIsNameManuallyEdited(true);
   };
 
-  const handleSave = async () => {
+  // T9830: `createProjectIntent` is the create-mode Save outcome chosen at click
+  // time — `true` from "Create an editable clip", `false`/undefined from
+  // "Save play" (and from the Enter shortcut, which defaults to the no-draft
+  // save-play-only outcome). Edit mode ignores it and keeps the clip's existing
+  // `createProject` (autoProjectId) — its "Create clip" affordance is separate.
+  const handleSave = async (createProjectIntent) => {
+    // T9830: in-flight guard — a second Save while the first is still awaiting
+    // its round trip is a no-op (double-click / Enter-during-save safety). The
+    // ref is set synchronously so the second call bails BEFORE it can fire a
+    // duplicate create or leave an orphan region. Returns the same `false` a
+    // failed save returns, so no caller mistakes it for a fresh success.
+    if (saveInFlightRef.current) return false;
+    saveInFlightRef.current = true;
+    try {
+    const saveCreateProject = isEditMode ? createProject : createProjectIntent === true;
     // T8140: this open ended in a save ATTEMPT — suppress the abandonment
     // beacon. Set synchronously (not after the await below) since the beacon's
     // own cleanup can fire on the very next render (e.g. a rerender that flips
@@ -468,7 +456,7 @@ export function AnnotateFullscreenOverlay({
         notes,
         tagged_teammates: finalTeammates,
         my_athlete: myAthlete,
-        createProject,
+        createProject: saveCreateProject,
       });
     } else {
       const clipData = {
@@ -480,7 +468,7 @@ export function AnnotateFullscreenOverlay({
         notes,
         tagged_teammates: finalTeammates,
         my_athlete: myAthlete,
-        createProject,
+        createProject: saveCreateProject,
       };
       savePromise = onCreateClip(clipData);
     }
@@ -522,6 +510,11 @@ export function AnnotateFullscreenOverlay({
       onResume();
     }
     return true;
+    } finally {
+      // T9830: release the in-flight guard on every exit (success, failure,
+      // throw) so the next real Save gesture can proceed.
+      saveInFlightRef.current = false;
+    }
   };
   handleSaveRef.current = handleSave;
 
@@ -630,59 +623,9 @@ export function AnnotateFullscreenOverlay({
           clipEditorActive
         />
 
-        {/* Star Rating */}
-        <div className="mb-4">
-          <label className="block text-gray-400 text-sm mb-2">Rating{isMobile ? '' : ' (press 1-5)'}</label>
-          <StarRating rating={rating} onRatingChange={handleRatingChange} size={28} />
-          {/* T8490 / T9820: create-mode-only caption stating what Save will do —
-              the outcome clause is driven by the live `createProject` intent, not
-              the star count. */}
-          {!isEditMode && (
-            <p className="text-xs text-gray-400 mt-1.5">{getRatingCaption(rating, myAthlete, createProject)}</p>
-          )}
-        </div>
-
-        {/* Tag Selection — T8600: on mobile, Tags (+ Notes, newly available)
-            move behind the "Add details" disclosure, which opens a full-screen
-            popup (AddDetailsPopup). Desktop keeps them inline here, unchanged,
-            until the strip layout (C2) gives desktop its own in-place panel. */}
-        {isMobile ? (
-          <div className="mb-4">
-            <button
-              type="button"
-              onClick={() => setDetailsOpen(true)}
-              aria-expanded={detailsOpen}
-              data-testid="add-details-button"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded text-sm text-gray-300 transition-colors"
-            >
-              <ChevronDown size={14} />
-              {detailsLabel}
-            </button>
-          </div>
-        ) : tagSet ? (
-          <div className="mb-4">
-            <label className="block text-gray-400 text-sm mb-2">Tags</label>
-            <TagSelector
-              positions={getPositions(sport)}
-              tagsByPosition={tagSet.tags}
-              selectedTags={selectedTags}
-              onTagToggle={handleTagToggle}
-              size="lg"
-            />
-          </div>
-        ) : sport === NO_SPORT ? (
-          // T8140: the amber no_sport prompt is kept ONLY on desktop (which also
-          // has the top-bar sport control). On mobile the first-clip path is kept
-          // clean — no amber wall in the form — and a full-screen "What sport is
-          // this?" question fires at first save instead (AnnotateModeView),
-          // replacing T7922's in-form picker for the mobile case.
-          <div className="mb-4">
-            <label className="block text-gray-400 text-sm mb-2">Tags</label>
-            <NoSportTagWarning onChange={handleSetSport} />
-          </div>
-        ) : null}
-
-        {/* Clip Name - always rendered to keep panel height stable */}
+        {/* Clip Name - always rendered to keep panel height stable. T9830: Name
+            is now the first control below the scrub (rating/tags/notes moved into
+            the Optional details disclosure), matching the two-outcome schematic. */}
         <div className="mb-4">
           <label className="block text-gray-400 text-sm mb-2">
             {ANNOTATE.CLIP_NAME}
@@ -698,22 +641,6 @@ export function AnnotateFullscreenOverlay({
             className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
         </div>
-
-        {/* Notes — desktop only */}
-        {!isMobile && (
-          <div className="mb-4">
-            <label htmlFor="clip-notes" className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
-            <textarea
-              id="clip-notes"
-              ref={notesRef}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add a note about this clip..."
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500 resize-none"
-              rows={2}
-            />
-          </div>
-        )}
 
         {/* Layer — replaces the old My Athlete on/off toggle. Shown on mobile
             too: this overlay IS the mobile add/edit surface. Locked to Team,
@@ -731,10 +658,9 @@ export function AnnotateFullscreenOverlay({
               // T5725: switching TO My Athlete clears teammate tags — teammates
               // are Team-layer-only, so a My Athlete clip must never carry them.
               // Persisted on Save; visible now because the Teammates block hides.
+              // T9830: no create-clip auto-flip here anymore — the layer no longer
+              // drives a Save default.
               if (mine) setTaggedTeammates([]);
-              if (!createProjectManuallySet) {
-                setCreateProject(rating === 5 && mine);
-              }
             }}
             className="w-full"
           />
@@ -754,43 +680,72 @@ export function AnnotateFullscreenOverlay({
           </div>
         )}
 
-        {/* Clip toggle — desktop only; toggle in create mode, button in edit mode.
-            T9450: positive polarity (no "Don't …" double negative) + clip vocabulary
-            (a play produces a clip, never a reel), matching the strip layout. */}
-        {!isMobile && (
+        {/* Edit-mode "Create clip" affordance — desktop formBody only (the strip
+            has its own; the mobile edit sheet uses the stage CTA). Unconditional,
+            never rating-gated. Create mode has NO such control here anymore: the
+            two Save buttons in the footer are the create/save-only choice. */}
+        {!isMobile && isEditMode && (
           <div className="mb-4 flex items-center justify-between">
             <label className="text-gray-400 text-sm">Clip</label>
-            {isEditMode ? (
-              existingClip?.autoProjectId ? (
-                <span className="text-green-400 text-sm">{ANNOTATE.CLIP_CREATED}</span>
-              ) : (
-                <Button
-                  variant="cyan"
-                  size="sm"
-                  icon={Plus}
-                  onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
-                >
-                  {ANNOTATE.CREATE_CLIP}
-                </Button>
-              )
+            {existingClip?.autoProjectId ? (
+              <span className="text-green-400 text-sm">{ANNOTATE.CLIP_CREATED}</span>
             ) : (
-              <div className="flex items-center gap-2">
-                <span className={`text-sm ${createProject ? 'text-cyan-400' : 'text-gray-500'}`}>
-                  {createProject ? ANNOTATE.CREATE_EDITABLE_CLIP : ANNOTATE.JUST_SAVE_PLAY}
-                </span>
-                <Toggle
-                  checked={createProject}
-                  onChange={(val) => { setCreateProject(val); setCreateProjectManuallySet(true); }}
-                  size="sm"
-                  accent="cyan"
-                />
-              </div>
+              <Button
+                variant="cyan"
+                size="sm"
+                icon={Plus}
+                onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
+              >
+                {ANNOTATE.CREATE_CLIP}
+              </Button>
             )}
+          </div>
+        )}
+
+        {/* T9830: "Optional details" disclosure — rating, sport, tags and notes.
+            One button, two presentations: desktop expands the shared DetailsFields
+            in place (below); mobile opens the full-screen AddDetailsPopup (rendered
+            by the inline layout wrapper). */}
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => setDetailsOpen(o => !o)}
+            aria-expanded={detailsOpen}
+            data-testid="add-details-button"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded text-sm text-gray-300 transition-colors"
+          >
+            {detailsOpen && !isMobile ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {detailsLabel}
+          </button>
+        </div>
+
+        {/* Desktop expand-in-place details panel (mobile uses AddDetailsPopup). */}
+        {!isMobile && detailsOpen && (
+          <div className="mb-4 border-t border-gray-700 pt-4">
+            <DetailsFields
+              rating={rating}
+              onRatingChange={handleRatingChange}
+              showKeyHint
+              tagSet={tagSet}
+              sport={sport}
+              positions={getPositions(sport)}
+              selectedTags={selectedTags}
+              onTagToggle={handleTagToggle}
+              onSetSport={handleSetSport}
+              notes={notes}
+              onNotesChange={(e) => setNotes(e.target.value)}
+            />
           </div>
         )}
 
     </>
   );
+
+  // T9830: the two always-visible, always-enabled create outcomes — "Create an
+  // editable clip" (makes a draft) and "Save play" (saves the marked play only,
+  // no draft/render/credits). Both pass their intent straight into handleSave, so
+  // the primary action never dynamically switches on rating or a prior toggle.
+  const saving = saveStatus === 'saving';
 
   // T8140: Save/Cancel live in a pinned footer OUTSIDE the scroll area so Save is
   // always visible without scrolling (390x844 mobile) — the body scrolls, the
@@ -800,20 +755,47 @@ export function AnnotateFullscreenOverlay({
       {displayStatus && (
         <div className="mb-1.5"><SaveStatusBadge status={displayStatus} /></div>
       )}
-      <div className="flex gap-3">
-        <button
-          onClick={handleSave}
-          className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
-        >
-          {isEditMode ? ANNOTATE.UPDATE_PLAY : (createProject ? ANNOTATE.SAVE_PLAY_AND_CLIP : ANNOTATE.SAVE_PLAY)}
-        </button>
-        <button
-          onClick={onClose}
-          className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
-        >
-          Cancel
-        </button>
-      </div>
+      {isEditMode ? (
+        <div className="flex gap-3">
+          <button
+            onClick={() => handleSave()}
+            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+          >
+            {ANNOTATE.UPDATE_PLAY}
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="flex gap-3">
+            <button
+              onClick={() => handleSave(true)}
+              disabled={saving}
+              className="flex-1 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
+            >
+              {ANNOTATE.CREATE_EDITABLE_CLIP}
+            </button>
+            <button
+              onClick={() => handleSave(false)}
+              disabled={saving}
+              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
+            >
+              {ANNOTATE.SAVE_PLAY}
+            </button>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-full mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+        </>
+      )}
     </div>
   );
 
@@ -983,8 +965,8 @@ export function AnnotateFullscreenOverlay({
                 onChange={(mine) => {
                   setMyAthlete(mine);
                   // T5725: switching TO My Athlete clears teammate tags.
+                  // T9830: no create-clip auto-flip here anymore.
                   if (mine) setTaggedTeammates([]);
-                  if (!createProjectManuallySet) setCreateProject(rating === 5 && mine);
                 }}
                 disabled={!!existingClip?.shared_by}
                 disabledReason={existingClip?.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
@@ -1038,21 +1020,15 @@ export function AnnotateFullscreenOverlay({
             />
           </div>
 
-          {/* Controls row */}
+          {/* Controls row — T9830: rating + sport moved into the details
+              disclosure below; the create-mode clip toggle is replaced by the two
+              always-visible Save buttons ("Create an editable clip" / "Save play").
+              Edit mode keeps its separate, unconditional "Create clip" affordance. */}
           <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
-            <StarRating rating={rating} onRatingChange={handleRatingChange} size={22} />
-
-            {/* Clip toggle — next to Rating (its state auto-flips with rating).
-                T8960 items 4+7: create mode is a WIDER toggle-button with stateful
-                copy; edit mode is the "Clip Play" action (renamed from
-                "Clip Out Play"). The name field that used to live here is gone —
-                the header pencil is the single name affordance now. */}
-            {isEditMode ? (
-              // T9330: a project exists (autoProjectId) OR is being created right
-              // now (focusPending) — either way the manual "Clip Play" create
-              // affordance would be wrong, so show the created indicator. "Clip
-              // created", not "Reel created" (vocabulary: this is the clip's own
-              // project, never a reel).
+            {/* T9330: a project exists (autoProjectId) OR is being created right
+                now (focusPending) — either way the manual create affordance would
+                be wrong, so show the "Clip created" indicator. Edit mode only. */}
+            {isEditMode && (
               (existingClip?.autoProjectId || focusPending) ? (
                 <span className="text-xs text-green-400 shrink-0">{ANNOTATE.CLIP_CREATED}</span>
               ) : (
@@ -1065,32 +1041,11 @@ export function AnnotateFullscreenOverlay({
                   {ANNOTATE.CREATE_CLIP}
                 </Button>
               )
-            ) : (
-              <button
-                type="button"
-                onClick={() => { setCreateProject(!createProject); setCreateProjectManuallySet(true); }}
-                aria-pressed={createProject}
-                className={`shrink-0 px-3 py-1.5 rounded text-sm font-medium border transition-colors ${
-                  createProject
-                    ? 'bg-cyan-600/20 border-cyan-500/60 text-cyan-300 hover:bg-cyan-600/30'
-                    : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600'
-                }`}
-              >
-                {createProject ? ANNOTATE.CREATE_EDITABLE_CLIP : ANNOTATE.JUST_SAVE_PLAY}
-              </button>
             )}
 
             {!myAthlete && (
               <div className="min-w-[180px] max-w-xs flex-1">
                 <TeammateTagInput teammates={taggedTeammates} onChange={setTaggedTeammates} suggestions={teammateSuggestions} />
-              </div>
-            )}
-
-            {/* Q3: no_sport promotes into the controls row (always visible),
-                rather than hiding behind the details disclosure. */}
-            {!tagSet && sport === NO_SPORT && (
-              <div className="min-w-[220px]">
-                <NoSportTagWarning onChange={handleSetSport} />
               </div>
             )}
 
@@ -1106,12 +1061,31 @@ export function AnnotateFullscreenOverlay({
                 {detailsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 {detailsLabel}
               </button>
-              <button
-                onClick={handleSave}
-                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
-              >
-                {isEditMode ? ANNOTATE.UPDATE_PLAY : (createProject ? ANNOTATE.SAVE_PLAY_AND_CLIP : ANNOTATE.SAVE_PLAY)}
-              </button>
+              {isEditMode ? (
+                <button
+                  onClick={() => handleSave()}
+                  className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
+                >
+                  {ANNOTATE.UPDATE_PLAY}
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => handleSave(true)}
+                    disabled={saving}
+                    className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 text-white text-sm font-medium rounded transition-colors"
+                  >
+                    {ANNOTATE.CREATE_EDITABLE_CLIP}
+                  </button>
+                  <button
+                    onClick={() => handleSave(false)}
+                    disabled={saving}
+                    className="px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded transition-colors"
+                  >
+                    {ANNOTATE.SAVE_PLAY}
+                  </button>
+                </>
+              )}
               <button
                 onClick={onClose}
                 className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded transition-colors"
@@ -1129,43 +1103,25 @@ export function AnnotateFullscreenOverlay({
             </div>
           )}
 
-          {/* T8490: create-mode-only caption, own row below Controls so it
-              never widens the flex-wrap row and risks pushing Save off-screen. */}
-          {!isEditMode && (
-            <div className="px-4 pb-3 -mt-2">
-              <p className="text-xs text-gray-400">{getRatingCaption(rating, myAthlete, createProject)}</p>
-            </div>
-          )}
-
           {/* Details panel — desktop expand-in-place. T8960 item 6: no inner
-              scroll (the panel grows to fit Tags + Notes); dismissal is the
-              toggle button itself, no separate Done/X. */}
+              scroll (the panel grows to fit Rating + Tags + Notes); dismissal is
+              the toggle button itself, no separate Done/X. T9830: rating + the
+              (de-ambered) sport prompt now live here, via the shared DetailsFields. */}
           {detailsOpen && (
             <div className={`border-t px-4 py-3 ${isEditMode ? 'border-yellow-800/30' : 'border-green-800/30'}`}>
-              {tagSet && (
-                <div className="mb-4">
-                  <label className="block text-gray-400 text-sm mb-2">Tags</label>
-                  <TagSelector
-                    positions={getPositions(sport)}
-                    tagsByPosition={tagSet.tags}
-                    selectedTags={selectedTags}
-                    onTagToggle={handleTagToggle}
-                    size="lg"
-                  />
-                </div>
-              )}
-              <div>
-                <label htmlFor="clip-notes" className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
-                <textarea
-                  id="clip-notes"
-                  ref={notesRef}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add a note about this clip..."
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500 resize-none"
-                  rows={2}
-                />
-              </div>
+              <DetailsFields
+                rating={rating}
+                onRatingChange={handleRatingChange}
+                showKeyHint
+                tagSet={tagSet}
+                sport={sport}
+                positions={getPositions(sport)}
+                selectedTags={selectedTags}
+                onTagToggle={handleTagToggle}
+                onSetSport={handleSetSport}
+                notes={notes}
+                onNotesChange={(e) => setNotes(e.target.value)}
+              />
             </div>
           )}
         </div>
@@ -1208,7 +1164,7 @@ export function AnnotateFullscreenOverlay({
           {/* T9630 N35: the standalone notation span that used to sit here was
               a straight duplicate of the label StarRating already renders —
               two rating indicators for one value on the tightest layout. */}
-          <StarRating rating={rating} onRatingChange={handleRatingChange} size={20} />
+          <StarRating rating={rating} onRatingChange={handleRatingChange} size={20} showLabel />
           <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
           <div className="flex-1 overflow-x-auto scrollbar-hide">
             {tagSet ? (
@@ -1225,12 +1181,34 @@ export function AnnotateFullscreenOverlay({
             ) : null}
           </div>
           <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
-          <button
-            onClick={handleSave}
-            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
-          >
-            {isEditMode ? ANNOTATE.UPDATE_PLAY : (createProject ? ANNOTATE.SAVE_PLAY_AND_CLIP : ANNOTATE.SAVE_PLAY)}
-          </button>
+          {/* T9830: two always-visible outcomes here too (create mode). Rating
+              stays inline on this height-starved landscape bar rather than moving
+              behind a disclosure it never had — see the outcome record. */}
+          {isEditMode ? (
+            <button
+              onClick={() => handleSave()}
+              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
+            >
+              {ANNOTATE.UPDATE_PLAY}
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => handleSave(true)}
+                disabled={saving}
+                className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
+              >
+                {ANNOTATE.CREATE_EDITABLE_CLIP}
+              </button>
+              <button
+                onClick={() => handleSave(false)}
+                disabled={saving}
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
+              >
+                {ANNOTATE.SAVE_PLAY}
+              </button>
+            </>
+          )}
           <button
             onClick={onClose}
             className="p-1 hover:bg-gray-700 rounded transition-colors flex-shrink-0"
@@ -1245,12 +1223,6 @@ export function AnnotateFullscreenOverlay({
             on the height-starved landscape layout. */}
         {displayStatus && (
           <p className="mt-1"><SaveStatusBadge status={displayStatus} /></p>
-        )}
-        {/* T8490: create-mode-only caption. Single truncated line — this
-            layout is the most height-starved surface (landscape phone, T5700
-            two-lane note), so no wrapping. */}
-        {!isEditMode && (
-          <p className="text-xs text-gray-400 mt-1 truncate">{getRatingCaption(rating, myAthlete, createProject)}</p>
         )}
       </div>
     );
@@ -1292,11 +1264,14 @@ export function AnnotateFullscreenOverlay({
         {isMobile && detailsOpen && (
           <AddDetailsPopup
             isEditMode={isEditMode}
+            rating={rating}
+            onRatingChange={handleRatingChange}
             tagSet={tagSet}
             sport={sport}
             positions={getPositions(sport)}
             selectedTags={selectedTags}
             onTagToggle={handleTagToggle}
+            onSetSport={handleSetSport}
             notes={notes}
             onNotesChange={(e) => setNotes(e.target.value)}
             onDone={() => setDetailsOpen(false)}

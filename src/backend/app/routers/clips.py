@@ -1036,7 +1036,7 @@ def _insert_working_clip_with_dims(
 
 
 def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> int:
-    """Create a 9:16 project for a 5-star clip and return the project ID."""
+    """Create a 9:16 editable-clip project (on explicit create_project) and return the project ID."""
     logger.info(f"[CreateReel] Creating auto-project for clip {raw_clip_id}, clip_name={clip_name!r}")
 
     # Fetch tags and rating from the raw clip to generate a name if needed.
@@ -1095,7 +1095,7 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
             UPDATE raw_clips SET auto_project_id = ? WHERE id = ?
         """, (project_id, raw_clip_id))
 
-    logger.info(f"Created auto-project {project_id} for 5-star clip {raw_clip_id}")
+    logger.info(f"Created auto-project {project_id} for clip {raw_clip_id}")
     return project_id
 
 
@@ -1181,8 +1181,12 @@ async def save_raw_clip(
     """
     Save a raw clip during annotation (real-time save).
 
-    Creates a pending clip record. If the clip is rated 5 stars,
-    automatically creates a 9:16 project for it.
+    Creates a pending clip record. Creating a 9:16 editable clip/project is an
+    EXPLICIT caller choice (`create_project`), never inferred from the rating —
+    the frontend offers "Create an editable clip" and "Save play" as two
+    separate outcomes (T9830); the rating is descriptive metadata only. (Older
+    copy claimed "5 stars automatically creates a project" — the backend never
+    gated on rating; only a since-removed frontend default did.)
 
     Idempotent: If a clip with the same game_id + end_time + video_sequence already exists,
     updates that clip instead of creating a duplicate.
@@ -1361,9 +1365,11 @@ async def update_raw_clip(
     """
     Update a raw clip's metadata.
 
-    Handles 5-star sync:
-    - If rating changed TO 5: Create auto-project
-    - If rating changed FROM 5: Delete auto-project (if unmodified)
+    Clip/project creation is driven ONLY by the explicit `create_project` flag
+    (T9830), never by the rating — the rating is descriptive metadata. (Older
+    copy claimed a "5-star sync" that created/deleted the project as the rating
+    crossed 5; that gating lived in a since-removed frontend default, not here.)
+    - If create_project is set and no project exists yet: Create auto-project
     - If duration changed: Increment boundaries_version
     """
     if update.create_project:

@@ -69,6 +69,9 @@ describe('AnnotateFullscreenOverlay — Esc layering (T8600)', () => {
 describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unchanged)', () => {
   it('typing "1" in the clip name field does not change the rating', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
+    // T9830: rating lives behind the Optional details disclosure — open it to see
+    // the "4 stars · Good" label.
+    fireEvent.click(screen.getByTestId('add-details-button'));
     // T8960: the name is a pencil button until clicked; open the inline input.
     fireEvent.click(screen.getByTitle('Rename clip'));
     const nameInput = screen.getByLabelText('Clip name');

@@ -1,4 +1,5 @@
 import { Star } from 'lucide-react';
+import { getRatingLabel } from './clipConstants';
 
 /**
  * StarRating - 5-star rating selector
@@ -6,8 +7,13 @@ import { Star } from 'lucide-react';
  * @param {number} rating - Current rating (1-5)
  * @param {function} onRatingChange - Callback when rating changes
  * @param {number} size - Star icon size (default 18)
+ * @param {boolean} showLabel - T9830: opt-in canonical descriptor label
+ *   (`getRatingLabel(rating)`, e.g. "4 stars · Good", T9630 N35) rendered beside
+ *   the stars. The Annotate editor's rating (now an optional detail) turns this
+ *   on so the label reads identically everywhere; UploadClipModal keeps the bare
+ *   star row (default off) — no behavior change for the pre-existing consumer.
  */
-export function StarRating({ rating, onRatingChange, size = 18 }) {
+export function StarRating({ rating, onRatingChange, size = 18, showLabel = false }) {
   return (
     <div className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map((starNum) => (
@@ -26,6 +32,15 @@ export function StarRating({ rating, onRatingChange, size = 18 }) {
           />
         </button>
       ))}
+      {showLabel && (
+        <span
+          className="ml-2 text-sm font-bold text-white"
+          title={getRatingLabel(rating)}
+          aria-label={getRatingLabel(rating)}
+        >
+          {getRatingLabel(rating)}
+        </span>
+      )}
     </div>
   );
 }
