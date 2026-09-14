@@ -578,6 +578,34 @@ per-clip remapping.
   characterization net on the export path) — that path's rows rely on the `/overlay-data`
   read-time hoist fallback until a follow-up wires it too.
 
+## Spotlight player-selection = keyframe `fromDetection` flag (T9770)
+
+There is **no separate stored "selected player" field.** Which player is selected in Spotlight
+is derived entirely from whether a highlight region's KEYFRAMES carry `fromDetection: true` at a
+detected player's timestamp. `isDetectionAssigned` (`modes/overlay/utils/detectionAssignment.js`)
+treats a BOUNDARY keyframe (first/last) as assigned ONLY if it has `fromDetection` — a bare
+boundary scaffold keyframe reads as unassigned. `OverlayModeView` derives
+`awaitingPlayerSelection` from `countDetectionAssignments(highlightRegions)`, which gates the
+"Pick your player" prompt AND suppresses the on-screen ellipse (HighlightOverlay must not mount).
+So the flag is the WHOLE contract for persisted selection.
+
+- **Legacy/unassigned reads via `!kf.fromDetection`** — a keyframe with NO `fromDetection` key
+  (undefined) correctly reads as unassigned. Never write `fromDetection: false`; absence is the
+  unassigned state. The write is **additive-only**: set it to `True`, never clear it.
+- **Both `add_keyframe` branches must write it (the T9770 landmine).** `add_keyframe`
+  (`routers/export/overlay.py`) has a CREATE branch (no keyframe within `_find_keyframe_index`'s
+  0.02s tolerance) and an UPDATE branch (one already exists). The CREATE branch always wrote
+  `fromDetection`; the UPDATE branch historically set position/style but NOT `fromDetection`.
+  `handlePlayerSelect` anchors the keyframe to the detection's exact timestamp, which for a short
+  region often lands within 0.02s of a boundary scaffold keyframe → UPDATE branch → selection
+  silently lost `fromDetection` → "Pick your player" resurfaced on reload (reported E40/E55). Fix:
+  UPDATE branch now mirrors CREATE's `if action.data.fromDetection: kf['fromDetection'] = True`.
+  Any future keyframe-write path (new action, migration, carry-forward transform) touching a
+  selection keyframe MUST preserve `fromDetection` or the same bug returns.
+- Coverage: `tests/test_t9770_spotlight_selection_persistence.py` (backend, both branches +
+  additive + legacy), `detectionAssignment.test.js` + `OverlayModeView.playerSelection.test.jsx`
+  (frontend, boundary-with/without-flag).
+
 ## Rotation / horizon straighten (T5640, 2026-07-22)
 
 Per-clip content rotation to level tilted footage. **Single scalar per clip, NOT
