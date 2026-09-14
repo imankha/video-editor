@@ -37,7 +37,7 @@ export function buildInviteUrl(inviteCode) {
 
 export function buildInviteMessage(inviteCode) {
   const url = buildInviteUrl(inviteCode);
-  return `Hey,\nJust wanted to share a link to ReelBallers -- really cool app that lets you annotate your player's clips and use AI to create great looking highlights.\n\n${url}`;
+  return `Hey,\nJust wanted to share a link to ReelBallers -- really cool app that lets you annotate your athlete's clips and use AI to create great looking highlights.\n\n${url}`;
 }
 
 export async function shareInvite() {

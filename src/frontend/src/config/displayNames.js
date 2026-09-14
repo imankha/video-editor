@@ -35,7 +35,7 @@ export const ANNOTATE = {
   PREVIEW_PLAYS: 'Preview plays',          // N26 — playback-all button (was "Playback Annotations")
   PREVIEW_CLIP: 'Preview clip',            // N26 — per-clip preview (unchanged)
   LAYER_LABEL: 'Play category',            // N28 — the control formerly "Clip layer"/"Layer"
-  LAYER_MINE: 'My player',                 // N28 — was "My Athlete"
+  LAYER_MINE: 'My athlete',                // N28, reversed by T9860 (2026-09-14)
   LAYER_TEAM: 'Team',                      // N28 — unchanged
   // N41 (T9580) — the first-clip invitation after a saved play. FRAME_THIS_CLIP
   // is the FOCUS-stage primary CTA (single-sourced into clipStage.getClipStage,
@@ -340,10 +340,16 @@ export const OVERLAY_REAPPLY_FOCUS_TOAST = {
 // unchanged) and the render-action strings (EXPORT_JOBS, T9540) -- a mode names a
 // PLACE you edit, a job names a THING YOU DO, and this block names the controls in
 // between. One noun per primitive so T9610/T9620's instructional copy reuses these
-// exact words. "player" is the canonical subject noun (matches ANNOTATE.LAYER_MINE
-// 'My player', T9520 -- do not reintroduce "athlete" here). "keyframe" is
-// intentionally absent as a primary label: it survives only as advanced help in
-// component tooltips (FocusTimeline), per the task's "demote, don't ban" rule.
+// exact words.
+//
+// T9860 (reversed 2026-09-14, reversing T9550's 2026-09-11 comment here): "athlete"
+// is back. The two words name different things, so both stay, each locked to a
+// grammatical number: "athlete" = your kid, the subject. Always possessive or
+// singular: "your athlete", "My athlete". "player" = anyone on the field, or a
+// detection count. Always generic or plural: "22 players detected", "Finding
+// players". "keyframe" is intentionally absent as a primary label: it survives
+// only as advanced help in component tooltips (FocusTimeline), per the task's
+// "demote, don't ban" rule.
 export const EDITOR_PANELS = {
   // N17 -- the crop primitive is a "focus point"; its timeline track is the
   // "Framing timeline". "crop keyframe" stays only in advanced help/tooltips.
@@ -352,8 +358,8 @@ export const EDITOR_PANELS = {
   // N29 -- spotlight styling. "Highlight Color" mixed brand + generic for one thing:
   // the spotlight. The shape options say WHERE the spotlight sits vs the player.
   SPOTLIGHT_COLOR: 'Spotlight color',
-  SPOTLIGHT_AROUND_PLAYER: 'Around player', // was "Body" / "Body ellipse"
-  SPOTLIGHT_UNDER_PLAYER: 'Under player',   // was "Ground" / "Ground spotlight"
+  SPOTLIGHT_AROUND_PLAYER: 'Around athlete', // was "Body" / "Body ellipse"
+  SPOTLIGHT_UNDER_PLAYER: 'Under athlete',   // was "Ground" / "Ground spotlight"
   // N30 -- styling sliders in plain words; the component keeps the live px/% readout.
   OUTLINE_THICKNESS: 'Outline thickness',   // was "Stroke Width"
   SPOTLIGHT_FILL: 'Spotlight fill',         // was "Fill"
@@ -366,10 +372,10 @@ export const EDITOR_PANELS = {
   // styling controls. These name that primary task (stated on screen, never a
   // tooltip) and gate the styling copy behind it. The word "player" keeps the
   // detection COUNTS unmistakable as counts, not jersey identities.
-  SELECT_PLAYER_TITLE: 'Pick your player',
-  SELECT_PLAYER_CLICK: 'Click your player to add a spotlight',
-  SELECT_PLAYER_TAP: 'Tap your player to add a spotlight',
-  SELECT_PLAYER_FIND: 'Tap a green marker on the timeline to find your player',
+  SELECT_PLAYER_TITLE: 'Pick your athlete',
+  SELECT_PLAYER_CLICK: 'Click your athlete to add a spotlight',
+  SELECT_PLAYER_TAP: 'Tap your athlete to add a spotlight',
+  SELECT_PLAYER_FIND: 'Tap a green marker on the timeline to find your athlete',
   SELECT_PLAYER_STYLING_HINT: 'Spotlight color, shape, and dimming appear once you pick a player.',
 };
 

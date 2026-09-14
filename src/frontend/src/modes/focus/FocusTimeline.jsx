@@ -96,7 +96,7 @@ export function FocusTimeline({
           selectedLayer === 'crop' ? 'bg-yellow-900/30' : 'bg-gray-900 hover:bg-gray-800'
         } ${segments.length === 0 ? 'rounded-bl-lg' : ''}`}
         onClick={() => onLayerSelect && onLayerSelect('crop')}
-        title={`${EDITOR_PANELS.FRAMING_TIMELINE} — click to add a ${EDITOR_PANELS.FOCUS_POINT.toLowerCase()} (a crop keyframe). Drag the crop box on the video to frame your player at different moments.`}
+        title={`${EDITOR_PANELS.FRAMING_TIMELINE} — click to add a ${EDITOR_PANELS.FOCUS_POINT.toLowerCase()} (a crop keyframe). Drag the crop box on the video to frame your athlete at different moments.`}
       >
         <Crop size={18} className={selectedLayer === 'crop' ? 'text-yellow-300' : 'text-yellow-400'} />
       </div>
