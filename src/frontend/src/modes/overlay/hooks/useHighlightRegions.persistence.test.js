@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import useHighlightRegions from './useHighlightRegions';
 import { frameToTime } from '../../../utils/videoUtils';
+import { countDetectionAssignments } from '../utils/detectionAssignment';
 
 /**
  * T5644 — re-added region must persist via a surgical create_region gesture.
@@ -238,6 +239,81 @@ describe('useHighlightRegions - video-level detections survive reset (T5646)', (
 
     expect(readded).toBeTruthy();
     expect(result.current.regions[0].detections.map(d => d.timestamp)).toEqual([0.5, 1.0]);
+  });
+});
+
+/**
+ * T9780 — restoreRegions must carry `fromDetection` through the frontend restore
+ * path (additively).
+ *
+ * `fromDetection` is the SOLE field marking a keyframe as a real player
+ * assignment (see detectionAssignment.isDetectionAssigned — a boundary keyframe
+ * without it is treated as unassigned scaffolding). restoreRegions rebuilt each
+ * keyframe with an explicit key whitelist that silently dropped it, so every
+ * reload / Overlay remount (incl. an Overlay->Focus->Overlay round trip) stripped
+ * the marker: OverlayModeView's awaitingPlayerSelection check then saw zero
+ * assigned detections and re-showed "Pick your player" (and suppressed the
+ * tracking ellipse) even though the DB still had the correct geometry.
+ *
+ * This is the frontend twin of T9770's backend add_keyframe UPDATE-branch fix.
+ * The DB data is correct (the CREATE/first-save path persists fromDetection); the
+ * bug was purely in how the frontend reconstructs its in-memory shape from it.
+ */
+describe('useHighlightRegions - restoreRegions carries fromDetection (T9780)', () => {
+  const videoMetadata = { width: 1920, height: 1080, fps: 30, duration: 10 };
+
+  // A saved region whose START boundary keyframe is an explicit player
+  // assignment (fromDetection: true), sitting on the region's detection frame.
+  // This mirrors the real flow: assigning a player at the region start updates
+  // the boundary keyframe in place, so the assignment lives on a boundary.
+  const assignedKeyframe = {
+    frame: 0,
+    x: 960, y: 540, radiusX: 65, radiusY: 130,
+    strokeOpacity: 0.85, fillOpacity: 0.05, color: 'white',
+    fromDetection: true,
+  };
+  const endKeyframe = {
+    frame: 60,
+    x: 960, y: 540, radiusX: 65, radiusY: 130,
+    strokeOpacity: 0.85, fillOpacity: 0.05, color: 'white',
+  };
+  const savedRegionWith = (startKf) => [
+    {
+      id: 'region-assigned',
+      start_time: 0,
+      end_time: 2,
+      keyframes: [startKf, endKeyframe],
+      detections: [{ timestamp: 0, frame: 0, boxes: [{ x: 0.5, y: 0.5 }] }],
+      videoWidth: 1920,
+      videoHeight: 1080,
+      fps: 30,
+    },
+  ];
+
+  it('a restored keyframe carrying fromDetection counts as an assigned detection', () => {
+    const { result } = renderHook(() => useHighlightRegions(videoMetadata));
+
+    act(() => { result.current.restoreRegions(savedRegionWith(assignedKeyframe), 10); });
+
+    // The marker survives the restore -> the detection is assigned.
+    expect(result.current.regions[0].keyframes[0].fromDetection).toBe(true);
+    const { total, assigned } = countDetectionAssignments(result.current.regions);
+    expect(total).toBe(1);
+    expect(assigned).toBe(1);
+  });
+
+  it('legacy negative control: a keyframe WITHOUT fromDetection stays unassigned (no fabricated marker)', () => {
+    const { result } = renderHook(() => useHighlightRegions(videoMetadata));
+
+    const legacyStart = { ...assignedKeyframe };
+    delete legacyStart.fromDetection;
+
+    act(() => { result.current.restoreRegions(savedRegionWith(legacyStart), 10); });
+
+    expect(result.current.regions[0].keyframes[0].fromDetection).toBeUndefined();
+    const { total, assigned } = countDetectionAssignments(result.current.regions);
+    expect(total).toBe(1);
+    expect(assigned).toBe(0);
   });
 });
 
