@@ -74,6 +74,17 @@ export const SHARING = {
   OPEN_ERROR: "Game invitations couldn't open. Try again.",
 };
 
+// T9860 (Shared Vocabulary epic, copy and concept sweep): the editor MODE noun,
+// single source. Was declared per-mode in editorStore.SCREENS[].label (a store
+// owning a UI string) plus duplicated across draftStage, SegmentedProgressStrip,
+// DraftTile, AnnotateFullscreenOverlay and quest_config.py. FRAMING replaces the
+// prior "AI Focus" epic override (see the T9550 comment below, superseded).
+export const MODE_NAMES = {
+  ANNOTATE: 'Annotate',
+  FRAMING: 'Framing',
+  SPOTLIGHT: 'Spotlight',
+};
+
 export const SECTION_NAMES = {
   // Single-clip auto-draft tab (Home). Tab id stays `projects` / URL
   // `/home/reels` (frozen for deep-link compat). T9530 (Shared Vocabulary epic,
@@ -88,7 +99,11 @@ export const SECTION_NAMES = {
   // T9530 (N11) dropped the "In Progress" prefix so the label is now "Reels"
   // (was "In Progress Reels" T8555, "Highlights" before). In-progress-drafts
   // surface only -- published reels live under PUBLISHED.
+  // T9860: REELS added as the key that matches its own value (HIGHLIGHTS kept
+  // as an alias for this commit only; call sites move to REELS and HIGHLIGHTS
+  // is deleted in a later commit of this same PR).
   HIGHLIGHTS: 'Reels',
+  REELS: 'Reels',
   HIGHLIGHTS_LOWER: 'reels',
 
   // Published reels tab (T8555) -- every published reel regardless of single-
@@ -364,4 +379,15 @@ export const CREDITS = {
   MIN_CHARGE: 'Any render costs at least 1 credit.',
   billableLine: (exactSeconds, credits) =>
     `${formatLength(exactSeconds, PRECISION.TENTH)} of video · ${credits} credit${credits === 1 ? '' : 's'} · ${CREDITS.PER_SECOND_RULE}.`,
+};
+
+// T9860 (Shared Vocabulary epic, copy and concept sweep, design doc section 2.3
+// Section 5): one reason sentence per stage, none using the feature's own name
+// as the reason. Mark play replaces the mechanics-only helper line; Framing and
+// Publish are new; Spotlight replaces FOCUS_PUBLISH.SPOTLIGHT_CAPTION.
+export const STAGE_REASONS = {
+  MARK_PLAY: 'You are bookmarking, not editing, so tap through the whole game and come back to edit later.',
+  FRAMING: 'You filmed wide from the stands and the video you are sending is phone shaped, so framing is you choosing what survives the crop.',
+  SPOTLIGHT: 'Twenty-two kids in the same kit: this is how anyone watching knows which one is yours.',
+  PUBLISH: 'Nobody else can see this until you share a link.',
 };

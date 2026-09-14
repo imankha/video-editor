@@ -61,6 +61,36 @@ export function getDraftStage(project) {
   return DRAFT_STAGE.NOT_STARTED;
 }
 
+// T9860 (Shared Vocabulary epic, copy and concept sweep, D4): the ready/published
+// split, derived once here instead of improvised per call site (ProjectManager,
+// DraftTile's ready badge, DraftTile's published marker each re-derived their own
+// word from has_final_video + is_published before this). A second axis from
+// getDraftStage, not a fourth DRAFT_STAGE -- the pipeline states stay unchanged.
+export const DRAFT_STATUS = {
+  DRAFT: 'draft',
+  PRIVATE: 'private',
+  PUBLISHED: 'published',
+};
+
+const DRAFT_STATUS_INFO = {
+  [DRAFT_STATUS.DRAFT]: { label: 'Draft', detail: 'Not exported yet' },
+  [DRAFT_STATUS.PRIVATE]: { label: 'Private', detail: 'Only you can see it' },
+  [DRAFT_STATUS.PUBLISHED]: { label: 'Published', detail: 'Only you can see it until you share a link' },
+};
+
+/**
+ * Per-project status (D4): Draft until a final video exists, then Private or
+ * Published depending on is_published. Returns { status, label, detail }.
+ */
+export function getDraftStatus(project) {
+  const status = !project.has_final_video
+    ? DRAFT_STATUS.DRAFT
+    : project.is_published
+      ? DRAFT_STATUS.PUBLISHED
+      : DRAFT_STATUS.PRIVATE;
+  return { status, ...DRAFT_STATUS_INFO[status] };
+}
+
 /**
  * Whether a draft's tile renders at SOURCE aspect (landscape) rather than its
  * TARGET output ratio. A tile stays source-aspect until real framing has been
