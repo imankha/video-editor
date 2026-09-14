@@ -12,7 +12,7 @@ import { loginAsRealUser } from './helpers/realAuth';
  * wait can be laid directly onto the HAR timeline.
  *
  *   Journey: Home (games list) -> Annotate (video first paint) -> Framing
- *   (video + crop) -> Overlay (highlights) -> Highlight Reels (list + thumbs +
+ *   (video + crop) -> Overlay (highlights) -> Published (list + thumbs +
  *   downloads/count) -> Play a reel/recap (video playing).
  *
  * This spec writes NO application source and mutates NO account data — every leg
@@ -296,7 +296,7 @@ test.describe('T4770 new-user-flow perf walkthrough', () => {
     // ---- 6. PLAY a reel / recap: video playing -----------------------------
     await leg('play', async () => {
       await stamp(page, 'play:navStart');
-      // In the Highlight Reels panel, click a Play affordance to open the story player.
+      // In the Published panel, click a Play affordance to open the story player.
       const playBtn = page.getByRole('button', { name: /^Play/i }).first();
       if (await playBtn.count()) {
         await playBtn.click({ timeout: 8000 }).catch(() => {});

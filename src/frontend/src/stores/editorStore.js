@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SECTION_NAMES } from '../config/displayNames';
+import { SECTION_NAMES, MODE_NAMES } from '../config/displayNames';
 import { useFocusStore } from './focusStore';
 import { useProjectDataStore } from './projectDataStore';
 import { useOverlayStore } from './overlayStore';
@@ -97,9 +97,9 @@ function updatePath(mode) {
  */
 export const SCREENS = {
   PROJECT_MANAGER: { type: EDITOR_MODES.PROJECT_MANAGER, label: SECTION_NAMES.CLIPS },
-  FRAMING: { type: EDITOR_MODES.FRAMING, label: 'AI Focus' },
-  OVERLAY: { type: EDITOR_MODES.OVERLAY, label: 'Spotlight' },
-  ANNOTATE: { type: EDITOR_MODES.ANNOTATE, label: 'Annotate' },
+  FRAMING: { type: EDITOR_MODES.FRAMING, label: MODE_NAMES.FRAMING },
+  OVERLAY: { type: EDITOR_MODES.OVERLAY, label: MODE_NAMES.SPOTLIGHT },
+  ANNOTATE: { type: EDITOR_MODES.ANNOTATE, label: MODE_NAMES.ANNOTATE },
 };
 
 /**

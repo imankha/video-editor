@@ -29,12 +29,13 @@ describe('OverlaySpotlightPanel — parent-facing vocabulary (T9550)', () => {
   it('uses the renamed labels (N29/N30) and drops the old jargon', () => {
     render(<OverlaySpotlightPanel {...baseProps} />);
 
-    // N29: "Spotlight color" (was "Highlight Color"); shape says WHERE vs the player.
+    // N29: "Spotlight color" (was "Highlight Color"); shape says WHERE vs the athlete.
     expect(screen.getByText('Spotlight color')).toBeTruthy();
-    // "Around player"/"Under player" appear as both the row value and the segmented
-    // button, so there are >=1 matches — the point is the noun renders, jargon doesn't.
-    expect(screen.getAllByText('Around player').length).toBeGreaterThan(0); // was "Body ellipse"
-    expect(screen.getAllByText('Under player').length).toBeGreaterThan(0);  // was "Ground spotlight"
+    // "Around athlete"/"Under athlete" (T9860 D3, was "Around player"/"Under player")
+    // appear as both the row value and the segmented button, so there are >=1
+    // matches — the point is the noun renders, jargon doesn't.
+    expect(screen.getAllByText('Around athlete').length).toBeGreaterThan(0); // was "Body ellipse"
+    expect(screen.getAllByText('Under athlete').length).toBeGreaterThan(0);  // was "Ground spotlight"
     // N30: styling sliders in plain words.
     expect(screen.getByText('Outline thickness')).toBeTruthy(); // was "Stroke Width"
     expect(screen.getByText('Spotlight fill')).toBeTruthy();    // was "Fill"

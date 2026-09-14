@@ -8,7 +8,8 @@ import { formatLength, PRECISION } from '../utils/timeFormat';
 // play produces a CLIP, never a reel. Internal names (the `my_athlete` field,
 // `autoProjectId`, EDITOR_MODES, routes, analytics events) are deliberately NOT
 // renamed to match — deep links and greppability beat cosmetic consistency.
-// Editor mode names stay "AI Focus" / "Spotlight" (epic override, not this file).
+// Editor mode names live in MODE_NAMES below (T9860 moved them off the per-mode
+// editorStore.SCREENS[].label and out of this comment).
 export const ANNOTATE = {
   MODE_DESCRIPTION: 'Mark plays',          // N04 — mode-switcher description
   MARK_PLAY: 'Mark play',                  // N05 — primary create CTA
@@ -34,7 +35,7 @@ export const ANNOTATE = {
   PREVIEW_PLAYS: 'Preview plays',          // N26 — playback-all button (was "Playback Annotations")
   PREVIEW_CLIP: 'Preview clip',            // N26 — per-clip preview (unchanged)
   LAYER_LABEL: 'Play category',            // N28 — the control formerly "Clip layer"/"Layer"
-  LAYER_MINE: 'My player',                 // N28 — was "My Athlete"
+  LAYER_MINE: 'My athlete',                // N28, reversed by T9860 (2026-09-14)
   LAYER_TEAM: 'Team',                      // N28 — unchanged
   // N41 (T9580) — the first-clip invitation after a saved play. FRAME_THIS_CLIP
   // is the FOCUS-stage primary CTA (single-sourced into clipStage.getClipStage,
@@ -74,6 +75,31 @@ export const SHARING = {
   OPEN_ERROR: "Game invitations couldn't open. Try again.",
 };
 
+// T9860 (Shared Vocabulary epic, copy and concept sweep): the editor MODE noun,
+// single source. Was declared per-mode in editorStore.SCREENS[].label (a store
+// owning a UI string) plus duplicated across draftStage, SegmentedProgressStrip,
+// DraftTile, AnnotateFullscreenOverlay and quest_config.py. FRAMING replaces the
+// prior epic override that had named this mode noun after the render engine
+// (see the T9550 comment below, superseded).
+export const MODE_NAMES = {
+  ANNOTATE: 'Annotate',
+  FRAMING: 'Framing',
+  SPOTLIGHT: 'Spotlight',
+};
+
+// T9860 (Shared Vocabulary epic, copy and concept sweep, design doc section 2.3
+// Section 5): one reason sentence per stage, none using the feature's own name
+// as the reason. Mark play replaces the mechanics-only helper line; Framing and
+// Publish are new; Spotlight replaces FOCUS_PUBLISH.SPOTLIGHT_CAPTION. Declared
+// here (near MODE_NAMES) rather than at the file's end because FOCUS_PUBLISH and
+// OVERLAY_PUBLISH below both read PUBLISH as part of their publish captions.
+export const STAGE_REASONS = {
+  MARK_PLAY: 'You are bookmarking, not editing, so tap through the whole game and come back to edit later.',
+  FRAMING: 'You filmed wide from the stands and the video you are sending is phone shaped, so framing is you choosing what survives the crop.',
+  SPOTLIGHT: 'Twenty-two kids in the same kit: this is how anyone watching knows which one is yours.',
+  PUBLISH: 'Nobody else can see this until you share a link.',
+};
+
 export const SECTION_NAMES = {
   // Single-clip auto-draft tab (Home). Tab id stays `projects` / URL
   // `/home/reels` (frozen for deep-link compat). T9530 (Shared Vocabulary epic,
@@ -88,21 +114,14 @@ export const SECTION_NAMES = {
   // T9530 (N11) dropped the "In Progress" prefix so the label is now "Reels"
   // (was "In Progress Reels" T8555, "Highlights" before). In-progress-drafts
   // surface only -- published reels live under PUBLISHED.
-  HIGHLIGHTS: 'Reels',
-  HIGHLIGHTS_LOWER: 'reels',
+  // T9860: key renamed to REELS to match its own value (was HIGHLIGHTS, which
+  // grepped as a lie -- the value has said "Reels" since T9530).
+  REELS: 'Reels',
 
   // Published reels tab (T8555) -- every published reel regardless of single-
   // or multi-clip origin (the old gallery/DownloadsPanel published list,
   // relocated to its own top-level tab).
   PUBLISHED: 'Published',
-
-  // Published-reel NOUN used off the tab bar (Hide-from-Drafts hint, export
-  // toasts, GalleryButton, quests). NOT a tab label -- deliberately keeps the
-  // "Highlight Reel(s)" term (T8555 retired it only from the tab bar; T9530
-  // renamed the per-card publish ACTION to Publish clip/Publish reel, see
-  // LIBRARY_ACTIONS, but left this destination noun for cross-surface copy the
-  // sibling children T9560/T9570 still own).
-  LIBRARY: 'Highlight Reels',
 };
 
 // T9530 (Shared Vocabulary epic, N01-N03/N12-N15): the Library-surface object
@@ -155,18 +174,18 @@ export const SECTION_NAMES_SHORT = {
 // buttons with captions; these give the same plain-language distinction at the
 // non-empty entry points, where the CTA otherwise stands alone). Parallel phrasing
 // states the choice: a full game must have plays marked to yield clips; a short
-// clip skips that and goes straight to Focus. No em dashes (project-wide rule);
-// "Focus" is the current framing-mode name.
+// clip skips that and goes straight to Framing. No em dashes (project-wide rule);
+// "Framing" (MODE_NAMES.FRAMING) is the current mode name, used as a noun, never a verb.
 export const UPLOAD_ENTRY_HINT = {
   GAME: 'A full game needs plays marked before it becomes clips.',
-  CLIP: 'A short clip skips straight to Focus, no game needed.',
+  CLIP: `A short clip skips straight to ${MODE_NAMES.FRAMING}, no game needed.`,
 };
 
 export const CLIP_UPLOAD = {
   UPLOAD_CLIP: 'Upload clip',
   NOTICE_TITLE: 'Heads up: these clips won’t be linked to a game',
   NOTICE_BODY:
-    'Uploading here adds videos straight to your clips, ready to Focus and publish. '
+    `Uploading here adds videos straight to your clips, ready for ${MODE_NAMES.FRAMING} and publish. `
     + 'Because they don’t come from a game in Annotate, they won’t be part of a '
     + 'game you can build more highlights from.',
   NOTICE_CONTINUE: 'Continue',
@@ -193,20 +212,22 @@ export const UPLOAD_STATE = {
 // completion vocabulary, single source. Keyed on the export `type` ('framing' |
 // 'overlay') the store + WS payload already carry, so the button, the job list, the
 // toast and the completion message never disagree about the stage (one object, one
-// stage). Mode names ("AI Focus" / "Spotlight") are deliberately NOT here -- a mode
-// names a PLACE you edit, a job names a THING YOU DO. The post-export action-bar
-// labels (FOCUS_PUBLISH / OVERLAY_PUBLISH below) are T9590 territory, untouched here.
+// stage). Mode names (MODE_NAMES.FRAMING / MODE_NAMES.SPOTLIGHT) are deliberately NOT
+// here -- a mode names a PLACE you edit, a job names a THING YOU DO. The post-export
+// action-bar labels (FOCUS_PUBLISH / OVERLAY_PUBLISH below) are T9590 territory,
+// untouched here.
 //
-// Focus stage NOUN is "AI Focus" (the mode was renamed Framing -> AI Focus, T9320);
-// the render VERB is "Generate", deliberately NOT "Apply": "Apply AI Focus" (T9330) is
-// a DIFFERENT gesture that NAVIGATES INTO the mode, so reusing it here would confuse
-// entering the mode with paying to render inside it. Completion is exactly "AI Focus ready".
+// Focus stage NOUN is MODE_NAMES.FRAMING (T9860 renamed the mode noun off the render
+// engine to "Framing"); the render VERB is "Generate", deliberately NOT "Apply": "Apply Framing"
+// (T9330) is a DIFFERENT gesture that NAVIGATES INTO the mode, so reusing it here would
+// confuse entering the mode with paying to render inside it. Completion is exactly
+// "Framing ready".
 export const EXPORT_JOBS = {
   framing: {
-    action: 'Generate AI Focus',              // N19 — render CTA, was "Export Focused Video"
-    inProgress: 'Generating AI Focus...',     // N19 — progress/job label, was "Creating reel..."
-    completed: 'AI Focus ready',              // N21 — names the stage that finished, was "Export Complete"
-    jobNoun: 'AI Focus',                       // job-list row noun, was "Framing Export"
+    action: `Generate ${MODE_NAMES.FRAMING}`,          // N19 — render CTA, was "Export Focused Video"
+    inProgress: `Generating ${MODE_NAMES.FRAMING}...`, // N19 — progress/job label, was "Creating reel..."
+    completed: `${MODE_NAMES.FRAMING} ready`,          // N21 — names the stage that finished, was "Export Complete"
+    jobNoun: MODE_NAMES.FRAMING,                       // job-list row noun, was "Framing Export"
   },
   overlay: {
     action: 'Export clip with effects',       // N20 — render CTA, was "Add Spotlight"
@@ -225,7 +246,8 @@ export const EXPORT_JOBS = {
 export const EXPORT_PROGRESS = {
   PREPARING: 'Preparing video',                // init/queued/validating/downloading
   UPLOADING: 'Uploading',                      // upload
-  RENDERING: 'Rendering',                      // processing/modal_processing/rendering/upscaling
+  RENDERING: 'Rendering',                      // processing/modal_processing/rendering/analyzing
+  ENHANCING: 'Enhancing video',                // upscaling/ai_upscale (T9860 3.3: put the AI claim where the AI runs)
   FINDING_PLAYERS: 'Finding players for spotlight', // detecting_players
 };
 
@@ -236,21 +258,24 @@ export const EXPORT_PROGRESS = {
 // product owner decision, recorded with the conflict at filing:
 //   PRIMARY   Add spotlight             (dominant; opens the Spotlight editor, no export)
 //   SECONDARY Publish without spotlight (publishes the framed reel as-is)
-//   TERTIARY  Edit framing              (back into AI Focus; the paid re-export path)
+//   TERTIARY  Edit framing              (back into Framing; the paid re-export path)
 //   QUIET     Save draft                (defer; replaces the old "Add Spotlight Later",
 //                                        whose spotlight-framed destination is gone)
 // Captions state each destination + the honest cost/audience BEFORE the click
 // (T9590 acceptance). PUBLISH_CAPTION's audience wording is verified against the
-// real endpoints (downloads.py publish -> lands the reel in Highlight Reels;
-// shares.py -> a share link is public, "anyone with the link" -- matches the
-// post-publish toast). T9670 owns the confirmed publish-audience contract and is
-// not done yet, so RE-VERIFY this wording once T9670 lands. EDIT_FRAMING_CAPTION
-// keeps the honest "uses credits" re-export warning.
+// real endpoints (downloads.py publish -> moves the reel to the owner's own
+// Published tab; shares.py -> a share link is a SEPARATE gesture). T9670 §4,
+// live-verified by T9710 (2026-09-13): publishing sets published_at and moves the
+// reel to Published, and creates no link and grants no audience by itself --
+// sharing a link is a second, separate gesture. PUBLISH_CAPTION states the
+// destination and that precondition instead of the "anyone with the link" claim,
+// which was false as a consequence of publishing alone (T9860 D5).
+// EDIT_FRAMING_CAPTION keeps the honest "uses credits" re-export warning.
 export const FOCUS_PUBLISH = {
   ADD_SPOTLIGHT_LABEL: 'Add spotlight',
-  SPOTLIGHT_CAPTION: 'A spotlight is a glowing highlight that follows your athlete.',
+  SPOTLIGHT_CAPTION: STAGE_REASONS.SPOTLIGHT,
   PUBLISH_LABEL: 'Publish without spotlight',
-  PUBLISH_CAPTION: 'Adds it to your Highlight Reels as is -- anyone with the link can watch it.',
+  PUBLISH_CAPTION: `Files it under Published as is. ${STAGE_REASONS.PUBLISH}`,
   EDIT_FRAMING_LABEL: 'Edit framing',
   EDIT_FRAMING_CAPTION: 'Reframe and export again, uses credits.',
   SAVE_DRAFT_LABEL: 'Save draft',
@@ -261,12 +286,12 @@ export const FOCUS_PUBLISH = {
 export const FOCUS_PUBLISH_LATER_TOAST = {
   SINGLE_CLIP: {
     title: 'Saved to Clips',
-    message: 'Clips are single plays. Highlight Reels join several clips into one video. '
+    message: 'Clips are single plays. A highlight reel joins several clips into one video. '
       + 'Yours is still a draft, so add a spotlight or publish it from here whenever you want.',
   },
   MULTI_CLIP: {
-    title: 'Saved to Highlight Reels, under Highlights',
-    message: 'Highlight Reels join several clips into one video. Single plays stay in Clips. '
+    title: `Saved to ${SECTION_NAMES.REELS}`,
+    message: 'A highlight reel joins several clips into one video. Single plays stay in Clips. '
       + 'Yours is still a draft, so add a spotlight or publish it from here whenever you want.',
   },
 };
@@ -288,44 +313,52 @@ export const FOCUS_ADD_SPOTLIGHT_TOAST = {
 // a fixed action):
 //   PRIMARY   Publish           (dominant; the reel is finished)
 //   SECONDARY Reapply spotlight (back into Spotlight editing)
-//   TERTIARY  Reapply AI Focus  (reframe; the paid re-export path)
+//   TERTIARY  Reapply Framing   (reframe; the paid re-export path)
 //   QUIET     Save draft        (defer; replaces the old "Publish Later")
-// PUBLISH_CAPTION states the audience BEFORE the tap (verified against
-// downloads.py publish + shares.py, matching the post-publish "anyone with the
-// link" toast; re-verify once T9670 lands). REAPPLY_FOCUS_CAPTION keeps the honest
-// "uses credits" warning, verbatim with Focus's so the two read as one system.
+// PUBLISH_CAPTION states the destination + the honest precondition BEFORE the tap.
+// T9670 §4, live-verified by T9710 (2026-09-13): publishing moves the reel to
+// Published and creates no link and grants no audience by itself -- sharing a
+// link is a second, separate gesture (T9860 D5). REAPPLY_FOCUS_CAPTION keeps the
+// honest "uses credits" warning, verbatim with Focus's so the two read as one
+// system.
 export const OVERLAY_PUBLISH = {
   PUBLISH_LABEL: 'Publish',
-  PUBLISH_CAPTION: 'Adds it to your Highlight Reels -- anyone with the link can watch it.',
+  PUBLISH_CAPTION: `Files it under Published. ${STAGE_REASONS.PUBLISH}`,
   REAPPLY_OVERLAY_LABEL: 'Reapply spotlight',
   REAPPLY_OVERLAY_CAPTION: 'Go back and redo the spotlight on your reel.',
-  REAPPLY_FOCUS_LABEL: 'Reapply AI Focus',
+  REAPPLY_FOCUS_LABEL: `Reapply ${MODE_NAMES.FRAMING}`,
   REAPPLY_FOCUS_CAPTION: 'Reframe and export again, uses credits.',
   SAVE_DRAFT_LABEL: 'Save draft',
   SAVE_DRAFT_CAPTION: 'Save it as a draft and publish whenever you\'re ready.',
 };
 
-// T9110: "Reapply Focus" confirmation toast. Mirrors FOCUS_ADD_SPOTLIGHT_TOAST's
+// T9110: "Reapply Framing" confirmation toast. Mirrors FOCUS_ADD_SPOTLIGHT_TOAST's
 // reasoning (product owner, 2026-09-08): a choice that moves the user into
 // ANOTHER edit mode has no other confirmation their prior work was saved, so it
-// gets a toast. Honest that the spotlight carries over the Focus re-export
+// gets a toast. Honest that the spotlight carries over the Framing re-export
 // (highlight carry-forward, T4350/T4355) and that a fresh export follows.
 export const OVERLAY_REAPPLY_FOCUS_TOAST = {
   title: 'Spotlight saved',
-  message: 'Reframe your clip in AI Focus, then export again -- your spotlight carries over to the new reel.',
+  message: `Reframe your clip in ${MODE_NAMES.FRAMING}, then export again, your spotlight carries over to the new reel.`,
 };
 
 // T9550 (Shared Vocabulary epic, N16-N32): the editor-stage IN-PANEL vocabulary,
-// single source. These name the CONTROLS you tune once inside AI Focus / Spotlight
+// single source. These name the CONTROLS you tune once inside Framing / Spotlight
 // -- the focus point, the styling sliders, the cover image. Deliberately NOT here:
-// the mode NAMES ("AI Focus" / "Spotlight", editorStore SCREENS -- epic override,
+// the mode NAMES (MODE_NAMES.FRAMING / MODE_NAMES.SPOTLIGHT, editorStore SCREENS --
 // unchanged) and the render-action strings (EXPORT_JOBS, T9540) -- a mode names a
 // PLACE you edit, a job names a THING YOU DO, and this block names the controls in
 // between. One noun per primitive so T9610/T9620's instructional copy reuses these
-// exact words. "player" is the canonical subject noun (matches ANNOTATE.LAYER_MINE
-// 'My player', T9520 -- do not reintroduce "athlete" here). "keyframe" is
-// intentionally absent as a primary label: it survives only as advanced help in
-// component tooltips (FocusTimeline), per the task's "demote, don't ban" rule.
+// exact words.
+//
+// T9860 (reversed 2026-09-14, reversing T9550's 2026-09-11 comment here): "athlete"
+// is back. The two words name different things, so both stay, each locked to a
+// grammatical number: "athlete" = your kid, the subject. Always possessive or
+// singular: "your athlete", "My athlete". "player" = anyone on the field, or a
+// detection count. Always generic or plural: "22 players detected", "Finding
+// players". "keyframe" is intentionally absent as a primary label: it survives
+// only as advanced help in component tooltips (FocusTimeline), per the task's
+// "demote, don't ban" rule.
 export const EDITOR_PANELS = {
   // N17 -- the crop primitive is a "focus point"; its timeline track is the
   // "Framing timeline". "crop keyframe" stays only in advanced help/tooltips.
@@ -334,8 +367,8 @@ export const EDITOR_PANELS = {
   // N29 -- spotlight styling. "Highlight Color" mixed brand + generic for one thing:
   // the spotlight. The shape options say WHERE the spotlight sits vs the player.
   SPOTLIGHT_COLOR: 'Spotlight color',
-  SPOTLIGHT_AROUND_PLAYER: 'Around player', // was "Body" / "Body ellipse"
-  SPOTLIGHT_UNDER_PLAYER: 'Under player',   // was "Ground" / "Ground spotlight"
+  SPOTLIGHT_AROUND_PLAYER: 'Around athlete', // was "Body" / "Body ellipse"
+  SPOTLIGHT_UNDER_PLAYER: 'Under athlete',   // was "Ground" / "Ground spotlight"
   // N30 -- styling sliders in plain words; the component keeps the live px/% readout.
   OUTLINE_THICKNESS: 'Outline thickness',   // was "Stroke Width"
   SPOTLIGHT_FILL: 'Spotlight fill',         // was "Fill"
@@ -348,10 +381,10 @@ export const EDITOR_PANELS = {
   // styling controls. These name that primary task (stated on screen, never a
   // tooltip) and gate the styling copy behind it. The word "player" keeps the
   // detection COUNTS unmistakable as counts, not jersey identities.
-  SELECT_PLAYER_TITLE: 'Pick your player',
-  SELECT_PLAYER_CLICK: 'Click your player to add a spotlight',
-  SELECT_PLAYER_TAP: 'Tap your player to add a spotlight',
-  SELECT_PLAYER_FIND: 'Tap a green marker on the timeline to find your player',
+  SELECT_PLAYER_TITLE: 'Pick your athlete',
+  SELECT_PLAYER_CLICK: 'Click your athlete to add a spotlight',
+  SELECT_PLAYER_TAP: 'Tap your athlete to add a spotlight',
+  SELECT_PLAYER_FIND: 'Tap a green marker on the timeline to find your athlete',
   SELECT_PLAYER_STYLING_HINT: 'Spotlight color, shape, and dimming appear once you pick a player.',
 };
 

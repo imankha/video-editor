@@ -63,7 +63,7 @@ describe('handleOverlayExportCompletion (T9740 fix v3)', () => {
     // The whole point: publish is NOT gated on final_video_id anymore.
     expect(publish).toHaveBeenCalledTimes(1);
     expect(publish).toHaveBeenCalledWith({ openGallery: false, projectId: 7 });
-    expect(toastSuccess).toHaveBeenCalledWith('Published', { message: 'Anyone with the link can watch it.' });
+    expect(toastSuccess).toHaveBeenCalledWith('Published', { message: 'Nobody else can see this until you share a link.' });
     // The finished-reel preview still opens (the project object exists; its
     // final_video_id being stale-null is the preview's problem, not publish's).
     expect(openFinishedReel).toHaveBeenCalledWith(

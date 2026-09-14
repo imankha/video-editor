@@ -154,7 +154,7 @@ test.describe('T8480 - Focus unlocks the moment a reel exists (desktop)', () => 
 test.describe('T8470 - one status story for a fresh draft (desktop)', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test('save with reel ON -> Home continue card, Clips tab chip, and Highlight Reels drawer all say Draft', async ({ page }, testInfo) => {
+  test('save with reel ON -> Home continue card, Clips tab chip, and Published tab all say Draft', async ({ page }, testInfo) => {
     test.setTimeout(180000);
     const userId = makeUserId('t8470');
     testInfo.annotations.push({ type: 'userId', description: userId });
@@ -215,11 +215,11 @@ test.describe('T8480 - touch-visible explanations + unlock (390x844)', () => {
     // force: Playwright refuses actionability on aria-disabled; real taps land.
     await expect(page.getByTestId('mode-framing')).toBeVisible({ timeout: 60000 });
     await page.getByTestId('mode-framing').click({ force: true });
-    await expect(page.getByText('Select a reel first')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Open a clip to start framing')).toBeVisible({ timeout: 5000 });
 
     const form = await openAddClipForm(page);
 
-    // Mobile hides the reel toggle; rating 5 (My player) auto-enables it.
+    // Mobile hides the reel toggle; rating 5 (My athlete) auto-enables it.
     await form.locator('button[title="5 stars"]').click();
     const result = await saveClip(page, form);
     expect(result.project_created).toBeTruthy();

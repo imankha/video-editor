@@ -9,8 +9,10 @@
  * evidence never depends on the account's live data.
  *
  * Acceptance mapping:
- *  - #1/#2: reel-status words derive from draftStage.js ("Ready to Publish",
- *           "Draft - in Spotlight"); no undefined word appears.
+ *  - #1/#2: reel-status words derive from draftStage.js / getDraftStatus
+ *           ("Private", "Draft, in Spotlight" -- T9860 D4 replaced the old
+ *           "Ready to Publish"/"Done" per-call-site words with the single
+ *           getDraftStatus(project).label derivation); no undefined word appears.
  *  - #3:    no surface labels a private draft as already shared -> ZERO
  *           "Ready to share" text anywhere on the page.
  */
@@ -21,10 +23,11 @@ import { loginAsRealUser } from './helpers/realAuth';
 // label this task touches.
 const MOCK_PROJECTS = [
   {
-    // Published final -> the recent-project row must read terminal "Done", NOT
-    // "Ready to Publish" (Site 3 guard: draftStage READY spans published too, so
-    // the row keeps DraftTile's published/ready split). Newest timestamp so it is
-    // sortedProjects[0] and drives the "Continue where you left off" row.
+    // Published final -> the recent-project row must read terminal "Published"
+    // (T9860 D4: getDraftStatus(project).label), NOT "Private" (Site 3 guard:
+    // draftStage READY spans published too, so the row keeps DraftTile's
+    // published/ready split). Newest timestamp so it is sortedProjects[0] and
+    // drives the "Continue where you left off" row.
     id: 90004, name: 'QA Published Reel', aspect_ratio: '9:16',
     clip_count: 1, clips_in_progress: 0, clips_exported: 1,
     has_working_video: true, has_overlay_edits: false, has_final_video: true,
@@ -33,7 +36,7 @@ const MOCK_PROJECTS = [
     last_opened_at: '2026-09-11T00:00:09Z',
   },
   {
-    // READY, not yet published -> DraftTile badge "Ready to Publish" (Site 1).
+    // READY, not yet published -> DraftTile badge "Private" (T9860 D4, Site 1).
     id: 90001, name: 'QA Ready To Publish Reel', aspect_ratio: '9:16',
     clip_count: 1, clips_in_progress: 0, clips_exported: 1,
     has_working_video: true, has_overlay_edits: false, has_final_video: true,
@@ -42,7 +45,7 @@ const MOCK_PROJECTS = [
   },
   {
     // IN_OVERLAY (working video, no final) -> SegmentedProgressStrip 'ready'
-    // Spotlight segment tooltip "Draft - in Spotlight" (Site 2), and the
+    // Spotlight segment tooltip "Draft, in Spotlight" (T9860, Site 2), and the
     // DraftTile status chip "In Spotlight".
     id: 90003, name: 'QA In Spotlight Reel', aspect_ratio: '9:16',
     clip_count: 1, clips_in_progress: 0, clips_exported: 1,
@@ -76,12 +79,12 @@ test('T9600: reel-status surfaces use draftStage vocabulary, never "Ready to sha
   await expect(page.getByText('Ready to share', { exact: false })).toHaveCount(0);
 
   // --- Site 3 guard (reviewer MAJOR): the most-recent reel is PUBLISHED, so the
-  //     "Continue where you left off" row must read terminal "Done", never
-  //     "Ready to Publish" (which would falsely say a live reel is still private). ---
+  //     "Continue where you left off" row must read terminal "Published", never
+  //     "Private" (which would falsely say a live reel is still private). ---
   const recentRow = page.getByRole('button').filter({ hasText: 'QA Published Reel' }).first();
   await expect(recentRow).toBeVisible({ timeout: 15000 });
-  await expect(recentRow).toContainText('Done');
-  await expect(recentRow).not.toContainText('Ready to Publish');
+  await expect(recentRow).toContainText('Published');
+  await expect(recentRow).not.toContainText('Private');
   await page.screenshot({ path: '/workspace/qa/T9600-landing-view.png', fullPage: true });
 
   // Open the Reels tab (In Progress Reels), where the crafted reels render.
@@ -92,9 +95,10 @@ test('T9600: reel-status surfaces use draftStage vocabulary, never "Ready to sha
   await expect(page.getByText('Ready to share', { exact: false })).toHaveCount(0);
   await page.screenshot({ path: '/workspace/qa/T9600-reels-view.png', fullPage: true });
 
-  // --- Site 1: the ready tile's badge is exactly the canonical READY label. ---
+  // --- Site 1: the ready tile's badge is exactly the canonical getDraftStatus
+  //     READY-not-published label (T9860 D4: "Private"). ---
   const readyCard = page.locator('[data-testid="project-card"]', { hasText: 'QA Ready To Publish Reel' }).first();
-  await expect(readyCard.getByText('Ready to Publish').first()).toBeVisible();
+  await expect(readyCard.getByText('Private').first()).toBeVisible();
   await readyCard.screenshot({ path: '/workspace/qa/T9600-ready-badge.png' });
 
   // --- Site 2: the in-overlay reel's Spotlight segment tooltip reads the
@@ -103,7 +107,7 @@ test('T9600: reel-status surfaces use draftStage vocabulary, never "Ready to sha
   const spotlightSeg = overlayCard.locator('[title^="Spotlight:"]').first();
   await expect(spotlightSeg).toHaveCount(1);
   const tip = await spotlightSeg.getAttribute('title');
-  expect(tip).toContain('Draft - in Spotlight');
+  expect(tip).toContain('Draft, in Spotlight');
   expect(tip).not.toContain('Ready to share');
   console.log('[T9600] Spotlight segment tooltip =', JSON.stringify(tip));
   await overlayCard.screenshot({ path: '/workspace/qa/T9600-in-spotlight-card.png' });

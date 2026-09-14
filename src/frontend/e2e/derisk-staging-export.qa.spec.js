@@ -10,7 +10,7 @@ import { waitForAppReady } from './helpers/appReady.js';
  * E2E_REAL_PROFILE):
  *   login -> Clips -> open a DISCOVERED draft -> Export -> wait for the
  *   pipeline (framing render -> overlay render -> final video) -> publish
- *   ("Move to Highlight Reels") -> Highlight Reels lists the reel.
+ *   ("Publish clip"/"Publish reel", T9530) -> the Published tab lists the reel.
  *
  * T5400: the target draft is DISCOVERED from /api/projects (a non-finalized reel
  * draft), NOT hardcoded to project id 1 / a "Wonder Goal" chip. If the fixture has
@@ -112,9 +112,10 @@ async function openDraftCard(page, name) {
 // the old /^Export( \(\d+\/\d+\))?$/ matched neither label, which presented as a phantom
 // "overlay panel never mounted" mount-logic FAIL on a perfectly healthy screen.
 // T9540 (2026-09-11): render actions renamed again — Framing reads
-// "Generate AI Focus( (n/m))?", Overlay reads "Export clip with effects" (same onExport
+// "Generate Framing( (n/m))?", Overlay reads "Export clip with effects" (same onExport
 // handler, different label). "Add Spotlight" is now only the action-bar label (T9590).
-const FRAMING_EXPORT_BTN = /^Generate AI Focus( \(\d+\/\d+\))?$/;
+// T9860 (2026-09-14): the mode noun itself was renamed off the render engine to "Framing".
+const FRAMING_EXPORT_BTN = /^Generate Framing( \(\d+\/\d+\))?$/;
 const OVERLAY_EXPORT_BTN = /^Export clip with effects$/;
 
 test('staging export pipeline + publish (smoke + durability) @staging-gate @gate-a', async ({ context, page }) => {
@@ -269,20 +270,20 @@ test('staging export pipeline + publish (smoke + durability) @staging-gate @gate
   }
   expect(proj?.has_final_video, 'pipeline produced a final video').toBeTruthy();
 
-  // --- PUBLISH: the ready-to-publish card shows "Move to Highlight Reels" ---
+  // --- PUBLISH: the ready-to-publish card shows "Publish clip"/"Publish reel" (T9530) ---
   await page.goto('/');
   await waitForAppReady(page, { ready: page.getByRole('button', { name: 'Clips' }) });
   await page.getByRole('button', { name: 'Clips' }).first().click({ timeout: 30000 });
-  const moveBtn = page.getByRole('button', { name: /Move to Highlight Reels/i }).first();
+  const moveBtn = page.getByRole('button', { name: /Publish (clip|reel)/i }).first();
   await moveBtn.waitFor({ timeout: 60000 });
   await page.screenshot({ path: `${EVID}/05-ready-to-publish.png` });
   await moveBtn.click();
-  console.log('[derisk] Move to Highlight Reels clicked');
+  console.log('[derisk] Publish clicked');
 
   // publish opens the gallery; the reel count must become >= 1
   await page.waitForTimeout(4000);
   const count = await apiGet(context, '/downloads/count');
   console.log('[derisk] downloads/count:', JSON.stringify(count));
   await page.screenshot({ path: `${EVID}/06-after-publish.png` });
-  expect(count.count, 'published reel visible in Highlight Reels').toBeGreaterThanOrEqual(1);
+  expect(count.count, 'published reel visible under Published').toBeGreaterThanOrEqual(1);
 });

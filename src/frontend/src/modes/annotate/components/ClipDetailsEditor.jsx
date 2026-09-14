@@ -373,9 +373,9 @@ export function ClipDetailsEditor({
               replaced by it; while the request is in flight (reelRequested, no
               autoProjectId yet) it stays disabled "Clip Created".
             - every other stage: a button that OPENS the clip's existing project
-              (Apply AI Focus / Apply Spotlight / View Final / View Published),
-              routing action 'overlay' -> Spotlight, else Focus. Drifted and
-              below-migration projects land on "Apply AI Focus" (open it), never
+              (Apply Framing / Apply Spotlight / View Final / View Published),
+              routing action 'overlay' -> Spotlight, else Framing. Drifted and
+              below-migration projects land on "Apply Framing" (open it), never
               back on Create Clip — a project that EXISTS should open.
             T8070 staleness + T8470 fresh-draft both live inside getClipStage. */}
         {!isMobile && (

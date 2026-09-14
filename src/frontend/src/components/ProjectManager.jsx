@@ -51,7 +51,7 @@ import { EmptyTabGuide } from './shared/EmptyTabGuide';
 import { GameTile } from './GameTile';
 import { UploadingGameTile } from './UploadingGameTile';
 import { ReferenceGameCard } from './ReferenceGameCard';
-import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, getDraftStage, stageRowsFor, phaseRowsFor } from '../utils/draftStage';
+import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, getDraftStage, getDraftStatus, stageRowsFor, phaseRowsFor } from '../utils/draftStage';
 import { deriveDraftSourceExpiry, computeStorageExpiryRisk } from '../utils/draftSourceExpiry';
 import { StorageExpiryBanner } from './StorageExpiryBanner';
 
@@ -1289,8 +1289,8 @@ export function ProjectManager({
       )}
 
       {/* Top right controls - Invite + Sign-in/Profile. T8545: the Gallery
-          (Highlight Reels) icon-button/drawer entry point that used to live
-          here is gone -- Highlight Reels is now the third peer tab below. */}
+          icon-button/drawer entry point that used to live here is gone --
+          Published is now the third peer tab below. */}
       {/* T9290: opaque backing plate on the fixed controls cluster (matches the
           gray-900 page surface) so scrolled content passes fully behind the row
           rather than bleeding through the translucent Invite/sport chips.
@@ -1403,15 +1403,12 @@ export function ProjectManager({
                     {/* T9600: reel-level status is the SAME domain as draftStage, so
                         route it through the single source instead of hardcoding words
                         that drifted from it (the pre-T8470 'Overlay'/'Focus' vs
-                        'Spotlight'/'AI Focus'). draftStage's READY bucket spans BOTH
-                        published and ready-to-publish finals, so keep DraftTile's
-                        published/ready split here (terminal 'Done' when already
-                        published, T8470's word) — otherwise a live reel would read
-                        'Ready to Publish', a fresh contradiction. The green
-                        CheckCircle above still carries the completion cue. */}
-                    {recentItems.recentProject.has_final_video && recentItems.recentProject.is_published
-                      ? 'Done'
-                      : DRAFT_STAGE_LABELS[getDraftStage(recentItems.recentProject)]}
+                        'Spotlight'/'Framing'). T9860 (D4): the published/ready split
+                        is now getDraftStatus's job -- draftStage's READY label reads
+                        "Ready to watch", which is true of both, so the per-call-site
+                        'Done' override this comment used to explain is gone. The
+                        green CheckCircle above still carries the completion cue. */}
+                    {getDraftStatus(recentItems.recentProject).label}
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-gray-500 flex-shrink-0" />
@@ -1460,7 +1457,7 @@ export function ProjectManager({
           title={!hasClips ? 'Add a clip to unlock' : undefined}
           onClick={() => setActiveTab('inProgressReels')}
           Icon={Clapperboard}
-          label={SECTION_NAMES.HIGHLIGHTS}
+          label={SECTION_NAMES.REELS}
           shortLabel={SECTION_NAMES_SHORT.REELS}
           count={highlightDrafts.length}
           activeBg={HIGHLIGHT.bg}
@@ -2125,14 +2122,14 @@ export function ProjectManager({
                 size="lg"
                 icon={Plus}
                 disabled={!hasClips}
-                title={!hasClips ? 'Extract clips from a game first using Annotate mode' : undefined}
+                title={!hasClips ? 'Mark a play in a game first' : undefined}
                 onClick={() => setShowAssemblyModal(true)}
                 className="w-full"
               >
                 {LIBRARY_ACTIONS.CREATE_REEL}
               </Button>
             </div>
-            <CardCarousel ariaLabel={`${SECTION_NAMES.HIGHLIGHTS} in progress`} fillerSlot={REELS_PARTIAL_FILLER}>
+            <CardCarousel ariaLabel={`${SECTION_NAMES.REELS} in progress`} fillerSlot={REELS_PARTIAL_FILLER}>
               {highlightDrafts.map((project) => (
                 <DraftTile
                   key={project.id}

@@ -26,10 +26,10 @@ export const CLIP_STAGE = {
   // The clip has no project yet — manual-create territory (ClipDetailsEditor's
   // "Create Clip" affordance). NOT this CTA's job; the stage CTA only renders
   // once a project exists (or is being created — the overlay shows a disabled
-  // "Apply AI Focus" during that in-flight window via its own `focusPending`).
+  // "Apply Framing" during that in-flight window via its own `focusPending`).
   NO_PROJECT: 'NO_PROJECT',
   // A project exists but no working video yet (fresh draft, drifted, or a
-  // below-migration project with a null snapshot) — open it in AI Focus.
+  // below-migration project with a null snapshot) — open it in Framing.
   FOCUS: 'FOCUS',
   // has_working_video, no final — next step is Spotlight (Overlay mode).
   SPOTLIGHT: 'SPOTLIGHT',

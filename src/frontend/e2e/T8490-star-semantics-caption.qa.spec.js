@@ -148,7 +148,7 @@ test.describe('T8490: rating caption — desktop strip', () => {
     await expect(strip).toContainText('Technical lapse (?) - a play to learn from.');
     await saveEvidence(page, 'T8490-strip-rating2');
 
-    // Rating 5 + My player (default layer) -> auto-enables creation (T9820).
+    // Rating 5 + My athlete (default layer) -> auto-enables creation (T9820).
     await strip.locator('button[title="5 stars"]').click();
     await expect(strip).toContainText('Brilliant play (!!) - this play will also become an editable clip.');
     await expect(strip.locator('button:has-text("Save")')).toBeVisible();

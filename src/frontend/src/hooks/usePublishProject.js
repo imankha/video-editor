@@ -8,10 +8,11 @@ import { useProjectsStore } from '../stores/projectsStore';
 import { toast } from '../components/shared/Toast';
 
 /**
- * usePublishProject (T8530) — the single owner of the "Publish to Highlight Reels"
- * gesture, extracted verbatim from DraftTile.publishProject so the draft tile AND
- * the draft preview player (DraftReelPreview) share ONE publish path instead of
- * duplicating the T4050 durable-sync contract.
+ * usePublishProject (T8530) — the single owner of the publish gesture (files the
+ * project under SECTION_NAMES.PUBLISHED), extracted verbatim from
+ * DraftTile.publishProject so the draft tile AND the draft preview player
+ * (DraftReelPreview) share ONE publish path instead of duplicating the T4050
+ * durable-sync contract.
  *
  * T4050 contract carried through unchanged:
  * - POST /api/downloads/publish/{id}

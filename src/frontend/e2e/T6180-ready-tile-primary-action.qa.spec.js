@@ -6,8 +6,9 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
  * T6180 — a ready Draft Reel now has a real primary action. Real-browser evidence.
  *
  * Acceptance criteria (task file):
- *   (1) "Ready" is a NON-interactive badge; the primary action reads as an action and
- *       names the verb ("Move to Highlight Reels").
+ *   (1) "Private" (T9860 D4: getDraftStatus's label for a completed, unpublished
+ *       project) is a NON-interactive badge; the primary action reads as an
+ *       action and names the verb ("Publish clip"/"Publish reel", T9530).
  *   (2) Play is a visible secondary action; the remaining actions live in a kebab and
  *       all still work.
  *   (3) A tile click in the ready state PREVIEWS (the inert-tile behaviour is gone).
@@ -36,10 +37,10 @@ async function gotoDrafts(page) {
   await page.waitForTimeout(800); // let carousels + posters settle
 }
 
-// A ready tile = a project-card that contains the primary "Move to Highlight Reels" button.
+// A ready tile = a project-card that contains the primary "Publish clip"/"Publish reel" button.
 const readyTile = (page) =>
   page.locator('[data-testid="project-card"]', {
-    has: page.getByRole('button', { name: 'Move to Highlight Reels' }),
+    has: page.getByRole('button', { name: /Publish (clip|reel)/i }),
   });
 
 // Guarantee a ready tile exists. Prefer a live one; otherwise flip the first real
@@ -80,13 +81,13 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
   await expect(tile).toBeVisible();
   await tile.scrollIntoViewIfNeeded();
 
-  // ---- Criterion 1: "Ready" is a status badge (not a control); primary names the verb.
-  await expect(tile.getByText('Ready', { exact: true }), '"Ready" status badge renders').toBeVisible();
+  // ---- Criterion 1: "Private" is a status badge (not a control); primary names the verb.
+  await expect(tile.getByText('Private', { exact: true }), '"Private" status badge renders').toBeVisible();
   expect(
-    await tile.getByRole('button', { name: /^ready$/i }).count(),
-    '"Ready" is NOT a button anymore'
+    await tile.getByRole('button', { name: /^private$/i }).count(),
+    '"Private" is NOT a button anymore'
   ).toBe(0);
-  const primary = tile.getByRole('button', { name: 'Move to Highlight Reels' });
+  const primary = tile.getByRole('button', { name: /Publish (clip|reel)/i });
   await expect(primary, 'primary action names the verb').toBeVisible();
   await expect(primary).toBeEnabled();
   await saveEvidence(page, 'criterion-1-ready-badge-and-primary');
@@ -129,7 +130,7 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
   await responsiveSweep(page);
   await page.setViewportSize({ width: 1280, height: 800 });
 
-  // Published state unregressed: Highlight Reels tiles still render.
+  // Published state unregressed: Published-tab tiles still render.
   const myReelsTab = page.getByRole('button', { name: /^Published/ });
   if (await myReelsTab.count()) {
     await myReelsTab.first().click();

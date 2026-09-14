@@ -5,7 +5,7 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
 import { gotoGame, createClipViaUI, deleteClip } from './helpers/annotateClips.js';
 
 /**
- * T5700 follow-up — two clip lanes ("My player" / "Team") on desktop, collapsing
+ * T5700 follow-up — two clip lanes ("My athlete" / "Team") on desktop, collapsing
  * to the original single tinted track on phones.
  *
  * Drives the REAL account (imankh@gmail.com, game 6) via dev-login, same pattern
@@ -40,7 +40,7 @@ test.describe('T5700 follow-up — desktop two-lane split', () => {
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    mineId = await createClipViaUI(page, 'My player');
+    mineId = await createClipViaUI(page, 'My athlete');
     teamId = await createClipViaUI(page, 'Team', SECOND_CLIP_GAPS); // distinct gap so it's a separate marker
   });
 
@@ -54,12 +54,12 @@ test.describe('T5700 follow-up — desktop two-lane split', () => {
     const teamLabel = page.getByTestId('clip-lane-label-team');
     await expect(mineLabel).toBeVisible();
     await expect(teamLabel).toBeVisible();
-    await expect(mineLabel).toContainText('My player');
+    await expect(mineLabel).toContainText('My athlete');
     await expect(teamLabel).toContainText('Team');
 
     const mineLane = page.getByTestId('clip-lane-mine');
     const teamLane = page.getByTestId('clip-lane-team');
-    // The just-created My player clip's marker is in the mine lane, not the team lane.
+    // The just-created My athlete clip's marker is in the mine lane, not the team lane.
     expect(await mineLane.locator('.clip-marker').count()).toBeGreaterThanOrEqual(1);
     expect(await teamLane.locator('.clip-marker').count()).toBeGreaterThanOrEqual(1);
 
@@ -72,7 +72,7 @@ test.describe('T5700 follow-up — desktop two-lane split', () => {
 
     await mineLane.locator('.clip-marker').first().click();
     await expect(page.locator('[data-clip-details]')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('[data-clip-details]').getByRole('radio', { name: 'My player' }))
+    await expect(page.locator('[data-clip-details]').getByRole('radio', { name: 'My athlete' }))
       .toHaveAttribute('aria-checked', 'true');
 
     await teamLane.locator('.clip-marker').first().click();
@@ -108,8 +108,8 @@ test.describe('T5700 follow-up — landscape phone (T4933 case) stays usable', (
     // row, not the timeline `.clip-marker` — the marker's `hover:scale-110`
     // transition never settles for Playwright's actionability check against this
     // densely-packed 32-clip landscape timeline (unrelated to this diff; the list
-    // row is a plain, stable click target). T6400: My player rows carry no `title`
-    // marker by design (only the Team layer does), so `getByTitle('My player')`
+    // row is a plain, stable click target). T6400: My athlete rows carry no `title`
+    // marker by design (only the Team layer does), so `getByTitle('My athlete')`
     // never resolved — use the stable clip-item row testid.
     await page.getByTestId('clip-item').first().click();
     const editor = page.locator('[data-clip-details]');

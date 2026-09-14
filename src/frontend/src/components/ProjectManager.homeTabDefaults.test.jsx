@@ -13,10 +13,10 @@ import { AppStateProvider } from '../contexts';
 // The "Create Highlight Reel" button moved off this tab entirely (to
 // DownloadsPanel), so it is no longer asserted here as a Clips-tab action.
 //
-// T8545: Highlight Reels is now a third peer tab (was a top-right icon
+// T8545: the Reels tab is now a third peer tab (was a top-right icon
 // button/drawer). DownloadsPanel is stubbed here (like the other heavy
 // children) since this file's focus is tab-selection logic, not the
-// Highlights tab's own content -- the stub echoes its `active` prop so tests
+// Reels tab's own content -- the stub echoes its `active` prop so tests
 // can assert which tab is showing.
 
 // jsdom lacks IntersectionObserver (used by the games-grid cache-warming effect).

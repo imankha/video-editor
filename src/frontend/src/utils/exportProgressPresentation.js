@@ -52,8 +52,8 @@ const PHASE_TO_COPY = {
   modal_processing: EXPORT_PROGRESS.RENDERING,
   rendering: EXPORT_PROGRESS.RENDERING,
   analyzing: EXPORT_PROGRESS.RENDERING,
-  upscaling: EXPORT_PROGRESS.RENDERING,
-  ai_upscale: EXPORT_PROGRESS.RENDERING,
+  upscaling: EXPORT_PROGRESS.ENHANCING,
+  ai_upscale: EXPORT_PROGRESS.ENHANCING,
   detecting_players: EXPORT_PROGRESS.FINDING_PLAYERS,
 };
 
@@ -65,8 +65,8 @@ function inferFromMessage(message) {
   if (m.includes('download') || m.includes('prepar') || m.includes('validat') || m.includes('hash')) {
     return EXPORT_PROGRESS.PREPARING;
   }
-  if (m.includes('render') || m.includes('process') || m.includes('frame')
-    || m.includes('upscal') || m.includes('encod')) {
+  if (m.includes('upscal')) return EXPORT_PROGRESS.ENHANCING;
+  if (m.includes('render') || m.includes('process') || m.includes('frame') || m.includes('encod')) {
     return EXPORT_PROGRESS.RENDERING;
   }
   return null;

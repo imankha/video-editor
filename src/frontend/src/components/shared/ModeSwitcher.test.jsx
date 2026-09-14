@@ -33,7 +33,7 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
     fireEvent.click(screen.getByTestId('mode-framing'));
 
     expect(onModeChange).not.toHaveBeenCalled();
-    expect(toastTitles()).toEqual(['Select a reel first']);
+    expect(toastTitles()).toEqual(['Open a clip to start framing']);
     expect(useToastStore.getState().toasts[0].type).toBe('info');
   });
 
@@ -44,7 +44,7 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
     fireEvent.click(screen.getByTestId('mode-overlay'));
 
     expect(onModeChange).not.toHaveBeenCalled();
-    expect(toastTitles()).toEqual(['Export from AI Focus first to enable Spotlight mode']);
+    expect(toastTitles()).toEqual(['Export from Framing first to unlock Spotlight']);
   });
 
   it('repeat taps dedupe to a single toast instead of stacking', () => {

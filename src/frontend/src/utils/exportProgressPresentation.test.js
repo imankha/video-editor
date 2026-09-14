@@ -19,8 +19,16 @@ describe('exportProgressLabel — phase -> honest N37 copy', () => {
   });
 
   it('maps render-ish phases to "Rendering"', () => {
-    for (const phase of ['processing', 'modal_processing', 'rendering', 'upscaling', 'ai_upscale']) {
+    for (const phase of ['processing', 'modal_processing', 'rendering']) {
       expect(exportProgressLabel(phase, '').primary).toBe(EXPORT_PROGRESS.RENDERING);
+    }
+  });
+
+  // T9860: upscaling/ai_upscale split out of RENDERING into their own honest
+  // "Enhancing video" phase, so the AI step is named where it actually runs.
+  it('maps upscaling phases to "Enhancing video"', () => {
+    for (const phase of ['upscaling', 'ai_upscale']) {
+      expect(exportProgressLabel(phase, '').primary).toBe(EXPORT_PROGRESS.ENHANCING);
     }
   });
 
@@ -32,6 +40,8 @@ describe('exportProgressLabel — phase -> honest N37 copy', () => {
 
 describe('exportProgressLabel — counters are optional secondary detail', () => {
   it('extracts an "N/M" counter from the message as detail, not primary', () => {
+    // phase 'processing' short-circuits to RENDERING regardless of the upscale-
+    // flavored message text -- phase always wins over message inference.
     const r = exportProgressLabel('processing', 'AI upscaling frame 150/180');
     expect(r.primary).toBe(EXPORT_PROGRESS.RENDERING);
     expect(r.detail).toBe('150/180');

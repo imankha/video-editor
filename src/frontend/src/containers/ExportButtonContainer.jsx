@@ -864,7 +864,7 @@ export function ExportButtonContainer({
         const blob = new Blob([response.data], { type: 'video/mp4' });
 
         setLocalProgress(95);
-        setProgressMessage(`Saving to ${SECTION_NAMES.LIBRARY}...`);
+        setProgressMessage(`Saving to ${SECTION_NAMES.PUBLISHED}...`);
 
         if (projectId) {
           try {

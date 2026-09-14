@@ -1,8 +1,15 @@
 // T8980/T9390: copy for the shared EmptyTabGuide rendered by all four home tabs.
-// Copy is APPROVED (T9390 binding spec, 2026-09-09) and binding -- do not
+// Copy was APPROVED (T9390 binding spec, 2026-09-09) and binding -- do not
 // paraphrase. No em dashes anywhere (project-wide rule). Vocabulary is T8130's
 // approved nouns (Plays, Clips, Reels) + displayNames.js (SECTION_NAMES,
 // CLIP_UPLOAD); no new vocabulary is introduced here.
+//
+// T9860 (Shared Vocabulary epic, copy and concept sweep, 2026-09-14) supersedes
+// specific words in this file as a VOCABULARY CORRECTION mandated by a later
+// decision, not a paraphrase of the T9390 spec: "tap/Tap Add Play" was stale
+// (T9520 renamed the control to ANNOTATE.MARK_PLAY, this file was missed) and
+// "Focus pass" follows the mode noun rename to MODE_NAMES.FRAMING. The rest of the
+// T9390 spec is still binding.
 //
 // T9390 (Decision 2) cut every empty-variant tab to a headline + ONE short line
 // (footer kept only on Games). Decision 1 demoted Reels to an unnumbered
@@ -11,7 +18,7 @@
 // at the tab bar, which let the Reels "no clips" branch and the Published
 // "nothing" branch be deleted as dead code (see EmptyTabGuide.jsx).
 
-import { SECTION_NAMES_SHORT } from './displayNames';
+import { SECTION_NAMES_SHORT, ANNOTATE } from './displayNames';
 
 // The four home tabs in flow order. `key` is the EmptyTabGuide semantic id (also
 // the flow-strip step id and the STEP_COLORS key in EmptyTabGuide.jsx); `label`
@@ -38,7 +45,7 @@ export const FLOW_STEPS = [
 export const EMPTY_TAB_GUIDE = {
   games: {
     headline: 'Start with a game',
-    body: 'Upload a recording, then tap Add Play on the moments worth keeping.',
+    body: `Upload a recording, then tap ${ANNOTATE.MARK_PLAY} on the moments worth keeping.`,
     addGameCaption: 'From your phone or computer, 2 credits.',
     // Footer kept ONLY on Games (Decision 2): it carries the "a game is not a
     // hard prerequisite either" message -- the Games->Clips edge of the same
@@ -48,8 +55,8 @@ export const EMPTY_TAB_GUIDE = {
   },
   clips: {
     headline: 'Cut a clip, or upload one',
-    body: 'Clips get a Focus pass, then publish alone or into a reel.',
-    openGameText: 'Open a game and tap Add Play.', // games > 0 (the Go to Games path)
+    body: 'Clips get a Framing pass, then publish alone or into a reel.',
+    openGameText: `Open a game and tap ${ANNOTATE.MARK_PLAY}.`, // games > 0 (the Go to Games path)
     uploadText: 'Already have a video?', // games > 0 (the Add Video path)
     // games = 0: Add Video is the ONLY path (Decision 3 removed the cross-tab
     // Add Game create action). This caption tells the user a game is not a
@@ -95,11 +102,11 @@ export const EMPTY_TAB_GUIDE = {
 export const PARTIAL_TAB_GUIDE = {
   games: {
     headline: 'Cut your first play',
-    body: 'Tap Add Play on each moment worth keeping.',
+    body: `Tap ${ANNOTATE.MARK_PLAY} on each moment worth keeping.`,
     cta: 'Open game',
   },
   clips: {
-    headline: 'Give each clip a Focus pass',
+    headline: 'Give each clip a Framing pass',
     body: 'Add an optional Spotlight, then publish it alone or into a reel.',
   },
   reels: {

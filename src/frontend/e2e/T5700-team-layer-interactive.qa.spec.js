@@ -12,7 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USER_DATA_BASE = path.resolve(__dirname, '..', '..', '..', 'user_data');
 
 /**
- * T5700 — Team / My player layer in Annotate: interactive REAL-BROWSER QA.
+ * T5700 — Team / My athlete layer in Annotate: interactive REAL-BROWSER QA.
  *
  * Drives the REAL account (imankh@gmail.com, game 6 — active storage, real
  * video, 32 real annotated clips, all starting after t=100s) via dev-login.
@@ -86,17 +86,17 @@ test.describe('T5700/T6400 — add-clip form layer: new clips land on the chosen
     await saveEvidence(page, 'criterion-new-clip-team-layer');
   });
 
-  test('My player chosen -> new clip gets my_athlete=true and NO layer marker (unmarked default)', async ({ page }) => {
+  test('My athlete chosen -> new clip gets my_athlete=true and NO layer marker (unmarked default)', async ({ page }) => {
     const teamMarkersBefore = await page.locator('[data-testid="clip-row"] [aria-label="Team"]').count();
 
-    const id = await createClipViaUI(page, 'My player');
+    const id = await createClipViaUI(page, 'My athlete');
     createdIds.push(id);
 
     // Only Team rows are marked now, so the layer is proven via the per-clip
     // editor control (which reflects the just-created, now-selected clip) plus
     // the absence of any NEW Team marker in the list.
     await expect(
-      page.locator('[data-clip-details]').getByRole('radio', { name: /^My player/ })
+      page.locator('[data-clip-details]').getByRole('radio', { name: /^My athlete/ })
     ).toHaveAttribute('aria-checked', 'true', { timeout: 5000 });
     expect(await page.locator('[data-testid="clip-row"] [aria-label="Team"]').count()).toBe(teamMarkersBefore);
     await saveEvidence(page, 'criterion-new-clip-my-athlete-layer');
@@ -125,19 +125,19 @@ test.describe('T5700/T6400 — add-clip form layer: new clips land on the chosen
     await saveEvidence(page, 'criterion-inherit-team');
   });
 
-  test('assign a clip to My player, then a NEW clip inherits My player (inherit-from-previous)', async ({ page }) => {
+  test('assign a clip to My athlete, then a NEW clip inherits My athlete (inherit-from-previous)', async ({ page }) => {
     const formA = await openAddClipForm(page);
     createdIds.push(await saveClipForm(page, formA));
-    // Prove inheritance both ways: first push it to Team, then to My player, so
+    // Prove inheritance both ways: first push it to Team, then to My athlete, so
     // the final default is unambiguously the LAST assignment, not a stale seed.
     await setSelectedClipLayer(page, 'Team');
-    await setSelectedClipLayer(page, 'My player');
+    await setSelectedClipLayer(page, 'My athlete');
 
     const formB = await openAddClipForm(page, SECOND_CLIP_GAPS);
-    await expect(formB.getByRole('radio', { name: 'My player' })).toHaveAttribute('aria-checked', 'true');
+    await expect(formB.getByRole('radio', { name: 'My athlete' })).toHaveAttribute('aria-checked', 'true');
     createdIds.push(await saveClipForm(page, formB));
 
-    await expect(page.locator('[data-clip-details]:visible').getByRole('radio', { name: 'My player' }))
+    await expect(page.locator('[data-clip-details]:visible').getByRole('radio', { name: 'My athlete' }))
       .toHaveAttribute('aria-checked', 'true', { timeout: 5000 });
     await saveEvidence(page, 'criterion-inherit-my-athlete');
   });
@@ -184,7 +184,7 @@ test.describe('T5700 — per-clip switch: gesture-based surgical save + survives
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    clipId = await createClipViaUI(page); // defaults to My player (toggle default on fresh game open)
+    clipId = await createClipViaUI(page); // defaults to My athlete (toggle default on fresh game open)
   });
 
   test.afterEach(async ({ context }) => {
@@ -194,7 +194,7 @@ test.describe('T5700 — per-clip switch: gesture-based surgical save + survives
   test('switching a clip to Team sends ONLY {my_athlete:false} and persists across reload', async ({ page }) => {
     const editor = page.locator('[data-clip-details]');
     await expect(editor).toBeVisible({ timeout: 5000 });
-    await expect(editor.getByRole('radio', { name: 'My player' })).toHaveAttribute('aria-checked', 'true');
+    await expect(editor.getByRole('radio', { name: 'My athlete' })).toHaveAttribute('aria-checked', 'true');
 
     const [putReq] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
@@ -217,7 +217,7 @@ test.describe('T5700 — filter pills', () => {
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    mineId = await createClipViaUI(page, 'My player');
+    mineId = await createClipViaUI(page, 'My athlete');
     teamId = await createClipViaUI(page, 'Team', SECOND_CLIP_GAPS); // distinct gap so it lands outside the first clip's span
   });
 
@@ -226,14 +226,14 @@ test.describe('T5700 — filter pills', () => {
     await deleteClip(context, teamId);
   });
 
-  test('My player / Team / All filters produce the right row sets', async ({ page }) => {
-    // Only Team rows carry a marker now, so My player rows are counted as
+  test('My athlete / Team / All filters produce the right row sets', async ({ page }) => {
+    // Only Team rows carry a marker now, so My athlete rows are counted as
     // "rows without a Team marker" rather than by a marker of their own.
     const countRows = async () => page.getByTestId('clip-row').count();
     const countTeam = async () => page.locator('[data-testid="clip-row"] [aria-label="Team"]').count();
     const countMine = async () => (await countRows()) - (await countTeam());
 
-    await page.getByRole('button', { name: 'My player', exact: true }).click();
+    await page.getByRole('button', { name: 'My athlete', exact: true }).click();
     expect(await countMine()).toBeGreaterThanOrEqual(1);
     expect(await countTeam()).toBe(0);
 
@@ -291,7 +291,7 @@ test.describe('T5700 — imported clip: layer control locked, no request sent', 
     const editor = page.locator('[data-clip-details]');
     await expect(editor).toBeVisible({ timeout: 5000 });
 
-    const mine = editor.getByRole('radio', { name: /^My player/ });
+    const mine = editor.getByRole('radio', { name: /^My athlete/ });
     const team = editor.getByRole('radio', { name: /^Team/ });
     await expect(mine).toBeDisabled();
     await expect(team).toBeDisabled();

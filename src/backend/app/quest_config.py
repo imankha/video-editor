@@ -122,10 +122,10 @@ ALL_STEP_IDS = [s for q in QUEST_DEFINITIONS for s in q["step_ids"]]
 STEP_TITLES = {
     # T9575: sentence case across the whole checklist, mirroring the frontend
     # STEP_TITLES exactly (pinned by questDefinitions.test.jsx "FE/BE STEP_TITLES
-    # sync"). Mode/feature proper nouns (Annotate, AI Focus, Spotlight, Publish,
-    # Highlight Reels) keep their capitals; the "spotlight" EFFECT stays lowercase.
+    # sync"). Mode/feature proper nouns (Annotate, Framing, Spotlight, Publish)
+    # keep their capitals; the "spotlight" EFFECT stays lowercase.
     "watch_annotate_tutorial": "Watch Annotate tutorial",
-    "watch_framing_tutorial": "Watch AI Focus tutorial",
+    "watch_framing_tutorial": "Watch Framing tutorial",
     "watch_overlay_tutorial": "Watch Spotlight tutorial",
     "watch_publish_tutorial": "Watch Publish tutorial",
     "upload_game": "Upload your first game",
@@ -135,23 +135,23 @@ STEP_TITLES = {
     "playback_annotations": "Preview plays",  # N40
     "return_home": "Head back home",
     "open_framing": "Open your clip",
-    "position_crop": "Keep your player in frame",
+    "position_crop": "Keep your athlete in frame",
     "add_slowmo": "Add a slow-mo moment",
     "export_framing": "Export your highlight",
-    "wait_for_export": "Crisp it up to 1080p",
+    "wait_for_export": "Enhance the video",
     "open_overlay": "Open in Spotlight",
-    "select_players": "Pick your player",
+    "select_players": "Pick your athlete",
     "choose_color": "Pick your spotlight color",
     "choose_shape": "Choose the spotlight shape",
     "export_overlay": "Export clip with effects",
     "wait_for_overlay": "Render the spotlight",
     "preview_draft": "Watch your preview",
-    # T9575 residual #2: this title hardcodes the FE-derived `Move to
-    # ${SECTION_NAMES.LIBRARY}` string. They agree by COINCIDENCE across the
-    # JS/Python boundary (no shared constant), so a future `LIBRARY` rename would
-    # silently drift this backend error copy. The FE/BE agreement is pinned by
-    # questDefinitions.test.jsx ("FE/BE move_to_my_reels title sync") — update
-    # both together if the destination noun changes.
-    "move_to_my_reels": "Move to Highlight Reels",
+    # T9575 residual #2: this title hardcodes the FE-derived
+    # LIBRARY_ACTIONS.PUBLISH_CLIP string (src/frontend/src/config/displayNames.js).
+    # They agree by COINCIDENCE across the JS/Python boundary (no shared constant),
+    # so a future rename of that constant would silently drift this backend error
+    # copy. The FE/BE agreement is pinned by questDefinitions.test.jsx ("FE/BE
+    # move_to_my_reels title sync") — update both together if the label changes.
+    "move_to_my_reels": "Publish clip",
     "view_gallery_video": "Watch your clip",
 }

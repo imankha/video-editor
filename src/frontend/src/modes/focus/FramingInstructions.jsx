@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Play } from 'lucide-react';
-import { EDITOR_PANELS } from '../../config/displayNames';
+import { EDITOR_PANELS, STAGE_REASONS } from '../../config/displayNames';
 
 /**
  * FramingInstructions (T9610) — a visible three-step sequence that teaches a
@@ -33,7 +33,7 @@ export default function FramingInstructions({ focusPointCount = 0, expanded, onT
   const hasFramingSuccess = focusPointCount >= 2;
 
   const steps = [
-    `Move the box over your player.`,
+    `Move the box over your athlete.`,
     `Step forward in the video.`,
     `Move the box again to follow them.`,
   ];
@@ -53,7 +53,7 @@ export default function FramingInstructions({ focusPointCount = 0, expanded, onT
         <span className="flex items-center gap-2 min-w-0">
           {!expanded && <Play size={14} className="shrink-0 text-blue-300" aria-hidden="true" />}
           <span className="truncate text-sm font-semibold text-white">
-            {expanded ? 'Frame your player' : 'Press play to preview your framing before exporting'}
+            {expanded ? 'Frame your athlete' : 'Press play to preview your framing before exporting'}
           </span>
         </span>
         {expanded
@@ -63,6 +63,9 @@ export default function FramingInstructions({ focusPointCount = 0, expanded, onT
 
       {expanded && (
         <div className="px-3 pb-3">
+          {/* T9860 3.5: one reason per stage, stated before the mechanics. */}
+          <p className="mt-2 text-xs text-gray-400">{STAGE_REASONS.FRAMING}</p>
+
           <ol className="flex flex-col gap-1.5">
             {steps.map((text, i) => (
               <li key={i} className="flex items-center gap-2.5 text-sm text-gray-200">
@@ -90,7 +93,7 @@ export default function FramingInstructions({ focusPointCount = 0, expanded, onT
             }`}
           >
             <Play size={14} className="shrink-0" aria-hidden="true" />
-            <span>Press play to preview how your reel follows your player — before you export.</span>
+            <span>Press play to preview how your reel follows your athlete, before you export.</span>
           </p>
         </div>
       )}

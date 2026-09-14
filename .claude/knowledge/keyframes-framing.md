@@ -1,5 +1,14 @@
 ---
 domain: keyframes-framing
+updated: 2026-09-14 (T9860 — supersedes two claims in the T9550 entry immediately below: the "Mode
+NAMES held (epic override)" line is no longer true -- T9860 LIFTED that override, so
+`editorStore.SCREENS.FRAMING.label` now reads `MODE_NAMES.FRAMING` ("Framing"), not the literal
+"AI Focus" (`e2e/T9550-editor-stage-strings.qa.spec.js`'s assertion was inverted to match: requires
+"Framing" visible, "AI Focus" zero count). Also, "Around player"/"Under player" (D3) are now
+"Around athlete"/"Under athlete" — see `.claude/knowledge/annotate.md`'s T9860 entry for the full
+athlete/player split rule (possessive/singular = athlete, generic/plural = player) and the rest of
+the sweep. `EDITOR_PANELS`'s other T9550 nouns (Focus point, Framing timeline, Spotlight color,
+Outline thickness, Spotlight fill, Dim background, Cover image) are UNCHANGED by T9860.)
 updated: 2026-09-12 (T9740 v2 — EXPORT-BUTTON REF LANDMINE: Focus's "Publish without spotlight"
 one-tap fires OVERLAY's export button, which is not mounted yet at click time. A SINGLE
 `exportButtonRef` shared by Focus's and Overlay's export button instances (App.jsx handed one ref

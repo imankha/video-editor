@@ -228,7 +228,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     const persistedReel = dlBody.downloads.find((d) => d.intro_card_id === targetCard.id);
     expect(persistedReel, 'PERSISTENCE: the value must round-trip after reload').toBeTruthy();
 
-    // Navigate back into Highlight Reels and reopen the SAME reel's picker.
+    // Navigate back into Published and reopen the SAME reel's picker.
     await page.getByRole('button', { name: /^Published/ }).first().click();
     await expect(page.getByTestId('published-tab-panel').first())
       .toBeVisible({ timeout: 15000 });
@@ -347,7 +347,7 @@ test.describe('T5215 intro attachment (real account)', () => {
   // tests, which assert the same share modal + embedded intro carousel + "No
   // intro" option AND the freeze semantics + far more (T7770, survey item 11).
 
-  test('responsive sweep: Highlight Reels carousel view + collection share dialog', async ({ page }) => {
+  test('responsive sweep: Published carousel view + collection share dialog', async ({ page }) => {
     await openDrawer(page);
     const hasReels = await expandFirstGroup(page);
     test.skip(!hasReels, 'no published reels on this account/profile');

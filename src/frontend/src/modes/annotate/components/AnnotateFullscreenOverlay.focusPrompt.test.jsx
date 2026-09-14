@@ -12,7 +12,7 @@ function dialogScope() {
 // T8600 §2.8: Focus mid-edit must never silently discard the open form. The
 // strip's Focus button (edit mode, existingClip.autoProjectId set) opens a
 // confirm-then-save-then-navigate prompt with exactly two buttons (Q2:
-// "Save & open AI Focus" + "Cancel", no third "Discard" button).
+// "Save & open Framing" + "Cancel", no third "Discard" button).
 //
 // T8730: the prompt now ONLY appears when there are real unsaved changes. The
 // dirty-path suite below therefore edits a field first (dirtyEdit) so the
@@ -71,12 +71,12 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
     expect(screen.getByText('Save this play first?')).toBeTruthy();
   });
 
-  it('exactly two buttons: "Save & open AI Focus" and "Cancel" (no Discard, Q2)', () => {
+  it('exactly two buttons: "Save & open Framing" and "Cancel" (no Discard, Q2)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={vi.fn()} />);
     dirtyEdit();
     fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
     const dialog = dialogScope();
-    expect(dialog.getByRole('button', { name: 'Save & open AI Focus' })).toBeTruthy();
+    expect(dialog.getByRole('button', { name: 'Save & open Framing' })).toBeTruthy();
     expect(dialog.getByRole('button', { name: 'Cancel' })).toBeTruthy();
     expect(dialog.getAllByRole('button')).toHaveLength(3); // header X + the two above
     expect(screen.queryByText(/discard/i)).toBeNull();
@@ -94,13 +94,13 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
     expect(onOpenInFocus).not.toHaveBeenCalled();
   });
 
-  it('"Save & open AI Focus" saves first, then navigates with the reel id', async () => {
+  it('"Save & open Framing" saves first, then navigates with the reel id', async () => {
     const onUpdateClip = vi.fn(() => Promise.resolve());
     const onOpenInFocus = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} onOpenInFocus={onOpenInFocus} />);
     dirtyEdit();
     fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save & open AI Focus' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save & open Framing' }));
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(onOpenInFocus).toHaveBeenCalledWith(42));
   });
@@ -112,24 +112,24 @@ describe('AnnotateFullscreenOverlay — Focus mid-edit save-first prompt (T8600 
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={vi.fn()} />);
     dirtyEdit();
     fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
-    expect(screen.queryByText('Opening AI Focus closes the Annotate editor.')).toBeNull();
+    expect(screen.queryByText('Opening Framing closes the Annotate editor.')).toBeNull();
     expect(screen.queryByText(/closes the annotate editor/i)).toBeNull();
     expect(screen.queryByText(/play editor/i)).toBeNull();
   });
 });
 
 // T9330: the confirm-dialog button label and content track the CLIP'S STAGE
-// (getClipStage), not a hardcoded "AI Focus" — a Spotlight-stage clip should
-// read "Save & open Spotlight", not "Save & open AI Focus".
+// (getClipStage), not a hardcoded "Framing" — a Spotlight-stage clip should
+// read "Save & open Spotlight", not "Save & open Framing".
 describe('AnnotateFullscreenOverlay — stage-aware confirm dialog copy (T9330)', () => {
-  it('FOCUS stage: dialog button reads "Save & open AI Focus"', () => {
+  it('FOCUS stage: dialog button reads "Save & open Framing"', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={vi.fn()} />);
     dirtyEdit();
     fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
-    expect(dialogScope().getByRole('button', { name: 'Save & open AI Focus' })).toBeTruthy();
+    expect(dialogScope().getByRole('button', { name: 'Save & open Framing' })).toBeTruthy();
   });
 
-  it('SPOTLIGHT stage: dialog button reads "Save & open Spotlight", not "AI Focus"', () => {
+  it('SPOTLIGHT stage: dialog button reads "Save & open Spotlight", not "Framing"', () => {
     const spotlightClip = {
       id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], my_athlete: true,
       autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10,
@@ -148,7 +148,7 @@ describe('AnnotateFullscreenOverlay — stage-aware confirm dialog copy (T9330)'
     fireEvent.click(screen.getByRole('button', { name: /spotlight/i }));
     const dialog = dialogScope();
     expect(dialog.getByRole('button', { name: 'Save & open Spotlight' })).toBeTruthy();
-    expect(dialog.queryByRole('button', { name: /AI Focus/i })).toBeNull();
+    expect(dialog.queryByRole('button', { name: /Framing/i })).toBeNull();
   });
 });
 

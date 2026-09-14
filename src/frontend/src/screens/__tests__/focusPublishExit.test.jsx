@@ -180,7 +180,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     expect(deps.recordAchievement).toHaveBeenCalledTimes(1);
     expect(deps.recordAchievement).toHaveBeenCalledWith('overlay_deferred');
     expect(deps.toastSuccess).toHaveBeenCalledWith(
-      'Saved to Highlight Reels, under Highlights',
+      'Saved to Reels',
       expect.objectContaining({ duration: 10000 }),
     );
     expect(deps.goToProjectManager).toHaveBeenCalledTimes(1);

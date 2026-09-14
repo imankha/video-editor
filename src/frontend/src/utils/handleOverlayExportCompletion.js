@@ -1,3 +1,5 @@
+import { STAGE_REASONS } from '../config/displayNames';
+
 /**
  * handleOverlayExportCompletion (T9740 fix v3) — the decision logic that used to
  * live inline in App.jsx's `handleExportComplete`, extracted so it can be tested
@@ -113,7 +115,7 @@ export async function handleOverlayExportCompletion(completed, {
   //     "no final video" case with its own 404.
   const published = await publish({ openGallery: false, projectId: completed.projectId });
   if (published) {
-    toastSuccess('Published', { message: 'Anyone with the link can watch it.' });
+    toastSuccess('Published', { message: STAGE_REASONS.PUBLISH });
   } else {
     console.error(
       '[App] T9740: one-tap publish POST failed for project',

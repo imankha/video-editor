@@ -45,7 +45,7 @@ function OverlayPublishExitHarness({
     const published = await publish({ openGallery: false });
     setShowExportCompletePreview(false);
     if (published) {
-      toastSuccess('Published', { message: 'Anyone with the link can watch it.' });
+      toastSuccess('Published', { message: 'Nobody else can see this until you share a link.' });
     }
     if (snapshot?.final_video_id) {
       openFinishedReel(snapshot, { alreadyPublished: !!published });
@@ -210,7 +210,7 @@ describe('T9110 Overlay post-export completion preview + publish-exit action bar
     fireEvent.click(screen.getByRole('button', { name: OVERLAY_PUBLISH.SAVE_DRAFT_LABEL }));
 
     expect(deps.toastSuccess).toHaveBeenCalledWith(
-      'Saved to Highlight Reels, under Highlights',
+      'Saved to Reels',
       expect.objectContaining({ duration: 10000 }),
     );
     expect(deps.goToProjectManager).toHaveBeenCalledTimes(1);

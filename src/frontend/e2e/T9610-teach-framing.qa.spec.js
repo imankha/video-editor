@@ -54,7 +54,7 @@ test.describe('T9610 teach framing (desktop)', () => {
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 
     // Criterion 1: the three-step visible instruction, in plain language.
-    await expect(guide.getByText(/move the box over your player/i)).toBeVisible();
+    await expect(guide.getByText(/move the box over your athlete/i)).toBeVisible();
     await expect(guide.getByText(/step forward in the video/i)).toBeVisible();
     await expect(guide.getByText(/move the box again to follow them/i)).toBeVisible();
     // Names the primitive with the shared "Focus point" noun.

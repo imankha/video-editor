@@ -1,5 +1,49 @@
 ---
 domain: annotate
+updated: 2026-09-14 (T9860 — copy/vocabulary sweep, single cutover across ~34 source + ~64 test/spec
+files, landed as 6 ordered commits on feature/T9860-copy-and-concept-sweep. **Single source added:**
+`config/displayNames.js` gained `MODE_NAMES` (ANNOTATE/FRAMING/SPOTLIGHT), `STAGE_REASONS` (one
+sentence per stage: MARK_PLAY/FRAMING/SPOTLIGHT/PUBLISH), `draftStage.js` gained `DRAFT_STATUS` +
+`getDraftStatus(project)` (D4) — `draftStage.js`'s 4-state machine itself is UNCHANGED, this is a
+presentation-only derived helper layered on top. **Mode noun:** "AI Focus" -> "Framing" everywhere
+(`editorStore.SCREENS[].label` now imports `MODE_NAMES` instead of owning its own string; ~30 render
+sites + comments swept); internal identifiers (`EDITOR_MODES.FRAMING`, `/focus` route, `CLIP_STAGE.FOCUS`,
+`DRAFT_STAGE.IN_FRAMING`, `EXPORT_JOBS.framing`, `framing_exported` analytics, `FocusScreen.jsx`) are
+UNTOUCHED by design (T9550-editor-stage-strings.qa.spec.js's assertion was INVERTED — now requires
+"Framing" and forbids "AI Focus", since T9860 lifted the T9320/T9550 override that had pinned the old
+name). **Athlete/player REVERSAL** (T9550, 2026-09-11, had banned "athlete" in favor of "player" —
+user reversed this 2026-09-14): the split is now BY MEANING, not a blanket flip — `athlete` = the
+subject, always possessive/singular ("your athlete", "My athlete" — `ANNOTATE.LAYER_MINE`); `player`
+= generic/plural or a detection count ("N players detected", `EXPORT_PROGRESS.FINDING_PLAYERS`). This
+makes the UI agree with the persisted `my_athlete` column instead of diverging from it. **Destination
+noun (D1):** `SECTION_NAMES.LIBRARY` ("Highlight Reels") deleted; the published destination is now
+`SECTION_NAMES.PUBLISHED` ("Published") everywhere, including the quest step `move_to_my_reels`
+(now `LIBRARY_ACTIONS.PUBLISH_CLIP`, FE+BE `quest_config.py` mirror updated together).
+**Publish-audience copy (D5, safety-critical):** every publish caption/toast that claimed "anyone with
+the link can watch it" was FALSE (T9670/T9710 verified publishing grants no audience by itself —
+sharing is a separate gesture) — replaced with `STAGE_REASONS.PUBLISH` ("Nobody else can see this
+until you share a link."); the true "anyone with the link" claim survives only inside the actual share
+dialogs + the post-share-token toast. **Mark-play gate widened (D2):** `AnnotateModeView.jsx`'s
+reason line now shows for `annotateClipCount < 3` (was `!hasAnnotateClips`, i.e. only the first play)
+— derived at render time from existing state, no new store/effect/persisted field.
+**Enhancing phase:** `exportProgressPresentation.js` now maps `upscaling`/`ai_upscale` (and the
+`upscal` message-keyword fallback, checked BEFORE the render-keyword branch) to a new
+`EXPORT_PROGRESS.ENHANCING` ("Enhancing video"), split out of `RENDERING` — the AI claim now sits on
+the step that actually runs it, and quality-outcome promises ("Crisp it up to 1080p" etc) were
+removed, not reworded. **Test-file gotcha found during commit 6:** DraftTile.jsx's top-left ready
+badge (`isReadyToPublish`) renders `getDraftStatus(project).label`, which for a completed-but-
+unpublished project is "Private" — NOT "Ready to watch" (that string is the unrelated stage-row
+heading `DRAFT_STAGE_LABELS.READY`, used elsewhere); a test that conflates the two will assert the
+wrong string. **e2e scope note:** the design doc's own file list covered only 7 e2e/qa specs, but the
+same "Move to Highlight Reels" staleness (already broken since T9530 renamed the button to "Publish
+clip"/"Publish reel", masked by `.catch()`-guarded locators) turned out to exist in several more specs
+(T4110, T6180, T8520-T8530, tutorial-capture-publish, T8480) — fixed as part of commit 6 using the
+same target strings. `src/landing/` (marketing site, separate deploy pipeline, never imports
+`displayNames.js`) was deliberately left untouched — its "Highlight Reels" SEO copy is a different
+product's vocabulary, not this app's. Two dead components (`CompareModelsButton.jsx`,
+`GalleryButton.jsx` — the latter still reads the now-deleted `SECTION_NAMES.LIBRARY`, harmless since
+it has zero importers) were intentionally left for a filed follow-up deletion task, not touched here.
+Prior:)
 updated: 2026-09-14 (T9850 — first-result onboarding guidance now completes on saved playable VALUE,
 not a mandatory Preview-plays click. **The defect (B05·R4):** quest_1's last step
 `playback_annotations` gated SOLELY on the `played_annotations` achievement

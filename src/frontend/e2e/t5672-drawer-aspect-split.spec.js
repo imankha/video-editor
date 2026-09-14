@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 
 /**
- * T5672: Highlight Reels drawer (GameCollectionGroup) aspect-split rows.
+ * T5672: Published drawer (GameCollectionGroup) aspect-split rows.
  *
  * The real account's game/mixes buckets are all single-aspect today (checked
  * live via GET /api/collections/summary -- every game reports only '9:16' in

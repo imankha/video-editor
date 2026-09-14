@@ -7,8 +7,8 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  *
  * Drives the app AS THE REAL USER (imankh@gmail.com, prod-copied into dev) to
  * confirm the exact break point of the prod data-loss bug:
- *   Highlight Reels -> Re-edit a published game-6 reel -> reframe -> export ->
- *   "Move to Highlight Reels" -> reload -> is the edited reel present & no phantom card?
+ *   Published tab -> Re-edit a published game-6 reel -> reframe -> export ->
+ *   Publish -> reload -> is the edited reel present & no phantom card?
  *
  * This is an INVESTIGATION spec, not a guardrail: every check is soft and the
  * test ends by dumping a structured CAPTURE block (network statuses, [ReExport]/
@@ -44,7 +44,7 @@ const WATCH = [
   '/api/collections/summary',
 ];
 
-test('T4110 live repro: re-edit a game-6 reel, export, move to Highlight Reels, reload', async ({ context, page }) => {
+test('T4110 live repro: re-edit a game-6 reel, export, publish, reload', async ({ context, page }) => {
   // T5420: explicitly a DEV INVESTIGATION spec (not a guardrail) — it drives a full
   // re-edit -> reframe -> overlay-export -> publish -> reload pipeline whose overlay-export
   // panel does not mount on staging (see derisk-staging-export + FIXTURE-CONTRACT), and
@@ -105,9 +105,9 @@ test('T4110 live repro: re-edit a game-6 reel, export, move to Highlight Reels, 
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded').catch(() => {});
 
-  // --- open Highlight Reels --------------------------------------------------------
+  // --- open Published tab --------------------------------------------------------
   const myReelsBtn = page.getByRole('button', { name: /^Published/ }).first();
-  await myReelsBtn.click({ timeout: 30000 }).catch(() => note('Highlight Reels button not clickable'));
+  await myReelsBtn.click({ timeout: 30000 }).catch(() => note('Published button not clickable'));
   // The collections tab / game groups render inside the slide-out panel.
   await page.getByText('Game Highlights').first().waitFor({ timeout: 30000 }).catch(() => note('no Game Highlights card rendered'));
 
@@ -145,7 +145,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, move to Highlight Reels, 
   }
   await summarizeGame6('after-restore');
 
-  // --- make a reframe edit + export + Move to Highlight Reels (best effort) --------
+  // --- make a reframe edit + export + Publish (best effort) --------
   // The editor selectors aren't all locked down for headless; this stage is
   // defensive. We record what fires. A reframe to a non-9:16 ratio is what would
   // add a 2nd eligible ratio (the phantom card); we try a ratio toggle if shown.
@@ -161,20 +161,20 @@ test('T4110 live repro: re-edit a game-6 reel, export, move to Highlight Reels, 
     const exportBtn = page.getByRole('button', { name: /Next: Spotlight|Create Reel/i }).first();
     if (await exportBtn.count()) {
       await exportBtn.click({ timeout: 10000 }).catch(() => note('export click failed'));
-      note('clicked export; waiting up to 120s for completion / Move-to-My-Reels');
+      note('clicked export; waiting up to 120s for completion / Publish');
       // Wait for either an export-complete signal or a publish button to appear.
-      const moveBtn = page.getByRole('button', { name: /Move to Highlight Reels/i }).first();
+      const moveBtn = page.getByRole('button', { name: /Publish (clip|reel)/i }).first();
       const completeMsg = page.getByText(/Reel ready/i).first();
       await Promise.race([
         moveBtn.waitFor({ timeout: 120000 }).catch(() => {}),
         completeMsg.waitFor({ timeout: 120000 }).catch(() => {}),
       ]);
       if (await moveBtn.count()) {
-        await moveBtn.click({ timeout: 10000 }).catch(() => note('Move-to-My-Reels click failed'));
-        note('clicked "Move to Highlight Reels"');
+        await moveBtn.click({ timeout: 10000 }).catch(() => note('Publish click failed'));
+        note('clicked "Publish"');
         await page.waitForTimeout(5000);
       } else {
-        note('no "Move to Highlight Reels" button appeared (export likely did not finalize live)');
+        note('no Publish button appeared (export likely did not finalize live)');
       }
     } else {
       note('no Export button found in editor view');

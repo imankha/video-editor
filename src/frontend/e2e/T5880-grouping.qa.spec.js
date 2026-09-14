@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
- * T5880 QA - derived tournament/month grouping in Highlight Reels, in a REAL browser
+ * T5880 QA - derived tournament/month grouping in Published, in a REAL browser
  * at 390px and 1280px.
  *
  * The grouping/eligibility LOGIC (which games form which group, no fabricated

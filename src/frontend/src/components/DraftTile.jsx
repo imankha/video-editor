@@ -17,10 +17,10 @@ import { openFinishedReel } from '../utils/finishedReelNav';
 import { API_BASE } from '../config';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
-import { SECTION_NAMES, LIBRARY_ACTIONS } from '../config/displayNames';
+import { SECTION_NAMES, LIBRARY_ACTIONS, MODE_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
-import { rendersSourceAspect, DRAFT_STAGE, DRAFT_STAGE_LABELS } from '../utils/draftStage';
+import { rendersSourceAspect, getDraftStatus } from '../utils/draftStage';
 import { staleClipCount } from '../utils/reelStaleness';
 
 /**
@@ -353,13 +353,15 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // progress strip). Mirrors the old metadata-row status logic, condensed to one word.
   let statusLabel = 'Draft';
   let statusTint = 'text-gray-200';
-  if (isComplete) { statusLabel = 'Done'; statusTint = 'text-green-300'; }
+  // This branch only renders when !isReadyToPublish (isComplete && published,
+  // see the render gate below), so getDraftStatus always resolves PUBLISHED here.
+  if (isComplete) { statusLabel = getDraftStatus(project).label; statusTint = 'text-green-300'; }
   else if (isWaitingForUpload) { statusLabel = 'Uploading'; statusTint = 'text-amber-300'; }
   else if (isExporting && isOffline) { statusLabel = 'Offline'; statusTint = 'text-gray-300'; }
   else if (isExporting) { statusLabel = 'Exporting'; statusTint = 'text-amber-300'; }
   else if (failedExportType) { statusLabel = 'Failed'; statusTint = 'text-orange-300'; }
   else if (project.has_working_video) { statusLabel = 'In Spotlight'; statusTint = 'text-blue-300'; }
-  else if (project.clips_in_progress > 0) { statusLabel = 'AI Focus'; statusTint = 'text-blue-300'; }
+  else if (project.clips_in_progress > 0) { statusLabel = MODE_NAMES.FRAMING; statusTint = 'text-blue-300'; }
   else if (project.clips_exported > 0) { statusLabel = 'Exported'; statusTint = 'text-gray-200'; }
 
   // Fine pointer reveals actions on hover; coarse pointer reveals on long-press (actionsRevealed).
@@ -397,7 +399,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {isComplete && (
         <button onClick={(e) => { e.stopPropagation(); handleClipClick(0); setMenuOpen(false); }} className={`${menuItemClass} hover:bg-gray-600`}>
           <Crop size={18} className="text-gray-300 flex-shrink-0" />
-          <span className="text-gray-200">Open in AI Focus</span>
+          <span className="text-gray-200">Open in {MODE_NAMES.FRAMING}</span>
         </button>
       )}
       {isComplete && (
@@ -487,8 +489,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       )}
 
       {/* Multi-clip marker — only shown when the draft has more than 1 clip. On a
-          ready tile the top-left hosts the "Ready to Publish" badge, so the count shifts to the
-          top-right corner freed by the suppressed status chip (T6180). */}
+          ready tile the top-left hosts the status badge (T9860 D4: "Private"), so the count
+          shifts to the top-right corner freed by the suppressed status chip (T6180). */}
       {project.clip_count > 1 && (
         <span
           className={`absolute top-1.5 z-20 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gray-900/80 text-white shadow backdrop-blur-sm ${
@@ -502,23 +504,22 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         </span>
       )}
 
-      {/* The "Ready to Publish" badge is a STATUS, not a control (T6180): a
-          non-interactive badge. The publish gesture is the primary button in the
-          bottom action bar. T8470 qualified the bare "Ready" (it had a final
-          video but was not yet published); T9600 routes the word through
-          draftStage's READY label so a private draft is never described as
-          already shared. */}
+      {/* The ready badge is a STATUS, not a control (T6180): a non-interactive
+          badge. The publish gesture is the primary button in the bottom action
+          bar. T8470 qualified the bare "Ready" (it had a final video but was not
+          yet published); T9860 (D4) routes the word through getDraftStatus so a
+          private draft reads "Private", never a claim it is already shared. */}
       {isReadyToPublish && (
         <span
           className="absolute top-1.5 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-black/60 backdrop-blur-sm text-cyan-300 shadow"
         >
           <CheckCircle size={11} />
-          {DRAFT_STAGE_LABELS[DRAFT_STAGE.READY]}
+          {getDraftStatus(project).label}
         </span>
       )}
 
       {/* Status chip (Q7) — suppressed in the ready state (Q1): a ready tile shows
-          only the top-left "Ready to Publish" badge. Every other state is byte-for-byte unchanged. */}
+          only the top-left status badge. Every other state is byte-for-byte unchanged. */}
       {!isReadyToPublish && (
         <span className={`absolute top-1.5 right-1.5 z-20 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-black/60 backdrop-blur-sm ${statusTint}`}>
           {statusLabel}
@@ -527,7 +528,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
 
       {/* In-My-Reels marker for published-complete reels */}
       {isComplete && project.is_published && (
-        <span className="absolute top-9 right-1.5 z-20 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-black/60 backdrop-blur-sm text-cyan-300" title={`In ${SECTION_NAMES.LIBRARY}`}>
+        <span className="absolute top-9 right-1.5 z-20 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-black/60 backdrop-blur-sm text-cyan-300" title={getDraftStatus(project).label}>
           <CheckCircle size={11} />
         </span>
       )}
@@ -646,13 +647,13 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           {/* T6890: the rename pencil moved OUT of this rail to sit beside the name
               in the bottom scrim (above). It is no longer stacked here. */}
           {isComplete && (
-            <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title="Open in AI Focus" className={actionBtnClass} />
+            <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title={`Open in ${MODE_NAMES.FRAMING}`} className={actionBtnClass} />
           )}
           {isComplete && (
             <Button variant="secondary" size="sm" icon={Layers} iconOnly onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }} title="Open in Spotlight" className={actionBtnClass} />
           )}
           {isComplete && !isReadyToPublish && (
-            <Button variant="secondary" size="sm" icon={EyeOff} iconOnly loading={isPublishing} onClick={handleHideFromDrafts} title={`Hide from Drafts (stays in ${SECTION_NAMES.LIBRARY})`} className={actionBtnClass} />
+            <Button variant="secondary" size="sm" icon={EyeOff} iconOnly loading={isPublishing} onClick={handleHideFromDrafts} title={`Hide from Drafts (stays under ${SECTION_NAMES.PUBLISHED})`} className={actionBtnClass} />
           )}
           <Button variant={showDeleteConfirm ? 'danger' : 'secondary'} size="sm" icon={Trash2} iconOnly onClick={handleDelete} title={showDeleteConfirm ? 'Click again to confirm' : deleteLabel} className={actionBtnClass} />
         </div>

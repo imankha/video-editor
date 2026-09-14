@@ -21,7 +21,7 @@ import { FOCUS_PUBLISH } from '../config/displayNames';
  *                                          setEditorMode('overlay')).
  *   SECONDARY Publish without spotlight — normal gray card. Publishes the framed
  *                                          reel as-is; caption states audience.
- *   TERTIARY  Edit framing              — quiet outline card. Back into AI Focus;
+ *   TERTIARY  Edit framing              — quiet outline card. Back into Framing;
  *                                          caption carries the paid-re-export
  *                                          ("uses credits") warning BEFORE the tap.
  *   QUIET     Save draft                — NOT a competing card: a small ghost

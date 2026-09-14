@@ -106,8 +106,8 @@ async function openRankingGame(context, page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded').catch(() => {});
 
-  // T8545: Highlight Reels is now the Published tab (was a top-right icon
-  // button carrying title="Highlight Reels" / SECTION_NAMES.LIBRARY).
+  // T8545: this view is now the Published tab (was a top-right icon
+  // button carrying title="Published" / SECTION_NAMES.PUBLISHED).
   await page.getByRole('button', { name: /^Published/ }).first().click({ timeout: 15000 });
 
   // ConfidenceBanner shows "Rank reels" when kind === 'active' (eligible: true)

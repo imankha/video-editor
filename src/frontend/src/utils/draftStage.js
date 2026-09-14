@@ -4,6 +4,7 @@
 // group status counts, and tests — never re-derive these buckets inline.
 
 import { RATIO, RATIO_ORDER } from '../constants/aspectRatios';
+import { MODE_NAMES } from '../config/displayNames';
 
 export const DRAFT_STAGE = {
   NOT_STARTED: 'not_started',
@@ -27,9 +28,14 @@ export const DRAFT_STAGE_ORDER = [
 // "Ready" wording that contradicted the "Reel created!" story elsewhere.
 export const DRAFT_STAGE_LABELS = {
   [DRAFT_STAGE.NOT_STARTED]: 'Draft',
-  [DRAFT_STAGE.IN_FRAMING]: 'Draft - in AI Focus',
-  [DRAFT_STAGE.IN_OVERLAY]: 'Draft - in Spotlight',
-  [DRAFT_STAGE.READY]: 'Ready to Publish',
+  [DRAFT_STAGE.IN_FRAMING]: `Draft, in ${MODE_NAMES.FRAMING}`,
+  [DRAFT_STAGE.IN_OVERLAY]: `Draft, in ${MODE_NAMES.SPOTLIGHT}`,
+  // T9860 (design doc §2.3 Section 4): READY groups private AND published items
+  // (has_final_video, regardless of is_published), so "Ready to Publish" was
+  // already wrong for a published item -- ProjectManager.jsx improvised a 'Done'
+  // override to cover exactly that gap. "Ready to watch" is true of both, so the
+  // override is deleted (see getDraftStatus below) instead of reproduced.
+  [DRAFT_STAGE.READY]: 'Ready to watch',
 };
 
 // Text tint per stage — matches the CollapsibleGroup legend colors so the row
@@ -59,6 +65,36 @@ export function getDraftStage(project) {
     return DRAFT_STAGE.IN_FRAMING;
   }
   return DRAFT_STAGE.NOT_STARTED;
+}
+
+// T9860 (Shared Vocabulary epic, copy and concept sweep, D4): the ready/published
+// split, derived once here instead of improvised per call site (ProjectManager,
+// DraftTile's ready badge, DraftTile's published marker each re-derived their own
+// word from has_final_video + is_published before this). A second axis from
+// getDraftStage, not a fourth DRAFT_STAGE -- the pipeline states stay unchanged.
+export const DRAFT_STATUS = {
+  DRAFT: 'draft',
+  PRIVATE: 'private',
+  PUBLISHED: 'published',
+};
+
+const DRAFT_STATUS_INFO = {
+  [DRAFT_STATUS.DRAFT]: { label: 'Draft', detail: 'Not exported yet' },
+  [DRAFT_STATUS.PRIVATE]: { label: 'Private', detail: 'Only you can see it' },
+  [DRAFT_STATUS.PUBLISHED]: { label: 'Published', detail: 'Only you can see it until you share a link' },
+};
+
+/**
+ * Per-project status (D4): Draft until a final video exists, then Private or
+ * Published depending on is_published. Returns { status, label, detail }.
+ */
+export function getDraftStatus(project) {
+  const status = !project.has_final_video
+    ? DRAFT_STATUS.DRAFT
+    : project.is_published
+      ? DRAFT_STATUS.PUBLISHED
+      : DRAFT_STATUS.PRIVATE;
+  return { status, ...DRAFT_STATUS_INFO[status] };
 }
 
 /**

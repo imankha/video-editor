@@ -6,14 +6,18 @@
  * criteria 1-4), saving a screenshot per criterion to /workspace/qa.
  *
  * What it pins:
- *  - Focus (AI Focus mode name UNCHANGED) → Settings tab → the aspect-ratio row
- *    reads "Portrait (9:16)" / "Landscape (16:9)" (N32: word alongside the ratio).
+ *  - Focus (mode name is "Framing" — T9860 lifted the T9320/T9550 override that
+ *    had pinned the mode noun to "AI Focus"; see below) → Settings tab → the
+ *    aspect-ratio row reads "Portrait (9:16)" / "Landscape (16:9)" (N32: word
+ *    alongside the ratio).
  *  - Overlay (Spotlight mode name UNCHANGED) → Spotlight tab → "Spotlight color"
  *    (N29, was "Highlight Color"); when a spotlight is enabled, "Outline
  *    thickness" / "Spotlight fill" / "Dim background" (N30).
  *  - Overlay → the third settings tab is labelled "Cover image" (N31, was
  *    "Thumbnail"); its panel copy is cover-image language.
- *  - The mode names "AI Focus" and "Spotlight" still appear (override held).
+ *  - The mode name "Framing" appears and "AI Focus" never does (T9860, 2026-09-14,
+ *    routed the mode noun through MODE_NAMES.FRAMING); "Spotlight" still appears
+ *    (override held for that mode name).
  *
  * NON-MUTATING: opens drafts, switches settings tabs, screenshots. Never exports,
  * never clicks a CTA. Skips loudly (repo honest-skip convention) when the account
@@ -40,14 +44,16 @@ test.describe('T9550 editor-stage vocabulary (desktop)', () => {
     await loginAsRealUser(context, AUDIT_EMAIL, AUDIT_PROFILE);
   });
 
-  test('Focus Settings tab: aspect ratio shows the descriptive word alongside the number (N32); AI Focus name held', async ({ page }) => {
+  test('Focus Settings tab: aspect ratio shows the descriptive word alongside the number (N32); mode noun reads Framing, not AI Focus', async ({ page }) => {
     let opened = true;
     try { await openFramingDraft(page); }
     catch (e) { opened = false; test.skip(true, `no Focus-openable draft: ${e.message}`); }
     if (!opened) return;
 
-    // AI Focus mode name is unchanged (override) — it labels the mode switcher.
-    await expect(page.getByText('AI Focus', { exact: false }).first()).toBeVisible();
+    // T9860 lifted the T9320/T9550 override: the mode switcher now reads
+    // "Framing", and "AI Focus" must never appear anywhere on the screen.
+    await expect(page.getByText('Framing', { exact: false }).first()).toBeVisible();
+    await expect(page.getByText('AI Focus', { exact: false })).toHaveCount(0);
 
     await page.getByTestId('settings-tab-settings').click();
     const panel = page.getByTestId('settings-panel-settings');

@@ -149,27 +149,28 @@ describe('DraftTile (T5672)', () => {
 
   it('shows a status chip reflecting framing-in-progress', () => {
     renderTile({ clips_in_progress: 1 });
-    expect(screen.getByText('AI Focus')).toBeTruthy();
+    expect(screen.getByText('Framing')).toBeTruthy();
   });
 
-  it('shows a Done status chip for a completed reel', () => {
+  it('shows a Published status chip for a completed reel', () => {
     renderTile({ has_final_video: true, is_published: true });
-    expect(screen.getByText('Done')).toBeTruthy();
+    expect(screen.getByText('Published')).toBeTruthy();
   });
 
   // Re-pinned from the old badge-shape test (T6180). Old contract: a single 10px
-  // corner <button> labelled "Ready" that published. New contract: "Ready to Publish"
-  // (T8470 qualified the bare "Ready"; T9600 routes the word through draftStage's
-  // READY label so a private draft is never labelled as already shared) is a
-  // NON-interactive status badge, and a DISTINCT emphasized primary button names the
-  // verb. T9530 (N12) made that verb name its own object: a reel (is_auto_created ===
-  // false, baseProject) publishes as "Publish reel" (was "Publish to Highlight
-  // Reels"); a clip as "Publish clip".
-  it('makes the "Ready to Publish" status a non-interactive badge and a distinct primary button the publish verb (T6180)', () => {
+  // corner <button> labelled "Ready" that published. New contract: "Private"
+  // (T8470 qualified the bare "Ready"; T9600 routed the word through draftStage's
+  // READY label so a private draft was never labelled as already shared; T9860
+  // (D4) replaced that with getDraftStatus(project), whose label for a completed,
+  // unpublished project is "Private") is a NON-interactive status badge, and a
+  // DISTINCT emphasized primary button names the verb. T9530 (N12) made that verb
+  // name its own object: a reel (is_auto_created === false, baseProject) publishes
+  // as "Publish reel" (was the old destination-noun phrasing, D1); a clip as "Publish clip".
+  it('makes the "Private" status a non-interactive badge and a distinct primary button the publish verb (T6180)', () => {
     renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
-    // "Ready to Publish" is a status, not a control — no button carries that accessible name.
-    expect(screen.queryByRole('button', { name: /^ready to publish$/i })).toBeNull();
-    expect(screen.getByText('Ready to Publish')).toBeTruthy();
+    // "Private" is a status, not a control — no button carries that accessible name.
+    expect(screen.queryByRole('button', { name: /^private$/i })).toBeNull();
+    expect(screen.getByText('Private')).toBeTruthy();
     // The primary action's accessible name names the object, but its visible label
     // is shortened to "Publish" (matches CollectionPlayer's button).
     const primary = screen.getByRole('button', { name: 'Publish reel' });
@@ -218,7 +219,7 @@ describe('DraftTile (T5672)', () => {
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
     // Secondary actions are reachable inside it.
     expect(screen.getByRole('button', { name: /rename/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /open in ai focus/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /open in framing/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /open in spotlight/i })).toBeTruthy();
     // First delete click ARMS the confirm without deleting or closing the menu.
     const del = screen.getByRole('button', { name: /delete reel/i });

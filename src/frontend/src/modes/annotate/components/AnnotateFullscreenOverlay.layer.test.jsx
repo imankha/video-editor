@@ -37,7 +37,7 @@ const baseProps = {
 describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
   it('create mode defaults the Layer control from newClipLayerIsMine=true (My Athlete)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
-    expect(screen.getByRole('radio', { name: 'My player' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'My athlete' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('create mode defaults the Layer control from newClipLayerIsMine=false (Team)', () => {
@@ -74,7 +74,7 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
           existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], my_athlete: false, shared_by: 'Dana Smith' }}
         />
       );
-      const mine = screen.getByRole('radio', { name: /^My player/ });
+      const mine = screen.getByRole('radio', { name: /^My athlete/ });
       const team = screen.getByRole('radio', { name: /^Team/ });
       expect(mine.disabled).toBe(true);
       expect(team.disabled).toBe(true);
@@ -89,7 +89,7 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
           onUpdateClip={onUpdateClip}
         />
       );
-      fireEvent.click(screen.getByRole('radio', { name: /^My player/ }));
+      fireEvent.click(screen.getByRole('radio', { name: /^My athlete/ }));
       fireEvent.click(screen.getByRole('button', { name: 'Update play' }));
       expect(onUpdateClip).toHaveBeenCalledTimes(1);
       expect(onUpdateClip.mock.calls[0][1]).toMatchObject({ my_athlete: false });
@@ -149,7 +149,7 @@ describe('AnnotateFullscreenOverlay — Layer control in the desktop strip (T860
         existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], my_athlete: false, shared_by: 'Dana Smith' }}
       />
     );
-    expect(screen.getByRole('radio', { name: /^My player/ }).disabled).toBe(true);
+    expect(screen.getByRole('radio', { name: /^My athlete/ }).disabled).toBe(true);
     expect(screen.getByRole('radio', { name: /^Team/ }).disabled).toBe(true);
   });
 });

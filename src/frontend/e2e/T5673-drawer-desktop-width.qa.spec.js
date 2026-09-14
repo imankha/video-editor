@@ -72,7 +72,7 @@ async function tilesInFirstRow(page) {
   return visible;
 }
 
-test.describe('T5673 — Highlight Reels drawer desktop width (real account)', () => {
+test.describe('T5673 — Published drawer desktop width (real account)', () => {
   test('width-c1: 1315px desktop widens the drawer well past 448px, more tiles per row', async ({ page }) => {
     await page.setViewportSize({ width: 1315, height: 900 });
     await openDrawer(page);

@@ -36,7 +36,7 @@ skipOnDeployedTarget(
 );
 
 // The three IN-GRID choices (Save draft is a quiet link outside the card grid).
-const LABELS = ['Publish', 'Reapply spotlight', 'Reapply AI Focus'];
+const LABELS = ['Publish', 'Reapply spotlight', 'Reapply Framing'];
 
 // Count resolved grid-template-columns tracks (each track resolves to a px
 // value, so the token count == the column count). The measurement the task
@@ -76,7 +76,7 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
     await expect(page.getByTestId('overlay-save-draft')).toBeVisible();
     // Publish is the dominant PRIMARY (its card is the tinted/ringed cyan one).
     await expect(page.getByTestId('overlay-choice-primary').getByRole('button', { name: 'Publish', exact: true })).toBeVisible();
-    // Reapply AI Focus carries the honest paid-re-export cost warning caption.
+    // Reapply Framing carries the honest paid-re-export cost warning caption.
     await expect(bar.getByText(/uses credits/i)).toBeVisible();
     await saveEvidence(page, 'T9110-criterion-preview-actionbar-desktop');
 
@@ -85,9 +85,9 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'publish-now');
     await expect(page.getByText('Published', { exact: false })).toBeVisible();
 
-    // Reapply AI Focus -> its own confirming toast + closes.
+    // Reapply Framing -> its own confirming toast + closes.
     await page.getByTestId('diag-reopen').click();
-    await page.getByTestId('overlay-publish-action-bar').getByRole('button', { name: 'Reapply AI Focus', exact: true }).click();
+    await page.getByTestId('overlay-publish-action-bar').getByRole('button', { name: 'Reapply Framing', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'reapply-focus');
     await expect(page.getByText('Spotlight saved')).toBeVisible();
 
@@ -95,7 +95,7 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
     await page.getByTestId('diag-reopen').click();
     await page.getByTestId('overlay-save-draft').click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'publish-later');
-    await expect(page.getByText('Saved to Highlight Reels, under Highlights')).toBeVisible();
+    await expect(page.getByText('Saved to Reels')).toBeVisible();
   });
 
   test('LIVE DOM measurement: no title wraps / no row overflow at sm:+; single row gated at lg: (1024), not sm:', async ({ page }) => {

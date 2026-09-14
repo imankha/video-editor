@@ -97,7 +97,7 @@ describe('CropLayer placeholder copy (T3780)', () => {
 
   it('uses outcome-first copy', () => {
     const { container } = renderEmpty();
-    expect(container.textContent).toContain('Keep your player in frame');
+    expect(container.textContent).toContain('Keep your athlete in frame');
   });
 
   it('drops the "Set Crop Keyframes" jargon', () => {

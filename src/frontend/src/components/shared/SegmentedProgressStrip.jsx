@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import { getClipDisplayName } from '../../utils/clipDisplayName';
 import { isClipStale } from '../../utils/reelStaleness';
 import { DRAFT_STAGE, DRAFT_STAGE_LABELS } from '../../utils/draftStage';
+import { MODE_NAMES } from '../../config/displayNames';
 
 /**
  * SegmentedProgressStrip - Visual progress indicator with segments
@@ -49,13 +50,13 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
 
   if (framingComplete) {
     // Framing done - show single "Framing" segment as complete
-    clipSegments.push({ status: 'done', label: 'AI Focus', tags: [] });
+    clipSegments.push({ status: 'done', label: MODE_NAMES.FRAMING, tags: [] });
   } else if (isExporting === 'framing') {
     // Currently exporting - show single "Framing" segment as exporting (or disconnected)
-    clipSegments.push({ status: isOffline ? 'disconnected' : 'exporting', label: 'AI Focus', tags: [] });
+    clipSegments.push({ status: isOffline ? 'disconnected' : 'exporting', label: MODE_NAMES.FRAMING, tags: [] });
   } else if (failedExportType === 'framing') {
     // Framing export failed - show single "Framing" segment as failed
-    clipSegments.push({ status: 'export_failed', label: 'AI Focus', tags: [] });
+    clipSegments.push({ status: 'export_failed', label: MODE_NAMES.FRAMING, tags: [] });
   } else {
     // Framing not done - show per-clip editing status
     for (let i = 0; i < clip_count; i++) {
@@ -63,7 +64,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
       const clipName = getClipDisplayName(clipInfo, `Clip ${i + 1}`);
       const clipTags = clipInfo?.tags || [];
       // T8350: SECONDARY staleness cue -- only meaningful here, before framing
-      // collapses per-clip segments into one "Focus" segment (see reelStaleness.js).
+      // collapses per-clip segments into one "Framing" segment (see reelStaleness.js).
       const clipStale = clipInfo ? isClipStale(clipInfo) : false;
 
       if (clips_in_progress > 0 && i < clips_in_progress) {
@@ -134,12 +135,12 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
               ) : isExporting === 'framing' ? (
                 <span className="text-amber-400 flex items-center gap-1">
                   <RefreshCw size={10} className="animate-spin" />
-                  AI Focus...
+                  {MODE_NAMES.FRAMING}...
                 </span>
               ) : framingComplete ? (
-                <span className="text-green-400">AI Focus</span>
+                <span className="text-green-400">{MODE_NAMES.FRAMING}</span>
               ) : (
-                <span>AI Focus</span>
+                <span>{MODE_NAMES.FRAMING}</span>
               )}
             </span>
             {isExporting === 'overlay' && isOffline ? (
@@ -193,7 +194,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
                 segment.status === 'done' ? 'Complete' :
                 segment.status === 'disconnected' ? 'Not Connected' :
                 segment.status === 'exporting' ? 'Exporting...' :
-                segment.status === 'in_progress' ? (isOverlay ? 'Started - export to complete' : 'Started - export AI Focus to complete') :
+                segment.status === 'in_progress' ? (isOverlay ? 'Started - export to complete' : `Started - export ${MODE_NAMES.FRAMING} to complete`) :
                 // T9600: the 'ready' spotlight segment is a working-video-only reel
                 // (draftStage IN_OVERLAY), not a shared one — route through the single
                 // source instead of the old "Ready to share" literal that read as

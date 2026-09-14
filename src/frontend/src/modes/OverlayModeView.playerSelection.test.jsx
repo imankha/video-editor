@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 /**
  * T9620 (UX-10): the spotlight editor leads with PICKING A PLAYER.
- * - "Click your player" is stated on screen (not a hover tooltip) while unpicked.
+ * - "Click your athlete" (T9860 D3) is stated on screen (not a hover tooltip) while unpicked.
  * - The spotlight scaffolding ellipse is suppressed until a player is assigned
  *   (HighlightOverlay does not render), so nothing floats on unassigned ground.
  * - Both are lifted once a detection frame carries an assignment keyframe.
@@ -94,13 +94,13 @@ function renderView(overrides = {}) {
 }
 
 describe('OverlayModeView player-selection-first (T9620)', () => {
-  it('states "Click your player" and suppresses the spotlight before selection', () => {
+  it('states "Click your athlete" and suppresses the spotlight before selection', () => {
     renderView({ highlightRegions: [regionUnassigned()] });
     const prompt = screen.getByTestId('select-player-prompt');
     expect(prompt.textContent).toBe(EDITOR_PANELS.SELECT_PLAYER_CLICK);
     // No ellipse on unassigned ground: HighlightOverlay must not mount.
     expect(screen.queryByTestId('highlight-overlay')).toBeNull();
-    // Styling controls hidden; the panel shows the pick-your-player guidance.
+    // Styling controls hidden; the panel shows the pick-your-athlete guidance.
     expect(screen.getByText(EDITOR_PANELS.SELECT_PLAYER_TITLE)).toBeTruthy();
     expect(screen.queryByText(EDITOR_PANELS.OUTLINE_THICKNESS)).toBeNull();
   });

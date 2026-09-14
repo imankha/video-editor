@@ -13,10 +13,10 @@ import { gotoGame, createClipViaUI, deleteClip } from './helpers/annotateClips.j
  * so a stray test clip never lingers in the real account.
  *
  * Proves, against the running app:
- *   - the Teammates control is ABSENT on a My player clip and PRESENT on a Team
+ *   - the Teammates control is ABSENT on a My athlete clip and PRESENT on a Team
  *     clip (desktop AND mobile);
  *   - tagging a teammate works on a Team clip;
- *   - switching a tagged clip TO My player clears the tags in the SAME surgical
+ *   - switching a tagged clip TO My athlete clears the tags in the SAME surgical
  *     write (PUT {my_athlete:true, tagged_teammates:[]}) and the control (with
  *     its chips) visibly disappears — the clear-on-switch decision.
  *
@@ -45,19 +45,19 @@ test.describe('T5725 — desktop: Teammates control gating + clear-on-switch', (
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    clipId = await createClipViaUI(page); // My player default
+    clipId = await createClipViaUI(page); // My athlete default
   });
 
   test.afterEach(async ({ context }) => {
     await deleteClip(context, clipId);
   });
 
-  test('absent on My player, present on Team, tagging works, and switching to My player clears tags', async ({ page }) => {
+  test('absent on My athlete, present on Team, tagging works, and switching to My athlete clears tags', async ({ page }) => {
     const editor = page.locator('[data-clip-details]');
     await expect(editor).toBeVisible({ timeout: 5000 });
-    await expect(editor.getByRole('radio', { name: 'My player' })).toHaveAttribute('aria-checked', 'true');
+    await expect(editor.getByRole('radio', { name: 'My athlete' })).toHaveAttribute('aria-checked', 'true');
 
-    // (1) Absent on a My player clip.
+    // (1) Absent on a My athlete clip.
     await expect(teammatesLabel(editor)).toHaveCount(0);
     await saveEvidence(page, 'criterion-teammates-absent-my-athlete-desktop');
 
@@ -76,10 +76,10 @@ test.describe('T5725 — desktop: Teammates control gating + clear-on-switch', (
     expect(tagPut.postDataJSON()).toEqual({ tagged_teammates: ['QA Teammate'] });
     await expect(editor.getByText('QA Teammate')).toBeVisible();
 
-    // (4) Switch back to My player -> tags cleared in the SAME write, control gone.
+    // (4) Switch back to My athlete -> tags cleared in the SAME write, control gone.
     const [clearPut] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
-      editor.getByRole('radio', { name: 'My player' }).click(),
+      editor.getByRole('radio', { name: 'My athlete' }).click(),
     ]);
     expect(clearPut.postDataJSON()).toEqual({ my_athlete: true, tagged_teammates: [] });
     await expect(teammatesLabel(editor)).toHaveCount(0);
@@ -99,14 +99,14 @@ test.describe('T5725 — mobile (390px): Teammates control gating', () => {
   test.beforeEach(async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
     await gotoGame(page);
-    clipId = await createClipViaUI(page); // My player default
+    clipId = await createClipViaUI(page); // My athlete default
   });
 
   test.afterEach(async ({ context }) => {
     await deleteClip(context, clipId);
   });
 
-  test('mobile detail editor: teammates absent on My player, present on Team', async ({ page }) => {
+  test('mobile detail editor: teammates absent on My athlete, present on Team', async ({ page }) => {
     // Open the mobile clips drawer and view the just-created clip's details.
     // On mobile a clip row's own onClick is disabled; details open via the
     // per-row "View details" button (ClipListItem, isMobile branch).
@@ -118,7 +118,7 @@ test.describe('T5725 — mobile (390px): Teammates control gating', () => {
     const editor = page.locator('[data-clip-details]:visible');
     await expect(editor).toBeVisible({ timeout: 5000 });
 
-    // Absent on My player (mobile).
+    // Absent on My athlete (mobile).
     await expect(teammatesLabel(editor)).toHaveCount(0);
     await saveEvidence(page, 'criterion-teammates-absent-my-athlete-mobile');
 
@@ -128,8 +128,8 @@ test.describe('T5725 — mobile (390px): Teammates control gating', () => {
     await assertNoHorizontalOverflow(page);
     await saveEvidence(page, 'criterion-teammates-present-team-mobile');
 
-    // Back to My player hides it again.
-    await editor.getByRole('radio', { name: 'My player' }).click();
+    // Back to My athlete hides it again.
+    await editor.getByRole('radio', { name: 'My athlete' }).click();
     await expect(teammatesLabel(editor)).toHaveCount(0);
   });
 });

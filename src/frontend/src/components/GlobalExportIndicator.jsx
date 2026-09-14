@@ -233,7 +233,7 @@ export function GlobalExportIndicator() {
             }
           },
         } : undefined;
-        // T9540 (N21): title names the STAGE that finished (AI Focus ready / Clip ready);
+        // T9540 (N21): title names the STAGE that finished (Framing ready / Clip ready);
         // the message names the object instance (the reel/clip name).
         const completeVocab = jobVocab(exp);
         toast.success(completeVocab ? completeVocab.completed : 'Export complete', {

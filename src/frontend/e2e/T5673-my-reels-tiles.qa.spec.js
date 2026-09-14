@@ -5,10 +5,10 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
 /**
  * T5673 (visual tiles) + T5678 (no batch Select) — live QA on the REAL account.
  *
- * Drives the Highlight Reels drawer as imankh@gmail.com (dev-login) at 390 (mobile) and
+ * Drives the Published drawer as imankh@gmail.com (dev-login) at 390 (mobile) and
  * 1280+ (desktop) and evidences the acceptance criteria of BOTH bundled tasks:
  *
- *   T5678-c1  no Select button / selection mode anywhere in Highlight Reels
+ *   T5678-c1  no Select button / selection mode anywhere in Published
  *   T5678-c2  each reel EXPOSES "Move to profile…" (the picker->confirm->commit WALK
  *             is owned by T4850-move-reels; T7770 dropped the duplicated uncommitted walk)
  *   T5673-c1  collection/game groups show poster imagery (tiles, not text rows)
@@ -56,7 +56,7 @@ async function expandFirstGroup(page) {
   return false;
 }
 
-test.describe('T5673 + T5678 — Highlight Reels visual tiles (real account)', () => {
+test.describe('T5673 + T5678 — Published visual tiles (real account)', () => {
   test('c1: NO Select button anywhere in the drawer', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openDrawer(page);

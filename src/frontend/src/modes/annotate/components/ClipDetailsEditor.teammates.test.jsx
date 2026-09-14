@@ -93,7 +93,7 @@ describe('ClipDetailsEditor — clear-on-switch to My Athlete (T5725)', () => {
         onDelete={() => {}}
       />
     );
-    fireEvent.click(screen.getByRole('radio', { name: 'My player' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'My athlete' }));
     expect(onUpdate).toHaveBeenCalledTimes(1);
     expect(onUpdate).toHaveBeenCalledWith({ my_athlete: true, tagged_teammates: [] });
   });
