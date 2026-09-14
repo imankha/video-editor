@@ -369,11 +369,18 @@ def _find_games_for_hash(
     the expired set. Can't use a SQL join since game_storage_refs is in
     auth.sqlite while game_videos is in profile.sqlite.
     """
-    # A game needs (re)export when it was never run, or it failed and still has
-    # retries left. {p} is the games-table alias prefix ("" or "g.").
+    # A game needs (re)export when it was never run, or it failed/is stuck
+    # pending and still has retries left. {p} is the games-table alias prefix
+    # ("" or "g."). T10121: the 'pending' arm closes mechanism B -- a machine
+    # death mid-export (Fly suspend/deploy/OOM) previously left a game at
+    # 'pending' forever, matching neither IS NULL nor 'failed', so it was
+    # never re-selected even though auto_export_game already tolerates
+    # re-entering a pending game (T2460).
     def needs_export(p):
         return (f"({p}auto_export_status IS NULL OR "
                 f"({p}auto_export_status = 'failed' "
+                f"AND COALESCE({p}auto_export_attempts, 0) < ?) OR "
+                f"({p}auto_export_status = 'pending' "
                 f"AND COALESCE({p}auto_export_attempts, 0) < ?))")
 
     with get_db_connection() as conn:
@@ -383,7 +390,7 @@ def _find_games_for_hash(
         single = cursor.execute(
             f"""SELECT id FROM games
                WHERE blake3_hash = ? AND {needs_export('')}""",
-            (blake3_hash, MAX_AUTO_EXPORT_ATTEMPTS),
+            (blake3_hash, MAX_AUTO_EXPORT_ATTEMPTS, MAX_AUTO_EXPORT_ATTEMPTS),
         ).fetchall()
 
         # Multi-video games using this hash
@@ -391,7 +398,7 @@ def _find_games_for_hash(
             f"""SELECT DISTINCT g.id FROM games g
                JOIN game_videos gv ON gv.game_id = g.id
                WHERE gv.blake3_hash = ? AND {needs_export('g.')}""",
-            (blake3_hash, MAX_AUTO_EXPORT_ATTEMPTS),
+            (blake3_hash, MAX_AUTO_EXPORT_ATTEMPTS, MAX_AUTO_EXPORT_ATTEMPTS),
         ).fetchall()
 
         # Filter: only include multi-video games where ALL hashes are expired

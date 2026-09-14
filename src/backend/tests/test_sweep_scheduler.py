@@ -242,6 +242,29 @@ class TestFindGamesForHash:
         result = _find_games_for_hash(USER_ID, PROFILE_ID, "hash_a", {"hash_a"})
         assert result == set()
 
+    def test_pending_under_cap_is_retried(self, isolated_profile_db):
+        """T10121 mechanism B: a game stuck at 'pending' (machine died mid-export)
+        under the retry cap IS re-selected -- the selector previously matched
+        neither IS NULL nor 'failed' for 'pending', so it was silently reclaimed."""
+        from app.services.sweep_scheduler import _find_games_for_hash
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash="hash_a", status="pending", attempts=1)
+
+        result = _find_games_for_hash(USER_ID, PROFILE_ID, "hash_a", {"hash_a"})
+        assert result == {game_id}
+
+    def test_pending_at_cap_excluded(self, isolated_profile_db):
+        """A 'pending' game that has exhausted its retries is not re-selected."""
+        from app.services.auto_export import MAX_AUTO_EXPORT_ATTEMPTS
+        from app.services.sweep_scheduler import _find_games_for_hash
+
+        db = isolated_profile_db["db_path"]
+        _insert_game(db, blake3_hash="hash_a", status="pending", attempts=MAX_AUTO_EXPORT_ATTEMPTS)
+
+        result = _find_games_for_hash(USER_ID, PROFILE_ID, "hash_a", {"hash_a"})
+        assert result == set()
+
 
 # ---------------------------------------------------------------------------
 # do_sweep tests

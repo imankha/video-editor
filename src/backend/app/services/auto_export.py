@@ -41,9 +41,25 @@ RECAP_MAP_SCHEMA = "recap-map/v2"
 
 EXPORT_TIMEOUT_SECONDS = 300
 
-# Max times the sweep will retry a failed auto-export before giving up and
-# letting the source be reclaimed. The counter lives in games.auto_export_attempts
-# and is read by sweep_scheduler._find_games_for_hash.
+# Status vocabulary for games.auto_export_status (single authoritative note --
+# sweep_scheduler.needs_export's selector matches against exactly these
+# literals; keep this comment in sync with that selector):
+#   pending   -- export attempt in progress or interrupted mid-run (T2460);
+#                retryable under the attempt cap. T10121 closed the selector
+#                hole that let a machine-death-stuck 'pending' game sit
+#                forever unretried -- the sweep's re-check saw nothing
+#                pending export and reclaimed the source out from under it.
+#   failed    -- the last attempt raised; retryable under the attempt cap.
+#   complete  -- terminal, success.
+#   skipped   -- terminal, the game had zero rated clips (nothing to export).
+#   abandoned -- terminal (T10121 D7): the attempt cap was exhausted AND the
+#                R2 recap-artifact gate still refuses reclaim. Never
+#                auto-retried and never matched by the sweep selector;
+#                reclaiming an abandoned game's source is an explicit admin
+#                action, not something a timeout should do silently.
+# Max times the sweep will retry a failed/pending auto-export before giving up
+# (see 'abandoned' above). The counter lives in games.auto_export_attempts and
+# is read by sweep_scheduler._find_games_for_hash / needs_export.
 MAX_AUTO_EXPORT_ATTEMPTS = 3
 
 # T4140: the recap doubles as a full-quality re-edit master. Create Clip (T4130)
