@@ -1,8 +1,8 @@
-# T10120: A game can be storage-reclaimed before its recap succeeds, stranding its clips with no video and no way back except Delete
+# T10120: GameTile gates annotation playback on the wrong signal, hiding fully-annotated team-layer games behind a Delete-only dead end
 
 **Status:** TODO
 **Impact:** 8
-**Complexity:** 6
+**Complexity:** 3
 **Created:** 2026-09-14
 **Updated:** 2026-09-14
 
@@ -10,128 +10,145 @@
 
 Bug 52 (`bug_reports`, sarkarati@gmail.com, 2026-09-02, build `d9621161`): "No option to watch
 annotation replay for Game Vs LA Breakers Belmar May 2. Should have 17 clips viewable but only
-option is to delete game." Action breadcrumbs show him repeatedly opening/closing the game
-(annotate <-> project-manager) without ever reaching framing/overlay — consistent with the game
-genuinely offering no way to view its clips, only delete.
+option is to delete game." Action breadcrumbs show him repeatedly opening/closing the game without
+ever reaching framing/overlay — the game genuinely offered no way to view its clips.
 
-This is potentially worse than a missing button: per the root-cause below, the underlying clips'
-video source may be genuinely gone, not just inaccessible through the UI.
+## Root Cause (expert-confirmed 2026-09-14 — see T10121 for the sibling backend investigation)
 
-## Root Cause (investigated 2026-09-14, not yet expert-verified)
+This is the child of a wider investigation (`docs/plans/tasks/T10121-reclaim-sweep-can-permanently-destroy-unrecapped-footage.md`)
+that found **four distinct** ways a game can end up expired with `recap_video_url IS NULL`. This
+task is specifically the fix for the one that most likely explains sarkarati's report, is the
+**actual reported bug** (not a hypothetical), is small, and **loses no data**:
 
-"Watch annotation replay" is `GameTile`'s "Watch recap" action
-(`src/frontend/src/components/GameTile.jsx:180`):
+**`recap_video_url` is an athlete-layer-only pointer that the frontend misreads as "any recap
+exists."** `src/backend/app/services/auto_export.py:131-149`:
 
-```js
-hasRecap && { key: 'play', label: 'Watch recap', icon: Play, onClick: onPlayRecap },
+```python
+team_clips = _get_annotated_clips(game_id, RecapLayer.TEAM)
+if team_clips:
+    _generate_recap(..., layer=RecapLayer.TEAM)      # writes recaps/{id}_team.mp4 to R2
+
+athlete_clips = _get_annotated_clips(game_id, RecapLayer.ATHLETE)
+if athlete_clips:
+    recap_url = _generate_recap(..., layer=RecapLayer.ATHLETE)
+else:
+    recap_url = None                                  # <-- team-only game
+...
+"UPDATE games SET auto_export_status = 'complete', recap_video_url = ? WHERE id = ?", (recap_url, game_id)
 ```
 
-where `hasRecap = Boolean(game.recap_video_url)` (`:63`). The tile's action list (`:179-188`) also
-gates "Add video"/"Share" on `!isExpired` and "Extend" on `canExtend`. When a game is `isExpired`,
-has no `recap_video_url`, and `can_extend === false`, **every conditional action evaluates false**
-— the tile falls through to only the unconditional Delete button (`:193-213`), and tapping the
-tile (`activatePrimary()`, `:138-148`) is a no-op since neither `canExtend` nor `hasRecap` hold.
-This exactly matches "only option is to delete game."
+A game whose rated clips are **all Team-layer** (`my_athlete = 0`) finishes auto-export with
+`auto_export_status='complete'` and `recap_video_url = NULL`, **while a perfectly good team recap
+sits in R2** at `recaps/{game_id}_team.mp4`. T5710 deliberately kept the column pointing at the
+unsuffixed athlete key (`.claude/knowledge/export-pipeline.md:815-821`) and nobody revisited the
+consumers that read it as a boolean.
 
-**Why `recap_video_url` can end up NULL on an expired game:** `recap_video_url` is set only by
-`auto_export_game`/`ensure_recap` (`src/backend/app/services/auto_export.py`), whose own module
-docstring says it generates recap videos **before game-video deletion during the cleanup/reclaim
-sweep**. If that auto-export fails or exhausts `MAX_AUTO_EXPORT_ATTEMPTS` (3, `auto_export.py:47`)
-before the sweep reclaims the source video's storage, the source gets deleted with
-`recap_video_url` still NULL. `_compute_storage_status` (`games.py:2433-2458`, from T8320) then
-reports `'expired'` for any hash-backed game with no surviving `game_storage` row (documented as
-"the safe direction" in its own docstring), and `can_extend` (`games.py:1535`) is false once no
-ref/grace window remains. Net effect: a game with real annotated clips (17, in this report) whose
-auto-export step failed before reclaim lands in a zero-action dead end.
+**All-team-layer is not an edge case — it is the guaranteed shape of every claimed/shared game**:
+`materialization.py:728` — "Incoming share clips are always Team layer (my_athlete=0)";
+`materialization.py:475-479` — a materialized game starts with `recap_video_url=None`. The ONLY
+place such a game's recap is ever reachable today is right after claiming it
+(`ProjectManager.jsx:1144-1153` opens `RecapPlayerModal` directly with `initialTab:'team'`) — once
+that moment passes, `GameTile` has no way back in.
 
-**Potential real data loss, not just a UI gap:** per `auto_export.py:49-54`, the recap video is
-also used as the clips' fallback video source AFTER the original is reclaimed
-(`resolve_clip_source`). If the recap was never generated, the clips may have **no playable video
-source left at all**, not merely a hidden replay button. This needs confirming (see Investigation
-below) before assuming the fix is UI-only.
+The collapse itself, exactly matching the bug report (`GameTile.jsx:63, 142-148, 179-188`):
+`hasRecap = Boolean(game.recap_video_url)` → false; `!isExpired` kills Add video/Share;
+`can_extend` is false once the grace window is gone; `activatePrimary()` (tap-to-open) is inert.
+The poster also 404s (`games.py:3801-3836` only derives a poster from `recap_video_url`), so the
+tile renders as a grey "No poster" box with one Delete button.
 
-**Ruled out as the same bug:** T8150 (fixed 2026-09-13) was a *freshly created* game vanishing from
-missing `durable_sync` on `activate_game`/`create_game` — unrelated, this game is old/expired, not
-newly created. T6770 (deployed 2026-08-26, predates this report) fixed `game_storage_refs` drift
-that `can_extend` now correctly reads — it doesn't touch auto-export reliability or the
-sweep-vs-recap race. **Not provably fixed by any of the 136 tasks in the 2026-09-13 deploy** — none
-of T8200/T8210/T8220/etc. touch `auto_export.py`'s retry/failure path. Treat as still live on
-current master pending the investigation below.
+**The backend already fully supports this case — only the tile's gate is wrong.**
+`GET /api/games/{id}/recap-data?layer=team` (`games.py:1704-1826`) already resolves the stitched
+team recap, or falls back to the live game video, a legacy recap, or a clip-names-only list — and
+`RecapPlayerModal.jsx:180-188, 593-601` already renders the honest "This game's video is no longer
+available (storage expired). The annotation details are still listed." state with the clip rail.
+Nothing needs to be built server-side for this fix; the frontend is just asking the wrong question.
 
-## Investigation needed before implementing
+## Fix
 
-1. Confirm via prod logs (or a live repro against a game near its reclaim window) whether
-   `auto_export_game` actually failed/exhausted retries for this specific game before reclaim, or
-   whether there's a different gap (e.g. a race between the sweep's delete step and the auto-export
-   step that isn't just "auto-export failed N times").
-2. Confirm whether this game's clips currently have ANY playable video source, or whether the
-   footage is genuinely gone. This determines severity: if clips are truly unrecoverable, this is a
-   data-loss bug (`feedback_no_fallbacks_correct_data`, infrastructure-depth tier 1-2) needing
-   different urgency/communication than a pure UI dead-end.
-3. Per CLAUDE.md's model policy, this is a root-cause investigation whose mechanism spans
-   async/sweep timing — **spawn the expert agent** with this task file plus `auto_export.py`,
-   `games.py`'s `_compute_storage_status`/`can_extend`, and `.claude/knowledge/modal-gpu.md` +
-   `annotate.md` before designing the fix.
+**Do NOT overload `recap_video_url`** — it's a real pointer used by `/recap-url`
+(`games.py:1631-1646`) and the poster path (`games.py:3801`); making it also mean "some recap
+exists somewhere" repeats the same one-field-two-meanings mistake. Surface the truth instead:
 
-## Design questions for the fix (once root cause confirmed)
+1. `games.py:1274-1296` (`_compute_athlete_stats`) already reads `my_athlete` per row in the same
+   pass that builds `clip_count` — add `athlete_clip_count`/`team_clip_count` to the per-game dict
+   (free, no N+1) and include them in the list payload (`games.py:1549`).
+2. `GameTile.jsx:63` — replace `const hasRecap = Boolean(game.recap_video_url);` with
+   `const hasAnnotations = (game.clip_count || 0) > 0;`.
+3. `GameTile.jsx:180` — relabel the action from **"Watch recap"** to **"Watch annotations"** (the
+   reporter's own words were "watch annotation replay") and gate it on `hasAnnotations`.
+4. `GameTile.jsx:142-148` (`activatePrimary`) — on an expired game: `canExtend → onExtend`, else
+   `hasAnnotations → onPlayRecap` (was `hasRecap`).
+5. `ProjectManager.jsx:1791` — `onPlayRecap` already accepts a tab; pass
+   `game.athlete_clip_count > 0 ? 'athlete' : 'team'` so a team-only game opens on the tab that has
+   content (`RecapPlayerModal.jsx:53` currently defaults to `'athlete'`, which would open empty for
+   this exact case).
+6. Update `.claude/knowledge/annotate.md:1944-1946` — it currently documents the broken gate as
+   intentional; fix the doc in the same commit per the knowledge-doc rule (docs are claims, code is
+   truth).
 
-1. Should the reclaim sweep be hardened so it CANNOT delete a game's source video until its recap
-   has successfully generated (i.e. make recap-before-delete an invariant the sweep enforces, not
-   just an intended ordering) — this is the structural fix.
-2. Should `GameTile` show a distinct "recap unavailable" / "needs attention" state instead of
-   silently collapsing to Delete-only when a game is expired with no recap? This is a UX safety net
-   regardless of (1) — a user should never see a dead end that looks identical to "nothing here,
-   just delete it" for a game that has real annotated clip data.
-3. For sarkarati's specific game (and any others found in the same state): is recovery possible
-   (re-run auto-export against surviving source data, if any), or does this need direct remediation
-   per data-safety rules (confirm scope + exact accounts before any write, per CLAUDE.md's Data
-   Safety Rules)?
+This single change makes every case honest, because `recap-data` already implements all the
+resolution routes — it was never reachable through the tile.
+
+## Does sarkarati's specific game need separate recovery?
+
+Likely not, but unconfirmed. Per T10121's investigation, this mechanism (all-team-layer) is
+estimated ~60% likely to be his exact case (17 clips, no athlete layer) — if so, the team recap
+already exists in R2 and this UI fix alone restores his game, no data remediation needed. See
+T10121's "sarkarati's game" section for the diagnostic query and why it must run against his
+**per-user SQLite** (profile_db, R2-synced — NOT shared Postgres; `games`/`raw_clips` live in
+`src/backend/app/database.py`'s schema, not `pg.py`'s). If the diagnostic instead shows `pending`/
+`failed` status, his case is T10121's territory, not this task's.
 
 ## Context
 
 ### Relevant Files (REQUIRED)
-- `src/frontend/src/components/GameTile.jsx:63,138-148,179-213` — action-gating logic, the
-  UI-visible symptom
-- `src/backend/app/services/auto_export.py` — `auto_export_game`/`ensure_recap`,
-  `MAX_AUTO_EXPORT_ATTEMPTS`, the recap-before-reclaim ordering and its failure path
-- `src/backend/app/routers/games.py:1535` (`can_extend`), `:2433-2458` (`_compute_storage_status`,
-  T8320's "safe direction" expiry logic)
-- `.claude/knowledge/modal-gpu.md` — auto-export/GPU pipeline context
-- `.claude/knowledge/annotate.md` — games/clips/recap invariants
+- `src/frontend/src/components/GameTile.jsx:63,142-148,179-213` — the gate to fix
+- `src/backend/app/routers/games.py:1274-1296` (add per-layer counts), `:1549` (list payload),
+  `:1631-1646` (`/recap-url`), `:1704-1826` (`/recap-data`, already correct), `:3801-3836` (poster)
+- `src/frontend/src/screens/ProjectManager.jsx:1791` — `onPlayRecap` tab selection
+- `src/frontend/src/components/RecapPlayerModal.jsx:53,180-188,593-601` — already handles the
+  expired/team-only cases correctly, just needs to be reachable
+- `.claude/knowledge/annotate.md:1944-1946` — fix the stale doc note in the same commit
 
 ### Related Tasks
-- Not the same as T8150 (fixed) or T6770 (fixed, predates this report) — see Root Cause above for
-  why both are ruled out
-- Filed alongside T10070/T10080/T10090/T10110 from the same full bug-report triage pass
-  (2026-09-14)
+- Sibling backend investigation: T10121 (reclaim sweep can permanently destroy footage — a
+  different, more severe set of mechanisms; this task's fix does not require T10121 or vice versa,
+  they can ship independently and in either order)
+- T10130 (storage-expiry banner reassurance copy) depends on **T10121**, not this task — this fix
+  doesn't change reclaim reliability, only read-path correctness
+- Filed alongside T10070/T10080/T10090/T10110 from the 2026-09-14 bug-report triage pass
 
 ### Technical Notes
-- No silent fallback / no defensive self-repair per coding standards — if the sweep's ordering
-  invariant is violated, fail loud (log CRITICAL, don't let reclaim silently proceed), don't paper
-  over it with a UI state change alone.
+- `athlete_clip_count`/`team_clip_count` are derived on read from `my_athlete`, never stored
+  (`feedback_no_redundant_state`) — same pattern `_compute_athlete_stats` already uses for
+  `clip_count`.
 
 ## Implementation
 
 ### Steps
-1. [ ] Spawn expert agent for root-cause confirmation + fix design (see Investigation above).
-2. [ ] Confirm sarkarati's specific game's clip-recovery status.
-3. [ ] Implement the sweep-ordering hardening (recap-before-reclaim as an enforced invariant).
-4. [ ] Implement the `GameTile` "recap unavailable" state as a UX safety net.
-5. [ ] Backend tests: sweep must not reclaim a game whose auto-export hasn't succeeded (or has
-   permanently failed in a way that's surfaced, not silently swallowed).
-6. [ ] Remediate sarkarati's specific game per whatever the investigation finds is recoverable.
+1. [ ] Add `athlete_clip_count`/`team_clip_count` to the games list payload.
+2. [ ] `GameTile.jsx`: replace `hasRecap` with `hasAnnotations`, relabel the action, fix
+   `activatePrimary`.
+3. [ ] `ProjectManager.jsx`: pass the correct initial tab to `onPlayRecap`.
+4. [ ] Fix the stale note in `.claude/knowledge/annotate.md`.
+5. [ ] Frontend tests: `GameTile.test.jsx` currently pins the OLD (broken) behavior at `:153-160`
+   ("Extend storage" test) — rewrite the case for an expired, non-extendable, team-only game
+   (`clip_count>0`, `recap_video_url:null`) to expect "Watch annotations" and a working tap.
+6. [ ] Run the diagnostic query from T10121 against sarkarati's profile DB; if it confirms
+   all-team-layer, tell him once this ships (per `feedback_post_deploy_user_notification`).
 
 ### Progress Log
 
-**2026-09-14**: Task filed from `bug_reports` #52 + root-cause investigation during a full
-bug-report triage pass. Not yet expert-reviewed or started.
+**2026-09-14**: Task filed from `bug_reports` #52. Expert investigation (docs/plans/tasks/T10121)
+confirmed root cause and full fix design; this task file rewritten to carry just the frontend fix
+after the investigation found 3 additional, more severe backend mechanisms — split out to T10121
+so this small, safe, high-confidence fix isn't blocked on the harder backend design work.
 
 ## Acceptance Criteria
 
-- [ ] The reclaim sweep cannot delete a game's source video before its recap has either succeeded
-      or been surfaced as a definitive, logged failure (not just silently retried-and-abandoned).
-- [ ] A game with real annotated clips never presents as "only option is to delete" without a
-      clear explanation of what happened.
-- [ ] sarkarati's specific game is resolved (recap recovered, or clips confirmed genuinely lost and
-      handled per data-safety rules) — never left in its current stuck state.
-- [ ] Backend tests cover the sweep-ordering invariant.
+- [ ] A game with real annotated clips (any layer) never presents as "only option is to delete"
+      when a recap actually exists for its clips.
+- [ ] An all-team-layer game's tile correctly offers "Watch annotations" and opens the team tab.
+- [ ] `GameTile.test.jsx` covers the fixed case.
+- [ ] sarkarati's specific game confirmed resolved (or handed to T10121 if the diagnostic shows a
+      different mechanism).

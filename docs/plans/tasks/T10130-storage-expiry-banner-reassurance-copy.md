@@ -22,24 +22,25 @@ rendered account-level per T8330. Current copy (`:32-42`):
 {count} game(s) expiring soon — {count} draft reel(s) depend on {it/them}.  [Extend storage]
 ```
 
-## IMPORTANT — sequencing dependency on T10120
+## IMPORTANT — sequencing dependency on T10121 (not T10120)
 
-**Do not ship this copy before T10120 lands, or ship it only with a caveat that makes the claim
-true today.** The "you'll still get annotation playback after deletion" guarantee described by the
-user is backed by exactly the mechanism T10120 found broken: `auto_export.py`'s recap generation is
-*supposed* to run before the reclaim sweep deletes a game's source video, and that recap is what
-`resolve_clip_source` falls back to once the original is gone (`.claude/knowledge/annotate.md`,
-`auto_export.py:49-54`). T10120 found this ordering isn't currently enforced — if auto-export fails
-or exhausts retries before reclaim, the source gets deleted with no recap, and the game's clips can
-end up with **no playable video at all** (bug 52, a 17-clip game landed in exactly this state).
+**Do not ship this copy before T10121 lands.** The 2026-09-14 expert investigation split the
+original T10120 finding into two tasks:
+- **T10120** — a frontend read-path fix (GameTile misreads `recap_video_url` as "any recap
+  exists"). This fixes the *display* of an existing recap but does nothing about whether a recap
+  reliably gets created before reclaim in the first place.
+- **T10121** — the actual reliability gap: the reclaim sweep can permanently delete a game's video
+  before its recap exists, via three separate confirmed mechanisms (a stuck `pending` status never
+  retried, retry exhaustion with zero alerting, and multi-video partial expiry) — with **no R2
+  object versioning anywhere in this codebase**, so once reclaimed, it's permanently gone.
 
-Telling users "it's safe to let this expire, you'll still have annotation playback" while that
-guarantee can silently fail would be actively worse than saying nothing — it would encourage the
-exact behavior (declining to extend) that turns into permanent data loss when the recap step fails.
-**Sequence this after T10120's sweep-ordering fix ships**, or coordinate with whoever implements it
-so the reassurance copy and the reliability fix land together.
+The "you'll still get annotation playback after deletion" guarantee this banner is meant to make
+is backed entirely by T10121's fix, not T10120's. Shipping this copy before T10121 lands would
+encourage the exact behavior (declining to extend) that currently risks permanent data loss.
+**Sequence this after T10121**, or coordinate with whoever implements it so the reassurance copy
+and the reliability fix land together.
 
-## Solution (draft, refine once T10120's fix is confirmed)
+## Solution (draft, refine once T10121's fix is confirmed)
 
 Add a second line/tooltip to the banner (and consider `SourceExpiredPanel.jsx` and `GameTile.jsx`'s
 "Extend storage" surfaces too, per Relevant Files below, since they carry the same messaging gap) —
@@ -63,8 +64,8 @@ rather than a conditional one that requires new plumbing.
 - `.claude/knowledge/annotate.md` — recap/annotation-playback invariants
 
 ### Related Tasks
-- **Blocked on / must sequence after T10120** (game reclaim before recap strands clips) — see
-  sequencing note above
+- **Blocked on / must sequence after T10121** (reclaim sweep can permanently destroy footage) —
+  see sequencing note above. Not blocked on T10120 (unrelated fix, can ship independently).
 - Same milestone family as T8330 (the banner's origin task)
 
 ### Technical Notes
@@ -75,7 +76,7 @@ rather than a conditional one that requires new plumbing.
 ## Implementation
 
 ### Steps
-1. [ ] Confirm T10120's sweep-ordering fix has shipped (or is landing in the same batch).
+1. [ ] Confirm T10121's sweep-hardening fix has shipped (or is landing in the same batch).
 2. [ ] UX copy pass (ui-designer agent) for the actual reassurance wording, across all 3 surfaces
    found above.
 3. [ ] Determine if the message should be conditional on annotation/export completeness or general
@@ -91,4 +92,4 @@ this copy needs to wait on a reliability fix first.
 
 - [ ] The storage-expiry banner (and ideally SourceExpiredPanel/GameTile's equivalent messaging)
       tells users that a fully-marked, fully-exported game does not need to stay stored.
-- [ ] This claim is actually true when shipped — i.e. T10120's fix is live first.
+- [ ] This claim is actually true when shipped — i.e. T10121's fix is live first.
