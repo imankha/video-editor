@@ -32,18 +32,46 @@ screenshot capture, not the layout bug itself, but worth a glance if reproducing
 
 ## Solution
 
-Not yet investigated. Before spending time on this:
-1. Check whether the in-progress Overlay/Focus redesign work (T9860 copy/concept sweep and
-   related evaluation-2026-09-13 tasks) already changes this layout.
-2. If still relevant after that work lands, reproduce with a 16:9 export in the Overlay menu and
-   find the CSS/layout cause (likely an aspect-ratio-dependent width/overflow in the Overlay
-   toolbar or menu container).
+**Investigated 2026-09-14 (Explore agent, code-only pass, not live-reproduced): appears already
+superseded, recommend closing.** The actual Overlay layout lives in
+`src/frontend/src/modes/OverlayModeView.jsx` (not `components/overlay/`, which only holds
+sub-panels), with the desktop settings rail in `src/frontend/src/components/settings/SettingsRail.jsx`.
+
+This exact bug class was hit and fixed **twice** before this 2026-09-14 report:
+- **T9150** (2026-09-08/09, commit `869f7a16`) first added an explicit `calc(100%-22rem)` cap on
+  the video column to keep it from overlapping the rail.
+- **T9270** step 2 (2026-09-09, commit `e5499473`) removed that cap and switched to the current
+  flexbox layout: the desktop row (`OverlayModeView.jsx:954-985`) has the video column as
+  `lg:flex-1 lg:min-w-0` and `SettingsRail` as a sibling that is `shrink-0` with a fixed
+  `width: 300px` (`SettingsRail.jsx:152-163`). Flexbox guarantees the rail's width; the video
+  column absorbs remaining space and is capped by `max-w-full` — it cannot mathematically overlap
+  or push the rail off-screen under this layout.
+
+The 2026-09-14 bug report (viewport 2224x1277, well above the `lg` breakpoint) reads as describing
+**pre-T9270 behavior** — the fix landed 5 days before the report. **T9860 (today's copy sweep) did
+not touch this file's layout**, only a `MODE_NAMES` import — confirms its own "no layout change"
+claim, ruling it out as a regression source.
+
+**One stale artifact found, unrelated to whether the bug is live:** the comment at
+`OverlayModeView.jsx:385-392` still references the removed `lg:max-w-[calc(100%-22rem)]` cap, and
+the e2e harness (`t9100diag/main.jsx`, `T9100-overlay-detection-alignment.qa.spec.js`) still tests
+the old cap-based approach instead of the real component. Minor cleanup, not evidence the layout
+bug itself is live.
+
+**Not live-reproduced against a real 16:9 export** — this is a code-reading verdict, not a
+Playwright confirmation. Recommend the user either (a) accept this as closed/superseded given the
+flexbox layout mathematically rules out the reported overlap, or (b) ask for a quick live-drive
+confirmation before closing. Leaving status as TODO pending that call — AI does not close tasks
+unilaterally.
 
 ## Context
 
 ### Relevant Files (REQUIRED)
-- Overlay menu/toolbar components — not yet located, needs a repro pass first
-  (`src/frontend/src/components/overlay/` per the bug-triage skill's mode->directory mapping)
+- `src/frontend/src/modes/OverlayModeView.jsx:373-398` (aspect-ratio video sizing), `:954-985`
+  (desktop row layout), `:385-392` (stale comment referencing the removed cap)
+- `src/frontend/src/components/settings/SettingsRail.jsx:152-163` (fixed-width rail, `shrink-0`)
+- `t9100diag/main.jsx`, `T9100-overlay-detection-alignment.qa.spec.js` — e2e harness still
+  exercises the old cap-based approach, not the current component (stale, minor follow-up)
 
 ### Related Tasks
 - Related to T10070 (same reporter, same email, unrelated bug)
@@ -52,13 +80,20 @@ Not yet investigated. Before spending time on this:
 ## Implementation
 
 ### Steps
-1. [ ] Check against current Overlay redesign work before investigating further.
-2. [ ] If still live, reproduce with a 16:9 export and identify the layout cause.
-3. [ ] Fix.
+1. [x] Check against current Overlay redesign work before investigating further — done 2026-09-14,
+   see Solution above: superseded by T9150/T9270, appears already fixed.
+2. [ ] (Optional, low priority) Live-reproduce with a real 16:9 export to fully confirm before
+   closing — not yet done, code-only verdict so far.
+3. [ ] (Optional, small follow-up) Clean up the stale `calc(100%-22rem)` comment and the
+   cap-based e2e harness in `t9100diag`/`T9100-overlay-detection-alignment.qa.spec.js`.
 
 ### Progress Log
 
-**2026-09-14**: Filed from reporter's email. Not started.
+**2026-09-14**: Filed from reporter's email. Investigated same day (Explore agent, code-only):
+the layout fix (T9150 -> T9270, both 2026-09-09) already replaced the fixed-width cap with a
+flexbox layout that cannot overlap the settings rail; the 2026-09-14 report reads as describing
+pre-fix behavior. Recommend closing as superseded; awaiting user confirmation (AI does not close
+tasks unilaterally) before removing from PLAN.md.
 
 ## Acceptance Criteria
 

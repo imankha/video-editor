@@ -19,26 +19,51 @@ resolvable at a glance which arrows scroll which cards, and the cards themselves
 to one continuous "Not Started" collection (4 cards visible, badge says "6" total) rather than two
 distinct groups that would justify two carousels.
 
-Not yet root-caused. Likely candidates to check first:
-1. The "By Phase" grouping renders one carousel component per phase, but a phase group name
-   header (e.g. "Vs LA Breakers Belmar May 2") is being mis-rendered as its own sub-carousel
-   instead of a label within the single "Not Started" carousel.
-2. Two carousel component instances are mounting for the same data (e.g. a stale/duplicate render
-   from a keyed-list bug) rather than the grouping logic being wrong.
+**Root-caused 2026-09-14 (Explore agent, code-only pass — not yet live-reproduced).** Hypothesis 1
+was essentially correct, with a precise mechanism: this is by-design behavior (T8080), not a
+rendering bug, that happens to read as confusing.
+
+`DraftPhaseAspectRows` (`src/frontend/src/components/ProjectManager.jsx:170-225`) mounts **one
+`CardCarousel` per GAME, not one per phase**. `phaseRowsFor`
+(`src/frontend/src/utils/draftStage.js:201-230`) buckets "Not Started" drafts into a single
+`ratio: null` bucket (`:168-169`) and then **re-splits that bucket by game** (`:219-224`). Each
+per-game cluster gets its own subtle 10px gray label (`ProjectManager.jsx:193-197`) and its own
+`<CardCarousel>` (`:199-219`), each independently deciding whether to show arrows purely from its
+own overflow state (`CardCarousel.jsx:267`, `isOverflowing`) — with no awareness of sibling
+carousels. The clusters are `shrink-0 max-w-[420px]` inside a `flex flex-wrap` container
+(`ProjectManager.jsx:190`), so two games' clusters can pack onto the same visual line, each
+producing its own arrow pair — exactly matching the screenshot (arrows at x=427/799 and
+x=821/1196). The phase badge count ("6") is the whole-phase total across ALL games in the bucket;
+each carousel only shows its own game's subset (e.g. 3+3) — hence "4 visible, badge says 6."
+
+**This is working as coded, not a bug in the mechanical sense** — but the per-game separator label
+is too subtle to read as "these are two different groups," so two legitimate small carousels look
+like one broken one. Bug 51's own framing ("confusing UI") matches this diagnosis exactly.
 
 ## Solution
 
-Not yet investigated — reproduce first (Reel Drafts, "By Phase" tab, an account with several
-Not-Started drafts), then find the Reel Drafts carousel/grouping component and determine which of
-the two candidates above (or another cause) is correct. This is a straightforward frontend layout
-fix once the actual cause is identified; no backend involvement expected.
+Three candidate fixes (UX judgment call, not yet decided):
+(a) Make the per-game cluster label more visually distinct (stronger divider/spacing) so two
+    adjacent clusters clearly read as separate groups.
+(b) Stop letting distinct-game clusters wrap onto the same line within one phase section (force
+    each game's cluster onto its own full-width row).
+(c) If the real intent is "one carousel per phase," collapse the per-game split for Not Started
+    entirely and use the game name as an inline label within a single `CardCarousel` per phase.
+
+Recommend (b) as the smallest, safest fix (one game per row removes the ambiguity without
+touching the carousel/grouping data model), but this is a visual/UX call — not making it
+unilaterally. Not yet live-reproduced against a real account with multiple Not-Started drafts.
 
 ## Context
 
 ### Relevant Files (REQUIRED)
-- Reel Drafts / "By Phase" grouping view — not yet located, needs a repro pass first
-  (likely `src/frontend/src/components/gallery/` or a drafts-specific directory; search for
-  "By Phase" / "Not Started" / carousel component names)
+- `src/frontend/src/components/ProjectManager.jsx:170-225` (`DraftPhaseAspectRows` — mounts one
+  `CardCarousel` per game), `:190` (flex-wrap container letting clusters share a line), `:2001-2003`
+  (phase badge = whole-phase total, not per-carousel)
+- `src/frontend/src/utils/draftStage.js:201-230` (`phaseRowsFor` — the by-game re-split), `:168-169`
+  (single `ratio: null` bucket for Not Started)
+- `src/frontend/src/components/shared/CardCarousel.jsx:267` (`showChevrons`/`isOverflowing` — each
+  carousel decides independently, no cross-carousel awareness)
 
 ### Related Tasks
 - Same reporter as T10070/T10080/T10090, unrelated bug — filed together from the same triage pass
@@ -46,13 +71,21 @@ fix once the actual cause is identified; no backend involvement expected.
 ## Implementation
 
 ### Steps
-1. [ ] Reproduce: open Reel Drafts, "By Phase" view, with 4+ Not-Started drafts.
-2. [ ] Identify why two carousel control sets render in the same row.
-3. [ ] Fix so each logical group has exactly one set of controls.
+1. [x] Root-caused 2026-09-14 (code-only) — see Solution above: `DraftPhaseAspectRows` mounts one
+   `CardCarousel` per game, and same-line wrapping makes two games' clusters look like one broken
+   carousel.
+2. [ ] Live-reproduce against a real account with 2+ games' Not-Started drafts to confirm the
+   diagnosis before implementing.
+3. [ ] User/UX pick between options (a)/(b)/(c) above — (b), forcing one game per row, is the
+   recommended smallest fix.
+4. [ ] Implement + frontend test for the chosen fix.
 
 ### Progress Log
 
-**2026-09-14**: Filed from `bug_reports` #51 during a full bug-report triage pass. Not started.
+**2026-09-14**: Filed from `bug_reports` #51 during a full bug-report triage pass. Root-caused
+same day (Explore agent): by-design per-game carousel splitting (T8080) plus flex-wrap packing,
+not a rendering defect. Deferred implementation — low priority (Impact 3), needs a UX pick between
+3 candidate fixes first; see Solution above.
 
 ## Acceptance Criteria
 
