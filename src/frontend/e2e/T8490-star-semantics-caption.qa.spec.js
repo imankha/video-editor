@@ -139,8 +139,8 @@ test.describe('T8490: rating caption — desktop strip', () => {
     const strip = page.locator('[data-testid="annotate-editor-strip"]');
     await expect(strip).toBeVisible();
 
-    // Default rating (4, "Good") — "Good play" caption.
-    await expect(strip).toContainText('Good play (!) - one more star creates a clip.');
+    // Default rating (4, "Good"), creation toggle OFF -> save-only caption (T9820).
+    await expect(strip).toContainText('Good play (!) - this saves the play without creating a clip.');
     await saveEvidence(page, 'T8490-strip-rating4-mine');
 
     // Rating 2 -> "Technical lapse" learn-from caption
@@ -148,21 +148,46 @@ test.describe('T8490: rating caption — desktop strip', () => {
     await expect(strip).toContainText('Technical lapse (?) - a play to learn from.');
     await saveEvidence(page, 'T8490-strip-rating2');
 
-    // Rating 5 + My player (default layer) -> "clip will be created from play."
+    // Rating 5 + My player (default layer) -> auto-enables creation (T9820).
     await strip.locator('button[title="5 stars"]').click();
-    await expect(strip).toContainText("Brilliant play (!!) - clip will be created from play.");
+    await expect(strip).toContainText('Brilliant play (!!) - this play will also become an editable clip.');
     await expect(strip.locator('button:has-text("Save")')).toBeVisible();
     await saveEvidence(page, 'T8490-strip-rating5-mine');
 
-    // Switch to Team -> "team plays do not create clips."
+    // Switch to Team -> auto-flip leaves creation OFF -> save-only caption (T9820).
     await page.locator('[role="radio"][aria-label="Team"]').click();
-    await expect(strip).toContainText("Brilliant team play (!!) - team plays don't create clips.");
+    await expect(strip).toContainText('Brilliant team play (!!) - this saves the play without creating a clip.');
     await saveEvidence(page, 'T8490-strip-rating5-team');
 
     // Save stays reachable throughout (never covered/off-screen). Scope to the
     // footer Save button (T9520: "Save play"/"Save play and create clip") so the
     // match is unambiguous — the toggle's "Just save this play" also contains "save".
     await expect(strip.getByRole('button', { name: /^Save play/ })).toBeInViewport();
+  });
+
+  // T9820 / E47 regression: at four stars with the create-clip toggle manually
+  // ON, the caption must reflect the intent and the CTA must agree — never demand
+  // another star. Kept as its own test because toggling manually disables the
+  // rating-5 auto-flip for the rest of the session.
+  test('E47: four stars + create toggle ON -> caption and CTA agree, no star demand @t9820', async ({ page }) => {
+    await enterAnnotateMode(page);
+    await ensurePaused(page);
+    await seekVideoDirect(page, 10);
+
+    await page.locator('[data-testid="annotate-primary-cta"]').click();
+    await page.waitForTimeout(800);
+
+    const strip = page.locator('[data-testid="annotate-editor-strip"]');
+    await expect(strip).toBeVisible();
+
+    // Default rating is 4; enable creation via the toggle.
+    await strip.getByRole('button', { name: 'Just save this play' }).click();
+
+    await expect(strip).toContainText('Good play (!) - this play will also become an editable clip.');
+    await expect(strip).not.toContainText('one more star');
+    // CTA agrees with the intent (T9520 copy: "Save play and create clip").
+    await expect(strip.getByRole('button', { name: 'Save play and create clip' })).toBeVisible();
+    await saveEvidence(page, 'T9820-strip-rating4-create-on');
   });
 });
 
@@ -192,11 +217,11 @@ test.describe('T8490: rating caption — mobile bottom sheet', () => {
 
     const sheet = page.locator('[data-add-clip-form]');
     await expect(sheet).toBeVisible();
-    await expect(sheet).toContainText('Good play (!) - one more star creates a clip.');
+    await expect(sheet).toContainText('Good play (!) - this saves the play without creating a clip.');
     await saveEvidence(page, 'T8490-mobile-320-rating4-mine');
 
     await sheet.locator('button[title="5 stars"]').click();
-    await expect(sheet).toContainText("Brilliant play (!!) - clip will be created from play.");
+    await expect(sheet).toContainText('Brilliant play (!!) - this play will also become an editable clip.');
     await saveEvidence(page, 'T8490-mobile-320-rating5-mine');
 
     // The pinned footer keeps Save reachable without scrolling (T8140).

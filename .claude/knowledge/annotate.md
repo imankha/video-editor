@@ -686,15 +686,21 @@ imported), `NotesOverlay.jsx` — all now import the single canonical
 `ClipSelectorSidebar.jsx` already did, via `getRatingDisplay`). Every glyph render site now carries
 a `title`/`aria-label` built from `RATING_ADJECTIVES[rating]`. New invariant: **do not reintroduce a
 local `RATING_NOTATION`/`RATING_ADJECTIVES` copy** — import from `clipConstants.js`.
-`clipConstants.js` also gained `getRatingCaption(rating, mine)` (create mode) and
+`clipConstants.js` also gained `getRatingCaption(rating, mine, createIntent)` (create mode) and
 `getEditRatingCaption(rating, mine, hasReel)` (edit mode) — pure functions, no new store state,
-implementing the one-line "what does this rating mean for the reel" caption. Create-mode caption
-renders in THREE places in `AnnotateFullscreenOverlay.jsx` (`formBody`'s rating block, the `strip`
-layout as its own full-width row BELOW the controls row so it can never widen the flex-wrap row and
-risk pushing Save off-screen at 320px, and `landscape-inline` as a single truncated line — the most
-height-starved surface per the T5700 two-lane note below), gated on `!isEditMode`. Edit-mode caption
+implementing the one-line "what will Save do" caption. **T9820: the creation clause is driven by the
+LIVE create-clip intent, NEVER a star count** — `createIntent` is the `createProject` toggle in create
+mode, `hasReel` (a clip already exists) in edit mode. The old star-threshold copy ("one more star
+creates a clip" at rating 4, "five stars creates a clip") was a false prediction the moment the toggle
+disagreed (E47: 4 stars + creation ON still demanded another star); the no-rating/4/5 create-mode
+branches and the rating-4 edit-mode branch now state the actual outcome. Ratings 1-3 stay
+adjective-only (they never claimed creation). Create-mode caption renders in THREE places in
+`AnnotateFullscreenOverlay.jsx` (`formBody`'s rating block, the `strip` layout as its own full-width row
+BELOW the controls row so it can never widen the flex-wrap row and risk pushing Save off-screen at 320px,
+and `landscape-inline` as a single truncated line — the most height-starved surface per the T5700
+two-lane note below), gated on `!isEditMode`, all three passing `createProject`. Edit-mode caption
 renders once in `ClipDetailsEditor.jsx`'s rating row, reading `hasReel`/`isTeamLayer` instead of
-promising a future "reel will be created". Also: `soccerTags.js`'s goalie "Save" tag gained a
+promising a future "will be created". Also: `soccerTags.js`'s goalie "Save" tag gained a
 `displayName: "Keeper Save"` field (stored `name` unchanged so existing clips still match and the
 backend curated-combo exact-name guard is untouched) — `TagSelector.jsx` renders
 `tag.displayName || tag.name`, everywhere else (`onTagToggle`, `selectedTags.includes`, `key`) still

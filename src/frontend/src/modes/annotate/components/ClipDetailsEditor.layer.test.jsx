@@ -91,15 +91,23 @@ describe('ClipDetailsEditor — Layer control (T5700)', () => {
 // hasReel (region.autoProjectId) instead of promising a future "will be
 // created" — the reel either already exists or the Reel control below is the
 // live action to create one.
-describe('ClipDetailsEditor — rating caption (T8490)', () => {
+describe('ClipDetailsEditor — rating caption (T8490 / T9820)', () => {
   it('rating 2 shows the "Technical lapse" learn-from caption', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, rating: 2, my_athlete: true }} onUpdate={() => {}} onDelete={() => {}} />);
     expect(screen.getByText('Technical lapse (?) - a play to learn from.')).toBeTruthy();
   });
 
-  it('rating 4 shows the "Good play" one-more-star caption', () => {
-    render(<ClipDetailsEditor region={{ ...baseRegion, rating: 4, my_athlete: true }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.getByText('Good play (!) - one more star creates a clip.')).toBeTruthy();
+  // T9820 / E47 regression: edit-mode creation is a manual control, never
+  // rating-gated, so 4 stars must read off hasReel, never demand another star.
+  it('rating 4 + no clip yet points at the Clip control below, never "one more star"', () => {
+    render(<ClipDetailsEditor region={{ ...baseRegion, rating: 4, my_athlete: true, autoProjectId: null }} onUpdate={() => {}} onDelete={() => {}} />);
+    expect(screen.getByText('Good play (!) - create a clip below.')).toBeTruthy();
+    expect(screen.queryByText(/one more star|another star/)).toBeNull();
+  });
+
+  it('rating 4 + clip already exists says so, does not demand another star', () => {
+    render(<ClipDetailsEditor region={{ ...baseRegion, rating: 4, my_athlete: true, autoProjectId: 'p1' }} onUpdate={() => {}} onDelete={() => {}} />);
+    expect(screen.getByText('Good play (!) - clip already created from play.')).toBeTruthy();
   });
 
   it('rating 5 + My Athlete + no clip yet points at the Clip control below, never "will be created"', () => {

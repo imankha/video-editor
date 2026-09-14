@@ -265,8 +265,9 @@ export function ClipDetailsEditor({
             onRatingChange={handleRatingChange}
           />
         </div>
-        {/* T8490: edit-mode caption — mirrors the Add Play sheet's, but reads
-            off hasReel instead of promising a future "will be created". */}
+        {/* T8490 / T9820: edit-mode caption — reads off hasReel (creation here is
+            a manual control, never rating-gated) so it states whether a clip
+            exists, never a star threshold. */}
         <p className="text-xs text-gray-400 -mt-1.5 ml-[4.5rem]">
           {getEditRatingCaption(rating, !isTeamLayer, hasReel)}
         </p>

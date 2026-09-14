@@ -633,10 +633,11 @@ export function AnnotateFullscreenOverlay({
         <div className="mb-4">
           <label className="block text-gray-400 text-sm mb-2">Rating{isMobile ? '' : ' (press 1-5)'}</label>
           <StarRating rating={rating} onRatingChange={handleRatingChange} size={28} />
-          {/* T8490: create-mode-only caption explaining what the rating means
-              for the reel — mirrors the auto-flip gate's `mine` check. */}
+          {/* T8490 / T9820: create-mode-only caption stating what Save will do —
+              the outcome clause is driven by the live `createProject` intent, not
+              the star count. */}
           {!isEditMode && (
-            <p className="text-xs text-gray-400 mt-1.5">{getRatingCaption(rating, myAthlete)}</p>
+            <p className="text-xs text-gray-400 mt-1.5">{getRatingCaption(rating, myAthlete, createProject)}</p>
           )}
         </div>
 
@@ -1131,7 +1132,7 @@ export function AnnotateFullscreenOverlay({
               never widens the flex-wrap row and risks pushing Save off-screen. */}
           {!isEditMode && (
             <div className="px-4 pb-3 -mt-2">
-              <p className="text-xs text-gray-400">{getRatingCaption(rating, myAthlete)}</p>
+              <p className="text-xs text-gray-400">{getRatingCaption(rating, myAthlete, createProject)}</p>
             </div>
           )}
 
@@ -1248,7 +1249,7 @@ export function AnnotateFullscreenOverlay({
             layout is the most height-starved surface (landscape phone, T5700
             two-lane note), so no wrapping. */}
         {!isEditMode && (
-          <p className="text-xs text-gray-400 mt-1 truncate">{getRatingCaption(rating, myAthlete)}</p>
+          <p className="text-xs text-gray-400 mt-1 truncate">{getRatingCaption(rating, myAthlete, createProject)}</p>
         )}
       </div>
     );
