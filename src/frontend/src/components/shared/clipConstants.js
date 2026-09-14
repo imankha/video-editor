@@ -44,6 +44,17 @@ export const RATING_BACKGROUND_COLORS = {
 // Default rating when none is set
 export const DEFAULT_RATING = 3;
 
+// T9840: default capture window for a "Mark play" tap — 6 seconds before the
+// tap + 2 seconds after (8s total, was 9+3=12). The post-roll is intentional:
+// parents tap AFTER they see a good play, so the seconds following the tap hold
+// the end of it. Single-sourced here so BOTH the fullscreen tap-to-range default
+// (AnnotateFullscreenOverlay) and useAnnotate's addClipRegion default duration
+// express ONE policy — DEFAULT_CLIP_DURATION is DERIVED (before + after), not a
+// separate literal that merely happens to agree.
+export const DEFAULT_CLIP_BEFORE = 6;  // seconds before the tap
+export const DEFAULT_CLIP_AFTER = 2;   // seconds after the tap
+export const DEFAULT_CLIP_DURATION = DEFAULT_CLIP_BEFORE + DEFAULT_CLIP_AFTER; // 8s total
+
 // T8490 / T9820: one-line caption explaining what a rating means for the play.
 // The creation clause is driven by the LIVE create-clip intent (`createIntent`,
 // the AnnotateFullscreenOverlay toggle), NOT by the star count. Star-threshold

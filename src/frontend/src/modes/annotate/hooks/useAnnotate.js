@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { getAllSupportedTagNames } from '../constants/tagRegistry';
+import { DEFAULT_CLIP_DURATION } from '../../../components/shared/clipConstants';
 import { track } from '../../../utils/analytics';
 import { setAnnotateSnapshot } from '../../../utils/editorContext';
 
@@ -205,7 +206,9 @@ export function validateTsvContent(content) {
   return { success: true, annotations };
 }
 
-const DEFAULT_CLIP_DURATION = 8.0; // seconds
+// DEFAULT_CLIP_DURATION is the same capture-window policy as the fullscreen
+// tap-to-range default: derived as DEFAULT_CLIP_BEFORE + DEFAULT_CLIP_AFTER
+// (= 8s) and imported from clipConstants.js (T9840), not a separate literal.
 const MIN_CLIP_DURATION = 1.0; // seconds (enforced)
 const MAX_CLIP_DURATION = 60.0; // seconds (max for slider)
 const MAX_NOTES_LENGTH = 280; // characters (like a tweet)

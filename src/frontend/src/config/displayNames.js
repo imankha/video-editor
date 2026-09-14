@@ -13,9 +13,9 @@ export const ANNOTATE = {
   MODE_DESCRIPTION: 'Mark plays',          // N04 — mode-switcher description
   MARK_PLAY: 'Mark play',                  // N05 — primary create CTA
   EDIT_PLAY: 'Edit play',                  // N05 — edit CTA
-  // N05 helper: the default capture window is 9s before + 3s after the tap = 12s
-  // (DEFAULT_CLIP_BEFORE + DEFAULT_CLIP_AFTER in AnnotateFullscreenOverlay).
-  MARK_PLAY_HELPER: 'Captures the previous 12 seconds',
+  // N05 helper: the default capture window is 6s before + 2s after the tap = 8s
+  // (DEFAULT_CLIP_BEFORE + DEFAULT_CLIP_AFTER, single-sourced in clipConstants.js — T9840).
+  MARK_PLAY_HELPER: 'Captures 6 seconds before and 2 after',
   MARKING_PLAY_TITLE: 'Marking a play',    // N05 — create-editor header title
   PLAYS_HEADING: 'Plays',                  // N06 — sidebar list heading
   // N07 — create-an-editable-clip toggle. Positive polarity both states (T9450):

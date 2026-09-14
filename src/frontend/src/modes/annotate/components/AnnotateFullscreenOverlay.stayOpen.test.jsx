@@ -55,8 +55,8 @@ describe('AnnotateFullscreenOverlay — stays open on the new clip after create-
     // in flight).
     const newRegion = {
       id: 'new_clip_1',
-      startTime: 21, // currentTime(30) - DEFAULT_CLIP_BEFORE(9)
-      endTime: 33,   // currentTime(30) + DEFAULT_CLIP_AFTER(3)
+      startTime: 24, // currentTime(30) - DEFAULT_CLIP_BEFORE(6)
+      endTime: 32,   // currentTime(30) + DEFAULT_CLIP_AFTER(2)
       rating: 4,
       tags: [],
       notes: '',
@@ -86,7 +86,7 @@ describe('AnnotateFullscreenOverlay — stays open on the new clip after create-
 
   it('the disabled "Frame this clip" CTA becomes enabled once the late setAutoProjectId lands (pure re-render, no write)', () => {
     const newRegionPending = {
-      id: 'new_clip_1', startTime: 21, endTime: 33, rating: 4, tags: [], notes: '',
+      id: 'new_clip_1', startTime: 24, endTime: 32, rating: 4, tags: [], notes: '',
       name: '', tagged_teammates: [], my_athlete: true, autoProjectId: null,
     };
     const { rerender } = render(
@@ -107,7 +107,7 @@ describe('AnnotateFullscreenOverlay — stays open on the new clip after create-
 
   it('does not read dirty (no confirm dialog) even after the late autoProjectId re-render', () => {
     const newRegionPending = {
-      id: 'new_clip_1', startTime: 21, endTime: 33, rating: 4, tags: [], notes: '',
+      id: 'new_clip_1', startTime: 24, endTime: 32, rating: 4, tags: [], notes: '',
       name: '', tagged_teammates: [], my_athlete: true, autoProjectId: null,
     };
     const { rerender } = render(

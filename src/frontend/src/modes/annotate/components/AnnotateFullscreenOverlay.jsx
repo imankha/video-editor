@@ -15,7 +15,7 @@ import { Toggle, Button } from '../../../components/shared/Button';
 import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialog';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
-import { getRatingCaption, getRatingLabel } from '../../../components/shared/clipConstants';
+import { getRatingCaption, getRatingLabel, DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../../../components/shared/clipConstants';
 import { ANNOTATE } from '../../../config/displayNames';
 
 // T9580: the "Save & open …" confirm-dialog destination noun, keyed by stage
@@ -53,8 +53,9 @@ function DockPositionSelector({ position, onPositionChange }) {
   );
 }
 
-const DEFAULT_CLIP_BEFORE = 9;  // seconds before playhead
-const DEFAULT_CLIP_AFTER = 3;   // seconds after playhead
+// DEFAULT_CLIP_BEFORE / DEFAULT_CLIP_AFTER (the tap-to-range capture window) are
+// single-sourced in clipConstants.js (T9840) and imported above, so this
+// overlay's default and useAnnotate's addClipRegion default stay one policy.
 const DEFAULT_RATING = 4; // "Good"
 
 /**

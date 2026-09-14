@@ -1059,7 +1059,7 @@ export function AnnotateModeView({
               {/* First-use teaching hint — shown only before the first clip exists.
                   One static sentence, not a coach-mark system (tutorial-redesign
                   owns the full guided flow). T9520 N05: name the concrete capture
-                  window (9s before + 3s after the tap = 12s). */}
+                  window (6s before + 2s after the tap = 8s). */}
               {!hasAnnotateClips && (
                 <p className="text-sm text-gray-300 text-center px-2">
                   When something great happens, tap &mdash; {ANNOTATE.MARK_PLAY_HELPER.toLowerCase()}.
