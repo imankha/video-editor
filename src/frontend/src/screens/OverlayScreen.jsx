@@ -1652,6 +1652,10 @@ export function OverlayScreen({
       // Video state
       videoRef={videoRef}
       effectiveOverlayVideoUrl={effectiveOverlayVideoUrl}
+      // T9800: gate the "Export required" banner on the transient post-export
+      // wait window so a just-completed export doesn't flash the warning before
+      // the new working video hydrates into the store.
+      shouldWaitForWorkingVideo={shouldWaitForWorkingVideo}
       effectiveOverlayMetadata={effectiveOverlayMetadata}
       effectiveOverlayFile={effectiveOverlayFile}
       videoTitle={project?.name}

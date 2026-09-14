@@ -257,14 +257,21 @@ export function OverlayModeView({
   hasFramingEdits,
   hasMultipleClips,
   framingVideoUrl,
+  // T9800: true during the transient window after a successful export while the
+  // new working video is still hydrating into the store. Gates showExportRequired
+  // so the banner never flashes before readiness is known.
+  shouldWaitForWorkingVideo = false,
   // T740: Outdated framing warning
   framingOutdated = false,
   // T5676: locks the Overlay Settings card while an overlay export is in flight
   // (mirrors the export container's isCurrentlyExporting; threaded from OverlayScreen).
   settingsDisabled = false,
 }) {
-  // Show "export required" message if no overlay video but framing has edits
-  const showExportRequired = !effectiveOverlayVideoUrl && framingVideoUrl && (hasFramingEdits || hasMultipleClips);
+  // Show "export required" message if no overlay video but framing has edits.
+  // T9800: !shouldWaitForWorkingVideo suppresses the banner during the transient
+  // post-export hydration window (effectiveOverlayVideoUrl is momentarily falsy
+  // while the new working video loads); the neutral loading state shows instead.
+  const showExportRequired = !effectiveOverlayVideoUrl && !shouldWaitForWorkingVideo && framingVideoUrl && (hasFramingEdits || hasMultipleClips);
   const isMobile = useIsMobile();
   const fsControls = useFullscreenControls({ isPlaying });
   // Mobile fullscreen video is opt-in (tap the expand button). Defaulting to it
