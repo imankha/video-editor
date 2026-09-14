@@ -633,8 +633,9 @@ export function AnnotateFullscreenOverlay({
         <div className="mb-4">
           <label className="block text-gray-400 text-sm mb-2">Rating{isMobile ? '' : ' (press 1-5)'}</label>
           <StarRating rating={rating} onRatingChange={handleRatingChange} size={28} />
-          {/* T8490: create-mode-only caption explaining what the rating means
-              for the reel — mirrors the auto-flip gate's `mine` check. */}
+          {/* T8490 / T9820: create-mode-only caption stating what Save will do —
+              the outcome clause is driven by the live `createProject` intent, not
+              the star count. */}
           {!isEditMode && (
             <p className="text-xs text-gray-400 mt-1.5">{getRatingCaption(rating, myAthlete, createProject)}</p>
           )}
