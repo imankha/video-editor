@@ -25,7 +25,7 @@ from app.middleware.db_sync import (
 )
 from app.migrations import MigrationBlocked
 from app.profile_context import get_current_profile_id
-from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
+from app.queries import exclude_shared_in_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.intro_cards import (
     load_profile_cards,
@@ -329,7 +329,7 @@ async def list_downloads(
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
             AND fv.published_at IS NOT NULL{extra}
-            {exclude_teammate_reels_clause()}
+            {exclude_shared_in_reels_clause()}
             ORDER BY {ORDER_BY_RANK}
         """
         cursor.execute(base_query, params)
@@ -2232,7 +2232,7 @@ async def get_download_count():
             FROM final_videos
             WHERE id IN ({latest_final_videos_subquery()})
             AND published_at IS NOT NULL
-            {exclude_teammate_reels_clause("final_videos")}
+            {exclude_shared_in_reels_clause("final_videos")}
         """)
         row = cursor.fetchone()
 

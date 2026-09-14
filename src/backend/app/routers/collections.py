@@ -35,7 +35,7 @@ from app.analytics import record_milestone
 from app.database import get_db_connection
 from app.migrations import MigrationBlocked
 from app.profile_context import get_current_profile_id
-from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
+from app.queries import exclude_shared_in_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.intro_cards import (
     collection_intro_settings_key,
@@ -416,7 +416,7 @@ def collections_summary(sport: str | None = None):
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
               AND fv.published_at IS NOT NULL
-              {exclude_teammate_reels_clause()}
+              {exclude_shared_in_reels_clause()}
             """
         )
         rows = cursor.fetchall()
@@ -694,7 +694,7 @@ def evaluate_collection_members(conn, definition: dict) -> list[dict]:
         WHERE fv.id IN ({latest_final_videos_subquery()})
           AND fv.published_at IS NOT NULL
           AND fv.aspect_ratio = ?
-          {exclude_teammate_reels_clause()}
+          {exclude_shared_in_reels_clause()}
         ORDER BY {ORDER_BY_RANK}
         """,
         (ratio,),

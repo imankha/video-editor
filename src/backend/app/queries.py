@@ -170,24 +170,38 @@ def latest_final_videos_subquery() -> str:
     """.strip()
 
 
-def exclude_teammate_reels_clause(fv_alias: str = "fv") -> str:
-    """AND-prefixed SQL fragment that drops teammate-only single-clip reels from
-    the user's OWN collections + rankings (bug 22).
+def exclude_shared_in_reels_clause(fv_alias: str = "fv") -> str:
+    """AND-prefixed SQL fragment that drops reels a TEAMMATE SHARED IN from the
+    user's OWN collections + rankings (bug 22).
 
-    A single-clip reel's "My Athlete" status IS its source clip's, derived (not
-    denormalized) via final_videos.source_clip_id -> raw_clips.my_athlete. A reel
-    built from a teammate clip (my_athlete = 0) is excluded everywhere the user's
-    own highlights are surfaced (Rankings, Collections gallery/summary, share
-    resolution). The reel still exists and stays viewable/shareable directly.
+    Provenance, NOT layer, is the correct signal. A reel's source clip is
+    "shared in" only when it came from another athlete's account via
+    materialization -- which stamps `raw_clips.shared_by` with a non-NULL sharer
+    identifier AND hardcodes `my_athlete = 0` (see services/materialization.py, a
+    T5330 invariant: shared_by is never NULL for a shared-in clip). A clip the
+    user created themselves NEVER sets `shared_by` (INSERT paths in
+    routers/clips.py leave it NULL) regardless of its My Athlete/Team layer.
 
-    Kept (status can't be denied): multi-clip reels (source_clip_id NULL ->
-    Mixes), orphans / deleted source clips (no raw_clips row), and pre-migration
-    clips (my_athlete NULL). The correlated NOT EXISTS avoids alias collisions
-    with the outer query and latest_final_videos_subquery().
+    So the exclusion predicate is `my_athlete = 0 AND shared_by IS NOT NULL`:
+    - Own Team-layer clip (my_athlete = 0, shared_by NULL) -> KEPT. This is
+      T10070: a reel the user exported from their OWN Team-layer footage must
+      appear in their Gallery/Collections/Rankings; the old `my_athlete = 0`
+      predicate wrongly hid it.
+    - Shared-in clip (my_athlete = 0, shared_by set) -> EXCLUDED (bug 22 intact).
+    Keeping BOTH conditions makes this monotone vs. the old behavior: it can only
+    ADD visibility, never remove it -- so relabeling a shared-in clip to My
+    Athlete (which sets my_athlete = 1) never re-hides an already-visible reel.
+
+    Kept (never matched): multi-clip reels (source_clip_id NULL -> Mixes),
+    orphans / deleted source clips (no raw_clips row), and pre-migration clips
+    (my_athlete NULL). The correlated NOT EXISTS avoids alias collisions with the
+    outer query and latest_final_videos_subquery().
     """
     return f"""
         AND NOT EXISTS (
             SELECT 1 FROM raw_clips rc
-            WHERE rc.id = {fv_alias}.source_clip_id AND rc.my_athlete = 0
+            WHERE rc.id = {fv_alias}.source_clip_id
+              AND rc.my_athlete = 0
+              AND rc.shared_by IS NOT NULL
         )
     """.strip()

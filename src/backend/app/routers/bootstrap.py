@@ -14,7 +14,7 @@ import time
 from fastapi import APIRouter
 
 from ..database import get_db_connection
-from ..queries import exclude_teammate_reels_clause, latest_final_videos_subquery
+from ..queries import exclude_shared_in_reels_clause, latest_final_videos_subquery
 from ..services.credit_ledger import get_credit_balance
 from ..services.user_db import (
     INTRO_FACT_FIELDS,
@@ -145,7 +145,7 @@ def _read_profile_misc() -> dict:
             FROM final_videos
             WHERE id IN ({latest_final_videos_subquery()})
             AND published_at IS NOT NULL
-            {exclude_teammate_reels_clause("final_videos")}
+            {exclude_shared_in_reels_clause("final_videos")}
         """)
         dl_row = cursor.fetchone()
         downloads = {
