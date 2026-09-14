@@ -17,25 +17,24 @@ recipients, not just uploaders. Tests cover:
 
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.materialization import _copy_game, _create_storage_refs, _collect_video_hashes
 from app.services.auth_db import (
     create_user,
-    insert_game_storage_ref,
-    get_game_storage_ref,
-    get_storage_refs_for_user,
-    get_all_ref_hashes,
-    get_grace_deletion_hashes,
-    insert_grace_deletion,
     delete_ref,
+    get_all_ref_hashes,
+    get_game_storage_ref,
+    get_grace_deletion_hashes,
+    get_storage_refs_for_user,
+    insert_game_storage_ref,
+    insert_grace_deletion,
 )
+from app.services.materialization import _collect_video_hashes, _copy_game, _create_storage_refs
 from app.services.storage_credits import calculate_extension_cost, storage_expires_at
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -512,8 +511,8 @@ class TestStorageStatusDerivation:
         # set". The derivation assertions read from Postgres, so the SQLite
         # write is incidental but must not crash — set a context and isolate it
         # in tmp_path, mirroring the other pg-backed classes (T5050).
-        from app.user_context import set_current_user_id, reset_user_id
-        from app.profile_context import set_current_profile_id, reset_profile_id_token
+        from app.profile_context import reset_profile_id_token, set_current_profile_id
+        from app.user_context import reset_user_id, set_current_user_id
 
         create_user("sharer-user", email="sharer@test.com")
         create_user("recipient-user", email="recipient@test.com")
@@ -618,7 +617,7 @@ class TestExtendEndpointHandler:
 
     @pytest.mark.asyncio
     async def test_recipient_extends_shared_game(self, pg_conn, tmp_path):
-        from app.routers.games import extend_game_storage, ExtendStorageRequest
+        from app.routers.games import ExtendStorageRequest, extend_game_storage
 
         r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
         game_id = _insert_game(r_conn, blake3_hash="endpoint_hash",
@@ -652,7 +651,7 @@ class TestExtendEndpointHandler:
 
     @pytest.mark.asyncio
     async def test_extend_expired_shared_game_starts_from_now(self, pg_conn, tmp_path):
-        from app.routers.games import extend_game_storage, ExtendStorageRequest
+        from app.routers.games import ExtendStorageRequest, extend_game_storage
 
         r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
         game_id = _insert_game(r_conn, blake3_hash="expired_ep_hash",
@@ -684,7 +683,7 @@ class TestExtendEndpointHandler:
 
     @pytest.mark.asyncio
     async def test_extend_does_not_affect_sharer_ref(self, pg_conn, tmp_path):
-        from app.routers.games import extend_game_storage, ExtendStorageRequest
+        from app.routers.games import ExtendStorageRequest, extend_game_storage
 
         # Storage refs live in per-profile SQLite (game_storage keyed by hash);
         # sharer/recipient independence comes from separate profile DBs. The endpoint's
@@ -739,8 +738,9 @@ class TestExtendEndpointHandler:
 
     @pytest.mark.asyncio
     async def test_extend_insufficient_credits_returns_402(self, pg_conn, tmp_path):
-        from app.routers.games import extend_game_storage, ExtendStorageRequest
         from fastapi import HTTPException
+
+        from app.routers.games import ExtendStorageRequest, extend_game_storage
 
         r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
         game_id = _insert_game(r_conn, blake3_hash="broke_hash",
@@ -760,6 +760,66 @@ class TestExtendEndpointHandler:
 
         r_conn.close()
 
+    @pytest.mark.asyncio
+    async def test_extend_refuses_when_video_missing_from_r2(self, pg_conn, tmp_path):
+        """T10122: can_extend is a UI-only guard, not a live existence check -- a
+        game whose source is already gone from R2 (by any of T10121's reclaim
+        mechanisms, or an admin action) must not be charged for extending it."""
+        from fastapi import HTTPException
+
+        from app.routers.games import ExtendStorageRequest, extend_game_storage
+
+        r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
+        game_id = _insert_game(r_conn, blake3_hash="gone_hash",
+                               video_size=int(1.0 * 1024 ** 3))
+        _insert_game_video(r_conn, game_id, "gone_hash", sequence=0,
+                           video_size=int(1.0 * 1024 ** 3))
+
+        @contextmanager
+        def mock_db_conn():
+            yield r_conn
+
+        deduct = MagicMock(return_value={"success": True, "balance": 10})
+        with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
+             patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
+             patch("app.routers.games.get_db_connection", mock_db_conn), \
+             patch("app.routers.games.get_r2_client", return_value=MagicMock()), \
+             patch("app.routers.games.r2_head_object_global", return_value=False), \
+             patch("app.routers.games.deduct_credits", deduct):
+            with pytest.raises(HTTPException) as exc_info:
+                await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+            assert exc_info.value.status_code == 410
+
+        deduct.assert_not_called()
+        r_conn.close()
+
+    @pytest.mark.asyncio
+    async def test_extend_proceeds_when_video_present_in_r2(self, pg_conn, tmp_path):
+        """The new R2 existence check must not become a false-negative gate -- a
+        game whose source genuinely exists still extends normally."""
+        from app.routers.games import ExtendStorageRequest, extend_game_storage
+
+        r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
+        game_id = _insert_game(r_conn, blake3_hash="present_hash",
+                               video_size=int(1.0 * 1024 ** 3))
+        _insert_game_video(r_conn, game_id, "present_hash", sequence=0,
+                           video_size=int(1.0 * 1024 ** 3))
+
+        @contextmanager
+        def mock_db_conn():
+            yield r_conn
+
+        with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
+             patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
+             patch("app.routers.games.get_db_connection", mock_db_conn), \
+             patch("app.routers.games.get_r2_client", return_value=MagicMock()), \
+             patch("app.routers.games.r2_head_object_global", return_value=True), \
+             patch("app.routers.games.deduct_credits", return_value={"success": True, "balance": 10}):
+            result = await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+
+        assert result["success"] is True
+        r_conn.close()
+
 
 # ===========================================================================
 # Multi-video game extension
@@ -774,7 +834,7 @@ class TestMultiVideoExtend:
 
     @pytest.mark.asyncio
     async def test_extends_all_video_refs(self, pg_conn, tmp_path):
-        from app.routers.games import extend_game_storage, ExtendStorageRequest
+        from app.routers.games import ExtendStorageRequest, extend_game_storage
 
         r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
         game_id = _insert_game(r_conn, blake3_hash=None, video_size=None)
@@ -810,7 +870,7 @@ class TestMultiVideoExtend:
     @pytest.mark.asyncio
     async def test_multi_video_grace_cancellation(self, pg_conn, tmp_path):
         """Extending a multi-video game cancels grace deletions for ALL hashes."""
-        from app.routers.games import extend_game_storage, ExtendStorageRequest
+        from app.routers.games import ExtendStorageRequest, extend_game_storage
 
         r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
         game_id = _insert_game(r_conn, blake3_hash=None, video_size=None)

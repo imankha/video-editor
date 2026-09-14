@@ -17,7 +17,7 @@ import contextlib
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
@@ -83,8 +83,8 @@ def _parse_recorded_at(value) -> datetime | None:
         except (ValueError, TypeError):
             return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        dt = dt.replace(tzinfo=datetime.UTC)
+    return dt.astimezone(datetime.UTC)
 
 
 def _normalize_recorded_at(value) -> str | None:
@@ -1927,6 +1927,34 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
 
+        game_video_rows = cursor.execute(
+            "SELECT blake3_hash, video_size FROM game_videos WHERE game_id = ?",
+            (game_id,),
+        ).fetchall()
+
+        # T10122: `can_extend` is a UI-only guard computed from ref/grace-window
+        # state, not a live existence check -- verify the source is actually
+        # still in R2 before charging credits to extend it (same HEAD-check
+        # pattern _ensure_game_storage_refs already uses, games.py:943). Skip
+        # when R2 isn't configured (local dev/tests).
+        if get_r2_client():
+            hashes = {vr["blake3_hash"] for vr in game_video_rows if vr["blake3_hash"]}
+            if game["blake3_hash"]:
+                hashes.add(game["blake3_hash"])
+            missing = [h for h in hashes if not r2_head_object_global(f"games/{h}.mp4")]
+            if missing:
+                logger.warning(
+                    f"[extend_storage] refusing: game={game_id} missing R2 source(s) "
+                    f"{[h[:12] for h in missing]}"
+                )
+                raise HTTPException(
+                    status_code=410,
+                    detail={
+                        "code": "video_missing",
+                        "error": "This game's video is no longer available to extend.",
+                    },
+                )
+
         game_size = game['video_size'] or 0
         cost = calculate_extension_cost(game_size, request.days)
 
@@ -1955,11 +1983,6 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
             base = datetime.utcnow()
         new_expiry = storage_expires_at(from_dt=base, days=request.days)
         new_expiry_str = new_expiry.isoformat()
-
-        game_video_rows = cursor.execute(
-            "SELECT blake3_hash, video_size FROM game_videos WHERE game_id = ?",
-            (game_id,),
-        ).fetchall()
 
     for vr in game_video_rows:
         insert_game_storage_ref(
