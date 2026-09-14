@@ -544,6 +544,26 @@ per-clip remapping.
   `useHighlightRegions.detections.test.js` (T5649 block, 5 cases) — begin-lever-to-0 pulls in
   frame-0, end shrink drops out-of-range, end grow pulls in, overlap-clamp regression, null
   payload; negative control confirmed the 3 re-slice tests FAIL on the frozen-slice source.
+- **`restoreRegions` MUST carry `fromDetection` additively (T9780, FIXED 2026-09-14).**
+  `restoreRegions` (`useHighlightRegions.js`) rebuilds each restored keyframe with an
+  EXPLICIT key whitelist (`frame, x, y, radiusX, radiusY, strokeOpacity, fillOpacity,
+  color`). That whitelist silently dropped `kf.fromDetection` — the SOLE field marking a
+  keyframe as a real player assignment (`overlay/utils/detectionAssignment.js`
+  `isDetectionAssigned` treats a boundary keyframe lacking it as unassigned scaffolding).
+  Consequence: every reload / Overlay remount (incl. an Overlay->Focus->Overlay round trip
+  with no page reload) rebuilt regions through `restoreRegions` and stripped the marker, so
+  `OverlayModeView`'s `awaitingPlayerSelection` check (`countDetectionAssignments`) saw
+  zero assigned detections and re-showed "Pick your player" + suppressed the tracking
+  ellipse — despite the DB holding correct geometry. **Purely a read/restore-path bug (DB
+  data was always correct); the frontend twin of T9770's backend `add_keyframe`
+  UPDATE-branch fix.** Fix: `...(kf.fromDetection ? { fromDetection: true } : {})` — carry
+  it ADDITIVELY, never fabricating the marker on a keyframe that never had one. RULE: any
+  key-whitelist reconstruction of a keyframe on a read path must include every
+  semantically-load-bearing field, or a marker like this silently vanishes on round-trip.
+  `getRegionsForExport` has its OWN whitelist that deliberately omits `fromDetection` (it's
+  an editor-state marker, not part of the render payload) — that's correct and unchanged.
+  Coverage: `useHighlightRegions.persistence.test.js` (T9780 block — restored
+  fromDetection counts as assigned + legacy negative control stays unassigned).
 - **`videoDetections` is VIDEO-level; `reset()` must NOT null it (T5646, FIXED 2026-07-21).**
   The hold's lifecycle: set ONCE per load from `/overlay-data` (`setVideoDetections`),
   replaced only on the next load, and sliced (never mutated) by `addRegion`. Landmine that
