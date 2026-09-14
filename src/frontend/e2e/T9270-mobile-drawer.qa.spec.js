@@ -174,7 +174,10 @@ test.describe('T9270 mobile drawer @ 390x844', () => {
       const drawer = page.getByTestId('settings-drawer');
       await drawer.waitFor({ state: 'attached', timeout: 20000 });
 
-      for (const width of [360, 390, 699, 768, 1023]) {
+      // Includes the md (768) and lg (1024) container boundaries, where the content
+      // container hits full width with a zero mx-auto gutter — the widths where an
+      // over-bled sticky action band leaks (T9920 residual fix).
+      for (const width of [360, 390, 699, 768, 1023, 1024, 1440]) {
         await page.setViewportSize({ width, height: 844 });
         await page.waitForTimeout(300); // let the responsive reflow settle
         // Drawer is parked (closed) — confirm, then assert no horizontal overflow.

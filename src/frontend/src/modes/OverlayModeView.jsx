@@ -1251,7 +1251,11 @@ export function OverlayModeView({
           every width (generalizes T8790's mobile-only sticky bar; its solid bg +
           top-shadow read cleanly over the taller portrait stage scrolling behind). */}
       {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
-        <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-6">
+        // T9920: bleed must match App's container padding (`px-3 sm:px-4`, App.jsx),
+        // not `sm:-mx-6` — the extra 8px/side over-bleed leaks as horizontal overflow
+        // once the container hits full width with no `mx-auto` gutter (md 768 / lg 1024).
+        // Identical fix to FocusModeView's action band.
+        <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-4">
           <OverlayExportButtonSection
             ref={exportButtonRef}
             videoFile={effectiveOverlayFile}

@@ -826,7 +826,13 @@ export function FocusModeView({
           sticky bar; the band's own solid bg + top-shadow read cleanly over the
           content that scrolls behind it). */}
       {videoUrl && !isFullscreen && !mobileFs && (
-        <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-6">
+        // T9920: the bleed MUST match App's content container padding (`px-3 sm:px-4`,
+        // App.jsx) — the band spans to the container edge, not 8px past it. The old
+        // `sm:-mx-6` over-bled by 8px/side; harmless while `mx-auto` gutters absorbed
+        // it, but at the `md` boundary (768px) — and again at `lg` (1024px) — the
+        // container is full-width with a zero gutter, so those 8px leaked as a
+        // horizontal scrollbar on App's inner overflow-auto pane.
+        <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-4">
           <ExportButtonSection
             ref={exportButtonRef}
             videoFile={videoFile}
