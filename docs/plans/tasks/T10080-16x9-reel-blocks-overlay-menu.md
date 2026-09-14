@@ -17,6 +17,19 @@ Reporter's words: "wanted to make sure you saw the bug that exported 16:9 reels 
 in the Overlay menu due to the layout. Since you're actively redesigning the focus/export/overlay
 flow, this might not be as important, but still wanted you to be aware since it exists on Live."
 
+### Found in `bug_reports` (2026-09-14, T10090 restored connectivity)
+
+Bug 56, 06:28 UTC, build `d9621161`, viewport 2224x1277: "Unable to access Overlay options for
+16:9 exported reel. Video covers up the part of the screen where the overlay options are located."
+`editor_context`: game 13 "Mission Viejo Classic: Vs Downey United Blue Aug 29", project 47
+(16:9), clip 76, `overlay: {effectType: "dark_overlay", highlightShape: "body", ...}`. Screenshot
+(Spotlight player-detection review screen) shows the video canvas spanning the full viewport width
+with no visible side panel for overlay controls — consistent with a 16:9 aspect ratio pushing the
+options panel off-screen or below the fold rather than reflowing next to a wide video. Console logs
+also show `[ReportProblem] Video frame capture failed: ... Tainted canvases may not be exported`
+around the same time — likely an unrelated CORS/canvas issue triggered by his own bug-report
+screenshot capture, not the layout bug itself, but worth a glance if reproducing.
+
 ## Solution
 
 Not yet investigated. Before spending time on this:

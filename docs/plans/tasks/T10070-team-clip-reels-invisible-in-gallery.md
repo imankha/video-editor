@@ -20,10 +20,32 @@ Scope below.
 ### Reporter
 
 sarkarati@gmail.com (a known real user, friend of the product owner) reported this by email on
-2026-09-14 and says he also submitted an in-app error report the night before (2026-09-13). That
-in-app report could not be located while writing this task — see Blocked below.
+2026-09-14 and says he also submitted an in-app error report the night before (2026-09-13). Found
+2026-09-14 (T10090 restored task-board connectivity) — three related `bug_reports` entries, all
+`status=new`, all build `d9621161`:
 
-Reporter's own words:
+- **Bug 57** (primary, 06:45 UTC): "I'm not able to find reels that I've created of Team clips in
+  My Reels. The reel has been focused, overlay added, and previewed, but after I move it to My
+  Reels, it disappears... The commonality between the 3 reels I just created that aren't showing up
+  is that they are all Team reels, not My Athlete reels." `editor_context.game`: id 12, "Strikers FC
+  Summer Classic: Vs Pateadores IRV U9 Aug 15". Action breadcrumbs confirm the full repro: clip 76
+  (project 47, game 13 "Mission Viejo Classic: Vs Downey United Blue Aug 29", 16:9) framing-exported
+  05:39-05:48 UTC then overlay-exported at 05:36 UTC (same session also covers clip 74, project
+  unset, same game 13), and clip 77 (project 48, game 12 "Strikers FC...", 9:16) framing-exported
+  06:36-06:40 UTC then overlay-exported 06:41 UTC — these are the exact two reels his email
+  describes.
+- **Bug 55** (likely duplicate of 57, 06:14 UTC): "It's not clear where the reel I just published to
+  My Reels from Reel Drafts can be found. It was a team reel (not a my athlete reel) in 16:9 format
+  titled \"Lielle free kick follow through\"" — his own in-app title differs slightly from the
+  email's "Lielle amazing free kick goal" (he flagged in the email that he wrote the in-app report
+  from memory without checking back — use the email's title, not this one). `editor_context.game`:
+  id 13 "Mission Viejo Classic: Vs Downey United Blue Aug 29", matching clip 74/76 above.
+- **Bug 56** (related, ADDS_VARIANCE, 06:28 UTC): "Unable to access Overlay options for 16:9
+  exported reel. Video covers up the part of the screen where the overlay options are located." —
+  this is the separate lower-priority issue already filed as T10080, not this task's scope.
+
+Reporter's own words (from his later email, same content as bug 57/55 above but with corrected
+names):
 
 > It seems that Reels exported from Team clips do not appear in Gallery when published to My
 > Reels. As a result, the published reels are unable to be downloaded or shared. I tried to create
@@ -97,20 +119,20 @@ from a Team-layer clip would hit the same filter. Before/alongside the fix:
    is missing or corrupted — this is a read-side filter bug, not a data-loss bug), but confirm this
    with a dry run before telling affected users their reels are fixed.
 
-## Blocked: locate the actual `bug_reports` entry
-
-Could not fetch sarkarati's original in-app report — both `prod_session` and `staging_session` in
-`scripts/.task-manager-config.json` returned 401 (expired, see T10090). Once a fresh `prod_session`
-is in place, find it via:
-
-```
-GET {prod_url}/api/admin/bugs?status=new&page_size=50
-```
-
-filtered to `reporter_email == sarkarati@gmail.com` and a `created_at` around 2026-09-13 evening.
-Load it with `/bug {id}p` once found — it may carry a screenshot, console logs, or action
-breadcrumbs this task doesn't have. Cross-reference; the title in his own in-app report is known
-wrong (see Reporter section above), so match on reporter + timestamp, not title.
+**Second candidate-affected account found 2026-09-14** (`bug_reports` #53, drewsoccerati@gmail.com,
+2026-09-02, profile `e5f4f253`): "Reel missing from My Reels from Game at FRAM2 May 9. Reel was
+created from Clip titled 'Romy goes on safari, dribbles 4'. I'm pretty sure this Reel was exported
+because I have a download of it saved to my computer with that name." Same symptom shape (export +
+download succeeded, Gallery entry missing) during the same `d9621161` build window. Investigation
+(2026-09-14) ruled out the other known orphaned-`final_videos` landmines (T4010/T4020/T4110, all
+fixed well before this build) and confirmed `my_athlete` is a real per-family-account layer field
+("My player" vs "Team" in the Play-category control — see `.claude/knowledge/annotate.md`), so a
+Team-layer source clip is plausible for any account, not just sarkarati's. **Not yet confirmed** —
+his `raw_clips.my_athlete` value lives in his per-user SQLite (R2-synced), not shared Postgres, so
+it wasn't directly checkable without downloading that profile's DB. Include profile `e5f4f253` /
+this clip in the Scope query above; if it comes back `my_athlete=0`, his reel is fixed by the same
+change and he should be told once verified — otherwise this is a second, still-unexplained bug and
+needs its own investigation.
 
 ## Context
 
@@ -145,19 +167,23 @@ wrong (see Reporter section above), so match on reporter + timestamp, not title.
    pure read-filter fix.
 2. [ ] Confirm scope: query prod for all currently-hidden published Team-layer reels (see Scope
    above).
-3. [ ] Locate sarkarati's original `bug_reports` entry once T10090 restores connectivity;
-   pull any additional context (screenshot, console logs).
+3. [x] Locate sarkarati's original `bug_reports` entries (57 primary, 55 duplicate, 56 related/
+   T10080) — done 2026-09-14, see Reporter section for exact game/project/clip IDs.
 4. [ ] Implement the corrected filter per the expert's design.
-5. [ ] Verify sarkarati's two specific reels ("Lielle amazing free kick goal",
-   "Lily scores a banger to open the half") become visible and downloadable.
+5. [ ] Verify sarkarati's two specific reels — clip 76/project 47/game 13 (16:9, "Lielle amazing
+   free kick goal") and clip 77/project 48/game 12 (9:16, "Lily scores a banger to open the half")
+   — become visible and downloadable.
 6. [ ] Backend tests for the corrected query predicate (both the "my own Team clip" case that
    should now show, and the original bug-22 "someone else's shared reel" case that must stay
    hidden).
+7. [ ] Once fixed, mark bug 55 `duplicate_of` 57 and both `status=testing` via the task board
+   (AI does not change bug statuses — user's call per bug-triage skill).
 
 ### Progress Log
 
-**2026-09-14**: Task filed from reporter's email + root-cause investigation. Not yet
-expert-reviewed or started.
+**2026-09-14**: Task filed from reporter's email + root-cause investigation. Cross-referenced
+against the actual `bug_reports` entries (57/55/56) once T10090 restored task-board connectivity —
+confirms the exact repro data (game/project/clip IDs) above. Not yet expert-reviewed or started.
 
 ## Acceptance Criteria
 

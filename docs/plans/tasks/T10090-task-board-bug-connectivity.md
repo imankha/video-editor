@@ -1,10 +1,16 @@
 # T10090: Task board's Production Reported Bugs panel is silently disconnected
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 1
 **Created:** 2026-09-14
 **Updated:** 2026-09-14
+
+## Resolved 2026-09-14
+
+User re-pasted a fresh `prod_session` cookie via Bug Config. Confirmed working: the full bug-report
+triage pass (T10070/T10080/T10090/T10110/T10120) ran successfully against live prod data
+immediately after.
 
 ## Problem
 
@@ -84,10 +90,10 @@ populated before considering this closed.
 ### Steps
 1. [x] Make the disconnected state visually unmissable instead of looking empty.
 2. [x] Remove staging bug-report support (board only; `promote-bugs.py`/bug-triage skill untouched).
-3. [ ] User pastes fresh `prod_session` cookie.
-4. [ ] Confirm the panel populates; unblock T10070's lookup step.
+3. [x] User pastes fresh `prod_session` cookie.
+4. [x] Confirm the panel populates; unblocked T10070's lookup step.
 
 ## Acceptance Criteria
 
-- [ ] Task board's Production Reported Bugs panel shows real data.
-- [ ] A future cookie expiry reads as "reconnect needed", never as "zero bugs".
+- [x] Task board's Production Reported Bugs panel shows real data.
+- [x] A future cookie expiry reads as "reconnect needed", never as "zero bugs".
