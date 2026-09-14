@@ -1,5 +1,22 @@
 ---
 domain: annotate
+updated: 2026-09-14 (T9840 — capture-window numbers made consistent, copy fixed. The "Mark play"
+tap-to-range DEFAULT is now **6s before + 2s after the tap = 8s total** (was 9+3=12). The window
+still STRADDLES the tap on purpose (post-roll kept, NOT reduced to 0): parents tap after they see a
+good play, so the 2s after the tap holds the end of it. **Single-sourced in
+`components/shared/clipConstants.js`**: `DEFAULT_CLIP_BEFORE = 6`, `DEFAULT_CLIP_AFTER = 2`, and
+`DEFAULT_CLIP_DURATION = DEFAULT_CLIP_BEFORE + DEFAULT_CLIP_AFTER` (DERIVED, not a literal). Both
+sites import from there: `AnnotateFullscreenOverlay.jsx` (scrub-state init at :257/:260 and :326-327,
+BEFORE/AFTER) and `useAnnotate.js`'s `addClipRegion` default (DURATION) — previously the hook had its
+own hardcoded `DEFAULT_CLIP_DURATION = 8.0` that merely happened to agree with 9+3; now one policy,
+one place. Both clamps unchanged (`max(0, t - BEFORE)` start, `min(t + AFTER, duration)` end); the
+near-start case (t=3) correctly yields 0:00-0:05 (start clamped, post-roll still applied), not a
+zero-length save. Copy: `displayNames.js` `ANNOTATE.MARK_PLAY_HELPER = 'Captures 6 seconds before and
+2 after'` (was "Captures the previous 12 seconds" — the exact stale-copy defect this task fixed);
+comment at `AnnotateModeView.jsx:1062` updated too. **Billable duration (T9480 coordination):** no
+code change needed — `ExportButtonContainer`'s `estimatedSeconds`/`estimatedCredits` derive from the
+clip's actual start/end via `sumEffectiveDurations`/`estimateExportCredits(clips)`, so they follow the
+new window automatically; there was never a separately hardcoded 12. Prior:)
 updated: 2026-09-14 (T9810 — repaired the game-invitation entry points + documented the
 two-share-features split. **THE LANDMINE (this is the thing a future task trips over):** the
 Annotate action bar has TWO DIFFERENT share features that look like one. (1) **Game invitations**
@@ -181,8 +198,8 @@ updated: 2026-09-11 (T9520 — Annotate surface VOCABULARY is now the Shared-Voc
 single-sourced in `config/displayNames.js` `ANNOTATE`. One model: a GAME holds PLAYS (marked
 ranges); a PLAY can produce a CLIP (editable video); reels are multi-clip and live OFF this surface,
 so "reel" NEVER appears in Annotate copy. Canonical labels (import `ANNOTATE`, never inline): primary
-CTA **Mark play** / **Edit play** (was "Add Play"/"Edit Play") with helper **"Captures the previous 12
-seconds"** (= DEFAULT_CLIP_BEFORE 9 + DEFAULT_CLIP_AFTER 3); sidebar + timeline list heading **Plays**
+CTA **Mark play** / **Edit play** (was "Add Play"/"Edit Play") with helper **"Captures 6 seconds before and
+2 after"** (= DEFAULT_CLIP_BEFORE 6 + DEFAULT_CLIP_AFTER 2, updated by T9840 — see the T9840 entry); sidebar + timeline list heading **Plays**
 (was "Clips"); create-editable-clip toggle **"Create an editable clip"** ON / **"Just save this play"**
 OFF (positive polarity, T9450 unchanged); Save gesture **Save play** / **Save play and create clip**
 (when createProject on) / **Update play** (was "Save"/"Update"); manual create action **Create clip** +

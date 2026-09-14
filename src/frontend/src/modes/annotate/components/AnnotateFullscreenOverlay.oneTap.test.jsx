@@ -162,7 +162,7 @@ describe('AnnotateFullscreenOverlay — abandonment beacon (T8140)', () => {
     await act(async () => {
       fireEvent.click(saveButton(container));
     });
-    const newRegion = { id: 'new_1', startTime: 21, endTime: 33, rating: 4, tags: [], autoProjectId: null };
+    const newRegion = { id: 'new_1', startTime: 24, endTime: 32, rating: 4, tags: [], autoProjectId: null };
     rerender(<AnnotateFullscreenOverlay {...baseProps} isVisible={true} existingClip={newRegion} />);
     expect(recordUiImpression).not.toHaveBeenCalled();
   });
