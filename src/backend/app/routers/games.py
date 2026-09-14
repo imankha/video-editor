@@ -1345,7 +1345,7 @@ def _compute_reel_counts(cursor, game_ids: list) -> dict:
     version per source, published only, teammate-only single-clip reels excluded.
     ONE query for the whole list, decoded in Python (no N+1).
     """
-    from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
+    from app.queries import exclude_shared_in_reels_clause, latest_final_videos_subquery
     from app.services.collection_metadata import route_game_ids
 
     if not game_ids:
@@ -1356,7 +1356,7 @@ def _compute_reel_counts(cursor, game_ids: list) -> dict:
         FROM final_videos fv
         WHERE fv.id IN ({latest_final_videos_subquery()})
           AND fv.published_at IS NOT NULL
-          {exclude_teammate_reels_clause()}
+          {exclude_shared_in_reels_clause()}
     """)
     counts: dict = {}
     for row in cursor.fetchall():
@@ -1883,7 +1883,7 @@ async def get_recap_data(game_id: int, layer: str = "athlete"):
 @router.get("/{game_id:int}/brilliant-clips")
 async def get_brilliant_clips(game_id: int):
     """Get brilliant clip exports for a game (5-star or 4-star fallback auto-exports)."""
-    from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
+    from app.queries import exclude_shared_in_reels_clause, latest_final_videos_subquery
 
     get_current_user_id()
 
@@ -1896,7 +1896,7 @@ async def get_brilliant_clips(game_id: int):
                   AND fv.game_id = ?
                   AND fv.published_at IS NOT NULL
                   AND fv.id IN ({latest_final_videos_subquery()})
-                  {exclude_teammate_reels_clause()}
+                  {exclude_shared_in_reels_clause()}
                 ORDER BY fv.id""",
             (game_id,),
         ).fetchall()

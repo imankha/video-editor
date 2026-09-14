@@ -3,8 +3,9 @@
 A reel counts for a game when its frozen game_ids decodes to exactly that one
 game id (route_game_ids), regardless of clip_count -- deliberately NOT
 route_collection, which would drop a multi-clip highlight reel built from one
-game. Multi-game mixes, game-less reels, unpublished drafts, and teammate-only
-single-clip reels count for NO game.
+game. Multi-game mixes, game-less reels, unpublished drafts, and shared-in
+teammate single-clip reels count for NO game; the user's OWN Team-layer reels
+DO count (T10070).
 """
 import sqlite3
 
@@ -25,7 +26,8 @@ def _conn():
     conn.execute(
         """CREATE TABLE raw_clips (
                id INTEGER PRIMARY KEY AUTOINCREMENT,
-               my_athlete INTEGER DEFAULT 1)"""
+               my_athlete INTEGER DEFAULT 1,
+               shared_by TEXT)"""
     )
     return conn
 
@@ -82,14 +84,25 @@ def test_unpublished_draft_counts_for_no_game():
     assert counts == {}
 
 
-def test_teammate_only_single_clip_reel_excluded():
+def test_shared_in_teammate_single_clip_reel_excluded():
     conn = _conn()
-    # source clip belongs to a teammate (my_athlete=0) -> excluded from the
-    # user's own surfaces by exclude_teammate_reels_clause.
-    conn.execute("INSERT INTO raw_clips (id, my_athlete) VALUES (7, 0)")
+    # source clip was SHARED IN by a teammate (my_athlete=0, shared_by set) ->
+    # excluded from the user's own surfaces by exclude_shared_in_reels_clause.
+    conn.execute(
+        "INSERT INTO raw_clips (id, my_athlete, shared_by) VALUES (7, 0, 'teammate@example.com')")
     _add_reel(conn, game_ids=[1], clip_count=1, project_id=10, source_clip_id=7)
     counts = _compute_reel_counts(conn.cursor(), [1])
     assert counts == {}
+
+
+def test_own_team_layer_single_clip_reel_counts():
+    conn = _conn()
+    # T10070: source clip is the user's OWN Team-layer clip (my_athlete=0,
+    # shared_by NULL) -> its reel counts for the game like any other own reel.
+    conn.execute("INSERT INTO raw_clips (id, my_athlete, shared_by) VALUES (8, 0, NULL)")
+    _add_reel(conn, game_ids=[1], clip_count=1, project_id=10, source_clip_id=8)
+    counts = _compute_reel_counts(conn.cursor(), [1])
+    assert counts == {1: 1}
 
 
 def test_only_latest_version_of_a_reel_counts():

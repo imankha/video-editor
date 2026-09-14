@@ -25,7 +25,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.database import get_db_connection
-from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
+from app.queries import exclude_shared_in_reels_clause, latest_final_videos_subquery
 from app.routers.collections import COLLECTION_MIN_DURATION_SEC
 from app.services.collection_metadata import route_collection
 from app.services.glicko import RD_MAX, update_one
@@ -117,7 +117,7 @@ def _rankable_pool(cursor, aspect_ratio: str) -> list:
           AND fv.aspect_ratio = ?
           AND fv.clip_count = 1
           AND fv.rating IS NOT NULL
-          {exclude_teammate_reels_clause()}
+          {exclude_shared_in_reels_clause()}
         """,
         (aspect_ratio,),
     )

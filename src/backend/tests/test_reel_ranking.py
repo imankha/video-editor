@@ -65,13 +65,13 @@ def _insert_project(cur, archived=False):
 
 
 def _insert_raw_clip(cur, *, rating, game_id=None, auto_project_id=None,
-                     start_time=0.0, end_time=None, my_athlete=1):
+                     start_time=0.0, end_time=None, my_athlete=1, shared_by=None):
     _rcid[0] += 1
     cur.execute(
-        "INSERT INTO raw_clips (id, filename, rating, game_id, auto_project_id, start_time, end_time, my_athlete) "
-        "VALUES (?, 'c.mp4', ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO raw_clips (id, filename, rating, game_id, auto_project_id, start_time, end_time, my_athlete, shared_by) "
+        "VALUES (?, 'c.mp4', ?, ?, ?, ?, ?, ?, ?)",
         (_rcid[0], rating, game_id, auto_project_id, start_time,
-         end_time if end_time is not None else float(_rcid[0]), my_athlete),
+         end_time if end_time is not None else float(_rcid[0]), my_athlete, shared_by),
     )
     return _rcid[0]
 
@@ -285,60 +285,73 @@ class TestResolverOrdering:
 
 
 # ---------------------------------------------------------------------------
-# Teammate reels excluded from the user's own collections + rankings (bug 22)
+# Shared-in teammate reels excluded from the user's own collections + rankings
+# (bug 22); own Team-layer reels stay visible (T10070).
 #
-# A single-clip reel's "My Athlete" status IS its source clip's. A reel built
-# from a teammate clip (raw_clips.my_athlete = 0) must NOT appear in the user's
-# own Rankings, Collections gallery, summary, or share resolution. Multi-clip
-# reels (source_clip_id NULL) and reels whose source clip is gone/pre-migration
-# (my_athlete NULL) stay -- their my-athlete status can't be denied.
+# Provenance -- not layer -- is the signal. A reel is excluded only when its
+# source clip was SHARED IN by a teammate: materialization stamps
+# raw_clips.shared_by (non-NULL) AND hardcodes my_athlete = 0. A clip the user
+# created themselves never sets shared_by, whatever its layer. So the predicate
+# is `my_athlete = 0 AND shared_by IS NOT NULL`:
+#   - shared-in teammate clip (my_athlete=0, shared_by set) -> EXCLUDED (bug 22)
+#   - OWN Team-layer clip     (my_athlete=0, shared_by NULL) -> KEPT   (T10070)
+# Multi-clip reels (source_clip_id NULL), orphans/deleted source clips, and
+# pre-migration clips (my_athlete NULL) stay -- their status can't be denied.
 # ---------------------------------------------------------------------------
 
 class TestMyAthleteReelExclusion:
     def _seed(self, db):
-        """Mine (my_athlete=1), teammate (my_athlete=0), pre-migration (NULL),
-        all single-clip reels in game 1; returns (mine_fv, team_fv, null_fv)."""
+        """Single-clip reels in game 1:
+          mine      -- my_athlete=1                       (kept)
+          shared_in -- my_athlete=0, shared_by set        (excluded, bug 22)
+          own_team  -- my_athlete=0, shared_by NULL       (kept, T10070)
+          null      -- my_athlete NULL (pre-migration)    (kept)
+        Returns (mine_fv, shared_in_fv, own_team_fv, null_fv)."""
         with _conn(db) as c:
             cur = c.cursor()
             rc_mine = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=1)
-            rc_team = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=0)
+            rc_shared = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=0,
+                                         shared_by="teammate@example.com")
+            rc_own_team = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=0,
+                                           shared_by=None)
             rc_null = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=None)
             mine = _insert_fv(cur, game_ids=[1], source_clip_id=rc_mine)
-            team = _insert_fv(cur, game_ids=[1], source_clip_id=rc_team)
+            shared_in = _insert_fv(cur, game_ids=[1], source_clip_id=rc_shared)
+            own_team = _insert_fv(cur, game_ids=[1], source_clip_id=rc_own_team)
             nul = _insert_fv(cur, game_ids=[1], source_clip_id=rc_null)
             c.commit()
-        return mine, team, nul
+        return mine, shared_in, own_team, nul
 
-    def test_rankable_pool_excludes_teammate_reel(self, db):
+    def test_rankable_pool_excludes_shared_in_reel(self, db):
         from app.routers.rank import _rankable_pool
-        mine, team, nul = self._seed(db)
+        mine, shared_in, own_team, nul = self._seed(db)
         with _conn(db) as c:
             ids = {r["id"] for r in _rankable_pool(c.cursor(), "9:16")}
-        assert mine in ids and nul in ids
-        assert team not in ids
+        assert mine in ids and own_team in ids and nul in ids
+        assert shared_in not in ids
 
-    def test_downloads_excludes_teammate_reel(self, db):
-        mine, team, nul = self._seed(db)
+    def test_downloads_excludes_shared_in_reel(self, db):
+        mine, shared_in, own_team, nul = self._seed(db)
         ids = {d.id for d in _downloads(game_id=1).downloads}
-        assert mine in ids and nul in ids
-        assert team not in ids
+        assert mine in ids and own_team in ids and nul in ids
+        assert shared_in not in ids
 
-    def test_summary_excludes_teammate_reel(self, db):
-        mine, team, nul = self._seed(db)
+    def test_summary_excludes_shared_in_reel(self, db):
+        mine, shared_in, own_team, nul = self._seed(db)
         summary = _summary()
         game = next(g for g in summary.games if g.game_id == 1)
-        assert game.reel_count == 2  # mine + null, not teammate
+        assert game.reel_count == 3  # mine + own_team + null, not shared_in
         assert _downloads(game_id=1).total_count == game.reel_count
 
-    def test_collection_members_exclude_teammate_reel(self, db):
+    def test_collection_members_exclude_shared_in_reel(self, db):
         from app.routers.collections import evaluate_collection_members
-        mine, team, nul = self._seed(db)
+        mine, shared_in, own_team, nul = self._seed(db)
         with _conn(db) as c:
             members = evaluate_collection_members(
                 c, {"scope": {"type": "all"}, "filter": {}, "aspect_ratio": "9:16"})
         ids = {m["id"] for m in members}
-        assert mine in ids and nul in ids
-        assert team not in ids
+        assert mine in ids and own_team in ids and nul in ids
+        assert shared_in not in ids
 
     def test_orphan_and_multiclip_reels_kept(self, db):
         # A reel with no source clip (orphan) or pointing at a deleted clip can't
@@ -353,23 +366,28 @@ class TestMyAthleteReelExclusion:
             ids = {r["id"] for r in _rankable_pool(c.cursor(), "9:16")}
         assert orphan in ids and dangling in ids
 
-    def test_brilliant_clips_exclude_teammate_reel(self, db):
+    def test_brilliant_clips_exclude_shared_in_reel(self, db):
         # The game recap "Highlights" tab (games.get_brilliant_clips) surfaces a
-        # game's auto-exported single-clip reels -- a teammate clip's reel must
-        # not leak in there either (bug 22, same class as Rankings/gallery).
+        # game's auto-exported single-clip reels -- a shared-in teammate clip's
+        # reel must not leak in there (bug 22), but the user's OWN Team-layer reel
+        # must (T10070).
         from app.routers.games import get_brilliant_clips
         with _conn(db) as c:
             cur = c.cursor()
             rc_mine = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=1)
-            rc_team = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=0)
+            rc_shared = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=0,
+                                         shared_by="teammate@example.com")
+            rc_own_team = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=0,
+                                           shared_by=None)
             rc_null = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=None)
             mine = _insert_fv(cur, source_type="brilliant_clip", game_id=1, source_clip_id=rc_mine)
-            team = _insert_fv(cur, source_type="brilliant_clip", game_id=1, source_clip_id=rc_team)
+            shared_in = _insert_fv(cur, source_type="brilliant_clip", game_id=1, source_clip_id=rc_shared)
+            own_team = _insert_fv(cur, source_type="brilliant_clip", game_id=1, source_clip_id=rc_own_team)
             nul = _insert_fv(cur, source_type="brilliant_clip", game_id=1, source_clip_id=rc_null)
             c.commit()
         ids = {clip["id"] for clip in asyncio.run(get_brilliant_clips(1))["clips"]}
-        assert mine in ids and nul in ids  # mine + pre-migration kept
-        assert team not in ids             # teammate reel excluded
+        assert mine in ids and own_team in ids and nul in ids  # mine + own Team + pre-migration
+        assert shared_in not in ids                            # shared-in teammate reel excluded
 
 
 # ---------------------------------------------------------------------------
