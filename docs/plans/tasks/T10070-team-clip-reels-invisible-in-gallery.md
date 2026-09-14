@@ -1,6 +1,6 @@
 # T10070: Reels exported from Team-layer clips never appear in Gallery/My Reels
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-09-14

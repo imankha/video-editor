@@ -1,6 +1,6 @@
 # T10121: Storage-reclaim sweep can permanently destroy a game's footage before its recap exists, with three separate real mechanisms and zero alerting
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 7
 **Created:** 2026-09-14

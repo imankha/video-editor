@@ -1,6 +1,6 @@
 # T10120: GameTile gates annotation playback on the wrong signal, hiding fully-annotated team-layer games behind a Delete-only dead end
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-09-14
