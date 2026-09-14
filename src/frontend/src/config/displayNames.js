@@ -8,7 +8,8 @@ import { formatLength, PRECISION } from '../utils/timeFormat';
 // play produces a CLIP, never a reel. Internal names (the `my_athlete` field,
 // `autoProjectId`, EDITOR_MODES, routes, analytics events) are deliberately NOT
 // renamed to match — deep links and greppability beat cosmetic consistency.
-// Editor mode names stay "AI Focus" / "Spotlight" (epic override, not this file).
+// Editor mode names live in MODE_NAMES below (T9860 moved them off the per-mode
+// editorStore.SCREENS[].label and out of this comment).
 export const ANNOTATE = {
   MODE_DESCRIPTION: 'Mark plays',          // N04 — mode-switcher description
   MARK_PLAY: 'Mark play',                  // N05 — primary create CTA
@@ -170,18 +171,18 @@ export const SECTION_NAMES_SHORT = {
 // buttons with captions; these give the same plain-language distinction at the
 // non-empty entry points, where the CTA otherwise stands alone). Parallel phrasing
 // states the choice: a full game must have plays marked to yield clips; a short
-// clip skips that and goes straight to Focus. No em dashes (project-wide rule);
-// "Focus" is the current framing-mode name.
+// clip skips that and goes straight to Framing. No em dashes (project-wide rule);
+// "Framing" (MODE_NAMES.FRAMING) is the current mode name, used as a noun, never a verb.
 export const UPLOAD_ENTRY_HINT = {
   GAME: 'A full game needs plays marked before it becomes clips.',
-  CLIP: 'A short clip skips straight to Focus, no game needed.',
+  CLIP: `A short clip skips straight to ${MODE_NAMES.FRAMING}, no game needed.`,
 };
 
 export const CLIP_UPLOAD = {
   UPLOAD_CLIP: 'Upload clip',
   NOTICE_TITLE: 'Heads up: these clips won’t be linked to a game',
   NOTICE_BODY:
-    'Uploading here adds videos straight to your clips, ready to Focus and publish. '
+    `Uploading here adds videos straight to your clips, ready for ${MODE_NAMES.FRAMING} and publish. `
     + 'Because they don’t come from a game in Annotate, they won’t be part of a '
     + 'game you can build more highlights from.',
   NOTICE_CONTINUE: 'Continue',
@@ -208,20 +209,22 @@ export const UPLOAD_STATE = {
 // completion vocabulary, single source. Keyed on the export `type` ('framing' |
 // 'overlay') the store + WS payload already carry, so the button, the job list, the
 // toast and the completion message never disagree about the stage (one object, one
-// stage). Mode names ("AI Focus" / "Spotlight") are deliberately NOT here -- a mode
-// names a PLACE you edit, a job names a THING YOU DO. The post-export action-bar
-// labels (FOCUS_PUBLISH / OVERLAY_PUBLISH below) are T9590 territory, untouched here.
+// stage). Mode names (MODE_NAMES.FRAMING / MODE_NAMES.SPOTLIGHT) are deliberately NOT
+// here -- a mode names a PLACE you edit, a job names a THING YOU DO. The post-export
+// action-bar labels (FOCUS_PUBLISH / OVERLAY_PUBLISH below) are T9590 territory,
+// untouched here.
 //
-// Focus stage NOUN is "AI Focus" (the mode was renamed Framing -> AI Focus, T9320);
-// the render VERB is "Generate", deliberately NOT "Apply": "Apply AI Focus" (T9330) is
-// a DIFFERENT gesture that NAVIGATES INTO the mode, so reusing it here would confuse
-// entering the mode with paying to render inside it. Completion is exactly "AI Focus ready".
+// Focus stage NOUN is MODE_NAMES.FRAMING (T9860 renamed the mode from "AI Focus" to
+// "Framing"); the render VERB is "Generate", deliberately NOT "Apply": "Apply Framing"
+// (T9330) is a DIFFERENT gesture that NAVIGATES INTO the mode, so reusing it here would
+// confuse entering the mode with paying to render inside it. Completion is exactly
+// "Framing ready".
 export const EXPORT_JOBS = {
   framing: {
-    action: 'Generate AI Focus',              // N19 — render CTA, was "Export Focused Video"
-    inProgress: 'Generating AI Focus...',     // N19 — progress/job label, was "Creating reel..."
-    completed: 'AI Focus ready',              // N21 — names the stage that finished, was "Export Complete"
-    jobNoun: 'AI Focus',                       // job-list row noun, was "Framing Export"
+    action: `Generate ${MODE_NAMES.FRAMING}`,          // N19 — render CTA, was "Export Focused Video"
+    inProgress: `Generating ${MODE_NAMES.FRAMING}...`, // N19 — progress/job label, was "Creating reel..."
+    completed: `${MODE_NAMES.FRAMING} ready`,          // N21 — names the stage that finished, was "Export Complete"
+    jobNoun: MODE_NAMES.FRAMING,                       // job-list row noun, was "Framing Export"
   },
   overlay: {
     action: 'Export clip with effects',       // N20 — render CTA, was "Add Spotlight"
@@ -251,7 +254,7 @@ export const EXPORT_PROGRESS = {
 // product owner decision, recorded with the conflict at filing:
 //   PRIMARY   Add spotlight             (dominant; opens the Spotlight editor, no export)
 //   SECONDARY Publish without spotlight (publishes the framed reel as-is)
-//   TERTIARY  Edit framing              (back into AI Focus; the paid re-export path)
+//   TERTIARY  Edit framing              (back into Framing; the paid re-export path)
 //   QUIET     Save draft                (defer; replaces the old "Add Spotlight Later",
 //                                        whose spotlight-framed destination is gone)
 // Captions state each destination + the honest cost/audience BEFORE the click
@@ -303,7 +306,7 @@ export const FOCUS_ADD_SPOTLIGHT_TOAST = {
 // a fixed action):
 //   PRIMARY   Publish           (dominant; the reel is finished)
 //   SECONDARY Reapply spotlight (back into Spotlight editing)
-//   TERTIARY  Reapply AI Focus  (reframe; the paid re-export path)
+//   TERTIARY  Reapply Framing   (reframe; the paid re-export path)
 //   QUIET     Save draft        (defer; replaces the old "Publish Later")
 // PUBLISH_CAPTION states the audience BEFORE the tap (verified against
 // downloads.py publish + shares.py, matching the post-publish "anyone with the
@@ -314,26 +317,26 @@ export const OVERLAY_PUBLISH = {
   PUBLISH_CAPTION: 'Adds it to your Highlight Reels -- anyone with the link can watch it.',
   REAPPLY_OVERLAY_LABEL: 'Reapply spotlight',
   REAPPLY_OVERLAY_CAPTION: 'Go back and redo the spotlight on your reel.',
-  REAPPLY_FOCUS_LABEL: 'Reapply AI Focus',
+  REAPPLY_FOCUS_LABEL: `Reapply ${MODE_NAMES.FRAMING}`,
   REAPPLY_FOCUS_CAPTION: 'Reframe and export again, uses credits.',
   SAVE_DRAFT_LABEL: 'Save draft',
   SAVE_DRAFT_CAPTION: 'Save it as a draft and publish whenever you\'re ready.',
 };
 
-// T9110: "Reapply Focus" confirmation toast. Mirrors FOCUS_ADD_SPOTLIGHT_TOAST's
+// T9110: "Reapply Framing" confirmation toast. Mirrors FOCUS_ADD_SPOTLIGHT_TOAST's
 // reasoning (product owner, 2026-09-08): a choice that moves the user into
 // ANOTHER edit mode has no other confirmation their prior work was saved, so it
-// gets a toast. Honest that the spotlight carries over the Focus re-export
+// gets a toast. Honest that the spotlight carries over the Framing re-export
 // (highlight carry-forward, T4350/T4355) and that a fresh export follows.
 export const OVERLAY_REAPPLY_FOCUS_TOAST = {
   title: 'Spotlight saved',
-  message: 'Reframe your clip in AI Focus, then export again -- your spotlight carries over to the new reel.',
+  message: `Reframe your clip in ${MODE_NAMES.FRAMING}, then export again, your spotlight carries over to the new reel.`,
 };
 
 // T9550 (Shared Vocabulary epic, N16-N32): the editor-stage IN-PANEL vocabulary,
-// single source. These name the CONTROLS you tune once inside AI Focus / Spotlight
+// single source. These name the CONTROLS you tune once inside Framing / Spotlight
 // -- the focus point, the styling sliders, the cover image. Deliberately NOT here:
-// the mode NAMES ("AI Focus" / "Spotlight", editorStore SCREENS -- epic override,
+// the mode NAMES (MODE_NAMES.FRAMING / MODE_NAMES.SPOTLIGHT, editorStore SCREENS --
 // unchanged) and the render-action strings (EXPORT_JOBS, T9540) -- a mode names a
 // PLACE you edit, a job names a THING YOU DO, and this block names the controls in
 // between. One noun per primitive so T9610/T9620's instructional copy reuses these

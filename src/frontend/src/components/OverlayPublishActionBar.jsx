@@ -19,7 +19,7 @@ import { OVERLAY_PUBLISH } from '../config/displayNames';
  *   PRIMARY   Publish           — visually dominant (filled cyan `lg` button in a
  *                                 tinted+ringed card); caption states the audience.
  *   SECONDARY Reapply spotlight — normal gray card; back into Spotlight editing.
- *   TERTIARY  Reapply AI Focus  — quiet outline card; reframe. Caption carries the
+ *   TERTIARY  Reapply Framing   — quiet outline card; reframe. Caption carries the
  *                                 honest paid-re-export ("uses credits") warning.
  *   QUIET     Save draft        — a small ghost link below the grid, NOT a fourth
  *                                 competing card. Replaces T9110's "Publish Later".
@@ -89,7 +89,7 @@ export function OverlayPublishActionBar({
           <p className="text-sm italic leading-relaxed text-gray-400">{OVERLAY_PUBLISH.REAPPLY_OVERLAY_CAPTION}</p>
         </div>
 
-        {/* TERTIARY — Reapply AI Focus. Quiet outline card; caption carries the
+        {/* TERTIARY — Reapply Framing. Quiet outline card; caption carries the
             honest "uses credits" re-export warning BEFORE the tap. */}
         <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-800 bg-gray-800/20 p-5 text-center">
           <Button variant="outline" size="md" icon={Crop} onClick={onReapplyFocus} className="w-full">

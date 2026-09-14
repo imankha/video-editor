@@ -4,6 +4,7 @@
 // group status counts, and tests — never re-derive these buckets inline.
 
 import { RATIO, RATIO_ORDER } from '../constants/aspectRatios';
+import { MODE_NAMES } from '../config/displayNames';
 
 export const DRAFT_STAGE = {
   NOT_STARTED: 'not_started',
@@ -27,8 +28,8 @@ export const DRAFT_STAGE_ORDER = [
 // "Ready" wording that contradicted the "Reel created!" story elsewhere.
 export const DRAFT_STAGE_LABELS = {
   [DRAFT_STAGE.NOT_STARTED]: 'Draft',
-  [DRAFT_STAGE.IN_FRAMING]: 'Draft - in AI Focus',
-  [DRAFT_STAGE.IN_OVERLAY]: 'Draft - in Spotlight',
+  [DRAFT_STAGE.IN_FRAMING]: `Draft, in ${MODE_NAMES.FRAMING}`,
+  [DRAFT_STAGE.IN_OVERLAY]: `Draft, in ${MODE_NAMES.SPOTLIGHT}`,
   [DRAFT_STAGE.READY]: 'Ready to Publish',
 };
 

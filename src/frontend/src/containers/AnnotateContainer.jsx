@@ -31,7 +31,7 @@ import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
 import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInput';
 import { generateClipName } from '../utils/clipDisplayName';
-import { SECTION_NAMES } from '../config/displayNames';
+import { SECTION_NAMES, MODE_NAMES } from '../config/displayNames';
 import { setPendingGame } from '../utils/pendingNavigation';
 import { beginGameVideoLoad, computeResumePosition, seekVideoElementWhenReady } from './annotateVideoLoad';
 
@@ -87,14 +87,14 @@ export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProject
   useProjectsStore.getState().selectProject(projectId);
   // T8760 item 2: name the clip and confirm its new home — the Clips tab (T8555;
   // T9530/N10 dropped the "In Progress" prefix, single-sourced via SECTION_NAMES).
-  // The "Open Focus" action still carries T8480's Focus-unlock affordance.
+  // The "Open Framing" action still carries T8480's Framing-unlock affordance.
   // `dedupKey` unchanged so it collapses duplicates.
   const name = (clipName && clipName.trim()) ? clipName.trim() : 'Your clip';
   toast.success(`${name} is now in ${SECTION_NAMES.CLIPS}`, {
     duration: 6000,
     dedupKey: 'reel-created',
     action: {
-      label: 'Open AI Focus',
+      label: `Open ${MODE_NAMES.FRAMING}`,
       onClick: () => onOpenReelInFocus?.(projectId),
     },
   });
@@ -1232,7 +1232,7 @@ export function AnnotateContainer({
   // T9330: which just-created clip is waiting for its project id to land.
   // The editor stays open on the new clip after a create (see onCreateSelect);
   // while `create_project` was requested and the backend round trip hasn't
-  // answered yet, the strip CTA shows a DISABLED "Apply AI Focus". This is
+  // answered yet, the strip CTA shows a DISABLED "Apply Framing". This is
   // transient view state driven by the Save gesture (memory-only, never
   // persisted, never a reactive write) — it clears the instant setAutoProjectId
   // lands (or the save fails). A specific clip id (not a bool) so an unrelated
@@ -1295,7 +1295,7 @@ export function AnnotateContainer({
       // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek
       effectiveSeek(clipData.startTime);
 
-      // T9330: arm the disabled "Apply AI Focus" pending CTA for this clip while
+      // T9330: arm the disabled "Apply Framing" pending CTA for this clip while
       // the project is being created (only when we'll actually save + a project
       // was requested). Cleared in every result branch below.
       if (annotateGameId && clipData.createProject) {
@@ -1322,7 +1322,7 @@ export function AnnotateContainer({
         // EVERY case, including saveClip returning null (dedup guard, sync_failed
         // 503, or a thrown/other-HTTP error caught in useRawClipSave). Clearing
         // here rather than per-branch is what prevents a permanently-disabled
-        // "Apply AI Focus" on the just-cut clip in the sync-failure flow. When a
+        // "Apply Framing" on the just-cut clip in the sync-failure flow. When a
         // project WAS created, setAutoProjectId below lands the live stage CTA;
         // when it wasn't, no CTA shows — both correct with pending cleared.
         setPendingProjectClipId(null);
@@ -1962,7 +1962,7 @@ export function AnnotateContainer({
     isLoadingAnnotations,
     ANNOTATE_MAX_NOTES_LENGTH,
     // T9330: the clip whose project is being created right now (create-save in
-    // flight) — drives the strip's disabled "Apply AI Focus" pending CTA.
+    // flight) — drives the strip's disabled "Apply Framing" pending CTA.
     pendingProjectClipId,
 
     // Handlers

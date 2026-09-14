@@ -17,7 +17,7 @@ import { openFinishedReel } from '../utils/finishedReelNav';
 import { API_BASE } from '../config';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
-import { SECTION_NAMES, LIBRARY_ACTIONS } from '../config/displayNames';
+import { SECTION_NAMES, LIBRARY_ACTIONS, MODE_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
 import { rendersSourceAspect, DRAFT_STAGE, DRAFT_STAGE_LABELS } from '../utils/draftStage';
@@ -359,7 +359,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   else if (isExporting) { statusLabel = 'Exporting'; statusTint = 'text-amber-300'; }
   else if (failedExportType) { statusLabel = 'Failed'; statusTint = 'text-orange-300'; }
   else if (project.has_working_video) { statusLabel = 'In Spotlight'; statusTint = 'text-blue-300'; }
-  else if (project.clips_in_progress > 0) { statusLabel = 'AI Focus'; statusTint = 'text-blue-300'; }
+  else if (project.clips_in_progress > 0) { statusLabel = MODE_NAMES.FRAMING; statusTint = 'text-blue-300'; }
   else if (project.clips_exported > 0) { statusLabel = 'Exported'; statusTint = 'text-gray-200'; }
 
   // Fine pointer reveals actions on hover; coarse pointer reveals on long-press (actionsRevealed).
@@ -397,7 +397,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {isComplete && (
         <button onClick={(e) => { e.stopPropagation(); handleClipClick(0); setMenuOpen(false); }} className={`${menuItemClass} hover:bg-gray-600`}>
           <Crop size={18} className="text-gray-300 flex-shrink-0" />
-          <span className="text-gray-200">Open in AI Focus</span>
+          <span className="text-gray-200">Open in {MODE_NAMES.FRAMING}</span>
         </button>
       )}
       {isComplete && (
@@ -646,7 +646,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           {/* T6890: the rename pencil moved OUT of this rail to sit beside the name
               in the bottom scrim (above). It is no longer stacked here. */}
           {isComplete && (
-            <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title="Open in AI Focus" className={actionBtnClass} />
+            <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title={`Open in ${MODE_NAMES.FRAMING}`} className={actionBtnClass} />
           )}
           {isComplete && (
             <Button variant="secondary" size="sm" icon={Layers} iconOnly onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }} title="Open in Spotlight" className={actionBtnClass} />

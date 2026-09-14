@@ -18,13 +18,13 @@ import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
 import { DetailsFields } from './DetailsFields';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../../../components/shared/clipConstants';
-import { ANNOTATE } from '../../../config/displayNames';
+import { ANNOTATE, MODE_NAMES } from '../../../config/displayNames';
 
 // T9580: the "Save & open …" confirm-dialog destination noun, keyed by stage
 // (decoupled from the CTA button label, which N41 reworded FOCUS to "Frame this
 // clip"). Module scope — a static map, no per-render recreation.
 const STAGE_OPEN_NAME = {
-  [CLIP_STAGE.FOCUS]: 'AI Focus',
+  [CLIP_STAGE.FOCUS]: MODE_NAMES.FRAMING,
   [CLIP_STAGE.SPOTLIGHT]: 'Spotlight',
   [CLIP_STAGE.FINAL]: 'Final',
   [CLIP_STAGE.PUBLISHED]: 'Published',
@@ -146,7 +146,7 @@ export function AnnotateFullscreenOverlay({
   // Falls back to onResume (close+play) when absent.
   onResumePlaybackOnly,
   // T9330: true while THIS clip's project is being created (create-save in
-  // flight, id not landed yet). Renders a DISABLED "Apply AI Focus" pending CTA.
+  // flight, id not landed yet). Renders a DISABLED "Apply Framing" pending CTA.
   focusPending = false,
   // T8600 §2.5: required per-render-site discriminator for the
   // add_clip_opened_no_save beacon (no default — see the effect below).
@@ -176,8 +176,8 @@ export function AnnotateFullscreenOverlay({
   // T9330: the destination-mode noun for the "Save & open …" dialog. T9580
   // decoupled this from the button LABEL (which N41 reworded FOCUS to "Frame this
   // clip") — derive it from the stage so the dialog copy stays grammatical
-  // ("...then open AI Focus"), independent of the CTA wording.
-  const openStageName = STAGE_OPEN_NAME[clipStage?.stage] || 'AI Focus';
+  // ("...then open Framing"), independent of the CTA wording.
+  const openStageName = STAGE_OPEN_NAME[clipStage?.stage] || MODE_NAMES.FRAMING;
   // T8140: one-tap first clip — a nameless new clip defaults to "Play N" so the
   // user can save without typing a name. Display-and-persist default (memory-only
   // until the Save gesture); never applied in edit mode.
@@ -862,10 +862,10 @@ export function AnnotateFullscreenOverlay({
   ) : null;
 
   // T8600 §2.8 / T9330: navigating mid-edit is never a silent discard — save
-  // first, then navigate. Copy is STAGE-AWARE ("Save & open AI Focus" /
+  // first, then navigate. Copy is STAGE-AWARE ("Save & open Framing" /
   // "Spotlight" / "Final" / "Published"); the stale "closes the Annotate editor"
   // line is gone (the editor stays open). openStageName strips the CTA verb
-  // ("Apply AI Focus" -> "AI Focus", "View Final" -> "Final"). Rendered by every
+  // ("Apply Framing" -> "Framing", "View Final" -> "Final"). Rendered by every
   // layout that shows stageCta (strip + mobile inline edit).
   const focusConfirmDialog = (
     <ConfirmationDialog
@@ -1237,9 +1237,9 @@ export function AnnotateFullscreenOverlay({
       <div data-add-clip-form className="border-t border-gray-700 flex flex-col min-h-0 max-h-full">
         <div className="p-3 overflow-y-auto min-h-0 flex-1">{formBody}</div>
         {/* T9330 (design §2.6): the mobile edit sheet gets the SAME stage-aware
-            CTA as the desktop strip (Apply AI Focus / Apply Spotlight / View
+            CTA as the desktop strip (Apply Framing / Apply Spotlight / View
             Final / View Published), so editing an existing clip-with-a-project on
-            a phone has a path into Focus/Spotlight/the finished video. Edit mode
+            a phone has a path into Framing/Spotlight/the finished video. Edit mode
             only — mobile CREATE still closes on save (Save/Cancel below) and does
             not surface the in-flight CTA. Its own row above the footer. */}
         {stageCta && (

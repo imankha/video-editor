@@ -123,7 +123,7 @@ export function AnnotateModeView({
   onOpenClipInFocus,
   // T9330: opens the clip's project in Spotlight (Overlay mode) for the strip's
   // stage CTA; and the clip whose project is being created right now (drives the
-  // strip's disabled "Apply AI Focus" pending CTA).
+  // strip's disabled "Apply Framing" pending CTA).
   onOpenClipInOverlay,
   pendingProjectClipId = null,
   // T8890: angle strip + source switching (null for angle-free games)

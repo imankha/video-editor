@@ -17,7 +17,7 @@ import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPrevi
 import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, MousePointerClick } from 'lucide-react';
 import { formatInstant, formatLength, PRECISION } from '../utils/timeFormat';
 import { HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
-import { EDITOR_PANELS } from '../config/displayNames';
+import { EDITOR_PANELS, MODE_NAMES } from '../config/displayNames';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
 import { isRegionUnderPlayhead } from '../utils/textRegionPlayhead';
 import {
@@ -1207,13 +1207,13 @@ export function OverlayModeView({
             <p className="text-purple-300/70 text-sm mb-4">
               {hasMultipleClips
                 ? 'You have multiple clips loaded. Export first to combine them into a single video before adding overlays.'
-                : 'You have made edits in AI Focus mode. Export first to apply them before adding overlays.'}
+                : `You have made edits in ${MODE_NAMES.FRAMING} mode. Export first to apply them before adding overlays.`}
             </p>
             <button
               onClick={onSwitchToFraming}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              Switch to AI Focus Mode
+              Switch to {MODE_NAMES.FRAMING} Mode
             </button>
           </div>
         )}

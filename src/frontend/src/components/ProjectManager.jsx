@@ -1403,7 +1403,7 @@ export function ProjectManager({
                     {/* T9600: reel-level status is the SAME domain as draftStage, so
                         route it through the single source instead of hardcoding words
                         that drifted from it (the pre-T8470 'Overlay'/'Focus' vs
-                        'Spotlight'/'AI Focus'). draftStage's READY bucket spans BOTH
+                        'Spotlight'/'Framing'). draftStage's READY bucket spans BOTH
                         published and ready-to-publish finals, so keep DraftTile's
                         published/ready split here (terminal 'Done' when already
                         published, T8470's word) — otherwise a live reel would read

@@ -82,7 +82,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // the settings rail's Reel group (desktop) / mobile drawer, not in this component.
 
   // T9540: button / in-progress copy resolve from the ONE EXPORT_JOBS table, keyed on
-  // the export stage (framing = AI Focus render, overlay = effects render), so the button
+  // the export stage (framing = Framing render, overlay = effects render), so the button
   // names the same object+stage as the job list, toast and completion message.
   const job = EXPORT_JOBS[isFramingMode ? 'framing' : 'overlay'];
 
@@ -173,7 +173,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         </div>
       )}
 
-      {/* Success message — N21: names the stage that finished (AI Focus / Clip) */}
+      {/* Success message — N21: names the stage that finished (Framing / Clip) */}
       {displayProgress === 100 && !isCurrentlyExporting && (
         <div className="text-green-400 text-xs bg-green-900/20 border border-green-800 rounded p-2 w-full">
           {`${job.completed}. Find it in ${SECTION_NAMES.LIBRARY}.`}

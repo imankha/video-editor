@@ -27,7 +27,7 @@ import { useSessionHeartbeat } from './hooks/useSessionHeartbeat';
 import { useIsMobile } from './hooks/useIsMobile';
 import { ConfirmationDialog, toast, UnifiedHeader } from './components/shared';
 import { getProjectDisplayName } from './utils/clipDisplayName';
-import { SECTION_NAMES } from './config/displayNames';
+import { SECTION_NAMES, MODE_NAMES } from './config/displayNames';
 // Screen components (self-contained, own their hooks)
 // ProjectsScreen is static — it's the home/landing screen loaded on every visit
 import { ProjectsScreen } from './screens';
@@ -1052,10 +1052,10 @@ function App() {
       {/* Mode Switch Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={modeSwitchDialog.isOpen}
-        title={modeSwitchDialog.sourceMode === 'overlay' ? 'Uncommitted Spotlight Changes' : 'Uncommitted AI Focus Changes'}
+        title={modeSwitchDialog.sourceMode === 'overlay' ? 'Uncommitted Spotlight Changes' : `Uncommitted ${MODE_NAMES.FRAMING} Changes`}
         message={modeSwitchDialog.sourceMode === 'overlay'
           ? 'You have Spotlight edits that haven\'t been exported yet.\n\n• Export: Create a new final video (GPU processing), then switch modes\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in Spotlight mode'
-          : 'You have AI Focus edits that haven\'t been exported yet.\n\n• Export: Re-export clip (GPU processing), then switch modes. This will reset any Spotlight work.\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in AI Focus mode'
+          : `You have ${MODE_NAMES.FRAMING} edits that haven't been exported yet.\n\n• Export: Re-export clip (GPU processing), then switch modes. This will reset any Spotlight work.\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in ${MODE_NAMES.FRAMING} mode`
         }
         onClose={handleModeSwitchCancel}
         buttons={[

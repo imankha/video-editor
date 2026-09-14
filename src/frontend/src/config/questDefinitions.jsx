@@ -7,11 +7,11 @@
  *
  * T3700: copy is outcome-framed and jargon-free. Never say "set crop keyframes" —
  * say "keep your player in the shot." Button references must match the renamed
- * terminal buttons: "Generate AI Focus" (framing) and "Export clip with effects" (overlay) (T9540).
+ * terminal buttons: "Generate Framing" (framing) and "Export clip with effects" (overlay) (T9540).
  */
 
 import { Image, Plus, Star, Film, Crosshair, FolderOpen, CheckCircle, Video } from 'lucide-react';
-import { SECTION_NAMES, ANNOTATE, EDITOR_PANELS, EXPORT_JOBS } from './displayNames';
+import { SECTION_NAMES, ANNOTATE, EDITOR_PANELS, EXPORT_JOBS, MODE_NAMES } from './displayNames';
 import { useTutorialStore } from '../stores/useTutorialStore';
 
 /** Inline icon — small version of the actual UI icon, styled to sit inline with text */
@@ -125,10 +125,10 @@ function MiniButton({ icon: IconComponent, children, variant = 'purple' }) {
 /** Step titles keyed by step ID — plain strings */
 export const STEP_TITLES = {
   // Quest tutorial steps — T4780. T9575: titles are sentence case across the whole
-  // checklist; mode/feature proper nouns (Annotate, AI Focus, Spotlight, Publish,
+  // checklist; mode/feature proper nouns (Annotate, Framing, Spotlight, Publish,
   // Highlight Reels) keep their capitals, the "spotlight" EFFECT stays lowercase.
   watch_annotate_tutorial: 'Watch Annotate tutorial',
-  watch_framing_tutorial: 'Watch AI Focus tutorial',
+  watch_framing_tutorial: `Watch ${MODE_NAMES.FRAMING} tutorial`,
   watch_overlay_tutorial: 'Watch Spotlight tutorial',
   watch_publish_tutorial: 'Watch Publish tutorial',
   // Quest 1 — Get Started
@@ -186,7 +186,7 @@ export const STEP_DESCRIPTIONS = {
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>{EXPORT_JOBS.framing.action}</MiniButton> and we'll render your close-up in crisp 1080p.</>,
   wait_for_export: 'We are upscaling your highlight to crisp 1080p. This takes a minute. Sit tight; next you will add a spotlight to your player on this same clip.',
   // Quest 3 — Spotlight Your Player
-  open_overlay: <>Click the clip's card under <strong>{SECTION_NAMES.CLIPS}</strong> to open it in Spotlight mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows AI Focus complete (green) and Spotlight not yet started (blue).</>,
+  open_overlay: <>Click the clip's card under <strong>{SECTION_NAMES.CLIPS}</strong> to open it in Spotlight mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows {MODE_NAMES.FRAMING} complete (green) and Spotlight not yet started (blue).</>,
   select_players: <>Click each <GreenSquare /> green marker on the timeline and tap your player. Can't spot them? Drag the circle right onto them.</>,
   choose_color: 'Pick a spotlight color that pops against the jerseys.',
   choose_shape: <>Spotlight around your player, or a glow under them? Pick <strong>{EDITOR_PANELS.SPOTLIGHT_AROUND_PLAYER}</strong> or <strong>{EDITOR_PANELS.SPOTLIGHT_UNDER_PLAYER}</strong>.</>,

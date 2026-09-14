@@ -122,10 +122,10 @@ ALL_STEP_IDS = [s for q in QUEST_DEFINITIONS for s in q["step_ids"]]
 STEP_TITLES = {
     # T9575: sentence case across the whole checklist, mirroring the frontend
     # STEP_TITLES exactly (pinned by questDefinitions.test.jsx "FE/BE STEP_TITLES
-    # sync"). Mode/feature proper nouns (Annotate, AI Focus, Spotlight, Publish,
+    # sync"). Mode/feature proper nouns (Annotate, Framing, Spotlight, Publish,
     # Highlight Reels) keep their capitals; the "spotlight" EFFECT stays lowercase.
     "watch_annotate_tutorial": "Watch Annotate tutorial",
-    "watch_framing_tutorial": "Watch AI Focus tutorial",
+    "watch_framing_tutorial": "Watch Framing tutorial",
     "watch_overlay_tutorial": "Watch Spotlight tutorial",
     "watch_publish_tutorial": "Watch Publish tutorial",
     "upload_game": "Upload your first game",
