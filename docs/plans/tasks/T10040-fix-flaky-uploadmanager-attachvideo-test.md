@@ -1,10 +1,10 @@
 # T10040: Fix the chronic uploadManager.attachVideo Branch CI false-positive
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-14
-**Updated:** 2026-09-14
+**Updated:** 2026-09-13
 
 ## Problem
 
@@ -110,16 +110,57 @@ isolated run, not by guessing further.
 ## Implementation
 
 ### Steps
-1. [ ] Reproduce in isolation and log the actual `mockFetch` call sequence to confirm the extra
+1. [x] Reproduce in isolation and log the actual `mockFetch` call sequence to confirm the extra
        call.
-2. [ ] Identify the exact source of the extra call (or the real mismatch, if the hypothesis above
+2. [x] Identify the exact source of the extra call (or the real mismatch, if the hypothesis above
        is wrong).
-3. [ ] Fix: URL-routed mock (preferred) or missing mock response, or a genuine product-code fix
+3. [x] Fix: URL-routed mock (preferred) or missing mock response, or a genuine product-code fix
        if warranted.
-4. [ ] Apply the same durability fix to sibling tests in the same file if they share the
+4. [x] Apply the same durability fix to sibling tests in the same file if they share the
        positional-mock pattern.
-5. [ ] Confirm green in isolation AND in the full suite (rule out parallel-run flakiness too).
+5. [x] Confirm green in isolation AND in the full suite (rule out parallel-run flakiness too).
 6. [ ] Delete the `known-failures.md` row once confirmed green on 2-3 consecutive Branch CI runs.
+
+## Root Cause (CONFIRMED 2026-09-13)
+
+The task's hypothesis was right in shape and wrong in detail: the extra call is not inside
+`apiFetchWithNetworkRetry`, it is **T8838's shrink-capability census**.
+
+`ensureVideoInR2` (`uploadManager.js:637`) calls
+`probeAndReport(file, faststartInfo, (name) => recordUiImpression('capability', name))`
+**before** the `prepare-upload` POST. `recordUiImpression` posts to
+`POST /api/telemetry/impression` (`utils/uiTelemetry.js:63`), and `probeAndReport` is explicitly
+fire-and-forget - never awaited, so upload timing is unaffected in production.
+
+Instrumented run (`mockFetch.mock.calls.map(([url]) => url)`) on master:
+
+```
+[["/api/telemetry/impression","POST"],["/api/games/prepare-upload","POST"]]
+```
+
+The test queued its two responses **positionally** with `mockResolvedValueOnce`, so the telemetry
+beacon consumed the `prepare-upload` fixture and `prepare-upload` received the `addVideosToGame`
+shape, which has no `status` field - hence the exact `Unexpected status: undefined` symptom.
+
+Why it presented as FLAKY rather than a hard failure: the beacon is not awaited, so whether its
+`fetch` lands before or after `prepare-upload` depends on microtask/`setTimeout` scheduling under
+the runner's load. By the time it was investigated it reproduced deterministically on master.
+
+The third test (`does NOT trigger a reload when the attach POST fails`) had the **same** defect
+but passed for the wrong reason: its second queued response was a 409, which `prepare-upload`
+consumed and threw on, so the test's `rejects.toThrow()` was satisfied by a prepare failure
+rather than the attach failure it names.
+
+**No product bug.** `ensureVideoInR2`'s status handling is correct; nothing in `uploadManager.js`
+changed.
+
+### Fix
+
+Both tests now route responses **by URL** via a local `routeFetch({ fragment: response })` helper -
+the same pattern the sibling `uploadManager.attachFootage.test.js` already used, which is precisely
+why that file never flaked. Telemetry beacons are answered generically and excluded from the
+asserted sequence; an **unrouted** URL now throws `Unrouted fetch in test: <url>` instead of
+silently stealing another call's response, so this class of drift can never return quietly.
 
 ## Acceptance Criteria
 
