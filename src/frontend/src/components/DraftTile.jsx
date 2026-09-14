@@ -489,8 +489,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       )}
 
       {/* Multi-clip marker — only shown when the draft has more than 1 clip. On a
-          ready tile the top-left hosts the "Ready to Publish" badge, so the count shifts to the
-          top-right corner freed by the suppressed status chip (T6180). */}
+          ready tile the top-left hosts the status badge (T9860 D4: "Private"), so the count
+          shifts to the top-right corner freed by the suppressed status chip (T6180). */}
       {project.clip_count > 1 && (
         <span
           className={`absolute top-1.5 z-20 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gray-900/80 text-white shadow backdrop-blur-sm ${

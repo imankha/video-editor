@@ -14,7 +14,7 @@ import { saveEvidence } from './helpers/qa.js';
  * update depth exceeded", logged continuously (250+ in <4s). Fix: measure the
  * untransformed layout box (offsetWidth).
  *
- * This spec reproduces the trigger (hover + pointer-hold on a Ready-to-Publish tile)
+ * This spec reproduces the trigger (hover + pointer-hold on a ready tile)
  * and asserts ZERO "Maximum update depth" console errors — the live half of the fix
  * (a unit test alone can't see the transform-driven loop).
  *
@@ -24,7 +24,7 @@ import { saveEvidence } from './helpers/qa.js';
 const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE_ID = process.env.E2E_PROFILE_ID || '9fa7378c';
 
-test('T9300 holding a Ready-to-Publish tile does not trigger a render loop', async ({ context, page }) => {
+test('T9300 holding a ready tile does not trigger a render loop', async ({ context, page }) => {
   test.setTimeout(180000);
 
   // Capture React's "Maximum update depth exceeded" — the loop's fingerprint.
@@ -46,13 +46,14 @@ test('T9300 holding a Ready-to-Publish tile does not trigger a render loop', asy
   await clipsTab.click();
   await page.waitForTimeout(800); // let carousels + posters settle
 
-  // The Ready-to-Publish carousel: CardCarousel aria-label carries the stage label.
-  const readyRow = page.locator('[role="group"][aria-label*="Ready to Publish"]').first();
-  await expect(readyRow, 'a "Ready to Publish" carousel row is present').toBeVisible({ timeout: 30000 });
+  // The ready carousel: CardCarousel aria-label carries the stage label
+  // (T9860: DRAFT_STAGE_LABELS[READY] is now "Ready to watch", was "Ready to Publish").
+  const readyRow = page.locator('[role="group"][aria-label*="Ready to watch"]').first();
+  await expect(readyRow, 'a "Ready to watch" carousel row is present').toBeVisible({ timeout: 30000 });
 
   const tiles = readyRow.locator('[data-testid="project-card"]');
   const tileCount = await tiles.count();
-  expect(tileCount, 'Ready-to-Publish row has at least one tile').toBeGreaterThan(0);
+  expect(tileCount, 'Ready-to-watch row has at least one tile').toBeGreaterThan(0);
 
   // The report was the SECOND card; hold whichever slot exists (prefer slot 1).
   const target = tileCount > 1 ? tiles.nth(1) : tiles.first();
