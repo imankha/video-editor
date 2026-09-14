@@ -176,7 +176,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
       {/* Success message — N21: names the stage that finished (Framing / Clip) */}
       {displayProgress === 100 && !isCurrentlyExporting && (
         <div className="text-green-400 text-xs bg-green-900/20 border border-green-800 rounded p-2 w-full">
-          {`${job.completed}. Find it in ${SECTION_NAMES.LIBRARY}.`}
+          {`${job.completed}. Find it under ${SECTION_NAMES.PUBLISHED}.`}
         </div>
       )}
     </>

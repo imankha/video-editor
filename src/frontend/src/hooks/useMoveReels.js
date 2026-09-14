@@ -3,6 +3,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { toast } from '../components/shared/Toast';
 import { track } from '../utils/analytics';
+import { SECTION_NAMES } from '../config/displayNames';
 
 /**
  * useMoveReels - T4850: move published reels to a sibling profile of the same user.
@@ -122,7 +123,7 @@ export function useMoveReels(onMoved, onPartial) {
       track('reels_moved', { count: data.moved_ids?.length || videoIds.length });
       toast.success(
         videoIds.length > 1 ? `Moved ${videoIds.length} reels` : 'Reel moved',
-        { message: 'Find them in the other profile’s Highlight Reels.' },
+        { message: `Find them under the other profile’s ${SECTION_NAMES.PUBLISHED}.` },
       );
       onMoved?.(data.moved_ids || videoIds, targetProfileId);
       return true;

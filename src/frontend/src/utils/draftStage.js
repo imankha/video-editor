@@ -30,7 +30,12 @@ export const DRAFT_STAGE_LABELS = {
   [DRAFT_STAGE.NOT_STARTED]: 'Draft',
   [DRAFT_STAGE.IN_FRAMING]: `Draft, in ${MODE_NAMES.FRAMING}`,
   [DRAFT_STAGE.IN_OVERLAY]: `Draft, in ${MODE_NAMES.SPOTLIGHT}`,
-  [DRAFT_STAGE.READY]: 'Ready to Publish',
+  // T9860 (design doc §2.3 Section 4): READY groups private AND published items
+  // (has_final_video, regardless of is_published), so "Ready to Publish" was
+  // already wrong for a published item -- ProjectManager.jsx improvised a 'Done'
+  // override to cover exactly that gap. "Ready to watch" is true of both, so the
+  // override is deleted (see getDraftStatus below) instead of reproduced.
+  [DRAFT_STAGE.READY]: 'Ready to watch',
 };
 
 // Text tint per stage — matches the CollapsibleGroup legend colors so the row

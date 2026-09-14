@@ -8,6 +8,7 @@ import { useQuestStore } from '../stores/questStore';
 import { usePublishProject } from '../hooks/usePublishProject';
 import { useWebShare } from '../hooks/useWebShare';
 import { toast } from './shared/Toast';
+import { STAGE_REASONS } from '../config/displayNames';
 
 /**
  * DraftReelPreview (T8530) — the thin, store-aware wrapper that turns an
@@ -107,7 +108,7 @@ function DraftReelPreviewInner({ payload }) {
     const ok = await publish({ openGallery: false });
     if (ok) {
       setPublished(true);
-      toast.success('Published', { message: 'Anyone with the link can watch it.' });
+      toast.success('Published', { message: STAGE_REASONS.PUBLISH });
       // One-shot attention ring on the freshly-swapped Share button (§4.6).
       setRingOn(true);
       clearTimeout(ringTimer.current);

@@ -91,9 +91,9 @@ export function ModeSwitcher({
       isLoadingWorkingVideo && modeOption.id === 'overlay'
         ? 'Loading working video...'
         : !isAvailable && modeOption.id === 'framing'
-          ? 'Select a reel first'
+          ? 'Open a clip to start framing'
           : !isAvailable && modeOption.id === 'overlay'
-            ? hasProject ? 'Export from AI Focus first to enable Spotlight mode' : 'Select a reel first'
+            ? hasProject ? 'Export from Framing first to unlock Spotlight' : 'Open a clip to start framing'
             : modeOption.showWarning
               ? 'Previously exported video no longer matches your settings. Export to create latest video before overlaying.'
               : modeOption.description;

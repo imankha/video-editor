@@ -3,6 +3,7 @@ import { X, Download, Loader, Pencil, Scale, Share2, FolderInput } from 'lucide-
 import { Button } from '../shared/Button';
 import { Z } from '../../constants/zLayers';
 import { RATIO } from '../../constants/aspectRatios';
+import { LIBRARY_ACTIONS } from '../../config/displayNames';
 import { useStoryPlayback } from './useStoryPlayback';
 import { formatGameClock } from '../../utils/timeFormat';
 import { PlayheadHandle } from '../shared/PlayheadHandle';
@@ -394,8 +395,8 @@ export function CollectionPlayer({
               icon={FolderInput}
               loading={publishLoading}
               onClick={onPublish}
-              title="Publish to Highlight Reels"
-              aria-label="Publish to Highlight Reels"
+              title={LIBRARY_ACTIONS.PUBLISH_REEL}
+              aria-label={LIBRARY_ACTIONS.PUBLISH_REEL}
               className="coarse-pointer:min-h-11"
             >
               Publish

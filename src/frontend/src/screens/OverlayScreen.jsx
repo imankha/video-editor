@@ -33,7 +33,7 @@ import { usePublishProject } from '../hooks/usePublishProject';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
 import { openFinishedReel } from '../utils/finishedReelNav';
 import { toast } from '../components/shared';
-import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST } from '../config/displayNames';
+import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS } from '../config/displayNames';
 
 /**
  * OverlayScreen - Self-contained screen for Overlay mode
@@ -1594,7 +1594,7 @@ export function OverlayScreen({
     const published = await publishProject({ openGallery: false });
     setShowExportCompletePreview(false);
     if (published) {
-      toast.success('Published', { message: 'Anyone with the link can watch it.' });
+      toast.success('Published', { message: STAGE_REASONS.PUBLISH });
     }
     if (snapshot?.final_video_id) {
       openFinishedReel(snapshot, { alreadyPublished: !!published });

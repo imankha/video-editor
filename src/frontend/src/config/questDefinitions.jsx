@@ -11,7 +11,7 @@
  */
 
 import { Image, Plus, Star, Film, Crosshair, FolderOpen, CheckCircle, Video } from 'lucide-react';
-import { SECTION_NAMES, ANNOTATE, EDITOR_PANELS, EXPORT_JOBS, MODE_NAMES } from './displayNames';
+import { SECTION_NAMES, ANNOTATE, EDITOR_PANELS, EXPORT_JOBS, MODE_NAMES, LIBRARY_ACTIONS } from './displayNames';
 import { useTutorialStore } from '../stores/useTutorialStore';
 
 /** Inline icon — small version of the actual UI icon, styled to sit inline with text */
@@ -125,8 +125,8 @@ function MiniButton({ icon: IconComponent, children, variant = 'purple' }) {
 /** Step titles keyed by step ID — plain strings */
 export const STEP_TITLES = {
   // Quest tutorial steps — T4780. T9575: titles are sentence case across the whole
-  // checklist; mode/feature proper nouns (Annotate, Framing, Spotlight, Publish,
-  // Highlight Reels) keep their capitals, the "spotlight" EFFECT stays lowercase.
+  // checklist; mode/feature proper nouns (Annotate, Framing, Spotlight, Publish)
+  // keep their capitals, the "spotlight" EFFECT stays lowercase.
   watch_annotate_tutorial: 'Watch Annotate tutorial',
   watch_framing_tutorial: `Watch ${MODE_NAMES.FRAMING} tutorial`,
   watch_overlay_tutorial: 'Watch Spotlight tutorial',
@@ -156,7 +156,7 @@ export const STEP_TITLES = {
   export_overlay: EXPORT_JOBS.overlay.action,
   wait_for_overlay: 'Render the spotlight',
   preview_draft: 'Watch your preview',
-  move_to_my_reels: `Move to ${SECTION_NAMES.LIBRARY}`,
+  move_to_my_reels: LIBRARY_ACTIONS.PUBLISH_CLIP,
   view_gallery_video: 'Watch your clip',
 };
 
@@ -194,6 +194,6 @@ export const STEP_DESCRIPTIONS = {
   export_overlay: <>Click <MiniButton>{EXPORT_JOBS.overlay.action}</MiniButton> to render your highlight with the spotlight on your athlete.</>,
   wait_for_overlay: 'We are rendering your highlight with the spotlight burned in.',
   preview_draft: <>Press play on the <DoneBadge /> Clip to preview your finished clip. Watch it back for a moment to make sure it looks just how you want.</>,
-  move_to_my_reels: <>Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> to publish your clip. If you spot an issue, redo the framing or overlay first.</>,
+  move_to_my_reels: <>Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />{LIBRARY_ACTIONS.PUBLISH_CLIP}</MiniButton> to publish your clip. If you spot an issue, redo the framing or overlay first.</>,
   view_gallery_video: <>Hit the play button on the card to watch your finished clip. Once it's perfect, you can download and share it.</>,
 };

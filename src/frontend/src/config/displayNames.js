@@ -86,6 +86,19 @@ export const MODE_NAMES = {
   SPOTLIGHT: 'Spotlight',
 };
 
+// T9860 (Shared Vocabulary epic, copy and concept sweep, design doc section 2.3
+// Section 5): one reason sentence per stage, none using the feature's own name
+// as the reason. Mark play replaces the mechanics-only helper line; Framing and
+// Publish are new; Spotlight replaces FOCUS_PUBLISH.SPOTLIGHT_CAPTION. Declared
+// here (near MODE_NAMES) rather than at the file's end because FOCUS_PUBLISH and
+// OVERLAY_PUBLISH below both read PUBLISH as part of their publish captions.
+export const STAGE_REASONS = {
+  MARK_PLAY: 'You are bookmarking, not editing, so tap through the whole game and come back to edit later.',
+  FRAMING: 'You filmed wide from the stands and the video you are sending is phone shaped, so framing is you choosing what survives the crop.',
+  SPOTLIGHT: 'Twenty-two kids in the same kit: this is how anyone watching knows which one is yours.',
+  PUBLISH: 'Nobody else can see this until you share a link.',
+};
+
 export const SECTION_NAMES = {
   // Single-clip auto-draft tab (Home). Tab id stays `projects` / URL
   // `/home/reels` (frozen for deep-link compat). T9530 (Shared Vocabulary epic,
@@ -100,25 +113,14 @@ export const SECTION_NAMES = {
   // T9530 (N11) dropped the "In Progress" prefix so the label is now "Reels"
   // (was "In Progress Reels" T8555, "Highlights" before). In-progress-drafts
   // surface only -- published reels live under PUBLISHED.
-  // T9860: REELS added as the key that matches its own value (HIGHLIGHTS kept
-  // as an alias for this commit only; call sites move to REELS and HIGHLIGHTS
-  // is deleted in a later commit of this same PR).
-  HIGHLIGHTS: 'Reels',
+  // T9860: key renamed to REELS to match its own value (was HIGHLIGHTS, which
+  // grepped as a lie -- the value has said "Reels" since T9530).
   REELS: 'Reels',
-  HIGHLIGHTS_LOWER: 'reels',
 
   // Published reels tab (T8555) -- every published reel regardless of single-
   // or multi-clip origin (the old gallery/DownloadsPanel published list,
   // relocated to its own top-level tab).
   PUBLISHED: 'Published',
-
-  // Published-reel NOUN used off the tab bar (Hide-from-Drafts hint, export
-  // toasts, GalleryButton, quests). NOT a tab label -- deliberately keeps the
-  // "Highlight Reel(s)" term (T8555 retired it only from the tab bar; T9530
-  // renamed the per-card publish ACTION to Publish clip/Publish reel, see
-  // LIBRARY_ACTIONS, but left this destination noun for cross-surface copy the
-  // sibling children T9560/T9570 still own).
-  LIBRARY: 'Highlight Reels',
 };
 
 // T9530 (Shared Vocabulary epic, N01-N03/N12-N15): the Library-surface object
@@ -259,16 +261,19 @@ export const EXPORT_PROGRESS = {
 //                                        whose spotlight-framed destination is gone)
 // Captions state each destination + the honest cost/audience BEFORE the click
 // (T9590 acceptance). PUBLISH_CAPTION's audience wording is verified against the
-// real endpoints (downloads.py publish -> lands the reel in Highlight Reels;
-// shares.py -> a share link is public, "anyone with the link" -- matches the
-// post-publish toast). T9670 owns the confirmed publish-audience contract and is
-// not done yet, so RE-VERIFY this wording once T9670 lands. EDIT_FRAMING_CAPTION
-// keeps the honest "uses credits" re-export warning.
+// real endpoints (downloads.py publish -> moves the reel to the owner's own
+// Published tab; shares.py -> a share link is a SEPARATE gesture). T9670 §4,
+// live-verified by T9710 (2026-09-13): publishing sets published_at and moves the
+// reel to Published, and creates no link and grants no audience by itself --
+// sharing a link is a second, separate gesture. PUBLISH_CAPTION states the
+// destination and that precondition instead of the "anyone with the link" claim,
+// which was false as a consequence of publishing alone (T9860 D5).
+// EDIT_FRAMING_CAPTION keeps the honest "uses credits" re-export warning.
 export const FOCUS_PUBLISH = {
   ADD_SPOTLIGHT_LABEL: 'Add spotlight',
   SPOTLIGHT_CAPTION: 'A spotlight is a glowing highlight that follows your athlete.',
   PUBLISH_LABEL: 'Publish without spotlight',
-  PUBLISH_CAPTION: 'Adds it to your Highlight Reels as is -- anyone with the link can watch it.',
+  PUBLISH_CAPTION: `Files it under Published as is. ${STAGE_REASONS.PUBLISH}`,
   EDIT_FRAMING_LABEL: 'Edit framing',
   EDIT_FRAMING_CAPTION: 'Reframe and export again, uses credits.',
   SAVE_DRAFT_LABEL: 'Save draft',
@@ -279,12 +284,12 @@ export const FOCUS_PUBLISH = {
 export const FOCUS_PUBLISH_LATER_TOAST = {
   SINGLE_CLIP: {
     title: 'Saved to Clips',
-    message: 'Clips are single plays. Highlight Reels join several clips into one video. '
+    message: 'Clips are single plays. A highlight reel joins several clips into one video. '
       + 'Yours is still a draft, so add a spotlight or publish it from here whenever you want.',
   },
   MULTI_CLIP: {
-    title: 'Saved to Highlight Reels, under Highlights',
-    message: 'Highlight Reels join several clips into one video. Single plays stay in Clips. '
+    title: `Saved to ${SECTION_NAMES.REELS}`,
+    message: 'A highlight reel joins several clips into one video. Single plays stay in Clips. '
       + 'Yours is still a draft, so add a spotlight or publish it from here whenever you want.',
   },
 };
@@ -308,13 +313,15 @@ export const FOCUS_ADD_SPOTLIGHT_TOAST = {
 //   SECONDARY Reapply spotlight (back into Spotlight editing)
 //   TERTIARY  Reapply Framing   (reframe; the paid re-export path)
 //   QUIET     Save draft        (defer; replaces the old "Publish Later")
-// PUBLISH_CAPTION states the audience BEFORE the tap (verified against
-// downloads.py publish + shares.py, matching the post-publish "anyone with the
-// link" toast; re-verify once T9670 lands). REAPPLY_FOCUS_CAPTION keeps the honest
-// "uses credits" warning, verbatim with Focus's so the two read as one system.
+// PUBLISH_CAPTION states the destination + the honest precondition BEFORE the tap.
+// T9670 §4, live-verified by T9710 (2026-09-13): publishing moves the reel to
+// Published and creates no link and grants no audience by itself -- sharing a
+// link is a second, separate gesture (T9860 D5). REAPPLY_FOCUS_CAPTION keeps the
+// honest "uses credits" warning, verbatim with Focus's so the two read as one
+// system.
 export const OVERLAY_PUBLISH = {
   PUBLISH_LABEL: 'Publish',
-  PUBLISH_CAPTION: 'Adds it to your Highlight Reels -- anyone with the link can watch it.',
+  PUBLISH_CAPTION: `Files it under Published. ${STAGE_REASONS.PUBLISH}`,
   REAPPLY_OVERLAY_LABEL: 'Reapply spotlight',
   REAPPLY_OVERLAY_CAPTION: 'Go back and redo the spotlight on your reel.',
   REAPPLY_FOCUS_LABEL: `Reapply ${MODE_NAMES.FRAMING}`,
@@ -388,15 +395,4 @@ export const CREDITS = {
   MIN_CHARGE: 'Any render costs at least 1 credit.',
   billableLine: (exactSeconds, credits) =>
     `${formatLength(exactSeconds, PRECISION.TENTH)} of video · ${credits} credit${credits === 1 ? '' : 's'} · ${CREDITS.PER_SECOND_RULE}.`,
-};
-
-// T9860 (Shared Vocabulary epic, copy and concept sweep, design doc section 2.3
-// Section 5): one reason sentence per stage, none using the feature's own name
-// as the reason. Mark play replaces the mechanics-only helper line; Framing and
-// Publish are new; Spotlight replaces FOCUS_PUBLISH.SPOTLIGHT_CAPTION.
-export const STAGE_REASONS = {
-  MARK_PLAY: 'You are bookmarking, not editing, so tap through the whole game and come back to edit later.',
-  FRAMING: 'You filmed wide from the stands and the video you are sending is phone shaped, so framing is you choosing what survives the crop.',
-  SPOTLIGHT: 'Twenty-two kids in the same kit: this is how anyone watching knows which one is yours.',
-  PUBLISH: 'Nobody else can see this until you share a link.',
 };
