@@ -30,6 +30,13 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    bash scripts/deploy_production.sh [--all | --frontend-only | --backend-only --accept-build-drift] > /tmp/deploy-output.log 2>&1; echo "DEPLOY_EXIT: $?"
    ```
    Run it with `run_in_background: true` (timeout 600000ms; the harness notifies you when it exits).
+
+   **Read the `DEPLOY_EXIT:` line in the task output file, NOT the harness's "exit code".** The
+   trailing `; echo` makes the compound command always succeed, so a failed deploy still notifies as
+   "completed (exit code 0)" while `DEPLOY_EXIT:` says `1`. Hit for real on 2026-09-13: the backend
+   shipped, the frontend build died on a missing `vite` (no `node_modules` in the shared checkout),
+   and the notification still read 0 -- leaving prod in backend-ahead-of-frontend build drift. Check
+   the log tail for `[done]` too; a green deploy always prints it.
    The script handles:
    - Pre-flight checks (branch, clean tree, origin sync)
    - **Secrets sync**: pushes `.env.prod` → Fly.io secrets (except DATABASE_URL, managed by `fly postgres attach`)
