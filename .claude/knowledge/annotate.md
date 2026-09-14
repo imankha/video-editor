@@ -1985,9 +1985,15 @@ The full checklist for an 11th→Nth sport:
   so the E2E broke while the unit tests stayed green. Lesson: a component only reachable from its own
   tests is dead, not covered. The tile's verbose meta row is GONE by design — the scrim shows only
   name + clip count (the date was dropped in T7290, see below); all game actions live behind the
-  tile's kebab menu. NOTE the tile
-  gates the recap entry on `recap_video_url` (hasRecap), NOT on clip_count, and shows no recap entry
-  for an expired game with no recap video — a deliberate divergence from the old GameCard.
+  tile's kebab menu. **T10120: the tile gates the "Watch annotations" action on `clip_count > 0`
+  (`hasAnnotations`), NOT on `recap_video_url`.** `recap_video_url` is an athlete-layer-only pointer
+  (T5710): an all-team-layer game — the guaranteed shape of every claimed/shared game
+  (`materialization.py`: incoming share clips are always `my_athlete=0`) — finishes auto-export with
+  it NULL even though a real team recap sits in R2 at `recaps/{id}_team.mp4`, and `GET /recap-data`
+  resolves it. The OLD gate on `recap_video_url` (hasRecap) misread that as "no recap" and collapsed
+  such tiles to a Delete-only dead end (bug 52). `ProjectManager` opens the modal on the tab that has
+  content (`athlete_clip_count > 0 ? 'athlete' : 'team'`); the backend games-list payload carries
+  `athlete_clip_count`/`team_clip_count` derived live from `raw_clips.my_athlete` (never stored).
   Covering specs: `GameTile.test.jsx`, `GameTile.posterUrl.test.jsx`, `T5681-games-poster-grid.spec.js`.
 
 - **The Games tab organizes by MATCH date (`game_date`), never upload date (T7290).** Month headers,

@@ -71,7 +71,7 @@ describe('ReferenceGameCard (T5820)', () => {
     expect(screen.queryByLabelText('More actions')).toBeNull();
     expect(screen.queryByText('Edit game')).toBeNull();
     expect(screen.queryByText('Delete game')).toBeNull();
-    expect(screen.queryByText('Watch recap')).toBeNull();
+    expect(screen.queryByText('Watch annotations')).toBeNull();
     expect(screen.queryByText('Extend storage')).toBeNull();
     expect(screen.queryByText(/Expired|\dd$/)).toBeNull();
     // No "N clips" line — a reference has no local clips.

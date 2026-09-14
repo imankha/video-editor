@@ -81,11 +81,11 @@ describe('GameTile — kebab menu (item 4)', () => {
     render(<GameTile game={baseGame} {...hs} />);
 
     // No kebab action labels until the kebab is opened.
-    expect(screen.queryByText('Watch recap')).toBeNull();
+    expect(screen.queryByText('Watch annotations')).toBeNull();
 
     fireEvent.click(screen.getByLabelText('More actions'));
 
-    expect(screen.getByText('Watch recap')).toBeTruthy(); // hasRecap
+    expect(screen.getByText('Watch annotations')).toBeTruthy(); // hasAnnotations (clip_count > 0)
     expect(screen.getByText('Share game')).toBeTruthy();   // active
     expect(screen.getByText('Delete game')).toBeTruthy();
     // T6890: Edit moved OUT of the kebab to the pencil beside the name.
@@ -144,21 +144,68 @@ describe('GameTile — kebab menu (item 4)', () => {
   });
 
   // Re-homed from the retired ProjectManager.gameCard.test.jsx ("offers the Recap
-  // entry even when the game is still extendable", T5990): an expired game that
-  // still has a recap video AND is extendable must expose BOTH the recap entry and
-  // Extend -- the tile menu gates recap on recap_video_url (hasRecap), independent
-  // of Extend. NOTE (surfaced by T5990): unlike the old GameCard, the tile does NOT
-  // offer a recap entry for an expired game with no recap_video_url, and it gates
-  // recap on the recap video rather than clip_count.
-  it('offers both Watch recap and Extend on an expired, extendable game with a recap', () => {
+  // entry even when the game is still extendable", T5990): an expired game that has
+  // annotated clips AND is still extendable must expose BOTH "Watch annotations" and
+  // Extend -- the tile menu gates playback on clip_count (hasAnnotations), independent
+  // of Extend.
+  it('offers both Watch annotations and Extend on an expired, extendable game with clips', () => {
     const hs = handlers();
     const expired = { ...baseGame, storage_status: 'expired', can_extend: true, recap_video_url: 'recaps/42.mp4' };
     render(<GameTile game={expired} {...hs} />);
     fireEvent.click(screen.getByLabelText('More actions'));
-    expect(screen.getByText('Watch recap')).toBeTruthy();
+    expect(screen.getByText('Watch annotations')).toBeTruthy();
     expect(screen.getByText('Extend storage')).toBeTruthy();
-    fireEvent.click(screen.getByText('Watch recap'));
+    fireEvent.click(screen.getByText('Watch annotations'));
     expect(hs.onPlayRecap).toHaveBeenCalledTimes(1);
+  });
+
+  // T10120 (bug 52): an all-team-layer game finishes auto-export with
+  // recap_video_url NULL (that column is athlete-layer-only, T5710) even though a
+  // real team recap sits in R2. The OLD gate on recap_video_url (hasRecap) misread
+  // this as "no recap" and collapsed the tile to a Delete-only dead end. The tile
+  // now gates on clip_count, so a team-only game with clips still offers "Watch
+  // annotations" and, once its grace window is gone (not extendable), tapping the
+  // tile body opens playback.
+  it('offers Watch annotations for an expired, non-extendable, team-only game (recap_video_url null)', () => {
+    const hs = handlers();
+    const teamOnly = {
+      ...baseGame,
+      storage_status: 'expired',
+      can_extend: false,
+      clip_count: 17,
+      athlete_clip_count: 0,
+      team_clip_count: 17,
+      recap_video_url: null,
+    };
+    render(<GameTile game={teamOnly} {...hs} />);
+    fireEvent.click(screen.getByLabelText('More actions'));
+    // The dead-end regression: this must NOT be a Delete-only menu.
+    expect(screen.getByText('Watch annotations')).toBeTruthy();
+    expect(screen.queryByText('Extend storage')).toBeNull(); // grace window gone
+    fireEvent.click(screen.getByText('Watch annotations'));
+    expect(hs.onPlayRecap).toHaveBeenCalledTimes(1);
+  });
+
+  it('tapping the tile body plays annotations on an expired, non-extendable game with clips', () => {
+    const hs = handlers();
+    const teamOnly = {
+      ...baseGame, storage_status: 'expired', can_extend: false, recap_video_url: null,
+    };
+    const { container } = render(<GameTile game={teamOnly} {...hs} />);
+    fireEvent.click(container.firstChild);
+    expect(hs.onPlayRecap).toHaveBeenCalledTimes(1);
+    expect(hs.onExtend).not.toHaveBeenCalled();
+  });
+
+  it('offers no playback (Delete-only) for an expired, non-extendable game with zero clips', () => {
+    const hs = handlers();
+    const empty = {
+      ...baseGame, storage_status: 'expired', can_extend: false, clip_count: 0, recap_video_url: null,
+    };
+    render(<GameTile game={empty} {...hs} />);
+    fireEvent.click(screen.getByLabelText('More actions'));
+    expect(screen.queryByText('Watch annotations')).toBeNull();
+    expect(screen.getByText('Delete game')).toBeTruthy();
   });
 });
 

@@ -21,10 +21,10 @@ import { API_BASE } from '../config';
  * - A single kebab button (top-right) opening the same portal menu pattern ReelTile
  *   uses: full labels, flip-aware desktop popover, bottom action sheet on coarse
  *   pointers. Replaces the old vertical icon stack that clipped the ~120px tile.
- * - Tile tap stays the primary action: open (annotate) live games, Extend/Recap
- *   expired ones.
+ * - Tile tap stays the primary action: open (annotate) live games, Extend or
+ *   watch annotations on expired ones.
  *
- * Every game action (open, watch recap, share, edit, extend, delete) stays
+ * Every game action (open, watch annotations, share, edit, extend, delete) stays
  * reachable via the tile tap + kebab menu.
  */
 export function GameTile({
@@ -60,7 +60,13 @@ export function GameTile({
   const sportGlyph = sportEmojiOrNull(currentProfile?.sport);
 
   const isExpired = game.storage_status === 'expired';
-  const hasRecap = Boolean(game.recap_video_url);
+  // T10120: gate recap/annotation playback on whether the game HAS annotated clips,
+  // not on recap_video_url. recap_video_url is an athlete-layer-only pointer (T5710):
+  // an all-team-layer game (every shared/claimed game) finishes auto-export with it
+  // NULL even though a real team recap sits in R2, and GET /recap-data resolves it.
+  // Reading recap_video_url as "any recap exists" collapsed such tiles to a
+  // Delete-only dead end (bug 52). clip_count is derived live from raw_clips.
+  const hasAnnotations = (game.clip_count || 0) > 0;
 
   // T8260: secondary-line counts. "annotations" = the existing clip_count (raw_clips
   // rows saved while annotating), relabeled here only. "reels" = reel_count, the
@@ -141,7 +147,7 @@ export function GameTile({
     if (isUploadFailed) return;
     if (isExpired) {
       if (canExtend) onExtend?.();
-      else if (hasRecap) onPlayRecap?.();
+      else if (hasAnnotations) onPlayRecap?.();
     } else {
       onLoad();
     }
@@ -177,7 +183,7 @@ export function GameTile({
   // Action descriptors -- rendered once for the desktop popover and once for the
   // mobile sheet (Delete is separate: it carries the two-tap confirm).
   const actions = [
-    hasRecap && { key: 'play', label: 'Watch recap', icon: Play, onClick: onPlayRecap },
+    hasAnnotations && { key: 'play', label: 'Watch annotations', icon: Play, onClick: onPlayRecap },
     // T8700: attach another video to a live (non-expired) game. Hidden when
     // expired — the source is gone, so there's nothing to append to.
     !isExpired && onAddVideo && { key: 'addVideo', label: 'Add video', icon: Film, onClick: onAddVideo },

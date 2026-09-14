@@ -1785,7 +1785,11 @@ export function ProjectManager({
                                   onLoad={() => onLoadGame(game.id)}
                                   onDelete={() => onDeleteGame(game.id)}
                                   onExtend={() => setExtensionGame(game)}
-                                  onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
+                                  // T10120: open on the tab that actually has content. An
+                                  // all-team-layer game (athlete_clip_count === 0) has no athlete
+                                  // recap, so defaulting to 'athlete' (RecapPlayerModal's default)
+                                  // would render empty; send it straight to the team tab.
+                                  onPlayRecap={() => setRecapGame({ game, initialTab: game.athlete_clip_count > 0 ? 'athlete' : 'team' })}
                                   onShare={() => setShareGame(game)}
                                   onEdit={() => setEditGame(game)}
                                   // T7490: a failed upload re-selects the file through the
