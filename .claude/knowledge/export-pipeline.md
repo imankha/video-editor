@@ -604,6 +604,22 @@ graph LR
 - WARNING (memory): backend tests TRUNCATE the real dev Postgres — warn the user before running; the guard blocks staging/prod only.
 - T4370 will add `tests/export_golden/`-style DB-delta snapshots for all 6 triggers; until it lands there is NO broad characterization net — prefer surgical diffs. **The multi-clip finalizer IS now pinned** by `tests/test_t5630_characterization.py` (local in-band, Modal in-band, recovery == in-band) + `test_t5630_finalize_unit.py` (upsert/finalize idempotency, fallback) — reuse the T5600/T4200 mocked-pipeline harness (mock Modal AI call, R2, detection, sync; real profile SQLite via a `_init_cache` test user) for any further finalize change.
 
+- **T9800 (2026-09-14) — the "Export required for Spotlight mode" banner flashed during the transient
+  post-export hydration window.** `OverlayModeView.showExportRequired` was
+  `!effectiveOverlayVideoUrl && framingVideoUrl && (hasFramingEdits || hasMultipleClips)`. That predicate
+  can't tell "genuinely never exported" (should warn) from "export just completed, new working video still
+  hydrating into the store" (should show the neutral loader, not warn): `effectiveOverlayVideoUrl` is
+  momentarily falsy in BOTH, and `hasFramingEdits` is a STATIC persisted fact (from `segments_data`/`crop_data`,
+  `OverlayScreen.jsx`) that does NOT reset after a successful export, so the banner fired for the whole window.
+  Fix (minimal): thread the ALREADY-computed `shouldWaitForWorkingVideo` (from `deriveOverlayVideoSource`,
+  the T9150 pure fn — true until BOTH `workingVideo.url` and `workingVideo.metadata` are present, so the order
+  media/revision resolve in doesn't matter) as a new `OverlayModeView` prop and gate the banner:
+  `... && !shouldWaitForWorkingVideo && ...`. `shouldWaitForWorkingVideo` was already consumed by the screen's
+  `isLoading`/`loadingMessage` props (OverlayScreen.jsx:1666/1676) but had NEVER been passed to `OverlayModeView`
+  — that was the whole gap. Do NOT make `hasFramingEdits` dynamic or add a "reset on export" mechanism; the
+  wait-window gate is the complete fix. The error/retry branch (`workingVideoLoadError`) is untouched. Pinned by
+  `OverlayModeView.exportRequiredRace.test.jsx`.
+
 ## Staging export timeline + overlay-export-mount gap (T6120, 2026-07-27)
 - **The overlay->final pipeline is HEALTHY and FAST on staging** (`modal_enabled=true`). Measured on the
   imankh fixture (`9fa7378c`) via read-only `GET /api/exports/project/{id}`: framing renders complete in
