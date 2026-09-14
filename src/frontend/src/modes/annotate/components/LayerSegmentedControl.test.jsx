@@ -8,7 +8,7 @@ describe('LayerSegmentedControl', () => {
   it('shows My Athlete selected when value is true, null, or undefined (legacy rule)', () => {
     for (const value of [true, null, undefined]) {
       const { unmount } = render(<LayerSegmentedControl value={value} onChange={() => {}} />);
-      expect(screen.getByRole('radio', { name: 'My player' }).getAttribute('aria-checked')).toBe('true');
+      expect(screen.getByRole('radio', { name: 'My athlete' }).getAttribute('aria-checked')).toBe('true');
       expect(screen.getByRole('radio', { name: 'Team' }).getAttribute('aria-checked')).toBe('false');
       unmount();
     }
@@ -16,7 +16,7 @@ describe('LayerSegmentedControl', () => {
 
   it('shows Team selected when value is false', () => {
     render(<LayerSegmentedControl value={false} onChange={() => {}} />);
-    expect(screen.getByRole('radio', { name: 'My player' }).getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByRole('radio', { name: 'My athlete' }).getAttribute('aria-checked')).toBe('false');
     expect(screen.getByRole('radio', { name: 'Team' }).getAttribute('aria-checked')).toBe('true');
   });
 
@@ -27,7 +27,7 @@ describe('LayerSegmentedControl', () => {
     expect(onChange).toHaveBeenCalledWith(false);
 
     onChange.mockClear();
-    fireEvent.click(screen.getByRole('radio', { name: 'My player' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'My athlete' }));
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
@@ -48,7 +48,7 @@ describe('LayerSegmentedControl', () => {
           disabledReason="Shared by Dana — imported clips stay on the Team layer"
         />
       );
-      const mine = screen.getByRole('radio', { name: /^My player/ });
+      const mine = screen.getByRole('radio', { name: /^My athlete/ });
       const team = screen.getByRole('radio', { name: /^Team/ });
       expect(mine.disabled).toBe(true);
       expect(team.disabled).toBe(true);

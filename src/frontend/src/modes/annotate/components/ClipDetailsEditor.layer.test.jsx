@@ -33,7 +33,7 @@ const baseRegion = {
 describe('ClipDetailsEditor — Layer control (T5700)', () => {
   it('defaults to My Athlete selected when my_athlete is undefined/null (legacy rule)', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, my_athlete: undefined }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.getByRole('radio', { name: 'My player' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'My athlete' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('shows Team selected when my_athlete is false', () => {
@@ -58,7 +58,7 @@ describe('ClipDetailsEditor — Layer control (T5700)', () => {
           onDelete={() => {}}
         />
       );
-      const mine = screen.getByRole('radio', { name: /^My player/ });
+      const mine = screen.getByRole('radio', { name: /^My athlete/ });
       const team = screen.getByRole('radio', { name: /^Team/ });
       expect(mine.disabled).toBe(true);
       expect(team.disabled).toBe(true);
@@ -74,7 +74,7 @@ describe('ClipDetailsEditor — Layer control (T5700)', () => {
           onDelete={() => {}}
         />
       );
-      fireEvent.click(screen.getByRole('radio', { name: /^My player/ }));
+      fireEvent.click(screen.getByRole('radio', { name: /^My athlete/ }));
       fireEvent.click(screen.getByRole('radio', { name: /^Team/ }));
       expect(onUpdate).not.toHaveBeenCalled();
     });
@@ -82,7 +82,7 @@ describe('ClipDetailsEditor — Layer control (T5700)', () => {
 
   it('a non-imported clip (no shared_by) stays interactive', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, my_athlete: false, shared_by: null }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.getByRole('radio', { name: /^My player/ }).disabled).toBe(false);
+    expect(screen.getByRole('radio', { name: /^My athlete/ }).disabled).toBe(false);
     expect(screen.getByRole('radio', { name: /^Team/ }).disabled).toBe(false);
   });
 });
