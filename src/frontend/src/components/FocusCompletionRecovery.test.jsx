@@ -6,13 +6,15 @@ import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useProjectsStore } from '../stores/projectsStore';
 
 // T9285 review fix — this component previously had NO dedicated test at all.
-// Covers: (1) Option C's auto-open trigger predicate, including the regression
-// the review caught (a job discovered while the user is elsewhere must NOT
-// retroactively auto-open just because the user later navigates home on their
-// own); (2) View/Dismiss wiring; (3) view() never lets a rejection escape;
-// (4) the openMode staleness-scoping guard now lives HERE (always mounted),
-// not inside FocusScreen (which can only be mounted while editorMode ===
-// openMode, so a guard there could never observe a mismatch).
+// T9790 removed Option C's auto-navigate: the card is now ALWAYS passive (it
+// never auto-invokes View, even idle on home), so a cold reload onto the
+// library is never hijacked into an old Focus completion screen. Covers:
+// (1) the card stays passive in every editor state, including idle-on-home
+// (the state Option C used to auto-open on); (2) View/Dismiss wiring;
+// (3) view() never lets a rejection escape; (4) the openMode staleness-scoping
+// guard lives HERE (always mounted), not inside FocusScreen (which can only be
+// mounted while editorMode === openMode, so a guard there could never observe
+// a mismatch).
 
 const { resumeFocusCompletionMock, apiFetchMock, loadProjectMock, toastErrorMock } = vi.hoisted(() => ({
   resumeFocusCompletionMock: vi.fn(async () => ({ opened: true, navigated: true })),
@@ -44,7 +46,7 @@ describe('FocusCompletionRecovery (T9285)', () => {
     resumeFocusCompletionMock.mockResolvedValue({ opened: true, navigated: true });
     apiFetchMock.mockClear();
     toastErrorMock.mockClear();
-    useFocusCompletionStore.setState({ recovered: null, preview: null, autoTriedJobId: null, resuming: false });
+    useFocusCompletionStore.setState({ recovered: null, preview: null, resuming: false });
     useEditorStore.setState({ editorMode: EDITOR_MODES.PROJECT_MANAGER });
     useProjectsStore.setState({ selectedProjectId: null, selectedProject: null });
   });
@@ -54,15 +56,18 @@ describe('FocusCompletionRecovery (T9285)', () => {
     expect(screen.queryByTestId('focus-completion-recovery')).toBeNull();
   });
 
-  it('Option C: auto-invokes resumeFocusCompletion when idle on home with nothing selected', async () => {
+  it('T9790: does NOT auto-invoke even when idle on home with nothing selected — shows the passive card instead', async () => {
+    // This is exactly the state Option C used to auto-open on (and the state a
+    // genuine cold reload onto the library lands in). It must now stay passive.
     render(<FocusCompletionRecovery />);
     noteRecovered('job-1', 5);
 
-    await waitFor(() => expect(resumeFocusCompletionMock).toHaveBeenCalledTimes(1));
-    expect(resumeFocusCompletionMock.mock.calls[0][0]).toEqual({ jobId: 'job-1', projectId: 5 });
+    await screen.findByTestId('focus-completion-recovery');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(resumeFocusCompletionMock).not.toHaveBeenCalled();
   });
 
-  it('does not auto-invoke when a project is already selected (not idle on home) — shows the passive card instead', async () => {
+  it('does not auto-invoke when a project is already selected — shows the passive card', async () => {
     useProjectsStore.setState({ selectedProjectId: 99 });
     render(<FocusCompletionRecovery />);
     noteRecovered('job-2', 5);
@@ -80,62 +85,49 @@ describe('FocusCompletionRecovery (T9285)', () => {
     expect(resumeFocusCompletionMock).not.toHaveBeenCalled();
   });
 
-  it('REGRESSION (review finding #4): a job discovered while elsewhere does NOT retroactively auto-open when the user later navigates home on their own', async () => {
+  it('T9790: never auto-opens when the user navigates home on their own after discovery elsewhere', async () => {
     useProjectsStore.setState({ selectedProjectId: 99 });
     render(<FocusCompletionRecovery />);
     noteRecovered('job-3', 5);
     await screen.findByTestId('focus-completion-recovery');
     expect(resumeFocusCompletionMock).not.toHaveBeenCalled();
 
-    // The user's OWN later navigation home — not the app's redirect. The
-    // auto-open decision must already have been consumed at discovery time.
+    // The user's OWN later navigation home. With Option C removed there is no
+    // auto-open in any state; the card just stays passive.
     act(() => {
       useProjectsStore.setState({ selectedProjectId: null });
     });
     await new Promise((r) => setTimeout(r, 20));
 
     expect(resumeFocusCompletionMock).not.toHaveBeenCalled();
-    // The card is still there — nothing was silently swallowed.
     expect(screen.getByTestId('focus-completion-recovery')).toBeTruthy();
   });
 
-  it('REGRESSION (follow-up review, finding #3): the one-shot decision survives an unmount+remount of the component — App.jsx mounts this in TWO structurally different trees (home vs. editor return), so navigating between them unmounts one instance and mounts a fresh one', async () => {
-    useProjectsStore.setState({ selectedProjectId: 99 }); // elsewhere -> passive card
-    const { unmount } = render(<FocusCompletionRecovery />);
+  it('T9790: stays passive across an unmount+remount of the component (App.jsx mounts it in TWO structurally different trees)', async () => {
+    const { unmount } = render(<FocusCompletionRecovery />); // idle on home from beforeEach
     noteRecovered('job-remount', 5);
     await screen.findByTestId('focus-completion-recovery');
-    expect(resumeFocusCompletionMock).not.toHaveBeenCalled();
 
-    // Simulate the home<->editor navigation: this component's instance is
-    // torn down (App.jsx does not keep one persistent instance across the
-    // two returns) and a fresh one mounts in its place. `recovered` is
-    // untouched (it lives in the store, not this component) and the user
-    // has now landed on home with nothing selected.
+    // Simulate the home<->editor navigation: this instance is torn down and a
+    // fresh one mounts in its place while the user sits idle on home. With
+    // Option C gone there is no auto-open decision to re-arm — the card just
+    // renders passively again.
     unmount();
-    act(() => {
-      useProjectsStore.setState({ selectedProjectId: null });
-    });
     render(<FocusCompletionRecovery />);
     await new Promise((r) => setTimeout(r, 20));
-
-    // A component-local ref would see this as a fresh "first observation" of
-    // the still-`recovered` job and auto-open it — the exact hijack Option C
-    // exists to prevent. The store-backed autoTriedJobId must have already
-    // consumed the one-shot decision before the remount.
     expect(resumeFocusCompletionMock).not.toHaveBeenCalled();
     expect(screen.getByTestId('focus-completion-recovery')).toBeTruthy();
   });
 
-  it('a NEW job discovered later still gets its own fresh auto-open decision (per-job, not a global one-shot)', async () => {
-    // First job: idle on home, auto-opens and clears.
+  it('multiple jobs discovered over time each show the passive card, never auto-open', async () => {
     render(<FocusCompletionRecovery />);
     noteRecovered('job-4a', 5);
-    await waitFor(() => expect(resumeFocusCompletionMock).toHaveBeenCalledTimes(1));
+    await screen.findByTestId('focus-completion-recovery');
 
-    // Second, DIFFERENT job discovered later, also while idle on home.
     noteRecovered('job-4b', 6);
-    await waitFor(() => expect(resumeFocusCompletionMock).toHaveBeenCalledTimes(2));
-    expect(resumeFocusCompletionMock.mock.calls[1][0]).toEqual({ jobId: 'job-4b', projectId: 6 });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(resumeFocusCompletionMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('focus-completion-recovery')).toBeTruthy();
   });
 
   it('View click invokes resumeFocusCompletion and clears the card afterward', async () => {

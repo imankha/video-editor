@@ -17,16 +17,18 @@
  * @param {number} params.projectId
  * @param {string|null} params.previewUrl
  * @param {string} params.openMode
- * @param {(payload:{projectId:number, previewUrl:string, openMode:string}) => void} params.openPreview
+ * @param {string} [params.jobId] completed framing job id (T9790) — carried
+ *   into the preview payload so the decision gesture can acknowledge it.
+ * @param {(payload:{projectId:number, previewUrl:string, openMode:string, jobId?:string}) => void} params.openPreview
  * @param {(id:string) => void} params.recordAchievement
  * @returns {boolean} whether the preview was opened
  */
-export function offerFocusCompletionPreview({ projectId, previewUrl, openMode, openPreview, recordAchievement }) {
+export function offerFocusCompletionPreview({ projectId, previewUrl, openMode, jobId, openPreview, recordAchievement }) {
   if (!previewUrl) {
     console.error('[FocusScreen] export completed but no preview URL for project', projectId);
     return false;
   }
-  openPreview({ projectId, previewUrl, openMode });
+  openPreview({ projectId, previewUrl, openMode, jobId });
   recordAchievement('overlay_offered');
   return true;
 }

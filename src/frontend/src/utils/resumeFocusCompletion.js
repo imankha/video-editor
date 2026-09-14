@@ -50,7 +50,7 @@
  * @param {(project:Object, opts:Object) => Promise<any>} deps.loadProject
  * @param {() => Promise<Object|null>} deps.refreshProject
  * @param {(projectId:number) => Promise<string|null>} deps.resolvePreviewUrl
- * @param {(payload:{projectId:number, previewUrl:string, openMode:string}) => void} deps.openPreview
+ * @param {(payload:{projectId:number, previewUrl:string, openMode:string, jobId?:string}) => void} deps.openPreview
  * @param {(jobId:string) => Promise<void>} deps.acknowledgeJob
  * @param {(id:string) => void} deps.recordAchievement
  * @param {(title:string, opts:Object) => void} deps.toastError
@@ -91,7 +91,7 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
     }
 
     if (alreadyInFocus) {
-      openPreview({ projectId, previewUrl, openMode: EDITOR_MODES.FRAMING });
+      openPreview({ projectId, previewUrl, openMode: EDITOR_MODES.FRAMING, jobId });
       recordAchievement('overlay_offered');
       await acknowledgeJob(jobId);
       return { opened: true, navigated: false };
@@ -106,7 +106,7 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
 
     setEditorMode(EDITOR_MODES.FRAMING);
     await loadProject(project, { mode: EDITOR_MODES.FRAMING });
-    openPreview({ projectId, previewUrl, openMode: EDITOR_MODES.FRAMING });
+    openPreview({ projectId, previewUrl, openMode: EDITOR_MODES.FRAMING, jobId });
     recordAchievement('overlay_offered');
     await acknowledgeJob(jobId);
     return { opened: true, navigated: true };

@@ -1,6 +1,24 @@
 ---
 domain: export-pipeline
-updated: 2026-09-12 (T9285 RECOVERY-PATH FOCUS COMPLETION PREVIEW, frontend-only: a Focus export
+updated: 2026-09-14 (T9790 STOP OLD EXPORT COMPLETIONS HIJACKING RELOAD, frontend-only, two defects
+fixed together: (1) the LIVE Focus completion path NEVER acknowledged its framing job -- only the
+recovered path did -- so every live completion sat unacknowledged for the full 24h window and a
+reload always re-found it "recoverable". Fixed by threading the export id (=== the client-generated
+export_id ExportButtonContainer sent as the job key) from ExportButtonContainer's 4 onProceedToOverlay
+calls -> FocusScreen.handleProceedToOverlayInternal (new 4th param) -> the focusCompletionStore.preview
+payload (new `jobId` field) -> acknowledged by whichever of the 4 decision gestures the user picks
+(Add Spotlight / Add Spotlight Later / Publish / Refocus), ONLY on the gesture, never at raw completion
+(preserves the §6a re-prompt-on-discard property). The private acknowledgeJob helper in
+FocusCompletionRecovery was extracted to NEW utils/acknowledgeExportJob.js, shared by the live path
++ the recovered path's View/Dismiss. (2) Option C's auto-navigate REMOVED entirely: it auto-invoked
+View whenever idle on Clips home with nothing selected -- indistinguishable from a genuine cold reload
+onto the library -- and defect (1) made it fire on essentially every reload, hijacking the requested
+route into the old Focus completion screen. FocusCompletionRecovery now ONLY ever shows the passive
+View/Dismiss card; the `autoTriedJobId`/`setAutoTriedJobId` one-shot guard the auto-open needed was
+deleted from focusCompletionStore. resumeFocusCompletion's `view()`, the passive card, the openMode
+staleness guard, and the genuinely-orphaned recovery mechanism are UNCHANGED. Reverses part of T9285
+(merged 1 day earlier) per user decision. See § Recovery-path Focus completion preview below.);
+        2026-09-12 (T9285 RECOVERY-PATH FOCUS COMPLETION PREVIEW, frontend-only: a Focus export
 completing via useExportRecovery.js post-reload/tab-discard called only exportStore.completeExport,
 a silent no-op for a job never in activeExports -- zero user signal. NEW single completion seam
 utils/recoveredExportCompletion.js::reportRecoveredCompletion (routes all 3 useExportRecovery
@@ -139,7 +157,30 @@ The problem: `working_videos.highlights_data` is the SOLE home of user overlay-e
 
 **Credits:** GPU exports reserve → insert job → confirm before dispatch (`framing.py:446-478`, `multi_clip.py:1927-1958`, `exports.py:536-595`); failure paths refund (`multi_clip.py:1760-1829`, `export_worker.py:206-219`). **T8280 (2026-09-02):** the flat `math.ceil(video_seconds)` formula at `framing.py:493`/`multi_clip.py:2155` is now `compute_export_credits(video_seconds, output_fps)` (`highlight_transform.py`, `HIGH_FPS_THRESHOLD=31`) — both live call sites still pass `target_fps=30` (Option B: 30fps cost-saving choice only, no native price shipped), so pricing is unchanged today; the fps-scaled branch (`ceil(seconds*max(1,fps/30))`) is a tested-but-unreachable seed for a future native-delivery task. `list_project_clips` (`clips.py`) now falls back `wc.fps or gv.fps` (mirrors the multi-clip DB-resolve fallback below) so the Focus screen can surface source fps for a "recorded at Nfps, exported at 30fps" note (`ExportButtonView`'s `export-high-fps-note`) — no schema change, no persisted choice. See modal-gpu.md § Active/upcoming work T8280 for the paired read-loop GPU optimization.
 
-## Recovery-path Focus completion preview (T9285, 2026-09-12)
+## Recovery-path Focus completion preview (T9285, 2026-09-12; amended by T9790, 2026-09-14)
+
+> **T9790 CORRECTION (read first — the two behaviors below are OUT OF DATE):**
+> 1. **Option C's auto-navigate is GONE.** Everywhere this section describes
+>    `FocusCompletionRecovery` "auto-invoking View" / "auto-opening when idle on
+>    Clips home with nothing selected", that no longer happens: the component now
+>    ONLY ever shows the passive View/Dismiss card. `focusCompletionStore`'s
+>    `autoTriedJobId`/`setAutoTriedJobId` (and the whole "one-shot claim survives
+>    the remount" machinery) were DELETED — dead once the auto-open was removed.
+>    Why: the idle-on-home state is indistinguishable from a genuine cold reload
+>    onto the library, and defect #2 below made the auto-open fire on essentially
+>    every reload, hijacking the requested route into the old completion screen.
+> 2. **The LIVE completion path now acknowledges too.** The "§6a acknowledge-
+>    timing split" below was only ever half-wired: the RECOVERED path acknowledged
+>    on View/Dismiss, but the LIVE path (`FocusScreen.handleProceedToOverlayInternal`
+>    + its 4 gesture handlers) acknowledged on NONE of them, so every live
+>    completion stayed unacknowledged for the full 24h window. Now the completed
+>    framing job's id (=== the client-generated `export_id` the render was inserted
+>    under) is threaded ExportButtonContainer's 4 `onProceedToOverlay` calls ->
+>    `handleProceedToOverlayInternal` (4th param) -> `focusCompletionStore.preview.jobId`
+>    -> acknowledged by whichever of Add Spotlight / Add Spotlight Later / Publish /
+>    Refocus the user picks. Still ONLY on the gesture, never at raw completion
+>    (the re-prompt-on-discard property is preserved for the live path too).
+>    The `acknowledgeJob` fetch helper moved to shared `utils/acknowledgeExportJob.js`.
 
 **The bug:** a Focus (framing) export completing via `useExportRecovery.js` (the
 recovery path — a page reload/mobile-tab-discard mid-render, or the export
@@ -303,10 +344,12 @@ recovery-path gap it left open.
   response's `exports.unacknowledged` field must be stubbed too (see
   `e2e/T9285-recovery-preview.qa.spec.js`'s `stubUnacknowledged` helper).
 - **Untouched by design:** `App.jsx:551-557`'s redirect (satisfied, not
-  special-cased), `handleOverlayExportCompletion.js`, `ExportButtonContainer.jsx`,
+  special-cased), `handleOverlayExportCompletion.js`,
   `publishIntentStore.js`, `scheduleExportWhenReady.js`,
   `focusOverlayTransition.js` (T9280's guard — its test stays green,
-  unmodified). No schema/DB change.
+  unmodified). No schema/DB change. (T9285 also left `ExportButtonContainer.jsx`
+  untouched; T9790 later added the job-id 4th arg to its 4 `onProceedToOverlay`
+  calls — see the T9790 correction banner at the top of this section.)
 
 ## Render/job labels + double-dispatch guard (T9540, 2026-09-11)
 

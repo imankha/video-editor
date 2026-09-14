@@ -30,6 +30,7 @@ import { useFocusCompletionStore } from '../stores/focusCompletionStore';
 import { useProject } from '../contexts/ProjectContext';
 import { shouldPersistFocusForOverlayTransition, shouldSkipFocusCompletionPreview } from './focusOverlayTransition';
 import { offerFocusCompletionPreview } from './focusCompletionOffer';
+import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
 
 // T8390: safety-net expiry for a staked publish intent (see handlePublish).
 // ExportButtonContainer exposes no onError callback to this screen, so a
@@ -958,7 +959,11 @@ export function FocusScreen({
   };
 
   // Handle proceed to overlay
-  const handleProceedToOverlayInternal = useCallback(async (renderedVideoBlob, clipMetadata, exportedProjectId) => {
+  // T9790: `exportJobId` (the completed framing job's id, === the client-
+  // generated export_id ExportButtonContainer sent as this render's job key) is
+  // threaded through so it can be stamped onto the preview payload and
+  // acknowledged on whichever of the four decision gestures the user picks.
+  const handleProceedToOverlayInternal = useCallback(async (renderedVideoBlob, clipMetadata, exportedProjectId, exportJobId) => {
     const currentlyViewingProjectId = useProjectsStore.getState().selectedProjectId;
 
     console.log('[FocusScreen] Starting overlay transition...', {
@@ -1061,6 +1066,7 @@ export function FocusScreen({
         projectId,
         previewUrl,
         openMode: EDITOR_MODES.FRAMING,
+        jobId: exportJobId,
         openPreview,
         recordAchievement: (id) => useQuestStore.getState().recordAchievement(id),
       });
@@ -1091,9 +1097,24 @@ export function FocusScreen({
     }
   }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, clipMetadataCache, globalAspectRatio, refreshProject, projectId, onExportComplete, setIsLoadingWorkingVideo, openPreview]);
 
+  // T9790: acknowledge the completed framing job on the decision gesture. The
+  // live completion path (offerFocusCompletionPreview) deliberately does NOT
+  // acknowledge at raw completion time — useExportRecovery also skips framing
+  // jobs — so a tab discard BEFORE the user picks any of the four actions still
+  // re-prompts the completion (the §6a property). The write fires here, tied to
+  // an actual choice, marking only `acknowledged_at` server-side. Reads the
+  // job id straight from the preview payload (getState, so it works regardless
+  // of render timing and needs no dependency); a null id (e.g. a preview
+  // opened before T9790 threaded the id) is a no-op, never a bad request.
+  const acknowledgeCompletionJob = useCallback(() => {
+    const jobId = useFocusCompletionStore.getState().preview?.jobId;
+    if (jobId) acknowledgeExportJob(jobId);
+  }, []);
+
   // T8390: the four post-preview gesture handlers. Each emits its own
   // FLOW_EVENT from the click handler (never a reactive watcher).
   const handleAddSpotlight = useCallback(() => {
+    acknowledgeCompletionJob();
     // Identical to today's behavior — everything is already staged. No new event:
     // App.jsx's effect emits the overlay-entry achievement when editorMode becomes
     // OVERLAY.
@@ -1106,9 +1127,10 @@ export function FocusScreen({
     // owner: every action-bar choice should say what happened + what's next).
     toast.success(FOCUS_ADD_SPOTLIGHT_TOAST.title, { message: FOCUS_ADD_SPOTLIGHT_TOAST.message });
     setEditorMode('overlay');
-  }, [setEditorMode, projectId, closePreview]);
+  }, [setEditorMode, projectId, closePreview, acknowledgeCompletionJob]);
 
   const handleAddSpotlightLater = useCallback(() => {
+    acknowledgeCompletionJob();
     closePreview();
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     useQuestStore.getState().recordAchievement('overlay_deferred');
@@ -1123,7 +1145,7 @@ export function FocusScreen({
     // Navigation only — lands on the drafts surface. Persists NOTHING; the draft
     // stays at its current stage and the Overlay tab remains enabled.
     useEditorStore.getState().goToProjectManager();
-  }, [project?.is_auto_created, projectId, closePreview]);
+  }, [project?.is_auto_created, projectId, closePreview, acknowledgeCompletionJob]);
 
   // T8390: Publish — renamed from "Finish Now" now that the user has actually
   // watched the preview before deciding. ONE tap, TRUE publish: this fires the
@@ -1155,6 +1177,7 @@ export function FocusScreen({
     // the mutex: if this project's intent is already staked, a render is
     // already in flight for it.
     if (usePublishIntentStore.getState().projectId === projectId) return;
+    acknowledgeCompletionJob();
     closePreview();
     useQuestStore.getState().recordAchievement('overlay_declined');
     usePublishIntentStore.getState().set(projectId);
@@ -1168,7 +1191,7 @@ export function FocusScreen({
     }, PUBLISH_INTENT_TIMEOUT_MS);
     setEditorMode('overlay');
     onPublishWithoutSpotlight(projectId);
-  }, [setEditorMode, onPublishWithoutSpotlight, projectId, closePreview]);
+  }, [setEditorMode, onPublishWithoutSpotlight, projectId, closePreview, acknowledgeCompletionJob]);
 
   // T8390: Refocus — go back and reframe. The preview is an overlay ON TOP of
   // the still-mounted Focus editor, so closing it IS "back to editing"; no new
@@ -1177,10 +1200,15 @@ export function FocusScreen({
   // Later's side effects (achievement + toast + navigation) — closing a preview
   // is "nevermind", not an explicit choice.
   const handleRefocus = useCallback(() => {
+    // T9790: Refocus is still a deliberate decision on the completion (the user
+    // saw the preview and chose to reframe), and it doubles as CollectionPlayer's
+    // X/Escape close — acknowledging here matches the other three actions so the
+    // completion does not re-prompt on reload after the user has acted on it.
+    acknowledgeCompletionJob();
     closePreview();
     // T8390: defense-in-depth clear (see handleAddSpotlight comment above).
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
-  }, [projectId, closePreview]);
+  }, [projectId, closePreview, acknowledgeCompletionJob]);
 
   // Derive game name for selected clip
   const selectedClipGameName = useMemo(() => {
