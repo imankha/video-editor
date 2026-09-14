@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Play, Plus, Pencil, Share2, ArrowLeft, Minimize, Clock } from 'lucide-react';
+import { Play, Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import ZoomControls from '../components/ZoomControls';
@@ -107,11 +107,15 @@ export function AnnotateModeView({
   // T2750: Multi-video scrub
   multiVideo,
   boundaryOffsets,
-  // T2820: Share with tagged players
+  // T2820: Share with tagged players (opens ShareWithTeammatesModal). T9810:
+  // this is its OWN affordance now, rendered only when hasTaggedClips is true so
+  // it never silently no-ops (the modal only renders when tagged clips exist).
   onShare,
   hasUnsentShares,
+  hasTaggedClips = false,
   teammateSuggestions = [],
-  // T2905: Share annotated playback
+  // T2905: Share annotated playback (game invitations — opens SharePlaybackDialog).
+  // T9810: this is now the primary "Share plays" action on every surface.
   onSharePlayback,
   // T5700: which layer NEW clips default to (mode toggle)
   newClipLayerIsMine = true,
@@ -1082,29 +1086,42 @@ export function AnnotateModeView({
                       <Play size={18} />
                       <span>{ANNOTATE.PREVIEW_PLAYS}</span>
                     </button>
-                    {onShare && (
+                    {/* T9810: game invitations. Repointed from onShare (tagged-player
+                        sharing) to onSharePlayback so this button opens the SAME
+                        game-scoped SharePlaybackDialog as the fullscreen bar and the
+                        RecapPlayerModal — the reported "three clicks, no response" bug
+                        was this button firing onShare, whose modal only renders when
+                        tagged clips exist. Stable "Share plays" label: it is always the
+                        action to open the invite flow. */}
+                    {onSharePlayback && (
                       <button
-                        onClick={onShare}
-                        className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                          hasUnsentShares
-                            ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
-                            : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                        }`}
+                        onClick={onSharePlayback}
+                        className="flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white"
                       >
                         <Share2 size={18} />
-                        <span className="hidden sm:inline">
-                          {/* N34 (T9560): action vs state — a pending share is the
-                              ACTION ("Share plays"); once shared, the state-neutral
-                              "Sharing settings" manages it without re-implying a fresh
-                              share. Never "Shared …", which claimed sharing had occurred. */}
-                          {hasUnsentShares ? SHARING.SHARE_PLAYS : SHARING.SETTINGS}
-                        </span>
-                        <span className="sm:hidden">
-                          {hasUnsentShares ? SHARING.SHARE_PLAYS_SHORT : SHARING.SETTINGS_SHORT}
-                        </span>
+                        <span className="hidden sm:inline">{SHARING.SHARE_PLAYS}</span>
+                        <span className="sm:hidden">{SHARING.SHARE_PLAYS_SHORT}</span>
                       </button>
                     )}
                   </div>
+                  {/* T9810: tagged-player sharing (T2820) keeps its own honest
+                      affordance, rendered ONLY when tagged clips exist so it never sets
+                      state that renders nothing. hasUnsentShares highlights it in cyan
+                      when there are still-unshared tagged clips (N34 action/state split). */}
+                  {onShare && hasTaggedClips && (
+                    <button
+                      onClick={onShare}
+                      className={`text-sm flex items-center justify-center gap-1.5 mt-1 transition-colors ${
+                        hasUnsentShares
+                          ? 'text-cyan-400 hover:text-cyan-300'
+                          : 'text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      <Users size={14} />
+                      <span className="hidden sm:inline">{SHARING.TAGGED_SHARE}</span>
+                      <span className="sm:hidden">{SHARING.TAGGED_SHARE_SHORT}</span>
+                    </button>
+                  )}
                   {/* T9450: the standing "automatically saved to your library"
                       reassurance was removed — it claimed persistence on an unsaved
                       surface. A saved confirmation now fires only after a real save
@@ -1120,15 +1137,16 @@ export function AnnotateModeView({
                     <Play size={12} />
                     <span>{ANNOTATE.PREVIEW_PLAYS}</span>
                   </button>
-                  {onShare && (
+                  {/* T9810: game invitations (repointed from onShare, matching the
+                      promoted button above). No tagged-share affordance here: this is
+                      the zero-clips state, so hasTaggedClips is always false. */}
+                  {onSharePlayback && (
                     <button
-                      onClick={onShare}
+                      onClick={onSharePlayback}
                       className="text-xs text-gray-400 hover:text-gray-200 flex items-center gap-1"
                     >
                       <Share2 size={12} />
-                      {/* N34 (T9560): same action/state split as the promoted button
-                          above — never the banned "Shared" state literal. */}
-                      <span>{hasUnsentShares ? SHARING.SHARE_PLAYS_SHORT : SHARING.SETTINGS_SHORT}</span>
+                      <span>{SHARING.SHARE_PLAYS_SHORT}</span>
                     </button>
                   )}
                 </div>

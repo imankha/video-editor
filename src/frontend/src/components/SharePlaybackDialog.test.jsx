@@ -92,7 +92,7 @@ describe('SharePlaybackDialog', () => {
   describe('Rendering', () => {
     it('renders dialog with game name in title', () => {
       render(<SharePlaybackDialog {...defaultProps} />);
-      expect(screen.getByText('Sharing settings: Big Game')).toBeTruthy();
+      expect(screen.getByText('Share plays: Big Game')).toBeTruthy();
     });
 
     it('renders email input', () => {
@@ -104,6 +104,38 @@ describe('SharePlaybackDialog', () => {
       render(<SharePlaybackDialog {...defaultProps} />);
       expect(screen.queryByRole('combobox')).toBeNull();
       expect(screen.queryByText('Select athlete')).toBeNull();
+    });
+
+    // T9810: honest permission-scope disclosure (verified against the server grant).
+    it('shows the permission-scope disclosure line', () => {
+      render(<SharePlaybackDialog {...defaultProps} />);
+      expect(
+        screen.getByText(/watch this entire game recording and every play/i)
+      ).toBeTruthy();
+    });
+  });
+
+  // T9810: open-failure state — actionable error, not a broken form, when there
+  // is no game context to invite into.
+  describe('Open-failure state', () => {
+    it('renders an actionable error instead of the form when gameId is missing', () => {
+      render(<SharePlaybackDialog {...defaultProps} gameId={null} />);
+      expect(screen.getByText("Game invitations couldn't open. Try again.")).toBeTruthy();
+      expect(screen.queryByTestId('user-picker')).toBeNull();
+    });
+
+    it('does not fetch contacts when gameId is missing', () => {
+      globalThis.fetch = mockFetchSuccess();
+      render(<SharePlaybackDialog {...defaultProps} gameId={null} />);
+      const contactsCall = globalThis.fetch.mock.calls.find(c => c[0].includes('/contacts'));
+      expect(contactsCall).toBeFalsy();
+    });
+
+    it('closes from the error state', () => {
+      const onClose = vi.fn();
+      render(<SharePlaybackDialog {...defaultProps} gameId={null} onClose={onClose} />);
+      fireEvent.click(screen.getByText('Close'));
+      expect(onClose).toHaveBeenCalled();
     });
   });
 
@@ -212,7 +244,7 @@ describe('SharePlaybackDialog', () => {
     it('does not close on backdrop click', () => {
       const onClose = vi.fn();
       render(<SharePlaybackDialog {...defaultProps} onClose={onClose} />);
-      const backdrop = screen.getByText('Sharing settings: Big Game').closest('.fixed');
+      const backdrop = screen.getByText('Share plays: Big Game').closest('.fixed');
       fireEvent.click(backdrop);
       expect(onClose).not.toHaveBeenCalled();
     });
@@ -220,7 +252,7 @@ describe('SharePlaybackDialog', () => {
     it('does not close on inner dialog click', () => {
       const onClose = vi.fn();
       render(<SharePlaybackDialog {...defaultProps} onClose={onClose} />);
-      const dialog = screen.getByText('Sharing settings: Big Game').closest('.bg-gray-800');
+      const dialog = screen.getByText('Share plays: Big Game').closest('.bg-gray-800');
       fireEvent.click(dialog);
       expect(onClose).not.toHaveBeenCalled();
     });
@@ -250,6 +282,21 @@ describe('SharePlaybackDialog', () => {
         const contactsCall = calls.find(c => c[0].includes('/contacts'));
         expect(contactsCall).toBeTruthy();
       });
+    });
+
+    // T9810: a contacts fetch failure is non-blocking but never silently swallowed —
+    // the user is told suggestions are missing and can still type addresses.
+    it('surfaces a non-blocking note when contacts fail to load', async () => {
+      globalThis.fetch = vi.fn(async (url) => {
+        if (url.includes('/contacts')) return { ok: false, json: async () => null };
+        return { ok: true, json: async () => ({}) };
+      });
+      render(<SharePlaybackDialog {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByText(/Couldn't load your contacts/i)).toBeTruthy();
+      });
+      // Form is still usable.
+      expect(screen.getByTestId('user-picker')).toBeTruthy();
     });
   });
 });

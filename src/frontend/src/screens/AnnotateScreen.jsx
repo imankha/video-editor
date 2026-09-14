@@ -895,11 +895,15 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         addFootage={addFootage}
         amberFootage={amberFootage}
         onFixAmberFootage={onFixAmberFootage}
-        // T2820: Share with tagged players
+        // T2820: Share with tagged players. T9810: hasTaggedClips gates the
+        // tagged-share affordance so it never renders when the modal would be empty
+        // (showShareModal && hasTaggedClips is the modal's own render gate below).
         onShare={() => setShowShareModal(true)}
         hasUnsentShares={hasUnsentShares}
+        hasTaggedClips={hasTaggedClips}
         teammateSuggestions={teammateSuggestions}
-        // T2905: Share annotated playback
+        // T2905/T9810: Share annotated playback (game invitations) — now the primary
+        // "Share plays" action on the fullscreen bar AND the normal-view buttons.
         onSharePlayback={() => setShowPlaybackShareDialog(true)}
           />
         </div>
