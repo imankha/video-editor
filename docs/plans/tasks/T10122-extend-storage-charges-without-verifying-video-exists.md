@@ -1,6 +1,6 @@
 # T10122: "Extend storage" can charge credits for a game whose video is already gone
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-14
