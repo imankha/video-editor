@@ -132,10 +132,15 @@ test.describe('T5700 follow-up — responsive sweep', () => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
   });
 
-  test('Annotate screen: no horizontal overflow at 375px or desktop, with the two-lane layout live', async ({ page }) => {
+  test('Annotate screen: no horizontal overflow across the viewport matrix, with the two-lane layout live on desktop', async ({ page }) => {
     await gotoGame(page);
+    // T9920 widened the shared VIEWPORTS matrix (was 375 + desktop-1280) to
+    // 360/390/699/768/1024/1440. The two-lane clip track is gated on useIsMobile()
+    // (max-width:1023px on the fine-pointer desktop project), so the desktop lanes
+    // show only at the `desktop-*` widths (1024/1440); every narrower width shows
+    // the single mobile clip track.
     await responsiveSweep(page, async (vp) => {
-      if (vp.name === 'desktop-1280') {
+      if (vp.name.startsWith('desktop')) {
         await expect(page.getByTestId('clip-lane-label-mine')).toBeVisible();
         await expect(page.getByTestId('clip-lane-label-team')).toBeVisible();
       } else {

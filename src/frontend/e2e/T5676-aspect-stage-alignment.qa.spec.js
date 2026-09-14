@@ -319,7 +319,7 @@ test.describe('T5676 aspect-aware video stage @staging-gate @gate-b', () => {
       `negative = more scroll needed — expected for portrait reels per the 70vh vs 60vh trade-off)`);
     await saveEvidence(page, 'criterion-4-timeline-offset-comparison');
 
-    // ---- responsiveSweep: mobile-375 + desktop-1280 overflow + evidence --------
+    // ---- responsiveSweep: full VIEWPORTS matrix (360-1440) overflow + evidence --
     await responsiveSweep(page);
 
     await context.close();

@@ -52,9 +52,12 @@ export async function assertNoHorizontalOverflow(page) {
     for (const el of document.querySelectorAll('*')) {
       const ox = getComputedStyle(el).overflowX;
       if (ox !== 'auto' && ox !== 'scroll') continue;
-      // Only the main content pane(s): big enough to be a primary scroll region,
-      // never a short horizontal widget (timeline scrubber) that scrolls by design.
-      const big = el.clientWidth >= vw * 0.5 && el.clientHeight >= vh * 0.5;
+      // Only a MAIN content pane: tall enough to fill most of the viewport height,
+      // never a short by-design horizontal strip (timeline scrubber). Keyed on
+      // height, not width — a wide in-flow sidebar can legitimately shrink the pane
+      // below half the viewport WIDTH (the pre-fix Bug B state at ~699px), so a
+      // width gate would miss the very offender we are hunting.
+      const big = el.clientHeight >= vh * 0.5;
       if (!big) continue;
       const overflow = el.scrollWidth - el.clientWidth;
       if (overflow > 1) {
