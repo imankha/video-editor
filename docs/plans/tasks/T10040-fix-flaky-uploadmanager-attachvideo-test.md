@@ -1,6 +1,6 @@
 # T10040: Fix the chronic uploadManager.attachVideo Branch CI false-positive
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-14
