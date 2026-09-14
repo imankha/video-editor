@@ -1,10 +1,22 @@
 # T9760: Production backend is 744 commits / 11 days behind master (found via missing quest_upfront grant)
 
-**Status:** WIP - runbook prep in progress (deploy itself still pending, part of the next production deploy)
+**Status:** STAGING - deploy runbook complete and live-verified, awaiting user Resolve/deploy-promotion to DONE
 **Impact:** 8
 **Complexity:** 1 (was 4 - root cause is a deploy gap, not a code bug)
 **Created:** 2026-09-12
-**Updated:** 2026-09-13
+**Updated:** 2026-09-14
+
+## Runbook complete (2026-09-14)
+
+All 5 runbook steps below are done:
+1. Deploy ran 2026-09-13 (backend build 4290 -> 5068) - see reconciliation commit `4cb44c7e`.
+2. Dry-run backfill: 112 of 117 production users were short credits.
+3. Applied for real; a verifying re-run reports 117 already_full, 0 remaining, 0 failed.
+4. Re-ran `scripts/verify_t9680_credits.py` live against prod (via `fly proxy`) on 2026-09-14: the
+   10 most recent real signups (through `2026-09-14T16:39Z`) all show `signup_amt=8` +
+   `questbank_amt=80` = 88. Confirmed, not just inferred from the deploy tag.
+5. Staging discriminator turned out moot - master itself was already correct, prod was the only
+   thing stale, and the deploy resolved it directly.
 
 ## Decision Record (2026-09-13)
 
@@ -191,17 +203,17 @@ from a first read — escalate to the Code Expert / expert agent rather than gue
 
 ## Acceptance Criteria
 
-- [ ] Root cause of the missing `questbank:%` grant identified with evidence (not guessed)
-- [ ] Confirm whether this is the SAME root cause as T9680's original homepage-vs-in-app
-      wording mismatch, or a second independent issue
-- [ ] Fix implemented so new signups receive the full 88-credit grant (or whatever the corrected
-      intended total is, if investigation reveals the intended number itself is in question)
+- [x] Root cause of the missing `questbank:%` grant identified with evidence (not guessed) - stale
+      prod deploy, not a code bug
+- [x] Confirm whether this is the SAME root cause as T9680's original homepage-vs-in-app
+      wording mismatch, or a second independent issue - independent, see "AC #2 answer" above
+- [x] Fix implemented so new signups receive the full 88-credit grant - live-verified 2026-09-14
 - [ ] Regression test: a new-account signup flow test asserting both `new_account_bonus` (8) AND
-      `quest_upfront` (80) post with the expected idempotency keys
-- [ ] A rough estimate of user impact (how many real signups since this likely started received
-      only 8 credits) — informs whether affected users need remediation credits, per
-      `feedback_post_deploy_user_notification` (bug fixes → ask affected users to retest,
-      approval-gated)
+      `quest_upfront` (80) post with the expected idempotency keys - the 8 backfill tests cover the
+      backfill path; no dedicated signup-flow assertion exists yet, worth a follow-up but not
+      blocking (the mechanism itself is the pre-existing T8120 code, already tested there)
+- [x] A rough estimate of user impact - 112 of 117 production users were short credits; all
+      remediated by the 2026-09-13 backfill, re-run confirms 0 remaining
 - [ ] T9680's Decision Record cross-referenced once this closes
 
 ## Related Tasks

@@ -926,6 +926,9 @@ HTML = r"""<!DOCTYPE html>
     font-size: 12px; color: var(--text-muted); background: rgba(255,255,255,0.05);
     padding: 2px 8px; border-radius: 4px;
   }
+  .bug-offline.auth-error {
+    color: var(--red); background: rgba(255,80,80,0.12); font-weight: 600;
+  }
 
   /* Bug group container */
   .bug-group {
@@ -1359,20 +1362,17 @@ function renderBugMilestones(app) {
     hdr.className = 'milestone-header';
 
     if (envData.error) {
-      const groups = envData.groups || [];
-      const bugCount = groups.reduce((s, g) => s + 1 + (g.related ? g.related.length : 0), 0);
+      const isAuthError = envData.error.includes('Auth');
       hdr.innerHTML =
-        '<span class="arrow' + (msCollapsed ? ' collapsed' : '') + '">&#9660;</span>' +
         '<span class="bug-env-icon" style="color:' + accentVar + '">&#9679;</span>' +
         '<h2>' + envLabel + ' Reported Bugs</h2>' +
-        '<span class="bug-offline">' + (envData.error.includes('Auth') ? 'Session expired' : 'Offline') + '</span>';
+        '<span class="bug-offline' + (isAuthError ? ' auth-error' : '') + '">' +
+        (isAuthError ? 'Session expired - click to reconnect' : 'Offline: ' + envData.error) + '</span>';
+      hdr.title = isAuthError
+        ? 'Not showing bugs: the ' + envLabel.toLowerCase() + ' session cookie has expired. Click to open Bug Config and paste a fresh one.'
+        : 'Not showing bugs: ' + envData.error;
       hdr.onclick = () => {
-        const list = div.querySelector('.task-list');
-        if (list) {
-          list.classList.toggle('collapsed');
-          hdr.querySelector('.arrow').classList.toggle('collapsed');
-          collapseState[msKey] = list.classList.contains('collapsed');
-        }
+        document.getElementById('config-panel').classList.add('open');
       };
       div.appendChild(hdr);
       app.appendChild(div);
