@@ -1,6 +1,6 @@
 # T10120: GameTile gates annotation playback on the wrong signal, hiding fully-annotated team-layer games behind a Delete-only dead end
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-09-14
@@ -143,6 +143,12 @@ T10121's "sarkarati's game" section for the diagnostic query and why it must run
 confirmed root cause and full fix design; this task file rewritten to carry just the frontend fix
 after the investigation found 3 additional, more severe backend mechanisms — split out to T10121
 so this small, safe, high-confidence fix isn't blocked on the harder backend design work.
+
+**2026-09-14 (later)**: Implemented, reviewed (0 BLOCKING/MAJOR), supervisor-verified red/green
+independently, Branch CI green, merged (PR #436). **Still open**: running the diagnostic query
+against sarkarati's actual profile DB to confirm his specific game — unreachable from the
+container (no R2/prod access there); needs a supervisor/admin follow-up per T10121's diagnostic
+query before telling him it's fixed.
 
 ## Acceptance Criteria
 

@@ -1,6 +1,6 @@
 # T10070: Reels exported from Team-layer clips never appear in Gallery/My Reels
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-09-14
@@ -184,6 +184,16 @@ needs its own investigation.
 **2026-09-14**: Task filed from reporter's email + root-cause investigation. Cross-referenced
 against the actual `bug_reports` entries (57/55/56) once T10090 restored task-board connectivity —
 confirms the exact repro data (game/project/clip IDs) above. Not yet expert-reviewed or started.
+
+**2026-09-14 (later)**: Expert agent confirmed the exact ownership predicate
+(`my_athlete = 0 AND shared_by IS NOT NULL`), fixed and renamed to `exclude_shared_in_reels_clause`
+across all 8 call sites, reviewed (0 BLOCKING/MAJOR), supervisor-verified red/green independently
+(6 tests, exact diagnosed symptom), Branch CI green, merged (PR #437). **Still open**: (1) confirm
+sarkarati's specific two reels (clip 76/game 13, clip 77/game 12) now visible — the scope query
+from this task's Steps needs to run against his profile DB, not reachable from a container; (2)
+the second candidate account (drewsoccerati@gmail.com, bug 53) also needs the scope query run
+against his profile before confirming; (3) once confirmed, mark bug 55 `duplicate_of` 57 and both
+`status=testing` is the user's call, not AI's, per the bug-triage skill.
 
 ## Acceptance Criteria
 
