@@ -823,6 +823,13 @@ async def overlay_action(project_id: int, action: OverlayAction):
                         kf['fillOpacity'] = action.data.fillOpacity
                     if action.data.color is not None:
                         kf['color'] = action.data.color
+                    if action.data.fromDetection:
+                        # Persist detection-assignment marker on the UPDATE path too (T9770).
+                        # A player-selection click that lands within _find_keyframe_index's
+                        # tolerance of an existing (often boundary scaffold) keyframe takes this
+                        # branch; without this the selection silently loses fromDetection and
+                        # "Pick your player" resurfaces on reload. Additive-only; never clears it.
+                        kf['fromDetection'] = True
                     logger.info(f"[Overlay Action] Updated keyframe at {action.data.time}s")
                 else:
                     new_kf = {
