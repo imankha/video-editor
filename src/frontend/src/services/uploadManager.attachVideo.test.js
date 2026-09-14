@@ -47,6 +47,36 @@ vi.mock('../stores/editorStore', () => ({
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;
 
+/**
+ * T10040: responses are routed BY URL, never by positional
+ * `mockResolvedValueOnce` chaining. The upload path fires fire-and-forget
+ * beacons that are never awaited -- T8838's shrink-capability probe posts to
+ * /api/telemetry/impression from inside ensureVideoInR2, before
+ * prepare-upload -- so a positional queue hands the prepare-upload response to
+ * whichever call happens to land first. That is exactly what made this file a
+ * chronic Branch CI false-positive (`prepareData.status === undefined`, 10
+ * confirmed hits, known-failures.md row 30). URL routing makes a future added
+ * call unable to shift the queue, and makes an unrouted call fail loudly
+ * instead of silently stealing another call's response.
+ */
+const jsonResponse = (body, { ok = true, status = 200 } = {}) => ({
+  ok,
+  status,
+  json: async () => body,
+});
+
+function routeFetch(routes) {
+  mockFetch.mockImplementation(async (url) => {
+    const href = String(url);
+    // Fire-and-forget telemetry beacons: always answered, never part of the
+    // asserted call sequence.
+    if (href.includes('/api/telemetry/')) return jsonResponse({ ok: true });
+    const fragment = Object.keys(routes).find((f) => href.includes(f));
+    if (!fragment) throw new Error(`Unrouted fetch in test: ${href}`);
+    return routes[fragment];
+  });
+}
+
 class MockWorker {
   constructor() {
     this.onmessage = null;
@@ -99,14 +129,14 @@ describe('attachVideoToExistingGame (T8700, new helper)', () => {
     // Step 1 (implicit): hashing goes through the mocked Worker, no fetch.
     // Step 2: prepare-upload — video already in R2 (dedup path), skips actual
     // multipart upload calls so this test stays about ORDER, not byte transfer.
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ status: 'exists', blake3_hash: 'b'.repeat(64), file_size: 2048 }),
-    });
     // Step 3: POST /api/games/{id}/videos — the addVideosToGame transport.
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
+    routeFetch({
+      '/api/games/prepare-upload': jsonResponse({
+        status: 'exists',
+        blake3_hash: 'b'.repeat(64),
+        file_size: 2048,
+      }),
+      '/api/games/42/videos': jsonResponse({
         game_id: 42,
         videos_added: 1,
         videos: [{ sequence: 2, blake3_hash: 'b'.repeat(64), video_url: 'https://example.com/2.mp4' }],
@@ -152,14 +182,16 @@ describe('attachVideoToExistingGame (T8700, new helper)', () => {
   it('does NOT trigger a reload when the attach POST fails', async () => {
     const { attachVideoToExistingGame } = await import('./uploadManager');
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ status: 'exists', blake3_hash: 'b'.repeat(64), file_size: 2048 }),
-    });
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 409,
-      json: async () => ({ detail: 'Game is not ready' }),
+    routeFetch({
+      '/api/games/prepare-upload': jsonResponse({
+        status: 'exists',
+        blake3_hash: 'b'.repeat(64),
+        file_size: 2048,
+      }),
+      '/api/games/42/videos': jsonResponse(
+        { detail: 'Game is not ready' },
+        { ok: false, status: 409 }
+      ),
     });
 
     const mockFile = new File(['second half'], 'second-half.mp4', { type: 'video/mp4' });
