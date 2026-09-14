@@ -1,5 +1,32 @@
 ---
 domain: annotate
+updated: 2026-09-14 (T9850 — first-result onboarding guidance now completes on saved playable VALUE,
+not a mandatory Preview-plays click. **The defect (B05·R4):** quest_1's last step
+`playback_annotations` gated SOLELY on the `played_annotations` achievement
+(`routers/quests.py` `_check_all_steps`), which fires ONLY from entering Preview-plays mode inside
+Annotate (`modes/annotate/hooks/useAnnotationPlayback.js:284`). A user who saved a clip and moved to
+Focus/Spotlight/Library was pinned at "4/5" while the guide pointed at Preview plays — a control that
+exists ONLY on the Annotate screen. **The fix (1 line + copy):** OR-satisfy the step with
+`rc["reels"] >= 1` (the own-auto-project-clip signal `annotate_brilliant`/`rate_clip` already key off
+— `raw_clips.auto_project_id IS NOT NULL AND shared_by IS NULL`), so creating an editable clip
+completes it; Preview plays stays a SUFFICIENT path so nothing that already completed regresses. Because
+completion derives in `_check_all_steps` — the ONE choke point `/progress` and `/claim-reward` share —
+displayed-complete and claim-rejected can never disagree (the T9410 invariant holds; adding an OR only
+makes completion EASIER). **Copy:** `config/questDefinitions.jsx`'s `playback_annotations` DESCRIPTION
+no longer instructs a required Preview-plays click — it points at the persistent T9580 next actions
+(`ANNOTATE.FRAME_THIS_CLIP` / `ANNOTATE.KEEP_MARKING_PLAYS`); removed the now-unused `Play` lucide
+import. **Left ALONE (deliberate):** the step TITLE stays `ANNOTATE.PREVIEW_PLAYS` (T9860 owns final
+vocabulary; the FE/BE STEP_TITLES sync test still passes); `data/questDefinitions.js` needs NO change
+(it carries only `step_ids`, not completion — OR-satisfy keeps the id); no other quest_1 step
+hard-requires rating/tag/source-preview (`rate_clip` was already OR'd with `reels>=1`). The already-
+shipped stageCta/keepMarkingCta persistent-next-action UI (T9580) was NOT rebuilt — brief's core ask
+was already met by existing code; only the guide's completion PREDICATE + description were wrong.
+Tests: new `tests/test_t9850_playback_step_gating.py` (3 — saved-clip completes step without the
+achievement, achievement still sufficient, router-seam claim succeeds via saved-value path) +
+`config/questDefinitions.test.jsx` T9850 assertion (desc names Frame-this-clip/Keep-marking, never
+Preview plays). QA: container has no browser (same limit as T9830/T9820/T9630) — no live e2e drive;
+`new-user-flow.spec.js` left intact (its Create-Reel step already sets auto_project_id, so the step
+completes earlier but every assertion still holds). Prior:)
 updated: 2026-09-14 (T9830 — the play editor now offers TWO explicit, always-visible, always-enabled
 create outcomes instead of a rating-driven default. **What was removed:** the create-mode "Clip"
 toggle (desktop formBody + strip), the label-switching single Save button (SAVE_PLAY vs
