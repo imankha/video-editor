@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
+import { ANNOTATE } from '../../../config/displayNames';
 
 // jsdom lacks matchMedia; AnnotateFullscreenOverlay renders through the real useIsMobile hook.
 beforeEach(() => {
@@ -147,10 +148,10 @@ describe('AnnotateFullscreenOverlay — Layer control in the desktop strip (T860
 // per the 5-state table in the task file. Default rating is 4 (DEFAULT_RATING),
 // so the "no rating yet" branch is exercised at the getRatingCaption unit-test
 // level (clipConstants.test.js), not through this component's initial render.
-describe('AnnotateFullscreenOverlay — rating caption (T8490)', () => {
-  it('rating 4 (default) shows the "Good play" caption, formBody layout', () => {
+describe('AnnotateFullscreenOverlay — rating caption (T8490 / T9820)', () => {
+  it('rating 4 (default), creation OFF -> "Good play" save-only caption, formBody layout', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
-    expect(screen.getByText('Good play (!) - one more star creates a clip.')).toBeTruthy();
+    expect(screen.getByText('Good play (!) - this saves the play without creating a clip.')).toBeTruthy();
   });
 
   it('rating 2 shows the "Technical lapse" learn-from caption, formBody layout', () => {
@@ -159,16 +160,16 @@ describe('AnnotateFullscreenOverlay — rating caption (T8490)', () => {
     expect(screen.getByText('Technical lapse (?) - a play to learn from.')).toBeTruthy();
   });
 
-  it('rating 5 + My Athlete shows the clip-will-be-created caption, formBody layout', () => {
+  it('rating 5 + My Athlete auto-enables creation -> "will also become an editable clip", formBody layout', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
     fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
-    expect(screen.getByText('Brilliant play (!!) - clip will be created from play.')).toBeTruthy();
+    expect(screen.getByText('Brilliant play (!!) - this play will also become an editable clip.')).toBeTruthy();
   });
 
-  it('rating 5 + Team shows the team-plays-dont-create-clips caption, formBody layout', () => {
+  it('rating 5 + Team leaves creation OFF -> team label, save-only caption, formBody layout', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={false} />);
     fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
-    expect(screen.getByText("Brilliant team play (!!) - team plays don't create clips.")).toBeTruthy();
+    expect(screen.getByText('Brilliant team play (!!) - this saves the play without creating a clip.')).toBeTruthy();
   });
 
   it('the caption never renders in edit mode (existingClip set)', () => {
@@ -178,14 +179,25 @@ describe('AnnotateFullscreenOverlay — rating caption (T8490)', () => {
         existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 5, tags: [], my_athlete: true }}
       />
     );
-    expect(screen.queryByText(/clip will be created/)).toBeNull();
-    expect(screen.queryByText(/creates a clip/i)).toBeNull();
+    expect(screen.queryByText(/editable clip/)).toBeNull();
+    expect(screen.queryByText(/creating a clip/i)).toBeNull();
   });
 
-  it('rating 5 + My Athlete shows the clip-will-be-created caption, strip layout', () => {
+  it('rating 5 + My Athlete auto-enables creation -> "will also become an editable clip", strip layout', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" surface="inline_desktop" newClipLayerIsMine={true} />);
     fireEvent.click(screen.getByRole('button', { name: '5 stars' }));
-    expect(screen.getByText('Brilliant play (!!) - clip will be created from play.')).toBeTruthy();
+    expect(screen.getByText('Brilliant play (!!) - this play will also become an editable clip.')).toBeTruthy();
+  });
+
+  // T9820 / E47 regression: 4 stars with the create-clip toggle manually ON must
+  // reflect the intent, never demand another star. The caption is driven by the
+  // live createProject toggle, not the star count.
+  it('rating 4 + creation toggled ON -> caption follows the toggle, never demands another star (strip layout)', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" surface="inline_desktop" newClipLayerIsMine={true} />);
+    // default rating is 4; enable creation via the toggle button
+    fireEvent.click(screen.getByRole('button', { name: ANNOTATE.JUST_SAVE_PLAY }));
+    expect(screen.getByText('Good play (!) - this play will also become an editable clip.')).toBeTruthy();
+    expect(screen.queryByText(/one more star|another star/)).toBeNull();
   });
 
   it('the caption never renders in edit mode, strip layout', () => {
@@ -197,6 +209,6 @@ describe('AnnotateFullscreenOverlay — rating caption (T8490)', () => {
         existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 5, tags: [], my_athlete: true }}
       />
     );
-    expect(screen.queryByText(/clip will be created/)).toBeNull();
+    expect(screen.queryByText(/editable clip/)).toBeNull();
   });
 });

@@ -44,31 +44,43 @@ export const RATING_BACKGROUND_COLORS = {
 // Default rating when none is set
 export const DEFAULT_RATING = 3;
 
-// T8490: one-line caption explaining what a rating means for the reel,
-// mirroring the auto-flip gate's `mine` (My Athlete layer) check — bound to
-// rating + layer only, not the live createProject toggle, so it always
-// communicates the RULE regardless of a manual override.
-export function getRatingCaption(rating, mine) {
-  if (!rating) return 'How good was this play? Rate it 1 to 5 - five stars creates a clip from the play.';
+// T8490 / T9820: one-line caption explaining what a rating means for the play.
+// The creation clause is driven by the LIVE create-clip intent (`createIntent`,
+// the AnnotateFullscreenOverlay toggle), NOT by the star count. Star-threshold
+// copy ("one more star creates a clip", "five stars creates a clip") was a false
+// prediction the moment the toggle disagreed with it (T9820 / E47: 4 stars with
+// creation toggled ON still claimed another star was required). The rating
+// adjective describes quality; the outcome clause states what Save will actually
+// do. Ratings 1-3 stay adjective-only (they never claimed creation, so nothing to
+// correct); the no-rating/4/5 branches drop their star prediction for the intent.
+export function getRatingCaption(rating, mine, createIntent) {
+  const outcome = createIntent
+    ? 'this play will also become an editable clip.'
+    : 'this saves the play without creating a clip.';
+  if (!rating) return `How good was this play? Rate it 1 to 5 - ${outcome}`;
   if (rating === 1) return `Mental lapse (${RATING_NOTATION[1]}) - a play to learn from.`;
   if (rating === 2) return `Technical lapse (${RATING_NOTATION[2]}) - a play to learn from.`;
   if (rating === 3) return `Interesting play (${RATING_NOTATION[3]}) - worth a second look.`;
-  if (rating === 4) return `Good play (${RATING_NOTATION[4]}) - one more star creates a clip.`;
-  return mine
-    ? `Brilliant play (${RATING_NOTATION[5]}) - clip will be created from play.`
-    : `Brilliant team play (${RATING_NOTATION[5]}) - team plays don't create clips.`;
+  if (rating === 4) return `Good play (${RATING_NOTATION[4]}) - ${outcome}`;
+  const label = mine ? 'Brilliant play' : 'Brilliant team play';
+  return `${label} (${RATING_NOTATION[5]}) - ${outcome}`;
 }
 
-// T8490: edit-mode variant for ClipDetailsEditor — no auto-flip happens here
-// (the Reel control's own button/link is the only way a reel gets created),
-// so the 5-star/My Athlete state reads off `hasReel` instead of promising a
-// future "will be created".
+// T8490 / T9820: edit-mode variant for ClipDetailsEditor — clip creation here is a
+// separate manual control (never rating-gated), so the outcome clause reads off
+// `hasReel` (does a clip already exist) instead of predicting one from the star
+// count. The rating===4 branch previously repeated the same false "one more star
+// creates a clip" threshold; it now mirrors the 5-star branch's hasReel wording.
 export function getEditRatingCaption(rating, mine, hasReel) {
-  if (!rating) return 'How good was this play? Rate it 1 to 5 - five stars creates a clip from the play.';
+  if (!rating) return 'How good was this play? Rate it 1 to 5.';
   if (rating === 1) return `Mental lapse (${RATING_NOTATION[1]}) - a play to learn from.`;
   if (rating === 2) return `Technical lapse (${RATING_NOTATION[2]}) - a play to learn from.`;
   if (rating === 3) return `Interesting play (${RATING_NOTATION[3]}) - worth a second look.`;
-  if (rating === 4) return `Good play (${RATING_NOTATION[4]}) - one more star creates a clip.`;
+  if (rating === 4) {
+    return hasReel
+      ? `Good play (${RATING_NOTATION[4]}) - clip already created from play.`
+      : `Good play (${RATING_NOTATION[4]}) - create a clip below.`;
+  }
   if (!mine) return `Brilliant team play (${RATING_NOTATION[5]}) - team plays don't create clips.`;
   return hasReel
     ? `Brilliant play (${RATING_NOTATION[5]}) - clip already created from play.`
