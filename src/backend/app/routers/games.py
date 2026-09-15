@@ -17,7 +17,7 @@ import contextlib
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
@@ -83,8 +83,8 @@ def _parse_recorded_at(value) -> datetime | None:
         except (ValueError, TypeError):
             return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.UTC)
-    return dt.astimezone(datetime.UTC)
+        dt = dt.replace(tzinfo=timezone.utc)  # noqa: UP017 -- `datetime` here is the class (from datetime import datetime), not the module; `datetime.UTC` does not exist on it
+    return dt.astimezone(timezone.utc)  # noqa: UP017
 
 
 def _normalize_recorded_at(value) -> str | None:
