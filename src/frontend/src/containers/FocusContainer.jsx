@@ -10,6 +10,8 @@ import { track } from '../utils/analytics';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useQuestStore } from '../stores/questStore';
 import { calculateEffectiveDuration, sumEffectiveDurations } from '../utils/effectiveDuration';
+import { wideFrameTarget, resizeAboutCenter, isWideFraming as computeIsWideFraming } from '../utils/widenFraming';
+import useFramingHistory from '../hooks/useFramingHistory';
 
 /**
  * Frame-keyed persist adapter for crop keyframes (T3800). Crop keys by frame
@@ -75,6 +77,7 @@ export function FocusContainer({
   setRotation,
   clampCropForCurrentRotation,
   resetCrop,
+  calculateDefaultCrop,
 
   // Segment state and actions (from useSegments in App.jsx)
   segments,
@@ -142,6 +145,10 @@ export function FocusContainer({
   const latestSelectedClipIdRef = useRef(selectedClipId);
   latestSelectedClipIdRef.current = selectedClipId;
 
+  // T9950 Slice 2: session-scoped Undo for framing edits. Memory only, cleared
+  // by the caller on the clip-selection gesture (see clearFramingHistory below).
+  const framingHistory = useFramingHistory();
+
   // DERIVED STATE: Current crop state at playhead
   const currentCropState = useMemo(() => {
     if (!metadata) return null;
@@ -162,6 +169,28 @@ export function FocusContainer({
     const hasSegmentSplits = segmentBoundaries.length > 2;
     return hasCropEdits || hasTrimEdits || hasSpeedEdits || hasSegmentSplits;
   }, [keyframes, trimRange, segmentSpeeds, segmentBoundaries]);
+
+  // T9950 Slice 2: the reel aspect ratio as a width/height number, and the
+  // default crop size for it -- shared by handleWidenFraming and the derived
+  // isWideFraming read below. calculateDefaultCrop is the SAME function
+  // useCrop uses to seed a fresh clip's crop, so "default" here always means
+  // the one true default (no mirrored constant in widenFraming.js).
+  const aspectValue = useMemo(() => {
+    const [ratioW, ratioH] = aspectRatio.split(':').map(Number);
+    return ratioW / ratioH;
+  }, [aspectRatio]);
+  const defaultCropSize = useMemo(() => {
+    if (!metadata?.width || !metadata?.height) return null;
+    const crop = calculateDefaultCrop(metadata.width, metadata.height, aspectRatio);
+    return { width: crop.width, height: crop.height };
+  }, [metadata, aspectRatio, calculateDefaultCrop]);
+
+  // DERIVED (design doc §2.1/§3.3): "is this clip widely framed?" is NEVER
+  // stored -- it's read straight off the crop rects every render.
+  const isWideFraming = useMemo(() => {
+    if (!metadata?.width || !metadata?.height || !defaultCropSize) return false;
+    return computeIsWideFraming(keyframes, metadata, aspectValue, defaultCropSize);
+  }, [keyframes, metadata, aspectValue, defaultCropSize]);
 
   /**
    * Clips with current clip's live state merged.
@@ -347,6 +376,122 @@ export function FocusContainer({
   }, [onCropChange]);
 
   /**
+   * T9950 Slice 2 -- replays a single crop-keyframe state through the SAME
+   * write path as an ordinary edit (hook update + surgical persist). Used by
+   * the Undo stack's inverse thunks. `data === null` means "this keyframe did
+   * not exist before this edit" -> the inverse deletes it.
+   */
+  const applyInverseKeyframeState = useCallback(async (frame, data, origin, clipIdAtPush) => {
+    // Defensive only: clearFramingHistory already empties the stack on clip
+    // switch (the gesture handler), so this should never see a stale clip.
+    if (latestSelectedClipIdRef.current !== clipIdAtPush) return;
+    const time = frame / framerate;
+    if (data) {
+      addOrUpdateKeyframe(time, data, duration, origin || 'user');
+    } else {
+      removeKeyframe(time, duration);
+    }
+    onUserEdit?.();
+    setFramingChangedSinceExport?.(true);
+
+    const clipId = selectedClip?.id;
+    if (!selectedProjectId || !clipId) return;
+    if (data) {
+      await persistKeyframeEdit({
+        resolution: { targetKey: frame, movedFromKey: null },
+        data: { x: data.x, y: data.y, width: data.width, height: data.height, origin: origin || 'user' },
+        actions: cropPersistActions(selectedProjectId, clipId),
+        awaited: true,
+        onError: (error) => toast.error('Failed to undo framing edit', { message: error }),
+      });
+    } else {
+      const result = await focusActions.deleteCropKeyframe(selectedProjectId, clipId, frame);
+      if (!result.success) toast.error('Failed to undo framing edit', { message: result.error });
+    }
+  }, [framerate, duration, addOrUpdateKeyframe, removeKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
+
+  /**
+   * T9950 Slice 2 -- "Use a wider frame" / toggle-off. A crop EDIT through the
+   * existing single write path (design doc §2.1/§3), never a stored preference:
+   * every keyframe is rewritten to the 2x-scaled wide-frame target (§9.2), or
+   * back to the default crop size at the same center when already wide (§8 Q1).
+   * A zero-keyframe clip creates ONE keyframe at currentTime, matching
+   * handleCropComplete's own zero-keyframe behavior. Pushes the inverse onto
+   * the Undo stack so the edit is reversible within the session.
+   */
+  const handleWidenFraming = useCallback(async () => {
+    if (!metadata?.width || !metadata?.height || !defaultCropSize) return;
+    const clipId = selectedClip?.id;
+    if (!selectedProjectId || !clipId) return;
+
+    const wasWide = isWideFraming;
+    const target = wasWide
+      ? defaultCropSize
+      : wideFrameTarget(metadata.width, metadata.height, aspectValue, defaultCropSize);
+
+    const callerClipId = selectedClipId;
+    const sourceKeyframes = keyframes.length > 0
+      ? keyframes
+      : [{ frame: Math.round(currentTime * framerate), ...getCropDataAtTime(currentTime), origin: 'user' }];
+
+    clipHasUserEditsRef.current = true;
+    onUserEdit?.();
+    setFramingChangedSinceExport?.(true);
+    track('widen_framing', { clipId: callerClipId, toWide: !wasWide, keyframeCount: sourceKeyframes.length }, { debugOnly: true });
+
+    const inverseEntries = [];
+
+    for (const kf of sourceKeyframes) {
+      const existingKf = keyframes.find(k => k.frame === kf.frame);
+      const origin = existingKf?.origin || 'user';
+      inverseEntries.push({
+        frame: kf.frame,
+        data: existingKf ? { x: existingKf.x, y: existingKf.y, width: existingKf.width, height: existingKf.height } : null,
+        origin,
+      });
+
+      const rawRect = resizeAboutCenter(kf, target.width, target.height, metadata.width, metadata.height);
+      const rect = rotation && clampCropForCurrentRotation ? clampCropForCurrentRotation(rawRect) : rawRect;
+      const time = kf.frame / framerate;
+
+      addOrUpdateKeyframe(time, rect, duration, origin);
+      // Surgical per-keyframe POSTs, awaited in sequence; actionClient FIFO-serializes per clip anyway.
+      await persistKeyframeEdit({
+        resolution: { targetKey: kf.frame, movedFromKey: null },
+        data: { x: rect.x, y: rect.y, width: rect.width, height: rect.height, origin },
+        actions: cropPersistActions(selectedProjectId, clipId),
+        awaited: true,
+        onError: (error) => toast.error('Failed to widen frame', { message: error }),
+      });
+    }
+
+    framingHistory.push(
+      wasWide ? 'Back to default frame' : 'Use a wider frame',
+      () => Promise.all(inverseEntries.map(e => applyInverseKeyframeState(e.frame, e.data, e.origin, callerClipId)))
+    );
+  }, [metadata, defaultCropSize, aspectValue, isWideFraming, selectedClip, selectedProjectId, selectedClipId, keyframes, currentTime, framerate, getCropDataAtTime, onUserEdit, setFramingChangedSinceExport, addOrUpdateKeyframe, duration, rotation, clampCropForCurrentRotation, framingHistory, applyInverseKeyframeState]);
+
+  /**
+   * T9950 Slice 2 -- pops the most recent framing edit (widen, ordinary focus-
+   * point edit, or delete) and replays its inverse. A no-op when the stack is
+   * empty (canUndo is false; the button is disabled, but this stays safe if
+   * called anyway).
+   */
+  const handleUndoFraming = useCallback(async () => {
+    await framingHistory.undo();
+  }, [framingHistory]);
+
+  /**
+   * T9950 Slice 2 -- clears the Undo stack. Called from the existing
+   * clip-selection GESTURE (FocusScreen.handleSelectClip), never from a
+   * useEffect keyed on selectedClipId: an inverse thunk closes over a specific
+   * clip's keyframes, so it must not survive a clip switch.
+   */
+  const clearFramingHistory = useCallback(() => {
+    framingHistory.clear();
+  }, [framingHistory]);
+
+  /**
    * Handle crop complete (create keyframe)
    */
   const handleCropComplete = useCallback(async (rawCropData) => {
@@ -383,16 +528,15 @@ export function FocusContainer({
     useQuestStore.getState().recordAchievement('crop_adjusted');
     // T10010 activation funnel: this handler IS the MANUAL framing path (a user
     // drag placing/positioning the crop box). IDs/bucket only, no PII.
-    // NOTE(T9950): the Focus/framing UI is being simplified under T9950 (not yet
-    // landed as of this task); if that reshapes how a framing point is placed,
-    // re-verify this call site still fires from the point-placement gesture.
+    // T9950 landed without reshaping this call site: it still fires from the
+    // same point-placement gesture.
     recordFunnelEvent(FUNNEL_EVENTS.FRAMING_POINT_ADDED, { clip_id: selectedClipId, path: 'manual' });
 
     // Persist via the shared keyframe-edit path (T3800). The backend key can only
     // be the resolved targetFrame — no raw frame can leak past identity resolution.
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
-      await persistKeyframeEdit({
+      const result = await persistKeyframeEdit({
         resolution: { targetKey: targetFrame, movedFromKey: null },
         data: { x: cropData.x, y: cropData.y, width: cropData.width, height: cropData.height, origin },
         actions: cropPersistActions(selectedProjectId, clipId),
@@ -420,8 +564,22 @@ export function FocusContainer({
         awaited: true,
         onError: (error) => toast.error('Failed to save crop keyframe', { message: error }),
       });
+      // T9950 Slice 2: push the inverse so Undo covers ordinary focus-point
+      // edits too, not just "Use a wider frame". Mirrors the rollback closure
+      // above (same previousKf/previousKfData), but as a replay for Undo
+      // rather than a failure-only local revert. Gated on success — a failed
+      // POST already rolled back above, so pushing here too would queue a
+      // redundant no-op undo entry (reviewer finding, Slice 2).
+      if (result?.success !== false) {
+        framingHistory.push('Focus point edit', () => applyInverseKeyframeState(
+          targetFrame,
+          previousKf ? { x: previousKf.x, y: previousKf.y, width: previousKf.width, height: previousKf.height } : null,
+          previousKf?.origin,
+          callerClipId
+        ));
+      }
     }
-  }, [currentTime, framerate, duration, keyframes, getCropDataAtTime, addOrUpdateKeyframe, removeKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData, rotation, clampCropForCurrentRotation]);
+  }, [currentTime, framerate, duration, keyframes, getCropDataAtTime, addOrUpdateKeyframe, removeKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData, rotation, clampCropForCurrentRotation, framingHistory, applyInverseKeyframeState]);
 
   /**
    * Handle a horizon-straighten commit (T5640). Mirrors handleCropComplete's
@@ -758,9 +916,18 @@ export function FocusContainer({
           setFramingChangedSinceExport?.(false);
         }
         toast.error('Failed to delete keyframe', { message: result.error });
+      } else if (deletedKf) {
+        // T9950 Slice 2: push the inverse (re-add the deleted keyframe) so
+        // Undo covers keyframe deletes too.
+        framingHistory.push('Delete focus point', () => applyInverseKeyframeState(
+          frame,
+          { x: deletedKf.x, y: deletedKf.y, width: deletedKf.width, height: deletedKf.height },
+          deletedOrigin,
+          callerClipId
+        ));
       }
     }
-  }, [duration, framerate, keyframes, getCropDataAtTime, removeKeyframe, addOrUpdateKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
+  }, [duration, framerate, keyframes, getCropDataAtTime, removeKeyframe, addOrUpdateKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData, framingHistory, applyInverseKeyframeState]);
 
   /**
    * Handler for copy crop at current time
@@ -1064,6 +1231,11 @@ export function FocusContainer({
     selectedClipEffectiveDuration,
     projectEffectiveDuration,
 
+    // T9950 Slice 2: derived "is this clip widely framed?" (never stored) +
+    // session-scoped Undo state.
+    isWideFraming,
+    canUndoFraming: framingHistory.canUndo,
+
     // Handlers
     handleCropChange,
     handleCropComplete,
@@ -1078,6 +1250,9 @@ export function FocusContainer({
     handleRemoveSplit,
     handleSegmentSpeedChange,
     handleSetRotation,
+    handleWidenFraming,
+    handleUndoFraming,
+    clearFramingHistory,
 
     // Persistence
     saveCurrentClipState,

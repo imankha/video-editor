@@ -12,6 +12,7 @@ import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
 import FocusClipsPanel from '../components/settings/FocusClipsPanel';
 import { FocusMode, CropOverlay } from './focus';
 import FramingInstructions from './focus/FramingInstructions';
+import FramingActionRow from './focus/FramingActionRow';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { ratioWithName } from '../constants/aspectRatios';
 import { EDITOR_PANELS } from '../config/displayNames';
@@ -197,6 +198,12 @@ export function FocusModeView({
   onKeyframeDelete,
   onCopyCrop,
   onPasteCrop,
+
+  // T9950 Slice 2: wider frame + Undo
+  isWideFraming = false,
+  canUndoFraming = false,
+  onWidenFraming,
+  onUndoFraming,
 
   // Zoom state
   zoom,
@@ -637,6 +644,17 @@ export function FocusModeView({
             isPlaying={isPlaying}
             isFullscreen={isFullscreen}
             showSegments={advancedOpen}
+          />
+        )}
+
+        {/* T9950 Slice 2: [Undo] [Use a wider frame] [Preview highlight] — under
+            the timeline, above the Advanced-editing disclosure (design doc §5). */}
+        {!mobileFs && videoUrl && (
+          <FramingActionRow
+            canUndo={canUndoFraming}
+            onUndo={onUndoFraming}
+            isWideFraming={isWideFraming}
+            onWidenFraming={onWidenFraming}
           />
         )}
 
