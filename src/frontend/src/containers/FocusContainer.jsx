@@ -7,6 +7,7 @@ import { resolveTargetFrame } from '../utils/keyframeUtils';
 import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
 import { toast } from '../components/shared';
 import { track } from '../utils/analytics';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useQuestStore } from '../stores/questStore';
 import { calculateEffectiveDuration, sumEffectiveDurations } from '../utils/effectiveDuration';
 
@@ -380,6 +381,12 @@ export function FocusContainer({
     track('crop_keyframe_add', { frame: targetFrame, clipId: selectedClipId, x: cropData.x, y: cropData.y, w: cropData.width, h: cropData.height }, { debugOnly: true });
     // T3700: quest_2 "Keep your player in frame" — the user adjusted the crop box
     useQuestStore.getState().recordAchievement('crop_adjusted');
+    // T10010 activation funnel: this handler IS the MANUAL framing path (a user
+    // drag placing/positioning the crop box). IDs/bucket only, no PII.
+    // NOTE(T9950): the Focus/framing UI is being simplified under T9950 (not yet
+    // landed as of this task); if that reshapes how a framing point is placed,
+    // re-verify this call site still fires from the point-placement gesture.
+    recordFunnelEvent(FUNNEL_EVENTS.FRAMING_POINT_ADDED, { clip_id: selectedClipId, path: 'manual' });
 
     // Persist via the shared keyframe-edit path (T3800). The backend key can only
     // be the resolved targetFrame — no raw frame can leak past identity resolution.

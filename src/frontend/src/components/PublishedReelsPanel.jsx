@@ -25,6 +25,7 @@ import { useQuestStore } from '../stores/questStore';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { toast } from './shared/Toast';
 import { track } from '../utils/analytics';
+import { recordFunnelEvent, FUNNEL_EVENTS, viewedThresholdSeconds } from '../utils/funnelEvents';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { formatGameClock, formatLength, PRECISION } from '../utils/timeFormat';
@@ -99,6 +100,9 @@ export function PublishedReelsPanel({
   // bare CollectionPlayer-equivalent render (AC #5).
   const [storyPlayer, setStoryPlayer] = useState(null);
   const watchTimerRef = useRef(null);
+  // T10010: separate timer for the activation `result_viewed` beacon (>=2s / >=50%
+  // of duration), distinct from the 1s quest-achievement timer above.
+  const viewedTimerRef = useRef(null);
   // Reels already marked watched in the current player session — avoids redundant
   // PATCH/recompute calls when the user navigates back and forth (T3900).
   const watchedThisSessionRef = useRef(new Set());
@@ -134,6 +138,7 @@ export function PublishedReelsPanel({
   };
   const closeStoryPlayer = useCallback(() => {
     clearTimeout(watchTimerRef.current);
+    clearTimeout(viewedTimerRef.current);
     setStoryPlayer(null);
   }, []);
 
@@ -529,6 +534,34 @@ export function PublishedReelsPanel({
     watchTimerRef.current = setTimeout(() => {
       useQuestStore.getState().recordAchievement('watched_gallery_video_1s');
     }, 1000);
+
+    // T10010 activation funnel (result surface). result_opened = the open GESTURE;
+    // result_reopened ADDITIONALLY marks re-engagement with a result watched before.
+    // playback_started = media begins (autoPlay). result_viewed fires only once the
+    // stated view threshold is reached; the server re-validates is_playback_viewed,
+    // so a paused-early watch is dropped there. IDs/durations only — no PII.
+    recordFunnelEvent(FUNNEL_EVENTS.RESULT_OPENED, {
+      result_id: download.id,
+      entry_route: 'my_reels',
+    });
+    if (download.watched_at) {
+      recordFunnelEvent(FUNNEL_EVENTS.RESULT_REOPENED, { result_id: download.id });
+    }
+    recordFunnelEvent(FUNNEL_EVENTS.PLAYBACK_STARTED, {
+      result_id: download.id,
+      duration_seconds: download.duration,
+    });
+    clearTimeout(viewedTimerRef.current);
+    const viewedAt = viewedThresholdSeconds(download.duration);
+    if (viewedAt > 0) {
+      viewedTimerRef.current = setTimeout(() => {
+        recordFunnelEvent(FUNNEL_EVENTS.RESULT_VIEWED, {
+          result_id: download.id,
+          watched_seconds: viewedAt,
+          duration_seconds: download.duration,
+        });
+      }, viewedAt * 1000);
+    }
   };
 
   // Card folder button -> same shared restore-then-navigate path as the players (T3940).

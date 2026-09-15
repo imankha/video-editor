@@ -151,6 +151,35 @@ async def report_impression(payload: ImpressionReport) -> Response:
     return Response(status_code=204)
 
 
+class FunnelEventReport(BaseModel):
+    """T10010: a client-side activation-funnel gesture (framing point added,
+    preview started, a validated playback view, draft saved, result (re)opened).
+
+    `event` is closed server-side to CLIENT_FUNNEL_EVENTS; `context` carries only
+    coarse join keys/buckets/durations and is stripped to the PII-safe allow-list
+    server-side (record_funnel_event), so no child name / email / free-text can
+    ride in. Every field optional — a beacon must never fail validation."""
+
+    event: str
+    context: dict | None = None
+
+
+@router.post("/api/telemetry/funnel-event", status_code=204)
+async def report_funnel_event(payload: FunnelEventReport) -> Response:
+    """T10010 sink. Routes to record_funnel_event, which owns the closed-vocabulary
+    check, the PII allow-list on context, the server-side re-validation of the
+    `result_viewed` threshold, and (via record_milestone) the impersonation guard
+    plus the aggregate + per-user-log writes. No PG schema change. Always 204,
+    never raises."""
+    from app.analytics import record_funnel_event
+
+    try:
+        record_funnel_event(payload.event, payload.context)
+    except Exception:
+        logger.exception("[Telemetry] record_funnel_event failed (ignored)")
+    return Response(status_code=204)
+
+
 class SessionBreadcrumbReport(BaseModel):
     """T7515 tier 4: session-exit breadcrumb. `dwell` maps screen→foreground
     seconds; `trail` is the ordered screen sequence; `last_screen` is where the

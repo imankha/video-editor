@@ -14,6 +14,7 @@ import { useReelPreviewStore } from '../stores/reelPreviewStore';
 import { usePublishProject } from '../hooks/usePublishProject';
 import { useIsCoarsePointer } from '../hooks/useIsMobile';
 import { openFinishedReel } from '../utils/finishedReelNav';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { API_BASE } from '../config';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
@@ -215,7 +216,15 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
     // button; the low-risk body gesture is Preview. Guard on final_video_id: a ready
     // tile without a playable video simply does nothing on body tap.
     if (isReadyToPublish) {
-      if (project.final_video_id) openFinishedReel(project);
+      if (project.final_video_id) {
+        // T10010 activation funnel: previewing a finished draft is a real
+        // user gesture (body tap on a ready tile). IDs only, no PII.
+        recordFunnelEvent(FUNNEL_EVENTS.PREVIEW_STARTED, {
+          project_id: project.id,
+          result_id: project.final_video_id,
+        });
+        openFinishedReel(project);
+      }
       return;
     }
     if (isCoarsePointer && actionsRevealed) {

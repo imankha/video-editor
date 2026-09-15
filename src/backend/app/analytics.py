@@ -237,7 +237,115 @@ FLOW_EVENTS = {
     "watched_framing_tutorial":     {"label": "Watched Framing Tutorial",   "daily_col": None},
     "watched_overlay_tutorial":     {"label": "Watched Overlay Tutorial",   "daily_col": None},
     "watched_publish_tutorial":     {"label": "Watched Publish Tutorial",   "daily_col": None},
+    # T10010: activation-funnel completion events. All are engagement dimensions
+    # (daily_col=None -> NO new daily_counters column, NO migration): a new key is
+    # just a new free-text row in the existing per-(user,action,platform)
+    # `user_actions` aggregate + the per-user `user_action_log` detail trail,
+    # exactly like the T7890/T7515 additions above. The join keys the brief asks
+    # for (person/highlight/edit-revision/job) ride the per-user `user_action_log`
+    # context (SQLite), never Postgres — Postgres stays aggregate-only.
+    #
+    # Reconciliation (do NOT invent duplicates for events that already exist):
+    #   upload_started   -> game_created (attempt)      upload_succeeded -> game_upload_succeeded
+    #   play_saved       -> clip_created                highlight_created -> clip_created/clip_uploaded
+    #   framing_opened   -> framing_opened (bridged)    export_accepted  -> export_started
+    #   export_succeeded -> export_completed            export_failed    -> export_failed
+    #   share_intent     -> share_attempted             publish_succeeded -> share_completed
+    # The keys below are the genuinely-NEW gesture points with no existing event.
+    #
+    # ACTIVATION vs render count: a person appears ONCE per action in `user_actions`
+    # (one row per (user_id, action, platform)); three renders of one highlight by
+    # one person still yield ONE user with a `result_viewed` row. So person-level
+    # activation is COUNT(DISTINCT user_id) over these actions, never SUM(count) —
+    # the dedup requirement is a READ convention, not new write infrastructure.
+    "framing_point_added":          {"label": "Framing Point Added",        "daily_col": None},
+    "preview_started":              {"label": "Preview Started",            "daily_col": None},
+    "draft_saved":                  {"label": "Draft Saved",                "daily_col": None},
+    "result_opened":                {"label": "Result Opened",              "daily_col": None},
+    "playback_started":             {"label": "Playback Started",           "daily_col": None},
+    # result_viewed is the PLAYBACK-VALIDATED activation signal — a real watch, not
+    # a load. It is a DIFFERENT event from render validation (export_completed): a
+    # rendered highlight nobody watched is NOT activated. "Viewed" is a stated
+    # convention (see is_playback_viewed), never a satisfaction claim.
+    "result_viewed":                {"label": "Result Viewed",              "daily_col": None},
+    "result_reopened":              {"label": "Result Reopened",            "daily_col": None},
 }
+
+# ---------------------------------------------------------------------------
+# T10010 — "viewed" playback convention (NOT a satisfaction claim)
+# ---------------------------------------------------------------------------
+# A `result_viewed` fires only when actual playback crosses a stated threshold, so
+# a bare load / autoplay-then-bail is never miscounted as a watch. The convention
+# (from the brief): a clip is "viewed" at >= VIEWED_MIN_SECONDS of playback when it
+# is long enough to afford that (>= VIEWED_LONG_CLIP_SECONDS), otherwise at
+# >= VIEWED_SHORT_FRACTION of its duration. Mirrored verbatim on the client
+# (funnelEvents.js computeViewed) so the client only beacons a genuine view; the
+# server re-checks here so a malformed/optimistic beacon can't inflate the metric.
+VIEWED_MIN_SECONDS = 2.0
+VIEWED_LONG_CLIP_SECONDS = 4.0
+VIEWED_SHORT_FRACTION = 0.5
+
+
+def is_playback_viewed(watched_seconds: float, duration_seconds: float) -> bool:
+    """True when observed playback meets the T10010 'viewed' convention.
+
+    Not a proxy for satisfaction — only 'the media actually played far enough to
+    count as watched'. ``watched_seconds`` is the furthest playback position
+    reached (seconds); ``duration_seconds`` is the media length. A non-positive
+    duration is unknown/unloaded and can never satisfy the threshold (returns
+    False) rather than dividing by zero or silently passing.
+    """
+    try:
+        watched = float(watched_seconds)
+        duration = float(duration_seconds)
+    except (TypeError, ValueError):
+        return False
+    if duration <= 0 or watched <= 0:
+        return False
+    if duration >= VIEWED_LONG_CLIP_SECONDS:
+        return watched >= VIEWED_MIN_SECONDS
+    return watched >= duration * VIEWED_SHORT_FRACTION
+
+
+# ---------------------------------------------------------------------------
+# T10010 — client-beaconable funnel events + PII-bounded context
+# ---------------------------------------------------------------------------
+# Closed vocabulary of funnel events a BROWSER gesture may beacon in via
+# POST /api/telemetry/funnel-event (routers/telemetry.py) -> record_milestone.
+# Kept closed for the same reason record_milestone gates on FLOW_EVENTS: a stray
+# beacon must not be able to coin a funnel dimension. Server-side gestures with a
+# natural endpoint (clip_created, export_completed, share_completed, ...) are NOT
+# in this set — they fire at their durable backend point, not from a spoofable
+# client beacon.
+CLIENT_FUNNEL_EVENTS = frozenset({
+    "framing_point_added",
+    "preview_started",
+    "draft_saved",
+    "result_opened",
+    "playback_started",
+    "result_viewed",
+    "result_reopened",
+})
+
+# Privacy guardrail (acceptance criterion 4): the ONLY context keys a funnel
+# beacon may persist. Everything else the client sends is DROPPED server-side, so
+# the detail trail can never carry child names, raw video, recipient emails, or
+# free-text — the join keys the brief needs are coarse IDs/buckets/durations only.
+# Values are additionally type/length-bounded in record_funnel_event.
+FUNNEL_CONTEXT_ALLOWED_KEYS = frozenset({
+    "highlight_id",     # join: highlight (the exportable moment)
+    "clip_id",          # join: source play/clip
+    "project_id",       # join: project
+    "export_id",        # join: render job output
+    "job_id",           # join: render job
+    "revision",         # join: edit revision
+    "result_id",        # join: the viewed artifact
+    "entry_route",      # bucket: how the surface was reached (short slug)
+    "path",             # bucket: manual|automatic|wide (framing path)
+    "watched_seconds",  # numeric: playback position reached
+    "duration_seconds", # numeric: media length (for the viewed convention)
+    "load_ms",          # numeric: media-load duration
+})
 
 # T7510: closed vocabulary of coarse, machine-readable failure reasons. Encoded
 # into the stored action name for a failed attempt (e.g. game_upload_failed:timeout)
@@ -668,6 +776,74 @@ def record_impression(kind: str, name: str, session_count: int | None = None):
         )
     except Exception:
         logger.warning("[Analytics] SQLite sync failed for impression user=%s action=%s", user_id, action)
+
+
+def _sanitize_funnel_context(context: dict | None) -> dict:
+    """Bound a client-supplied funnel context to the PII-safe allow-list.
+
+    Drops every key not in ``FUNNEL_CONTEXT_ALLOWED_KEYS`` (so child names,
+    recipient emails, raw video and free-text can never reach the trail), and
+    caps the survivors: numeric fields stay numeric, everything else is coerced to
+    a short slug string. This is the acceptance-criterion-4 guardrail enforced at
+    the write seam, not merely documented.
+    """
+    if not context or not isinstance(context, dict):
+        return {}
+    # `revision` is a JOIN KEY, not a measurement — keep it as a capped string id
+    # (a revision may be non-numeric, and a dropped join key is worse than a
+    # stringified one). Only true measurements are coerced to numeric.
+    numeric_keys = {"watched_seconds", "duration_seconds", "load_ms"}
+    clean: dict = {}
+    for key, value in context.items():
+        if key not in FUNNEL_CONTEXT_ALLOWED_KEYS:
+            continue
+        if key in numeric_keys:
+            try:
+                clean[key] = round(float(value), 3)
+            except (TypeError, ValueError):
+                continue
+        else:
+            # IDs / short bucket slugs only, length-capped.
+            clean[key] = str(value)[:64]
+    return clean
+
+
+def record_funnel_event(event: str, context: dict | None = None):
+    """T10010 client-beacon funnel event -> record_milestone.
+
+    Routes a browser gesture (framing point added, preview started, a validated
+    playback view, draft saved, result (re)opened) into the SAME storage as every
+    other milestone: the free-text `user_actions` aggregate (Postgres, counts
+    only) + the per-user `user_action_log` detail trail (SQLite, join context).
+    No PG schema change — these events carry ``daily_col=None``.
+
+    Closed to ``CLIENT_FUNNEL_EVENTS`` (a spoofed beacon can't coin a dimension),
+    context is bounded to the PII-safe allow-list, and ``result_viewed`` is
+    re-validated against :func:`is_playback_viewed` server-side so an optimistic
+    client can't inflate activation with a bare load. Impersonation is guarded by
+    record_milestone itself. Never raises (a beacon must not break the app)."""
+    if event not in CLIENT_FUNNEL_EVENTS:
+        logger.warning("[Analytics] Rejected non-client funnel event: %r", event)
+        return
+
+    clean = _sanitize_funnel_context(context)
+
+    # Trust-but-verify: the client only beacons a genuine view, but re-check the
+    # convention here so a malformed/optimistic beacon can't count a load as a
+    # watch. A view lacking the numbers to prove itself is dropped.
+    if event == "result_viewed" and not is_playback_viewed(
+        clean.get("watched_seconds", 0), clean.get("duration_seconds", 0)
+    ):
+        logger.info("[Analytics] result_viewed beacon below viewed threshold — dropped")
+        return
+
+    try:
+        user_id = get_current_user_id()
+    except RuntimeError:
+        logger.warning("[Analytics] funnel event %s with no user context — dropped", event)
+        return
+
+    record_milestone(user_id, event, clean or None)
 
 
 def record_session_exit(

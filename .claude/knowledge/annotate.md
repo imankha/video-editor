@@ -1,5 +1,26 @@
 ---
 domain: annotate
+updated: 2026-09-15 (T10010 — activation-funnel instrumentation, aggregates-only, NO schema/migration.
+NEW client-beacon funnel events go `POST /api/telemetry/funnel-event` -> `record_funnel_event` ->
+`record_milestone` (each `daily_col=None` in `FLOW_EVENTS` -> a free-text `user_actions` row + a
+per-user `user_action_log` detail row, no new Postgres column): `framing_point_added`, `preview_started`,
+`draft_saved`, `result_opened`, `playback_started`, `result_viewed`, `result_reopened`. Server-side
+gestures are UNCHANGED and already fire at their durable point (`clip_created` = play/highlight saved,
+`game_created`/`game_upload_succeeded` = upload, `export_completed` = render succeeded, `share_completed`
+= publish). **"viewed" convention** (NOT satisfaction): >=2s for a clip >=4s else >=50% of duration —
+`is_playback_viewed()` (backend) mirrored by `funnelEvents.computeViewed()` (frontend), and the server
+RE-VALIDATES `result_viewed` so an optimistic beacon can't count a bare load. **ACTIVATION dedup** =
+`COUNT(DISTINCT user_id)` over `result_viewed`, NEVER `SUM(count)` — 3 renders of 1 highlight by 1 person
+= ONE activated person (`user_actions` is one row per (user,action,platform)). Join keys
+(highlight/clip/revision/job) ride the per-user `user_action_log` context; Postgres stays aggregate-only.
+**Privacy**: the beacon context is stripped server-side to `FUNNEL_CONTEXT_ALLOWED_KEYS` (coarse
+IDs/buckets/durations) — no child names/emails/free-text. Client util `utils/funnelEvents.js` wired at
+`FocusContainer.handleCropComplete` (framing_point_added, path='manual'), `DraftTile` ready-tile tap
+(preview_started), `PublishedReelsPanel.handlePlay` (result_opened/reopened/playback_started +
+result_viewed via a threshold timer), `FocusScreen`/`OverlayScreen` defer handlers (draft_saved). Full
+spec + cohort queries: `docs/plans/tasks/evaluation-2026-09-13/T10010-activation-metrics.md`. NOTE:
+T9950 (Focus simplification) had NOT landed — the two framing call sites are flagged in-code for
+re-verify if it reshapes that surface. Prior:)
 updated: 2026-09-15 (T9900 — progress/saving status readable+persistent, frontend-only, no schema.
 The Annotate-side slice of T9900 (main export-indicator work is in export-pipeline.md): the T9330
 create-in-flight DISABLED "Frame this clip" CTA (`stagePendingCta`, AnnotateFullscreenOverlay.jsx,
