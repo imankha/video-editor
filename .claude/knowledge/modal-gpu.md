@@ -117,6 +117,23 @@ graph LR
 - `call_modal_framing_ai(test_mode=True)` → `local_processors.local_framing_mock` (`modal_client.py:541`, `local_processors.py:737`) — no GPU, no Modal, no render.
 - `MODAL_ENABLED=false` + no CUDA → `MockVideoUpscaler` end-to-end pipeline verification (T4120 recipe); /dotask containers have Modal off by default and optional token provisioning (T4180).
 - Cost/perf anchors (E6 benchmark): T4 ≈ 681 ms/frame; 10s clip @30fps ≈ 204 GPU-s ≈ $0.03; Modal jobs can run 40+ min (hence the 60-min stale threshold in `cleanup_stale_exports`). Framing cost anchor ≈ 0.3c/exported-second still stands (T4940 sanity check).
+- **Quality benchmark (T9970, 2026-09-15):** `scripts/quality_benchmark.py` is a standalone,
+  product-code-free instrument that runs the geometric half of framing (source → crop rect →
+  Lanczos enlarge → libx264 crf23) over an authorized fixture and captures matched-timestamp
+  frames at each stage at a normal-playback cadence, emitting `results.json` + source|crop|enlarged
+  montages + one encoded mp4 per framing variant. **CRITICAL caveat: in a no-CUDA container it is
+  Lanczos-only (`MockVideoUpscaler`-equivalent) — the Real-ESRGAN GAN is NOT exercised, so every
+  sharpness number is a no-GAN LOWER BOUND, never proof the upscaler is defective.** First run
+  (fixture `formal annotations/test.short/wcfc-carlsbad-trimmed.mp4`, 1080p/1:29.322, matches the
+  evaluator's clip): the softness R3 flagged scales with the crop **enlargement factor**, not source
+  content — the *default* 9:16 crop (`DEFAULT_CROP_SIZES["9:16"]=(205,365)`, `default_crop.py`,
+  source-dim-independent) enlarges ~4× to 810×1440 and drops enlarged `lap_var` to 3.18 vs 105.0 for
+  a wide 608×1080 crop (~1.33×), while the two *source* crops are comparably sharp (295 vs 279). So
+  the measured-softest path is the zero-effort default. Recommendation: prefer wider default framing
+  before enhancement, but keep any conditional "looks soft" warning DISABLED until a GAN-inclusive
+  multi-fixture calibration run exists. Full rubric + fixture inventory + findings + the still-required
+  GAN/staging re-run: `docs/plans/tasks/evaluation-2026-09-13/T9970-benchmark/`. Gates the future
+  default-crop/wider-frame/warning tasks and T9980/T9990 (GATED_DISCOVERY).
 - **Overlay-render GPU cost is UNMEASURED (T4940 Step 0, OPERATOR follow-up).** The 2nd Modal pass (`render_overlay`, ffmpeg compositing not GAN) is FREE to users by product decision — no credit deduction in `overlay.py`. Its real GPU-s/video-s was never benchmarked (Modal is unavailable in the /dotask container, so T4940 couldn't run it). Measure it the same way as the E6 framing benchmark when convenient; until then "free" is a decision, not a known number. Expected well under 0.1c/s.
 
 ## Active/upcoming work
