@@ -155,17 +155,16 @@ function DraftStageRows({
 // By-Phase view (T8080, aspect-major follow-up): one section per aspect
 // PRESENT in a phase (row-height invariant -- a wrapped line must never mix
 // tile heights, so aspect is the outer axis, matching every other grouping in
-// this file), each carrying compact per-game clusters. Games are usually
-// sparse within one (phase, aspect) bucket (a single game contributes 1-2
-// drafts), so a full-width row per game would leave most of the row empty
-// next to a small fixed-width tile (DraftTile.sizeClass is a fixed px width
-// from `sm:` up, not fluid) -- clusters shrink-wrap to their content and a
-// flex-wrap container packs several onto the same line. The max-width cap
-// keeps a genuinely large cluster (many drafts, one game, one aspect, one
-// phase) from growing unbounded -- CardCarousel only detects overflow (and
-// shows its scroll/arrow affordances) when its container has a bounded width
-// to overflow past.
-const COMPACT_ROW_MAX_WIDTH = 'max-w-full sm:max-w-[420px]';
+// this file), each carrying one per-game cluster per row (T10110 -- clusters
+// used to flex-wrap onto shared lines, which read as one broken carousel with
+// duplicate controls; now each game gets its own full-width row instead).
+// CardCarousel only detects overflow (and shows its scroll/arrow affordances)
+// when its container has a bounded width to overflow past, so the row still
+// needs a max-width -- max-w-full bounds it to the row's own available width
+// (T10140) rather than the old fixed 420px, which used to leave most of a
+// wide row empty next to a small fixed-width tile now that nothing else
+// shares the line.
+const COMPACT_ROW_MAX_WIDTH = 'max-w-full';
 
 function DraftPhaseAspectRows({
   byAspect,
