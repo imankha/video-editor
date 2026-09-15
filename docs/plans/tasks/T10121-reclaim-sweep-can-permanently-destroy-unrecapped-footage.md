@@ -1,6 +1,6 @@
 # T10121: Storage-reclaim sweep can permanently destroy a game's footage before its recap exists, with three separate real mechanisms and zero alerting
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 7
 **Created:** 2026-09-14
@@ -213,6 +213,15 @@ multi-video refusal logic against the full sweep code path before cutting a bran
 
 **2026-09-14**: Split out of T10120 after the expert investigation found this was the larger,
 more severe finding. Not yet Architect-reviewed or started.
+
+**2026-09-14 (later)**: Architect design doc written (`T10121-design.md`), 5 of the expert's 7
+original fix points corrected after re-verification against current code. User approved all 7
+decisions same day. Implemented (4 commits matching the design's sequencing), reviewed (0
+BLOCKING/MAJOR), supervisor-independent red/green proof (10/10 new tests confirmed red on
+reverted source, 89/89 restored), Branch CI green, merged (PR #439). **Still open (task's own
+Step 8, not done)**: the read-only prod inventory of any already-abandoned-shaped game, to be run
+before deploy so the expected volume of new WARNING/CRITICAL log lines is known in advance and any
+already-lost game is reported for a remediation decision. T10130 is now unblocked.
 
 ## Acceptance Criteria
 
