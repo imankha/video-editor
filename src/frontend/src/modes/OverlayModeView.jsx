@@ -754,12 +754,17 @@ export function OverlayModeView({
       onHighlightEffectTypeChange={onHighlightEffectTypeChange}
       isHighlightEnabled={highlightRegions.length > 0}
       disabled={settingsDisabled}
-      // T9620: sequence styling AFTER player selection — the panel shows the
-      // "pick your player" guidance while unpicked, then the styling controls
-      // plus a "N of M players selected" progress line once assignment begins.
+      // T9620/T9960: sequence styling AFTER player selection — the panel shows the
+      // "pick your player" guidance while unpicked, then a completion affirmation
+      // (one athlete satisfies the step, adding more is optional) plus the styling
+      // controls once assignment begins.
       awaitingPlayerSelection={awaitingPlayerSelection}
       assignedCount={assignedDetections}
       totalDetections={totalDetections}
+      // T9960: surface the (already adjustable) effect interval as a named,
+      // previewable readout. Derived from the region span — no new state, no
+      // stored default; adjusting stays a timeline-lever gesture.
+      spotlightDurationSeconds={spotlightSpan ? spotlightSpan.end - spotlightSpan.start : null}
     />
   );
 
