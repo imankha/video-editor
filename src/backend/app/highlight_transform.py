@@ -741,7 +741,7 @@ def transform_keyframe_to_raw(
         working_video_dims=working_video_dims
     )
 
-    return {
+    result = {
         'raw_frame': raw_frame,
         'raw_x': raw_coords['x'],
         'raw_y': raw_coords['y'],
@@ -751,6 +751,16 @@ def transform_keyframe_to_raw(
         'color': keyframe.get('color', '#FFFFFF'),
         'player_image_path': None  # Will be filled in by image extraction
     }
+    # Carry the detection-assignment marker through the geometry transform,
+    # ADDITIVELY (T10060). `fromDetection` is the sole marker that a keyframe is a
+    # real Spotlight/player assignment; the raw<->working round-trip must not drop
+    # it or a framing re-export silently demotes the assignment to unassigned
+    # scaffolding. Additive-only: never invent it on a keyframe that lacked it
+    # (mirrors the T9770 rule for the overlay UPDATE branch). The paired
+    # `transform_keyframe_to_working` re-attaches it on the way back.
+    if keyframe.get('fromDetection'):
+        result['fromDetection'] = True
+    return result
 
 
 def transform_keyframe_to_working(
@@ -808,7 +818,7 @@ def transform_keyframe_to_working(
     # Calculate frame number in working video
     working_frame = int(round(working_time * framerate))
 
-    return {
+    result = {
         'time': working_time,
         'frame': working_frame,
         'x': working_coords['x'],
@@ -819,6 +829,17 @@ def transform_keyframe_to_working(
         'color': raw_keyframe.get('color', '#FFFF00'),
         'origin': 'restored'  # Mark as restored from raw clip
     }
+    # Re-attach the detection-assignment marker on the way back to working space,
+    # ADDITIVELY (T10060). `transform_keyframe_to_raw` carries `fromDetection`
+    # into raw space; this completes the round-trip so a framing re-export no
+    # longer drops the sole marker of a real Spotlight/player assignment. The
+    # marker rides WITH its own keyframe through the exact drop/survive logic as
+    # the geometry, so it holds even when the keyframe's time shifts (speed/trim
+    # change) — a time-matching merge could not. Additive-only: never invent it
+    # on a keyframe that lacked it (mirrors the T9770 backend UPDATE-branch rule).
+    if raw_keyframe.get('fromDetection'):
+        result['fromDetection'] = True
+    return result
 
 
 def transform_highlight_region_to_raw(

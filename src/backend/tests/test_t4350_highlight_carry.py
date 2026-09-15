@@ -387,3 +387,106 @@ class TestLegacyUncertain:
 
         assert result == prior_highlights
         assert note == "legacy_uncertain"
+
+
+# =============================================================================
+# CASE 6: fromDetection (Spotlight player assignment) survives a re-export (T10060)
+# =============================================================================
+
+class TestFromDetectionSurvivesCarry:
+    """T10060: `fromDetection` is the SOLE per-keyframe marker of a real player
+    (Spotlight) assignment. The geometry-only keyframe transform
+    (`transform_keyframe_to_working`) whitelists a fixed key set that OMITTED it,
+    so a framing re-export (crop change) that hit the carry/transform path
+    silently demoted an assigned player back to unassigned scaffolding
+    (re-opening "Pick your player"). Server-side twin of the frontend T9780 bug.
+    The marker must ride through the OLD->raw->NEW transform additively — never
+    fabricated on a keyframe that never had it (mirrors the T9770 backend rule).
+    """
+
+    def _region_with_detection(self, region_id, start_time, end_time, kf_time, from_detection):
+        region = _region(region_id, start_time, end_time, kf_time=kf_time)
+        if from_detection:
+            region['keyframes'][0]['fromDetection'] = True
+        return region
+
+    def test_from_detection_survives_single_clip_transform(
+        self, video_dims, simple_crop_keyframes, detected_regions_sentinel
+    ):
+        """An assigned Spotlight keyframe (fromDetection: True) survives a
+        framing re-export that re-transforms the region."""
+        old_segments = {'boundaries': [0.0, 15.0], 'segmentSpeeds': {}, 'trimRange': None}
+        new_segments = {'boundaries': [0.0, 15.0], 'segmentSpeeds': {}, 'trimRange': {'start': 2.0, 'end': 15.0}}
+        old_snapshot = _snapshot(1, video_dims, [_clip_entry(old_segments, simple_crop_keyframes)])
+        new_snapshot = _snapshot(1, video_dims, [_clip_entry(new_segments, simple_crop_keyframes)])
+
+        prior_highlights = [self._region_with_detection('r1', 5.0, 7.0, 5.0, from_detection=True)]
+
+        result, note = resolve_carried_highlights(
+            prior_highlights=prior_highlights,
+            prior_snapshot=old_snapshot,
+            new_snapshot=new_snapshot,
+            detected_regions=detected_regions_sentinel,
+            clip_count=1,
+        )
+
+        assert note is None
+        assert len(result) == 1
+        kfs = result[0]['keyframes']
+        assert len(kfs) == 1
+        # geometry came from the transform (whitelist output marks origin), and
+        # the marker rode through with it
+        assert kfs[0].get('origin') == 'restored'
+        assert kfs[0].get('fromDetection') is True
+
+    def test_legacy_keyframe_never_gains_false_positive_marker(
+        self, video_dims, simple_crop_keyframes, detected_regions_sentinel
+    ):
+        """Negative control: a keyframe WITHOUT fromDetection must never gain the
+        marker through the transform (additive-only, T9770 rule)."""
+        old_segments = {'boundaries': [0.0, 15.0], 'segmentSpeeds': {}, 'trimRange': None}
+        new_segments = {'boundaries': [0.0, 15.0], 'segmentSpeeds': {}, 'trimRange': {'start': 2.0, 'end': 15.0}}
+        old_snapshot = _snapshot(1, video_dims, [_clip_entry(old_segments, simple_crop_keyframes)])
+        new_snapshot = _snapshot(1, video_dims, [_clip_entry(new_segments, simple_crop_keyframes)])
+
+        prior_highlights = [self._region_with_detection('r1', 5.0, 7.0, 5.0, from_detection=False)]
+
+        result, _ = resolve_carried_highlights(
+            prior_highlights=prior_highlights,
+            prior_snapshot=old_snapshot,
+            new_snapshot=new_snapshot,
+            detected_regions=detected_regions_sentinel,
+            clip_count=1,
+        )
+
+        assert len(result) == 1
+        assert 'fromDetection' not in result[0]['keyframes'][0]
+
+    def test_from_detection_survives_multi_clip_transform(
+        self, video_dims, simple_crop_keyframes, detected_regions_sentinel
+    ):
+        """The multi-clip carry path (T4355) must preserve fromDetection too."""
+        segs_a = {'boundaries': [0.0, 15.0], 'segmentSpeeds': {}, 'trimRange': None}
+        segs_b = {'boundaries': [0.0, 15.0], 'segmentSpeeds': {}, 'trimRange': {'start': 1.0, 'end': 14.0}}
+        old_snapshot = _snapshot(2, video_dims, [
+            _clip_entry(segs_a, simple_crop_keyframes),
+            _clip_entry(segs_a, simple_crop_keyframes),
+        ])
+        new_snapshot = _snapshot(2, video_dims, [
+            _clip_entry(segs_b, simple_crop_keyframes),
+            _clip_entry(segs_b, simple_crop_keyframes),
+        ])
+
+        prior_highlights = [self._region_with_detection('r1', 2.0, 5.0, 2.0, from_detection=True)]
+
+        result, note = resolve_carried_highlights(
+            prior_highlights=prior_highlights,
+            prior_snapshot=old_snapshot,
+            new_snapshot=new_snapshot,
+            detected_regions=detected_regions_sentinel,
+            clip_count=2,
+        )
+
+        assert note != "multiclip_reset"
+        assert len(result) == 1
+        assert result[0]['keyframes'][0].get('fromDetection') is True
