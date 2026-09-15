@@ -1,6 +1,6 @@
 # T10110: Reel Drafts "By Phase" view renders duplicate/overlapping carousel controls
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-09-14
@@ -102,7 +102,11 @@ unnecessary — clusters can no longer share a line, so there's nothing to visua
 Existing `GameTile.test.jsx`/lint pass clean; no new automated coverage added yet (same gap noted
 in the first attempt — no existing test file covers this component's rendering).
 
+**2026-09-15 (verified + merged)**: User live-tested the restarted stack directly (dev-login,
+Reel Drafts By Phase) and confirmed two games now stack on separate rows instead of sharing a
+line. Merged together with T10140 (same branch, same component) as PR #441.
+
 ## Acceptance Criteria
 
-- [ ] Each Reel Drafts group/row shows exactly one carousel control set, unambiguous which cards
-      it scrolls.
+- [x] Each Reel Drafts group/row shows exactly one carousel control set, unambiguous which cards
+      it scrolls. User-confirmed live 2026-09-15.

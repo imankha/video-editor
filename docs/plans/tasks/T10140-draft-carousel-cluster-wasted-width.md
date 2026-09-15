@@ -1,6 +1,6 @@
 # T10140: Draft carousel cluster doesn't use available horizontal width
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-09-15
@@ -78,9 +78,13 @@ can no longer share a row with another (T10110), the old cap's only job — keep
 clusters from fighting for room on one line — no longer applies; `CardCarousel` still gets a
 bounded container (the row's own available width) so its overflow/arrow detection is unaffected.
 
+**2026-09-15 (verified + merged)**: User live-tested on the same restarted stack as T10110 and
+confirmed a solo game's cluster now fills the row. Merged together with T10110 as PR #441.
+
 ## Acceptance Criteria
 
-- [ ] A Draft/Not-Started bucket with only one game's cluster (or otherwise fewer clusters than fit
+- [x] A Draft/Not-Started bucket with only one game's cluster (or otherwise fewer clusters than fit
       the row) uses the available horizontal width instead of stopping at a fixed 420px cap.
-- [ ] Multiple clusters sharing a row still read as clearly separate groups (T10110's divider fix
-      preserved).
+      User-confirmed live 2026-09-15.
+- [x] Moot by construction: T10110 now guarantees one cluster per row, so no two clusters ever
+      share a row to begin with.
