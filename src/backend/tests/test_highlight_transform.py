@@ -824,3 +824,63 @@ class TestComplexScenarios:
         assert len(raw_regions) == 2
         assert raw_regions[0]['id'] == 'region-1'
         assert raw_regions[1]['id'] == 'region-2'
+
+
+# =============================================================================
+# fromDetection MARKER PRESERVATION (T10060)
+# =============================================================================
+
+class TestFromDetectionPreservation:
+    """T10060: the keyframe transform pair is the ONLY consumer chain of the
+    raw-space keyframe form (transform_all_regions_to_raw is used exclusively by
+    highlight_carry), so threading the Spotlight-assignment marker
+    (`fromDetection`) through both directions additively is the clean seam. The
+    marker must ride WITH its own keyframe across working->raw->working, and must
+    never be fabricated on a keyframe that lacked it (T9770 additive-only rule)."""
+
+    def test_to_raw_preserves_from_detection(self, no_modifications_segments, simple_crop_keyframes, working_video_9x16):
+        kf = {'time': 1.0, 'x': 540, 'y': 960, 'radiusX': 50, 'radiusY': 100, 'fromDetection': True}
+        raw_kf = transform_keyframe_to_raw(
+            keyframe=kf,
+            crop_keyframes=simple_crop_keyframes,
+            segments_data=no_modifications_segments,
+            working_video_dims=working_video_9x16,
+            framerate=30.0,
+        )
+        assert raw_kf is not None
+        assert raw_kf.get('fromDetection') is True
+
+    def test_to_working_preserves_from_detection(self, no_modifications_segments, simple_crop_keyframes, working_video_9x16):
+        # raw coords must land INSIDE the crop box (x in [100,300], y in [50,410])
+        # or the transform marks the keyframe not-visible and returns None.
+        raw_kf = {'raw_frame': 30, 'raw_x': 200, 'raw_y': 230, 'raw_radiusX': 30, 'raw_radiusY': 50, 'fromDetection': True}
+        working_kf = transform_keyframe_to_working(
+            raw_keyframe=raw_kf,
+            crop_keyframes=simple_crop_keyframes,
+            segments_data=no_modifications_segments,
+            working_video_dims=working_video_9x16,
+            framerate=30.0,
+        )
+        assert working_kf is not None
+        assert working_kf.get('fromDetection') is True
+
+    def test_marker_absent_stays_absent_both_directions(self, no_modifications_segments, simple_crop_keyframes, working_video_9x16):
+        kf = {'time': 1.0, 'x': 540, 'y': 960, 'radiusX': 50, 'radiusY': 100}
+        raw_kf = transform_keyframe_to_raw(
+            keyframe=kf,
+            crop_keyframes=simple_crop_keyframes,
+            segments_data=no_modifications_segments,
+            working_video_dims=working_video_9x16,
+            framerate=30.0,
+        )
+        assert raw_kf is not None
+        assert 'fromDetection' not in raw_kf
+        working_kf = transform_keyframe_to_working(
+            raw_keyframe=raw_kf,
+            crop_keyframes=simple_crop_keyframes,
+            segments_data=no_modifications_segments,
+            working_video_dims=working_video_9x16,
+            framerate=30.0,
+        )
+        assert working_kf is not None
+        assert 'fromDetection' not in working_kf

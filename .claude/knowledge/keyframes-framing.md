@@ -586,6 +586,31 @@ per-clip remapping.
   an editor-state marker, not part of the render payload) — that's correct and unchanged.
   Coverage: `useHighlightRegions.persistence.test.js` (T9780 block — restored
   fromDetection counts as assigned + legacy negative control stays unassigned).
+- **The raw<->working keyframe transform pair MUST carry `fromDetection` additively
+  (T10060, FIXED 2026-09-15) — server-side twin of T9780.** `transform_keyframe_to_raw` /
+  `transform_keyframe_to_working` (`highlight_transform.py`) each rebuild a keyframe from a
+  FIXED key whitelist (`time/frame, x, y, radiusX, radiusY, opacity, color, origin`) that
+  OMITTED `fromDetection`. That pair is the sole consumer chain of raw-space keyframes —
+  `highlight_carry.resolve_carried_highlights` composes them OLD-working->raw->NEW-working to
+  carry overlay highlights across a framing re-export (T4350/T4355), REPLACING each region's
+  `keyframes` wholesale (`{**base, **region}` merges only region-level metadata, not keyframes).
+  So any re-export that actually re-transforms (crop change, trim, speed change — single OR
+  multi clip) silently demoted an assigned Spotlight player back to unassigned scaffolding,
+  re-opening "Pick your player" even AFTER T9780 shipped. The verbatim fast-path (framing
+  unchanged) and legacy-uncertain path (no old snapshot) never hit the transform, so they were
+  unaffected. **Fix: thread the marker ADDITIVELY through BOTH hops** — `if keyframe.get(
+  'fromDetection'): result['fromDetection'] = True` in each. Threading it WITH its own keyframe
+  through the exact drop/survive + time-shift logic as the geometry means it survives even when
+  the keyframe's working TIME moves (speed/trim) — a time-matching post-hoc merge could not.
+  Additive-only: never fabricated on a keyframe that lacked it (same rule as T9770's backend
+  UPDATE branch + T9780's frontend restore). RULE (now proven in all three layers — backend
+  write, backend re-transform, frontend restore): any key-whitelist reconstruction of a keyframe
+  MUST re-include `fromDetection`, or the assignment marker vanishes on that round-trip. NO
+  migration — write-path bug, no persisted corruption to backfill. Coverage:
+  `tests/test_t10060_carry_fromdetection.py` (both hops + single/multi-clip carry through the
+  real `resolve_carried_highlights` + verbatim/legacy negative controls),
+  `tests/test_highlight_transform.py::TestFromDetectionPreservation`,
+  `tests/test_t4350_highlight_carry.py::TestFromDetectionSurvivesCarry`.
 - **`videoDetections` is VIDEO-level; `reset()` must NOT null it (T5646, FIXED 2026-07-21).**
   The hold's lifecycle: set ONCE per load from `/overlay-data` (`setVideoDetections`),
   replaced only on the next load, and sliced (never mutated) by `addRegion`. Landmine that
