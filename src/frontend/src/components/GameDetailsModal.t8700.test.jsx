@@ -94,7 +94,7 @@ describe('GameDetailsModal — T8700 test 12 (Opponent/Date stable contract)', (
     expect(submit.disabled).toBe(false);
   });
 
-  it('submits successfully with opponent/date left at their defaults (no typing required)', async () => {
+  it('submits successfully with opponent/date left untouched (non-blocking, T9930 honest-empty)', async () => {
     const onCreateGame = vi.fn(() => Promise.resolve());
     const { container } = renderModal({ onCreateGame });
 
@@ -102,12 +102,13 @@ describe('GameDetailsModal — T8700 test 12 (Opponent/Date stable contract)', (
     fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
 
     await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
-    // Whatever the final default opponent string / date format the
-    // ui-designer lands on, both must be present (non-empty) and the call
-    // must succeed -- this is what "non-blocking" means end to end.
+    // T9930: untouched opponent/date are submitted EMPTY, not defaulted to a
+    // fabricated opponent or today's date. "Non-blocking" means the call still
+    // succeeds with the video alone; the backend supplies an honest upload-date
+    // title. The fields must never carry an invented value the parent didn't give.
     const payload = onCreateGame.mock.calls[0][0];
-    expect(payload.opponentName).toBeTruthy();
-    expect(payload.gameDate).toBeTruthy();
+    expect(payload.opponentName).toBe('');
+    expect(payload.gameDate).toBe('');
   });
 
   it('renders an opponent text input and a date input somewhere in the form (fields present, first-class per design intent)', () => {

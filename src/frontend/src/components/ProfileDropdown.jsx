@@ -1,17 +1,25 @@
 import { useState, useRef, useEffect } from 'react';
-import { Settings, User, LogIn, LogOut } from 'lucide-react';
+import { Settings, User, LogIn, LogOut, Share2 } from 'lucide-react';
 import { useProfileStore } from '../stores';
 import { useAuthStore } from '../stores/authStore';
+import { shareInvite } from '../utils/inviteEmail';
 
 /**
  * ProfileDropdown - Header ACCOUNT control.
  *
  * Guest:         Sign In button.
- * Authenticated: Google avatar -> dropdown (Account Settings, Sign Out).
+ * Authenticated: Google avatar -> dropdown (Invite a friend, Account Settings, Sign Out).
  *
  * Profile + sport switching moved OUT of this dropdown into ProfileSportButton
  * (the sport-glyph control) so it's discoverable rather than buried under the
- * account avatar. This control is now purely the account.
+ * account avatar. This control is now the account + the referral invite.
+ *
+ * T9930: "Invite a friend" (a REFERRAL/growth control — `shareInvite` GETs the
+ * per-user `/api/me/invite-code` and shares a `?ref=` product link) moved here
+ * from a front-and-center top-right button on the home surface. It was a
+ * first-run distraction competing with Upload game; still one click away, now in
+ * the account menu where its scope reads correctly. This is NOT a game-scoped
+ * collaboration share (those live inside Annotate) — do not conflate them.
  */
 export function ProfileDropdown() {
   const isInitialized = useProfileStore(state => state.isInitialized);
@@ -91,6 +99,17 @@ export function ProfileDropdown() {
           ref={dropdownRef}
           className="absolute right-0 top-full mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 py-1"
         >
+          <button
+            onClick={() => { setShowDropdown(false); shareInvite(); }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/10 transition-colors"
+            title="Invite a friend to ReelBallers"
+          >
+            <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 flex-shrink-0">
+              <Share2 size={14} className="text-gray-300" />
+            </div>
+            <span className="text-sm text-gray-300">Invite a friend</span>
+          </button>
+
           <button
             onClick={() => { setShowDropdown(false); openAccountSettings(); }}
             className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/10 transition-colors"

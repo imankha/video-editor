@@ -1,5 +1,40 @@
 ---
 domain: annotate
+updated: 2026-09-15 (T9930 — simplify upload + de-clutter fresh home. **Upload dialog
+(`GameDetailsModal.jsx`) RE-COLLAPSED its metadata** — Opponent / Game Date / Game Type /
+Tournament now sit behind a closed native `<details data-testid="game-details-disclosure">`
+labeled "Game details (optional)" (hint "You can add an opponent and game date later."). This
+REVERSES T8700/T8955, which had surfaced those as always-visible first-class fields — the Sept
+12-13 eval (finding S11) found metadata "appeared before value" on the very first upload. Cost
+line + file picker stay ABOVE and always-visible (so the T8500 pre-commit cost/storage disclosure
+is untouched). **DOC-DEBT FIXED:** the T8500 entry below still described this disclosure as
+`<details ... game-details-disclosure>` — it had actually been REMOVED by T8955, and T9930 has now
+re-introduced it; the testid string is the same one the old T8700 test already probed for.
+**Honest fallback title (the S11 core fix):** the date input no longer defaults to today and the
+`OPPONENT_PLACEHOLDER='Unnamed opponent'` was DELETED — an untouched opponent/date now submits
+EMPTY (`opponentName.trim()`, `gameDate=''`; `uploadManager.createGame` maps `''`->null). Backend
+`games.py` gained pure helpers `format_short_date()` (extracted verbatim from
+`generate_game_display_name`'s inline strftime — Windows `%-d` fallback preserved) and
+`upload_fallback_name()`; `create_game`'s fallback changed `"New Game"` -> `"Game uploaded <today>"`
+(uses TODAY's server date, never `request.game_date` — a date typed without an opponent is still a
+claimed match date). So a metadata-skipped game now titles "Game uploaded Sep 12" instead of the
+false "Vs Unnamed opponent Sep 12". `localTodayISO` export deleted (was only the today-default).
+**LANDMINE / already-safe:** editing game metadata later (`PUT /games/{id}`) regenerates ONLY
+`games.name`, never `raw_clips`/clip names (clip names derive from rating/tags/notes via
+`clipDisplayName.js` / `derive_clip_name`), so an existing highlight's name survives a later game
+rename — confirmed, no code needed for that AC. **Global "Invite" RELOCATED:** it is a REFERRAL/
+growth control (`shareInvite` -> GET `/api/me/invite-code` -> share a `?ref=` product link,
+`utils/inviteEmail.js`) — NOT a game-scoped collaboration share (those are the T9810 Annotate
+features: `onSharePlayback`/`SharePlaybackDialog` game-invite + `onShare`/`ShareWithTeammatesModal`
+tagged-player). The front-and-center top-right `<Button icon={Share2}>Invite</Button>` on the home
+surface was a first-run distraction competing with Upload game; it moved into `ProfileDropdown`'s
+account menu as "Invite a friend" (still one click away). Disabled Reels/Published tabs were
+already de-emphasized (disabled + T9390 caption) — left as-is. Tests: new
+`ProfileDropdown.t9930.test.jsx` + `test_t9930_game_upload_fallback_name.py` (backend, pure-fn) +
+updated `GameDetailsModal.videoFirst`/`.t8700` (honest-empty payload, disclosure) +
+`ProjectManager.homeTabDefaults` (no front-and-center Invite). QA: container has NO backend venv
+and no browser (same limit as T9630/T9810/T9850) — no live-drive; backend helpers verified with
+system python3 + a CI pytest; 112 frontend unit tests green. Prior:)
 updated: 2026-09-15 (T9870 — autosave + retain finished private results, RECONCILIATION task,
 frontend-only, no schema. Key finding: the scope was ALREADY satisfied by existing architecture +
 merged deps — in-progress crop/spotlight/trim edits autosave surgically PER GESTURE via

@@ -215,6 +215,40 @@ def generate_clip_name(rating: int, tags: list) -> str:
     return f"{adjective} {tag_part}"
 
 
+def format_short_date(iso_date: str | None) -> str:
+    """
+    Format a YYYY-MM-DD string as "Mon D" (e.g. "Dec 6"). Returns "" for a
+    missing/blank date and the raw value if it cannot be parsed. Platform-safe:
+    %-d is not portable (fails on Windows), so it falls back to %#d-style zero
+    stripping. Extracted (T9930) so the create-time fallback title and the
+    display-name builder share one date format.
+    """
+    if not iso_date:
+        return ""
+    from datetime import datetime
+    try:
+        dt = datetime.strptime(iso_date, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return iso_date
+    try:
+        return dt.strftime("%b %-d")  # "Dec 6"
+    except (ValueError, Exception):
+        # On Windows, %-d may not work; strip the leading zero manually.
+        return dt.strftime("%b %d").replace(" 0", " ")
+
+
+def upload_fallback_name(upload_date: str | None) -> str:
+    """
+    Honest title for a game created with no opponent (T9930). The parent gave no
+    match metadata, so the only truthful thing we know is when it was uploaded —
+    e.g. "Game uploaded Dec 6". Never fabricates an opponent or claims the upload
+    day as a match date (the old default titled these "Vs Unnamed opponent
+    <today>", asserting a match date the user never entered — evaluator S11).
+    """
+    date_str = format_short_date(upload_date)
+    return f"Game uploaded {date_str}" if date_str else "Game uploaded"
+
+
 def generate_game_display_name(
     opponent_name: str | None,
     game_date: str | None,
@@ -236,20 +270,7 @@ def generate_game_display_name(
         return fallback_name
 
     # Format date as "Mon D" (e.g., "Dec 6")
-    date_str = ""
-    if game_date:
-        try:
-            from datetime import datetime
-            dt = datetime.strptime(game_date, "%Y-%m-%d")
-            date_str = dt.strftime("%b %-d")  # "Dec 6"
-        except (ValueError, Exception):
-            # On Windows, %-d may not work, try %#d
-            try:
-                from datetime import datetime
-                dt = datetime.strptime(game_date, "%Y-%m-%d")
-                date_str = dt.strftime("%b %d").replace(" 0", " ")  # Remove leading zero
-            except Exception:
-                date_str = game_date
+    date_str = format_short_date(game_date)
 
     # Build the name based on game type
     if game_type == GameType.TOURNAMENT and tournament_name:
@@ -563,8 +584,13 @@ async def create_game(request: CreateGameRequest):
                     "video_url": video_url,
                 }
 
-    # Generate display name
-    fallback = "New Game"
+    # Generate display name. T9930: with no opponent the fallback is an honest
+    # upload-date title ("Game uploaded Dec 6") rather than "New Game" — the
+    # parent gave no match metadata, so today's upload date is the only truthful
+    # thing to show. Uses TODAY, never request.game_date: a date typed without an
+    # opponent is still a (claimed) match date, not the upload day.
+    from datetime import datetime
+    fallback = upload_fallback_name(datetime.now().strftime("%Y-%m-%d"))
     display_name = generate_game_display_name(
         request.opponent_name,
         request.game_date,
