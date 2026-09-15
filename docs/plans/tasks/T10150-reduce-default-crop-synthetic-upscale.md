@@ -1,6 +1,6 @@
 # T10150: Reduce the default 9:16 crop's synthetic upscale
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-15
