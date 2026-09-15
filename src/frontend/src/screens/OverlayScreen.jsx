@@ -32,6 +32,7 @@ import { clipGameClock } from '../utils/timeFormat';
 import { usePublishProject } from '../hooks/usePublishProject';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
 import { openFinishedReel } from '../utils/finishedReelNav';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { resultRetentionNote } from '../utils/resultRetentionNote';
 import { toast } from '../components/shared';
 import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS } from '../config/displayNames';
@@ -1625,12 +1626,14 @@ export function OverlayScreen({
   // Clips-vs-Highlight-Reels split — that's where the draft actually landed).
   const handlePublishLater = useCallback(() => {
     setShowExportCompletePreview(false);
+    // T10010 activation funnel: "Save draft"/defer from Overlay is a real gesture.
+    recordFunnelEvent(FUNNEL_EVENTS.DRAFT_SAVED, { project_id: projectId });
     const copy = project?.is_auto_created
       ? FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP
       : FOCUS_PUBLISH_LATER_TOAST.MULTI_CLIP;
     toast.success(copy.title, { message: copy.message, duration: 10000 });
     useEditorStore.getState().goToProjectManager();
-  }, [project?.is_auto_created]);
+  }, [project?.is_auto_created, projectId]);
 
   // =========================================
   // RENDER

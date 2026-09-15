@@ -1,5 +1,24 @@
 ---
 domain: export-pipeline
+updated: 2026-09-15 (T10010 — post-export RESULT funnel instrumentation, aggregates-only, NO schema.
+The render→result→playback tail is now instrumented WITHOUT touching the export mechanism itself.
+Render events are UNCHANGED (`export_started`=accepted, `export_completed`=succeeded [+`framing_exported`/
+`overlay_exported`], `export_failed`; fired server-side from `export_worker.py`/`export/overlay.py`).
+NEW client-beacon events (`POST /api/telemetry/funnel-event` -> `record_funnel_event` ->
+`record_milestone`, `daily_col=None`, no migration) cover the gestures with no backend endpoint:
+`result_opened`, `playback_started`, `result_viewed`, `result_reopened`, `preview_started`, `draft_saved`.
+**Render validation vs playback are DIFFERENT events**: `export_completed` (a validated render) is NOT
+activation; `result_viewed` (an actual watch: >=2s for a clip >=4s else >=50%, `is_playback_viewed`,
+server-re-validated) is. Publish (`share_completed`) is a separate, later fact — never conflated with
+"sent"/"watched". Wired in `PublishedReelsPanel.handlePlay` (result surface): result_opened + (if
+`download.watched_at`) result_reopened + playback_started fire on the open gesture; result_viewed fires
+from a duration-derived threshold timer (`viewedTimerRef`, cleared in `closeStoryPlayer`) — NOT inside
+the SHARED `useStoryPlayback` hook (that hook also drives the framing/overlay PREVIEW player, so
+instrumenting it would conflate preview with result). `preview_started` = `DraftTile` ready-tile body-tap
+(the real Preview gesture; NOT the auto-opening completion preview, which is a callback not a gesture).
+Media-load failure is still covered by the existing `POST /api/client-errors/video` beacon.
+ACTIVATION dedup + cohort queries + privacy allow-list: see
+`docs/plans/tasks/evaluation-2026-09-13/T10010-activation-metrics.md`. Prior:)
 updated: 2026-09-15 (T9900 PROGRESS + SAVING STATUS READABLE/PERSISTENT, frontend-only, no schema —
 RECONCILIATION-heavy: the audit found most acceptance criteria ALREADY satisfied by prior work and
 only TWO genuine residual gaps needed code. **AC1 (no speculative saved/ready): already satisfied** —

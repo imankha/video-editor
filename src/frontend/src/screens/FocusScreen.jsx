@@ -18,6 +18,7 @@ import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
 import { FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST } from '../config/displayNames';
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { resultRetentionNote } from '../utils/resultRetentionNote';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
@@ -1135,6 +1136,8 @@ export function FocusScreen({
     closePreview();
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     useQuestStore.getState().recordAchievement('overlay_deferred');
+    // T10010 activation funnel: "Save draft"/defer is a real user gesture. IDs only.
+    recordFunnelEvent(FUNNEL_EVENTS.DRAFT_SAVED, { project_id: projectId });
     // T8390: explainer toast — routed by is_auto_created (T8360's already-approved
     // split), since that's also where the draft actually landed (single-clip auto
     // drafts -> Clips tab; multi-clip drafts -> Highlights). Copy is verbatim from
