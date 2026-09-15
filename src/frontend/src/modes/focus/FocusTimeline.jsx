@@ -54,14 +54,19 @@ export function FocusTimeline({
   onRemoveSegmentBoundary,
   onSegmentSpeedChange,
   onSegmentTrim,
+  // T9950 Slice 1 -- gates the segment/speed/trim track behind the Advanced
+  // editing disclosure. Default `true` keeps every existing caller/test
+  // byte-identical (design doc §5 Slice 1).
+  showSegments = true,
 }) {
   const isMobile = useIsMobile();
+  const segmentTrackVisible = showSegments && segments.length > 0;
 
   const getTotalLayerHeight = () => {
     if (isMobile) {
       // Mobile: Video(h-8=2rem) + gap(mt-0.5=0.125rem) + Crop(h-8=2rem)
       let height = '4.125rem';
-      if (segments.length > 0) {
+      if (segmentTrackVisible) {
         // + gap(0.125rem) + Segment(h-14=3.5rem)
         height = '7.75rem';
       }
@@ -69,7 +74,7 @@ export function FocusTimeline({
     }
     // Desktop: Video(h-12=3rem) + gap(mt-1=0.25rem) + Crop(h-12=3rem)
     let height = '6.5rem';
-    if (segments.length > 0) {
+    if (segmentTrackVisible) {
       // + gap(0.25rem) + Segment(h-20=5rem)
       height = '11.75rem';
     }
@@ -94,15 +99,15 @@ export function FocusTimeline({
       <div
         className={`mt-0.5 lg:mt-1 h-8 lg:h-12 flex items-center justify-center border-r border-gray-700/50 transition-colors cursor-pointer ${
           selectedLayer === 'crop' ? 'bg-yellow-900/30' : 'bg-gray-900 hover:bg-gray-800'
-        } ${segments.length === 0 ? 'rounded-bl-lg' : ''}`}
+        } ${segmentTrackVisible ? '' : 'rounded-bl-lg'}`}
         onClick={() => onLayerSelect && onLayerSelect('crop')}
         title={`${EDITOR_PANELS.FRAMING_TIMELINE} — click to add a ${EDITOR_PANELS.FOCUS_POINT.toLowerCase()} (a crop keyframe). Drag the crop box on the video to frame your athlete at different moments.`}
       >
         <Crop size={18} className={selectedLayer === 'crop' ? 'text-yellow-300' : 'text-yellow-400'} />
       </div>
 
-      {/* Segment Layer Label (only if segments exist) */}
-      {segments.length > 0 && (
+      {/* Segment Layer Label (only if segments exist AND Advanced editing is open) */}
+      {segmentTrackVisible && (
         <div
           className="mt-0.5 lg:mt-1 h-14 lg:h-20 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 rounded-bl-lg"
           title="Speed & trim — click segments to change playback speed. Drag edges to trim the clip."
@@ -160,7 +165,7 @@ export function FocusTimeline({
       </div>
 
       {/* Segment Layer */}
-      {segments.length > 0 && (
+      {segmentTrackVisible && (
         <div className="mt-0.5 lg:mt-1">
           <SegmentLayer
             segments={segments}

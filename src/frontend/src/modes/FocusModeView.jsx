@@ -1,5 +1,5 @@
 import { forwardRef, useState } from 'react';
-import { Minimize, Maximize, Crop, Sliders, Film, ChevronLeft } from 'lucide-react';
+import { Minimize, Maximize, Crop, Sliders, Film, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -14,6 +14,7 @@ import { FocusMode, CropOverlay } from './focus';
 import FramingInstructions from './focus/FramingInstructions';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { ratioWithName } from '../constants/aspectRatios';
+import { EDITOR_PANELS } from '../config/displayNames';
 
 /**
  * OutputLengthChip - live post-trim/post-speed output duration (T5780).
@@ -291,6 +292,17 @@ export function FocusModeView({
   const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
   const [guideOverride, setGuideOverride] = useState(null);
   const guideExpanded = guideOverride ?? focusPointCount < 2;
+
+  // T9950 Slice 1: the segment/speed/trim track collapses behind an "Advanced
+  // editing" disclosure (design doc §5 Slice 1). EPHEMERAL view state, same
+  // gesture-override-on-derived-default pattern as guideOverride above (T9610
+  // precedent) — never a useEffect, never persisted. R4 (design doc §6): default
+  // OPEN when the clip already has user splits or a trim range, so a returning
+  // user's existing edits are never hidden by default; a fresh/untouched clip
+  // defaults to collapsed.
+  const hasExistingAdvancedEdits = (segmentBoundaries?.length || 0) > 2 || !!trimRange;
+  const [advancedOverride, setAdvancedOverride] = useState(null);
+  const advancedOpen = advancedOverride ?? hasExistingAdvancedEdits;
 
   // T9270: the Focus settings-rail tabs (Clips | Settings) and their bodies. The
   // Settings tab re-homes the old above-video toolbar (aspect, audio, straighten,
@@ -624,7 +636,24 @@ export function FocusModeView({
             onTimelineScrollPositionChange={onTimelineScrollPositionChange}
             isPlaying={isPlaying}
             isFullscreen={isFullscreen}
+            showSegments={advancedOpen}
           />
+        )}
+
+        {/* T9950 Slice 1: "Advanced editing" disclosure — directly under the
+            timeline. Toggles the segment/speed/trim track (showSegments above);
+            the settings-rail grouping (FocusSettingsPanel) uses the same word. */}
+        {!mobileFs && videoUrl && (
+          <button
+            type="button"
+            data-testid="advanced-editing-disclosure"
+            onClick={() => setAdvancedOverride(!advancedOpen)}
+            aria-expanded={advancedOpen}
+            className="mt-1 flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-gray-200"
+          >
+            {advancedOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {EDITOR_PANELS.ADVANCED_EDITING}
+          </button>
         )}
 
           {/* Mobile fullscreen: YouTube-style overlay controls + timeline */}
@@ -697,6 +726,7 @@ export function FocusModeView({
                         onTimelineScrollPositionChange={onTimelineScrollPositionChange}
                         isPlaying={isPlaying}
                         isFullscreen={isFullscreen}
+                        showSegments={advancedOpen}
                       />
                     </div>
                   )}
