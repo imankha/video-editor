@@ -47,6 +47,9 @@ import { OVERLAY_PUBLISH } from '../config/displayNames';
  * @param {Function} onReapplyOverlay - required. Secondary. Back into Spotlight editing.
  * @param {Function} onReapplyFocus   - required. Tertiary. Reframe (paid re-export).
  * @param {Function} onSaveDraft      - required. Quiet defer-to-drafts (was Publish Later).
+ * @param {string=}  retentionNote    - T9870 AC1 reassurance line ("it's already saved"),
+ *                                       derived by the screen via resultRetentionNote. Rendered
+ *                                       above the grid; omitted when null.
  */
 export function OverlayPublishActionBar({
   onPublishNow,
@@ -54,12 +57,24 @@ export function OverlayPublishActionBar({
   onReapplyOverlay,
   onReapplyFocus,
   onSaveDraft,
+  retentionNote,
 }) {
   return (
     <div
       data-testid="overlay-publish-action-bar"
       className="border-t border-gray-800 bg-gray-900 px-4 py-6 sm:px-6 sm:py-8"
     >
+      {/* T9870: retention honesty — the finished highlight is already saved and
+          watchable privately, so the completion says so; Publish stays a separate
+          deliberate choice and the Save-draft link is a convenience, not a save. */}
+      {retentionNote && (
+        <p
+          data-testid="overlay-retention-note"
+          className="mx-auto mb-5 max-w-md text-center text-sm font-medium text-green-400"
+        >
+          {retentionNote}
+        </p>
+      )}
       <div className="mx-auto grid w-full max-w-md grid-cols-1 gap-4 lg:max-w-4xl lg:grid-cols-[repeat(3,minmax(min-content,1fr))]">
         {/* PRIMARY — Publish. Dominant: filled cyan lg button, tinted+ringed
             card; caption states the audience/access BEFORE the tap. */}

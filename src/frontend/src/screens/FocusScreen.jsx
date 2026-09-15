@@ -18,6 +18,7 @@ import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
 import { FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST } from '../config/displayNames';
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
+import { resultRetentionNote } from '../utils/resultRetentionNote';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
@@ -1458,6 +1459,7 @@ export function FocusScreen({
               onAddSpotlight={handleAddSpotlight}
               onRefocus={handleRefocus}
               onSaveDraft={handleAddSpotlightLater}
+              retentionNote={resultRetentionNote(project)}
             />
           )}
         />

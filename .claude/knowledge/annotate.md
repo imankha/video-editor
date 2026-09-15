@@ -1,5 +1,33 @@
 ---
 domain: annotate
+updated: 2026-09-15 (T9870 — autosave + retain finished private results, RECONCILIATION task,
+frontend-only, no schema. Key finding: the scope was ALREADY satisfied by existing architecture +
+merged deps — in-progress crop/spotlight/trim edits autosave surgically PER GESTURE via
+`api/actionClient.js` (per-entity FIFO + `expected_version` + 409→reload + optimistic apply/rollback +
+`onError` toast; there is NO debounce and none is wanted); the backend export finalizer
+(`upsert_working_video`/`export_final`, durable_sync) durably persists the working/final video AT
+export completion, independent of any frontend click; `openFinishedReel`→`DraftReelPreview` is the
+stable private player (streams `final_video_id` even when unpublished); `draftStage.getDraftStatus`
+gives the Draft/Private/Published axis; publish is a SEPARATE explicit gesture. **LANDMINE the task
+fixed: the post-export completion "Save draft" ghost affordance persists NOTHING — it is
+navigation-only (`handleAddSpotlightLater` FocusScreen, `handlePublishLater` OverlayScreen) — yet its
+caption implied durability was gated on the click ("Keep it in your drafts and finish it whenever you
+want").** That false model was AC1's whole target. Fix (frontend-only): a retention reassurance line
+(`retentionNote` prop) above BOTH completion action grids (`FocusPublishActionBar`/
+`OverlayPublishActionBar`), derived once by the new PURE read `utils/resultRetentionNote.js`
+(`getDraftStatus`→one of `RESULT_RETENTION.{PRIVATE_DRAFT,PRIVATE_READY,PUBLISHED}` in
+displayNames.js) + reframed `SAVE_DRAFT_CAPTION`s. Focus completion (working video, no final)→DRAFT→
+"Saved to your drafts. Only you can see it."; Overlay completion (final video)→PRIVATE→"Private and
+ready to watch...". **AC4 guard lives in the deriver**: an already-published reel maps to
+`RESULT_RETENTION.PUBLISHED` ("already published, its link is unchanged") — never "only you can see
+it", never an implied visibility change; the deriver + prop NEVER write, so no persistence rule is
+touched. Explicit Save-draft control + T9830 outcome buttons preserved (kickoff). Scope stayed OUT of
+T9880 (publish/share split), T9890 (entry-point recovery), T9900 (persistent saving-status
+indicator). Tests: `resultRetentionNote.test.js` (4, incl. AC4), Focus/OverlayPublishActionBar
+retention-note cases. NOTE: `screens/__tests__/{focus,overlay}PublishExit.test.jsx` pass in ISOLATION
+but a multi-file batch run of the large screen harnesses shows a vitest cross-file worker-crash
+cascade ("document is not defined") — pre-existing isolation artifact, run them one file at a time.
+Prior:)
 updated: 2026-09-14 (T9860 — copy/vocabulary sweep, single cutover across ~34 source + ~64 test/spec
 files, landed as 6 ordered commits on feature/T9860-copy-and-concept-sweep. **Single source added:**
 `config/displayNames.js` gained `MODE_NAMES` (ANNOTATE/FRAMING/SPOTLIGHT), `STAGE_REASONS` (one

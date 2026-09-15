@@ -30,7 +30,24 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590)', () => {
     expect(screen.getByText('Files it under Published as is. Nobody else can see this until you share a link.')).toBeTruthy();
     // Re-render charge stated on the edit-framing choice BEFORE the tap (T9590).
     expect(screen.getByText('Reframe and export again, uses credits.')).toBeTruthy();
-    expect(screen.getByText('Keep it in your drafts and finish it whenever you want.')).toBeTruthy();
+    // T9870: retention-honest Save-draft caption -- the work is already saved, the
+    // link only leaves the flow.
+    expect(screen.getByText('It is already saved to your drafts. Pick it up whenever you want.')).toBeTruthy();
+  });
+
+  // T9870 (AC1): the retention reassurance line renders above the grid when the
+  // screen passes it, and is absent when it is null (nothing retained to reassure).
+  it('renders the retention note above the grid when provided, and omits it otherwise', () => {
+    const note = 'Saved to your drafts. Only you can see it.';
+    const { rerender, container } = render(<FocusPublishActionBar {...makeHandlers()} retentionNote={note} />);
+    const el = container.querySelector('[data-testid="focus-retention-note"]');
+    expect(el).toBeTruthy();
+    expect(el.textContent).toBe(note);
+    // It sits OUTSIDE the card grid (it is reassurance, not a competing choice).
+    expect(el.closest('[class*="rounded-xl"]')).toBeNull();
+
+    rerender(<FocusPublishActionBar {...makeHandlers()} retentionNote={null} />);
+    expect(container.querySelector('[data-testid="focus-retention-note"]')).toBeNull();
   });
 
   it('the Publish button carries data-tutorial-target="focus-publish" exactly once (guided-path rule 30 anchor)', () => {
