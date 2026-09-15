@@ -17,6 +17,7 @@ import numpy as np
 import torch
 
 from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
+from app.ai_upscaler.upscale_gate import should_skip_gan
 
 logger = logging.getLogger(__name__)
 
@@ -217,15 +218,20 @@ class FrameProcessor:
             scale_y = target_h / current_h
             desired_scale = min(scale_x, scale_y, 4.0)
 
-            # Real-ESRGAN can use outscale < 4 for more efficient processing
-            with contextlib.redirect_stderr(open(os.devnull, 'w')):
-                enhanced, _ = upsampler.enhance(frame, outscale=desired_scale)
+            # T10160: skip the GAN entirely for small enlargements. The cheap path
+            # is INERT by default (GAN_MIN_ENLARGE=0.0 -> should_skip_gan is always
+            # False), so this is byte-identical to before until the constant is
+            # flipped. The existing sharpen step below runs for BOTH branches.
+            if should_skip_gan(target_w, current_w):
+                enhanced = cv2.resize(frame, target_resolution, interpolation=cv2.INTER_LANCZOS4)
+            else:
+                # Real-ESRGAN can use outscale < 4 for more efficient processing
+                with contextlib.redirect_stderr(open(os.devnull, 'w')):
+                    enhanced, _ = upsampler.enhance(frame, outscale=desired_scale)
 
-            upscaled_h, upscaled_w = enhanced.shape[:2]
-
-            # Resize to exact target size if needed
-            if enhanced.shape[:2] != (target_h, target_w):
-                enhanced = cv2.resize(enhanced, target_resolution, interpolation=cv2.INTER_LANCZOS4)
+                # Resize to exact target size if needed
+                if enhanced.shape[:2] != (target_h, target_w):
+                    enhanced = cv2.resize(enhanced, target_resolution, interpolation=cv2.INTER_LANCZOS4)
 
             # Sharpen upscaled output for better perceived quality (QUALITY mode only)
             # Using milder unsharp mask to avoid over-sharpening

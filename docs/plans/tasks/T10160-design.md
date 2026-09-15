@@ -286,6 +286,12 @@ fixture, computing enlarged/encoded `lap_var` (+ `hf_ratio`) the same way as `sc
   a perceptual-noise floor, ideally corroborated by a small parent A/B (T9970's blocked dimension 12).
 - Expert's provisional direction is `enlarge_x <= ~1.5×` — a **hypothesis to test, not a ship-it
   number**. Do not bake 1.5× (or any number) into this task's default.
+- **Cheap-path sharpen divergence to account for at calibration (Reviewer note):** the Modal cheap
+  path (`_upscale_crop` → `_sharpen_frame`) sharpens UNCONDITIONALLY, whereas the local mirror's
+  sharpen is gated on `cuda and export_mode == 'quality'`. This is irrelevant while inert but means
+  the two engines' cheap-path output differs slightly once the constant is flipped; the GAN-inclusive
+  calibration run (and the Step-5 follow-up) should measure the Modal cheap path as it actually
+  behaves (always-sharpen), not assume local-path parity.
 
 ### 3.2 Deploy sequence (Invariant 3 — manual, per-env)
 
