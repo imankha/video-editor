@@ -1,5 +1,16 @@
 ---
 domain: persistence-sync
+updated: 2026-09-15 (T9870 — autosave + retain finished private results, frontend-only, NO new write
+path. Reconciliation finding relevant here: (1) in-progress crop/spotlight/trim edits already
+autosave surgically per gesture through `api/actionClient.js` → `/actions` (invariant 8) — this IS
+the autosave; there is no debounce and adding a second writer would violate invariant 5. (2) A
+finished result is durably retained by the BACKEND export finalizer (`upsert_working_video`/
+`export_final` under durable_sync) AT export completion — the frontend post-export "Save draft" ghost
+button (`handleAddSpotlightLater`/`handlePublishLater`) is NAVIGATION-ONLY and persists nothing, so
+retention was never actually gated on it. The task's fix is a PURE READ (`utils/resultRetentionNote.js`
+→ `getDraftStatus`) rendering a reassurance line + reframed captions; it triggers no write, adds no
+sync call site, and touches no publish/visibility state (AC4). Nothing in the CAS/sync machinery
+changed.)
 updated: 2026-09-07 (T8892: profile_db head v051 -> v052 (game_videos.original_filename TEXT NULL, for
 real angle names). Plain additive JIT-seam migration -- guarded PRAGMA table_info ALTER, idempotent,
 tuple row-factory, NO backfill (the datum never existed for pre-existing rows; a NULL is the honest

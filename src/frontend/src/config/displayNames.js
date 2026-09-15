@@ -279,7 +279,10 @@ export const FOCUS_PUBLISH = {
   EDIT_FRAMING_LABEL: 'Edit framing',
   EDIT_FRAMING_CAPTION: 'Reframe and export again, uses credits.',
   SAVE_DRAFT_LABEL: 'Save draft',
-  SAVE_DRAFT_CAPTION: 'Keep it in your drafts and finish it whenever you want.',
+  // T9870: retention honesty. The framing render already saved this as a private
+  // draft (see RESULT_RETENTION note above the grid) -- this link only leaves the
+  // flow, it is NOT what keeps the work. Say "it's already yours", not "save it now".
+  SAVE_DRAFT_CAPTION: 'It is already saved to your drafts. Pick it up whenever you want.',
 };
 
 // T8390: "Add Spotlight Later" toast copy, routed by is_auto_created (T8360 split).
@@ -329,7 +332,28 @@ export const OVERLAY_PUBLISH = {
   REAPPLY_FOCUS_LABEL: `Reapply ${MODE_NAMES.FRAMING}`,
   REAPPLY_FOCUS_CAPTION: 'Reframe and export again, uses credits.',
   SAVE_DRAFT_LABEL: 'Save draft',
-  SAVE_DRAFT_CAPTION: 'Save it as a draft and publish whenever you\'re ready.',
+  // T9870: retention honesty. The finished highlight is ALREADY saved and watchable
+  // (see RESULT_RETENTION note above the grid) -- this link only leaves the flow, it
+  // is not what keeps the reel. Publish stays a separate, deliberate choice.
+  SAVE_DRAFT_CAPTION: 'It is already saved and only you can see it. Publish whenever you are ready.',
+};
+
+// T9870: the post-export retention reassurance shown ABOVE each completion action
+// grid. AC1 ("completion is durably retrievable without a redundant Save-draft
+// step"): the backend finalizer already persisted the result at export completion,
+// so the completion surface must SAY the work is safe -- leaving with zero extra
+// clicks is fine. Composed entirely from shipped T9860 vocabulary (draftStage.js
+// DRAFT_STATUS / DRAFT_STAGE_LABELS), never new product wording. The AC4 guard
+// lives in the deriver (resultRetentionNote.js): an already-published reel gets the
+// PUBLISHED line and is never told "only you can see it".
+export const RESULT_RETENTION = {
+  // Overlay completion: a FINAL video exists -> private and ready to watch.
+  PRIVATE_READY: 'Saved. Private and ready to watch, only you can see it.',
+  // Focus completion: a framing WORKING video exists -> saved, still a draft.
+  PRIVATE_DRAFT: 'Saved to your drafts. Only you can see it.',
+  // Either completion, when the reel is already published (re-export of a shared
+  // reel): never claim "only you can see it", never imply a visibility change.
+  PUBLISHED: 'Saved. This reel is already published, its link is unchanged.',
 };
 
 // T9110: "Reapply Framing" confirmation toast. Mirrors FOCUS_ADD_SPOTLIGHT_TOAST's

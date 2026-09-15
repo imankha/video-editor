@@ -95,6 +95,20 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590)', () => {
     expect(saveDraft.className).toMatch(/bg-transparent/);
   });
 
+  // T9870 (AC1): the retention reassurance line renders above the grid when provided
+  // and is omitted when null.
+  it('renders the retention note above the grid when provided, and omits it otherwise', () => {
+    const note = 'Saved. Private and ready to watch, only you can see it.';
+    const { rerender, container } = render(<OverlayPublishActionBar {...makeHandlers()} retentionNote={note} />);
+    const el = container.querySelector('[data-testid="overlay-retention-note"]');
+    expect(el).toBeTruthy();
+    expect(el.textContent).toBe(note);
+    expect(el.closest('[class*="rounded-xl"]')).toBeNull();
+
+    rerender(<OverlayPublishActionBar {...makeHandlers()} retentionNote={null} />);
+    expect(container.querySelector('[data-testid="overlay-retention-note"]')).toBeNull();
+  });
+
   it('reads Publish, Reapply spotlight, Reapply Framing, Save draft in that DOM/tab order, no order-* juggling', () => {
     const { container } = render(<OverlayPublishActionBar {...makeHandlers()} />);
     const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent);

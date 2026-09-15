@@ -32,6 +32,7 @@ import { clipGameClock } from '../utils/timeFormat';
 import { usePublishProject } from '../hooks/usePublishProject';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
 import { openFinishedReel } from '../utils/finishedReelNav';
+import { resultRetentionNote } from '../utils/resultRetentionNote';
 import { toast } from '../components/shared';
 import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS } from '../config/displayNames';
 
@@ -1825,6 +1826,7 @@ export function OverlayScreen({
               onReapplyOverlay={handleReapplyOverlay}
               onReapplyFocus={handleReapplyFocus}
               onSaveDraft={handlePublishLater}
+              retentionNote={resultRetentionNote(project)}
             />
           )}
         />

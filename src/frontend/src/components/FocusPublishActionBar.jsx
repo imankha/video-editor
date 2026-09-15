@@ -61,6 +61,9 @@ import { FOCUS_PUBLISH } from '../config/displayNames';
  * @param {boolean=} publishLoading  - spins + disables Publish only.
  * @param {Function} onRefocus       - required. Tertiary "Edit framing" tap handler.
  * @param {Function} onSaveDraft     - required. Quiet defer-to-drafts (was Add Spotlight Later).
+ * @param {string=}  retentionNote   - T9870 AC1 reassurance line ("it's already saved"),
+ *                                      derived by the screen via resultRetentionNote. Rendered
+ *                                      above the grid; omitted when null.
  */
 export function FocusPublishActionBar({
   onAddSpotlight,
@@ -68,12 +71,24 @@ export function FocusPublishActionBar({
   publishLoading = false,
   onRefocus,
   onSaveDraft,
+  retentionNote,
 }) {
   return (
     <div
       data-testid="focus-publish-action-bar"
       className="border-t border-gray-800 bg-gray-900 px-4 py-6 sm:px-6 sm:py-8"
     >
+      {/* T9870: retention honesty — the framing render already saved this privately,
+          so the completion says so and the Save-draft click below is a convenience,
+          not the thing that keeps the work. */}
+      {retentionNote && (
+        <p
+          data-testid="focus-retention-note"
+          className="mx-auto mb-5 max-w-md text-center text-sm font-medium text-green-400"
+        >
+          {retentionNote}
+        </p>
+      )}
       <div className="mx-auto grid w-full max-w-md grid-cols-1 gap-4 lg:max-w-4xl lg:grid-cols-[repeat(3,minmax(min-content,1fr))]">
         {/* PRIMARY — Add spotlight. Dominant: filled cyan lg button in a
             tinted, ringed card. Opens the editor; never exports on its own. */}
