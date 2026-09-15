@@ -466,10 +466,10 @@ def multi_clip_project():
         project_id = cursor.lastrowid
 
         # Centered 9:16 box: width=608, height=1080 in a 1920x1080 frame -> x=656, y=0.
-        # center = (960, 540). Re-fit to 16:9 (640x360) -> x=640, y=360 (no clamp).
+        # center = (960, 540). Re-fit to 16:9 (1280x720) -> x=320, y=180 (no clamp).
         clip_a_crop = [{"frame": 0, "x": 656, "y": 0, "width": 608, "height": 1080, "origin": "permanent"}]
-        # Off-center box pushed to top-left: center=(235, 340). Re-fit to 16:9 (640x360) ->
-        # x = round(235-320) = -85 -> clamp 0 ; y = round(340-180) = 160.
+        # Off-center box pushed to top-left: center=(235, 340). Re-fit to 16:9 (1280x720) ->
+        # x = round(235-640) = -405 -> clamp 0 ; y = round(340-360) = -20 -> clamp 0.
         clip_b_crop = [
             {"frame": 0, "x": 100, "y": 100, "width": 270, "height": 480, "origin": "permanent"},
             {"frame": 90, "x": 100, "y": 100, "width": 270, "height": 480, "origin": "user"},
@@ -526,24 +526,26 @@ class TestSetProjectAspectRatio:
         # Every clip's boxes are now the 16:9 default size.
         for clip_id in (clip_a, clip_b):
             for kf in self._crop(clip_id):
-                assert kf["width"] == 640
-                assert kf["height"] == 360
+                assert kf["width"] == 1280
+                assert kf["height"] == 720
 
     def test_refit_preserves_center_when_unclamped(self, multi_clip_project):
         project_id, (clip_a, _clip_b) = multi_clip_project
         client.post(f"/api/clips/projects/{project_id}/aspect-ratio", json={"aspect_ratio": "16:9"})
 
         kf = self._crop(clip_a)[0]
-        # center stays (960, 540): 640+640/2 == 960, 360+360/2 == 540
-        assert kf["x"] == 640 and kf["y"] == 360
+        # center stays (960, 540): 320+1280/2 == 960, 180+720/2 == 540
+        assert kf["x"] == 320 and kf["y"] == 180
 
     def test_refit_clamps_to_frame_bounds(self, multi_clip_project):
         project_id, (_clip_a, clip_b) = multi_clip_project
         client.post(f"/api/clips/projects/{project_id}/aspect-ratio", json={"aspect_ratio": "16:9"})
 
         kf = self._crop(clip_b)[0]
-        # x would be negative (-85) so clamped to 0; y = 160 within bounds.
-        assert kf["x"] == 0 and kf["y"] == 160
+        # x would be negative (-405) so clamped to 0; y would be negative (-20) so also
+        # clamped to 0 (the T10150-enlarged 1280x720 box no longer fits this frame
+        # unclamped the way the old 640x360 box did).
+        assert kf["x"] == 0 and kf["y"] == 0
 
     def test_refit_preserves_frame_and_origin(self, multi_clip_project):
         project_id, (_clip_a, clip_b) = multi_clip_project
@@ -609,8 +611,8 @@ class TestSetProjectAspectRatio:
                                "JOIN projects p ON p.id = wc.project_id WHERE wc.id = ?", (clip_id,))
                 row = cursor.fetchone()
                 kf = decode_data(row[0])[0]
-                # Box re-shaped to the 16:9 product size (640x360), not the original 270x480.
-                assert (kf["width"], kf["height"]) == (640, 360)
+                # Box re-shaped to the 16:9 product size (1280x720), not the original 270x480.
+                assert (kf["width"], kf["height"]) == (1280, 720)
                 # frame + origin preserved verbatim (no keyframe-origin corruption).
                 assert kf["frame"] == 0
                 assert kf["origin"] == "permanent"
@@ -647,7 +649,7 @@ class TestSetProjectAspectRatio:
         )
         assert response.json()["updated_clip_count"] == 1
         kf = self._crop(clip_id)[0]
-        assert (kf["width"], kf["height"]) == (640, 360)
+        assert (kf["width"], kf["height"]) == (1280, 720)
 
     def test_invalid_aspect_ratio_rejected(self, multi_clip_project):
         project_id, _clips = multi_clip_project
