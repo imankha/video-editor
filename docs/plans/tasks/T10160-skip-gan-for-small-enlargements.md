@@ -1,6 +1,6 @@
 # T10160: Skip the GAN upscale pass when the enlargement is small
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-09-15
