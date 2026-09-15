@@ -95,7 +95,7 @@ describe('OverlaySpotlightPanel player-selection sequencing (T9620)', () => {
     expect(screen.getByText(EDITOR_PANELS.OUTLINE_THICKNESS)).toBeTruthy();
   });
 
-  it('names the remaining detection frames when partially assigned', () => {
+  it('reveals styling immediately after one pick, even with detections remaining', () => {
     render(
       <OverlaySpotlightPanel
         {...baseProps}
@@ -104,19 +104,99 @@ describe('OverlaySpotlightPanel player-selection sequencing (T9620)', () => {
         totalDetections={3}
       />
     );
-    const progress = screen.getByTestId('assignment-progress');
-    expect(progress.textContent).toContain('1 of 3 players selected');
+    // AC: one player satisfies the step — styling is available right away.
+    expect(screen.getByText(EDITOR_PANELS.OUTLINE_THICKNESS)).toBeTruthy();
   });
+});
 
-  it('shows no progress line once every detection frame is assigned', () => {
+/**
+ * T9960 (EP05): one selected athlete SATISFIES the step; picking more is optional,
+ * never implied as required. The effect interval is surfaced as a named readout
+ * above the (secondary) advanced styling controls.
+ */
+describe('OverlaySpotlightPanel single-athlete completion (T9960)', () => {
+  it('affirms completion after one pick and never implies all players are required', () => {
     render(
       <OverlaySpotlightPanel
         {...baseProps}
         awaitingPlayerSelection={false}
-        assignedCount={3}
+        assignedCount={1}
+        totalDetections={4}
+      />
+    );
+    const status = screen.getByTestId('player-selected-status');
+    expect(status.textContent).toContain(EDITOR_PANELS.SELECT_PLAYER_DONE);
+    // More detections remain -> adding is OPTIONAL, not an instruction.
+    expect(status.textContent).toContain(EDITOR_PANELS.SELECT_PLAYER_ADD_MORE);
+    // No all-player implication survives.
+    expect(status.textContent).not.toMatch(/of 4/);
+    expect(status.textContent).not.toMatch(/remaining/i);
+    expect(status.textContent).not.toMatch(/each too/i);
+  });
+
+  it('affirms completion without the add-more clause when no other players exist', () => {
+    render(
+      <OverlaySpotlightPanel
+        {...baseProps}
+        awaitingPlayerSelection={false}
+        assignedCount={1}
+        totalDetections={1}
+      />
+    );
+    const status = screen.getByTestId('player-selected-status');
+    expect(status.textContent).toContain(EDITOR_PANELS.SELECT_PLAYER_DONE);
+    expect(status.textContent).not.toContain(EDITOR_PANELS.SELECT_PLAYER_ADD_MORE);
+  });
+
+  it('shows no completion status before any player is picked', () => {
+    render(
+      <OverlaySpotlightPanel
+        {...baseProps}
+        awaitingPlayerSelection={false}
+        assignedCount={0}
+        totalDetections={0}
+      />
+    );
+    expect(screen.queryByTestId('player-selected-status')).toBeNull();
+  });
+
+  it('states Spotlight is optional in the pre-selection guidance', () => {
+    render(
+      <OverlaySpotlightPanel
+        {...baseProps}
+        awaitingPlayerSelection
+        assignedCount={0}
         totalDetections={3}
       />
     );
-    expect(screen.queryByTestId('assignment-progress')).toBeNull();
+    expect(screen.getByText(EDITOR_PANELS.SELECT_PLAYER_OPTIONAL)).toBeTruthy();
+  });
+
+  it('surfaces the effect interval as a named, previewable readout', () => {
+    render(
+      <OverlaySpotlightPanel
+        {...baseProps}
+        awaitingPlayerSelection={false}
+        assignedCount={1}
+        totalDetections={1}
+        spotlightDurationSeconds={2}
+      />
+    );
+    expect(screen.getByText(EDITOR_PANELS.SPOTLIGHT_DURATION)).toBeTruthy();
+    expect(screen.getByText('2.0s')).toBeTruthy();
+    expect(screen.getByTestId('spotlight-duration-hint')).toBeTruthy();
+  });
+
+  it('hides the duration readout when the interval is unknown', () => {
+    render(
+      <OverlaySpotlightPanel
+        {...baseProps}
+        awaitingPlayerSelection={false}
+        assignedCount={1}
+        totalDetections={1}
+        spotlightDurationSeconds={null}
+      />
+    );
+    expect(screen.queryByText(EDITOR_PANELS.SPOTLIGHT_DURATION)).toBeNull();
   });
 });

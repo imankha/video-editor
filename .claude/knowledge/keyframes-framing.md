@@ -1,5 +1,18 @@
 ---
 domain: keyframes-framing
+updated: 2026-09-15 (T9960 — Spotlight single-athlete completion copy: `OverlaySpotlightPanel` no
+longer renders the all-player imperative "N of M players selected — click the remaining players to
+spotlight each too". ONE assigned detection now SATISFIES the step: it shows `EDITOR_PANELS.SELECT_PLAYER_DONE`
+("Your player is selected.") + only when other detections remain the OPTIONAL `SELECT_PLAYER_ADD_MORE`
+("Add another only if you want to highlight more than one.") — testid renamed `assignment-progress`→
+`player-selected-status`. Pre-selection panel gained `SELECT_PLAYER_OPTIONAL` (Spotlight never blocks
+the framed result). The effect interval is surfaced as a PRIMARY `SPOTLIGHT_DURATION` readout (derived
+read-time from `spotlightSpan` = min start/max end of highlightRegions, threaded OverlayContainer→
+OverlayModeView→panel via `spotlightDurationSeconds`; `formatLength` unit style) with styling kept
+secondary below it. NO new default timing and NO new state/persistence — the interval stays adjusted by
+the timeline levers (T5649) and previewed by Play spotlight/ordinary playback (T5250). AC "removed
+selection persists after reopen" is guaranteed by T9770/T9780 (unchanged here). Copy lives in
+`config/displayNames.js` EDITOR_PANELS. Coverage: `OverlaySpotlightPanel.test.jsx` T9960 block.)
 updated: 2026-09-14 (T9860 — supersedes two claims in the T9550 entry immediately below: the "Mode
 NAMES held (epic override)" line is no longer true -- T9860 LIFTED that override, so
 `editorStore.SCREENS.FRAMING.label` now reads `MODE_NAMES.FRAMING` ("Framing"), not the literal

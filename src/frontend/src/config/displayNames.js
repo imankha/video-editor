@@ -410,6 +410,20 @@ export const EDITOR_PANELS = {
   SELECT_PLAYER_TAP: 'Tap your athlete to add a spotlight',
   SELECT_PLAYER_FIND: 'Tap a green marker on the timeline to find your athlete',
   SELECT_PLAYER_STYLING_HINT: 'Spotlight color, shape, and dimming appear once you pick a player.',
+  // T9960 (EP05) -- one athlete SATISFIES the step; picking more is optional, never
+  // implied as required. Replaces the old "N of M players selected -- click the
+  // remaining players to spotlight each too" progress line, which read as an
+  // all-player instruction. SELECT_PLAYER_OPTIONAL reassures (pre-selection) that
+  // Spotlight never blocks reaching the framed result.
+  SELECT_PLAYER_DONE: 'Your player is selected.',
+  SELECT_PLAYER_ADD_MORE: 'Add another only if you want to highlight more than one.',
+  SELECT_PLAYER_OPTIONAL: 'Spotlight is optional -- you can publish the framed result without it.',
+  // T9960 -- surface the (already adjustable) effect interval as its own primary
+  // readout, with the advanced styling controls kept secondary below it. The
+  // interval is adjusted by dragging the region ends on the timeline and previewed
+  // with Play spotlight -- this names it, it does not add a new default timing.
+  SPOTLIGHT_DURATION: 'Spotlight duration',
+  SPOTLIGHT_DURATION_HINT: 'Drag the ends on the timeline to adjust, or press Play spotlight to preview.',
 };
 
 // T9480 -- single source for the billing-rule copy, verbatim from
