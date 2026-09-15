@@ -56,6 +56,8 @@ describe('AnnotateFullscreenOverlay — first-clip invitation (T9580 / N41)', ()
     );
     expect(screen.getByRole('button', { name: 'Frame this clip' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Keep marking plays' })).toBeTruthy();
+    // T9900: the live CTA is enabled, so there is NO "Preparing your clip..." caption.
+    expect(screen.queryByTestId('clip-preparing-note')).toBeNull();
   });
 
   it('"Keep marking plays" dismisses via onClose (playhead preserved — no onSeek)', () => {
@@ -85,6 +87,9 @@ describe('AnnotateFullscreenOverlay — first-clip invitation (T9580 / N41)', ()
     const primary = screen.getByRole('button', { name: 'Frame this clip' });
     expect(primary.disabled).toBe(true);
     expect(screen.getByRole('button', { name: 'Keep marking plays' })).toBeTruthy();
+    // T9900: the disabled button explains its temporary preparation state (E09) so the
+    // brief pause reads as "preparing", not "broken".
+    expect(screen.getByTestId('clip-preparing-note').textContent).toContain('Preparing your clip');
   });
 
   it('a later stage (Spotlight) shows NO "Keep marking plays" — the single stage CTA suffices', () => {

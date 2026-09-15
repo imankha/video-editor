@@ -832,9 +832,16 @@ export function AnnotateFullscreenOverlay({
   // only: mobile create closes on save, so the sheet is never open during that
   // window (focusPending stays false).
   const stagePendingCta = (isEditMode && !existingClip?.autoProjectId && focusPending) ? (
-    <Button variant="cyan" size="lg" icon={Crop} disabled className="w-full coarse-pointer:min-h-[44px]">
-      {ANNOTATE.FRAME_THIS_CLIP}
-    </Button>
+    <div>
+      <Button variant="cyan" size="lg" icon={Crop} disabled className="w-full coarse-pointer:min-h-[44px]">
+        {ANNOTATE.FRAME_THIS_CLIP}
+      </Button>
+      {/* T9900: the button is disabled only while the clip's project is being created —
+          say so, so the brief pause reads as "preparing", not "broken" (E09). */}
+      <p data-testid="clip-preparing-note" className="mt-1.5 text-xs text-center text-gray-400">
+        {ANNOTATE.PREPARING_CLIP}
+      </p>
+    </div>
   ) : null;
 
   // T9580 (N41): the first-clip invitation's dismiss secondary — "Keep marking

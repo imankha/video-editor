@@ -5,7 +5,7 @@ import { toast } from './shared';
 import { ExportStatus } from '../constants/exportStatus';
 import { useWebShare } from '../hooks/useWebShare';
 import { track } from '../utils/analytics';
-import { EXPORT_JOBS } from '../config/displayNames';
+import { EXPORT_JOBS, EXPORT_PROGRESS } from '../config/displayNames';
 import { exportProgressLabel } from '../utils/exportProgressPresentation';
 
 /**
@@ -97,12 +97,16 @@ export function calculateETA(exp) {
  * exportId to { percent, changedAt } for stall detection. Both are component-local
  * bookkeeping (refs), updated in an effect as progress arrives.
  *
- * Returns null (nothing to show), or { stale, formatted, fallbackText }:
- * - stale=false: show `formatted` (the live estimate)
- * - stale=true: the estimate broke its promise (deadline exceeded by
- *   ETA_BUST_GRACE_MS) or percent has been frozen past ETA_STALL_MS while the
- *   estimate reads under a minute - show `fallbackText` (stage message or
- *   "Still working...") instead of a number.
+ * Returns null (no trustworthy estimate — too little data), or { stale, formatted,
+ * fallbackText }:
+ * - stale=false: the live estimate holds (`formatted`)
+ * - stale=true: the estimate broke its promise (deadline exceeded by ETA_BUST_GRACE_MS)
+ *   or percent has been frozen past ETA_STALL_MS while the estimate reads under a minute.
+ *
+ * T9900: consumers now render the estimate slot via `etaSlotText`, which shows a number
+ * only when stale=false and otherwise the honest "Time remaining varies." fallback — the
+ * real stage line (`progressLine`) is rendered on its OWN line alongside it. `fallbackText`
+ * (the stage copy) is retained on the return object for T8510's direct unit tests.
  */
 export function resolveEtaDisplay(exp, now, deadlines, percentTracks) {
   const eta = calculateETA(exp);
@@ -121,6 +125,18 @@ export function resolveEtaDisplay(exp, now, deadlines, percentTracks) {
     // T9540: honest stage copy (not the raw engineering message) when the estimate busts.
     fallbackText: progressLine(exp),
   };
+}
+
+/**
+ * T9900: the honest text for the estimate slot — never blank, never a frozen/fabricated
+ * countdown. A trustworthy live estimate reads "About 1 minute remaining"; anything else
+ * (too little data yet — `display` is null — or an estimate that broke its own promise —
+ * `display.stale`) reads the "Time remaining varies." fallback. The real stage line always
+ * renders alongside this, so the user still sees what is happening.
+ */
+export function etaSlotText(display) {
+  if (!display || display.stale) return EXPORT_PROGRESS.ETA_VARIES;
+  return `${display.formatted} remaining`;
 }
 
 /**
@@ -308,7 +324,7 @@ export function GlobalExportIndicator() {
     <div className="fixed bottom-4 right-4 z-50">
       {/* Main indicator card */}
       <div
-        className={`bg-gray-800 border border-gray-600 rounded-lg shadow-xl overflow-hidden transition-all duration-200 ${
+        className={`bg-gray-800 border border-gray-600 rounded-lg shadow-xl overflow-hidden transition-all duration-200 max-w-[calc(100vw-2rem)] ${
           isExpanded ? 'w-80' : 'w-64'
         }`}
       >
@@ -317,33 +333,37 @@ export function GlobalExportIndicator() {
           className="flex items-center justify-between px-4 py-3 bg-gray-700/50 cursor-pointer hover:bg-gray-700/70"
           onClick={() => setIsExpanded(!isExpanded)}
         >
-          <div className="flex items-center gap-3">
-            <div className="relative">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="relative shrink-0">
               <Download className="w-5 h-5 text-blue-400" />
               {processingExports.length > 0 && (
                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse" />
               )}
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <div className="text-sm font-medium text-white">
                 {processingExports.length} Export{processingExports.length !== 1 ? 's' : ''} Active
               </div>
               {primaryExport && (
-                <div className="text-xs text-gray-400 truncate max-w-[180px]">
-                  {getExportLabel(primaryExport)} - {primaryExport.progress?.percent >= 0 ? `${primaryExport.progress.percent}%` : 'Processing...'}
-                  {primaryETA && (
-                    <span className="ml-1 text-gray-500">
-                      ({primaryETA.stale ? primaryETA.fallbackText : primaryETA.formatted})
-                    </span>
-                  )}
+                // T9900: give the object name, stage, percent and estimate their own lines
+                // so they WRAP instead of being ellipsis-clipped on one fixed-width row —
+                // the stage and estimate stay readable at 699px and 200% zoom once the
+                // announcing toast has dismissed (evidence E19).
+                <div className="text-xs text-gray-400 space-y-0.5">
+                  <div className="truncate">{getExportLabel(primaryExport)}</div>
+                  <div className="break-words">
+                    {progressLine(primaryExport)}
+                    {primaryExport.progress?.percent >= 0 ? ` · ${primaryExport.progress.percent}%` : ''}
+                  </div>
+                  <div className="text-gray-500 break-words">{etaSlotText(primaryETA)}</div>
                 </div>
               )}
             </div>
           </div>
           {isExpanded ? (
-            <ChevronDown className="w-4 h-4 text-gray-400" />
+            <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
           ) : (
-            <ChevronUp className="w-4 h-4 text-gray-400" />
+            <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
           )}
         </div>
 
@@ -369,14 +389,14 @@ export function GlobalExportIndicator() {
                 key={exp.exportId}
                 className={`px-4 py-3 border-t border-gray-700 ${getStatusColor(exp.status)}`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     {getStatusIcon(exp.status)}
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-sm font-medium text-white">
                         {jobVocab(exp) ? jobVocab(exp).jobNoun : `${exp.type} export`}
                       </div>
-                      <div className="text-xs text-gray-400 truncate max-w-[180px]">
+                      <div className="text-xs text-gray-400 truncate">
                         {getExportLabel(exp)}
                       </div>
                     </div>
@@ -397,9 +417,9 @@ export function GlobalExportIndicator() {
                 {/* Progress bar */}
                 {(exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING) && (
                   <div className="mt-2">
-                    <div className="flex justify-between text-xs text-gray-400 mb-1">
-                      <span>{progressLine(exp)}</span>
-                      <span>{exp.progress?.percent >= 0 ? `${exp.progress.percent}%` : ''}</span>
+                    <div className="flex justify-between gap-2 text-xs text-gray-400 mb-1">
+                      <span className="min-w-0 break-words">{progressLine(exp)}</span>
+                      <span className="shrink-0">{exp.progress?.percent >= 0 ? `${exp.progress.percent}%` : ''}</span>
                     </div>
                     <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
                       {exp.progress?.percent >= 0 ? (
@@ -411,17 +431,15 @@ export function GlobalExportIndicator() {
                         <div className="h-full bg-blue-500 animate-pulse w-full opacity-50" />
                       )}
                     </div>
-                    {/* ETA display - the stage message already renders above this row,
-                        so a busted estimate degrades to plain "Still working..." here */}
-                    {(() => {
-                      const eta = resolveEtaDisplay(exp, nowTick, etaDeadlinesRef.current, percentChangeRef.current);
-                      return eta ? (
-                        <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                          <Clock className="w-3 h-3" />
-                          <span>{eta.stale ? 'Still working...' : `${eta.formatted} remaining`}</span>
-                        </div>
-                      ) : null;
-                    })()}
+                    {/* ETA display — the stage message already renders above this row, so
+                        the estimate slot carries only an honest remaining time or the
+                        "Time remaining varies." fallback (never blank, never frozen). */}
+                    <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                      <Clock className="w-3 h-3 shrink-0" />
+                      <span className="min-w-0 break-words">
+                        {etaSlotText(resolveEtaDisplay(exp, nowTick, etaDeadlinesRef.current, percentChangeRef.current))}
+                      </span>
+                    </div>
                   </div>
                 )}
 
