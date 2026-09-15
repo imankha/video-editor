@@ -1,6 +1,6 @@
 # T10100: Delete the two unimported dead components (CompareModelsButton, GalleryButton)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 2
 **Complexity:** 1
 **Created:** 2026-09-14
