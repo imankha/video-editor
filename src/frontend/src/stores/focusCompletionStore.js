@@ -31,7 +31,12 @@ export const useFocusCompletionStore = create((set) => ({
   closePreview: () => set({ preview: null }),
 
   recovered: null,
-  noteRecovered: ({ jobId, projectId, projectName }) => set({ recovered: { jobId, projectId, projectName } }),
+  // First-write-wins: useExportRecovery's unacknowledged-jobs loop iterates
+  // newest-first (per the backend's ORDER BY completed_at DESC), so an
+  // unconditional set would let the LAST (oldest) job clobber the newest.
+  noteRecovered: ({ jobId, projectId, projectName }) => set((state) =>
+    state.recovered ? state : { recovered: { jobId, projectId, projectName } }
+  ),
   clearRecovered: () => set({ recovered: null }),
 
   // Survives the FocusCompletionRecovery remount (App.jsx mounts it in two
