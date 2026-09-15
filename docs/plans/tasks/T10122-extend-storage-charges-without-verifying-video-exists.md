@@ -1,6 +1,6 @@
 # T10122: "Extend storage" can charge credits for a game whose video is already gone
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-14
@@ -54,6 +54,12 @@ that extends nothing.
 ### Progress Log
 
 **2026-09-14**: Filed from the T10120/T10121 expert investigation.
+
+**2026-09-14 (later)**: Implemented inline in the supervisor session (single-file backend fix).
+Caught and fixed a real regression from a bad ruff auto-fix mid-task (`datetime.UTC` doesn't
+exist on the `datetime` class import used in this file, broke 8 unrelated
+`test_t8870_overlap_schema.py` tests — reverted to `timezone.utc` + noqa). Supervisor-independent
+red/green proof, Branch CI green after the fix, merged (PR #438).
 
 ## Acceptance Criteria
 
