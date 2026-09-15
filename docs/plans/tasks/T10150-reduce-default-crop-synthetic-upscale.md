@@ -45,12 +45,14 @@ quality claim" rules.
 
 ## Dependency
 
-**Gated on T10160** (skip the GAN pass for small enlargements). Doubling the default crop area
-roughly quadruples GPU input pixels for the upscale pass on every single framing export in the
-product, not just ones where a user opts into a wider frame — shipping this without T10160's
-cheap-path optimization (or an equivalent GPU-cost mitigation) durably raises Modal compute cost
-at full production volume. Do not implement before T10160 lands (or is explicitly waived by the
-user after a real cost measurement).
+**WAIVED 2026-09-15.** Originally gated on T10160 (skip the GAN pass for small enlargements),
+since doubling the default crop area roughly quadruples GPU input pixels for the upscale pass
+on every single framing export in the product. Reviewed alongside T10160's design gate
+(`docs/plans/tasks/T10160-design.md`, which puts the real cost at ~4x for a 410x730 default vs
+today's 205x365); user confirmed there is plenty of margin and the cost increase does not
+affect pricing. **T10160 does not need to land first** - proceed independently. T10160 still
+ships (inert-by-default GAN-skip mechanism) as a separate quality/tidiness improvement, not a
+prerequisite for this task.
 
 ## Solution (to be designed, not assumed)
 
@@ -74,7 +76,7 @@ user after a real cost measurement).
 - `src/backend/tests/test_default_crop.py` (existing coverage to extend)
 
 ### Related Tasks
-- Depends on: **T10160** (skip-GAN cheap path) — see Dependency above.
+- Depends on: **T10160** (skip-GAN cheap path) — WAIVED, see Dependency above.
 - Evidence from: T9970 (quality benchmark, merged) and T9950's design review
   (`docs/plans/tasks/T9950-design.md` §3.5, §8 Q2).
 - Coordinate with: T9950 (Framing simplification) — if T9950's "wider frame" ships with a 2x
@@ -91,7 +93,8 @@ outcome record given this changes default output for the majority of new exports
 ## Implementation
 
 ### Steps
-1. [ ] Confirm T10160 has landed (or an explicit user waiver exists) before starting.
+1. [x] Confirm T10160 has landed (or an explicit user waiver exists) before starting. **Waived
+   2026-09-15** - user confirmed GPU-cost margin is not a concern.
 2. [ ] Benchmark the `16:9` default separately — do not assume the `9:16` ratio transfers.
 3. [ ] Update `DEFAULT_CROP_SIZES` + `default_crop.py` together, same values.
 4. [ ] Decide and implement existing-vs-new-clip default behavior (see Solution item 3).
@@ -109,5 +112,6 @@ T9970's original finding named this as the likely higher-value follow-up, Q2 in 
 - [ ] New default crop sizes chosen with real evidence for BOTH `9:16` and `16:9`
 - [ ] Frontend/backend constants stay mirrored (no drift)
 - [ ] Existing clips' already-set crops are never silently rewritten
-- [ ] T10160 has landed first, or the GPU-cost tradeoff is explicitly accepted by the user
+- [x] T10160 has landed first, or the GPU-cost tradeoff is explicitly accepted by the user -
+      **waived 2026-09-15**, tradeoff explicitly accepted
 - [ ] No "Enhanced to HD" or similar quality-outcome claim ships in any related copy
