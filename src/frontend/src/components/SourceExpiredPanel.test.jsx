@@ -30,4 +30,11 @@ describe('T8310 SourceExpiredPanel', () => {
     expect(screen.queryByTestId('source-expired-extend')).toBeNull();
     expect(screen.getByText(/no longer be recovered/i)).toBeTruthy();
   });
+
+  it('T10130: reassures that an already-exported clip is unaffected, in both canExtend states', () => {
+    renderPanel({ canExtend: false });
+    expect(screen.getByText(/already exported this clip/i)).toBeTruthy();
+    renderPanel({ canExtend: true });
+    expect(screen.getAllByText(/already exported this clip/i).length).toBeGreaterThan(0);
+  });
 });

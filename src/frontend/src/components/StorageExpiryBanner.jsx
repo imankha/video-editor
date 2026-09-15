@@ -40,6 +40,10 @@ export function StorageExpiryBanner({ atRiskGameCount, dependentDraftCount, onEx
         >
           Extend storage
         </button>
+        <p className="mt-1 text-xs text-yellow-200/70">
+          Once you've exported everything you need from a game, it's fine to let it expire. Your
+          annotations stay playable after it's gone.
+        </p>
       </div>
       <button
         type="button"

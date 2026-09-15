@@ -1,6 +1,6 @@
 # T10130: Storage-expiry banner should reassure users that annotation playback survives game deletion once fully marked and exported
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-14
@@ -87,6 +87,10 @@ rather than a conditional one that requires new plumbing.
 
 **2026-09-14**: Filed from user request, during the T10120 bug-52 investigation that surfaced why
 this copy needs to wait on a reliability fix first.
+
+**2026-09-15**: T10121 merged. ui-designer agent proposed copy + treatment for all 3 surfaces;
+user approved as proposed. Implemented, 3 new tests (40 total passing), supervisor-independent
+red/green proof, Branch CI green, merged (PR #440).
 
 ## Acceptance Criteria
 

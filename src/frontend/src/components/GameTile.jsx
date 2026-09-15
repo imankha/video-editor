@@ -190,7 +190,15 @@ export function GameTile({
     !isExpired && { key: 'share', label: 'Share game', icon: Share2, onClick: onShare },
     // T6890: Edit game moved to the pencil beside the name in the scrim (below).
     canExtend && (isExpired || isNearExpiry) &&
-      { key: 'extend', label: 'Extend storage', icon: RefreshCw, onClick: onExtend },
+      {
+        key: 'extend',
+        label: 'Extend storage',
+        icon: RefreshCw,
+        onClick: onExtend,
+        // T10130: reassure that skipping the extension is fine once everything's
+        // exported -- the only row in this menu with a second line.
+        caption: 'Exported everything already? Skipping is fine. Annotations stay playable.',
+      },
   ].filter(Boolean);
 
   const menuItemClass =
@@ -198,10 +206,18 @@ export function GameTile({
 
   const menuItems = (iconSize) => (
     <>
-      {actions.map(({ key, label, icon: Icon, onClick }) => (
-        <button key={key} type="button" onClick={(e) => runAction(e, onClick)} className={menuItemClass}>
-          <Icon size={iconSize} className="text-gray-300 flex-shrink-0" />
-          <span>{label}</span>
+      {actions.map(({ key, label, icon: Icon, onClick, caption }) => (
+        <button
+          key={key}
+          type="button"
+          onClick={(e) => runAction(e, onClick)}
+          className={`${menuItemClass} ${caption ? 'items-start' : ''}`}
+        >
+          <Icon size={iconSize} className={`text-gray-300 flex-shrink-0 ${caption ? 'mt-0.5' : ''}`} />
+          <span className="flex flex-col">
+            <span>{label}</span>
+            {caption && <span className="text-[11px] font-normal text-gray-400">{caption}</span>}
+          </span>
         </button>
       ))}
       <div className="my-1 border-t border-gray-600" />
