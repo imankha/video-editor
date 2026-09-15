@@ -186,12 +186,14 @@ export const UPLOAD_ENTRY_HINT = {
 };
 
 // Division of work shown near the start action (Upload game), so a first-time
-// parent can tell their job (marking plays) from the app's job (framing the
-// player, following the action, spotlight, sharing). Mirrors the public
-// landing site's "how it works" framing so both surfaces say the same thing.
-// No em dashes (project-wide rule).
+// parent can tell their job (marking plays, framing the crop, picking their
+// player from the AI's boxes) from the app's job (upscale, spotlight, share
+// link). Do NOT claim autonomous framing/tracking here - Focus mode's crop is
+// user-placed (FramingInstructions.jsx), and player "tracking" is the user
+// clicking their kid on AI-proposed per-frame boxes (PlayerDetectionOverlay),
+// not identity tracking. No em dashes (project-wide rule).
 export const DIVISION_OF_WORK =
-  'You mark the plays. ReelBallers frames your player, follows the action, adds the spotlight, and builds a reel to share.';
+  'You mark the plays, frame your athlete, and pick them from the AI\'s player boxes. ReelBallers connects the dots for smooth motion, upscales your video, and builds a reel to share.';
 
 export const CLIP_UPLOAD = {
   UPLOAD_CLIP: 'Upload clip',
