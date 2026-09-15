@@ -187,29 +187,25 @@ function DraftPhaseAspectRows({
           </span>
         </div>
       )}
-      <div className="flex flex-wrap gap-x-5 gap-y-3">
+      {/* T10110: one game's cluster per ROW (no flex-wrap) -- two carousels never
+          share a line, so there's never an ambiguous pair of arrow sets to tell
+          apart (bug 51). Each cluster still owns its carousel/arrows; only the
+          layout changed. */}
+      <div className="flex flex-col gap-y-3">
         {byGame.map(({ key, label, projects }, gameIdx) => (
-          <div
-            key={key}
-            data-testid={`game-row-${key}`}
-            // T10110: a visible left divider so two games' clusters packed onto the
-            // same flex-wrap line read as clearly separate groups, not one carousel
-            // with duplicate controls (bug 51). Only drawn when there's more than
-            // one game cluster in this bucket -- a single game needs no divider.
-            className={`shrink-0 ${COMPACT_ROW_MAX_WIDTH} ${byGame.length > 1 ? 'border-l-2 border-gray-600 pl-2.5' : ''}`}
-          >
+          <div key={key} data-testid={`game-row-${key}`} className={`shrink-0 ${COMPACT_ROW_MAX_WIDTH}`}>
             <div className="px-3 pb-1 flex items-center gap-1.5">
-              <span className="text-[10px] font-semibold text-gray-200 bg-gray-700/60 px-1.5 py-0.5 rounded">
+              <span className="text-[10px] font-semibold text-gray-300 bg-gray-700/40 px-1.5 py-0.5 rounded">
                 {label}
               </span>
               <span className="text-[10px] text-gray-500">{projects.length}</span>
             </div>
             <CardCarousel
               ariaLabel={`${ariaPrefix} ${label}${byAspect.length > 1 ? ` ${ratio}` : ''}`}
-              // T8990: partial guide on the tab's FIRST compact cluster only. The
-              // clusters flex-wrap and are max-w-[420px], so a filler rarely fits
-              // here -- but the fits-check is the arbiter, so a wide first cluster
-              // with a single tile still gets it and a full one never does.
+              // T8990: partial guide on the tab's FIRST compact cluster only. Each
+              // cluster is max-w-[420px] on its own row (T10110), so a filler rarely
+              // fits here -- but the fits-check is the arbiter, so a wide first
+              // cluster with a single tile still gets it and a full one never does.
               fillerSlot={aspectIdx === 0 && gameIdx === 0 ? fillerSlot : null}
             >
               {projects.map(project => (

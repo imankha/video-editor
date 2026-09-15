@@ -87,23 +87,20 @@ same day (Explore agent): by-design per-game carousel splitting (T8080) plus fle
 not a rendering defect. Deferred implementation — low priority (Impact 3), needs a UX pick between
 3 candidate fixes first; see Solution above.
 
-**2026-09-15**: User picked option (a), a stronger visual divider (not the row-per-game or
-collapse-to-one-carousel alternatives). Implemented: `ProjectManager.jsx`'s `DraftPhaseAspectRows`
-game-row container gets `border-l-2 border-gray-600 pl-2.5` whenever `byGame.length > 1` (a single
-game in the bucket needs no divider), plus a slightly higher-contrast label
-(`text-gray-200`/`bg-gray-700/60`, up from `text-gray-300`/`bg-gray-700/40`).
+**2026-09-15**: User initially picked option (a), a stronger visual divider. Implemented and
+pushed to `feature/T10110-draft-carousel-group-divider` for live testing (a container stack stood
+up at the user's request). Partial verification only: the running dev app's only available
+account had a single game in its Draft bucket, so only the "divider correctly absent" half was
+confirmed live, not the "present" half.
 
-**Verification is partial, noted honestly rather than overclaimed**: live-confirmed against the
-running dev app (imankh@gmail.com's real account) that the divider is correctly ABSENT when a
-bucket has exactly one game (`game-row-Vs legends Sep 5` renders with no border class — this
-account's dev data only has one game in its "Draft" bucket). Could not reach a live account with
-2+ games in the same bucket within a reasonable time budget for this Impact-3 task (no existing
-account in this dev DB has that shape; creating one needs a full real annotate-clip flow on a
-second game). No existing unit test file covers `ProjectManager.jsx`/`DraftPhaseAspectRows`. The
-change itself is a trivial, additive Tailwind conditional with no logic change to the grouping —
-low risk, but the "present" branch is UNVERIFIED live. Recommend the user spot-check with a real
-account that has 2+ Not-Started/Draft games before merging, or accept the risk given how small the
-change is.
+**2026-09-15 (revised)**: After seeing the single-game case live, the user reconsidered and asked
+for option (b) instead — one game per row, no shared line at all — saying they're "not a fan of
+several carousels on the same line" even with a divider between them. Re-implemented on the same
+branch: `DraftPhaseAspectRows`'s container changed from `flex flex-wrap` to `flex flex-col`
+(vertical stack), and the per-cluster divider styling from the (a) attempt was removed as
+unnecessary — clusters can no longer share a line, so there's nothing to visually separate.
+Existing `GameTile.test.jsx`/lint pass clean; no new automated coverage added yet (same gap noted
+in the first attempt — no existing test file covers this component's rendering).
 
 ## Acceptance Criteria
 
