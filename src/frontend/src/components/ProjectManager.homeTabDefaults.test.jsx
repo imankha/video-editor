@@ -126,6 +126,9 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     // The "Build New Reel" assembly button is NOT shown on the Games tab
     // (T8555: it lives on the In Progress Reels tab body only).
     expect(screen.queryByRole('button', { name: 'Create reel' })).toBeNull();
+    // T9930: the global referral "Invite" button is no longer a front-and-center
+    // control on the fresh home — it moved into the account menu (ProfileDropdown).
+    expect(screen.queryByRole('button', { name: 'Invite' })).toBeNull();
 
     // T8380: the In Progress Clips tab is no longer a dead end -- "Add Video"
     // makes it a valid clip-creation entry point, so it must be reachable even

@@ -1,10 +1,13 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // T8500: the Add Game modal is video-first. The cost line renders BEFORE any
 // file is selected, all four metadata fields are defaulted inside a collapsed
 // disclosure, and the ONLY thing gating submit is a selected video - so a new
 // user can start an upload with two gestures (pick file, tap Add Game).
+// T9930: opponent/date/type are collapsed behind a "Game details (optional)"
+// disclosure again, and untouched metadata is submitted EMPTY (no fabricated
+// "Unnamed opponent"/today) so the backend titles the game by its upload date.
 
 const { recordAchievementSpy } = vi.hoisted(() => ({ recordAchievementSpy: vi.fn() }));
 vi.mock('../stores/questStore', () => {
@@ -47,7 +50,7 @@ vi.mock('./GameFootagePicker', () => ({
   ),
 }));
 
-import { GameDetailsModal, localTodayISO } from './GameDetailsModal';
+import { GameDetailsModal } from './GameDetailsModal';
 import { GameType } from '../constants/gameConstants';
 
 function renderModal(props = {}) {
@@ -75,22 +78,26 @@ describe('GameDetailsModal — T8500 video-first', () => {
     expect(screen.getByText(/Balance:\s*88/)).toBeTruthy();
   });
 
-  it('T8955: has no "More options" disclosure at all — Game Type is always visible', () => {
+  it('T9930: opponent/date/type sit behind a collapsed "Game details (optional)" disclosure', () => {
     renderModal();
-    // The collapsed disclosure is gone outright, not just defaulted-open.
-    expect(screen.queryByTestId('game-details-disclosure')).toBeNull();
-    expect(screen.queryByText('More options')).toBeNull();
-    // Game Type's four buttons are reachable with zero interaction.
-    expect(screen.getByRole('button', { name: 'Unknown' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Home' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Away' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Tournament' })).toBeTruthy();
+    const disclosure = screen.getByTestId('game-details-disclosure');
+    // Collapsed by default (native <details> without the `open` attribute), so
+    // the metadata does not compete with the file picker on first upload.
+    expect(disclosure.tagName).toBe('DETAILS');
+    expect(disclosure.open).toBe(false);
+    expect(screen.getByText('Game details (optional)')).toBeTruthy();
+    // The fields still live in the DOM inside the disclosure (Game Type buttons,
+    // the opponent input, the date input) — reachable, just not front-and-center.
+    expect(within(disclosure).getByRole('button', { name: 'Unknown' })).toBeTruthy();
+    expect(within(disclosure).getByPlaceholderText('e.g., Carlsbad SC')).toBeTruthy();
+    expect(disclosure.querySelector('input[type="date"]')).toBeTruthy();
   });
 
-  it('surfaces Opponent + Date as first-class fields (T8700)', () => {
+  it('keeps Opponent + Date reachable inside the disclosure (T9930 — collapsed, not removed)', () => {
     const { container } = renderModal();
-    // Opponent input (its placeholder) and the date input are reachable with
-    // zero interaction — they read as wanted, not skippable.
+    // T9930 re-collapsed these behind "Game details (optional)" (was first-class
+    // per T8700); they must still be present/reachable in the DOM, just not
+    // front-and-center. jsdom keeps <details> children mounted regardless of open.
     expect(screen.getByPlaceholderText('e.g., Carlsbad SC')).toBeTruthy();
     expect(container.querySelector('input[type="date"]')).toBeTruthy();
   });
@@ -104,7 +111,7 @@ describe('GameDetailsModal — T8500 video-first', () => {
     expect(submit.disabled).toBe(false);
   });
 
-  it('submits the defaults in the create payload: placeholder opponent, today, Unknown type + a 1-element footage list', async () => {
+  it('submits HONEST empty defaults (T9930): no fabricated opponent, no today date', async () => {
     const onCreateGame = vi.fn(() => Promise.resolve());
     const { container } = renderModal({ onCreateGame });
 
@@ -113,18 +120,19 @@ describe('GameDetailsModal — T8500 video-first', () => {
 
     await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
     // T8810: uniform ordered list — a single file is a 1-element list, no videoMode.
-    // T8930: Game Type defaults to Unknown (never a silently-assumed Home) unless the
-    // user picks one of the always-visible buttons (T8955 removed the disclosure).
+    // T9930: an untouched opponent and date submit EMPTY (createGame maps '' -> null),
+    // so the backend titles the game "Game uploaded <date>" instead of claiming a
+    // match opponent/date the parent never gave. Game Type still defaults to Unknown.
     expect(onCreateGame).toHaveBeenCalledWith({
-      opponentName: 'Unnamed opponent',
-      gameDate: localTodayISO(),
+      opponentName: '',
+      gameDate: '',
       gameType: GameType.UNKNOWN,
       tournamentName: null,
       files: [{ file, sequence: 1 }],
     });
   });
 
-  it('a typed opponent wins over the placeholder', async () => {
+  it('a typed opponent is sent as-is', async () => {
     const onCreateGame = vi.fn(() => Promise.resolve());
     const { container } = renderModal({ onCreateGame });
 

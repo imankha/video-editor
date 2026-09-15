@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, CheckCircle, Gamepad2, Scissors, Clapperboard, Send, Filter, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Share2, Trophy } from 'lucide-react';
+import { FolderOpen, Plus, CheckCircle, Gamepad2, Scissors, Clapperboard, Send, Filter, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Trophy } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { useAppState } from '../contexts';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -28,7 +28,6 @@ import { RecapPlayerModal } from './RecapPlayerModal';
 import { ShareGameModal } from './ShareGameModal';
 import { EditGameModal } from './EditGameModal';
 import { prioritizeUrls } from '../utils/cacheWarming';
-import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useProfileStore } from '../stores/profileStore';
@@ -974,8 +973,6 @@ export function ProjectManager({
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  const handleInviteClick = useCallback(() => shareInvite(), []);
-
   // Open game details modal (requires auth)
   const handleAddGameClick = useCallback(() => {
     requireAuth(() => {
@@ -1291,26 +1288,19 @@ export function ProjectManager({
         </div>
       )}
 
-      {/* Top right controls - Invite + Sign-in/Profile. T8545: the Gallery
-          icon-button/drawer entry point that used to live here is gone --
-          Published is now the third peer tab below. */}
+      {/* Top right controls - Sign-in/Profile. T8545: the Gallery icon-button/
+          drawer entry point that used to live here is gone -- Published is now
+          the third peer tab below. T9930: the global "Invite" button (a referral
+          share) was removed from this cluster -- it was a first-run distraction
+          competing with Upload game. It now lives one click away inside
+          ProfileDropdown's account menu ("Invite a friend"). */}
       {/* T9290: opaque backing plate on the fixed controls cluster (matches the
           gray-900 page surface) so scrolled content passes fully behind the row
-          rather than bleeding through the translucent Invite/sport chips.
+          rather than bleeding through the translucent sport/profile chips.
           Invisible at rest (page is gray-900 too); the gap between chips just
           reads as page background. */}
       <div className="fixed top-4 right-4 z-30 flex items-center gap-3 sm:gap-4 rounded-lg bg-gray-900">
         <InstallButton />
-        {isAuthenticated && (
-          <Button
-            variant="reelOutline"
-            icon={Share2}
-            onClick={handleInviteClick}
-            title="Invite a Friend"
-          >
-            <span className="hidden sm:inline">Invite</span>
-          </Button>
-        )}
         <SignInButton />
         <ProfileSportButton />
         <ProfileDropdown />
