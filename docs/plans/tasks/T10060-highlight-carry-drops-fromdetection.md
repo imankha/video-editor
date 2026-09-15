@@ -1,6 +1,6 @@
 # T10060: highlight_carry drops fromDetection on framing re-export, silently re-breaking Spotlight assignment persistence
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-14
