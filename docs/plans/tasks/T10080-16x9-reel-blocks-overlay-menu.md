@@ -1,6 +1,6 @@
 # T10080: Exported 16:9 reels block Overlay menu options due to layout
 
-**Status:** TODO
+**Status:** SUPERSEDED (2026-09-15, user-confirmed)
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-09-14
@@ -94,6 +94,11 @@ the layout fix (T9150 -> T9270, both 2026-09-09) already replaced the fixed-widt
 flexbox layout that cannot overlap the settings rail; the 2026-09-14 report reads as describing
 pre-fix behavior. Recommend closing as superseded; awaiting user confirmation (AI does not close
 tasks unilaterally) before removing from PLAN.md.
+
+**2026-09-15**: User confirmed closing as superseded. Marked SUPERSEDED in place (not deleted),
+same convention as T6430. The stale comment at `OverlayModeView.jsx:385-392` (references the
+removed cap) and the cap-based e2e harness (`t9100diag`/`T9100-overlay-detection-alignment.qa.spec.js`)
+remain as minor, low-priority cleanup debt — not filed as a separate task given how small they are.
 
 ## Acceptance Criteria
 
