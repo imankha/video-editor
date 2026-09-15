@@ -242,6 +242,42 @@ class TestFindGamesForHash:
         result = _find_games_for_hash(USER_ID, PROFILE_ID, "hash_a", {"hash_a"})
         assert result == set()
 
+    def test_pending_under_cap_is_retried(self, isolated_profile_db):
+        """T10121 mechanism B: a game stuck at 'pending' (machine died mid-export)
+        under the retry cap IS re-selected -- the selector previously matched
+        neither IS NULL nor 'failed' for 'pending', so it was silently reclaimed."""
+        from app.services.sweep_scheduler import _find_games_for_hash
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash="hash_a", status="pending", attempts=1)
+
+        result = _find_games_for_hash(USER_ID, PROFILE_ID, "hash_a", {"hash_a"})
+        assert result == {game_id}
+
+    def test_pending_at_cap_excluded(self, isolated_profile_db):
+        """A 'pending' game that has exhausted its retries is not re-selected."""
+        from app.services.auto_export import MAX_AUTO_EXPORT_ATTEMPTS
+        from app.services.sweep_scheduler import _find_games_for_hash
+
+        db = isolated_profile_db["db_path"]
+        _insert_game(db, blake3_hash="hash_a", status="pending", attempts=MAX_AUTO_EXPORT_ATTEMPTS)
+
+        result = _find_games_for_hash(USER_ID, PROFILE_ID, "hash_a", {"hash_a"})
+        assert result == set()
+
+    def test_abandoned_game_never_reselected(self, isolated_profile_db):
+        """T10121 D7: a terminal 'abandoned' game is never re-selected for
+        export, regardless of its attempt count -- it matches none of the
+        selector's three arms (IS NULL / 'failed' / 'pending')."""
+        from app.services.auto_export import MAX_AUTO_EXPORT_ATTEMPTS
+        from app.services.sweep_scheduler import _find_games_for_hash
+
+        db = isolated_profile_db["db_path"]
+        _insert_game(db, blake3_hash="hash_a", status="abandoned", attempts=MAX_AUTO_EXPORT_ATTEMPTS)
+
+        result = _find_games_for_hash(USER_ID, PROFILE_ID, "hash_a", {"hash_a"})
+        assert result == set()
+
 
 # ---------------------------------------------------------------------------
 # do_sweep tests
@@ -497,6 +533,229 @@ class TestDoSweep:
 
         assert "expired refs" in caplog.text
 
+    @patch(f"{M}.recap_artifacts_present")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
+    @patch(f"{M}.has_remaining_refs", return_value=False)
+    @patch(f"{M}.delete_ref")
+    @patch(f"{M}.auto_export_game")
+    @patch(f"{M}.ensure_database")
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_artifact_gate_missing_blocks_reclaim(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, mock_artifacts, isolated_profile_db
+    ):
+        """T10121 D1: the sweep must not delete a ref while a required recap
+        artifact is missing from R2 -- checked even for a SETTLED ('complete')
+        game, since the gate verifies R2 directly instead of trusting the
+        status column (mechanisms B/C/E all leave a stale/wrong column)."""
+        from app.services.auto_export import ArtifactVerdict
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        _insert_game(db, blake3_hash="hash_abc", status="complete")
+        mock_artifacts.return_value = ArtifactVerdict.MISSING
+
+        do_sweep()
+
+        mock_export.assert_not_called()
+        mock_delete_ref.assert_not_called()
+        mock_insert_grace.assert_not_called()
+
+    @patch(f"{M}.recap_artifacts_present")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
+    @patch(f"{M}.has_remaining_refs", return_value=False)
+    @patch(f"{M}.delete_ref")
+    @patch(f"{M}.auto_export_game")
+    @patch(f"{M}.ensure_database")
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_artifact_gate_present_allows_reclaim(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, mock_artifacts, isolated_profile_db
+    ):
+        """Guards against over-blocking: a settled game whose recap IS present
+        in R2 reclaims exactly as it did before the artifact gate existed."""
+        from app.services.auto_export import ArtifactVerdict
+        from app.services.sweep_scheduler import GRACE_PERIOD_DAYS, do_sweep
+
+        db = isolated_profile_db["db_path"]
+        _insert_game(db, blake3_hash="hash_abc", status="complete")
+        mock_artifacts.return_value = ArtifactVerdict.PRESENT
+
+        do_sweep()
+
+        mock_export.assert_not_called()
+        mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
+        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS)
+
+    @patch("app.services.auto_export.get_r2_client", return_value=None)
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
+    @patch(f"{M}.has_remaining_refs", return_value=False)
+    @patch(f"{M}.delete_ref")
+    @patch(f"{M}.auto_export_game")
+    @patch(f"{M}.ensure_database")
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_no_r2_client_artifact_gate_unverifiable_still_reclaims(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, mock_r2_client, isolated_profile_db, caplog
+    ):
+        """T10121 D2: with no R2 client configured (local dev/tests), the
+        recap-artifact gate can't check anything -- it reports UNVERIFIABLE
+        and the sweep proceeds with a WARNING rather than refusing, matching
+        the games.py:943 precedent for the same condition and preserving
+        today's dev/test behavior (uses the REAL recap_artifacts_present, not
+        a mock, to prove the end-to-end fallthrough)."""
+        import logging
+
+        from app.services.sweep_scheduler import GRACE_PERIOD_DAYS, do_sweep
+
+        db = isolated_profile_db["db_path"]
+        _insert_game(db, blake3_hash="hash_abc", status="complete")
+
+        with caplog.at_level(logging.WARNING, logger="app.services.sweep_scheduler"):
+            do_sweep()
+
+        mock_export.assert_not_called()
+        mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
+        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS)
+        assert "UNVERIFIABLE" in caplog.text
+
+    @patch(f"{M}.recap_artifacts_present")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
+    @patch(f"{M}.has_remaining_refs", return_value=False)
+    @patch(f"{M}.delete_ref")
+    @patch(f"{M}.auto_export_game")
+    @patch(f"{M}.ensure_database")
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_exhausted_and_missing_artifacts_abandons_and_keeps_ref(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, mock_artifacts, isolated_profile_db, caplog
+    ):
+        """T10121 D7: a game that has exhausted its retry cap AND whose recap
+        artifacts are still missing transitions to the terminal 'abandoned'
+        status with exactly ONE CRITICAL log, and its ref survives (never
+        silently reclaimed on a permanent failure)."""
+        import logging
+        from app.services.auto_export import ArtifactVerdict, MAX_AUTO_EXPORT_ATTEMPTS
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(
+            db, blake3_hash="hash_abc", status="failed", attempts=MAX_AUTO_EXPORT_ATTEMPTS
+        )
+        mock_artifacts.return_value = ArtifactVerdict.MISSING
+
+        with caplog.at_level(logging.CRITICAL, logger="app.services.sweep_scheduler"):
+            do_sweep()
+
+        conn = sqlite3.connect(str(db))
+        row = conn.execute(
+            "SELECT auto_export_status FROM games WHERE id = ?", (game_id,)
+        ).fetchone()
+        conn.close()
+        assert row[0] == "abandoned"
+
+        critical_records = [r for r in caplog.records if r.levelno == logging.CRITICAL]
+        assert len(critical_records) == 1
+        assert f"game={game_id}" in critical_records[0].message
+
+        mock_delete_ref.assert_not_called()
+        mock_insert_grace.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# T10121 D4: multi-video sibling-hash guard
+# ---------------------------------------------------------------------------
+
+class TestMultiVideoSiblingHash:
+    """A multi-video game's still-active half must never be reclaimed just
+    because ITS OWN hash expired while a sibling hash (the other half) is
+    still live."""
+
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
+    @patch(f"{M}.has_remaining_refs", return_value=False)
+    @patch(f"{M}.delete_ref")
+    @patch(f"{M}.auto_export_game", return_value="complete")
+    @patch(f"{M}.ensure_database")
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_live_sibling_hash_blocks_ref_deletion(
+        self, mock_users, mock_profiles, mock_ensure, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, isolated_profile_db
+    ):
+        """One hash of a multi-video game expired while the OTHER hash still
+        carries a live ref (the game's other half is still active) -- the
+        expired hash's ref must NOT be deleted (mechanism D). Distinct from
+        test_multi_video_partially_expired_excluded (which only pins the
+        SELECTION exclusion) -- this pins what happens to the REF afterward."""
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash=None, status="complete")
+        _insert_game_video(db, game_id, "hash_a", 1)
+        _insert_game_video(db, game_id, "hash_b", 2)
+        _insert_expired_storage(db, "hash_a")
+        _insert_live_storage(db, "hash_b")
+
+        do_sweep()
+
+        mock_delete_ref.assert_not_called()
+        mock_insert_grace.assert_not_called()
+
+    @patch(f"{M}.recap_artifacts_present")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
+    @patch(f"{M}.has_remaining_refs", return_value=False)
+    @patch(f"{M}.delete_ref")
+    @patch(f"{M}.auto_export_game", return_value="complete")
+    @patch(f"{M}.ensure_database")
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_already_reclaimed_sibling_does_not_strand_reclaim(
+        self, mock_users, mock_profiles, mock_ensure, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, mock_artifacts, isolated_profile_db
+    ):
+        """D4 anti-deadlock property: a sibling hash whose ref was ALREADY
+        reclaimed by a prior sweep (no game_storage row left for it at all --
+        not merely "not expired this sweep") must not permanently block
+        reclaiming this hash. Keying off a LIVE ref (not "absent from
+        expired_hashes") is what makes this work: the already-reclaimed
+        sibling has zero live refs, so it can never re-strand this hash."""
+        from app.services.auto_export import ArtifactVerdict
+        from app.services.sweep_scheduler import GRACE_PERIOD_DAYS, do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash=None, status="complete")
+        _insert_game_video(db, game_id, "hash_a", 1)
+        _insert_game_video(db, game_id, "hash_b", 2)
+        # hash_a is the ONLY remaining game_storage row -- hash_b's ref was
+        # already reclaimed by a prior sweep (no row at all, live or expired).
+        _insert_expired_storage(db, "hash_a")
+        mock_artifacts.return_value = ArtifactVerdict.PRESENT
+
+        do_sweep()
+
+        mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_a")
+        mock_insert_grace.assert_called_once_with("hash_a", GRACE_PERIOD_DAYS)
+
 
 # ---------------------------------------------------------------------------
 # Root-cause guard: never delete an R2 video while a live ref exists
@@ -583,6 +842,68 @@ class TestGraceDeletionLiveRefGuard:
 
         mock_r2_delete.assert_not_called()   # video NOT destroyed on incomplete info
         mock_del_grace.assert_not_called()   # grace row kept -> retried next sweep
+
+
+class TestPhase2ArtifactGate:
+    """T10121 D5: the same recap-artifact gate Phase 1 checks before delete_ref
+    is checked AGAIN here, right before the PERMANENT R2 delete -- catches a
+    row already queued in r2_grace_deletions by mechanisms B/C/D/E before this
+    fix shipped (its ref is already gone, so Phase 1 has nothing left to
+    re-examine this sweep)."""
+
+    @pytest.fixture(autouse=True)
+    def _production_env(self, monkeypatch):
+        monkeypatch.setattr("app.storage.APP_ENV", "production")
+
+    @patch(f"{M}.recap_artifacts_present")
+    @patch(f"{M}.delete_grace_deletion")
+    @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_missing_artifact"])
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_phase2_defers_when_recap_artifact_missing(
+        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        mock_r2_delete, mock_del_grace, mock_artifacts, isolated_profile_db
+    ):
+        from app.services.auto_export import ArtifactVerdict
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        # No game_storage row at all for this hash (the ref is already gone --
+        # exactly the state mechanisms B/C/D/E leave behind), so the live-ref
+        # gate above sees live_refs=0 and falls through to the artifact gate.
+        _insert_game(db, blake3_hash="hash_missing_artifact", status="failed", attempts=3)
+        mock_artifacts.return_value = ArtifactVerdict.MISSING
+
+        do_sweep()
+
+        mock_r2_delete.assert_not_called()
+        mock_del_grace.assert_not_called()
+
+    @patch(f"{M}.recap_artifacts_present")
+    @patch(f"{M}.delete_grace_deletion")
+    @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_present"])
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_phase2_deletes_when_recap_artifact_present(
+        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        mock_r2_delete, mock_del_grace, mock_artifacts, isolated_profile_db
+    ):
+        """Guards against over-blocking the Phase 2 gate itself."""
+        from app.services.auto_export import ArtifactVerdict
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        _insert_game(db, blake3_hash="hash_present", status="complete")
+        mock_artifacts.return_value = ArtifactVerdict.PRESENT
+
+        do_sweep()
+
+        mock_r2_delete.assert_called_once_with("games/hash_present.mp4")
+        mock_del_grace.assert_called_once_with("hash_present")
 
 
 class TestDeleteRefIdempotency:

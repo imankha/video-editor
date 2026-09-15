@@ -12,6 +12,7 @@ import tempfile
 import time
 import uuid
 from collections import defaultdict
+from enum import Enum
 from pathlib import Path
 
 import ffmpeg
@@ -25,6 +26,7 @@ from ..storage import (
     file_exists_in_r2,
     generate_presigned_url,
     generate_presigned_url_global,
+    get_r2_client,
     r2_head_object,
     r2_head_object_global,
     upload_bytes_to_r2,
@@ -41,9 +43,25 @@ RECAP_MAP_SCHEMA = "recap-map/v2"
 
 EXPORT_TIMEOUT_SECONDS = 300
 
-# Max times the sweep will retry a failed auto-export before giving up and
-# letting the source be reclaimed. The counter lives in games.auto_export_attempts
-# and is read by sweep_scheduler._find_games_for_hash.
+# Status vocabulary for games.auto_export_status (single authoritative note --
+# sweep_scheduler.needs_export's selector matches against exactly these
+# literals; keep this comment in sync with that selector):
+#   pending   -- export attempt in progress or interrupted mid-run (T2460);
+#                retryable under the attempt cap. T10121 closed the selector
+#                hole that let a machine-death-stuck 'pending' game sit
+#                forever unretried -- the sweep's re-check saw nothing
+#                pending export and reclaimed the source out from under it.
+#   failed    -- the last attempt raised; retryable under the attempt cap.
+#   complete  -- terminal, success.
+#   skipped   -- terminal, the game had zero rated clips (nothing to export).
+#   abandoned -- terminal (T10121 D7): the attempt cap was exhausted AND the
+#                R2 recap-artifact gate still refuses reclaim. Never
+#                auto-retried and never matched by the sweep selector;
+#                reclaiming an abandoned game's source is an explicit admin
+#                action, not something a timeout should do silently.
+# Max times the sweep will retry a failed/pending auto-export before giving up
+# (see 'abandoned' above). The counter lives in games.auto_export_attempts and
+# is read by sweep_scheduler._find_games_for_hash / needs_export.
 MAX_AUTO_EXPORT_ATTEMPTS = 3
 
 # T4140: the recap doubles as a full-quality re-edit master. Create Clip (T4130)
@@ -63,10 +81,42 @@ RECAP_PRESET = "fast"
 _LEGACY_RECAP_DIMENSIONS = (854, 480)
 
 
+def _sync_or_unsynced(user_id: str, profile_id: str, game_id: int, settled_status: str) -> str:
+    """Sync the just-written status to R2 and confirm it actually landed before
+    reporting it as the game's settled outcome (T10121 D6 / mechanism E).
+
+    Previously the three write paths in auto_export_game discarded
+    sync_db_to_r2_explicit's return value -- a CONFLICT (R2 replaces the local
+    DB with a newer copy, discarding the just-written row) or FAILED sync let
+    the caller report 'complete'/'skipped'/'failed' as if it were durable when
+    R2 never actually got the write. The LOCAL row is left exactly as
+    `settled_status` regardless of the sync outcome (never rewritten to
+    'failed' here) -- only the RETURN value degrades to 'unsynced', so a
+    caller like the sweep keeps the game's storage ref instead of trusting an
+    unconfirmed status.
+    """
+    from ..database import SyncResult
+
+    result = sync_db_to_r2_explicit(user_id, profile_id)
+    if result != SyncResult.OK:
+        logger.critical(
+            f"[AutoExport] SYNC_UNCONFIRMED user={user_id[:8]} profile={profile_id[:8]} "
+            f"game={game_id} settled_status={settled_status} sync_result={result.value}"
+        )
+        return 'unsynced'
+    return settled_status
+
+
 def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
     """Auto-export brilliant clips and generate recap for a game.
 
-    Returns status: 'complete', 'skipped', 'failed'.
+    Returns status: 'complete', 'skipped', 'failed', or 'unsynced' (T10121 D6
+    -- RETURN-ONLY, never persisted to games.auto_export_status; see
+    _sync_or_unsynced). 'unsynced' means the settled local write (whichever of
+    the three above it would otherwise have been) happened, but the R2 sync
+    that followed it did not confirm OK -- the caller must not trust the DB
+    row as durable and should keep the game's storage ref instead of treating
+    it as settled.
     """
     from ..database import ensure_database
 
@@ -107,9 +157,9 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
 
         if not annotated_clips:
             _set_game_status(game_id, 'skipped')
-            sync_db_to_r2_explicit(user_id, profile_id)
+            status = _sync_or_unsynced(user_id, profile_id, game_id, 'skipped')
             logger.info(f"[AutoExport] game={game_id} no clips, skipped in {time.perf_counter() - t0:.2f}s")
-            return 'skipped'
+            return status
 
         brilliant_clips = [c for c in annotated_clips if c['rating'] == 5]
         if not brilliant_clips:
@@ -149,16 +199,15 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
             )
             conn.commit()
 
-        sync_db_to_r2_explicit(user_id, profile_id)
+        status = _sync_or_unsynced(user_id, profile_id, game_id, 'complete')
         elapsed = time.perf_counter() - t0
         logger.info(f"[AutoExport] game={game_id} complete in {elapsed:.2f}s ({len(brilliant_clips)} brilliant, {len(annotated_clips)} total)")
-        return 'complete'
+        return status
 
     except Exception as e:
         logger.error(f"[AutoExport] game={game_id} failed after {time.perf_counter() - t0:.2f}s: {e}")
         _set_game_status(game_id, 'failed')
-        sync_db_to_r2_explicit(user_id, profile_id)
-        return 'failed'
+        return _sync_or_unsynced(user_id, profile_id, game_id, 'failed')
 
 
 def _get_annotated_clips(game_id: int, layer: str | None = None) -> list[dict]:
@@ -243,6 +292,73 @@ def clip_matches_layer(my_athlete, layer: str) -> bool:
     if layer == RecapLayer.TEAM:
         return my_athlete == 0
     return my_athlete == 1 or my_athlete is None
+
+
+class ArtifactVerdict(str, Enum):
+    """Result of checking whether a game's recap artifacts actually exist in
+    R2 (T10121 D1) -- the sweep must verify against R2 directly before
+    reclaiming a game's source video, never trust `auto_export_status` alone
+    (a status column can lag reality: mechanisms B/C/E all leave a game
+    reclaimable while its status column says otherwise)."""
+    PRESENT = "present"
+    MISSING = "missing"
+    UNVERIFIABLE = "unverifiable"
+
+
+def _legacy_mixed_recap_covers(user_id: str, game_id: int) -> bool:
+    """True when a pre-T5710 legacy mixed recap (the unsuffixed
+    `recaps/{game_id}.mp4`, written before the per-layer split existed) is
+    still present with an UNSTAMPED clip mapping -- T10121 D3: that satisfies
+    the team layer's artifact requirement on its own, since a legacy recap
+    already contains the team's clips (mixed with the athlete's).
+
+    Mirrors `ensure_recap`'s legacy-slice fallback (this module, ~line 738):
+    `mapping_layer is None` (unstamped) together with real entries is exactly
+    the legacy-mixed signal T5710 established (design decision 1) -- a fresh,
+    layer-pure mapping written by this task's own `_generate_recap` is always
+    stamped, so it can never be mistaken for a legacy mixed recap here.
+    """
+    recap_key, mapping_key = recap_r2_keys(game_id, None)
+    if not file_exists_in_r2(user_id, recap_key):
+        return False
+    mapping_layer, legacy_entries = load_recap_mapping(user_id, mapping_key)
+    return mapping_layer is None and bool(legacy_entries)
+
+
+def recap_artifacts_present(user_id: str, game_id: int) -> ArtifactVerdict:
+    """Whether every recap layer with >=1 rated clip has its artifact actually
+    live in R2 (T10121 D1) -- the gate the sweep must pass before it may ever
+    delete a game's source video ref.
+
+    PRESENT      -- every non-empty layer's recap object exists in R2 (or a
+                    legacy mixed recap covers the team layer, D3). A layer
+                    with zero rated clips passes trivially -- the legitimate
+                    'skipped' case, nothing was ever supposed to exist.
+    MISSING      -- a required layer's recap object is absent. Also returned
+                    when the R2 client is present but the HEAD call itself
+                    raised (unreachable) -- `file_exists_in_r2` already
+                    collapses both into a bare False, and D2 says an
+                    unreachable check must refuse exactly like a confirmed
+                    absence (retry next sweep), never optimistically pass.
+    UNVERIFIABLE -- no R2 client is configured at all (local dev / tests --
+                    there is nothing to check). D2: the caller proceeds with a
+                    WARNING rather than refusing, mirroring the games.py:943
+                    precedent for the same "R2 not configured" condition on
+                    the ref-creation side.
+    """
+    if not get_r2_client():
+        return ArtifactVerdict.UNVERIFIABLE
+
+    for layer in (RecapLayer.TEAM, RecapLayer.ATHLETE):
+        if not _get_annotated_clips(game_id, layer):
+            continue
+        recap_key, _ = recap_r2_keys(game_id, layer)
+        if file_exists_in_r2(user_id, recap_key):
+            continue
+        if layer == RecapLayer.TEAM and _legacy_mixed_recap_covers(user_id, game_id):
+            continue
+        return ArtifactVerdict.MISSING
+    return ArtifactVerdict.PRESENT
 
 
 def _set_game_status(game_id: int, status: str) -> None:
