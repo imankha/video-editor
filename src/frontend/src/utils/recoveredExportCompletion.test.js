@@ -54,12 +54,12 @@ describe('reportRecoveredCompletion (T9285)', () => {
     expect(useFocusCompletionStore.getState().recovered).toBeNull();
   });
 
-  it('latest wins: a second DIFFERENT job overwrites the previously noted one', () => {
+  it('first wins: a second DIFFERENT job does not overwrite the already-noted one (T10050 — the unacknowledged-jobs loop iterates newest-first, so first-write-wins keeps the newest)', () => {
     reportRecoveredCompletion({ jobId: 'job-5', projectId: 1, projectName: 'A', type: 'framing' });
     reportRecoveredCompletion({ jobId: 'job-6', projectId: 2, projectName: 'B', type: 'framing' });
 
     expect(useFocusCompletionStore.getState().recovered).toEqual({
-      jobId: 'job-6', projectId: 2, projectName: 'B',
+      jobId: 'job-5', projectId: 1, projectName: 'A',
     });
   });
 

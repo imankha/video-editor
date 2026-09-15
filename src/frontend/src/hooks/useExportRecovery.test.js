@@ -109,6 +109,27 @@ describe('useExportRecovery (T9285 recovery-path completion routing)', () => {
     expect(acknowledgedIds).not.toContain('job-framing-2');
   });
 
+  it('T10050: with 2+ unacknowledged framing completions (newest-first, matching the backend ORDER BY completed_at DESC), the store ends up with the NEWEST job, not the oldest', async () => {
+    window.__bootstrapExports = {
+      active: [],
+      unacknowledged: [
+        { job_id: 'job-newest', project_id: 42, project_name: 'Newest Reel', type: 'framing', status: 'complete', output_video_id: 7, output_filename: 'out.mp4' },
+        { job_id: 'job-oldest', project_id: 41, project_name: 'Oldest Reel', type: 'framing', status: 'complete', output_video_id: 6, output_filename: 'out-old.mp4' },
+      ],
+    };
+    apiFetchMock.mockResolvedValue(jsonResponse({ acknowledged: 1 }));
+
+    renderHook(() => useExportRecovery());
+
+    await waitFor(() => {
+      expect(useFocusCompletionStore.getState().recovered?.jobId).toBe('job-newest');
+    });
+
+    expect(useFocusCompletionStore.getState().recovered).toEqual({
+      jobId: 'job-newest', projectId: 42, projectName: 'Newest Reel',
+    });
+  });
+
   it('checkModalStatusOnce COMPLETE branch (active PENDING job finished on Modal while away) routes a framing job into focusCompletionStore', async () => {
     window.__bootstrapExports = {
       active: [
