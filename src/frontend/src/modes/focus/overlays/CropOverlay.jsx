@@ -46,7 +46,14 @@ export default function CropOverlay({
   selectedKeyframeIndex = null,
   isFullscreen = false,
   dimOpacity = 0.2,
-  interactive = true
+  interactive = true,
+  // T9950 Slice 3: suppresses the reticule, handles, badges, dim shadow, OOB
+  // rotation mask and straighten tool while the output-aspect preview is on.
+  // The rotation useLayoutEffect below and its cleanup are UNTOUCHED by this
+  // prop — CropOverlay must stay MOUNTED during preview, or its unmount
+  // cleanup clears video.style.transform and silently un-straightens the
+  // preview (design doc §4 landmine 1).
+  chromeHidden = false
 }) {
   // Transient drag/resize state lives in refs (not useState) so the window
   // move/up listeners can be attached synchronously in the pointer-down handler
@@ -540,7 +547,7 @@ export default function CropOverlay({
     >
       {/* T5640: out-of-bounds dim mask — the rotated-frame quad as an even-odd hole.
           pointer-events:none so it never eats crop/straighten input. */}
-      {maskQuadPoints && (
+      {!chromeHidden && maskQuadPoints && (
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
           style={{ position: 'absolute', top: 0, left: 0 }}
@@ -560,7 +567,11 @@ export default function CropOverlay({
         </svg>
       )}
 
-      {/* Dimmed overlay outside crop area */}
+      {/* Dimmed overlay outside crop area + the crop rectangle itself (reticule,
+          grid, badges, handles) — all suppressed together while chromeHidden
+          (T9950 Slice 3 preview). */}
+      {!chromeHidden && (
+        <>
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{ position: 'absolute', top: 0, left: 0 }}
@@ -659,13 +670,15 @@ export default function CropOverlay({
           />
         ))}
       </div>
+        </>
+      )}
 
       {/* T5640: straighten capture layer — full-overlay pointer surface that is
           ONLY active while the straighten tool is revealed (T5641 `straightenVisible`).
           Sits above the reticle (z-20) so the whole frame is a straighten target.
           touch-action: none + pointer capture + pointerId filter per the
           real-browser rule. */}
-      {straightenVisible && onSetRotation && (
+      {!chromeHidden && straightenVisible && onSetRotation && (
         <div
           className="absolute inset-0 pointer-events-auto"
           style={{ touchAction: 'none', cursor: 'crosshair', zIndex: 20 }}
@@ -694,7 +707,7 @@ export default function CropOverlay({
       {/* T5640: straighten dial — fine nudge, slider, readout, reset. Revealed only
           when the Straighten toggle (inline with zoom, T5641) is on. pointer-events:
           auto (parent is none). Only shown when the container wired onSetRotation. */}
-      {straightenVisible && onSetRotation && interactive && (
+      {!chromeHidden && straightenVisible && onSetRotation && interactive && (
         <div
           className="absolute left-1/2 bottom-2 -translate-x-1/2 pointer-events-auto flex items-center gap-2 bg-gray-900/85 border border-gray-700 rounded-lg px-2 py-1.5"
           style={{ zIndex: 30, touchAction: 'none' }}

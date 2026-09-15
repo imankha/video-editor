@@ -54,4 +54,26 @@ describe('FramingActionRow (T9950 Slice 2)', () => {
     );
     expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/back to framing/i);
   });
+
+  it('shows the approximation disclosure only while previewing', () => {
+    const { rerender } = render(
+      <FramingActionRow canUndo={false} onUndo={vi.fn()} isWideFraming={false} onWidenFraming={vi.fn()}
+        previewing={false} onTogglePreview={vi.fn()} />
+    );
+    expect(screen.queryByTestId('preview-disclosure')).toBeNull();
+
+    rerender(
+      <FramingActionRow canUndo={false} onUndo={vi.fn()} isWideFraming={false} onWidenFraming={vi.fn()}
+        previewing onTogglePreview={vi.fn()} />
+    );
+    expect(screen.getByTestId('preview-disclosure').textContent).toMatch(/final image quality is produced at export/i);
+  });
+
+  it('adds the multi-clip disclosure line when previewing a multi-clip project', () => {
+    render(
+      <FramingActionRow canUndo={false} onUndo={vi.fn()} isWideFraming={false} onWidenFraming={vi.fn()}
+        previewing onTogglePreview={vi.fn()} isMultiClip />
+    );
+    expect(screen.getByTestId('preview-disclosure').textContent).toMatch(/your clips are joined at export/i);
+  });
 });

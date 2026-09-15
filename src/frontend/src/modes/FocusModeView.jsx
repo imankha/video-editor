@@ -1,9 +1,11 @@
-import { forwardRef, useState } from 'react';
+import { forwardRef, useState, useMemo } from 'react';
 import { Minimize, Maximize, Crop, Sliders, Film, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
+import useVideoDisplayRect from '../hooks/useVideoDisplayRect';
+import { computeOutputPreviewTransform } from '../utils/outputPreviewTransform';
 import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
@@ -311,6 +313,51 @@ export function FocusModeView({
   const [advancedOverride, setAdvancedOverride] = useState(null);
   const advancedOpen = advancedOverride ?? hasExistingAdvancedEdits;
 
+  // T9950 Slice 3: the output-aspect moving preview (design doc §4, P1) is a
+  // re-framing of the SAME player, not a second one. EPHEMERAL view state,
+  // same pattern as advancedOverride/straightenVisible above — a click
+  // toggles it, nothing is persisted, no useEffect involved.
+  const [previewing, setPreviewing] = useState(false);
+  // The preview's own video->screen mapping, computed at zoom=1/panOffset=0 so
+  // the editor's inspection zoom never leaks into the preview (design doc §4
+  // landmine 2) regardless of the live editing zoom/panOffset above. Always
+  // called (rules of hooks) — cheap when `previewing` is false since nothing
+  // reads `previewRect` in that case.
+  const { rect: previewRect } = useVideoDisplayRect(videoRef, metadata, {
+    zoom: 1,
+    panOffset: { x: 0, y: 0 },
+    isFullscreen,
+  });
+  // Inverse of videoToScreenRect (design doc §4): maps currentCropState onto
+  // the whole stage box. containerWidth/Height are derived from previewRect
+  // itself rather than a second DOM measurement — offsetX/offsetY are exactly
+  // half the letterbox/pillarbox gap when panOffset is {x:0,y:0}.
+  // The [Preview highlight] toggle only lives in the non-fullscreen, non-mobileFs
+  // action row (rendered `!mobileFs` below, and unreachable from inside desktop
+  // fullscreen), so the transform/chrome-hiding effects are scoped to match —
+  // otherwise a fullscreen/mobile-expand tap while still marked `previewing`
+  // would carry a transform computed for the small stage box onto a viewport
+  // that is no longer constrained to the output aspect (reviewer nit, slice 3).
+  const previewActive = previewing && !mobileFs && !isFullscreen;
+  const previewTransform = useMemo(() => {
+    if (!previewActive || !previewRect) return null;
+    return computeOutputPreviewTransform({
+      crop: currentCropState,
+      displayRect: previewRect,
+      containerWidth: previewRect.width + 2 * previewRect.offsetX,
+      containerHeight: previewRect.height + 2 * previewRect.offsetY,
+    });
+  }, [previewActive, previewRect, currentCropState]);
+  // Constrains the stage box to the OUTPUT aspect (design doc §4) instead of
+  // the source video's aspect, only while previewing and only where the box
+  // isn't already the full viewport (fullscreen/mobileFs keep their existing
+  // sizing — same guard OverlayModeView's stageBoxStyle uses).
+  const previewStageAspect = useMemo(() => {
+    if (!previewActive) return null;
+    const [ratioW, ratioH] = (globalAspectRatio || '').split(':').map(Number);
+    return ratioW > 0 && ratioH > 0 ? `${ratioW} / ${ratioH}` : null;
+  }, [previewActive, globalAspectRatio]);
+
   // T9270: the Focus settings-rail tabs (Clips | Settings) and their bodies. The
   // Settings tab re-homes the old above-video toolbar (aspect, audio, straighten,
   // background dim, zoom) into Reel / This clip / View-only groups. `desktopOnly`
@@ -474,6 +521,7 @@ export function FocusModeView({
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : 'rounded-lg'
             }`}
+            style={previewStageAspect ? { aspectRatio: previewStageAspect, margin: '0 auto' } : undefined}
             onClick={mobileFs ? togglePlay : undefined}
             onTouchStart={mobileFs ? fsControls.handleLongPressTouchStart : undefined}
             onTouchMove={mobileFs ? fsControls.handleLongPressTouchMove : undefined}
@@ -488,6 +536,8 @@ export function FocusModeView({
               onFileSelect={(isFullscreen || mobileFs) ? undefined : onFileSelect}
               allowUpload={false}
               panEnabled={!mobileFs || touchMode === 'view'}
+              fitToAspect={!!previewStageAspect}
+              contentTransform={previewActive ? previewTransform : null}
               overlays={[
                 videoUrl && currentCropState && metadata && (
                   <CropOverlay
@@ -501,17 +551,18 @@ export function FocusModeView({
                     straightenVisible={straightenVisible}
                     onCropChange={onCropChange}
                     onCropComplete={onCropComplete}
-                    zoom={zoom}
-                    panOffset={panOffset}
+                    zoom={previewActive ? 1 : zoom}
+                    panOffset={previewActive ? { x: 0, y: 0 } : panOffset}
                     selectedKeyframeIndex={selectedCropKeyframeIndex}
                     isFullscreen={isFullscreen}
                     dimOpacity={dimOpacity}
                     interactive={!mobileFs || touchMode === 'crop'}
+                    chromeHidden={previewActive}
                   />
                 ),
               ].filter(Boolean)}
-              zoom={zoom}
-              panOffset={panOffset}
+              zoom={previewActive ? 1 : zoom}
+              panOffset={previewActive ? { x: 0, y: 0 } : panOffset}
               onZoomChange={onZoomByWheel}
               onPanChange={onPanChange}
               isFullscreen={isFullscreen}
@@ -647,14 +698,18 @@ export function FocusModeView({
           />
         )}
 
-        {/* T9950 Slice 2: [Undo] [Use a wider frame] [Preview highlight] — under
-            the timeline, above the Advanced-editing disclosure (design doc §5). */}
+        {/* T9950 Slice 2/3: [Undo] [Use a wider frame] [Preview highlight] —
+            under the timeline, above the Advanced-editing disclosure (design
+            doc §5). */}
         {!mobileFs && videoUrl && (
           <FramingActionRow
             canUndo={canUndoFraming}
             onUndo={onUndoFraming}
             isWideFraming={isWideFraming}
             onWidenFraming={onWidenFraming}
+            previewing={previewing}
+            onTogglePreview={() => setPreviewing((v) => !v)}
+            isMultiClip={isMultiClip}
           />
         )}
 

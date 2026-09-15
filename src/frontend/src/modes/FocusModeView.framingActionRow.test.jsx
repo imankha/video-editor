@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 /**
@@ -83,5 +83,23 @@ describe('FocusModeView FramingActionRow wiring (T9950 Slice 2)', () => {
   it('does not render the action row without a video', () => {
     renderView({ videoUrl: '' });
     expect(screen.queryByTestId('framing-undo')).toBeNull();
+  });
+
+  it('toggling Preview highlight flips its label and shows the approximation disclosure (T9950 Slice 3)', () => {
+    renderView();
+    const previewBtn = screen.getByTestId('framing-preview-toggle');
+    expect(previewBtn.textContent).toMatch(/preview highlight/i);
+    expect(screen.queryByTestId('preview-disclosure')).toBeNull();
+
+    fireEvent.click(previewBtn);
+
+    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/back to framing/i);
+    expect(screen.getByTestId('preview-disclosure')).not.toBeNull();
+  });
+
+  it('shows the multi-clip disclosure line only when previewing a multi-clip project', () => {
+    renderView({ clipsWithCurrentState: [{ id: 'a' }, { id: 'b' }], hasClips: true });
+    fireEvent.click(screen.getByTestId('framing-preview-toggle'));
+    expect(screen.getByTestId('preview-disclosure').textContent).toMatch(/your clips are joined at export/i);
   });
 });
