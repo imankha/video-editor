@@ -12,7 +12,12 @@ import time
 from datetime import UTC, datetime
 from enum import Enum
 
-from ..database import ensure_database, get_db_connection, sync_db_to_r2_explicit
+from ..database import (
+    SyncResult,
+    ensure_database,
+    get_db_connection,
+    sync_db_to_r2_explicit,
+)
 from ..migrations import MigrationBlocked
 from ..profile_context import set_current_profile_id
 from ..storage import r2_delete_object_global
@@ -205,6 +210,19 @@ def do_sweep():
                     logger.warning(
                         f"[Sweep] hash={blake3_hash[:12]} auto-export not settled "
                         f"(failed, under retry cap) — keeping ref to retry next sweep"
+                    )
+                    continue
+                if verdict == ReclaimVerdict.KEEP_ARTIFACTS_MISSING:
+                    # T10121 D7: a game whose retries are exhausted AND whose
+                    # recap artifacts are still missing transitions to the
+                    # terminal 'abandoned' state here (loud, one-time CRITICAL)
+                    # instead of the sweep silently keeping the ref forever
+                    # with no signal.
+                    for gid in _games_using_hash(blake3_hash):
+                        _abandon_if_exhausted(user_id, profile_id, gid)
+                    logger.warning(
+                        f"[Sweep] hash={blake3_hash[:12]} recap artifacts MISSING "
+                        f"— refusing reclaim, keeping ref to retry next sweep"
                     )
                     continue
                 if verdict != ReclaimVerdict.RECLAIM:
@@ -546,22 +564,76 @@ def _reclaim_verdict(
     return ReclaimVerdict.RECLAIM
 
 
+def _abandon_if_exhausted(user_id: str, profile_id: str, game_id: int) -> None:
+    """Write the terminal 'abandoned' status when a game has exhausted its
+    retry cap AND the recap-artifact gate still refuses reclaim (T10121 D7) --
+    a permanently-failing export must stop retrying loudly, never let the
+    sweep silently keep re-deferring (or worse, eventually reclaim) with no
+    signal that this game will never settle on its own.
+
+    A no-op below the attempt cap (still legitimately retryable) or once
+    already terminal ('complete'/'skipped'/'abandoned') -- the caller
+    re-invokes this every sweep the artifact gate refuses, so re-abandoning an
+    already-abandoned game must never re-fire the CRITICAL (D7: CRITICAL ONCE
+    at the transition, WARNING on every later refusal -- the caller's own
+    verdict-level WARNING already covers that). Never resets
+    auto_export_attempts (D7) -- a currently-stuck game keeps its count
+    exactly as-is; only the status transitions.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        game = cursor.execute(
+            "SELECT auto_export_status, auto_export_attempts FROM games WHERE id = ?",
+            (game_id,),
+        ).fetchone()
+        if not game:
+            return
+        if game['auto_export_status'] in ('complete', 'skipped', 'abandoned'):
+            return
+        attempts = game['auto_export_attempts'] or 0
+        if attempts < MAX_AUTO_EXPORT_ATTEMPTS:
+            return
+
+        cursor.execute(
+            "UPDATE games SET auto_export_status = 'abandoned' WHERE id = ?",
+            (game_id,),
+        )
+        conn.commit()
+
+    logger.critical(
+        f"[Sweep] ABANDONED user={user_id[:8]} profile={profile_id[:8]} "
+        f"game={game_id} attempts={attempts} — retry cap exhausted and recap "
+        f"artifacts still missing; ref KEPT, source will NOT be reclaimed"
+    )
+    sync_result = sync_db_to_r2_explicit(user_id, profile_id)
+    if sync_result != SyncResult.OK:
+        logger.warning(
+            f"[Sweep] game={game_id} 'abandoned' write sync={sync_result.value} "
+            f"— will retry sync on next write to this profile"
+        )
+
+
 def _phase2_artifact_gate_missing(blake3_hash: str, users: list) -> bool:
     """True if ANY profile-owned game using this hash has a MISSING recap
     artifact (T10121 D5) -- the Phase-2 twin of the Phase-1 artifact gate,
     checked right before the PERMANENT R2 delete. Needed because a game whose
     ref was already deleted by mechanisms B/C/D/E before this fix shipped has
     no expired ref left for Phase 1 to re-examine this sweep -- Phase 2's
-    grace-expired hash is the only remaining chance to catch it.
+    grace-expired hash is the only remaining chance to catch it, including
+    stamping 'abandoned' (D7) on any such game since Phase 1 will never see it
+    again to do so itself.
 
     Only walks profiles whose DB is already local (mirrors
     `_expire_game_storage_all_profiles`) -- Phase 1 already downloaded
     anything live this sweep, so a profile with no local file has no game
-    left to check.
+    left to check. Walks every profile/game rather than short-circuiting on
+    the first MISSING hit, so every exhausted game on this hash gets its
+    'abandoned' transition, not just the first one found.
     """
     from ..database import USER_DATA_BASE
     from ..migrations import _get_profile_ids
 
+    missing = False
     for user in users:
         user_id = user["user_id"]
         for profile_id in _get_profile_ids(user_id):
@@ -572,5 +644,6 @@ def _phase2_artifact_gate_missing(blake3_hash: str, users: list) -> bool:
             set_current_profile_id(profile_id)
             for game_id in _games_using_hash(blake3_hash):
                 if recap_artifacts_present(user_id, game_id) == ArtifactVerdict.MISSING:
-                    return True
-    return False
+                    missing = True
+                    _abandon_if_exhausted(user_id, profile_id, game_id)
+    return missing

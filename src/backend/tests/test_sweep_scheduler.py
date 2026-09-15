@@ -265,6 +265,19 @@ class TestFindGamesForHash:
         result = _find_games_for_hash(USER_ID, PROFILE_ID, "hash_a", {"hash_a"})
         assert result == set()
 
+    def test_abandoned_game_never_reselected(self, isolated_profile_db):
+        """T10121 D7: a terminal 'abandoned' game is never re-selected for
+        export, regardless of its attempt count -- it matches none of the
+        selector's three arms (IS NULL / 'failed' / 'pending')."""
+        from app.services.auto_export import MAX_AUTO_EXPORT_ATTEMPTS
+        from app.services.sweep_scheduler import _find_games_for_hash
+
+        db = isolated_profile_db["db_path"]
+        _insert_game(db, blake3_hash="hash_a", status="abandoned", attempts=MAX_AUTO_EXPORT_ATTEMPTS)
+
+        result = _find_games_for_hash(USER_ID, PROFILE_ID, "hash_a", {"hash_a"})
+        assert result == set()
+
 
 # ---------------------------------------------------------------------------
 # do_sweep tests
@@ -617,6 +630,52 @@ class TestDoSweep:
         mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
         mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS)
         assert "UNVERIFIABLE" in caplog.text
+
+    @patch(f"{M}.recap_artifacts_present")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
+    @patch(f"{M}.has_remaining_refs", return_value=False)
+    @patch(f"{M}.delete_ref")
+    @patch(f"{M}.auto_export_game")
+    @patch(f"{M}.ensure_database")
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_exhausted_and_missing_artifacts_abandons_and_keeps_ref(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, mock_artifacts, isolated_profile_db, caplog
+    ):
+        """T10121 D7: a game that has exhausted its retry cap AND whose recap
+        artifacts are still missing transitions to the terminal 'abandoned'
+        status with exactly ONE CRITICAL log, and its ref survives (never
+        silently reclaimed on a permanent failure)."""
+        import logging
+        from app.services.auto_export import ArtifactVerdict, MAX_AUTO_EXPORT_ATTEMPTS
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(
+            db, blake3_hash="hash_abc", status="failed", attempts=MAX_AUTO_EXPORT_ATTEMPTS
+        )
+        mock_artifacts.return_value = ArtifactVerdict.MISSING
+
+        with caplog.at_level(logging.CRITICAL, logger="app.services.sweep_scheduler"):
+            do_sweep()
+
+        conn = sqlite3.connect(str(db))
+        row = conn.execute(
+            "SELECT auto_export_status FROM games WHERE id = ?", (game_id,)
+        ).fetchone()
+        conn.close()
+        assert row[0] == "abandoned"
+
+        critical_records = [r for r in caplog.records if r.levelno == logging.CRITICAL]
+        assert len(critical_records) == 1
+        assert f"game={game_id}" in critical_records[0].message
+
+        mock_delete_ref.assert_not_called()
+        mock_insert_grace.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
