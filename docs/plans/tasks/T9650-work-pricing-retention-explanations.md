@@ -1,6 +1,6 @@
 # T9650: Align the work, pricing and retention explanations across public and signed-in surfaces
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-10
