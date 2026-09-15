@@ -110,6 +110,37 @@ describe('useCrop updateAspectRatio (T3910)', () => {
     expect(result.current.keyframes).toEqual(before);
   });
 
+  it('uses the T10150 enlarged default sizes for a 1080p source', () => {
+    // 9:16 -> 410x730, 16:9 -> 1280x720 (2x the pre-T10150 boxes, ~2x enlarge to
+    // the 1440p-capped output instead of ~4x). These must mirror the backend
+    // DEFAULT_CROP_SIZES (default_crop.py); parity is guarded by a backend test.
+    const { result } = renderHook(() => useCrop(METADATA, null, null));
+    expect(result.current.getCropDataAtTime(0)).toMatchObject({ width: 410, height: 730 });
+
+    act(() => {
+      result.current.updateAspectRatio('16:9');
+    });
+    expect(result.current.getCropDataAtTime(0)).toMatchObject({ width: 1280, height: 720 });
+  });
+
+  it('falls back to a fit-to-video default when the source is too small for the box', () => {
+    // T10150: the enlarged 16:9 default (1280x720) does not fit a tiny source. The
+    // default must clamp to the largest in-bounds 16:9 rectangle, never overflow.
+    const tiny = { width: 320, height: 240, duration: 5, framerate: 30 };
+    const { result } = renderHook(() => useCrop(tiny, null, null));
+
+    act(() => {
+      result.current.updateAspectRatio('16:9');
+    });
+    const crop = result.current.getCropDataAtTime(0);
+    expect(crop.width).toBeLessThanOrEqual(320);
+    expect(crop.height).toBeLessThanOrEqual(240);
+    // Still 16:9 and positioned inside the frame.
+    expect(Math.abs(crop.width / crop.height - 16 / 9)).toBeLessThan(0.02);
+    expect(crop.x).toBeGreaterThanOrEqual(0);
+    expect(crop.y).toBeGreaterThanOrEqual(0);
+  });
+
   it('changes the default-crop reticule shape for a clip with no keyframes', () => {
     // With no saved keyframes the reticule is driven by the default crop, which must
     // follow the new ratio so the preview matches what export will produce.
