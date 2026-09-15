@@ -1,6 +1,6 @@
 # T10130: Storage-expiry banner should reassure users that annotation playback survives game deletion once fully marked and exported
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-14
