@@ -42,8 +42,8 @@ from app.services.default_crop import DEFAULT_CROP_SIZES
 USER_ID = "t4050-e2e-user"
 PROFILE_ID = "testdefault"
 
-NINE_W, NINE_H = DEFAULT_CROP_SIZES["9:16"]        # (205, 365) portrait box
-SIXTEEN_W, SIXTEEN_H = DEFAULT_CROP_SIZES["16:9"]  # (640, 360) landscape box
+NINE_W, NINE_H = DEFAULT_CROP_SIZES["9:16"]        # (410, 730) portrait box
+SIXTEEN_W, SIXTEEN_H = DEFAULT_CROP_SIZES["16:9"]  # (1280, 720) landscape box
 
 # Real source: a landscape frame big enough to hold either crop box. testsrc gives a
 # genuine decodable H.264 stream so ffprobe on the output is meaningful.

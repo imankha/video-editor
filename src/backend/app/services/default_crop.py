@@ -7,11 +7,19 @@ default (not a silent fallback hiding a bug). It mirrors the frontend default in
 (visible default) and a clip they never opened get the SAME crop.
 """
 
-# Fixed crop sizes optimized for upscaling, keyed by output aspect ratio.
-# Mirrors DEFAULT_CROP_SIZES in the frontend.
+# Default crop sizes keyed by output aspect ratio, sized to LIMIT synthetic
+# upscale on a 1080p source (T10150). Each is 2x the pre-T10150 fixed box: a
+# 1080p source now enlarges ~2x (was ~4x) to the 1440p-capped output, ~10x
+# sharper by lap_var in the no-GAN benchmark (scripts/quality_benchmark.py),
+# while still keeping the athlete a clear subject of the frame (~18% of frame,
+# vs ~12% for a max-fit crop). Evidence: T9970 benchmark + T9950 design review
+# (9:16) and this task's 16:9 benchmark pass.
+# MUST stay mirrored with DEFAULT_CROP_SIZES in the frontend
+# (src/frontend/src/modes/focus/hooks/useCrop.js) — guarded by
+# test_frontend_backend_parity in tests/test_default_crop.py.
 DEFAULT_CROP_SIZES = {
-    "9:16": (205, 365),
-    "16:9": (640, 360),
+    "9:16": (410, 730),
+    "16:9": (1280, 720),
 }
 
 
@@ -25,9 +33,21 @@ def default_crop_size(video_width: int, video_height: int, aspect_ratio: str) ->
     source dimensions, so they resolve even when ``video_width``/``video_height`` are
     unknown. An arbitrary ratio needs the source dims to size the box; without them we
     raise rather than silently guess (No Silent Fallbacks).
+
+    When the source IS known and is smaller than the predefined box (a rare, tiny
+    source — the T10150-enlarged defaults are 410x730 / 1280x720), we fall through to
+    the fit-to-video calculation below instead of returning a box that overflows the
+    frame. This keeps the default a valid in-bounds crop at every source size, mirroring
+    the frontend's calculateDefaultCrop.
     """
     if aspect_ratio in DEFAULT_CROP_SIZES:
-        return DEFAULT_CROP_SIZES[aspect_ratio]
+        crop_w, crop_h = DEFAULT_CROP_SIZES[aspect_ratio]
+        # Unknown dims -> keep the source-independent predefined size (see above).
+        # Known dims that fit the box -> use it. Only a too-small source falls through.
+        if not video_width or not video_height or (
+            crop_w <= video_width and crop_h <= video_height
+        ):
+            return crop_w, crop_h
 
     if not video_width or not video_height:
         raise ValueError(

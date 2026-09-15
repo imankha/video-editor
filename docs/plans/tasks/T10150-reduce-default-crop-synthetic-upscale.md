@@ -107,6 +107,70 @@ outcome record given this changes default output for the majority of new exports
 **2026-09-15**: Filed as a T9950 design-review byproduct (Fable's second-pass verification;
 T9970's original finding named this as the likely higher-value follow-up, Q2 in the design doc).
 
+**2026-09-15 (implementation)**: New defaults chosen as **2x the old fixed box** for both
+ratios, evidence-backed:
+
+- **9:16**: 205x365 -> **410x730** (confirmed from T9970 benchmark + T9950 design review:
+  3.95x -> 1.98x enlarge, lap_var 3.2 -> 32.1 (~10x sharper), athlete 35.6% -> 17.8% of frame).
+- **16:9**: 640x360 -> **1280x720** (benchmarked separately this task, `scripts/quality_benchmark.py`
+  against `formal annotations/test.short/wcfc-carlsbad-trimmed.mp4` @ 1920x1080, output 2560x1440
+  = the VIDEO_MAX 1440p cap):
+
+  | 16:9 crop | enlarge | enlarged lap_var (higher=sharper) | subject share |
+  |---|---|---|---|
+  | 640x360 (old default) | 4.00x | 2.86 | 36.1% |
+  | **1280x720 (2x, chosen)** | **2.00x** | **27.62 (~9.7x better)** | **18.1%** |
+  | 960x540 (1.5x) | 2.67x | 10.97 | 24.1% |
+  | 1920x1080 (max-fit) | 1.33x | 90.84 | 12.0% |
+
+  16:9 mirrors 9:16 almost exactly: the 2x box is the sweet spot (~10x sharper, athlete still a
+  clear ~18% subject vs max-fit's 12%).
+
+**Real before/after export evidence** (in-container, GPU/Modal OFF so GAN is unmeasurable — these
+are the sanctioned no-GAN LOWER BOUND, T4120):
+- Standalone benchmark produced real encoded mp4s + side-by-side montages; the 640x360 (4x) frame
+  is visibly mushy, the 1280x720 (2x) frame visibly sharper (players/trees/cars crisp). Reproduce:
+  `python3 scripts/quality_benchmark.py --config <16:9 scenario, boxes above> --out <dir>`.
+- The **real product export pipeline** (`_export_clips`, real ffmpeg crop+scale, ffprobed output)
+  is exercised with the new defaults by `tests/test_t4050_reframe_e2e_pipeline.py` — PASSES.
+
+**Existing-vs-new-clip behavior**: the default is applied ONLY when a clip has no saved crop
+keyframes (state `uninitialized`); an existing clip with a user-set crop restores its saved
+keyframes and never recomputes the default. This is a pure code-level constant — NO reactive
+effect writes it back, so changing it cannot silently rewrite an already-set crop (gesture-based
+persistence rule). Guarded by useCrop tests (`does not auto-initialize when saved keyframes are
+provided`, `updateAspectRatio ... without rewriting saved keyframes`).
+
+**Small-source edge case**: the enlarged box can exceed a tiny/aspect-mismatched source. Both
+sides now fall through to the existing fit-to-video calc (largest rectangle of that ratio) so the
+default is always a valid in-bounds crop; the backend keeps resolving the predefined size when
+source dims are unknown. Guarded by `test_predefined_falls_back_when_source_too_small` (backend)
+and `falls back to a fit-to-video default when the source is too small` (frontend).
+
+**Drift guard**: new `test_frontend_backend_parity` parses `useCrop.js`'s `DEFAULT_CROP_SIZES` and
+asserts it equals the backend dict (and that it parsed the expected number of ratios) — a change
+to one side without the other now fails CI.
+
+**Widen-framing (T9950) interaction (noted, not a defect)**: the "use a wider frame" target is
+`min(default*2, maxFit)` (`widenFraming.js`). With the default now doubled, the raw widen target
+(e.g. 820x1460 on 9:16) is clamped by max-fit on a 1080p source — this is exactly the per-axis
+`min` clamp T9950 designed for, and `isWideFraming` is DERIVED so nothing is corrupted. Net effect:
+the widen button now yields a smaller RELATIVE enlargement over the (larger) default. Product
+behavior, within design; flagged for awareness. `widenFraming.test.js` uses its own fixture and
+stays green.
+
+**Tests**: backend 18/18 green (`test_default_crop.py`, `test_t4050_reframe_dropped_at_export.py`,
+`test_t4050_reframe_e2e_pipeline.py`); frontend 32/32 green (`useCrop.test.js` + adjacent
+`CropLayer`/`CropOverlay`). ESLint clean on the changed file.
+
+**QA note (live browser drive)**: the WIP-limit worker container runs the stack via docker
+orchestration on the host (`task.sh stack`), not reachable from inside the worker, and an
+authenticated Focus-mode drive needs real R2 account/clip data the container does not hold. The
+three QA checks it would perform are each covered by the automated evidence above (both-ratio
+default applies; existing manually-set crop unaffected; small-source edge case), and the no-GAN
+benchmark substitutes for the live GPU export. **Live browser QA at both aspect ratios should be
+confirmed on staging** (the designated test phase per CLAUDE.md) after merge.
+
 ## Acceptance Criteria
 
 - [ ] New default crop sizes chosen with real evidence for BOTH `9:16` and `16:9`

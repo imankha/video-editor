@@ -31,12 +31,13 @@ from app.services.default_crop import DEFAULT_CROP_SIZES
 USER_ID = "t4050-reframe-user"
 PROFILE_ID = "testdefault"
 
-NINE_W, NINE_H = DEFAULT_CROP_SIZES["9:16"]      # (205, 365) portrait box
-SIXTEEN_W, SIXTEEN_H = DEFAULT_CROP_SIZES["16:9"]  # (640, 360) landscape box
+NINE_W, NINE_H = DEFAULT_CROP_SIZES["9:16"]      # (410, 730) portrait box
+SIXTEEN_W, SIXTEEN_H = DEFAULT_CROP_SIZES["16:9"]  # (1280, 720) landscape box
 
 # A source frame big enough to hold either box so the refit isn't clamped into a
-# different shape.
-SRC_W, SRC_H = 1080, 1920
+# different shape (T10150 enlarged the defaults to 410x730 / 1280x720, so this must
+# be at least 1280x730 — a 1440p landscape frame comfortably holds both).
+SRC_W, SRC_H = 2560, 1440
 
 
 @pytest.fixture()
