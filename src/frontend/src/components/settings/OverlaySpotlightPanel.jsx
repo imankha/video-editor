@@ -2,6 +2,7 @@ import { Check, MousePointerClick } from 'lucide-react';
 import { HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS } from '../../constants/highlightColors';
 import { HighlightEffect } from '../../constants/highlightEffects';
 import { EDITOR_PANELS } from '../../config/displayNames';
+import { formatLength, PRECISION } from '../../utils/timeFormat';
 import SettingRow from './SettingRow';
 import SettingsPanel from './SettingsPanel';
 
@@ -31,11 +32,14 @@ export default function OverlaySpotlightPanel({
   disabled = false,
   // T9620 (UX-10): player-selection-first sequencing. While a player is still
   // unpicked the styling controls are hidden behind the "pick your player"
-  // guidance; once assignment begins they appear, with a progress line naming
-  // any remaining detection frames still to assign.
+  // guidance; once assignment begins they appear.
   awaitingPlayerSelection = false,
   assignedCount = 0,
   totalDetections = 0,
+  // T9960 (EP05): the current effect interval length (seconds), derived from the
+  // region span in OverlayModeView. Surfaced as the PRIMARY readout above the
+  // advanced styling controls; null hides the row (no region / unknown length).
+  spotlightDurationSeconds = null,
 }) {
   // Pre-selection: no styling controls, just the stated next step (on-screen
   // text, not a tooltip). Detection COUNT copy always says "player(s)" so the
@@ -51,24 +55,45 @@ export default function OverlaySpotlightPanel({
           <p className="text-xs text-gray-400">
             {EDITOR_PANELS.SELECT_PLAYER_STYLING_HINT}
           </p>
+          {/* T9960: Spotlight never blocks the framed result — say so up front so a
+              parent knows picking is optional, not a required gate. */}
+          <p className="text-xs text-gray-500">
+            {EDITOR_PANELS.SELECT_PLAYER_OPTIONAL}
+          </p>
         </div>
       </SettingsPanel>
     );
   }
 
-  const remaining = totalDetections - assignedCount;
-  const showProgress = totalDetections > 1 && assignedCount > 0 && remaining > 0;
+  // T9960 (EP05): one selected athlete SATISFIES the step. After the first pick,
+  // affirm completion; only when other detection frames remain do we mention that
+  // adding more is OPTIONAL — never an instruction to select "the remaining
+  // players". Derived from the same assignment counts, never a second stored copy.
+  const hasSelection = assignedCount > 0;
+  const moreAvailable = totalDetections - assignedCount > 0;
+  // The effect interval, surfaced as the primary readout. It's a LENGTH, so it
+  // rounds half-up (T9480 rule); hidden when unknown/non-positive.
+  const durationLabel =
+    spotlightDurationSeconds > 0
+      ? formatLength(spotlightDurationSeconds, PRECISION.TENTH, { style: 'unit' })
+      : null;
 
   return (
     <SettingsPanel title="This spotlight">
-      {/* T9620: after the first pick, name any detection frames still unassigned
-          so the user knows more checkpoints need a player. Derived from the same
-          assignment counts — never a second stored copy. */}
-      {showProgress && (
-        <p data-testid="assignment-progress" className="text-xs text-blue-300">
-          {assignedCount} of {totalDetections} players selected — click the remaining
-          {remaining === 1 ? ' player' : ' players'} to spotlight {remaining === 1 ? 'them' : 'each'} too.
+      {hasSelection && (
+        <p data-testid="player-selected-status" className="text-xs text-blue-300">
+          {EDITOR_PANELS.SELECT_PLAYER_DONE}
+          {moreAvailable ? ` ${EDITOR_PANELS.SELECT_PLAYER_ADD_MORE}` : ''}
         </p>
+      )}
+      {/* T9960: the (already adjustable) effect interval, named and shown as the
+          PRIMARY control — the advanced styling sliders stay secondary below. */}
+      {durationLabel && (
+        <SettingRow label={EDITOR_PANELS.SPOTLIGHT_DURATION} value={durationLabel} stack>
+          <p data-testid="spotlight-duration-hint" className="text-xs text-gray-400">
+            {EDITOR_PANELS.SPOTLIGHT_DURATION_HINT}
+          </p>
+        </SettingRow>
       )}
       {/* Spotlight color — the six swatches stack under the label (wide control). */}
       <SettingRow

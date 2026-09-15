@@ -13,21 +13,14 @@ import { API_BASE } from '../config';
 import { LIBRARY_ACTIONS } from '../config/displayNames';
 import apiFetch from '../utils/apiFetch';
 
-// Local calendar day as YYYY-MM-DD for the date input's default. NOT
-// toISOString() - that is UTC and rolls to tomorrow/yesterday near midnight.
-export function localTodayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-// Shown in the game tile name when the user submits without opening the
-// details disclosure ("Vs Unnamed opponent Sep 3"); editable via Edit Game.
-// An empty opponent would make the backend fall back to the bare "New Game".
-const OPPONENT_PLACEHOLDER = 'Unnamed opponent';
-
 export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const [opponentName, setOpponentName] = useState('');
-  const [gameDate, setGameDate] = useState(localTodayISO);
+  // T9930: the date starts EMPTY, not today. Defaulting to today silently
+  // recorded the upload day as the match date, so the tile title claimed a
+  // "Game Date" the parent never gave (evaluator finding S11). An untouched
+  // date is now sent as null; the backend titles it "Game uploaded <date>"
+  // (an honest upload-date fallback) instead of "Vs Unnamed opponent <today>".
+  const [gameDate, setGameDate] = useState('');
   const [gameType, setGameType] = useState(GameType.UNKNOWN);
   const [tournamentName, setTournamentName] = useState('');
   const [existingTournaments, setExistingTournaments] = useState([]);
@@ -115,7 +108,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
 
   const resetForm = useCallback(() => {
     setOpponentName('');
-    setGameDate(localTodayISO());
+    setGameDate('');
     setGameType(GameType.UNKNOWN);
     setTournamentName('');
     setShowTournamentDropdown(false);
@@ -127,8 +120,11 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     setIsSubmitting(true);
     try {
       // T8810: uniform ordered list — a single file is a 1-element list. No videoMode.
+      // T9930: send whatever the parent actually typed — an empty opponent/date is
+      // passed through as-is (createGame maps '' -> null) so the backend produces an
+      // honest "Game uploaded <date>" title rather than a fabricated opponent/date.
       const gameDetails = {
-        opponentName: opponentName.trim() || OPPONENT_PLACEHOLDER,
+        opponentName: opponentName.trim(),
         gameDate,
         gameType,
         tournamentName: gameType === GameType.TOURNAMENT ? tournamentName.trim() : null,
@@ -228,14 +224,22 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
             isSubmitting={isSubmitting}
           />
 
-          {/* T8700: Opponent + Date are surfaced as first-class fields (out of
-              the old collapsed "optional" disclosure) — live-testing feedback was
-              that these feel wanted at creation, not skippable. T8955: Game Type
-              (+ Tournament Name) joined them here — the "More options" disclosure
-              that used to hide it is gone entirely. Still non-blocking: every
-              field here carries a default (placeholder opponent, today, Unknown
-              type) so submit is gated on the video alone (T8500). */}
-          <div className="space-y-4">
+          {/* T9930: Opponent / Date / Game Type / Tournament are collapsed back
+              behind an OPTIONAL disclosure. T8700/T8955 had surfaced them as
+              always-visible first-class fields, but the Sept 12-13 evaluation
+              (finding S11) found metadata "appeared before value" on the very
+              first upload — the parent's job is to pick a video, not fill a form.
+              Cost/storage (above) and the file picker stay visible; the disclosure
+              is closed by default so an upload is still two gestures (pick, submit).
+              Every field keeps its default so submit remains gated on the video
+              alone (T8500). Native <details> = keyboard-accessible, no extra state. */}
+          <details data-testid="game-details-disclosure" className="group rounded-lg border border-gray-700 bg-gray-900/40">
+            <summary className="flex items-center justify-between cursor-pointer select-none px-3 py-2.5 text-sm font-medium text-gray-300 hover:text-white marker:content-['']">
+              <span>Game details (optional)</span>
+              <ChevronDown size={16} className="text-gray-400 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="px-3 pb-3 pt-1 space-y-4">
+            <p className="text-xs text-gray-500">You can add an opponent and game date later.</p>
             {/* Opponent Name */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1.5">
@@ -363,7 +367,8 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                 )}
               </div>
             )}
-          </div>
+            </div>
+          </details>
 
           </div>
 
