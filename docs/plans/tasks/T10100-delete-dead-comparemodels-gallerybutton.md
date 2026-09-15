@@ -1,6 +1,6 @@
 # T10100: Delete the two unimported dead components (CompareModelsButton, GalleryButton)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 2
 **Complexity:** 1
 **Created:** 2026-09-14
@@ -54,8 +54,16 @@ investigation. S-tier: <10 LOC net (deletions), 2 files, no test scope beyond a 
 **2026-09-14**: Filed as a T9860 investigation byproduct, not folded into T9860's scope per the
 project's standing rule (new bugs found as investigation byproducts get filed separately).
 
+**2026-09-15**: Implemented inline (S-tier, container overhead not worth it per dotask's
+container-gate rule). Re-verified zero importers for both files (grep across
+`src/frontend/src`, only self-matches). Also confirmed `GalleryButton.jsx`'s
+`SECTION_NAMES.LIBRARY` reference was already dangling — T9860 (merged 2026-09-14) deleted that
+constant from `config/displayNames.js` as part of its D1 decision, so this file was stale even
+before today. No dedicated test files existed for either component. Deleted both files
+(`git rm`), ran `npm run build` — exit 0, no missing-import errors.
+
 ## Acceptance Criteria
 
-- [ ] Both files deleted
-- [ ] Frontend build passes with no missing-import errors
-- [ ] No test regressions
+- [x] Both files deleted
+- [x] Frontend build passes with no missing-import errors
+- [x] No test regressions (no dedicated tests existed for either component; full build green)
