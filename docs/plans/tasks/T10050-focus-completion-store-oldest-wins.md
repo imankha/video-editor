@@ -1,6 +1,6 @@
 # T10050: focusCompletionStore shows the oldest unacknowledged job, not the newest
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-09-14
