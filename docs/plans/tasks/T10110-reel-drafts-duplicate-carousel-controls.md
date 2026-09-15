@@ -87,6 +87,24 @@ same day (Explore agent): by-design per-game carousel splitting (T8080) plus fle
 not a rendering defect. Deferred implementation — low priority (Impact 3), needs a UX pick between
 3 candidate fixes first; see Solution above.
 
+**2026-09-15**: User picked option (a), a stronger visual divider (not the row-per-game or
+collapse-to-one-carousel alternatives). Implemented: `ProjectManager.jsx`'s `DraftPhaseAspectRows`
+game-row container gets `border-l-2 border-gray-600 pl-2.5` whenever `byGame.length > 1` (a single
+game in the bucket needs no divider), plus a slightly higher-contrast label
+(`text-gray-200`/`bg-gray-700/60`, up from `text-gray-300`/`bg-gray-700/40`).
+
+**Verification is partial, noted honestly rather than overclaimed**: live-confirmed against the
+running dev app (imankh@gmail.com's real account) that the divider is correctly ABSENT when a
+bucket has exactly one game (`game-row-Vs legends Sep 5` renders with no border class — this
+account's dev data only has one game in its "Draft" bucket). Could not reach a live account with
+2+ games in the same bucket within a reasonable time budget for this Impact-3 task (no existing
+account in this dev DB has that shape; creating one needs a full real annotate-clip flow on a
+second game). No existing unit test file covers `ProjectManager.jsx`/`DraftPhaseAspectRows`. The
+change itself is a trivial, additive Tailwind conditional with no logic change to the grouping —
+low risk, but the "present" branch is UNVERIFIED live. Recommend the user spot-check with a real
+account that has 2+ Not-Started/Draft games before merging, or accept the risk given how small the
+change is.
+
 ## Acceptance Criteria
 
 - [ ] Each Reel Drafts group/row shows exactly one carousel control set, unambiguous which cards

@@ -189,9 +189,17 @@ function DraftPhaseAspectRows({
       )}
       <div className="flex flex-wrap gap-x-5 gap-y-3">
         {byGame.map(({ key, label, projects }, gameIdx) => (
-          <div key={key} data-testid={`game-row-${key}`} className={`shrink-0 ${COMPACT_ROW_MAX_WIDTH}`}>
+          <div
+            key={key}
+            data-testid={`game-row-${key}`}
+            // T10110: a visible left divider so two games' clusters packed onto the
+            // same flex-wrap line read as clearly separate groups, not one carousel
+            // with duplicate controls (bug 51). Only drawn when there's more than
+            // one game cluster in this bucket -- a single game needs no divider.
+            className={`shrink-0 ${COMPACT_ROW_MAX_WIDTH} ${byGame.length > 1 ? 'border-l-2 border-gray-600 pl-2.5' : ''}`}
+          >
             <div className="px-3 pb-1 flex items-center gap-1.5">
-              <span className="text-[10px] font-semibold text-gray-300 bg-gray-700/40 px-1.5 py-0.5 rounded">
+              <span className="text-[10px] font-semibold text-gray-200 bg-gray-700/60 px-1.5 py-0.5 rounded">
                 {label}
               </span>
               <span className="text-[10px] text-gray-500">{projects.length}</span>
