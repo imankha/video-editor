@@ -53,6 +53,27 @@ def _resolve_modal_app_name(app_env: str) -> str:
     )
 
 
+# T10160 -- "skip the GAN for small enlargements" gate.
+#
+# BYTE-FOR-BYTE copy of `app.ai_upscaler.upscale_gate` (GAN_MIN_ENLARGE +
+# should_skip_gan). This file is deployed into a Modal image whose image does not
+# mount the `app` package, so it cannot import the canonical module -- the exact
+# same constraint that forces `_resolve_modal_app_name` above to be duplicated.
+# Parity between the two copies is enforced by `tests/test_upscale_gate.py`.
+#
+# INERT by default: GAN_MIN_ENLARGE = 0.0 means the cheap path is never taken, so
+# the render output is byte-identical to pre-T10160. Flipping the constant is a
+# gated follow-up (see docs/plans/tasks/T10160-design.md).
+GAN_MIN_ENLARGE = 0.0
+
+
+def should_skip_gan(output_width: int, crop_width: int) -> bool:
+    """True when the crop's horizontal enlargement is below GAN_MIN_ENLARGE."""
+    if crop_width <= 0:
+        return False
+    return (output_width / crop_width) < GAN_MIN_ENLARGE
+
+
 # Define the Modal app (name mirrors storage.APP_ENV's default of "dev" when unset)
 app = modal.App(_resolve_modal_app_name(os.environ.get("APP_ENV", "dev")))
 
@@ -1289,6 +1310,50 @@ def _get_realesrgan_model():
     return _realesrgan_model
 
 
+def _sharpen_frame(frame):
+    """Unsharp-mask sharpen for the cheap (Lanczos) path.
+
+    Mirrors the quality-mode sharpen in `ai_upscaler/frame_processor.py` so the
+    Modal cheap path and the local mirror produce comparable output when the gate
+    is eventually flipped on. Only reached when should_skip_gan() is True.
+    """
+    import cv2
+    import numpy as np
+
+    gaussian = cv2.GaussianBlur(frame, (0, 0), 1.0)
+    sharpened = cv2.addWeighted(frame, 1.2, gaussian, -0.2, 0)
+    return np.clip(sharpened, 0, 255).astype(np.uint8)
+
+
+def _upscale_crop(upsampler, cropped, out_w, out_h, log_label=""):
+    """Upscale a crop to (out_w, out_h) -- the single gate decision for all Modal sites.
+
+    T10160: when should_skip_gan(out_w, crop_w) is True (enlargement below
+    GAN_MIN_ENLARGE), skip the Real-ESRGAN pass -- whose cost scales with the crop's
+    INPUT pixel count, not the enlargement -- and use a Lanczos resize + unsharp
+    sharpen instead. With GAN_MIN_ENLARGE = 0.0 (the shipped default) the branch is
+    never taken, so this reproduces the prior inline enhance block byte-for-byte:
+    enhance(outscale=4), resize-on-exception fallback, and the conditional
+    trim-to-target resize. See docs/plans/tasks/T10160-design.md.
+    """
+    import cv2
+
+    if should_skip_gan(out_w, cropped.shape[1]):
+        resized = cv2.resize(cropped, (out_w, out_h), interpolation=cv2.INTER_LANCZOS4)
+        return _sharpen_frame(resized)
+
+    try:
+        upscaled, _ = upsampler.enhance(cropped, outscale=4)
+    except Exception as e:
+        logger.warning(f"[{log_label}] Upscale failed: {e}, using resize")
+        upscaled = cv2.resize(cropped, (out_w, out_h), interpolation=cv2.INTER_LANCZOS4)
+
+    # Resize to target resolution (Real-ESRGAN outputs 4x, may need adjustment)
+    if upscaled.shape[1] != out_w or upscaled.shape[0] != out_h:
+        upscaled = cv2.resize(upscaled, (out_w, out_h), interpolation=cv2.INTER_LANCZOS4)
+    return upscaled
+
+
 def _interpolate_crop(sorted_keyframes: list, time: float) -> dict:
     """Interpolate crop position using Catmull-Rom spline.
 
@@ -1563,16 +1628,8 @@ def process_framing_ai(
                 else:
                     cropped = frame
 
-                # AI upscale with Real-ESRGAN
-                try:
-                    upscaled, _ = upsampler.enhance(cropped, outscale=4)
-                except Exception as e:
-                    logger.warning(f"[{job_id}] Upscale failed for frame {frame_idx}: {e}, using resize")
-                    upscaled = cv2.resize(cropped, (output_width, output_height), interpolation=cv2.INTER_LANCZOS4)
-
-                # Resize to target resolution (Real-ESRGAN outputs 4x, may need adjustment)
-                if upscaled.shape[1] != output_width or upscaled.shape[0] != output_height:
-                    upscaled = cv2.resize(upscaled, (output_width, output_height), interpolation=cv2.INTER_LANCZOS4)
+                # AI upscale with Real-ESRGAN (T10160: gated, cheap path inert at GAN_MIN_ENLARGE=0.0)
+                upscaled = _upscale_crop(upsampler, cropped, output_width, output_height, log_label=f"{job_id} frame {frame_idx}")
 
                 # Save frame
                 frame_path = os.path.join(frames_dir, f"frame_{output_frame_idx:06d}.png")
@@ -1950,14 +2007,8 @@ def process_framing_ai_l4(
                 else:
                     cropped = frame
 
-                try:
-                    upscaled, _ = upsampler.enhance(cropped, outscale=4)
-                except Exception as e:
-                    logger.warning(f"[{job_id}] Upscale failed for frame {frame_idx}: {e}, using resize")
-                    upscaled = cv2.resize(cropped, (output_width, output_height), interpolation=cv2.INTER_LANCZOS4)
-
-                if upscaled.shape[1] != output_width or upscaled.shape[0] != output_height:
-                    upscaled = cv2.resize(upscaled, (output_width, output_height), interpolation=cv2.INTER_LANCZOS4)
+                # AI upscale with Real-ESRGAN (T10160: gated, cheap path inert at GAN_MIN_ENLARGE=0.0)
+                upscaled = _upscale_crop(upsampler, cropped, output_width, output_height, log_label=f"{job_id} frame {frame_idx}")
 
                 frame_path = os.path.join(frames_dir, f"frame_{output_frame_idx:06d}.png")
                 cv2.imwrite(frame_path, upscaled)
@@ -2182,16 +2233,8 @@ def process_framing_ai_chunk(
                 else:
                     cropped = frame
 
-                # AI upscale with Real-ESRGAN
-                try:
-                    upscaled, _ = upsampler.enhance(cropped, outscale=4)
-                except Exception as e:
-                    logger.warning(f"[{chunk_id}] Upscale failed for scratch frame {local_idx}: {e}")
-                    upscaled = cv2.resize(cropped, (output_width, output_height), interpolation=cv2.INTER_LANCZOS4)
-
-                # Resize to target resolution
-                if upscaled.shape[1] != output_width or upscaled.shape[0] != output_height:
-                    upscaled = cv2.resize(upscaled, (output_width, output_height), interpolation=cv2.INTER_LANCZOS4)
+                # AI upscale with Real-ESRGAN (T10160: gated, cheap path inert at GAN_MIN_ENLARGE=0.0)
+                upscaled = _upscale_crop(upsampler, cropped, output_width, output_height, log_label=f"{chunk_id} scratch frame {local_idx}")
 
                 # Save frame
                 frame_path = os.path.join(frames_dir, f"frame_{output_frame_idx:06d}.png")
@@ -2958,16 +3001,8 @@ def process_clips_ai(
 
                     cropped = rotate_then_crop(frame, clip_rotation, x, y, w, h)
 
-                    # AI upscale with Real-ESRGAN (4x for quality)
-                    try:
-                        upscaled, _ = upsampler.enhance(cropped, outscale=4)
-                    except Exception as e:
-                        logger.warning(f"[{job_id}] Upscale failed for frame {frame_num}: {e}, using resize")
-                        upscaled = cv2.resize(cropped, (target_width, target_height), interpolation=cv2.INTER_LANCZOS4)
-
-                    # Resize to target dimensions
-                    if upscaled.shape[1] != target_width or upscaled.shape[0] != target_height:
-                        upscaled = cv2.resize(upscaled, (target_width, target_height), interpolation=cv2.INTER_LANCZOS4)
+                    # AI upscale with Real-ESRGAN (4x) (T10160: gated, cheap path inert at GAN_MIN_ENLARGE=0.0)
+                    upscaled = _upscale_crop(upsampler, cropped, target_width, target_height, log_label=f"{job_id} frame {frame_num}")
 
                     # Save frame
                     frame_path = os.path.join(frames_dir, f"frame_{output_frame_idx:06d}.png")
