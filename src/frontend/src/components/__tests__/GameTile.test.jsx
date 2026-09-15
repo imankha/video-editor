@@ -143,6 +143,18 @@ describe('GameTile — kebab menu (item 4)', () => {
     expect(screen.getByText('Extend storage')).toBeTruthy();
   });
 
+  // T10130: Extend storage is the only row with a reassurance caption -- confirm
+  // it renders and that clicking the row (not just the label) still fires onExtend.
+  it('T10130: Extend storage row shows the safe-to-skip reassurance caption', () => {
+    const hs = handlers();
+    const expired = { ...baseGame, storage_status: 'expired' };
+    render(<GameTile game={expired} {...hs} />);
+    fireEvent.click(screen.getByLabelText('More actions'));
+    expect(screen.getByText(/Skipping is fine\. Annotations stay playable\./)).toBeTruthy();
+    fireEvent.click(screen.getByText('Extend storage'));
+    expect(hs.onExtend).toHaveBeenCalledTimes(1);
+  });
+
   // Re-homed from the retired ProjectManager.gameCard.test.jsx ("offers the Recap
   // entry even when the game is still extendable", T5990): an expired game that has
   // annotated clips AND is still extendable must expose BOTH "Watch annotations" and

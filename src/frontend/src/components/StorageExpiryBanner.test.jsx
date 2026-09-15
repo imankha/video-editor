@@ -27,6 +27,12 @@ describe('StorageExpiryBanner (T8330)', () => {
     expect(bannerText()).toContain('1 draft reel depends on it');
   });
 
+  it('T10130: shows the safe-to-expire reassurance line', () => {
+    render(<StorageExpiryBanner atRiskGameCount={1} dependentDraftCount={1} />);
+    expect(bannerText()).toContain("it's fine to let it expire");
+    expect(bannerText()).toContain('annotations stay playable');
+  });
+
   it('fires onExtend when the Extend storage CTA is clicked', () => {
     const onExtend = vi.fn();
     render(<StorageExpiryBanner atRiskGameCount={1} dependentDraftCount={1} onExtend={onExtend} />);

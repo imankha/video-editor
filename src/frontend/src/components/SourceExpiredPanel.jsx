@@ -42,6 +42,10 @@ export function SourceExpiredPanel({ canExtend = false, className = '' }) {
             ? ' Extend its storage to keep editing.'
             : ' Its storage window has passed and it can no longer be recovered.'}
         </p>
+        <p className="text-gray-500 text-xs mt-2">
+          If you&apos;d already exported this clip before its source expired, that finished video
+          is unaffected. You just can&apos;t re-edit it from the original footage anymore.
+        </p>
         {canExtend && (
           <button
             type="button"
