@@ -1,5 +1,17 @@
 ---
 domain: annotate
+updated: 2026-09-15 (T9900 — progress/saving status readable+persistent, frontend-only, no schema.
+The Annotate-side slice of T9900 (main export-indicator work is in export-pipeline.md): the T9330
+create-in-flight DISABLED "Frame this clip" CTA (`stagePendingCta`, AnnotateFullscreenOverlay.jsx,
+gated `isEditMode && !existingClip?.autoProjectId && focusPending`, DESKTOP-STRIP-ONLY render at ~:1133
+— mobile create closes on save so `focusPending` stays false there) now carries a
+`data-testid="clip-preparing-note"` caption `ANNOTATE.PREPARING_CLIP = 'Preparing your clip...'` under
+the button, so the brief pause while the clip's project id lands reads as "preparing", not "broken"
+(evidence E09). Pure render from the existing `focusPending` prop — no store/effect/persistence change;
+clears itself when `setAutoProjectId` lands (the live enabled CTA shows NO caption). Vocabulary: "clip"
+not the brief's proposed "highlight" (T9860 standing rule — the object is a clip). Test:
+`AnnotateFullscreenOverlay.firstClipInvitation.test.jsx` (caption present when pending, absent when
+live). Prior:)
 updated: 2026-09-15 (T9930 — simplify upload + de-clutter fresh home. **Upload dialog
 (`GameDetailsModal.jsx`) RE-COLLAPSED its metadata** — Opponent / Game Date / Game Type /
 Tournament now sit behind a closed native `<details data-testid="game-details-disclosure">`

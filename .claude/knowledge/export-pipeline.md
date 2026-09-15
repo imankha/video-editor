@@ -1,6 +1,37 @@
 ---
 domain: export-pipeline
-updated: 2026-09-14 (T9790 STOP OLD EXPORT COMPLETIONS HIJACKING RELOAD, frontend-only, two defects
+updated: 2026-09-15 (T9900 PROGRESS + SAVING STATUS READABLE/PERSISTENT, frontend-only, no schema —
+RECONCILIATION-heavy: the audit found most acceptance criteria ALREADY satisfied by prior work and
+only TWO genuine residual gaps needed code. **AC1 (no speculative saved/ready): already satisfied** —
+`exportStore` COMPLETE is only ever set from a real backend ack (WS complete frame / useExportRecovery
+`/modal-status` / unacknowledged list), never optimistically; the toast's Share/Copy-Link action is
+built ONLY when `outputVideoId` is truthy (`GlobalExportIndicator:209`), so a COMPLETE with a null
+output id shows success but offers NO dead share link. **AC3 (no fake countdown / dup retry): already
+satisfied** — percent shown is always the real `progress.percent` (pulse bar, never a fabricated
+number, when indeterminate); export "Retry connection" (`ExportButtonContainer` ~367-421) only
+GETs `/modal-status` + reconnects the WS, NEVER re-POSTs a render; `inFlightRef` + backend 409
+`insert_export_job_if_none_active` (T9540) + `completionFiredRef` (T9740) guard dispatch.
+**AC4 (no unsupported background-continuation promise): satisfied by omission** — a full-frontend grep
+found ZERO user-facing "you can leave / safe to close / in the background" strings; exports genuinely
+survive reload (durable `export_jobs` + recovery) while uploads are transient client state (lost on
+reload, `uploadStore` never claims otherwise). GUARDRAIL for future copy: any "keeps running" line may
+be EXPORT-only, never upload. **AC2 (stage/estimate readable @699px + 200% zoom after the toast
+dismisses): the ONE visual gap fixed (evidence E19).** `GlobalExportIndicator` crammed
+name+stage+percent+ETA into ONE `truncate max-w-[180px]` line inside a fixed `w-64`/`w-80` card; at
+200% zoom the estimate ellipsis-clipped. Fix: each of name / stage+percent / estimate now gets its own
+WRAPPING line (`break-words`, `min-w-0 flex-1`, `space-y-0.5`); the fixed `max-w-[180px]` clamp is
+DELETED (both mini + expanded rows); the card gained `max-w-[calc(100vw-2rem)]` so it never overflows a
+narrow viewport. **NEW honest estimate slot**: `etaSlotText(display)` (exported from
+`GlobalExportIndicator.jsx`) — a trustworthy live estimate reads "About 1 minute remaining"; a null
+(too little data yet) OR `stale` (T8510 promise-busted) estimate reads the new
+`EXPORT_PROGRESS.ETA_VARIES = 'Time remaining varies.'` — never blank, never a frozen number. The real
+stage line (`progressLine`) always renders alongside, so degrading the estimate never hides progress.
+This replaced the mini-view's old "show the stage as the ETA fallback" and the expanded view's
+hardcoded "Still working..."; T8510's `resolveEtaDisplay` (deadline-bust + stall detection) is
+UNCHANGED — only how consumers render it changed. See annotate.md for the paired
+"Preparing your clip..." caption (T9900's other gap). Tests: `GlobalExportIndicator.test.jsx`
+(etaSlotText 3 + persistent-readability 1). Prior:);
+        2026-09-14 (T9790 STOP OLD EXPORT COMPLETIONS HIJACKING RELOAD, frontend-only, two defects
 fixed together: (1) the LIVE Focus completion path NEVER acknowledged its framing job -- only the
 recovered path did -- so every live completion sat unacknowledged for the full 24h window and a
 reload always re-found it "recoverable". Fixed by threading the export id (=== the client-generated

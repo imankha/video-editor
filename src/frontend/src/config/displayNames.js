@@ -44,6 +44,10 @@ export const ANNOTATE = {
   // their T9320/T9330 labels (Apply Spotlight / View Final / View Published).
   FRAME_THIS_CLIP: 'Frame this clip',      // N41 — FOCUS-stage primary CTA
   KEEP_MARKING_PLAYS: 'Keep marking plays', // N41 — invitation dismiss secondary
+  // T9900: caption under the create-in-flight DISABLED "Frame this clip" button, so a
+  // briefly-disabled onward action explains its temporary preparation state instead of
+  // reading as broken (evidence E09). Clears itself when the project id lands.
+  PREPARING_CLIP: 'Preparing your clip...',
 };
 
 // T9560 (Shared Vocabulary epic, N34): the Annotate share controls, single source.
@@ -249,6 +253,10 @@ export const EXPORT_PROGRESS = {
   RENDERING: 'Rendering',                      // processing/modal_processing/rendering/analyzing
   ENHANCING: 'Enhancing video',                // upscaling/ai_upscale (T9860 3.3: put the AI claim where the AI runs)
   FINDING_PLAYERS: 'Finding players for spotlight', // detecting_players
+  // T9900: honest "unavailable estimate" fallback — shown instead of a blank slot or a
+  // frozen/fabricated countdown when no live ETA is trustworthy (too little data yet, or
+  // the estimate broke its own promise). The real stage line still shows alongside it.
+  ETA_VARIES: 'Time remaining varies.',
 };
 
 // T8390 / re-hierarchized T9590: Focus's post-export publish-exit action bar

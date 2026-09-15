@@ -3,10 +3,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import GlobalExportIndicator, {
   getExportLabel,
   resolveEtaDisplay,
+  etaSlotText,
   ETA_BUST_GRACE_MS,
   ETA_STALL_MS,
 } from './GlobalExportIndicator';
 import { useExportStore } from '../stores/exportStore';
+import { EXPORT_PROGRESS } from '../config/displayNames';
 
 // T8510: the indicator must never surface an internal id ("Project #N") and must
 // stop showing a frozen time estimate once it has broken its own promise.
@@ -117,6 +119,38 @@ describe('resolveEtaDisplay — honest ETA (T8510)', () => {
   it('returns null when there is not enough data to estimate (percent < 5)', () => {
     const exp = makeExport({ percent: 3, elapsedSec: 60 });
     expect(resolveEtaDisplay(exp, NOW, new Map(), new Map())).toBeNull();
+  });
+});
+
+describe('etaSlotText — honest estimate slot, never blank/frozen (T9900)', () => {
+  it('shows a real remaining time when the estimate is trustworthy', () => {
+    expect(etaSlotText({ stale: false, formatted: 'About 1 minute' })).toBe('About 1 minute remaining');
+  });
+
+  it('falls back to "Time remaining varies." when the estimate broke its promise', () => {
+    expect(etaSlotText({ stale: true, formatted: 'Less than a minute' })).toBe(EXPORT_PROGRESS.ETA_VARIES);
+  });
+
+  it('falls back to "Time remaining varies." when there is no estimate at all', () => {
+    expect(etaSlotText(null)).toBe(EXPORT_PROGRESS.ETA_VARIES);
+  });
+});
+
+describe('GlobalExportIndicator — persistent stage + estimate stay readable (T9900, AC2)', () => {
+  it('shows the honest STAGE line and a non-truncating estimate in the persistent mini-view', () => {
+    // A just-started export (percent < 5) has no live ETA — the slot must still read
+    // honestly rather than sit blank, and the stage must be visible after the toast dismisses.
+    useExportStore.setState({
+      activeExports: {
+        export_r: makeExport({ exportId: 'export_r', percent: 2, elapsedSec: 5, message: 'AI upscaling frame 10/180' }),
+      },
+    });
+    render(<GlobalExportIndicator />);
+    // Stage copy is present (Enhancing video), plus the "unavailable estimate" fallback.
+    expect(document.body.textContent).toContain('Enhancing video');
+    expect(document.body.textContent).toContain(EXPORT_PROGRESS.ETA_VARIES);
+    // The old fixed-width clamp that clipped the estimate at 699px/200% zoom is gone.
+    expect(document.body.querySelector('.max-w-\\[180px\\]')).toBeNull();
   });
 });
 
