@@ -69,7 +69,7 @@ export const FACTS = {
   install: 'Runs in the browser. There is nothing to download or install.',
   /** Pricing. "Free to start" is the claim already made publicly. */
   pricingSummary: 'Free to start.',
-  /** New-account signup bonus (8) plus all four onboarding quest rewards (15+25+25+15). Source of truth: quest_config.py + storage_credits.NEW_ACCOUNT_CREDITS. */
+  /** New-account signup bonus (8) plus the quest-chain grant (80), both granted unconditionally and upfront at signup (T8120 retired the per-quest drip; T9680 confirmed 88 total, no conditions). Source of truth: NEW_ACCOUNT_CREDITS in storage_credits.py + QUEST_CHAIN_CREDIT_TOTAL in quest_config.py. */
   freeCredits: 88,
   /** Flat render cost: 1 credit per second of finished, exported video, rounded to the nearest second -- same rate regardless of resolution, upscaling, or overlays. Source of truth: round_credits_half_up(video_seconds) (round-half-up + 1-credit floor, T9750) in highlight_transform.py. */
   creditsPerExportSecond: 1,

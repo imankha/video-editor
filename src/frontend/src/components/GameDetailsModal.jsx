@@ -10,7 +10,7 @@ import { useCreditStore } from '../stores/creditStore';
 import { useQuestStore } from '../stores/questStore';
 import { calculateUploadCost } from '../utils/storageCost';
 import { API_BASE } from '../config';
-import { LIBRARY_ACTIONS } from '../config/displayNames';
+import { LIBRARY_ACTIONS, DIVISION_OF_WORK } from '../config/displayNames';
 import apiFetch from '../utils/apiFetch';
 
 export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
@@ -204,6 +204,10 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
         <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
           {/* Scrollable body: everything EXCEPT submit scrolls here. */}
           <div className="p-4 space-y-4 overflow-y-auto min-h-0 flex-1">
+          {/* Division of work (T9650): tell the parent their job (marking plays)
+              from the app's job, right at the start action. Mirrors the landing
+              site's "how it works" framing. */}
+          <p className="text-sm text-gray-400">{DIVISION_OF_WORK}</p>
           {/* Upload cost - visible BEFORE any file is selected (the first
               mention of credits/expiry a new user sees). */}
           <div className="flex items-center justify-between px-3 py-2 rounded-lg text-sm bg-gray-700/50 text-gray-300">
