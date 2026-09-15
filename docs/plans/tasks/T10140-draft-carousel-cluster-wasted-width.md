@@ -1,6 +1,6 @@
 # T10140: Draft carousel cluster doesn't use available horizontal width
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-09-15
@@ -58,16 +58,25 @@ fix rather than replacing it.
 ## Implementation
 
 ### Steps
-1. [ ] Reproduce on a wide viewport with exactly one game in the Draft bucket to confirm the wasted
+1. [x] Reproduce on a wide viewport with exactly one game in the Draft bucket to confirm the wasted
    space.
-2. [ ] Design the conditional/responsive width rule (see Solution above) — needs a UX call similar
-   to T10110's, not obviously a single "correct" answer.
-3. [ ] Implement + verify it doesn't regress T10110's divider fix when multiple clusters share a
-   row.
+2. [x] Design the width rule — moot once T10110 landed as one-game-per-row: every cluster is now
+   guaranteed alone on its row, so there's no longer a case where a wide cap needs to protect a
+   shared line. No conditional needed.
+3. [x] Implement + verify it doesn't regress T10110 (they now share the fix: no multiple clusters
+   ever share a row to begin with).
 
 ### Progress Log
 
 **2026-09-15**: Filed from user observation while live-testing T10110 on a running dev stack.
+
+**2026-09-15 (same session)**: Implemented immediately after T10110 landed, on the same branch
+(`feature/T10110-draft-carousel-group-divider`) — T10110's one-game-per-row layout made this the
+natural next step: `COMPACT_ROW_MAX_WIDTH` changed from `'max-w-full sm:max-w-[420px]'` to just
+`'max-w-full'` (`ProjectManager.jsx:168`). No conditional/responsive logic needed: since a cluster
+can no longer share a row with another (T10110), the old cap's only job — keeping several small
+clusters from fighting for room on one line — no longer applies; `CardCarousel` still gets a
+bounded container (the row's own available width) so its overflow/arrow detection is unaffected.
 
 ## Acceptance Criteria
 

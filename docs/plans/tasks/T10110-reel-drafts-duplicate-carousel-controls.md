@@ -87,6 +87,21 @@ same day (Explore agent): by-design per-game carousel splitting (T8080) plus fle
 not a rendering defect. Deferred implementation — low priority (Impact 3), needs a UX pick between
 3 candidate fixes first; see Solution above.
 
+**2026-09-15**: User initially picked option (a), a stronger visual divider. Implemented and
+pushed to `feature/T10110-draft-carousel-group-divider` for live testing (a container stack stood
+up at the user's request). Partial verification only: the running dev app's only available
+account had a single game in its Draft bucket, so only the "divider correctly absent" half was
+confirmed live, not the "present" half.
+
+**2026-09-15 (revised)**: After seeing the single-game case live, the user reconsidered and asked
+for option (b) instead — one game per row, no shared line at all — saying they're "not a fan of
+several carousels on the same line" even with a divider between them. Re-implemented on the same
+branch: `DraftPhaseAspectRows`'s container changed from `flex flex-wrap` to `flex flex-col`
+(vertical stack), and the per-cluster divider styling from the (a) attempt was removed as
+unnecessary — clusters can no longer share a line, so there's nothing to visually separate.
+Existing `GameTile.test.jsx`/lint pass clean; no new automated coverage added yet (same gap noted
+in the first attempt — no existing test file covers this component's rendering).
+
 ## Acceptance Criteria
 
 - [ ] Each Reel Drafts group/row shows exactly one carousel control set, unambiguous which cards
