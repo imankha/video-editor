@@ -185,6 +185,14 @@ export const UPLOAD_ENTRY_HINT = {
   CLIP: `A short clip skips straight to ${MODE_NAMES.FRAMING}, no game needed.`,
 };
 
+// Division of work shown near the start action (Upload game), so a first-time
+// parent can tell their job (marking plays) from the app's job (framing the
+// player, following the action, spotlight, sharing). Mirrors the public
+// landing site's "how it works" framing so both surfaces say the same thing.
+// No em dashes (project-wide rule).
+export const DIVISION_OF_WORK =
+  'You mark the plays. ReelBallers frames your player, follows the action, adds the spotlight, and builds a reel to share.';
+
 export const CLIP_UPLOAD = {
   UPLOAD_CLIP: 'Upload clip',
   NOTICE_TITLE: 'Heads up: these clips won’t be linked to a game',
@@ -443,4 +451,17 @@ export const CREDITS = {
   MIN_CHARGE: 'Any render costs at least 1 credit.',
   billableLine: (exactSeconds, credits) =>
     `${formatLength(exactSeconds, PRECISION.TENTH)} of video · ${credits} credit${credits === 1 ? '' : 's'} · ${CREDITS.PER_SECOND_RULE}.`,
+};
+
+// Retention, stated as the three distinct outcomes confirmed in the T9680
+// decision record (never "everything survives" or "everything is lost"). The
+// public landing site states the same three facts. No em dashes.
+// - SOURCE: game_storage row + raw R2 object, kept 30 days, extendable.
+// - EXPORTED: final_videos survive source expiry, no cascade, free to store.
+// - DRAFT: an un-exported draft has no independent source copy (T4130), so it
+//   stays visible but becomes un-editable / un-exportable once its source is gone.
+export const RETENTION = {
+  SOURCE: 'Your uploaded game is kept for 30 days, and you can extend it anytime.',
+  EXPORTED: 'Reels you export are kept for good and are free to store.',
+  DRAFT: 'An unexported draft stays viewable, but you need its source to re-edit or export it, so finish the ones you want to keep before the 30 days are up.',
 };

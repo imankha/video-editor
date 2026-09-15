@@ -6,7 +6,7 @@ import { CreditHistoryModal } from './CreditHistoryModal';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useEditorStore, useProjectsStore } from '../stores';
-import { CREDITS } from '../config/displayNames';
+import { CREDITS, RETENTION } from '../config/displayNames';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 
 /**
@@ -132,6 +132,14 @@ function CreditsExplainer() {
         </ul>
       </div>
       <p className="text-gray-400">Credits never expire.</p>
+      <div>
+        <p className="text-gray-400">How long things are kept:</p>
+        <ul className="list-disc list-inside text-gray-300">
+          <li>{RETENTION.SOURCE}</li>
+          <li>{RETENTION.EXPORTED}</li>
+          <li>{RETENTION.DRAFT}</li>
+        </ul>
+      </div>
     </div>
   );
 }
