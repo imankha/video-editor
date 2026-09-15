@@ -432,6 +432,25 @@ export const EDITOR_PANELS = {
   // with Play spotlight -- this names it, it does not add a new default timing.
   SPOTLIGHT_DURATION: 'Spotlight duration',
   SPOTLIGHT_DURATION_HINT: 'Drag the ends on the timeline to adjust, or press Play spotlight to preview.',
+  // T9950 -- segment/speed/trim + straighten/dim/zoom collapse behind one
+  // disclosure; the timeline row and the settings-rail heading share this word
+  // so the collapse reads as one concept (design doc §5 Slice 1).
+  ADVANCED_EDITING: 'Advanced editing',
+  // T9950 Slice 2 -- the widen button is an EDIT to the focus points, not a view
+  // toggle (design doc §3). Copy names what the control DOES, never a quality
+  // claim (design doc §3.5: "Do not promise crispness from resolution alone").
+  WIDER_FRAME: 'Use a wider frame',
+  WIDER_FRAME_ON: 'Back to default frame',
+  WIDER_FRAME_HELPER: 'Shows more of the field around your focus points.',
+  UNDO: 'Undo',
+  UNDO_NOTHING: 'Nothing to undo',
+  // T9950 Slice 3 -- preview approximation disclosure (design doc §4). Exact for
+  // crop/timing/format/audio; approximate for image quality and multi-clip
+  // concatenation. Never a sharpness claim in either direction.
+  PREVIEW_HIGHLIGHT: 'Preview highlight',
+  PREVIEW_BACK_TO_FRAMING: 'Back to framing',
+  PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced at export.',
+  PREVIEW_MULTI_CLIP_DISCLOSURE: 'Previewing this clip. Your clips are joined at export.',
 };
 
 // T9480 -- single source for the billing-rule copy, verbatim from

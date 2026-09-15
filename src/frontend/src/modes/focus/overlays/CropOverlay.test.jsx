@@ -57,7 +57,7 @@ const VIDEO_METADATA = { width: 640, height: 360 };
 // Room to move without hitting the constrainCrop bounds clamp (x in [0, 440]).
 const CROP = { x: 100, y: 100, width: 200, height: 150 };
 
-function Harness({ onCropChange, onCropComplete }) {
+function Harness({ onCropChange, onCropComplete, ...rest }) {
   const videoRef = useRef(null);
   return (
     <div className="video-container" style={{ width: 640, height: 360 }}>
@@ -69,6 +69,7 @@ function Harness({ onCropChange, onCropComplete }) {
         aspectRatio="free"
         onCropChange={onCropChange}
         onCropComplete={onCropComplete}
+        {...rest}
       />
     </div>
   );
@@ -169,5 +170,61 @@ describe('T5380 CropOverlay first-drag gesture', () => {
     fireEvent.pointerDown(cropBox, { pointerId: 1, clientX: 200, clientY: 175 });
 
     expect(() => act(() => { unmount(); })).not.toThrow();
+  });
+});
+
+describe('T9950 Slice 3 chromeHidden (output-aspect preview)', () => {
+  it('hides the reticule, handles and dim mask when chromeHidden', () => {
+    const { container } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} chromeHidden />
+    );
+    expect(getCropBox(container)).toBeNull();
+    expect(container.querySelector('.crop-handle')).toBeNull();
+  });
+
+  it('shows the reticule when chromeHidden is false (default)', () => {
+    const { container } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} />
+    );
+    expect(getCropBox(container)).not.toBeNull();
+  });
+
+  it('hides the straighten capture layer and dial even while straightenVisible is true', () => {
+    const { container } = render(
+      <Harness
+        onCropChange={vi.fn()}
+        onCropComplete={vi.fn()}
+        chromeHidden
+        straightenVisible
+        onSetRotation={vi.fn()}
+        rotation={5}
+      />
+    );
+    expect(container.querySelector('[aria-label="Rotation angle"]')).toBeNull();
+  });
+
+  it('still rotates the video element while chromeHidden (the landmine: unmount would clear it, but this prop must not unmount CropOverlay)', () => {
+    function RotatingHarness() {
+      const videoRef = useRef(null);
+      return (
+        <div className="video-container" style={{ width: 640, height: 360 }}>
+          <video ref={videoRef} />
+          <CropOverlay
+            videoRef={videoRef}
+            videoMetadata={VIDEO_METADATA}
+            currentCrop={CROP}
+            aspectRatio="free"
+            onCropChange={vi.fn()}
+            onCropComplete={vi.fn()}
+            rotation={5}
+            onSetRotation={vi.fn()}
+            chromeHidden
+          />
+        </div>
+      );
+    }
+    const { container } = render(<RotatingHarness />);
+    const video = container.querySelector('video');
+    expect(video.style.transform).toBe('rotate(-5deg)');
   });
 });

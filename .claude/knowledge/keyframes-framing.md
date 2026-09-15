@@ -1,5 +1,60 @@
 ---
 domain: keyframes-framing
+updated: 2026-09-15 (T9950 — Simplify manual framing / preview actual output before export, 3
+slices, all frontend-only, no schema change (design doc `T9950-design.md`, amended §9). **Slice 1**:
+the segment/speed/trim timeline track collapses behind an "Advanced editing" disclosure
+(`FocusModeView.jsx` `advancedOpen` ephemeral state -> `FocusTimeline`'s new `showSegments` prop,
+default `true` so every existing caller/test stays byte-identical); defaults OPEN when the clip
+already has user splits/trim (`boundaries.length > 2 || trimRange`) so a returning user's edits are
+never hidden by default. **Slice 2 — "Use a wider frame" is a crop EDIT, not a stored
+preference/view toggle.** `utils/widenFraming.js`'s `wideFrameTarget` is a bounded
+`WIDE_FRAME_SCALE = 2` scale of the DEFAULT crop size, clamped per-axis to `maxFitCrop` (kept only
+as the small-source safety net) — **not** literal max-fit, because a full max-fit crop (crop
+height == source height) leaves zero vertical framing freedom, so widening would collapse every
+keyframe's distinct vertical center to the same value and a reload+toggle-off round trip would
+silently lose it. `FocusContainer.handleWidenFraming`/`handleUndoFraming` route through the SAME
+`addOrUpdateKeyframe` + `persistKeyframeEdit` pair as `handleCropComplete` (single write path, no
+new API action) — widening N keyframes is N ordinary surgical POSTs through the existing per-clip
+FIFO `actionClient`, exactly like N fast drags. `isWideFraming` is DERIVED every render off the
+crop rects, never stored. New `hooks/useFramingHistory.js`: ref-backed LIFO undo stack (depth 20,
+memory-only, cleared on the existing clip-selection GESTURE in `FocusScreen.handleSelectClip`,
+never a `useEffect`) — `handleCropComplete` and keyframe-delete also push inverse thunks, so Undo
+covers ordinary focus-point edits too. Toggle-off (pressing the button again while wide) resizes
+back to the default crop size at the same center. **R1/T10160 GPU-cost gate**: production runs the
+GAN at the FULL input-crop pixel count regardless of how much enlargement is actually needed
+(`frame_processor.py`'s `desired_scale` is computed but the model still executes at that scale on
+the whole crop) — the 2x wider-frame target is ~4x today's default's input pixels; the real GPU-time
+measurement is T10160's job (T9950's own benchmark numbers, a no-GAN Lanczos comparison, are a
+LOWER BOUND, not a substitute — this task's own container had no GPU/CUDA to measure it directly,
+noted rather than silently skipped in the outcome record). **Slice 3 — the output-aspect moving
+preview is a re-framing of the SAME player, not a second one** (extends the T9610 "preview IS
+ordinary playback" invariant below to the output-aspect view): new
+`utils/outputPreviewTransform.js`'s `computeOutputPreviewTransform` is the algebraic inverse of
+`videoToScreenRect` (`useVideoDisplayRect.js`) — maps the current crop rect onto the whole stage box
+via `scale(s) translate(-x,-y)` with `transform-origin: 0 0`; fails closed (`null`) on
+incomplete/degenerate inputs. `VideoPlayer.jsx` gained one nullable prop `contentTransform` that
+REPLACES the existing pan/zoom transform on the SAME inner transform node — no new DOM node, and
+every OTHER caller (Overlay, Annotate, diag harnesses) omits it and stays byte-identical.
+`CropOverlay.jsx` gained one nullable prop `chromeHidden` that suppresses the reticule/handles/
+badges/dim-masks/straighten-tool via JSX conditionals ONLY — **the rotation `useLayoutEffect` and
+its cleanup (`video.style.transform`) are UNTOUCHED**, so CropOverlay stays MOUNTED during preview
+(unmounting it would clear the rotation and silently un-straighten the preview — the landmine this
+prop was built around, pinned by a dedicated `CropOverlay.test.jsx` case). `FocusModeView`'s
+`previewing` (plain ephemeral `useState`, never persisted) forces `zoom=1`/`panOffset={0,0}` on both
+VideoPlayer and CropOverlay so the editor's own inspection zoom never leaks into the preview, and
+constrains the stage box to `globalAspectRatio` via the same `fitToAspect`/CSS-`aspectRatio` pattern
+`OverlayModeView.stageBoxStyle` already established. The derived `previewActive` additionally
+requires `!isFullscreen && !mobileFs` — a fullscreen or mobile-expand tap mid-preview must not carry
+a transform sized for the small stage box onto a viewport no longer constrained to the output
+aspect (a reviewer finding fixed before the slice-3 commit). The approximation disclosure
+(`EDITOR_PANELS.PREVIEW_DISCLOSURE`/`PREVIEW_MULTI_CLIP_DISCLOSURE`) shows only while previewing.
+No GPU or real-browser environment was available in this task's container to run the R1 GPU-cost
+measurement or the design doc's real-browser QA spec (`e2e/T9950-framing-preview.qa.spec.js`,
+not written — both left for T10160 / a real dev-stack environment respectively, per the task's
+outcome record). Coverage: `widenFraming.test.js`, `useFramingHistory.test.js`,
+`outputPreviewTransform.test.js`, `FramingActionRow.test.jsx`,
+`FocusModeView.framingActionRow.test.jsx`, `FocusModeView.advancedEditing.test.jsx`,
+`CropOverlay.test.jsx` chromeHidden block.)
 updated: 2026-09-15 (T9960 — Spotlight single-athlete completion copy: `OverlaySpotlightPanel` no
 longer renders the all-player imperative "N of M players selected — click the remaining players to
 spotlight each too". ONE assigned detection now SATISFIES the step: it shows `EDITOR_PANELS.SELECT_PLAYER_DONE`
@@ -223,6 +278,12 @@ so the estimate ticks the instant a speed/trim/split/clip-count gesture lands �
   expand/collapse is EPHEMERAL view state (`guideOverride ?? focusPointCount < 2`, gesture override,
   no useEffect — precedent T5641 straightenVisible). Coverage: `FramingInstructions.test.jsx`,
   `FocusModeView.framingGuide.test.jsx`, `e2e/T9610-teach-framing.qa.spec.js`.
+  **T9950 (2026-09-15) extended this to an OUTPUT-ASPECT view of the same playback**, not a second
+  mechanism: `FocusModeView`'s `previewing` toggle re-frames the SAME `<video>` via a
+  `contentTransform` on `VideoPlayer`'s existing inner transform node (the algebraic inverse of
+  `videoToScreenRect`, `utils/outputPreviewTransform.js`) and hides `CropOverlay`'s chrome via
+  `chromeHidden` while keeping it MOUNTED (its rotation effect must never unmount-clear). See the
+  T9950 entry above for the full mechanism.
 - **Segment speed reads as a STATE, not only an action (T9610).** `SegmentLayer.jsx` shows a
   persistent current-speed readout on each segment ("Normal speed" at 1x / "{speed}x slow-mo" when
   slowed), anchored TOP-LEFT so it never collides with the centered "Split Segments…" placeholder;

@@ -19,6 +19,10 @@ import { useVideoStore } from '../stores/videoStore';
  * @param {React.ReactNode[]} props.overlays - Array of overlay components to render over video
  * @param {number} props.zoom - Zoom level (1 = 100%)
  * @param {Object} props.panOffset - Pan offset {x, y}
+ * @param {Object|null} props.contentTransform - T9950 Slice 3: when provided, REPLACES
+ *   the pan/zoom transform on the inner transform node with
+ *   `{transform, transformOrigin}` (from `computeOutputPreviewTransform`) — used by the
+ *   output-aspect preview. `null`/undefined leaves the existing zoom/pan behavior untouched.
  * @param {Function} props.onZoomChange - Callback when zoom changes (wheel)
  * @param {Function} props.onPanChange - Callback when pan changes (drag)
  * @param {boolean} props.isFullscreen - Whether the player is in fullscreen mode
@@ -39,6 +43,7 @@ export function VideoPlayer({
   overlays = [],
   zoom = 1,
   panOffset = { x: 0, y: 0 },
+  contentTransform = null,
   onZoomChange,
   onPanChange,
   isFullscreen = false,
@@ -223,8 +228,10 @@ export function VideoPlayer({
           <div
             className="absolute inset-0 flex items-center justify-center"
             style={{
-              transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
-              transformOrigin: 'center center',
+              transform: contentTransform
+                ? contentTransform.transform
+                : `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+              transformOrigin: contentTransform ? contentTransform.transformOrigin : 'center center',
               transition: isPanning ? 'none' : 'transform 0.1s ease-out'
             }}
           >

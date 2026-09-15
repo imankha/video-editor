@@ -73,6 +73,8 @@ export function FocusMode({
   onTimelineScrollPositionChange,
   isPlaying = false,
   isFullscreen = false,
+  // T9950 Slice 1 -- threads to FocusTimeline's showSegments gate.
+  showSegments = true,
   // Children (allows App.jsx to pass additional content)
   children,
 }) {
@@ -118,6 +120,7 @@ export function FocusMode({
             timelineScrollPosition={timelineScrollPosition}
             onTimelineScrollPositionChange={onTimelineScrollPositionChange}
             isPlaying={isPlaying}
+            showSegments={showSegments}
           />
         </div>
       )}

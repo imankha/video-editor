@@ -290,6 +290,7 @@ export function FocusScreen({
     hasKeyframeAt,
     getCropDataAtTime,
     getKeyframesForExport,
+    calculateDefaultCrop,
     reset: resetCrop,
     restoreState: restoreCropState,
   } = useCrop(metadata, trimRange, selectedClipCropKeyframes, selectedClipRotation);
@@ -357,6 +358,7 @@ export function FocusScreen({
     setRotation,
     clampCropForCurrentRotation,
     resetCrop,
+    calculateDefaultCrop,
     segments,
     segmentBoundaries,
     segmentSpeeds,
@@ -408,6 +410,8 @@ export function FocusScreen({
     clipsWithCurrentState: framingClipsWithCurrentState,
     selectedClipEffectiveDuration,
     projectEffectiveDuration,
+    isWideFraming,
+    canUndoFraming,
     handleCropChange: framingHandleCropChange,
     handleCropComplete: framingHandleCropComplete,
     handleTrimSegment: framingHandleTrimSegment,
@@ -421,6 +425,9 @@ export function FocusScreen({
     handleRemoveSplit: framingHandleRemoveSplit,
     handleSegmentSpeedChange: framingHandleSegmentSpeedChange,
     handleSetRotation: framingHandleSetRotation,
+    handleWidenFraming: framingHandleWidenFraming,
+    handleUndoFraming: framingHandleUndoFraming,
+    clearFramingHistory,
     saveCurrentClipState: framingSaveCurrentClipState,
   } = framing;
 
@@ -1222,11 +1229,15 @@ export function FocusScreen({
   }, [selectedClipWithMeta?.game_id, games]);
 
   // Handle clip selection from sidebar
+  // T9950 Slice 2: clear the framing Undo stack HERE, at the clip-selection
+  // gesture itself (never a useEffect keyed on selectedClipId) — an inverse
+  // thunk closes over a specific clip's keyframes and must not survive a switch.
   const handleSelectClip = useCallback((clipId) => {
     if (clipId !== selectedClipId) {
+      clearFramingHistory();
       selectClip(clipId);
     }
-  }, [selectedClipId, selectClip]);
+  }, [selectedClipId, selectClip, clearFramingHistory]);
 
   // Handle clip deletion from sidebar — persists to backend
   const handleDeleteClip = useCallback((clipId) => {
@@ -1423,6 +1434,10 @@ export function FocusScreen({
       clipsWithCurrentState={framingClipsWithCurrentState}
       selectedClipEffectiveDuration={selectedClipEffectiveDuration}
       projectEffectiveDuration={projectEffectiveDuration}
+      isWideFraming={isWideFraming}
+      canUndoFraming={canUndoFraming}
+      onWidenFraming={framingHandleWidenFraming}
+      onUndoFraming={framingHandleUndoFraming}
       globalAspectRatio={globalAspectRatio}
       onAspectRatioChange={handleAspectRatioChange}
       globalTransition={globalTransition}
