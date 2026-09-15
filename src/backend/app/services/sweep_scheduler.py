@@ -10,6 +10,7 @@ import asyncio
 import logging
 import time
 from datetime import UTC, datetime
+from enum import Enum
 
 from ..database import ensure_database, get_db_connection, sync_db_to_r2_explicit
 from ..migrations import MigrationBlocked
@@ -27,7 +28,12 @@ from .auth_db import (
     has_remaining_refs,
     insert_grace_deletion,
 )
-from .auto_export import MAX_AUTO_EXPORT_ATTEMPTS, auto_export_game
+from .auto_export import (
+    MAX_AUTO_EXPORT_ATTEMPTS,
+    ArtifactVerdict,
+    auto_export_game,
+    recap_artifacts_present,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +43,19 @@ MAX_DELAY = 86400  # 24 hours
 MIN_DELAY = 60  # 1 minute
 STARTUP_DELAY = 60  # Wait for app to stabilize
 GRACE_PERIOD_DAYS = 14
+
+
+class ReclaimVerdict(str, Enum):
+    """Outcome of `_reclaim_verdict` -- whether it is safe to delete a profile's
+    game_storage ref for an expired hash (T10121). Every non-RECLAIM outcome
+    keeps the ref and retries next sweep; only KEEP_ARTIFACTS_MISSING can also
+    transition a game to the terminal 'abandoned' state (see
+    `_abandon_if_exhausted`)."""
+    RECLAIM = "reclaim"
+    KEEP_RETRYABLE = "keep_retryable"
+    KEEP_UNSYNCED = "keep_unsynced"
+    KEEP_SIBLING_LIVE = "keep_sibling_live"
+    KEEP_ARTIFACTS_MISSING = "keep_artifacts_missing"
 
 
 def _app_env() -> str:
@@ -164,21 +183,34 @@ def do_sweep():
                     user_id, profile_id, blake3_hash, expired_hashes
                 )
 
+                export_statuses = []
                 for game_id in game_ids:
                     try:
                         status = auto_export_game(user_id, profile_id, game_id)
+                        export_statuses.append(status)
                         logger.info(f"[Sweep] game={game_id} user={user_id[:8]} status={status}")
                     except Exception as e:
                         logger.error(f"[Sweep] Auto-export failed: user={user_id} game={game_id}: {e}")
 
-                # Keep the ref (and the source video) if any game on this hash
-                # still has a retryable auto-export — a failed export under the
-                # attempt cap. Reclaiming now would delete the source before we
-                # could ever produce its recap (bug 23p). The next sweep retries.
-                if _find_games_for_hash(user_id, profile_id, blake3_hash, expired_hashes):
+                verdict = _reclaim_verdict(
+                    user_id, profile_id, blake3_hash, expired_hashes, export_statuses
+                )
+
+                if verdict == ReclaimVerdict.KEEP_RETRYABLE:
+                    # Keep the ref (and the source video) if any game on this
+                    # hash still has a retryable auto-export — a failed export
+                    # under the attempt cap. Reclaiming now would delete the
+                    # source before we could ever produce its recap (bug 23p).
+                    # The next sweep retries.
                     logger.warning(
                         f"[Sweep] hash={blake3_hash[:12]} auto-export not settled "
                         f"(failed, under retry cap) — keeping ref to retry next sweep"
+                    )
+                    continue
+                if verdict != ReclaimVerdict.RECLAIM:
+                    logger.warning(
+                        f"[Sweep] hash={blake3_hash[:12]} verdict={verdict.value} "
+                        f"— keeping ref to retry next sweep"
                     )
                     continue
 
@@ -242,6 +274,19 @@ def do_sweep():
                     f"authoritatively confirm refs (indeterminate profile); keeping "
                     f"grace row to retry next sweep"
                 )
+            continue
+
+        # T10121 D5: the same artifact gate Phase 1 checks before delete_ref
+        # is checked again here before the PERMANENT R2 delete -- this catches
+        # rows already queued in r2_grace_deletions by mechanisms B/C/D/E
+        # before this fix shipped (their ref was already deleted, so Phase 1
+        # this sweep never re-examines them). Reuses the existing DEFER shape:
+        # log, leave the grace row queued, continue.
+        if _phase2_artifact_gate_missing(blake3_hash, users):
+            logger.error(
+                f"[Sweep] DEFER delete hash={blake3_hash[:12]} — recap artifacts "
+                f"missing for a game on this hash; keeping grace row to retry next sweep"
+            )
             continue
 
         r2_delete_object_global(f"games/{blake3_hash}.mp4")
@@ -412,3 +457,120 @@ def _find_games_for_hash(
                 multi.append(row)
 
     return {g['id'] for g in list(single) + list(multi)}
+
+
+def _games_using_hash(blake3_hash: str) -> set[int]:
+    """ALL games (regardless of auto_export_status) using this hash in the
+    CURRENT profile -- single-video via games.blake3_hash, multi-video via
+    game_videos. Unlike `_find_games_for_hash`'s needs-export selector (which
+    deliberately excludes 'complete'/'skipped'/'abandoned' games), the D4
+    sibling check and the D1 artifact gate must see EVERY game on a hash,
+    settled or not, before a source video is permanently deleted.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        single = cursor.execute(
+            "SELECT id FROM games WHERE blake3_hash = ?", (blake3_hash,)
+        ).fetchall()
+        multi = cursor.execute(
+            "SELECT DISTINCT game_id AS id FROM game_videos WHERE blake3_hash = ?",
+            (blake3_hash,),
+        ).fetchall()
+    return {row['id'] for row in list(single) + list(multi)}
+
+
+def _has_live_sibling_hash(blake3_hash: str) -> bool:
+    """True if a game using `blake3_hash` also uses a SIBLING video hash that
+    still carries a LIVE (future-expiry) game_storage ref in this profile
+    (T10121 D4) -- refuses to reclaim one half of a multi-video game while its
+    other half is still active (mechanism D).
+
+    Keyed off a LIVE ref specifically via `count_refs_in_profile`, NOT off
+    "the sibling is absent from this sweep's expired-hashes set" -- that
+    phrasing would strand an ALREADY-reclaimed sibling (its own ref long
+    deleted) forever, since a deleted ref is permanently "not expired this
+    sweep" without ever becoming live again.
+    """
+    game_ids = _games_using_hash(blake3_hash)
+    if not game_ids:
+        return False
+
+    placeholders = ",".join("?" * len(game_ids))
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        siblings = cursor.execute(
+            f"""SELECT DISTINCT blake3_hash FROM game_videos
+               WHERE game_id IN ({placeholders}) AND blake3_hash != ?""",
+            (*game_ids, blake3_hash),
+        ).fetchall()
+
+    for row in siblings:
+        _, live = count_refs_in_profile(row['blake3_hash'])
+        if live > 0:
+            return True
+    return False
+
+
+def _reclaim_verdict(
+    user_id: str, profile_id: str, blake3_hash: str,
+    expired_hashes: set[str], export_statuses: list[str],
+) -> ReclaimVerdict:
+    """Decide whether it's safe to delete this profile's ref to `blake3_hash`
+    (T10121 D1-D6), checked cheapest-first: two SQLite-only bail-outs before
+    ever touching R2.
+
+    A recap-gate verdict of ArtifactVerdict.UNVERIFIABLE (no R2 client
+    configured -- local dev/tests) does NOT block reclaim here: D2 says the
+    sweep proceeds exactly as it did before this task, just with a WARNING,
+    matching the games.py:943 precedent for the same "can't check, R2 isn't
+    configured" condition on the ref-creation side.
+    """
+    if _find_games_for_hash(user_id, profile_id, blake3_hash, expired_hashes):
+        return ReclaimVerdict.KEEP_RETRYABLE
+
+    if 'unsynced' in export_statuses:
+        return ReclaimVerdict.KEEP_UNSYNCED
+
+    if _has_live_sibling_hash(blake3_hash):
+        return ReclaimVerdict.KEEP_SIBLING_LIVE
+
+    game_ids = _games_using_hash(blake3_hash)
+    verdicts = [recap_artifacts_present(user_id, gid) for gid in game_ids]
+    if any(v == ArtifactVerdict.MISSING for v in verdicts):
+        return ReclaimVerdict.KEEP_ARTIFACTS_MISSING
+    if any(v == ArtifactVerdict.UNVERIFIABLE for v in verdicts):
+        logger.warning(
+            f"[Sweep] hash={blake3_hash[:12]} recap artifacts UNVERIFIABLE "
+            f"(no R2 client configured) — proceeding with reclaim per D2"
+        )
+    return ReclaimVerdict.RECLAIM
+
+
+def _phase2_artifact_gate_missing(blake3_hash: str, users: list) -> bool:
+    """True if ANY profile-owned game using this hash has a MISSING recap
+    artifact (T10121 D5) -- the Phase-2 twin of the Phase-1 artifact gate,
+    checked right before the PERMANENT R2 delete. Needed because a game whose
+    ref was already deleted by mechanisms B/C/D/E before this fix shipped has
+    no expired ref left for Phase 1 to re-examine this sweep -- Phase 2's
+    grace-expired hash is the only remaining chance to catch it.
+
+    Only walks profiles whose DB is already local (mirrors
+    `_expire_game_storage_all_profiles`) -- Phase 1 already downloaded
+    anything live this sweep, so a profile with no local file has no game
+    left to check.
+    """
+    from ..database import USER_DATA_BASE
+    from ..migrations import _get_profile_ids
+
+    for user in users:
+        user_id = user["user_id"]
+        for profile_id in _get_profile_ids(user_id):
+            db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+            if not db_path.exists():
+                continue
+            set_current_user_id(user_id)
+            set_current_profile_id(profile_id)
+            for game_id in _games_using_hash(blake3_hash):
+                if recap_artifacts_present(user_id, game_id) == ArtifactVerdict.MISSING:
+                    return True
+    return False

@@ -12,6 +12,7 @@ import tempfile
 import time
 import uuid
 from collections import defaultdict
+from enum import Enum
 from pathlib import Path
 
 import ffmpeg
@@ -25,6 +26,7 @@ from ..storage import (
     file_exists_in_r2,
     generate_presigned_url,
     generate_presigned_url_global,
+    get_r2_client,
     r2_head_object,
     r2_head_object_global,
     upload_bytes_to_r2,
@@ -290,6 +292,73 @@ def clip_matches_layer(my_athlete, layer: str) -> bool:
     if layer == RecapLayer.TEAM:
         return my_athlete == 0
     return my_athlete == 1 or my_athlete is None
+
+
+class ArtifactVerdict(str, Enum):
+    """Result of checking whether a game's recap artifacts actually exist in
+    R2 (T10121 D1) -- the sweep must verify against R2 directly before
+    reclaiming a game's source video, never trust `auto_export_status` alone
+    (a status column can lag reality: mechanisms B/C/E all leave a game
+    reclaimable while its status column says otherwise)."""
+    PRESENT = "present"
+    MISSING = "missing"
+    UNVERIFIABLE = "unverifiable"
+
+
+def _legacy_mixed_recap_covers(user_id: str, game_id: int) -> bool:
+    """True when a pre-T5710 legacy mixed recap (the unsuffixed
+    `recaps/{game_id}.mp4`, written before the per-layer split existed) is
+    still present with an UNSTAMPED clip mapping -- T10121 D3: that satisfies
+    the team layer's artifact requirement on its own, since a legacy recap
+    already contains the team's clips (mixed with the athlete's).
+
+    Mirrors `ensure_recap`'s legacy-slice fallback (this module, ~line 738):
+    `mapping_layer is None` (unstamped) together with real entries is exactly
+    the legacy-mixed signal T5710 established (design decision 1) -- a fresh,
+    layer-pure mapping written by this task's own `_generate_recap` is always
+    stamped, so it can never be mistaken for a legacy mixed recap here.
+    """
+    recap_key, mapping_key = recap_r2_keys(game_id, None)
+    if not file_exists_in_r2(user_id, recap_key):
+        return False
+    mapping_layer, legacy_entries = load_recap_mapping(user_id, mapping_key)
+    return mapping_layer is None and bool(legacy_entries)
+
+
+def recap_artifacts_present(user_id: str, game_id: int) -> ArtifactVerdict:
+    """Whether every recap layer with >=1 rated clip has its artifact actually
+    live in R2 (T10121 D1) -- the gate the sweep must pass before it may ever
+    delete a game's source video ref.
+
+    PRESENT      -- every non-empty layer's recap object exists in R2 (or a
+                    legacy mixed recap covers the team layer, D3). A layer
+                    with zero rated clips passes trivially -- the legitimate
+                    'skipped' case, nothing was ever supposed to exist.
+    MISSING      -- a required layer's recap object is absent. Also returned
+                    when the R2 client is present but the HEAD call itself
+                    raised (unreachable) -- `file_exists_in_r2` already
+                    collapses both into a bare False, and D2 says an
+                    unreachable check must refuse exactly like a confirmed
+                    absence (retry next sweep), never optimistically pass.
+    UNVERIFIABLE -- no R2 client is configured at all (local dev / tests --
+                    there is nothing to check). D2: the caller proceeds with a
+                    WARNING rather than refusing, mirroring the games.py:943
+                    precedent for the same "R2 not configured" condition on
+                    the ref-creation side.
+    """
+    if not get_r2_client():
+        return ArtifactVerdict.UNVERIFIABLE
+
+    for layer in (RecapLayer.TEAM, RecapLayer.ATHLETE):
+        if not _get_annotated_clips(game_id, layer):
+            continue
+        recap_key, _ = recap_r2_keys(game_id, layer)
+        if file_exists_in_r2(user_id, recap_key):
+            continue
+        if layer == RecapLayer.TEAM and _legacy_mixed_recap_covers(user_id, game_id):
+            continue
+        return ArtifactVerdict.MISSING
+    return ArtifactVerdict.PRESENT
 
 
 def _set_game_status(game_id: int, status: str) -> None:
