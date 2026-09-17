@@ -1,6 +1,6 @@
 # T10210: Pricing set in one place, reflected everywhere
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-17
@@ -120,5 +120,5 @@ git-integration rooted at `src/frontend`) would not find `../backend/app/pricing
 - [x] Landing pricing cards, lowest-rate stat and worked example derive at build time
 - [x] Tests assert invariants, not literals; a reprice needs no test edits
 - [x] Landing build output unchanged for the current ladder
-- [ ] Reviewer pass on the diff
-- [ ] Branch CI green, merged
+- [x] Reviewer pass on the diff (1 BLOCKING + 3 MAJOR, all fixed)
+- [x] Branch CI green (d7522647), merged to master 2026-09-17
