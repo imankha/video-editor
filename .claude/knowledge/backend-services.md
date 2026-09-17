@@ -1,5 +1,18 @@
 ---
 domain: backend-services
+updated: 2026-09-17 (T10270: **`upload_failures` (Postgres, v029) is a new durable per-event
+record of every upload failure** -- a bounded operational incident record, NOT analytics state
+(fenced against the analytics-epic's "no new Postgres per-event state" rule; see § "Upload-failure
+observability (T10270)" below for the fence list F1-F5). ONE writer
+(`services/upload_failures.record_upload_failure`) fans out to the row, the existing
+`record_milestone` aggregate (only when `terminal` and not impersonated), and one canonical
+`[UPLOAD_FAILURE]` log line. The old beacon phase allowlist (`games_upload.py`, "if phase ==
+uploading") is gone, replaced by `terminal = not server_responded` -- a client-declared boolean
+with a back-compat default (`phase in (preparing, finalizing)`) for pre-T10270 builds. New admin
+endpoint `GET /api/admin/upload-failures` (to_regclass-guarded, T6090 pattern). Also fixed in the
+same task: `admin.py`'s stuck-uploads handler had the T8370 "SELECT column list omits `kind`"
+landmine AGAIN, hardcoding the GAME r2 key for CLIP rows -- fixed to `SELECT *` + `_pending_kind()`
++ `upload_object_key()`, the same pattern as `list_pending_uploads`.)
 updated: 2026-09-12 (T9575: **FE/BE quest-copy duplication is a live naming-sync LANDMINE.**
 `app/quest_config.py` `STEP_TITLES` (used only for the claim-reward "Step not complete" error copy,
 T9560/N39) hand-mirrors the frontend `questDefinitions.jsx` `STEP_TITLES` across the JS/Python
@@ -183,7 +196,7 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 
 | Track | DB | Version mechanism | Latest (2026-07-03) |
 |---|---|---|---|
-| `postgres` | Fly Postgres | `schema_migrations` table | v025 (v019 credits T5840; **v020 `game_link` share_type + share_games.game_date T5720**; **v021 `share_claims` T5730**; **v022 `user_usage_daily` T5770** — v020/v021 were reserved by the then-unmerged Share the Game branches, so T5770 landed at v022; all three merged together and the track is contiguous 1..22 again; **v023 `pending_teammate_shares` recipient_email->invited_email rename T7550** (sibling branch, landed on master); **v024 `daily_counters` attempt/outcome columns T7510** (`game_uploads_succeeded`/`_failed`, `clips_attempted`/`_failed`) — additive only, no new table; **v025 clear stale `game_storage_refs` T6770** — `DELETE FROM game_storage_refs` (dead pre-T2930 sediment, see the T6770 note above); paired with profile_db v047 which repopulates it as the live derived ref-set. Re-verify sibling branches before numbering the NEXT postgres migration.) |
+| `postgres` | Fly Postgres | `schema_migrations` table | v029 (v019 credits T5840; **v020 `game_link` share_type + share_games.game_date T5720**; **v021 `share_claims` T5730**; **v022 `user_usage_daily` T5770** — v020/v021 were reserved by the then-unmerged Share the Game branches, so T5770 landed at v022; all three merged together and the track is contiguous 1..22 again; **v023 `pending_teammate_shares` recipient_email->invited_email rename T7550** (sibling branch, landed on master); **v024 `daily_counters` attempt/outcome columns T7510** (`game_uploads_succeeded`/`_failed`, `clips_attempted`/`_failed`) — additive only, no new table; **v025 clear stale `game_storage_refs` T6770** — `DELETE FROM game_storage_refs` (dead pre-T2930 sediment, see the T6770 note above); paired with profile_db v047 which repopulates it as the live derived ref-set; v026 `is_test_account` flag; v027 `daily_counters.clips_uploaded` T8370; v028 `bug_reports.client_report_id` T9400; **v029 `upload_failures` table T10270** — see § "Upload-failure observability (T10270)" below. Re-verify sibling branches before numbering the NEXT postgres migration.) |
 | `profile_db` | profile.sqlite | `PRAGMA user_version` | v048 (**v048 delete sweep-orphan `raw_clips/` extracts T7830** — DATA-ONLY (no column), FIRST migration that calls `delete_from_r2`: reuses `app/services/orphan_raw_clips.py`'s classification logic (extracted from `scripts/cleanup_orphan_raw_clips.py`, the standalone dry-run/`--apply` script T7830 shipped first — both now import the same module rather than duplicating the reviewed reference-set-union + sweep-signature-gate logic) to delete ONLY `auto_`-prefixed unreferenced `raw_clips/` objects per profile, R2_ENABLED-guarded, idempotent, logs every delete at INFO (no dry-run step once wired as a migration, so logging is the only audit trail — see the migration's own docstring before copying this pattern); v024 poster_filename T4890; v025 slowmo_section_start/end freeze T5090 — backfills from R2 archive; v026 `games.shared_by` + backfill T5330 — see Quest system section; **v027 `working_videos.detections_data` T5600** — video-level player-detection store, backfills by hoisting the union of existing regions' embedded detections via `app/services/video_detections.hoist_video_detections`, see keyframes-framing.md § Video-level player-detection store; v028 export_jobs.stage/output_key; v029 working_clips.rotation; **v030 games source reference T5800** (cross-profile game attribution); **v031 reclassify teammate-tagged clips to Team T5725** — DATA-ONLY (no column): moves every teammate-tagged My-Athlete/NULL `raw_clips` row to `my_athlete = 0`, tags preserved, idempotent, positional tuple-row reads, numbered v031 to avoid the v030 collision with T5800, see annotate.md § Teammate tagging is Team-layer only; v032 poster_frame_time/poster_source + projects.poster_marker_time T5410; v033 heal moved-reel attribution T5830 (DATA-ONLY); v034 intro card library T5195 — CREATEs `intro_cards` (per-profile card library) + `final_videos.intro_card_id` (nullable), see § Intro card library below; v035-v043 intro-card/text-overlay follow-ups (subtitle_text, dead-field nulling, backfill, regions shape, intro_min_duration add+drop — not individually re-audited here, see each migration file's docstring); **v044 `working_clips.framing_version` T4330** — mutation counter for framing-action 409 conflict detection; **v045 canonicalize `working_clips.segments_data.boundaries` T4340** — DATA-ONLY (no column): rewrites pre-existing splits-only rows to the full-list `[0,...splits,duration]` format, duration JOINed live from `raw_clips` (no new column — one canonical duration source), reuses `highlight_transform.canonicalize_segments_data`, idempotent, skips+logs orphan rows with no derivable duration, see annotate.md § segments_data write-time-canonical; v046 `working_videos.framing_snapshot`/`highlight_carry_note` (sibling branch, landed on master, not otherwise documented here); **v047 backfill `game_storage_refs` T6770** — DATA-ONLY (no column): re-derives every profile's Postgres ref rows from its real `game_storage` rows via `insert_game_storage_ref`, idempotent, doubles as the one-time drift reconciliation the 2026-07-23 retrospective flagged) |
 | `user_db` | user.sqlite | `PRAGMA user_version` | v006 |
 
@@ -193,6 +206,80 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 - **`up(conn)` receives a TUPLE row factory for SQLite** (plain `sqlite3.connect`, migrations/__init__.py:91/119) — index rows positionally (`r[0]`), NOT `r['col']`. String-indexing crashed the v017 backfill for 4 prod users (memory: v017 rowfactory bug). Test the row-reading path with data, not just the empty case.
 - `PRAGMA user_version` (schema) and the `db_version` table / R2 `db-version` metadata (sync) are independent — see persistence-sync.md.
 - Status check: `get_migration_status()` (migrations/__init__.py) reports CODE head versions only. `get_migration_status_for_user(user_id)` (T5970) additionally reports each registered profile's ACTUAL R2 `PRAGMA user_version` vs head — READ-ONLY (temp download + read + unlink, no R2 write), one user only (never the mutating full-R2-walk). Exposed at `GET /api/admin/migration-status[?user_id=]` (admin-gated); no user_id -> head only (zero cost). Use it to answer "is this env at head?" without running migrate.
+
+## Upload-failure observability (T10270)
+
+**What it is.** `upload_failures` (Postgres, v029) is a durable, per-event record of
+every upload failure — game or clip, client or server, terminal or not. It answers
+"which uploads failed since build X, for whom, at what stage, why" (`GET
+/api/admin/upload-failures`, admin.py), which neither `user_actions` (no `last_at`,
+can't be date-scoped) nor `daily_counters` (no user, no reason) could answer. It sits
+BESIDE the existing `record_milestone` aggregate (`user_actions`/`daily_counters`) —
+that aggregate is unchanged and still the success/fail RATE source of truth; this
+table is the per-event DETAIL layer.
+
+**It is explicitly NOT analytics state.** A standing directive for the Investor-Grade
+Analytics epic says new per-event state must go into `analytics.sqlite`, never
+Postgres. `upload_failures` was approved as an exception (design doc
+`docs/plans/tasks/T10270-design.md` §2) because it is a closed-vocabulary, 90-day-TTL,
+bounded INCIDENT record for one funnel step (rows grow with failures, which the
+feature exists to drive DOWN), not a growing-with-engagement event firehose. **No
+analytics report may read this table**, and no future per-event table should point to
+this one as precedent for skipping the analytics.sqlite rule — that decision needs its
+own design gate.
+
+**The fence (non-negotiable — a future change that violates one of these needs its own
+design review, not a quiet patch):**
+- **F1. Closed vocabularies.** `stage` (`UPLOAD_STAGES`) and `reason`
+  (`UPLOAD_FAILURE_REASONS`), both in `services/upload_failures.py`. The writer coerces
+  an unrecognized value to `"unknown"` and logs loudly — it never coins a new
+  dimension. `MILESTONE_REASON_BY_UPLOAD_REASON` is a TOTAL map (every reason has a
+  coarse bucket); `test_t10270_upload_failures.py::TestVocabularyTotality` fails RED if
+  a reason is added without one.
+- **F2. TTL is code, not a chore.** 90-day sweep (`sweep_expired_upload_failures`) runs
+  inside the EXISTING hourly `cleanup._do_cleanup()` loop — no new scheduler.
+- **F3. One writer, no generic sink.** `record_upload_failure()` is the ONLY function
+  that INSERTs into this table, anywhere in the codebase. There is deliberately no
+  `record_event(table, payload)` escape hatch. Async callers (every `async def` handler
+  in `games_upload.py`/`clips.py`/`games.py`) go through
+  `record_upload_failure_from_payload` + `run_in_context` (T6200 cardinal rule:
+  `run_in_context` forwards positional args only, so the keyword-only writer is wrapped
+  in a payload-dict adapter rather than called directly); plain `def` callers (the
+  stale-upload reaper `list_pending_uploads`) call it directly. If a future task wants
+  to log something else here, that is a signal to route through this writer with a new
+  `stage`/`reason` pair, not to add a second INSERT path.
+- **F4. Purged with the user.** `auth._purge_user_data` (to_regclass-guarded) and
+  `scripts/delete_user.py`'s table list (via the new generic `table_present()` helper,
+  which generalizes the credits-specific `credit_tables_present()` check).
+- **F5. Scope fence written down here** (this section) and in
+  `investor-analytics/EPIC.md` if/when that epic file exists — `upload_failures` is an
+  operational incident record, not analytics.
+
+**The beacon phase gate is gone.** `games_upload.py`'s `upload_failure_beacon` used to
+hardcode `if phase == "uploading"` to decide whether a client-reported failure was
+already counted by a server branch — wrong for `fetch_rejected` (no server response
+ever arrived, regardless of phase). Replaced by ONE expression: `terminal = not
+server_responded`, where `server_responded` is a client-declared boolean (`true` at the
+two response-driven beacon sites — prepare/finalize `!res.ok` — `false` everywhere
+else), defaulting to `phase in ("preparing", "finalizing")` when absent (exact
+back-compat for pre-T10270 clients; delete that fallback once builds roll over). The
+beacon now ALWAYS writes a row (`origin="beacon"`); only the AGGREGATE bridge is gated
+on `terminal`.
+
+**Impersonation:** the ROW is always written (with `impersonated=true`) — an admin
+reproducing a failure is diagnostically useful — but the `record_milestone` bridge is
+skipped, matching every other milestone site's impersonation guard. The admin list
+filters `impersonated=false` by default (`include_impersonated=true` to see them);
+RATES exclude impersonated rows unconditionally, regardless of that flag.
+
+**Landmine this task fixed AGAIN:** `admin.py`'s `stuck-uploads` handler had the T8370
+"explicit SELECT column list omits `kind`" bug a second time — `_pending_kind()`
+silently resolves to GAME when `kind` isn't in the selected columns (even on an
+already-migrated DB), and the R2 key was hardcoded to `games/{hash}.mp4` even for a
+CLIP row (whose bytes live at `raw_clips/{hash}.mp4`, per-profile). Any FUTURE
+`pending_uploads` read must `SELECT *` (or explicitly include `kind`) and derive the R2
+key via `upload_object_key(kind, hash, user_id)`, never a hardcoded `games/` prefix —
+this is now the second time this exact bug shipped.
 
 ## Pre-cut clip upload (T8370)
 

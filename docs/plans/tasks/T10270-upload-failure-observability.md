@@ -98,8 +98,104 @@ that tradeoff in the design doc and let the user rule on it.
 
 ## Acceptance Criteria
 
-- [ ] A single query answers "which uploads failed since build X, for whom, at what stage, why"
-- [ ] Every failure branch listed above writes a row (test each with a forced failure)
-- [ ] Admin list is date-scoped and cross-user; clip and game rates are separate and paired
-- [ ] `[UPLOAD_*]` log lines survive a deploy and are readable 7 days later
-- [ ] Migration file + `_SCHEMA_DDL`; Migration agent included
+- [x] A single query answers "which uploads failed since build X, for whom, at what stage, why"
+- [x] Every failure branch listed above writes a row (test each with a forced failure)
+- [x] Admin list is date-scoped and cross-user; clip and game rates are separate and paired
+- [x] `[UPLOAD_*]` log lines survive a deploy and are readable 7 days later (RE-SCOPED per
+      approved Q3: this ships the one canonical `[UPLOAD_FAILURE]` structured log line whose
+      facts are ALL also in the 90-day-TTL table — a queryable durable record, not a raw-log-
+      retention infra change. The log drain itself (D2: a Fly log shipper) is filed as a
+      follow-up infra task, see Implementation/Progress below.)
+- [x] Migration file + `_SCHEMA_DDL`; Migration agent included (kickoff session acted as the
+      Migration agent for slice A per design §5's recipe)
+
+## Implementation / Progress
+
+**Implemented 2026-09-17, branch `feature/T10270-upload-failure-observability`, 5 slices per the
+approved design (`T10270-design.md`), one commit each (802cee76, 393b0cf7, bc80f340, c08489a8,
+3f3d8ef5, plus a lint fixup edba32bf):**
+
+- **Slice A** — `services/upload_failures.py` (vocabularies + `record_upload_failure`, the ONE
+  writer, fence F3), migration `v029_upload_failures.py` (head independently verified: v028 was
+  HEAD on this branch, `git log --all --diff-filter=A` found no sibling claiming v029), mirrored in
+  `pg.py`'s `_SCHEMA_DDL`, TTL sweep in the existing hourly `cleanup._do_cleanup()` (F2), purge in
+  `auth._purge_user_data` + `scripts/delete_user.py` (F4, generalized `credit_tables_present`'s
+  to_regclass check into a reusable `table_present()` helper).
+- **Slice B** — `games_upload.py`'s old private `_record_upload_failure` deleted, every call site
+  (including two previously-uninstrumented ones: finalize's `session_not_found`, PATCH-parts 404)
+  routed through the shared writer; the beacon phase gate replaced by the `server_responded`
+  boolean (back-compat default reproduces the old gate exactly for pre-T10270 clients); the
+  stale-upload reaper also now writes rows (one per reaped upload) instead of a bare milestone
+  loop. `clips.py`'s batch endpoint writes one row per failed item. `games.py`'s
+  `_validate_video_in_r2` kept synchronous (existing test mocks aren't `AsyncMock`) with a new
+  async `_validate_video_in_r2_or_record` wrapper for the 4 call sites (create/attach/activate x2).
+- **Slice C** — `uploadManager.js` beacons for classes 1 (hash timeout / analyze throw /
+  unexpected status, via a shared `hashAndAnalyzeOrBeacon` helper at all 4 internal call sites) and
+  2 (`can_afford===false` now beacons AND calls the existing cancel-session DELETE endpoint, Q4).
+  Every beacon payload gained `original_filename` + `server_responded`.
+- **Slice D** — `GET /api/admin/upload-failures` (to_regclass-guarded, honest paired rates, never
+  summed), `UploadFailuresPanel.jsx` (pure view) + `adminStore.fetchUploadFailures` (on-demand, NOT
+  folded into the combined dashboard mount fetch — `AdminScreen.test.jsx`'s single-mount-request
+  assertion still passes).
+- **Slice E** — the `stuck-uploads` clip-key bug (class 9, a T8370-landmine recurrence) fixed
+  independently of the rest.
+
+**Deviations from the design doc (all within its stated latitude, none re-litigating an approved
+decision):**
+1. `_validate_video_in_r2` (games.py) was NOT made `async def` as design §3.5's "class 6" wiring
+   might read literally — it stayed synchronous with a new async wrapper, because ~10 existing test
+   files mock it with plain callables (`return_value=None`, bare lambdas), not `AsyncMock`, and
+   `await <a non-awaitable mock's return>` would have broken all of them. The wrapper still records
+   through the shared writer via `run_in_context` before re-raising, so the design's per-call-site
+   `stage` (creating/attaching/activating) is preserved.
+2. The stale-upload reaper (`list_pending_uploads`) was wired to the new writer even though the
+   design's §3.5 call-site table doesn't name it explicitly by line number — the design's §3.1
+   architecture diagram DOES list "reaper" as a writer-feeding site, and leaving its pre-existing
+   direct `record_milestone` call unconverted while every sibling branch in the same file moved to
+   the shared writer would have been an inconsistency introduced by this very task.
+3. **Reviewer-caught and fixed (MUST-FIX from the Stage 4.5 review pass, post-implementation):**
+   class 2's flow fired BOTH a beacon (`reason=insufficient_credits`) AND the explicit cancel call,
+   and `cancel_upload`'s own unconditional `reason=user_abandoned` writer call ALSO fired — two rows
+   and two coarse milestones (`refused` + `user_abandoned`) for one real user action, exactly the
+   class of defect this task exists to eliminate. The design's call-site table specified this wiring
+   (beacon + "call the existing DELETE endpoint") without flagging the interaction. Fixed by adding
+   an `already_recorded` query flag to `DELETE /api/games/upload/{session_id}`
+   (`cancel_upload`/`cancelUpload`): the class-2 caller passes `alreadyRecorded: true` so
+   `cancel_upload` skips its own generic `user_abandoned` record when the caller already wrote the
+   session's one precise reason. The two OTHER existing callers of `cancelUpload`
+   (`UploadProgressIndicator.jsx`, `ProjectsScreen.jsx` — genuine user-initiated cancels with no
+   prior beacon) are unaffected (default `alreadyRecorded: false`), and
+   `test_cancel_upload_records_user_abandoned` still passes unchanged. New regression test:
+   `test_cancel_upload_already_recorded_skips_the_user_abandoned_milestone`.
+
+**Reviewer verdict (fresh-context Reviewer agent, full-diff pass):** one MUST-FIX (the class-2
+double-count above, fixed) and three notes/nits (not fixed, low-value/out-of-scope): (1) malformed
+numeric beacon fields — `attempt_no`/`elapsed_ms`/`file_size` taken verbatim from client JSON — can
+make the INSERT raise and silently lose the row (writer still bridges the milestone); (2) the
+part-upload-exhaustion beacon relies on the to-be-deleted `server_responded` back-compat fallback
+instead of setting it explicitly; (3) the clip batch endpoint's per-failed-item writer calls are
+sequential, not batched (bounded by client batch size, failure path only). All five of the
+classification's named focus areas (fence F3 one-writer, the `server_responded` back-compat
+correctness, `run_in_context` at every async call site, the admin endpoint's never-summed paired
+rates, and the migration head number) passed independent re-verification.
+
+**Follow-up task to file (D2, the log drain):** design §3.8 recommends splitting the real log drain
+(a Fly log shipper — a separate `fly-log-shipper` app running Vector, consuming the org's NATS log
+stream, sinking to R2 under a `logs/` prefix with lifecycle expiry) into its own infra task, since
+it is a different kind of work (a deployed app + Vector config, no application code) and this task
+already answers the acceptance criteria without it (D1, the `[UPLOAD_FAILURE]` structured log line
++ the 90-day table, ships in this task). Recommend title: "Upload/app log drain to R2 (D2 follow-up
+to T10270)".
+
+**Test evidence:** 14 new backend pure/mocked unit tests pass (`test_t10270_upload_failures.py`);
+76 frontend tests pass across `uploadManager.*.test.js` + the admin store/component suite
+(`adminStore.uploadFailures.test.js`, `UploadFailuresPanel.test.jsx`, `AdminScreen.test.jsx`'s
+single-mount assertion). Backend tests requiring real Postgres (5 in `test_t10270_upload_failures.py`,
+8 new ones in `test_admin.py`, 1 in `test_t10270_stuck_uploads_clip_key.py`) error on connection
+refused in this container — **no Postgres or docker available here** (confirmed identical to
+every pre-existing `pg_conn`-fixture test, e.g. `test_t7970_upload_failure_milestones.py`, so this
+is a known container limitation, not a regression). The live-write path (an actual INSERT into
+`upload_failures`, the admin endpoint's real SQL, the migration file's real execution) is
+**UNVERIFIED in this container** and needs a supervisor or staging check before merge confidence is
+complete. ruff + eslint clean on every touched file (only pre-existing, unrelated findings remain
+in `scripts/delete_user.py` outside this diff's touched lines).
