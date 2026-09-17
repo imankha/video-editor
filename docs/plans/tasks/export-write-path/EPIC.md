@@ -40,3 +40,25 @@ Current state (all verified in the audit):
 - [ ] No export type accepts client state as authority over DB blobs
 - [ ] Golden tests prove output parity across the consolidation
 - [ ] routers/export/ contains routing + validation only
+
+## Learnings handoff for T4400 (2026-09-17, from T4390)
+
+T4390's Step-1 divergence-table audit found the task file's site inventory stale before writing
+any code — three of five claimed finalize copies and one of three claimed publish writers had
+already been consolidated by T5630/T4175/T4380 since the epic was scoped in July; re-verify
+T4400's own file/line citations against current `master` before trusting them, the same way. The
+"gap, not a conflict" pattern (an optional param one caller class needs and another doesn't,
+solved as an explicit `None`-default parameter rather than a behavioral unification) worked
+cleanly and is the template for reconciling client-vs-backend-authority differences T4400 will
+hit. The Reviewer pass on T4390's consolidation (mechanical-extraction commit checked
+statement-by-statement against both prior copies) caught two things worth building into T4400's
+own review from the start rather than after the fact: (1) when two writers being merged handle a
+read failure differently — one tolerant/fallback, one raising — silently picking the raising
+behavior can turn a "degraded but survives" path into "aborts a transaction after a completed,
+paid GPU render"; audit every try/except and fallback-on-failure in each copy being merged, not
+just the happy path. (2) A consolidated writer that silently falls back to old behavior on a
+dependency failure (R2/ffprobe unavailable) is indistinguishable in logs from "the new rule is
+actually firing" unless the fallback-taken *and* the override-applied branches are both logged —
+T4400 makes the DB authoritative over client state, which is exactly this shape of change
+(old-client-wins vs new-DB-wins), so give every divergence point a log line before it ships to
+production, not just the error path.
