@@ -73,7 +73,15 @@ def _compute_money_spent_cents(purchase_credit_amounts: list[int]) -> int:
     from ..analytics import CREDIT_AMOUNT_TO_CENTS
     total = 0
     for amount in purchase_credit_amounts:
-        total += CREDIT_AMOUNT_TO_CENTS.get(amount, 0)
+        cents = CREDIT_AMOUNT_TO_CENTS.get(amount)
+        if cents is None:
+            # Not a silent 0: an amount no ladder ever sold means the map is stale.
+            logger.warning(
+                "[admin] No price known for a %d-credit purchase; money-spent is understated",
+                amount,
+            )
+            continue
+        total += cents
     return total
 
 

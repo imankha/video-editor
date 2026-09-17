@@ -27,7 +27,12 @@ def _load_pricing() -> dict:
 
 
 def pack_display_name(name: str, credits: int) -> str:
-    """Stripe-facing pack name, e.g. 'Starter — 80 Credits'."""
+    """Stripe-facing pack name, e.g. 'Starter — 80 Credits'.
+
+    The em dash is DELIBERATE and frozen (test_display_name_format_is_stripe_frozen): it is
+    the live Stripe product-name format since T4940. Do not "ASCII-clean" it; changing it
+    renames every product in Stripe reporting.
+    """
     return f"{name} — {credits} Credits"
 
 

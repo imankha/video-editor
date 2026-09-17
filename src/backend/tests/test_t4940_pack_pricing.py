@@ -35,8 +35,20 @@ class TestSingleSource:
             assert CREDIT_PACKS[p["key"]]["name"] == pack_display_name(p["name"], p["credits"])
 
     def test_payments_and_storage_credits_reexport_the_same_objects(self):
+        # Guards against someone re-adding a local pack table / anchor in either module.
         assert payments.CREDIT_PACKS is CREDIT_PACKS
         assert storage_credits.CREDIT_VALUE == CREDIT_VALUE
+
+    def test_analytics_amount_map_covers_the_current_ladder(self):
+        # admin money-spent maps purchase credit amounts to cents; a stale map reports $0.
+        from app.analytics import CREDIT_AMOUNT_TO_CENTS
+        for p in CREDIT_PACKS.values():
+            assert CREDIT_AMOUNT_TO_CENTS[p["credits"]] == p["price_cents"]
+
+    def test_display_name_format_is_stripe_frozen(self):
+        # The em dash is DELIBERATE: it is the live Stripe product-name format (T4940).
+        # Do not "ASCII-clean" it; that renames every product in Stripe reporting.
+        assert pack_display_name("Starter", 80) == "Starter — 80 Credits"
 
 
 class TestLadderInvariants:
@@ -46,6 +58,15 @@ class TestLadderInvariants:
         for p in packs:
             assert isinstance(p["credits"], int) and p["credits"] > 0
             assert isinstance(p["price_cents"], int) and p["price_cents"] > 0
+
+    def test_shape_rules_credits_in_tens_prices_x99_anchor_in_band(self):
+        # T4940 rule: credits in multiples of 10, prices $X.99. Catches a fat-fingered
+        # pricing.json ("credits": 8 -> a 10x storage anchor) without pinning any number a
+        # legitimate reprice would change.
+        for p in _ladder():
+            assert p["credits"] % 10 == 0
+            assert p["price_cents"] % 100 == 99
+        assert 0.01 <= CREDIT_VALUE <= 0.10
 
     def test_prices_ascend(self):
         prices = [p["price_cents"] for p in _ladder()]

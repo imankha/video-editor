@@ -28,11 +28,11 @@ import { faqPage, softwareApplication, webSite, webPage, type FaqItem } from '..
 
 // Worked pricing example: a 90-minute game (~6 GB) stored 30 days, three 15-second highlights.
 const EXAMPLE_GAME_GB = 6
-const EXAMPLE_HIGHLIGHTS = 3
 const EXAMPLE_HIGHLIGHT_SECONDS = 15
-const exampleStorageCredits = calculateUploadCost(EXAMPLE_GAME_GB * 1024 ** 3)
-const exampleExportCredits = EXAMPLE_HIGHLIGHTS * EXAMPLE_HIGHLIGHT_SECONDS * FACTS.creditsPerExportSecond
-const exampleTotalCredits = exampleStorageCredits + exampleExportCredits
+// "three highlights" is spelled out in the prose below; keep the 3 here in step with it.
+const exampleUploadCredits = calculateUploadCost(EXAMPLE_GAME_GB * 1024 ** 3) // storage + auto-export surcharge
+const exampleExportCredits = 3 * EXAMPLE_HIGHLIGHT_SECONDS * FACTS.creditsPerExportSecond
+const exampleTotalCredits = exampleUploadCredits + exampleExportCredits
 const exampleTotalUsd = costAtBestRateUsd(exampleTotalCredits).toFixed(2)
 const lowestRateDisplay = LOWEST_RATE_CENTS.toFixed(1)
 
@@ -388,7 +388,7 @@ const steps = [
     <div class="bg-white/5 backdrop-blur-lg rounded-2xl p-8 max-w-3xl mx-auto border border-white/10">
       <h3 class="text-white font-semibold mb-2">For example: a 90-minute game, three highlights</h3>
       <p class="text-gray-300 leading-relaxed">
-        Upload the full 90-minute game (about {EXAMPLE_GAME_GB}&nbsp;GB) and store it for 30 days: {exampleStorageCredits} credits. Pull
+        Upload the full 90-minute game (about {EXAMPLE_GAME_GB}&nbsp;GB) and store it for 30 days: {exampleUploadCredits} credits. Pull
         three {EXAMPLE_HIGHLIGHT_SECONDS}-second highlights out of it and export them: {exampleExportCredits} credits, at 1 credit per second of
         finished video, rounded to the nearest second. <strong class="text-white">{exampleTotalCredits} credits total:
         about ${exampleTotalUsd}</strong> at the {BEST_VALUE_PACK.name} rate, well under a single pack.

@@ -92,6 +92,27 @@ frontend `pricing.test.js` + `BuyCreditsModal.test.jsx` + `StorageExtensionModal
 and `dist/index.html` still contains exactly `3.8&cent;`, `30 days: 3 credits`, `45 credits`,
 `48 credits total`, `about $1.83` (identical derived copy); `src/frontend` `vite build` green.
 
+**2026-09-17, reviewer pass (fresh context)**: 1 BLOCKING + 3 MAJOR, all accepted and fixed:
+- BLOCKING: `deploy-landing.yml` only triggered on `src/landing/**`, so a `pricing.json`-only reprice
+  would redeploy the API and app but leave reelballers.com on stale prices (a regression this refactor
+  introduced). Added `pricing.json`, `config/pricing.js`, `utils/storageCost.js` to its paths.
+- MAJOR: nothing caught a fat-fingered ladder (`"credits": 8` -> 10x storage anchor). Rather than pin
+  0.05 (which would make a reprice a three-file edit), both test suites now enforce T4940's shape
+  rules (credits in tens, prices $X.99) and a 1c..10c band on the anchor.
+- MAJOR: the Stripe-facing name format was asserted only against itself; pinned
+  `pack_display_name("Starter", 80) == "Starter — 80 Credits"` with a do-not-ASCII-clean comment.
+- MAJOR: a FOURTH stale ladder (`analytics.CREDIT_AMOUNT_TO_CENTS` = pre-T4940 120/400/1000) made
+  admin money-spent read $0 for every post-T4940 purchase. Now derives the current ladder from
+  `CREDIT_PACKS` on top of the retired rows; `admin._compute_money_spent_cents` warns on an unknown
+  amount instead of silently adding 0. Pre-existing bug, fixed here since it is exactly this task's class.
+- MINOR fixes taken: frozen `CREDIT_PACKS` export, shape test instead of the tautological equality,
+  days-per-credit tests assert maximality (`dpc+1` costs 2), landing example variable renamed to
+  `exampleUploadCredits` and the "three" constant collapsed into the prose.
+
+Follow-ups NOT done here (noted for T10220 / a CI task): Branch CI never builds the landing site, so a
+broken `@editor` cross-package import surfaces only at deploy; a frontend-only build root (e.g. a Pages
+git-integration rooted at `src/frontend`) would not find `../backend/app/pricing.json`.
+
 ## Acceptance Criteria
 
 - [x] Exactly one file holds pack prices/credits; no second copy in app, landing or backend source

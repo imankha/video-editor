@@ -26,12 +26,8 @@ import { CREDIT_PACKS } from '../config/pricing';
 // source so this test never carries its own copy of the ladder.
 const CONFIG = {
   publishable_key: 'pk_test_x',
-  packs: CREDIT_PACKS.map((p) => ({
-    key: p.key,
-    credits: p.credits,
-    price_cents: p.price_cents,
-    name: `${p.name} — ${p.credits} Credits`,
-  })),
+  // `name` is not asserted (the backend composes the Stripe-facing form); pass the bare name.
+  packs: CREDIT_PACKS.map((p) => ({ key: p.key, credits: p.credits, price_cents: p.price_cents, name: p.name })),
 };
 const [FIRST_PACK, ...OTHER_PACKS] = CREDIT_PACKS;
 const priceText = (p) => `$${(p.price_cents / 100).toFixed(2)}`;

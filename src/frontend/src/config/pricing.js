@@ -15,7 +15,7 @@
 import pricing from '../../../backend/app/pricing.json';
 
 /** @type {{ key: string, name: string, credits: number, price_cents: number }[]} */
-export const CREDIT_PACKS = pricing.credit_packs;
+export const CREDIT_PACKS = Object.freeze(pricing.credit_packs.map((p) => Object.freeze({ ...p })));
 
 /** Price per credit, in cents. */
 export function packRateCents(pack) {

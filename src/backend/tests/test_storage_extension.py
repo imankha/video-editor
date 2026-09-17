@@ -123,20 +123,21 @@ class TestDaysPerCreditFormula:
     def test_2_5_gb_game(self):
         size = int(2.5 * 1024 ** 3)
         dpc = self._days_per_credit(size)
-        assert dpc >= 1  # derived from CREDIT_VALUE, not a literal (T10210)
+        # dpc is the LARGEST day count one credit buys (derived, not a literal - T10210)
         assert calculate_extension_cost(size, dpc) == 1
+        assert calculate_extension_cost(size, dpc + 1) == 2
 
     def test_5_gb_game(self):
         size = int(5.0 * 1024 ** 3)
         dpc = self._days_per_credit(size)
-        assert dpc >= 1
         assert calculate_extension_cost(size, dpc) == 1
+        assert calculate_extension_cost(size, dpc + 1) == 2
 
     def test_10_gb_game(self):
         size = int(10.0 * 1024 ** 3)
         dpc = self._days_per_credit(size)
-        assert dpc >= 1
         assert calculate_extension_cost(size, dpc) == 1
+        assert calculate_extension_cost(size, dpc + 1) == 2
 
     def test_1_gb_game(self):
         size = int(1.0 * 1024 ** 3)

@@ -536,7 +536,10 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   `@editor` alias (pricing cards, lowest-rate stat, worked example all computed at build). Tests on
   both sides assert ladder INVARIANTS (ascending price, strictly decreasing rate, the CREDIT_VALUE rule),
   never literals, so a reprice is a one-file edit. The json must live under `src/backend` because the
-  Fly Docker build context is that directory alone.
+  Fly Docker build context is that directory alone; every JS build must run from a FULL checkout (a
+  build rooted at `src/frontend` alone cannot resolve it). `deploy-landing.yml` triggers on the json
+  too, or the public pricing page goes stale on a reprice. `analytics.CREDIT_AMOUNT_TO_CENTS` (admin
+  money-spent) derives the current ladder from the same source on top of retired pre-T4940 amounts.
 - **Credit packs single-sourced + ~5c repricing (T4940, 2026-07-25).** `CREDIT_PACKS`
   (now `app/pricing.json` via `app/pricing.py`, see T10210 above) repriced to the sub-$1-per-clip ladder **starter 80/$3.99, popular
   160/$6.99, best_value 340/$12.99** (starter = worst-case 4.99c/credit, best_value =
