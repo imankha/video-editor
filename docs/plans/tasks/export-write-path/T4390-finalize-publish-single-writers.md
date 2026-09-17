@@ -1,10 +1,14 @@
 # T4390: finalize_export + publish_final_video — Single Writers
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-07-03
+**Updated:** 2026-09-17
 **Epic:** [export-write-path](EPIC.md) · Audit items E2 + E4-adjacent · Depends on T4380
+
+**2026-09-17: spawned via /dotask** (container `reel-task-t4390`, branch
+`feature/T4390-finalize-publish-single-writers`) immediately after T4380 merged (PR #456).
 
 ## Problem
 
