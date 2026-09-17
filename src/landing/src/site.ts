@@ -85,11 +85,11 @@ export const FACTS = {
  * thing an AI engine will contradict from another source.
  */
 export const INPUT_SOURCES = [
+  'Footage exported from team camera systems (Veo, Trace, Hudl) as a video file',
   'iPhone and Android phones',
   'GoPro and other action cameras',
   'XbotGo and similar auto-follow phone mounts',
   'Camcorders and DSLR/mirrorless cameras',
-  'Footage exported from team camera systems (Veo, Trace, Hudl) as a video file',
 ] as const
 
 /** Primary nav. Also drives the header, footer, and sitemap expectations. */

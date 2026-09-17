@@ -24,8 +24,8 @@ preparing college recruiting material. It is US-focused.
 
 ## What it does
 
-1. **Upload** a full game video from any camera. Nothing is installed; the
-   editor runs in a web browser.
+1. **Upload** video from any camera -- a full game, individual clips, or both.
+   Nothing is installed; the editor runs in a web browser.
 2. **Mark** the plays worth keeping while watching, tagging each by position and
    play type, with ratings and notes.
 3. **Export** a highlight reel. The user frames the chosen player and picks them
