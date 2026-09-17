@@ -64,9 +64,11 @@ result = await call_modal_framing_ai(job_id, user_id, ...)
 ### Export Helpers
 ```python
 from app.services.export_helpers import (
-    create_export_job, complete_export_job, fail_export_job,
+    insert_export_job_if_none_active, complete_export_job, fail_export_job,
     send_progress, create_progress_callback
 )
+# T4380: export_jobs writes are owned by app.services.export_job_repository;
+# the functions above are thin wrappers kept for routers/export/framing.py.
 ```
 
 ### Version-based Queries

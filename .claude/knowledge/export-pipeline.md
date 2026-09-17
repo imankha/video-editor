@@ -1,5 +1,16 @@
 ---
 domain: export-pipeline
+updated: 2026-09-17 (T4380 — ExportJobRepository landed: every `export_jobs` INSERT/UPDATE in the
+codebase (31 sites, was 2 competing create-helpers + 14+ raw sites across 5 modules) now goes
+through NEW `services/export_job_repository.py` — `grep -rn "UPDATE export_jobs\|INSERT INTO
+export_jobs" src/backend/app --include=*.py` hits ONLY that file (+ the excluded pre-repository
+`v028_export_job_stages.py` migration). This is the T4390 (finalize_export + publish_final_video
+single writers) prerequisite gate — depends on T4370's golden harness, which stayed green through
+every migration commit. See new § ExportJobRepository section below for the repository's shape,
+transition methods, and the resolved pending-vs-processing decision. ONE deliberate behavior
+change: job-record insert failure now RAISES (was: swallowed with a warning, old
+`export_helpers.create_export_job`, deleted — zero live callers). Everything else is byte-for-byte
+preserved (verified per-module against T4370 goldens).)
 updated: 2026-09-17 (T4370 — export golden-output test harness landed: DB-effects
 snapshots for all 6 export triggers + local-render goldens with a documented
 average-hash tolerance. This is the characterization gate T4380-T4410 (export
@@ -186,6 +197,58 @@ The parity oracle T4380-T4410's consolidation must prove output-parity against, 
 **Data safety:** none of these tests request the `pg_conn` fixture — every trigger's writes are pure per-user profile SQLite under a fresh random `test_t4370_*` user id, so the real dev Postgres (the "tests TRUNCATE dev DB" memory) is never touched by this harness.
 
 > **`POST /api/export/framing` is DEAD (T4350 finding).** No frontend or backend caller — the frontend uses `/render` (single) + `/multi-clip`. Its inline verbatim highlight carry (`framing.py:240-260`) never runs. Don't "fix" that site; the live carry lives in `upsert_working_video` (below).
+
+## ExportJobRepository — single owner of `export_jobs` writes (T4380)
+
+`services/export_job_repository.py` owns every raw INSERT/UPDATE against `export_jobs`. Every
+function takes a caller-supplied `cursor` (the caller owns the connection + commit), so a
+transition can participate in a larger multi-table transaction — e.g. `export_finalize.
+upsert_working_video`'s single commit that also writes `working_videos`/`projects`/
+`working_clips`.
+
+**Creation has THREE distinct paths, not one — do not collapse them:**
+- `create()` → `ExportStatus.PENDING`. For jobs handed to the async worker
+  (`export_worker.process_export_job`, via `/exports/start` or `/exports/framing`) — the worker
+  hard-gates on `status == 'pending'` before running a job (`export_worker.py` `process_export_job`),
+  so this is the ONE value that keeps that path alive.
+- `create_if_none_active()` → `ExportStatus.PROCESSING`, atomic `INSERT...SELECT...WHERE NOT
+  EXISTS` per-(project, type) in-flight guard (T9540). For the synchronous inline-render endpoints
+  (framing/overlay/multi-clip render routes) — those callers ARE the worker for that request, so
+  they insert already-`processing`. Used by `framing.py`, `overlay.py`'s `render_overlay`, and
+  `multi_clip.py`'s dispatch entry.
+- `create_processing()` → `ExportStatus.PROCESSING`, unconditional, NO guard. Exactly one caller:
+  `overlay.py`'s `export_overlay_only` local-render tracking insert, which never had the T9540
+  dedup guard — reusing `create_if_none_active` there would have silently added dedup semantics
+  that weren't present before.
+
+**Transitions:** `start` (pending→processing), `complete` (→complete; `preserve_gpu_metadata=True`
+COALESCEs gpu_seconds/modal_function onto the existing value instead of nulling — used by
+`export_finalize.upsert_working_video`'s resumable path; every other caller either supplies fresh
+values or never populated those columns for that job anyway), `fail` (→error), `recover`
+(error→processing, clears error/completed_at — the `/modal-status` "Modal still running but DB
+shows error" reset). Each logs (never blocks) on an unexpected current status.
+
+**Non-transition writes still owned here** (same table, not a status change): `acknowledge`
+(T12 notification dismissal), `store_modal_call_id`/`store_modal_call_id_with_stage`,
+`set_input_data_checkpoint`/`set_rendered_checkpoint`/`set_stage`/`claim_stage_for_finalize`
+(T5630/T7210 `stage`/`output_key` durable-finalize checkpoints — a DIFFERENT concept from
+`status`, never folded into start/complete/fail/recover), `clear_pending_on_startup` (dev-mode
+bulk clear), `get`/`get_stale_candidates` (reads).
+
+**ONE deliberate behavior change:** `create()`/`create_if_none_active()`/`create_processing()`
+RAISE on insert failure — no more swallow-with-warning (the old `export_helpers.
+create_export_job`, deleted, had zero live callers by the time this landed). Every UPDATE
+(transition) function preserves its call site's pre-existing swallow-or-raise behavior verbatim;
+that wrapping stays at the caller, not centralized.
+
+`export_helpers.py` still exists — `insert_export_job_if_none_active`, `fail_export_job`,
+`store_modal_call_id`, `derive_project_name`, `resolve_clip_source`, etc. are thin wrappers kept
+because `routers/export/framing.py` (out of T4380's migration scope) still calls them by name;
+they delegate to the repository internally.
+
+`export_worker.py` no longer imports `get_export_job`/`update_job_*` from `routers/exports.py`
+(the T4380 Problem-section inverted-layering finding) — it calls `export_job_repository` directly,
+opening its own connection per call.
 
 ## Highlight carry-forward on framing re-export (T4350 + T4355)
 

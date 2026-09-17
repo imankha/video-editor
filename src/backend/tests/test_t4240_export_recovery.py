@@ -123,15 +123,33 @@ def test_cleanup_skips_jobs_with_unknown_modal_status(monkeypatch):
 async def test_worker_error_handler_survives_config_decode_failure(monkeypatch):
     """If decode_data(job['input_data']) fails, the except handler reads config/
     job_type/project_id -- they must already be bound so the handler marks the job
-    error instead of crashing with NameError/UnboundLocalError."""
+    error instead of crashing with NameError/UnboundLocalError.
+
+    T4380: export_worker now reads/writes export_jobs via export_job_repository
+    (own connection per call) instead of importing get_export_job/update_job_*
+    from the router -- patch that seam plus a no-op get_db_connection."""
     import app.services.export_worker as w
+    from app.services import export_job_repository
 
     job = {"id": "job-4", "project_id": 42, "type": "framing", "status": "pending", "input_data": b"garbage"}
 
     errors = []
-    monkeypatch.setattr(w, "get_export_job", lambda _id: job)
-    monkeypatch.setattr(w, "update_job_started", lambda *a, **k: None)
-    monkeypatch.setattr(w, "update_job_error", lambda jid, msg: errors.append((jid, msg)))
+
+    class _FakeConn:
+        def cursor(self):
+            return None
+
+        def commit(self):
+            pass
+
+    @contextmanager
+    def _fake_conn():
+        yield _FakeConn()  # cursor value is never inspected by the stubbed repo calls below
+
+    monkeypatch.setattr(w, "get_db_connection", _fake_conn)
+    monkeypatch.setattr(export_job_repository, "get", lambda cursor, _id: job)
+    monkeypatch.setattr(export_job_repository, "start", lambda cursor, _id: None)
+    monkeypatch.setattr(export_job_repository, "fail", lambda cursor, jid, msg: errors.append((jid, msg)))
     monkeypatch.setattr(w, "record_milestone", lambda *a, **k: None)
     monkeypatch.setattr(w, "_sync_after_export", lambda *a, **k: None)
 

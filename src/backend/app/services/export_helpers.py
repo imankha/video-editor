@@ -9,19 +9,26 @@ This module provides DRY utilities for:
 
 Usage:
     from app.services.export_helpers import (
-        create_export_job,
-        complete_export_job,
+        insert_export_job_if_none_active,
         fail_export_job,
         send_progress,
         derive_project_name,
     )
+
+T4380: every export_jobs write below delegates to
+app.services.export_job_repository (the single owner) -- these functions stay
+as thin, differently-shaped wrappers because routers/export/framing.py (out
+of T4380's migration scope) still calls them by these names. complete_export_job
+was deleted here -- it had zero callers even before T4380 (dead code found
+during the single-ownership cleanup, unrelated to this task's own changes).
 """
 
 import logging
 import re
 
-from app.constants import ExportPhase, ExportStatus, RecapLayer
+from app.constants import ExportPhase, RecapLayer
 from app.database import get_db_connection
+from app.services import export_job_repository
 from app.utils.encoding import decode_data, encode_data
 from app.websocket import export_progress, make_progress_data, manager
 
@@ -31,50 +38,6 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Export Job Lifecycle
 # =============================================================================
-
-def create_export_job(
-    export_id: str,
-    project_id: int,
-    export_type: str,
-    input_data: dict | None = None,
-    game_id: int | None = None,
-    game_name: str | None = None,
-) -> str:
-    """
-    Create an export_jobs record for tracking.
-
-    Args:
-        export_id: Unique export job identifier
-        project_id: Project ID (use 0 for annotate exports)
-        export_type: 'framing', 'overlay', or 'annotate'
-        input_data: Optional dict of input parameters
-        game_id: Optional game ID (for annotate exports)
-        game_name: Optional game name (for annotate exports)
-
-    Returns:
-        The export_id
-    """
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO export_jobs (id, project_id, type, status, input_data, game_id, game_name)
-                VALUES (?, ?, ?, 'processing', ?, ?, ?)
-            """, (
-                export_id,
-                project_id,
-                export_type,
-                encode_data(input_data) if input_data else encode_data({}),
-                game_id,
-                game_name,
-            ))
-            conn.commit()
-        logger.info(f"[Export] Created job {export_id} (type={export_type}, project={project_id})")
-    except Exception as e:
-        logger.warning(f"[Export] Failed to create job record {export_id}: {e}")
-
-    return export_id
-
 
 def insert_export_job_if_none_active(
     export_id: str,
@@ -100,68 +63,18 @@ def insert_export_job_if_none_active(
     legitimate Focus->Overlay sequence (different type) is allowed, and a fresh
     render AFTER a terminal ('complete'/'error') job is allowed (and re-charges).
 
-    Unlike ``create_export_job`` this does NOT swallow failures into a "continue
-    anyway" — a swallowed insert here would let the duplicate charge through, so
-    a DB error propagates to the caller (which fails the dispatch cleanly).
+    A DB error propagates to the caller (which fails the dispatch cleanly) —
+    a swallowed insert here would let the duplicate charge through.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO export_jobs (id, project_id, type, status, input_data)
-            SELECT ?, ?, ?, 'processing', ?
-            WHERE NOT EXISTS (
-                SELECT 1 FROM export_jobs
-                WHERE project_id = ? AND type = ? AND status IN ('pending', 'processing')
-            )
-            """,
-            (
-                export_id,
-                project_id,
-                export_type,
-                encode_data(input_data) if input_data else encode_data({}),
-                project_id,
-                export_type,
-            ),
+        inserted = export_job_repository.create_if_none_active(
+            cursor, job_id=export_id, project_id=project_id, job_type=export_type,
+            input_data=encode_data(input_data) if input_data else encode_data({}),
         )
-        inserted = cursor.rowcount == 1
         conn.commit()
 
-    if inserted:
-        logger.info(f"[Export] Created job {export_id} (type={export_type}, project={project_id})")
-    else:
-        logger.info(
-            f"[Export] Duplicate dispatch blocked: active {export_type} job already exists "
-            f"for project {project_id} (export_id {export_id} dropped)"
-        )
     return inserted
-
-
-def complete_export_job(
-    export_id: str,
-    output_filename: str | None = None,
-    output_video_id: int | None = None,
-):
-    """
-    Mark an export job as complete.
-
-    Args:
-        export_id: The export job ID
-        output_filename: Optional output filename
-        output_video_id: Optional output video ID (working_video_id or final_video_id)
-    """
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE export_jobs
-                SET status = ?, output_filename = ?, output_video_id = ?, completed_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            """, (ExportStatus.COMPLETE, output_filename, output_video_id, export_id))
-            conn.commit()
-        logger.info(f"[Export] Completed job {export_id}")
-    except Exception as e:
-        logger.warning(f"[Export] Failed to complete job record {export_id}: {e}")
 
 
 def fail_export_job(export_id: str, error_message: str):
@@ -175,13 +88,8 @@ def fail_export_job(export_id: str, error_message: str):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE export_jobs
-                SET status = ?, error = ?, completed_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            """, (ExportStatus.ERROR, error_message[:500], export_id))
+            export_job_repository.fail(cursor, export_id, error_message[:500])
             conn.commit()
-        logger.error(f"[Export] Failed job {export_id}: {error_message[:100]}")
     except Exception as e:
         logger.warning(f"[Export] Failed to update job record {export_id}: {e}")
 
@@ -197,13 +105,8 @@ def store_modal_call_id(export_id: str, modal_call_id: str):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE export_jobs
-                SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            """, (modal_call_id, export_id))
+            export_job_repository.store_modal_call_id(cursor, export_id, modal_call_id)
             conn.commit()
-        logger.info(f"[Export] Stored modal_call_id for {export_id}: {modal_call_id[:16]}...")
     except Exception as e:
         logger.warning(f"[Export] Failed to store modal_call_id for {export_id}: {e}")
 

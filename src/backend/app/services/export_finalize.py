@@ -37,6 +37,7 @@ import logging
 from app.constants import ExportStage
 from app.database import column_exists, get_db_connection
 from app.queries import latest_working_clips_subquery
+from app.services import export_job_repository
 from app.utils.encoding import decode_data
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ def _set_export_stage(job_id: str, stage: str) -> None:
     DB missing the column (deploy->v028 window) must not crash the finalize."""
     try:
         with get_db_connection() as conn:
-            conn.cursor().execute("UPDATE export_jobs SET stage = ? WHERE id = ?", (stage, job_id))
+            export_job_repository.set_stage(conn.cursor(), job_id, stage)
             conn.commit()
     except Exception as e:
         logger.warning(f"[Finalize] Could not set stage={stage} for job {job_id}: {e}")
@@ -71,11 +72,7 @@ def _claim_stage_for_finalize(job_id: str, expected_stage, new_stage: str) -> bo
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE export_jobs SET stage = ? WHERE id = ? AND stage IS ?",
-                (new_stage, job_id, expected_stage),
-            )
-            if cursor.rowcount > 0:
+            if export_job_repository.claim_stage_for_finalize(cursor, job_id, expected_stage, new_stage):
                 conn.commit()
                 return True
             # No row matched the CAS. Distinguish "no export_jobs row exists at
@@ -272,20 +269,13 @@ def upsert_working_video(
         cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (wv_id, project_id))
 
         # Complete the job + write the output_video_id back-reference (idempotency
-        # key for a later resume). COALESCE keeps prior gpu/function metadata when a
-        # caller does not supply it (local path).
-        cursor.execute(
-            """
-            UPDATE export_jobs
-            SET status = 'complete',
-                output_video_id = ?,
-                output_filename = ?,
-                completed_at = CURRENT_TIMESTAMP,
-                gpu_seconds = COALESCE(?, gpu_seconds),
-                modal_function = COALESCE(?, modal_function)
-            WHERE id = ?
-            """,
-            (wv_id, filename, gpu_seconds, modal_function, job_id),
+        # key for a later resume). preserve_gpu_metadata keeps prior gpu/function
+        # metadata when a caller does not supply it (local path).
+        export_job_repository.complete(
+            cursor, job_id,
+            output_video_id=wv_id, output_filename=filename,
+            gpu_seconds=gpu_seconds, modal_function=modal_function,
+            preserve_gpu_metadata=True,
         )
 
         # Stamp the exported working clips (snapshot the raw-clip boundary version).
@@ -389,10 +379,7 @@ async def finalize_export(
         logger.error(f"[Finalize] Cannot finalize job {job_id}: no output_key")
         try:
             with get_db_connection() as conn:
-                conn.cursor().execute(
-                    "UPDATE export_jobs SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    ("Modal result incomplete: no output_key", job_id),
-                )
+                export_job_repository.fail(conn.cursor(), job_id, "Modal result incomplete: no output_key")
                 conn.commit()
         except Exception as db_err:
             logger.error(f"[Finalize] Also failed to mark job {job_id} error: {db_err}", exc_info=True)
