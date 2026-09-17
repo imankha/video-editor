@@ -7,7 +7,7 @@ import { ChevronRight, ChevronLeft, X } from 'lucide-react';
  * and carries NO accent color. The CTA never lives inside it. This component is one
  * component with TWO layout modes, switched on `isMobile`:
  *
- *   Desktop (isMobile=false): a 300px IN-FLOW box on the right, floor-to-ceiling
+ *   Desktop (isMobile=false): a 380px IN-FLOW box on the right, floor-to-ceiling
  *     between the header and the action band. `collapsed` tweens its WIDTH to a 64px
  *     icon strip (keeping the tab icons) over 320ms cubic-bezier(0.2,0.8,0.2,1). The
  *     main column reflows for free; the players are container-sized so the stage
@@ -155,7 +155,7 @@ export default function SettingsRail({
       data-testid="settings-rail"
       className="hidden lg:flex flex-col shrink-0 self-stretch overflow-hidden"
       style={{
-        width: collapsed ? '64px' : '300px',
+        width: collapsed ? '64px' : '380px',
         background: '#0f172a',
         borderLeft: '1px solid #334155',
         transition: RAIL_TWEEN,

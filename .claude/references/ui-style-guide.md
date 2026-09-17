@@ -415,7 +415,7 @@ never lives inside the settings container, never resizes, never moves.
   `#9333ea` (purple). `data-testid="primary-cta"`. Its box is byte-identical across
   rail-collapsed and drawer-open — nothing in its ancestry resizes with layout state.
 - **`SettingsRail`** (`components/settings/SettingsRail.jsx`): ONE component, two
-  layout modes on `isMobile` (from `useIsMobile()`). Desktop = a 300px in-flow box
+  layout modes on `isMobile` (from `useIsMobile()`). Desktop = a 380px in-flow box
   that tweens its **width** to a 64px icon strip when `collapsed`
   (`width 320ms cubic-bezier(0.2,0.8,0.2,1)`); the main column reflows for free.
   Mobile = a 316px `position:absolute` drawer that slides in with

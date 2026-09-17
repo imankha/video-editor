@@ -17,14 +17,14 @@ const TABS = [
  * the STYLE the tween/transform drives (width / transform), not measured geometry.
  */
 describe('SettingsRail — desktop collapse (T9270)', () => {
-  it('expanded rail is 300px wide and width-tweened', () => {
+  it('expanded rail is 380px wide and width-tweened', () => {
     render(
       <SettingsRail isMobile={false} collapsed={false} tabs={TABS} activeTab="a" onTabChange={() => {}}>
         <div>body</div>
       </SettingsRail>
     );
     const rail = screen.getByTestId('settings-rail');
-    expect(rail.style.width).toBe('300px');
+    expect(rail.style.width).toBe('380px');
     expect(rail.style.transition).toMatch(/width/);
   });
 
