@@ -1,10 +1,14 @@
 # T4380: ExportJobRepository — One Owner for export_jobs
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-07-03
+**Updated:** 2026-09-17
 **Epic:** [export-write-path](EPIC.md) · Audit item E1 · Depends on T4370
+
+**2026-09-17: spawned via /dotask** (container `reel-task-t4380`, branch
+`feature/T4380-export-job-repository`) immediately after T4370 merged (PR #455).
 
 ## Problem
 
