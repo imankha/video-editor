@@ -1,6 +1,6 @@
 # T10300: Link a directly uploaded clip to a game later, and say so in the upload notice
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-09-17
