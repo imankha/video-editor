@@ -7,6 +7,13 @@
 **Epic:** [Tutorial Redesign](EPIC.md)
 **Blocked by:** T7620 (approved design)
 
+> **Rulings 2026-09-17 (binding, see EPIC.md's 2026-09-17 section):** fully guided when Help is on,
+> Help-close is the only exit (one tap, always visible, re-openable); multi-option forks with
+> consequence captions; anticipate and explain likely next intents from location + history; default
+> ON until the first EXPORT; keep `TutorialVideoModal` and mount it from the Help panel; re-derive all
+> step copy from `displayNames.js`; **start only after every other Deploy Candidate task is implemented
+> and the UI approved.**
+
 ## Scope
 
 Implement the approved T7620 design exactly:

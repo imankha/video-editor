@@ -39,15 +39,16 @@ button + "You have N clips in progress." are the **Published** tab's empty state
      Framing focuses the camera on your player and lets you trim and add slo-mo to key moments. A
      short clip can also skip straight to Framing, no game needed." (`Framing` via
      `MODE_NAMES.FRAMING`.)
-   - Reels: body "You can also combine clips together to make a full highlight reel." The user
-     gave one line; keep the existing headline "Combine clips into one reel" above it unless the
-     user says otherwise (flagged in the milestone questions).
+   - Reels: headline "Build a highlight reel." body "You can also combine clips together to make
+     a full highlight reel." (User gave one line and asked for whatever makes sense; every other
+     tab has headline + body, so it gets a short headline. Ruled 2026-09-17.)
    - Published: headline "View your completed work." body "Download or share links with family,
      coaches, and recruiters. If you install the app on your phone you can even post to social
-     directly." **Verify the last sentence before shipping**: it is a capability claim
-     (`feedback_ai_capability_copy_accuracy`); confirm the PWA share path actually hands the
-     video file to the OS share sheet (`navigator.share` with files) on iOS and Android. If it
-     only shares a link, say "share to social directly" instead.
+     directly." The user has done this on a phone (ruled 2026-09-17), so the sentence stands.
+     Include a **code audit** as part of this task: confirm the PWA share path hands the VIDEO
+     FILE to the OS share sheet (`navigator.share` with `files`, share-target manifest) on iOS and
+     Android and note where it degrades to a link. A finding is a follow-up task, not a gate on
+     this copy.
 3. **Remove `FlowStrip`** (`EmptyTabGuide.jsx:113-159`, `FLOW_STEPS` in `emptyStates.js:34-39`)
    and its `STEP_COLORS`; delete, don't hide.
 4. **Published empty state**: drop `draftsText(n)` ("You have N clips in progress.") and the

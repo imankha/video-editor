@@ -1,6 +1,6 @@
 # T10320: Re-bake instructions and reshoot the tutorial videos for the new flow and vocabulary
 
-**Status:** TODO (decision-gated, see Problem)
+**Status:** TODO (ruled 2026-09-17: outcome 2, in-app AND site)
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-17
@@ -44,6 +44,19 @@ Fill / Outside Dim -> Outline thickness / Spotlight fill / Dim background; plus 
 (Games / Clips / Reels / Published), the four-choice publish bars (T9590), "Pick your athlete"
 (T9620), and every Deploy Candidate copy change (T10280/T10290). Canonical source:
 `src/frontend/src/config/displayNames.js`.
+
+**RULED 2026-09-17: outcome (2).** "I like the tutorials so back in app as well." Two further asks
+from the user, both in scope here:
+
+- **Cut-off narration.** The current video "gets cut off sometimes when it's talking about a button
+  under the fold." Audit both the capture spec (is the named control on screen when the narration
+  names it, at the capture viewport?) and the players (`TutorialVideoModal.jsx`, landing
+  `TutorialModal.tsx`: letterboxing, object-fit, chapter seeks landing mid-sentence). Fix the cause,
+  then re-capture with the control visible at every mention.
+- **Too small.** "Video plays too small, optimize the video size for the places it will play."
+  Measure the rendered player size on phone (portrait + landscape), desktop modal and the landing
+  launcher; encode per surface (or one encode that is legible at the smallest), and let the player
+  fill its container instead of a fixed max width. Add the target sizes to `workflow/contract.py`.
 
 ## Solution
 

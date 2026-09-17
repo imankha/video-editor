@@ -1,6 +1,6 @@
 # T10220: Rebalance monetization: 12.99 / 22.99 / 32.99 ladder
 
-**Status:** TODO
+**Status:** TODO (deferred until AFTER the Deploy Candidate ships, user ruling 2026-09-17)
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-09-17
@@ -22,17 +22,19 @@ credits per tier. Everything else (Stripe amounts, `/api/payments/config`, the a
 `CREDIT_VALUE` on both sides, the landing pricing cards, lowest-rate stat and worked example, the
 invariant tests) derives.
 
-**Open decision (ask the user, blocks this task):** what does "retain the discount curve" anchor
-to? Two readings, very different credit counts:
+**RULED 2026-09-17: reading B** ("we need to continue to incentivize users to buy bigger credit
+packs"), and the whole task is deferred until after the Deploy Candidate ships. The two readings,
+kept for the record:
 
 | Reading | Starter 12.99 | Middle 22.99 | Max 32.99 | Storage anchor `CREDIT_VALUE` |
 |---|---|---|---|---|
 | A. Keep today's per-credit RATES (4.99c / 4.37c / 3.82c): a bigger pack, same value per dollar | 260 credits | 526 credits | 864 credits | stays 0.05 (worst case 4.99c) |
 | B. Keep today's 12.99 = 340 credits mapping and extend the curve downward (+14% / +33% bonus steps) | 340 credits | 690 credits | 1,120 credits | drops to 0.04 (worst case 3.82c), so upload/extension storage costs ~25% MORE credits |
 
-Reading B changes the storage-cost formula on both sides (derived, by design) and the "1 credit
-= 1 second" value proposition per dollar; reading A keeps every existing economic number and only
-raises the minimum purchase. Recommend A unless the user wants credits to get cheaper.
+Reading B (chosen) changes the storage-cost formula on both sides (derived, by design): the
+anchor moves from 5c to 4c, so upload/extension charges cost ~25% more credits while every credit
+costs the user less. State that consequence in the deploy notes and in the T4940 doc. Round the
+credit counts to tens (340 / 690 / 1,120 already are).
 
 Either way: T4940's power-law check (`unit_price(q) = p0 x (q/q0)^-k`, k in 0.15-0.25) should
 still hold across the three rungs, and the ladder invariant tests enforce "bigger is cheaper per
@@ -59,7 +61,7 @@ credit".
 ## Implementation
 
 ### Steps
-1. [ ] Get the user's answer to the reading A / B question (and whether tier names change)
+1. [x] Reading B chosen by the user 2026-09-17 (tier names unchanged unless the user says otherwise)
 2. [ ] Edit `pricing.json`; run `test_t4940_pack_pricing.py` + `pricing.test.js` (invariants)
 3. [ ] `npm run build` in `src/landing` and eyeball the pricing section + worked example
 4. [ ] Update the T4940 doc + revenue projection note; deploy landing via `/deploy-landing`

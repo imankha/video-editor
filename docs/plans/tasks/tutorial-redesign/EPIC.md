@@ -118,14 +118,34 @@ Mapped against the APPROVED T7620 design (`docs/plans/tasks/T7620-design.md`, 20
 | **"Spelling out the implications of each option"** | Small delta: fork dialogs are one sentence + bare answer labels (§8.2). Extend answers to `{value, label, caption}` using the shipped `FOCUS_PUBLISH` / `OVERLAY_PUBLISH` consequence-caption pattern; widen `steps.copy.test.js` word budgets and re-check `placement.test.js` at 320px / keyboard-open. Recommend yes. |
 | **Re-film tutorial videos, accessible from tutorial and site** (separate ask) | **Conflict** with the 2026-08-31 directive above ("No more tutorial videos", videos removed as a mechanism) and design §12/§20 retiring `TutorialVideoModal.jsx` in T7630. Outcomes in [T10320](../T10320-reshoot-tutorial-videos-v3.md): (1) landing-only reshoot, or (2) videos return in-app via the Help panel and T7630 keeps the modal. **Decision needed before T7630 deletes the player.** |
 
+**Rulings (user, 2026-09-17), binding on T7630 and superseding the conflicting lines above:**
+
+1. **Fully guided when ON.** No per-step "Not now". The escape is closing Help, which must be one
+   obvious tap, always visible, and re-openable at any time from the same place. This amends
+   evidence constraint #2 and design D2/D4: the "skippable" property is satisfied by the toggle, not
+   by a per-step dismiss. The shade still never acts as a backdrop-close.
+2. **Not always one choice.** Forks with several options are expected (game video vs. clip at the
+   start). The guide derives what to show from WHERE the user is and WHAT they have done, and should
+   ANTICIPATE the likely next intents and explain each one, not only the single next click.
+3. **Default ON until the first EXPORT** (not "published" as D1 said): on for anyone who has not
+   exported a clip or reel yet, off for anyone who has; an explicit toggle pins forever.
+4. **Consequence captions on fork options**: yes, `{value, label, caption}` using the shipped
+   `FOCUS_PUBLISH` / `OVERLAY_PUBLISH` pattern.
+5. **Tutorial videos return in-app as well as on the site** (amends the 2026-08-31 "no more videos"
+   directive). Entry point: the Help panel ("Watch the walkthrough"), never the retired quest steps.
+   T7630 therefore keeps `TutorialVideoModal.jsx` / `tutorialVideos.js` alive and re-mounts them from
+   `HelpPanel`; the reshoot itself is [T10320](../T10320-reshoot-tutorial-videos-v3.md).
+6. **Sequencing**: this epic is worked LAST in the Deploy Candidate, after every other task is
+   implemented and the UI has been approved by the user, because guided mode must anchor to final
+   screens. The videos shoot after guided mode ships.
+
 Also found: every one of the design's 69 rules carries `say` copy written in T8130-era vocabulary
 ("Add Play", "Highlight Reels", "Focus"); T9860 (2026-09-14) and the Deploy Candidate copy tasks
 (T10280/T10290) changed most of those nouns. T7630 must re-derive all step copy and target
 literals from `displayNames.js` at implementation time, not from the design text.
 
-Sequencing inside the Deploy Candidate: T7630 starts after T10280 (home tabs), T10290 (Annotate
-editor) and T10310 (Overlay rail) are on staging, so the tour anchors to final screens; T10320
-(videos) shoots last.
+Sequencing inside the Deploy Candidate: T7630 starts only after EVERY other milestone task is
+implemented and the UI approved (ruling 6 above); T10320 (videos) shoots after guided mode ships.
 
 ## Design constraints
 
