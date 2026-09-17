@@ -781,8 +781,12 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     // now instead of leaving it for the reaper to mislabel `user_abandoned`
     // later -- best-effort, never blocks the credits error the user sees.
     // EXISTS-dedup responses carry no upload_session_id (nothing was opened).
+    // alreadyRecorded=true: the beacon above already wrote this session's ONE
+    // precise failure row (insufficient_credits) -- cancel_upload's own
+    // generic user_abandoned record would otherwise double-count the same
+    // real event under a second, less accurate reason (reviewer-caught).
     if (prepareData.upload_session_id) {
-      cancelUpload(prepareData.upload_session_id).catch(() => {
+      cancelUpload(prepareData.upload_session_id, { alreadyRecorded: true }).catch(() => {
         /* best-effort cleanup; the credits error below is what the user sees */
       });
     }
@@ -1410,8 +1414,13 @@ export async function attachVideoToExistingGame(gameId, filesOrFile, onProgress)
  * Cancel an in-progress upload
  * @param {string} sessionId - Upload session ID from prepare-upload
  */
-export async function cancelUpload(sessionId) {
-  const response = await apiFetch(`${API_BASE}/api/games/upload/${sessionId}`, {
+export async function cancelUpload(sessionId, { alreadyRecorded = false } = {}) {
+  // T10270: alreadyRecorded skips the server's own generic user_abandoned
+  // upload_failures record when the CALLER already beaconed a precise reason
+  // for this session (class 2's insufficient_credits path) -- one real event,
+  // one row, not a double-count under two different reasons.
+  const params = alreadyRecorded ? '?already_recorded=true' : '';
+  const response = await apiFetch(`${API_BASE}/api/games/upload/${sessionId}${params}`, {
     method: 'DELETE',
   });
 

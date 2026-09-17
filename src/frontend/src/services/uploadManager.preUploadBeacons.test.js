@@ -174,6 +174,10 @@ describe('T10270 class 2: can_afford===false cancels the session honestly (Q4)',
     const deleteCalls = mockFetch.mock.calls.filter(([, o]) => o?.method === 'DELETE');
     expect(deleteCalls).toHaveLength(1);
     expect(deleteCalls[0][0]).toContain('/api/games/upload/sess-broke-123');
+    // Reviewer-caught double-count fix: the cancel must tell the server this
+    // session's ONE failure was already recorded by the beacon above, so
+    // cancel_upload's own generic user_abandoned record doesn't ALSO fire.
+    expect(deleteCalls[0][0]).toContain('already_recorded=true');
 
     const payloads = beaconPayloads();
     expect(payloads).toHaveLength(1);

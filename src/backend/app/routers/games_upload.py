@@ -14,7 +14,7 @@ import re
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.constants import MAX_CLIP_UPLOAD_BYTES, GameStatus, UploadKind, UploadStatus
@@ -922,7 +922,18 @@ def list_pending_uploads():
 
 
 @router.delete("/upload/{session_id}")
-async def cancel_upload(session_id: str):
+async def cancel_upload(
+    session_id: str,
+    already_recorded: bool = Query(
+        False,
+        description=(
+            "T10270: the caller already wrote its own precise upload_failures row "
+            "for this session (e.g. the insufficient_credits beacon) -- skip this "
+            "handler's own user_abandoned record so one real event isn't counted "
+            "twice under two different reasons."
+        ),
+    ),
+):
     """
     Cancel an in-progress upload and clean up R2 multipart upload.
     """
@@ -970,11 +981,15 @@ async def cancel_upload(session_id: str):
     # same category as the reaper's silent abandonment (user_abandoned), but this is
     # the EXPLICIT gesture. It deletes the pending row above, so the reaper can never
     # re-count it (no double-count). Emitted outside the SQLite txn (reaper convention).
-    await _write_upload_failure(stage="uploading", reason="user_abandoned", terminal=True,
-                                 kind=cancel_kind, user_id=user_id,
-                                 blake3_hash=pending['blake3_hash'],
-                                 upload_session_id=session_id,
-                                 r2_upload_id=pending['r2_upload_id'])
+    # T10270 (reviewer-caught double-count): `already_recorded` skips this generic
+    # user_abandoned record when the caller already wrote its own precise reason
+    # (class 2's insufficient_credits beacon) -- one real event, one row.
+    if not already_recorded:
+        await _write_upload_failure(stage="uploading", reason="user_abandoned", terminal=True,
+                                     kind=cancel_kind, user_id=user_id,
+                                     blake3_hash=pending['blake3_hash'],
+                                     upload_session_id=session_id,
+                                     r2_upload_id=pending['r2_upload_id'])
 
     return {"status": "cancelled"}
 
