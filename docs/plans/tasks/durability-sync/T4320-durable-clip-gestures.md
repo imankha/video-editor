@@ -1,10 +1,16 @@
 # T4320: Durable Sync for Clip-Creating Gestures + user.sqlite Shutdown Sync
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-07-03
+**Updated:** 2026-09-17
 **Epic:** [durability-sync](EPIC.md) · Audit item B3
+
+**2026-09-17: status corrected from a stale TODO.** Merged `804bf068d` and promoted to DONE in
+PLAN.md by `62e283a52` (deployed 2026-07-18 prod) — this header was simply never updated at the
+time. Discovered during a PLAN.md audit ahead of the Tutorial Redesign epic; the archive row was
+also missing and has been added back (see `PLAN-archive.md`).
 
 ## Problem
 

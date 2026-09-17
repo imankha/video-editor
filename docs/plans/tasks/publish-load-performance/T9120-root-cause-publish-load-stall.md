@@ -1,10 +1,15 @@
 # T9120: Root-cause the Publish page-load event-loop stall
 
-**Status:** WAITING ON USER
+**Status:** DONE
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-09-08
-**Updated:** 2026-09-08
+**Updated:** 2026-09-17
+
+**2026-09-17: status corrected from a stale WAITING ON USER.** This task's own job (root-cause +
+hand off a spec) was already done at filing time; the status never advanced once T9130 (the spec
+it handed off) was approved, filed, implemented and shipped (deployed 2026-09-13 prod, see
+PLAN-archive.md). Found during a PLAN.md audit ahead of the Tutorial Redesign epic.
 
 ## Epic Context
 
