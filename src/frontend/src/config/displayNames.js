@@ -204,6 +204,35 @@ export const CLIP_UPLOAD = {
     + 'game you can build more highlights from.',
   NOTICE_CONTINUE: 'Continue',
   NOTICE_CANCEL: 'Cancel',
+  // T10250: over-cap pre-flight dialog. The MB number is DERIVED from the
+  // server-provided cap (configStore.maxClipUploadBytes) — there is no `500`
+  // literal here; this sentence mirrors the backend refusal in
+  // games_upload.py so the two never drift.
+  SIZE_LIMIT_TITLE: 'This clip is too large to upload',
+  sizeLimitBody: (mb) =>
+    `Clip uploads are limited to ${mb}MB. For longer footage, use Add Game instead.`,
+  SIZE_LIMIT_ADD_GAME: 'Add Game instead',
+  SIZE_LIMIT_CANCEL: 'Cancel',
+  // T10250: non-retryable server refusals surfaced verbatim on the rail (no
+  // Retry). Keyed on the clip-batch error codes (clips.py upload_clips_batch);
+  // `duration_exceeds_cap` is parameterized by the server duration cap
+  // (configStore.maxClipDurationS) so, again, no minutes literal is hardcoded.
+  refusalMessage: (code, { durationMinutes } = {}) => {
+    switch (code) {
+      case 'duration_exceeds_cap':
+        return durationMinutes
+          ? `This clip is longer than the ${durationMinutes}-minute limit. For longer footage, use Add Game instead.`
+          : 'This clip is longer than the allowed limit. For longer footage, use Add Game instead.';
+      case 'probe_failed':
+        return "We couldn't read this video. Make sure it's a valid MP4, MOV, or WebM file.";
+      case 'source_missing':
+        return "We couldn't find the uploaded video. Please pick the file and add it again.";
+      case 'insufficient_credits':
+        return "You don't have enough credits to add this clip.";
+      default:
+        return 'This clip could not be added.';
+    }
+  },
 };
 
 // T9430: honest upload-state vocabulary shown next to the local preview. The four
