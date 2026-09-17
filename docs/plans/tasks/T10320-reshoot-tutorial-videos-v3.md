@@ -29,6 +29,10 @@ decisions`: surfaced with dates, the user decides. The two coherent outcomes:
   alive (T7630 must not delete it), mount it from the new `HelpPanel` ("Watch the walkthrough")
   instead of quest steps, flip `TUTORIAL_VIDEOS_ENABLED` back on for that surface only. Reshoot
   AFTER T7630 ships so the videos show the Help overlay users will actually see.
+  Note: the video gate is mirrored server-side (T9410: `quest_config.py:44` +
+  `routers/quests.py:198-204`, tests `test_t9410_tutorial_step_gating.py`), and both flags are wired to
+  the quest checklist the redesign deletes. So (2) must NOT resurrect the `watch_*_tutorial` quest
+  steps; the Help panel gets its own entry point and the old flags stay off / get deleted with the panel.
 
 Vocabulary drift since the 2026-08-17 shoot (T5140) is far larger than "reels -> Published":
 My Reels -> Published; Add Clip -> Mark play; Focus/AI Focus -> Framing (T9860 reversed T7700);
