@@ -18,9 +18,11 @@ import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, UPLOAD_ENTRY_HINT } from '../config/displayNames';
+import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, UPLOAD_ENTRY_HINT, ANNOTATE, MODE_NAMES } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
-import { useClipUpload } from '../hooks/useClipUpload';
+import { ClipSizeLimitModal } from './ClipSizeLimitModal';
+import { useClipUpload, CLIP_UPLOAD_CREATING_PCT } from '../hooks/useClipUpload';
+import { useConfigStore } from '../stores/configStore';
 import { GAME, REEL, HIGHLIGHT, PUBLISHED } from '../config/themeColors';
 import { ExpirationBadge } from './ExpirationBadge';
 import { StorageExtensionModal } from './StorageExtensionModal';
@@ -592,6 +594,16 @@ export function ProjectManager({
       window.history.replaceState(null, '', path);
     }
   }, []);
+  // T10260: refs read at clip-upload COMPLETION to decide whether to auto-open the
+  // new clip in Framing. A completion is the tail of the user's own upload gesture,
+  // so opening is allowed — but only if they are still on the Clips tab and the
+  // screen is still mounted; if they navigated away we must NOT yank them, we offer
+  // an "Open" toast instead. Refs (not deps) so the async completion reads CURRENT
+  // values without re-creating runClipUpload on every tab switch.
+  const activeTabRef = useRef(activeTab);
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+  const isMountedRef = useRef(true);
+  useEffect(() => () => { isMountedRef.current = false; }, []);
   // T8555: the "Build New Reel" assembly button lives on the In Progress
   // Reels tab body (rendered inline in this component's content ternary), so
   // the assembly modal's open state (and the GameClipSelectorModal it drives)
@@ -624,8 +636,22 @@ export function ProjectManager({
   // retry re-invokes uploadClips and resets progressByFile (the T8380 seam).
   const clipFileInputRef = useRef(null);
   const [showClipNotice, setShowClipNotice] = useState(false);
-  const [failedClips, setFailedClips] = useState([]); // [{ name, file }]
+  // T10250: `failedClips` rows now carry their failure CLASS. `retryable` rows keep
+  // a File + a Retry button; refused rows (over-cap already filtered pre-flight, or
+  // a server refusal like duration_exceeds_cap) carry the server `message` and get
+  // NO Retry (retrying the same bytes fails identically).
+  const [failedClips, setFailedClips] = useState([]); // [{ name, file, retryable, message }]
+  // T10250: over-cap files caught by the pre-flight check (never hashed/uploaded),
+  // held so the size-limit dialog can carry them into Add Game.
+  const [oversizeClips, setOversizeClips] = useState([]);
+  // T10250: files pre-seeded into the Add Game picker after "Add Game instead".
+  const [gamePrefillFiles, setGamePrefillFiles] = useState(null);
   const { uploadClips, progressByFile, isUploading: isUploadingClips } = useClipUpload();
+  // T10250: server-provided clip caps (configStore, hydrated from /api/bootstrap).
+  // null until bootstrap resolves -> the pre-flight gate is skipped and the server
+  // stays authoritative (never a hardcoded fallback for internal config).
+  const maxClipUploadBytes = useConfigStore((s) => s.maxClipUploadBytes);
+  const maxClipDurationS = useConfigStore((s) => s.maxClipDurationS);
 
   // Project filter state - persisted via settings store
   const {
@@ -999,48 +1025,103 @@ export function ProjectManager({
     clipFileInputRef.current?.click();
   }, []);
 
-  // Run a batch through useClipUpload and reconcile the retryable-failure rail.
-  // A file that fails BEFORE reaching R2 comes back with `original_filename`, so
-  // we still hold its File and can offer Retry; a backend-side rejection (e.g.
-  // duration cap, insufficient credits) is surfaced as a toast instead, since
-  // retrying it as-is would just fail again. Never a silent loss (T8380 AC).
+  // Run a batch through useClipUpload and reconcile the failure rail + completion
+  // navigation.
+  // T10250 failure classes: a `retryable` failure (transient network/R2, or the
+  // whole-batch POST failing) keeps its File + a Retry button; a `refused` failure
+  // (a server refusal like duration_exceeds_cap, or a prepare-upload 400) carries
+  // the server's exact message and gets NO Retry — retrying the same bytes fails
+  // identically. Never a silent loss (T8380 AC).
+  // T10260 completion: when the batch created clip(s) and the user is still on the
+  // Clips tab, open the FIRST clip straight into Framing (the completion of their
+  // own upload gesture); if they navigated away, offer an "Open" toast instead of
+  // yanking them.
   const runClipUpload = useCallback(async (files) => {
     const fileByName = new Map(files.map((f) => [f.name, f]));
     const { results, charged } = await uploadClips(files);
 
+    const created = results.filter((r) => r.ok && r.project_id != null);
     const okCount = results.filter((r) => r.ok).length;
-    const retryable = results
-      .filter((r) => !r.ok && r.original_filename && fileByName.has(r.original_filename))
-      .map((r) => ({ name: r.original_filename, file: fileByName.get(r.original_filename) }));
-    const nonRetryable = results.filter(
-      (r) => !r.ok && !(r.original_filename && fileByName.has(r.original_filename)),
-    );
+    const durationMinutes = maxClipDurationS ? Math.round(maxClipDurationS / 60) : null;
+
+    // Partition failures into retryable vs refused rows for the rail.
+    const failedRows = results
+      .filter((r) => !r.ok && r.original_filename)
+      .map((r) => ({
+        name: r.original_filename,
+        // Only a retryable row keeps a File (needed to re-run); a refused row
+        // must never expose a Retry, so it carries no file.
+        file: r.retryable ? fileByName.get(r.original_filename) ?? null : null,
+        retryable: !!r.retryable,
+        // Refused rows show the reason: a batch code maps through refusalMessage;
+        // a prepare-upload refusal already carries the server's exact sentence in
+        // `error`. Retryable rows use the rail's generic "Upload didn't finish."
+        message: r.retryable
+          ? null
+          : (r.code
+            ? CLIP_UPLOAD.refusalMessage(r.code, { durationMinutes })
+            : (r.error || CLIP_UPLOAD.refusalMessage(undefined))),
+      }));
+
+    // TODO(T10270): once the `upload_failures` table exists, record each REFUSED
+    // failure here (failedRows.filter(r => !r.retryable), plus the pre-flight
+    // over-cap files in handleClipFilesChange) with original_filename + file_size
+    // so support can see why a clip never landed. The table does not exist yet
+    // (T10270 is at the Architect design gate) — do NOT invent a placeholder
+    // table or a parallel logging path; this is the single wire-up point.
 
     // Replace this run's files in the failed set (a retried file that now
     // succeeded drops out; a still-failing one stays).
     setFailedClips((prev) => {
       const thisRun = new Set(files.map((f) => f.name));
-      return [...prev.filter((p) => !thisRun.has(p.name)), ...retryable];
+      return [...prev.filter((p) => !thisRun.has(p.name)), ...failedRows];
     });
 
     if (okCount > 0) {
-      toast.success(
-        `Added ${okCount} clip${okCount !== 1 ? 's' : ''}`
-        + (charged ? ` (${charged} credit${charged !== 1 ? 's' : ''})` : ''),
-      );
+      const creditSuffix = charged ? ` (${charged} credit${charged !== 1 ? 's' : ''})` : '';
+      const addedMsg = `Added ${okCount} clip${okCount !== 1 ? 's' : ''}${creditSuffix}`;
+      const firstId = created[0]?.project_id ?? null;
+      const stillOnClips = isMountedRef.current && activeTabRef.current === 'projects';
+      if (stillOnClips && firstId != null && onSelectProjectWithMode) {
+        // Completing the user's own upload gesture — open the first clip in Framing.
+        toast.success(addedMsg);
+        onSelectProjectWithMode(firstId, { mode: 'framing' });
+      } else if (firstId != null && onSelectProjectWithMode) {
+        // User navigated away mid-upload: never force navigation — offer Open.
+        toast.success(addedMsg, {
+          action: {
+            label: `Open ${MODE_NAMES.FRAMING}`,
+            onClick: () => onSelectProjectWithMode(firstId, { mode: 'framing' }),
+          },
+        });
+      } else {
+        toast.success(addedMsg);
+      }
     }
-    if (nonRetryable.length > 0) {
-      toast.error(
-        `${nonRetryable.length} upload${nonRetryable.length !== 1 ? 's' : ''} could not be added`,
-      );
-    }
-  }, [uploadClips]);
+    // Refused/failed rows are surfaced on the rail (with the reason inline) rather
+    // than a vanishing toast, so nothing is silently dropped.
+  }, [uploadClips, onSelectProjectWithMode, maxClipDurationS]);
 
   const handleClipFilesChange = useCallback((e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = ''; // allow re-selecting the same file(s)
-    if (files.length > 0) runClipUpload(files);
-  }, [runClipUpload]);
+    if (files.length === 0) return;
+    // T10250 pre-flight: a file over the server cap never enters the hash/upload
+    // pipeline. When the cap is unknown (bootstrap not yet resolved) we skip the
+    // optimistic gate and let the server refuse — never a hardcoded fallback.
+    const overCap = maxClipUploadBytes ? files.filter((f) => f.size > maxClipUploadBytes) : [];
+    const withinCap = maxClipUploadBytes ? files.filter((f) => f.size <= maxClipUploadBytes) : files;
+    if (overCap.length > 0) setOversizeClips(overCap);
+    if (withinCap.length > 0) runClipUpload(withinCap);
+  }, [runClipUpload, maxClipUploadBytes]);
+
+  // T10250: "Add Game instead" from the size-limit dialog — carry the over-cap
+  // file(s) into the Add Game picker (no size cap there), then dismiss the dialog.
+  const handleOversizeAddGame = useCallback(() => {
+    setGamePrefillFiles(oversizeClips);
+    setOversizeClips([]);
+    setShowGameDetailsModal(true);
+  }, [oversizeClips]);
 
   const handleRetryClip = useCallback((name) => {
     const entry = failedClips.find((f) => f.name === name);
@@ -1053,16 +1134,23 @@ export function ProjectManager({
 
   // Rail rows: live progress while a batch is in flight (from the hook's
   // progressByFile, excluding completed rows so they don't linger beside the new
-  // tiles), plus persisted failed rows awaiting Retry.
+  // tiles), plus persisted failed rows awaiting Retry/reason.
+  // T10260: a landed-but-not-yet-created file sits at CLIP_UPLOAD_CREATING_PCT
+  // (99) — kept visible (pct < 100) so the bar never vanishes before the tile
+  // exists, and flagged `creating` so the row reads "Preparing your clip...".
   const clipUploadRows = useMemo(() => {
     const rows = [];
     if (isUploadingClips) {
       for (const [name, pct] of Object.entries(progressByFile)) {
-        if (pct >= 0 && pct < 100) rows.push({ name, pct, failed: false });
+        if (pct >= 0 && pct < 100) {
+          rows.push({ name, pct, failed: false, creating: pct >= CLIP_UPLOAD_CREATING_PCT });
+        }
       }
     }
-    for (const { name } of failedClips) {
-      if (!rows.some((r) => r.name === name)) rows.push({ name, pct: -1, failed: true });
+    for (const { name, retryable, message } of failedClips) {
+      if (!rows.some((r) => r.name === name)) {
+        rows.push({ name, pct: -1, failed: true, retryable, message });
+      }
     }
     return rows;
   }, [isUploadingClips, progressByFile, failedClips]);
@@ -1540,25 +1628,35 @@ export function ProjectManager({
             Uploading
           </h2>
           <div className="space-y-2">
-            {clipUploadRows.map(({ name, pct, failed }) => (
+            {clipUploadRows.map(({ name, pct, failed, retryable, message, creating }) => (
               <div key={name} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="text-gray-300 truncate mr-2">{name}</span>
                   {failed
                     ? <span className="text-red-400 shrink-0">Failed</span>
-                    : <span className="text-gray-400 shrink-0">{pct}%</span>}
+                    : creating
+                      // T10260: the bytes are durable, the clip record is being
+                      // created — read as "Preparing", not a stalled 99%.
+                      ? <span className="text-gray-400 shrink-0" data-testid="clip-preparing-note">{ANNOTATE.PREPARING_CLIP}</span>
+                      : <span className="text-gray-400 shrink-0">{pct}%</span>}
                 </div>
                 {failed ? (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 flex-1">Upload didn’t finish.</span>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={RefreshCw}
-                      onClick={() => handleRetryClip(name)}
-                    >
-                      Retry
-                    </Button>
+                    {/* T10250: refused rows show the server's reason (no Retry);
+                        retryable rows keep the generic copy + Retry. */}
+                    <span className="text-xs text-gray-500 flex-1">
+                      {retryable ? 'Upload didn’t finish.' : (message || 'This clip could not be added.')}
+                    </span>
+                    {retryable && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={RefreshCw}
+                        onClick={() => handleRetryClip(name)}
+                      >
+                        Retry
+                      </Button>
+                    )}
                     <button
                       onClick={() => handleDismissClip(name)}
                       className="p-1 text-gray-400 hover:text-gray-200 rounded"
@@ -2170,11 +2268,25 @@ export function ProjectManager({
         existingProjectNames={projects?.map(p => p.name) || []}
       />
 
-      {/* Game Details Modal - for creating a new game */}
+      {/* Game Details Modal - for creating a new game. T10250: initialFiles
+          pre-seeds the picker when the user chose "Add Game instead" from the
+          clip-size-limit dialog; cleared on close so a later plain Add Game
+          opens empty. */}
       <GameDetailsModal
         isOpen={showGameDetailsModal}
-        onClose={() => setShowGameDetailsModal(false)}
+        onClose={() => { setShowGameDetailsModal(false); setGamePrefillFiles(null); }}
         onCreateGame={handleCreateGame}
+        initialFiles={gamePrefillFiles}
+      />
+
+      {/* T10250: over-cap pre-flight dialog. Shown INSTEAD of hashing/uploading a
+          clip above the server cap; "Add Game instead" carries the file(s) over. */}
+      <ClipSizeLimitModal
+        isOpen={oversizeClips.length > 0}
+        files={oversizeClips}
+        maxBytes={maxClipUploadBytes}
+        onAddGame={handleOversizeAddGame}
+        onCancel={() => setOversizeClips([])}
       />
 
       {/* T8700: attach an additional video to an existing game. The modal drives
