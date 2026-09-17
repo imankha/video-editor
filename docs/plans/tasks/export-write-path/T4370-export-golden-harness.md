@@ -203,3 +203,17 @@ python3 -m pytest tests/test_export_golden_local_render.py tests/test_export_gol
 **How to re-bless** (after an INTENTIONAL behavior change, e.g. during
 T4380-T4410's consolidation): `python3 scripts/rebless_export_goldens.py`,
 then review the printed `git diff` before committing the golden files.
+
+**Reviewer pass: APPROVED, 0 blocking/major, 2 minor (both same root cause).**
+`fixtures.py`'s `TABLE_MASK_FIELDS["working_videos"]` masks `filename`
+table-globally, which also hides two writer-specific, ALREADY-deterministic
+filenames that aren't UUID-suffixed: the durable worker's
+`project_{project_id}_v{version}.mp4` (`export_worker.py:284`) and the overlay
+tests' seeded `wv_fixture.mp4`. Consequence: a future finalize consolidation
+(T4390) that changes the worker's filename FORMAT (not just its random suffix)
+wouldn't be caught by `durable_worker.json`. Not fixed here (reviewer: "not
+blocking... test-code norm applies, the mask isn't wrong, just slightly
+broader than strictly necessary for this one writer") — flagging for T4390's
+implementer: if you touch `process_framing_export`'s filename scheme, manually
+diff `durable_worker.json`'s masked `<MASKED>` filename fields against the new
+actual value once before trusting a green run on that golden specifically.
