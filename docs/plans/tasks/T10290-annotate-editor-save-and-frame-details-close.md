@@ -71,3 +71,41 @@ Current behavior (trace 2026-09-17):
 - [ ] "Details" is open by default at >= md, closed on mobile; label reads "Details"
 - [ ] Saving from the desktop strip closes the editor (play stays selected)
 - [ ] Unit tests updated; e2e drives Save and Frame from a fresh play
+
+## Implementation (2026-09-17, branch feature/T10240-frame-clip-cta-and-save-and-frame)
+
+Commit `2cc9b9d1`. Frontend-only, reuses T10240's (`9e335873`) create-then-navigate seam.
+
+1. **Save and Frame** (`ANNOTATE.SAVE_AND_FRAME`) replaces "Create an editable clip" as the second
+   outcome in EVERY layout (overlay/inline `actionsFooter`, desktop `strip` controls row,
+   `landscape-inline` bar) and now in EDIT mode too. Order everywhere: green primary ("Save play" create /
+   "Update play" edit), then cyan "Save and Frame", then Cancel. `handleSaveAndFrame` = `handleSave(true)`
+   then `onOpenInFocus(projectId)` on success only (a failed save never navigates). `saveCreateProject`
+   forces a project when the intent is true in BOTH modes, so edit-mode Save-and-Frame on a project-less
+   play still lands a clip; plain "Update play" keeps the clip's existing project state. `handleSave` now
+   resolves `{ saved, projectId }` and normalizes older bare-boolean returns; the `focusConfirmDialog`
+   destructures `.saved` (an object is always truthy — the old `if (!saved)` check would have navigated
+   past a failed save).
+2. **Details**: "Add details" -> "Details" (`ANNOTATE.DETAILS`; AddDetailsPopup heading + `aria-label`).
+   `detailsOpen` seeds `useState(!isMobile)` (open desktop >= md, closed mobile), seeded ONLY at init; the
+   `[existingClip]` reset effect never touches it, so a desktop open lands expanded and a clip switch can't
+   re-close it. Count suffix kept ("Details (2 tags, note)").
+3. **Save closes edit mode**: the desktop-strip create branch dropped its stay-open-and-rehydrate-into-edit
+   special case; `handleSave` always `onResume()`s on success (failed save unchanged). Deleted
+   `skipNextStatusResetRef` and the reset-effect's skip branch.
+
+**Decision recorded (reversal, not drift):** this reverses part of T9830 (the 2nd outcome button is
+relabelled + reordered) and the create-mode "stay open" of T9330, per the user's three asks.
+**Deviation:** `ANNOTATE.SAVE_AND_FRAME` / `FRAME_CLIP` are literals (the VERB form of Framing), not
+composed from `MODE_NAMES.FRAMING` (the noun "Framing") — same choice as the shipped `FRAME_THIS_CLIP`
+literal; a `MODE_NAMES`-derived compose would read "Framing clip"/"Save and Framing". Documented at the
+constants.
+**Dead code (removal deferred):** the T9330 stay-open machinery (`focusPending` / `stagePendingCta` /
+`pendingProjectClipId` / `onResumePlaybackOnly`) is now inert (create always closes). Kept to avoid a
+broader cross-file cutover; `stayOpen.test.jsx` still passes because it drives those props directly.
+`onResumePlaybackOnly` removed from the overlay's own prop list.
+
+**Tests:** overlay suite updated for the new labels and the desktop-default-open details panel
+(explicitOutcomes, stripLayout, layer, keys, oneTap, saveStatus, namePreservation, focusPrompt, details).
+Relevant unit set green (173 pass). Live-drive QA + a Save-and-Frame e2e spec deferred to the supervisor's
+staging run (no e2e in Branch CI; app not runnable in-container).
