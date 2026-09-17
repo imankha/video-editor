@@ -82,13 +82,13 @@ describe('AnnotateFullscreenOverlay strip — layer control on the top line (T89
   });
 });
 
-// T9830: the create-mode "Clip" toggle is replaced by two always-visible,
-// always-enabled Save outcomes — "Create an editable clip" and "Save play". The
-// primary action never switches on rating or a prior toggle.
-describe('AnnotateFullscreenOverlay strip — two explicit create outcomes (T9830)', () => {
+// T9830/T10290: the create-mode "Clip" toggle is replaced by two always-visible,
+// always-enabled Save outcomes — "Save play" and "Save and Frame". The primary
+// action never switches on rating or a prior toggle.
+describe('AnnotateFullscreenOverlay strip — two explicit create outcomes (T9830/T10290)', () => {
   it('create mode shows both outcome buttons, enabled, with NO toggle', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" newClipLayerIsMine={true} />);
-    expect(screen.getByRole('button', { name: 'Create an editable clip' }).disabled).toBe(false);
+    expect(screen.getByRole('button', { name: 'Save and Frame' }).disabled).toBe(false);
     expect(screen.getByRole('button', { name: 'Save play' }).disabled).toBe(false);
     // The old toggle off-state label is gone.
     expect(screen.queryByText('Just save this play')).toBeNull();
@@ -103,7 +103,7 @@ describe('AnnotateFullscreenOverlay strip — two explicit create outcomes (T983
   it('a 5-star My Athlete moment shows the SAME two buttons (no rating-driven default)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" newClipLayerIsMine={true} />);
     fireEvent.keyDown(window, { key: '5' }); // rating shortcut — no inline stars to click
-    expect(screen.getByRole('button', { name: 'Create an editable clip' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save and Frame' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Save play' })).toBeTruthy();
   });
 });
@@ -119,8 +119,8 @@ describe('AnnotateFullscreenOverlay strip — edit-mode "Create clip" button (T8
 
 describe('AnnotateFullscreenOverlay strip — details panel has no inner scroll (T8960 item 6)', () => {
   it('the opened details panel is not an overflow-y-auto / max-h-64 scroll box', () => {
+    // T10290: details is open by default on desktop, so the panel is already shown.
     const { container } = render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
-    fireEvent.click(screen.getByText('Add details'));
     expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
     expect(container.querySelector('.overflow-y-auto')).toBeNull();
     expect(container.querySelector('.max-h-64')).toBeNull();

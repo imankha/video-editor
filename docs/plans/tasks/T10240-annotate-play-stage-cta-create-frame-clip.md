@@ -71,3 +71,35 @@ affordance.
 - [ ] "View Final" never renders unless the linked project's current `has_final_video` is true
 - [ ] Unit tests for `getClipStage` cover NO_PROJECT actions; e2e drives Frame Clip end to end
 - [ ] `hello@reelballers.com` probe result recorded (why "View Final" showed)
+
+## Implementation (2026-09-17, branch feature/T10240-frame-clip-cta-and-save-and-frame)
+
+Commit `9e335873`. Frontend-only, no schema. Shared with T10290 (`2cc9b9d1`) on one branch.
+
+**Shared create-then-navigate seam (built once here):** `handleFullscreenCreateClip` and
+`updateClipRegionWithSync` (`AnnotateContainer.jsx`) now resolve `{ saveOk, projectId }` instead of a
+bare `saveOk`. `projectId` is set only when the call created the auto-project (`result.project_created`),
+so a caller (`ClipDetailsEditor` "Frame clip", `AnnotateFullscreenOverlay.handleSaveAndFrame`) gets the id
+SYNCHRONOUSLY instead of waiting for the later `setAutoProjectId` re-render.
+
+**Stage CTA:** `getClipStage` NO_PROJECT now carries `createActions:[{key:'create',navigate:false},
+{key:'frame',navigate:true}]` (bare `label`/`action` kept for back-compat). `ClipDetailsEditor` renders
+both "Create clip" / "Frame clip" (via `ANNOTATE.CREATE_CLIP` / `FRAME_CLIP`), always enabled, on desktop
+AND mobile (produced-stage CTA stays `!isMobile`); a `creatingRef` guards double-create invisibly.
+"Create clip" stays in Annotate (reel-created toast from the container); "Frame clip" awaits the seam's
+`projectId` then `onOpenInFocus(id)`. `ClipsSidePanel` mobile detail-takeover now receives
+`onOpenInFocus`/`onOpenInOverlay`.
+
+**"View Final" gate — no change needed:** `getClipStage` already reads `has_final_video` off the live
+`useProjectsList()` lookup at render time (no memoized snapshot), so a re-export reflects immediately.
+
+**Account probe:** NOT runnable in the permission-free container (no R2 creds, no backend venv, no local
+`user_data`). Per T10230's ground-truth (same day), the reported play "Great Control Pass" genuinely had a
+real `final_video_id` (`has_final_video=true`), so "View Final" was CORRECT for that play at observation
+time, not a stale/wrong `useProjectsList()` value — scenario (a) of the Problem section, with the value
+being right rather than wrong. No backend data bug found to fix; no defensive UI fallback added.
+
+**Tests:** `clipStage.test.js` (NO_PROJECT createActions), `ClipDetailsEditor.reel.test.jsx` (two create
+actions, Create-clip-no-nav vs Frame-clip-navigates, mobile renders them). Relevant unit set green
+(173 pass across clipStage / ClipDetailsEditor / overlay / AddDetailsPopup). Live-drive QA + a Frame-clip
+e2e spec are deferred to the supervisor's staging run (no e2e in Branch CI; app not runnable in-container).

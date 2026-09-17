@@ -44,6 +44,20 @@ export const ANNOTATE = {
   // their T9320/T9330 labels (Apply Spotlight / View Final / View Published).
   FRAME_THIS_CLIP: 'Frame this clip',      // N41 — FOCUS-stage primary CTA
   KEEP_MARKING_PLAYS: 'Keep marking plays', // N41 — invitation dismiss secondary
+  // T10240/T10290 (N42): the two Framing-entry actions. "Frame"/"Save and Frame"
+  // is the VERB form of the Framing mode (MODE_NAMES.FRAMING = 'Framing', T9860) —
+  // deliberately NOT the old "Focus" mode name, and NOT the noun "Framing" (which
+  // would read "Framing clip"). FRAME_CLIP pairs with CREATE_CLIP as the two
+  // NO_PROJECT stage actions (create-only vs create-and-open-Framing, T10240);
+  // SAVE_AND_FRAME is the editor's create-then-open-Framing outcome (T10290 —
+  // replaces the old CREATE_EDITABLE_CLIP second button). Same verb-vs-noun split
+  // as FRAME_THIS_CLIP above, which is likewise a literal (not MODE_NAMES-derived).
+  FRAME_CLIP: 'Frame clip',                // N42 — NO_PROJECT create + open Framing
+  SAVE_AND_FRAME: 'Save and Frame',        // N42 — editor save + open Framing
+  // T10290: the details disclosure label (was the inline literal "Add details").
+  // Renamed to just "Details" — the count suffix (e.g. "Details (2 tags, note)")
+  // is composed at the call site when content exists.
+  DETAILS: 'Details',
   // T9900: caption under the create-in-flight DISABLED "Frame this clip" button, so a
   // briefly-disabled onward action explains its temporary preparation state instead of
   // reading as broken (evidence E09). Clears itself when the project id lands.

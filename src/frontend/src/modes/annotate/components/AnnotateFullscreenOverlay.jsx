@@ -141,10 +141,10 @@ export function AnnotateFullscreenOverlay({
   // routes here when getClipStage returns action 'overlay'. Same prop name
   // ClipDetailsEditor already uses.
   onOpenInOverlay,
-  // T9330: resume playback WITHOUT closing the editor — the desktop strip's
-  // create-save uses this so the editor stays open on the just-created clip.
-  // Falls back to onResume (close+play) when absent.
-  onResumePlaybackOnly,
+  // T9330/T10290: `onResumePlaybackOnly` (resume WITHOUT closing) is no longer a
+  // prop — T10290 made every create close the editor via onResume, so the desktop
+  // strip's old stay-open-and-rehydrate path (its only consumer) is gone. The
+  // parent may still pass it; it is simply ignored.
   // T9330: true while THIS clip's project is being created (create-save in
   // flight, id not landed yet). Renders a DISABLED "Apply Framing" pending CTA.
   focusPending = false,
@@ -230,13 +230,17 @@ export function AnnotateFullscreenOverlay({
   const [notes, setNotes] = useState('');
   const [taggedTeammates, setTaggedTeammates] = useState([]);
   const [myAthlete, setMyAthlete] = useState(true);
-  // T8600: Tags + Notes move behind an "Add details" disclosure — one boolean,
-  // two presentations (desktop expand-in-place, mobile full-screen popup).
+  // T8600: Tags + Notes move behind a "Details" disclosure — one boolean, two
+  // presentations (desktop expand-in-place, mobile full-screen popup).
   // Deliberately NOT reset by the [existingClip] effect below: the component
   // unmounts when the editor closes (parent gates the render), so it resets
   // naturally; re-seeding on a clip switch leaves the panel open, which is
   // harmless and avoids a second reset path.
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  // T10290: open by default on desktop (>= md), closed on mobile — the initial
+  // value is the ONLY seed (the reset effect never touches detailsOpen), so a
+  // desktop open lands with details already expanded and mobile keeps the popup
+  // closed until tapped.
+  const [detailsOpen, setDetailsOpen] = useState(!isMobile);
   // T8600 §2.8: strip-only — Focus mid-edit must never silently discard the
   // open form, so the Focus button opens this confirm-then-save-then-navigate
   // prompt instead of navigating directly.
@@ -268,23 +272,15 @@ export function AnnotateFullscreenOverlay({
   // field the user typed) stays exactly as it was — no reset, no silent claim
   // of success.
   const [saveStatus, setSaveStatus] = useState('idle');
-  // T9630: the desktop-strip CREATE save stays open and rehydrates from the
-  // just-saved region (T9330) — that rehydration is THIS save's own
-  // existingClip transition, not a switch to a different clip, so the reset
-  // effect below must not wipe the 'saved' status it just set. Armed only in
-  // that one branch of handleSave, consumed on the very next existingClip
-  // change.
-  const skipNextStatusResetRef = useRef(false);
 
   // Reset form when existingClip changes (switching between create/edit mode)
   useEffect(() => {
     const t = currentTimeRef.current;
     setIsEditingName(false); // T8760: close inline name editing on clip switch
-    if (skipNextStatusResetRef.current) {
-      skipNextStatusResetRef.current = false;
-    } else {
-      setSaveStatus('idle');
-    }
+    // T10290: every create now closes the editor (the desktop strip no longer
+    // stays open and rehydrates), so a clip switch is always a real switch —
+    // reset the save status unconditionally.
+    setSaveStatus('idle');
     if (existingClip) {
       setRating(existingClip.rating || DEFAULT_RATING);
       setSelectedTags(existingClip.tags || []);
@@ -417,10 +413,18 @@ export function AnnotateFullscreenOverlay({
     // ref is set synchronously so the second call bails BEFORE it can fire a
     // duplicate create or leave an orphan region. Returns the same `false` a
     // failed save returns, so no caller mistakes it for a fresh success.
-    if (saveInFlightRef.current) return false;
+    if (saveInFlightRef.current) return { saved: false, projectId: null };
     saveInFlightRef.current = true;
     try {
-    const saveCreateProject = isEditMode ? createProject : createProjectIntent === true;
+    // T10290: "Save and Frame" passes createProjectIntent=true in BOTH modes so
+    // it always lands a clip to open in Framing. In edit mode the plain "Update
+    // play" gesture passes no intent and keeps the clip's existing project state
+    // (createProject === !!autoProjectId); "Save and Frame" forces a project even
+    // on a play that had none. Create mode is unchanged — its two footer buttons
+    // ("Save play" / "Save and Frame") pass their explicit intent straight in.
+    const saveCreateProject = isEditMode
+      ? (createProjectIntent === true || createProject)
+      : createProjectIntent === true;
     // T8140: this open ended in a save ATTEMPT — suppress the abandonment
     // beacon. Set synchronously (not after the await below) since the beacon's
     // own cleanup can fire on the very next render (e.g. a rerender that flips
@@ -473,43 +477,43 @@ export function AnnotateFullscreenOverlay({
       savePromise = onCreateClip(clipData);
     }
     // T9630: derive Unsaved/Saving/Saved from the REAL persistence outcome —
-    // wait for the save to actually land before claiming success. A save that
-    // resolves to exactly `false` (onCreateClip/onUpdateClip's real
-    // create/update result) failed: show the error state, leave every field
-    // exactly as the user left it, and do NOT close or resume — a failure must
-    // never look identical to a success. Anything else (true, or the bare
-    // `undefined` older callers/tests resolve with) is a success.
+    // wait for the save to actually land before claiming success. T10240: the
+    // create/update paths now resolve { saveOk, projectId }; older callers/tests
+    // resolve a bare boolean/undefined. Normalize both: only an explicit
+    // saveOk === false (or a bare `false`) is a failure — show the error state,
+    // leave every field exactly as the user left it, and do NOT close or resume
+    // (a failure must never look identical to a success). projectId is the id of
+    // a project created by THIS save (null otherwise), so "Save and Frame" can
+    // navigate into Framing with it.
     setSaveStatus('saving');
-    let success;
+    let result;
     try {
-      success = await savePromise;
+      result = await savePromise;
     } catch (err) {
       console.error('[AnnotateFullscreenOverlay] save threw', err);
-      success = false;
+      result = { saveOk: false, projectId: null };
     }
-    if (success === false) {
+    const saveOk = (result && typeof result === 'object')
+      ? result.saveOk !== false
+      : result !== false;
+    const createdProjectId = (result && typeof result === 'object')
+      ? (result.projectId ?? null)
+      : null;
+    if (!saveOk) {
       setSaveStatus('error');
-      return false;
+      return { saved: false, projectId: null };
     }
     setSaveStatus('saved');
-    // T9330: NO form reset here anymore. On the desktop strip the editor STAYS
-    // OPEN after a create and rehydrates from the just-saved region via the
-    // [existingClip] effect (the single form-population path) — resetting to
-    // create defaults would blank a form that now shows a real clip AND make it
-    // read dirty. On surfaces that still close (mobile sheet, fullscreen dock,
-    // and every edit save), the component unmounts, so there is nothing to reset.
-    //
-    // T9330: resume playback. The desktop strip's CREATE save keeps the editor
-    // open (resume playback only); everything else closes as before.
-    if (!isEditMode && layout === 'strip') {
-      // T9630: this save's own existingClip rehydration is about to fire the
-      // reset effect — don't let it wipe the 'saved' status we just set.
-      skipNextStatusResetRef.current = true;
-      (onResumePlaybackOnly || onResume)();
-    } else {
-      onResume();
-    }
-    return true;
+    // T10290: every layout now CLOSES the editor on a successful save (the
+    // desktop strip's old stay-open-and-rehydrate-into-edit special case is
+    // gone — "Clicking save should close down the edit mode"). The failed-save
+    // path above already returned without closing, so the form stays open with
+    // the user's edits on failure. No form reset is needed here: the component
+    // unmounts when the parent stops rendering it after onResume closes.
+    onResume();
+    // T10240: hand back the project id created by this save (falling back to an
+    // already-linked project in edit mode) so "Save and Frame" can open Framing.
+    return { saved: true, projectId: createdProjectId ?? existingClip?.autoProjectId ?? null };
     } finally {
       // T9830: release the in-flight guard on every exit (success, failure,
       // throw) so the next real Save gesture can proceed.
@@ -517,6 +521,18 @@ export function AnnotateFullscreenOverlay({
     }
   };
   handleSaveRef.current = handleSave;
+
+  // T10290: "Save and Frame" — the shared save-then-navigate seam. Saves the play
+  // (forcing a clip via createProjectIntent=true so even a project-less play lands
+  // one), then opens Framing on the created/linked project using the id handed
+  // back SYNCHRONOUSLY from the create path (T10240 seam) rather than waiting for
+  // a later setAutoProjectId re-render. A failed save never navigates (the form
+  // stays open with the user's edits, same as the focus-confirm dialog's rule).
+  const handleSaveAndFrame = async () => {
+    const { saved, projectId } = await handleSave(true);
+    if (!saved) return;
+    if (projectId) onOpenInFocus?.(projectId);
+  };
 
   // T8730: real unsaved-changes detection for the strip's Focus button. Compares
   // the values handleSave WOULD persist (edit-mode payload, L344-354) against the
@@ -573,8 +589,8 @@ export function AnnotateFullscreenOverlay({
   const tagCount = selectedTags.length;
   const hasNote = notes.trim().length > 0;
   const detailsLabel = !tagCount && !hasNote
-    ? 'Add details'
-    : `Details (${[tagCount ? `${tagCount} tag${tagCount > 1 ? 's' : ''}` : null, hasNote ? 'note' : null].filter(Boolean).join(', ')})`;
+    ? ANNOTATE.DETAILS
+    : `${ANNOTATE.DETAILS} (${[tagCount ? `${tagCount} tag${tagCount > 1 ? 's' : ''}` : null, hasNote ? 'note' : null].filter(Boolean).join(', ')})`;
 
   const formBody = (
     <>
@@ -741,10 +757,11 @@ export function AnnotateFullscreenOverlay({
     </>
   );
 
-  // T9830: the two always-visible, always-enabled create outcomes — "Create an
-  // editable clip" (makes a draft) and "Save play" (saves the marked play only,
-  // no draft/render/credits). Both pass their intent straight into handleSave, so
-  // the primary action never dynamically switches on rating or a prior toggle.
+  // T9830/T10290: the two always-visible, always-enabled outcomes — "Save play"
+  // (saves the marked play only, no draft/render/credits) and "Save and Frame"
+  // (saves AND opens Framing on the produced clip). Both pass their intent straight
+  // into handleSave/handleSaveAndFrame, so the primary action never dynamically
+  // switches on rating or a prior toggle. Replaces T9830's "Create an editable clip".
   const saving = saveStatus === 'saving';
 
   // T8140: Save/Cancel live in a pinned footer OUTSIDE the scroll area so Save is
@@ -755,47 +772,33 @@ export function AnnotateFullscreenOverlay({
       {displayStatus && (
         <div className="mb-1.5"><SaveStatusBadge status={displayStatus} /></div>
       )}
-      {isEditMode ? (
+      {/* T10290: primary (green) save first, then "Save and Frame" (cyan, saves +
+          opens Framing), then a full-width Cancel — same order in create and edit
+          mode. The primary is "Save play" (create) / "Update play" (edit). */}
+      <>
         <div className="flex gap-3">
           <button
-            onClick={() => handleSave()}
-            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+            onClick={() => handleSave(isEditMode ? undefined : false)}
+            disabled={saving}
+            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
           >
-            {ANNOTATE.UPDATE_PLAY}
+            {isEditMode ? ANNOTATE.UPDATE_PLAY : ANNOTATE.SAVE_PLAY}
           </button>
           <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+            onClick={handleSaveAndFrame}
+            disabled={saving}
+            className="flex-1 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
           >
-            Cancel
+            {ANNOTATE.SAVE_AND_FRAME}
           </button>
         </div>
-      ) : (
-        <>
-          <div className="flex gap-3">
-            <button
-              onClick={() => handleSave(true)}
-              disabled={saving}
-              className="flex-1 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
-            >
-              {ANNOTATE.CREATE_EDITABLE_CLIP}
-            </button>
-            <button
-              onClick={() => handleSave(false)}
-              disabled={saving}
-              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
-            >
-              {ANNOTATE.SAVE_PLAY}
-            </button>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-full mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
-        </>
-      )}
+        <button
+          onClick={onClose}
+          className="w-full mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+        >
+          Cancel
+        </button>
+      </>
     </div>
   );
 
@@ -890,7 +893,10 @@ export function AnnotateFullscreenOverlay({
             setFocusConfirmOpen(false);
             // T9630: a failed save must not navigate away — that would discard
             // the failure silently and leave the user thinking it saved.
-            const saved = await handleSave();
+            // T10240: handleSave now resolves { saved, projectId }; destructure
+            // the boolean (an object is always truthy, so `if (!saved)` on the
+            // object would never catch a failure).
+            const { saved } = await handleSave();
             if (!saved) return;
             if (clipStage?.action === 'overlay') {
               onOpenInOverlay?.(existingClip.autoProjectId);
@@ -1028,8 +1034,8 @@ export function AnnotateFullscreenOverlay({
           </div>
 
           {/* Controls row — T9830: rating + sport moved into the details
-              disclosure below; the create-mode clip toggle is replaced by the two
-              always-visible Save buttons ("Create an editable clip" / "Save play").
+              disclosure below. T10290: the save row is now "Save play"/"Update play"
+              (green primary) + "Save and Frame" (cyan, saves and opens Framing).
               Edit mode keeps its separate, unconditional "Create clip" affordance. */}
           <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
             {/* T9330: a project exists (autoProjectId) OR is being created right
@@ -1068,31 +1074,22 @@ export function AnnotateFullscreenOverlay({
                 {detailsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 {detailsLabel}
               </button>
-              {isEditMode ? (
-                <button
-                  onClick={() => handleSave()}
-                  className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
-                >
-                  {ANNOTATE.UPDATE_PLAY}
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={() => handleSave(true)}
-                    disabled={saving}
-                    className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 text-white text-sm font-medium rounded transition-colors"
-                  >
-                    {ANNOTATE.CREATE_EDITABLE_CLIP}
-                  </button>
-                  <button
-                    onClick={() => handleSave(false)}
-                    disabled={saving}
-                    className="px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded transition-colors"
-                  >
-                    {ANNOTATE.SAVE_PLAY}
-                  </button>
-                </>
-              )}
+              {/* T10290: primary (green) save first — "Update play" (edit) /
+                  "Save play" (create) — then "Save and Frame" (cyan). */}
+              <button
+                onClick={() => handleSave(isEditMode ? undefined : false)}
+                disabled={saving}
+                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded transition-colors"
+              >
+                {isEditMode ? ANNOTATE.UPDATE_PLAY : ANNOTATE.SAVE_PLAY}
+              </button>
+              <button
+                onClick={handleSaveAndFrame}
+                disabled={saving}
+                className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 text-white text-sm font-medium rounded transition-colors"
+              >
+                {ANNOTATE.SAVE_AND_FRAME}
+              </button>
               <button
                 onClick={onClose}
                 className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded transition-colors"
@@ -1188,34 +1185,24 @@ export function AnnotateFullscreenOverlay({
             ) : null}
           </div>
           <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
-          {/* T9830: two always-visible outcomes here too (create mode). Rating
-              stays inline on this height-starved landscape bar rather than moving
-              behind a disclosure it never had — see the outcome record. */}
-          {isEditMode ? (
-            <button
-              onClick={() => handleSave()}
-              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
-            >
-              {ANNOTATE.UPDATE_PLAY}
-            </button>
-          ) : (
-            <>
-              <button
-                onClick={() => handleSave(true)}
-                disabled={saving}
-                className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
-              >
-                {ANNOTATE.CREATE_EDITABLE_CLIP}
-              </button>
-              <button
-                onClick={() => handleSave(false)}
-                disabled={saving}
-                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
-              >
-                {ANNOTATE.SAVE_PLAY}
-              </button>
-            </>
-          )}
+          {/* T9830/T10290: two always-visible outcomes here too. Rating stays
+              inline on this height-starved landscape bar rather than moving behind
+              a disclosure it never had — see the outcome record. Green primary
+              ("Update play"/"Save play") first, then cyan "Save and Frame". */}
+          <button
+            onClick={() => handleSave(isEditMode ? undefined : false)}
+            disabled={saving}
+            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
+          >
+            {isEditMode ? ANNOTATE.UPDATE_PLAY : ANNOTATE.SAVE_PLAY}
+          </button>
+          <button
+            onClick={handleSaveAndFrame}
+            disabled={saving}
+            className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
+          >
+            {ANNOTATE.SAVE_AND_FRAME}
+          </button>
           <button
             onClick={onClose}
             className="p-1 hover:bg-gray-700 rounded transition-colors flex-shrink-0"

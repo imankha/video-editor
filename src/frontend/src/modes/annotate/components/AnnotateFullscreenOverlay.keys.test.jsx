@@ -36,10 +36,10 @@ const baseProps = {
 };
 
 describe('AnnotateFullscreenOverlay — Esc layering (T8600)', () => {
+  // T10290: details is OPEN by default on desktop, so it's already expanded.
   it('Esc closes the details panel first, leaving the editor open', () => {
     const onClose = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" onClose={onClose} />);
-    fireEvent.click(screen.getByText('Add details'));
     expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
 
     fireEvent.keyDown(window, { key: 'Escape' });
@@ -50,6 +50,9 @@ describe('AnnotateFullscreenOverlay — Esc layering (T8600)', () => {
   it('a second Esc (details already closed) closes the editor', () => {
     const onClose = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" onClose={onClose} />);
+    // First Esc closes the (default-open) details panel; the second closes the editor.
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -57,7 +60,6 @@ describe('AnnotateFullscreenOverlay — Esc layering (T8600)', () => {
   it('Esc while typing in the Notes textarea closes details, not the editor', () => {
     const onClose = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" onClose={onClose} />);
-    fireEvent.click(screen.getByText('Add details'));
     const notes = screen.getByLabelText('Notes (optional)');
     notes.focus();
     fireEvent.keyDown(notes, { key: 'Escape' });
@@ -69,9 +71,8 @@ describe('AnnotateFullscreenOverlay — Esc layering (T8600)', () => {
 describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unchanged)', () => {
   it('typing "1" in the clip name field does not change the rating', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
-    // T9830: rating lives behind the Optional details disclosure — open it to see
-    // the "4 stars · Good" label.
-    fireEvent.click(screen.getByTestId('add-details-button'));
+    // T9830/T10290: rating lives behind the details disclosure, which is open by
+    // default on desktop — the "4 stars · Good" label is already visible.
     // T8960: the name is a pencil button until clicked; open the inline input.
     fireEvent.click(screen.getByTitle('Rename clip'));
     const nameInput = screen.getByLabelText('Clip name');

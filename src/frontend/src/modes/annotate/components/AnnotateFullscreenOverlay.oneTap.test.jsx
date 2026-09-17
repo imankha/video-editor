@@ -98,9 +98,11 @@ describe('AnnotateFullscreenOverlay — one-tap defaults (T8140)', () => {
 describe('AnnotateFullscreenOverlay — platform-aware rating copy (T8140/T9830)', () => {
   it('desktop keeps the "(press 1-5)" keyboard hint (inside details)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} />);
-    expect(screen.queryByText('Rating (press 1-5)')).toBeNull(); // collapsed
-    fireEvent.click(screen.getByTestId('add-details-button'));
+    // T10290: details is open by default on desktop, so the hint is visible;
+    // collapsing the disclosure hides it (proving it lives inside the panel).
     expect(screen.getByText('Rating (press 1-5)')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('add-details-button'));
+    expect(screen.queryByText('Rating (press 1-5)')).toBeNull();
   });
 
   it('mobile drops the keyboard hint (inside the details popup)', () => {
@@ -123,10 +125,11 @@ describe('AnnotateFullscreenOverlay — no amber no_sport wall on mobile (T8140)
 
   it('desktop no_sport create form keeps the in-form picker (T7922 preserved), inside details', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} />);
-    // T9830: the sport prompt is now an optional detail — behind the disclosure.
-    expect(screen.queryByText('Pick your sport to tag this clip')).toBeNull();
-    fireEvent.click(screen.getByTestId('add-details-button'));
+    // T9830/T10290: the sport prompt is an optional detail behind the disclosure,
+    // which is open by default on desktop — visible, and hidden when collapsed.
     expect(screen.getByText('Pick your sport to tag this clip')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('add-details-button'));
+    expect(screen.queryByText('Pick your sport to tag this clip')).toBeNull();
   });
 });
 

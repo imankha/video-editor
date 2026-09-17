@@ -1290,6 +1290,12 @@ export function AnnotateContainer({
     // (true = durably saved, or nothing needed saving; false = it did not
     // land). Starts false: a rejected/never-created region is a real failure.
     let saveOk = false;
+    // T10240: the created project id, threaded back to the caller SYNCHRONOUSLY
+    // (was only delivered later via setAutoProjectId). This is the shared
+    // create-then-navigate seam: T10290's "Save and Frame" and T10240's
+    // "Frame clip" both need the id the instant the create resolves so they can
+    // navigate into Framing without waiting for a re-render.
+    let createdProjectId = null;
     if (newRegion) {
       console.log('[CreateClip] Stored region:', newRegion.id, 'actual:', newRegion.startTime, '-', newRegion.endTime, 'seq:', newRegion.videoSequence);
       // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek
@@ -1347,6 +1353,7 @@ export function AnnotateContainer({
           setRawClipId(newRegion.id, result.raw_clip_id);
 
           if (result.project_created) {
+            createdProjectId = result.project_id;
             setAutoProjectId(newRegion.id, result.project_id);
             notifyReelCreated(result.project_id, reelToastClipName(newRegion));
           } else {
@@ -1366,12 +1373,12 @@ export function AnnotateContainer({
         saveOk = true;
       }
     }
-    // T9330: the editor STAYS OPEN after a create — addClipRegion routes the
-    // create edge through onCreateSelect -> editClip (CREATING->EDITING), landing
-    // the editor on the new region. handleSave resumes playback WITHOUT closing on
-    // the desktop strip; the mobile sheet still closes (its save path calls the
-    // close-bearing onResume). The CTA lights up when setAutoProjectId lands above.
-    return saveOk;
+    // T10240: return the save outcome AND the created project id (null when no
+    // project was created — e.g. a "Save play" with createProject off) so the
+    // overlay's "Save and Frame" can navigate into Framing the instant the create
+    // resolves. T10290 dropped the desktop strip's stay-open-and-rehydrate
+    // behavior: every create now closes the editor via handleSave's onResume().
+    return { saveOk, projectId: createdProjectId };
   }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, isOverlapTimeline, activeSourceSequence, gameVideos, notifyReelCreated]);
 
   /**
@@ -1383,8 +1390,14 @@ export function AnnotateContainer({
     const region = clipRegions.find(r => r.id === regionId);
     if (!region) {
       console.warn('[AnnotateContainer] Region not found for update:', regionId);
-      return false;
+      return { saveOk: false, projectId: null };
     }
+    // T10240: the project id created by THIS call (createProject: true on a play
+    // that had none), threaded back synchronously so "Frame clip" / "Save and
+    // Frame" can open it in Framing without waiting for setAutoProjectId to
+    // re-render. Null when this update created no project. Shared seam with
+    // handleFullscreenCreateClip — both create paths resolve { saveOk, projectId }.
+    let createdProjectId = null;
 
     if (updates.createProject != null) {
       console.log('[CreateReel] updateClipRegionWithSync entered', {
@@ -1430,7 +1443,7 @@ export function AnnotateContainer({
       }
       // T9630: nothing to persist yet (no game record) — the local update above
       // always applies, so this is not a failure for the caller's save-status UI.
-      return true;
+      return { saveOk: true, projectId: null };
     }
 
     // If clip doesn't have rawClipId, save it to backend first
@@ -1464,16 +1477,17 @@ export function AnnotateContainer({
         setRawClipId(region.id, result.raw_clip_id);
 
         if (result.project_created) {
+          createdProjectId = result.project_id;
           setAutoProjectId(region.id, result.project_id);
           notifyReelCreated(result.project_id, reelToastClipName(region));
         }
         // T9630: real persistence outcome for the caller's tri-state save UI.
-        return true;
+        return { saveOk: true, projectId: createdProjectId };
       }
       // T9630: saveClip returned null (dedup guard / sync_failed 503 / thrown
       // error — useRawClipSave already surfaced its own toast/retry) or
       // {notFound: true} (ghost game) — either way this update did NOT land.
-      return false;
+      return { saveOk: false, projectId: null };
     } else {
       // Clip already has rawClipId, just update
       const backendUpdates = {};
@@ -1503,18 +1517,19 @@ export function AnnotateContainer({
           console.log('[CreateReel] UPDATE path result:', result);
         }
         if (result?.project_created) {
+          createdProjectId = result.project_id;
           setAutoProjectId(region.id, result.project_id);
           notifyReelCreated(result.project_id, reelToastClipName(region));
         }
         // T9630: updateClipRemote (useRawClipSave.updateClip) returns null on
         // any failure (thrown error / sync_failed 503, already toasted there).
-        return !!result;
+        return { saveOk: !!result, projectId: createdProjectId };
       } else if (updates.createProject != null) {
         console.warn('[CreateReel] ABORT: backendUpdates was empty, nothing sent to backend');
-        return false;
+        return { saveOk: false, projectId: null };
       }
       // Nothing needed persisting (e.g. a redundant update) — not a failure.
-      return true;
+      return { saveOk: true, projectId: null };
     }
   }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, activeSourceSequence, fullTimeline, isOverlapTimeline, effectiveCurrentTime, notifyReelCreated]);
 
@@ -1523,10 +1538,13 @@ export function AnnotateContainer({
    * Uses updateClipRegionWithSync for backend sync.
    *
    * T9630: no longer closes the overlay itself — it returns the real
-   * persistence outcome (true/false) so the overlay's own Save gesture
+   * persistence outcome so the overlay's own Save gesture
    * (AnnotateFullscreenOverlay.handleSave) can decide whether to close. A
    * failed save must leave the form open with the user's edits intact rather
    * than closing unconditionally and silently discarding the failure.
+   * T10240: the outcome is now { saveOk, projectId } (projectId set only when
+   * this update created the auto-project) so "Save and Frame" / "Frame clip"
+   * can navigate into Framing with the new id.
    */
   const handleFullscreenUpdateClip = useCallback((regionId, updates) => {
     return updateClipRegionWithSync(regionId, updates);

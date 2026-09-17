@@ -36,10 +36,12 @@ const baseProps = {
   surface: 'inline_desktop',
 };
 
-describe('AnnotateFullscreenOverlay — "Add details" disclosure label (T8600)', () => {
-  it('shows "Add details" when there are no tags and no note', () => {
+// T10290: the disclosure is now labelled "Details" (dropped the "Add" prefix),
+// open by default on desktop (>= md) and closed on mobile.
+describe('AnnotateFullscreenOverlay — "Details" disclosure label (T8600/T10290)', () => {
+  it('shows "Details" when there are no tags and no note', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
-    expect(screen.getByText('Add details')).toBeTruthy();
+    expect(screen.getByText('Details')).toBeTruthy();
   });
 
   it('counts tags and note presence in the label once selected', () => {
@@ -55,32 +57,34 @@ describe('AnnotateFullscreenOverlay — "Add details" disclosure label (T8600)',
 });
 
 describe('AnnotateFullscreenOverlay — desktop expand-in-place (layout="strip")', () => {
-  it('the details panel is closed by default and opens in place on click, no popup', () => {
+  it('the details panel is OPEN by default on desktop and collapses on click, no popup (T10290)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
-    expect(screen.queryByRole('dialog', { name: 'Add details' })).toBeNull();
-    fireEvent.click(screen.getByText('Add details'));
-    // Desktop panel is in-flow content, not a portaled dialog.
-    expect(screen.queryByRole('dialog', { name: 'Add details' })).toBeNull();
+    // Desktop panel is in-flow content, not a portaled dialog, and open by default.
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
     expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
+    fireEvent.click(screen.getByText('Details'));
+    expect(screen.queryByLabelText('Notes (optional)')).toBeNull();
   });
 
-  it('re-clicking the disclosure collapses the panel (no separate Done/X)', () => {
+  it('re-clicking the disclosure re-opens the panel (no separate Done/X)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
-    const toggle = () => screen.getByText(/Add details|Details/);
-    fireEvent.click(toggle());
-    expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
+    const toggle = () => screen.getByText(/Details/);
+    // Starts open (desktop default) -> click collapses -> click re-opens.
     fireEvent.click(toggle());
     expect(screen.queryByLabelText('Notes (optional)')).toBeNull();
+    fireEvent.click(toggle());
+    expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
   });
 });
 
 describe('AnnotateFullscreenOverlay — mobile full-screen popup (layout="inline", isMobile)', () => {
   beforeEach(() => mockViewport(true));
 
-  it('tapping "Add details" opens a full-screen popup with Tags + Notes', () => {
+  it('is closed by default on mobile; tapping "Details" opens a full-screen popup with Tags + Notes', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" />);
-    fireEvent.click(screen.getByText('Add details'));
-    const dialog = screen.getByRole('dialog', { name: 'Add details' });
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
+    fireEvent.click(screen.getByText('Details'));
+    const dialog = screen.getByRole('dialog', { name: 'Details' });
     expect(dialog).toBeTruthy();
     expect(screen.getByPlaceholderText('Add a note about this clip...')).toBeTruthy();
   });
@@ -88,15 +92,15 @@ describe('AnnotateFullscreenOverlay — mobile full-screen popup (layout="inline
   it('Done closes the popup without saving', () => {
     const onCreateClip = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" onCreateClip={onCreateClip} />);
-    fireEvent.click(screen.getByText('Add details'));
+    fireEvent.click(screen.getByText('Details'));
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
-    expect(screen.queryByRole('dialog', { name: 'Add details' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
     expect(onCreateClip).not.toHaveBeenCalled();
   });
 
   it('Notes is newly available on mobile via the popup (was desktop-only)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" />);
-    fireEvent.click(screen.getByText('Add details'));
+    fireEvent.click(screen.getByText('Details'));
     expect(screen.getByPlaceholderText('Add a note about this clip...')).toBeTruthy();
   });
 });

@@ -1,5 +1,50 @@
 ---
 domain: annotate
+updated: 2026-09-17 (T10240 + T10290 — marked-play stage CTA + play-editor "Save and Frame" / Details /
+Save-closes. FRONTEND-ONLY, no schema. **SHARED create-then-navigate seam (build once, do NOT rebuild a
+third time):** the two container create paths — `handleFullscreenCreateClip` AND `updateClipRegionWithSync`
+(AnnotateContainer.jsx) — now RESOLVE `{ saveOk, projectId }` (was a bare `saveOk` bool; the id used to
+arrive only later via `setAutoProjectId`). `projectId` is set ONLY when THIS call created the auto-project
+(`result.project_created`), else null (edit-mode callers fall back to `existingClip.autoProjectId`). The
+overlay's `handleSave` resolves `{ saved, projectId }` and NORMALIZES older bare boolean/undefined returns
+(tests mock those): `saveOk = obj ? obj.saveOk !== false : result !== false`. Two consumers, no dup:
+ClipDetailsEditor's "Frame clip" handler and the overlay's `handleSaveAndFrame`. **T10240 (marked-play
+stage CTA):** `getClipStage` NO_PROJECT was a dead end (`action:null`); now carries
+`createActions: [{key:'create',navigate:false},{key:'frame',navigate:true}]`. ClipDetailsEditor renders
+BOTH ("Create clip" / "Frame clip", `ANNOTATE.CREATE_CLIP`/`FRAME_CLIP`) on desktop AND mobile (a phone
+can Frame a clip) — the FOCUS+ produced-stage CTA stays `!isMobile`. Buttons are NEVER disabled; a
+`creatingRef` (not state) guards double-create invisibly. "Create clip" stays in Annotate (reel-created
+toast fires from the container's `notifyReelCreated`); "Frame clip" awaits the seam's `projectId` then
+`onOpenInFocus(id)`. ClipsSidePanel's mobile detail-takeover instance now gets `onOpenInFocus`/`onOpenInOverlay`.
+**"View Final" gate was ALREADY fresh** — `getClipStage` reads `has_final_video` off the live
+`useProjectsList()` lookup at render time (both ClipDetailsEditor and the overlay), no memoized snapshot,
+so a re-export shows immediately; no gate change was needed. Account probe of `hello@reelballers.com` not
+runnable in the permission-free container (no R2 creds/venv); per T10230 that play genuinely had
+`has_final_video=true`, so the reported "View Final" was CORRECT, not stale. **T10290 (play editor):**
+(1) "Save and Frame" (`ANNOTATE.SAVE_AND_FRAME`) REPLACES T9830's "Create an editable clip" as the second
+outcome, in EVERY layout (overlay/inline `actionsFooter`, desktop `strip` controls row, `landscape-inline`
+bar) AND now in EDIT mode too. New order everywhere: green primary ("Save play" create / "Update play"
+edit) THEN cyan "Save and Frame" THEN Cancel. `handleSaveAndFrame` = `handleSave(true)` then
+`onOpenInFocus(projectId)` on success only (failed save never navigates). `saveCreateProject` forces a
+project when `createProjectIntent===true` in BOTH modes (so edit-mode Save-and-Frame on a project-less
+play still lands a clip; plain "Update play" passes no intent and keeps the clip's existing state).
+The `focusConfirmDialog` now destructures `const { saved } = await handleSave()` — an OBJECT return is
+always truthy, so the old `if (!saved)` bool check would have silently navigated past a failed save.
+(2) "Add details" -> "Details" everywhere (`ANNOTATE.DETAILS`; AddDetailsPopup heading + `aria-label`).
+`detailsOpen` now seeds `useState(!isMobile)` (open on desktop >= md, closed on mobile) — seeded ONLY at
+init; the `[existingClip]` reset effect NEVER touches `detailsOpen`, so a desktop open lands expanded and
+a clip-switch can't re-close it. `detailsLabel` keeps the count suffix ("Details (2 tags, note)").
+(3) SAVE NOW CLOSES EDIT MODE: the desktop-strip create branch dropped its stay-open-and-rehydrate-into-edit
+special case — `handleSave` always calls `onResume()` on success (failed save unchanged: error state, form
+stays open). DELETED: `skipNextStatusResetRef` + the reset-effect's skip branch (a clip switch is always a
+real switch now). **DEAD CODE left inert (removal deferred to a follow-up, not this task's scope):** the
+`focusPending`/`stagePendingCta`/`pendingProjectClipId`/`onResumePlaybackOnly` machinery (T9330 stay-open)
+can no longer fire in production (create always closes), but `stayOpen.test.jsx` still passes because it
+drives the overlay with those props DIRECTLY. `onResumePlaybackOnly` removed from the overlay's own prop
+list (unused); AnnotateModeView still passes it harmlessly. Reverses part of T9830 (2nd button relabelled +
+reordered) and the create-mode "stay open" of T9330. Tests: clipStage.test.js NO_PROJECT createActions;
+ClipDetailsEditor.reel.test.jsx (two create actions, mobile); overlay suite (details default-open, Save
+and Frame labels). Prior:)
 updated: 2026-09-17 (T10250/T10260 — direct clip-upload UX: pre-flight size gate + open-in-Framing.
 Frontend + one trivial backend read. **Clip-upload caps now live on `/api/bootstrap`** as
 `upload_limits: {max_clip_upload_bytes, max_clip_duration_s}` (from `constants.py` MAX_CLIP_UPLOAD_BYTES
