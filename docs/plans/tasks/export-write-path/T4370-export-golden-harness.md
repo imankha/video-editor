@@ -1,10 +1,15 @@
 # T4370: Export Golden-Output Test Harness
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-07-03
+**Updated:** 2026-09-17
 **Epic:** [export-write-path](EPIC.md) · Audit item F2 — **must land before T4380-T4410, T4420, T4430**
+
+**2026-09-17: spawned via /dotask** (container `reel-task-t4370`, branch
+`feature/T4370-export-golden-harness`) as part of clearing the Export Write-Path Unification
+epic — the real remaining durability-lane engineering per docs/plans/HANDOFF-before-T7620.md.
 
 ## Problem
 
