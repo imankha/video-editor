@@ -19,9 +19,9 @@ from ..analytics import record_milestone
 from ..constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 from ..database import column_exists, get_db_connection, get_working_videos_path
 from ..queries import latest_working_clips_subquery
-from ..routers.exports import get_export_job, update_job_complete, update_job_error, update_job_started
 from ..utils.encoding import decode_data
 from ..websocket import export_progress, manager
+from . import export_job_repository
 from .ffmpeg_service import get_video_duration
 from .modal_client import call_modal_overlay, modal_enabled
 
@@ -147,7 +147,8 @@ async def process_export_job(job_id: str):
     logger.info(f"[ExportWorker] Starting job: {job_id}")
 
     # Get job from database
-    job = get_export_job(job_id)
+    with get_db_connection() as conn:
+        job = export_job_repository.get(conn.cursor(), job_id)
     if not job:
         logger.error(f"[ExportWorker] Job not found: {job_id}")
         return
@@ -158,7 +159,10 @@ async def process_export_job(job_id: str):
         return
 
     # Mark as started (DB write #1)
-    update_job_started(job_id)
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        export_job_repository.start(cursor, job_id)
+        conn.commit()
     await send_progress(job_id, 5, "Export started...")
 
     # T4240: bind everything the except handler reads BEFORE the try. Previously
@@ -180,7 +184,10 @@ async def process_export_job(job_id: str):
             raise ValueError(f"Unknown export type: {job_type}")
 
         # Mark as complete (DB write #2)
-        update_job_complete(job_id, output_video_id, output_filename)
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            export_job_repository.complete(cursor, job_id, output_video_id=output_video_id, output_filename=output_filename)
+            conn.commit()
         credit_user_id = config.get("credit_user_id")
         if credit_user_id:
             record_milestone(credit_user_id, "export_completed", {"export_id": job_id, "type": "framing"})
@@ -194,7 +201,10 @@ async def process_export_job(job_id: str):
 
     except Exception as e:
         logger.error(f"[ExportWorker] Job {job_id} failed ({type(e).__name__}): {e}", exc_info=True)
-        update_job_error(job_id, str(e))
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            export_job_repository.fail(cursor, job_id, str(e))
+            conn.commit()
         fail_user_id = config.get("credit_user_id")
         if fail_user_id:
             record_milestone(fail_user_id, "export_failed", {"export_id": job_id, "project_id": project_id})
@@ -464,11 +474,7 @@ def recover_orphaned_jobs():
 
             if stale_jobs:
                 logger.info(f"[ExportWorker] CLEAR_PENDING_JOBS_ON_STARTUP=true, clearing {len(stale_jobs)} stale jobs")
-                cursor.execute("""
-                    UPDATE export_jobs
-                    SET status = 'error', error = 'Cleared on startup (dev mode)', completed_at = CURRENT_TIMESTAMP
-                    WHERE status IN ('pending', 'processing')
-                """)
+                export_job_repository.clear_pending_on_startup(cursor)
                 conn.commit()
                 for row in stale_jobs:
                     logger.info(f"[ExportWorker] Cleared stale job: {row['id']} (was {row['status']})")
@@ -505,6 +511,9 @@ def recover_orphaned_jobs():
 
         # No modal_call_id or Modal job is gone - mark as error
         logger.warning(f"[ExportWorker] Found orphaned job: {job_id}, marking as error")
-        update_job_error(job_id, "Server restarted during processing")
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            export_job_repository.fail(cursor, job_id, "Server restarted during processing")
+            conn.commit()
 
 
