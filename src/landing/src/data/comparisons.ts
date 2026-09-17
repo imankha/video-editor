@@ -215,7 +215,7 @@ export const COMPARISONS: Comparison[] = [
       },
       {
         q: 'Can CapCut follow a player automatically?',
-        a: 'Neither app auto-follows a player -- CapCut offers general tracking and masking features, and ReelBallers has you frame your athlete and pick them from AI-proposed player boxes. The difference is in the workflow: ReelBallers is built around keeping one chosen athlete in frame across a wide game clip, connecting the motion between your marks, where CapCut means keyframing a moving crop on each clip by hand.',
+        a: 'Not for a specific athlete across wide game footage on its own -- CapCut offers general subject tracking and masking, but nothing tuned to one chosen player in a crowd of twenty-two. ReelBallers has you frame your athlete and pick them from AI-proposed player boxes, then connects the motion between your marks; CapCut means keyframing a moving crop on each clip by hand.',
       },
       {
         q: 'Which is better for a college recruiting video?',

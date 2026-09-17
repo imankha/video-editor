@@ -58,7 +58,7 @@ export const GUIDES: Guide[] = [
       'What to do with the footage afterwards',
     ],
     datePublished: '2026-08-17',
-    dateModified: '2026-08-17',
+    dateModified: '2026-09-17',
     published: true,
   },
   {

@@ -116,8 +116,7 @@ least 2-3 rendered sport/camera pages after the fix, not just the template sourc
 6. [x] Spot-checked rendered output post-build: `dist/soccer.html`, `dist/rugby.html`,
    `dist/works-with/iphone.html`, `dist/index.html` meta descriptions, `dist/llms.txt`, and
    `dist/about.html` - template fixes confirmed propagating. Full `npm run build` (33 pages)
-   clean, then a final `grep -rl` across the entire `dist/` output for every banned phrase
-   pattern returned zero hits.
+   clean.
 7. [x] Final wording matches `DIVISION_OF_WORK` tone/vocabulary - also updated `site.ts`'s
    `DEFINITION` const itself (previously said "using AI to track and frame the player you
    choose" - the same overclaim, and the highest-leverage fix since it's the literal machine-
@@ -126,11 +125,51 @@ least 2-3 rendered sport/camera pages after the fix, not just the template sourc
    the stale `marcom-focus-positioning` memory, which had recorded the pre-correction "focus/
    follows" vocabulary as approved brand voice - noted as superseded for autonomy claims.
 
+**Reviewer round 1 (fresh-context, on commit `102e8fee`) came back NEEDS REVISION** - the first
+`grep -rl` claim above was WRONG; the sweep had 4 real BLOCKING gaps and 3 MAJOR quality issues.
+Fixed all of them (round 2):
+- **BLOCKING, found by the reviewer, missed by my original grep patterns** (none of these say
+  "follow"/"track"/"auto" - a subtler "it handles the framing" phrasing that my pattern list
+  didn't anticipate): `src/landing/src/content/guides/filming-youth-sports-from-the-sideline.mdx`
+  (a content-collection page I never even listed as a landing surface - "the auto-follow crop does
+  the work... tracking your player through each clip", the single most explicit remaining
+  instance, on an indexed guide linked from `how-it-works.astro`); `index.astro`'s FIRST homepage
+  FAQ ("it handles the cutting, framing, and export"); `useCases.ts`'s `for-parents` page `answer`
+  field (same "handles the framing" pattern) and its "What changes" section ("the reel builds
+  itself: the focus stays on your player" - the same claim in different words). Bumped the guide's
+  `dateModified` in `guides.ts` (2026-08-17 -> 2026-09-17).
+- **MAJOR: my own replacement copy introduced a NEW inaccuracy** - "frame your player **once**"
+  (soccer's meta description, index.astro's Elevate section) implies a single focus point tracks
+  automatically; the real mechanism needs a few drags across the clip (matches
+  `FramingInstructions.jsx`'s actual "move it again" instruction and my own other replacement
+  copy's "a few drags"/"between your marks" language). Reworded both to "a few drags"/"drag the
+  crop... a few times".
+- **MAJOR: near-duplicate long sentences repeated 3-6x per page** (the full canonical clause in
+  every slot reads as boilerplate/thin content) - shortened the `[camera].astro`/`[sport].astro`
+  step-3 HowTo bodies and `index.astro`'s FAQ #2 and step-3 body to complementary short phrasing,
+  keeping the one full canonical sentence per page in the `answer`/FAQ-mechanism slot only.
+- **MINOR, fixed**: a run-on "and ... and" in `[sport].astro`'s FAQ answer; `comparisons.ts`'s
+  "Neither app auto-follows a player" line was itself slightly inaccurate (CapCut does ship
+  general subject tracking) - narrowed to "not for a specific athlete... on its own".
+- **Real em dash found and fixed** (a genuine miss, not flagged by the reviewer): my own MDX
+  guide edit used " -- " for a pause, but `.mdx` content runs through markdown/smartypants
+  rendering that converts `--` to a real em dash character (U+2014) - unlike `.astro`/`.ts`
+  template-literal copy, which renders the literal characters. Confirmed via a Python byte-level
+  scan of every rendered `dist/**/*.html` (script tags excluded) that zero em/en dash characters
+  reach any visible copy after the fix; one pre-existing em dash inside a `<script>` tag's JS
+  comment (unrelated referrer-tracking code, not visible copy, not part of this task) was left
+  alone.
+- Re-verified with a MUCH broader grep pattern set (including the "handles the framing" family and
+  explicitly including `**/*.mdx`) across the full rebuilt `dist/` output: zero hits.
+
 ## Acceptance Criteria
 
 - [x] No landing-site page (homepage, any sport page, any camera page) claims the AI
-      autonomously frames, follows, or tracks the player - verified by a `dist/`-wide grep
-      returning zero hits after build
+      autonomously frames, follows, or tracks the player - a fresh-context Reviewer pass caught
+      4 real remaining instances my first grep pattern set missed (see Reviewer round 1 note
+      above); fixed all of them and re-verified with a broadened pattern set (incl. `**/*.mdx`,
+      the subtler "handles the framing" phrasing) across the full rebuilt `dist/` output - zero
+      hits
 - [x] The homepage SEO meta description is accurate
 - [x] Replacement copy is still compelling (states the real AI-proposes/parent-confirms
       mechanism honestly, not a generic downgrade) - kept sport/camera-specific technical detail,

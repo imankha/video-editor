@@ -63,7 +63,7 @@ export const SPORTS: Sport[] = [
     emoji: '⚽',
     title: 'Soccer Highlight Video Maker | ReelBallers',
     description:
-      'Turn soccer match footage into a highlight reel. Frame your player once, ReelBallers keeps them in view. Works with any camera. Free to start.',
+      'Turn soccer match footage into a highlight reel. Frame your player with a few drags; ReelBallers smooths the motion. Works with any camera. Free.',
     h1: 'Soccer highlight video maker',
     answer:
       'ReelBallers turns full soccer match footage into a highlight reel: you mark the moments that matter and frame your player across the pitch, and ReelBallers connects the dots between your marks so they stay in frame, even in wide sideline video.',

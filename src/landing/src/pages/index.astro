@@ -39,11 +39,11 @@ const lowestRateDisplay = LOWEST_RATE_CENTS.toFixed(1)
 const faqs: FaqItem[] = [
   {
     q: 'What is ReelBallers?',
-    a: 'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game footage into shareable highlight reels. You upload a game, mark the moments worth keeping, and it handles the cutting, framing, and export.',
+    a: 'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game footage into shareable highlight reels. You upload a game, mark the moments worth keeping and frame your player, and it handles the cutting and export.',
   },
   {
     q: 'How do I make a highlight reel from game footage?',
-    a: 'Three steps. Upload your game video, watch it and mark the plays worth keeping (tagging each by position and play type), then frame your player and pick them from the AI\'s player boxes. ReelBallers connects the dots for smooth motion and stitches the clips into one reel you can share with a link.',
+    a: 'Three steps. Upload your game video, watch it and mark the plays worth keeping (tagging each by position and play type), then frame your player with a few drags. ReelBallers stitches the clips into one reel you can share with a link.',
   },
   {
     q: 'How does it keep the focus on my player?',
@@ -100,7 +100,7 @@ const steps = [
   {
     n: 3,
     title: 'Export and share one link',
-    body: 'You put the focus on your athlete: frame them in the wide shot and pick them from the AI\'s player boxes. ReelBallers connects the dots for smooth motion, adds the spotlight, and stitches it into one sharp reel. Share it with a single link.',
+    body: 'You put the focus on your athlete: a few drags of the crop box in the wide shot. ReelBallers smooths the motion, adds the spotlight, and stitches it into one sharp reel. Share it with a single link.',
   },
 ]
 ---
@@ -236,9 +236,9 @@ const steps = [
           Elevate
         </h3>
         <p class="text-lg text-gray-300 leading-relaxed">
-          Your athlete, in focus. Frame them once and pick them from the AI's player boxes, and
-          your wide sideline video becomes close-up footage through every play: centered, sharp,
-          impossible to lose in the crowd. Animated spotlights tell everyone exactly who to watch.
+          Your athlete, in focus. A few drags of the crop box and your wide sideline video becomes
+          close-up footage through every play: centered, sharp, impossible to lose in the crowd.
+          Animated spotlights tell everyone exactly who to watch.
         </p>
         <p class="text-sm text-gray-500 mt-2">
           Under the hood: AI-proposed player boxes, motion interpolation between your marks, and

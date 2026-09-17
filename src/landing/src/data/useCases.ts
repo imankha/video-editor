@@ -58,7 +58,7 @@ export const USE_CASES: UseCase[] = [
         heading: 'Building it from your own footage',
         body: [
           'The manual route is: scrub hours of game video, note timestamps, cut each play, crop and reframe each clip by hand, add a marker, then re-export the whole thing every time you want to change the order. That is the reason most recruiting reels never get made, and why the ones that do are usually a year out of date.',
-          'ReelBallers collapses that into marking plays while you watch. Each tagged clip goes into a library you can filter, so a reel for one coach and a shorter cut for another come from the same work rather than a second edit. When your athlete has a better game in October, you add those clips and re-generate rather than starting over.',
+          'ReelBallers collapses that into marking plays while you watch, plus a few drags to frame each clip. Each tagged clip goes into a library you can filter, so a reel for one coach and a shorter cut for another come from the same work rather than a second edit. When your athlete has a better game in October, you add those clips and re-generate rather than starting over.',
         ],
       },
     ],
@@ -116,7 +116,7 @@ export const USE_CASES: UseCase[] = [
       'Turn the game footage on your phone into highlight reels your family actually watches. Built for parents, no editing experience and no new camera needed.',
     h1: 'Highlight reels for sports parents',
     answer:
-      'ReelBallers turns the game footage already on your phone into a highlight reel you can send with one link. You mark the plays worth keeping while you watch; it handles the cutting, the framing, and the export.',
+      'ReelBallers turns the game footage already on your phone into a highlight reel you can send with one link. You mark the plays worth keeping and frame your player while you watch; it handles the cutting and the export.',
     sections: [
       {
         heading: 'The footage problem every sports parent has',
@@ -128,7 +128,7 @@ export const USE_CASES: UseCase[] = [
       {
         heading: 'What changes',
         body: [
-          'You watch the game once, the way you would anyway, and tap to mark the moments worth keeping. That is the whole input. From there the reel builds itself: the focus stays on your player, zoomed in and sharp, and you get a link.',
+          'You watch the game once, the way you would anyway, tap to mark the moments worth keeping, and drag the crop over your player a few times per clip. ReelBallers connects the motion in between and builds the reel: your athlete stays in focus, zoomed in and sharp, and you get a link.',
           'Because each clip is tagged, the library compounds. By mid-season you can pull every goal, or everything from one tournament, without touching the original footage again.',
         ],
       },
