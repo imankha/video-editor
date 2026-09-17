@@ -37,7 +37,7 @@ export const TAGLINE = "Share Your Athlete's Brilliance"
  * product does, change it ONLY here.
  */
 export const DEFINITION =
-  'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game footage into shareable highlight reels, using AI to track and frame the player you choose.'
+  'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game footage into shareable highlight reels: you frame the player you choose and pick them from AI-proposed player boxes, and ReelBallers connects the motion, upscales, and exports the reel.'
 
 export const CONTACT_EMAIL = 'hello@reelballers.com'
 
@@ -85,11 +85,11 @@ export const FACTS = {
  * thing an AI engine will contradict from another source.
  */
 export const INPUT_SOURCES = [
+  'Footage exported from team camera systems (Veo, Trace, Hudl) as a video file',
   'iPhone and Android phones',
   'GoPro and other action cameras',
   'XbotGo and similar auto-follow phone mounts',
   'Camcorders and DSLR/mirrorless cameras',
-  'Footage exported from team camera systems (Veo, Trace, Hudl) as a video file',
 ] as const
 
 /** Primary nav. Also drives the header, footer, and sitemap expectations. */

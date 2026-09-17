@@ -24,11 +24,12 @@ preparing college recruiting material. It is US-focused.
 
 ## What it does
 
-1. **Upload** a full game video from any camera. Nothing is installed; the
-   editor runs in a web browser.
+1. **Upload** video from any camera -- a full game, individual clips, or both.
+   Nothing is installed; the editor runs in a web browser.
 2. **Mark** the plays worth keeping while watching, tagging each by position and
    play type, with ratings and notes.
-3. **Export** a highlight reel. ${BRAND} crops and follows the chosen player
+3. **Export** a highlight reel. The user frames the chosen player and picks them
+   from AI-proposed player boxes; ${BRAND} connects the dots for smooth motion
    across the field, upscales the footage toward ${FACTS.upscaleTarget}, adds an
    optional spotlight marker, and produces a single shareable link. The same
    clips can be exported in multiple aspect ratios, for example a wide
@@ -59,8 +60,8 @@ those platforms as a standard video file.
   ${BRAND} requires no hardware and centres on one chosen player.
 - **vs general video editors (CapCut, Premiere, iMovie):** those are
   general-purpose timelines with no understanding of sport. ${BRAND} provides
-  per-sport play tagging, automatic player-following crop, and a spotlight, so
-  the sport-specific work is not done by hand.
+  per-sport play tagging, a guided player-framing workflow with AI-proposed
+  player boxes, and a spotlight, so the sport-specific work is not done by hand.
 - **vs editing by hand:** the manual route means scrubbing hours of footage,
   timestamping plays, and re-exporting whenever the cut changes.
 

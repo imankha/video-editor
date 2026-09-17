@@ -26,5 +26,5 @@ export const HERO_MEDIA = {
    * Describes what the demo shows. Used as the accessible label and in copy --
    * update it if the swapped footage shows a different sport or effect.
    */
-  alt: 'Side-by-side comparison: the same soccer play as raw wide sideline footage, and as a ReelBallers reel with the player followed and spotlighted.',
+  alt: 'Side-by-side comparison: the same soccer play as raw wide sideline footage, and as a ReelBallers reel with the player framed and spotlighted.',
 } as const

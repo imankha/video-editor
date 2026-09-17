@@ -51,14 +51,14 @@ export const USE_CASES: UseCase[] = [
         heading: 'Making yourself findable on screen',
         body: [
           'The single most common failure in a parent-made recruiting reel is that the coach cannot tell which player to watch. In wide sideline footage of twenty-two players in matching kit, that is a genuinely hard problem, and coaches do not spend long solving it.',
-          'There are two fixes and you want both. First, a visual marker -- a spotlight or highlight on your athlete at the start of each clip -- so the eye lands in the right place immediately. Second, framing that follows the player, so they stay near the centre of the frame instead of drifting into a corner.',
+          'There are two fixes and you want both. First, a visual marker -- a spotlight or highlight on your athlete at the start of each clip -- so the eye lands in the right place immediately. Second, framing them yourself with a few drags of the crop box, so they stay near the centre of the frame instead of drifting into a corner.',
         ],
       },
       {
         heading: 'Building it from your own footage',
         body: [
           'The manual route is: scrub hours of game video, note timestamps, cut each play, crop and reframe each clip by hand, add a marker, then re-export the whole thing every time you want to change the order. That is the reason most recruiting reels never get made, and why the ones that do are usually a year out of date.',
-          'ReelBallers collapses that into marking plays while you watch. Each tagged clip goes into a library you can filter, so a reel for one coach and a shorter cut for another come from the same work rather than a second edit. When your athlete has a better game in October, you add those clips and re-generate rather than starting over.',
+          'ReelBallers collapses that into marking plays while you watch, plus a few drags to frame each clip. Each tagged clip goes into a library you can filter, so a reel for one coach and a shorter cut for another come from the same work rather than a second edit. When your athlete has a better game in October, you add those clips and re-generate rather than starting over.',
         ],
       },
     ],
@@ -92,11 +92,11 @@ export const USE_CASES: UseCase[] = [
       },
       {
         q: 'Can I make a recruiting video myself?',
-        a: 'Yes. A recruiting reel needs clear plays, a findable player, and sensible order -- none of which requires a professional editor. The hard parts are finding the plays in hours of footage and keeping your athlete framed, and both of those are what ReelBallers automates.',
+        a: 'Yes. A recruiting reel needs clear plays, a findable player, and sensible order -- none of which requires a professional editor. The hard part is finding the plays in hours of footage; keeping your athlete framed just takes a few drags of the crop box, and ReelBallers connects the motion in between.',
       },
       {
         q: 'What footage do I need?',
-        a: 'Regular game footage from any camera. Wide sideline video from a phone works, because the reel is built by cropping into the frame and following the player. Filming wide and letting software crop in beats zooming while filming.',
+        a: 'Regular game footage from any camera. Wide sideline video from a phone works, because you frame the player yourself and ReelBallers crops into the shot. Filming wide and letting the crop do the zoom beats zooming while filming.',
       },
       {
         q: 'Should I add music to a recruiting video?',
@@ -116,7 +116,7 @@ export const USE_CASES: UseCase[] = [
       'Turn the game footage on your phone into highlight reels your family actually watches. Built for parents, no editing experience and no new camera needed.',
     h1: 'Highlight reels for sports parents',
     answer:
-      'ReelBallers turns the game footage already on your phone into a highlight reel you can send with one link. You mark the plays worth keeping while you watch; it handles the cutting, the framing, and the export.',
+      'ReelBallers turns the game footage already on your phone into a highlight reel you can send with one link. You mark the plays worth keeping and frame your player while you watch; it handles the cutting and the export.',
     sections: [
       {
         heading: 'The footage problem every sports parent has',
@@ -128,7 +128,7 @@ export const USE_CASES: UseCase[] = [
       {
         heading: 'What changes',
         body: [
-          'You watch the game once, the way you would anyway, and tap to mark the moments worth keeping. That is the whole input. From there the reel builds itself: the focus stays on your player, zoomed in and sharp, and you get a link.',
+          'You watch the game once, the way you would anyway, tap to mark the moments worth keeping, and drag the crop over your player a few times per clip. ReelBallers connects the motion in between and builds the reel: your athlete stays in focus, zoomed in and sharp, and you get a link.',
           'Because each clip is tagged, the library compounds. By mid-season you can pull every goal, or everything from one tournament, without touching the original footage again.',
         ],
       },
@@ -149,11 +149,11 @@ export const USE_CASES: UseCase[] = [
     faqs: [
       {
         q: 'Do I need any editing experience?',
-        a: 'No. The only thing you do is mark the plays worth keeping while you watch the game. Cutting, cropping, following the player, and exporting are automatic.',
+        a: 'No. You mark the plays worth keeping while you watch the game, then frame your athlete and pick them from the AI\'s player boxes. Cutting, connecting the motion between your marks, and exporting are automatic.',
       },
       {
         q: 'Do I need to buy a camera?',
-        a: 'No. The footage on your phone is fine. Film wide and steady, and the software crops in from there.',
+        a: 'No. The footage on your phone is fine. Film wide and steady, then frame your player yourself and let the crop do the zoom.',
       },
       {
         q: 'How long does it take to make a reel?',
