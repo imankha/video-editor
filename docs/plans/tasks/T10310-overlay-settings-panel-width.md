@@ -1,12 +1,29 @@
 # T10310: Overlay/Spotlight settings panel is too narrow to use
 
-**Status:** WIP (ui-designer proposal in progress, 2026-09-17 - live-measured the current rail on
-staging: fixed 300px content width at both 1280px and 1920px viewport, confirming it does not
-respond to available space at all)
+**Status:** WIP (user approved the ui-designer's A+B recommendation 2026-09-17, decision artifact
+https://claude.ai/artifact/SPnV7hN7zm1hpWPQSvvjPZ — implementation starting)
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-17
 **Updated:** 2026-09-17
+
+## Decision (2026-09-17)
+
+User approved **Option A + Option B together** from the decision artifact:
+
+- **Finding 1** (the bug as filed): `SettingsRail.jsx:158` hard-codes the expanded desktop rail at
+  `300px` (inline `width: collapsed ? '64px' : '300px'`), gated only by `hidden lg:flex` — it never
+  changes above the `lg` breakpoint, which is why 1280px and 1920px measured identically.
+- **Finding 2** (found while auditing, not in the original task description): the Focus/Overlay
+  page shell (`App.jsx:985`) is wrapped in Tailwind's `container` utility, which tops out at
+  `1536px` (the `2xl` breakpoint) — at 1920px this caps the whole header+video+rail block and
+  centers it, wasting the space either side.
+
+**Option A**: bump the rail's fixed width `300px` -> `380px`. **Option B**: replace `App.jsx:985`'s
+`container` class with an explicit wider cap (`max-w-[1800px]`) so the freed width goes somewhere.
+Both are single-file, single-constant changes. See the artifact for the full options table
+(C: two-column compact layout, D: collapsible sections — both considered, not chosen) and the
+tradeoff analysis.
 
 ## Problem
 
