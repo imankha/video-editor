@@ -21,12 +21,10 @@ import pytest
 from app.services.upload_failures import (
     MILESTONE_REASON_BY_UPLOAD_REASON,
     UPLOAD_FAILURE_REASONS,
-    UPLOAD_STAGES,
     record_upload_failure,
     record_upload_failure_from_payload,
     sweep_expired_upload_failures,
 )
-
 
 # ---------------------------------------------------------------------------
 # Pure logic -- no Postgres required

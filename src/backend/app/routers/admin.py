@@ -33,8 +33,8 @@ from ..services.pg import get_pg
 from ..storage import APP_ENV
 from ..user_context import get_current_user_id
 from ..utils.cookies import delete_cookie as _delete_cookie_raw
-from ..version import APP_BUILD, APP_VERSION
 from ..utils.cookies import set_cookie as _set_cookie_raw
+from ..version import APP_BUILD, APP_VERSION
 
 logger = logging.getLogger(__name__)
 
