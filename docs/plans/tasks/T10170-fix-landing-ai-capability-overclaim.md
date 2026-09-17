@@ -1,6 +1,8 @@
 # T10170: Fix live landing-site claims that AI autonomously frames/tracks the player
 
-**Status:** WIP
+**Status:** WAITING ON USER (PR #458, Branch CI green - layer-scoped skip, no landing tests exist;
+two independent Reviewer passes, round 2 APPROVED; genuinely not provable by a human-absent test
+since this is marketing-copy accuracy/quality - needs your own read before merge)
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-09-15
