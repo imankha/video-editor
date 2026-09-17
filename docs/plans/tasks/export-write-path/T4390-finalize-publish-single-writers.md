@@ -118,3 +118,12 @@ one-line parameter gap (`effect_type`), or resolvable with hard evidence (aspect
 only offers two ratios, framed-pipeline file dims already match project setting today, so
 file-derivation is additive hardening with a documented, test-inert fallback). Proceeding to
 implementation — no BLOCKED.
+
+**2026-09-17 — Pushed + PR opened.** Branch was fully committed (7 commits) but never pushed
+after the last quota interrupt; pushed and opened [PR #457](https://github.com/imankha/video-editor/pull/457).
+One uncommitted change surfaced at push time (`.claude/knowledge/export-pipeline.md`, the Stage-7
+knowledge-doc update called for by CLAUDE.md) — committed separately (824476cc) and pushed. Branch
+CI running on the PR head. Remaining before STAGING: CI green, then merge. Live dev export
+(drive-app-as-user) stays SKIPPED-WITH-REASON per the 16:33 note — no dev Postgres reachable from
+the container; recommend a live re-check post-merge if desired, otherwise evidence base is golden
+harness + unit tests per kickoff fallback.
