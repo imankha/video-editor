@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ClipDetailsEditor } from './ClipDetailsEditor';
 import { useProjectsStore } from '../../../stores/projectsStore';
 
@@ -32,22 +32,38 @@ const baseRegion = {
 // linkedProject) helper instead of its own nested-ternary stage machine, and
 // the CTA labels are Frame this clip / Apply Spotlight / View Final / View
 // Published — superseding T9320's old mode-noun / Spotlight / Completed /
-// Published / Open clip (Draft). The manual "Create Clip" affordance
-// (NO_PROJECT case) is unchanged.
+// Published / Open clip (Draft). T10240: the NO_PROJECT case now shows TWO
+// always-enabled actions ("Create clip" / "Frame clip"), never a disabled
+// transitional state.
 describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () => {
-  it('shows an enabled "Create Clip" button when no project exists yet (NO_PROJECT)', () => {
+  it('shows two enabled create actions when no project exists yet (NO_PROJECT): Create clip + Frame clip', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: null }} onUpdate={() => {}} onDelete={() => {}} />);
-    const button = screen.getByRole('button', { name: 'Create clip' });
-    expect(button.disabled).toBe(false);
+    const create = screen.getByRole('button', { name: 'Create clip' });
+    const frame = screen.getByRole('button', { name: 'Frame clip' });
+    expect(create.disabled).toBe(false);
+    expect(frame.disabled).toBe(false);
   });
 
-  it('clicking "Create Clip" fires onUpdate({ createProject: true }) and shows a disabled transitional state while the request is in flight', () => {
-    const onUpdate = vi.fn();
-    render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: null }} onUpdate={onUpdate} onDelete={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create clip' }));
+  it('clicking "Create clip" fires onUpdate({ createProject: true }) and does NOT navigate', async () => {
+    const onUpdate = vi.fn(() => Promise.resolve({ saveOk: true, projectId: 77 }));
+    const onOpenInFocus = vi.fn();
+    render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: null }} onUpdate={onUpdate} onDelete={() => {}} onOpenInFocus={onOpenInFocus} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create clip' }));
+    });
     expect(onUpdate).toHaveBeenCalledWith({ createProject: true });
-    const button = screen.getByRole('button', { name: 'Clip created' });
-    expect(button.disabled).toBe(true);
+    expect(onOpenInFocus).not.toHaveBeenCalled();
+  });
+
+  it('clicking "Frame clip" creates then opens Framing on the synchronously-returned project id', async () => {
+    const onUpdate = vi.fn(() => Promise.resolve({ saveOk: true, projectId: 88 }));
+    const onOpenInFocus = vi.fn();
+    render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: null }} onUpdate={onUpdate} onDelete={() => {}} onOpenInFocus={onOpenInFocus} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Frame clip' }));
+    });
+    expect(onUpdate).toHaveBeenCalledWith({ createProject: true });
+    expect(onOpenInFocus).toHaveBeenCalledWith(88);
   });
 
   it('shows an enabled "Frame this clip" button once region.autoProjectId is set (FOCUS stage)', () => {
@@ -294,11 +310,17 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
       });
     });
 
-    it('never renders the stage control (Create Clip or Frame this clip) — desktop only', () => {
+    it('never renders the produced-stage control (Frame this clip) — desktop only', () => {
       render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }} onUpdate={() => {}} onDelete={() => {}} />);
       expect(screen.queryByRole('button', { name: 'Frame this clip' })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Create Clip' })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Clip Created' })).toBeNull();
+    });
+
+    // T10240: the NO_PROJECT create actions DO render on mobile (a phone can
+    // Frame a clip from a saved play), unlike the produced-stage CTA above.
+    it('renders the two NO_PROJECT create actions on mobile (Create clip / Frame clip)', () => {
+      render(<ClipDetailsEditor region={{ ...baseRegion, autoProjectId: null }} onUpdate={() => {}} onDelete={() => {}} />);
+      expect(screen.getByRole('button', { name: 'Create clip' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Frame clip' })).toBeTruthy();
     });
   });
 });

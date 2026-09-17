@@ -55,7 +55,23 @@ export const CLIP_STAGE = {
 export function getClipStage(region, linkedProject) {
   const hasProject = !!region?.autoProjectId;
   if (!hasProject) {
-    return { stage: CLIP_STAGE.NO_PROJECT, label: 'Create Clip', action: null };
+    // T10240: a saved play with no clip is no longer a dead end (was
+    // `action: null`). Two create outcomes, BOTH creating the auto-project via
+    // the same create path (updateClipRegionWithSync's `createProject: true`):
+    // "Create clip" stays in Annotate; "Frame clip" then opens it in Framing.
+    // `navigate` tells each surface whether to call onOpenInFocus with the new
+    // project id — threaded back synchronously from the create path (the shared
+    // create-then-navigate seam T10290's "Save and Frame" reuses). Neither is
+    // ever rendered disabled at the NO_PROJECT moment.
+    return {
+      stage: CLIP_STAGE.NO_PROJECT,
+      label: ANNOTATE.CREATE_CLIP,
+      action: null,
+      createActions: [
+        { key: 'create', label: ANNOTATE.CREATE_CLIP, navigate: false },
+        { key: 'frame', label: ANNOTATE.FRAME_CLIP, navigate: true },
+      ],
+    };
   }
 
   // T8070: exact-equality staleness gate (no epsilon).

@@ -171,6 +171,10 @@ export function ClipsSidePanel({
               onScrubLock={onScrubLock}
               onScrubUnlock={onScrubUnlock}
               teammateSuggestions={teammateSuggestions}
+              // T10240: the mobile detail takeover needs onOpenInFocus so its
+              // NO_PROJECT "Frame clip" action can navigate into Framing.
+              onOpenInFocus={onOpenClipInFocus}
+              onOpenInOverlay={onOpenClipInOverlay}
             />
           </div>
         </>
