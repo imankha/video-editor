@@ -1508,7 +1508,7 @@ async def export_overlay_only(
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                export_job_repository.create(cursor, job_id=export_id, project_id=project_id, job_type='overlay', input_data='{}')
+                export_job_repository.create_processing(cursor, job_id=export_id, project_id=project_id, job_type='overlay', input_data='{}')
                 conn.commit()
             logger.info(f"[Overlay Export] Created export_jobs record: {export_id} for project '{project_name}'")
         except Exception as e:

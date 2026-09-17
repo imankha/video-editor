@@ -11,12 +11,12 @@ internals).
 Run: pytest src/backend/tests/test_t4380_export_job_repository.py -v
 """
 
+import sqlite3
 import sys
 import uuid
 from pathlib import Path
 
 import pytest
-import sqlite3
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -111,6 +111,24 @@ def test_create_inserts_pending(project_id):
     assert row["status"] == "pending"
     assert row["project_id"] == project_id
     assert row["type"] == "framing"
+
+
+def test_create_processing_inserts_processing_unconditionally(project_id):
+    """create_processing (overlay.py's local-render tracking insert) has no
+    in-flight guard -- unlike create_if_none_active, calling it twice for the
+    same (project, type) inserts a SECOND row rather than blocking."""
+    from app.database import get_db_connection
+    from app.services import export_job_repository as repo
+
+    first, second = _job_id(), _job_id()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        repo.create_processing(cursor, job_id=first, project_id=project_id, job_type="overlay", input_data="{}")
+        repo.create_processing(cursor, job_id=second, project_id=project_id, job_type="overlay", input_data="{}")
+        conn.commit()
+
+    assert _row(first)["status"] == "processing"
+    assert _row(second)["status"] == "processing"
 
 
 def test_create_raises_on_insert_failure(project_id):
@@ -414,8 +432,8 @@ def test_store_modal_call_id(project_id):
 
 
 def test_store_modal_call_id_with_stage_sets_stage_and_output_key(project_id):
-    from app.database import get_db_connection
     from app.constants import ExportStage
+    from app.database import get_db_connection
     from app.services import export_job_repository as repo
 
     with get_db_connection() as conn:
@@ -444,8 +462,8 @@ def test_set_input_data_checkpoint(project_id):
 
 
 def test_set_rendered_checkpoint(project_id):
-    from app.database import get_db_connection
     from app.constants import ExportStage
+    from app.database import get_db_connection
     from app.services import export_job_repository as repo
 
     with get_db_connection() as conn:
@@ -460,8 +478,8 @@ def test_set_rendered_checkpoint(project_id):
 
 
 def test_set_stage(project_id):
-    from app.database import get_db_connection
     from app.constants import ExportStage
+    from app.database import get_db_connection
     from app.services import export_job_repository as repo
 
     with get_db_connection() as conn:
@@ -474,8 +492,8 @@ def test_set_stage(project_id):
 
 
 def test_claim_stage_for_finalize_cas_succeeds_on_matching_snapshot(project_id):
-    from app.database import get_db_connection
     from app.constants import ExportStage
+    from app.database import get_db_connection
     from app.services import export_job_repository as repo
 
     with get_db_connection() as conn:
@@ -496,8 +514,8 @@ def test_claim_stage_for_finalize_cas_succeeds_on_matching_snapshot(project_id):
 def test_claim_stage_for_finalize_cas_loses_on_stale_snapshot(project_id):
     """A second caller racing in with a stale (already-advanced-past) snapshot
     loses the CAS -- T7210's double-finalize guard."""
-    from app.database import get_db_connection
     from app.constants import ExportStage
+    from app.database import get_db_connection
     from app.services import export_job_repository as repo
 
     with get_db_connection() as conn:

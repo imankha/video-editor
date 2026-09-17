@@ -59,6 +59,25 @@ def create(cursor, *, job_id: str, project_id: int, job_type: str, input_data) -
     return job_id
 
 
+def create_processing(cursor, *, job_id: str, project_id: int, job_type: str, input_data) -> str:
+    """INSERT a new job as ExportStatus.PROCESSING, unconditionally (no
+    in-flight guard — see create_if_none_active for the guarded T9540
+    variant). For a synchronous inline-render tracking row where the caller
+    IS the worker for this request, same as create_if_none_active, but this
+    specific call site (overlay.py's local-render path) never had the
+    guard — preserved as its own plain insert rather than silently adding
+    dedup semantics that weren't there before."""
+    cursor.execute(
+        """
+        INSERT INTO export_jobs (id, project_id, type, status, input_data)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (job_id, project_id, job_type, ExportStatus.PROCESSING.value, input_data),
+    )
+    logger.info(f"[ExportJobRepository] Created job {job_id} (type={job_type}, project={project_id}, status=processing)")
+    return job_id
+
+
 def create_if_none_active(cursor, *, job_id: str, project_id: int, job_type: str, input_data) -> bool:
     """T9540 atomic per-(project, type) in-flight guard. INSERTs as
     ExportStatus.PROCESSING only when no active job already exists for this
