@@ -44,12 +44,6 @@ from ...middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
 from ...profile_context import get_current_profile_id
 from ...schemas import TextSpec
 from ...services import export_job_repository
-from ...services.collection_metadata import (
-    compute_project_game_ids,
-    compute_project_metadata,
-    compute_project_ranking_freeze,
-    compute_unified_clip_start,
-)
 from ...services.ffmpeg_service import get_encoding_command_parts
 from ...services.image_extractor import (
     list_highlight_images,
@@ -61,14 +55,16 @@ from ...services.poster import (
     generate_poster_at_export,
     get_project_poster_marker_time,
     load_project_clip_segments,
-    read_clip_segments_for_project,
     revert_to_auto_poster,
     set_project_poster_marker_time,
+)
+from ...services.publish_final_video import (
+    delete_prior_final_object,
+    publish_final_video,
 )
 from ...services.spotlight_reveal import compute_spotlight_reveal
 from ...services.video_detections import hoist_video_detections, slice_detections
 from ...storage import (
-    delete_from_r2,
     generate_presigned_url,
     upload_bytes_to_r2,
 )
@@ -82,41 +78,6 @@ _frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ov
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def _prior_final_is_shared(prior_filename: str) -> bool:
-    """Whether an active share still serves the prior final video's R2 object.
-
-    Shares snapshot the filename + resolve playback straight from R2, so deleting an
-    object an active share points at would break the share. Postgres is an external
-    dependency here: if the check can't run, fail SAFE (treat as shared -> keep the
-    object) rather than risk deleting a still-served reel."""
-    if not prior_filename:
-        return False
-    try:
-        from app.services.sharing_db import filename_has_active_share
-        return filename_has_active_share(prior_filename)
-    except Exception as e:
-        logger.warning(
-            f"[ReExport] Active-share check failed for {prior_filename}; "
-            f"keeping prior object to be safe: {e}")
-        return True
-
-
-def _delete_prior_final_object(user_id: str, prior_filename: str, new_filename: str) -> None:
-    """Post-commit, best-effort cleanup of a re-exported reel's PRIOR R2 object.
-
-    Runs ONLY after the new version is committed + the pointer repointed. Never
-    deletes the just-written object, and never raises -- a cleanup failure must not
-    roll back the successful swap. Caller has already confirmed the object is not
-    served by an active share."""
-    if not prior_filename or prior_filename == new_filename:
-        return
-    try:
-        delete_from_r2(user_id, f"final_videos/{prior_filename}")
-        logger.info(f"[ReExport] Deleted prior final R2 object final_videos/{prior_filename}")
-    except Exception as e:
-        logger.warning(f"[ReExport] Failed to delete prior final final_videos/{prior_filename}: {e}")
 
 
 def _finalize_overlay_export(
@@ -135,169 +96,43 @@ def _finalize_overlay_export(
     caller awaits `generate_poster_at_export(...)` with these AFTER this
     returns and BEFORE the sync-then-announce barrier (T5410; poster capture
     moved here from publish, T5280 REVERSED).
+
+    T4390: the final_videos write itself is the shared `publish_final_video`
+    writer (aspect_ratio still sourced from the project's setting here --
+    same as before this consolidation; deriving it from the actual output
+    file per T4160's rule is a separate, immediately-following commit).
     """
-    # T5410: still compute the reel's first slow-mo section from the project's
-    # ordered working clips and FREEZE it onto the final_videos row -- this is
-    # cheap (no ffmpeg) and is the durable source of truth publish/backfill read
-    # after the publish-time working_clips prune. poster_filename/_frame_time/
-    # _source are left NULL in the INSERT below; the caller's
-    # generate_poster_at_export call (after this returns) fills them.
-    slowmo_section = first_slowmo_section(load_project_clip_segments(project_id))
-    slowmo_start = slowmo_section[0] if slowmo_section else None
-    slowmo_end = slowmo_section[1] if slowmo_section else None
+    with get_db_connection() as conn:
+        _row = conn.cursor().execute(
+            "SELECT aspect_ratio FROM projects WHERE id = ?", (project_id,)
+        ).fetchone()
+        aspect_ratio = _row["aspect_ratio"] if _row else None
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
-
-        # T5215/T6030: intro_card_id (v034) and slowmo_section_start (v025)
-        # both live on final_videos and are guarded for the deploy->migrate
-        # window -- one PRAGMA table_info fetch covers both flags instead of
-        # two independent column_exists() probes (each runs its own PRAGMA;
-        # a per-call probe here is a real perf concern -- see
-        # test_finalize_guard_is_one_probe_not_per_row). intro_card_id is
-        # needed BEFORE the prior-row read below (it's part of that SELECT).
-        _final_videos_cols = {row[1] for row in cursor.execute("PRAGMA table_info(final_videos)").fetchall()}
-        _has_intro = "intro_card_id" in _final_videos_cols
-        intro_select = ", fv.intro_card_id" if _has_intro else ""
-
-        # T4010: capture the PRIOR final the project currently points at so we can
-        # atomically swap to the new version and clean up the old one after commit.
-        # T5215: also capture its intro_card_id -- this is what CARRIES the reel's
-        # attachment forward across the re-export's new version row (the top
-        # regression risk this task exists to prevent: a re-export must not
-        # silently drop the attachment). Read BEFORE any DELETE of this prior row.
-        cursor.execute(f"""
-            SELECT fv.id, fv.filename{intro_select}
-            FROM projects p JOIN final_videos fv ON fv.id = p.final_video_id
-            WHERE p.id = ?
-        """, (project_id,))
-        prior = cursor.fetchone()
-        prior_final_id = prior['id'] if prior else None
-        prior_filename = prior['filename'] if prior else None
-        prior_intro_card_id = prior['intro_card_id'] if (prior and _has_intro) else None
-        # An active share still serves the old object straight from R2 -> keep both
-        # its row and its object; otherwise the re-export replaces it in place.
-        keep_prior = _prior_final_is_shared(prior_filename)
-
-        cursor.execute("""
-            SELECT COALESCE(MAX(version), 0) + 1 as next_version
-            FROM final_videos WHERE project_id = ?
-        """, (project_id,))
-        next_version = cursor.fetchone()['next_version']
-
-        cursor.execute("SELECT id FROM raw_clips WHERE auto_project_id = ?", (project_id,))
-        is_auto_project = cursor.fetchone() is not None
-        source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
-
-        cursor.execute("SELECT name FROM projects WHERE id = ?", (project_id,))
-        project_row = cursor.fetchone()
-        fv_name = project_row['name'] if project_row else f"Video {project_id}"
-
-        # T5410: the user's pre-export overlay marker, read here (same cursor,
-        # same project read) so the caller can pass it straight into
-        # generate_poster_at_export. Column-guarded for the deploy->migrate
-        # window (v032 not yet applied) -- mirrors the _has_slowmo pattern below.
-        poster_marker_time = None
-        if column_exists(cursor, "projects", "poster_marker_time"):
-            cursor.execute("SELECT poster_marker_time FROM projects WHERE id = ?", (project_id,))
-            pm_row = cursor.fetchone()
-            if pm_row and pm_row["poster_marker_time"] is not None:
-                poster_marker_time = float(pm_row["poster_marker_time"])
-
-        # T3600: freeze collection metadata while working data still exists
-        # (publish archives + deletes it). T3605: freeze game_ids too.
-        duration, aspect_ratio, tags_blob = compute_project_metadata(cursor, project_id)
-        game_ids_blob = compute_project_game_ids(cursor, project_id)
-        # T3630: clip_count + quality_score + the Glicko seed (rating/rd) +
-        # source_clip_id/clip_start_time, all frozen in one shot.
-        (clip_count, quality_score, rating, rd,
-         source_clip_id, clip_start_time) = compute_project_ranking_freeze(cursor, project_id)
-        # T3920: unified two-half in-match start (file-relative + prior-half durations)
-        clip_game_start_time = compute_unified_clip_start(cursor, source_clip_id, clip_start_time)
-
-        # T6030: slowmo_section_start/end arrive with profile_db v025, which runs
-        # manually (not on deploy/startup). During the deploy->migrate window a
-        # below-v025 final_videos table has neither column; naming them here 500s
-        # ("no such column"), and this INSERT is on EVERY export's finalize path, so
-        # the window blocks all exports from completing. Omit both columns from the
-        # column list AND the positional VALUES tuple when absent -- never insert into
-        # a nonexistent column. NULL is the v025 default and the backfill is what
-        # populates them, so a window-era row is simply left unfrozen until the migrate
-        # runs (poster capture then reconstructs the section from live clips at publish).
-        _has_slowmo = "slowmo_section_start" in _final_videos_cols
-        slowmo_cols = ", slowmo_section_start, slowmo_section_end" if _has_slowmo else ""
-        slowmo_placeholders = ", ?, ?" if _has_slowmo else ""
-        slowmo_values = (slowmo_start, slowmo_end) if _has_slowmo else ()
-        # T5215: carry the reel's attachment (captured above from the prior row,
-        # or NULL/inherit-default on a first-ever export) into the new version.
-        intro_cols = ", intro_card_id" if _has_intro else ""
-        intro_placeholders = ", ?" if _has_intro else ""
-        intro_values = (prior_intro_card_id,) if _has_intro else ()
-        cursor.execute(f"""
-            INSERT INTO final_videos (project_id, filename, version, source_type, name,
-                duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
-                rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time,
-                poster_filename{slowmo_cols}{intro_cols})
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?{slowmo_placeholders}{intro_placeholders})
-        """, (project_id, output_filename, next_version, source_type, fv_name,
-              duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
-              rating, rd, source_clip_id, clip_start_time, clip_game_start_time, None,
-              *slowmo_values, *intro_values))
-        final_video_id = cursor.lastrowid
-
-        cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
-
-        # T4050: trace the atomic final-video swap. This is the ONLY place a
-        # re-framed reel becomes a materialized final; if a re-export never
-        # reaches here (prod max final_video.id stuck), the failure is upstream
-        # in the render/source path -- this log marks the successful boundary.
-        logger.info(
-            f"[ReExport] finalize project={project_id} new_final_id={final_video_id} "
-            f"version={next_version} filename={output_filename!r} "
-            f"prior_final_id={prior_final_id} "
-            f"{'KEEP prior (active share)' if (prior_final_id and keep_prior) else ('DELETE prior id=' + str(prior_final_id)) if prior_final_id else 'no prior (first final)'}"
+        result = publish_final_video(
+            cursor,
+            project_id=project_id,
+            output_filename=output_filename,
+            aspect_ratio=aspect_ratio,
+            export_job_id=export_id,
+            gpu_seconds=gpu_seconds,
+            modal_function=modal_function,
         )
-
-        # T4010: drop the now-superseded prior row in the SAME transaction as the
-        # swap, so DB + R2 stay consistent (the prior R2 object is deleted post-commit
-        # below). Skipped when an active share still serves it.
-        if prior_final_id and not keep_prior:
-            cursor.execute("DELETE FROM final_videos WHERE id = ?", (prior_final_id,))
-
-        export_job_repository.complete(
-            cursor, export_id,
-            output_video_id=final_video_id, output_filename=output_filename,
-            gpu_seconds=gpu_seconds, modal_function=modal_function,
-        )
-
-        # T8070: refresh the per-clip reel-source window to each clip's CURRENT
-        # boundaries for every clip of this project (via working_clips.raw_clip_id,
-        # so multi-clip and user-created reels are covered too). A final (Overlay)
-        # export is a successful export against the current window, so it re-freezes
-        # the snapshot the annotate Reel control compares against. Column-guarded
-        # for the deploy->migrate window (v049 not applied).
-        if column_exists(cursor, "raw_clips", "reel_source_start_time"):
-            cursor.execute("""
-                UPDATE raw_clips
-                SET reel_source_start_time = start_time,
-                    reel_source_end_time = end_time
-                WHERE id IN (
-                    SELECT raw_clip_id FROM working_clips
-                    WHERE project_id = ? AND raw_clip_id IS NOT NULL
-                )
-            """, (project_id,))
-
         conn.commit()
 
     # T4010: only after the swap is committed, best-effort delete the prior object.
-    if not keep_prior:
-        _delete_prior_final_object(user_id, prior_filename, output_filename)
+    if not result["keep_prior"]:
+        delete_prior_final_object(user_id, result["prior_filename"], output_filename)
 
     from app.analytics import record_milestone
     record_milestone(user_id, "export_completed", {"export_id": export_id, "type": "overlay"})
     record_milestone(user_id, "overlay_exported", {"export_id": export_id, "project_id": project_id})
 
-    return final_video_id, slowmo_section, duration, poster_marker_time
+    return (
+        result["final_video_id"], result["slowmo_section"],
+        result["duration"], result["poster_marker_time"],
+    )
 
 
 # T4200: the sync_failed payload builder now lives in export_helpers so framing and
@@ -1812,7 +1647,7 @@ async def export_final(
 
         # Verify project exists and has a working video
         cursor.execute("""
-            SELECT id, name, working_video_id, final_video_id
+            SELECT id, name, working_video_id, final_video_id, aspect_ratio
             FROM projects WHERE id = ?
         """, (project_id,))
         project = cursor.fetchone()
@@ -1821,7 +1656,7 @@ async def export_final(
             raise HTTPException(status_code=404, detail="Project not found")
 
         # T5410: the user's pre-export overlay marker (column-guarded for the
-        # deploy->migrate window, v032 not yet applied -- mirrors _has_slowmo below).
+        # deploy->migrate window, v032 not yet applied).
         poster_marker_time = None
         if column_exists(cursor, "projects", "poster_marker_time"):
             cursor.execute("SELECT poster_marker_time FROM projects WHERE id = ?", (project_id,))
@@ -1834,25 +1669,6 @@ async def export_final(
                 status_code=400,
                 detail="Project must have a working video before final export"
             )
-
-        # T5215: intro_card_id landed in v034; guarded (deploy->migrate window).
-        _has_intro = column_exists(cursor, "final_videos", "intro_card_id")
-        intro_select = ", intro_card_id" if _has_intro else ""
-
-        # T4010: capture the PRIOR final the project points at, to swap atomically
-        # and clean up the old version after commit (unless an active share serves it).
-        # T5215: also capture its intro_card_id -- carries the reel's attachment
-        # forward across this re-export's new version row (same regression the
-        # `_finalize_overlay_export` path above guards against).
-        prior_final_id = project['final_video_id']
-        prior_filename = None
-        prior_intro_card_id = None
-        if prior_final_id:
-            cursor.execute(f"SELECT filename{intro_select} FROM final_videos WHERE id = ?", (prior_final_id,))
-            prior_row = cursor.fetchone()
-            prior_filename = prior_row['filename'] if prior_row else None
-            prior_intro_card_id = prior_row['intro_card_id'] if (prior_row and _has_intro) else None
-        keep_prior = _prior_final_is_shared(prior_filename)
 
         # Generate unique filename using project name + UUID (no local storage)
         project_name = project['name'] or f"project_{project_id}"
@@ -1871,81 +1687,30 @@ async def export_final(
             raise HTTPException(status_code=500, detail="Failed to upload final video to R2")
         logger.info(f"[Final Export] Uploaded final video to R2: {filename} ({len(content)} bytes)")
 
-        # T5280: no poster (og:image JPEG) extraction here -- it moved to the
-        # publish gesture (downloads.py publish_to_my_reels), since share links are
-        # the poster's only consumer and can't exist before publish. Drafts that
-        # never publish skip the ffmpeg cost entirely.
-        # T5090 (KEPT): reuse the already-open cursor to read the project's ordered
-        # working-clip segment data (only SELECTs have run so far) and compute the
-        # first slow-mo section; FREEZE it on the row below so publish/backfill
-        # survive the publish-time working_clips prune. poster_filename stays NULL
-        # here; publish fills it.
-        slowmo_section = first_slowmo_section(read_clip_segments_for_project(cursor, project_id))
-        slowmo_start = slowmo_section[0] if slowmo_section else None
-        slowmo_end = slowmo_section[1] if slowmo_section else None
+        # T4390: aspect_ratio still sourced from the project's setting here --
+        # same as before this consolidation. Deriving it from the actual output
+        # file per T4160's rule is a separate, immediately-following commit.
+        aspect_ratio = project['aspect_ratio']
 
-        # Get next version number for final video
-        cursor.execute("""
-            SELECT COALESCE(MAX(version), 0) + 1 as next_version
-            FROM final_videos
-            WHERE project_id = ?
-        """, (project_id,))
-        next_version = cursor.fetchone()['next_version']
-        logger.info(f"[Final Export] Creating final video version {next_version} for project {project_id}")
+        # T4390: the shared final_videos writer -- T4010 atomic swap, T5215
+        # intro carry, T6030 slowmo (now column-guarded here too), T8070
+        # raw_clips refresh all live in publish_final_video. No export_job_id:
+        # this frontend-rendered save path has no export_jobs row.
+        result = publish_final_video(
+            cursor,
+            project_id=project_id,
+            output_filename=filename,
+            aspect_ratio=aspect_ratio,
+        )
+        final_video_id = result["final_video_id"]
+        logger.info(
+            f"[Final Export] Created final video id={final_video_id} "
+            f"with source_type={result['source_type']}"
+        )
 
-        # Determine source_type: check if this is an auto-created project for a 5-star clip
-        cursor.execute("""
-            SELECT id FROM raw_clips WHERE auto_project_id = ?
-        """, (project_id,))
-        is_auto_project = cursor.fetchone() is not None
-        source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
-
-        cursor.execute("SELECT name FROM projects WHERE id = ?", (project_id,))
-        project_row = cursor.fetchone()
-        fv_name = project_row['name'] if project_row else f"Video {project_id}"
-
-        # T3600: freeze collection metadata while working data still exists.
-        # T3605: freeze game_ids too.
-        duration, aspect_ratio, tags_blob = compute_project_metadata(cursor, project_id)
-        game_ids_blob = compute_project_game_ids(cursor, project_id)
-        # T3630: clip_count + quality_score + the Glicko seed (rating/rd) +
-        # source_clip_id/clip_start_time, all frozen in one shot.
-        (clip_count, quality_score, rating, rd,
-         source_clip_id, clip_start_time) = compute_project_ranking_freeze(cursor, project_id)
-        # T3920: unified two-half in-match start (file-relative + prior-half durations)
-        clip_game_start_time = compute_unified_clip_start(cursor, source_clip_id, clip_start_time)
-
-        # T5215: carry the reel's attachment (captured above from the prior row,
-        # or NULL/inherit-default on a first-ever export) into the new version.
-        intro_cols = ", intro_card_id" if _has_intro else ""
-        intro_placeholders = ", ?" if _has_intro else ""
-        intro_values = (prior_intro_card_id,) if _has_intro else ()
-
-        # Create new final video entry with version number and source_type
-        cursor.execute(f"""
-            INSERT INTO final_videos (project_id, filename, version, source_type, name,
-                duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
-                rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time,
-                poster_filename, slowmo_section_start, slowmo_section_end{intro_cols})
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?{intro_placeholders})
-        """, (project_id, filename, next_version, source_type, fv_name,
-              duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
-              rating, rd, source_clip_id, clip_start_time, clip_game_start_time, None,
-              slowmo_start, slowmo_end, *intro_values))
-        final_video_id = cursor.lastrowid
-        logger.info(f"[Final Export] Created final video id={final_video_id} with source_type={source_type}")
-
-        # Update project with new final video ID
-        cursor.execute("""
-            UPDATE projects SET final_video_id = ? WHERE id = ?
-        """, (final_video_id, project_id))
-
-        # T4010: drop the superseded prior row in the same transaction as the swap
-        # (its R2 object is deleted post-commit). Skipped when a share still serves it.
-        if prior_final_id and not keep_prior:
-            cursor.execute("DELETE FROM final_videos WHERE id = ?", (prior_final_id,))
-
-        # Track source clips for before/after comparison
+        # Track source clips for before/after comparison (export_final-only
+        # feature -- a different table, not part of the shared final_videos
+        # writer; same transaction/cursor as the write above).
         cursor.execute("""
             SELECT wc.id, wc.raw_clip_id, wc.uploaded_filename, wc.segments_data, wc.sort_order,
                    rc.filename as raw_filename
@@ -1994,34 +1759,20 @@ async def export_final(
 
         logger.info(f"[Final Export] Tracked {len(working_clips)} source clips for before/after")
 
-        # T8070: refresh the per-clip reel-source window (see _finalize_overlay_export
-        # for rationale). This inline finalizer does NOT call the shared helper, so it
-        # needs its own identical refresh. Column-guarded for the deploy->migrate window.
-        if column_exists(cursor, "raw_clips", "reel_source_start_time"):
-            cursor.execute("""
-                UPDATE raw_clips
-                SET reel_source_start_time = start_time,
-                    reel_source_end_time = end_time
-                WHERE id IN (
-                    SELECT raw_clip_id FROM working_clips
-                    WHERE project_id = ? AND raw_clip_id IS NOT NULL
-                )
-            """, (project_id,))
-
         conn.commit()
 
         logger.info(f"[Final Export] Created final video {final_video_id} for project {project_id}")
 
     # T4010: only after the swap is committed, best-effort delete the prior object.
-    if not keep_prior:
-        _delete_prior_final_object(user_id, prior_filename, filename)
+    if not result["keep_prior"]:
+        delete_prior_final_object(user_id, result["prior_filename"], filename)
 
     # T5410: capture the poster AFTER finalize, BEFORE the durable_sync barrier
     # (the `_durable` dependency awaits the R2 sync AFTER this handler returns,
     # so setting poster_* on the local row here still rides that same sync).
     await generate_poster_at_export(
         user_id, final_video_id, filename,
-        slowmo_section, duration, poster_marker_time,
+        result["slowmo_section"], result["duration"], poster_marker_time,
     )
 
     return JSONResponse({

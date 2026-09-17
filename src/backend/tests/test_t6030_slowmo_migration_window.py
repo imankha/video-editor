@@ -240,10 +240,13 @@ def test_export_finalize_at_head_persists_slowmo(at_head_user, monkeypatch):
 
     monkeypatch.setattr(analytics, "record_milestone", lambda *a, **k: None)
     # Freeze a deterministic section so we can assert it lands in the real columns.
+    # T4390: the final_videos write (incl. slow-mo section computation) moved to
+    # the shared publish_final_video writer -- patch it there, not on overlay.
     import app.routers.export.overlay as overlay
+    from app.services import publish_final_video
 
-    monkeypatch.setattr(overlay, "first_slowmo_section", lambda segs: (1.5, 3.5))
-    monkeypatch.setattr(overlay, "load_project_clip_segments", lambda pid: [])
+    monkeypatch.setattr(publish_final_video, "first_slowmo_section", lambda segs: (1.5, 3.5))
+    monkeypatch.setattr(publish_final_video, "read_clip_segments_for_project", lambda cursor, pid: [])
 
     project_id = _seed_project(at_head_user)
     final_video_id, _slowmo_section, _duration, _poster_marker_time = overlay._finalize_overlay_export(

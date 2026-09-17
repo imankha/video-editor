@@ -125,6 +125,7 @@ def test_upsert_working_video_refreshes_reel_source_to_current(db):
 def test_finalize_overlay_export_refreshes_reel_source_to_current(db):
     """Overlay finalize re-freezes reel_source_* to the clip's CURRENT boundaries."""
     from app.routers.export import overlay
+    from app.services import publish_final_video
 
     project_id, raw_clip_id = _seed_project_with_clip(db, 2.0, 8.0, reel_source=(0.0, 5.0))
     # give the project a working video so metadata freeze has something to read
@@ -142,7 +143,7 @@ def test_finalize_overlay_export_refreshes_reel_source_to_current(db):
     conn.commit()
     conn.close()
 
-    with patch.object(overlay, "delete_from_r2", return_value=True), \
+    with patch.object(publish_final_video, "delete_from_r2", return_value=True), \
          patch("app.services.sharing_db.filename_has_active_share", return_value=False), \
          patch("app.analytics.record_milestone"):
         overlay._finalize_overlay_export(project_id, "final.mp4", "exp-ov-t8070", USER_ID)

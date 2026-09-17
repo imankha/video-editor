@@ -255,6 +255,7 @@ class TestOverlayFinalizeCleanup:
         """New version inserted + pointer repointed, THEN the prior R2 object is
         deleted — and only the prior one, never the just-written object."""
         from app.routers.export import overlay
+        from app.services import publish_final_video
 
         project_id, wv, fv = self._seed(db)
 
@@ -273,7 +274,7 @@ class TestOverlayFinalizeCleanup:
             seen["deleted_key"] = key
             return True
 
-        with patch.object(overlay, "delete_from_r2", side_effect=_capture_delete) as mock_del, \
+        with patch.object(publish_final_video, "delete_from_r2", side_effect=_capture_delete) as mock_del, \
              patch("app.services.sharing_db.filename_has_active_share", return_value=False), \
              patch("app.analytics.record_milestone"):
             new_fid, _slowmo_section, _duration, _poster_marker_time = overlay._finalize_overlay_export(
@@ -293,10 +294,11 @@ class TestOverlayFinalizeCleanup:
         """If an active (non-revoked) share still serves the prior object, the
         cleanup keeps BOTH the prior R2 object and its row (share stays playable)."""
         from app.routers.export import overlay
+        from app.services import publish_final_video
 
         project_id, wv, fv = self._seed(db)
 
-        with patch.object(overlay, "delete_from_r2") as mock_del, \
+        with patch.object(publish_final_video, "delete_from_r2") as mock_del, \
              patch("app.services.sharing_db.filename_has_active_share", return_value=True), \
              patch("app.analytics.record_milestone"):
             new_fid, _slowmo_section, _duration, _poster_marker_time = overlay._finalize_overlay_export(
@@ -311,10 +313,11 @@ class TestOverlayFinalizeCleanup:
     def test_cleanup_failure_does_not_roll_back_swap(self, db):
         """A failure deleting the prior R2 object must NOT undo the committed swap."""
         from app.routers.export import overlay
+        from app.services import publish_final_video
 
         project_id, wv, fv = self._seed(db)
 
-        with patch.object(overlay, "delete_from_r2", side_effect=RuntimeError("R2 down")), \
+        with patch.object(publish_final_video, "delete_from_r2", side_effect=RuntimeError("R2 down")), \
              patch("app.services.sharing_db.filename_has_active_share", return_value=False), \
              patch("app.analytics.record_milestone"):
             new_fid, _slowmo_section, _duration, _poster_marker_time = overlay._finalize_overlay_export(
@@ -326,6 +329,7 @@ class TestOverlayFinalizeCleanup:
     def test_first_export_has_no_prior_object_to_delete(self, db):
         """A project with no prior final video must not attempt any R2 delete."""
         from app.routers.export import overlay
+        from app.services import publish_final_video
 
         conn = _connect(db)
         cur = conn.cursor()
@@ -334,7 +338,7 @@ class TestOverlayFinalizeCleanup:
         conn.commit()
         conn.close()
 
-        with patch.object(overlay, "delete_from_r2") as mock_del, \
+        with patch.object(publish_final_video, "delete_from_r2") as mock_del, \
              patch("app.services.sharing_db.filename_has_active_share", return_value=False), \
              patch("app.analytics.record_milestone"):
             overlay._finalize_overlay_export(project_id, "first.mp4", "exp-t4010-g", USER_ID)
