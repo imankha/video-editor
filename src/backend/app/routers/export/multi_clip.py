@@ -37,6 +37,7 @@ from ...constants import AI_UPSCALE_FACTOR, VIDEO_MAX_HEIGHT, VIDEO_MAX_WIDTH, E
 from ...database import column_exists, get_db_connection
 from ...profile_context import get_current_profile_id, set_current_profile_id
 from ...queries import latest_working_clips_subquery
+from ...services import export_job_repository
 from ...services.clip_cache import get_clip_cache
 from ...services.clip_pipeline import process_clip_with_pipeline
 from ...services.ffmpeg_service import get_video_duration
@@ -1307,18 +1308,13 @@ def _persist_rendered_checkpoint(export_id, output_key, normalized_clips_data, t
     })
     try:
         with get_db_connection() as conn:
-            conn.cursor().execute(
-                "UPDATE export_jobs SET input_data = ? WHERE id = ?", (input_blob, export_id)
-            )
+            export_job_repository.set_input_data_checkpoint(conn.cursor(), export_id, input_blob)
             conn.commit()
     except Exception as e:
         logger.warning(f"[Multi-Clip Export] Failed to persist input_data checkpoint for {export_id}: {e}")
     try:
         with get_db_connection() as conn:
-            conn.cursor().execute(
-                "UPDATE export_jobs SET stage = ?, output_key = ? WHERE id = ?",
-                (ExportStage.RENDERED.value, output_key, export_id),
-            )
+            export_job_repository.set_rendered_checkpoint(conn.cursor(), export_id, ExportStage.RENDERED.value, output_key)
             conn.commit()
     except Exception as e:
         # stage/output_key absent pre-v028 -> recovery falls back to modal_result.output_key.
@@ -1461,18 +1457,9 @@ async def _export_clips(
                             # T5630: this moment IS stage 'rendering' (dispatched,
                             # Modal maybe still running). Best-effort on `stage`
                             # (absent during the deploy->v028 window).
-                            try:
-                                cursor.execute("""
-                                    UPDATE export_jobs
-                                    SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP, stage = ?, output_key = ?
-                                    WHERE id = ?
-                                """, (modal_call_id, ExportStage.RENDERING.value, output_key, export_id))
-                            except Exception:
-                                cursor.execute("""
-                                    UPDATE export_jobs
-                                    SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP
-                                    WHERE id = ?
-                                """, (modal_call_id, export_id))
+                            export_job_repository.store_modal_call_id_with_stage(
+                                cursor, export_id, modal_call_id, ExportStage.RENDERING.value, output_key
+                            )
                             conn.commit()
                         logger.info(f"[Multi-Clip Export] Stored modal_call_id: {modal_call_id} for recovery")
                     except Exception as e:
@@ -2025,11 +2012,7 @@ async def _export_clips(
             try:
                 with get_db_connection() as conn:
                     cursor = conn.cursor()
-                    cursor.execute("""
-                        UPDATE export_jobs
-                        SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (str(e), export_id))
+                    export_job_repository.fail(cursor, export_id, str(e))
                     conn.commit()
                 logger.info(f"[Multi-Clip Export] Updated export_jobs to error: {export_id}")
             except Exception as db_e:
