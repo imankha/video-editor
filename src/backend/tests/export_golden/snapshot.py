@@ -63,6 +63,30 @@ def _canonical_json(tables: dict) -> str:
     return json.dumps(tables, indent=2, sort_keys=True, default=str) + "\n"
 
 
+def load_or_bless(name: str, actual: dict) -> dict:
+    """Lower-level primitive than `assert_matches_golden`: with BLESS_GOLDENS=1,
+    writes `actual` as the golden and returns it; otherwise reads and returns
+    the checked-in golden dict, leaving comparison to the caller.
+
+    For data with an intrinsic tolerance (render goldens: duration/frame-hash
+    drift is expected across ffmpeg builds) -- exact-JSON-equality via
+    `assert_matches_golden` is the wrong tool; the caller applies its own
+    per-field tolerance against the returned dict.
+    """
+    golden_path = GOLDENS_DIR / f"{name}.json"
+    if _bless_enabled():
+        GOLDENS_DIR.mkdir(parents=True, exist_ok=True)
+        golden_path.write_text(_canonical_json(actual))
+        return actual
+    if not golden_path.exists():
+        raise AssertionError(
+            f"No golden file at {golden_path}.\n"
+            f"Run `BLESS_GOLDENS=1 python3 scripts/rebless_export_goldens.py` "
+            f"to create it, then review the diff with `git diff` before committing."
+        )
+    return json.loads(golden_path.read_text())
+
+
 def assert_matches_golden(name: str, tables: dict) -> None:
     """Assert `tables` (a `{table_name: [row_dict, ...]}` snapshot of the DB
     delta a trigger produced) matches the checked-in golden `goldens/{name}.json`.
