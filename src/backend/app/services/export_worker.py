@@ -17,8 +17,7 @@ import os
 
 from ..analytics import record_milestone
 from ..constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
-from ..database import column_exists, get_db_connection, get_working_videos_path
-from ..queries import latest_working_clips_subquery
+from ..database import get_db_connection, get_working_videos_path
 from ..utils.encoding import decode_data
 from ..websocket import export_progress, manager
 from . import export_job_repository
@@ -179,15 +178,14 @@ async def process_export_job(job_id: str):
 
         # Route to appropriate handler
         if job_type == 'framing':
-            output_video_id, output_filename = await process_framing_export(job_id, project_id, config)
+            # T4390: process_framing_export completes the job itself now (via the
+            # shared upsert_working_video writer, in the SAME transaction as the
+            # working_videos INSERT) -- no separate completion write here, and its
+            # return value has no remaining caller in this function.
+            await process_framing_export(job_id, project_id, config)
         else:
             raise ValueError(f"Unknown export type: {job_type}")
 
-        # Mark as complete (DB write #2)
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            export_job_repository.complete(cursor, job_id, output_video_id=output_video_id, output_filename=output_filename)
-            conn.commit()
         credit_user_id = config.get("credit_user_id")
         if credit_user_id:
             record_milestone(credit_user_id, "export_completed", {"export_id": job_id, "type": "framing"})
@@ -338,41 +336,25 @@ async def process_framing_export(job_id: str, project_id: int, config: dict) -> 
     video_duration = get_video_duration(output_path)
     logger.info(f"[ExportWorker] Working video duration: {video_duration:.2f}s")
 
-    # Save to database (carry forward existing overlay data)
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO working_videos (project_id, filename, version, duration, highlights_data, effect_type)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (project_id, output_filename, next_version, video_duration, existing_highlights, existing_effect_type))
-        working_video_id = cursor.lastrowid
-
-        # Update project to point to new working video.
-        # T4010: do NOT null final_video_id -- the published reel stays valid until a
-        # new final is exported. Staleness is detected via timestamps downstream.
-        cursor.execute("""
-            UPDATE projects
-            SET working_video_id = ?
-            WHERE id = ?
-        """, (working_video_id, project_id))
-
-        # T8070: refresh the reel-source window for every clip this export
-        # actually rendered (INV-2/INV-3), mirroring routers/export/framing.py.
-        # Column-guarded for the deploy->migrate window.
-        if column_exists(cursor, "raw_clips", "reel_source_start_time"):
-            cursor.execute(f"""
-                UPDATE raw_clips
-                SET reel_source_start_time = start_time,
-                    reel_source_end_time = end_time
-                WHERE id IN (
-                    SELECT raw_clip_id FROM working_clips
-                    WHERE project_id = ?
-                    AND id IN ({latest_working_clips_subquery()})
-                    AND raw_clip_id IS NOT NULL
-                )
-            """, (project_id, project_id))
-
-        conn.commit()
+    # T4390: shared finalize writer (working_videos INSERT -> repoint project ->
+    # complete export_jobs -> stamp working_clips.exported_at/raw_clip_version ->
+    # refresh raw_clips' reel-source window), same transaction the multi-clip
+    # finalizer uses (T5630). This also fixes a gap this raw copy had: it never
+    # stamped working_clips.exported_at, which T4200's own analysis flags as
+    # weakening the T4020 shadow-version guard -- upsert_working_video does that
+    # stamp unconditionally as part of the one transaction. `next_version` above
+    # is still used to NAME the output file before the slow upscale runs; the
+    # writer assigns the AUTHORITATIVE version fresh at insert time (a narrower,
+    # safer race window than the prior code holding one MAX+1 read for the
+    # entire upscale duration -- readers always take MAX(version) regardless).
+    from .export_finalize import upsert_working_video
+    working_video_id = upsert_working_video(
+        {"id": job_id, "project_id": project_id},
+        filename=output_filename,
+        duration=video_duration,
+        highlights_data=existing_highlights,
+        effect_type=existing_effect_type,
+    )
 
     logger.info(f"[ExportWorker] Framing export complete: {output_filename} (id: {working_video_id})")
 

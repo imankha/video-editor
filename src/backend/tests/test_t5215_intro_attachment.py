@@ -164,10 +164,11 @@ class TestReExportCarriesIntroCardId:
 
     def test_explicit_id_survives_reexport(self, db):
         from app.routers.export import overlay
+        from app.services import publish_final_video
         card_id = _seed_card(db, "Hero")
         project_id, fv = self._seed(db, card_id)
 
-        with patch.object(overlay, "delete_from_r2", return_value=True), \
+        with patch.object(publish_final_video, "delete_from_r2", return_value=True), \
              patch("app.services.sharing_db.filename_has_active_share", return_value=False), \
              patch("app.analytics.record_milestone"):
             new_fid, *_ = overlay._finalize_overlay_export(project_id, "new.mp4", "exp-t5215-a", USER_ID)
@@ -177,8 +178,9 @@ class TestReExportCarriesIntroCardId:
 
     def test_zero_no_intro_survives_reexport(self, db):
         from app.routers.export import overlay
+        from app.services import publish_final_video
         project_id, fv = self._seed(db, 0)
-        with patch.object(overlay, "delete_from_r2", return_value=True), \
+        with patch.object(publish_final_video, "delete_from_r2", return_value=True), \
              patch("app.services.sharing_db.filename_has_active_share", return_value=False), \
              patch("app.analytics.record_milestone"):
             new_fid, *_ = overlay._finalize_overlay_export(project_id, "new.mp4", "exp-t5215-b", USER_ID)
@@ -186,8 +188,9 @@ class TestReExportCarriesIntroCardId:
 
     def test_null_inherit_survives_reexport(self, db):
         from app.routers.export import overlay
+        from app.services import publish_final_video
         project_id, fv = self._seed(db, None)
-        with patch.object(overlay, "delete_from_r2", return_value=True), \
+        with patch.object(publish_final_video, "delete_from_r2", return_value=True), \
              patch("app.services.sharing_db.filename_has_active_share", return_value=False), \
              patch("app.analytics.record_milestone"):
             new_fid, *_ = overlay._finalize_overlay_export(project_id, "new.mp4", "exp-t5215-c", USER_ID)
@@ -195,9 +198,10 @@ class TestReExportCarriesIntroCardId:
 
     def test_carries_forward_even_when_prior_is_kept_for_active_share(self, db):
         from app.routers.export import overlay
+        from app.services import publish_final_video
         card_id = _seed_card(db, "Hero")
         project_id, fv = self._seed(db, card_id)
-        with patch.object(overlay, "delete_from_r2") as mock_del, \
+        with patch.object(publish_final_video, "delete_from_r2") as mock_del, \
              patch("app.services.sharing_db.filename_has_active_share", return_value=True), \
              patch("app.analytics.record_milestone"):
             new_fid, *_ = overlay._finalize_overlay_export(project_id, "new.mp4", "exp-t5215-d", USER_ID)
@@ -208,6 +212,7 @@ class TestReExportCarriesIntroCardId:
         """A first-ever export (no prior final_videos row) has nothing to carry
         -- the new row is NULL (inherit-the-default), never a crash."""
         from app.routers.export import overlay
+        from app.services import publish_final_video
         conn = _connect(db)
         cur = conn.cursor()
         cur.execute("INSERT INTO projects (name, aspect_ratio) VALUES ('Fresh', '9:16')")
@@ -215,7 +220,7 @@ class TestReExportCarriesIntroCardId:
         conn.commit()
         conn.close()
 
-        with patch.object(overlay, "delete_from_r2") as mock_del, \
+        with patch.object(publish_final_video, "delete_from_r2") as mock_del, \
              patch("app.services.sharing_db.filename_has_active_share", return_value=False), \
              patch("app.analytics.record_milestone"):
             new_fid, *_ = overlay._finalize_overlay_export(project_id, "first.mp4", "exp-t5215-e", USER_ID)

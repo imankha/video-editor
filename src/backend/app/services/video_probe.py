@@ -51,6 +51,36 @@ def ffprobe_bytes(data: bytes) -> dict | None:
         return None
 
 
+def probe_dimensions_via_url(url: str) -> dict | None:
+    """T4390: ffprobe width/height directly from an HTTPS URL (byte-range aware,
+    same technique poster.py's frame-grab uses passing ffmpeg a presigned URL).
+    Returns None on any failure (bad URL, unreachable, unreadable) -- callers
+    treat this as an external-dependency probe that can legitimately fail, not
+    an internal-data fallback."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=width,height",
+                "-of", "json",
+                url,
+            ],
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return None
+        parsed = json.loads(result.stdout)
+        stream = (parsed.get("streams") or [{}])[0]
+        if not stream.get("width") or not stream.get("height"):
+            return None
+        return {"width": int(stream["width"]), "height": int(stream["height"])}
+    except Exception as e:
+        logger.warning(f"[video_probe] probe_dimensions_via_url failed: {e}")
+        return None
+
+
 def probe_r2_video(s3_client, bucket: str, key: str) -> dict | None:
     """
     Probe a video in R2 via presigned URL + ffprobe. ffprobe natively uses HTTP

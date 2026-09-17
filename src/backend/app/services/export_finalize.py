@@ -110,13 +110,22 @@ def upsert_working_video(
     new_framing_snapshot: dict | None = None,
     gpu_seconds: float | None = None,
     modal_function: str | None = None,
+    effect_type: str | None = None,
 ) -> int:
-    """Shared idempotent persist transaction for the multi-clip finalizer.
+    """Shared idempotent persist transaction for the multi-clip finalizer AND
+    (T4390) the single-clip framing finalizers (``export_worker.py``'s durable
+    worker path).
 
     ``highlights_data`` / ``detections_data`` are ALREADY-ENCODED msgpack blobs
     (or None). The local in-band writer passes ``detections_data=None``
     (preserving its historical column omission — regions carry embedded
     detections); the Modal path passes both.
+
+    ``effect_type`` (T4390): the single-clip framing writers carry the
+    project's current overlay effect forward across a re-export (schema
+    ``DEFAULT 'original'`` otherwise). Multi-clip callers never set it — the
+    default None leaves the column out of the INSERT entirely (relies on the
+    schema default), matching their exact pre-existing behavior byte-for-byte.
 
     T4350: ``highlights_data`` is the FRESHLY-DETECTED regions (the first-export
     seed / multi-clip fallback). When ``new_framing_snapshot`` (a DECODED framing
@@ -228,41 +237,33 @@ def upsert_working_video(
                 (project_id,),
             )
             next_version = cursor.fetchone()["next_version"]
+
+            # T4390: column set built additively so a new optional column (effect_type)
+            # doesn't multiply the deploy->migrate window branches below. Each branch
+            # still pins the EXACT same base column set it pinned before this change.
+            insert_cols = ["project_id", "filename", "version", "duration", "highlights_data"]
+            insert_vals = [project_id, filename, next_version, duration, insert_highlights]
             if has_carry_cols:
-                cursor.execute(
-                    """
-                    INSERT INTO working_videos
-                        (project_id, filename, version, duration, highlights_data, detections_data,
-                         framing_snapshot, highlight_carry_note)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (project_id, filename, next_version, duration, insert_highlights, detections_data,
-                     snapshot_blob, carry_note),
-                )
+                insert_cols += ["detections_data", "framing_snapshot", "highlight_carry_note"]
+                insert_vals += [detections_data, snapshot_blob, carry_note]
             elif _has_detections:
                 # deploy->migrate window (pre-v046): carry columns absent, INSERT the
                 # historical shape. Carry is skipped this once; the next re-export
                 # after migration takes the legacy_uncertain path.
-                cursor.execute(
-                    """
-                    INSERT INTO working_videos
-                        (project_id, filename, version, duration, highlights_data, detections_data)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (project_id, filename, next_version, duration, insert_highlights, detections_data),
-                )
-            else:
-                # T6780: even older window (pre-v027) — detections_data column also
-                # absent. Omit it too (v027's migration backfills it later); the carry
-                # columns are guaranteed absent here as well (v046 > v027).
-                cursor.execute(
-                    """
-                    INSERT INTO working_videos
-                        (project_id, filename, version, duration, highlights_data)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (project_id, filename, next_version, duration, insert_highlights),
-                )
+                insert_cols += ["detections_data"]
+                insert_vals += [detections_data]
+            # else: T6780 even older window (pre-v027) — detections_data column also
+            # absent. Omit it too (v027's migration backfills it later); the carry
+            # columns are guaranteed absent here as well (v046 > v027).
+            if effect_type is not None:
+                insert_cols += ["effect_type"]
+                insert_vals += [effect_type]
+
+            placeholders = ", ".join("?" for _ in insert_vals)
+            cursor.execute(
+                f"INSERT INTO working_videos ({', '.join(insert_cols)}) VALUES ({placeholders})",
+                tuple(insert_vals),
+            )
             wv_id = cursor.lastrowid
 
         # Repoint the project at the new/updated working video.

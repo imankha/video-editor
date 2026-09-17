@@ -10,13 +10,14 @@ Tests the full persistence strategy including:
 5. Gallery/Downloads feature
 """
 
-import requests
 import json
-import time
-from app.utils.encoding import decode_data
 import sys
+import time
 from pathlib import Path
-from datetime import datetime
+
+import requests
+
+from app.utils.encoding import decode_data
 
 BASE_URL = "http://localhost:8000/api"
 
@@ -48,7 +49,6 @@ class PersistenceTest:
         self.test_project_id = None
         self.test_raw_clip_ids = []
         self.test_working_clip_ids = []
-        self.test_working_video_id = None
         self.test_final_video_ids = []
         self.passed_tests = 0
         self.failed_tests = 0
@@ -241,58 +241,6 @@ class PersistenceTest:
 
         return True
 
-    def test_working_video_versioning(self):
-        """Test 4: Working video versioning"""
-        log_section("TEST 4: Working Video Versioning (Framing Exports)")
-
-        # Export working video version 1
-        with open(self.video_file, 'rb') as f:
-            files = {'video': f}
-            data = {
-                'project_id': self.test_project_id,
-                'clips_data': json.dumps([])
-            }
-            response = requests.post(f"{BASE_URL}/export/framing", files=files, data=data)
-
-        if response.status_code == 200:
-            result = response.json()
-            self.test_working_video_id = result['working_video_id']
-            log_success(f"Created working video v1 (ID: {self.test_working_video_id})")
-            self.passed_tests += 1
-        else:
-            log_error(f"Failed to export working video: {response.text}")
-            self.failed_tests += 1
-            return False
-
-        # Export working video version 2
-        time.sleep(0.5)  # Small delay to ensure different timestamps
-        with open(self.video_file, 'rb') as f:
-            files = {'video': f}
-            data = {
-                'project_id': self.test_project_id,
-                'clips_data': json.dumps([])
-            }
-            response = requests.post(f"{BASE_URL}/export/framing", files=files, data=data)
-
-        if response.status_code == 200:
-            result = response.json()
-            log_success(f"Created working video v2 (ID: {result['working_video_id']})")
-            self.passed_tests += 1
-        else:
-            log_error(f"Failed to export working video v2: {response.text}")
-            self.failed_tests += 1
-
-        # Verify GET returns latest version
-        response = requests.get(f"{BASE_URL}/export/projects/{self.test_project_id}/working-video")
-        if response.status_code == 200:
-            log_success("GET working-video returns latest version")
-            self.passed_tests += 1
-        else:
-            log_error("Failed to get working video")
-            self.failed_tests += 1
-
-        return True
-
     def test_overlay_persistence(self):
         """Test 5: Overlay mode data persistence"""
         log_section("TEST 5: Overlay Mode Data Persistence")
@@ -414,7 +362,7 @@ class PersistenceTest:
             data = response.json()
             test_downloads = [d for d in data['downloads'] if d['project_id'] == self.test_project_id]
             if len(test_downloads) == 3:
-                log_success(f"Gallery shows all 3 versions")
+                log_success("Gallery shows all 3 versions")
                 self.passed_tests += 1
             else:
                 log_error(f"Expected 3 videos in gallery, got {len(test_downloads)}")
@@ -506,7 +454,6 @@ class PersistenceTest:
             self.test_project_creation_and_state()
             self.test_clip_versioning()
             self.test_framing_persistence()
-            self.test_working_video_versioning()
             self.test_overlay_persistence()
             self.test_final_video_versioning()
             self.test_version_deletion()

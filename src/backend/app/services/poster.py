@@ -460,11 +460,13 @@ def load_project_clip_segments(
     """Open a profile-DB connection (CURRENT context) and read the project's
     ordered working-clip segment data via read_clip_segments_for_project.
 
-    Used by the overlay finalize path and the admin backfill, where no cursor is
-    already open. export_final passes its already-open cursor to
-    read_clip_segments_for_project directly instead. Never raises: a read failure
-    (e.g. archived project, missing table) logs at info and yields [] -> first
-    frame."""
+    Used where no cursor is already open: the `/overlay-data` poster endpoint,
+    `clip_boundary_offsets`, and the admin backfill. `publish_final_video`
+    (finalize/publish path) and `export_final` both already have an open
+    transaction cursor, so they call `read_clip_segments_for_project` directly
+    with their own tolerance wrapper instead of this one. Never raises: a read
+    failure (e.g. archived project, missing table) logs at info and yields []
+    -> first frame."""
     if project_id is None:
         return []
     from ..database import get_db_connection
