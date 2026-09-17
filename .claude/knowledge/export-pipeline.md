@@ -1,5 +1,11 @@
 ---
 domain: export-pipeline
+updated: 2026-09-17 (T4370 — export golden-output test harness landed: DB-effects
+snapshots for all 6 export triggers + local-render goldens with a documented
+average-hash tolerance. This is the characterization gate T4380-T4410 (export
+write-path consolidation) must pass before any of them may start. See new
+§ Golden-output harness section below for layout/run/re-bless. No production
+code changed — test infra only.)
 updated: 2026-09-15 (T10010 — post-export RESULT funnel instrumentation, aggregates-only, NO schema.
 The render→result→playback tail is now instrumented WITHOUT touching the export mechanism itself.
 Render events are UNCHANGED (`export_started`=accepted, `export_completed`=succeeded [+`framing_exported`/
@@ -158,7 +164,26 @@ Invariants 11-13); 2026-09-03 (T8510 FOCUS EXPORT GUARD + PROGRESS HONESTY, fron
 | `POST /api/downloads/publish/{project_id}` etc. | `downloads.py:818` publish, `:923` restore | Both use `durable_sync` dependency |
 | `GET /api/collections/download` | `collections.py download_collection` | **T4945**: stream a collection as ONE stitched MP4 (`[intro?][member_1..N][outro?]`); members concat (local ffmpeg or CPU-only `gpu=None` Modal `stitch_members` per `MODAL_ENABLED`) then app-side `compose_serve_time` for the ONE intro+outro, read-only over sources, disposable `temp/collection_stitch` scratch. **T4947 cache** (below): HEAD-before-build / write-after-build R2 cache. Access/sign-in gate: T4946 note above. Event-loop/error-handling hardening: T7040 note below. Progress UI: T7050 note above. |
 
-**The 6 export triggers** (T4370 harness must snapshot all of them): single-clip render (`/render`), multi-clip Modal branch, multi-clip local branch (`_export_clips:1236` vs `:1463`), overlay final (`render_overlay`/`/final`), durable worker (`export_worker.process_export_job`), sweep auto-export (`auto_export._export_brilliant_clip`).
+**The 6 export triggers** (T4370 harness snapshots all of them — see § Golden-output harness below): single-clip render (`/render`), multi-clip Modal branch, multi-clip local branch (`_export_clips:1236` vs `:1463`), overlay final (`render_overlay`/`/final`), durable worker (`export_worker.process_export_job`), sweep auto-export (`auto_export._export_brilliant_clip`).
+
+## Golden-output harness (T4370)
+
+The parity oracle T4380-T4410's consolidation must prove output-parity against, before any of those tasks may start. Two layers, both under `src/backend/tests/`:
+
+1. **DB-effects goldens** — one test per trigger, each calling the trigger's internal function DIRECTLY (not the HTTP route + fire-and-forget `asyncio.create_task`, which can't be awaited from a test) with the AI/GPU/Modal/R2 boundary stubbed, then snapshot-asserting the complete `working_videos`/`final_videos`/`export_jobs`/`projects`/`working_clips`/`raw_clips` delta against a checked-in JSON golden (`tests/export_golden/goldens/*.json`). Flat test files (`tests/test_export_golden_{local_render,overlay,multiclip_modal,worker,sweep}.py`) — `run_tests.py` globs `tests/test_*.py` non-recursively, so a subdirectory of test files would be invisible to it; the shared infra (`snapshot.py`/`fixtures.py`, canonicalization + bless mechanism + fixture-project builders) lives in the `tests/export_golden/` package precisely because it's imported, never collected directly.
+   - Single-clip render (a) and multi-clip local (c) share ONE code path (`multi_clip._export_clips` local branch, `is_test_mode=True` → `MockVideoUpscaler`, real ffmpeg crop+resize) — one test file, two tests.
+   - Multi-clip Modal (b) forces `modal_enabled()`→True on the SAME `_export_clips` and stubs `call_modal_clips_ai` + the R2 transport — hits the genuinely different Modal branch (`finalize_export`'s detect→persist→sync vs local's direct `upsert_working_video` call; Modal populates `detections_data`, local passes `None` — both pinned verbatim, not unified).
+   - Durable worker (e) hits `process_framing_export`'s DIVERGENT inline INSERT (carries `effect_type`, omits `detections_data`/`framing_snapshot`/`highlight_carry_note` entirely) — one of the "5 finalize copies" T4390 will consolidate; the golden pins that divergence on purpose.
+   - Sweep (f) snapshots the FULL table set even though it only touches `raw_clips`/`working_clips` post-T4175 — an empty `working_videos`/`final_videos` delta is itself the pinned property (the exact incident class — raw clips entering the ranking pool — this trigger's redesign fixed).
+   - Canonicalization: msgpack BLOB columns (`highlights_data`, `detections_data`, `framing_snapshot`, `input_data`, `tags`, `game_ids`) decoded before diffing; UUID-suffixed filenames + wall-clock timestamps + `export_jobs.id` masked to a fixed placeholder (shape, not incidental randomness, is what's pinned); `input_data`'s embedded `credit_user_id`/`video_path` are masked too (legitimately nondeterministic in production, not a test artifact).
+2. **Render goldens** (`tests/test_export_golden_render.py`) — 2 tiny ffmpeg-generated fixture videos through `MockVideoUpscaler` (the real local/CPU-fallback render path). ffprobe properties (resolution, codec, pix_fmt, audio-stream presence) exact-matched; duration tolerance ±1 frame (1/15s @ the 15fps fixture rate); perceptual similarity via 8×8 average-hash (`export_golden/render_hash.py`) with a **Hamming-distance tolerance of 6/64 bits** (documented reasoning, not empirically cross-validated against a second ffmpeg build — this container only has one; revisit if it ever flakes on a real ffmpeg version bump). Pixel-exact rejected on purpose (flakes across ffmpeg builds).
+   - **Characterization finding, not fixed here:** `MockVideoUpscaler.process_video_with_upscale` drops audio regardless of `include_audio` — its crop+scale filter chain rebinds the ffmpeg-python `stream` object to a video-only filtered node before `.output(..., acodec='aac')`, so there's never an audio stream left to map in. Zero production impact (CPU-fallback/test-only path, T4120 D1(b)/(c) — the real GPU path is unaffected) but pinned verbatim (`goldens/render_with_audio.json` → `has_audio: false`) rather than silently "fixed" as a drive-by.
+
+**Run just the harness:** `cd src/backend && python3 -m pytest tests/test_export_golden_local_render.py tests/test_export_golden_overlay.py tests/test_export_golden_multiclip_modal.py tests/test_export_golden_worker.py tests/test_export_golden_sweep.py tests/test_export_golden_render.py -v` (~50-60s, no `.venv` needed in the Linux container — plain `python3`/`pytest` are on PATH here; the `.venv/Scripts/python.exe` convention in CLAUDE.md is the Windows dev-machine path).
+
+**Re-bless** (only after an INTENTIONAL behavior change): `python3 scripts/rebless_export_goldens.py` — runs the harness with `BLESS_GOLDENS=1`, prints a `git diff` over `tests/export_golden/goldens/` for review before committing. Never hand-edit a golden JSON directly.
+
+**Data safety:** none of these tests request the `pg_conn` fixture — every trigger's writes are pure per-user profile SQLite under a fresh random `test_t4370_*` user id, so the real dev Postgres (the "tests TRUNCATE dev DB" memory) is never touched by this harness.
 
 > **`POST /api/export/framing` is DEAD (T4350 finding).** No frontend or backend caller — the frontend uses `/render` (single) + `/multi-clip`. Its inline verbatim highlight carry (`framing.py:240-260`) never runs. Don't "fix" that site; the live carry lives in `upsert_working_video` (below).
 

@@ -1,0 +1,292 @@
+{
+  "export_jobs": [
+    {
+      "acknowledged_at": null,
+      "completed_at": "<MASKED>",
+      "created_at": "<MASKED>",
+      "error": null,
+      "game_id": null,
+      "game_name": null,
+      "gpu_seconds": 2.5,
+      "id": "<MASKED>",
+      "input_data": {
+        "clips": [
+          {
+            "clipIndex": 0,
+            "clipName": "Fixture Clip 0",
+            "duration": 3.0,
+            "keyframes": [
+              {
+                "height": 320,
+                "time": 0.0,
+                "width": 180,
+                "x": 0,
+                "y": 0
+              },
+              {
+                "height": 320,
+                "time": 3.0,
+                "width": 180,
+                "x": 0,
+                "y": 0
+              }
+            ],
+            "rotation": 0,
+            "segment_data": {}
+          },
+          {
+            "clipIndex": 1,
+            "clipName": "Fixture Clip 1",
+            "duration": 3.0,
+            "keyframes": [
+              {
+                "height": 320,
+                "time": 0.0,
+                "width": 180,
+                "x": 0,
+                "y": 0
+              },
+              {
+                "height": 320,
+                "time": 3.0,
+                "width": 180,
+                "x": 0,
+                "y": 0
+              }
+            ],
+            "rotation": 0,
+            "segment_data": {}
+          }
+        ],
+        "framing_snapshot": {
+          "clip_count": 2,
+          "clips": [
+            {
+              "crop_keyframes": [],
+              "fps": 30.0,
+              "raw_duration": 3.0,
+              "segments_data": {
+                "boundaries": [
+                  0.0,
+                  3.0
+                ],
+                "segmentSpeeds": {},
+                "trimRange": null
+              }
+            },
+            {
+              "crop_keyframes": [],
+              "fps": 30.0,
+              "raw_duration": 3.0,
+              "segments_data": {
+                "boundaries": [
+                  0.0,
+                  3.0
+                ],
+                "segmentSpeeds": {},
+                "trimRange": null
+              }
+            }
+          ],
+          "transition": {
+            "duration": 0.0,
+            "type": "cut"
+          },
+          "video_dims": {
+            "height": 1280,
+            "width": 720
+          }
+        },
+        "transition": {
+          "duration": 0.0,
+          "type": "cut"
+        }
+      },
+      "modal_call_id": "modal-call-t4370-fixed",
+      "modal_function": "clips_ai_test_stub",
+      "output_filename": "<MASKED>",
+      "output_key": "<MASKED>",
+      "output_video_id": 1,
+      "project_id": 1,
+      "stage": "complete",
+      "started_at": "<MASKED>",
+      "status": "complete",
+      "type": "framing"
+    }
+  ],
+  "final_videos": [],
+  "projects": [
+    {
+      "archived_at": null,
+      "aspect_ratio": "9:16",
+      "created_at": "<MASKED>",
+      "current_mode": "framing",
+      "final_video_id": null,
+      "id": 1,
+      "is_auto_created": 0,
+      "last_opened_at": null,
+      "name": "T4370 Golden Fixture",
+      "poster_marker_time": null,
+      "restored_at": null,
+      "working_video_id": 1
+    }
+  ],
+  "raw_clips": [
+    {
+      "auto_project_id": null,
+      "boundaries_updated_at": null,
+      "boundaries_version": 1,
+      "created_at": "<MASKED>",
+      "default_highlight_regions": null,
+      "end_time": 3.0,
+      "filename": "<MASKED>",
+      "game_id": null,
+      "id": 1,
+      "my_athlete": 1,
+      "name": null,
+      "notes": null,
+      "rating": 5,
+      "reel_source_end_time": 3.0,
+      "reel_source_start_time": 0.0,
+      "shared_by": null,
+      "start_time": 0.0,
+      "tagged_teammates": null,
+      "tags": null,
+      "video_sequence": 1
+    },
+    {
+      "auto_project_id": null,
+      "boundaries_updated_at": null,
+      "boundaries_version": 1,
+      "created_at": "<MASKED>",
+      "default_highlight_regions": null,
+      "end_time": 3.0,
+      "filename": "<MASKED>",
+      "game_id": null,
+      "id": 2,
+      "my_athlete": 1,
+      "name": null,
+      "notes": null,
+      "rating": 5,
+      "reel_source_end_time": null,
+      "reel_source_start_time": null,
+      "shared_by": null,
+      "start_time": 0.0,
+      "tagged_teammates": null,
+      "tags": null,
+      "video_sequence": 1
+    }
+  ],
+  "working_clips": [
+    {
+      "created_at": "<MASKED>",
+      "crop_data": null,
+      "exported_at": "<MASKED>",
+      "fps": null,
+      "framing_version": 0,
+      "height": null,
+      "id": 1,
+      "project_id": 1,
+      "raw_clip_id": 1,
+      "raw_clip_version": 1,
+      "rotation": 0.0,
+      "segments_data": null,
+      "sort_order": 0,
+      "timing_data": null,
+      "uploaded_filename": "wc_fixture_0.mp4",
+      "version": 1,
+      "width": null
+    },
+    {
+      "created_at": "<MASKED>",
+      "crop_data": null,
+      "exported_at": null,
+      "fps": null,
+      "framing_version": 0,
+      "height": null,
+      "id": 2,
+      "project_id": 1,
+      "raw_clip_id": 2,
+      "raw_clip_version": null,
+      "rotation": 0.0,
+      "segments_data": null,
+      "sort_order": 1,
+      "timing_data": null,
+      "uploaded_filename": "wc_fixture_1.mp4",
+      "version": 1,
+      "width": null
+    }
+  ],
+  "working_videos": [
+    {
+      "created_at": "<MASKED>",
+      "detections_data": {
+        "detections": [],
+        "fps": 30
+      },
+      "dim_strength": 0.2,
+      "duration": 3.0,
+      "effect_type": "original",
+      "filename": "<MASKED>",
+      "fill_enabled": 1,
+      "fill_opacity": 0.2,
+      "framing_snapshot": {
+        "clip_count": 2,
+        "clips": [
+          {
+            "crop_keyframes": [],
+            "fps": 30.0,
+            "raw_duration": 3.0,
+            "segments_data": {
+              "boundaries": [
+                0.0,
+                3.0
+              ],
+              "segmentSpeeds": {},
+              "trimRange": null
+            }
+          },
+          {
+            "crop_keyframes": [],
+            "fps": 30.0,
+            "raw_duration": 3.0,
+            "segments_data": {
+              "boundaries": [
+                0.0,
+                3.0
+              ],
+              "segmentSpeeds": {},
+              "trimRange": null
+            }
+          }
+        ],
+        "transition": {
+          "duration": 0.0,
+          "type": "cut"
+        },
+        "video_dims": {
+          "height": 1280,
+          "width": 720
+        }
+      },
+      "highlight_carry_note": null,
+      "highlight_color": null,
+      "highlight_shape": "body",
+      "highlights_data": [
+        {
+          "enabled": true,
+          "end_time": 1.0,
+          "id": "det-1",
+          "keyframes": [],
+          "start_time": 0.2
+        }
+      ],
+      "id": 1,
+      "overlay_version": 0,
+      "project_id": 1,
+      "stroke_width": 2.0,
+      "text_overlays": null,
+      "version": 1
+    }
+  ]
+}

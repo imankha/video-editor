@@ -30,14 +30,195 @@ Two harness layers:
 
 ## Steps
 
-1. [ ] Read existing backend test infrastructure + T4120's verify recipe; write the harness plan (fixtures, stub boundary, snapshot format) in the Progress Log.
-2. [ ] DB-effects harness: start with single-clip render + overlay final (the two best-understood), then the other four triggers.
-3. [ ] Render goldens for the local path.
-4. [ ] CI/runtime budget: whole harness < ~2 min locally; document how to run just it.
+1. [x] Read existing backend test infrastructure + T4120's verify recipe; write the harness plan (fixtures, stub boundary, snapshot format) in the Progress Log.
+2. [x] DB-effects harness: start with single-clip render + overlay final (the two best-understood), then the other four triggers.
+3. [x] Render goldens for the local path.
+4. [x] CI/runtime budget: whole harness < ~2 min locally; document how to run just it.
 
 ## Acceptance Criteria
 
-- [ ] All 6 export triggers have DB-delta snapshots (every column, not just status)
-- [ ] Local render goldens with documented tolerance; ffprobe property assertions
-- [ ] One re-bless command with reviewable diffs
-- [ ] Harness green on master before any T4380+ work starts
+- [x] All 6 export triggers have DB-delta snapshots (every column, not just status)
+- [x] Local render goldens with documented tolerance; ffprobe property assertions
+- [x] One re-bless command with reviewable diffs
+- [ ] Harness green on master before any T4380+ work starts (green on the task branch; final master-merge confirmation is the supervisor's CI gate, not this worker's)
+
+**Note for T4420 (interpolation unification):** the Solution section above also
+scopes "local-vs-Modal parity on the SAME interpolation fixtures at the unit
+level (given keyframes + frame index -> identical crop rect from both
+implementations)" as a future oracle for T4420/T4430. This is NOT implemented
+by T4370 (absent from both the Steps and Acceptance Criteria checklists above,
+unlike the two harness layers, which are) — it is forward-looking motivation
+text, not a T4370 deliverable. T4420's implementer should read this task's
+`render_hash.py`/fixture patterns as a starting point but will need to add its
+own keyframe-interpolation-specific unit fixtures; flagging here so it isn't
+assumed to already exist.
+
+## Progress Log
+
+**2026-09-17 — Harness plan (written before test code, per Code Expert audit):**
+
+**Layout — flat, not a subpackage.** `run_tests.py` globs `tests/test_*.py`
+non-recursively (it does NOT run `pytest tests/`, see its own docstring). A
+`tests/export_golden/` subdirectory of `test_*.py` files would be invisible to
+it. Decision: helper/infra modules live in `tests/export_golden/` (a package,
+imported by test files, never matched by the glob directly) — `snapshot.py`
+(canonicalize + assert + bless), `fixtures.py` (fixture-project builders, tiny
+MP4 generation), `goldens/*.json` + `goldens/*.mp4` (golden data). The actual
+pytest test files are flat: `tests/test_export_golden_{trigger}.py` and
+`tests/test_export_golden_render.py`. Zero changes to `run_tests.py`.
+
+**Snapshot mechanism — hand-rolled (no snapshot-testing library exists in this
+repo or requirements).** `export_golden/snapshot.py::assert_matches_golden(name,
+tables)` serializes a `{table_name: [rows...]}` dict to canonical
+(sort_keys, indent=2) JSON, diffs it against `tests/export_golden/goldens/{name}.json`
+via `difflib.unified_diff` on mismatch (loud, reviewable — never a binary blob).
+`BLESS_GOLDENS=1` env var makes it overwrite the golden file with the actual
+snapshot instead of asserting; `scripts/rebless_export_goldens.py` sets that env
+var, runs the harness, and prints `git diff` over `tests/export_golden/goldens/`
+afterward so a re-bless always shows a reviewable diff, never a silent overwrite.
+
+**Stub boundary per trigger** (fast + deterministic; DB writes are REAL, only
+AI/GPU/Modal/R2 network calls are stubbed) — calling the internal
+trigger/background functions DIRECTLY (not the HTTP route + fire-and-forget
+`asyncio.create_task`, which can't be awaited from a test), matching the
+existing pattern in `test_t4110_export_durability.py::test_overlay_background_gates_complete_on_durable_sync`
+and `test_t4350_carry_finalize.py`:
+- (a) single-clip render + (c) multi-clip local branch: both share the exact
+  same code path — `multi_clip._export_clips(..., is_test_mode=True)` with a
+  fake `UploadFile`-like object (`.read()`/`.seek()`) wrapping a real
+  ffmpeg-generated tiny MP4 (reuses `test_seams._generate_tiny_mp4`'s lavfi
+  pattern). `is_test_mode=True` selects `MockVideoUpscaler` (real ffmpeg
+  crop+resize, no AI) — this is the SAME mock `test_seams.py` already uses for
+  E2E verification, so the render step is real ffmpeg, not a fake. `MODAL_ENABLED`
+  unset/false (default) keeps it off the Modal branch. Only `upload_to_r2` is
+  monkeypatched (R2_ENABLED is False in this env, so the real function returns
+  False and the pipeline would hard-fail — stub returns True, DB write is
+  unaffected by this).
+- (b) multi-clip Modal branch: patch `multi_clip.modal_enabled` to return True,
+  stub `multi_clip.call_modal_clips_ai` (returns a fixed success dict + writes
+  a local file at the expected output path so the duration probe/finalize can
+  read it), stub `download_from_r2`/`upload_bytes_to_r2`/`delete_from_r2` to
+  local-file / no-op equivalents, and stub
+  `multi_clip.run_player_detection_for_highlights` (via `export_finalize`) for
+  deterministic regions. Real code under test: `finalize_export` ->
+  `upsert_working_video` (the actual DB delta).
+- (d) overlay: `render_overlay`'s background worker
+  `overlay._run_overlay_export_background` called directly, stubbing
+  `call_modal_overlay_auto` (fixed success dict) and `generate_poster_at_export`
+  (no-op) exactly like the existing T4110 test; `_finalize_overlay_export` runs
+  FOR REAL (that's the DB delta under test). `export_final`
+  (`POST /api/export/final`) is a plain request/response (no background task) —
+  driven via `httpx.ASGITransport`, matching `test_t4110_export_durability.py`.
+- (e) durable worker: `export_worker.process_export_job` called directly with a
+  seeded `export_jobs` row (`status='pending'`); stub
+  `export_worker.get_upscaler` to return a fake class whose
+  `process_video_with_upscale` copies the input fixture to the output path
+  (real ffprobe-readable file, no AI).
+- (f) sweep: `auto_export._export_brilliant_clip` called directly; stub
+  `generate_presigned_url_global` to return a `file://`-free local path to a
+  tiny fixture MP4 (ffmpeg's `-i` accepts a local path directly) and stub
+  `upload_to_r2`/`r2_head_object` (no real R2). Snapshots `raw_clips` +
+  `working_clips` only — this trigger does NOT touch `working_videos`/
+  `final_videos` (post-T4175, verified in the audit).
+
+R2_ENABLED is False by default in this dev/container env (`storage.R2_ENABLED`),
+so `sync_export_db_to_r2`/`sync_db_to_r2_explicit` are already no-ops returning
+success without any patching — the durable-sync gate is exercised as a passthrough,
+not bypassed.
+
+**Snapshot canonicalization (avoiding flaky diffs):** BLOB columns
+(`highlights_data`, `detections_data`, `framing_snapshot`, `input_data`, `tags`,
+`game_ids`) are msgpack-decoded before serializing. UUID-suffixed filenames
+(`working_{id}_{uuid}.mp4`) and wall-clock columns (`completed_at`, `started_at`,
+`created_at`, `exported_at`, `published_at`) are masked to a fixed placeholder —
+the harness pins SHAPE (which columns are set, to what kind of value), not
+literal UUIDs/timestamps, matching how the code-expert audit found the "5
+finalize copies" genuinely differ in column SET (e.g. worker's inline INSERT
+carries `effect_type` and omits `detections_data`; local branch passes
+`detections_data=None` vs Modal's populated value) — those differences are
+pinned VERBATIM, not smoothed over.
+
+**Render goldens tolerance:** frame-hash (perceptual, via a simple downscale+
+average-hash over ffmpeg-extracted sample frames) with a documented Hamming-
+distance tolerance (chosen empirically in this task, documented in
+`.claude/knowledge/export-pipeline.md` once picked) — pixel-exact comparison is
+explicitly rejected per the task file (flakes across ffmpeg builds). Duration
+asserted ±1 frame, resolution + stream layout via `ffprobe`.
+
+**2026-09-17 — Implementation + QA complete.**
+
+9 tests across 6 files (`tests/test_export_golden_{local_render,overlay,
+multiclip_modal,worker,sweep,render}.py`) + shared infra (`tests/export_golden/
+{snapshot,fixtures,render_hash}.py`) + `scripts/rebless_export_goldens.py`.
+Full harness: **9 passed in ~50-60s** (well under the 2-min budget), stable
+across repeated runs (no flake observed in ~8 consecutive local runs while
+iterating).
+
+**QA proof (per Workflow step 4):**
+- Green run: confirmed above.
+- **Regression-catch proof:** temporarily changed `upsert_working_video`'s
+  `export_jobs.status` write from `'complete'` to `'done'`
+  (`export_finalize.py`). Result: exactly the 3 tests whose trigger flows
+  through `upsert_working_video` (single-clip render, multi-clip local,
+  multi-clip Modal) failed with a precise unified diff pointing at the one
+  changed line; the 3 tests whose trigger does NOT go through that function
+  (overlay render, export_final, durable worker, sweep) stayed green — proving
+  both that the harness catches a real regression AND that it doesn't
+  over-fire on unrelated triggers. Reverted; suite green again.
+- **Re-bless proof:** re-ran the same mutation, ran
+  `scripts/rebless_export_goldens.py`, confirmed the printed `git diff` was a
+  clean 1-line-changed diff per affected golden file (not a binary/opaque
+  blob) — reviewable exactly as the acceptance criteria requires. Reverted
+  both the code and the 3 regenerated golden files.
+- **Existing-suite regression check:** ran a curated 10-file set covering the
+  code this harness exercises (`test_t4350_carry_finalize`,
+  `test_t4355_multiclip_carry`, `test_t5630_characterization`,
+  `test_t5630_finalize_unit`, `test_t7210_modal_call_id_recovery`,
+  `test_export_worker_sync`, `test_auto_export`, `test_t4110_export_durability`,
+  `test_t4120_test_seams`, `test_t9540_double_dispatch_guard`) — 127 passed,
+  confirming adding this harness broke nothing pre-existing.
+
+**Data-safety guard:** none of these tests request the `pg_conn` fixture (the
+only fixture that touches real Postgres, guarded by conftest.py's
+staging/prod DSN keyword check) — every trigger's DB writes are pure per-user
+profile SQLite, freshly created per test run under a random `test_t4370_*`
+user id (`USER_DATA_BASE=/workspace/user_data` in this container, gitignored,
+fully disposable). `DATABASE_URL` in this environment already points at dev,
+not staging/prod, but the harness's design makes that moot — it never opens a
+Postgres connection at all.
+
+**Characterization finding surfaced (not a bug T4370 fixes, documented for
+awareness):** `MockVideoUpscaler.process_video_with_upscale` (the local/
+CPU-fallback render path) drops the audio stream from its output regardless of
+`include_audio` — its crop+scale filter chain rebinds the ffmpeg-python
+`stream` object to a video-only filtered node before `.output(...,
+acodec='aac')`, so there is never an audio stream left to map in. Zero
+production impact (this mock only runs in CPU/test containers per T4120
+D1(b)/(c); the real GPU/Modal path is unaffected) but pinned verbatim in
+`goldens/render_with_audio.json` (`has_audio: false`) per this task's
+characterize-don't-fix charter. See `.claude/knowledge/export-pipeline.md`.
+
+**How to run just this harness:**
+```bash
+cd src/backend
+python3 -m pytest tests/test_export_golden_local_render.py tests/test_export_golden_overlay.py \
+  tests/test_export_golden_multiclip_modal.py tests/test_export_golden_worker.py \
+  tests/test_export_golden_sweep.py tests/test_export_golden_render.py -v
+```
+**How to re-bless** (after an INTENTIONAL behavior change, e.g. during
+T4380-T4410's consolidation): `python3 scripts/rebless_export_goldens.py`,
+then review the printed `git diff` before committing the golden files.
+
+**Reviewer pass: APPROVED, 0 blocking/major, 2 minor (both same root cause).**
+`fixtures.py`'s `TABLE_MASK_FIELDS["working_videos"]` masks `filename`
+table-globally, which also hides two writer-specific, ALREADY-deterministic
+filenames that aren't UUID-suffixed: the durable worker's
+`project_{project_id}_v{version}.mp4` (`export_worker.py:284`) and the overlay
+tests' seeded `wv_fixture.mp4`. Consequence: a future finalize consolidation
+(T4390) that changes the worker's filename FORMAT (not just its random suffix)
+wouldn't be caught by `durable_worker.json`. Not fixed here (reviewer: "not
+blocking... test-code norm applies, the mask isn't wrong, just slightly
+broader than strictly necessary for this one writer") — flagging for T4390's
+implementer: if you touch `process_framing_export`'s filename scheme, manually
+diff `durable_worker.json`'s masked `<MASKED>` filename fields against the new
+actual value once before trusting a green run on that golden specifically.
