@@ -22,6 +22,7 @@ from app.database import column_exists, get_db_connection
 from app.middleware.db_sync import durable_sync
 from app.services.credit_ledger import get_credit_balance
 from app.services.storage_credits import calculate_storage_cost, calculate_upload_cost
+from app.services.upload_failures import record_upload_failure, record_upload_failure_from_payload
 from app.storage import (
     R2_ENABLED,
     generate_multipart_urls,
@@ -38,6 +39,7 @@ from app.storage import (
 )
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data, encode_data
+from app.utils.offload import run_in_context
 
 logger = logging.getLogger(__name__)
 
@@ -97,32 +99,23 @@ def validate_file_size(size: int) -> bool:
     return 0 < size <= MAX_FILE_SIZE
 
 
-def _record_upload_failure(user_id: str | None, reason: str, kind: str = UploadKind.GAME.value) -> None:
-    """
-    T7970: record a `game_upload_failed`/`clip_upload_failed` milestone at a REAL
-    in-flight failure site (T8370: routed by `kind` — a clip upload's failures
-    must not inflate the GAME tried/succeeded pair, mirroring the finalize-time
-    D4 fix).
+async def _write_upload_failure(*, stage: str, reason: str, terminal: bool,
+                                 kind: str = UploadKind.GAME.value, origin: str = "server",
+                                 **extra) -> None:
+    """T10270: this router's ONE call path into the shared writer
+    (`services.upload_failures.record_upload_failure`), replacing the old
+    private `_record_upload_failure` helper (deleted, not duplicated --
+    design §3.5's closing note).
 
-    Before T7970 the ONLY emitter of `game_upload_failed` was the stale-pending
-    reaper (`list_pending_uploads`, reason=user_abandoned), so the admin "Upload
-    Success" denominator was success-only by construction (100% by construction).
-    This records the actual failure branches (R2 error, validation rejection, size
-    mismatch, explicit cancel, client-side network abort) using the existing
-    `analytics.MILESTONE_REASONS` taxonomy.
-
-    Best-effort: analytics must NEVER break the upload's own error path, so a failed
-    milestone write is swallowed (and an absent user_id — anon beacon — is skipped).
-    Each caller traces to a named terminal failure event, not a reactive sweep.
+    Every handler in this file is `async def`, so the T6200 cardinal rule
+    applies: the writer is plain blocking (psycopg2) and MUST be offloaded via
+    `run_in_context`, which forwards positional args only -- this builds the
+    keyword payload dict `record_upload_failure` expects (design §3.4) rather
+    than calling it with keywords directly.
     """
-    if not user_id:
-        return
-    event = "clip_upload_failed" if kind == UploadKind.CLIP.value else "game_upload_failed"
-    try:
-        from app.analytics import record_milestone
-        record_milestone(user_id, event, reason=reason)
-    except Exception:
-        logger.exception(f"[T7970] failed to record {event} milestone")
+    payload = {"kind": kind, "stage": stage, "reason": reason, "terminal": terminal,
+               "origin": origin, **extra}
+    await run_in_context(record_upload_failure_from_payload, payload)
 
 
 # T8170: an HTTP status embedded in an uploadPart rejection message (see
@@ -212,21 +205,27 @@ async def prepare_upload(request: PrepareUploadRequest):
     # mis-namespaced upload would land bytes nobody can find.
     kind = request.kind
     if kind not in (UploadKind.GAME.value, UploadKind.CLIP.value):
-        _record_upload_failure(user_id, "refused")
+        await _write_upload_failure(stage="preparing", reason="refused", terminal=True,
+                                     user_id=user_id, http_status=400)
         raise HTTPException(status_code=400, detail=f"Invalid upload kind: {kind!r}")
     is_clip = kind == UploadKind.CLIP.value
 
     # Validate inputs. A malformed hash/size is a real rejected upload attempt (T7970).
     blake3_hash = request.blake3_hash.lower()
     if not validate_blake3_hash(blake3_hash):
-        _record_upload_failure(user_id, "refused", kind=kind)
+        await _write_upload_failure(stage="preparing", reason="refused", terminal=True,
+                                     kind=kind, user_id=user_id, http_status=400,
+                                     blake3_hash=blake3_hash)
         raise HTTPException(
             status_code=400,
             detail="Invalid BLAKE3 hash format. Expected 64 hex characters."
         )
 
     if not validate_file_size(request.file_size):
-        _record_upload_failure(user_id, "refused", kind=kind)
+        await _write_upload_failure(stage="preparing", reason="refused", terminal=True,
+                                     kind=kind, user_id=user_id, http_status=400,
+                                     blake3_hash=blake3_hash, file_size=request.file_size,
+                                     original_filename=request.original_filename)
         raise HTTPException(
             status_code=400,
             detail=f"Invalid file size. Must be between 1 byte and {MAX_FILE_SIZE // (1024**3)}GB."
@@ -235,7 +234,10 @@ async def prepare_upload(request: PrepareUploadRequest):
     # T8370 §4.3: clip sources are permanent (never expire), so cap the size
     # up front — never a silent truncation, steer to Add Game instead.
     if is_clip and request.file_size > MAX_CLIP_UPLOAD_BYTES:
-        _record_upload_failure(user_id, "refused", kind=kind)
+        await _write_upload_failure(stage="preparing", reason="refused", terminal=True,
+                                     kind=kind, user_id=user_id, http_status=400,
+                                     blake3_hash=blake3_hash, file_size=request.file_size,
+                                     original_filename=request.original_filename)
         raise HTTPException(
             status_code=400,
             detail=(
@@ -379,7 +381,10 @@ async def prepare_upload(request: PrepareUploadRequest):
     # e.g. an executed-but-unacked create from a prior attempt).
     upload_id = r2_create_multipart_upload(r2_key)
     if not upload_id:
-        _record_upload_failure(user_id, "sync_failed", kind=kind)
+        await _write_upload_failure(stage="preparing", reason="sync_failed", terminal=True,
+                                     kind=kind, user_id=user_id, http_status=500,
+                                     blake3_hash=blake3_hash, file_size=request.file_size,
+                                     original_filename=request.original_filename)
         raise HTTPException(
             status_code=500,
             detail="Failed to initiate multipart upload"
@@ -405,7 +410,11 @@ async def prepare_upload(request: PrepareUploadRequest):
         # (if the keeper is truly dead this is a no-op; direct use of the
         # created id is safe — only cross-response comparison is broken).
         r2_abort_multipart_upload(r2_key, upload_id)
-        _record_upload_failure(user_id, "sync_failed", kind=kind)
+        await _write_upload_failure(stage="preparing", reason="sync_failed", terminal=True,
+                                     kind=kind, user_id=user_id, http_status=500,
+                                     blake3_hash=blake3_hash, r2_upload_id=upload_id,
+                                     file_size=request.file_size,
+                                     original_filename=request.original_filename)
         raise HTTPException(
             status_code=500,
             detail="Failed to initiate multipart upload"
@@ -510,6 +519,10 @@ async def finalize_upload(
                 f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
                 f"reason=session_not_found"
             )
+            # T10270 class 7: previously warning-only, no durable record.
+            await _write_upload_failure(stage="finalizing", reason="session_not_found",
+                                         terminal=True, user_id=user_id, http_status=404,
+                                         upload_session_id=session_id)
             raise HTTPException(
                 status_code=404,
                 detail="Upload session not found"
@@ -536,7 +549,10 @@ async def finalize_upload(
                 f"reason=complete_multipart_failed"
             )
             # T7970: R2 refused/failed to assemble the multipart — a durable-sync failure.
-            _record_upload_failure(user_id, "sync_failed", kind=kind)
+            await _write_upload_failure(stage="finalizing", reason="sync_failed", terminal=True,
+                                         kind=kind, user_id=user_id, http_status=500,
+                                         blake3_hash=blake3_hash, upload_session_id=session_id,
+                                         r2_upload_id=r2_upload_id, parts_total=len(r2_parts))
             raise HTTPException(
                 status_code=500,
                 detail="Failed to complete multipart upload"
@@ -550,7 +566,10 @@ async def finalize_upload(
                 f"hash={blake3_hash} reason=object_not_found_after_complete"
             )
             # T7970: R2 completed but the object is not durably readable — sync failure.
-            _record_upload_failure(user_id, "sync_failed", kind=kind)
+            await _write_upload_failure(stage="finalizing", reason="sync_failed", terminal=True,
+                                         kind=kind, user_id=user_id, http_status=500,
+                                         blake3_hash=blake3_hash, upload_session_id=session_id,
+                                         r2_upload_id=r2_upload_id)
             raise HTTPException(
                 status_code=500,
                 detail="Upload completed but object not found"
@@ -566,7 +585,11 @@ async def finalize_upload(
             )
             # T7970: bytes on R2 don't match the declared size — the transfer dropped/
             # duplicated data in flight (transport-level corruption) -> network.
-            _record_upload_failure(user_id, "network", kind=kind)
+            await _write_upload_failure(stage="finalizing", reason="size_mismatch", terminal=True,
+                                         kind=kind, user_id=user_id, http_status=400,
+                                         blake3_hash=blake3_hash, upload_session_id=session_id,
+                                         file_size=actual_size,
+                                         error_text=f"expected {expected_size}, got {actual_size}")
             # Don't delete - let admin investigate
             raise HTTPException(
                 status_code=400,
@@ -640,6 +663,10 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
         pending = cursor.fetchone()
 
         if not pending:
+            # T10270 class 7: previously a bare 404 with no durable record.
+            await _write_upload_failure(stage="uploading", reason="session_not_found",
+                                         terminal=True, user_id=get_current_user_id(),
+                                         http_status=404, upload_session_id=session_id)
             raise HTTPException(
                 status_code=404,
                 detail="Upload session not found"
@@ -686,9 +713,16 @@ async def upload_failure_beacon(request: Request):
     otherwise produces ZERO server traffic.
 
     Fire-and-forget contract: this MUST NEVER throw on bad input and MUST NOT block
-    or break the client's failure path. It writes to LOGS ONLY — no profile/user DB
-    write (so gesture-persistence rules don't apply, per the task's Technical Notes),
-    and no durable_sync. Always returns 204, even for a malformed body.
+    or break the client's failure path. Always returns 204, even for a malformed body.
+
+    T10270 (design §3.4): the old `if phase == "uploading"` allowlist is GONE. The
+    beacon now ALWAYS writes a row (`origin="beacon"`), and the aggregate question
+    ("did a server branch already count this failure?") becomes one boolean:
+    `terminal = not server_responded`. `server_responded` is `true` at the client's
+    two response-driven beacon sites (prepare/finalize `!res.ok`) and `false`
+    everywhere else (hash/analyze death, fetch_rejected, part-upload exhaustion,
+    insufficient credits). Its absence (a pre-T10270 client build) falls back to
+    the OLD phase allowlist, reproducing today's behavior exactly.
     """
     try:
         payload = await request.json()
@@ -702,6 +736,11 @@ async def upload_failure_beacon(request: Request):
     except Exception:
         user_id = None
 
+    try:
+        beacon_user_agent = request.headers.get("user-agent")
+    except Exception:
+        beacon_user_agent = None
+
     # Pull a few known fields for a readable log line; keep the rest as-is.
     reason = payload.get("reason")
     phase = payload.get("phase")
@@ -709,10 +748,8 @@ async def upload_failure_beacon(request: Request):
     blake3_hash = payload.get("blake3_hash")
     attempts = payload.get("attempts")
     elapsed_ms = payload.get("elapsed_ms")
-    # T8370: client-declared, best-effort only — this beacon writes no DB row,
-    # so there is nothing to guard against a forged value; worst case a
-    # mislabeled beacon under/over-counts one of two purely informational
-    # failure-reason breakdowns.
+    # T8370: client-declared, best-effort only — worst case a mislabeled beacon
+    # under/over-counts one of two purely informational failure-reason breakdowns.
     beacon_kind = payload.get("kind") or UploadKind.GAME.value
 
     logger.error(
@@ -721,20 +758,40 @@ async def upload_failure_beacon(request: Request):
         f"attempts={attempts} elapsed_ms={elapsed_ms} reason={reason!r} detail={payload!r}"
     )
 
-    # T7970: a terminal client-side failure in the PART-UPLOAD phase is the one real
-    # failure the server never otherwise sees — the client exhausted its part retries
-    # and gave up WITHOUT ever calling finalize (no server-side branch fired).
-    # T8170: classify from the client's own failure message instead of hardcoding
-    # "network" — that mislabel hid the entire T8160 outage (a part PUT 404 from R2
-    # is not a dropped transport) behind a reason that pointed diagnosis at users'
-    # connections. The 'preparing' and 'finalizing' phases are DELIBERATELY skipped
-    # here: those failures already reached the server and are recorded by
-    # prepare-upload's validation/create branches and finalize's complete/size
-    # branches respectively, so emitting again would double-count the SAME failure
-    # and inflate the denominator. `_record_upload_failure` guards a None user_id
-    # (anon beacon) and never throws, so the fire-and-forget/always-204 contract holds.
-    if phase == "uploading":
-        _record_upload_failure(user_id, _classify_uploading_phase_failure(reason), kind=beacon_kind)
+    server_responded = payload.get("server_responded")
+    if server_responded is None:
+        # Back-compat for clients built before T10270 -- exactly reproduces the
+        # old phase allowlist. Delete once builds roll over (the T5070 build
+        # gate nudges reloads).
+        server_responded = phase in ("preparing", "finalizing")
+
+    # T8170: classify the part-upload phase from the client's own failure message
+    # instead of trusting free text verbatim -- that mislabel hid the entire T8160
+    # outage (a part PUT 404 from R2 is not a dropped transport) behind a reason
+    # that pointed diagnosis at users' connections. Every other phase's reason is
+    # expected to already be a UPLOAD_FAILURE_REASONS member (the new class-1/2
+    # beacon call sites send one); the writer coerces anything else to "unknown"
+    # rather than rejecting (F1).
+    classified_reason = (
+        _classify_uploading_phase_failure(reason) if phase == "uploading" else (reason or "unknown")
+    )
+
+    await _write_upload_failure(
+        stage=phase or "unknown",
+        reason=classified_reason,
+        terminal=not server_responded,
+        kind=beacon_kind,
+        origin="beacon",
+        user_id=user_id,
+        blake3_hash=blake3_hash,
+        upload_session_id=session_id,
+        attempt_no=attempts,
+        elapsed_ms=elapsed_ms,
+        original_filename=payload.get("original_filename"),
+        file_size=payload.get("file_size"),
+        error_text=reason if isinstance(reason, str) else None,
+        user_agent=beacon_user_agent,
+    )
 
     # 204 No Content — nothing to return.
     return None
@@ -742,7 +799,7 @@ async def upload_failure_beacon(request: Request):
 
 @router.get("/pending-uploads")
 # T9130: sync def -> anyio threadpool. Blocking R2 multipart validity/abort HEADs +
-# get_db_connection() reads/writes + synchronous record_milestone, no await in the body.
+# get_db_connection() reads/writes + synchronous record_upload_failure, no await in the body.
 def list_pending_uploads():
     """
     List pending uploads for the current user.
@@ -751,8 +808,7 @@ def list_pending_uploads():
     Validates each R2 session and auto-cleans stale ones.
     """
     user_id = get_current_user_id()
-    reaped_failures = 0  # T7510: count of orphaned GAME uploads reaped as failures
-    reaped_clip_failures = 0  # T8370: same, for CLIP uploads (routed to clip_upload_failed)
+    reaped_rows = []  # T10270: one entry per reaped upload -- (kind, blake3_hash, session_id)
     with get_db_connection() as conn:
         cursor = conn.cursor()
         # T8370 (reviewer-caught bug): SELECT * (not an explicit column list) so
@@ -826,8 +882,8 @@ def list_pending_uploads():
                 if row_kind == UploadKind.CLIP.value:
                     # T8370: no games row exists to surface — a dead clip upload
                     # has no visible surface (design §7 Q5, session-only client
-                    # state). Count it for its own reason-carrying failure event.
-                    reaped_clip_failures += 1
+                    # state). Record it for its own reason-carrying failure event.
+                    reaped_rows.append((row_kind, row['blake3_hash'], row['id'], row['r2_upload_id']))
                 else:
                     # 2. Surface any orphaned pending game instead of leaving it invisible.
                     cursor.execute(
@@ -844,22 +900,23 @@ def list_pending_uploads():
                         # user started an upload that never finalized. Record it with a
                         # coarse reason so the dashboard shows the attempt AND its cause
                         # (user_abandoned = navigated away / dead resume session).
-                        reaped_failures += 1
+                        reaped_rows.append((row_kind, row['blake3_hash'], row['id'], row['r2_upload_id']))
                 # 3. Drop the dead resume record.
                 cursor.execute("DELETE FROM pending_uploads WHERE id = ?", (row['id'],))
             conn.commit()
             logger.info(f"[T7490] Reaped {len(stale_rows)} stale pending upload(s)")
 
-    # Emit failure milestones AFTER the SQLite txn commits (outside the connection
-    # block), so the analytics PG write never rides the profile-DB transaction.
-    if reaped_failures:
-        from app.analytics import record_milestone
-        for _ in range(reaped_failures):
-            record_milestone(user_id, "game_upload_failed", reason="user_abandoned")
-    if reaped_clip_failures:
-        from app.analytics import record_milestone
-        for _ in range(reaped_clip_failures):
-            record_milestone(user_id, "clip_upload_failed", reason="user_abandoned")
+    # T10270: emit AFTER the SQLite txn commits (outside the connection block),
+    # so the Postgres write never rides the profile-DB transaction. This handler
+    # is plain `def` (already off the loop, T9130), so the writer is called
+    # directly -- no run_in_context needed (design §3.4: that's only for
+    # `async def` handlers).
+    for row_kind, blake3_hash, session_id, r2_upload_id in reaped_rows:
+        record_upload_failure(
+            kind=row_kind, stage="uploading", reason="user_abandoned", terminal=True,
+            user_id=user_id, blake3_hash=blake3_hash, upload_session_id=session_id,
+            r2_upload_id=r2_upload_id,
+        )
 
     return {'pending_uploads': uploads}
 
@@ -913,7 +970,11 @@ async def cancel_upload(session_id: str):
     # same category as the reaper's silent abandonment (user_abandoned), but this is
     # the EXPLICIT gesture. It deletes the pending row above, so the reaper can never
     # re-count it (no double-count). Emitted outside the SQLite txn (reaper convention).
-    _record_upload_failure(user_id, "user_abandoned", kind=cancel_kind)
+    await _write_upload_failure(stage="uploading", reason="user_abandoned", terminal=True,
+                                 kind=cancel_kind, user_id=user_id,
+                                 blake3_hash=pending['blake3_hash'],
+                                 upload_session_id=session_id,
+                                 r2_upload_id=pending['r2_upload_id'])
 
     return {"status": "cancelled"}
 
