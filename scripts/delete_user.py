@@ -89,6 +89,15 @@ def credit_tables_present(pg_conn) -> bool:
     return cur.fetchone()["ok"]
 
 
+def table_present(pg_conn, table_name: str) -> bool:
+    """Generic to_regclass tolerance check (T6090 pattern, generalized past
+    credit_tables_present's credits-specific check now that a second caller --
+    upload_failures, T10270 -- needs the same tolerance)."""
+    cur = pg_conn.cursor()
+    cur.execute("SELECT to_regclass(%s) IS NOT NULL AS ok", (f"public.{table_name}",))
+    return cur.fetchone()["ok"]
+
+
 def sweep_orphans(pg_conn, dry_run: bool) -> int:
     """Remove credit-ledger rows whose user_id has no matching `users` row.
 
@@ -193,6 +202,12 @@ def delete_one(user_id: str, email: str, app_env: str, bucket: str,
         tables.extend(CREDIT_TABLES)
     else:
         print("    credit ledger tables do not exist (pre-v019) -- skipping")
+    # T10270 F4: purged with the user, same to_regclass tolerance as the credit
+    # tables above (a pre-v029 destination doesn't have this table yet).
+    if table_present(pg_conn, "upload_failures"):
+        tables.append("upload_failures")
+    else:
+        print("    upload_failures table does not exist (pre-v029) -- skipping")
     for table in tables:
         if dry_run:
             cur.execute(f"SELECT COUNT(*) as cnt FROM {table} WHERE user_id = %s", (user_id,))

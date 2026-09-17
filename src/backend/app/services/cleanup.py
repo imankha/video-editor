@@ -64,6 +64,17 @@ def _do_cleanup():
     except Exception:
         logger.exception("[Cleanup] T8370 clip_upload reconciliation pass failed")
 
+    # T10270 F2: TTL is code, not a chore -- no new scheduler, piggybacked on
+    # this same hourly tick. Wrapped for the same reason as the reconciliation
+    # pass above: a bug here must never take down session/OTP cleanup.
+    try:
+        from .upload_failures import sweep_expired_upload_failures
+        swept = sweep_expired_upload_failures()
+        if swept:
+            logger.info(f"[Cleanup] T10270: swept {swept} expired upload_failures row(s)")
+    except Exception:
+        logger.exception("[Cleanup] T10270 upload_failures TTL sweep failed")
+
 
 def _clip_upload_batch_has_raw_clips(user_id: str, reference_id: str) -> bool:
     """True if at least one `raw_clips` row exists for this clip_upload batch's

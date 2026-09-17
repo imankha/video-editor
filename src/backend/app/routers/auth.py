@@ -129,6 +129,13 @@ def _purge_user_data(user_id: str) -> dict:
         # (privacy.py / DELETE /api/auth/user), which it does since both
         # callers invoke _purge_user_data first.
         cur.execute("DELETE FROM game_storage_refs WHERE user_id = %s", (user_id,))
+        # T10270 F4: purged with the user. to_regclass-guarded (the T6090
+        # lesson, scripts/delete_user.py's credit_tables_present) so a
+        # deployed-but-not-yet-migrated environment doesn't 500 the whole
+        # account delete on an UndefinedTable.
+        cur.execute("SELECT to_regclass('public.upload_failures') IS NOT NULL AS ok")
+        if cur.fetchone()["ok"]:
+            cur.execute("DELETE FROM upload_failures WHERE user_id = %s", (user_id,))
 
     # Invalidate in-process caches so a same-process relogin cannot resurrect old data
     # from a stale "already initialized" flag / cached version.
