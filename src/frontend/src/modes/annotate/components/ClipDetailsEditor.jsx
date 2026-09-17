@@ -387,25 +387,20 @@ export function ClipDetailsEditor({
           </div>
         )}
 
-        {/* Stage control — desktop only. T9330: driven by the shared
-            getClipStage helper (same stage + label as the desktop strip CTA).
-            - NO_PROJECT: the manual "Create Clip" affordance (rating<5 / Team-
-              layer clips with no project). Separate from the stage CTA and NOT
-              replaced by it; while the request is in flight (reelRequested, no
-              autoProjectId yet) it stays disabled "Clip Created".
-            - every other stage: a button that OPENS the clip's existing project
-              (Apply Framing / Apply Spotlight / View Final / View Published),
-              routing action 'overlay' -> Spotlight, else Framing. Drifted and
-              below-migration projects land on "Apply Framing" (open it), never
-              back on Create Clip — a project that EXISTS should open.
-            T8070 staleness + T8470 fresh-draft both live inside getClipStage. */}
-        {/* T10240: NO_PROJECT is no longer a dead end — it renders two always-
-            enabled create actions (on mobile too, so a phone can Frame a clip):
-            "Create clip" (create, stay in Annotate) and "Frame clip" (create,
-            then open Framing via the synchronously-returned project id). The
-            branch disappears the moment autoProjectId lands and the stage
-            advances. Every OTHER stage stays desktop-only and opens the clip's
-            existing project. */}
+        {/* Stage control — driven by the shared getClipStage helper (same stage +
+            label as the desktop strip CTA). T8070 staleness + T8470 fresh-draft
+            both live inside getClipStage.
+            - NO_PROJECT (T10240): no longer a dead end. Two ALWAYS-enabled create
+              actions, rendered on mobile too so a phone can Frame a clip: "Create
+              clip" (create, stay in Annotate; reel-created toast from the container)
+              and "Frame clip" (create, then open Framing via the synchronously-
+              returned project id). The branch disappears the moment autoProjectId
+              lands and the stage advances.
+            - every OTHER stage: DESKTOP ONLY — a button that OPENS the clip's
+              existing project (Apply Framing / Apply Spotlight / View Final / View
+              Published), routing action 'overlay' -> Spotlight, else Framing.
+              Drifted and below-migration projects land on "Apply Framing" (open
+              it), never back on create — a project that EXISTS should open. */}
         {clipStage.stage === CLIP_STAGE.NO_PROJECT ? (
           <div className="flex items-center justify-between gap-2">
             <label className="text-gray-400 text-xs shrink-0">Clip</label>
