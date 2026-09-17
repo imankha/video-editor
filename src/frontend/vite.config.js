@@ -150,6 +150,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    fs: {
+      // config/pricing.js imports src/backend/app/pricing.json (the single pricing source,
+      // T10210), which lives outside this package root. Build resolves it fine; the dev
+      // server needs the repo's src/ dir on its allow list to serve it.
+      allow: [resolve(__dirname, '..')],
+    },
     headers: {
       // Required for Google Sign-In: allows OAuth popup to postMessage back to the opener.
       // 'same-origin-allow-popups' is correct — 'same-origin' blocks the popup fallback flow.

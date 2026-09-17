@@ -1,5 +1,8 @@
+import { CREDIT_VALUE } from '../config/pricing';
+
+// Mirror of storage_credits.py: same constants, same formula. CREDIT_VALUE derives
+// from pricing.json on both sides, so a reprice moves the preview and the charge together.
 const R2_RATE_PER_GB_MONTH = 0.015;
-const CREDIT_VALUE = 0.05; // Mirror of storage_credits.CREDIT_VALUE (T4940) — keep in sync
 const MARGIN = 0.10;
 const STORAGE_DURATION_DAYS = 30;
 const AUTO_EXPORT_SURCHARGE = 1;

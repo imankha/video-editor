@@ -8,7 +8,7 @@ Provides:
 - POST /payments/webhook — Stripe webhook to fulfill credit grants (fallback)
 - POST /payments/verify — Verify Checkout Session after redirect (legacy)
 
-Credit packs are defined as constants (not in DB). Prices match T520 analysis.
+Credit packs come from app/pricing.json via app.pricing.CREDIT_PACKS (single source, T10210).
 """
 
 import logging
@@ -19,6 +19,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from ..analytics import decrement_total_spent, increment_total_spent, record_milestone
+from ..pricing import CREDIT_PACKS
 from ..services.auth_db import get_user_by_id
 from ..services.credit_ledger import CreditsUnavailable, credit_key, grant, has_processed_payment
 from ..services.user_db import get_stripe_customer_id, set_stripe_customer_id
@@ -94,21 +95,6 @@ async def get_payment_config():
     ]
     return {"publishable_key": STRIPE_PUBLISHABLE_KEY, "packs": packs}
 
-
-# ---------------------------------------------------------------------------
-# Credit Packs
-# ---------------------------------------------------------------------------
-
-# T4940 repricing: sub-$1-per-clip value ladder (80/160/340). Starter is the worst-case
-# (highest) per-credit rate at 4.99c (~0.05, the storage_credits CREDIT_VALUE anchor);
-# Popular = +14% bonus (140->160), Best Value = +33% bonus (255->340) at 3.82c/credit.
-# Existing balances and in-flight Stripe sessions are unaffected (grants read pack
-# metadata off the session/PI, not these constants).
-CREDIT_PACKS = {
-    "starter": {"credits": 80, "price_cents": 399, "name": "Starter — 80 Credits"},
-    "popular": {"credits": 160, "price_cents": 699, "name": "Popular — 160 Credits"},
-    "best_value": {"credits": 340, "price_cents": 1299, "name": "Best Value — 340 Credits"},
-}
 
 # ---------------------------------------------------------------------------
 # Stripe customer helpers

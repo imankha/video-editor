@@ -12,8 +12,29 @@ import {
 } from '../components/Illustrations'
 import { HERO_MEDIA } from '../config/heroMedia'
 import { SPORTS } from '../data/sports'
-import { FACTS, APP_URL, CONTACT_EMAIL, TAGLINE, DEFINITION, CREDIT_PACKS } from '../site'
+import { FACTS, APP_URL, CONTACT_EMAIL, TAGLINE, DEFINITION } from '../site'
+// Pricing derives from src/backend/app/pricing.json through the app's pricing module
+// (single source, T10210); the storage formula is the app's own, so the worked example
+// below recomputes itself when either the ladder or the storage anchor changes.
+import {
+  CREDIT_PACKS,
+  BEST_VALUE_PACK,
+  LOWEST_RATE_CENTS,
+  packPriceUsd,
+  costAtBestRateUsd,
+} from '@editor/config/pricing'
+import { calculateUploadCost } from '@editor/utils/storageCost'
 import { faqPage, softwareApplication, webSite, webPage, type FaqItem } from '../lib/schema'
+
+// Worked pricing example: a 90-minute game (~6 GB) stored 30 days, three 15-second highlights.
+const EXAMPLE_GAME_GB = 6
+const EXAMPLE_HIGHLIGHTS = 3
+const EXAMPLE_HIGHLIGHT_SECONDS = 15
+const exampleStorageCredits = calculateUploadCost(EXAMPLE_GAME_GB * 1024 ** 3)
+const exampleExportCredits = EXAMPLE_HIGHLIGHTS * EXAMPLE_HIGHLIGHT_SECONDS * FACTS.creditsPerExportSecond
+const exampleTotalCredits = exampleStorageCredits + exampleExportCredits
+const exampleTotalUsd = costAtBestRateUsd(exampleTotalCredits).toFixed(2)
+const lowestRateDisplay = LOWEST_RATE_CENTS.toFixed(1)
 
 const faqs: FaqItem[] = [
   {
@@ -337,7 +358,7 @@ const steps = [
         <div class="text-gray-400 text-sm">credit per second of finished video, rounded to the nearest second, any resolution</div>
       </div>
       <div class="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
-        <div class="text-3xl font-bold text-white mb-1">3.8&cent;</div>
+        <div class="text-3xl font-bold text-white mb-1">{lowestRateDisplay}&cent;</div>
         <div class="text-gray-400 text-sm">lowest per-credit price when you buy in bulk, and credits never expire</div>
       </div>
     </div>
@@ -348,16 +369,16 @@ const steps = [
           <div
             class:list={[
               'relative bg-white/5 border rounded-2xl p-6 text-center',
-              pack.name === 'Best Value' ? 'border-purple-400/50' : 'border-white/10',
+              pack.key === BEST_VALUE_PACK.key ? 'border-purple-400/50' : 'border-white/10',
             ]}
           >
-            {pack.name === 'Best Value' && (
+            {pack.key === BEST_VALUE_PACK.key && (
               <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap">
-                Best Value
+                {pack.name}
               </span>
             )}
             <div class="text-gray-400 text-sm font-medium mb-2">{pack.name}</div>
-            <div class="text-3xl font-bold text-white">${pack.priceUsd.toFixed(2)}</div>
+            <div class="text-3xl font-bold text-white">${packPriceUsd(pack).toFixed(2)}</div>
             <div class="text-gray-400 text-sm mt-1">{pack.credits} credits</div>
           </div>
         ))
@@ -367,10 +388,10 @@ const steps = [
     <div class="bg-white/5 backdrop-blur-lg rounded-2xl p-8 max-w-3xl mx-auto border border-white/10">
       <h3 class="text-white font-semibold mb-2">For example: a 90-minute game, three highlights</h3>
       <p class="text-gray-300 leading-relaxed">
-        Upload the full 90-minute game (about 6&nbsp;GB) and store it for 30 days: 3 credits. Pull
-        three 15-second highlights out of it and export them: 45 credits, at 1 credit per second of
-        finished video, rounded to the nearest second. <strong class="text-white">48 credits total:
-        about $1.83</strong> at the Best Value rate, well under a single pack.
+        Upload the full 90-minute game (about {EXAMPLE_GAME_GB}&nbsp;GB) and store it for 30 days: {exampleStorageCredits} credits. Pull
+        three {EXAMPLE_HIGHLIGHT_SECONDS}-second highlights out of it and export them: {exampleExportCredits} credits, at 1 credit per second of
+        finished video, rounded to the nearest second. <strong class="text-white">{exampleTotalCredits} credits total:
+        about ${exampleTotalUsd}</strong> at the {BEST_VALUE_PACK.name} rate, well under a single pack.
       </p>
     </div>
 
