@@ -137,12 +137,18 @@ class TestTerminalGating:
         """An anonymous beacon (no user_id resolvable) can't attribute a
         milestone -- mirrors the old _record_upload_failure's `if not user_id:
         return` guard. `user_id=None` falls back to the current request context
-        (design pseudocode: `user_id or current user`), so this test must ALSO
-        clear that context -- other test modules leave a contextvar user_id set
-        for the rest of the process, and a real anonymous beacon has none."""
-        from app.user_context import reset_user_id
+        (design pseudocode: `user_id or current user`), so this test must force
+        that fallback to resolve to nothing. `app.user_context.reset_user_id()`
+        looks like the right tool but has a pre-existing bug (filed separately,
+        not in scope here): its ContextVar.set()/.reset() dance restores
+        whatever value was active BEFORE the reset call, not "unset" -- a no-op
+        whenever an earlier test in the same process already set one and never
+        cleared it, which is exactly the "other test modules leave a contextvar
+        user_id set" case this docstring already warned about. Patching the
+        resolver `_safe_current_user_id` directly sidesteps that leak entirely
+        rather than relying on a mechanism known not to work here."""
         monkeypatch.setattr("app.services.upload_failures.get_pg", _stub_get_pg())
-        reset_user_id()
+        monkeypatch.setattr("app.services.upload_failures._safe_current_user_id", lambda: None)
         mock_milestone = MagicMock()
         with patch("app.analytics.record_milestone", mock_milestone):
             record_upload_failure(kind="game", stage="uploading", reason="timeout",

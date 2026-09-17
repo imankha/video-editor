@@ -147,6 +147,7 @@ def _mock_pg_startup():
          patch("app.services.sharing_db.get_pg", _stub_get_pg), \
          patch("app.services.credit_ledger.get_pg", _stub_get_pg), \
          patch("app.services.credit_backfill.get_pg", _stub_get_pg), \
+         patch("app.services.upload_failures.get_pg", _stub_get_pg), \
          patch("app.services.cleanup.start_cleanup_loop", new_callable=AsyncMock), \
          patch("app.services.cleanup.stop_cleanup_loop", new_callable=AsyncMock):
         yield
@@ -269,6 +270,7 @@ def pg_conn(monkeypatch):
     monkeypatch.setattr("app.routers.admin.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.credit_ledger.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.credit_backfill.get_pg", mock_get_pg)
+    monkeypatch.setattr("app.services.upload_failures.get_pg", mock_get_pg)
 
     yield dsn
 
