@@ -10,7 +10,6 @@ This module provides DRY utilities for:
 Usage:
     from app.services.export_helpers import (
         insert_export_job_if_none_active,
-        complete_export_job,
         fail_export_job,
         send_progress,
         derive_project_name,
@@ -19,7 +18,9 @@ Usage:
 T4380: every export_jobs write below delegates to
 app.services.export_job_repository (the single owner) -- these functions stay
 as thin, differently-shaped wrappers because routers/export/framing.py (out
-of T4380's migration scope) still calls them by these names.
+of T4380's migration scope) still calls them by these names. complete_export_job
+was deleted here -- it had zero callers even before T4380 (dead code found
+during the single-ownership cleanup, unrelated to this task's own changes).
 """
 
 import logging
@@ -74,28 +75,6 @@ def insert_export_job_if_none_active(
         conn.commit()
 
     return inserted
-
-
-def complete_export_job(
-    export_id: str,
-    output_filename: str | None = None,
-    output_video_id: int | None = None,
-):
-    """
-    Mark an export job as complete.
-
-    Args:
-        export_id: The export job ID
-        output_filename: Optional output filename
-        output_video_id: Optional output video ID (working_video_id or final_video_id)
-    """
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            export_job_repository.complete(cursor, export_id, output_video_id=output_video_id, output_filename=output_filename)
-            conn.commit()
-    except Exception as e:
-        logger.warning(f"[Export] Failed to complete job record {export_id}: {e}")
 
 
 def fail_export_job(export_id: str, error_message: str):
