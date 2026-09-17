@@ -1,7 +1,9 @@
 # T10270: Upload-failure observability: a durable record, a since-deploy listing, and no silent classes
 
-**Status:** WAITING ON USER (design gate: [T10270-design.md](T10270-design.md), decision artifact
-https://claude.ai/artifact/3DsuRvsHf9GtpZ2sxeA4AP)
+**Status:** WIP (design APPROVED 2026-09-17 - full recommended path: Option A/Postgres fenced,
+store filename+user agent fenced, split the log drain into its own task, fix the credit-refusal
+mislabel in scope, 90-day retention. See [T10270-design.md](T10270-design.md); decision artifact
+https://claude.ai/artifact/3DsuRvsHf9GtpZ2sxeA4AP. Implementation starting.)
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-09-17
