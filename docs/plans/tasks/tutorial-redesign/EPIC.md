@@ -93,6 +93,40 @@ this epic builds what the button opens). Requirements:
 Naming alignment: step copy uses the approved vocabulary - "Add Play", "Clips",
 "Create Highlight Reel" (see first-clip-funnel epic decisions).
 
+## 2026-09-17 user directive: restated target + four deltas awaiting the user's ruling
+
+The product owner restated the target while filing the Deploy Candidate milestone (the epic is IN
+that milestone):
+
+> "Redo tutorial so there is no quest UI, there is just a help button that toggles on and off,
+> and defaults on for new users, and when on puts the app in guided mode, essentially forcing the
+> user to click on one of their options, and spelling out the implications of each, and takes the
+> user's historical activity into account along with the current screen to determine what they
+> need to do at the time. The user might have more than one option, for example, initially we
+> don't know if they want to upload a full game video or just a clip."
+
+Mapped against the APPROVED T7620 design (`docs/plans/tasks/T7620-design.md`, 2026-09-02):
+
+| Clause | Status |
+|---|---|
+| No quest UI | Covered: design §13.1 deletes `QuestPanel`, `questDefinitions.jsx`, claim/fanfare UI; only the invisible milestone ledger survives (credits grants, achievements, analytics). |
+| Just a Help button that toggles | Covered: T8120 shipped the chip; T7630 replaces what it opens (`HelpChip` + `HelpPanel`, `guide_enabled` gesture-written). |
+| Historical activity + current screen decide | Covered, it is the design's spine: `deriveFacts` = 24 server milestone booleans + screen + screen-local state + durable intent; `GUIDANCE_MAP` is a first-match lookup. "History" means the milestone ledger, not raw telemetry. |
+| More than one option, e.g. game vs clip | Covered: fork F1 (durable `guide_intent_source`), the design's headline example; its pre-cut branch target `clips-add-video` is live since T8370/T8380. |
+| **Default on for new users** | Partial: D1 = ON for accounts that have not yet published, OFF for accounts that have. If "default on" means unconditionally, D1 needs a one-line amendment. **Decision needed.** |
+| **"Essentially forcing the user to click one of their options"** | **Conflict**: the design (§7.3, D2/D4) and this epic's binding evidence constraint #2 keep an always-present "Not now" and forbid the shade acting as a lock (skippable tours complete ~25% better; ~70% skip imposed ones). Forcing = removing "Not now" (or demoting it to Help-off only). **Decision needed**; never reintroduce backdrop-close semantics either way. |
+| **"Spelling out the implications of each option"** | Small delta: fork dialogs are one sentence + bare answer labels (§8.2). Extend answers to `{value, label, caption}` using the shipped `FOCUS_PUBLISH` / `OVERLAY_PUBLISH` consequence-caption pattern; widen `steps.copy.test.js` word budgets and re-check `placement.test.js` at 320px / keyboard-open. Recommend yes. |
+| **Re-film tutorial videos, accessible from tutorial and site** (separate ask) | **Conflict** with the 2026-08-31 directive above ("No more tutorial videos", videos removed as a mechanism) and design §12/§20 retiring `TutorialVideoModal.jsx` in T7630. Outcomes in [T10320](../T10320-reshoot-tutorial-videos-v3.md): (1) landing-only reshoot, or (2) videos return in-app via the Help panel and T7630 keeps the modal. **Decision needed before T7630 deletes the player.** |
+
+Also found: every one of the design's 69 rules carries `say` copy written in T8130-era vocabulary
+("Add Play", "Highlight Reels", "Focus"); T9860 (2026-09-14) and the Deploy Candidate copy tasks
+(T10280/T10290) changed most of those nouns. T7630 must re-derive all step copy and target
+literals from `displayNames.js` at implementation time, not from the design text.
+
+Sequencing inside the Deploy Candidate: T7630 starts after T10280 (home tabs), T10290 (Annotate
+editor) and T10310 (Overlay rail) are on staging, so the tour anchors to final screens; T10320
+(videos) shoots last.
+
 ## Design constraints
 
 - Motion is core product value (animation polish direction memory): the arrow bounce and
