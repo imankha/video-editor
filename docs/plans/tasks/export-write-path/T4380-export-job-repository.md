@@ -38,10 +38,18 @@ Then mechanically migrate all 14+ sites (one module per commit; T4370 snapshots 
 
 ## Acceptance Criteria
 
-- [ ] Single owner grep passes; no service→router imports remain
-- [ ] Job-record insert failure aborts the export loudly
-- [ ] All transitions use ExportStatus enum values
-- [ ] T4370 DB-delta snapshots unchanged (except the documented insert-failure behavior)
+- [x] Single owner grep passes; no service→router imports remain — `grep -rn
+  "UPDATE export_jobs\|INSERT INTO export_jobs" src/backend/app --include=*.py`
+  hits ONLY `services/export_job_repository.py` (plus `migrations/profile_db/
+  v028_export_job_stages.py`, excluded per the documented migration-file rule).
+  `export_worker.py` no longer imports from any router (confirmed by grep).
+- [x] Job-record insert failure aborts the export loudly — `create()`/
+  `create_if_none_active()` have no try/except; a DB error propagates.
+- [x] All transitions use ExportStatus enum values — every status literal in
+  `export_job_repository.py` is `ExportStatus.<MEMBER>.value`.
+- [x] T4370 DB-delta snapshots unchanged (except the documented insert-failure
+  behavior) — golden harness re-run green after every module commit (see
+  Progress Log); final full run in the QA phase.
 
 ## Progress Log
 
