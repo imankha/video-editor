@@ -25,17 +25,28 @@ Two harness layers:
 
 ## Steps
 
-1. [ ] Read existing backend test infrastructure + T4120's verify recipe; write the harness plan (fixtures, stub boundary, snapshot format) in the Progress Log.
-2. [ ] DB-effects harness: start with single-clip render + overlay final (the two best-understood), then the other four triggers.
-3. [ ] Render goldens for the local path.
-4. [ ] CI/runtime budget: whole harness < ~2 min locally; document how to run just it.
+1. [x] Read existing backend test infrastructure + T4120's verify recipe; write the harness plan (fixtures, stub boundary, snapshot format) in the Progress Log.
+2. [x] DB-effects harness: start with single-clip render + overlay final (the two best-understood), then the other four triggers.
+3. [x] Render goldens for the local path.
+4. [x] CI/runtime budget: whole harness < ~2 min locally; document how to run just it.
 
 ## Acceptance Criteria
 
-- [ ] All 6 export triggers have DB-delta snapshots (every column, not just status)
-- [ ] Local render goldens with documented tolerance; ffprobe property assertions
-- [ ] One re-bless command with reviewable diffs
-- [ ] Harness green on master before any T4380+ work starts
+- [x] All 6 export triggers have DB-delta snapshots (every column, not just status)
+- [x] Local render goldens with documented tolerance; ffprobe property assertions
+- [x] One re-bless command with reviewable diffs
+- [ ] Harness green on master before any T4380+ work starts (green on the task branch; final master-merge confirmation is the supervisor's CI gate, not this worker's)
+
+**Note for T4420 (interpolation unification):** the Solution section above also
+scopes "local-vs-Modal parity on the SAME interpolation fixtures at the unit
+level (given keyframes + frame index -> identical crop rect from both
+implementations)" as a future oracle for T4420/T4430. This is NOT implemented
+by T4370 (absent from both the Steps and Acceptance Criteria checklists above,
+unlike the two harness layers, which are) — it is forward-looking motivation
+text, not a T4370 deliverable. T4420's implementer should read this task's
+`render_hash.py`/fixture patterns as a starting point but will need to add its
+own keyframe-interpolation-specific unit fixtures; flagging here so it isn't
+assumed to already exist.
 
 ## Progress Log
 
@@ -128,3 +139,67 @@ distance tolerance (chosen empirically in this task, documented in
 `.claude/knowledge/export-pipeline.md` once picked) — pixel-exact comparison is
 explicitly rejected per the task file (flakes across ffmpeg builds). Duration
 asserted ±1 frame, resolution + stream layout via `ffprobe`.
+
+**2026-09-17 — Implementation + QA complete.**
+
+9 tests across 6 files (`tests/test_export_golden_{local_render,overlay,
+multiclip_modal,worker,sweep,render}.py`) + shared infra (`tests/export_golden/
+{snapshot,fixtures,render_hash}.py`) + `scripts/rebless_export_goldens.py`.
+Full harness: **9 passed in ~50-60s** (well under the 2-min budget), stable
+across repeated runs (no flake observed in ~8 consecutive local runs while
+iterating).
+
+**QA proof (per Workflow step 4):**
+- Green run: confirmed above.
+- **Regression-catch proof:** temporarily changed `upsert_working_video`'s
+  `export_jobs.status` write from `'complete'` to `'done'`
+  (`export_finalize.py`). Result: exactly the 3 tests whose trigger flows
+  through `upsert_working_video` (single-clip render, multi-clip local,
+  multi-clip Modal) failed with a precise unified diff pointing at the one
+  changed line; the 3 tests whose trigger does NOT go through that function
+  (overlay render, export_final, durable worker, sweep) stayed green — proving
+  both that the harness catches a real regression AND that it doesn't
+  over-fire on unrelated triggers. Reverted; suite green again.
+- **Re-bless proof:** re-ran the same mutation, ran
+  `scripts/rebless_export_goldens.py`, confirmed the printed `git diff` was a
+  clean 1-line-changed diff per affected golden file (not a binary/opaque
+  blob) — reviewable exactly as the acceptance criteria requires. Reverted
+  both the code and the 3 regenerated golden files.
+- **Existing-suite regression check:** ran a curated 10-file set covering the
+  code this harness exercises (`test_t4350_carry_finalize`,
+  `test_t4355_multiclip_carry`, `test_t5630_characterization`,
+  `test_t5630_finalize_unit`, `test_t7210_modal_call_id_recovery`,
+  `test_export_worker_sync`, `test_auto_export`, `test_t4110_export_durability`,
+  `test_t4120_test_seams`, `test_t9540_double_dispatch_guard`) — 127 passed,
+  confirming adding this harness broke nothing pre-existing.
+
+**Data-safety guard:** none of these tests request the `pg_conn` fixture (the
+only fixture that touches real Postgres, guarded by conftest.py's
+staging/prod DSN keyword check) — every trigger's DB writes are pure per-user
+profile SQLite, freshly created per test run under a random `test_t4370_*`
+user id (`USER_DATA_BASE=/workspace/user_data` in this container, gitignored,
+fully disposable). `DATABASE_URL` in this environment already points at dev,
+not staging/prod, but the harness's design makes that moot — it never opens a
+Postgres connection at all.
+
+**Characterization finding surfaced (not a bug T4370 fixes, documented for
+awareness):** `MockVideoUpscaler.process_video_with_upscale` (the local/
+CPU-fallback render path) drops the audio stream from its output regardless of
+`include_audio` — its crop+scale filter chain rebinds the ffmpeg-python
+`stream` object to a video-only filtered node before `.output(...,
+acodec='aac')`, so there is never an audio stream left to map in. Zero
+production impact (this mock only runs in CPU/test containers per T4120
+D1(b)/(c); the real GPU/Modal path is unaffected) but pinned verbatim in
+`goldens/render_with_audio.json` (`has_audio: false`) per this task's
+characterize-don't-fix charter. See `.claude/knowledge/export-pipeline.md`.
+
+**How to run just this harness:**
+```bash
+cd src/backend
+python3 -m pytest tests/test_export_golden_local_render.py tests/test_export_golden_overlay.py \
+  tests/test_export_golden_multiclip_modal.py tests/test_export_golden_worker.py \
+  tests/test_export_golden_sweep.py tests/test_export_golden_render.py -v
+```
+**How to re-bless** (after an INTENTIONAL behavior change, e.g. during
+T4380-T4410's consolidation): `python3 scripts/rebless_export_goldens.py`,
+then review the printed `git diff` before committing the golden files.
