@@ -23,7 +23,6 @@ from app.profile_context import set_current_profile_id
 from app.routers.export import overlay as ov
 from app.services.export_helpers import insert_export_job_if_none_active
 from app.user_context import set_current_user_id
-
 from tests.export_golden.fixtures import (
     build_fixture_project,
     new_test_user_id,
@@ -113,8 +112,8 @@ def final_env(tmp_path):
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.database._initialized_users", set()):
-        from app.main import app
         from app.database import ensure_database, set_local_db_version
+        from app.main import app
 
         user_id = new_test_user_id("exportfinal")
         profile_id = "abcd1234"

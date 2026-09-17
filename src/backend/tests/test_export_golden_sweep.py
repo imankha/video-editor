@@ -16,13 +16,11 @@ path -- ffmpeg's `-i` accepts a local path directly, no R2 round-trip needed)
 and `upload_to_r2`/`r2_head_object` (R2 disabled in this env).
 """
 
-import pytest
 
 from app.database import get_db_connection
 from app.profile_context import set_current_profile_id
 from app.services import auto_export
 from app.user_context import set_current_user_id
-
 from tests.export_golden.fixtures import (
     build_fixture_project,
     new_test_user_id,

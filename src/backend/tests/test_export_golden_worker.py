@@ -20,7 +20,6 @@ from app.profile_context import set_current_profile_id
 from app.routers.exports import create_export_job
 from app.services import export_worker
 from app.user_context import set_current_user_id
-
 from tests.export_golden.fixtures import (
     build_fixture_project,
     new_test_user_id,

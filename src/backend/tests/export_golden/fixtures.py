@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 
 from app.database import get_db_connection
+
 from .snapshot import canonicalize_row
 
 # Columns that are ALREADY-ENCODED msgpack blobs -- decode before diffing so the

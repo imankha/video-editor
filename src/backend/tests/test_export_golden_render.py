@@ -17,10 +17,8 @@ Asserts:
   comparison is explicitly rejected per the task file.
 """
 
-import pytest
 
 from app.services.local_processors import MockVideoUpscaler
-
 from tests.export_golden.fixtures import write_tiny_mp4
 from tests.export_golden.render_hash import (
     assert_hash_within_tolerance,

@@ -20,10 +20,8 @@ import pytest
 
 from app.profile_context import set_current_profile_id
 from app.routers.export import multi_clip as mc
-from app.services import export_finalize
 from app.services.export_helpers import insert_export_job_if_none_active
 from app.user_context import set_current_user_id
-
 from tests.export_golden.fixtures import (
     FakeUploadFile,
     build_fixture_project,
