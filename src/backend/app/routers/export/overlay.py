@@ -1700,8 +1700,13 @@ async def export_final(
         # T4390/T4160: derive aspect_ratio from the ACTUAL uploaded bytes (already
         # in memory -- no R2 round-trip needed here, unlike _finalize_overlay_export's
         # R2-only call sites), falling back to the project setting if the bytes
-        # can't be ffprobed (e.g. a test fixture's fake bytes).
-        aspect_ratio = resolve_output_aspect_ratio(
+        # can't be ffprobed (e.g. a test fixture's fake bytes). Threaded (T4390 M3
+        # fix): unlike _finalize_overlay_export's 3 call sites (each already run
+        # inside asyncio.to_thread), this one sits directly in this async handler --
+        # resolve_output_aspect_ratio's ffprobe_bytes is a blocking subprocess.run
+        # on the whole reel (up to a 60s timeout) and must not block the event loop.
+        aspect_ratio = await asyncio.to_thread(
+            resolve_output_aspect_ratio,
             project_aspect_ratio=project['aspect_ratio'],
             video_bytes=content,
             log_context=f"export_final project={project_id}",

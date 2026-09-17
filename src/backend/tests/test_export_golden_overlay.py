@@ -9,9 +9,12 @@
    background task), driven via `httpx.ASGITransport` like
    `test_t4110_export_durability.py`'s dur_env fixture.
 
-These are genuinely different writers (the audit found `_finalize_overlay_export`
-and `export_final`'s inline INSERT have different slowmo-column guarding) --
-separate goldens, not parametrized together.
+These were genuinely different writers at the time this test was written (the audit found
+`_finalize_overlay_export` and `export_final`'s inline INSERT had different slowmo-column
+guarding, DV7) -- separate goldens, not parametrized together. T4390 consolidated both
+onto the shared `publish_final_video` writer (DV7 fixed: slowmo columns are now ALWAYS
+column-guarded), but the two entry points above are still worth exercising separately --
+one is a background task, the other a plain request/response.
 """
 
 import io

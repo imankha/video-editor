@@ -143,6 +143,11 @@ def resolve_output_aspect_ratio(
     if dims:
         label = derive_aspect_ratio_label(dims["width"], dims["height"])
         if label:
+            if label != project_aspect_ratio:
+                logger.warning(
+                    f"[Publish] {log_context}: probed aspect ratio {label!r} overrides "
+                    f"project setting {project_aspect_ratio!r} (dims {dims['width']}x{dims['height']})"
+                )
             return label
         logger.warning(
             f"[Publish] {log_context}: probed dims {dims['width']}x{dims['height']} don't "
@@ -250,8 +255,22 @@ def publish_final_video(
     clip_game_start_time = compute_unified_clip_start(cursor, source_clip_id, clip_start_time)
 
     # T5090/T9410: the reel's first slow-mo section, frozen onto the row so
-    # publish/backfill survive the publish-time working_clips prune.
-    slowmo_section = first_slowmo_section(read_clip_segments_for_project(cursor, project_id))
+    # publish/backfill survive the publish-time working_clips prune. Tolerant
+    # by hand here (T4390 M2 fix): the prior copies' `load_project_clip_segments`
+    # never raises on a segment-read failure (corrupt segments_data, archived
+    # project) -- it logs and falls back to the first frame. That wrapper opens
+    # its OWN connection, which this function can't use (it must stay on the
+    # caller's already-open transaction cursor), so the same tolerance is
+    # reproduced inline instead of letting a decode failure abort the whole
+    # finalize transaction AFTER a completed, paid Modal render.
+    try:
+        slowmo_section = first_slowmo_section(read_clip_segments_for_project(cursor, project_id))
+    except Exception as e:
+        logger.info(
+            f"[Publish] project {project_id}: could not read segment data for the "
+            f"slow-mo freeze -> first frame ({e})"
+        )
+        slowmo_section = None
     slowmo_start = slowmo_section[0] if slowmo_section else None
     slowmo_end = slowmo_section[1] if slowmo_section else None
 
