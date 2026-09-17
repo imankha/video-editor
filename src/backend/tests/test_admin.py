@@ -611,3 +611,116 @@ class TestMigratePostgresRoute:
         alias for the new path, it must 404, never silently still work."""
         resp = client.post("/api/admin/migrate", headers=_auth_headers("admin-user"))
         assert resp.status_code == 404
+
+
+class TestUploadFailuresEndpoint:
+    """T10270: GET /api/admin/upload-failures (design doc §3.6)."""
+
+    def _insert(self, **overrides):
+        from app.services.pg import get_pg
+        fields = {
+            "user_id": "admin-user", "kind": "game", "stage": "preparing",
+            "reason": "refused", "terminal": True, "origin": "server",
+            "impersonated": False, "app_build": 0,
+        }
+        fields.update(overrides)
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cols = list(fields.keys())
+            cur.execute(
+                f"INSERT INTO upload_failures ({', '.join(cols)}) "
+                f"VALUES ({', '.join(['%s'] * len(cols))})",
+                list(fields.values()),
+            )
+
+    def test_non_admin_403(self, client):
+        resp = client.get("/api/admin/upload-failures", headers=_auth_headers("regular-user"))
+        assert resp.status_code == 403
+
+    def test_returns_migrated_false_when_table_missing(self, client):
+        """T6090 pattern: a deployed-but-not-yet-migrated environment must not 500."""
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            conn.cursor().execute("DROP TABLE upload_failures")
+        try:
+            resp = client.get("/api/admin/upload-failures", headers=_auth_headers("admin-user"))
+            assert resp.status_code == 200
+            assert resp.json() == {"migrated": False}
+        finally:
+            from app.services.pg import _SCHEMA_DDL
+            with get_pg() as conn:
+                conn.cursor().execute(_SCHEMA_DDL)
+
+    def test_empty_table_returns_honest_null_rates(self, client):
+        resp = client.get("/api/admin/upload-failures", headers=_auth_headers("admin-user"))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["rows"] == []
+        assert data["total"] == 0
+        assert data["rates"]["game"]["rate_pct"] is None
+        assert data["rates"]["clip"]["rate_pct"] is None
+        assert data["rates"]["game"]["attempts"] == 0
+
+    def test_game_and_clip_rates_are_separate_never_summed(self, client):
+        self._insert(kind="game", stage="preparing", reason="refused")
+        self._insert(kind="clip", stage="batching", reason="probe_failed")
+        self._insert(kind="clip", stage="batching", reason="source_missing")
+
+        resp = client.get("/api/admin/upload-failures", headers=_auth_headers("admin-user"))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["rows"]) == 3
+        assert data["rates"]["game"]["failed"] == 1
+        assert data["rates"]["clip"]["failed"] == 2
+        # feedback_tries_vs_success_must_both_show: every rate ships attempts
+        # AND succeeded AND failed together, never just a bare percentage.
+        for kind_rate in (data["rates"]["game"], data["rates"]["clip"]):
+            assert {"attempts", "succeeded", "failed", "rate_pct"} <= kind_rate.keys()
+        assert "denominator_note" in data["rates"]["clip"]
+        assert "denominator_note" not in data["rates"]["game"]
+
+    def test_non_terminal_rows_excluded_from_rates_but_shown_in_list(self, client):
+        self._insert(kind="game", terminal=True, reason="refused")
+        self._insert(kind="game", terminal=False, reason="fetch_rejected", origin="beacon")
+
+        resp = client.get("/api/admin/upload-failures", headers=_auth_headers("admin-user"))
+        data = resp.json()
+        assert len(data["rows"]) == 2
+        # Only the terminal row counts toward the failed rate.
+        assert data["rates"]["game"]["failed"] == 1
+
+    def test_impersonated_rows_excluded_from_default_list_and_from_rates(self, client):
+        self._insert(kind="game", impersonated=True)
+
+        resp = client.get("/api/admin/upload-failures", headers=_auth_headers("admin-user"))
+        data = resp.json()
+        assert data["rows"] == []
+        assert data["rates"]["game"]["failed"] == 0
+
+        resp2 = client.get(
+            "/api/admin/upload-failures?include_impersonated=true",
+            headers=_auth_headers("admin-user"),
+        )
+        data2 = resp2.json()
+        assert len(data2["rows"]) == 1
+        # Rates stay honest regardless of the list-visibility flag.
+        assert data2["rates"]["game"]["failed"] == 0
+
+    def test_filters_by_kind_stage_reason(self, client):
+        self._insert(kind="game", stage="preparing", reason="refused")
+        self._insert(kind="clip", stage="batching", reason="probe_failed")
+
+        resp = client.get(
+            "/api/admin/upload-failures?kind=clip", headers=_auth_headers("admin-user"),
+        )
+        rows = resp.json()["rows"]
+        assert len(rows) == 1
+        assert rows[0]["kind"] == "clip"
+
+    def test_window_reports_build_and_dates(self, client):
+        self._insert(kind="game", app_build=0)
+        resp = client.get("/api/admin/upload-failures", headers=_auth_headers("admin-user"))
+        window = resp.json()["window"]
+        assert window["since_build"] == 0
+        assert window["rows_at_this_build"] == 1
+        assert "since_date" in window and "until_date" in window

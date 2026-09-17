@@ -41,6 +41,11 @@ export const useAdminStore = create((set, get) => ({
   // T5760: Stripe revenue reconciliation (on-demand — never auto-fetched, Stripe latency)
   reconciliationData: null, reconciliationLoading: false, reconciliationError: null,
 
+  // T10270: upload-failures drill-down (on-demand — deliberately NOT part of
+  // fetchDashboard's combined mount request; AdminScreen.test.jsx asserts
+  // exactly one mount request for that endpoint).
+  uploadFailuresData: null, uploadFailuresLoading: false, uploadFailuresError: null,
+
   setSegmentFilter: (origin, from, to) => {
     set({ segmentOrigin: origin || null, segmentFrom: from || null, segmentTo: to || null });
     get().fetchUsers(1);
@@ -364,6 +369,30 @@ export const useAdminStore = create((set, get) => ({
   },
 
   clearUserDetail: () => set({ userDetailData: null, userDetailUserId: null }),
+
+  // T10270: on-demand upload-failures drill-down. Explicit gesture (a Refresh
+  // click, RevenueReconciliation's precedent) — never auto-fetched on mount.
+  fetchUploadFailures: async (filters = {}) => {
+    set({ uploadFailuresLoading: true, uploadFailuresError: null });
+    try {
+      const params = new URLSearchParams();
+      for (const key of ['sinceBuild', 'since', 'until', 'kind', 'stage', 'reason', 'userId', 'origin']) {
+        if (filters[key] != null && filters[key] !== '') {
+          const paramKey = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+          params.set(paramKey, filters[key]);
+        }
+      }
+      if (filters.includeImpersonated) params.set('include_impersonated', 'true');
+      const res = await apiFetch(`${API_BASE}/api/admin/upload-failures?${params}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      set({ uploadFailuresData: await res.json(), uploadFailuresLoading: false });
+    } catch (err) {
+      set({ uploadFailuresLoading: false, uploadFailuresError: err.message });
+    }
+  },
 
   // T5760: run the on-demand reconciliation pass (compares local total_spent_cents
   // against per-user Stripe NET revenue). Explicit gesture — this hits Stripe, so it

@@ -231,7 +231,10 @@ def pg_conn(monkeypatch):
     cur.execute(f"DELETE FROM credit_reservations WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM credits WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM users WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
-    cur.execute("TRUNCATE otp_codes, r2_grace_deletions, impersonation_audit, pending_teammate_shares, game_ref_counts, daily_counters")
+    # T10270: upload_failures is diagnostic/operational state, not real user
+    # data tests must preserve across runs -- full wipe each test, same
+    # treatment as daily_counters.
+    cur.execute("TRUNCATE otp_codes, r2_grace_deletions, impersonation_audit, pending_teammate_shares, game_ref_counts, daily_counters, upload_failures")
     cur.execute(_SEED_SQL)
     # T5840: open the credits_ready gate by default so the general test suite
     # (which predates the gate) doesn't 503 on every grant/debit. Tests that
