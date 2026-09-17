@@ -27,6 +27,7 @@ from ..constants import ExportStatus
 from ..database import get_db_connection, get_user_data_path
 from ..highlight_transform import round_credits_half_up
 from ..profile_context import get_current_profile_id
+from ..services import export_job_repository
 from ..user_context import get_current_user_id
 from ..utils.encoding import encode_data
 
@@ -99,13 +100,9 @@ def create_export_job(project_id: int, job_type: str, config: dict) -> str:
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO export_jobs (id, project_id, type, status, input_data)
-            VALUES (?, ?, ?, 'pending', ?)
-        """, (job_id, project_id, job_type, input_data))
+        export_job_repository.create(cursor, job_id=job_id, project_id=project_id, job_type=job_type, input_data=input_data)
         conn.commit()
 
-    logger.info(f"[ExportJobs] Created job {job_id} for project {project_id} (type: {job_type})")
     return job_id
 
 
@@ -153,44 +150,24 @@ def update_job_started(job_id: str):
     """Mark job as processing (started)."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE export_jobs
-            SET status = 'processing', started_at = datetime('now')
-            WHERE id = ?
-        """, (job_id,))
+        export_job_repository.start(cursor, job_id)
         conn.commit()
-    logger.info(f"[ExportJobs] Job {job_id} started processing")
 
 
 def update_job_complete(job_id: str, output_video_id: int, output_filename: str):
     """Mark job as complete with output references."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE export_jobs
-            SET status = 'complete',
-                completed_at = datetime('now'),
-                output_video_id = ?,
-                output_filename = ?
-            WHERE id = ?
-        """, (output_video_id, output_filename, job_id))
+        export_job_repository.complete(cursor, job_id, output_video_id=output_video_id, output_filename=output_filename)
         conn.commit()
-    logger.info(f"[ExportJobs] Job {job_id} completed (video_id: {output_video_id})")
 
 
 def update_job_error(job_id: str, error_message: str):
     """Mark job as failed with error message."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE export_jobs
-            SET status = 'error',
-                completed_at = datetime('now'),
-                error = ?
-            WHERE id = ?
-        """, (error_message, job_id))
+        export_job_repository.fail(cursor, job_id, error_message)
         conn.commit()
-    logger.error(f"[ExportJobs] Job {job_id} failed: {error_message}")
 
 
 def delete_export_job(job_id: str) -> bool:
@@ -302,13 +279,7 @@ def cleanup_stale_exports(max_age_minutes: int = 60):
         cursor = conn.cursor()
 
         # First, get potentially stale jobs (older than max_age_minutes)
-        cursor.execute("""
-            SELECT id, modal_call_id
-            FROM export_jobs
-            WHERE status IN ('pending', 'processing')
-              AND created_at < datetime('now', ? || ' minutes')
-        """, (f'-{max_age_minutes}',))
-        stale_candidates = cursor.fetchall()
+        stale_candidates = export_job_repository.get_stale_candidates(cursor, max_age_minutes)
 
         if not stale_candidates:
             return
@@ -334,13 +305,7 @@ def cleanup_stale_exports(max_age_minutes: int = 60):
                     continue
 
             # Either no modal_call_id or Modal says NOT running (False) - mark as stale
-            cursor.execute("""
-                UPDATE export_jobs
-                SET status = 'error',
-                    error = 'Export timed out (stale)',
-                    completed_at = datetime('now')
-                WHERE id = ?
-            """, (job_id,))
+            export_job_repository.fail(cursor, job_id, 'Export timed out (stale)')
             stale_count += 1
 
         conn.commit()
@@ -601,10 +566,7 @@ async def start_framing_export(
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO export_jobs (id, project_id, type, status, input_data)
-                VALUES (?, ?, 'framing', 'pending', ?)
-            """, (job_id, project_id, input_data))
+            export_job_repository.create(cursor, job_id=job_id, project_id=project_id, job_type='framing', input_data=input_data)
             conn.commit()
 
         # Step 3: Confirm reservation (atomic in user.sqlite)
@@ -780,27 +742,8 @@ async def acknowledge_exports(job_ids: list[str] | None = None):
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
-
-        if job_ids:
-            # Acknowledge specific exports
-            placeholders = ','.join(['?' for _ in job_ids])
-            cursor.execute(f"""
-                UPDATE export_jobs
-                SET acknowledged_at = datetime('now')
-                WHERE id IN ({placeholders})
-                  AND acknowledged_at IS NULL
-            """, job_ids)
-        else:
-            # Acknowledge all unacknowledged exports
-            cursor.execute("""
-                UPDATE export_jobs
-                SET acknowledged_at = datetime('now')
-                WHERE acknowledged_at IS NULL
-                  AND status IN ('complete', 'error')
-            """)
-
+        acknowledged_count = export_job_repository.acknowledge(cursor, job_ids)
         conn.commit()
-        acknowledged_count = cursor.rowcount
 
     logger.info(f"[ExportJobs] Acknowledged {acknowledged_count} exports")
     return {"acknowledged": acknowledged_count}
@@ -970,11 +913,7 @@ async def check_modal_status(job_id: str):
                 logger.info(f"[ExportJobs] Modal job {job_id} still running but DB shows error - resetting to processing")
                 with get_db_connection() as conn:
                     cursor = conn.cursor()
-                    cursor.execute("""
-                        UPDATE export_jobs
-                        SET status = 'processing', error = NULL, completed_at = NULL
-                        WHERE id = ?
-                    """, (job_id,))
+                    export_job_repository.recover(cursor, job_id)
                     conn.commit()
 
             return {
@@ -1060,11 +999,7 @@ async def cancel_export(job_id: str):
     # Mark as cancelled in database
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE export_jobs
-            SET status = 'error', error = 'Cancelled by user', completed_at = datetime('now')
-            WHERE id = ?
-        """, (job_id,))
+        export_job_repository.fail(cursor, job_id, 'Cancelled by user')
         conn.commit()
 
     logger.info(f"[ExportJobs] Job {job_id} cancelled by user (Modal cancelled: {modal_cancelled})")
