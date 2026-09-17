@@ -6,15 +6,21 @@ import math
 from datetime import datetime, timedelta
 
 from app.services.storage_credits import (
+    AUTO_EXPORT_SURCHARGE,
+    CREDIT_VALUE,
+    MARGIN,
+    R2_RATE_PER_GB_MONTH,
     calculate_extension_cost,
     calculate_storage_cost,
     calculate_upload_cost,
     storage_expires_at,
-    AUTO_EXPORT_SURCHARGE,
-    R2_RATE_PER_GB_MONTH,
-    CREDIT_VALUE,
-    MARGIN,
 )
+
+
+def _storage(size_gb, days=30):
+    """Expected storage credits from the documented formula, at whatever CREDIT_VALUE
+    pricing.json derives to (T10210) -- so a reprice never strands literal numbers here."""
+    return max(1, math.ceil(size_gb * R2_RATE_PER_GB_MONTH * (days / 30) * (1 + MARGIN) / CREDIT_VALUE))
 
 
 class TestUploadCostIncludesSurcharge:
@@ -24,19 +30,19 @@ class TestUploadCostIncludesSurcharge:
 
     def test_1gb_upload_cost(self):
         size = int(1.0 * 1024 ** 3)
-        assert calculate_upload_cost(size, 30) == 2  # 1 storage + 1 surcharge
+        assert calculate_upload_cost(size, 30) == _storage(1.0) + AUTO_EXPORT_SURCHARGE
 
     def test_2_5gb_upload_cost(self):
         size = int(2.5 * 1024 ** 3)
-        assert calculate_upload_cost(size, 30) == 2  # 1 storage + 1 surcharge
+        assert calculate_upload_cost(size, 30) == _storage(2.5) + AUTO_EXPORT_SURCHARGE
 
     def test_5gb_upload_cost(self):
         size = int(5.0 * 1024 ** 3)
-        assert calculate_upload_cost(size, 30) == 3  # 2 storage + 1 surcharge
+        assert calculate_upload_cost(size, 30) == _storage(5.0) + AUTO_EXPORT_SURCHARGE
 
     def test_10gb_upload_cost(self):
         size = int(10.0 * 1024 ** 3)
-        assert calculate_upload_cost(size, 30) == 5  # 4 storage + 1 surcharge (CREDIT_VALUE=0.05)
+        assert calculate_upload_cost(size, 30) == _storage(10.0) + AUTO_EXPORT_SURCHARGE
 
 
 class TestExtensionCostNoSurcharge:
@@ -53,15 +59,15 @@ class TestExtensionCostNoSurcharge:
 
     def test_small_game_30_days(self):
         size = int(1.0 * 1024 ** 3)
-        assert calculate_extension_cost(size, 30) == 1
+        assert calculate_extension_cost(size, 30) == _storage(1.0)
 
     def test_large_game_30_days(self):
         size = int(5.0 * 1024 ** 3)
-        assert calculate_extension_cost(size, 30) == 2
+        assert calculate_extension_cost(size, 30) == _storage(5.0)
 
     def test_very_large_game_30_days(self):
         size = int(10.0 * 1024 ** 3)
-        assert calculate_extension_cost(size, 30) == 4  # CREDIT_VALUE=0.05
+        assert calculate_extension_cost(size, 30) == _storage(10.0)
 
     def test_cost_scales_with_days(self):
         size = int(5.0 * 1024 ** 3)
@@ -117,20 +123,21 @@ class TestDaysPerCreditFormula:
     def test_2_5_gb_game(self):
         size = int(2.5 * 1024 ** 3)
         dpc = self._days_per_credit(size)
-        assert dpc == 36  # CREDIT_VALUE=0.05
+        # dpc is the LARGEST day count one credit buys (derived, not a literal - T10210)
         assert calculate_extension_cost(size, dpc) == 1
+        assert calculate_extension_cost(size, dpc + 1) == 2
 
     def test_5_gb_game(self):
         size = int(5.0 * 1024 ** 3)
         dpc = self._days_per_credit(size)
-        assert dpc == 18  # CREDIT_VALUE=0.05
         assert calculate_extension_cost(size, dpc) == 1
+        assert calculate_extension_cost(size, dpc + 1) == 2
 
     def test_10_gb_game(self):
         size = int(10.0 * 1024 ** 3)
         dpc = self._days_per_credit(size)
-        assert dpc == 9  # CREDIT_VALUE=0.05
         assert calculate_extension_cost(size, dpc) == 1
+        assert calculate_extension_cost(size, dpc + 1) == 2
 
     def test_1_gb_game(self):
         size = int(1.0 * 1024 ** 3)

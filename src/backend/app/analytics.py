@@ -7,6 +7,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 
 from app.migrations import MigrationBlocked
+from app.pricing import CREDIT_PACKS
 from app.services.pg import get_pg
 from app.user_context import (
     get_current_impersonator_id,
@@ -385,10 +386,18 @@ FUNNEL_STEPS = [
     "credit_purchased",
 ]
 
-CREDIT_AMOUNT_TO_CENTS = {
+# Credit amounts we have EVER sold, mapped to what they cost. The current ladder derives
+# from pricing.json (T10210); the frozen rows are retired ladders (pre-T4940) that still
+# appear in historical purchase rows. A retired amount reused by a future ladder takes the
+# current price (acceptable: the admin money-spent figure is an estimate, see admin.py).
+_RETIRED_CREDIT_AMOUNT_TO_CENTS = {
     120: 499,
     400: 1299,
     1000: 2499,
+}
+CREDIT_AMOUNT_TO_CENTS = {
+    **_RETIRED_CREDIT_AMOUNT_TO_CENTS,
+    **{p["credits"]: p["price_cents"] for p in CREDIT_PACKS.values()},
 }
 
 

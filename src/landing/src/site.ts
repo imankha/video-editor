@@ -75,16 +75,8 @@ export const FACTS = {
   creditsPerExportSecond: 1,
 } as const
 
-/**
- * Credit packs. Mirrored from CREDIT_PACKS in src/backend/app/routers/payments.py --
- * that file is the actual billing source of truth; keep these numbers in sync with it
- * by hand, they do not derive from it automatically.
- */
-export const CREDIT_PACKS = [
-  { name: 'Starter', credits: 80, priceUsd: 3.99 },
-  { name: 'Popular', credits: 160, priceUsd: 6.99 },
-  { name: 'Best Value', credits: 340, priceUsd: 12.99 },
-] as const
+// Credit packs: NOT defined here. Import from '@editor/config/pricing' -- it derives from
+// src/backend/app/pricing.json, the single pricing source (T10210), so the site cannot drift.
 
 /**
  * Input sources. The product accepts uploaded video files, so the honest claim

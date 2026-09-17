@@ -10,6 +10,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StorageExtensionModal } from './StorageExtensionModal';
 import { useCreditStore } from '../stores/creditStore';
+import { daysPerCredit } from '../utils/storageCost';
 
 vi.mock('./shared', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -66,8 +67,9 @@ describe('StorageExtensionModal', () => {
 
   it('calculates correct days-per-credit step for 5 GB', () => {
     render(<StorageExtensionModal {...defaultProps} />);
-    // 5 GB -> daysPerCredit = 18 days (CREDIT_VALUE=0.05, T4940)
-    expect(screen.getByText(/1 credit \(18d\)/)).toBeTruthy();
+    // 5 GB -> derived from the shared storage formula (T10210), not a literal
+    const step = daysPerCredit(5 * 1024 ** 3);
+    expect(screen.getByText(`1 credit (${step}d)`, { exact: false })).toBeTruthy();
   });
 
   it('calls correct endpoint on extend', async () => {
@@ -90,7 +92,7 @@ describe('StorageExtensionModal', () => {
         expect.stringContaining('/api/games/42/extend-storage'),
         expect.objectContaining({
           method: 'POST',
-          body: expect.stringContaining('"days":18'),
+          body: expect.stringContaining(`"days":${daysPerCredit(5 * 1024 ** 3)}`),
         }),
       );
     });
@@ -124,9 +126,10 @@ describe('StorageExtensionModal', () => {
     render(<StorageExtensionModal {...defaultProps} />);
     const slider = screen.getByRole('slider');
     fireEvent.change(slider, { target: { value: '3' } });
-    // 3 credits * 18 days/credit = 54 days (CREDIT_VALUE=0.05, T4940)
-    expect(screen.getByText(/\+54 days/)).toBeTruthy();
-    expect(screen.getByText(/3 credits for 54 days/)).toBeTruthy();
+    // 3 credits * days-per-credit, derived from the shared storage formula (T10210)
+    const days = 3 * daysPerCredit(5 * 1024 ** 3);
+    expect(screen.getByText(`+${days} days`, { exact: false })).toBeTruthy();
+    expect(screen.getByText(new RegExp(`3 credits for ${days} days`))).toBeTruthy();
   });
 
   it('shows credit balance', () => {

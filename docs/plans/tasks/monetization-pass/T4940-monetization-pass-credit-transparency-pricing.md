@@ -174,6 +174,11 @@ test-mode-grant cleanup: documented decision, NOT executed. Committed, NOT pushe
 
 **2026-07-13**: Added Workstream C after user reported the `4242` test card works on prod. CONFIRMED prod is in Stripe test mode on BOTH tiers: `.env.prod` has `sk_test_`/`pk_test_` (backend) and `src/frontend/.env.production` has `pk_test_` (frontend build). Prod has collected no real money. This is the actual go-live gate and precedes the pricing/transparency work.
 
+**2026-09-17 (T10210)**: the ladder moved out of `payments.py` into `src/backend/app/pricing.json`, the single
+pricing source for backend, app and landing site; `CREDIT_VALUE` is now derived from it (worst-case rate,
+ceil to a cent) instead of being a hand-synced constant. The economics above are unchanged. See
+`docs/plans/tasks/T10210-pricing-single-source.md`.
+
 ## Acceptance Criteria
 
 - [ ] **Prod Stripe is in LIVE mode:** test card declined on prod, real charge appears in Stripe live dashboard, prod bundle ships `pk_live_`, live webhook secret verifies live events

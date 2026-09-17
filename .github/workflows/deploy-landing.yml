@@ -6,6 +6,11 @@ on:
     branches: [master]
     paths:
       - 'src/landing/**'
+      # T10210: the landing bakes pricing + the storage formula at build time from
+      # files outside its own dir; a reprice must redeploy it or the site goes stale.
+      - 'src/backend/app/pricing.json'
+      - 'src/frontend/src/config/pricing.js'
+      - 'src/frontend/src/utils/storageCost.js'
 
 jobs:
   deploy-landing:

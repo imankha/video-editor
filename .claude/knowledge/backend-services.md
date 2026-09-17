@@ -528,8 +528,20 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   `components/admin/RevenueReconciliation.jsx` (drifted-only table + per-user/all "Adopt
   Stripe value" heal, collapsed section — Stripe pass runs only on explicit click). Tests:
   `test_revenue_reconciliation.py`. No schema change / no new table (computed on demand).
+- **Pricing has ONE source: `app/pricing.json` (T10210, 2026-09-17).** `app/pricing.py` loads it and
+  derives `CREDIT_PACKS` (Stripe-facing name composed there) and `CREDIT_VALUE` (worst-case per-credit
+  rate, ceil to a cent); `payments.py` and `storage_credits.py` import from it. The frontend twin
+  `src/frontend/src/config/pricing.js` reads the SAME json (cross-package import; `vite.config.js`
+  `server.fs.allow` covers it in dev) and feeds `utils/storageCost.js` plus the landing site via the
+  `@editor` alias (pricing cards, lowest-rate stat, worked example all computed at build). Tests on
+  both sides assert ladder INVARIANTS (ascending price, strictly decreasing rate, the CREDIT_VALUE rule),
+  never literals, so a reprice is a one-file edit. The json must live under `src/backend` because the
+  Fly Docker build context is that directory alone; every JS build must run from a FULL checkout (a
+  build rooted at `src/frontend` alone cannot resolve it). `deploy-landing.yml` triggers on the json
+  too, or the public pricing page goes stale on a reprice. `analytics.CREDIT_AMOUNT_TO_CENTS` (admin
+  money-spent) derives the current ladder from the same source on top of retired pre-T4940 amounts.
 - **Credit packs single-sourced + ~5c repricing (T4940, 2026-07-25).** `CREDIT_PACKS`
-  (`payments.py:68`) repriced to the sub-$1-per-clip ladder **starter 80/$3.99, popular
+  (now `app/pricing.json` via `app/pricing.py`, see T10210 above) repriced to the sub-$1-per-clip ladder **starter 80/$3.99, popular
   160/$6.99, best_value 340/$12.99** (starter = worst-case 4.99c/credit, best_value =
   3.82c/credit). `GET /api/payments/config` now returns
   `{publishable_key, packs[]}` — the **only** source of pack pricing; frontend
@@ -537,8 +549,8 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   gone; only presentational icon/badge stay client-side in `PACK_META`). Grants read pack
   metadata off the Stripe session/PI, not the constant, so existing balances + in-flight
   payments are unaffected by a reprice. `storage_credits.CREDIT_VALUE` → **0.05** (worst-case
-  $/credit, was 0.072) — the frontend mirror `utils/storageCost.js` must stay in lockstep or
-  the upload preview disagrees with the charge. Lower CREDIT_VALUE ⇒ more credits per GB (a 4GB
+  $/credit, was 0.072) — since T10210 both sides DERIVE it from `pricing.json`, so the upload
+  preview and the charge cannot drift. Lower CREDIT_VALUE ⇒ more credits per GB (a 4GB
   game 2→3 cr incl. surcharge), still cost-recovering (R2 cost × 1.10 margin). Usage history:
   `GET /api/credits/transactions` (unchanged) surfaced via `CreditHistoryModal.jsx` (running
   balance walked back from the authoritative current balance; deductions store negative

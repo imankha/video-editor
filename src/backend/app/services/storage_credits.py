@@ -12,11 +12,12 @@ import logging
 import math
 from datetime import datetime, timedelta
 
+from ..pricing import CREDIT_VALUE  # worst-case $/credit, derived from pricing.json (T10210)
+
 logger = logging.getLogger(__name__)
 
 # R2 cost basis
 R2_RATE_PER_GB_MONTH = 0.015  # $/GB/month
-CREDIT_VALUE = 0.05  # worst-case per-credit ($/credit at the Starter pack rate, ~4.99c, T4940)
 MARGIN = 0.10
 
 # Storage defaults
@@ -41,6 +42,6 @@ def calculate_extension_cost(file_size_bytes: int, days: int) -> int:
     return calculate_storage_cost(file_size_bytes, days)
 
 
-def storage_expires_at(from_dt: datetime = None, days: int = STORAGE_DURATION_DAYS) -> datetime:
+def storage_expires_at(from_dt: datetime | None = None, days: int = STORAGE_DURATION_DAYS) -> datetime:
     base = from_dt or datetime.utcnow()
     return base + timedelta(days=days)
