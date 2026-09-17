@@ -11,6 +11,9 @@ dependency below was repointed from T6430 to T7160.
 
 Epic child 3/3 — see [EPIC.md](EPIC.md). Depends on T6420 (+T7160 for the touch surface).
 
+**DECIDED 2026-09-17:** deferred alongside T7160 (see its task file's decision note) —
+out of the current Deploy Candidate milestone, not un-scoped.
+
 ## Problem
 
 Netflix shipped autoplay previews without an off switch and had to add one under sustained

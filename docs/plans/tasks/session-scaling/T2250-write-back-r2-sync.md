@@ -1,9 +1,14 @@
 # T2250: Write-Back R2 Sync
 
-**Status:** TODO
+**Status:** TODO (deferred by decision, not un-scoped)
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-05-01
+
+**DECIDED 2026-09-17 (user deferred to recommendation):** stays TODO — see [T2260](../session-scaling/T2260-data-loss-detection-recovery.md)'s matching note. The
+latency/cost problem this solves isn't live at current scale; revisit at the DAU/R2-spend
+threshold that originally motivated it, and sequence T2260 immediately after so the
+data-loss window it opens is never live unmitigated.
 
 ## Problem
 

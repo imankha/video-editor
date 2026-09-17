@@ -1,9 +1,16 @@
 # T7160: Mobile — tap-to-select plays the preview
 
-**Status:** TODO
+**Status:** TODO (deferred by decision, not un-scoped)
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-08-17
+
+**DECIDED 2026-09-17 (user deferred to recommendation):** stays deferred, out of the
+current Deploy Candidate milestone. This is new interaction design (touch has no
+equivalent today on either tile type), not a bug fix or finishing touch, so it doesn't
+fit the milestone's "kill bugs and finalize the streamlined UI" membership rule. The 4
+open design questions below (Architect gate) are unanswered — not resolved, just not
+being spent on right now. [T6440](../preview-video-improvements/T6440-autoplay-setting-data-saver.md) (depends on this for its touch surface) is deferred with it.
 
 Epic child 2/3 — see [EPIC.md](EPIC.md) for the design authority (supersedes T6430) and shared
 invariants. Depends on T6420 (`TilePreviewVideo` + the single-active registry) and T7170

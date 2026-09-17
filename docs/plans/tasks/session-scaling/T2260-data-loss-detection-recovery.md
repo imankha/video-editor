@@ -1,9 +1,16 @@
 # T2260: Data Loss Detection & Recovery
 
-**Status:** TODO
+**Status:** TODO (deferred by decision, not un-scoped)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-05-01
+
+**DECIDED 2026-09-17 (user deferred to recommendation):** leave T2250 and T2260 both
+TODO. Neither the write-through latency (~200ms/gesture) nor the R2 PUT cost T2250 fixes
+is a live problem at the actual current userbase (dozens of accounts, not the 100k DAU
+this was sized for) — and building write-back sync before this task's recovery UX exists
+would open a real, currently-unmitigated ~3 min data-loss window for no live benefit.
+Revisit when DAU or R2 spend actually approaches the threshold that motivated T2250.
 
 ## Problem
 

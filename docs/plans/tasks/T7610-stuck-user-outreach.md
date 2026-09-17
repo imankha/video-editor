@@ -1,6 +1,8 @@
 # T7610: Stuck-user re-activation: segmented hint emails + bookable help sessions
 
-**Status:** WAITING ON USER (email copy + booking link + goodwill credit decision)
+**Status:** WIP (all copy decisions closed 2026-09-17; remaining steps are action items,
+not decisions - confirm Discord invite never expires, log gate-verification evidence,
+T7880 reconciliation for rooom1h/finneganscudder, then send)
 **Priority:** P1 (only lever that can recover the existing 14 users)
 **Impact:** 8
 **Complexity:** 2
@@ -62,7 +64,7 @@ Platform: D desktop, M mobile, ? unrecorded (viewport heuristic + bug-report UAs
 ## Email copy (drafts for user approval; ASCII, no em dashes)
 
 Common frame (all segments): from Iman personally; lead with "tell me where you got
-stuck" (support framing rule); every email carries the booking link; short.
+stuck" (support framing rule); every email carries the Discord invite; short.
 
 **Base template:**
 > Subject: Where did you get stuck? I'd like to help personally
@@ -72,7 +74,7 @@ stuck" (support framing rule); every email carries the booking link; short.
 > stuck. Reply to this email and tell me; even one sentence helps. Happy to reward your
 > help with credits.
 >
-> Or better, grab 15 minutes with me and I'll walk you through it live: [BOOKING_LINK]
+> Or better, jump into our Discord and chat with me directly: https://discord.gg/abmtZacgsD
 >
 > [SEGMENT_HINT]
 >
@@ -103,44 +105,65 @@ stuck" (support framing rule); every email carries the booking link; short.
   on our side, now fixed: slower internet connections were timing out. Your game is
   waiting in your account with a retry button, or upload fresh; either way it will work
   now."
-- **6 paid-and-lost (bigajosue):** "First, I'm sorry. Your uploads failed because of a
-  bug on our side, and that's a terrible first experience, especially right after paying.
-  The bug is fixed, your credits are intact, and I've added 50 extra credits to your
-  account for the trouble. I'd love to personally make sure your first reel gets made:
-  [BOOKING_LINK]"
-  **BLOCKED 2026-09-03: THIS ACCOUNT NO LONGER EXISTS.** Discovered while investigating a
+- **6 paid-and-lost (bigajosue) - RE-DECIDED 2026-09-17 (user deferred to recommendation):
+  start-over invitation, no credit claims about the old account.** The account no longer
+  exists (see BLOCKED note below, superseded by this decision) so the 2026-08-24 copy's
+  "your credits are intact" / "I've added 50 extra credits" claims are dropped entirely -
+  goodwill credits are now a promise on re-signup, not a stated fact:
+  "First, I'm sorry. Your uploads failed because of a bug on our side, and that's a
+  terrible first experience, especially right after paying. The bug is fixed. I can't
+  restore your old session, but if you sign up again I'll add 50 credits to make up for
+  it, and I'd love to personally make sure your first reel gets made this time - come
+  say hi on our Discord: https://discord.gg/abmtZacgsD"
+  **Pre-send step changes accordingly: do NOT grant the 50 credits now (no account to
+  grant against) - grant them when/if bigajosue actually re-signs up, keyed off his
+  email.** Their $3.99 was never refunded (user decision 2026-09-03: accept the
+  chargeback risk), which is exactly why an accurate, apologetic version of this email is
+  worth sending.
+  <details><summary>Original 2026-08-24 copy + the 2026-09-03 blocked note (superseded)</summary>
+
+  "First, I'm sorry. Your uploads failed because of a bug on our side, and that's a
+  terrible first experience, especially right after paying. The bug is fixed, your
+  credits are intact, and I've added 50 extra credits to your account for the trouble.
+  I'd love to personally make sure your first reel gets made: [BOOKING_LINK]"
+
+  BLOCKED 2026-09-03: THIS ACCOUNT NO LONGER EXISTS. Discovered while investigating a
   revenue-reconciliation drift (see [Revenue Record Integrity](revenue-integrity/EPIC.md)):
   user `fb40690a-edcf-4504-a51f-f9df6f84ac4f` has no `users`, `user_segments`, `credits`
   or `credit_transactions` row in prod and its R2 prefix is empty, so the account was
   deleted some time after 2026-08-24 05:05 UTC (self-serve CCPA delete or a manual
-  `delete_user.py --env prod` run; the residue cannot distinguish them). Consequences for
-  this segment, decide before any send: the copy above is now FALSE on two counts ("your
-  credits are intact" and "I've added 50 extra credits to your account"), and the pre-send
-  grant in step 4 has no account to grant against. Either rewrite this segment as a
-  genuine start-over invitation (no credit claims, offer the goodwill credits on their
-  next signup and grant them when it happens), or drop the segment. Their $3.99 was never
-  refunded (user decision 2026-09-03: accept the chargeback risk), which makes an accurate,
-  apologetic version of this email MORE worth sending, not less.
-  **DECIDED 2026-08-24: 50 goodwill credits. GRANT THEM IMMEDIATELY BEFORE THE SEND**
-  (admin grant-credits endpoint) so the email states a fact, not a promise - this is a
-  pre-send checklist step, remind the user at send time.
+  `delete_user.py --env prod` run; the residue cannot distinguish them).
+  </details>
 - **7 share-recipients:** "The game and clips that were shared with you are still in your
   account. You can watch them, make your own clips from the game, and build your own reel
   from them. If that wasn't clear, that's on us; tell me what you were hoping to do."
+
+**ojedalucas19 (uploaded-no-clips segment) - DECIDED 2026-09-17 (user deferred to
+recommendation): plain re-engagement, no mention of the cascade-delete bug he never
+noticed.** Uses the standard segment-3 hint verbatim ("Your game is still in your
+account, ready to go. Open it, press Add Clip when you see a great play...") - no
+special-cased copy for him.
+
+**New cohort (Aug 24-27 signups, 14 users) - DECIDED 2026-09-17 (user deferred to
+recommendation): approved to fold in using the existing approved segment templates**,
+per the table in the addendum below. No new copy needed.
 
 **Dedup adjustment (see section below):** for the 5 recipients already emailed in the
 2026-08 win-back campaign, open with continuity, e.g. "I wrote a little while back; since
 then we've fixed several of the things that were in your way", instead of a cold intro.
 
-## Booking (Google Calendar, Mon-Fri 09:00-14:00, user's stated window)
+## Live help channel (DECIDED 2026-09-17: Discord, not a booking link)
 
-- Mechanism: a Google Calendar APPOINTMENT SCHEDULE (native booking page) on the user's
-  calendar, recurring Mon-Fri 9:00-14:00; the share link is [BOOKING_LINK] in every email
-  and, as a follow-up decision, on the in-app help/bug-report surface.
-- AI cannot create it in this environment until the claude.ai Google Calendar connector
-  is authorized. Two paths: (a) user authorizes the connector, AI creates + verifies the
-  schedule; (b) user creates it in Google Calendar (Settings -> Appointment schedules,
-  ~2 min) and pastes the link here. Either way the link lands in this file before sends.
+- **Mechanism changed from a scheduled Google Calendar slot to an always-open Discord
+  invite**, user decision 2026-09-17: `https://discord.gg/abmtZacgsD` - the ReelBallers
+  Discord, where the user chats with recipients directly. No connector authorization or
+  calendar setup needed; the link is live now and used verbatim in every email (base
+  template + bigajosue's segment) and, as a follow-up decision, on the in-app help/bug-report
+  surface.
+- **Not yet verified:** whether this specific invite link expires or has a max-uses cap
+  (Discord invites can be created either way). Confirm in Discord's Server Settings ->
+  Invites that this link is set to never expire / unlimited uses before it goes out in a
+  mass send - a link that dies after N joins would silently strand later recipients.
 
 ## Send mechanism + tracking
 
@@ -150,8 +173,8 @@ then we've fixed several of the things that were in your way", instead of a cold
   founder's real address; ONE follow-up to non-responders 3-5 days after the first send
   (follow-ups get read: 45% read rates vs 24% first-open in win-back studies), then STOP
   at two touches. CTA order stays as approved: primary ask = "reply and tell me where you
-  got stuck" (earns a reply), booking link second ("Or better...") - booking-first raises
-  friction on a first touch. The credits-reward line stays a tail sentence, never the
+  got stuck" (earns a reply), the Discord invite second ("Or better...") - leading with it
+  raises friction on a first touch. The credits-reward line stays a tail sentence, never the
   lead: these users never reached value, so incentives are not the lever.
 - Log every send in this file: date, user, segment, template version.
 - Success measure: recipients who RETURN and pass their previous wall (durable outcome,
@@ -160,12 +183,13 @@ then we've fixed several of the things that were in your way", instead of a cold
 
 ## Sequencing summary
 
-1. NOW: user approves copy (goodwill credits DECIDED: 50); booking link deferred until
-   send prep (user 2026-08-24).
+1. NOW: user approves copy (goodwill credits DECIDED: 50); Discord invite link DECIDED
+   2026-09-17 (`https://discord.gg/abmtZacgsD`, replaces the booking-link plan) - confirm
+   it's set to never-expire/unlimited-uses before send prep.
 2. Ship + DEPLOY the gate tasks (T7480, T7470, T7540, T7490).
 3. Verify each gate fix live on prod; record evidence here.
-4. PRE-SEND CHECKLIST: booking link in hand -> REMIND USER to grant bigajosue 50 credits
-   (verify balance shows the grant) -> then send.
+4. PRE-SEND CHECKLIST: Discord link expiry/uses confirmed -> bigajosue does NOT get a
+   pre-send grant (his 50 credits now trigger on re-signup, not before) -> then send.
 5. Send all segments (dedup-adjusted); log sends.
 6. Review return/pass-the-wall outcomes at day 7 and day 21.
 
@@ -233,11 +257,15 @@ visits total, still zero clips; his follow-up copy should acknowledge persistenc
 
 - [x] Email copy per segment approved by user (2026-08-24, with "Happy to reward your
       help with credits." added to the base template)
-- [x] Goodwill credit decision for bigajosue recorded (50 credits, 2026-08-24; granted at
-      pre-send checklist time, never earlier)
-- [ ] bigajosue segment re-decided: the account was deleted (found 2026-09-03), so the
-      approved copy and the pre-send grant are both invalid as written
-- [ ] Booking link created (either path), verified working, recorded here
+- [x] Goodwill credit decision for bigajosue recorded (50 credits, 2026-08-24; re-decided
+      2026-09-17 to grant on re-signup instead of pre-send, since the account is gone)
+- [x] bigajosue segment re-decided (2026-09-17): start-over invitation, no false claims
+      about an account that no longer exists
+- [x] ojedalucas19 tone decided (2026-09-17): plain re-engagement, standard segment-3 copy
+- [x] New cohort (14 users) approved to fold in on existing segment templates (2026-09-17)
+- [x] Discord invite link decided (2026-09-17: `https://discord.gg/abmtZacgsD`, replaces
+      the booking-link plan) and wired into the base template + bigajosue's segment copy
+- [ ] Confirm the Discord invite is set to never-expire/unlimited-uses before send
 - [ ] ALL gate tasks verified live on PROD with evidence logged here BEFORE any send
 - [ ] Sends executed + logged per user/segment
 - [ ] Day-7 and day-21 return review recorded
