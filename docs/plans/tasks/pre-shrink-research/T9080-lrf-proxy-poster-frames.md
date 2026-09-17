@@ -1,10 +1,15 @@
 # T9080: Poster + preview frames from the `.LRF` proxy at upload time (T8836 row 3)
 
-**Status:** TODO
+**Status:** TODO (deferred, not vetoed)
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-08
-**Updated:** 2026-09-08
+**Updated:** 2026-09-17
+
+**2026-09-17: user deferred this row** (via the pre-Tutorial-Redesign clearing artifact) -
+"kick to a later milestone dealing with uploads." Already lives in the Pre-Shrink Research
+epic; no re-filing needed. Revisit when that epic is picked up (already sequenced after
+Tutorial Redesign).
 
 ## Problem
 

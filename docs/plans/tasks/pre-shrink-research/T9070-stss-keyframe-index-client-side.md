@@ -1,10 +1,14 @@
 # T9070: Extract the `stss` keyframe index client-side (T8836 row 2)
 
-**Status:** TODO
+**Status:** TODO (confirmed, not vetoed)
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-08
-**Updated:** 2026-09-08
+**Updated:** 2026-09-17
+
+**2026-09-17: user confirmed this row** (via the pre-Tutorial-Redesign clearing artifact) -
+proceeds whenever the Pre-Shrink Research epic is picked up (already sequenced after Tutorial
+Redesign; no change to timing).
 
 ## Problem
 

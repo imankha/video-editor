@@ -1,10 +1,13 @@
 # T8836: Survey: other cheap client-side pre-upload work worth doing now (decision doc)
 
-**Status:** WAITING ON USER
+**Status:** DONE
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-06
-**Updated:** 2026-09-06
+**Updated:** 2026-09-17
+
+**2026-09-17: user decided rows 2/3 (T9070 confirmed, T9080 deferred) - all acceptance criteria
+met, this survey's job is done.** T9070/T9080 themselves stay TODO in their own milestone.
 
 ## Problem
 
@@ -135,10 +138,21 @@ proxy posters at upload time). Status stays WAITING ON USER: the user's pick is 
 gate. Confirm = tick step 4; veto = close the task(s) and tick step 4 with the declined
 row noted.
 
+**2026-09-17 (user decision, via the pre-Tutorial-Redesign clearing artifact)**: **Row 2
+(T9070) CONFIRMED** - proceeds whenever the Pre-Shrink Research epic is picked up (already
+sequenced after Share-Back Attribution and after Tutorial Redesign; no change to its
+position). **Row 3 (T9080) DEFERRED, not vetoed** - user: kick it out to a later milestone
+dealing with uploads. It already lives in the Pre-Shrink milestone (an uploads-track
+epic), so no re-filing was needed; its "Provisional - user may veto" framing is replaced
+with "deferred - revisit when Pre-Shrink Research starts" in its own row/task file. This
+is separate from and reinforces the same-day decision to defer the WHOLE shrink-tool
+track (T8840 and everything downstream of it) until after Tutorial Redesign.
+
 ## Acceptance Criteria
 
 - [x] Every candidate has a measured number on the 17 GB DJI file (or a stated reason it
       does not apply)
 - [x] One recommendation per row, with the target task named
 - [x] No app code changed by this task
-- [ ] Follow-up tasks filed only for rows the user picks
+- [x] Follow-up tasks filed only for rows the user picks (T9070 confirmed 2026-09-17; T9080
+      deferred, not filed as an active pick right now)

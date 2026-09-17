@@ -1,9 +1,10 @@
 # T7170: Remove preview reveal delay
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-08-17
+**Updated:** 2026-09-17
 
 **Filed as T7150, renumbered to T7170 same day** — a concurrent session claimed T7150 for an
 unrelated bug fix (43p, collection share intro sequencing) in this shared checkout before this
@@ -62,11 +63,36 @@ a real finding — don't silently reintroduce a floor to paper over it.
   check. Reviewer recommended (shared primitive both tile types depend on) but no Architect gate
   — this is not a new pattern.
 
+## Implementation
+
+### Steps
+1. [x] `PREVIEW_REVEAL_DELAY_MS` zeroed in `useTilePreview.js`, doc comments updated to match
+   the new behavior. `PREVIEW_WARM_DELAY_MS` (100ms request-storm guard) untouched.
+2. [x] Updated the three existing test files that assumed a positive floor
+   (`useTilePreview.test.jsx`, `ReelTile.preview.test.jsx`, `DraftTile.preview.test.jsx`) —
+   several assertions did `advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS - PREVIEW_WARM_DELAY_MS)`,
+   which is now negative and throws; others silently weakened to a 0ms no-op advance. Fixed by
+   advancing off `PREVIEW_WARM_DELAY_MS` instead, with a small positive tick (empirically
+   confirmed vitest's fake timers do not retroactively fire a same-instant 0ms timer scheduled
+   during an already-completed `advanceTimersByTime` call — needs its own subsequent tick).
+3. [ ] Real-browser flicker check NOT performed in-container (no live dev stack / Playwright
+   session run for this task). Given the change is a pure constant + the WARM 100ms dwell guard
+   is untouched, risk is judged low, but this is a stated acceptance criterion and staying
+   honest about it: **this is the pending staging-verification step**, not a silent gap.
+
+### Progress Log
+
+**2026-09-17**: Implemented inline (S/M-tier, no container, matches the container-gate rule).
+Red/green independently proven: reverted the source constant alone (kept the new/updated
+tests) → 10/28 relevant tests fail with either a thrown "Negative ticks" error or a
+phase-mismatch, all against the OLD 450ms-floor assumption; restored → 28/28 pass. Pushed
+directly to master (T10100 precedent for small direct fixes).
+
 ## Acceptance Criteria
-- [ ] Desktop hover: preview reveals as soon as content is ready, with no artificial wait beyond
+- [x] Desktop hover: preview reveals as soon as content is ready, with no artificial wait beyond
       real load time
-- [ ] `PREVIEW_WARM_DELAY_MS` (request-storm guard) unchanged
-- [ ] Real-browser check: fast mouse pass across a tile grid does not visibly strobe/flicker
-      (evidence captured; a real flicker gets reported back, not silently patched with a new floor)
-- [ ] Existing T6420/T6820 unit tests updated for the new floor value and still pass
-- [ ] Frontend unit tests pass
+- [x] `PREVIEW_WARM_DELAY_MS` (request-storm guard) unchanged
+- [ ] Real-browser check: fast mouse pass across a tile grid does not visibly strobe/flicker —
+      **NOT YET DONE**, owed as staging verification (see Progress Log)
+- [x] Existing T6420/T6820 unit tests updated for the new floor value and still pass (28/28)
+- [x] Frontend unit tests pass (relevant set; full suite not run per Test Scope Policy)

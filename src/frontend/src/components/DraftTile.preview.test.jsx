@@ -64,7 +64,7 @@ vi.mock('../stores/questStore', () => {
 });
 
 import { DraftTile } from './DraftTile';
-import { PREVIEW_WARM_DELAY_MS, PREVIEW_REVEAL_DELAY_MS } from '../hooks/useTilePreview';
+import { PREVIEW_WARM_DELAY_MS } from '../hooks/useTilePreview';
 
 const baseProject = {
   id: 7,
@@ -208,7 +208,7 @@ describe('T6820 DraftTile hover preview — Not Started source-clip fallback', (
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
   });
 
-  it('a fast load (before the floor) still waits for the ~450ms floor (flicker avoidance)', () => {
+  it('a fast load (content ready right after warm) reveals with no artificial wait (T7170: floor zeroed)', () => {
     const { video } = renderTile({
       has_working_video: false,
       final_video_id: null,
@@ -216,34 +216,36 @@ describe('T6820 DraftTile hover preview — Not Started source-clip fallback', (
     });
     fireEvent.pointerEnter(screen.getByTestId('project-card'));
     act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS));
-    // Content ready almost immediately -- should NOT reveal yet, floor not reached.
+    // Content ready almost immediately -- the floor (0ms) still needs its own
+    // tick, but there's no artificial wait stacked on top of it anymore.
     fireEvent.loadedData(video());
     expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
 
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS - PREVIEW_WARM_DELAY_MS));
+    act(() => vi.advanceTimersByTime(1));
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
   });
 });
 
 // Final/working-video tiers share the exact same max(floor, content-ready) policy
 // as the source-clip tier above -- one mechanism, all tiers, per the 2026-08-14
-// "artificial delay = floor - load latency" directive.
+// "artificial delay = floor - load latency" directive (floor zeroed by T7170).
 describe('Shared reveal policy — floor vs. content-ready race (all preview tiers)', () => {
-  it('final/working-video tiers still wait for the ~450ms floor even if content is ready instantly', () => {
+  it('final/working-video tiers reveal with no artificial wait once content is ready (T7170: floor zeroed)', () => {
     const { video } = renderTile({ has_working_video: true, final_video_id: null });
     fireEvent.pointerEnter(screen.getByTestId('project-card'));
     act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS));
     fireEvent.loadedData(video());
     expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
 
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS - PREVIEW_WARM_DELAY_MS));
+    act(() => vi.advanceTimersByTime(1));
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
   });
 
   it('final/working-video tiers do not reveal on the floor alone -- content-ready is still required', () => {
     renderTile({ has_working_video: true, final_video_id: null });
     fireEvent.pointerEnter(screen.getByTestId('project-card'));
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS));
+    act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS));
+    act(() => vi.advanceTimersByTime(1)); // floor (0ms) elapses
     expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
   });
 });

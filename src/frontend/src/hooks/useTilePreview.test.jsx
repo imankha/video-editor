@@ -39,7 +39,7 @@ import {
 const STREAM = '/api/downloads/7/stream';
 
 describe('useTilePreview — warm early, reveal late (T6420)', () => {
-  it('fine pointer: enter -> WARM at ~100ms, REVEAL at max(~450ms floor, content-ready)', () => {
+  it('fine pointer: enter -> WARM at ~100ms, REVEAL as soon as content is ready (T7170: floor zeroed)', () => {
     const { result } = renderHook(() => useTilePreview({ streamUrl: STREAM }));
     expect(result.current.phase).toBe(PREVIEW_PHASE.IDLE);
 
@@ -51,37 +51,38 @@ describe('useTilePreview — warm early, reveal late (T6420)', () => {
     act(() => vi.advanceTimersByTime(1));
     expect(result.current.phase).toBe(PREVIEW_PHASE.WARM);
 
-    // Floor timer alone is NOT enough (2026-08-14 policy) -- content must also
-    // report ready. Content ready fast (well before the floor) still waits for it.
+    // Floor timer alone is still NOT enough (2026-08-14 policy, unchanged by T7170) --
+    // content must also report ready.
     act(() => result.current.onContentReady());
     expect(result.current.phase).toBe(PREVIEW_PHASE.WARM);
 
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS - PREVIEW_WARM_DELAY_MS));
+    // The floor is now 0ms (T7170) -- it still needs its own tick to elapse (a real
+    // setTimeout, not synchronous), but there is no artificial wait built into it
+    // anymore. Any non-negative advance lets it fire.
+    act(() => vi.advanceTimersByTime(1));
     expect(result.current.phase).toBe(PREVIEW_PHASE.REVEAL);
   });
 
-  it('REVEAL policy: content ready BEFORE the floor still waits for the floor (flicker avoidance, fast tiers)', () => {
+  it('REVEAL policy: the floor alone is never enough -- content-ready is still required (T7170: floor is 0, not removed)', () => {
     const { result } = renderHook(() => useTilePreview({ streamUrl: STREAM }));
     act(() => result.current.onPointerEnter());
     act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS));
-    act(() => result.current.onContentReady()); // fires immediately, well before the floor
-    expect(result.current.phase).toBe(PREVIEW_PHASE.WARM); // not revealed yet
-
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS - PREVIEW_WARM_DELAY_MS - 1));
-    expect(result.current.phase).toBe(PREVIEW_PHASE.WARM); // still not, floor not reached
-
-    act(() => vi.advanceTimersByTime(1));
-    expect(result.current.phase).toBe(PREVIEW_PHASE.REVEAL); // floor reached, both true now
-  });
-
-  it('REVEAL policy: content ready AFTER the floor reveals immediately (no extra artificial wait on slow tiers)', () => {
-    const { result } = renderHook(() => useTilePreview({ streamUrl: STREAM }));
-    act(() => result.current.onPointerEnter());
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS)); // floor reached
+    act(() => vi.advanceTimersByTime(1)); // floor (0ms) elapses
     expect(result.current.phase).toBe(PREVIEW_PHASE.WARM); // content not ready yet, no reveal
 
-    // A long real load latency well past the floor -- reveal should fire the
-    // INSTANT content becomes ready, not wait any further artificial delay.
+    act(() => result.current.onContentReady());
+    expect(result.current.phase).toBe(PREVIEW_PHASE.REVEAL); // both true now
+  });
+
+  it('REVEAL policy: content ready AFTER a slow real load reveals the instant it is ready (no extra artificial wait)', () => {
+    const { result } = renderHook(() => useTilePreview({ streamUrl: STREAM }));
+    act(() => result.current.onPointerEnter());
+    act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS));
+    act(() => vi.advanceTimersByTime(1)); // floor (0ms) elapses
+    expect(result.current.phase).toBe(PREVIEW_PHASE.WARM); // content not ready yet, no reveal
+
+    // A long real load latency well past the (now nonexistent) floor -- reveal
+    // should fire the INSTANT content becomes ready, not wait any further.
     act(() => vi.advanceTimersByTime(2000));
     expect(result.current.phase).toBe(PREVIEW_PHASE.WARM);
     act(() => result.current.onContentReady());
@@ -93,15 +94,16 @@ describe('useTilePreview — warm early, reveal late (T6420)', () => {
     act(() => result.current.onPointerEnter());
     act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS - 5));
     act(() => result.current.onPointerLeave());
-    // Advance well past reveal — nothing should ever fire (zero requests).
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS * 2));
+    // Advance well past warm+reveal — nothing should ever fire (zero requests).
+    act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS * 2));
     expect(result.current.phase).toBe(PREVIEW_PHASE.IDLE);
   });
 
   it('leave after reveal tears down to idle', () => {
     const { result } = renderHook(() => useTilePreview({ streamUrl: STREAM }));
     act(() => result.current.onPointerEnter());
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS));
+    act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS));
+    act(() => vi.advanceTimersByTime(1)); // floor (0ms, T7170) elapses
     act(() => result.current.onContentReady());
     expect(result.current.phase).toBe(PREVIEW_PHASE.REVEAL);
     act(() => result.current.onPointerLeave());
@@ -112,7 +114,7 @@ describe('useTilePreview — warm early, reveal late (T6420)', () => {
     coarsePointer = true;
     const { result } = renderHook(() => useTilePreview({ streamUrl: STREAM }));
     act(() => result.current.onPointerEnter());
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS * 2));
+    act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS * 2));
     expect(result.current.phase).toBe(PREVIEW_PHASE.IDLE);
   });
 
@@ -120,14 +122,14 @@ describe('useTilePreview — warm early, reveal late (T6420)', () => {
     reducedMotion = true;
     const { result } = renderHook(() => useTilePreview({ streamUrl: STREAM }));
     act(() => result.current.onPointerEnter());
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS * 2));
+    act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS * 2));
     expect(result.current.phase).toBe(PREVIEW_PHASE.IDLE);
   });
 
   it('null streamUrl (draft with no rendered video): inert', () => {
     const { result } = renderHook(() => useTilePreview({ streamUrl: null }));
     act(() => result.current.onPointerEnter());
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS * 2));
+    act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS * 2));
     expect(result.current.phase).toBe(PREVIEW_PHASE.IDLE);
   });
 
@@ -156,7 +158,8 @@ describe('useTilePreview — warm early, reveal late (T6420)', () => {
 
     // Re-hovering the same tile activates again (slot was released, not leaked).
     act(() => a.result.current.onPointerEnter());
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS));
+    act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS));
+    act(() => vi.advanceTimersByTime(1)); // floor (0ms, T7170) elapses
     act(() => a.result.current.onContentReady());
     expect(a.result.current.phase).toBe(PREVIEW_PHASE.REVEAL);
   });

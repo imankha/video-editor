@@ -33,9 +33,9 @@ Confirm credit use matches the rules confirmed by T9680, and that nothing was ex
 
 ## Fixtures
 
-- `wcfc-carlsbad-trimmed.mp4` (45.8 MB, 1:29). Original local path recorded in the handoff:
-  `formal annotations/test.short/wcfc-carlsbad-trimmed.mp4`. **The video is not in the handoff
-  archive** - confirm access or substitute an equivalent authorized fixture.
+- `wcfc-carlsbad-trimmed.mp4` (45.8 MB, 1:29). **CONFIRMED available 2026-09-17** at
+  `formal annotations/test.short/wcfc-carlsbad-trimmed.mp4` (47,989,792 bytes, ffprobe
+  duration 89.32s - matches exactly). It was never missing, just not in the handoff archive.
 - Plays: 0:03-0:09 Control/Pass, 0:13-0:19 Dribble, optional 0:59-1:03.5 Pass.
 - Fractional bounds 2.973-9.000 s for the rounding boundary check.
 - Use a separate test account; do not overwrite the walkthrough's reviewed output.

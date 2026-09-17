@@ -10,14 +10,16 @@ import { useIsCoarsePointer } from './useIsMobile';
  * REVEAL, not the fetch. A straight-line grid crossing fires ZERO requests (grace
  * window); a dwell attaches the stream at ~WARM ms and buffers.
  *
- * REVEAL timing (2026-08-14 policy, all hover-preview tiers): artificial delay =
- * PREVIEW_REVEAL_DELAY_MS - real load latency, floored at 0 — i.e. REVEAL fires at
- * max(PREVIEW_REVEAL_DELAY_MS, load-ready time). A fast-loading tier (final/working
- * video) still waits the full ~450ms floor (flicker avoidance on a quick mouse
- * pass — content being ready sooner never reveals it sooner). A slow-loading tier
- * (T6820's source-clip window: moov + a mid-file byte range, real seek latency)
- * never pays an ADDITIONAL flat 450ms on top of its own real fetch time — it
- * reveals as soon as content is actually ready. Implemented by tracking two
+ * REVEAL timing (2026-08-14 policy, all hover-preview tiers; floor zeroed by T7170
+ * 2026-09-17): artificial delay = PREVIEW_REVEAL_DELAY_MS - real load latency, floored at 0 —
+ * i.e. REVEAL fires at max(PREVIEW_REVEAL_DELAY_MS, load-ready time). With the floor now 0,
+ * every tier reveals purely on its real content-ready signal — no tier pays an artificial
+ * wait beyond its own load time (a fast tier no longer pays the old ~450ms flicker-avoidance
+ * floor; a slow-loading tier, T6820's source-clip window: moov + a mid-file byte range, real
+ * seek latency, was already unaffected by the floor and still reveals exactly when ready).
+ * PREVIEW_WARM_DELAY_MS's 100ms hover dwell is what now absorbs a fast mouse pass across the
+ * grid (nothing shows until WARM fires) — see T7170's real-browser flicker check. Implemented
+ * by tracking two
  * independent conditions — the floor timer and a content-ready signal from
  * TilePreviewVideo's `onContentReady` — and transitioning to REVEAL only once
  * BOTH are true (whichever finishes second decides the moment). Previously this
@@ -35,7 +37,13 @@ import { useIsCoarsePointer } from './useIsMobile';
 
 // The two timing constants — tuned HERE, the single source both tiles share.
 export const PREVIEW_WARM_DELAY_MS = 100; // hover dwell before attaching src + buffering
-export const PREVIEW_REVEAL_DELAY_MS = 450; // floor: REVEAL never fires before this many ms
+// T7170 (2026-09-17): floor removed per user feedback — any perceptible delay before the
+// preview plays read as sluggish. REVEAL now fires purely on the real content-ready signal
+// (still never earlier than that — a fast tier no longer pays an artificial ~450ms wait it
+// doesn't need). The floor-vs-real-latency race structure below is UNCHANGED on purpose (0 is
+// trivially satisfied instead of deleted), so a slow tier's real-load-latency behavior from
+// T6820 keeps working unmodified.
+export const PREVIEW_REVEAL_DELAY_MS = 0; // floor: REVEAL never fires before this many ms
 // of hover dwell, but WILL fire later if real content-load latency exceeds it (see policy above).
 
 export const PREVIEW_PHASE = {

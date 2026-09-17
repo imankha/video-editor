@@ -1,10 +1,17 @@
 # T8840: Standalone browser shrink tool (fully working, zero app integration)
 
-**Status:** WAITING ON USER
+**Status:** WAITING ON USER (deferred)
 **Impact:** 7
 **Complexity:** 7
 **Created:** 2026-09-05
-**Updated:** 2026-09-08
+**Updated:** 2026-09-17
+
+**2026-09-17 (user direction): the whole shrink-tool track is deferred until after Tutorial
+Redesign** - "we aren't going to include the shrink tool right now, kick that work out until
+after the tutorial work." Still WAITING ON USER for the same real-hardware test as before
+(nothing about the acceptance bar changed); this just isn't active work right now. PLAN.md row
+relocated to sit with the Video Pre-Shrink milestone (which already runs entirely after Tutorial
+Redesign) instead of Universal Upload & Angles.
 
 ## Problem
 

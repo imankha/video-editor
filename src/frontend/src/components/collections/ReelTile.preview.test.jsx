@@ -32,7 +32,7 @@ afterEach(() => {
 });
 
 import { ReelTile } from './ReelTile';
-import { PREVIEW_REVEAL_DELAY_MS, PREVIEW_WARM_DELAY_MS } from '../../hooks/useTilePreview';
+import { PREVIEW_WARM_DELAY_MS } from '../../hooks/useTilePreview';
 
 const baseProps = () => ({
   download: { id: 42, project_name: 'Nutmeg', aspect_ratio: '9:16' },
@@ -75,10 +75,11 @@ describe('T6420 ReelTile inline hover preview', () => {
     act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS));
     expect(video().getAttribute('src')).toBe(EXPECTED_STREAM);
     expect(playSpy).not.toHaveBeenCalled(); // still warming, poster showing
-    // Content-ready (2026-08-14 policy) is required in addition to the floor.
+    // Content-ready (2026-08-14 policy) is required in addition to the floor,
+    // even though the floor itself is now 0ms (T7170).
     fireEvent.loadedData(video());
-    expect(playSpy).not.toHaveBeenCalled(); // floor not reached yet
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS - PREVIEW_WARM_DELAY_MS));
+    expect(playSpy).not.toHaveBeenCalled(); // floor (0ms) hasn't ticked yet
+    act(() => vi.advanceTimersByTime(1));
     expect(playSpy).toHaveBeenCalled();
   });
 
@@ -86,7 +87,7 @@ describe('T6420 ReelTile inline hover preview', () => {
     coarsePointer = true;
     const { video } = renderTile();
     fireEvent.pointerEnter(screen.getByTestId('reel-card'));
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS * 2));
+    act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS * 2));
     expect(video().getAttribute('src')).toBeNull();
     expect(playSpy).not.toHaveBeenCalled();
   });
@@ -95,7 +96,7 @@ describe('T6420 ReelTile inline hover preview', () => {
     const { video } = renderTile();
     const card = screen.getByTestId('reel-card');
     fireEvent.pointerEnter(card);
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS));
+    act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS));
     expect(video().getAttribute('src')).toBe(EXPECTED_STREAM);
     fireEvent.pointerLeave(card);
     expect(video().getAttribute('src')).toBeNull();
@@ -104,7 +105,7 @@ describe('T6420 ReelTile inline hover preview', () => {
   it('opening the full player (Play) tears down the inline preview AND calls onPlay', () => {
     const { video, props } = renderTile();
     fireEvent.pointerEnter(screen.getByTestId('reel-card'));
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS));
+    act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS));
     expect(video().getAttribute('src')).toBe(EXPECTED_STREAM);
 
     fireEvent.click(screen.getByRole('button', { name: 'Play video' }));
@@ -115,7 +116,7 @@ describe('T6420 ReelTile inline hover preview', () => {
   it('the preview is ephemeral: hovering fires NO write/action handlers', () => {
     const { props } = renderTile();
     fireEvent.pointerEnter(screen.getByTestId('reel-card'));
-    act(() => vi.advanceTimersByTime(PREVIEW_REVEAL_DELAY_MS));
+    act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS));
     // No watched-marking, no share/copy/download/open/delete — preview is read-only.
     expect(props.onPlay).not.toHaveBeenCalled();
     expect(props.onWebShare).not.toHaveBeenCalled();
