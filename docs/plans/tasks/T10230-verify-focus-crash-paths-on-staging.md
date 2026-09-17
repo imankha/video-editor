@@ -1,6 +1,6 @@
 # T10230: Re-verify the three React #185 crash paths on redeployed staging
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 10
 **Complexity:** 2
 **Created:** 2026-09-17
@@ -54,6 +54,47 @@ Verification first, then root-cause only if it still reproduces:
 
 ## Acceptance Criteria
 
-- [ ] All three paths open Framing without a console error on the current staging bundle
-- [ ] Bundle hash recorded in the progress log, with the account and timestamps
-- [ ] If reproduced: root cause identified by the expert agent and fixed with a regression test
+- [x] All three paths open Framing without a console error on the current staging bundle
+- [x] Bundle hash recorded in the progress log, with the account and timestamps
+- [x] If reproduced: root cause identified by the expert agent and fixed with a regression test — N/A, not reproduced
+
+## Progress Log
+
+**2026-09-17**: Verified live on staging via dev-login as `hello@reelballers.com`
+(`POST /api/auth/dev-login` + `X-Test-Mode` header — staging allows this gated path, real R2
+data, no password needed). Deployed bundle confirmed different from the reported one before
+even opening a browser: `curl` against `reel-ballers-staging.pages.dev` showed
+`index-BcKA4cM1.js` (report quoted `vendor-react-CGAGbR8z.js` / `index-VfqkVJmd.js`). Backend
+`x-app-version: db822c59...` (past T10200's fix commit).
+
+Drove all three paths with Playwright, console captured throughout:
+1. **View Final stage CTA** — Annotate -> "Great Control Pass" play -> Clip Details -> "View
+   Final" button -> navigated to `/focus`, 0 console errors, clip list rendered correctly.
+2. **Freshly uploaded clip from Clips tab** — clicked the Draft tile `VID_20260905_094101` on
+   the home screen -> navigated straight to `/focus` in Framing (no working video, no
+   clips-in-progress, so `useProjectLoader`'s `targetMode` default fired), 0 console errors.
+   This is the same `DraftTile.handleCardClick` -> `useProjectLoader(mode=null)` code path as
+   "go to Framing directly", confirmed by reading `DraftTile.jsx:239-245` and
+   `useProjectLoader.js:120` — both user-facing scenarios converge on one click in this
+   account's current data shape.
+3. **Framing tab from Focus** — clicked the Framing tab directly from a loaded project, 0
+   console errors.
+
+Full console across the whole run: 11 messages total, 0 errors except one benign pre-login 401
+on `/api/auth/me` (expected — that request fired before the dev-login cookie existed). No #185,
+no infinite-render warnings. **Verdict: not reproducible on the current staging bundle** — the
+2026-09-17 user report predated the 10:49 UTC deploy or hit a stale service-worker bundle, per
+the original hypothesis. No expert escalation needed.
+
+**T7170 flicker check**: attempted on the same account, but its Clips grid only has 2 tiles
+(one Draft, one Ready-to-watch) — too sparse for a real "fast mouse pass across a grid"
+strobe test. A rapid hover pass across both fired zero video/preview network requests (no
+request-storm) and no console errors. Source confirmed
+`PREVIEW_REVEAL_DELAY_MS = 0` / `PREVIEW_WARM_DELAY_MS = 100` unchanged
+(`useTilePreview.js:39,46`). Given this is a pure floor-constant change with the WARM guard
+untouched, residual risk is low, but a definitive visual-strobe verdict needs an account with a
+larger tile grid — noting this honestly rather than claiming a stronger check than was run.
+
+PLAN.md updated: this row, T10200's row, and T9950's flag all carry the re-verify verdict.
+Status set to WAITING ON USER — no code shipped, nothing to merge, just needs the user's
+Resolve.

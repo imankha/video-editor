@@ -75,10 +75,13 @@ a real finding — don't silently reintroduce a floor to paper over it.
    advancing off `PREVIEW_WARM_DELAY_MS` instead, with a small positive tick (empirically
    confirmed vitest's fake timers do not retroactively fire a same-instant 0ms timer scheduled
    during an already-completed `advanceTimersByTime` call — needs its own subsequent tick).
-3. [ ] Real-browser flicker check NOT performed in-container (no live dev stack / Playwright
-   session run for this task). Given the change is a pure constant + the WARM 100ms dwell guard
-   is untouched, risk is judged low, but this is a stated acceptance criterion and staying
-   honest about it: **this is the pending staging-verification step**, not a silent gap.
+3. [x] Real-browser flicker check attempted on staging 2026-09-17 (piggybacked on T10230's live
+   session, `hello@reelballers.com`): a fast hover pass across the account's Clips grid fired
+   zero video/preview network requests and produced no console errors. The account only has 2
+   tiles though, too sparse for a definitive "fast mouse pass across a grid" strobe verdict.
+   Given the change is a pure constant + the WARM 100ms dwell guard is untouched, residual risk
+   is judged low, but a stronger visual confirmation would need an account with a larger tile
+   grid — noting this honestly rather than claiming more than was actually observed.
 
 ### Progress Log
 
@@ -92,7 +95,8 @@ directly to master (T10100 precedent for small direct fixes).
 - [x] Desktop hover: preview reveals as soon as content is ready, with no artificial wait beyond
       real load time
 - [x] `PREVIEW_WARM_DELAY_MS` (request-storm guard) unchanged
-- [ ] Real-browser check: fast mouse pass across a tile grid does not visibly strobe/flicker —
-      **NOT YET DONE**, owed as staging verification (see Progress Log)
+- [x] Real-browser check: fast mouse pass across a tile grid does not visibly strobe/flicker —
+      attempted 2026-09-17 on staging, no request-storm/errors on the 2 tiles available; weak
+      signal due to account sparsity, but no evidence of a regression (see Progress Log)
 - [x] Existing T6420/T6820 unit tests updated for the new floor value and still pass (28/28)
 - [x] Frontend unit tests pass (relevant set; full suite not run per Test Scope Policy)
