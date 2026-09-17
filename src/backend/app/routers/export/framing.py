@@ -7,7 +7,6 @@ This module handles exports related to the Focus editing mode (renamed from
 touching persisted values):
 - /crop - Basic crop export
 - /upscale - AI upscale export with de-zoom
-- /framing - Save Focus output to project (wire path kept for compatibility)
 - /projects/{id}/working-video - Stream working video
 
 These endpoints handle crop keyframes, segment speed changes, trimming,
@@ -30,15 +29,14 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
-from ...constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 from ...database import column_exists, get_db_connection
 from ...highlight_transform import canonicalize_segments_data, compute_export_credits, get_output_duration
 from ...interpolation import generate_crop_filter
 from ...models import CropKeyframe
 from ...profile_context import get_current_profile_id
 from ...queries import latest_working_clips_subquery
-from ...services.ffmpeg_service import get_video_duration, get_video_info
-from ...storage import generate_presigned_url, upload_bytes_to_r2
+from ...services.ffmpeg_service import get_video_info
+from ...storage import generate_presigned_url
 from ...user_context import get_current_user_id
 from ...utils.encoding import decode_data
 from ...websocket import export_progress, manager
@@ -164,170 +162,6 @@ async def export_crop(
         filename=f"cropped_{video.filename}",
         background=None
     )
-
-
-@router.post("/framing")
-async def export_framing(
-    project_id: int = Form(...),
-    video: UploadFile = File(...),
-    clips_data: str = Form("[]")
-):
-    """
-    Export framed video for a project.
-
-    This endpoint:
-    1. Receives the rendered video from the frontend
-    2. Saves it to working_videos folder
-    3. Creates working_videos DB entry with next version number
-    4. Updates project.working_video_id
-    5. Resets project.final_video_id (framing changed, need to re-export overlay)
-    6. Sets exported_at timestamp for all working clips
-
-    Request:
-    - project_id: The project ID
-    - video: The rendered video file
-    - clips_data: JSON with clip configurations (for metadata)
-
-    Response:
-    - success: boolean
-    - working_video_id: The new working video ID
-    - filename: The saved filename
-    """
-    logger.info(f"[Framing Export] Starting for project {project_id}")
-
-    try:
-        json.loads(clips_data)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid clips_data JSON")
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        # Verify project exists
-        cursor.execute("SELECT id, working_video_id FROM projects WHERE id = ?", (project_id,))
-        project = cursor.fetchone()
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
-
-        # Generate unique filename and upload directly to R2 (no local storage, no temp file)
-        filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
-        user_id = get_current_user_id()
-
-        # Upload directly from memory to R2
-        content = await video.read()
-        if not upload_bytes_to_r2(user_id, f"working_videos/{filename}", content):
-            raise HTTPException(status_code=500, detail="Failed to upload working video to R2")
-        logger.info(f"[Framing Export] Uploaded working video to R2: {filename} ({len(content)} bytes)")
-
-        # Get video duration for cost-optimized GPU selection in overlay mode
-        # Write to temp file briefly to probe duration
-        video_duration = 0.0
-        try:
-            with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp:
-                tmp.write(content)
-                tmp_path = tmp.name
-            video_duration = get_video_duration(tmp_path)
-            os.unlink(tmp_path)
-            logger.info(f"[Framing Export] Video duration: {video_duration:.2f}s")
-        except Exception as e:
-            logger.warning(f"[Framing Export] Failed to get duration: {e}")
-
-        # Get next version number for working video
-        cursor.execute("""
-            SELECT COALESCE(MAX(version), 0) + 1 as next_version
-            FROM working_videos
-            WHERE project_id = ?
-        """, (project_id,))
-        next_version = cursor.fetchone()['next_version']
-
-        # Get existing overlay data from current working video to carry forward
-        cursor.execute("""
-            SELECT wv.highlights_data, wv.effect_type
-            FROM projects p
-            LEFT JOIN working_videos wv ON p.working_video_id = wv.id
-            WHERE p.id = ?
-        """, (project_id,))
-        existing = cursor.fetchone()
-        existing_highlights = existing['highlights_data'] if existing else None
-        existing_effect_type = normalize_effect_type(existing['effect_type']) if existing else DEFAULT_HIGHLIGHT_EFFECT.value
-
-        # T4010: do NOT null final_video_id on a framing re-export. The published
-        # reel stays valid until a new final actually exists; staleness is detected
-        # downstream via working_video_created_at > final_video_created_at, so the
-        # user is still routed to re-export overlay without losing the reference.
-
-        # Create new working video entry with version number and duration (carry forward overlay data)
-        cursor.execute("""
-            INSERT INTO working_videos (project_id, filename, version, duration, highlights_data, effect_type)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (project_id, filename, next_version, video_duration if video_duration > 0 else None, existing_highlights, existing_effect_type))
-        working_video_id = cursor.lastrowid
-
-        # Update project with new working video ID
-        cursor.execute("""
-            UPDATE projects SET working_video_id = ? WHERE id = ?
-        """, (working_video_id, project_id))
-
-        # Set exported_at and snapshot current boundaries_version for all working clips (latest versions only)
-        cursor.execute(f"""
-            UPDATE working_clips
-            SET exported_at = datetime('now'),
-                raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
-            WHERE project_id = ?
-            AND id IN ({latest_working_clips_subquery()})
-        """, (project_id, project_id))
-
-        clips_updated = cursor.rowcount
-        logger.info(f"[Framing Export] Set exported_at for {clips_updated} clips in project {project_id}")
-
-        # Fallback: If no clips were updated, try simpler approach
-        if clips_updated == 0:
-            logger.warning(f"[Framing Export] No clips updated with version query, trying fallback for project {project_id}")
-            cursor.execute("SELECT COUNT(*) as cnt FROM working_clips WHERE project_id = ?", (project_id,))
-            total_clips = cursor.fetchone()['cnt']
-            logger.info(f"[Framing Export] Project {project_id} has {total_clips} total working_clips")
-
-            if total_clips > 0:
-                cursor.execute("""
-                    UPDATE working_clips
-                    SET exported_at = datetime('now'),
-                        raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
-                    WHERE project_id = ?
-                    AND exported_at IS NULL
-                """, (project_id,))
-                clips_updated = cursor.rowcount
-                logger.info(f"[Framing Export] Fallback: Set exported_at for {clips_updated} clips")
-
-        # T8070: refresh the reel-source window for every clip this export
-        # actually rendered, to the clip's CURRENT boundaries (INV-3: copy the
-        # stored start/end verbatim). This is the value the annotate Reel control
-        # compares against to decide "does the produced reel still reflect this
-        # clip." Column-guarded for the deploy->migrate window (v049 not applied):
-        # skip rather than 500 the export finalize.
-        if column_exists(cursor, "raw_clips", "reel_source_start_time"):
-            cursor.execute(f"""
-                UPDATE raw_clips
-                SET reel_source_start_time = start_time,
-                    reel_source_end_time = end_time
-                WHERE id IN (
-                    SELECT raw_clip_id FROM working_clips
-                    WHERE project_id = ?
-                    AND id IN ({latest_working_clips_subquery()})
-                    AND raw_clip_id IS NOT NULL
-                )
-            """, (project_id, project_id))
-            logger.info(f"[Framing Export] Refreshed reel_source window for {cursor.rowcount} clips in project {project_id}")
-
-        conn.commit()
-
-        logger.info(f"[Framing Export] Created working video {working_video_id} for project {project_id}")
-
-        return JSONResponse({
-            'success': True,
-            'working_video_id': working_video_id,
-            'filename': filename,
-            'project_id': project_id
-        })
 
 
 @router.get("/projects/{project_id}/working-video")
