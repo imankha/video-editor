@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { DetailsFields } from './DetailsFields';
 import { Z } from '../../../constants/zLayers';
+import { ANNOTATE } from '../../../config/displayNames';
 
 /**
  * AddDetailsPopup (T8600 C1) — mobile-only full-screen takeover for the
@@ -41,12 +42,12 @@ export function AddDetailsPopup({
       className={`fixed inset-0 ${Z.MODAL} flex flex-col bg-gray-950/95`}
       role="dialog"
       aria-modal="true"
-      aria-label="Add details"
+      aria-label={ANNOTATE.DETAILS}
     >
       <div className={`h-0.5 shrink-0 ${isEditMode ? 'bg-yellow-500' : 'bg-green-500'}`} />
 
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 shrink-0">
-        <h2 className="text-base font-semibold text-white">Add details</h2>
+        <h2 className="text-base font-semibold text-white">{ANNOTATE.DETAILS}</h2>
         <div className="flex items-center gap-2">
           <button
             onClick={onDone}

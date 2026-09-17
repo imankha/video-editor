@@ -39,8 +39,7 @@ describe('AnnotateFullscreenOverlay — a custom title survives editing notes (T
       my_athlete: true, name: 'My banger', notes: '',
     };
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={customNamedClip} />);
-    // Open the details panel where Notes lives in the strip layout.
-    fireEvent.click(screen.getByTestId('add-details-button'));
+    // T10290: the details panel (where Notes lives) is open by default on desktop.
     fireEvent.change(screen.getByPlaceholderText('Add a note about this clip...'), {
       target: { value: 'Great run down the wing' },
     });
@@ -57,7 +56,6 @@ describe('AnnotateFullscreenOverlay — a custom title survives editing notes (T
       my_athlete: true, name: 'My banger', notes: '',
     };
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={customNamedClip} onUpdateClip={onUpdateClip} />);
-    fireEvent.click(screen.getByTestId('add-details-button'));
     fireEvent.change(screen.getByPlaceholderText('Add a note about this clip...'), {
       target: { value: 'Great run down the wing' },
     });

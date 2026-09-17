@@ -96,30 +96,30 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
     });
   });
 
-  // T9830: rating and layer no longer drive a create-clip default. The two
-  // explicit Save outcomes ("Create an editable clip" / "Save play") are always
-  // present and enabled, identical for unrated / 4-star / 5-star and for either
-  // layer — the first acceptance criterion (same obvious creation action).
-  describe('two explicit Save outcomes, independent of rating/layer (T9830)', () => {
+  // T9830/T10290: rating and layer no longer drive a create-clip default. The two
+  // explicit Save outcomes ("Save play" / "Save and Frame") are always present and
+  // enabled, identical for unrated / 4-star / 5-star and for either layer — the
+  // first acceptance criterion (same obvious creation action).
+  describe('two explicit Save outcomes, independent of rating/layer (T9830/T10290)', () => {
     it('shows both outcome buttons, always enabled, at the default rating', () => {
       render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
-      const create = screen.getByRole('button', { name: ANNOTATE.CREATE_EDITABLE_CLIP });
+      const frame = screen.getByRole('button', { name: ANNOTATE.SAVE_AND_FRAME });
       const save = screen.getByRole('button', { name: ANNOTATE.SAVE_PLAY });
-      expect(create.disabled).toBe(false);
+      expect(frame.disabled).toBe(false);
       expect(save.disabled).toBe(false);
     });
 
     it('a 5-star My Athlete moment shows the SAME two buttons (no rating-driven default)', () => {
       render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
       fireEvent.keyDown(window, { key: '5' }); // rating shortcut, no inline stars to click
-      expect(screen.getByRole('button', { name: ANNOTATE.CREATE_EDITABLE_CLIP })).toBeTruthy();
+      expect(screen.getByRole('button', { name: ANNOTATE.SAVE_AND_FRAME })).toBeTruthy();
       expect(screen.getByRole('button', { name: ANNOTATE.SAVE_PLAY })).toBeTruthy();
     });
 
     it('a 5-star Team moment ALSO shows the same two buttons', () => {
       render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={false} />);
       fireEvent.keyDown(window, { key: '5' });
-      expect(screen.getByRole('button', { name: ANNOTATE.CREATE_EDITABLE_CLIP })).toBeTruthy();
+      expect(screen.getByRole('button', { name: ANNOTATE.SAVE_AND_FRAME })).toBeTruthy();
       expect(screen.getByRole('button', { name: ANNOTATE.SAVE_PLAY })).toBeTruthy();
     });
 
@@ -166,18 +166,20 @@ describe('AnnotateFullscreenOverlay — rating is an optional detail, no outcome
     expect(screen.queryByText(/one more star|another star/)).toBeNull();
   });
 
-  it('rating lives behind the Optional details disclosure, not inline (formBody)', () => {
+  it('rating lives behind the details disclosure, not inline in the primary form (formBody)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
-    // Collapsed by default: the rating label is hidden until details opens.
-    expect(screen.queryByText('4 stars · Good')).toBeNull();
-    fireEvent.click(screen.getByTestId('add-details-button'));
+    // T10290: the disclosure is open by default on desktop, so the rating label
+    // is visible inside the panel. Collapsing the disclosure hides it — proving
+    // it lives INSIDE the disclosure, not in the always-visible primary form.
     expect(screen.getByText('4 stars · Good')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('add-details-button'));
+    expect(screen.queryByText('4 stars · Good')).toBeNull();
   });
 
   it('rating lives behind the details disclosure on the strip layout too', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" surface="inline_desktop" newClipLayerIsMine={true} />);
-    expect(screen.queryByText('4 stars · Good')).toBeNull();
-    fireEvent.click(screen.getByTestId('add-details-button'));
     expect(screen.getByText('4 stars · Good')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('add-details-button'));
+    expect(screen.queryByText('4 stars · Good')).toBeNull();
   });
 });
