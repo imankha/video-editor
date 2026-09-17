@@ -382,13 +382,15 @@ export function OverlayModeView({
   const aspectH = effectiveOverlayMetadata?.height;
   const useAspectStage = !isFullscreen && !mobileFs && aspectW > 0 && aspectH > 0;
   const stageBoxClass = useAspectStage
-    ? // T9150: the width cap that stops a landscape stage (genuinely 16:9, or a
-      // wrong-metadata bug) from starving the settings column lives on the VIDEO
-      // COLUMN below (lg:max-w-[calc(100%-22rem)]), not here. A % max-width on
-      // THIS box would resolve against its own lg:w-fit (fit-content) parent --
-      // circular, since the parent's width depends on this box's width. The column
-      // has a definite width from ITS parent (the row), so capping there is safe;
-      // this box just respects whatever width the column leaves it via max-w-full.
+    ? // T9270: the settings rail is a shrink-0 sibling of the VIDEO COLUMN below
+      // that reserves exactly its own width, and the column is lg:flex-1 lg:min-w-0,
+      // so a landscape stage (genuinely 16:9, or a wrong-metadata bug) can never
+      // starve the rail — no explicit width cap is needed here or on the column
+      // (this replaced T9150's lg:max-w-[calc(100%-22rem)] reserve; bumping the
+      // rail width reflows the column for free). A % max-width on THIS box would
+      // resolve against its own lg:w-fit (fit-content) parent -- circular, since
+      // the parent's width depends on this box's width. This box just respects
+      // whatever width the column leaves it via max-w-full.
       'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh]'
     : `relative bg-gray-900 ${
         (isFullscreen || mobileFs)
@@ -971,7 +973,7 @@ export function OverlayModeView({
                 {controlsEl}
               </div>
               {/* T9270: the unified settings rail — desktop (fine pointer) only, a
-                  300px in-flow box that width-tweens to a 64px icon strip when
+                  380px in-flow box that width-tweens to a 64px icon strip when
                   collapsed. On mobile the SAME rail renders as the translateX drawer
                   below. */}
               {!isMobile && (

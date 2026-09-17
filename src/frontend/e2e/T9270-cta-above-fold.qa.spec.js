@@ -110,7 +110,7 @@ for (const vp of DESKTOP_VIEWPORTS) {
           assertBoxesEqual(boxExpanded, boxCollapsed, `${screen.name} CTA collapsed`);
           assertBoxInViewport(boxCollapsed, vp, `${screen.name} rail-collapsed`);
 
-          // Criterion 7: the rail itself narrowed (300px -> 64px strip).
+          // Criterion 7: the rail itself narrowed (380px -> 64px strip).
           if (hadRail && railWidthBefore != null) {
             const railWidthAfter = (await rail.boundingBox())?.width ?? null;
             expect(railWidthAfter, `${screen.name}: rail narrowed on collapse`).toBeLessThan(railWidthBefore);
