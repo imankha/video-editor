@@ -31,10 +31,10 @@ Then mechanically migrate all 14+ sites (one module per commit; T4370 snapshots 
 
 ## Steps
 
-1. [ ] Read every write site; table current (site → status written → semantics) in the Progress Log; resolve the pending/processing question.
-2. [ ] Repository + unit tests (transitions, raise-on-insert-failure).
-3. [ ] Migrate module-by-module against T4370 snapshots (exports.py → export_helpers → worker → overlay → multi_clip).
-4. [ ] Delete old helpers; grep-verify single ownership; import check + full backend tests.
+1. [x] Read every write site; table current (site → status written → semantics) in the Progress Log; resolve the pending/processing question.
+2. [x] Repository + unit tests (transitions, raise-on-insert-failure).
+3. [x] Migrate module-by-module against T4370 snapshots (exports.py → export_finalize.py [scope addition] → export_helpers → worker → overlay → multi_clip).
+4. [x] Delete old helpers; grep-verify single ownership; import check + full backend tests.
 
 ## Acceptance Criteria
 
@@ -104,3 +104,35 @@ writing any repository code:
      already-in-a-failure-handler status update. Only insert-time swallowing changes.
    - Migration files (e.g. `v028_export_job_stages.py`) are excluded from the single-owner grep
      — they run pre-repository against arbitrary historical schema.
+
+**2026-09-17 — Reviewer pass (fresh-context) found one MAJOR before merge.** `overlay.py:1511`'s
+local-render tracking INSERT (`export_overlay_only`) was migrated onto `create()` (status=
+`pending`) instead of preserving its original `'processing'` — a real byte-level DB change,
+inconsistent with this file's own decision #1 above (synchronous inline-render endpoints insert
+`'processing'`). That site has no in-flight guard in its original code, so reusing
+`create_if_none_active` would have silently added dedup semantics that were never there. Fixed by
+adding `create_processing()` — an unconditional plain INSERT as `PROCESSING`, no guard — and
+pointing that one call site at it. New unit test (`test_create_processing_inserts_processing_
+unconditionally`) locks the no-guard property. Two MINOR notes accepted as-is (a pre-existing
+swallow wrapper around that same call site, and an undocumented-but-verified-safe `get()`
+column-narrowing in the worker) — see reviewer transcript for detail; no code change needed.
+
+**2026-09-17 — QA phase (final).** Evidence mapped to every Acceptance Criterion:
+
+| Acceptance criterion | Evidence |
+|---|---|
+| Single owner grep passes; no service→router imports remain | `grep -rn "UPDATE export_jobs\|INSERT INTO export_jobs" src/backend/app --include=*.py` → only `export_job_repository.py` (+ excluded `v028_export_job_stages.py`); `grep -n "from.*routers" app/services/export_worker.py` → no matches |
+| Job-record insert failure aborts the export loudly | `create()`/`create_if_none_active()`/`create_processing()` have no try/except in the repository; `test_create_raises_on_insert_failure` proves it via a forced PK collision |
+| All transitions use ExportStatus enum values | Every status literal in `export_job_repository.py` is `ExportStatus.<MEMBER>.value`, verified by reading the file |
+| T4370 DB-delta snapshots unchanged (except the documented insert-failure behavior) | Golden harness (`test_export_golden_{local_render,overlay,multiclip_modal,worker,sweep,render}.py`) run green after EVERY module commit (6 commits) and once more in final QA — 9/9 each time |
+
+Full QA sweep (golden harness + repository's own 24 unit tests + the curated relevant set —
+`test_t4350_carry_finalize`, `test_t4355_multiclip_carry`, `test_t5630_characterization`,
+`test_t5630_finalize_unit`, `test_t7210_modal_call_id_recovery`, `test_export_worker_sync`,
+`test_auto_export`, `test_t4110_export_durability`, `test_t4120_test_seams`,
+`test_t9540_double_dispatch_guard`, plus `test_t4240_export_recovery` and 2 overlay tests touched
+by the migration): **178/178 passed**. `python3 -c "from app.main import app"` clean. `ruff check`
+clean on every touched file (one pre-existing, unrelated import-order lint hit in
+`test_t4240_export_recovery.py` outside the edited region — left alone).
+
+CI verdict: not yet run (local sweep only, pending push).
