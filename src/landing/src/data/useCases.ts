@@ -51,7 +51,7 @@ export const USE_CASES: UseCase[] = [
         heading: 'Making yourself findable on screen',
         body: [
           'The single most common failure in a parent-made recruiting reel is that the coach cannot tell which player to watch. In wide sideline footage of twenty-two players in matching kit, that is a genuinely hard problem, and coaches do not spend long solving it.',
-          'There are two fixes and you want both. First, a visual marker -- a spotlight or highlight on your athlete at the start of each clip -- so the eye lands in the right place immediately. Second, framing that follows the player, so they stay near the centre of the frame instead of drifting into a corner.',
+          'There are two fixes and you want both. First, a visual marker -- a spotlight or highlight on your athlete at the start of each clip -- so the eye lands in the right place immediately. Second, framing them yourself with a few drags of the crop box, so they stay near the centre of the frame instead of drifting into a corner.',
         ],
       },
       {
@@ -92,11 +92,11 @@ export const USE_CASES: UseCase[] = [
       },
       {
         q: 'Can I make a recruiting video myself?',
-        a: 'Yes. A recruiting reel needs clear plays, a findable player, and sensible order -- none of which requires a professional editor. The hard parts are finding the plays in hours of footage and keeping your athlete framed, and both of those are what ReelBallers automates.',
+        a: 'Yes. A recruiting reel needs clear plays, a findable player, and sensible order -- none of which requires a professional editor. The hard part is finding the plays in hours of footage; keeping your athlete framed just takes a few drags of the crop box, and ReelBallers connects the motion in between.',
       },
       {
         q: 'What footage do I need?',
-        a: 'Regular game footage from any camera. Wide sideline video from a phone works, because the reel is built by cropping into the frame and following the player. Filming wide and letting software crop in beats zooming while filming.',
+        a: 'Regular game footage from any camera. Wide sideline video from a phone works, because you frame the player yourself and ReelBallers crops into the shot. Filming wide and letting the crop do the zoom beats zooming while filming.',
       },
       {
         q: 'Should I add music to a recruiting video?',
@@ -149,11 +149,11 @@ export const USE_CASES: UseCase[] = [
     faqs: [
       {
         q: 'Do I need any editing experience?',
-        a: 'No. The only thing you do is mark the plays worth keeping while you watch the game. Cutting, cropping, following the player, and exporting are automatic.',
+        a: 'No. You mark the plays worth keeping while you watch the game, then frame your athlete and pick them from the AI\'s player boxes. Cutting, connecting the motion between your marks, and exporting are automatic.',
       },
       {
         q: 'Do I need to buy a camera?',
-        a: 'No. The footage on your phone is fine. Film wide and steady, and the software crops in from there.',
+        a: 'No. The footage on your phone is fine. Film wide and steady, then frame your player yourself and let the crop do the zoom.',
       },
       {
         q: 'How long does it take to make a reel?',

@@ -46,7 +46,7 @@ export const COMPARISONS: Comparison[] = [
       'An honest comparison of making a sports highlight reel manually versus with ReelBallers: time, cost, quality, and when doing it by hand is still better.',
     h1: 'ReelBallers vs editing highlight reels by hand',
     answer:
-      'Editing by hand gives you total creative control and costs nothing but time -- typically several hours per reel. ReelBallers trades some of that control for speed: you mark plays while watching the game, and the cutting, player-following crop, and export are automatic.',
+      'Editing by hand gives you total creative control and costs nothing but time -- typically several hours per reel. ReelBallers trades some of that control for speed: you mark plays while watching the game and frame your player with a few drags, and the cutting, in-between motion, and export are automatic.',
     fairSummary:
       'Editing by hand in a general video editor is genuinely the more flexible option. Anything you can imagine, you can build, and you are not limited by what someone else automated. The cost is time, and the time is not one-off -- every change to a reel means going back into the timeline.',
     rows: [
@@ -59,13 +59,13 @@ export const COMPARISONS: Comparison[] = [
       {
         dimension: 'Creative control',
         them: 'Total. Any transition, any effect, any structure.',
-        us: 'Constrained to what the tool does: clip selection, follow-framing, spotlight, ordering, export format.',
+        us: 'Constrained to what the tool does: clip selection, framing your player, spotlight, ordering, export format.',
         winner: 'them',
       },
       {
         dimension: 'Following one player in wide footage',
         them: 'Possible with manual keyframed crops, but slow -- it is per-clip work, repeated for every clip.',
-        us: 'Automatic. Pick the player and the crop follows them.',
+        us: 'Pick the player, drag the crop over them a few times, and ReelBallers connects the motion in between -- a few marks per clip, not a keyframe per frame.',
         winner: 'us',
       },
       {
@@ -118,7 +118,7 @@ export const COMPARISONS: Comparison[] = [
       },
       {
         q: 'Can I get the same result editing by hand?',
-        a: 'You can get a better result by hand if you are skilled and patient, because you are not constrained by what the tool automates. The follow-crop is the hardest part to reproduce manually, since it means keyframing a moving crop on every clip.',
+        a: 'You can get a better result by hand if you are skilled and patient, because you are not constrained by what the tool automates. Keeping your player in frame is the hardest part to reproduce manually: in a general editor you keyframe a moving crop yourself on every clip, where ReelBallers just needs a few drags and connects the motion in between.',
       },
       {
         q: 'What is actually the slow part of editing highlights?',
@@ -137,7 +137,7 @@ export const COMPARISONS: Comparison[] = [
       'An honest comparison of CapCut and ReelBallers for making sports highlight reels: what each is built for, and which one fits youth sports footage.',
     h1: 'ReelBallers vs CapCut for sports highlights',
     answer:
-      'CapCut is a strong general-purpose video editor, better than ReelBallers at social-style editing, effects, captions, and templates. ReelBallers is narrower and sport-specific: it tags plays by position, follows one chosen player through wide game footage, and produces recruiting-length reels from full matches.',
+      'CapCut is a strong general-purpose video editor, better than ReelBallers at social-style editing, effects, captions, and templates. ReelBallers is narrower and sport-specific: it tags plays by position, lets you frame one chosen player through wide game footage with just a few drags per clip, and produces recruiting-length reels from full matches.',
     fairSummary:
       'CapCut is a capable and popular free editor, and for cutting a short clip for social it is genuinely excellent -- fast, template-driven, with good auto-captions and a large effects library. The gap is not quality, it is subject matter: CapCut has no concept of a sport, a position, a play type, or which of the twenty-two people on screen is your child.',
     rows: [
@@ -168,7 +168,7 @@ export const COMPARISONS: Comparison[] = [
       {
         dimension: 'Following one player across a wide frame',
         them: 'Manual keyframed cropping, per clip.',
-        us: 'Automatic once you pick the player.',
+        us: 'A few drags per clip once you pick the player; ReelBallers connects the motion in between.',
         winner: 'us',
       },
       {
@@ -211,11 +211,11 @@ export const COMPARISONS: Comparison[] = [
     faqs: [
       {
         q: 'Is CapCut good for sports highlight reels?',
-        a: 'It is good at the editing itself, and many people use it successfully for short sports clips. Where it struggles is full-match footage: there is no play tagging, no automatic player-following crop, and no way to mark which player a viewer should watch.',
+        a: 'It is good at the editing itself, and many people use it successfully for short sports clips. Where it struggles is full-match footage: there is no play tagging, no sports-specific framing workflow for keeping one player in view, and no way to mark which player a viewer should watch.',
       },
       {
         q: 'Can CapCut follow a player automatically?',
-        a: 'CapCut offers general tracking and masking features, but not a sports-specific follow-crop tied to a chosen athlete across a wide game frame. Reproducing that means keyframing a moving crop on each clip by hand.',
+        a: 'Neither app auto-follows a player -- CapCut offers general tracking and masking features, and ReelBallers has you frame your athlete and pick them from AI-proposed player boxes. The difference is in the workflow: ReelBallers is built around keeping one chosen athlete in frame across a wide game clip, connecting the motion between your marks, where CapCut means keyframing a moving crop on each clip by hand.',
       },
       {
         q: 'Which is better for a college recruiting video?',

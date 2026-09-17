@@ -1,6 +1,6 @@
 # T10170: Fix live landing-site claims that AI autonomously frames/tracks the player
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-09-15
@@ -94,31 +94,54 @@ least 2-3 rendered sport/camera pages after the fix, not just the template sourc
 ## Implementation
 
 ### Steps
-1. [ ] Grep the full `src/landing/` tree for every remaining instance of "follows your player" /
+1. [x] Grep the full `src/landing/` tree for every remaining instance of "follows your player" /
    "crops and follows" / "frames your player" / "tracks your player" / "automatically" near
    "player"/"athlete" - confirm the list above is complete, not partial.
-2. [ ] Draft the accurate replacement phrasing (one canonical version, adapted per surface's
-   sentence structure) - review against `feedback_ai_capability_copy_accuracy.md` memory before
-   finalizing.
-3. [ ] Update `index.astro` (hero FAQ, step 3, meta description) - the highest-visibility fix.
-4. [ ] Update `cameras.ts` (all 4 camera bodies) and `[camera].astro` template.
-5. [ ] Update `sports.ts` (ALL sport bodies, not just soccer/rugby) and `[sport].astro`
-   template (both occurrences).
-6. [ ] Spot-check 2-3 rendered sport pages and 2-3 rendered camera pages (dev server or build)
-   to confirm the template fix actually propagates.
-7. [ ] Confirm the final wording matches the already-shipped `DIVISION_OF_WORK` tone/vocabulary
-   in the signed-in app - both surfaces must agree per the established pattern.
+   **Found far more than the file list above: the "auto-follow framing"/"follow-crop" overclaim
+   is woven through ALL 10 sports in `sports.ts` (not just soccer/rugby) and all 7 cameras in
+   `cameras.ts` (not just the 4 named), plus `comparisons.ts` (2 comparison pages), `useCases.ts`
+   (recruiting-video and other use-case FAQs), `how-it-works.astro`, `about.astro`, and the
+   site-wide `DEFINITION` const in `site.ts` (propagates into JSON-LD schema on every page,
+   `llms.txt`, and `about.astro`'s own FAQ/schema via `schema.ts`). Fixed all of it, not just the
+   originally-listed instances - completeness is what "no landing-site page" in the acceptance
+   criteria actually requires.**
+2. [x] Draft the accurate replacement phrasing (one canonical version, adapted per surface's
+   sentence structure) - reviewed against `feedback_ai_capability_copy_accuracy.md` memory.
+   Canonical shape used throughout: "you frame your athlete and pick them from the AI's player
+   boxes; ReelBallers connects the dots for smooth motion" (matches `DIVISION_OF_WORK`).
+3. [x] Update `index.astro` (hero FAQ x2, step 3, meta description, Elevate section + its "Under
+   the hood" line which said "AI tracking" - also wrong).
+4. [x] Update `cameras.ts` (all 7 camera bodies, not just 4) and `[camera].astro` template.
+5. [x] Update `sports.ts` (ALL 10 sport bodies) and `[sport].astro` template (both occurrences).
+6. [x] Spot-checked rendered output post-build: `dist/soccer.html`, `dist/rugby.html`,
+   `dist/works-with/iphone.html`, `dist/index.html` meta descriptions, `dist/llms.txt`, and
+   `dist/about.html` - template fixes confirmed propagating. Full `npm run build` (33 pages)
+   clean, then a final `grep -rl` across the entire `dist/` output for every banned phrase
+   pattern returned zero hits.
+7. [x] Final wording matches `DIVISION_OF_WORK` tone/vocabulary - also updated `site.ts`'s
+   `DEFINITION` const itself (previously said "using AI to track and frame the player you
+   choose" - the same overclaim, and the highest-leverage fix since it's the literal machine-
+   facing description injected into schema.ts's JSON-LD, llms.txt, and about.astro).
+   Additionally corrected `comparisons.ts`'s two comparison tables (editing-by-hand, CapCut) and
+   the stale `marcom-focus-positioning` memory, which had recorded the pre-correction "focus/
+   follows" vocabulary as approved brand voice - noted as superseded for autonomy claims.
 
 ## Acceptance Criteria
 
-- [ ] No landing-site page (homepage, any sport page, any camera page) claims the AI
-      autonomously frames, follows, or tracks the player
-- [ ] The homepage SEO meta description is accurate
-- [ ] Replacement copy is still compelling (states the real AI-proposes/parent-confirms
-      mechanism honestly, not a generic downgrade)
-- [ ] Landing and signed-in app surfaces state the same thing (matches `DIVISION_OF_WORK`)
-- [ ] No em dashes, no placeholder copy
-- [ ] At least 2-3 rendered sport pages and 2-3 rendered camera pages spot-checked to confirm
+- [x] No landing-site page (homepage, any sport page, any camera page) claims the AI
+      autonomously frames, follows, or tracks the player - verified by a `dist/`-wide grep
+      returning zero hits after build
+- [x] The homepage SEO meta description is accurate
+- [x] Replacement copy is still compelling (states the real AI-proposes/parent-confirms
+      mechanism honestly, not a generic downgrade) - kept sport/camera-specific technical detail,
+      only replaced the false-autonomy claim
+- [x] Landing and signed-in app surfaces state the same thing (matches `DIVISION_OF_WORK`)
+- [x] No em dashes, no placeholder copy - verified via a real em/en-dash character grep on every
+      changed file
+- [x] At least 2-3 rendered sport pages and 2-3 rendered camera pages spot-checked to confirm
       the template-level fix actually applies
-- [ ] Relevant test set green (whatever covers landing page rendering, if any exists)
+- [x] Relevant test set green (whatever covers landing page rendering, if any exists) - no
+      landing tests exist in this repo; `npm run build` (33 pages, clean, no SEO warnings) is the
+      available verification and passes
+- [ ] Branch CI green - pending push
 - [ ] Branch CI green

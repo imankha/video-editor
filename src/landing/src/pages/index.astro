@@ -43,11 +43,11 @@ const faqs: FaqItem[] = [
   },
   {
     q: 'How do I make a highlight reel from game footage?',
-    a: 'Three steps. Upload your game video, watch it and mark the plays worth keeping (tagging each by position and play type), then export. ReelBallers crops and follows your player through each clip and stitches them into one reel you can share with a link.',
+    a: 'Three steps. Upload your game video, watch it and mark the plays worth keeping (tagging each by position and play type), then frame your player and pick them from the AI\'s player boxes. ReelBallers connects the dots for smooth motion and stitches the clips into one reel you can share with a link.',
   },
   {
     q: 'How does it keep the focus on my player?',
-    a: 'You film wide from the sideline with any camera. ReelBallers zooms into the frame and follows the player you choose, then uses AI upscaling to keep the close-up sharp -- so the finished clip looks like it was filmed close-up, following only your athlete. There is no hardware to buy.',
+    a: 'You film wide from the sideline with any camera. You frame your athlete and pick them from the AI\'s player boxes, ReelBallers connects the dots for smooth motion, then AI upscaling keeps the close-up sharp -- so the finished clip looks like it was filmed close-up on your athlete alone. There is no hardware to buy.',
   },
   {
     q: 'What footage does ReelBallers work with?',
@@ -100,14 +100,14 @@ const steps = [
   {
     n: 3,
     title: 'Export and share one link',
-    body: 'ReelBallers puts the focus on your player: zoomed in, following every play, adds the spotlight, and stitches it into one sharp reel. Share it with a single link.',
+    body: 'You put the focus on your athlete: frame them in the wide shot and pick them from the AI\'s player boxes. ReelBallers connects the dots for smooth motion, adds the spotlight, and stitches it into one sharp reel. Share it with a single link.',
   },
 ]
 ---
 
 <PageLayout
   title="Turn Game Footage Into Highlight Reels | ReelBallers"
-  description="Upload raw game footage and get a highlight reel that follows your player automatically. Works with any camera, 11 sports, no hardware to buy. Free."
+  description="Upload raw game footage, frame your player, and get a highlight reel that keeps them in focus. Works with any camera, 11 sports, no hardware to buy. Free."
   path="/"
   schemas={schemas}
 >
@@ -236,12 +236,13 @@ const steps = [
           Elevate
         </h3>
         <p class="text-lg text-gray-300 leading-relaxed">
-          Your athlete, in focus. Your wide sideline video becomes close-up footage that follows
-          your player through every play: centered, sharp, impossible to lose in the crowd.
-          Animated spotlights tell everyone exactly who to watch.
+          Your athlete, in focus. Frame them once and pick them from the AI's player boxes, and
+          your wide sideline video becomes close-up footage through every play: centered, sharp,
+          impossible to lose in the crowd. Animated spotlights tell everyone exactly who to watch.
         </p>
         <p class="text-sm text-gray-500 mt-2">
-          Under the hood: AI tracking, reframing, and upscaling toward {FACTS.upscaleTarget}.
+          Under the hood: AI-proposed player boxes, motion interpolation between your marks, and
+          upscaling toward {FACTS.upscaleTarget}.
         </p>
       </div>
     </div>
