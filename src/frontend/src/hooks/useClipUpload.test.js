@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useClipUpload } from './useClipUpload';
+import { useClipUpload, progressToPercent, CLIP_UPLOAD_CREATING_PCT } from './useClipUpload';
 
 vi.mock('../services/uploadManager', () => ({
   ensureVideoInR2: vi.fn(),
@@ -151,7 +151,69 @@ describe('useClipUpload', () => {
     });
 
     expect(uploadClipsBatch).not.toHaveBeenCalled();
-    expect(result.current.error).toBeTruthy();
+    // T10250: the dead `error` state was removed; a total-failure batch surfaces
+    // as per-file result rows (named + classed), not an opaque hook flag.
     expect(outcome.charged).toBe(0);
+    const row = outcome.results.find((r) => r.original_filename === 'a.mp4');
+    expect(row.ok).toBe(false);
+    // A plain network error is transient -> retryable (no err.refused tag).
+    expect(row.retryable).toBe(true);
+  });
+
+  // T10250 refusal classification: a prepare-upload REFUSAL (err.refused, e.g. an
+  // over-cap or bad-kind 400) is non-retryable — retrying the same bytes fails
+  // identically — while a transient transport error stays retryable.
+  it('tags a refused R2 landing as non-retryable, a transient one as retryable', async () => {
+    const refused = Object.assign(new Error('Clip uploads are limited to 500MB.'), { refused: true });
+    ensureVideoInR2
+      .mockRejectedValueOnce(refused)
+      .mockRejectedValueOnce(new Error('network blip'));
+
+    const { result } = renderHook(() => useClipUpload());
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.uploadClips([makeFile('big.mp4'), makeFile('blip.mp4')]);
+    });
+
+    const bigRow = outcome.results.find((r) => r.original_filename === 'big.mp4');
+    const blipRow = outcome.results.find((r) => r.original_filename === 'blip.mp4');
+    expect(bigRow.retryable).toBe(false);
+    expect(bigRow.error).toMatch(/500MB/);
+    expect(blipRow.retryable).toBe(true);
+  });
+
+  // T10260 honest progress: reaching R2 (COMPLETE) is NOT the clip being ready —
+  // the phase mapping must hold at 99 ("Creating your clip...") so the bar never
+  // reads 100% before the clip row + auto-project exist in the store.
+  it('maps upload phases to percent, capping COMPLETE below 100 (T10260)', () => {
+    expect(progressToPercent({ phase: 'hashing', percent: 100 })).toBe(15);
+    expect(progressToPercent({ phase: 'preparing' })).toBe(15);
+    expect(progressToPercent({ phase: 'uploading', percent: 100 })).toBe(98);
+    expect(progressToPercent({ phase: 'finalizing' })).toBe(98);
+    expect(progressToPercent({ phase: 'complete' })).toBe(CLIP_UPLOAD_CREATING_PCT);
+    expect(CLIP_UPLOAD_CREATING_PCT).toBeLessThan(100);
+  });
+
+  // T10260: only AFTER the batch POST lands and fetchProjects resolves does a
+  // landed file's bar reach 100 — the store now holds the tile.
+  it('pushes a landed file to 100 only after the batch creates its project (T10260)', async () => {
+    // Drive onProgress to COMPLETE as the real uploadManager does, so the file
+    // sits at the "Creating..." cap (99) BEFORE the batch bumps it to 100.
+    ensureVideoInR2.mockImplementation((file, onProgress) => {
+      onProgress?.({ phase: 'complete' });
+      return Promise.resolve({ blake3_hash: 'hash-a', file_size: 111, uploaded: true });
+    });
+    uploadClipsBatch.mockResolvedValue({
+      results: [{ ok: true, blake3_hash: 'hash-a', raw_clip_id: 1, project_id: 10 }],
+      charged: 1,
+      balance: 9,
+    });
+
+    const { result } = renderHook(() => useClipUpload());
+    await act(async () => {
+      await result.current.uploadClips([makeFile('a.mp4')]);
+    });
+
+    expect(result.current.progressByFile['a.mp4']).toBe(100);
   });
 });

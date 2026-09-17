@@ -1,6 +1,8 @@
 # T10310: Overlay/Spotlight settings panel is too narrow to use
 
-**Status:** TODO
+**Status:** WIP (ui-designer proposal in progress, 2026-09-17 - live-measured the current rail on
+staging: fixed 300px content width at both 1280px and 1920px viewport, confirming it does not
+respond to available space at all)
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-17

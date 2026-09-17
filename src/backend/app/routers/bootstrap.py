@@ -13,6 +13,7 @@ import time
 
 from fastapi import APIRouter
 
+from ..constants import MAX_CLIP_DURATION_S, MAX_CLIP_UPLOAD_BYTES
 from ..database import get_db_connection
 from ..queries import exclude_shared_in_reels_clause, latest_final_videos_subquery
 from ..services.credit_ledger import get_credit_balance
@@ -275,4 +276,13 @@ async def bootstrap():
         "downloads": misc["downloads"],
         "exports": misc["exports"],
         "pending_uploads": misc["pending_uploads"],
+        # T10250: the clip-upload caps the client mirrors for its pre-flight size
+        # check (a 500MB+ clip is steered to Add Game BEFORE hashing, no round trip).
+        # Server stays authoritative (prepare-upload / batch probe still enforce);
+        # this is the single backend number the client reads so no `500` literal
+        # ever lives client-side.
+        "upload_limits": {
+            "max_clip_upload_bytes": MAX_CLIP_UPLOAD_BYTES,
+            "max_clip_duration_s": MAX_CLIP_DURATION_S,
+        },
     }

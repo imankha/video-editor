@@ -55,3 +55,30 @@ the tile exists. There is no "open when done": `selectProject` only sets selecti
 - [ ] A single uploaded clip opens straight into Framing when the upload finishes on the Clips tab
 - [ ] Navigating away mid-upload yields a toast with Open, not a forced navigation
 - [ ] Unit test for the phase mapping; e2e for upload -> Framing
+
+## Implementation (2026-09-17)
+
+Implemented on branch `feature/T10250-clip-upload-size-limit-and-framing-open` (shared with T10250).
+
+1. **Honest progress:** `progressToPercent(COMPLETE)` now returns the exported
+   `CLIP_UPLOAD_CREATING_PCT = 99` instead of 100 (`useClipUpload.js`). A landed file sits at
+   99 and the rail row reads "Preparing your clip..." (reuses `ANNOTATE.PREPARING_CLIP` and the
+   `data-testid="clip-preparing-note"` from T9900, `creating` flag on the rail row). The bar
+   reaches 100 ONLY after the batch `POST /api/clips/upload` returns AND `fetchProjects` resolves
+   (the tile is in the store) — `uploadClips` bumps each landed file to 100 at that point. The bar
+   never reads 100% before the tile exists.
+2. **Open on completion (gesture, not reactive):** `ProjectManager.runClipUpload` opens the first
+   created clip into Framing via `onSelectProjectWithMode(projectId, { mode: 'framing' })` — the
+   same path `ProjectsScreen`'s clip tile uses (`handleSelectProjectWithMode`), threaded
+   ProjectsScreen -> ProjectManager -> completion point. The hook never reaches `editorStore`. This
+   fires at the completion of the user's own upload gesture — NOT a `useEffect` watching progress.
+   For a multi-file batch the first created clip opens and the existing success toast reports the count.
+3. **Don't yank on navigate-away:** auto-open only when `activeTabRef.current === 'projects'` (the
+   Clips tab) and `isMountedRef.current` — both are refs read at completion so they see CURRENT
+   values, not a stale closure. Otherwise a success toast with an "Open Framing" action is shown
+   (the `announceReelCreated` toast-with-action pattern), never a forced navigation.
+
+**Tests:** `useClipUpload.test.js` (phase mapping caps COMPLETE below 100; 99->100 only after the
+batch creates the project), `ProjectManager.clipSizeLimit.test.jsx` (opens in Framing on the Clips
+tab; navigate-away yields a toast with Open and no forced navigation), e2e
+`T10250-clip-size-limit-and-framing-open.spec.js` (upload -> Framing + navigate-away toast).

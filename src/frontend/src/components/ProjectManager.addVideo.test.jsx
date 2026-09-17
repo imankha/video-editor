@@ -165,8 +165,9 @@ describe('ProjectManager Add Video flow (T8380)', () => {
   });
 
   it('a file that fails to reach R2 surfaces a Retry that re-runs just that file', async () => {
+    // T10250: a transient transport failure comes back tagged retryable -> Retry.
     uploadClipsMock.mockResolvedValue({
-      results: [{ ok: false, original_filename: 'bad.mp4', error: 'network' }],
+      results: [{ ok: false, original_filename: 'bad.mp4', error: 'network', retryable: true }],
       charged: 0,
       balance: null,
     });
