@@ -62,6 +62,7 @@ import { useAuthStore } from './stores/authStore';
 import useUploadStore from './stores/uploadStore';
 import { useQuestStore } from './stores/questStore';
 import { useCreditStore } from './stores/creditStore';
+import { useConfigStore } from './stores/configStore';
 import { API_BASE } from './config';
 import apiFetch from './utils/apiFetch';
 import { setPendingGame } from './utils/pendingNavigation';
@@ -256,6 +257,9 @@ function App() {
           useQuestStore.getState().setFromBootstrap(data.quests_progress);
           useQuestStore.getState().setPanelCollapsed(data.quest_panel_collapsed);
           useGalleryStore.getState().setFromBootstrap(data.downloads);
+          // T10250: mirror the clip-upload caps for the "Add Video" pre-flight
+          // size check (no-op if the server predates the field).
+          useConfigStore.getState().setFromBootstrap(data.upload_limits);
           // Publish export data for useExportRecovery to consume (avoids separate fetch)
           if (data.exports) {
             window.__bootstrapExports = data.exports;

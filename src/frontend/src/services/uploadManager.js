@@ -718,7 +718,12 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       file_size: uploadSize,
       kind: options.kind,
     });
-    throw new Error(extractErrorMessage(error, `Prepare failed: ${prepareRes.status}`));
+    const prepareErr = new Error(extractErrorMessage(error, `Prepare failed: ${prepareRes.status}`));
+    // T10250: a 400 from prepare-upload is a REFUSAL (invalid kind/hash, or a
+    // clip over MAX_CLIP_UPLOAD_BYTES) — the same input will always fail, so it
+    // must NOT get a Retry affordance. 5xx / network rejects stay retryable.
+    prepareErr.refused = prepareRes.status === 400;
+    throw prepareErr;
   }
 
   const prepareData = await prepareRes.json();

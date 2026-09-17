@@ -1,5 +1,41 @@
 ---
 domain: annotate
+updated: 2026-09-17 (T10250/T10260 — direct clip-upload UX: pre-flight size gate + open-in-Framing.
+Frontend + one trivial backend read. **Clip-upload caps now live on `/api/bootstrap`** as
+`upload_limits: {max_clip_upload_bytes, max_clip_duration_s}` (from `constants.py` MAX_CLIP_UPLOAD_BYTES
+/MAX_CLIP_DURATION_S — the SINGLE source; there is NO `500` or minutes literal client-side). New
+`stores/configStore.js` mirrors it (hydrated in `App.jsx` from bootstrap; null until then). **INVARIANT:
+`maxClipUploadBytes==null` means "cap unknown" -> skip the optimistic pre-flight gate and let the server
+refuse — never substitute a hardcoded fallback.** T10250 pre-flight: `ProjectManager.handleClipFilesChange`
+partitions picked files by `maxClipUploadBytes` BEFORE hashing; over-cap files never enter the pipeline —
+they open the new `ClipSizeLimitModal` (caution shell reused from ClipUploadNoticeModal). Its ONLY primary
+action "Add Game instead" carries the File(s) into `GameDetailsModal` via a new `initialFiles` prop ->
+`GameFootagePicker`'s existing T8910 initialFiles ingest effect (game upload has no clip size cap); no
+Retry (over-cap is not retryable). **Failure classes (T10250):** `uploadManager.ensureVideoInR2` tags a
+prepare-upload 400 as `err.refused=true` (5xx/network stay retryable); `useClipUpload` propagates
+`retryable` on every failure row (perFileErrors: `!err.refused`; batch_failed: true; batch per-item codes
+source_missing/probe_failed/duration_exceeds_cap/insufficient_credits: false via `enrichBatchResult`, which
+also reunites batch results with `original_filename` by blake3_hash). `ProjectManager.runClipUpload` renders
+refused rows with the server's exact message (via `CLIP_UPLOAD.refusalMessage(code,{durationMinutes})`,
+minutes derived from `maxClipDurationS`) and NO Retry button; retryable rows keep the generic
+"Upload didn't finish." + Retry. The dead `useClipUpload.error` state was DELETED (was destructured nowhere).
+`TODO(T10270)` at the refused-row site marks where the upload_failures record write goes once that table
+ships (do NOT build a parallel mechanism). **T10260 honest progress:** `progressToPercent(COMPLETE)` now
+returns `CLIP_UPLOAD_CREATING_PCT=99` (exported), NOT 100 — a landed file sits at 99 ("Preparing your
+clip...", reusing `ANNOTATE.PREPARING_CLIP` + the `data-testid="clip-preparing-note"` from T9900) and only
+reaches 100 after the batch POST lands AND `fetchProjects` resolves (the tile exists in the store). The bar
+never reads 100% before the tile exists. **T10260 open-on-completion (INVARIANT — gesture, not reactive):**
+`runClipUpload` opens the first created clip into Framing via `onSelectProjectWithMode(id,{mode:'framing'})`
+— threaded ProjectsScreen(`handleSelectProjectWithMode`) -> ProjectManager -> completion point, NOT the hook
+(the hook must not reach editorStore). This is the tail of the user's OWN upload gesture, fired at the
+completion point — NEVER a useEffect watching progress state. It only auto-navigates when still on the Clips
+tab (`activeTabRef.current==='projects' && isMountedRef.current`, refs read CURRENT values, not a stale
+closure); if the user navigated away it shows a toast with an "Open Framing" action instead of yanking them.
+Reuse this same `onSelectProjectWithMode` path for any future upload->stage navigation; do NOT invent a
+second one. Tests: `useClipUpload.test.js` (+ phase mapping, refusal classes, 99->100), new
+`ProjectManager.clipSizeLimit.test.jsx` (pre-flight gate, Add Game handoff, refused-no-Retry, both
+completion branches), backend `test_bootstrap.py::test_exposes_clip_upload_limits`, e2e
+`T10250-clip-size-limit-and-framing-open.spec.js`. Prior:)
 updated: 2026-09-15 (T10010 — activation-funnel instrumentation, aggregates-only, NO schema/migration.
 NEW client-beacon funnel events go `POST /api/telemetry/funnel-event` -> `record_funnel_event` ->
 `record_milestone` (each `daily_col=None` in `FLOW_EVENTS` -> a free-text `user_actions` row + a
