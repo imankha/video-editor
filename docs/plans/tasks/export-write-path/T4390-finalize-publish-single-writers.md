@@ -127,3 +127,48 @@ CI running on the PR head. Remaining before STAGING: CI green, then merge. Live 
 (drive-app-as-user) stays SKIPPED-WITH-REASON per the 16:33 note — no dev Postgres reachable from
 the container; recommend a live re-check post-merge if desired, otherwise evidence base is golden
 harness + unit tests per kickoff fallback.
+
+**2026-09-17 — Branch CI + Reviewer verdict: NOT MERGED, WAITING ON USER.**
+
+*CI (run 35244363045, head 9ebeee0c):* backend job FAILED — `test_t6200_concurrency.py::test_authed_burst_larger_than_pool_does_not_503`
+(`sqlite3.OperationalError: database is locked`), 1 failed / 4014 passed. Matches the documented
+flake in `docs/testing/known-failures.md:29` (same test/error, confirmed non-reproducing via
+same-SHA rerun on T7910's unrelated branch); this diff touches no SQLite locking/pool code. Not
+currently deselected in `branch-ci.yml`, so the job reads red regardless. Reran via
+`gh run rerun 35244363045 --failed`; outcome not yet confirmed in this log entry — check the run
+before treating CI as green.
+
+*Reviewer (fresh-context, full diff `origin/master...HEAD` + task file + knowledge doc):* **BLOCKING ISSUES FOUND** — the red CI (above) plus 3 MAJOR:
+- **M1** — `publish_final_video.py:143-155`: when the probed file aspect ratio disagrees with
+  `projects.aspect_ratio` (the exact event T4160 exists to catch), the override is applied
+  silently — both `logger.warning` calls cover probe *failure*, not probe-succeeds-and-disagrees.
+  Since this path is only live in a real R2 environment (goldens are inert here by design and this
+  task's live-export check was skipped), there is currently no log evidence the probe path has
+  ever fired in production, and no way to distinguish "rule working" from "probe always fails,
+  silently falling back to master's old behavior." Fix: log on `label != project_aspect_ratio`
+  with both values + project id.
+- **M2** — the shared writer's slow-mo segment read (`publish_final_video.py:254`) uses
+  `read_clip_segments_for_project` (raises on decode failure) where the old
+  `_finalize_overlay_export` used `load_project_clip_segments` (never raises, empty-list fallback).
+  Not in the divergence table. A corrupt `segments_data` blob or missing table now aborts the
+  whole finalize transaction *after* a completed Modal render — the user loses the export and
+  re-pays GPU seconds on retry. Needs either the tolerant read restored, or documented as a 4th
+  deliberate behavior change with that tradeoff spelled out (and `poster.py:463`'s docstring fixed).
+- **M3** — `overlay.py`'s `export_final` now calls the new `resolve_output_aspect_ratio` /
+  `ffprobe_bytes` synchronously inside `async def export_final`, un-threaded (up to 60s blocking
+  the event loop on a hang) — unlike the other 3 call sites, which correctly
+  `await asyncio.to_thread(...)`. One-line fix.
+- Two MINORs the reviewer flagged as "should ride this PR": the deleted `/framing` endpoint still
+  has a live caller in `tests/integration/test_persistence.py` (a manual script outside
+  `run_tests.py`'s glob, invisible to CI — will 404 at "TEST 4"); and stale prose in
+  `test_export_golden_overlay.py:12-14` about slowmo-column guarding (superseded by the DV7 fix).
+- Everything the task was asked to scrutinize came back clean: the "mechanical extraction, zero
+  behavior change" claim holds line-for-line against both prior copies; T4010's atomic-swap /
+  no-speculative-NULL protections and T4200's finalize-before-sync-before-announce ordering both
+  survived untouched; `effect_type=None` truly preserves multi-clip behavior; the
+  goldens-can't-catch-it reasoning for the aspect_ratio fallback checks out structurally (same
+  source column as `compute_project_metadata`); all 5 acceptance criteria grep-verified.
+
+**Not provably verified — PLAN.md row set to WAITING ON USER.** Needed before this can merge:
+fix M1/M2/M3 + the two MINORs, confirm the CI rerun is clean (or deselect the documented flake),
+then a follow-up review pass on the delta. Branch/PR/container left in place, nothing deleted.
