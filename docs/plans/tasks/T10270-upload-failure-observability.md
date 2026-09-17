@@ -1,6 +1,7 @@
 # T10270: Upload-failure observability: a durable record, a since-deploy listing, and no silent classes
 
-**Status:** TODO
+**Status:** WAITING ON USER (design gate: [T10270-design.md](T10270-design.md), decision artifact
+https://claude.ai/artifact/3DsuRvsHf9GtpZ2sxeA4AP)
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-09-17
