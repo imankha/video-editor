@@ -1,6 +1,6 @@
 # T4370: Export Golden-Output Test Harness
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-07-03
@@ -10,6 +10,8 @@
 **2026-09-17: spawned via /dotask** (container `reel-task-t4370`, branch
 `feature/T4370-export-golden-harness`) as part of clearing the Export Write-Path Unification
 epic — the real remaining durability-lane engineering per docs/plans/HANDOFF-before-T7620.md.
+Merged PR #455 (Branch CI green, reviewer approved, red/green regression-catch proof — see
+Progress Log below). **This unlocks T4380** (next in strict order).
 
 ## Problem
 
@@ -40,7 +42,7 @@ Two harness layers:
 - [x] All 6 export triggers have DB-delta snapshots (every column, not just status)
 - [x] Local render goldens with documented tolerance; ffprobe property assertions
 - [x] One re-bless command with reviewable diffs
-- [ ] Harness green on master before any T4380+ work starts (green on the task branch; final master-merge confirmation is the supervisor's CI gate, not this worker's)
+- [x] Harness green on master before any T4380+ work starts (merged via PR #455, Branch CI green)
 
 **Note for T4420 (interpolation unification):** the Solution section above also
 scopes "local-vs-Modal parity on the SAME interpolation fixtures at the unit
