@@ -43,6 +43,7 @@ from ...highlight_transform import (
 from ...middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
 from ...profile_context import get_current_profile_id
 from ...schemas import TextSpec
+from ...services import export_job_repository
 from ...services.collection_metadata import (
     compute_project_game_ids,
     compute_project_metadata,
@@ -263,11 +264,11 @@ def _finalize_overlay_export(
         if prior_final_id and not keep_prior:
             cursor.execute("DELETE FROM final_videos WHERE id = ?", (prior_final_id,))
 
-        cursor.execute("""
-            UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?,
-                completed_at = CURRENT_TIMESTAMP, gpu_seconds = ?, modal_function = ?
-            WHERE id = ?
-        """, (final_video_id, output_filename, gpu_seconds, modal_function, export_id))
+        export_job_repository.complete(
+            cursor, export_id,
+            output_video_id=final_video_id, output_filename=output_filename,
+            gpu_seconds=gpu_seconds, modal_function=modal_function,
+        )
 
         # T8070: refresh the per-clip reel-source window to each clip's CURRENT
         # boundaries for every clip of this project (via working_clips.raw_clip_id,
@@ -1507,10 +1508,7 @@ async def export_overlay_only(
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO export_jobs (id, project_id, type, status, input_data)
-                    VALUES (?, ?, 'overlay', 'processing', '{}')
-                """, (export_id, project_id))
+                export_job_repository.create(cursor, job_id=export_id, project_id=project_id, job_type='overlay', input_data='{}')
                 conn.commit()
             logger.info(f"[Overlay Export] Created export_jobs record: {export_id} for project '{project_name}'")
         except Exception as e:
@@ -1688,10 +1686,7 @@ async def export_overlay_only(
             try:
                 with get_db_connection() as conn:
                     cursor = conn.cursor()
-                    cursor.execute("""
-                        UPDATE export_jobs SET status = 'complete', completed_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (export_id,))
+                    export_job_repository.complete(cursor, export_id)
                     conn.commit()
             except Exception as e:
                 logger.warning(f"[Overlay Export] Failed to update export_jobs record: {e}")
@@ -1723,10 +1718,7 @@ async def export_overlay_only(
             try:
                 with get_db_connection() as conn:
                     cursor = conn.cursor()
-                    cursor.execute("""
-                        UPDATE export_jobs SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (error_msg[:500], export_id))
+                    export_job_repository.fail(cursor, export_id, error_msg[:500])
                     conn.commit()
             except Exception:
                 pass
@@ -1758,10 +1750,7 @@ async def export_overlay_only(
             try:
                 with get_db_connection() as conn:
                     cursor = conn.cursor()
-                    cursor.execute("""
-                        UPDATE export_jobs SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (str(e)[:500], export_id))
+                    export_job_repository.fail(cursor, export_id, str(e)[:500])
                     conn.commit()
             except Exception:
                 pass
@@ -2836,10 +2825,7 @@ async def _run_overlay_export_background(
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("""
-                    UPDATE export_jobs SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                """, (str(e)[:500], export_id))
+                export_job_repository.fail(cursor, export_id, str(e)[:500])
                 conn.commit()
         except Exception:
             pass
