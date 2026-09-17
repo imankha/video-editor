@@ -36,6 +36,7 @@ from app.services.auth_db import (
 )
 from app.services.credit_ledger import CreditsUnavailable, deduct_credits, get_balance
 from app.services.storage_credits import calculate_extension_cost, calculate_upload_cost, storage_expires_at
+from app.services.upload_failures import record_upload_failure_from_payload
 from app.storage import (
     R2_ENABLED,
     VideoServeOutcome,
@@ -361,6 +362,29 @@ def _validate_video_in_r2(blake3_hash: str) -> None:
         )
 
 
+async def _validate_video_in_r2_or_record(blake3_hash: str, *, stage: str) -> None:
+    """T10270 class 6: async wrapper around `_validate_video_in_r2` that records
+    the failure through the shared writer before re-raising. Kept as a
+    SEPARATE wrapper (rather than making the helper itself async) so the
+    existing `_validate_video_in_r2` mocks across ~10 test files (plain
+    `return_value=None` / lambdas, not AsyncMock) keep working unchanged --
+    this wrapper still calls the module-level `_validate_video_in_r2` name at
+    call time, so monkeypatching it is unaffected. `stage` is passed by each of
+    the 4 call sites (create / attach / activate) since they mean different
+    points in the upload lifecycle (design §3.5). Every caller is `async def`,
+    so the writer is offloaded via `run_in_context` per the T6200 cardinal rule.
+    """
+    try:
+        _validate_video_in_r2(blake3_hash)
+    except HTTPException as e:
+        await run_in_context(record_upload_failure_from_payload, {
+            "kind": "game", "stage": stage, "reason": "source_missing", "terminal": True,
+            "user_id": get_current_user_id(), "http_status": e.status_code,
+            "blake3_hash": blake3_hash,
+        })
+        raise
+
+
 def _probe_video_metadata(blake3_hash: str) -> dict | None:
     """
     Probe a game video in R2 via ffprobe for fps, duration, width, height.
@@ -503,7 +527,7 @@ async def create_game(request: CreateGameRequest):
     # Skip R2 validation for pending games (video upload hasn't started yet)
     if game_status == GameStatus.READY:
         for video in request.videos:
-            _validate_video_in_r2(video.blake3_hash.lower())
+            await _validate_video_in_r2_or_record(video.blake3_hash.lower(), stage="creating")
 
     # If a pending game already exists for this hash, return it so the
     # frontend can resume the upload and activate it.
@@ -707,7 +731,7 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
 
     # Validate all videos exist in R2
     for video in request.videos:
-        _validate_video_in_r2(video.blake3_hash.lower())
+        await _validate_video_in_r2_or_record(video.blake3_hash.lower(), stage="attaching")
 
     user_id = get_current_user_id()
     profile_id = get_current_profile_id()
@@ -723,6 +747,10 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
         if not game_row:
             raise HTTPException(status_code=404, detail="Game not found")
         if game_row["status"] != GameStatus.READY:
+            await run_in_context(record_upload_failure_from_payload, {
+                "kind": "game", "stage": "attaching", "reason": "game_not_ready",
+                "terminal": True, "user_id": user_id, "http_status": 409,
+            })
             raise HTTPException(
                 status_code=409,
                 detail={
@@ -757,6 +785,11 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
             # committing a usable-but-unpaid video, which can't be rolled back once
             # _ensure_game_storage_refs opens its own connection (bug26p).
             if get_balance(user_id) < cost:
+                await run_in_context(record_upload_failure_from_payload, {
+                    "kind": "game", "stage": "attaching", "reason": "insufficient_credits",
+                    "terminal": True, "user_id": user_id, "http_status": 402,
+                    "error_text": f"required={cost} balance={get_balance(user_id)}",
+                })
                 raise HTTPException(
                     status_code=402,
                     detail={
@@ -1071,11 +1104,11 @@ async def activate_game(
         video_rows = cursor.fetchall()
 
         for row in video_rows:
-            _validate_video_in_r2(row['blake3_hash'])
+            await _validate_video_in_r2_or_record(row['blake3_hash'], stage="activating")
 
         # Also validate the legacy blake3_hash on the games row if present
         if game['blake3_hash']:
-            _validate_video_in_r2(game['blake3_hash'])
+            await _validate_video_in_r2_or_record(game['blake3_hash'], stage="activating")
 
         # Backfill missing metadata from R2 probe (pending games skip probe at creation)
         for row in video_rows:

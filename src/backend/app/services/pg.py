@@ -347,6 +347,44 @@ CREATE INDEX IF NOT EXISTS idx_bug_reports_duplicate ON bug_reports(duplicate_of
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS client_report_id TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_bug_reports_client_id ON bug_reports(client_report_id);
 
+-- T10270: durable per-event upload-failure record (design doc §3.2). Fenced
+-- (F1-F5 in backend-services.md): closed stage/reason vocabularies validated
+-- by services/upload_failures.py's ONE writer, 90-day TTL swept by the
+-- existing hourly cleanup loop, purged with the user. NOT analytics state --
+-- no analytics report may read this table. Mirrored in
+-- migrations/postgres/v029_upload_failures.py; the two texts must match.
+CREATE TABLE IF NOT EXISTS upload_failures (
+    id                BIGSERIAL PRIMARY KEY,
+    occurred_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    user_id           TEXT,
+    profile_id        TEXT,
+    kind              TEXT NOT NULL,
+    stage             TEXT NOT NULL,
+    reason            TEXT NOT NULL,
+    terminal          BOOLEAN NOT NULL,
+    origin            TEXT NOT NULL,
+    impersonated      BOOLEAN NOT NULL DEFAULT FALSE,
+    http_status       INTEGER,
+    error_text        TEXT,
+    blake3_hash       TEXT,
+    upload_session_id TEXT,
+    r2_upload_id      TEXT,
+    file_size         BIGINT,
+    original_filename TEXT,
+    parts_total       INTEGER,
+    parts_completed   INTEGER,
+    attempt_no        INTEGER,
+    elapsed_ms        INTEGER,
+    platform          TEXT,
+    user_agent        TEXT,
+    app_build         INTEGER NOT NULL DEFAULT 0,
+    commit_sha        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_upload_failures_occurred ON upload_failures(occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_upload_failures_build    ON upload_failures(app_build, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_upload_failures_user     ON upload_failures(user_id);
+CREATE INDEX IF NOT EXISTS idx_upload_failures_kind     ON upload_failures(kind, reason);
+
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY,
     description TEXT NOT NULL,

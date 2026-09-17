@@ -122,7 +122,12 @@ function withTimeout(promise, ms, message, onTimeout) {
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => {
       if (onTimeout) onTimeout();
-      reject(new Error(message));
+      // T10270: tag the rejection so a catch site can classify hash_timeout
+      // vs. a different underlying failure (e.g. analyzeMp4Faststart throwing
+      // for a real corrupt-file reason) without string-matching the message.
+      const err = new Error(message);
+      err.isUploadTimeout = true;
+      reject(err);
     }, ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
@@ -196,6 +201,10 @@ export async function apiFetchWithNetworkRetry(url, options, { phase, beacon } =
         phase,
         reason: 'fetch_rejected',
         attempt: attempt + 1,
+        // T10270: no response ever arrived -- this is the exact case the old
+        // phase allowlist got wrong (it treated 'preparing'/'finalizing' as
+        // "the server saw it" regardless of whether a response existed).
+        server_responded: false,
       });
       if (attempt < NETWORK_RETRY_MAX) {
         await new Promise((r) => setTimeout(r, NETWORK_RETRY_BACKOFF_MS * (attempt + 1)));
@@ -663,6 +672,30 @@ async function _hashAndAnalyze(file, onProgress, signal) {
   return { blake3_hash: hash, faststartInfo, file_size };
 }
 
+/**
+ * T10270 class 1: `hashAndAnalyze` wrapped to beacon a pre-prepare client
+ * death (hash timeout / faststart analyze throw) -- today these throw with
+ * NOTHING recorded, because no server request has happened yet for any
+ * server-side branch to catch. Shared by every internal call site
+ * (ensureVideoInR2, uploadGame, uploadMultiVideoGame,
+ * attachVideoToExistingGame) so the beacon logic lives in exactly one place.
+ */
+async function hashAndAnalyzeOrBeacon(file, onProgress, kind) {
+  try {
+    return await hashAndAnalyze(file, onProgress);
+  } catch (err) {
+    sendUploadFailureBeacon({
+      phase: 'hashing',
+      reason: err?.isUploadTimeout ? 'hash_timeout' : 'analyze_failed',
+      original_filename: file.name,
+      file_size: file.size,
+      kind,
+      server_responded: false,
+    });
+    throw err;
+  }
+}
+
 export async function ensureVideoInR2(file, onProgress, options = {}) {
   const notify = (phase, percent, message) => {
     if (onProgress) {
@@ -676,7 +709,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     hash = options.precomputed.blake3_hash;
     faststartInfo = options.precomputed.faststartInfo;
   } else {
-    const h = await hashAndAnalyze(file, onProgress);
+    const h = await hashAndAnalyzeOrBeacon(file, onProgress, options.kind);
     hash = h.blake3_hash;
     faststartInfo = h.faststartInfo;
   }
@@ -705,7 +738,13 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(prepareBody),
     },
-    { phase: 'preparing', beacon: { blake3_hash: hash, file_size: uploadSize, kind: options.kind } },
+    {
+      phase: 'preparing',
+      beacon: {
+        blake3_hash: hash, file_size: uploadSize, original_filename: file.name,
+        kind: options.kind,
+      },
+    },
   );
 
   if (!prepareRes.ok) {
@@ -716,7 +755,9 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       reason: error.detail || `prepare_failed_${prepareRes.status}`,
       blake3_hash: hash,
       file_size: uploadSize,
+      original_filename: file.name,
       kind: options.kind,
+      server_responded: true,
     });
     const prepareErr = new Error(extractErrorMessage(error, `Prepare failed: ${prepareRes.status}`));
     // T10250: a 400 from prepare-upload is a REFUSAL (invalid kind/hash, or a
@@ -730,6 +771,30 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
 
   // T1580: Check if user can afford the upload before transferring bytes
   if (prepareData.can_afford === false) {
+    sendUploadFailureBeacon({
+      phase: 'preparing',
+      reason: 'insufficient_credits',
+      blake3_hash: hash,
+      file_size: uploadSize,
+      original_filename: file.name,
+      kind: options.kind,
+      server_responded: false,
+    });
+    // T10270 class 2 (Q4): the server already inserted a pending_uploads row
+    // and opened an R2 multipart before returning can_afford=false (it has no
+    // way to know the cost until it computes it). Cancel that session honestly
+    // now instead of leaving it for the reaper to mislabel `user_abandoned`
+    // later -- best-effort, never blocks the credits error the user sees.
+    // EXISTS-dedup responses carry no upload_session_id (nothing was opened).
+    // alreadyRecorded=true: the beacon above already wrote this session's ONE
+    // precise failure row (insufficient_credits) -- cancel_upload's own
+    // generic user_abandoned record would otherwise double-count the same
+    // real event under a second, less accurate reason (reviewer-caught).
+    if (prepareData.upload_session_id) {
+      cancelUpload(prepareData.upload_session_id, { alreadyRecorded: true }).catch(() => {
+        /* best-effort cleanup; the credits error below is what the user sees */
+      });
+    }
     const err = new Error(`Insufficient credits: need ${prepareData.upload_cost}, have ${prepareData.balance}`);
     err.insufficientCredits = true;
     err.uploadCost = prepareData.upload_cost;
@@ -757,6 +822,18 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
 
   // Phase 3: Upload parts
   if (prepareData.status !== UPLOAD_STATUS.UPLOAD_REQUIRED) {
+    // T10270 class 1: an unrecognized status is a client-side death with
+    // nothing recorded today (the server's response WAS received, just not
+    // in a shape this client understands).
+    sendUploadFailureBeacon({
+      phase: 'preparing',
+      reason: 'unexpected_status',
+      blake3_hash: hash,
+      file_size: uploadSize,
+      original_filename: file.name,
+      kind: options.kind,
+      server_responded: true,
+    });
     throw new Error(`Unexpected status: ${prepareData.status}`);
   }
   const isResume = prepareData.is_resume === true;
@@ -797,6 +874,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       session_id: prepareData.upload_session_id,
       blake3_hash: hash,
       file_size: uploadSize,
+      original_filename: file.name,
       total_parts: prepareData.parts.length,
       elapsed_ms: Math.round(performance.now() - __diagUploadStart),
       kind: options.kind,
@@ -842,8 +920,10 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       session_id: prepareData.upload_session_id,
       blake3_hash: hash,
       file_size: uploadSize,
+      original_filename: file.name,
       total_parts: parts.length,
       kind: options.kind,
+      server_responded: true,
     });
     throw new Error(message);
   }
@@ -997,7 +1077,7 @@ export async function uploadGame(file, onProgress, options = {}) {
 
   try {
     // Step 1: Hash the file (accurate progress from sampled hash).
-    const hashResult = await hashAndAnalyze(file, onProgress);
+    const hashResult = await hashAndAnalyzeOrBeacon(file, onProgress, options.kind);
 
     const videoRef = {
       blake3_hash: hashResult.blake3_hash,
@@ -1147,7 +1227,7 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       };
 
       // Step A: Hash this file.
-      const hashResult = await hashAndAnalyze(file, perFileProgress);
+      const hashResult = await hashAndAnalyzeOrBeacon(file, perFileProgress, options.kind);
 
       const videoRef = {
         blake3_hash: hashResult.blake3_hash,
@@ -1296,7 +1376,7 @@ export async function attachVideoToExistingGame(gameId, filesOrFile, onProgress)
     };
 
     // Step 1: hash + faststart analysis (emits 'hashing' progress).
-    const hashResult = await hashAndAnalyze(file, perFileProgress);
+    const hashResult = await hashAndAnalyzeOrBeacon(file, perFileProgress, undefined);
 
     // Step 2: ensure the bytes are durable in R2 (dedup-aware multipart upload).
     const r2Result = await ensureVideoInR2(file, perFileProgress, {
@@ -1339,8 +1419,13 @@ export async function attachVideoToExistingGame(gameId, filesOrFile, onProgress)
  * Cancel an in-progress upload
  * @param {string} sessionId - Upload session ID from prepare-upload
  */
-export async function cancelUpload(sessionId) {
-  const response = await apiFetch(`${API_BASE}/api/games/upload/${sessionId}`, {
+export async function cancelUpload(sessionId, { alreadyRecorded = false } = {}) {
+  // T10270: alreadyRecorded skips the server's own generic user_abandoned
+  // upload_failures record when the CALLER already beaconed a precise reason
+  // for this session (class 2's insufficient_credits path) -- one real event,
+  // one row, not a double-count under two different reasons.
+  const params = alreadyRecorded ? '?already_recorded=true' : '';
+  const response = await apiFetch(`${API_BASE}/api/games/upload/${sessionId}${params}`, {
     method: 'DELETE',
   });
 

@@ -242,6 +242,28 @@ def test_cancel_upload_records_user_abandoned(monkeypatch):
     assert after >= before + 1
 
 
+def test_cancel_upload_already_recorded_skips_the_user_abandoned_milestone(monkeypatch):
+    """T10270 (reviewer-caught double-count): the client's insufficient_credits
+    beacon already wrote this session's ONE precise failure row before calling
+    cancel -- already_recorded=true must suppress cancel_upload's own generic
+    user_abandoned record, or one real event counts twice under two reasons."""
+    blake3_hash = f"{uuid.uuid4().hex}{uuid.uuid4().hex}"[:64]
+    upload_id = f"upl_{uuid.uuid4().hex}"
+    session_id = _make_pending_upload(blake3_hash, upload_id)
+
+    monkeypatch.setattr("app.routers.games_upload.r2_abort_multipart_upload", lambda *a, **k: True)
+
+    before = _action_count(TEST_USER_ID, "game_upload_failed:user_abandoned")
+
+    with _client() as client:
+        resp = client.delete(f"/api/games/upload/{session_id}?already_recorded=true")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "cancelled"}
+    after = _action_count(TEST_USER_ID, "game_upload_failed:user_abandoned")
+    assert after == before
+
+
 def test_beacon_phase_uploading_records_network():
     """upload-failure-beacon with phase=uploading is the one client-side failure the
     server never otherwise sees -> HTTP 204 AND a milestone row. A genuine transport

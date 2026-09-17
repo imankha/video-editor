@@ -10,6 +10,7 @@ import { CohortGrid } from '../components/admin/CohortGrid';
 import { PlatformBreakdown } from '../components/admin/PlatformBreakdown';
 import { UserDetailPanel } from '../components/admin/UserDetailPanel';
 import { RevenueReconciliation } from '../components/admin/RevenueReconciliation';
+import { UploadFailuresPanel } from '../components/admin/UploadFailuresPanel';
 
 function CollapsibleSection({ title, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -68,6 +69,14 @@ export function AdminScreen({ onBack }) {
   const cohortsLoading = useAdminStore(s => s.cohortsLoading);
   const platformsData = useAdminStore(s => s.platformsData);
   const fetchDashboard = useAdminStore(s => s.fetchDashboard);
+
+  // T10270: deliberately NOT part of fetchDashboard's combined mount fetch --
+  // a separate, on-demand drill-down (AdminScreen.test.jsx asserts exactly
+  // one mount request for /api/admin/dashboard).
+  const uploadFailuresData = useAdminStore(s => s.uploadFailuresData);
+  const uploadFailuresLoading = useAdminStore(s => s.uploadFailuresLoading);
+  const uploadFailuresError = useAdminStore(s => s.uploadFailuresError);
+  const fetchUploadFailures = useAdminStore(s => s.fetchUploadFailures);
 
   // T8020: one combined round-trip on mount instead of 5 separate fetches. The
   // individual actions above stay wired for their other callers (pagination,
@@ -212,6 +221,17 @@ export function AdminScreen({ onBack }) {
             default; the Stripe pass only runs when the admin clicks inside. */}
         <CollapsibleSection title="Revenue Reconciliation (Stripe)">
           <RevenueReconciliation />
+        </CollapsibleSection>
+
+        {/* T10270: Upload Failures drill-down. Collapsed by default, separate
+            on-demand fetch (never folded into the combined dashboard mount). */}
+        <CollapsibleSection title="Upload Failures">
+          <UploadFailuresPanel
+            data={uploadFailuresData}
+            loading={uploadFailuresLoading}
+            error={uploadFailuresError}
+            onRefresh={() => fetchUploadFailures()}
+          />
         </CollapsibleSection>
 
         {(userDetailData || userDetailLoading) && (

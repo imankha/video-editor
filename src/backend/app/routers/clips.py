@@ -39,11 +39,13 @@ from app.services.media_probe import probe_r2_video
 from app.services.pg import get_pg
 from app.services.poster import invalidate_draft_poster
 from app.services.storage_credits import calculate_storage_cost
+from app.services.upload_failures import record_upload_failure_from_payload
 from app.storage import generate_presigned_url, r2_head_object, upload_bytes_to_r2
 from app.tfidf_titles import extract_keywords_tfidf
 from app.user_context import get_current_user_id
 from app.utils.clip_range import normalize_clip_range
 from app.utils.encoding import decode_data, encode_data
+from app.utils.offload import run_in_context
 
 logger = logging.getLogger(__name__)
 
@@ -1951,6 +1953,11 @@ async def upload_clips_batch(request: ClipUploadBatchRequest, _durable: None = D
             head = r2_head_object(user_id, key)
             if not head:
                 results.append({"ok": False, "blake3_hash": blake3_hash, "error": "source_missing"})
+                await run_in_context(record_upload_failure_from_payload, {
+                    "kind": "clip", "stage": "batching", "reason": "source_missing",
+                    "terminal": True, "user_id": user_id, "blake3_hash": blake3_hash,
+                    "file_size": item.file_size, "original_filename": item.original_filename,
+                })
                 continue
 
             # Idempotent re-post: this exact clip source already landed a row.
@@ -1971,11 +1978,22 @@ async def upload_clips_batch(request: ClipUploadBatchRequest, _durable: None = D
             meta = probe_r2_video(key)
             if not meta or not meta.get("duration"):
                 results.append({"ok": False, "blake3_hash": blake3_hash, "error": "probe_failed"})
+                await run_in_context(record_upload_failure_from_payload, {
+                    "kind": "clip", "stage": "batching", "reason": "probe_failed",
+                    "terminal": True, "user_id": user_id, "blake3_hash": blake3_hash,
+                    "file_size": item.file_size, "original_filename": item.original_filename,
+                })
                 continue
 
             duration = meta["duration"]
             if duration > MAX_CLIP_DURATION_S:
                 results.append({"ok": False, "blake3_hash": blake3_hash, "error": "duration_exceeds_cap"})
+                await run_in_context(record_upload_failure_from_payload, {
+                    "kind": "clip", "stage": "batching", "reason": "duration_exceeds_cap",
+                    "terminal": True, "user_id": user_id, "blake3_hash": blake3_hash,
+                    "file_size": item.file_size, "original_filename": item.original_filename,
+                    "error_text": f"duration={duration}s cap={MAX_CLIP_DURATION_S}s",
+                })
                 continue
 
             to_create.append({
@@ -2025,6 +2043,12 @@ async def upload_clips_batch(request: ClipUploadBatchRequest, _durable: None = D
                     })
                 for c in to_create:
                     results.append({"ok": False, "blake3_hash": c["blake3_hash"], "error": "insufficient_credits"})
+                    await run_in_context(record_upload_failure_from_payload, {
+                        "kind": "clip", "stage": "batching", "reason": "insufficient_credits",
+                        "terminal": True, "user_id": user_id, "blake3_hash": c["blake3_hash"],
+                        "file_size": c["file_size"], "original_filename": c["item"].original_filename,
+                        "error_text": f"required={charged} balance={balance}",
+                    })
                 return {"results": results, "charged": charged, "balance": balance}
         elif already_existing:
             # Pure idempotent re-post (every accepted item already has a

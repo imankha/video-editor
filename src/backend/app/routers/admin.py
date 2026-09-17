@@ -34,6 +34,7 @@ from ..storage import APP_ENV
 from ..user_context import get_current_user_id
 from ..utils.cookies import delete_cookie as _delete_cookie_raw
 from ..utils.cookies import set_cookie as _set_cookie_raw
+from ..version import APP_BUILD, APP_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -922,6 +923,7 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
     an all-users sweep (log tag `[UPLOAD_LIFECYCLE]` covers the fleet-wide view)."""
     _require_admin()
 
+    from ..routers.games_upload import _pending_kind, upload_object_key
     from ..services.materialization import open_profile_db_readonly
     from ..services.user_db import get_profiles
     from ..storage import r2_is_multipart_upload_valid, r2_list_multipart_parts
@@ -947,11 +949,11 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
             return None
         try:
             cur = conn.cursor()
-            cur.execute(
-                "SELECT id, blake3_hash, file_size, original_filename, "
-                "r2_upload_id, parts_json, label, created_at "
-                "FROM pending_uploads ORDER BY created_at DESC"
-            )
+            # T10270 class 9 (the T8370 landmine, again): SELECT * so `kind` is
+            # present when the column exists -- an explicit column list that
+            # omits it makes _pending_kind() resolve to GAME unconditionally
+            # (the column was never selected), even on an already-migrated DB.
+            cur.execute("SELECT * FROM pending_uploads ORDER BY created_at DESC")
             return cur.fetchall()
         finally:
             conn.close()
@@ -981,7 +983,12 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
             if age_seconds is not None and age_seconds < cutoff_seconds:
                 continue
 
-            r2_key = f"games/{row['blake3_hash']}.mp4"
+            # T10270 class 9: derive the key by kind instead of hardcoding the
+            # GAME namespace -- a CLIP row's bytes live at raw_clips/{hash}.mp4
+            # (per-profile), not games/{hash}.mp4, so the old hardcode HEADed
+            # the wrong object and reported every live clip upload as dead.
+            kind = _pending_kind(row)
+            r2_key = upload_object_key(kind, row['blake3_hash'], user_id)
             upload_id = row["r2_upload_id"]
             valid = await asyncio.to_thread(
                 r2_is_multipart_upload_valid, r2_key, upload_id
@@ -999,6 +1006,7 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
                 "blake3_hash": row["blake3_hash"],
                 "original_filename": row["original_filename"],
                 "label": row["label"],
+                "kind": kind,
                 "file_size": row["file_size"],
                 "created_at": created_at,
                 "age_hours": round(age_seconds / 3600, 2) if age_seconds is not None else None,
@@ -1008,6 +1016,158 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
             })
 
     return {"user_id": user_id, "older_than_hours": older_than_hours, "stuck_uploads": results}
+
+
+# ---------------------------------------------------------------------------
+# Upload-failure observability (T10270)
+# ---------------------------------------------------------------------------
+
+@router.get("/upload-failures")
+# T10270: sync def -> anyio threadpool (matches the other analytics handlers'
+# concurrency model, backend-services.md).
+def list_upload_failures(
+    since_build: int = Query(None),
+    since: str = Query(None, description="YYYY-MM-DD, overrides since_build's derived window"),
+    until: str = Query(None, description="YYYY-MM-DD, overrides since_build's derived window"),
+    kind: str = Query(None),
+    stage: str = Query(None),
+    reason: str = Query(None),
+    user_id: str = Query(None),
+    origin: str = Query(None),
+    include_impersonated: bool = False,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """GET /api/admin/upload-failures (design doc §3.6): a single query answers
+    "which uploads failed since build X, for whom, at what stage, why" (AC1).
+
+    Default window: the earliest date any row was recorded AT the current
+    APP_BUILD (an honest "no failures recorded on this build" when there are
+    none yet, falling back to today). `since`/`until` are an explicit UTC date
+    override, independent of build. `rows`/`total` are date-window + filter
+    scoped; `rates` are ALWAYS the honest game/clip pair (never summed, never
+    without both attempts and successes -- feedback_tries_vs_success_must_both_show),
+    excluding impersonated rows regardless of `include_impersonated` (that
+    flag only controls whether admin reproductions show up in the LIST).
+    """
+    _require_admin()
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+
+        # T6090 pattern: tolerate a deployed-but-not-yet-migrated environment
+        # instead of a bare 500 on UndefinedTable.
+        cur.execute("SELECT to_regclass('public.upload_failures') IS NOT NULL AS ok")
+        if not cur.fetchone()["ok"]:
+            return {"migrated": False}
+
+        today = datetime.now(UTC).date()
+        build = since_build if since_build is not None else APP_BUILD
+
+        if since or until:
+            since_date = date.fromisoformat(since) if since else today
+            until_date = date.fromisoformat(until) if until else today
+        else:
+            cur.execute(
+                "SELECT MIN(occurred_at)::date AS d FROM upload_failures WHERE app_build = %s",
+                (build,),
+            )
+            row = cur.fetchone()
+            since_date = row["d"] if row and row["d"] else today
+            until_date = today
+
+        cur.execute(
+            "SELECT COUNT(*) AS cnt FROM upload_failures WHERE app_build = %s",
+            (build,),
+        )
+        rows_at_this_build = cur.fetchone()["cnt"]
+
+        filters = ["occurred_at::date BETWEEN %s AND %s"]
+        params = [since_date, until_date]
+        if kind:
+            filters.append("kind = %s")
+            params.append(kind)
+        if stage:
+            filters.append("stage = %s")
+            params.append(stage)
+        if reason:
+            filters.append("reason = %s")
+            params.append(reason)
+        if user_id:
+            filters.append("user_id = %s")
+            params.append(user_id)
+        if origin:
+            filters.append("origin = %s")
+            params.append(origin)
+        if not include_impersonated:
+            filters.append("impersonated = FALSE")
+        where_clause = "WHERE " + " AND ".join(filters)
+
+        cur.execute(f"SELECT COUNT(*) AS cnt FROM upload_failures {where_clause}", params)
+        total = cur.fetchone()["cnt"]
+
+        cur.execute(
+            f"SELECT * FROM upload_failures {where_clause} "
+            "ORDER BY occurred_at DESC LIMIT %s OFFSET %s",
+            [*params, limit, offset],
+        )
+        rows = cur.fetchall()
+
+        # Honesty rules (design §3.6): game/clip are SEPARATE, every rate ships
+        # attempts+succeeded+failed together, rate_pct is null (not 0%/100%)
+        # when attempts==0. Mixed-grain disclosure: successes come from
+        # daily_counters (day-keyed), failures from upload_failures (exact
+        # timestamps, terminal=true) -- both bounded to the SAME [since_date,
+        # until_date] window, but a day-vs-exact-timestamp ceiling remains
+        # (the same one T7467 documented for the pulse cards).
+        cur.execute(
+            "SELECT COALESCE(SUM(game_uploads_succeeded), 0) AS succeeded, "
+            "COALESCE(SUM(clips_uploaded), 0) AS clip_succeeded "
+            "FROM daily_counters WHERE origin_type = 'all' AND counter_date BETWEEN %s AND %s",
+            (since_date, until_date),
+        )
+        succ = cur.fetchone()
+        game_succeeded, clip_succeeded = succ["succeeded"], succ["clip_succeeded"]
+
+        cur.execute(
+            "SELECT "
+            "COUNT(*) FILTER (WHERE kind = 'game') AS game_failed, "
+            "COUNT(*) FILTER (WHERE kind = 'clip') AS clip_failed "
+            "FROM upload_failures WHERE terminal = TRUE AND impersonated = FALSE "
+            "AND occurred_at::date BETWEEN %s AND %s",
+            (since_date, until_date),
+        )
+        fail = cur.fetchone()
+        game_failed, clip_failed = fail["game_failed"], fail["clip_failed"]
+
+    def _rate(succeeded, failed):
+        attempts = succeeded + failed
+        return {
+            "attempts": attempts,
+            "succeeded": succeeded,
+            "failed": failed,
+            "rate_pct": round(succeeded / attempts * 100, 1) if attempts else None,
+        }
+
+    game_rate = _rate(game_succeeded, game_failed)
+    clip_rate = _rate(clip_succeeded, clip_failed)
+    # T8380: clip_upload_attempted isn't emitted anywhere yet, so the clip
+    # denominator is outcome-based (succeeded+failed), not a true attempt
+    # count -- disclosed rather than silently presented as precise.
+    clip_rate["denominator_note"] = "outcome-based: clip_upload_attempted is not emitted yet (T8380)"
+
+    return {
+        "window": {
+            "since_build": build,
+            "commit_sha": APP_VERSION,
+            "since_date": since_date.isoformat(),
+            "until_date": until_date.isoformat(),
+            "rows_at_this_build": rows_at_this_build,
+        },
+        "rows": rows,
+        "total": total,
+        "rates": {"game": game_rate, "clip": clip_rate},
+    }
 
 
 # ---------------------------------------------------------------------------
