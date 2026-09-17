@@ -133,6 +133,16 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   );
 });
 
+// T9950 Slice 3 fix (P0 2026-09-15): useVideoDisplayRect's effect deps include
+// `panOffset` by reference (see useVideoDisplayRect.js's own test comment: "a
+// fresh object each render would re-trigger forever"). The preview transform
+// call below always passes zoom=1/pan={0,0} — a module-level constant keeps
+// that reference stable across renders instead of a `{ x: 0, y: 0 }` literal
+// re-created inline every render, which re-fired the layout effect's setRect
+// on every single render and crashed Focus mode with "Maximum update depth
+// exceeded" for every draft, not just while previewing.
+const PREVIEW_ZERO_PAN = { x: 0, y: 0 };
+
 /**
  * FocusModeView - Complete view for Framing mode
  *
@@ -325,7 +335,7 @@ export function FocusModeView({
   // reads `previewRect` in that case.
   const { rect: previewRect } = useVideoDisplayRect(videoRef, metadata, {
     zoom: 1,
-    panOffset: { x: 0, y: 0 },
+    panOffset: PREVIEW_ZERO_PAN,
     isFullscreen,
   });
   // Inverse of videoToScreenRect (design doc §4): maps currentCropState onto
