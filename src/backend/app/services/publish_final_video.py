@@ -22,6 +22,9 @@ two prior copies, not re-derived per caller):
   `_finalize_overlay_export` already avoided; no documented reason for the
   difference, so the safer of the two behaviors wins).
 - T8070 raw_clips reel-source window refresh.
+- T4160's aspect_ratio-from-actual-output-file rule, EXTENDED (T4390) to
+  every publish caller -- previously only the now-removed sweep path
+  enforced it. See `resolve_output_aspect_ratio`.
 
 Deliberately NOT absorbed (still caller-side -- different table, or a
 concern this writer doesn't own):
@@ -45,6 +48,7 @@ from .collection_metadata import (
     compute_unified_clip_start,
 )
 from .poster import first_slowmo_section, read_clip_segments_for_project
+from .video_probe import ffprobe_bytes, probe_dimensions_via_url
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +88,74 @@ def delete_prior_final_object(user_id: str, prior_filename: str | None, new_file
         logger.warning(f"[Publish] Failed to delete prior final final_videos/{prior_filename}: {e}")
 
 
+def derive_aspect_ratio_label(width: int, height: int) -> str | None:
+    """Map actual pixel dimensions to the two ratios the product supports.
+
+    The frontend only ever offers '16:9'/'9:16' (no third option), so an
+    unrecognized ratio returns None rather than inventing an 'other' bucket
+    nothing downstream (e.g. rank.py's ranking-pool filter) knows how to
+    handle -- callers fall back to the project's explicit setting instead."""
+    if not width or not height:
+        return None
+    ratio = width / height
+    if 1.7 <= ratio <= 1.8:
+        return '16:9'
+    if 0.55 <= ratio <= 0.6:
+        return '9:16'
+    return None
+
+
+def resolve_output_aspect_ratio(
+    *,
+    project_aspect_ratio: str | None,
+    video_bytes: bytes | None = None,
+    user_id: str | None = None,
+    r2_relative_path: str | None = None,
+    log_context: str = "",
+) -> str | None:
+    """T4160's rule ("aspect_ratio must come from the actual output file"),
+    extended (T4390) to every publish caller -- previously only the
+    now-removed sweep path enforced it.
+
+    Probes the ACTUAL rendered file: in-memory bytes when the caller already
+    has them (`export_final` holds the uploaded bytes), else a presigned-URL
+    ffprobe for R2-resident output (`_finalize_overlay_export`'s 3 call sites
+    never hold local bytes -- Modal writes straight to R2, the
+    no-keyframes/test-mode paths do an R2->R2 copy).
+
+    On any probe failure (R2 disabled -- true in every current test
+    environment, so this path always falls back there and the goldens need
+    no re-bless for this change; network/ffprobe failure; or a genuinely
+    non-standard ratio) falls back to the project's explicit aspect_ratio
+    setting, with a WARNING log. This is the CLAUDE.md-sanctioned "fallback
+    for an external dependency" (ffprobe/R2 network access) -- the fallback
+    value is real user-set data, not a guess, and the failure is logged, not
+    silent. Behavior only changes where R2 is actually live (staging/prod),
+    which is exactly where the T4160 incident class lives."""
+    dims = None
+    if video_bytes is not None:
+        dims = ffprobe_bytes(video_bytes)
+    if dims is None and user_id and r2_relative_path:
+        from ..storage import generate_presigned_url
+        url = generate_presigned_url(user_id, r2_relative_path, expires_in=300)
+        if url:
+            dims = probe_dimensions_via_url(url)
+    if dims:
+        label = derive_aspect_ratio_label(dims["width"], dims["height"])
+        if label:
+            return label
+        logger.warning(
+            f"[Publish] {log_context}: probed dims {dims['width']}x{dims['height']} don't "
+            f"match a known aspect ratio; using project setting {project_aspect_ratio!r}"
+        )
+    else:
+        logger.warning(
+            f"[Publish] {log_context}: could not probe output file dimensions "
+            f"(R2 disabled or ffprobe failed); using project setting {project_aspect_ratio!r}"
+        )
+    return project_aspect_ratio
+
+
 def publish_final_video(
     cursor,
     *,
@@ -100,10 +172,11 @@ def publish_final_video(
     before_after_tracks) can do it with the same cursor right after this
     returns, before committing.
 
-    `aspect_ratio` is a REQUIRED, already-resolved value -- the caller
-    supplies it (currently the project's setting, matching both prior
-    writers' pre-existing behavior byte-for-byte; a following commit adds
-    T4160's actual-output-file derivation on the caller side).
+    `aspect_ratio` is a REQUIRED, already-resolved value -- callers derive it
+    via `resolve_output_aspect_ratio` (or an equivalent actual-file probe)
+    BEFORE calling in. This function does not re-derive it: T4160's rule is
+    about sourcing the value from the actual file, which only the caller (who
+    has the bytes or the R2 key) can do.
 
     `export_job_id`: when given, completes that export_jobs row in the same
     transaction (the `_finalize_overlay_export` callers, which always have a

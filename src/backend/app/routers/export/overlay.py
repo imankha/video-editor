@@ -61,6 +61,7 @@ from ...services.poster import (
 from ...services.publish_final_video import (
     delete_prior_final_object,
     publish_final_video,
+    resolve_output_aspect_ratio,
 )
 from ...services.spotlight_reveal import compute_spotlight_reveal
 from ...services.video_detections import hoist_video_detections, slice_detections
@@ -98,15 +99,24 @@ def _finalize_overlay_export(
     moved here from publish, T5280 REVERSED).
 
     T4390: the final_videos write itself is the shared `publish_final_video`
-    writer (aspect_ratio still sourced from the project's setting here --
-    same as before this consolidation; deriving it from the actual output
-    file per T4160's rule is a separate, immediately-following commit).
+    writer. aspect_ratio is derived from the ACTUAL output file (T4160's rule,
+    extended past the sweep path) via a presigned-URL probe -- none of this
+    function's 3 call sites hold local bytes (Modal writes straight to R2; the
+    no-keyframes/test-mode paths do an R2->R2 copy) -- falling back to the
+    project's setting if the probe can't run (see resolve_output_aspect_ratio).
     """
     with get_db_connection() as conn:
         _row = conn.cursor().execute(
             "SELECT aspect_ratio FROM projects WHERE id = ?", (project_id,)
         ).fetchone()
-        aspect_ratio = _row["aspect_ratio"] if _row else None
+        project_aspect_ratio = _row["aspect_ratio"] if _row else None
+
+    aspect_ratio = resolve_output_aspect_ratio(
+        project_aspect_ratio=project_aspect_ratio,
+        user_id=user_id,
+        r2_relative_path=f"final_videos/{output_filename}",
+        log_context=f"_finalize_overlay_export project={project_id}",
+    )
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1687,10 +1697,15 @@ async def export_final(
             raise HTTPException(status_code=500, detail="Failed to upload final video to R2")
         logger.info(f"[Final Export] Uploaded final video to R2: {filename} ({len(content)} bytes)")
 
-        # T4390: aspect_ratio still sourced from the project's setting here --
-        # same as before this consolidation. Deriving it from the actual output
-        # file per T4160's rule is a separate, immediately-following commit.
-        aspect_ratio = project['aspect_ratio']
+        # T4390/T4160: derive aspect_ratio from the ACTUAL uploaded bytes (already
+        # in memory -- no R2 round-trip needed here, unlike _finalize_overlay_export's
+        # R2-only call sites), falling back to the project setting if the bytes
+        # can't be ffprobed (e.g. a test fixture's fake bytes).
+        aspect_ratio = resolve_output_aspect_ratio(
+            project_aspect_ratio=project['aspect_ratio'],
+            video_bytes=content,
+            log_context=f"export_final project={project_id}",
+        )
 
         # T4390: the shared final_videos writer -- T4010 atomic swap, T5215
         # intro carry, T6030 slowmo (now column-guarded here too), T8070
