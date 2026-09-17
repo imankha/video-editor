@@ -29,10 +29,17 @@ TABLE_BLOB_FIELDS = {
 TABLE_MASK_FIELDS = {
     "working_videos": ("filename", "created_at"),
     "final_videos": ("filename", "created_at", "published_at"),
-    "export_jobs": ("started_at", "completed_at", "created_at", "output_filename"),
+    "export_jobs": ("id", "started_at", "completed_at", "created_at", "output_filename", "output_key"),
     "working_clips": ("exported_at", "created_at"),
     "raw_clips": ("filename", "boundaries_updated_at", "created_at"),
     "projects": ("created_at", "last_opened_at"),
+}
+
+# Keys INSIDE a decoded blob dict that are legitimately nondeterministic in
+# production too (a real user_id, a real tmp render path) -- not a test
+# artifact, so masked rather than pinned literally.
+TABLE_BLOB_SUBFIELD_MASKS = {
+    "export_jobs": {"input_data": ("credit_user_id", "video_path")},
 }
 
 
@@ -161,7 +168,11 @@ def _fetch_rows(cursor, sql: str, params: tuple, table: str) -> list:
     cursor.execute(sql, params)
     blob_fields = TABLE_BLOB_FIELDS.get(table, ())
     mask_fields = TABLE_MASK_FIELDS.get(table, ())
-    return [canonicalize_row(r, blob_fields=blob_fields, mask_fields=mask_fields) for r in cursor.fetchall()]
+    blob_subfield_masks = TABLE_BLOB_SUBFIELD_MASKS.get(table)
+    return [
+        canonicalize_row(r, blob_fields=blob_fields, mask_fields=mask_fields, blob_subfield_masks=blob_subfield_masks)
+        for r in cursor.fetchall()
+    ]
 
 
 def snapshot_project_tables(project_id: int) -> dict:

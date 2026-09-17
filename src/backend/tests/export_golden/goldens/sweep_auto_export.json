@@ -1,0 +1,66 @@
+{
+  "export_jobs": [],
+  "final_videos": [],
+  "projects": [
+    {
+      "archived_at": null,
+      "aspect_ratio": "9:16",
+      "created_at": "<MASKED>",
+      "current_mode": "framing",
+      "final_video_id": null,
+      "id": 1,
+      "is_auto_created": 0,
+      "last_opened_at": null,
+      "name": "T4370 Golden Fixture",
+      "poster_marker_time": null,
+      "restored_at": null,
+      "working_video_id": null
+    }
+  ],
+  "raw_clips": [
+    {
+      "auto_project_id": 1,
+      "boundaries_updated_at": null,
+      "boundaries_version": 1,
+      "created_at": "<MASKED>",
+      "default_highlight_regions": null,
+      "end_time": 13.0,
+      "filename": "<MASKED>",
+      "game_id": null,
+      "id": 1,
+      "my_athlete": 1,
+      "name": null,
+      "notes": null,
+      "rating": 5,
+      "reel_source_end_time": null,
+      "reel_source_start_time": null,
+      "shared_by": null,
+      "start_time": 10.0,
+      "tagged_teammates": null,
+      "tags": null,
+      "video_sequence": 1
+    }
+  ],
+  "working_clips": [
+    {
+      "created_at": "<MASKED>",
+      "crop_data": null,
+      "exported_at": null,
+      "fps": null,
+      "framing_version": 0,
+      "height": null,
+      "id": 1,
+      "project_id": 1,
+      "raw_clip_id": 1,
+      "raw_clip_version": null,
+      "rotation": 0.0,
+      "segments_data": null,
+      "sort_order": 0,
+      "timing_data": null,
+      "uploaded_filename": null,
+      "version": 1,
+      "width": null
+    }
+  ],
+  "working_videos": []
+}

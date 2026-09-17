@@ -22,15 +22,23 @@ def _bless_enabled() -> bool:
     return os.environ.get("BLESS_GOLDENS", "").strip() in ("1", "true", "yes")
 
 
-def canonicalize_row(row: dict, *, blob_fields: tuple = (), mask_fields: tuple = ()) -> dict:
+def canonicalize_row(
+    row: dict, *, blob_fields: tuple = (), mask_fields: tuple = (), blob_subfield_masks: dict | None = None,
+) -> dict:
     """Decode msgpack BLOB columns and mask nondeterministic columns (UUID-suffixed
     filenames, wall-clock timestamps, gpu_seconds/modal_function sourced from a
     stubbed Modal result) so the golden pins SHAPE, not incidental randomness.
+
+    `blob_subfield_masks` masks nondeterministic KEYS INSIDE a decoded blob dict
+    (e.g. export_jobs.input_data legitimately embeds the real user_id + a real
+    tmp render path -- nondeterministic in production too, not a test artifact):
+    ``{blob_field_name: (subkey, ...)}``.
 
     `row` may be a sqlite3.Row or a plain dict.
     """
     from app.utils.encoding import decode_data
 
+    blob_subfield_masks = blob_subfield_masks or {}
     out = {}
     keys = row.keys() if hasattr(row, "keys") else row
     for key in keys:
@@ -41,6 +49,10 @@ def canonicalize_row(row: dict, *, blob_fields: tuple = (), mask_fields: tuple =
         if key in blob_fields and value is not None:
             try:
                 value = decode_data(value)
+                if isinstance(value, dict) and key in blob_subfield_masks:
+                    for subkey in blob_subfield_masks[key]:
+                        if subkey in value and value[subkey] is not None:
+                            value[subkey] = MASKED
             except Exception:
                 value = f"<UNDECODABLE BLOB len={len(value)}>"
         out[key] = value
