@@ -1,0 +1,120 @@
+{
+  "export_jobs": [],
+  "final_videos": [
+    {
+      "aspect_ratio": "9:16",
+      "clip_count": 1,
+      "clip_game_start_time": 0.0,
+      "clip_start_time": 0.0,
+      "created_at": "<MASKED>",
+      "duration": 5.0,
+      "filename": "<MASKED>",
+      "game_id": null,
+      "game_ids": null,
+      "id": 1,
+      "intro_card_id": null,
+      "match_count": 0,
+      "name": "T4370 Golden Fixture",
+      "poster_filename": null,
+      "poster_frame_time": null,
+      "poster_source": null,
+      "project_id": 1,
+      "published_at": null,
+      "quality_score": 5.0,
+      "rating": 1580.0,
+      "rating_counts": null,
+      "rd": 350.0,
+      "slowmo_section_end": null,
+      "slowmo_section_start": null,
+      "source_clip_id": 1,
+      "source_type": "custom_project",
+      "tags": null,
+      "version": 1,
+      "watched_at": null
+    }
+  ],
+  "projects": [
+    {
+      "archived_at": null,
+      "aspect_ratio": "9:16",
+      "created_at": "<MASKED>",
+      "current_mode": "framing",
+      "final_video_id": 1,
+      "id": 1,
+      "is_auto_created": 0,
+      "last_opened_at": null,
+      "name": "T4370 Golden Fixture",
+      "poster_marker_time": null,
+      "restored_at": null,
+      "working_video_id": 1
+    }
+  ],
+  "raw_clips": [
+    {
+      "auto_project_id": null,
+      "boundaries_updated_at": null,
+      "boundaries_version": 1,
+      "created_at": "<MASKED>",
+      "default_highlight_regions": null,
+      "end_time": 5.0,
+      "filename": "<MASKED>",
+      "game_id": null,
+      "id": 1,
+      "my_athlete": 1,
+      "name": null,
+      "notes": null,
+      "rating": 5,
+      "reel_source_end_time": 5.0,
+      "reel_source_start_time": 0.0,
+      "shared_by": null,
+      "start_time": 0.0,
+      "tagged_teammates": null,
+      "tags": null,
+      "video_sequence": 1
+    }
+  ],
+  "working_clips": [
+    {
+      "created_at": "<MASKED>",
+      "crop_data": null,
+      "exported_at": null,
+      "fps": null,
+      "framing_version": 0,
+      "height": null,
+      "id": 1,
+      "project_id": 1,
+      "raw_clip_id": 1,
+      "raw_clip_version": null,
+      "rotation": 0.0,
+      "segments_data": null,
+      "sort_order": 0,
+      "timing_data": null,
+      "uploaded_filename": "wc_fixture_0.mp4",
+      "version": 1,
+      "width": null
+    }
+  ],
+  "working_videos": [
+    {
+      "created_at": "<MASKED>",
+      "detections_data": null,
+      "dim_strength": 0.2,
+      "duration": 5.0,
+      "effect_type": "original",
+      "filename": "<MASKED>",
+      "fill_enabled": 1,
+      "fill_opacity": 0.2,
+      "framing_snapshot": null,
+      "highlight_carry_note": null,
+      "highlight_color": null,
+      "highlight_shape": "body",
+      "highlights_data": null,
+      "id": 1,
+      "overlay_version": 0,
+      "project_id": 1,
+      "stroke_width": 2.0,
+      "text_overlays": null,
+      "version": 1
+    }
+  ]
+}
