@@ -172,3 +172,37 @@ before treating CI as green.
 **Not provably verified — PLAN.md row set to WAITING ON USER.** Needed before this can merge:
 fix M1/M2/M3 + the two MINORs, confirm the CI rerun is clean (or deselect the documented flake),
 then a follow-up review pass on the delta. Branch/PR/container left in place, nothing deleted.
+
+**2026-09-17 — Fixed, re-reviewed, provably verified.**
+
+*CI rerun (run 35246013931, `gh run rerun --failed`):* went GREEN with no code changes, confirming
+`test_t6200_concurrency` was the documented flake, not a real regression.
+
+*Fix commit `386c421f`:* M1 (log line on probed-aspect-ratio override, additional to the two
+failure-path warnings), M2 (slow-mo segment read wrapped in the same tolerant
+try/log/fall-back-to-None pattern the old `load_project_clip_segments` had, using the caller's
+own transaction cursor instead of opening a new connection — `poster.py` docstring corrected to
+match), M3 (`export_final`'s `resolve_output_aspect_ratio` call now runs via
+`await asyncio.to_thread(...)`, matching the other 3 call sites), plus both MINORs (dead
+`/export/framing`'s last caller removed from the manual integration script; stale
+slowmo-column-guarding claim in `test_export_golden_overlay.py` corrected). Verified locally:
+golden harness 9/9, T4390's own T4010/T4390 suites 21/21, broader curated regression around
+`publish_final_video`'s absorbed properties (T5090/T5215/T6030/T8070/T4200/T4210/T5280/T5410)
+149/151 (2 pre-existing Postgres-unreachable errors, same known infra gap, unrelated to this
+diff), ruff clean, import clean.
+
+*Fresh-context Reviewer, delta-only pass on `386c421f`:* **APPROVED WITH MINOR NOTES.** All 3
+MAJOR + both MINOR findings independently confirmed resolved (log format checked against
+`projects.aspect_ratio`'s actual stored literals; the M2 swallow confirmed to not poison the
+sqlite transaction and to leave `KeyboardInterrupt`/`SystemExit` uncaught; the M3
+`asyncio.to_thread` kwarg-forwarding confirmed correct against `resolve_output_aspect_ratio`'s
+keyword-only signature). No scope creep, no new bugs. Two non-blocking notes, explicitly flagged
+as not worth holding the branch for: (1) neither M1's log line nor M2's tolerance path is pinned
+by a test yet — worth adding later, M2 especially since it guards a paid Modal render; (2) two
+trivially-stale docstring/comment phrasings (`poster.py:462-465` says `export_final` calls
+`read_clip_segments_for_project` "directly", now transitive through `publish_final_video`;
+`test_persistence.py`'s module docstring still lists working-video version tracking after TEST 4's
+removal). Filed as low-priority follow-up, not blocking.
+
+**Provably verified per the merge bar (red/green evidence + CI green + Reviewer approval).
+Proceeding to merge.**
