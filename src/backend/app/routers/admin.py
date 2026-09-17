@@ -922,6 +922,7 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
     an all-users sweep (log tag `[UPLOAD_LIFECYCLE]` covers the fleet-wide view)."""
     _require_admin()
 
+    from ..routers.games_upload import _pending_kind, upload_object_key
     from ..services.materialization import open_profile_db_readonly
     from ..services.user_db import get_profiles
     from ..storage import r2_is_multipart_upload_valid, r2_list_multipart_parts
@@ -947,11 +948,11 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
             return None
         try:
             cur = conn.cursor()
-            cur.execute(
-                "SELECT id, blake3_hash, file_size, original_filename, "
-                "r2_upload_id, parts_json, label, created_at "
-                "FROM pending_uploads ORDER BY created_at DESC"
-            )
+            # T10270 class 9 (the T8370 landmine, again): SELECT * so `kind` is
+            # present when the column exists -- an explicit column list that
+            # omits it makes _pending_kind() resolve to GAME unconditionally
+            # (the column was never selected), even on an already-migrated DB.
+            cur.execute("SELECT * FROM pending_uploads ORDER BY created_at DESC")
             return cur.fetchall()
         finally:
             conn.close()
@@ -981,7 +982,12 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
             if age_seconds is not None and age_seconds < cutoff_seconds:
                 continue
 
-            r2_key = f"games/{row['blake3_hash']}.mp4"
+            # T10270 class 9: derive the key by kind instead of hardcoding the
+            # GAME namespace -- a CLIP row's bytes live at raw_clips/{hash}.mp4
+            # (per-profile), not games/{hash}.mp4, so the old hardcode HEADed
+            # the wrong object and reported every live clip upload as dead.
+            kind = _pending_kind(row)
+            r2_key = upload_object_key(kind, row['blake3_hash'], user_id)
             upload_id = row["r2_upload_id"]
             valid = await asyncio.to_thread(
                 r2_is_multipart_upload_valid, r2_key, upload_id
@@ -999,6 +1005,7 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
                 "blake3_hash": row["blake3_hash"],
                 "original_filename": row["original_filename"],
                 "label": row["label"],
+                "kind": kind,
                 "file_size": row["file_size"],
                 "created_at": created_at,
                 "age_hours": round(age_seconds / 3600, 2) if age_seconds is not None else None,
