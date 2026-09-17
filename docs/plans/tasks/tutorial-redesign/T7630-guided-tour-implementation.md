@@ -13,6 +13,20 @@
 > ON until the first EXPORT; keep `TutorialVideoModal` and mount it from the Help panel; re-derive all
 > step copy from `displayNames.js`; **start only after every other Deploy Candidate task is implemented
 > and the UI approved.**
+>
+> **Re-scoped 2026-09-17 (user: build the epic in concert with the Deploy Candidate; front-load what
+> supports the next deploy).** This task is now the ESSENTIAL-PATH CORE only: the engine
+> (`guide/` modules, shade + arrow, anchor registry, `deriveFacts`, `resolveGuidance`), the ladder
+> rules L1 to L5 with their target attributes, forks F1 / F3 / F5 / F8 (F8's second answer opens
+> the Help panel), the Help chip + panel (toggle, ladder map, "Watch the walkthrough" via the kept
+> `TutorialVideoModal`, Report a problem), the stall pulse, consequence captions on fork options,
+> `guide_enabled` / `guide_intent_source` persistence with default ON until the first export,
+> deletion of the quest PANEL UI (`QuestPanel.jsx`, `QuestIcon.jsx`, `questDefinitions.jsx`, claim /
+> fanfare UI), and re-deriving all step copy from `displayNames.js`. **Carved out to
+> [T10330](T10330-guided-mode-advanced-tier-and-cleanup.md) (next iteration):** the post-publish
+> advanced tier A1 to A10 and the Help-chip menu mode, forks F6 (obsolete) / F7, the legacy
+> endpoint / `modalOcclusion.js` / video-flag cleanup, the voice-readiness audit, and the per-rule
+> admin readout.
 
 ## Scope
 

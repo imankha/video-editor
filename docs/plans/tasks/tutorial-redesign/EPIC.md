@@ -135,9 +135,10 @@ Mapped against the APPROVED T7620 design (`docs/plans/tasks/T7620-design.md`, 20
    directive). Entry point: the Help panel ("Watch the walkthrough"), never the retired quest steps.
    T7630 therefore keeps `TutorialVideoModal.jsx` / `tutorialVideos.js` alive and re-mounts them from
    `HelpPanel`; the reshoot itself is [T10320](../T10320-reshoot-tutorial-videos-v3.md).
-6. **Sequencing**: this epic is worked LAST in the Deploy Candidate, after every other task is
-   implemented and the UI has been approved by the user, because guided mode must anchor to final
-   screens. The videos shoot after guided mode ships.
+6. **Sequencing**: the essential-path core (T7630 re-scoped, T7640) is worked LAST in the Deploy
+   Candidate, after every other task is implemented and the UI has been approved by the user,
+   because guided mode must anchor to final screens. The videos shoot after guided mode ships.
+   The advanced tier and cleanup (T10330) follow in the next iteration.
 
 Also found: every one of the design's 69 rules carries `say` copy written in T8130-era vocabulary
 ("Add Play", "Highlight Reels", "Focus"); T9860 (2026-09-14) and the Deploy Candidate copy tasks
@@ -175,6 +176,11 @@ implemented and the UI approved (ruling 6 above); T10320 (videos) shoots after g
 | T7620 | [Architect design: guided-tour engine + step definitions](T7620-guided-tour-design.md) | TODO |
 | T7630 | [Implement engine + essential-path steps](T7630-guided-tour-implementation.md) | TODO |
 | T7640 | [Screen-size matrix verification + quest reconciliation + rollout](T7640-screen-size-matrix-rollout.md) | TODO |
+| T10330 | [Next iteration: post-publish advanced tier, remaining forks, ledger cleanup](T10330-guided-mode-advanced-tier-and-cleanup.md) | TODO |
+
+**Split 2026-09-17 (user order):** T7620 + T7630 (re-scoped to the essential-path core) + T7640 ship in the
+Deploy Candidate milestone; T10330 holds everything the next deploy does not need and runs in the
+following iteration. The epic completes when T10330 lands.
 
 ## Sequencing
 
