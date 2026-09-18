@@ -394,6 +394,12 @@ def test_reconciler_puts_r2_ahead_of_modal(monkeypatch):
     # No call id at all is an absence of evidence, not evidence of death.
     assert exports.reconcile_dispatched_export({"output_key": None, "modal_call_id": None}) == "unknown"
 
+    # Nor is a terminal Modal status when there was no output_key to probe with:
+    # a pre-v028 job, or rolling-deploy skew hiding the column. "Terminal" alone
+    # does not say terminal HOW, since a successful generator reports it too.
+    monkeypatch.setattr(exports, "check_modal_job_running", lambda _id: False)
+    assert exports.reconcile_dispatched_export({"output_key": None, "modal_call_id": "fc-abc"}) == "unknown"
+
 
 # =============================================================================
 # The two rewired endpoints
@@ -445,3 +451,31 @@ async def test_modal_status_reports_running_for_unknown_and_never_fails_it(monke
 
     assert out["status"] == "running"
     assert failed == [], "an unknowable job must not be failed here"
+
+
+def test_stale_sweep_survives_a_below_head_db(monkeypatch):
+    """`output_key` is v028 and the sweep runs on GET /api/exports/active, a hot
+    read. A DB one migration behind (rolling-deploy skew) must not 500 the whole
+    endpoint -- caught by Branch CI via
+    test_t6030_migration_window_structural_guard::test_exports_lists."""
+    from app.routers import exports
+    from app.services import export_job_repository
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(_EXPORT_JOBS_DDL.replace(", output_key TEXT", ""))
+    conn.execute(
+        "INSERT INTO export_jobs (id, project_id, type, status, input_data, modal_call_id, created_at) "
+        "VALUES ('job-1', 42, 'framing', 'processing', ?, 'fc-abc', datetime('now', '-120 minutes'))",
+        (b"{}",),
+    )
+    conn.commit()
+
+    cur = conn.cursor()
+    rows = export_job_repository.get_stale_candidates(cur, 60)
+    assert len(rows) == 1
+    assert rows[0]["output_key"] is None, "must read NULL, not raise"
+
+    # And with no key to probe, a terminal Modal status must not read as 'dead'.
+    monkeypatch.setattr(exports, "check_modal_job_running", lambda _id: False)
+    assert exports.reconcile_dispatched_export(dict(rows[0])) == "unknown"

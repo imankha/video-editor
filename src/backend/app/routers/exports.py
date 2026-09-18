@@ -337,6 +337,12 @@ def reconcile_dispatched_export(job: dict) -> str:
         return 'running'
     if running is None:
         return 'unknown'
+    if not output_key:
+        # Modal says terminal, but with no output_key there was no R2 probe to
+        # answer "terminal HOW?" -- and a SUCCESSFUL generator reports terminal too.
+        # A pre-v028 job, or rolling-deploy skew hiding the column. Not provably
+        # dead, so not killed here; the age backstop still terminates it.
+        return 'unknown'
     return 'dead'
 
 
