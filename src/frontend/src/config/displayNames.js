@@ -200,11 +200,17 @@ export const DIVISION_OF_WORK =
 
 export const CLIP_UPLOAD = {
   UPLOAD_CLIP: 'Upload clip',
-  NOTICE_TITLE: 'Heads up: these clips won’t be linked to a game',
+  // T10300: uploads no longer come with a permanent "not linkable" consequence —
+  // a directly-uploaded clip STARTS unlinked but can be linked to a game later
+  // from the Clips tab (POST /api/clips/raw/{id}/link). The notice now states the
+  // starting state and the recovery path instead of the old "won't be part of a
+  // game" absolute. "Framing" is MODE_NAMES.FRAMING (a noun, never a verb); curly
+  // apostrophes match this file's existing convention; no em dashes.
+  NOTICE_TITLE: 'Heads up: these clips start out unlinked from a game',
   NOTICE_BODY:
     `Uploading here adds videos straight to your clips, ready for ${MODE_NAMES.FRAMING} and publish. `
-    + 'Because they don’t come from a game in Annotate, they won’t be part of a '
-    + 'game you can build more highlights from.',
+    + 'You can link a clip to a game at any time from the Clips tab so it shows up '
+    + 'with that game’s highlights.',
   NOTICE_CONTINUE: 'Continue',
   NOTICE_CANCEL: 'Cancel',
   // T10250: over-cap pre-flight dialog. The MB number is DERIVED from the
@@ -236,6 +242,30 @@ export const CLIP_UPLOAD = {
         return 'This clip could not be added.';
     }
   },
+};
+
+// T10300: link/unlink an uploaded clip to a game (the recovery path promised by
+// CLIP_UPLOAD.NOTICE_BODY). Only surfaced on tiles whose clip.source === 'upload'
+// (a game-cut clip can never be relinked; the backend 409s it). Single source for
+// the tile action labels + the game-picker modal copy. No em dashes; curly
+// apostrophes match this file's convention.
+export const CLIP_LINK = {
+  LINK_TO_GAME: 'Link to game',       // tile action + picker title, unlinked clip
+  unlinkFrom: (name) => (name ? `Unlink from ${name}` : 'Unlink from game'),
+  PICKER_TITLE: 'Link this clip to a game',
+  PICKER_SUBTITLE: 'The clip shows up with that game’s highlights.',
+  PICKER_SEARCH_PLACEHOLDER: 'Search games',
+  PICKER_EMPTY: 'You don’t have any games yet. Upload a game first, then link this clip to it.',
+  PICKER_NO_MATCH: 'No games match your search.',
+  CANCEL: 'Cancel',
+  // Success toasts confirm the re-grouping the user just triggered.
+  linkedToast: (name) => (name ? `Clip linked to ${name}` : 'Clip linked to game'),
+  UNLINKED_TOAST: 'Clip unlinked from game',
+  // 409: a non-upload clip somehow reached the link endpoint. Should never happen
+  // (the affordance is upload-gated), but surface it instead of swallowing it.
+  ERROR_NOT_UPLOAD: 'Only uploaded clips can be linked to a game.',
+  ERROR_GENERIC: "Couldn't update this clip's game. Please try again.",
+  clipCount: (n) => `${n} clip${n === 1 ? '' : 's'}`,
 };
 
 // T9430: honest upload-state vocabulary shown next to the local preview. The four

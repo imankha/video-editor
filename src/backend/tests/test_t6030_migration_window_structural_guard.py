@@ -57,7 +57,7 @@ POST_V023_COLUMNS = {
     "working_clips": ["rotation", "framing_version"],                                     # v029, v044
     "projects": ["poster_marker_time"],                                                  # v032
     "intro_cards": ["subtitle_text"],                                                    # v035
-    "raw_clips": ["reel_source_start_time", "reel_source_end_time"],                  # v049
+    "raw_clips": ["reel_source_start_time", "reel_source_end_time", "source"],        # v049, v053
     "pending_uploads": ["kind"],                                                       # v050
     "game_videos": ["recorded_at", "offset_seconds", "original_filename"],             # v051, v052
     # v048 (T7830) delete-only R2 cleanup, adds no columns.
@@ -177,7 +177,22 @@ POST_V023_COLUMNS = {
     #   distinct migration a peer machine can lag behind; it projects NULL when absent
     #   (never a 500). The insert-time WRITE (create_game/add_game_videos) only runs at
     #   head (JIT seam) and is benign-additive (column defaults NULL).
-HEAD_VERSION_AUDITED = 52  # v052 (T8892): game_videos.original_filename, column_exists-guarded read
+    # v053 (T10300 link an uploaded clip to a game) adds raw_clips.source (above).
+    #   Both hot LIST reads that name it -- clips.py list_raw_clips and get_raw_clip
+    #   (driven by test_clips_lists below) -- are column_exists-guarded, projecting
+    #   the literal 'game' when absent (the same default new rows get at head via
+    #   the column's own DEFAULT, so a below-head clip reads identically to a
+    #   just-migrated one; never a 500). projects.py _read_projects_list's
+    #   ClipSummary.source (T8350-style tile-gating field, exercised by
+    #   test_projects_list below) is guarded the same way. list_project_clips
+    #   (clips.py, also driven by test_clips_lists) never names raw_clips.source at
+    #   all, so it needs no guard. The link endpoint itself
+    #   (POST /clips/raw/{id}/link) is a write-only gesture reachable solely from
+    #   the head-schema frontend affordance (gated on RawClipResponse.source ==
+    #   'upload'), analogous to v050's kind='clip' write path -- not a list read
+    #   this below-head fixture drives, so it is left unguarded (a below-head DB
+    #   migrates JIT on access before any live request reaches it).
+HEAD_VERSION_AUDITED = 53  # v053 (T10300): raw_clips.source, column_exists-guarded reads
 
 
 def _cleanup(user_id: str) -> None:

@@ -88,6 +88,7 @@ vi.mock('./PublishedReelsPanel', () => ({
 
 import { ProjectManager } from './ProjectManager';
 import { useGalleryStore } from '../stores/galleryStore';
+import { CLIP_UPLOAD } from '../config/displayNames';
 import { EMPTY_TAB_GUIDE } from '../config/emptyStates';
 
 const APP_STATE = { unseenReelsCount: 0, exportingProject: null };
@@ -135,7 +136,11 @@ describe('ProjectManager Add Video flow (T8380)', () => {
 
     // The notice appears; nothing has been uploaded yet.
     expect(screen.getByRole('alertdialog')).toBeTruthy();
-    expect(screen.getByText(/won’t be linked to a game/i)).toBeTruthy();
+    // T10300: notice copy softened from "won't be linked" to "start out unlinked
+    // ... link later" -- assert against the CLIP_UPLOAD constant, not a literal,
+    // so this test can't drift from displayNames.js again.
+    expect(screen.getByText(CLIP_UPLOAD.NOTICE_TITLE)).toBeTruthy();
+    expect(screen.getByText(CLIP_UPLOAD.NOTICE_BODY)).toBeTruthy();
     expect(uploadClipsMock).not.toHaveBeenCalled();
 
     // Cancel closes it without uploading.

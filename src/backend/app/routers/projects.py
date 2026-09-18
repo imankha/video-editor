@@ -231,6 +231,11 @@ class ClipSummary(BaseModel):
     name: str | None = None
     tags: list[str] = []
     rating: int | None = None
+    # T10300: 'game' (annotate-cut) | 'upload' (direct upload). Lets the Clips-tab
+    # tile gate the "Link to game" / "Unlink" affordance to upload clips (the only
+    # kind a user may (un)link). Defaults 'game' when the below-v053 column is absent
+    # (deploy->migrate window) -- same tolerance as the reel_source columns below.
+    source: str = 'game'
     # T6820: source-window offsets + a streamable working-clip id, populated ONLY on
     # the FIRST clip (payload discipline). Powers the Not-Started draft hover preview,
     # which streams the bounded source-clip proxy and so must seek into the clip
@@ -463,15 +468,23 @@ def _read_projects_list():
         else:
             _reel_src_select = "NULL AS reel_source_start_time, NULL AS reel_source_end_time"
 
+        # T10300: raw_clips.source (v053) discriminates upload vs game-cut clips so
+        # the tile can gate the link/unlink affordance. Column-guarded for the
+        # deploy->migrate window, same pattern as _reel_src_select above.
+        if column_exists(cursor, "raw_clips", "source"):
+            _source_select = "rc.source"
+        else:
+            _source_select = "'game' AS source"
+
         # Fetch clip details for each project (names, tags, rating)
         cursor.execute(f"""
             SELECT project_id, clip_id, name, tags, rating, sort_order, start_time,
-                   end_time, reel_source_start_time, reel_source_end_time
+                   end_time, reel_source_start_time, reel_source_end_time, source
             FROM (
                 SELECT rc.auto_project_id as project_id, rc.id as clip_id,
                     rc.name, rc.tags, rc.rating,
                     0 as sort_order, rc.start_time, rc.end_time,
-                    {_reel_src_select}
+                    {_reel_src_select}, {_source_select}
                 FROM raw_clips rc
                 WHERE rc.auto_project_id IS NOT NULL
 
@@ -480,7 +493,7 @@ def _read_projects_list():
                 SELECT wc.project_id as project_id, rc.id as clip_id,
                     rc.name, rc.tags, rc.rating,
                     wc.sort_order, rc.start_time, rc.end_time,
-                    {_reel_src_select}
+                    {_reel_src_select}, {_source_select}
                 FROM working_clips wc
                 JOIN raw_clips rc ON rc.id = wc.raw_clip_id
             ) combined
@@ -507,7 +520,8 @@ def _read_projects_list():
                 start_time=clip_row['start_time'],
                 end_time=clip_row['end_time'],
                 reel_source_start_time=clip_row['reel_source_start_time'],
-                reel_source_end_time=clip_row['reel_source_end_time']
+                reel_source_end_time=clip_row['reel_source_end_time'],
+                source=clip_row['source'],
             ))
             project_clip_starts[project_id].setdefault(
                 clip_row['clip_id'], clip_row['start_time'])
