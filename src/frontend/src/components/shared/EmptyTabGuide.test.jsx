@@ -1,55 +1,47 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { EmptyTabGuide } from './EmptyTabGuide';
+import { EmptyTabGuide, TabGuideHeader } from './EmptyTabGuide';
 import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 
-// T8980/T9390: the shared empty state rendered by all four home tabs. Copy is
-// APPROVED and binding; these tests assert the exact copy + the count-driven
-// branching + the flow strip. (jsdom applies no CSS, so the sm+ strip renders in
-// the DOM regardless of breakpoint; T9390 dropped the sub-sm dot row entirely, so
-// only the one sm+ strip node exists now.)
+// T8980/T9390/T10280: the shared empty state rendered by all four home tabs. Copy
+// is binding; these tests assert the exact copy + the count-driven branching. T10280
+// deleted the flow strip and consolidated every tab onto the one TabGuideHeader
+// structure (a centered headline + body), used by the empty state AND the populated
+// Games/Clips tabs.
 
-describe('EmptyTabGuide flow strip (T9530/N46: unnumbered peer destinations + optional Reels pill)', () => {
-  it('renders Games/Clips/Reels/Published as peers with NO step numbers', () => {
-    render(<EmptyTabGuide tab="games" gamesCount={0} onAddGame={vi.fn()} onNavigate={vi.fn()} />);
-
-    // All four destinations appear as peer labels...
-    expect(screen.getByText('Games')).toBeTruthy();
-    expect(screen.getByText('Clips')).toBeTruthy();
-    expect(screen.getByText('Reels')).toBeTruthy();
-    expect(screen.getByText('Published')).toBeTruthy();
-
-    // ...and NONE of them carries a step number (N46: the numbered 1-2-3 nodes
-    // read as a mandatory pipeline and were removed).
-    expect(screen.queryByText('1')).toBeNull();
-    expect(screen.queryByText('2')).toBeNull();
-    expect(screen.queryByText('3')).toBeNull();
-    expect(screen.queryByText('4')).toBeNull();
-
-    // The Reels detour keeps its dashed "optional" pill.
-    expect(screen.getByText(/optional/i)).toBeTruthy();
+describe('EmptyTabGuide shared guidance structure (T10280)', () => {
+  it('renders the same centered headline + body for every tab, and NO flow strip', () => {
+    for (const tab of ['games', 'clips', 'reels', 'published']) {
+      const { container, unmount } = render(
+        <EmptyTabGuide
+          tab={tab}
+          gamesCount={0}
+          clipCount={0}
+          onNavigate={vi.fn()}
+          onAddGame={vi.fn()}
+          onAddVideo={vi.fn()}
+          onBuildReel={vi.fn()}
+        />,
+      );
+      const c = EMPTY_TAB_GUIDE[tab];
+      // Headline is the h2; body is present verbatim.
+      const h2 = screen.getByRole('heading', { level: 2 });
+      expect(h2.textContent).toBe(c.headline);
+      expect(h2.className).toMatch(/text-lg/);
+      expect(h2.className).toMatch(/font-semibold/);
+      expect(screen.getByText(c.body)).toBeTruthy();
+      // The flow strip (an <ol> of Games/Clips/Reels/Published peers + the dashed
+      // "optional" pill) is gone entirely on every tab (T10280).
+      expect(container.querySelector('ol')).toBeNull();
+      expect(screen.queryByText(/optional/i)).toBeNull();
+      unmount();
+    }
   });
 
-  it('lights the current destination in its own tab color, others muted (Games -> green)', () => {
-    render(<EmptyTabGuide tab="games" gamesCount={0} onAddGame={vi.fn()} onNavigate={vi.fn()} />);
-    const games = screen.getByText('Games');
-    expect(games.className.includes('bg-green-600')).toBe(true);
-    // An inactive peer is muted text, never lit in its color.
-    const clips = screen.getByText('Clips');
-    expect(clips.className.includes('bg-cyan-600')).toBe(false);
-    expect(clips.className.includes('text-gray-500')).toBe(true);
-  });
-
-  it('lights Published in amber when it is the active tab', () => {
-    render(<EmptyTabGuide tab="published" clipCount={0} gamesCount={1} onNavigate={vi.fn()} />);
-    const published = screen.getByText('Published');
-    expect(published.className.includes('bg-amber-600')).toBe(true);
-  });
-
-  it('never prints a "Step N of M" line (T9320) nor any step digit', () => {
-    render(<EmptyTabGuide tab="reels" clipCount={2} onNavigate={vi.fn()} onBuildReel={vi.fn()} />);
-    expect(screen.queryByText(/Step \d+ of \d+/)).toBeNull();
-    expect(screen.queryByText(/^\d+$/)).toBeNull();
+  it('exports TabGuideHeader, which renders the tab headline + body standalone', () => {
+    render(<TabGuideHeader tab="clips" />);
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(EMPTY_TAB_GUIDE.clips.headline);
+    expect(screen.getByText(EMPTY_TAB_GUIDE.clips.body)).toBeTruthy();
   });
 });
 
@@ -138,21 +130,19 @@ describe('EmptyTabGuide - Reels tab (T9390: tab is gated, so Build New Reel is a
   });
 });
 
-describe('EmptyTabGuide - Published tab (T9390: nothing-branch deleted, tab is gated)', () => {
-  it('drafts > 0: names the in-progress clips and links to Clips via "Open Clips"', () => {
+describe('EmptyTabGuide - Published tab (T10280: no in-progress count, no Open Clips button)', () => {
+  it('shows the headline/body + Go to Games, and NO "N in progress" count or Open Clips button', () => {
     const onNavigate = vi.fn();
-    render(<EmptyTabGuide tab="published" clipCount={1} gamesCount={2} onNavigate={onNavigate} />);
+    // Even with drafts present (clipCount > 0), the in-progress count + Open Clips
+    // button are gone (T10280) -- the guide is now headline/body + Go to Games only.
+    render(<EmptyTabGuide tab="published" clipCount={3} gamesCount={2} onNavigate={onNavigate} />);
 
-    expect(screen.getByText('You have 1 clip in progress.')).toBeTruthy();
-    expect(screen.queryByText(/the Clips tab/i)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Open Clips' }));
-    expect(onNavigate).toHaveBeenCalledWith('projects');
-  });
-
-  it('no drafts: points to Games with the trimmed line (games are guaranteed once gated)', () => {
-    const onNavigate = vi.fn();
-    render(<EmptyTabGuide tab="published" clipCount={0} gamesCount={2} onNavigate={onNavigate} />);
+    expect(screen.getByText(EMPTY_TAB_GUIDE.published.headline)).toBeTruthy();
+    expect(screen.getByText(EMPTY_TAB_GUIDE.published.body)).toBeTruthy();
     expect(screen.getByText(EMPTY_TAB_GUIDE.published.noClipsGamesText)).toBeTruthy();
+    expect(screen.queryByText(/in progress/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open Clips' })).toBeNull();
+
     fireEvent.click(screen.getByRole('button', { name: 'Go to Games' }));
     expect(onNavigate).toHaveBeenCalledWith('games');
   });
@@ -185,11 +175,14 @@ describe('EmptyTabGuide copy hygiene', () => {
     expect(walk(PARTIAL_TAB_GUIDE)).not.toContain('—');
   });
 
-  it('every empty-variant tab body is a single short sentence (Decision 2 density cut)', () => {
+  it('every empty-variant tab has a non-empty headline + body (T10280: multi-sentence bodies allowed)', () => {
+    // T10280 reversed T9390's one-line density cut -- the user asked for the fuller
+    // header + description Reels/Published already had, so bodies may now be several
+    // sentences. Assert presence, not a single-sentence cap.
     for (const tab of ['games', 'clips', 'reels', 'published']) {
-      const body = EMPTY_TAB_GUIDE[tab].body;
-      // One sentence: exactly one terminal period, no mid-string ". " split.
-      expect(body.split('. ').length).toBe(1);
+      const { headline, body } = EMPTY_TAB_GUIDE[tab];
+      expect(headline.trim().length).toBeGreaterThan(0);
+      expect(body.trim().length).toBeGreaterThan(0);
     }
   });
 });

@@ -18,44 +18,43 @@
 // at the tab bar, which let the Reels "no clips" branch and the Published
 // "nothing" branch be deleted as dead code (see EmptyTabGuide.jsx).
 
-import { SECTION_NAMES_SHORT, ANNOTATE } from './displayNames';
+import { ANNOTATE, MODE_NAMES } from './displayNames';
 
-// The four home tabs in flow order. `key` is the EmptyTabGuide semantic id (also
-// the flow-strip step id and the STEP_COLORS key in EmptyTabGuide.jsx); `label`
-// is the short one-line step name (SECTION_NAMES_SHORT -- the same words the
-// sub-`sm` tab bar uses, single source); `navId` is the setActiveTab id that
-// switches to that tab (the frozen tab ids, note `clips` -> `projects` from
-// T8555's deep-link compat freeze). T9390: Reels carries `optional: true` -- it
-// is a single publish for a full game/season, not a required step between Clips
-// and Published, so the strip renders it as a detour pill. T9530 (N46) removed
-// step numbering entirely: the four destinations render as unnumbered peers, so
-// no step gets a number in code or on screen (the `optional` flag now only drives
-// Reels' dashed-pill styling, not a number-skip).
-export const FLOW_STEPS = [
-  { key: 'games', label: SECTION_NAMES_SHORT.GAMES, navId: 'games' },
-  { key: 'clips', label: SECTION_NAMES_SHORT.CLIPS, navId: 'projects' },
-  { key: 'reels', label: SECTION_NAMES_SHORT.REELS, navId: 'inProgressReels', optional: true },
-  { key: 'published', label: SECTION_NAMES_SHORT.PUBLISHED, navId: 'published' },
-];
-
-// Per-tab copy (empty variant). `body` is now a single short line (Decision 2).
-// Count-interpolated captions are functions so the noun pluralizes with the
-// count ("1 clip" / "2 clips"), matching the existing CollectionsTab pattern;
-// every function branch only renders when its count is > 0.
+// T10280 (2026-09-17): one guidance structure for all four home tabs. Every tab,
+// empty or populated, shows the SAME centered headline + body block (rendered by
+// `TabGuideHeader` in EmptyTabGuide.jsx: `text-lg font-semibold` headline +
+// `text-sm text-gray-400` body). The old FlowStrip (Games . Clips . Reels .
+// Published diagram) and its FLOW_STEPS/STEP_COLORS were deleted -- the user found
+// the strip redundant with the tab bar directly above it. Copy below is the
+// user's own words (2026-09-17 staging), spelling normalized: headline is the
+// first sentence, body is the rest. "Framing" is the mode noun (MODE_NAMES.FRAMING),
+// never a literal. No em dashes anywhere (project-wide rule).
+//
+// `body` is now allowed to be multiple sentences (reverses T9390's Decision 2
+// one-line cut) -- the user asked for the fuller header + description that Reels
+// and Published already had.
+//
+// Count-interpolated action captions stay functions so the noun pluralizes with
+// the count ("1 clip" / "2 clips"); every function branch only renders when its
+// count is > 0.
 export const EMPTY_TAB_GUIDE = {
   games: {
-    headline: 'Start with a game',
-    body: `Upload a recording, then tap ${ANNOTATE.MARK_PLAY} on the moments worth keeping.`,
+    headline: 'Review game footage for highlights and learning opportunities.',
+    body:
+      'Mark plays from game video you want to review with your athlete. ' +
+      'Create clips you want to use in highlights.',
     addGameCaption: 'From your phone or computer, 2 credits.',
-    // Footer kept ONLY on Games (Decision 2): it carries the "a game is not a
-    // hard prerequisite either" message -- the Games->Clips edge of the same
-    // "not everything here is mandatory" point Decision 1 makes for Clips->Reels.
+    // Footer kept ONLY on Games: it carries the "a game is not a hard
+    // prerequisite either" message -- have a clip already, skip ahead to Clips.
     footerPrefix: 'Have a clip already? ',
     footerLink: 'Skip ahead on Clips.',
   },
   clips: {
-    headline: 'Cut a clip, or upload one',
-    body: 'Clips get a Framing pass, then publish alone or into a reel.',
+    headline: 'Focus the action on your athlete.',
+    body:
+      `Clips you marked can be framed. ${MODE_NAMES.FRAMING} focuses the camera on your ` +
+      'player and lets you trim and add slo-mo to key moments. A short clip can also ' +
+      `skip straight to ${MODE_NAMES.FRAMING}, no game needed.`,
     openGameText: `Open a game and tap ${ANNOTATE.MARK_PLAY}.`, // games > 0 (the Go to Games path)
     uploadText: 'Already have a video?', // games > 0 (the Add Video path)
     // games = 0: Add Video is the ONLY path (Decision 3 removed the cross-tab
@@ -64,8 +63,8 @@ export const EMPTY_TAB_GUIDE = {
     noGameCaption: 'No game needed.',
   },
   reels: {
-    headline: 'Combine clips into one reel',
-    body: 'Order your clips and export once, or publish a single clip on its own.',
+    headline: 'Build a highlight reel.',
+    body: 'You can also combine clips together to make a full highlight reel.',
     // Build New Reel is gated by hasClips at the TAB BAR now (Decision 3), so the
     // empty Reels guide only renders when a clip exists -- the button is always
     // enabled here and the old "no clips" branch was deleted as dead code.
@@ -76,14 +75,15 @@ export const EMPTY_TAB_GUIDE = {
       n > 0 ? `You have ${n} clip${n === 1 ? '' : 's'} ready to use.` : 'You have clips ready to use.',
   },
   published: {
-    headline: 'Share what you publish',
-    body: 'Every reel or clip gets a link for coaches, family and recruiters.',
-    draftsText: (n) =>
-      `You have ${n} clip${n === 1 ? '' : 's'} in progress.`,
+    headline: 'View your completed work.',
+    body:
+      'Download or share links with family, coaches, and recruiters. If you install ' +
+      'the app on your phone you can even post to social directly.',
     // Published is gated on hasClips too (Decision 3), so games are guaranteed
     // here -- the old zero-everything "Add a game to get started" branch was
     // deleted as dead code; this is the fall-through for "has a clip, nothing
-    // published yet".
+    // published yet". T10280 dropped the "N clips in progress" draftsText + the
+    // "Open Clips" button -- the headline/body plus this fallback is enough.
     noClipsGamesText: 'Cut your first clip to get started.',
   },
 };

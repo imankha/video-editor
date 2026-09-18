@@ -18,7 +18,7 @@ import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, UPLOAD_ENTRY_HINT, ANNOTATE, MODE_NAMES } from '../config/displayNames';
+import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { useClipUpload, CLIP_UPLOAD_CREATING_PCT } from '../hooks/useClipUpload';
@@ -48,7 +48,7 @@ import { InstallButton } from './InstallButton';
 import { DraftTile } from './DraftTile';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { CardCarousel } from './shared/CardCarousel';
-import { EmptyTabGuide } from './shared/EmptyTabGuide';
+import { EmptyTabGuide, TabGuideHeader } from './shared/EmptyTabGuide';
 import { GameTile } from './GameTile';
 import { UploadingGameTile } from './UploadingGameTile';
 import { ReferenceGameCard } from './ReferenceGameCard';
@@ -1579,18 +1579,20 @@ export function ProjectManager({
           below the empty message instead, see the gamesEmptyConfirmed branch). */}
       {activeTab === 'games' && !gamesEmptyConfirmed && (
         <div className="mb-4 sm:mb-5">
-          <Button
-            variant="success"
-            size="lg"
-            icon={Plus}
-            onClick={handleAddGameClick}
-          >
-            {LIBRARY_ACTIONS.UPLOAD_GAME}
-          </Button>
-          {/* T9640: state the game-vs-clip distinction at the entry point itself,
-              not only in the empty-state guide (the EmptyTabGuide already pairs its
-              buttons with captions; this covers the populated tab). */}
-          <p className="text-xs text-gray-500 mt-1.5">{UPLOAD_ENTRY_HINT.GAME}</p>
+          {/* T10280: the populated Games tab shows the SAME centered headline/body
+              guidance the empty state uses (TabGuideHeader), above the CTA -- so
+              Games matches Reels/Published instead of the old bare hint caption. */}
+          <TabGuideHeader tab="games" />
+          <div className="mt-4">
+            <Button
+              variant="success"
+              size="lg"
+              icon={Plus}
+              onClick={handleAddGameClick}
+            >
+              {LIBRARY_ACTIONS.UPLOAD_GAME}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -1601,18 +1603,22 @@ export function ProjectManager({
           T7630's guided-tour anchor needs). Mobile-first, above the carousels. */}
       {activeTab === 'projects' && clipDrafts.length > 0 && (
         <div className="mb-4 sm:mb-5">
-          <Button
-            variant="success"
-            size="lg"
-            icon={Plus}
-            onClick={handleAddVideoClick}
-            data-tutorial-target="clips-add-video"
-          >
-            {CLIP_UPLOAD.UPLOAD_CLIP}
-          </Button>
-          {/* T9640: parallel to the Games entry above -- a short clip skips play
-              marking and goes straight to Focus, stated at the entry point. */}
-          <p className="text-xs text-gray-500 mt-1.5">{UPLOAD_ENTRY_HINT.CLIP}</p>
+          {/* T10280: the populated Clips tab shows the SAME centered headline/body
+              guidance the empty state uses (TabGuideHeader), above the CTA. The
+              game-vs-clip distinction the old hint carried now lives in the Clips
+              body copy ("A short clip can also skip straight to Framing..."). */}
+          <TabGuideHeader tab="clips" />
+          <div className="mt-4">
+            <Button
+              variant="success"
+              size="lg"
+              icon={Plus}
+              onClick={handleAddVideoClick}
+              data-tutorial-target="clips-add-video"
+            >
+              {CLIP_UPLOAD.UPLOAD_CLIP}
+            </Button>
+          </div>
         </div>
       )}
 
