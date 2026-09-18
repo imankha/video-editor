@@ -217,7 +217,7 @@ describe('T8555: In Progress Reels tab shows ONLY unpublished multiclip drafts',
     // dead end. Headline resolves into the Create reel CTA below it (T8780
     // order preserved). The lone single-clip draft makes hasClips true, so the
     // button is enabled with the "1 clip ready to use" caption.
-    const message = screen.getByText('Combine clips into one reel');
+    const message = screen.getByText(EMPTY_TAB_GUIDE.reels.headline);
     const button = screen.getByRole('button', { name: /Create reel/i });
     expect(message).toBeTruthy();
     expect(button.disabled).toBe(false);

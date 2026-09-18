@@ -51,11 +51,6 @@ export function CollectionsTab({
   onIntroCollection,
   onDownloadCollection,
   introBadgesByKey = {},
-  // T8470 (Part C): the empty published-reels state must never claim "No reels
-  // yet" while draft clips exist on the Clips tab. The count comes from the panel
-  // so this stays a pure view (the old onViewDraftClips link is superseded by
-  // EmptyTabGuide's own cross-tab button via onNavigateTab).
-  draftClipCount = 0,
   // T8980: the empty state is now the shared EmptyTabGuide (Published tab). It
   // branches on the account's game count and offers cross-tab / Add Game
   // gestures; all threaded down from ProjectManager via PublishedReelsPanel.
@@ -148,14 +143,12 @@ export function CollectionsTab({
   // `games` here is the PUBLISHED-reel-by-game grouping (summary.games), so this
   // condition means "no published reels" -- the Published tab's empty state.
   if (smart.length === 0 && games.length === 0 && !hasMixes) {
-    // T8980: the shared EmptyTabGuide replaces the old "No reels yet" dead end
-    // (and its stale "the Clips tab" link -- T8555 renamed it "In Progress
-    // Clips"). draftClipCount is the same single-clip-draft count the Clips
-    // badge shows, so the "N clips in progress" branch can never disagree.
+    // T8980: the shared EmptyTabGuide replaces the old "No reels yet" dead end.
+    // T10280 dropped the "N clips in progress" branch, so clipCount is no longer
+    // threaded here (the Published guide is now just headline/body + Go to Games).
     return (
       <EmptyTabGuide
         tab="published"
-        clipCount={draftClipCount}
         gamesCount={accountGamesCount}
         onNavigate={onNavigateTab}
         onAddGame={onAddGame}

@@ -150,9 +150,13 @@ describe('T9660 — full-width gallery width class (no narrow fixed column)', ()
   it('renders the populated Clips gallery inside the full-width class, not a narrow column', () => {
     const { container } = renderOnClipsTab({ projects: [A_CLIP] });
     // The clips gallery content area is present at the full-width class...
-    expect(container.querySelector('.max-w-6xl')).toBeTruthy();
-    // ...and no narrow reading-column cap has crept into the rendered tree.
-    expect(container.querySelector('.max-w-md, .max-w-sm, .max-w-lg')).toBeNull();
+    const gallery = container.querySelector('.max-w-6xl');
+    expect(gallery).toBeTruthy();
+    // ...and no narrow reading-column cap has crept into the GALLERY subtree. T10280
+    // added a centered `max-w-md` guidance header (TabGuideHeader) ABOVE the gallery
+    // -- that text-width cap is intentional and lives outside .max-w-6xl, so scope
+    // the guard to the gallery itself rather than the whole rendered tree.
+    expect(gallery.querySelector('.max-w-md, .max-w-sm, .max-w-lg')).toBeNull();
   });
 });
 

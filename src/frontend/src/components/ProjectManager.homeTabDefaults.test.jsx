@@ -77,6 +77,7 @@ vi.mock('./PublishedReelsPanel', () => ({
 
 import { ProjectManager } from './ProjectManager';
 import { useGalleryStore } from '../stores/galleryStore';
+import { EMPTY_TAB_GUIDE } from '../config/emptyStates';
 
 const APP_STATE = { unseenReelsCount: 0, exportingProject: null };
 
@@ -120,7 +121,7 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     // T8980: the Games empty state is the shared EmptyTabGuide -- its approved
     // headline resolves into the Add Game CTA directly below it (T8780 order,
     // preserved), same shape as the Reels/Published guides.
-    const message = screen.getByText('Start with a game');
+    const message = screen.getByText(EMPTY_TAB_GUIDE.games.headline);
     const addGameButton = screen.getByRole('button', { name: 'Upload game' });
     expect(message.compareDocumentPosition(addGameButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The "Build New Reel" assembly button is NOT shown on the Games tab
@@ -144,7 +145,7 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     fireEvent.click(tab);
     const addVideo = await screen.findByRole('button', { name: 'Upload clip' });
     expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
-    expect(screen.getByText('Cut a clip, or upload one')).toBeTruthy();
+    expect(screen.getByText(EMPTY_TAB_GUIDE.clips.headline)).toBeTruthy();
     // T9390 (Decision 3): at zero games Clips shows Add Video ALONE (no cross-tab
     // Add Game create action), with the "No game needed." caption.
     expect(screen.getByText('No game needed.')).toBeTruthy();
