@@ -96,30 +96,28 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
     });
   });
 
-  // T9830/T10290: rating and layer no longer drive a create-clip default. The two
-  // explicit Save outcomes ("Save play" / "Save and Frame") are always present and
-  // enabled, identical for unrated / 4-star / 5-star and for either layer — the
-  // first acceptance criterion (same obvious creation action).
-  describe('two explicit Save outcomes, independent of rating/layer (T9830/T10290)', () => {
-    it('shows both outcome buttons, always enabled, at the default rating', () => {
+  // T9830/T10290: rating and layer no longer drive a create-clip default. The
+  // single Save outcome ("Save play") is always present and enabled, identical
+  // for unrated / 4-star / 5-star and for either layer. T10310 (2026-09-18 user
+  // request): "Save and Frame" moved out to the main screen, so it's never
+  // rendered here.
+  describe('the one Save outcome, independent of rating/layer (T9830/T10290/T10310)', () => {
+    it('shows the outcome button, always enabled, at the default rating', () => {
       render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
-      const frame = screen.getByRole('button', { name: ANNOTATE.SAVE_AND_FRAME });
       const save = screen.getByRole('button', { name: ANNOTATE.SAVE_PLAY });
-      expect(frame.disabled).toBe(false);
       expect(save.disabled).toBe(false);
+      expect(screen.queryByRole('button', { name: ANNOTATE.SAVE_AND_FRAME })).toBeNull();
     });
 
-    it('a 5-star My Athlete moment shows the SAME two buttons (no rating-driven default)', () => {
+    it('a 5-star My Athlete moment shows the SAME button (no rating-driven default)', () => {
       render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
       fireEvent.keyDown(window, { key: '5' }); // rating shortcut, no inline stars to click
-      expect(screen.getByRole('button', { name: ANNOTATE.SAVE_AND_FRAME })).toBeTruthy();
       expect(screen.getByRole('button', { name: ANNOTATE.SAVE_PLAY })).toBeTruthy();
     });
 
-    it('a 5-star Team moment ALSO shows the same two buttons', () => {
+    it('a 5-star Team moment ALSO shows the same button', () => {
       render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={false} />);
       fireEvent.keyDown(window, { key: '5' });
-      expect(screen.getByRole('button', { name: ANNOTATE.SAVE_AND_FRAME })).toBeTruthy();
       expect(screen.getByRole('button', { name: ANNOTATE.SAVE_PLAY })).toBeTruthy();
     });
 

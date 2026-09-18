@@ -860,7 +860,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         annotateRegionsWithLayout={virtualRegionsWithLayout}
         annotateSelectedRegionId={annotateSelectedRegionId}
         hasAnnotateClips={hasAnnotateClips}
-        annotateClipCount={annotateClipCount}
         clipRegions={virtualClipRegions}
         isEditMode={isEditMode}
         // Handlers

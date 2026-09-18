@@ -82,14 +82,16 @@ describe('AnnotateFullscreenOverlay strip — layer control on the top line (T89
   });
 });
 
-// T9830/T10290: the create-mode "Clip" toggle is replaced by two always-visible,
-// always-enabled Save outcomes — "Save play" and "Save and Frame". The primary
-// action never switches on rating or a prior toggle.
-describe('AnnotateFullscreenOverlay strip — two explicit create outcomes (T9830/T10290)', () => {
-  it('create mode shows both outcome buttons, enabled, with NO toggle', () => {
+// T9830/T10290: the create-mode "Clip" toggle was replaced by two
+// always-visible outcomes ("Save play" / "Save and Frame"); T10310
+// (2026-09-18 user request) moved "Save and Frame" out to the main screen, so
+// the strip now has exactly one always-visible, always-enabled Save outcome
+// that never switches on rating or a prior toggle.
+describe('AnnotateFullscreenOverlay strip — the one create outcome (T9830/T10290/T10310)', () => {
+  it('create mode shows the outcome button, enabled, with NO toggle and no Save and Frame', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" newClipLayerIsMine={true} />);
-    expect(screen.getByRole('button', { name: 'Save and Frame' }).disabled).toBe(false);
     expect(screen.getByRole('button', { name: 'Save play' }).disabled).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Save and Frame' })).toBeNull();
     // The old toggle off-state label is gone.
     expect(screen.queryByText('Just save this play')).toBeNull();
   });
@@ -100,30 +102,29 @@ describe('AnnotateFullscreenOverlay strip — two explicit create outcomes (T983
     expect(container.querySelector('[title="Auto-create a reel from this play"]')).toBeNull();
   });
 
-  it('a 5-star My Athlete moment shows the SAME two buttons (no rating-driven default)', () => {
+  it('a 5-star My Athlete moment shows the SAME button (no rating-driven default)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" newClipLayerIsMine={true} />);
     fireEvent.keyDown(window, { key: '5' }); // rating shortcut — no inline stars to click
-    expect(screen.getByRole('button', { name: 'Save and Frame' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Save play' })).toBeTruthy();
   });
 });
 
-describe('AnnotateFullscreenOverlay strip — edit-mode "Create clip" button (T8960 item 7, T9520 N09)', () => {
-  it('reads "Create clip" (no "Clip Out Play"/"Clip Play") when the clip has no reel yet', () => {
+// T10310 (2026-09-18 user request): "Create clip" moved out of the editor
+// entirely onto the main Annotate screen's split [Edit Play]/[Frame Clip] row
+// — this editor never renders it, in either mode.
+describe('AnnotateFullscreenOverlay strip — no "Create clip" affordance (T10310)', () => {
+  it('edit mode never renders Create clip, with or without a project', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={editClip} />);
-    expect(screen.getByText('Create clip')).toBeTruthy();
-    expect(screen.queryByText('Clip Out Play')).toBeNull();
-    expect(screen.queryByText('Clip Play')).toBeNull();
+    expect(screen.queryByText('Create clip')).toBeNull();
+
+    cleanup();
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...editClip, autoProjectId: 42 }} />);
+    expect(screen.queryByText('Create clip')).toBeNull();
   });
 
-  // T10310 (2026-09-18 user request): "Rate and Tag" and "Create clip" swapped
-  // positions — Rate and Tag is now the leftmost control, Create clip moved
-  // into the right-hand action group (before Update play).
-  it('places "Rate and Tag" to the left of "Create clip" in the controls row', () => {
+  it('"Rate and Tag" still opens the details disclosure on its own (no longer paired with Create clip)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={editClip} />);
-    const rateAndTag = screen.getByTestId('add-details-button');
-    const createClip = screen.getByText('Create clip');
-    expect(rateAndTag.compareDocumentPosition(createClip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId('add-details-button')).toBeTruthy();
   });
 });
 

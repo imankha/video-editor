@@ -33,6 +33,7 @@ vi.mock('../hooks/useFullscreenControls', () => ({
 vi.mock('../stores', () => ({
   useCurrentProfile: () => ({ id: 'p1', sport: 'no_sport' }),
   useProfileStore: (selector) => selector({ updateProfile: updateProfileMock }),
+  useProjectsList: () => [],
 }));
 
 import { AnnotateModeView } from './AnnotateModeView';

@@ -522,18 +522,6 @@ export function AnnotateFullscreenOverlay({
   };
   handleSaveRef.current = handleSave;
 
-  // T10290: "Save and Frame" — the shared save-then-navigate seam. Saves the play
-  // (forcing a clip via createProjectIntent=true so even a project-less play lands
-  // one), then opens Framing on the created/linked project using the id handed
-  // back SYNCHRONOUSLY from the create path (T10240 seam) rather than waiting for
-  // a later setAutoProjectId re-render. A failed save never navigates (the form
-  // stays open with the user's edits, same as the focus-confirm dialog's rule).
-  const handleSaveAndFrame = async () => {
-    const { saved, projectId } = await handleSave(true);
-    if (!saved) return;
-    if (projectId) onOpenInFocus?.(projectId);
-  };
-
   // T8730: real unsaved-changes detection for the strip's Focus button. Compares
   // the values handleSave WOULD persist (edit-mode payload, L344-354) against the
   // loaded clip, so the false-positive "Save this play first?" dialog is gone when
@@ -696,27 +684,10 @@ export function AnnotateFullscreenOverlay({
           </div>
         )}
 
-        {/* Edit-mode "Create clip" affordance — desktop formBody only (the strip
-            has its own; the mobile edit sheet uses the stage CTA). Unconditional,
-            never rating-gated. Create mode has NO such control here anymore: the
-            two Save buttons in the footer are the create/save-only choice. */}
-        {!isMobile && isEditMode && (
-          <div className="mb-4 flex items-center justify-between">
-            <label className="text-gray-400 text-sm">Clip</label>
-            {existingClip?.autoProjectId ? (
-              <span className="text-green-400 text-sm">{ANNOTATE.CLIP_CREATED}</span>
-            ) : (
-              <Button
-                variant="cyan"
-                size="sm"
-                icon={Plus}
-                onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
-              >
-                {ANNOTATE.CREATE_CLIP}
-              </Button>
-            )}
-          </div>
-        )}
+        {/* T10310 (2026-09-18 user request): the "Create clip" affordance moved
+            out of the editor entirely -- onto the main Annotate screen's split
+            [Edit Play]/[Frame Clip] row (AnnotateModeView), which both creates
+            the project AND opens Framing in one gesture. */}
 
         {/* T9830: "Optional details" disclosure — rating, sport, tags and notes.
             One button, two presentations: desktop expands the shared DetailsFields
@@ -757,11 +728,10 @@ export function AnnotateFullscreenOverlay({
     </>
   );
 
-  // T9830/T10290: the two always-visible, always-enabled outcomes — "Save play"
-  // (saves the marked play only, no draft/render/credits) and "Save and Frame"
-  // (saves AND opens Framing on the produced clip). Both pass their intent straight
-  // into handleSave/handleSaveAndFrame, so the primary action never dynamically
-  // switches on rating or a prior toggle. Replaces T9830's "Create an editable clip".
+  // T9830/T10290: the always-visible, always-enabled save outcome ("Save play" —
+  // saves the marked play only, no draft/render/credits). T10310: "Save and
+  // Frame" moved out to the main screen's Frame Clip button; this editor now
+  // only ever saves. Replaces T9830's "Create an editable clip".
   const saving = saveStatus === 'saving';
 
   // T8140: Save/Cancel live in a pinned footer OUTSIDE the scroll area so Save is
@@ -772,26 +742,18 @@ export function AnnotateFullscreenOverlay({
       {displayStatus && (
         <div className="mb-1.5"><SaveStatusBadge status={displayStatus} /></div>
       )}
-      {/* T10290: primary (green) save first, then "Save and Frame" (cyan, saves +
-          opens Framing), then a full-width Cancel — same order in create and edit
-          mode. The primary is "Save play" (create) / "Update play" (edit). */}
+      {/* T10310 (2026-09-18 user request): "Save and Frame" moved out of the
+          editor onto the main screen's split [Edit Play]/[Frame Clip] row —
+          this footer is now just the plain save + Cancel. The primary is
+          "Save play" (create) / "Update play" (edit). */}
       <>
-        <div className="flex gap-3">
-          <button
-            onClick={() => handleSave(isEditMode ? undefined : false)}
-            disabled={saving}
-            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
-          >
-            {isEditMode ? ANNOTATE.UPDATE_PLAY : ANNOTATE.SAVE_PLAY}
-          </button>
-          <button
-            onClick={handleSaveAndFrame}
-            disabled={saving}
-            className="flex-1 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
-          >
-            {ANNOTATE.SAVE_AND_FRAME}
-          </button>
-        </div>
+        <button
+          onClick={() => handleSave(isEditMode ? undefined : false)}
+          disabled={saving}
+          className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
+        >
+          {isEditMode ? ANNOTATE.UPDATE_PLAY : ANNOTATE.SAVE_PLAY}
+        </button>
         <button
           onClick={onClose}
           className="w-full mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
@@ -1044,9 +1006,11 @@ export function AnnotateFullscreenOverlay({
           </div>
 
           {/* Controls row — T9830: rating + sport moved into the details
-              disclosure below. T10290: the save row is now "Save play"/"Update play"
-              (green primary) + "Save and Frame" (cyan, saves and opens Framing).
-              Edit mode keeps its separate, unconditional "Create clip" affordance. */}
+              disclosure below. T10310 (2026-09-18 user request): "Create clip"
+              and "Save and Frame" both moved out of the editor onto the main
+              screen's split [Edit Play]/[Frame Clip] row — this row is now
+              just Save + Cancel (plus the "Clip created" status when a project
+              already exists). */}
           <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
             {/* T10310: "Rate and Tag" moved to the far left, swapped with
                 "Create clip" (now in the right-hand action group) per user
@@ -1070,38 +1034,15 @@ export function AnnotateFullscreenOverlay({
             )}
 
             <div className="ml-auto flex items-center gap-2 shrink-0">
-              {/* T9330: a project exists (autoProjectId) OR is being created right
-                  now (focusPending) — either way the manual create affordance would
-                  be wrong, so show the "Clip created" indicator. Edit mode only. */}
-              {isEditMode && (
-                (existingClip?.autoProjectId || focusPending) ? (
-                  <span className="text-xs text-green-400 shrink-0">{ANNOTATE.CLIP_CREATED}</span>
-                ) : (
-                  <Button
-                    variant="cyan"
-                    size="sm"
-                    icon={Plus}
-                    onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
-                  >
-                    {ANNOTATE.CREATE_CLIP}
-                  </Button>
-                )
+              {isEditMode && (existingClip?.autoProjectId || focusPending) && (
+                <span className="text-xs text-green-400 shrink-0">{ANNOTATE.CLIP_CREATED}</span>
               )}
-              {/* T10290: primary (green) save first — "Update play" (edit) /
-                  "Save play" (create) — then "Save and Frame" (cyan). */}
               <button
                 onClick={() => handleSave(isEditMode ? undefined : false)}
                 disabled={saving}
                 className="px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded transition-colors"
               >
                 {isEditMode ? ANNOTATE.UPDATE_PLAY : ANNOTATE.SAVE_PLAY}
-              </button>
-              <button
-                onClick={handleSaveAndFrame}
-                disabled={saving}
-                className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 text-white text-sm font-medium rounded transition-colors"
-              >
-                {ANNOTATE.SAVE_AND_FRAME}
               </button>
               <button
                 onClick={onClose}
@@ -1198,23 +1139,16 @@ export function AnnotateFullscreenOverlay({
             ) : null}
           </div>
           <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
-          {/* T9830/T10290: two always-visible outcomes here too. Rating stays
-              inline on this height-starved landscape bar rather than moving behind
-              a disclosure it never had — see the outcome record. Green primary
-              ("Update play"/"Save play") first, then cyan "Save and Frame". */}
+          {/* T9830/T10290: the always-visible save outcome. T10310 (2026-09-18
+              user request): "Save and Frame" moved out onto the main screen's
+              split [Edit Play]/[Frame Clip] row, so only the plain save remains
+              here. */}
           <button
             onClick={() => handleSave(isEditMode ? undefined : false)}
             disabled={saving}
             className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
           >
             {isEditMode ? ANNOTATE.UPDATE_PLAY : ANNOTATE.SAVE_PLAY}
-          </button>
-          <button
-            onClick={handleSaveAndFrame}
-            disabled={saving}
-            className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
-          >
-            {ANNOTATE.SAVE_AND_FRAME}
           </button>
           <button
             onClick={onClose}

@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Play, Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users } from 'lucide-react';
+import { Play, Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import ZoomControls from '../components/ZoomControls';
@@ -8,9 +8,10 @@ import AngleSwitcherBadge from './annotate/AngleSwitcherBadge';
 import FixTimingStrip from './annotate/FixTimingStrip';
 import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
-import { ANNOTATE, SHARING, STAGE_REASONS } from '../config/displayNames';
+import { ANNOTATE, SHARING } from '../config/displayNames';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
-import { useCurrentProfile, useProfileStore } from '../stores';
+import { getClipStage, CLIP_STAGE } from './annotate/clipStage';
+import { useCurrentProfile, useProfileStore, useProjectsList } from '../stores';
 import PlaybackControls from './annotate/components/PlaybackControls';
 import { generateClipName } from '../utils/clipDisplayName';
 import { clipGameClock } from '../utils/timeFormat';
@@ -67,7 +68,6 @@ export function AnnotateModeView({
   annotateRegionsWithLayout,
   annotateSelectedRegionId,
   hasAnnotateClips,
-  annotateClipCount = 0,
   clipRegions,
   isEditMode,
 
@@ -166,6 +166,44 @@ export function AnnotateModeView({
     if (!annotateSelectedRegionId || !showAnnotateOverlay) return null;
     return clipRegions?.find(r => r.id === annotateSelectedRegionId) || null;
   }, [annotateSelectedRegionId, showAnnotateOverlay, clipRegions]);
+
+  // T10310 (2026-09-18 user request): the SELECTED region, NOT gated on the
+  // overlay being open (unlike existingClip above) — drives the main screen's
+  // split [Edit Play]/[Frame Clip] row, so Frame Clip is reachable the moment
+  // a play is selected, without opening the fullscreen editor first. Same
+  // getClipStage + useProjectsList lookup AnnotateFullscreenOverlay/
+  // ClipDetailsEditor already use (single source, not a re-derivation).
+  const selectedRegion = useMemo(() => {
+    if (!annotateSelectedRegionId) return null;
+    return clipRegions?.find(r => r.id === annotateSelectedRegionId) || null;
+  }, [annotateSelectedRegionId, clipRegions]);
+  const projectsList = useProjectsList();
+  const selectedRegionProject = selectedRegion?.autoProjectId
+    ? projectsList.find(p => p.id === selectedRegion.autoProjectId)
+    : null;
+  const selectedClipStage = selectedRegion ? getClipStage(selectedRegion, selectedRegionProject) : null;
+  const [frameClipPending, setFrameClipPending] = useState(false);
+  // "Frame Clip" replaces both the editor's old "Create clip" and "Save and
+  // Frame" in one gesture: a project-less play creates its project THEN opens
+  // Framing (same create-then-navigate seam as the editor's old Save and
+  // Frame); a play that already has a project just opens its current stage
+  // (Framing/Spotlight/Final/Published) via the SAME getClipStage action the
+  // editor's stage CTA uses.
+  const handleFrameClip = useCallback(async () => {
+    if (!selectedRegion || frameClipPending) return;
+    if (selectedRegion.autoProjectId) {
+      if (selectedClipStage?.action === 'overlay') onOpenClipInOverlay?.(selectedRegion.autoProjectId);
+      else onOpenClipInFocus?.(selectedRegion.autoProjectId);
+      return;
+    }
+    setFrameClipPending(true);
+    try {
+      const result = await onFullscreenUpdateClip(selectedRegion.id, { createProject: true });
+      if (result?.saveOk && result.projectId) onOpenClipInFocus?.(result.projectId);
+    } finally {
+      setFrameClipPending(false);
+    }
+  }, [selectedRegion, selectedClipStage, frameClipPending, onFullscreenUpdateClip, onOpenClipInFocus, onOpenClipInOverlay]);
 
   // T8760 item 10: while a clip is open for editing, the transport readout is
   // clip-relative (elapsed / clip-duration). Null outside clip-edit mode, so
@@ -1010,48 +1048,76 @@ export function AnnotateModeView({
         {!annotateFullscreen && !underCanvasEditor && !fixTiming && (
           <div className="mt-3 sm:mt-6">
             <div className="space-y-3">
-              {/* PRIMARY CTA — full-width, high-contrast, >=44pt tap target.
-                  Flips to "Edit Play" when a clip is selected, mirroring
-                  AnnotateControls' isEditMode handling (T8130 review finding:
-                  the button must reflect what onAddClip is about to do -
-                  editClip vs startCreating - or it silently misroutes the
-                  gesture it exists to teach). */}
-              <button
-                onClick={onAddClip}
-                disabled={isSourceExpired}
-                data-testid="annotate-primary-cta"
-                title={
-                  isSourceExpired
-                    ? 'Source video expired — cannot mark plays'
-                    : isEditMode
-                    ? 'Edit the selected play'
-                    : 'Mark a play ending at the current time'
-                }
-                className={`w-full min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg ${
-                  isSourceExpired
-                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed shadow-none'
-                    : isEditMode
-                    ? 'bg-yellow-600 hover:bg-yellow-500 text-white shadow-yellow-900/40'
-                    : 'bg-green-500 hover:bg-green-400 text-white shadow-green-900/40'
-                }`}
-              >
-                {isEditMode ? <Pencil size={22} /> : <Plus size={22} />}
-                {isEditMode ? ANNOTATE.EDIT_PLAY : ANNOTATE.MARK_PLAY}
-              </button>
+              {/* PRIMARY CTA. T10310 (2026-09-18 user request): once a play is
+                  selected, this splits into [Edit Play] + [Frame Clip] — the
+                  latter replaces the editor's old "Create clip"/"Save and
+                  Frame" with one gesture that creates the clip's project (if
+                  it doesn't have one yet) and opens it at its current stage.
+                  Creating a new play keeps the single full-width CTA. */}
+              {isEditMode ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={onAddClip}
+                    disabled={isSourceExpired}
+                    data-testid="annotate-primary-cta"
+                    title={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Edit the selected play'}
+                    className={`flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg ${
+                      isSourceExpired
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed shadow-none'
+                        : 'bg-yellow-600 hover:bg-yellow-500 text-white shadow-yellow-900/40'
+                    }`}
+                  >
+                    <Pencil size={22} />
+                    {ANNOTATE.EDIT_PLAY}
+                  </button>
+                  {selectedRegion && (
+                    <button
+                      onClick={handleFrameClip}
+                      disabled={frameClipPending}
+                      data-testid="annotate-frame-clip-cta"
+                      title={
+                        selectedRegion.autoProjectId && selectedClipStage?.stage !== CLIP_STAGE.FOCUS
+                          ? `Open the clip: ${selectedClipStage.label}`
+                          : ANNOTATE.FRAME_THIS_CLIP_HINT
+                      }
+                      className="flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white shadow-cyan-900/40"
+                    >
+                      {selectedClipStage?.action === 'overlay' ? <Sparkles size={22} /> : <Crop size={22} />}
+                      {selectedRegion.autoProjectId ? selectedClipStage.label : ANNOTATE.FRAME_CLIP}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={onAddClip}
+                  disabled={isSourceExpired}
+                  data-testid="annotate-primary-cta"
+                  title={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Mark a play ending at the current time'}
+                  className={`w-full min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg ${
+                    isSourceExpired
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed shadow-none'
+                      : 'bg-green-500 hover:bg-green-400 text-white shadow-green-900/40'
+                  }`}
+                >
+                  <Plus size={22} />
+                  {ANNOTATE.MARK_PLAY}
+                </button>
+              )}
 
-              {/* Teaching hint, shown through the first three saved plays (T9860 D2:
-                  the widened gate; derived from annotateClipCount, not a new store or
-                  effect). Line 1 is the stage reason (why bookmark now, edit later);
-                  line 2, the 6s/2s capture-window mechanic, stays a second sentence
-                  in the same paragraph on the very first play only. */}
-              {annotateClipCount < 3 && (
+              {/* Teaching hint (2026-09-18 user request: dropped the "You are
+                  bookmarking, not editing..." stage-reason line entirely) —
+                  the 6s/2s capture-window mechanic on the very first play only. */}
+              {!hasAnnotateClips && (
                 <p className="text-sm text-gray-300 text-center px-2">
-                  {STAGE_REASONS.MARK_PLAY}
-                  {!hasAnnotateClips && ` ${ANNOTATE.MARK_PLAY_HELPER}.`}
+                  {ANNOTATE.MARK_PLAY_HELPER}.
                 </p>
               )}
 
-              {hasAnnotateClips ? (
+              {/* T10310 (2026-09-18 user request): once a play is selected,
+                  these whole-game actions (Preview plays / Share plays / tagged
+                  sharing) are gone — only the play-specific actions above
+                  apply. They come back once nothing is selected. */}
+              {!isEditMode && (hasAnnotateClips ? (
                 <>
                   <div className="flex gap-2">
                     <button
@@ -1131,7 +1197,7 @@ export function AnnotateModeView({
                     </button>
                   )}
                 </div>
-              )}
+              ))}
             </div>
           </div>
         )}

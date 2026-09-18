@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
 
-// T9830/T10290: create mode offers two explicit, always-visible outcomes —
-// "Save play" (no draft/render/credits) and "Save and Frame" (saves AND opens
-// Framing on the produced clip) — replacing the rating-driven default + toggle +
-// label-switching single Save button, and T9830's "Create an editable clip".
-// These tests pin the brief's acceptance criteria.
+// T9830/T10290: create mode used to offer two explicit, always-visible
+// outcomes — "Save play" and "Save and Frame" — replacing the rating-driven
+// default + toggle + label-switching single Save button, and T9830's "Create
+// an editable clip". T10310 (2026-09-18 user request): "Save and Frame" moved
+// OUT of the editor entirely onto the main Annotate screen's split [Edit
+// Play]/[Frame Clip] row (AnnotateModeView) — this editor now has exactly one
+// always-visible, always-enabled save outcome.
 
 function mockViewport(matches) {
   window.matchMedia = (query) => ({
@@ -36,18 +38,17 @@ const baseProps = {
   surface: 'dock_fullscreen',
 };
 
-describe('AnnotateFullscreenOverlay — explicit create outcomes (T9830)', () => {
-  it('AC1: unrated / 4-star / 5-star all show the SAME two enabled buttons', () => {
+describe('AnnotateFullscreenOverlay — the one explicit create outcome (T9830, T10310)', () => {
+  it('AC1: unrated / 4-star / 5-star all show the SAME single enabled Save button', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} onCreateClip={() => {}} newClipLayerIsMine />);
-    const both = () => [
-      screen.getByRole('button', { name: 'Save and Frame' }),
-      screen.getByRole('button', { name: 'Save play' }),
-    ];
-    both().forEach((b) => expect(b.disabled).toBe(false));
+    const save = () => screen.getByRole('button', { name: 'Save play' });
+    expect(save().disabled).toBe(false);
     fireEvent.keyDown(window, { key: '5' }); // 5-star
-    both().forEach((b) => expect(b.disabled).toBe(false));
+    expect(save().disabled).toBe(false);
     fireEvent.keyDown(window, { key: '1' }); // low rating
-    both().forEach((b) => expect(b.disabled).toBe(false));
+    expect(save().disabled).toBe(false);
+    // "Save and Frame" moved out to the main screen -- never rendered here.
+    expect(screen.queryByRole('button', { name: 'Save and Frame' })).toBeNull();
   });
 
   it('AC2: "Save play" saves the play with NO project (createProject false)', async () => {
@@ -60,22 +61,11 @@ describe('AnnotateFullscreenOverlay — explicit create outcomes (T9830)', () =>
     expect(onCreateClip.mock.calls[0][0].createProject).toBe(false);
   });
 
-  it('AC3: "Save and Frame" saves createProject=true with an EMPTY form (no rating/sport/tags/notes required)', async () => {
-    const onCreateClip = vi.fn(() => Promise.resolve({ raw_clip_id: 2, project_created: true }));
-    // Default profile is no_sport; no tags, no notes, no manual name.
-    render(<AnnotateFullscreenOverlay {...baseProps} onCreateClip={onCreateClip} nextClipNumber={9} />);
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save and Frame' }));
-    });
-    expect(onCreateClip).toHaveBeenCalledTimes(1);
-    expect(onCreateClip.mock.calls[0][0]).toMatchObject({ createProject: true, tags: [], notes: '' });
-  });
-
   it('AC4 (double-click): a second click while the save is in flight is a no-op (one create, not two)', async () => {
     const { promise, resolve } = deferred();
     const onCreateClip = vi.fn(() => promise);
     render(<AnnotateFullscreenOverlay {...baseProps} onCreateClip={onCreateClip} />);
-    const btn = screen.getByRole('button', { name: 'Save and Frame' });
+    const btn = screen.getByRole('button', { name: 'Save play' });
     await act(async () => {
       fireEvent.click(btn); // starts the save (promise pending)
       fireEvent.click(btn); // in-flight guard must swallow this one
@@ -97,24 +87,24 @@ describe('AnnotateFullscreenOverlay — explicit create outcomes (T9830)', () =>
   });
 });
 
-describe('AnnotateFullscreenOverlay — both outcomes on every layout (T9830)', () => {
-  it('the desktop strip create mode shows both buttons', () => {
+describe('AnnotateFullscreenOverlay — one save outcome, no Save and Frame, on every layout (T10310)', () => {
+  it('the desktop strip create mode shows only Save play', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} onCreateClip={() => {}} layout="strip" surface="inline_desktop" />);
-    expect(screen.getByRole('button', { name: 'Save and Frame' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Save play' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Save and Frame' })).toBeNull();
   });
 
-  it('the mobile inline sheet create mode shows both buttons', () => {
+  it('the mobile inline sheet create mode shows only Save play', () => {
     mockViewport(true);
     render(<AnnotateFullscreenOverlay {...baseProps} onCreateClip={() => {}} layout="inline" surface="sheet_mobile" />);
-    expect(screen.getByRole('button', { name: 'Save and Frame' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Save play' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Save and Frame' })).toBeNull();
   });
 
-  it('the landscape-inline bar create mode shows both buttons', () => {
+  it('the landscape-inline bar create mode shows only Save play', () => {
     mockViewport(true);
     render(<AnnotateFullscreenOverlay {...baseProps} onCreateClip={() => {}} layout="landscape-inline" surface="fullscreen_mobile" />);
-    expect(screen.getByRole('button', { name: 'Save and Frame' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Save play' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Save and Frame' })).toBeNull();
   });
 });

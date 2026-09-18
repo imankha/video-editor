@@ -119,7 +119,7 @@ export const MODE_NAMES = {
 // OVERLAY_PUBLISH below both read PUBLISH as part of their publish captions.
 export const STAGE_REASONS = {
   MARK_PLAY: 'You are bookmarking, not editing, so tap through the whole game and come back to edit later.',
-  FRAMING: 'You filmed wide from the stands and the video you are sending is phone shaped, so framing is you choosing what survives the crop.',
+  FRAMING: 'Focus the action on your player, crop out everything else.',
   SPOTLIGHT: 'Twenty-two kids in the same kit: this is how anyone watching knows which one is yours.',
   PUBLISH: 'Nobody else can see this until you share a link.',
 };
