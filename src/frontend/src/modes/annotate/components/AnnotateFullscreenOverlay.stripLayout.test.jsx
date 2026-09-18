@@ -150,7 +150,7 @@ describe('AnnotateFullscreenOverlay strip — full-width stage-aware primary CTA
         existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
       />
     );
-    const cta = screen.getByRole('button', { name: 'Frame this clip' });
+    const cta = screen.getByRole('button', { name: 'Frame' });
     expect(cta.className).toMatch(/w-full/);
     // Regression (2026-09-18 user request): rollover explaining what Framing
     // does, using the already-approved Clips-tab copy (T10280).
@@ -170,7 +170,7 @@ describe('AnnotateFullscreenOverlay strip — full-width stage-aware primary CTA
         existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
       />
     );
-    expect(screen.queryByRole('button', { name: 'Frame this clip' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Frame' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Apply Spotlight' })).toBeTruthy();
   });
 });

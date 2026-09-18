@@ -53,7 +53,7 @@ describe('AnnotateFullscreenOverlay mobile inline sheet — stage CTA (T9330 §2
         existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: null, reelSourceEndTime: null }}
       />
     );
-    expect(screen.getByRole('button', { name: 'Frame this clip' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Frame' })).toBeTruthy();
   });
 
   it('reflects the linked project stage (Spotlight) on mobile too', () => {
@@ -64,7 +64,7 @@ describe('AnnotateFullscreenOverlay mobile inline sheet — stage CTA (T9330 §2
         existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
       />
     );
-    expect(screen.queryByRole('button', { name: 'Frame this clip' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Frame' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Apply Spotlight' })).toBeTruthy();
   });
 
@@ -77,7 +77,7 @@ describe('AnnotateFullscreenOverlay mobile inline sheet — stage CTA (T9330 §2
         onOpenInFocus={onOpenInFocus}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Frame this clip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Frame' }));
     expect(screen.queryByText('Save this play first?')).toBeNull();
     expect(onOpenInFocus).toHaveBeenCalledWith(42);
   });
@@ -96,14 +96,14 @@ describe('AnnotateFullscreenOverlay mobile inline sheet — stage CTA (T9330 §2
     fireEvent.click(screen.getByTestId('add-details-button'));
     fireEvent.click(screen.getByTitle('5 stars'));
     fireEvent.click(screen.getByRole('button', { name: 'Done' })); // close the popup
-    fireEvent.click(screen.getByRole('button', { name: 'Frame this clip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Frame' }));
     expect(screen.getByText('Save this play first?')).toBeTruthy();
     expect(onOpenInFocus).not.toHaveBeenCalled();
   });
 
   it('create mode (no existing clip) shows NO stage CTA — just Save/Cancel', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={null} />);
-    expect(screen.queryByRole('button', { name: 'Frame this clip' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Frame' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Apply Spotlight|View Final|View Published/ })).toBeNull();
     expect(screen.getByRole('button', { name: /^Save play/ })).toBeTruthy();
   });
