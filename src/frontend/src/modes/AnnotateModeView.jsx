@@ -5,6 +5,7 @@ import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
 import AngleSwitcherBadge from './annotate/AngleSwitcherBadge';
 import FixTimingStrip from './annotate/FixTimingStrip';
+import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { ANNOTATE, SHARING } from '../config/displayNames';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
@@ -897,10 +898,6 @@ export function AnnotateModeView({
           {/* Annotate Mode Timeline - non-fullscreen (hidden while the under-canvas editor is open) */}
           {!annotateFullscreen && !underCanvasEditor && (
             <div className="mt-6">
-              {/* T10390: Add-footage trigger lives in the timeline's own Video-timeline
-                  label cell now (see AnnotateTimeline.jsx) — not passed to the
-                  fullscreen-strip AnnotateMode calls above, matching the old rail's
-                  non-fullscreen-only gate. */}
               <AnnotateMode
                 currentTime={currentTime}
                 duration={duration || annotateVideoMetadata?.duration || 0}
@@ -916,7 +913,6 @@ export function AnnotateModeView({
                 angleData={angleData}
                 amberFootage={amberFootage}
                 onFixAmberFootage={onFixAmberFootage}
-                addFootage={addFootage}
               />
             </div>
           )}
@@ -1128,6 +1124,17 @@ export function AnnotateModeView({
                         <span className="sm:hidden">{SHARING.SHARE_PLAYS_SHORT}</span>
                       </button>
                     )}
+                    {/* T10393 (user request): Add footage joins this whole-game
+                        row as a third full-size button — its earlier home (a
+                        compact icon in the timeline's Video-timeline cell,
+                        T10390) wasn't prominent enough to get clicked. */}
+                    {addFootage && (
+                      <AddFootageButton
+                        gameId={addFootage.gameId}
+                        disabled={addFootage.disabled}
+                        onFootageAttached={addFootage.onFootageAttached}
+                      />
+                    )}
                   </div>
                   {/* T9810: tagged-player sharing (T2820) keeps its own honest
                       affordance, rendered ONLY when tagged clips exist so it never sets
@@ -1173,6 +1180,14 @@ export function AnnotateModeView({
                       <Share2 size={12} />
                       <span>{SHARING.SHARE_PLAYS_SHORT}</span>
                     </button>
+                  )}
+                  {addFootage && (
+                    <AddFootageButton
+                      variant="link"
+                      gameId={addFootage.gameId}
+                      disabled={addFootage.disabled}
+                      onFootageAttached={addFootage.onFootageAttached}
+                    />
                   )}
                 </div>
               ))}

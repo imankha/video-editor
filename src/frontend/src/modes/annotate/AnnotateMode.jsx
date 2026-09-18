@@ -28,10 +28,6 @@ export default function AnnotateMode({
   // T8910: no-timestamp landing footage (amber warning bars) + Fix-timing tap.
   amberFootage = [],
   onFixAmberFootage,
-  // T10390: Add-footage trigger, threaded down to the timeline's Video-timeline
-  // label cell. Undefined hides it (the fullscreen strip's AnnotateMode call
-  // doesn't pass one, matching the old rail's non-fullscreen-only gate).
-  addFootage,
 }) {
   if (!duration) return null;
 
@@ -52,7 +48,6 @@ export default function AnnotateMode({
         angleData={angleData}
         amberFootage={amberFootage}
         onFixAmberFootage={onFixAmberFootage}
-        addFootage={addFootage}
       />
     </div>
   );

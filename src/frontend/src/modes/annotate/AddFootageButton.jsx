@@ -54,7 +54,7 @@ function toRecordedAt(creationTime) {
  * existing load path and produce the landing feedback (gesture-based, not
  * reactive). This component owns only picker/modal/drop UI state.
  */
-export function AddFootageButton({ gameId, disabled = false, onFootageAttached, compact = false }) {
+export function AddFootageButton({ gameId, disabled = false, onFootageAttached, variant = 'row' }) {
   const [isOpen, setIsOpen] = useState(false);
   // Files handed to the picker from a window-level drop (null for a click-open).
   const [droppedFiles, setDroppedFiles] = useState(null);
@@ -206,16 +206,25 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
         title={COPY.title}
         aria-label={COPY.title}
         className={
-          // T10390: compact trigger for the AnnotateTimeline's Video-timeline
-          // cell (replaces the old above-canvas row / settings-rail header —
-          // see that task for why). Same modal/drop-target below, unchanged.
-          compact
-            ? 'inline-flex items-center justify-center w-7 h-7 rounded text-violet-300 transition-colors hover:bg-violet-500/20 hover:text-violet-200 disabled:opacity-50 disabled:cursor-not-allowed'
-            : 'inline-flex items-center gap-1.5 rounded-lg bg-gray-700 px-2.5 py-1.5 text-sm font-medium text-gray-200 transition-colors hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed coarse-pointer:min-h-[44px]'
+          // T10393 (user request): the compact timeline-cell trigger (T10390)
+          // wasn't prominent enough to get clicked, so this now lives as a
+          // third button in the whole-game CTA row, alongside Preview/Share
+          // plays -- same size/shape as its siblings there. `link` matches
+          // that row's own de-emphasized zero-clips state (tiny text links).
+          variant === 'link'
+            ? 'text-xs text-gray-400 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1'
+            : 'flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 disabled:cursor-not-allowed text-white'
         }
       >
-        <FilePlus size={compact ? 14 : 16} className="shrink-0" />
-        {!compact && <span className="hidden lg:inline">{COPY.label}</span>}
+        <FilePlus size={variant === 'link' ? 12 : 18} className="shrink-0" />
+        {variant === 'link' ? (
+          <span>Add footage</span>
+        ) : (
+          <>
+            <span className="hidden sm:inline">{COPY.label}</span>
+            <span className="sm:hidden">Add footage</span>
+          </>
+        )}
       </button>
 
       {dropOverlay}
