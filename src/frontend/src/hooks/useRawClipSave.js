@@ -3,6 +3,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { toast } from '../components/shared/Toast';
 import { useQuestStore } from '../stores/questStore';
+import { CLIP_LINK } from '../config/displayNames';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -27,6 +28,12 @@ export const CLIP_SYNC_FAILED_COPY = {
   delete: {
     title: 'Could not save to the cloud',
     message: "Your clip wasn't deleted. Please try again.",
+  },
+  // T10300: link/unlink an uploaded clip to a game (POST /clips/raw/{id}/link,
+  // durable_sync-gated like the others).
+  link: {
+    title: 'Could not save to the cloud',
+    message: "Your clip's game wasn't updated. Please try again.",
   },
 };
 
@@ -305,6 +312,63 @@ export function useRawClipSave(activeGameIdRef = null) {
   }, [activeGameIdRef]);
 
   /**
+   * T10300: Link (or unlink) an UPLOADED raw clip to a game — a gesture-based,
+   * surgical call carrying only the changed field (the game id). Mirrors
+   * updateClip's shape: durable_sync-gated (POST /clips/raw/{id}/link), so a 503
+   * `sync_failed` surfaces the same Retry UX; a 404 (clip or target game gone) and
+   * a 409 (clip is not `source==='upload'` — a game-cut clip, which the affordance
+   * never exposes) are surfaced distinctly, never swallowed.
+   *
+   * @param {number} clipId - The raw clip ID (project.clips[0].id)
+   * @param {number|null} gameId - Target game id to link to; `null` = unlink
+   * @returns {{ success: true, clip_id, game_id }|null}
+   */
+  const linkRawClipToGame = useCallback(async (clipId, gameId) => {
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/clips/raw/${clipId}/link`, {
+        method: 'POST',
+        headers: withClientGameHeader({ 'Content-Type': 'application/json' }, activeGameIdRef),
+        body: JSON.stringify({ game_id: gameId ?? null }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        // T5350/T4320: durable link committed locally but never reached R2.
+        if (response.status === 503 && syncFailedCode(errorData) === 'sync_failed') {
+          setError(CLIP_SYNC_FAILED_COPY.link.message);
+          surfaceClipSyncFailed('link', () => linkRawClipToGame(clipId, gameId));
+          return null;
+        }
+        // 409: the clip is not an upload clip (game-cut clips can never be
+        // relinked). The upload-gated affordance should make this unreachable, but
+        // surface it plainly rather than hiding it.
+        if (response.status === 409) {
+          setError(CLIP_LINK.ERROR_NOT_UPLOAD);
+          toast.error(CLIP_LINK.ERROR_NOT_UPLOAD);
+          return null;
+        }
+        setError(CLIP_LINK.ERROR_GENERIC);
+        toast.error(errorData.detail || CLIP_LINK.ERROR_GENERIC);
+        return null;
+      }
+
+      const result = await response.json();
+      refreshQuestProgress();
+      return result;
+    } catch (err) {
+      setError(err.message);
+      console.error('[useRawClipSave] linkRawClipToGame error:', err);
+      toast.error(CLIP_LINK.ERROR_GENERIC);
+      return null;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [activeGameIdRef]);
+
+  /**
    * Clear any error state
    */
   const clearError = useCallback(() => {
@@ -320,6 +384,7 @@ export function useRawClipSave(activeGameIdRef = null) {
     saveClip,
     updateClip,
     deleteClip,
+    linkRawClipToGame,
     clearError
   };
 }

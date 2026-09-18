@@ -1,5 +1,27 @@
 ---
 domain: annotate
+updated: 2026-09-18 (T10300 — link a directly-uploaded clip to a game later. **NEW `raw_clips.source`
+discriminator** (`profile_db` migration v053; `TEXT NOT NULL DEFAULT 'game'`, values `'game'` = annotate-cut,
+`'upload'` = direct upload). Both direct-upload insert sites write `source='upload'` (`clips.py` batch
+`/clips/upload` + `/clips/.../upload-with-metadata`); every other insert (`save_raw_clip`, share
+materialization) omits it -> defaults `'game'`. THREE invariants now key on it, replacing the old mutable
+`game_id IS NULL` heuristics: **(1) upload idempotency** (`clips.py` ~2018) is `filename = ? AND source =
+'upload'` (`filename` IS the blake3 content hash), so a re-upload dedups whether or not the clip has since
+been linked/unlinked — no duplicate row, no second credit charge; **(2) game-cut natural key** (`save_raw_clip`,
+both branches) adds `AND source = 'game'`, so a linked upload clip (game_id set, video_sequence NULL,
+end_time=duration) can NEVER be matched/clobbered by an annotate cut sharing its end_time; **(3) game-delete
+cascade** (`games.py` `_delete_game_cascade`) UPDATEs `game_id=NULL WHERE game_id=? AND source='upload'`
+BEFORE the project-orphan scan + FK cascade, so a linked upload clip (and its auto-project) SURVIVES a game
+delete, unlinked — only `source='game'` clips cascade via the FK (`ON DELETE CASCADE` unchanged). **Linking is
+attribution-only:** `POST /api/clips/raw/{clip_id}/link {game_id: int|null}` (durable_sync-gated; 404 clip /
+404 game / 409 non-upload) sets `game_id` while the clip keeps its OWN source span (start=0, end=duration,
+video_sequence NULL) — no fake timeline position. The clip surfaces under the game via the UNCHANGED
+`compute_project_game_ids` (`game_id IS NOT NULL`). `RawClipResponse.source` + `ClipSummary.source`
+(projects-list, column-guarded) let `DraftTile` gate the "Link to game"/"Unlink" affordance strictly on
+`clips[0].source==='upload'` (kebab + hover rail); the picker is `LinkClipToGameModal`. Notice copy
+(`CLIP_UPLOAD.NOTICE_*`) softened from "won't be linked" to "start out unlinked ... link later". Backfill is
+sound because direct uploads are the ONLY clips created with `game_id IS NULL`. Tests:
+`test_t10300_link_uploaded_clip.py` (12), `DraftTile.test.jsx` T10300 gating block. Prior:)
 updated: 2026-09-17 (T10240 + T10290 — marked-play stage CTA + play-editor "Save and Frame" / Details /
 Save-closes. FRONTEND-ONLY, no schema. **SHARED create-then-navigate seam (build once, do NOT rebuild a
 third time):** the two container create paths — `handleFullscreenCreateClip` AND `updateClipRegionWithSync`

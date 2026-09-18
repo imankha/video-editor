@@ -1201,6 +1201,11 @@ def ensure_database():
                 -- the produced status. NULL = no produced reel. See migration v049.
                 reel_source_start_time REAL,
                 reel_source_end_time REAL,
+                -- T10300: 'game' = annotate-cut clip; 'upload' = direct upload.
+                -- Discriminates idempotency (filename+source='upload'), the
+                -- game-cut natural key (scoped to 'game'), and game-delete
+                -- cascade (upload clips are UNLINKED, not deleted). See v053.
+                source TEXT NOT NULL DEFAULT 'game',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
                 FOREIGN KEY (auto_project_id) REFERENCES projects(id) ON DELETE SET NULL

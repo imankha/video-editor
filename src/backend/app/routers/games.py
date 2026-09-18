@@ -2261,12 +2261,25 @@ def _delete_game_cascade(cursor, game_id: int) -> tuple[list[str], int]:
     Cleanup order matters for FK constraints:
     - raw_clips cascade from games (ON DELETE CASCADE), which cascades to working_clips
     - projects reference clips without cascade, so empty ones are pruned explicitly.
+
+    T10300 D3: a directly-uploaded clip linked to this game (source='upload') is
+    attribution only, not game content -- it must survive game deletion, UNLINKED
+    rather than cascade-deleted. It is explicitly unlinked BEFORE the project-orphan
+    scan below and the cascade delete, so its project is no longer seen as
+    game-linked and survives too. Game-cut clips (source='game') are unaffected and
+    still cascade via the FK.
     """
     # Collect video hashes before cascade delete removes game_videos rows.
     video_hashes = [
         row['blake3_hash'] for row in
         cursor.execute("SELECT blake3_hash FROM game_videos WHERE game_id = ?", (game_id,)).fetchall()
     ]
+
+    # T10300 D3: unlink (not delete) attributed upload clips before the cascade.
+    cursor.execute(
+        "UPDATE raw_clips SET game_id = NULL WHERE game_id = ? AND source = 'upload'",
+        (game_id,),
+    )
 
     # Find all projects linked to this game's clips (auto-created or manual).
     cursor.execute("""

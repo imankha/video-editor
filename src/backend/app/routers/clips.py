@@ -144,6 +144,7 @@ class RawClipResponse(BaseModel):
     auto_project_id: int | None = None
     created_at: str
     shared_by: str | None = None
+    source: str = 'game'  # T10300: 'game' (annotate-cut) | 'upload' (direct upload)
 
 
 class RawClipCreate(BaseModel):
@@ -181,6 +182,14 @@ class RawClipSaveResponse(BaseModel):
     filename: str
     project_created: bool = False
     project_id: int | None = None
+
+
+class LinkClipToGameRequest(BaseModel):
+    """T10300: surgical link/unlink gesture for an uploaded clip.
+
+    game_id != None -> link the clip to that game (attribution only);
+    game_id == None -> unlink. One gesture, one field."""
+    game_id: int | None = None
 
 
 class WorkingClipCreate(BaseModel):
@@ -881,7 +890,8 @@ async def list_raw_clips(game_id: int | None = None, min_rating: int | None = No
 
         query = """
             SELECT id, filename, rating, tags, name, notes, start_time, end_time,
-                   game_id, auto_project_id, created_at, tagged_teammates, my_athlete
+                   game_id, auto_project_id, created_at, tagged_teammates, my_athlete,
+                   source
             FROM raw_clips
             WHERE 1=1
         """
@@ -930,6 +940,7 @@ async def list_raw_clips(game_id: int | None = None, min_rating: int | None = No
                 created_at=clip['created_at'],
                 tagged_teammates=tagged_teammates,
                 my_athlete=my_athlete,
+                source=clip['source'],
             ))
         return result
 
@@ -942,7 +953,7 @@ async def get_raw_clip(clip_id: int):
         cursor.execute("""
             SELECT id, filename, rating, tags, name, notes, start_time, end_time,
                    game_id, auto_project_id, created_at, tagged_teammates, my_athlete,
-                   shared_by
+                   shared_by, source
             FROM raw_clips WHERE id = ?
         """, (clip_id,))
         clip = cursor.fetchone()
@@ -974,6 +985,7 @@ async def get_raw_clip(clip_id: int):
             tagged_teammates=tagged_teammates,
             my_athlete=my_athlete,
             shared_by=clip['shared_by'],
+            source=clip['source'],
         )
 
 
@@ -1237,16 +1249,21 @@ async def save_raw_clip(
             )
             raise HTTPException(status_code=404, detail="Game not found")
 
-        # Check if clip already exists (natural key: game_id + end_time + video_sequence)
+        # Check if clip already exists (natural key: game_id + end_time + video_sequence).
+        # T10300: scope to source='game' — a linked upload clip (source='upload')
+        # carries its own game_id + end_time=duration + video_sequence NULL, which
+        # could otherwise be falsely matched here and UPDATE-clobbered by an
+        # annotate cut. Game cuts and linked uploads share game_id but occupy
+        # separate keyspaces.
         if clip_data.video_sequence is not None:
             cursor.execute("""
                 SELECT id, filename, rating, auto_project_id, start_time FROM raw_clips
-                WHERE game_id = ? AND end_time = ? AND video_sequence = ?
+                WHERE game_id = ? AND end_time = ? AND video_sequence = ? AND source = 'game'
             """, (clip_data.game_id, clip_data.end_time, clip_data.video_sequence))
         else:
             cursor.execute("""
                 SELECT id, filename, rating, auto_project_id, start_time FROM raw_clips
-                WHERE game_id = ? AND end_time = ? AND video_sequence IS NULL
+                WHERE game_id = ? AND end_time = ? AND video_sequence IS NULL AND source = 'game'
             """, (clip_data.game_id, clip_data.end_time))
         existing = cursor.fetchone()
 
@@ -1512,6 +1529,42 @@ async def update_raw_clip(
         "project_created": project_created,
         "project_id": auto_project_id
     }
+
+
+@router.post("/raw/{clip_id}/link")
+async def link_raw_clip_to_game(
+    clip_id: int,
+    body: LinkClipToGameRequest,
+    _durable: None = Depends(durable_sync),  # T10300: sync the (un)link to R2 before 200
+):
+    """T10300 D4: surgical link/unlink gesture for a directly-uploaded clip.
+
+    body.game_id != None -> link (attribution only: game_id is set, the clip
+    keeps its own source span). body.game_id == None -> unlink.
+
+    Never re-attributes a game-cut clip (source='game') -- only upload clips
+    can be linked/unlinked through this gesture.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id, source FROM raw_clips WHERE id = ?", (clip_id,))
+        clip = cursor.fetchone()
+        if not clip:
+            raise HTTPException(status_code=404, detail="Raw clip not found")
+        if clip['source'] != 'upload':
+            raise HTTPException(status_code=409, detail="Only uploaded clips can be linked to a game")
+
+        if body.game_id is not None:
+            cursor.execute("SELECT id FROM games WHERE id = ?", (body.game_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Game not found")
+
+        cursor.execute("UPDATE raw_clips SET game_id = ? WHERE id = ?", (body.game_id, clip_id))
+        conn.commit()
+        logger.info(f"[T10300] clip {clip_id} {'linked to game ' + str(body.game_id) if body.game_id else 'unlinked'}")
+
+    return {"success": True, "clip_id": clip_id, "game_id": body.game_id}
 
 
 @router.delete("/raw/{clip_id}")
@@ -1961,8 +2014,12 @@ async def upload_clips_batch(request: ClipUploadBatchRequest, _durable: None = D
                 continue
 
             # Idempotent re-post: this exact clip source already landed a row.
+            # T10300: key on source='upload' (immutable), NOT game_id IS NULL —
+            # a re-upload must still dedup after the clip has been linked to a
+            # game (game_id set) or later unlinked. `filename` IS the blake3
+            # content hash, so (filename, source='upload') is the natural key.
             cursor.execute(
-                "SELECT id, auto_project_id FROM raw_clips WHERE filename = ? AND game_id IS NULL",
+                "SELECT id, auto_project_id FROM raw_clips WHERE filename = ? AND source = 'upload'",
                 (filename,),
             )
             existing = cursor.fetchone()
@@ -2080,10 +2137,12 @@ async def upload_clips_batch(request: ClipUploadBatchRequest, _durable: None = D
 
             # D1 fix: (0, probed_duration) — never NULL/NULL (a 0-second source
             # range at export, the bug this closes).
+            # T10300: source='upload' — game_id stays NULL at creation (linking
+            # to a game is always a later user gesture, POST /clips/raw/{id}/link).
             cursor.execute("""
                 INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time,
-                                       game_id, my_athlete)
-                VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)
+                                       game_id, my_athlete, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 'upload')
             """, (c["filename"], rating, encode_data(tags), unique_name, notes, 0, meta["duration"], my_athlete_val))
             raw_clip_id = cursor.lastrowid
 
@@ -2161,10 +2220,12 @@ async def upload_clip_with_metadata(
 
         logger.info(f"Uploaded clip to R2: {clip_filename}")
 
-        # Create raw_clip entry (game_id=NULL for direct uploads)
+        # Create raw_clip entry (game_id=NULL for direct uploads).
+        # T10300: source='upload' so idempotency/natural-key/cascade treat it as
+        # an uploaded clip, matching the batch /clips/upload path.
         cursor.execute("""
-            INSERT INTO raw_clips (filename, rating, tags, name, notes, game_id)
-            VALUES (?, ?, ?, ?, ?, NULL)
+            INSERT INTO raw_clips (filename, rating, tags, name, notes, game_id, source)
+            VALUES (?, ?, ?, ?, ?, NULL, 'upload')
         """, (
             clip_filename,
             rating,

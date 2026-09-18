@@ -666,3 +666,45 @@ describe('DraftTile names its own object (T9530 N12/N14/N15)', () => {
     expect(screen.queryByRole('button', { name: /delete clip/i })).toBeNull();
   });
 });
+
+// T10300: the "Link to game" / "Unlink" affordance is gated strictly on the
+// clip's source discriminator — only a directly-uploaded clip (source==='upload')
+// may be (un)linked; a game-cut clip (source==='game') can never be re-attributed.
+// The kebab reflects the current link state: "Link to game" when unlinked, an
+// "Unlink from {game}" action (naming the linked game) when linked.
+describe('DraftTile link/unlink affordance (T10300)', () => {
+  const renderReady = (overrides) => render(
+    <DraftTile
+      project={{ ...baseProject, has_final_video: true, final_video_id: 99, is_published: false, ...overrides }}
+      onSelect={vi.fn()}
+      onSelectWithMode={vi.fn()}
+      onDelete={vi.fn()}
+    />
+  );
+
+  it('an UNLINKED upload clip offers "Link to game" in the kebab', () => {
+    renderReady({ is_auto_created: true, clips: [{ id: 42, source: 'upload' }], game_ids: [] });
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    expect(screen.getByText('Link to game')).toBeTruthy();
+    expect(screen.queryByText(/^Unlink/)).toBeNull();
+  });
+
+  it('a LINKED upload clip offers "Unlink from {game}", naming the game', () => {
+    renderReady({
+      is_auto_created: true,
+      clips: [{ id: 42, source: 'upload' }],
+      game_ids: [5],
+      game_names: ['vs Rockets'],
+    });
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    expect(screen.getByText('Unlink from vs Rockets')).toBeTruthy();
+    expect(screen.queryByText('Link to game')).toBeNull();
+  });
+
+  it('a game-cut clip (source: "game") exposes NEITHER link nor unlink', () => {
+    renderReady({ is_auto_created: true, clips: [{ id: 42, source: 'game' }], game_ids: [5], game_names: ['vs Rockets'] });
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    expect(screen.queryByText('Link to game')).toBeNull();
+    expect(screen.queryByText(/^Unlink/)).toBeNull();
+  });
+});

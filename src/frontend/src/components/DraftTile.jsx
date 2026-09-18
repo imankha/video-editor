@@ -1,13 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Z } from '../constants/zLayers';
-import { Pencil, CheckCircle, Tag, Loader2, FolderInput, MoreVertical, Trash2, Play, Crop, Layers, EyeOff, Film, AlertTriangle, Clock } from 'lucide-react';
+import { Pencil, CheckCircle, Tag, Loader2, FolderInput, MoreVertical, Trash2, Play, Crop, Layers, EyeOff, Film, AlertTriangle, Clock, Link2, Unlink } from 'lucide-react';
 import { Button } from './shared/Button';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { TilePreviewVideo } from './collections/TilePreviewVideo';
 import { useTilePreview } from '../hooks/useTilePreview';
 import { useProjectsStore } from '../stores/projectsStore';
+import { useGamesDataStore, useReadyGames } from '../stores/gamesDataStore';
 import { useCurrentProfile } from '../stores/profileStore';
+import { useRawClipSave } from '../hooks/useRawClipSave';
+import { LinkClipToGameModal } from './LinkClipToGameModal';
 import { useSyncStore } from '../stores/syncStore';
 import { useExportStore } from '../stores/exportStore';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
@@ -18,7 +21,8 @@ import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { API_BASE } from '../config';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
-import { SECTION_NAMES, LIBRARY_ACTIONS, MODE_NAMES } from '../config/displayNames';
+import { SECTION_NAMES, LIBRARY_ACTIONS, MODE_NAMES, CLIP_LINK } from '../config/displayNames';
+import { toast } from './shared/Toast';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
 import { rendersSourceAspect, getDraftStatus } from '../utils/draftStage';
@@ -45,6 +49,8 @@ import { staleClipCount } from '../utils/reelStaleness';
 export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set(), sourceExpiry = null }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
+  // T10300: game-picker for linking a directly-uploaded clip to a game.
+  const [showLinkModal, setShowLinkModal] = useState(false);
   // T8530: publish is the shared usePublishProject gesture (extracted from this
   // component so DraftTile + the draft preview player run ONE publish path,
   // carrying the T4050 durable-sync contract verbatim). `publishRetry` still
@@ -85,6 +91,60 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // persistent accent ring so the user can spot "the one I'm working on" in the row.
   const selectedProjectId = useProjectsStore(state => state.selectedProjectId);
   const isCurrentProject = selectedProjectId != null && selectedProjectId === project.id;
+
+  // T10300: link/unlink an UPLOADED clip to a game. The affordance is gated strictly
+  // on the clip's source discriminator (a game-cut clip can never be relinked — the
+  // backend 409s it). `raw_clips.id` for the link endpoint is the first (only) clip.
+  const firstProjectClip = project.clips?.[0];
+  const isUploadClip = firstProjectClip?.source === 'upload';
+  const isLinkedToGame = !!project.game_ids?.length;
+  const linkedGameName = project.game_names?.[0] || null;
+  const readyGames = useReadyGames();
+  const fetchProjects = useProjectsStore(state => state.fetchProjects);
+  const fetchGames = useGamesDataStore(state => state.fetchGames);
+  const { linkRawClipToGame, isSaving: isLinking } = useRawClipSave();
+
+  // Gesture handlers — the API call fires from the click, never a reactive effect.
+  // On success we refetch projects (re-groups the tile under/out of the game) and
+  // games (clip counts update) from the click handler's success branch.
+  const refreshAfterLink = async () => {
+    await Promise.all([
+      fetchProjects({ force: true }),
+      fetchGames({ force: true }),
+    ]);
+  };
+
+  const handleOpenLinkPicker = (e) => {
+    e.stopPropagation();
+    setMenuOpen(false);
+    setActionsRevealed(false);
+    setShowLinkModal(true);
+  };
+
+  const handleLinkToGame = async (gameId) => {
+    setShowLinkModal(false);
+    const clipId = firstProjectClip?.id;
+    if (clipId == null) return;
+    const result = await linkRawClipToGame(clipId, gameId);
+    if (result) {
+      const gameName = readyGames.find(g => g.id === gameId)?.name || null;
+      toast.success(CLIP_LINK.linkedToast(gameName));
+      await refreshAfterLink();
+    }
+  };
+
+  const handleUnlinkFromGame = async (e) => {
+    e.stopPropagation();
+    setMenuOpen(false);
+    setActionsRevealed(false);
+    const clipId = firstProjectClip?.id;
+    if (clipId == null) return;
+    const result = await linkRawClipToGame(clipId, null);
+    if (result) {
+      toast.success(CLIP_LINK.UNLINKED_TOAST);
+      await refreshAfterLink();
+    }
+  };
 
   // Position the kebab popover against the button rect and close it on outside tap
   // (fine-pointer popover only; the coarse-pointer sheet is a full-screen overlay
@@ -423,6 +483,20 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           <span className="text-gray-200">Hide from Drafts</span>
         </button>
       )}
+      {/* T10300: link/unlink an uploaded clip to a game (upload clips only). */}
+      {isUploadClip && (
+        isLinkedToGame ? (
+          <button onClick={handleUnlinkFromGame} disabled={isLinking} className={`${menuItemClass} hover:bg-gray-600`}>
+            <Unlink size={18} className="text-gray-300 flex-shrink-0" />
+            <span className="text-gray-200">{CLIP_LINK.unlinkFrom(linkedGameName)}</span>
+          </button>
+        ) : (
+          <button onClick={handleOpenLinkPicker} disabled={isLinking} className={`${menuItemClass} hover:bg-gray-600`}>
+            <Link2 size={18} className="text-gray-300 flex-shrink-0" />
+            <span className="text-gray-200">{CLIP_LINK.LINK_TO_GAME}</span>
+          </button>
+        )
+      )}
       <div className="my-1 border-t border-gray-600" />
       {/* Two-click delete: first click arms the confirm and KEEPS the menu open; the
           second calls onDelete and the tile unmounts. Never closes on the first tap. */}
@@ -664,6 +738,15 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           {isComplete && !isReadyToPublish && (
             <Button variant="secondary" size="sm" icon={EyeOff} iconOnly loading={isPublishing} onClick={handleHideFromDrafts} title={`Hide from Drafts (stays under ${SECTION_NAMES.PUBLISHED})`} className={actionBtnClass} />
           )}
+          {/* T10300: link/unlink an uploaded clip to a game (upload clips only), so
+              an unframed uploaded clip exposes the SAME affordance as the ready kebab. */}
+          {isUploadClip && (
+            isLinkedToGame ? (
+              <Button variant="secondary" size="sm" icon={Unlink} iconOnly loading={isLinking} onClick={handleUnlinkFromGame} title={CLIP_LINK.unlinkFrom(linkedGameName)} className={actionBtnClass} />
+            ) : (
+              <Button variant="secondary" size="sm" icon={Link2} iconOnly loading={isLinking} onClick={handleOpenLinkPicker} title={CLIP_LINK.LINK_TO_GAME} className={actionBtnClass} />
+            )
+          )}
           <Button variant={showDeleteConfirm ? 'danger' : 'secondary'} size="sm" icon={Trash2} iconOnly onClick={handleDelete} title={showDeleteConfirm ? 'Click again to confirm' : deleteLabel} className={actionBtnClass} />
         </div>
       )}
@@ -800,6 +883,17 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
             Retry
           </button>
         </div>
+      )}
+
+      {/* T10300: game picker for linking this uploaded clip to a game. Portaled +
+          Z.MODAL inside the modal itself; the games list is the readyGames store. */}
+      {showLinkModal && (
+        <LinkClipToGameModal
+          isOpen={showLinkModal}
+          games={readyGames}
+          onClose={() => setShowLinkModal(false)}
+          onLink={handleLinkToGame}
+        />
       )}
 
     </div>
