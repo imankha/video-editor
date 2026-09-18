@@ -32,7 +32,9 @@ import { FOCUS_PUBLISH } from '../config/displayNames';
  *
  * Tab order follows the visual hierarchy for free: the three cards are in
  * DOM order primary→secondary→tertiary, then the Save-draft link, so keyboard
- * focus lands on the dominant action first (T9590 acceptance) with no tabIndex.
+ * focus lands on the dominant action first (T9590 acceptance). Each card is
+ * ONE tab stop (tabIndex={0} on the card itself; the inner pill button is
+ * tabIndex={-1}, see handleCardKeyDown below, 2026-09-18).
  *
  * GRID (kept from T9110's mechanism, restructured for 3 cards): one CSS grid,
  * one DOM instance per card, same order at every width. `grid-cols-1` stacks
@@ -65,6 +67,23 @@ import { FOCUS_PUBLISH } from '../config/displayNames';
  *                                      derived by the screen via resultRetentionNote. Rendered
  *                                      above the grid; omitted when null.
  */
+// 2026-09-18 (user request): the whole card is the touch/click target now, not
+// just the small pill button inside it -- a hover-sized target was too easy to
+// miss, especially the caption text underneath it. The card `<div>` carries
+// role="button" + tabIndex + this key handler (Enter/Space, matching native
+// button activation); the inner Button keeps its own visual style but loses
+// its onClick and gets tabIndex={-1} so there is exactly ONE tab stop per card
+// and a click anywhere in the card (including the inner button, via bubbling)
+// fires the handler exactly once.
+function handleCardKeyDown(handler) {
+  return (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handler();
+    }
+  };
+}
+
 export function FocusPublishActionBar({
   onAddSpotlight,
   onPublish,
@@ -94,9 +113,13 @@ export function FocusPublishActionBar({
             tinted, ringed card. Opens the editor; never exports on its own. */}
         <div
           data-testid="focus-choice-primary"
-          className="flex h-full flex-col justify-between gap-4 rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-5 text-center ring-1 ring-cyan-500/20"
+          role="button"
+          tabIndex={0}
+          onClick={onAddSpotlight}
+          onKeyDown={handleCardKeyDown(onAddSpotlight)}
+          className="flex h-full flex-col justify-between gap-4 rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-5 text-center ring-1 ring-cyan-500/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-400"
         >
-          <Button variant="cyan" size="lg" icon={Sparkles} onClick={onAddSpotlight} className="w-full">
+          <Button variant="cyan" size="lg" icon={Sparkles} tabIndex={-1} className="w-full">
             <span className="whitespace-nowrap">{FOCUS_PUBLISH.ADD_SPOTLIGHT_LABEL}</span>
           </Button>
           <p className="text-sm italic leading-relaxed text-gray-300">{FOCUS_PUBLISH.SPOTLIGHT_CAPTION}</p>
@@ -104,13 +127,20 @@ export function FocusPublishActionBar({
 
         {/* SECONDARY — Publish without spotlight. Normal gray card; caption
             states the audience/access BEFORE the tap. */}
-        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-700 bg-gray-800/40 p-5 text-center">
+        <div
+          role="button"
+          tabIndex={0}
+          aria-disabled={publishLoading}
+          onClick={publishLoading ? undefined : onPublish}
+          onKeyDown={publishLoading ? undefined : handleCardKeyDown(onPublish)}
+          className={`flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-700 bg-gray-800/40 p-5 text-center focus:outline-none focus:ring-2 focus:ring-gray-400 ${publishLoading ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+        >
           <Button
             variant="secondary"
             size="md"
             icon={FolderInput}
             loading={publishLoading}
-            onClick={onPublish}
+            tabIndex={-1}
             data-tutorial-target="focus-publish"
             className="w-full"
           >
@@ -121,8 +151,14 @@ export function FocusPublishActionBar({
 
         {/* TERTIARY — Edit framing. Quiet outline card; caption carries the
             "uses credits" re-export warning BEFORE the tap. */}
-        <div className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-800 bg-gray-800/20 p-5 text-center">
-          <Button variant="outline" size="md" icon={Pencil} onClick={onRefocus} className="w-full">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={onRefocus}
+          onKeyDown={handleCardKeyDown(onRefocus)}
+          className="flex h-full flex-col justify-between gap-4 rounded-xl border border-gray-800 bg-gray-800/20 p-5 text-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-400"
+        >
+          <Button variant="outline" size="md" icon={Pencil} tabIndex={-1} className="w-full">
             <span className="whitespace-nowrap">{FOCUS_PUBLISH.EDIT_FRAMING_LABEL}</span>
           </Button>
           <p className="text-sm italic leading-relaxed text-gray-400">{FOCUS_PUBLISH.EDIT_FRAMING_CAPTION}</p>

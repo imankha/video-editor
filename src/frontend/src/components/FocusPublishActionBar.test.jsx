@@ -75,6 +75,55 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590)', () => {
     expect(handlers.onSaveDraft).toHaveBeenCalledTimes(1);
   });
 
+  // Regression (2026-09-18 user request): the whole card is the touch target
+  // now, not just the small pill button inside it. Clicking the CAPTION text
+  // (never previously interactive) must fire the same handler, exactly once
+  // (no double-fire from the nested button also bubbling).
+  it('clicking anywhere in a card (including its caption, not just the pill) fires the handler exactly once', () => {
+    const handlers = makeHandlers();
+    render(<FocusPublishActionBar {...handlers} />);
+
+    fireEvent.click(screen.getByText(FOCUS_PUBLISH.SPOTLIGHT_CAPTION));
+    expect(handlers.onAddSpotlight).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByText(FOCUS_PUBLISH.EDIT_FRAMING_CAPTION));
+    expect(handlers.onRefocus).toHaveBeenCalledTimes(1);
+  });
+
+  it('clicking the inner pill button still fires the handler exactly once (no double-fire via bubbling)', () => {
+    const handlers = makeHandlers();
+    render(<FocusPublishActionBar {...handlers} />);
+
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }));
+    expect(handlers.onPublish).toHaveBeenCalledTimes(1);
+  });
+
+  it('each card is keyboard-activatable with Enter/Space (single tab stop per card)', () => {
+    const handlers = makeHandlers();
+    const { container } = render(<FocusPublishActionBar {...handlers} />);
+
+    const primaryCard = container.querySelector('[data-testid="focus-choice-primary"]');
+    expect(primaryCard.getAttribute('role')).toBe('button');
+    expect(primaryCard.getAttribute('tabindex')).toBe('0');
+    fireEvent.keyDown(primaryCard, { key: 'Enter' });
+    expect(handlers.onAddSpotlight).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(primaryCard, { key: ' ' });
+    expect(handlers.onAddSpotlight).toHaveBeenCalledTimes(2);
+
+    // The inner pill is excluded from the tab sequence -- the card is the ONE stop.
+    const innerButton = screen.getByRole('button', { name: FOCUS_PUBLISH.ADD_SPOTLIGHT_LABEL });
+    expect(innerButton.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('a loading Publish card ignores clicks (matches the disabled inner button)', () => {
+    const handlers = makeHandlers();
+    render(<FocusPublishActionBar {...handlers} publishLoading />);
+    const publishCard = screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }).closest('[role="button"]');
+    fireEvent.click(screen.getByText(FOCUS_PUBLISH.PUBLISH_CAPTION));
+    expect(handlers.onPublish).not.toHaveBeenCalled();
+    expect(publishCard.getAttribute('aria-disabled')).toBe('true');
+  });
+
   it('publishLoading spins/disables Publish only', () => {
     render(<FocusPublishActionBar {...makeHandlers()} publishLoading />);
     // Button.jsx only swaps the icon slot for a spinner while loading -- the
