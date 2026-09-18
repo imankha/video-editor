@@ -1,6 +1,6 @@
 # T10280: Home tab guidance: one structure for all four tabs, new copy, drop the flow strip
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-17
