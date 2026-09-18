@@ -2,13 +2,13 @@ import { ChevronDown, ChevronUp, Play } from 'lucide-react';
 import { EDITOR_PANELS, STAGE_REASONS } from '../../config/displayNames';
 
 /**
- * FramingInstructions (T9610) — a visible three-step sequence that teaches a
+ * FramingInstructions (T9610) — a visible instructional sequence that teaches a
  * first-time parent to frame their player, plus a prompt to PREVIEW the result by
  * pressing play before paying for a render.
  *
  * Why it exists: the framing screen used to say "Set crop keyframes so the focus
  * follows your athlete" — "keyframe" assumes video-editing knowledge. This replaces
- * that with a plain-language sequence (move the box → step forward → move it again)
+ * that with plain-language instructions (move the box, replay, re-adjust, use slo-mo)
  * and names the primitive with the ONE shared noun, `EDITOR_PANELS.FOCUS_POINT`
  * ("Focus point", owned by T9550) — never "keyframe" in this parent-facing copy.
  *
@@ -32,12 +32,6 @@ export default function FramingInstructions({ focusPointCount = 0, expanded, onT
   const noun = EDITOR_PANELS.FOCUS_POINT.toLowerCase();
   const hasFramingSuccess = focusPointCount >= 2;
 
-  const steps = [
-    `Move the box over your athlete.`,
-    `Step forward in the video.`,
-    `Move the box again to follow them.`,
-  ];
-
   return (
     <div
       data-testid="framing-instructions"
@@ -50,11 +44,8 @@ export default function FramingInstructions({ focusPointCount = 0, expanded, onT
         aria-expanded={expanded}
         className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"
       >
-        <span className="flex items-center gap-2 min-w-0">
-          {!expanded && <Play size={14} className="shrink-0 text-blue-300" aria-hidden="true" />}
-          <span className="truncate text-sm font-semibold text-white">
-            {expanded ? 'Frame your athlete' : 'Press play to preview your framing before exporting'}
-          </span>
+        <span className="truncate text-sm font-semibold text-white">
+          {expanded ? 'Frame your athlete' : 'Instructions'}
         </span>
         {expanded
           ? <ChevronUp size={16} className="shrink-0 text-gray-400" aria-hidden="true" />
@@ -63,19 +54,16 @@ export default function FramingInstructions({ focusPointCount = 0, expanded, onT
 
       {expanded && (
         <div className="px-3 pb-3">
-          {/* T9860 3.5: one reason per stage, stated before the mechanics. */}
-          <p className="mt-2 text-xs text-gray-400">{STAGE_REASONS.FRAMING}</p>
+          {/* T9860 3.5: one reason per stage, stated before the mechanics — sized up
+              (2026-09-18 user request) so it reads as the headline, not a footnote. */}
+          <p className="mt-2 text-sm font-medium text-gray-200">{STAGE_REASONS.FRAMING}</p>
 
-          <ol className="flex flex-col gap-1.5">
-            {steps.map((text, i) => (
-              <li key={i} className="flex items-center gap-2.5 text-sm text-gray-200">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
-                  {i + 1}
-                </span>
-                <span>{text}</span>
-              </li>
-            ))}
-          </ol>
+          {/* 2026-09-18 user request: plain instructional copy, not a numbered list. */}
+          <p data-testid="framing-instructions-steps" className="mt-2 text-xs text-gray-400">
+            Move the box so it captures your athlete and the play. Play the video and
+            re-adjust the box as needed so it stays focused on your player. Also use
+            slow-mo to capture key athlete movements.
+          </p>
 
           {/* Distinguish the MANUAL focus points from the mode's automatic reframing,
               so the capability is neither over- nor under-claimed. */}

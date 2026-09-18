@@ -65,14 +65,14 @@ describe('FocusModeView framing guide (T9610)', () => {
     renderView({ keyframes: [kf(10)] });
     const toggle = screen.getByTestId('framing-instructions-toggle');
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByTestId('framing-instructions').querySelector('ol')).not.toBeNull();
+    expect(screen.getByTestId('framing-instructions-steps')).not.toBeNull();
   });
 
   it('collapses the guide by default once two focus points are placed', () => {
     renderView({ keyframes: [kf(10), kf(40)] });
     const toggle = screen.getByTestId('framing-instructions-toggle');
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(screen.getByTestId('framing-instructions').querySelector('ol')).toBeNull();
+    expect(screen.queryByTestId('framing-instructions-steps')).toBeNull();
   });
 
   it('ignores trim-origin keyframes when counting focus points', () => {

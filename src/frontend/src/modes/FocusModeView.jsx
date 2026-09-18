@@ -443,16 +443,9 @@ export function FocusModeView({
         </div>
       )}
 
-      {/* Game name - hidden in fullscreen, hidden below lg on mobile (mobile gets
-          it inline under the video instead, see clipGameName below). 2026-09-18
-          (user request): the old bordered/backgrounded full-width bar (which also
-          re-showed the clip title already in the breadcrumb above) is gone --
-          plain de-emphasized text, no dedicated bar. */}
-      {!isFullscreen && clipGameName && (
-        <div className="hidden lg:block mb-2 text-sm text-gray-400 truncate">
-          {clipGameName}
-        </div>
-      )}
+      {/* Game name now lives in the breadcrumb above (Clips > Game > Clip,
+          clickable to jump to Annotate for that game) — see UnifiedHeader /
+          Breadcrumb. No separate desktop bar needed here anymore. */}
       {/* Tags keep their own card (unrelated to the identity bar above) since
           they're the one piece of this block with real visual weight. */}
       {!isFullscreen && clipTags?.length > 0 && (

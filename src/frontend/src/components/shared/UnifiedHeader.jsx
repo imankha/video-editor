@@ -22,6 +22,8 @@ const MODE_ICONS = {
 export function UnifiedHeader({
   onHomeClick,
   breadcrumbType,
+  breadcrumbGameName,
+  onGameNameClick,
   breadcrumbItemName,
   editorMode,
   onModeChange,
@@ -80,6 +82,8 @@ export function UnifiedHeader({
         <div className="min-w-0">
           <Breadcrumb
             type={breadcrumbType}
+            gameName={breadcrumbGameName}
+            onGameClick={onGameNameClick}
             itemName={breadcrumbItemName}
             onTypeClick={onHomeClick}
           />

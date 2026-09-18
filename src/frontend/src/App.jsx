@@ -130,6 +130,14 @@ function App() {
     return clips?.[0] ?? null;
   }, [selectedClipId, clips]);
 
+  // Source game name for the breadcrumb's middle segment (Clips > Game > Clip).
+  const readyGames = useGamesDataStore(state => state.readyGames);
+  const selectedClipGameName = useMemo(() => {
+    if (!selectedClipForAnnotate?.game_id || !readyGames?.length) return null;
+    const game = readyGames.find(g => g.id === selectedClipForAnnotate.game_id);
+    return game?.name || null;
+  }, [selectedClipForAnnotate?.game_id, readyGames]);
+
   // Project management — Zustand store (reactive to profile switches)
   const selectedProject = useProjectsStore(state => state.selectedProject);
   const selectedProjectId = useProjectsStore(state => state.selectedProjectId);
@@ -968,6 +976,8 @@ function App() {
           <UnifiedHeader
             onHomeClick={() => handleModeChange(EDITOR_MODES.PROJECT_MANAGER)}
             breadcrumbType={SECTION_NAMES.CLIPS}
+            breadcrumbGameName={selectedClipGameName}
+            onGameNameClick={() => handleModeChange(EDITOR_MODES.ANNOTATE)}
             breadcrumbItemName={getProjectDisplayName(selectedProject)}
             editorMode={editorMode}
             onModeChange={handleModeChange}

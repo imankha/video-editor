@@ -53,22 +53,22 @@ test.describe('T9610 teach framing (desktop)', () => {
     }
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 
-    // Criterion 1: the three-step visible instruction, in plain language.
-    await expect(guide.getByText(/move the box over your athlete/i)).toBeVisible();
-    await expect(guide.getByText(/step forward in the video/i)).toBeVisible();
-    await expect(guide.getByText(/move the box again to follow them/i)).toBeVisible();
+    // Criterion 1: the visible instruction, in plain language (no numbered list).
+    await expect(guide.getByText(/move the box so it captures your athlete and the play/i)).toBeVisible();
+    await expect(guide.getByText(/re-adjust the box as needed so it stays focused on your player/i)).toBeVisible();
+    await expect(guide.getByText(/slow-mo to capture key athlete movements/i)).toBeVisible();
     // Names the primitive with the shared "Focus point" noun.
     await expect(guide.getByText(/focus point/i).first()).toBeVisible();
-    await saveEvidence(page, 'T9610-crit1-three-step-guide-expanded');
+    await saveEvidence(page, 'T9610-crit1-guide-expanded');
 
     // Criterion 2 (preview): the prompt points at ordinary playback, before export.
     await expect(page.getByTestId('framing-preview-prompt')).toContainText(/press play to preview/i);
 
-    // Collapse it: the preview prompt stays prominent in the collapsed header.
+    // Collapse it: the header becomes a plain "Instructions" label, no play icon.
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    await expect(toggle).toContainText(/press play to preview/i);
-    await saveEvidence(page, 'T9610-crit2-collapsed-preview-prompt');
+    await expect(toggle).toHaveText('Instructions');
+    await saveEvidence(page, 'T9610-crit2-collapsed-instructions-label');
 
     // Criterion 3 (verify T9550): descriptive aspect label stays visible.
     await page.getByTestId('settings-tab-settings').click();
