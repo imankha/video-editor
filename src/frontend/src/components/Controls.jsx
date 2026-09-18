@@ -1,6 +1,7 @@
 import React from 'react';
 import { Play, Pause, SkipBack, SkipForward, RotateCcw, Maximize, Minimize, Repeat, PlayCircle } from 'lucide-react';
 import { Button } from './shared/Button';
+import ZoomControls from './ZoomControls';
 import { formatTime } from '../utils/timeFormat';
 
 /**
@@ -40,6 +41,16 @@ export function Controls({
   onToggleFullscreen,
   isLooping,
   secondaryPlay,
+  // T10395: Focus's zoom control moved here from its settings rail, to match
+  // Annotate's transport bar (T10390). Optional + opt-in via `showZoomControls`
+  // so Overlay (also a Controls caller) is unaffected.
+  showZoomControls = false,
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
+  minZoom,
+  maxZoom,
 }) {
   // Primary Play/Pause. When looping, add a purple accent ring (byte-identical
   // className when not looping: exactly 'rounded-full').
@@ -121,16 +132,31 @@ export function Controls({
       </div>
 
       {/* Right side controls */}
-      {onToggleFullscreen && (
+      {(onToggleFullscreen || showZoomControls) && (
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={isFullscreen ? Minimize : Maximize}
-            iconOnly
-            onClick={onToggleFullscreen}
-            title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
-          />
+          {showZoomControls && (
+            <div className="hidden lg:flex items-center border-l border-gray-700 pl-2">
+              <ZoomControls
+                compact
+                zoom={zoom}
+                onZoomIn={onZoomIn}
+                onZoomOut={onZoomOut}
+                onResetZoom={onResetZoom}
+                minZoom={minZoom}
+                maxZoom={maxZoom}
+              />
+            </div>
+          )}
+          {onToggleFullscreen && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={isFullscreen ? Minimize : Maximize}
+              iconOnly
+              onClick={onToggleFullscreen}
+              title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
+            />
+          )}
         </div>
       )}
     </div>

@@ -1,6 +1,5 @@
 import { RotateCw } from 'lucide-react';
 import AspectRatioSelector from '../AspectRatioSelector';
-import ZoomControls from '../ZoomControls';
 import { Toggle } from '../shared';
 import SettingRow from './SettingRow';
 import SettingsPanel from './SettingsPanel';
@@ -10,20 +9,22 @@ import { EDITOR_PANELS } from '../../config/displayNames';
 /**
  * FocusSettingsPanel (T9270) — the Focus "Settings" tab body. Re-homes the controls
  * that used to live in the above-video toolbar (aspect selector, audio, straighten,
- * background dim, zoom) into the shared SettingRow / SettingsPanel anatomy, grouped
+ * background dim) into the shared SettingRow / SettingsPanel anatomy, grouped
  * by WHAT EACH CONTROL CHANGES:
  *
  *   Reel               — applies to every clip (aspect ratio, include audio)
- *   Advanced editing   — This clip (straighten) + View only (dim, zoom), T9950
+ *   Advanced editing   — This clip (straighten) + View only (dim), T9950
  *                        Slice 1: grouped under one heading. Originally shared
  *                        its label with the timeline's disclosure below the
  *                        video; that one was renamed to "Trim and Slo-mo"
  *                        2026-09-18 (unrelated content -- segment/speed/trim,
- *                        not straighten/dim/zoom), so this heading keeps
- *                        "Advanced editing" on its own now.
+ *                        not straighten/dim), so this heading keeps
+ *                        "Advanced editing" on its own now. T10395: zoom moved
+ *                        out of this panel entirely, onto the video's own
+ *                        Controls transport bar (matching Annotate, T10390).
  *
- * View-only controls (dim, zoom) and the straighten line-drag tool stay DESKTOP-ONLY
- * exactly as they were gated in the old toolbar: `desktopOnly` is false in the mobile
+ * The dim toggle and the straighten line-drag tool stay DESKTOP-ONLY exactly as
+ * they were gated in the old toolbar: `desktopOnly` is false in the mobile
  * drawer, which drops the Advanced editing group and the straighten tool entirely
  * (Step 4). One accent: blue-600.
  */
@@ -36,12 +37,6 @@ export default function FocusSettingsPanel({
   onToggleStraighten,
   dimOpacity,
   onToggleDim,
-  zoom,
-  onZoomIn,
-  onZoomOut,
-  onResetZoom,
-  minZoom,
-  maxZoom,
   desktopOnly = true,
 }) {
   return (
@@ -62,10 +57,10 @@ export default function FocusSettingsPanel({
         </SettingRow>
       </SettingsPanel>
 
-      {/* T9950 Slice 1: "This clip" (straighten) + "View only" (dim, zoom) grouped
+      {/* T9950 Slice 1: "This clip" (straighten) + "View only" (dim) grouped
           under one "Advanced editing" heading (own label since 2026-09-18 --
-          see the file docblock). The line-drag straighten TOOL and dim/zoom stay desktop-only
-          exactly as before (a phone has no pillarbox to dim, pinch handles zoom). */}
+          see the file docblock). The line-drag straighten TOOL and dim stay
+          desktop-only exactly as before (a phone has no pillarbox to dim). */}
       {desktopOnly && (
         <section className="space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -109,16 +104,6 @@ export default function FocusSettingsPanel({
                     style={{ transform: dimOpacity === 0.7 ? 'translateX(16px)' : 'translateX(0)' }}
                   />
                 </button>
-              </SettingRow>
-              <SettingRow label="Zoom" value={`${Math.round((zoom ?? 1) * 100)}%`}>
-                <ZoomControls
-                  zoom={zoom}
-                  onZoomIn={onZoomIn}
-                  onZoomOut={onZoomOut}
-                  onResetZoom={onResetZoom}
-                  minZoom={minZoom}
-                  maxZoom={maxZoom}
-                />
               </SettingRow>
             </SettingsPanel>
           </div>

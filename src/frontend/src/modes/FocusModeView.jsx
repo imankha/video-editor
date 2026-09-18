@@ -380,9 +380,10 @@ export function FocusModeView({
 
   // T9270: the Focus settings-rail tabs (Clips | Settings) and their bodies. The
   // Settings tab re-homes the old above-video toolbar (aspect, audio, straighten,
-  // background dim, zoom) into Reel / This clip / View-only groups. `desktopOnly`
-  // keeps dim/zoom + the straighten line-drag tool out of the mobile drawer (Step 4),
-  // exactly as the old toolbar gated them.
+  // background dim) into Reel / This clip / View-only groups. `desktopOnly` keeps
+  // dim + the straighten line-drag tool out of the mobile drawer (Step 4), exactly
+  // as the old toolbar gated them. T10395: zoom moved out of this rail entirely,
+  // onto the video's own Controls transport bar (matching Annotate, T10390).
   const focusRailTabs = [
     { id: 'clips', label: 'Clips', icon: Film },
     { id: 'settings', label: 'Settings', icon: Sliders },
@@ -397,12 +398,6 @@ export function FocusModeView({
       onToggleStraighten={handleToggleStraighten}
       dimOpacity={dimOpacity}
       onToggleDim={() => setDimOpacity(dimOpacity === 0.2 ? 0.7 : 0.2)}
-      zoom={zoom}
-      onZoomIn={onZoomIn}
-      onZoomOut={onZoomOut}
-      onResetZoom={onResetZoom}
-      minZoom={MIN_ZOOM}
-      maxZoom={MAX_ZOOM}
       desktopOnly={desktopOnly}
     />
   );
@@ -601,6 +596,15 @@ export function FocusModeView({
                 onRestart={restart}
                 isFullscreen={isFullscreen}
                 onToggleFullscreen={onToggleFullscreen}
+                // T10395: Zoom lives here now (was the settings rail's "View
+                // only" row) — desktop, non-fullscreen only, matching Annotate.
+                showZoomControls={!isFullscreen && !isMobile}
+                zoom={zoom}
+                onZoomIn={onZoomIn}
+                onZoomOut={onZoomOut}
+                onResetZoom={onResetZoom}
+                minZoom={MIN_ZOOM}
+                maxZoom={MAX_ZOOM}
               />
             )}
 

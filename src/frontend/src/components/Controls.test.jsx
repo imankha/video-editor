@@ -54,3 +54,31 @@ describe('Controls — spotlight-loop optional props (T5370)', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 });
+
+// T10395: Focus's zoom moved from its settings rail onto this shared bar,
+// opt-in via `showZoomControls` so Overlay (the other Controls caller) is
+// unaffected when it doesn't pass the prop.
+describe('Controls zoom (T10395)', () => {
+  it('shows no zoom controls by default', () => {
+    const { container } = render(<Controls {...baseProps} zoom={1} minZoom={1} maxZoom={4} />);
+    expect(container.querySelector('button[title="Zoom In (Scroll Up)"]')).toBeNull();
+  });
+
+  it('shows the compact zoom controls, reset always present but disabled at 100%, when showZoomControls is true', () => {
+    const { container } = render(
+      <Controls {...baseProps} showZoomControls zoom={1} minZoom={1} maxZoom={4} />,
+    );
+    expect(container.querySelector('button[title="Zoom In (Scroll Up)"]')).not.toBeNull();
+    expect(container.querySelector('button[title="Zoom Out (Scroll Down)"]')).not.toBeNull();
+    const reset = container.querySelector('button[title="Reset to 100%"]');
+    expect(reset).not.toBeNull();
+    expect(reset.disabled).toBe(true);
+  });
+
+  it('enables the reset button once zoomed in', () => {
+    const { container } = render(
+      <Controls {...baseProps} showZoomControls zoom={2} minZoom={1} maxZoom={4} />,
+    );
+    expect(container.querySelector('button[title="Reset to 100%"]').disabled).toBe(false);
+  });
+});
