@@ -1554,13 +1554,13 @@ export function ProjectManager({
         {/* T10310 (2026-09-18 user request): Reels + Published are ALWAYS
             reachable now, even at zero clips, so a curious user can click in and
             read what each tab says -- supersedes T9390 Decision 3's hasClips gate
-            (removed below, along with its VISIBLE-reason caption). Their own
-            EmptyTabGuide content (ReelsActions/PublishedActions) already renders
-            sensibly with zero clips: Build New Reel and the Games link both work
-            regardless of count. `hasClips` still gates the actual CREATE actions
-            that are genuinely impossible without a clip (e.g. the populated Reels
-            tab's own "Create reel" button below) -- only the tab-bar ACCESS gate
-            is gone. */}
+            (removed below, along with its VISIBLE-reason caption). Reels' own
+            EmptyTabGuide content (ReelsActions) already renders sensibly with zero
+            clips: Build New Reel works regardless of count. Published's empty
+            guide is headline/body only now (no fallback action to gate).
+            `hasClips` still gates the actual CREATE actions that are genuinely
+            impossible without a clip (e.g. the populated Reels tab's own "Create
+            reel" button below) -- only the tab-bar ACCESS gate is gone. */}
         <SegmentedTabButton
           active={activeTab === 'inProgressReels'}
           onClick={() => setActiveTab('inProgressReels')}

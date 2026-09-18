@@ -79,12 +79,9 @@ export const EMPTY_TAB_GUIDE = {
     body:
       'Download or share links with family, coaches, and recruiters. If you install ' +
       'the app on your phone you can even post to social directly.',
-    // Published is gated on hasClips too (Decision 3), so games are guaranteed
-    // here -- the old zero-everything "Add a game to get started" branch was
-    // deleted as dead code; this is the fall-through for "has a clip, nothing
-    // published yet". T10280 dropped the "N clips in progress" draftsText + the
-    // "Open Clips" button -- the headline/body plus this fallback is enough.
-    noClipsGamesText: 'Cut your first clip to get started.',
+    // T10310 (2026-09-18 user request): dropped the "Cut your first clip to get
+    // started." line + Go to Games button -- the headline/body alone is the
+    // empty state now, no fallback action.
   },
 };
 

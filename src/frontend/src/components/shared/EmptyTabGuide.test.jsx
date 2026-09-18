@@ -130,28 +130,25 @@ describe('EmptyTabGuide - Reels tab (T9390: tab is gated, so Build New Reel is a
   });
 });
 
-describe('EmptyTabGuide - Published tab (T10280: no in-progress count, no Open Clips button)', () => {
-  it('shows the headline/body + Go to Games, and NO "N in progress" count or Open Clips button', () => {
-    const onNavigate = vi.fn();
-    // Even with drafts present (clipCount > 0), the in-progress count + Open Clips
-    // button are gone (T10280) -- the guide is now headline/body + Go to Games only.
-    render(<EmptyTabGuide tab="published" clipCount={3} gamesCount={2} onNavigate={onNavigate} />);
+describe('EmptyTabGuide - Published tab (T10310: headline/body only, no fallback action)', () => {
+  it('shows the headline/body and NO "Cut your first clip" text or Go to Games button', () => {
+    // T10310 (2026-09-18 user request) dropped the "Cut your first clip to get
+    // started." line + Go to Games button -- headline/body is the whole guide now,
+    // regardless of clip/game count.
+    render(<EmptyTabGuide tab="published" clipCount={3} gamesCount={2} onNavigate={vi.fn()} />);
 
     expect(screen.getByText(EMPTY_TAB_GUIDE.published.headline)).toBeTruthy();
     expect(screen.getByText(EMPTY_TAB_GUIDE.published.body)).toBeTruthy();
-    expect(screen.getByText(EMPTY_TAB_GUIDE.published.noClipsGamesText)).toBeTruthy();
+    expect(screen.queryByText(/cut your first clip/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Go to Games' })).toBeNull();
     expect(screen.queryByText(/in progress/i)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Open Clips' })).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Go to Games' }));
-    expect(onNavigate).toHaveBeenCalledWith('games');
   });
 
   it('offers NO cross-tab Add Game (the zero-everything branch was deleted)', () => {
     render(<EmptyTabGuide tab="published" clipCount={0} gamesCount={0} onNavigate={vi.fn()} onAddGame={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Upload game' })).toBeNull();
-    // Falls through to the Go to Games branch instead of the retired Add Game one.
-    expect(screen.getByRole('button', { name: 'Go to Games' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Go to Games' })).toBeNull();
   });
 });
 

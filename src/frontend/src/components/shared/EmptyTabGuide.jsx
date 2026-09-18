@@ -74,7 +74,6 @@ export function EmptyTabGuide({
           <ClipsActions gamesCount={gamesCount} onNavigate={onNavigate} onAddVideo={onAddVideo} />
         )}
         {tab === 'reels' && <ReelsActions clipCount={clipCount} onBuildReel={onBuildReel} />}
-        {tab === 'published' && <PublishedActions onNavigate={onNavigate} />}
       </div>
 
       <Footer tab={tab} onNavigate={onNavigate} />
@@ -199,24 +198,6 @@ function ReelsActions({ clipCount, onBuildReel }) {
         {LIBRARY_ACTIONS.CREATE_REEL}
       </Button>
       <p className="text-xs text-gray-500">{c.hasClipsCaption(clipCount)}</p>
-    </div>
-  );
-}
-
-// T9390 (Decision 3) / T10310: "Go to Games" holds up regardless of clip count
-// (the Games tab is always reachable), so this single branch still reads fine now
-// that Published is reachable at genuine zero clips, not just zero everything.
-// T10280 dropped the "N clips in progress" draftsText + the "Open Clips" button
-// (the user did not want an in-progress count here), so a single branch remains:
-// the headline/body plus "cut your first clip" pointing back to Games.
-function PublishedActions({ onNavigate }) {
-  const c = EMPTY_TAB_GUIDE.published;
-  return (
-    <div className="flex flex-col items-center gap-2 w-full">
-      <p className="text-sm text-gray-400">{c.noClipsGamesText}</p>
-      <Button variant="secondary" size="lg" onClick={() => onNavigate('games')}>
-        Go to Games
-      </Button>
     </div>
   );
 }
