@@ -23,7 +23,7 @@ def _in_memory_db():
     cur.execute(
         "CREATE TABLE export_jobs (id TEXT PRIMARY KEY, project_id INTEGER, status TEXT, "
         "output_video_id INTEGER, output_filename TEXT, error TEXT, modal_call_id TEXT, "
-        "created_at TEXT, completed_at TEXT)"
+        "created_at TEXT, completed_at TEXT, output_key TEXT)"
     )
     cur.execute("CREATE TABLE projects (id INTEGER PRIMARY KEY, working_video_id INTEGER)")
     cur.execute(

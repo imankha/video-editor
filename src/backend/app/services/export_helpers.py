@@ -94,6 +94,49 @@ def fail_export_job(export_id: str, error_message: str):
         logger.warning(f"[Export] Failed to update job record {export_id}: {e}")
 
 
+def refund_failed_export(export_id: str) -> int:
+    """Give back whatever `export_id` was charged, for a failure declared OUTSIDE
+    the process that ran it (T10360). Returns the amount refunded (0 if none).
+
+    The in-process handlers know their own `credits_deducted` and refund directly;
+    the recovery paths -- startup orphan reconciliation, the stale sweep,
+    `/modal-status` -- do not, because the machine that held it is gone. They call
+    this, which reads the charge back out of the ledger. Idempotent against those
+    in-process refunds (same key), so double-calling is safe.
+
+    Never raises: a money-DB hiccup must not stop a job being reconciled to its
+    true status (the job is failed FIRST, deliberately -- leaving a dead job
+    active is worse than a delayed refund). But nothing retries this: once the
+    job is terminal it is no longer a stale candidate, so a failure here loses
+    the user's credits permanently. Hence CRITICAL, matching the sibling handler
+    in `export_worker.process_export_job`. Recovery is a manual grant under the
+    `refund:{export_id}` key, which is idempotent, so it is safe to hand-run.
+    """
+    from app.user_context import get_current_user_id
+    try:
+        user_id = get_current_user_id()
+    except Exception as e:
+        # Not a money failure -- a caller reached an out-of-band failure path with
+        # no user context, which is a routing bug in that caller, not a hiccup.
+        logger.error(
+            f"[Export] refund_failed_export({export_id}) has no user context: {e}",
+            exc_info=True,
+        )
+        return 0
+
+    from app.services.credit_ledger import refund_export_charge
+    try:
+        return refund_export_charge(user_id, export_id)
+    except Exception as e:
+        logger.critical(
+            f"[Export] REFUND FAILED for failed export {export_id} (user {user_id}): "
+            f"{e} -- credits were NOT returned and nothing will retry this. "
+            f"Resolve with a manual grant under key refund:{export_id}.",
+            exc_info=True,
+        )
+        return 0
+
+
 def store_modal_call_id(export_id: str, modal_call_id: str):
     """
     Store Modal call_id for job recovery.

@@ -139,21 +139,35 @@ async def test_call_modal_clips_ai_no_call_id_item_never_fires_callback(monkeypa
 # ============================================================================
 
 
-class _FakeGeneratorDone:
-    """Stand-in for modal's api_pb2.GeneratorDone -- not a dict."""
+class _FakeInputInfo:
+    """Stand-in for modal.call_graph.InputInfo, whose `status` is what
+    `check_modal_job_running` reads post-T10360."""
+
+    def __init__(self, status, call_id):
+        self.status = status
+        self.function_call_id = call_id
+        self.function_name = "process_clips_ai"
 
 
 class _FakeFunctionCall:
-    def __init__(self, get_result):
-        self._get_result = get_result
+    """T10360: `/modal-status` no longer calls `.get()` -- for a generator call
+    that always raised NotFoundError in production, so the GeneratorDone branch
+    these tests used to drive never actually executed there. The recoverable
+    signal is the INPUT record via `get_call_graph()`, which reports a TERMINAL
+    status for a finished render; whether that render SUCCEEDED is then decided
+    by the R2 object, which is what these two tests still pin."""
 
-    def get(self, timeout=0):
-        return self._get_result
+    def __init__(self, call_id):
+        self._call_id = call_id
+
+    def get_call_graph(self):
+        from modal.call_graph import InputStatus
+        return [_FakeInputInfo(InputStatus.SUCCESS, self._call_id)]
 
 
 @pytest.mark.asyncio
 async def test_modal_status_generator_done_finalizes_when_output_exists(project, monkeypatch):
-    """GeneratorDone + a confirmed R2 object -> treat as success and finalize."""
+    """Terminal Modal status + a confirmed R2 object -> success, finalize."""
     export_id = f"exp-{uuid.uuid4().hex[:8]}"
     _create_job(export_id, project, output_key="working_videos/w_ok.mp4")
     with get_db_connection() as conn:
@@ -164,12 +178,9 @@ async def test_modal_status_generator_done_finalizes_when_output_exists(project,
 
     monkeypatch.setattr(er, "get_current_user_id", lambda: TEST_USER_ID)
 
-    class _FakeModal:
-        FunctionCall = type("FunctionCall", (), {"from_id": staticmethod(lambda cid: _FakeFunctionCall(_FakeGeneratorDone()))})
-
-    monkeypatch.setitem(__import__("sys").modules, "modal", _FakeModal())
-    import app.storage as storage_mod
-    monkeypatch.setattr(storage_mod, "file_exists_in_r2", lambda *a, **k: True)
+    import modal
+    monkeypatch.setattr(modal.FunctionCall, "from_id", staticmethod(lambda cid: _FakeFunctionCall(cid)))
+    monkeypatch.setattr(er, "file_exists_in_r2", lambda *a, **k: True)
 
     async def fake_finalize(job, result, user_id):
         return {"finalized": True, "working_video_id": 1, "output_filename": "w_ok.mp4"}
@@ -183,8 +194,8 @@ async def test_modal_status_generator_done_finalizes_when_output_exists(project,
 
 @pytest.mark.asyncio
 async def test_modal_status_generator_done_errors_when_no_output_object(project, monkeypatch):
-    """GeneratorDone + NO confirmed R2 object -> must NOT silently finalize a
-    row pointing at a missing object (T4240). Reports error instead."""
+    """Terminal Modal status + NO confirmed R2 object -> must NOT silently
+    finalize a row pointing at a missing object (T4240). Reports error instead."""
     export_id = f"exp-{uuid.uuid4().hex[:8]}"
     _create_job(export_id, project, output_key="working_videos/w_missing.mp4")
     with get_db_connection() as conn:
@@ -195,12 +206,9 @@ async def test_modal_status_generator_done_errors_when_no_output_object(project,
 
     monkeypatch.setattr(er, "get_current_user_id", lambda: TEST_USER_ID)
 
-    class _FakeModal:
-        FunctionCall = type("FunctionCall", (), {"from_id": staticmethod(lambda cid: _FakeFunctionCall(_FakeGeneratorDone()))})
-
-    monkeypatch.setitem(__import__("sys").modules, "modal", _FakeModal())
-    import app.storage as storage_mod
-    monkeypatch.setattr(storage_mod, "file_exists_in_r2", lambda *a, **k: False)
+    import modal
+    monkeypatch.setattr(modal.FunctionCall, "from_id", staticmethod(lambda cid: _FakeFunctionCall(cid)))
+    monkeypatch.setattr(er, "file_exists_in_r2", lambda *a, **k: False)
 
     finalize_called = []
 

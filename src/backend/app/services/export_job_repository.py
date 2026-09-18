@@ -130,10 +130,17 @@ def get(cursor, job_id: str) -> dict | None:
 
 def get_stale_candidates(cursor, max_age_minutes: int) -> list:
     """Jobs still active (pending/processing) older than max_age_minutes —
-    candidates for cleanup_stale_exports' Modal-liveness check."""
+    candidates for cleanup_stale_exports' Modal-liveness check.
+
+    T10360 added `output_key` and `age_minutes`: the sweep must check whether the
+    render actually produced its object in R2 before failing a job (a FINISHED
+    generator call is indistinguishable from a dead one by Modal status alone),
+    and must be able to give up on a permanently-UNKNOWN job by age instead of
+    skipping it forever. Rows are read by NAME, never unpacked positionally."""
     cursor.execute(
         """
-        SELECT id, modal_call_id
+        SELECT id, modal_call_id, output_key,
+               (julianday('now') - julianday(created_at)) * 1440 AS age_minutes
         FROM export_jobs
         WHERE status IN (?, ?)
           AND created_at < datetime('now', ? || ' minutes')

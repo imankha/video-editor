@@ -43,7 +43,7 @@ def _seed_active_db(num_stale: int) -> sqlite3.Connection:
         "CREATE TABLE export_jobs (id TEXT PRIMARY KEY, project_id INTEGER, type TEXT, "
         "status TEXT, error TEXT, output_video_id INTEGER, output_filename TEXT, "
         "modal_call_id TEXT, created_at TEXT, started_at TEXT, completed_at TEXT, "
-        "game_id INTEGER, game_name TEXT)"
+        "game_id INTEGER, game_name TEXT, output_key TEXT)"
     )
     conn.execute("CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT)")
     conn.execute("INSERT INTO projects (id, name) VALUES (1, 'Proj')")

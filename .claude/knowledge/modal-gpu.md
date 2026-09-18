@@ -64,14 +64,49 @@ graph LR
   polling loop and fires `call_id_callback` once (`modal_client.py`'s `call_modal_clips_ai`).
   `call_modal_framing_ai`/`call_modal_overlay` still have NO working call_id capture — their "NOT
   USED with remote_gen" docstrings are accurate, not fixed by T7210.
-  - Recovering a **generator** call via `FunctionCall.get(timeout=0)` returns a `GeneratorDone`
-    marker, NOT the dict the function yielded as its last item (the SDK can't replay the stream)
-    — `/modal-status` (`exports.py`) treats this as "Modal is done" but HEAD-probes R2
-    (`file_exists_in_r2`) against the job's `output_key` before finalizing, since a caught-and-
-    yielded Modal-side error is *also* `GeneratorDone` and indistinguishable from success by
-    completion alone. `export_jobs.output_key` is now written at DISPATCH time (`multi_clip.py`'s
-    `store_modal_call_id`), not only after upload — so its mere presence is no longer proof the
-    object exists; the R2 check is the actual boundary.
+  - ~~Recovering a **generator** call via `FunctionCall.get(timeout=0)` returns a `GeneratorDone`
+    marker~~ **FALSE — corrected by T10360 (2026-09-18).** From a SECOND process it raises
+    `NotFoundError`, always. `.get()` reads the OUTPUT store, and a generator's lone output (the
+    `GeneratorDone` proto) is expired by the in-band consumer as it reads it —
+    `pop_function_call_outputs(clear_on_success=True)`, whose proto comment is explicit that it
+    "expires *any* remaining outputs soon after this call". So the outcome is `NotFoundError`
+    whether the render succeeded, failed, or is still going. **`/modal-status`'s GeneratorDone
+    branch therefore never executed in production and `check_modal_job_running` was a constant
+    `None` for every job in the database — the whole call-id recovery mechanism was inert from
+    the day T7210 shipped it.** Verified against the 2026-09-18 incident's own call id
+    (`fc-01M2V16YB5YV258AZ9MR1KYW33`): `.get(timeout=0)` → `NotFoundError`.
+  - **The mechanism that DOES work (T10360): `FunctionCall.from_id(id).get_call_graph()`.** It
+    reads the INPUT record, which is never consumed and is still queryable hours later — the same
+    incident id returns `[InputInfo(status=SUCCESS, function_name='process_clips_ai')]`. It fails
+    safe in both directions: an unrecognised future status maps to PENDING
+    (`InputStatus._missing_`) and an aged-out record returns `[]` (reported as UNKNOWN), so
+    neither can kill a live paid job. **But a terminal status is NOT evidence of failure** — a
+    generator that finished perfectly also records SUCCESS, and `process_clips_ai` catches its own
+    errors and yields `{"status": "error"}` before returning normally, so SUCCESS covers both
+    outcomes. `export_jobs.output_key` is written at DISPATCH time (`multi_clip.py`'s
+    `store_modal_call_id`), not after upload — so the COLUMN proves nothing, but the R2 OBJECT is
+    the real boundary and the only fact that survives losing the process that was watching.
+  - **`exports.reconcile_dispatched_export(job)` is the single seam all three recovery paths now
+    use** (`/modal-status`, `/resume-progress`, `cleanup_stale_exports`): R2 FIRST
+    (`rendered`), then Modal's input status (`running` / `dead`), else `unknown`. The R2-first
+    ordering is load-bearing — asking Modal first and believing a terminal status refunds users
+    for reels that exist. `unknown` is never terminal at a call site; only
+    `cleanup_stale_exports`' `UNKNOWN_MODAL_GIVEUP_MINUTES` (180, ~3x `process_clips_ai`'s
+    `timeout=3600` with no retries) may end it, and it refunds when it does.
+  - **T10360 (staging incident, 2026-09-18): startup recovery must NEVER fail a dispatched job.**
+    `export_worker.recover_orphaned_jobs` used to run its own second copy of the liveness check
+    with an `except Exception` that fell through to "mark as error". A generator call id does not
+    resolve through `FunctionCall.from_id` at all (`NotFoundError`, reproduced against the
+    incident's own `fc-01M2V16YB5YV258AZ9MR1KYW33`), so a deploy landing mid-export failed a job
+    whose render had ALREADY finished and uploaded. It now delegates to the T4240-hardened
+    three-state `routers/exports.check_modal_job_running` and leaves ANY job with a
+    `modal_call_id` as `processing` regardless of the answer — recovery cannot see the render
+    output, so `/modal-status` (which HEAD-probes R2, above) is the only thing entitled to decide,
+    with the 60-minute `cleanup_stale_exports` as backstop. Corollary for anyone adding a new
+    recovery path: **positive evidence of death is required before failing a paid job, and
+    "Modal says finished" is NOT evidence of death — it is when there is most likely a finished
+    video to deliver.** See export-pipeline.md § Landmines for the credits half of the same
+    incident.
   - Recovery finalizing at all (previously impossible — `modal_call_id` was always NULL) means the
     in-band export and a recovery poll can now race to finalize the SAME job concurrently.
     `export_finalize.py`'s `_claim_stage_for_finalize` is a CAS on `export_jobs.stage` gating entry
