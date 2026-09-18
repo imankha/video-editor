@@ -2,10 +2,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 /**
- * T9950 Slice 1: the segment/speed/trim track collapses behind an "Advanced
- * editing" disclosure. Default derives from whether the clip already has user
- * splits or a trim range (design doc §5/§6 R4) — a returning user's existing
- * edits are never hidden by default; a fresh/untouched clip defaults collapsed.
+ * T9950 Slice 1: the segment/speed/trim track collapses behind a "Trim and
+ * Slo-mo" disclosure (renamed from "Advanced editing" 2026-09-18; testid
+ * unchanged). Default derives from whether the clip already has user splits
+ * or a trim range (design doc §5/§6 R4) — a returning user's existing edits
+ * are never hidden by default; a fresh/untouched clip defaults collapsed.
  */
 
 vi.mock('../components/AspectRatioSelector', () => ({ default: () => <div /> }));
@@ -72,6 +73,14 @@ describe('FocusModeView Advanced editing disclosure (T9950 Slice 1)', () => {
     const toggle = screen.getByTestId('advanced-editing-disclosure');
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(lastFocusModeProps.showSegments).toBe(false);
+  });
+
+  // Regression (2026-09-18 user request): the disclosure's label was renamed
+  // from "Advanced editing" to "Trim and Slo-mo" -- it reveals segment/speed/
+  // trim controls, so the label should say so.
+  it('labels the disclosure "Trim and Slo-mo"', () => {
+    renderView({ segmentBoundaries: [0, 100], trimRange: null });
+    expect(screen.getByTestId('advanced-editing-disclosure').textContent).toMatch(/trim and slo-mo/i);
   });
 
   it('defaults expanded when the clip already has a user split (R4)', () => {

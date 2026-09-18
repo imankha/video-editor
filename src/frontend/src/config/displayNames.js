@@ -504,9 +504,13 @@ export const EDITOR_PANELS = {
   // with Play spotlight -- this names it, it does not add a new default timing.
   SPOTLIGHT_DURATION: 'Spotlight duration',
   SPOTLIGHT_DURATION_HINT: 'Drag the ends on the timeline to adjust, or press Play spotlight to preview.',
-  // T9950 -- segment/speed/trim + straighten/dim/zoom collapse behind one
-  // disclosure; the timeline row and the settings-rail heading share this word
-  // so the collapse reads as one concept (design doc §5 Slice 1).
+  // T9950 -- the timeline disclosure (segment/speed/trim track) and the
+  // settings-rail heading (straighten/dim/zoom) USED to share one word
+  // ("Advanced editing"); split 2026-09-18 per user request so the timeline
+  // disclosure's label matches what it actually reveals.
+  TRIM_AND_SLOWMO: 'Trim and Slo-mo',
+  // The settings-rail heading (straighten/dim/zoom) keeps this word --
+  // unrelated to trim/slo-mo, so it was NOT renamed alongside the disclosure.
   ADVANCED_EDITING: 'Advanced editing',
   // T9950 Slice 2 -- the widen button is an EDIT to the focus points, not a view
   // toggle (design doc §3). Copy names what the control DOES, never a quality

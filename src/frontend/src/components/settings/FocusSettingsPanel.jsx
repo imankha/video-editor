@@ -15,9 +15,12 @@ import { EDITOR_PANELS } from '../../config/displayNames';
  *
  *   Reel               — applies to every clip (aspect ratio, include audio)
  *   Advanced editing   — This clip (straighten) + View only (dim, zoom), T9950
- *                        Slice 1: grouped under one heading so the rail and the
- *                        timeline's Advanced editing disclosure use the SAME word.
- *                        Copy/grouping only — no behavior change.
+ *                        Slice 1: grouped under one heading. Originally shared
+ *                        its label with the timeline's disclosure below the
+ *                        video; that one was renamed to "Trim and Slo-mo"
+ *                        2026-09-18 (unrelated content -- segment/speed/trim,
+ *                        not straighten/dim/zoom), so this heading keeps
+ *                        "Advanced editing" on its own now.
  *
  * View-only controls (dim, zoom) and the straighten line-drag tool stay DESKTOP-ONLY
  * exactly as they were gated in the old toolbar: `desktopOnly` is false in the mobile
@@ -56,8 +59,8 @@ export default function FocusSettingsPanel({
       </SettingsPanel>
 
       {/* T9950 Slice 1: "This clip" (straighten) + "View only" (dim, zoom) grouped
-          under one "Advanced editing" heading, matching the timeline's disclosure
-          row wording. The line-drag straighten TOOL and dim/zoom stay desktop-only
+          under one "Advanced editing" heading (own label since 2026-09-18 --
+          see the file docblock). The line-drag straighten TOOL and dim/zoom stay desktop-only
           exactly as before (a phone has no pillarbox to dim, pinch handles zoom). */}
       {desktopOnly && (
         <section className="space-y-3">

@@ -723,9 +723,11 @@ export function FocusModeView({
           />
         )}
 
-        {/* T9950 Slice 1: "Advanced editing" disclosure — directly under the
-            timeline. Toggles the segment/speed/trim track (showSegments above);
-            the settings-rail grouping (FocusSettingsPanel) uses the same word. */}
+        {/* T9950 Slice 1: "Trim and Slo-mo" disclosure — directly under the
+            timeline. Toggles the segment/speed/trim track (showSegments above).
+            Renamed from "Advanced editing" 2026-09-18 per user request; the
+            settings-rail grouping (FocusSettingsPanel) is unrelated content
+            (straighten/dim/zoom) and kept its own "Advanced editing" label. */}
         {!mobileFs && videoUrl && (
           <button
             type="button"
@@ -735,7 +737,7 @@ export function FocusModeView({
             className="mt-1 flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-gray-200"
           >
             {advancedOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            {EDITOR_PANELS.ADVANCED_EDITING}
+            {EDITOR_PANELS.TRIM_AND_SLOWMO}
           </button>
         )}
 
