@@ -77,3 +77,16 @@ describe('OverlayModeView "Reset" pill (T5658)', () => {
     expect(onReturnToSpotlight).toHaveBeenCalledTimes(1);
   });
 });
+
+// Regression (2026-09-18 user request): the technical readouts (dimensions/
+// duration/fps) moved from the TOP of the screen to a de-emphasized footer
+// BELOW the bottom CTA -- a DOM-order check, not just "renders".
+describe('OverlayModeView technical metadata footer (2026-09-18)', () => {
+  it('renders the fps readout in a de-emphasized footer AFTER the export CTA', () => {
+    renderView();
+    const cta = screen.getByTestId('overlay-export-button');
+    const fps = screen.getByText('30 fps');
+    expect(fps.closest('div').className).toMatch(/text-xs/);
+    expect(cta.compareDocumentPosition(fps) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});

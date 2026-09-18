@@ -495,31 +495,9 @@ export function AnnotateModeView({
   // --- ANNOTATING MODE (default) ---
   return (
     <>
-      {/* Video Metadata - Annotate mode (hidden on mobile) */}
-      {annotateVideoMetadata && !annotateFullscreen && (
-        <div className="hidden lg:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 lg:p-4 border border-white/20">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-300">
-            {annotateVideoMetadata.resolution && (
-              <span>
-                <span className="text-gray-400">Resolution:</span>{' '}
-                {annotateVideoMetadata.resolution}
-              </span>
-            )}
-            {annotateVideoMetadata.format && (
-              <span>
-                <span className="text-gray-400">Format:</span>{' '}
-                {annotateVideoMetadata.format.toUpperCase()}
-              </span>
-            )}
-            {annotateVideoMetadata.size > 0 && (
-              <span>
-                <span className="text-gray-400">Size:</span>{' '}
-                {formatFileSize(annotateVideoMetadata.size)}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Video Metadata (resolution/format/size) moved 2026-09-18 (user request)
+          to a de-emphasized footer below the bottom CTA (Preview plays/Share
+          plays) -- see the end of this component. */}
 
       {/* Main Editor Area */}
       <div className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'}`}>
@@ -1158,6 +1136,32 @@ export function AnnotateModeView({
           </div>
         )}
       </div>
+
+      {/* Technical readouts (resolution/format/size) - 2026-09-18 (user request):
+          moved below the bottom CTA (Preview plays/Share plays above) and
+          de-emphasized (small/quiet). Same content, least-important placement. */}
+      {annotateVideoMetadata && !annotateFullscreen && (
+        <div className="hidden lg:flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
+          {annotateVideoMetadata.resolution && (
+            <span>
+              <span className="text-gray-600">Resolution:</span>{' '}
+              {annotateVideoMetadata.resolution}
+            </span>
+          )}
+          {annotateVideoMetadata.format && (
+            <span>
+              <span className="text-gray-600">Format:</span>{' '}
+              {annotateVideoMetadata.format.toUpperCase()}
+            </span>
+          )}
+          {annotateVideoMetadata.size > 0 && (
+            <span>
+              <span className="text-gray-600">Size:</span>{' '}
+              {formatFileSize(annotateVideoMetadata.size)}
+            </span>
+          )}
+        </div>
+      )}
     </>
   );
 }

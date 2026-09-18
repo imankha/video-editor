@@ -854,48 +854,30 @@ export function OverlayModeView({
           </button>
         </div>
       )}
-      {/* Video Metadata - use overlay metadata, hidden in fullscreen, hidden below lg on mobile */}
+      {/* Clip identity (title/tags/game clock) - 2026-09-18 (user request): split
+          from the technical readouts (dimensions/duration/fps), which moved to a
+          de-emphasized footer below the bottom CTA. */}
       {!isFullscreen && (effectiveOverlayMetadata ? (
         <div className="hidden lg:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 lg:p-4 border border-white/20">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-1 lg:gap-0 text-sm text-gray-300">
-            {/* Left: Title + Tags */}
-            <div className="flex flex-col gap-1">
-              {videoTitle && <span className="font-semibold text-white">{videoTitle}</span>}
-              {videoTags?.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {videoTags.map(tag => (
-                    <span key={tag} className="px-2 py-0.5 bg-blue-500/30 text-blue-200 text-xs rounded">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {/* T5670: game name + in-match game clock (matches Annotate) */}
-              {gameName && gameClock && (
-                <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                  <span className="truncate max-w-[220px]">{gameName}</span>
-                  <span className="text-gray-600">·</span>
-                  <span className="flex-shrink-0">{gameClock}</span>
-                </div>
-              )}
-            </div>
-            {/* Right: Metadata */}
-            <div className="flex items-center gap-3 text-sm text-gray-300">
-              <span>{effectiveOverlayMetadata.width}x{effectiveOverlayMetadata.height}</span>
-              {(duration > 0 || effectiveOverlayMetadata.duration > 0) && (
-                <>
-                  <span className="text-gray-600">•</span>
-                  {/* T9480 review fix: the video's duration is a LENGTH -- rounds, not floors. */}
-                  <span>{formatLength(duration || effectiveOverlayMetadata.duration, PRECISION.SECOND, { style: 'clock' })}</span>
-                </>
-              )}
-              {effectiveOverlayMetadata.framerate && (
-                <>
-                  <span className="text-gray-600">•</span>
-                  <span>{Math.round(effectiveOverlayMetadata.framerate)} fps</span>
-                </>
-              )}
-            </div>
+          <div className="flex flex-col gap-1 text-sm text-gray-300">
+            {videoTitle && <span className="font-semibold text-white">{videoTitle}</span>}
+            {videoTags?.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {videoTags.map(tag => (
+                  <span key={tag} className="px-2 py-0.5 bg-blue-500/30 text-blue-200 text-xs rounded">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+            {/* T5670: game name + in-match game clock (matches Annotate) */}
+            {gameName && gameClock && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                <span className="truncate max-w-[220px]">{gameName}</span>
+                <span className="text-gray-600">·</span>
+                <span className="flex-shrink-0">{gameClock}</span>
+              </div>
+            )}
           </div>
         </div>
       ) : isLoading && (
@@ -1274,6 +1256,28 @@ export function OverlayModeView({
             onExportComplete={onExportComplete}
             disabled={!effectiveOverlayFile && !effectiveOverlayVideoUrl}
           />
+        </div>
+      )}
+
+      {/* Technical readouts (dimensions/duration/fps) - 2026-09-18 (user request):
+          moved below the bottom CTA and de-emphasized (small/quiet), split out of
+          the clip-identity block above. Same content, least-important placement. */}
+      {!isFullscreen && effectiveOverlayMetadata && (
+        <div className="hidden lg:flex items-center gap-3 mt-2 text-xs text-gray-500">
+          <span>{effectiveOverlayMetadata.width}x{effectiveOverlayMetadata.height}</span>
+          {(duration > 0 || effectiveOverlayMetadata.duration > 0) && (
+            <>
+              <span className="text-gray-700">•</span>
+              {/* T9480 review fix: the video's duration is a LENGTH -- rounds, not floors. */}
+              <span>{formatLength(duration || effectiveOverlayMetadata.duration, PRECISION.SECOND, { style: 'clock' })}</span>
+            </>
+          )}
+          {effectiveOverlayMetadata.framerate && (
+            <>
+              <span className="text-gray-700">•</span>
+              <span>{Math.round(effectiveOverlayMetadata.framerate)} fps</span>
+            </>
+          )}
         </div>
       )}
     </div>

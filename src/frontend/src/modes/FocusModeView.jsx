@@ -433,56 +433,31 @@ export function FocusModeView({
         </div>
       )}
 
-      {/* Video Metadata - hidden in fullscreen, hidden below lg on mobile */}
-      {metadata && !isFullscreen && (
+      {/* Clip identity (title/game/tags) - hidden in fullscreen, hidden below lg
+          on mobile. 2026-09-18 (user request): split from the technical readouts
+          (dimensions/duration/fps), which moved to a de-emphasized footer below
+          the bottom CTA -- this is the part worth seeing first. */}
+      {!isFullscreen && (clipTitle || clipGameName || clipTags?.length > 0) && (
         <div className="hidden lg:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 lg:p-4 border border-white/20">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-1 lg:gap-0 text-sm text-gray-300">
-            {/* Left: Title + Game + Tags */}
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                {clipTitle && <span className="font-semibold text-white">{clipTitle}</span>}
-                {clipGameName && (
-                  <>
-                    <span className="text-gray-500">•</span>
-                    <span className="text-gray-400">{clipGameName}</span>
-                  </>
-                )}
+          <div className="flex flex-col gap-1 text-sm text-gray-300">
+            <div className="flex items-center gap-2">
+              {clipTitle && <span className="font-semibold text-white">{clipTitle}</span>}
+              {clipGameName && (
+                <>
+                  <span className="text-gray-500">•</span>
+                  <span className="text-gray-400">{clipGameName}</span>
+                </>
+              )}
+            </div>
+            {clipTags?.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {clipTags.map(tag => (
+                  <span key={tag} className="px-2 py-0.5 bg-blue-500/30 text-blue-200 text-xs rounded">
+                    {tag}
+                  </span>
+                ))}
               </div>
-              {clipTags?.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {clipTags.map(tag => (
-                    <span key={tag} className="px-2 py-0.5 bg-blue-500/30 text-blue-200 text-xs rounded">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Right: Metadata */}
-            <div className="flex items-center gap-3 text-sm text-gray-300">
-              <span>{metadata.width}x{metadata.height}</span>
-              <>
-                <span className="text-gray-600">•</span>
-                {/* T9480 review fix: the clip's source duration is a LENGTH -- rounds, not floors. */}
-                <span>{formatLength(duration || clipDuration, PRECISION.SECOND, { style: 'clock' })}</span>
-              </>
-              {selectedClipEffectiveDuration != null && (
-                <>
-                  <span className="text-gray-600">•</span>
-                  <OutputLengthChip
-                    seconds={selectedClipEffectiveDuration}
-                    emphasized={outputDiffersFromSource}
-                  />
-                </>
-              )}
-              {metadata.framerate && (
-                <>
-                  <span className="text-gray-600">•</span>
-                  <span>{Math.round(metadata.framerate)} fps</span>
-                </>
-              )}
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -968,6 +943,35 @@ export function FocusModeView({
             onExportComplete={onExportComplete}
             saveCurrentClipState={saveCurrentClipState}
           />
+        </div>
+      )}
+
+      {/* Technical readouts (dimensions/duration/fps) - 2026-09-18 (user request):
+          moved below the bottom CTA and de-emphasized (small/quiet), split out of
+          the clip-identity block above. Same content, least-important placement. */}
+      {metadata && !isFullscreen && (
+        <div className="hidden lg:flex items-center gap-3 mt-2 text-xs text-gray-500">
+          <span>{metadata.width}x{metadata.height}</span>
+          <>
+            <span className="text-gray-700">•</span>
+            {/* T9480 review fix: the clip's source duration is a LENGTH -- rounds, not floors. */}
+            <span>{formatLength(duration || clipDuration, PRECISION.SECOND, { style: 'clock' })}</span>
+          </>
+          {selectedClipEffectiveDuration != null && (
+            <>
+              <span className="text-gray-700">•</span>
+              <OutputLengthChip
+                seconds={selectedClipEffectiveDuration}
+                emphasized={outputDiffersFromSource}
+              />
+            </>
+          )}
+          {metadata.framerate && (
+            <>
+              <span className="text-gray-700">•</span>
+              <span>{Math.round(metadata.framerate)} fps</span>
+            </>
+          )}
         </div>
       )}
     </div>

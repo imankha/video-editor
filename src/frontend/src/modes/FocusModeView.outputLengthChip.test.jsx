@@ -73,4 +73,16 @@ describe('OutputLengthChip (T9480 review fix, BLOCKING #2)', () => {
     const chip = screen.getAllByTestId('output-length-chip')[0];
     expect(chip.textContent).toBe('Output: 0:02');
   });
+
+  // Regression (2026-09-18 user request): the technical readouts (dimensions/
+  // duration/fps) moved from the TOP of the screen to a de-emphasized footer
+  // BELOW the sticky bottom CTA band -- a DOM-order check, not just "renders".
+  it('renders the fps readout in a de-emphasized footer AFTER the sticky CTA band', () => {
+    const { container } = renderView({ videoUrl: 'blob:video' });
+    const ctaBand = container.querySelector('.sticky.bottom-0');
+    expect(ctaBand).toBeTruthy();
+    const fps = screen.getByText('30 fps');
+    expect(fps.closest('div').className).toMatch(/text-xs/);
+    expect(ctaBand.compareDocumentPosition(fps) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

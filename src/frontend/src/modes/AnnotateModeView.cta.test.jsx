@@ -148,4 +148,18 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     const { container } = renderView({ hasAnnotateClips: false });
     expect(container.textContent).not.toMatch(/Add Clip/);
   });
+
+  // Regression (2026-09-18 user request): the technical readouts (resolution/
+  // format/size) moved from the TOP of the screen to a de-emphasized footer
+  // BELOW the bottom CTA (Preview plays), so this is a DOM-order check, not
+  // just a "does it render" check.
+  it('renders the technical metadata footer AFTER the bottom CTA, de-emphasized', () => {
+    renderView({ hasAnnotateClips: true, annotateVideoMetadata: { format: 'mp4', size: 1024 } });
+    const playback = screen.getByRole('button', { name: /preview plays/i });
+    const footer = screen.getByText('Format:').closest('div');
+    expect(footer.textContent).toMatch(/MP4/);
+    expect(footer.textContent).toMatch(/1 KB/);
+    expect(footer.className).toMatch(/text-xs/);
+    expect(playback.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
