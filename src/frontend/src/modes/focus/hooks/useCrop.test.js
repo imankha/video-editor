@@ -156,3 +156,87 @@ describe('useCrop updateAspectRatio (T3910)', () => {
     expect(landscape.width).toBeGreaterThan(landscape.height); // 16:9 default
   });
 });
+
+// 2026-09-18 data-loss fix (T5640 superseded): setRotation used to re-clamp
+// and REWRITE every crop keyframe against the new angle -- irreversible, and
+// severe (at just 1 degree most tracking keyframes already collapsed to ~2
+// distinct positions for a 9:16 crop in a 1920x1080 source; past ~13 degrees
+// EVERY keyframe became byte-identical). Keyframes now store the user's true
+// framing verbatim; the safe-area clamp moved to read time (the screen's
+// display crop + the render pipeline), never touching what's saved.
+describe('useCrop setRotation (T5640, 2026-09-18 data-loss fix)', () => {
+  it('never rewrites keyframes when the straighten angle changes, even far apart', () => {
+    const trackingKeyframes = [
+      { frame: 0, x: 0, y: 175, width: 410, height: 730, origin: 'permanent' },
+      { frame: 300, x: 377, y: 175, width: 410, height: 730, origin: 'user' },
+      { frame: 600, x: 755, y: 175, width: 410, height: 730, origin: 'user' },
+      { frame: 900, x: 1132, y: 175, width: 410, height: 730, origin: 'user' },
+      { frame: 1200, x: 1510, y: 175, width: 410, height: 730, origin: 'permanent' },
+    ];
+    const { result } = renderHook(() => useCrop(METADATA, null, trackingKeyframes));
+    const before = result.current.keyframes.map(k => ({ ...k }));
+    expect(before).toHaveLength(5);
+    // Every x distinct beforehand -- this is what "tracking" means.
+    expect(new Set(before.map(k => k.x)).size).toBe(5);
+
+    act(() => {
+      result.current.setRotation(1); // the smallest real dial step
+    });
+    expect(result.current.keyframes).toEqual(before);
+
+    act(() => {
+      result.current.setRotation(15); // past the old collapse-everything threshold
+    });
+    expect(result.current.keyframes).toEqual(before);
+
+    act(() => {
+      result.current.setRotation(0); // back to level
+    });
+    expect(result.current.keyframes).toEqual(before);
+  });
+
+  it('returns only { rotation }, no movedKeyframes list, and updates rotation state', () => {
+    const { result } = renderHook(() => useCrop(METADATA, null, SAVED_KEYFRAMES));
+
+    let returned;
+    act(() => {
+      returned = result.current.setRotation(8);
+    });
+
+    expect(returned).toEqual({ rotation: 8 });
+    expect(result.current.rotation).toBe(8);
+  });
+
+  it('clamps the requested angle to +/- MAX_ROT (20)', () => {
+    const { result } = renderHook(() => useCrop(METADATA, null, null));
+
+    let returned;
+    act(() => {
+      returned = result.current.setRotation(999);
+    });
+    expect(returned.rotation).toBe(20);
+
+    act(() => {
+      returned = result.current.setRotation(-999);
+    });
+    expect(returned.rotation).toBe(-20);
+  });
+
+  it('clampCropForCurrentRotation (the DISPLAY-time clamp FocusScreen.currentCropState now calls) pulls an out-of-safe-area crop in, without touching the stored keyframe', () => {
+    const trackingKeyframes = [
+      { frame: 0, x: 0, y: 175, width: 410, height: 730, origin: 'permanent' },
+    ];
+    const { result } = renderHook(() => useCrop(METADATA, null, trackingKeyframes));
+
+    act(() => {
+      result.current.setRotation(15); // past the old collapse-everything threshold
+    });
+    // The stored keyframe is untouched...
+    expect(result.current.keyframes[0]).toMatchObject({ x: 0, y: 175, width: 410, height: 730 });
+
+    // ...but the display-time clamp pulls it into the (now much smaller) safe
+    // area, same as the render pipeline will.
+    const displayCrop = result.current.clampCropForCurrentRotation({ x: 0, y: 175, width: 410, height: 730 });
+    expect(displayCrop.x).toBeGreaterThan(0);
+  });
+});

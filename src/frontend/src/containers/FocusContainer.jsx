@@ -501,68 +501,46 @@ export function FocusContainer({
    * optimistic + surgical + rollback pattern. Fired by ONE gesture: straighten
    * drag-end, dial commit, nudge, or reset. NEVER reactive.
    *
-   * 1. Optimistically apply the new angle in the hook (setRotation clamps to
-   *    +/- MAX_ROT and re-clamps every crop keyframe against the new theta,
-   *    returning which keyframes moved).
-   * 2. Optimistically write `rotation` to the clip store (sidebar/indicator).
-   * 3. Await ONE surgical set_rotation action; roll back both on failure.
-   * 4. Persist the clamp-corrections: fire a surgical update_crop_keyframe for
-   *    each crop keyframe the clamp moved (design decision #5 — keep the DB ==
-   *    what the export renders). These are fire-and-forget follow-ups.
+   * 2026-09-18 data-loss fix: this used to ALSO re-clamp and persist every crop
+   * keyframe against the new angle (design decision #5, "keep the DB == what
+   * the export renders") — an irreversible clamp that collapsed the user's
+   * tracking data (see useCrop.setRotation's docstring for the mechanism and
+   * numbers). Keyframes are never touched here anymore; the safe-area clamp
+   * applies at READ time instead (FocusScreen's display crop + the export
+   * pipeline), so straightening is now just: 1) optimistic angle in the hook,
+   * 2) optimistic store write, 3) ONE awaited set_rotation, rolling back both
+   * on failure.
    */
   const handleSetRotation = useCallback(async (deg) => {
     const callerClipId = selectedClipId;
     const previousRotation = rotation;
-    const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
 
-    // 1 + 2: optimistic hook + store update.
-    const { rotation: theta, movedKeyframes } = setRotation(deg);
+    const { rotation: theta } = setRotation(deg);
     clipHasUserEditsRef.current = true;
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
-    track('rotation_set', { clipId: callerClipId, degrees: theta, movedKeyframes: movedKeyframes.length }, { debugOnly: true });
+    track('rotation_set', { clipId: callerClipId, degrees: theta }, { debugOnly: true });
 
     if (callerClipId) {
-      // Merge the clamped keyframes into the store copy so the sidebar indicator
-      // and any store readers reflect what the hook now holds.
-      const movedByFrame = new Map(movedKeyframes.map(kf => [kf.frame, kf]));
-      const nextStoreKfs = previousStoreKfs.map(kf =>
-        movedByFrame.has(kf.frame)
-          ? { ...kf, ...movedByFrame.get(kf.frame) }
-          : kf
-      );
-      updateClipData(callerClipId, { rotation: theta, crop_data: nextStoreKfs });
+      updateClipData(callerClipId, { rotation: theta });
     }
 
     const clipId = selectedClip?.id;
     if (!selectedProjectId || !clipId) return;
 
-    // 3: single surgical set_rotation, with rollback on failure.
     const result = await focusActions.setRotation(selectedProjectId, clipId, theta);
     if (!result.success) {
-      // Store rollback is keyed by clip id — always safe.
       if (callerClipId) {
-        updateClipData(callerClipId, { rotation: previousRotation, crop_data: previousStoreKfs });
+        updateClipData(callerClipId, { rotation: previousRotation });
       }
       // Hook rollback only if the user is still on the same clip — the hook now
-      // holds a different clip's rotation/keyframes after a switch.
+      // holds a different clip's rotation after a switch.
       if (latestSelectedClipIdRef.current === callerClipId) {
         setRotation(previousRotation);
         clipHasUserEditsRef.current = false;
         setFramingChangedSinceExport?.(false);
       }
       toast.error('Failed to save rotation', { message: result.error });
-      return;
-    }
-
-    // 4: persist each clamp-corrected keyframe surgically (design decision #5).
-    for (const kf of movedKeyframes) {
-      const res = await focusActions.updateCropKeyframe(selectedProjectId, clipId, kf.frame, {
-        x: kf.x, y: kf.y, width: kf.width, height: kf.height, origin: kf.origin,
-      });
-      if (!res.success) {
-        console.error('[FocusContainer] Failed to persist clamped keyframe after rotation:', res.error, { frame: kf.frame });
-      }
     }
   }, [rotation, setRotation, selectedClip, selectedClipId, selectedProjectId, updateClipData, onUserEdit, setFramingChangedSinceExport]);
 

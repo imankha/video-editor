@@ -14,12 +14,29 @@ source W*H) THEN slice the axis-aligned crop. These tests pin:
      refactor cannot silently drift the geometry.
   3. The Python safe-area mirror matches the closed-form expectations that the JS
      SSOT (rotationSafeArea.js) also encodes.
+
+2026-09-18 data-loss fix: `rotate_then_crop` used to TRUST its caller to have
+already clamped x/y/w/h to the safe area (the caller was the frontend, which
+clamped and PERSISTED the clamp into the stored crop keyframes -- destructive,
+irreversible, and the actual cause of the reported data loss; see
+useCrop.setRotation's docstring on the frontend). Crop keyframes now store the
+user's true framing verbatim; `rotate_then_crop` clamps INTERNALLY instead, so
+it is the render path's own guarantee against black wedges, not a trust
+contract with a caller that may hand it out-of-bounds coordinates. Section 4
+below pins that internal clamp directly; Section 5 pins byte-for-byte parity
+between video_processing.py's Modal-inline copy of the clamp
+(`_clamp_crop_to_safe_area`, needed because the Modal image can't import
+`app`) and the canonical `app.services.rotation_safe_area` module.
 """
 
 import math
 
 import numpy as np
+import pytest
 
+from app.modal_functions.video_processing import (
+    _clamp_crop_to_safe_area as modal_clamp,
+)
 from app.modal_functions.video_processing import rotate_then_crop
 from app.services.rotation_safe_area import (
     ROTATION_EPSILON,
@@ -145,7 +162,7 @@ def test_denormal_theta_is_identity_passthrough():
 def test_real_small_rotation_still_clamps():
     """The epsilon must not disable the feature: 0.1 degrees (the finest real dial
     step) is above ROTATION_EPSILON and MUST still pull an oversize crop in."""
-    assert 0.1 > ROTATION_EPSILON
+    assert ROTATION_EPSILON < 0.1
     crop = {"x": 660, "y": 0, "width": 607.5, "height": 1080}
     out = clamp_crop_to_safe_area(crop, 1920, 1080, 0.1, 9 / 16)
     assert out["x"] < crop["x"]
@@ -166,3 +183,60 @@ def test_clamp_recenters_and_locks_aspect():
     assert out["y"] >= S["y0"] - 1e-6
     assert out["x"] + out["width"] <= S["x0"] + S["w_safe"] + 1e-6
     assert out["y"] + out["height"] <= S["y0"] + S["h_safe"] + 1e-6
+
+
+def test_rotate_then_crop_clamps_an_out_of_bounds_crop_itself():
+    """2026-09-18 data-loss fix: `rotate_then_crop` no longer trusts its caller
+    to have pre-clamped x/y/w/h -- it must clamp INTERNALLY, since crop
+    keyframes now store the user's true (possibly out-of-safe-area) framing
+    verbatim. Feed it a crop that is NOT pre-clamped and assert it still slices
+    without going out of the frame's bounds and still contains no black wedge."""
+    W, H = 1920, 1080
+    theta = -3.0
+    f = _frame(W, H, value=200)
+
+    # The SAME oversize, un-clamped crop the other black-corner test clamps
+    # manually before calling rotate_then_crop -- this time handed straight
+    # through, unclamped, to prove the primitive clamps it itself.
+    r = 9 / 16
+    x, y, w, h = 400, 0, round(1080 * r), 1080
+
+    out = rotate_then_crop(f, theta, x, y, w, h)
+
+    assert out.size > 0
+    black = np.all(out == 0, axis=2)
+    assert not black.any(), f"{int(black.sum())} black pixels leaked into an unclamped crop"
+
+
+class TestModalInlineClampParity:
+    """The Modal image can't import app.services, so video_processing.py inlines
+    a copy of clamp_crop_to_safe_area (`_clamp_crop_to_safe_area`). It must match
+    the canonical module for every input, integer-rounding aside (the inline copy
+    rounds to whole pixels for the cv2 slice; the canonical module stays float).
+
+    The inline copy derives r from the crop's OWN w/h (no separate r parameter —
+    matching how both real callers invoke the canonical function, always passing
+    r=width/height of the SAME crop), so every case here keeps w/h consistent
+    with the parametrized r — an (x, y, w, h) whose aspect does not match r is
+    not a shape either caller ever actually produces.
+    """
+
+    @pytest.mark.parametrize(
+        "x,y,w,h,frame_w,frame_h,theta,r",
+        [
+            (100, 50, 400, 300, 1920, 1080, 0, 4 / 3),  # identity
+            (660, 0, 607.5, 1080, 1920, 1080, 0.1, 9 / 16),  # finest real dial step
+            (400, 0, 1080 * 9 / 16, 1080, 1920, 1080, -3.0, 9 / 16),  # T5640 case
+            (1500, 800, 900, 1600, 1920, 1080, 6.0, 9 / 16),  # corner, aspect lock
+            (0, 0, 1080 * 9 / 16, 1080, 1920, 1080, 15.0, 9 / 16),  # near/at MAX travel
+        ],
+    )
+    def test_matches_canonical(self, x, y, w, h, frame_w, frame_h, theta, r):
+        canonical = clamp_crop_to_safe_area({"x": x, "y": y, "width": w, "height": h}, frame_w, frame_h, theta, r)
+        inline = modal_clamp(x, y, w, h, frame_w, frame_h, theta)
+        assert inline == (
+            round(canonical["x"]),
+            round(canonical["y"]),
+            round(canonical["width"]),
+            round(canonical["height"]),
+        )

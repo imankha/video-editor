@@ -795,16 +795,26 @@ export function FocusScreen({
   // Current crop state. With no keyframes, interpolateCrop falls back to the
   // default centered crop so the reticule still renders (and matches what the GPU
   // export applies for an empty crop).
+  //
+  // 2026-09-18 data-loss fix: the safe-area clamp for the straighten angle
+  // used to be baked into the STORED keyframes (destructive, irreversible —
+  // see useCrop.setRotation). Keyframes now hold the user's true framing
+  // verbatim; the clamp applies here, at display time, so preview always
+  // matches what the export pipeline renders without ever touching the saved
+  // data. `dragCrop` (an active drag in progress) stays unclamped so the user
+  // sees exactly where they're dragging — handleCropComplete clamps it on
+  // release, the same way it always has.
   const currentCropState = useMemo(() => {
-    const crop = dragCrop || interpolateCrop(currentTime);
-    if (!crop) return null;
+    const rawCrop = dragCrop || interpolateCrop(currentTime);
+    if (!rawCrop) return null;
+    const crop = dragCrop ? rawCrop : clampCropForCurrentRotation(rawCrop);
     return {
       x: crop.x,
       y: crop.y,
       width: crop.width,
       height: crop.height
     };
-  }, [dragCrop, currentTime, interpolateCrop]);
+  }, [dragCrop, currentTime, interpolateCrop, clampCropForCurrentRotation]);
 
   // Crop context value for child components
   const cropContextValue = useMemo(() => ({

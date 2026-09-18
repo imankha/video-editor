@@ -18,6 +18,7 @@ import torch
 
 from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
 from app.ai_upscaler.upscale_gate import should_skip_gan
+from app.services.rotation_safe_area import clamp_crop_to_safe_area
 
 logger = logging.getLogger(__name__)
 
@@ -113,9 +114,29 @@ class FrameProcessor:
             y = int(crop['y'])
             w = int(crop['width'])
             h = int(crop['height'])
+            frame_h, frame_w = frame.shape[:2]
+
+            # 2026-09-18 data-loss fix: crop keyframes now store the user's
+            # true framing verbatim (the destructive write-time clamp that
+            # used to live in useCrop.setRotation on the frontend is gone --
+            # see its docstring for why). When rotated, clamp to the safe
+            # area HERE so no black wedge enters the render, matching
+            # video_processing.rotate_then_crop's render-time guarantee (that
+            # module inlines a copy of this same function -- its Modal image
+            # can't import `app`). The plain bounds-guard below still applies
+            # unconditionally as a final safety net (e.g. a stale crop from
+            # before a source resize).
+            if self.rotation:
+                clamped = clamp_crop_to_safe_area(
+                    {'x': x, 'y': y, 'width': w, 'height': h},
+                    frame_w, frame_h, self.rotation, w / h,
+                )
+                x = round(clamped['x'])
+                y = round(clamped['y'])
+                w = round(clamped['width'])
+                h = round(clamped['height'])
 
             # Ensure crop is within bounds
-            frame_h, frame_w = frame.shape[:2]
             x = max(0, min(x, frame_w - 1))
             y = max(0, min(y, frame_h - 1))
             w = max(1, min(w, frame_w - x))

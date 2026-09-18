@@ -1,12 +1,20 @@
 """
 Rotation safe-area geometry (T5640 — Framing horizon straighten) — Python mirror.
 
-This is the backend copy of `src/frontend/src/utils/rotationSafeArea.js`. The
-CLIENT is the single source of truth for the safe-area clamp (it runs at gesture
-time and persists the clamped crop keyframes). This mirror exists only for the
-characterization test / defense — per the project rule "correct data, not
-workarounds," the export TRUSTS the stored clamped crop and never re-clamps at
-render time. Keep the two implementations in sync.
+This is the backend copy of `src/frontend/src/utils/rotationSafeArea.js`.
+
+2026-09-18 data-loss fix: this used to be a defense-only mirror -- the CLIENT
+clamped and PERSISTED crop keyframes the moment the straighten angle changed,
+so the export trusted the stored (already-clamped) crop and never re-clamped
+at render time. That write-time clamp had no inverse and destroyed the user's
+tracking data (see useCrop.setRotation's docstring on the frontend for the
+mechanism). Crop keyframes now store the user's true framing verbatim; the
+safe-area clamp moved HERE, to render time, which is now the ONLY place that
+guarantees no black wedge enters the export. Callers: this module directly
+from `app.ai_upscaler.frame_processor` (same process, can import `app`);
+`app/modal_functions/video_processing.py` keeps its OWN inline copy
+(`_clamp_crop_to_safe_area`) since its Modal image can't import `app`. Keep
+all three (this file, the inline Modal copy, and rotationSafeArea.js) in sync.
 
 Sign convention (design §2.1): theta = content-correction angle in degrees,
 positive = rotate content counter-clockwise (math orientation, y-up). The render
@@ -22,12 +30,10 @@ MAX_ROT = 20
 # Any |theta| below this is FP residue from trig / repeated 0.1-degree dial
 # additions (0.1+0.1+0.1-0.1-0.1-0.1 == 2.7755575615628914e-17), NOT a real angle,
 # and must be treated as theta=0. 1e-6 is 100,000x below the finest 0.1-degree
-# user step and >=5 orders of magnitude above any accumulation residue. This mirror
-# is not currently in any render path (export trusts the stored clamped crop and
-# never re-clamps — grep: only caller is the T5640 characterization test), so the
-# change is behaviorally inert for production render; it exists to keep the JS/Py
-# pair honest per the "keep the two implementations in sync" contract above, so a
-# future wiring of this module can't silently reintroduce the denormal bug.
+# user step and >=5 orders of magnitude above any accumulation residue. 2026-09-18:
+# this module is now in the render path (frame_processor.py imports it directly),
+# so this dead-zone is live production behavior, not just defense-in-depth for a
+# characterization test.
 ROTATION_EPSILON = 1e-6
 
 

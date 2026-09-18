@@ -1387,6 +1387,71 @@ def _interpolate_crop(sorted_keyframes: list, time: float) -> dict:
     }
 
 
+def _clamp_crop_to_safe_area(x, y, w, h, frame_w, frame_h, rotation_deg):
+    """INLINE COPY of `app/services/rotation_safe_area.py`'s
+    `clamp_crop_to_safe_area` (that module can't be imported here -- the Modal
+    image mounts neither `app` nor its deps, only boto3/opencv/numpy; same
+    constraint `_decode_text_layers`/`_spotlight_reveal` document above). Pure
+    stdlib `math`, no cv2/numpy needed. Keep in sync with rotation_safe_area.py
+    and rotationSafeArea.js (three copies of one contract: JS gesture-time
+    display, this Python render-time clamp, and the characterization-test
+    Python mirror).
+
+    2026-09-18 data-loss fix (T5640 superseded): crop keyframes used to be
+    clamped and PERSISTED the moment the user changed the straighten angle --
+    irreversible and destructive (collapses to ~2 distinct x positions at just
+    1 degree, ALL keyframes identical past ~13 degrees for a portrait crop in
+    a landscape source; see useCrop.setRotation's docstring on the frontend
+    for the full mechanism). Keyframes now store the user's true framing
+    verbatim; the safe-area clamp lives ONLY here (render time) and at
+    display time (FocusScreen.currentCropState on the frontend), so rotation
+    is fully reversible by construction and this function is what actually
+    guarantees no black wedge enters the export.
+
+    r (target aspect) is derived from the crop's OWN w/h, matching the
+    frontend's `r = width / height` convention -- the crop box IS the target
+    aspect, never a separate parameter.
+    """
+    if not rotation_deg or abs(rotation_deg) < 1e-6:
+        return x, y, w, h
+
+    import math
+    r = w / h
+    theta = abs(rotation_deg) * math.pi / 180
+    sin_a, cos_a = abs(math.sin(theta)), abs(math.cos(theta))
+    longer, shorter = max(frame_w, frame_h), min(frame_w, frame_h)
+    width_is_longer = frame_w >= frame_h
+
+    if shorter <= 2 * sin_a * cos_a * longer or abs(sin_a - cos_a) < 1e-10:
+        half_short = 0.5 * shorter
+        if width_is_longer:
+            wr, hr = half_short / sin_a, half_short / cos_a
+        else:
+            wr, hr = half_short / cos_a, half_short / sin_a
+    else:
+        cos_2a = cos_a * cos_a - sin_a * sin_a
+        wr = (frame_w * cos_a - frame_h * sin_a) / cos_2a
+        hr = (frame_h * cos_a - frame_w * sin_a) / cos_2a
+
+    if wr / hr >= r:
+        w_safe, h_safe = hr * r, hr
+    else:
+        w_safe, h_safe = wr, wr / r
+    x0, y0 = (frame_w - w_safe) / 2, (frame_h - h_safe) / 2
+
+    cw = min(w, w_safe)
+    ch = min(h, h_safe)
+    if cw / ch > r:
+        cw = ch * r
+    else:
+        ch = cw / r
+
+    max_x, max_y = x0 + w_safe - cw, y0 + h_safe - ch
+    cx = min(max(x, x0), max_x)
+    cy = min(max(y, y0), max_y)
+    return round(cx), round(cy), round(cw), round(ch)
+
+
 def rotate_then_crop(frame, rotation_deg, x, y, w, h):
     """Rotate the full frame about its center (output kept at source W*H) THEN
     slice the axis-aligned crop (T5640).
@@ -1397,8 +1462,9 @@ def rotate_then_crop(frame, rotation_deg, x, y, w, h):
     output canvas at the source W*H preserves the crop coordinate box, so
     rotation_deg == 0 is the byte-identical fast path (plain slice, no warp).
 
-    The safe-area clamp on the client guarantees the crop stays inside the rotated
-    content, so no black wedge can enter this slice.
+    2026-09-18: the crop is clamped to the rotated frame's safe area HERE (not
+    trusted from the caller) -- see `_clamp_crop_to_safe_area`'s docstring for
+    why this moved from "the client guarantees it" to a render-time guarantee.
     """
     if rotation_deg:
         import cv2
@@ -1409,6 +1475,7 @@ def rotate_then_crop(frame, rotation_deg, x, y, w, h):
             flags=cv2.INTER_LANCZOS4,
             borderValue=(0, 0, 0),
         )
+        x, y, w, h = _clamp_crop_to_safe_area(x, y, w, h, w0, h0, rotation_deg)
     return frame[y:y + h, x:x + w]
 
 

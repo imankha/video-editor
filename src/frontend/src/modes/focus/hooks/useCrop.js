@@ -325,45 +325,34 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
   }, [rotation]);
 
   /**
-   * Set the horizon-straighten angle (degrees). Clamps to +/- MAX_ROT, updates
-   * state, and re-clamps EVERY crop keyframe against the new theta (they all share
-   * the reel aspect). Returns the list of keyframes that ACTUALLY moved so the
-   * caller can persist only those (surgical update_crop_keyframe follow-ups).
+   * Set the horizon-straighten angle (degrees). Clamps to +/- MAX_ROT and
+   * updates state — nothing else.
    *
-   * PURE state update: no useEffect, no API calls. Persistence is the container's
-   * job (gesture handler), per the project-wide gesture-based rule.
+   * 2026-09-18 data-loss fix: this used to ALSO re-clamp every crop keyframe
+   * against the new theta and persist the clamped rects (design decision #5,
+   * T5640: "keep the DB == what the export renders"). That clamp has no
+   * inverse and the safe area shrinks fast — at 1 degree most keyframes
+   * already collapse to ~2 distinct positions; past ~13 degrees (for a
+   * portrait crop in a landscape source) EVERY keyframe collapses to the
+   * SAME rect, permanently destroying the tracking data the user placed,
+   * with no way back (straightening back to 0 does not restore it — the
+   * clamp already happened and was already saved). Keyframes now ALWAYS
+   * store the user's true framing verbatim; the safe-area clamp moved to
+   * READ time instead (FocusScreen's interpolated display crop via
+   * clampCropForCurrentRotation below, mirrored by the export pipeline) so
+   * rotation is fully reversible by construction.
+   *
+   * PURE state update: no useEffect, no API calls. Persistence is the
+   * container's job (gesture handler), per the project-wide gesture-based rule.
    *
    * @param {number} deg - requested angle (unclamped)
-   * @returns {{ rotation: number, movedKeyframes: Array<{frame, x, y, width, height, origin}> }}
+   * @returns {{ rotation: number }}
    */
   const setRotation = useCallback((deg) => {
     const theta = clampRotation(deg);
     setRotationState(theta);
-
-    const { width: W, height: H } = videoDimsRef.current;
-    const r = aspectValueRef.current;
-    const moved = [];
-    if (W && H) {
-      const current = keyframesRef.current || [];
-      current.forEach((kf) => {
-        const clamped = clampCropToSafeArea(
-          { x: kf.x, y: kf.y, width: kf.width, height: kf.height },
-          W, H, theta, r
-        );
-        const changed =
-          clamped.x !== kf.x ||
-          clamped.y !== kf.y ||
-          clamped.width !== kf.width ||
-          clamped.height !== kf.height;
-        if (changed) {
-          // Frame-based update in place (same frame, clamped box). Preserve origin.
-          addOrUpdateKeyframe(kf.frame / framerate, clamped, undefined, kf.origin);
-          moved.push({ frame: kf.frame, ...clamped, origin: kf.origin });
-        }
-      });
-    }
-    return { rotation: theta, movedKeyframes: moved };
-  }, [addOrUpdateKeyframe, framerate]);
+    return { rotation: theta };
+  }, []);
 
   /**
    * Copy the crop keyframe at the specified time
