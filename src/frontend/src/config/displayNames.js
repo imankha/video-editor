@@ -54,10 +54,11 @@ export const ANNOTATE = {
   // as FRAME_THIS_CLIP above, which is likewise a literal (not MODE_NAMES-derived).
   FRAME_CLIP: 'Frame clip',                // N42 — NO_PROJECT create + open Framing
   SAVE_AND_FRAME: 'Save and Frame',        // N42 — editor save + open Framing
-  // T10290: the details disclosure label (was the inline literal "Add details").
-  // Renamed to just "Details" — the count suffix (e.g. "Details (2 tags, note)")
-  // is composed at the call site when content exists.
-  DETAILS: 'Details',
+  // T10290: the details disclosure label (was the inline literal "Add details",
+  // then just "Details"). Renamed to "Rate and Tag" 2026-09-18 per user request
+  // (it holds rating + sport + tags + notes) — the count suffix (e.g.
+  // "Rate and Tag (2 tags, note)") is composed at the call site when content exists.
+  DETAILS: 'Rate and Tag',
   // T9900: caption under the create-in-flight DISABLED "Frame this clip" button, so a
   // briefly-disabled onward action explains its temporary preparation state instead of
   // reading as broken (evidence E09). Clears itself when the project id lands.
