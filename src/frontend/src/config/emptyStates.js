@@ -39,7 +39,7 @@ import { ANNOTATE, MODE_NAMES } from './displayNames';
 // count is > 0.
 export const EMPTY_TAB_GUIDE = {
   games: {
-    headline: 'Review game footage.',
+    headline: 'Review game footage',
     body:
       'Mark plays from game video you want to review with your athlete. ' +
       'Create clips you want to use in highlights.',
