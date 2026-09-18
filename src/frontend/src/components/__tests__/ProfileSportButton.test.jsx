@@ -44,6 +44,15 @@ describe('ProfileSportButton', () => {
     expect(screen.getByTestId('manage-modal')).toBeTruthy();
   });
 
+  // 2026-09-18 (user request): the no_sport rollover reads "No Sport Selected",
+  // distinct from the bare "No Sport" InlineSportSelect's pill/dropdown still use.
+  it('reads "No Sport Selected" in the rollover when the profile has explicitly picked no_sport', () => {
+    h.profiles = [{ ...h.profiles[0], sport: 'no_sport' }];
+    render(<ProfileSportButton />);
+    const btn = screen.getByRole('button', { name: /No Sport Selected\. Switch sport or profile\./ });
+    expect(btn.getAttribute('title')).toBe('No Sport Selected — switch sport or profile');
+  });
+
   it('renders nothing when unauthenticated or before profiles initialize', () => {
     h.auth = false;
     const { unmount } = render(<ProfileSportButton />);
