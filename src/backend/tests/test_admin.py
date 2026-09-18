@@ -71,6 +71,13 @@ def milestones_data(pg_conn):
             ("admin-user", "game_created", 10),
             ("admin-user", "game_upload_succeeded", 1),
             ("admin-user", "clip_created", 25),
+            # T8370 direct-upload flow (distinct from the annotate-save clip_created
+            # above) -- attempts >> successes, mirroring the game_created/
+            # game_upload_succeeded shape so the combined tried/succeeded pair is
+            # exercised across BOTH clip flows, not just one.
+            ("admin-user", "clip_save_attempted", 30),
+            ("admin-user", "clip_upload_attempted", 4),
+            ("admin-user", "clip_uploaded", 2),
             ("admin-user", "export_completed", 5),
             # T8230: per-type export events. export_completed (5) is the generic
             # total; framing (2) + overlay (1) sum to 3, leaving a residual of 2
@@ -229,6 +236,11 @@ class TestAdminUsers:
         assert admin["game_created_count"] == 10
         assert admin["game_upload_succeeded_count"] == 1
         assert admin["clip_created_count"] == 25
+        # clip_tried_count sums BOTH flows' attempts (30 clip_save_attempted +
+        # 4 clip_upload_attempted); clip_succeeded_count sums both flows' durable
+        # outcomes (25 clip_created + 2 clip_uploaded).
+        assert admin["clip_tried_count"] == 34
+        assert admin["clip_succeeded_count"] == 27
         assert admin["export_completed_count"] == 5
         assert admin["session_count"] == 20
 
@@ -264,6 +276,28 @@ class TestAdminUsers:
         assert regular["game_created_count"] == 3
         assert "game_upload_succeeded_count" in regular
         assert regular["game_upload_succeeded_count"] == 0
+
+    def test_clips_tried_vs_succeeded_never_conflated(self, client_with_milestones):
+        """Mirrors test_games_tried_vs_succeeded_never_conflated for clips. A clip
+        can land via either the annotate-save flow (clip_save_attempted ->
+        clip_created) or the T8370 direct-upload flow (clip_upload_attempted ->
+        clip_uploaded) -- "tried"/"succeeded" must sum BOTH flows, never expose
+        just one of them as if it were the whole picture."""
+        resp = client_with_milestones.get(
+            "/api/admin/users", headers=_auth_headers("admin-user")
+        )
+        data = resp.json()
+        admin = next(u for u in data["users"] if u["user_id"] == "admin-user")
+        regular = next(u for u in data["users"] if u["user_id"] == "regular-user")
+
+        assert admin["clip_tried_count"] != admin["clip_succeeded_count"]
+        assert admin["clip_tried_count"] == 34      # 30 + 4
+        assert admin["clip_succeeded_count"] == 27  # 25 + 2
+
+        # regular-user seeded only clip_created (8), no attempt events at all --
+        # tried must not silently fall back to the succeeded count.
+        assert regular["clip_tried_count"] == 0
+        assert regular["clip_succeeded_count"] == 8
 
     def test_export_types_split_focus_overlay(self, client_with_milestones):
         """T8230: the Exports total must be surfaced split into its per-type

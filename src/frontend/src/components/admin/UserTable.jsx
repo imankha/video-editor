@@ -44,9 +44,11 @@ const COLUMNS = [
   { key: 'last_step', label: 'Last Step', align: 'center' },
   { key: 'acquired_at', label: 'Joined', align: 'right' },
   { key: 'game_created_count', label: 'Games', align: 'right' },
-  // T8240: label is "Clips Saved" (clip_created analytics events = raw annotation
-  // clips the user saved), NOT "Published" -- publishing is a different concept
-  // (final_videos.published_at) with no cheap Postgres source. Metric/key unchanged.
+  // T8240: label is "Clips Saved" (activity events -- annotate-save + direct-upload
+  // attempts/successes), NOT "Published" -- publishing is a different concept
+  // (final_videos.published_at) with no cheap Postgres source. Sort key stays
+  // clip_created_count (annotate-only) for back-compat; the cell shows the
+  // combined tried/succeeded pair (clip_tried_count / clip_succeeded_count).
   { key: 'clip_created_count', label: 'Clips Saved', align: 'right' },
   { key: 'export_completed_count', label: 'Exports', align: 'right' },
   // T8230: per-type breakdown of the Exports total. Exports stays as the honest
@@ -373,7 +375,13 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                       outage retry storm) at a glance. */}
                   {user.game_created_count ?? 0} tried / {user.game_upload_succeeded_count ?? 0} succeeded
                 </td>
-                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.clip_created_count ?? 0}</td>
+                <td className="px-3 py-2.5 text-right text-gray-400 text-xs whitespace-nowrap">
+                  {/* Clips mirror the Games tried/succeeded pair above: "tried" sums
+                      the annotate-save and direct-upload attempt events, "succeeded"
+                      sums their durable outcomes (clip_created + clip_uploaded) --
+                      never one bare count standing in for the other. */}
+                  {user.clip_tried_count ?? 0} tried / {user.clip_succeeded_count ?? 0} succeeded
+                </td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.export_completed_count ?? 0}</td>
                 {/* T8230: Focus (framing) / Overlay export breakdown of the Exports total. */}
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.framing_exported_count ?? 0}</td>

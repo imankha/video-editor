@@ -272,6 +272,16 @@ def list_users(
                        SUM(count) FILTER (WHERE action = 'game_created')     AS game_created_count,
                        SUM(count) FILTER (WHERE action = 'game_upload_succeeded') AS game_upload_succeeded_count,
                        SUM(count) FILTER (WHERE action = 'clip_created')     AS clip_created_count,
+                       -- Clip tried/succeeded pair mirrors the Games one (T8220), but a
+                       -- clip can land via EITHER of two flows: annotate-save
+                       -- (clip_save_attempted -> clip_created) or direct upload
+                       -- (clip_upload_attempted -> clip_uploaded, T8370) -- so "tried"
+                       -- sums both attempt events. clip_created_count above stays the
+                       -- annotate-only figure (existing sort key / back-compat); the
+                       -- combined succeeded figure is computed in Python below.
+                       SUM(count) FILTER (WHERE action IN ('clip_save_attempted', 'clip_upload_attempted'))
+                                                                              AS clip_tried_count,
+                       SUM(count) FILTER (WHERE action = 'clip_uploaded')     AS clip_uploaded_count,
                        SUM(count) FILTER (WHERE action = 'export_completed') AS export_completed_count,
                        -- T8230: split the generic Exports total into its per-type
                        -- events. export_completed >= framing_exported + overlay_exported
@@ -305,6 +315,8 @@ def list_users(
                 COALESCE(act.game_created_count, 0)     AS game_created_count,
                 COALESCE(act.game_upload_succeeded_count, 0) AS game_upload_succeeded_count,
                 COALESCE(act.clip_created_count, 0)     AS clip_created_count,
+                COALESCE(act.clip_tried_count, 0)       AS clip_tried_count,
+                COALESCE(act.clip_uploaded_count, 0)    AS clip_uploaded_count,
                 COALESCE(act.export_completed_count, 0) AS export_completed_count,
                 COALESCE(act.framing_exported_count, 0) AS framing_exported_count,
                 COALESCE(act.overlay_exported_count, 0) AS overlay_exported_count,
@@ -412,6 +424,12 @@ def list_users(
             "game_created_count": row["game_created_count"],
             "game_upload_succeeded_count": row["game_upload_succeeded_count"],
             "clip_created_count": row["clip_created_count"],
+            "clip_tried_count": row["clip_tried_count"],
+            # T8370's clip_uploaded (direct-upload flow) landed after the T8220
+            # tried/succeeded pair shipped for clip_created (annotate flow) alone --
+            # sum both durable-success events so "succeeded" isn't missing an
+            # entire upload path (see comment on clip_tried_count above).
+            "clip_succeeded_count": row["clip_created_count"] + row["clip_uploaded_count"],
             "export_completed_count": row["export_completed_count"],
             "framing_exported_count": row["framing_exported_count"],
             "overlay_exported_count": row["overlay_exported_count"],

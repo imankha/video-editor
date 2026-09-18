@@ -10,6 +10,8 @@ const BASE_USER = {
   last_step: 'Signed Up',
   acquired_at: '2026-08-20',
   clip_created_count: 0,
+  clip_tried_count: 0,
+  clip_succeeded_count: 0,
   export_completed_count: 0,
   share_completed_count: 0,
   credits: 0,
@@ -57,11 +59,21 @@ describe('UserTable Clips Saved column (T8240 relabel)', () => {
     expect(screen.queryByText('Published')).toBeNull();
   });
 
-  it('still renders clip_created_count in the Clips Saved cell (metric unchanged)', () => {
-    const users = [{ ...BASE_USER, clip_created_count: 12 }];
+  it('renders the clip tried/succeeded pair in the Clips Saved cell, never a bare count', () => {
+    const users = [{ ...BASE_USER, clip_tried_count: 12, clip_succeeded_count: 9 }];
     render(<UserTable users={users} onUserClick={() => {}} funnelTotals={{}} />);
 
-    expect(screen.getByText('12')).toBeTruthy();
+    expect(screen.getByText('12 tried / 9 succeeded')).toBeTruthy();
+    expect(screen.queryByText('12')).toBeNull();
+  });
+
+  it('sums both clip flows into "succeeded" (annotate-save + T8370 direct upload)', () => {
+    // A user who only ever used the direct-upload flow: zero annotate-save
+    // successes (clip_created), but clip_uploaded successes must still count.
+    const users = [{ ...BASE_USER, clip_tried_count: 3, clip_succeeded_count: 3 }];
+    render(<UserTable users={users} onUserClick={() => {}} funnelTotals={{}} />);
+
+    expect(screen.getByText('3 tried / 3 succeeded')).toBeTruthy();
   });
 });
 
