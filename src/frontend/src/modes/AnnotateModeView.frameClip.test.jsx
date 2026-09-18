@@ -162,7 +162,10 @@ describe('AnnotateModeView — play-selected CTA row (T10310)', () => {
 
     // No linked project row in the store -> getClipStage reads it as a fresh
     // draft, action 'focus' -- the button opens Focus directly, no create call.
-    fireEvent.click(screen.getByRole('button', { name: /frame this clip/i }));
+    // FOCUS-stage label is "Frame" (ANNOTATE.FRAME_THIS_CLIP, shortened from
+    // "Frame this clip" 2026-09-18, same day this test was written) -- distinct
+    // from the "Frame clip" label the NO_PROJECT-stage tests above assert.
+    fireEvent.click(screen.getByRole('button', { name: /^frame$/i }));
 
     expect(onFullscreenUpdateClip).not.toHaveBeenCalled();
     expect(onOpenClipInFocus).toHaveBeenCalledWith(42);
