@@ -1,15 +1,10 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Play, Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, Sliders } from 'lucide-react';
+import { Play, Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
-import ZoomControls from '../components/ZoomControls';
-import SettingsRail, { RAIL_WIDTH_PX, RAIL_COLLAPSED_WIDTH_PX, RAIL_TWEEN } from '../components/settings/SettingsRail';
-import SettingsPanel from '../components/settings/SettingsPanel';
-import SettingRow from '../components/settings/SettingRow';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
 import AngleSwitcherBadge from './annotate/AngleSwitcherBadge';
 import FixTimingStrip from './annotate/FixTimingStrip';
-import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { ANNOTATE, SHARING } from '../config/displayNames';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
@@ -22,11 +17,6 @@ import { formatFileSize } from '../utils/fileValidation';
 import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import { Button } from '../components/shared';
-
-// T10380: Annotate's settings rail has a single "Settings" tab (just Zoom today —
-// unlike Focus/Overlay, Annotate has no separate Clips tab to pair it with, since
-// clips already live in the bottom timeline).
-const ANNOTATE_RAIL_TABS = [{ id: 'settings', label: 'Settings', icon: Sliders }];
 
 /**
  * AnnotateModeView - Complete view for Annotate mode
@@ -237,10 +227,6 @@ export function AnnotateModeView({
   const playbackFsControls = useFullscreenControls({ isPlaying: playback?.isPlaying });
   const mobileFs = annotateFullscreen && isMobile;
   const [isDraggingScrub, setIsDraggingScrub] = useState(false);
-  // T10380: right-side settings rail (desktop only, mirrors Focus/Overlay's
-  // SettingsRail) — replaces the above-canvas toolbar row. Open/collapsed is
-  // ephemeral view state, never persisted (no-persisted-view-state rule).
-  const [railCollapsed, setRailCollapsed] = useState(false);
 
   // T8600: the under-canvas editor (strip on desktop, inline sheet on mobile)
   // replaces the timeline + CTA/Playback/Share block below the video whenever
@@ -551,31 +537,6 @@ export function AnnotateModeView({
 
       {/* Main Editor Area */}
       <div className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'}`}>
-        {/* T10380: mobile-only "Add footage" row above the canvas. Desktop no
-            longer has a row here at all — Add footage moves into the settings
-            rail's header (below), Zoom into the rail body — reversing T9350's
-            "above the fold" row placement, superseded by the always-visible
-            rail. Mobile keeps this single-button row (no rail there; the rail
-            is `hidden lg:flex`, matching Focus/Overlay's own desktop-only rail). */}
-        {annotateVideoUrl && !annotateFullscreen && isMobile && addFootage && !underCanvasEditor && (
-          <div className="mb-4 flex items-center">
-            <AddFootageButton
-              gameId={addFootage.gameId}
-              disabled={addFootage.disabled}
-              onFootageAttached={addFootage.onFootageAttached}
-            />
-          </div>
-        )}
-
-        {/* T10380: row = editor column + right-side settings rail (desktop only).
-            Same row/column wrapper classes Focus/Overlay use for their own rail
-            (FocusModeView.jsx ~:480-481) — lg:flex only, so mobile stays exactly
-            the plain block it was. The rail is a permanent sibling here (unlike
-            the old toolbar row, its presence doesn't depend on underCanvasEditor)
-            so Zoom stays reachable while the strip editor is open, exactly as it
-            did before. */}
-        <div className={annotateVideoUrl && !annotateFullscreen ? 'lg:flex lg:flex-row lg:items-start' : ''}>
-        <div className="flex flex-col w-full lg:flex-1 lg:min-w-0">
         {/* Fullscreen container - uses fixed positioning for fullscreen */}
         <div
           ref={annotateContainerRef}
@@ -799,6 +760,15 @@ export function AnnotateModeView({
                     // strip editor is open (both Add and Edit Play). Scoped to
                     // desktop strip so fullscreen/mobile transports are untouched.
                     editorOpen={desktopEditorOpen}
+                    // T10390: Zoom lives here now (was the settings rail's one
+                    // control) — desktop, non-fullscreen only, same gate the rail used.
+                    showZoomControls={!annotateFullscreen && !isMobile}
+                    zoom={zoom}
+                    onZoomIn={onZoomIn}
+                    onZoomOut={onZoomOut}
+                    onResetZoom={onResetZoom}
+                    minZoom={MIN_ZOOM}
+                    maxZoom={MAX_ZOOM}
                   />
                 </div>
                 {annotateFullscreen && (
@@ -927,8 +897,10 @@ export function AnnotateModeView({
           {/* Annotate Mode Timeline - non-fullscreen (hidden while the under-canvas editor is open) */}
           {!annotateFullscreen && !underCanvasEditor && (
             <div className="mt-6">
-              {/* T9350: "Add footage" moved OUT of this timeline header row into
-                  the toolbar row above the canvas (paired with Zoom). */}
+              {/* T10390: Add-footage trigger lives in the timeline's own Video-timeline
+                  label cell now (see AnnotateTimeline.jsx) — not passed to the
+                  fullscreen-strip AnnotateMode calls above, matching the old rail's
+                  non-fullscreen-only gate. */}
               <AnnotateMode
                 currentTime={currentTime}
                 duration={duration || annotateVideoMetadata?.duration || 0}
@@ -944,6 +916,7 @@ export function AnnotateModeView({
                 angleData={angleData}
                 amberFootage={amberFootage}
                 onFixAmberFootage={onFixAmberFootage}
+                addFootage={addFootage}
               />
             </div>
           )}
@@ -984,53 +957,6 @@ export function AnnotateModeView({
               />
             </div>
           )}
-        </div>
-        </div>
-
-        {/* T10380: right-side settings rail (desktop only) — mirrors Focus/Overlay's
-            SettingsRail exactly. Add footage sits in its own header strip above the
-            rail body (SettingsRail's own rule: "the CTA never lives inside the
-            rail"), Zoom is the rail's one "View only" setting. */}
-        {annotateVideoUrl && !annotateFullscreen && !isMobile && (
-          <div
-            className="hidden lg:flex flex-col shrink-0 self-stretch"
-            style={{
-              width: railCollapsed ? `${RAIL_COLLAPSED_WIDTH_PX}px` : `${RAIL_WIDTH_PX}px`,
-              transition: RAIL_TWEEN,
-            }}
-          >
-            {addFootage && !underCanvasEditor && !railCollapsed && (
-              <div className="p-3 border-b shrink-0" style={{ background: '#0f172a', borderColor: '#334155' }}>
-                <AddFootageButton
-                  gameId={addFootage.gameId}
-                  disabled={addFootage.disabled}
-                  onFootageAttached={addFootage.onFootageAttached}
-                />
-              </div>
-            )}
-            <SettingsRail
-              isMobile={false}
-              collapsed={railCollapsed}
-              onToggleCollapse={() => setRailCollapsed((v) => !v)}
-              tabs={ANNOTATE_RAIL_TABS}
-              activeTab={ANNOTATE_RAIL_TABS[0].id}
-              title="Settings"
-            >
-              <SettingsPanel title="View only">
-                <SettingRow label="Zoom" value={`${Math.round((zoom ?? 1) * 100)}%`}>
-                  <ZoomControls
-                    zoom={zoom}
-                    onZoomIn={onZoomIn}
-                    onZoomOut={onZoomOut}
-                    onResetZoom={onResetZoom}
-                    minZoom={MIN_ZOOM}
-                    maxZoom={MAX_ZOOM}
-                  />
-                </SettingRow>
-              </SettingsPanel>
-            </SettingsRail>
-          </div>
-        )}
         </div>
 
         {/* Mobile inline add/edit clip form. T8140: a fixed, viewport-anchored

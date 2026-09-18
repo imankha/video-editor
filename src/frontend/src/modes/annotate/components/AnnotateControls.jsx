@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Rewind, RotateCcw, Maximize, Minimize, Plus, Pencil, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
+import ZoomControls from '../../../components/ZoomControls';
 import { formatTime, formatInstant, formatLength, PRECISION } from '../../../utils/timeFormat';
 import { ANNOTATE } from '../../../config/displayNames';
 
@@ -97,6 +98,17 @@ export function AnnotateControls({
   // unchanged. `clipEditBounds` alone can't drive this — it's null in create
   // (Add Play) mode, where the buttons must also be hidden.
   editorOpen = false,
+  // T10390: Zoom moved off the (now-deleted) right-side settings rail onto this
+  // bar — same gate the rail used (`!annotateFullscreen && !isMobile`), passed
+  // in by the caller so this component doesn't need to know about fullscreen/
+  // mobile state itself.
+  showZoomControls = false,
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
+  minZoom,
+  maxZoom,
 }) {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -258,6 +270,21 @@ export function AnnotateControls({
 
         {/* Speed control */}
         <SpeedControl speed={playbackSpeed} onSpeedChange={onSpeedChange} />
+
+        {/* Zoom — desktop only, same gate the old settings rail used */}
+        {showZoomControls && (
+          <div className="hidden lg:flex items-center border-l border-gray-700 pl-2 ml-1">
+            <ZoomControls
+              compact
+              zoom={zoom}
+              onZoomIn={onZoomIn}
+              onZoomOut={onZoomOut}
+              onResetZoom={onResetZoom}
+              minZoom={minZoom}
+              maxZoom={maxZoom}
+            />
+          </div>
+        )}
 
         {/* Fullscreen button - hidden when fullscreen wouldn't increase video size */}
         {onToggleFullscreen && (

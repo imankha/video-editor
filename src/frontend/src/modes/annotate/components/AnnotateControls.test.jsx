@@ -74,3 +74,30 @@ describe('AnnotateControls skip-button gating (T8960 item 9)', () => {
     expect(screen.getByTitle('Play')).toBeTruthy();
   });
 });
+
+// T10390: Zoom moved off the (deleted) settings rail onto this bar, gated by
+// the caller with `showZoomControls` (same condition the rail used).
+describe('AnnotateControls zoom (T10390)', () => {
+  it('shows no zoom controls by default', () => {
+    render(<AnnotateControls {...baseProps} zoom={1} minZoom={1} maxZoom={4} />);
+    expect(screen.queryByTitle('Zoom In (Scroll Up)')).toBeNull();
+    expect(screen.queryByTitle('Zoom Out (Scroll Down)')).toBeNull();
+  });
+
+  it('shows the compact zoom controls when showZoomControls is true', () => {
+    render(
+      <AnnotateControls {...baseProps} showZoomControls zoom={1} minZoom={1} maxZoom={4} />,
+    );
+    expect(screen.getByTitle('Zoom In (Scroll Up)')).toBeTruthy();
+    expect(screen.getByTitle('Zoom Out (Scroll Down)')).toBeTruthy();
+    // Not zoomed -> no reset button.
+    expect(screen.queryByTitle('Reset to 100%')).toBeNull();
+  });
+
+  it('shows the reset button once zoomed in', () => {
+    render(
+      <AnnotateControls {...baseProps} showZoomControls zoom={2} minZoom={1} maxZoom={4} />,
+    );
+    expect(screen.getByTitle('Reset to 100%')).toBeTruthy();
+  });
+});

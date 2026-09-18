@@ -3,6 +3,7 @@ import { Film, Scissors, Video, Clock } from 'lucide-react';
 import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBase';
 import ClipRegionLayer from './layers/ClipRegionLayer';
 import AngleLanes from './AngleLanes';
+import AddFootageButton from './AddFootageButton';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { ANNOTATE } from '../../config/displayNames';
 
@@ -50,6 +51,13 @@ export function AnnotateTimeline({
   // other game, so the timeline DOM stays byte-identical (zero amber pixels).
   amberFootage = [],
   onFixAmberFootage,
+  // T10390: Add-footage trigger lives in the Video-timeline label cell below —
+  // that row is the one place in this column that represents the raw source
+  // video as a whole (not a specific clip lane), which is exactly what adding
+  // footage changes (new angle lanes, more footage on an existing lane, or an
+  // amber "timing unknown" bar on this same track). Undefined/null hides it
+  // (e.g. the fullscreen desktop strip's own AnnotateMode call doesn't pass one).
+  addFootage,
 }) {
   const isMobile = useIsMobile();
 
@@ -86,17 +94,32 @@ export function AnnotateTimeline({
   // Layer labels for the fixed left column - clickable to select layer
   const layerLabels = (
     <>
-      {/* Video Timeline Label - click to select playhead layer */}
+      {/* Video Timeline Label - click to select playhead layer. T10390: also
+          hosts the Add-footage trigger (compact) as a sibling button, not
+          nested, so neither click target needs stopPropagation. */}
       <div
-        className={`h-8 lg:h-12 flex items-center justify-center border-r rounded-tl-lg cursor-pointer transition-colors ${
+        className={`h-8 lg:h-12 flex items-center justify-between border-r rounded-tl-lg transition-colors ${
           selectedLayer === 'playhead'
             ? 'bg-blue-900/50 border-blue-500 ring-1 ring-inset ring-blue-500'
             : 'border-gray-700 bg-gray-900 hover:bg-gray-800'
         }`}
-        onClick={() => onLayerSelect?.('playhead')}
-        title="Click to select playhead layer (arrow keys step frames)"
       >
-        <Film size={18} className="text-blue-400" />
+        <button
+          type="button"
+          className="flex-1 h-full flex items-center justify-center cursor-pointer"
+          onClick={() => onLayerSelect?.('playhead')}
+          title="Click to select playhead layer (arrow keys step frames)"
+        >
+          <Film size={18} className="text-blue-400" />
+        </button>
+        {addFootage && (
+          <AddFootageButton
+            compact
+            gameId={addFootage.gameId}
+            disabled={addFootage.disabled}
+            onFootageAttached={addFootage.onFootageAttached}
+          />
+        )}
       </div>
 
       {/* T8890: Angles label — aligns with the angle strip (first child below the

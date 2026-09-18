@@ -14,11 +14,53 @@ export default function ZoomControls({
   onResetZoom,
   minZoom,
   maxZoom,
+  // T10390: Annotate's transport bar wants the icons only, matching the ghost
+  // icon-buttons already there (rewind/step/volume/fullscreen) — no boxed pill,
+  // no "Zoom:" label. Focus/Overlay's settings-panel usage is untouched.
+  compact = false,
 }) {
   const zoomPercentage = Math.round(zoom * 100);
   const canZoomIn = zoom < maxZoom;
   const canZoomOut = zoom > minZoom;
   const isZoomed = zoom !== 1;
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-0.5">
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={ZoomOut}
+          iconOnly
+          onClick={onZoomOut}
+          disabled={!canZoomOut}
+          title="Zoom Out (Scroll Down)"
+        />
+        <span className="hidden sm:inline text-xs font-mono text-gray-300 w-10 text-center">
+          {zoomPercentage}%
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={ZoomIn}
+          iconOnly
+          onClick={onZoomIn}
+          disabled={!canZoomIn}
+          title="Zoom In (Scroll Up)"
+        />
+        {isZoomed && (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Maximize2}
+            iconOnly
+            onClick={onResetZoom}
+            title="Reset to 100%"
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
