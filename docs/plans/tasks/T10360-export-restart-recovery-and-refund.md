@@ -1,6 +1,6 @@
 # T10360 — A mid-export deploy destroys the export and keeps the credits
 
-**Status:** WIP
+**Status:** STAGING (merged to master 2026-09-18, PR #465)
 **Tier:** M
 **Layers:** Backend
 **Found by:** live staging incident, 2026-09-18 (sakarati@gmail.com)
