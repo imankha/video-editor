@@ -2217,7 +2217,11 @@ export function ProjectManager({
             />
           ) : (
             <>
-            <div className="mb-4">
+            {/* T10280 fix: the populated Reels tab was missing the shared
+                headline/body guidance entirely (only its empty state had it) --
+                found live on staging 2026-09-18. Matches the Games/Clips pattern. */}
+            <TabGuideHeader tab="reels" />
+            <div className="mb-4 mt-4">
               <Button
                 variant="cyan"
                 size="lg"

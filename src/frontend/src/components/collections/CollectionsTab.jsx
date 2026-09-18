@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Loader, AlertCircle } from 'lucide-react';
 import { Button } from '../shared/Button';
-import { EmptyTabGuide } from '../shared/EmptyTabGuide';
+import { EmptyTabGuide, TabGuideHeader } from '../shared/EmptyTabGuide';
 import { REEL } from '../../config/themeColors';
 import { RATIO_ORDER } from '../../constants/aspectRatios';
 import { GameCollectionGroup } from './GameCollectionGroup';
@@ -158,6 +158,12 @@ export function CollectionsTab({
 
   return (
     <>
+      {/* T10280 fix: the populated Published tab was missing the shared
+          headline/body guidance entirely (only its empty state had it) --
+          found live on staging 2026-09-18. Matches the Games/Clips pattern. */}
+      <div className="mb-4 sm:mb-5">
+        <TabGuideHeader tab="published" />
+      </div>
       {/* Smart collections */}
       {smart.map((sc) => (
         <div key={`smart:${sc.key}`} className="mb-3">

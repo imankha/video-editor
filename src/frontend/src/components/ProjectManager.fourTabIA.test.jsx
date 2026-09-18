@@ -201,6 +201,12 @@ describe('T8555: In Progress Reels tab shows ONLY unpublished multiclip drafts',
     // renamed it "Build New Reel" -> "Create reel" (LIBRARY_ACTIONS.CREATE_REEL).
     expect(screen.getByRole('button', { name: 'Create reel' })).toBeTruthy();
 
+    // Regression (found live on staging 2026-09-18): T10280 added the shared
+    // headline/body guidance to the POPULATED Games/Clips tabs but missed
+    // Reels, which only had it on the empty branch -- the populated tab shown
+    // here rendered no guidance text at all. Must render on both branches now.
+    expect(screen.getByText(EMPTY_TAB_GUIDE.reels.headline)).toBeTruthy();
+
     // No published-gallery content (ConfidenceBanner / CollectionsTab /
     // published-tab-panel testid) leaks into this tab's body. (dataset.active,
     // matching this file's convention -- jest-dom's toHaveAttribute is not

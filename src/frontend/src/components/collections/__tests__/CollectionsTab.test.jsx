@@ -13,6 +13,7 @@ vi.mock('../SmartLockedCard', () => ({
 vi.mock('../GameCollectionGroup', () => ({ GameCollectionGroup: () => null }));
 
 import { CollectionsTab } from '../CollectionsTab';
+import { EMPTY_TAB_GUIDE } from '../../../config/emptyStates';
 
 const BUCKET = {
   reel_count: 0, ratio_counts: {}, ratio_durations: {}, ratio_eligible: {},
@@ -67,5 +68,16 @@ describe('CollectionsTab — nudge vs hidden', () => {
     ]);
     expect(screen.getByTestId('card').textContent).toBe('Top Digs:9:16');
     expect(screen.queryByTestId('locked')).toBeNull();
+  });
+
+  // Regression (found live on staging 2026-09-18): T10280 added the shared
+  // headline/body guidance to the POPULATED Games/Clips tabs but missed
+  // Published, which only had it on the empty branch -- a populated Published
+  // tab rendered no guidance text at all.
+  it('shows the shared headline/body guidance on the POPULATED tab too, not just empty (T10280)', () => {
+    renderTab([
+      ready({ key: 'tag:Dig', name: 'Top Digs', tags: ['Dig'], nudge_when_locked: false }),
+    ]);
+    expect(screen.getByText(EMPTY_TAB_GUIDE.published.headline)).toBeTruthy();
   });
 });
