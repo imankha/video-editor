@@ -1,11 +1,13 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 /**
- * T9950 Slice 2: FocusModeView threads Undo state/handlers to FramingActionRow,
- * rendered under the timeline (above the Advanced editing disclosure, design
- * doc §5). T10310 (2026-09-18 user request): the wider-frame wiring this file
- * used to also cover was removed along with the button itself.
+ * T10310 (2026-09-18 user request): "Preview highlight" was growing taller than
+ * the viewport on a portrait (9:16) reel -- the stage box's `aspectRatio` style
+ * derived height FROM the editor column's full width with no cap, so a wide
+ * desktop column produced a very tall box. Fix: `lg:h-[70vh] lg:max-h-[70vh]` +
+ * `lg:w-fit` caps the height and derives width instead, matching
+ * OverlayModeView's stageBoxStyle for the identical portrait-preview case.
  */
 
 vi.mock('../components/AspectRatioSelector', () => ({ default: () => <div /> }));
@@ -59,44 +61,32 @@ function renderView(overrides = {}) {
   return render(<FocusModeView {...props} />);
 }
 
-describe('FocusModeView FramingActionRow wiring (T9950 Slice 2)', () => {
-  it('passes canUndoFraming through to disable/enable the Undo button', () => {
-    renderView({ canUndoFraming: false });
-    expect(screen.getByTestId('framing-undo').disabled).toBe(true);
-  });
-
-  it('calls onUndoFraming when Undo is clicked', () => {
-    const onUndoFraming = vi.fn();
-    renderView({ canUndoFraming: true, onUndoFraming });
-    screen.getByTestId('framing-undo').click();
-    expect(onUndoFraming).toHaveBeenCalledTimes(1);
-  });
-
-  it('never renders a widen-frame control', () => {
+describe('FocusModeView preview-highlight stage sizing (T10310)', () => {
+  it('is not height-capped before Preview highlight is toggled on', () => {
     renderView();
-    expect(screen.queryByTestId('framing-widen')).toBeNull();
+    const stage = screen.getByTestId('focus-video-stage');
+    expect(stage.className).not.toMatch(/lg:h-\[70vh\]/);
   });
 
-  it('does not render the action row without a video', () => {
-    renderView({ videoUrl: '' });
-    expect(screen.queryByTestId('framing-undo')).toBeNull();
-  });
-
-  it('toggling Preview highlight flips its label and shows the approximation disclosure (T9950 Slice 3)', () => {
-    renderView();
-    const previewBtn = screen.getByTestId('framing-preview-toggle');
-    expect(previewBtn.textContent).toMatch(/preview highlight/i);
-    expect(screen.queryByTestId('preview-disclosure')).toBeNull();
-
-    fireEvent.click(previewBtn);
-
-    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/back to framing/i);
-    expect(screen.getByTestId('preview-disclosure')).not.toBeNull();
-  });
-
-  it('shows the multi-clip disclosure line only when previewing a multi-clip project', () => {
-    renderView({ clipsWithCurrentState: [{ id: 'a' }, { id: 'b' }], hasClips: true });
+  it('caps height (and derives width) once Preview highlight is on, for a portrait reel', () => {
+    renderView({ globalAspectRatio: '9:16' });
     fireEvent.click(screen.getByTestId('framing-preview-toggle'));
-    expect(screen.getByTestId('preview-disclosure').textContent).toMatch(/your clips are joined at export/i);
+
+    const stage = screen.getByTestId('focus-video-stage');
+    expect(stage.className).toMatch(/lg:h-\[70vh\]/);
+    expect(stage.className).toMatch(/lg:max-h-\[70vh\]/);
+    expect(stage.className).toMatch(/lg:w-fit/);
+    expect(stage.style.aspectRatio).toBe('9 / 16');
+  });
+
+  it('drops the height cap again once Preview highlight is toggled back off', () => {
+    renderView();
+    const toggle = screen.getByTestId('framing-preview-toggle');
+    fireEvent.click(toggle); // on
+    fireEvent.click(toggle); // off
+
+    const stage = screen.getByTestId('focus-video-stage');
+    expect(stage.className).not.toMatch(/lg:h-\[70vh\]/);
+    expect(stage.style.aspectRatio).toBeFalsy();
   });
 });

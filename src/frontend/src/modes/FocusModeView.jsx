@@ -211,10 +211,8 @@ export function FocusModeView({
   onCopyCrop,
   onPasteCrop,
 
-  // T9950 Slice 2: wider frame + Undo
-  isWideFraming = false,
+  // T9950 Slice 2: Undo
   canUndoFraming = false,
-  onWidenFraming,
   onUndoFraming,
 
   // Zoom state
@@ -494,14 +492,22 @@ export function FocusModeView({
           className={`${(isFullscreen || mobileFs) ? `fixed inset-0 z-[100] bg-gray-900${mobileFs ? '' : ' flex flex-col'}` : ''}`}
           onMouseMove={mobileFs ? fsControls.handleInteraction : undefined}
         >
-          {/* Video Player with CropOverlay */}
+          {/* Video Player with CropOverlay. 2026-09-18 (user request): the
+              preview-highlight stage was growing taller than the viewport on a
+              portrait (9:16) reel -- `aspectRatio` alone derives height FROM the
+              column's full width, with no cap. `lg:h-[70vh] lg:max-h-[70vh]` +
+              `lg:w-fit` flips that (height capped, width derived instead),
+              matching OverlayModeView's stageBoxStyle for the identical case. */}
           <div
+            data-testid="focus-video-stage"
             className={`relative bg-gray-900 ${
               (isFullscreen || mobileFs)
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
-                : 'rounded-lg'
+                : previewStageAspect
+                  ? 'rounded-lg mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh]'
+                  : 'rounded-lg'
             }`}
-            style={previewStageAspect ? { aspectRatio: previewStageAspect, margin: '0 auto' } : undefined}
+            style={previewStageAspect ? { aspectRatio: previewStageAspect } : undefined}
             onClick={mobileFs ? togglePlay : undefined}
             onTouchStart={mobileFs ? fsControls.handleLongPressTouchStart : undefined}
             onTouchMove={mobileFs ? fsControls.handleLongPressTouchMove : undefined}
@@ -699,17 +705,15 @@ export function FocusModeView({
           </button>
         )}
 
-        {/* T9950 Slice 2/3: [Undo] [Use a wider frame] [Preview highlight] —
-            below the Trim and Slo-mo disclosure now (design doc §5's original
-            order reversed 2026-09-18; this row acts on the crop/frame, not the
-            timeline, so it no longer needs to sit between the timeline and its
-            own disclosure). */}
+        {/* T9950 Slice 2/3 (T10310: "Use a wider frame" removed 2026-09-18) —
+            [Undo] [Preview highlight] — below the Trim and Slo-mo disclosure
+            now (design doc §5's original order reversed 2026-09-18; this row
+            acts on the crop/frame, not the timeline, so it no longer needs to
+            sit between the timeline and its own disclosure). */}
         {!mobileFs && videoUrl && (
           <FramingActionRow
             canUndo={canUndoFraming}
             onUndo={onUndoFraming}
-            isWideFraming={isWideFraming}
-            onWidenFraming={onWidenFraming}
             previewing={previewing}
             onTogglePreview={() => setPreviewing((v) => !v)}
             isMultiClip={isMultiClip}

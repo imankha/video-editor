@@ -290,7 +290,6 @@ export function FocusScreen({
     hasKeyframeAt,
     getCropDataAtTime,
     getKeyframesForExport,
-    calculateDefaultCrop,
     reset: resetCrop,
     restoreState: restoreCropState,
   } = useCrop(metadata, trimRange, selectedClipCropKeyframes, selectedClipRotation);
@@ -358,7 +357,6 @@ export function FocusScreen({
     setRotation,
     clampCropForCurrentRotation,
     resetCrop,
-    calculateDefaultCrop,
     segments,
     segmentBoundaries,
     segmentSpeeds,
@@ -410,7 +408,6 @@ export function FocusScreen({
     clipsWithCurrentState: framingClipsWithCurrentState,
     selectedClipEffectiveDuration,
     projectEffectiveDuration,
-    isWideFraming,
     canUndoFraming,
     handleCropChange: framingHandleCropChange,
     handleCropComplete: framingHandleCropComplete,
@@ -425,7 +422,6 @@ export function FocusScreen({
     handleRemoveSplit: framingHandleRemoveSplit,
     handleSegmentSpeedChange: framingHandleSegmentSpeedChange,
     handleSetRotation: framingHandleSetRotation,
-    handleWidenFraming: framingHandleWidenFraming,
     handleUndoFraming: framingHandleUndoFraming,
     clearFramingHistory,
     saveCurrentClipState: framingSaveCurrentClipState,
@@ -1434,9 +1430,7 @@ export function FocusScreen({
       clipsWithCurrentState={framingClipsWithCurrentState}
       selectedClipEffectiveDuration={selectedClipEffectiveDuration}
       projectEffectiveDuration={projectEffectiveDuration}
-      isWideFraming={isWideFraming}
       canUndoFraming={canUndoFraming}
-      onWidenFraming={framingHandleWidenFraming}
       onUndoFraming={framingHandleUndoFraming}
       globalAspectRatio={globalAspectRatio}
       onAspectRatioChange={handleAspectRatioChange}

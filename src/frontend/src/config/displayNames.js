@@ -530,15 +530,6 @@ export const EDITOR_PANELS = {
   // The settings-rail heading (straighten/dim/zoom) keeps this word --
   // unrelated to trim/slo-mo, so it was NOT renamed alongside the disclosure.
   ADVANCED_EDITING: 'Advanced editing',
-  // T9950 Slice 2 -- the widen button is an EDIT to the focus points, not a view
-  // toggle (design doc §3). Copy names what the control DOES, never a quality
-  // claim (design doc §3.5: "Do not promise crispness from resolution alone").
-  WIDER_FRAME: 'Use a wider frame',
-  WIDER_FRAME_ON: 'Back to default frame',
-  // 2026-09-18 (user request) -- was a permanent caption under the action row
-  // (WIDER_FRAME_HELPER) until the user asked to remove it in favor of a
-  // rollover; same text, now a title/hint instead of always-visible.
-  WIDER_FRAME_HINT: 'Shows more of the field around your focus points.',
   UNDO: 'Undo',
   UNDO_NOTHING: 'Nothing to undo',
   // T9950 Slice 3 -- preview approximation disclosure (design doc §4). Exact for

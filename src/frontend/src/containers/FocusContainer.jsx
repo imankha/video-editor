@@ -10,7 +10,6 @@ import { track } from '../utils/analytics';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useQuestStore } from '../stores/questStore';
 import { calculateEffectiveDuration, sumEffectiveDurations } from '../utils/effectiveDuration';
-import { wideFrameTarget, resizeAboutCenter, isWideFraming as computeIsWideFraming } from '../utils/widenFraming';
 import useFramingHistory from '../hooks/useFramingHistory';
 
 /**
@@ -77,7 +76,6 @@ export function FocusContainer({
   setRotation,
   clampCropForCurrentRotation,
   resetCrop,
-  calculateDefaultCrop,
 
   // Segment state and actions (from useSegments in App.jsx)
   segments,
@@ -169,28 +167,6 @@ export function FocusContainer({
     const hasSegmentSplits = segmentBoundaries.length > 2;
     return hasCropEdits || hasTrimEdits || hasSpeedEdits || hasSegmentSplits;
   }, [keyframes, trimRange, segmentSpeeds, segmentBoundaries]);
-
-  // T9950 Slice 2: the reel aspect ratio as a width/height number, and the
-  // default crop size for it -- shared by handleWidenFraming and the derived
-  // isWideFraming read below. calculateDefaultCrop is the SAME function
-  // useCrop uses to seed a fresh clip's crop, so "default" here always means
-  // the one true default (no mirrored constant in widenFraming.js).
-  const aspectValue = useMemo(() => {
-    const [ratioW, ratioH] = aspectRatio.split(':').map(Number);
-    return ratioW / ratioH;
-  }, [aspectRatio]);
-  const defaultCropSize = useMemo(() => {
-    if (!metadata?.width || !metadata?.height) return null;
-    const crop = calculateDefaultCrop(metadata.width, metadata.height, aspectRatio);
-    return { width: crop.width, height: crop.height };
-  }, [metadata, aspectRatio, calculateDefaultCrop]);
-
-  // DERIVED (design doc §2.1/§3.3): "is this clip widely framed?" is NEVER
-  // stored -- it's read straight off the crop rects every render.
-  const isWideFraming = useMemo(() => {
-    if (!metadata?.width || !metadata?.height || !defaultCropSize) return false;
-    return computeIsWideFraming(keyframes, metadata, aspectValue, defaultCropSize);
-  }, [keyframes, metadata, aspectValue, defaultCropSize]);
 
   /**
    * Clips with current clip's live state merged.
@@ -409,67 +385,6 @@ export function FocusContainer({
       if (!result.success) toast.error('Failed to undo framing edit', { message: result.error });
     }
   }, [framerate, duration, addOrUpdateKeyframe, removeKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
-
-  /**
-   * T9950 Slice 2 -- "Use a wider frame" / toggle-off. A crop EDIT through the
-   * existing single write path (design doc §2.1/§3), never a stored preference:
-   * every keyframe is rewritten to the 2x-scaled wide-frame target (§9.2), or
-   * back to the default crop size at the same center when already wide (§8 Q1).
-   * A zero-keyframe clip creates ONE keyframe at currentTime, matching
-   * handleCropComplete's own zero-keyframe behavior. Pushes the inverse onto
-   * the Undo stack so the edit is reversible within the session.
-   */
-  const handleWidenFraming = useCallback(async () => {
-    if (!metadata?.width || !metadata?.height || !defaultCropSize) return;
-    const clipId = selectedClip?.id;
-    if (!selectedProjectId || !clipId) return;
-
-    const wasWide = isWideFraming;
-    const target = wasWide
-      ? defaultCropSize
-      : wideFrameTarget(metadata.width, metadata.height, aspectValue, defaultCropSize);
-
-    const callerClipId = selectedClipId;
-    const sourceKeyframes = keyframes.length > 0
-      ? keyframes
-      : [{ frame: Math.round(currentTime * framerate), ...getCropDataAtTime(currentTime), origin: 'user' }];
-
-    clipHasUserEditsRef.current = true;
-    onUserEdit?.();
-    setFramingChangedSinceExport?.(true);
-    track('widen_framing', { clipId: callerClipId, toWide: !wasWide, keyframeCount: sourceKeyframes.length }, { debugOnly: true });
-
-    const inverseEntries = [];
-
-    for (const kf of sourceKeyframes) {
-      const existingKf = keyframes.find(k => k.frame === kf.frame);
-      const origin = existingKf?.origin || 'user';
-      inverseEntries.push({
-        frame: kf.frame,
-        data: existingKf ? { x: existingKf.x, y: existingKf.y, width: existingKf.width, height: existingKf.height } : null,
-        origin,
-      });
-
-      const rawRect = resizeAboutCenter(kf, target.width, target.height, metadata.width, metadata.height);
-      const rect = rotation && clampCropForCurrentRotation ? clampCropForCurrentRotation(rawRect) : rawRect;
-      const time = kf.frame / framerate;
-
-      addOrUpdateKeyframe(time, rect, duration, origin);
-      // Surgical per-keyframe POSTs, awaited in sequence; actionClient FIFO-serializes per clip anyway.
-      await persistKeyframeEdit({
-        resolution: { targetKey: kf.frame, movedFromKey: null },
-        data: { x: rect.x, y: rect.y, width: rect.width, height: rect.height, origin },
-        actions: cropPersistActions(selectedProjectId, clipId),
-        awaited: true,
-        onError: (error) => toast.error('Failed to widen frame', { message: error }),
-      });
-    }
-
-    framingHistory.push(
-      wasWide ? 'Back to default frame' : 'Use a wider frame',
-      () => Promise.all(inverseEntries.map(e => applyInverseKeyframeState(e.frame, e.data, e.origin, callerClipId)))
-    );
-  }, [metadata, defaultCropSize, aspectValue, isWideFraming, selectedClip, selectedProjectId, selectedClipId, keyframes, currentTime, framerate, getCropDataAtTime, onUserEdit, setFramingChangedSinceExport, addOrUpdateKeyframe, duration, rotation, clampCropForCurrentRotation, framingHistory, applyInverseKeyframeState]);
 
   /**
    * T9950 Slice 2 -- pops the most recent framing edit (widen, ordinary focus-
@@ -1231,9 +1146,7 @@ export function FocusContainer({
     selectedClipEffectiveDuration,
     projectEffectiveDuration,
 
-    // T9950 Slice 2: derived "is this clip widely framed?" (never stored) +
-    // session-scoped Undo state.
-    isWideFraming,
+    // T9950 Slice 2: session-scoped Undo state.
     canUndoFraming: framingHistory.canUndo,
 
     // Handlers
@@ -1250,7 +1163,6 @@ export function FocusContainer({
     handleRemoveSplit,
     handleSegmentSpeedChange,
     handleSetRotation,
-    handleWidenFraming,
     handleUndoFraming,
     clearFramingHistory,
 

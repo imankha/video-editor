@@ -1,8 +1,9 @@
-import { Undo2, Maximize2, Eye, EyeOff } from 'lucide-react';
+import { Undo2, Eye, EyeOff } from 'lucide-react';
 import { EDITOR_PANELS } from '../../config/displayNames';
 
 /**
- * FramingActionRow (T9950) — [Undo] [Use a wider frame] [Preview highlight].
+ * FramingActionRow (T9950, T10310) — [Undo] [Preview highlight]. "Use a wider
+ * frame" was removed 2026-09-18 per user request.
  * Pure presentational: props in, callbacks out, no store reads (design doc
  * §5 Slice 2).
  *
@@ -13,8 +14,6 @@ import { EDITOR_PANELS } from '../../config/displayNames';
 export default function FramingActionRow({
   canUndo,
   onUndo,
-  isWideFraming,
-  onWidenFraming,
   previewing = false,
   onTogglePreview,
   isMultiClip = false,
@@ -32,22 +31,6 @@ export default function FramingActionRow({
       >
         <Undo2 size={14} aria-hidden="true" />
         {EDITOR_PANELS.UNDO}
-      </button>
-
-      <button
-        type="button"
-        data-testid="framing-widen"
-        onClick={onWidenFraming}
-        aria-pressed={isWideFraming}
-        title={EDITOR_PANELS.WIDER_FRAME_HINT}
-        className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors coarse-pointer:min-h-11 ${
-          isWideFraming
-            ? 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500'
-            : 'border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700'
-        }`}
-      >
-        <Maximize2 size={14} aria-hidden="true" />
-        {isWideFraming ? EDITOR_PANELS.WIDER_FRAME_ON : EDITOR_PANELS.WIDER_FRAME}
       </button>
 
       {onTogglePreview && (
