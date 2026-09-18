@@ -35,6 +35,16 @@ class V053RawClipsSource(BaseMigration):
     description = "Add raw_clips.source ('game'/'upload') for T10300 upload-clip linking"
 
     def up(self, conn) -> None:
+        # A profile at an older/minimal schema state (e.g. a synthetic test
+        # fixture, or a fresh share-materialization target) may not have
+        # raw_clips at all yet -- skip rather than crashing the JIT seam.
+        # Same guard as v049 (v049_raw_clips_reel_source_window.py), same table.
+        has_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='raw_clips'"
+        ).fetchone()
+        if not has_table:
+            return
+
         # PRAGMA table_info rows are tuples under the migration runner's row
         # factory -> index positionally (row[1] == column name; v017 landmine).
         cols = {row[1] for row in conn.execute("PRAGMA table_info(raw_clips)").fetchall()}

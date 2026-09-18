@@ -888,10 +888,16 @@ async def list_raw_clips(game_id: int | None = None, min_rating: int | None = No
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        query = """
+        # T10300/T6030: source (v053) tolerated across the deploy->migrate window --
+        # a below-head DB has no column yet, so default to 'game' (the same default
+        # new rows get), never a missing-column 500. Same pattern as reel_source_*.
+        _source_select = (
+            "source" if column_exists(cursor, "raw_clips", "source") else "'game' as source"
+        )
+        query = f"""
             SELECT id, filename, rating, tags, name, notes, start_time, end_time,
                    game_id, auto_project_id, created_at, tagged_teammates, my_athlete,
-                   source
+                   {_source_select}
             FROM raw_clips
             WHERE 1=1
         """
@@ -950,10 +956,15 @@ async def get_raw_clip(clip_id: int):
     """Get a single raw clip's metadata."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        # T10300/T6030: source (v053) tolerated across the deploy->migrate window --
+        # see list_raw_clips above.
+        _source_select = (
+            "source" if column_exists(cursor, "raw_clips", "source") else "'game' as source"
+        )
+        cursor.execute(f"""
             SELECT id, filename, rating, tags, name, notes, start_time, end_time,
                    game_id, auto_project_id, created_at, tagged_teammates, my_athlete,
-                   shared_by, source
+                   shared_by, {_source_select}
             FROM raw_clips WHERE id = ?
         """, (clip_id,))
         clip = cursor.fetchone()
