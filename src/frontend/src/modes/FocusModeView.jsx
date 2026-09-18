@@ -433,31 +433,26 @@ export function FocusModeView({
         </div>
       )}
 
-      {/* Clip identity (title/game/tags) - hidden in fullscreen, hidden below lg
-          on mobile. 2026-09-18 (user request): split from the technical readouts
-          (dimensions/duration/fps), which moved to a de-emphasized footer below
-          the bottom CTA -- this is the part worth seeing first. */}
-      {!isFullscreen && (clipTitle || clipGameName || clipTags?.length > 0) && (
+      {/* Game name - hidden in fullscreen, hidden below lg on mobile (mobile gets
+          it inline under the video instead, see clipGameName below). 2026-09-18
+          (user request): the old bordered/backgrounded full-width bar (which also
+          re-showed the clip title already in the breadcrumb above) is gone --
+          plain de-emphasized text, no dedicated bar. */}
+      {!isFullscreen && clipGameName && (
+        <div className="hidden lg:block mb-2 text-sm text-gray-400 truncate">
+          {clipGameName}
+        </div>
+      )}
+      {/* Tags keep their own card (unrelated to the identity bar above) since
+          they're the one piece of this block with real visual weight. */}
+      {!isFullscreen && clipTags?.length > 0 && (
         <div className="hidden lg:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 lg:p-4 border border-white/20">
-          <div className="flex flex-col gap-1 text-sm text-gray-300">
-            <div className="flex items-center gap-2">
-              {clipTitle && <span className="font-semibold text-white">{clipTitle}</span>}
-              {clipGameName && (
-                <>
-                  <span className="text-gray-500">•</span>
-                  <span className="text-gray-400">{clipGameName}</span>
-                </>
-              )}
-            </div>
-            {clipTags?.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {clipTags.map(tag => (
-                  <span key={tag} className="px-2 py-0.5 bg-blue-500/30 text-blue-200 text-xs rounded">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
+          <div className="flex flex-wrap gap-1">
+            {clipTags.map(tag => (
+              <span key={tag} className="px-2 py-0.5 bg-blue-500/30 text-blue-200 text-xs rounded">
+                {tag}
+              </span>
+            ))}
           </div>
         </div>
       )}
