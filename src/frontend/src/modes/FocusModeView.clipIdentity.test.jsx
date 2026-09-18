@@ -6,11 +6,16 @@ import { describe, it, expect } from 'vitest';
  * a full-width bordered/backgrounded card duplicating the clip title (already
  * shown in the breadcrumb above the editor) plus the game name plus tags. The
  * user X'd it out and asked for the game name to move somewhere that doesn't
- * spend a dedicated horizontal bar on it. Fix: the game name renders as plain
- * de-emphasized text with no card; the clip title is dropped from this component
- * entirely on desktop (mobile keeps its own separate under-video chip); tags keep
- * their own card since they carry real visual weight, but it never bundles the
- * game name in with it.
+ * spend a dedicated horizontal bar on it. First fix: the game name rendered as
+ * plain de-emphasized text with no card, still its own row under the breadcrumb.
+ *
+ * T10310 round 2 (same day): the user asked for the game name to move ONTO the
+ * breadcrumb itself (Clips > Game Name > Clip Name, game name clickable to jump
+ * to Annotate for that game) -- see Breadcrumb.jsx / UnifiedHeader.jsx. FocusModeView
+ * no longer renders a desktop game-name row at all; the clip title is dropped from
+ * this component entirely on desktop (mobile keeps its own separate under-video
+ * chip); tags keep their own card since they carry real visual weight, but it
+ * never bundles the game name in with it.
  */
 
 vi.mock('../components/VideoPlayer', () => ({ VideoPlayer: () => <div /> }));
@@ -80,11 +85,15 @@ function identityOrTagsCardAncestorOf(node) {
 }
 
 describe('FocusModeView desktop clip identity (T10310)', () => {
-  it('renders the game name as plain text with no bordered card ancestor', () => {
+  it('no longer renders a standalone desktop game-name row (it moved to the breadcrumb)', () => {
     renderView({ clipTags: [] });
 
-    const gameName = screen.getByText('Vs Carlsbad Game Sep 1');
-    expect(identityOrTagsCardAncestorOf(gameName)).toBeNull();
+    // Exact text match only ever hit the old dedicated desktop row (its lone
+    // direct text-node child was just the game name). That row is gone --
+    // the game name lives in the breadcrumb now, outside this component. The
+    // mobile-only chip still mentions it, but bundled with the clip title
+    // (" · Vs Carlsbad Game Sep 1"), never as this exact standalone string.
+    expect(screen.queryByText('Vs Carlsbad Game Sep 1')).toBeNull();
     // No small identity/tags card at all -- there are no tags to justify one.
     expect(document.querySelector('.border-white\\/20.mb-4')).toBeNull();
   });
@@ -98,12 +107,10 @@ describe('FocusModeView desktop clip identity (T10310)', () => {
     expect(identityOrTagsCardAncestorOf(title)).toBeNull();
   });
 
-  it('tags keep their own bordered card, separate from the game name', () => {
+  it('tags keep their own bordered card, and it never pulls in the game name', () => {
     renderView({ clipTags: ['Goal', 'Assist'] });
 
-    const gameName = screen.getByText('Vs Carlsbad Game Sep 1');
     const tag = screen.getByText('Goal');
-    expect(identityOrTagsCardAncestorOf(gameName)).toBeNull();
     const tagCard = identityOrTagsCardAncestorOf(tag);
     expect(tagCard).not.toBeNull();
     // The card holding tags never also contains the game name text.
