@@ -1,4 +1,4 @@
-import { forwardRef, useState, useMemo } from 'react';
+import { forwardRef, useState, useMemo, useCallback } from 'react';
 import { Minimize, Maximize, Crop, Sliders, Film, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
@@ -287,10 +287,22 @@ export function FocusModeView({
   // T5641: straighten tool is a niche affordance (~99% of clips never rotate), so
   // the line-drag tool + fine dial are HIDDEN by default behind this toggle.
   // EPHEMERAL view state — local useState, NEVER persisted (no-persisted-view-state
-  // rule, precedent T5610 circleEditActive / T5370 spotlightPlayMode). Hiding the
-  // controls does NOT clear the rotation: a set angle keeps rotating the video
-  // (CropOverlay CSS-rotate + OOB mask stay ungated); only the editing UI toggles.
+  // rule, precedent T5610 circleEditActive / T5370 spotlightPlayMode).
+  //
+  // 2026-09-18 (user request) supersedes T5641's "hiding does not clear the
+  // rotation" -- toggling straighten OFF now also resets the angle to 0
+  // (video back to its original orientation), via handleToggleStraighten
+  // below. Safe now that rotation changes never touch stored crop keyframes
+  // (the T5640 data-loss fix, same day) -- resetting to 0 is a plain angle
+  // change like any other, not a destructive re-clamp.
   const [straightenVisible, setStraightenVisible] = useState(false);
+  const handleToggleStraighten = useCallback(() => {
+    setStraightenVisible((v) => {
+      const next = !v;
+      if (!next) onSetRotation?.(0);
+      return next;
+    });
+  }, [onSetRotation]);
 
   // T9270: ephemeral settings-rail view state. NEVER persisted (no-persisted-view-state
   // rule; precedent T5641 straightenVisible above, T5610 circleEditActive). Desktop
@@ -382,7 +394,7 @@ export function FocusModeView({
       includeAudio={includeAudio}
       onIncludeAudioChange={onIncludeAudioChange}
       straightenVisible={straightenVisible}
-      onToggleStraighten={() => setStraightenVisible((v) => !v)}
+      onToggleStraighten={handleToggleStraighten}
       dimOpacity={dimOpacity}
       onToggleDim={() => setDimOpacity(dimOpacity === 0.2 ? 0.7 : 0.2)}
       zoom={zoom}
