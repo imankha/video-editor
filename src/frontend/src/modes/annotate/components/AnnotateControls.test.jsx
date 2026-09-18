@@ -90,14 +90,16 @@ describe('AnnotateControls zoom (T10390)', () => {
     );
     expect(screen.getByTitle('Zoom In (Scroll Up)')).toBeTruthy();
     expect(screen.getByTitle('Zoom Out (Scroll Down)')).toBeTruthy();
-    // Not zoomed -> no reset button.
-    expect(screen.queryByTitle('Reset to 100%')).toBeNull();
+    // T10393 (user request): the reset button is always rendered (never
+    // conditionally mounted) so the bar's width doesn't shift at 100% -- just
+    // disabled there instead of absent.
+    expect(screen.getByTitle('Reset to 100%').disabled).toBe(true);
   });
 
-  it('shows the reset button once zoomed in', () => {
+  it('enables the reset button once zoomed in', () => {
     render(
       <AnnotateControls {...baseProps} showZoomControls zoom={2} minZoom={1} maxZoom={4} />,
     );
-    expect(screen.getByTitle('Reset to 100%')).toBeTruthy();
+    expect(screen.getByTitle('Reset to 100%').disabled).toBe(false);
   });
 });

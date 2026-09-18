@@ -48,16 +48,18 @@ export default function ZoomControls({
           disabled={!canZoomIn}
           title="Zoom In (Scroll Up)"
         />
-        {isZoomed && (
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={Maximize2}
-            iconOnly
-            onClick={onResetZoom}
-            title="Reset to 100%"
-          />
-        )}
+        {/* T10393 (user request): always rendered (was `isZoomed &&`) so the
+            transport bar's width doesn't shift every time zoom crosses 100% —
+            disabled instead of absent. */}
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={Maximize2}
+          iconOnly
+          onClick={onResetZoom}
+          disabled={!isZoomed}
+          title="Reset to 100%"
+        />
       </div>
     );
   }
@@ -95,18 +97,18 @@ export default function ZoomControls({
         title="Zoom In (Scroll Up)"
       />
 
-      {/* Reset Zoom Button */}
-      {isZoomed && (
-        <Button
-          variant="primary"
-          size="sm"
-          icon={Maximize2}
-          iconOnly
-          onClick={onResetZoom}
-          className="ml-1"
-          title="Reset to 100%"
-        />
-      )}
+      {/* Reset Zoom Button — always rendered (was `isZoomed &&`), disabled at
+          100% instead of absent, so the row doesn't shift width (T10393). */}
+      <Button
+        variant="primary"
+        size="sm"
+        icon={Maximize2}
+        iconOnly
+        onClick={onResetZoom}
+        disabled={!isZoomed}
+        className="ml-1"
+        title="Reset to 100%"
+      />
     </div>
   );
 }
