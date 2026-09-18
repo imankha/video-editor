@@ -54,7 +54,7 @@ describe('AnnotateFullscreenOverlay — first-clip invitation (T9580 / N41)', ()
         existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
       />
     );
-    expect(screen.getByRole('button', { name: 'Frame this clip' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Frame' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Keep marking plays' })).toBeTruthy();
     // T9900: the live CTA is enabled, so there is NO "Preparing your clip..." caption.
     expect(screen.queryByTestId('clip-preparing-note')).toBeNull();
@@ -84,7 +84,7 @@ describe('AnnotateFullscreenOverlay — first-clip invitation (T9580 / N41)', ()
         focusPending
       />
     );
-    const primary = screen.getByRole('button', { name: 'Frame this clip' });
+    const primary = screen.getByRole('button', { name: 'Frame' });
     expect(primary.disabled).toBe(true);
     expect(screen.getByRole('button', { name: 'Keep marking plays' })).toBeTruthy();
     // T9900: the disabled button explains its temporary preparation state (E09) so the
@@ -102,12 +102,12 @@ describe('AnnotateFullscreenOverlay — first-clip invitation (T9580 / N41)', ()
     );
     expect(screen.getByRole('button', { name: 'Apply Spotlight' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Keep marking plays' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Frame this clip' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Frame' })).toBeNull();
   });
 
   it('create mode (no existing clip) shows neither invitation button', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={null} />);
-    expect(screen.queryByRole('button', { name: 'Frame this clip' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Frame' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Keep marking plays' })).toBeNull();
   });
 });

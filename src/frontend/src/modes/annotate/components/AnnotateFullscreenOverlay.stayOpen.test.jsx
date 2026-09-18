@@ -79,7 +79,7 @@ describe('AnnotateFullscreenOverlay — stays open on the new clip after create-
     // (createProject was requested at save time). Clicking it must NOT open
     // the T8730 "Save this play first?" dialog: a freshly created clip reads
     // clean instantly (rehydrate-only population path).
-    const cta = screen.getByRole('button', { name: 'Frame this clip' });
+    const cta = screen.getByRole('button', { name: 'Frame' });
     expect(cta.disabled).toBe(true);
     expect(screen.queryByText('Save this play first?')).toBeNull();
   });
@@ -92,7 +92,7 @@ describe('AnnotateFullscreenOverlay — stays open on the new clip after create-
     const { rerender } = render(
       <AnnotateFullscreenOverlay {...baseProps} existingClip={newRegionPending} focusPending={true} />
     );
-    expect(screen.getByRole('button', { name: 'Frame this clip' }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Frame' }).disabled).toBe(true);
 
     // saveClip resolves -> setAutoProjectId(newRegion.id, project_id) -> the
     // region gains autoProjectId and pendingProjectClipId clears (focusPending
@@ -101,7 +101,7 @@ describe('AnnotateFullscreenOverlay — stays open on the new clip after create-
     const newRegionResolved = { ...newRegionPending, autoProjectId: 42 };
     rerender(<AnnotateFullscreenOverlay {...baseProps} existingClip={newRegionResolved} focusPending={false} />);
 
-    const cta = screen.getByRole('button', { name: 'Frame this clip' });
+    const cta = screen.getByRole('button', { name: 'Frame' });
     expect(cta.disabled).toBe(false);
   });
 
@@ -122,7 +122,7 @@ describe('AnnotateFullscreenOverlay — stays open on the new clip after create-
     rerender(
       <AnnotateFullscreenOverlay {...baseProps} existingClip={newRegionResolved} focusPending={false} onOpenInFocus={onOpenInFocus} />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Frame this clip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Frame' }));
     expect(screen.queryByText('Save this play first?')).toBeNull();
     expect(onOpenInFocus).toHaveBeenCalledWith(42);
   });

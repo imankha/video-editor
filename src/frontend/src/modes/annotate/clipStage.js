@@ -16,9 +16,10 @@
 //   - T8470 Part D: a fresh draft project (no snapshot, no produced video) is a
 //     live link into Focus, never an actionable "create" dead end.
 //
-// T9580 (N41): the FOCUS-stage label is "Frame this clip" (the first-clip
-// invitation wording), single-sourced from displayNames.ANNOTATE so the desktop
-// strip and the sidebar share it. Later stages keep their T9320/T9330 labels.
+// T9580 (N41): the FOCUS-stage label is "Frame" (shortened 2026-09-18 from the
+// first-clip invitation wording "Frame this clip"), single-sourced from
+// displayNames.ANNOTATE so the desktop strip and the sidebar share it. Later
+// stages keep their T9320/T9330 labels.
 
 import { ANNOTATE } from '../../config/displayNames';
 

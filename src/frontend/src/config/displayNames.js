@@ -42,7 +42,10 @@ export const ANNOTATE = {
   // so the desktop strip and the sidebar share it); KEEP_MARKING_PLAYS is its
   // dismiss secondary (closes the editor, playhead preserved). Later stages keep
   // their T9320/T9330 labels (Apply Spotlight / View Final / View Published).
-  FRAME_THIS_CLIP: 'Frame this clip',      // N41 — FOCUS-stage primary CTA
+  // 2026-09-18 (user request): shortened from "Frame this clip" to "Frame" —
+  // the timeline strip's Edit play/Frame pairing already frames it as an
+  // action on the currently-selected clip; no need to repeat "this clip".
+  FRAME_THIS_CLIP: 'Frame',                // N41 — FOCUS-stage primary CTA
   // 2026-09-18 (user request): rollover on the Frame this clip button, using
   // ALREADY-APPROVED copy -- the Clips-tab guidance body (T10280, the user's
   // own words, 2026-09-17) is the one place the app explains what Framing

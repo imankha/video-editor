@@ -170,7 +170,7 @@ export default function ClipRegionLayer({
         {regions.map((region) => {
           const isSelected = region.id === selectedRegionId;
           const isHovered = region.id === hoveredRegionId;
-          const left = timeToPercent(region.endTime);
+          const left = timeToPercent((region.startTime + region.endTime) / 2);
           const rating = region.rating || 3;
           const notation = RATING_NOTATION[rating];
           const color = RATING_COLORS[rating];
