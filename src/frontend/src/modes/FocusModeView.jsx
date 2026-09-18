@@ -708,26 +708,13 @@ export function FocusModeView({
           />
         )}
 
-        {/* T9950 Slice 2/3: [Undo] [Use a wider frame] [Preview highlight] —
-            under the timeline, above the Advanced-editing disclosure (design
-            doc §5). */}
-        {!mobileFs && videoUrl && (
-          <FramingActionRow
-            canUndo={canUndoFraming}
-            onUndo={onUndoFraming}
-            isWideFraming={isWideFraming}
-            onWidenFraming={onWidenFraming}
-            previewing={previewing}
-            onTogglePreview={() => setPreviewing((v) => !v)}
-            isMultiClip={isMultiClip}
-          />
-        )}
-
-        {/* T9950 Slice 1: "Trim and Slo-mo" disclosure — directly under the
-            timeline. Toggles the segment/speed/trim track (showSegments above).
-            Renamed from "Advanced editing" 2026-09-18 per user request; the
-            settings-rail grouping (FocusSettingsPanel) is unrelated content
-            (straighten/dim/zoom) and kept its own "Advanced editing" label. */}
+        {/* T9950 Slice 1: "Trim and Slo-mo" disclosure — moved directly under
+            the timeline 2026-09-18 per user request (it toggles the timeline's
+            own segment/speed/trim track, showSegments above, so it belongs
+            next to what it acts on, not after the unrelated action row below).
+            Renamed from "Advanced editing" the same day; the settings-rail
+            grouping (FocusSettingsPanel) is unrelated content (straighten/dim/
+            zoom) and kept its own "Advanced editing" label. */}
         {!mobileFs && videoUrl && (
           <button
             type="button"
@@ -739,6 +726,23 @@ export function FocusModeView({
             {advancedOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             {EDITOR_PANELS.TRIM_AND_SLOWMO}
           </button>
+        )}
+
+        {/* T9950 Slice 2/3: [Undo] [Use a wider frame] [Preview highlight] —
+            below the Trim and Slo-mo disclosure now (design doc §5's original
+            order reversed 2026-09-18; this row acts on the crop/frame, not the
+            timeline, so it no longer needs to sit between the timeline and its
+            own disclosure). */}
+        {!mobileFs && videoUrl && (
+          <FramingActionRow
+            canUndo={canUndoFraming}
+            onUndo={onUndoFraming}
+            isWideFraming={isWideFraming}
+            onWidenFraming={onWidenFraming}
+            previewing={previewing}
+            onTogglePreview={() => setPreviewing((v) => !v)}
+            isMultiClip={isMultiClip}
+          />
         )}
 
           {/* Mobile fullscreen: YouTube-style overlay controls + timeline */}
