@@ -253,6 +253,7 @@ export function Toggle({
   size = 'md',
   accent = 'purple',
   className = '',
+  ...props
 }) {
   const sizeStyles = {
     sm: { track: 'h-5 w-10', thumb: 'h-3 w-3', translate: 'translate-x-5' },
@@ -277,6 +278,7 @@ export function Toggle({
         disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
         className,
       ].filter(Boolean).join(' ')}
+      {...props}
     >
       <span
         className={[

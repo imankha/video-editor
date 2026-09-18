@@ -39,6 +39,7 @@ export default function FramingActionRow({
         data-testid="framing-widen"
         onClick={onWidenFraming}
         aria-pressed={isWideFraming}
+        title={EDITOR_PANELS.WIDER_FRAME_HINT}
         className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors coarse-pointer:min-h-11 ${
           isWideFraming
             ? 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500'
@@ -55,6 +56,7 @@ export default function FramingActionRow({
           data-testid="framing-preview-toggle"
           onClick={onTogglePreview}
           aria-pressed={previewing}
+          title={EDITOR_PANELS.PREVIEW_DISCLOSURE}
           className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors coarse-pointer:min-h-11 ${
             previewing
               ? 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500'

@@ -141,6 +141,11 @@ describe('AnnotateFullscreenOverlay strip — full-width stage-aware primary CTA
     );
     const cta = screen.getByRole('button', { name: 'Frame this clip' });
     expect(cta.className).toMatch(/w-full/);
+    // Regression (2026-09-18 user request): rollover explaining what Framing
+    // does, using the already-approved Clips-tab copy (T10280).
+    expect(cta.title).toBe(
+      'Framing focuses the camera on your player and lets you trim and add slo-mo to key moments.'
+    );
   });
 
   it('reflects the linked project stage (Spotlight), not a hardcoded "Framing" label', () => {

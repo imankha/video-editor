@@ -73,6 +73,25 @@ describe('ClipDetailsEditor — stage-aware CTA (T9330, via getClipStage)', () =
     expect(button.disabled).toBe(false);
   });
 
+  // Regression (2026-09-18 user request): a rollover on "Frame this clip"
+  // explaining what Framing does, using the already-approved Clips-tab copy.
+  it('"Frame this clip" carries a rollover explaining what Framing does; other stages do not', () => {
+    const focusRender = render(
+      <ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }} onUpdate={() => {}} onDelete={() => {}} />
+    );
+    expect(screen.getByRole('button', { name: 'Frame this clip' }).title).toBe(
+      'Framing focuses the camera on your player and lets you trim and add slo-mo to key moments.'
+    );
+    focusRender.unmount();
+
+    useProjectsStore.setState({ projects: [{ id: 42, has_working_video: true, has_final_video: true, is_published: false }] });
+    render(
+      <ClipDetailsEditor region={{ ...baseRegion, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }} onUpdate={() => {}} onDelete={() => {}} />
+    );
+    expect(screen.getByRole('button', { name: 'View Final' }).title).not.toMatch(/Framing focuses/);
+    useProjectsStore.setState({ projects: [] });
+  });
+
   it('clicking "Frame this clip" calls onOpenInFocus with the clip\'s autoProjectId', () => {
     const onOpenInFocus = vi.fn();
     render(

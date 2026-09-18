@@ -721,6 +721,7 @@ export function FocusModeView({
             data-testid="advanced-editing-disclosure"
             onClick={() => setAdvancedOverride(!advancedOpen)}
             aria-expanded={advancedOpen}
+            title={EDITOR_PANELS.TRIM_AND_SLOWMO_HINT}
             className="mt-1 flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-gray-200"
           >
             {advancedOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}

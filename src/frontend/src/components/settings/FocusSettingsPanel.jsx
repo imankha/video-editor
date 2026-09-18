@@ -54,7 +54,11 @@ export default function FocusSettingsPanel({
           />
         </SettingRow>
         <SettingRow label="Include audio" value={includeAudio ? 'On' : 'Off'}>
-          <Toggle checked={includeAudio} onChange={onIncludeAudioChange} />
+          <Toggle
+            checked={includeAudio}
+            onChange={onIncludeAudioChange}
+            title="Include the clip's original audio in the exported video"
+          />
         </SettingRow>
       </SettingsPanel>
 
@@ -97,6 +101,7 @@ export default function FocusSettingsPanel({
                   className="relative w-8 h-4 rounded-full transition-colors coarse-pointer:min-h-11"
                   style={{ backgroundColor: dimOpacity === 0.7 ? '#2563eb' : '#4b5563' }}
                   aria-label="Toggle background darkness"
+                  title="Dim or darken the letterboxed background behind your video"
                   aria-pressed={dimOpacity === 0.7}
                 >
                   <span

@@ -425,6 +425,9 @@ export function ClipDetailsEditor({
               variant="cyan"
               size="sm"
               icon={clipStage.action === 'overlay' ? Sparkles : Crop}
+              // 2026-09-18 (user request): FOCUS-stage rollover, same
+              // already-approved copy as the desktop strip's CTA.
+              title={clipStage.stage === CLIP_STAGE.FOCUS ? ANNOTATE.FRAME_THIS_CLIP_HINT : undefined}
               onClick={() =>
                 clipStage.action === 'overlay'
                   ? onOpenInOverlay(region.autoProjectId)

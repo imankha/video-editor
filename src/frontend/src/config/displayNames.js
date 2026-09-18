@@ -43,6 +43,11 @@ export const ANNOTATE = {
   // dismiss secondary (closes the editor, playhead preserved). Later stages keep
   // their T9320/T9330 labels (Apply Spotlight / View Final / View Published).
   FRAME_THIS_CLIP: 'Frame this clip',      // N41 — FOCUS-stage primary CTA
+  // 2026-09-18 (user request): rollover on the Frame this clip button, using
+  // ALREADY-APPROVED copy -- the Clips-tab guidance body (T10280, the user's
+  // own words, 2026-09-17) is the one place the app explains what Framing
+  // does; this reuses its "what Framing does" sentence verbatim.
+  FRAME_THIS_CLIP_HINT: 'Framing focuses the camera on your player and lets you trim and add slo-mo to key moments.',
   KEEP_MARKING_PLAYS: 'Keep marking plays', // N41 — invitation dismiss secondary
   // T10240/T10290 (N42): the two Framing-entry actions. "Frame"/"Save and Frame"
   // is the VERB form of the Framing mode (MODE_NAMES.FRAMING = 'Framing', T9860) —
@@ -510,6 +515,8 @@ export const EDITOR_PANELS = {
   // ("Advanced editing"); split 2026-09-18 per user request so the timeline
   // disclosure's label matches what it actually reveals.
   TRIM_AND_SLOWMO: 'Trim and Slo-mo',
+  // 2026-09-18 (user request: rollover hints on every Framing-screen button).
+  TRIM_AND_SLOWMO_HINT: 'Split this clip into segments, adjust playback speed, or trim the start and end.',
   // The settings-rail heading (straighten/dim/zoom) keeps this word --
   // unrelated to trim/slo-mo, so it was NOT renamed alongside the disclosure.
   ADVANCED_EDITING: 'Advanced editing',
@@ -518,6 +525,10 @@ export const EDITOR_PANELS = {
   // claim (design doc §3.5: "Do not promise crispness from resolution alone").
   WIDER_FRAME: 'Use a wider frame',
   WIDER_FRAME_ON: 'Back to default frame',
+  // 2026-09-18 (user request) -- was a permanent caption under the action row
+  // (WIDER_FRAME_HELPER) until the user asked to remove it in favor of a
+  // rollover; same text, now a title/hint instead of always-visible.
+  WIDER_FRAME_HINT: 'Shows more of the field around your focus points.',
   UNDO: 'Undo',
   UNDO_NOTHING: 'Nothing to undo',
   // T9950 Slice 3 -- preview approximation disclosure (design doc §4). Exact for

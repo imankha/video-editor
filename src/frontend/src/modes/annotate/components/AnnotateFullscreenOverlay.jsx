@@ -813,7 +813,10 @@ export function AnnotateFullscreenOverlay({
       variant="cyan"
       size="lg"
       icon={clipStage.action === 'overlay' ? Sparkles : Crop}
-      title={`Open the clip: ${clipStage.label}`}
+      // 2026-09-18 (user request): the FOCUS-stage CTA gets a rollover explaining
+      // what Framing does (already-approved copy); other stages keep the
+      // generic "open the clip" hint.
+      title={clipStage.stage === CLIP_STAGE.FOCUS ? ANNOTATE.FRAME_THIS_CLIP_HINT : `Open the clip: ${clipStage.label}`}
       className="w-full coarse-pointer:min-h-[44px]"
       onClick={() => {
         if (hasUnsavedEdits()) {
@@ -836,7 +839,14 @@ export function AnnotateFullscreenOverlay({
   // window (focusPending stays false).
   const stagePendingCta = (isEditMode && !existingClip?.autoProjectId && focusPending) ? (
     <div>
-      <Button variant="cyan" size="lg" icon={Crop} disabled className="w-full coarse-pointer:min-h-[44px]">
+      <Button
+        variant="cyan"
+        size="lg"
+        icon={Crop}
+        disabled
+        title={ANNOTATE.FRAME_THIS_CLIP_HINT}
+        className="w-full coarse-pointer:min-h-[44px]"
+      >
         {ANNOTATE.FRAME_THIS_CLIP}
       </Button>
       {/* T9900: the button is disabled only while the clip's project is being created —
