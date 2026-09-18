@@ -21,6 +21,7 @@ import { useAuthStore } from '../stores/authStore';
 import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { ClipSizeLimitModal } from './ClipSizeLimitModal';
+import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
 import { useClipUpload, CLIP_UPLOAD_CREATING_PCT } from '../hooks/useClipUpload';
 import { useConfigStore } from '../stores/configStore';
 import { GAME, REEL, HIGHLIGHT, PUBLISHED } from '../config/themeColors';
@@ -646,6 +647,10 @@ export function ProjectManager({
   const [oversizeClips, setOversizeClips] = useState([]);
   // T10250: files pre-seeded into the Add Game picker after "Add Game instead".
   const [gamePrefillFiles, setGamePrefillFiles] = useState(null);
+  // T10310: over-cap files caught only AFTER an upload attempt (pre-flight check
+  // skipped because maxClipUploadBytes hadn't hydrated yet at pick time) — drives
+  // the ClipUploadTooLargeModal popup so the refusal isn't just a missable rail row.
+  const [postUploadTooLarge, setPostUploadTooLarge] = useState(null); // { names: string[] } | null
   const { uploadClips, progressByFile, isUploading: isUploadingClips } = useClipUpload();
   // T10250: server-provided clip caps (configStore, hydrated from /api/bootstrap).
   // null until bootstrap resolves -> the pre-flight gate is skipped and the server
@@ -1070,6 +1075,19 @@ export function ProjectManager({
     // (T10270 is at the Architect design gate) — do NOT invent a placeholder
     // table or a parallel logging path; this is the single wire-up point.
 
+    // T10310: a prepare-upload refusal (the same over-cap check the pre-flight
+    // ClipSizeLimitModal runs, minus the client-side gate — see the comment above
+    // "a prepare-upload refusal already carries the server's exact sentence in
+    // `error`") slipped past pre-flight and only failed after the upload attempt.
+    // It's the ONE refusal class with no `.code` (batch refusals like
+    // duration_exceeds_cap always have one) — a closure-safe signal that never
+    // depends on maxClipUploadBytes having hydrated by pick time. Pop the "too
+    // large" modal so it isn't just an easy-to-miss rail row.
+    const tooLargeNames = results
+      .filter((r) => !r.ok && r.original_filename && !r.retryable && !r.code)
+      .map((r) => r.original_filename);
+    if (tooLargeNames.length > 0) setPostUploadTooLarge({ names: tooLargeNames });
+
     // Replace this run's files in the failed set (a retried file that now
     // succeeded drops out; a still-failing one stays).
     setFailedClips((prev) => {
@@ -1187,8 +1205,20 @@ export function ProjectManager({
       return;
     }
     // A URL-named tab is authoritative — don't let the clip-drafts-count default
-    // flip a cold /home/games deep link over to Clips. (T5677)
+    // flip a cold /home/games deep link over to Clips. (T5677) T10310 (2026-09-18
+    // user request) carves out ONE exception: a cold/stale /home/reels landing
+    // (e.g. a URL left over from a prior session, or a failed-upload attempt)
+    // with genuinely zero clips now settles on Games instead, same as the bare
+    // /home default below -- this supersedes T8380's "no dead-end redirect" for
+    // the INITIAL landing only. `!hasSetInitialTab.current` scopes this to that
+    // one-time settle: once it fires (either branch), a user's own later click
+    // into an empty Clips tab is never bounced back out (Upload clip is still a
+    // legitimate empty-state action there).
     if (tabFromPath(window.location.pathname)) {
+      if (tabFromPath(window.location.pathname) === 'projects' && !hasSetInitialTab.current) {
+        if (loading) return; // wait for the real clipDrafts count before deciding
+        if (clipDrafts.length === 0) setActiveTab('games');
+      }
       hasSetInitialTab.current = true;
       return;
     }
@@ -1197,10 +1227,6 @@ export function ProjectManager({
       hasSetInitialTab.current = true;
     }
   }, [clipDrafts, loading]);
-
-  // T8380: the T6830 dead-end redirect effect (bounce a zero-content account off
-  // /home/reels back to Games) was removed -- the In Progress Clips tab is now a
-  // valid landing surface thanks to "Add Video", so parking there is intentional.
 
   // T8400/T8545/T8555: "land on the published reel" (e.g. DraftTile's Publish ->
   // My Reels action) fires galleryStore.open(); T8555 split published reels onto
@@ -1525,17 +1551,18 @@ export function ProjectManager({
           activeBg={REEL.bg}
           activeBgDark={REEL.bgDark}
         />
-        {/* T9390 (Decision 3): Reels + Published are disabled until the account
-            has a clip -- gated on the SAME `hasClips` that gates Build New Reel
-            (no new data source). You cannot build a reel OR publish anything
-            without a clip first; Clips is the only tab requiring nothing (Add
-            Video is its own independent creation path). The `title` is a secondary
-            hint only -- the VISIBLE caption below is the compliance mechanism
-            (T8780: title is invisible on touch). */}
+        {/* T10310 (2026-09-18 user request): Reels + Published are ALWAYS
+            reachable now, even at zero clips, so a curious user can click in and
+            read what each tab says -- supersedes T9390 Decision 3's hasClips gate
+            (removed below, along with its VISIBLE-reason caption). Their own
+            EmptyTabGuide content (ReelsActions/PublishedActions) already renders
+            sensibly with zero clips: Build New Reel and the Games link both work
+            regardless of count. `hasClips` still gates the actual CREATE actions
+            that are genuinely impossible without a clip (e.g. the populated Reels
+            tab's own "Create reel" button below) -- only the tab-bar ACCESS gate
+            is gone. */}
         <SegmentedTabButton
           active={activeTab === 'inProgressReels'}
-          disabled={!hasClips}
-          title={!hasClips ? 'Add a clip to unlock' : undefined}
           onClick={() => setActiveTab('inProgressReels')}
           Icon={Clapperboard}
           label={SECTION_NAMES.REELS}
@@ -1546,8 +1573,6 @@ export function ProjectManager({
         />
         <SegmentedTabButton
           active={activeTab === 'published'}
-          disabled={!hasClips}
-          title={!hasClips ? 'Add a clip to unlock' : undefined}
           onClick={() => setActiveTab('published')}
           Icon={Send}
           label={SECTION_NAMES.PUBLISHED}
@@ -1557,16 +1582,6 @@ export function ProjectManager({
           activeBgDark={PUBLISHED.bgDark}
         />
       </div>
-
-      {/* T9390 (Decision 3): a persistent VISIBLE reason for the two disabled tabs
-          (never a hover-only title -- T8780). One caption covers both, since they
-          share one gate; it disappears the instant a clip exists. Pure function of
-          already-loaded `hasClips` -- nothing persisted. */}
-      {!hasClips && (
-        <p className="text-xs text-gray-500 text-center mt-1 mb-3">
-          Reels and Published unlock once you have a clip. Cut one from a game, or use Upload clip on Clips.
-        </p>
-      )}
 
       {/* T8380: the T8780 disabled-Clips-tab caption was removed with the
           dead-end guard -- the tab is always reachable now, and its two-path
@@ -2297,6 +2312,17 @@ export function ProjectManager({
         maxBytes={maxClipUploadBytes}
         onAddGame={handleOversizeAddGame}
         onCancel={() => setOversizeClips([])}
+      />
+
+      {/* T10310: the post-upload counterpart — an over-cap file that missed the
+          pre-flight gate above and only got refused after the upload attempt. No
+          File left in hand to auto-carry into Add Game, so this instructs the
+          click-path instead. */}
+      <ClipUploadTooLargeModal
+        isOpen={!!postUploadTooLarge}
+        names={postUploadTooLarge?.names || []}
+        maxBytes={maxClipUploadBytes}
+        onDismiss={() => setPostUploadTooLarge(null)}
       />
 
       {/* T8700: attach an additional video to an existing game. The modal drives

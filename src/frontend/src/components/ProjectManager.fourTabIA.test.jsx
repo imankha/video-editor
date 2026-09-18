@@ -240,8 +240,6 @@ describe('T8555: Published tab renders the published gallery panel', () => {
   });
 
   it('clicking Published mounts the panel active with testid published-tab-panel', () => {
-    // T9390: Published is gated on hasClips, so the account needs a clip for the
-    // tab to be enabled and clickable.
     renderManager({ projects: [singleclipDraft(9)] });
 
     fireEvent.click(publishedTab());
@@ -397,49 +395,42 @@ describe('T8555: badge counts', () => {
   });
 });
 
-// T9390 (Decision 3): Reels and Published are disabled tabs until the account has
-// a clip -- gated on the SAME `hasClips` boolean that gates Build New Reel. Clips
-// and Games always stay reachable (Clips is the zero-game Add Video entry point).
-describe('T9390: Reels + Published tab gating on hasClips', () => {
-  const CAPTION = 'Reels and Published unlock once you have a clip. Cut one from a game, or use Upload clip on Clips.';
+// T9390 (Decision 3) was: Reels and Published disabled until the account has a
+// clip. T10310 (2026-09-18 user request) removed that gate -- both tabs are now
+// ALWAYS reachable so a curious user can click in and read what they say,
+// regardless of clip count. `hasClips` still gates the genuinely-impossible
+// CREATE actions inside those tabs (e.g. the populated Reels tab's own "Create
+// reel" button), just not tab-bar ACCESS.
+describe('T10310: Reels + Published tabs are always reachable (supersedes T9390 Decision 3 gating)', () => {
+  const OLD_CAPTION = 'Reels and Published unlock once you have a clip. Cut one from a game, or use Upload clip on Clips.';
 
   beforeEach(() => {
     window.history.replaceState(null, '', '/home');
     useGalleryStore.setState({ isOpen: false });
   });
 
-  it('no clips at all: Reels and Published are disabled, Games and Clips are not', () => {
+  it('no clips at all: Reels and Published are still enabled, same as Games and Clips', () => {
     renderManager({ projects: [], games: [] });
 
-    expect(inProgressReelsTab().disabled).toBe(true);
-    expect(publishedTab().disabled).toBe(true);
+    expect(inProgressReelsTab().disabled).toBe(false);
+    expect(publishedTab().disabled).toBe(false);
     expect(gamesTab().disabled).toBe(false);
     expect(clipsTab().disabled).toBe(false);
-    // The disabled reason is a VISIBLE caption (T8780), not a hover-only title.
-    expect(screen.getByText(CAPTION)).toBeTruthy();
+    // The old gate's explanatory caption is gone along with the gate itself.
+    expect(screen.queryByText(OLD_CAPTION)).toBeNull();
   });
 
-  it('a single-clip draft (Add Video path) unlocks BOTH tabs and hides the caption', () => {
+  it('a single-clip draft (Add Video path) still leaves both tabs enabled', () => {
     renderManager({ projects: [singleclipDraft(1)], games: [] });
 
     expect(inProgressReelsTab().disabled).toBe(false);
     expect(publishedTab().disabled).toBe(false);
-    expect(screen.queryByText(CAPTION)).toBeNull();
   });
 
-  it('a game with cut clips (clip_count > 0) also unlocks both tabs', () => {
-    renderManager({ projects: [], games: [{ ...oneGame('gc'), clip_count: 2 }] });
+  it('a game with zero cut clips still leaves both tabs enabled (nothing gates tab-bar access anymore)', () => {
+    renderManager({ projects: [], games: [{ ...oneGame('g0'), clip_count: 0 }] });
 
     expect(inProgressReelsTab().disabled).toBe(false);
     expect(publishedTab().disabled).toBe(false);
-    expect(screen.queryByText(CAPTION)).toBeNull();
-  });
-
-  it('a game with zero cut clips does NOT unlock the tabs (games alone are not enough)', () => {
-    renderManager({ projects: [], games: [{ ...oneGame('g0'), clip_count: 0 }] });
-
-    expect(inProgressReelsTab().disabled).toBe(true);
-    expect(publishedTab().disabled).toBe(true);
-    expect(screen.getByText(CAPTION)).toBeTruthy();
   });
 });

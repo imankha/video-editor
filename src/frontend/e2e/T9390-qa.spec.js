@@ -3,20 +3,21 @@ import { test, expect } from '@playwright/test';
 /**
  * T9390 QA drive: the four home-tab empty guides after the copy/strip simplify +
  * Decision 3 tab gating. Empty test-login session (no games, no clips), driven at
- * 320/390/768/1024. Captures screenshots to qa/ and asserts the new binding copy,
- * the 3-node-plus-optional-pill flow strip (sm+ only), and the disabled
- * Reels/Published tabs + visible caption.
+ * 320/390/768/1024. Captures screenshots to qa/ and asserts the new binding copy
+ * and the 3-node-plus-optional-pill flow strip (sm+ only).
+ *
+ * T10310 (2026-09-18 user request) removed Decision 3's Reels/Published tab-bar
+ * gate -- both tabs are now always enabled, so the disabled/caption assertions
+ * below were dropped.
  *
  * The throttled-network Published first-paint fix (Step 6) needs an account that
  * HAS a clip but nothing published (so Published is reachable AND its list is
  * empty); that shape is not constructible from an empty test-login session, so it
  * is verified by the useCollections eager-at-mount unit test + supervisor-side
- * live check, noted in the QA status. An empty account's Published tab is disabled
- * by design here.
+ * live check, noted in the QA status.
  */
 
 const TEST_USER_ID = `e2e_t9390_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-const CAPTION = 'Reels and Published unlock once you have a clip. Cut one from a game, or use Upload clip on Clips.';
 const VIEWPORTS = [
   { w: 320, h: 720, label: '320' },
   { w: 390, h: 844, label: '390' },
@@ -70,12 +71,11 @@ test('T9390: four-tab empty guides, strip, and gating across viewports', async (
     await expect(page.getByText('Upload a recording, then tap Mark play on the moments worth keeping.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Skip ahead on Clips.' })).toBeVisible();
 
-    // Decision 3: Reels + Published disabled; Games + Clips reachable; caption shown.
-    await expect(reelsTab).toBeDisabled();
-    await expect(publishedTab).toBeDisabled();
+    // T10310: all four tabs are reachable regardless of clip count.
+    await expect(reelsTab).toBeEnabled();
+    await expect(publishedTab).toBeEnabled();
     await expect(gamesTab).toBeEnabled();
     await expect(clipsTab).toBeEnabled();
-    await expect(page.getByText(CAPTION)).toBeVisible();
 
     // Flow strip is sm+ only. Tailwind `sm` = 640px.
     const optionalPill = page.getByText('· optional');

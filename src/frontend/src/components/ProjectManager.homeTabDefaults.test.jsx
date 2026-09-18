@@ -160,16 +160,27 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     expect(screen.getByRole('button', { name: 'Upload game' })).toBeTruthy();
   });
 
-  it('/home/reels deep link on a zero-content account STAYS on Clips (T8380: no dead-end redirect)', async () => {
+  it('/home/reels deep link on a zero-content account settles on Games (T10310: supersedes T8380)', async () => {
     renderManager({}, '/home/reels');
 
-    // T8380: the old redirect effect (bounce off the dead-end Clips tab onto
-    // Games) was removed -- /home/reels is now a valid landing surface, so the
-    // Add Video CTA is shown in place and the URL is not rewritten to Games.
-    const addVideo = await screen.findByRole('button', { name: 'Upload clip' });
-    expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
-    expect(window.location.pathname).toBe('/home/reels');
+    // T10310 (2026-09-18 user request): a stale/deep-linked /home/reels with
+    // genuinely zero clips (e.g. left over from a prior session, or a failed
+    // upload attempt) now settles on Games once loading resolves, rewriting the
+    // URL -- rather than parking the user on an empty Clips tab. The Clips tab
+    // itself is still fully reachable by clicking it (T8380's "not a dead end"
+    // still holds for that case).
+    const addGame = await screen.findByRole('button', { name: 'Upload game' });
+    expect(addGame).toBeTruthy();
+    expect(window.location.pathname).toBe('/home/games');
     expect(clipsTab().disabled).toBe(false);
+  });
+
+  it('/home/reels deep link with real clip drafts STAYS on Clips (T10310 exception only fires at zero clips)', async () => {
+    renderManager({ projects: [{ id: 7, name: 'A Reel', game_ids: [], is_auto_created: true }] }, '/home/reels');
+
+    const addVideo = await screen.findByRole('button', { name: 'Upload clip' });
+    expect(addVideo).toBeTruthy();
+    expect(window.location.pathname).toBe('/home/reels');
   });
 
   it('user with extracted clips but no drafts: Clips tab is enabled', () => {

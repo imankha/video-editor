@@ -15,9 +15,13 @@ import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
  * tabs render above their CTA, so all four tabs share one guidance structure.
  *
  * T9390 (Decision 3): Clips at zero games shows Add Video ALONE (no cross-tab Add
- * Game). Reels and Published are gated at the tab bar (ProjectManager) on hasClips,
- * so the Reels empty guide's Build New Reel is always enabled here and the old
- * "no clips" branch is gone; Published's zero-everything branch is gone too.
+ * Game). Reels and Published were gated at the tab bar (ProjectManager) on
+ * hasClips, so the Reels empty guide's Build New Reel was always enabled here and
+ * the old "no clips" branch was dropped; Published's zero-everything branch was
+ * dropped too. T10310 (2026-09-18 user request) removed that tab-bar gate --
+ * these two branches can now render at genuine zero clips (not just zero
+ * *everything*) -- but their copy already holds up at that count, so neither was
+ * restored.
  *
  * @param {'games'|'clips'|'reels'|'published'} tab - which empty state to render
  * @param {number} gamesCount - the account's game count (branches Clips)
@@ -178,9 +182,9 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
   );
 }
 
-// T9390 (Decision 3): the Reels tab is gated on hasClips at the tab bar, so this
-// empty guide only renders when a clip exists -- Build New Reel is always enabled
-// and the old "no clips" reason + cross-tab button branch was deleted as dead code.
+// T9390 (Decision 3) / T10310: Build New Reel has no disabled state here even
+// though the Reels tab is now reachable at zero clips -- clicking it just opens
+// GameClipSelectorModal with nothing to pick, same as any other empty picker.
 function ReelsActions({ clipCount, onBuildReel }) {
   const c = EMPTY_TAB_GUIDE.reels;
   return (
@@ -199,12 +203,12 @@ function ReelsActions({ clipCount, onBuildReel }) {
   );
 }
 
-// T9390 (Decision 3): Published is gated on hasClips at the tab bar, so games (or
-// a clip) are guaranteed here -- the old zero-everything "Add Game" branch was
-// deleted as dead code. T10280 dropped the "N clips in progress" draftsText + the
-// "Open Clips" button (the user did not want an in-progress count here), so a
-// single branch remains: the headline/body plus "cut your first clip" pointing
-// back to Games.
+// T9390 (Decision 3) / T10310: "Go to Games" holds up regardless of clip count
+// (the Games tab is always reachable), so this single branch still reads fine now
+// that Published is reachable at genuine zero clips, not just zero everything.
+// T10280 dropped the "N clips in progress" draftsText + the "Open Clips" button
+// (the user did not want an in-progress count here), so a single branch remains:
+// the headline/body plus "cut your first clip" pointing back to Games.
 function PublishedActions({ onNavigate }) {
   const c = EMPTY_TAB_GUIDE.published;
   return (

@@ -228,6 +228,16 @@ export const CLIP_UPLOAD = {
     `Clip uploads are limited to ${mb}MB. For longer footage, use Add Game instead.`,
   SIZE_LIMIT_ADD_GAME: 'Add Game instead',
   SIZE_LIMIT_CANCEL: 'Cancel',
+  // T10310 (2026-09-18 user request): the SAME over-cap refusal, but caught only
+  // AFTER an upload attempt (the pre-flight gate above is skipped while
+  // maxClipUploadBytes hasn't hydrated yet — see ProjectManager's null guard), so
+  // there is no File left in hand to auto-carry into Add Game. Surfaced as its own
+  // popup (not just the inert rail row, which is easy to miss) with the concrete
+  // click-path instead of an auto-action button.
+  POST_UPLOAD_TOO_LARGE_TITLE: 'This clip is too large for Clips',
+  postUploadTooLargeBody: (mb) =>
+    `Clip uploads are limited to ${mb}MB. Click Games, then click ${LIBRARY_ACTIONS.UPLOAD_GAME} to add this as a full game instead.`,
+  POST_UPLOAD_TOO_LARGE_DISMISS: 'Got it',
   // T10250: non-retryable server refusals surfaced verbatim on the rail (no
   // Retry). Keyed on the clip-batch error codes (clips.py upload_clips_batch);
   // `duration_exceeds_cap` is parameterized by the server duration cap

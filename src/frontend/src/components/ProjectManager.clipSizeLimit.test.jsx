@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppStateProvider } from '../contexts';
 
@@ -201,6 +201,31 @@ describe('ProjectManager clip size limit + completion nav (T10250/T10260)', () =
     expect(await screen.findByText(/10-minute limit/i)).toBeTruthy();
     // Refused rows never offer a Retry.
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    // A batch-coded refusal (duration cap) is NOT the over-cap "too large" popup.
+    expect(screen.queryByTestId('clip-upload-too-large-modal')).toBeNull();
+  });
+
+  it('a prepare-upload over-cap refusal that missed pre-flight pops the "too large" modal with Games/Upload game instructions (T10310)', async () => {
+    // Shape mirrors ensureVideoInR2's prepare-upload 400 refusal — no `.code`
+    // (batch-coded refusals like duration_exceeds_cap always have one), which is
+    // the signal runClipUpload uses to detect this class regardless of whether
+    // maxClipUploadBytes had hydrated by pick time.
+    uploadClipsMock.mockResolvedValue({
+      results: [{ ok: false, original_filename: 'huge.mp4', error: CLIP_UPLOAD.sizeLimitBody(5), retryable: false }],
+      charged: 0,
+      balance: null,
+    });
+    renderOnClipsTab();
+    const input = await openPicker();
+    fireEvent.change(input, { target: { files: [bytesFile('huge.mp4', 1024)] } });
+
+    const modal = await screen.findByTestId('clip-upload-too-large-modal');
+    const withinModal = within(modal);
+    expect(withinModal.getByText(CLIP_UPLOAD.postUploadTooLargeBody(5))).toBeTruthy();
+    expect(withinModal.getByText('huge.mp4')).toBeTruthy();
+
+    fireEvent.click(withinModal.getByRole('button', { name: CLIP_UPLOAD.POST_UPLOAD_TOO_LARGE_DISMISS }));
+    expect(screen.queryByTestId('clip-upload-too-large-modal')).toBeNull();
   });
 
   it('a finished single upload opens the clip in Framing while on the Clips tab (T10260)', async () => {

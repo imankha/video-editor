@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppStateProvider } from '../contexts';
 
@@ -92,9 +92,15 @@ import { useGalleryStore } from '../stores/galleryStore';
 
 const APP_STATE = { unseenReelsCount: 0, exportingProject: null };
 
+// T10310: a zero-clip account deep-linked to /home/reels now settles onto Games
+// (see ProjectManager's initial-tab effect), so a manual click into Clips is
+// needed to reach it for the zero-clip tests below — the SAME real path a user
+// takes (click the tab), which T8380 still keeps fully reachable regardless of
+// content. Non-empty-clip callers (A_CLIP) land on Clips already; the click is a
+// harmless no-op there.
 function renderOnClipsTab(props = {}) {
   window.history.replaceState(null, '', '/home/reels');
-  return render(
+  const result = render(
     <AppStateProvider value={APP_STATE}>
       <ProjectManager
         projects={[]}
@@ -114,6 +120,8 @@ function renderOnClipsTab(props = {}) {
       />
     </AppStateProvider>
   );
+  fireEvent.click(screen.getByRole('button', { name: /^Clips/i }));
+  return result;
 }
 
 const A_CLIP = { id: 7, name: 'A saved play', game_ids: [], is_auto_created: true };
