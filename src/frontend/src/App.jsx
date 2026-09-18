@@ -7,7 +7,6 @@ import { SharedAnnotationView } from './components/SharedAnnotationView';
 import { SharedCollectionView } from './components/SharedCollectionView';
 import { SharedGameView } from './components/SharedGameView';
 import { ClaimGameView } from './components/ClaimGameView';
-import { QuestPanel } from './components/QuestPanel';
 import { TutorialVideoModal } from './components/TutorialVideoModal';
 import { useTutorialStore } from './stores/useTutorialStore';
 import { getTutorialAssets } from './config/tutorialVideos';
@@ -24,7 +23,6 @@ import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useExportRecovery } from './hooks/useExportRecovery';
 import { useSessionHeartbeat } from './hooks/useSessionHeartbeat';
-import { useIsMobile } from './hooks/useIsMobile';
 import { ConfirmationDialog, toast, UnifiedHeader } from './components/shared';
 import { getProjectDisplayName } from './utils/clipDisplayName';
 import { SECTION_NAMES, MODE_NAMES } from './config/displayNames';
@@ -112,8 +110,6 @@ function App() {
   // Overlay store - for loading state and tracking changes
   const isLoadingWorkingVideo = useOverlayStore(state => state.isLoadingWorkingVideo);
   const overlayChangedSinceExport = useOverlayStore(state => state.overlayChangedSinceExport);
-
-  const isMobile = useIsMobile();
 
   // T4780: Tutorial video modal — read open quest from store, derive assets
   const openQuestId = useTutorialStore((s) => s.openQuestId);
@@ -488,23 +484,6 @@ function App() {
     setClaimGameToken(null);
     useEditorStore.getState().setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
   }, []);
-
-  // T5330b: SharedAnnotationView sets sessionStorage 'shared_annotation_flow' to
-  // suppress the onboarding QuestPanel while the recipient is on the /shared/teammate
-  // view (kept in sessionStorage so it survives the share->login reload). It has no
-  // owner that clears it, so a signed-up recipient never sees their new-user flow.
-  // Clear it once the user is in their OWN authenticated app and no longer on the
-  // shared-annotation route. Keyed on "left the shared view" (not merely
-  // "authenticated"), so an existing user actively viewing a shared annotation keeps
-  // the intended suppression.
-  // T5730: the claim route reuses the SAME flag (ClaimGameView sets it), so keep
-  // the suppression alive while claiming and clear it only once the user is
-  // authenticated AND off both shared routes.
-  useEffect(() => {
-    if (isAuthenticated && !teammateShareToken && !claimGameToken) {
-      sessionStorage.removeItem('shared_annotation_flow');
-    }
-  }, [isAuthenticated, teammateShareToken, claimGameToken]);
 
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
@@ -913,14 +892,12 @@ function App() {
             while connected, so no visible chrome on Drafts). */}
         <ConnectionStatus />
         <ImpersonationBanner />
-        {/* Shared bg-gray-900 wrapper: content + quest panel flow together, min-h-screen ensures background covers viewport */}
+        {/* Shared bg-gray-900 wrapper: min-h-screen ensures background covers viewport */}
         <div className="min-h-screen bg-gray-900">
           <ProjectsScreen
               onStateReset={clearSelection}
               onLoadGame={handleLoadGame}
             />
-          {/* Quest panel — static, flows after project content (T1600) */}
-          <QuestPanel inline />
           {/* Report button — mobile only (desktop has floating global button in main.jsx) */}
           <div className="sm:hidden text-center py-4">
             <ReportProblemButton />
@@ -1047,11 +1024,6 @@ function App() {
 
       {/* Sync Status Indicator - shows when R2 sync has failed */}
       <SyncStatusIndicator />
-
-      {/* Quest Panel (T540) — only on desktop in editor modes (shown inline on Home screen for mobile) */}
-      {!isMobile && (
-        <QuestPanel />
-      )}
 
       {/* Mode Switch Confirmation Dialog */}
       <ConfirmationDialog

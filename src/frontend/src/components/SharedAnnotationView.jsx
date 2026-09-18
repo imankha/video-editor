@@ -18,10 +18,6 @@ export function SharedAnnotationView({ shareToken, onClose }) {
 
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
 
-  useEffect(() => {
-    sessionStorage.setItem('shared_annotation_flow', 'true');
-  }, []);
-
   const handleInviteClick = useCallback(() => shareInvite(), []);
 
   useEffect(() => {

@@ -20,10 +20,6 @@ import { setPendingRecap } from '../utils/pendingNavigation';
  * Confirm POSTs the claim; success lands on the game card / recap (NOT Annotate)
  * with a tag-your-athlete nudge (post-import landing owned by ProjectManager via
  * the pendingRecap breadcrumb).
- *
- * The onboarding QuestPanel is suppressed while on this route by reusing the
- * existing `shared_annotation_flow` sessionStorage flag (cleared by App.jsx once
- * authenticated AND off the shared/claim route).
  */
 export function ClaimGameView({ token, onClose }) {
   const [state, setState] = useState('loading'); // loading | ready | revoked | not_found | error
@@ -35,11 +31,6 @@ export function ClaimGameView({ token, onClose }) {
   const [errorMessage, setErrorMessage] = useState(null);
 
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
-
-  // Suppress the onboarding QuestPanel while claiming (reuse the T5330b flag).
-  useEffect(() => {
-    sessionStorage.setItem('shared_annotation_flow', 'true');
-  }, []);
 
   // Resolve the share (game name + clip count for the dialog). Team-recap-only
   // public payload -- no auth required, so this loads before/after sign-in alike.
