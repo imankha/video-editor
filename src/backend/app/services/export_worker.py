@@ -468,34 +468,49 @@ def recover_orphaned_jobs():
         """)
         orphaned = cursor.fetchall()
 
+    # T10360: this loop used to run its OWN ad-hoc Modal check whose `except
+    # Exception` fell through to "mark as error" -- so ANY lookup hiccup killed a
+    # dispatched job. routers/exports.check_modal_job_running is the T4240-hardened
+    # three-state version of the same question; use it instead of a second copy.
+    from ..routers.exports import check_modal_job_running
+    from .export_helpers import refund_failed_export
+
     for row in orphaned:
         job_id = row['id']
         modal_call_id = row['modal_call_id']
 
         if modal_call_id:
-            # Check if Modal job is still running before marking as error
-            try:
-                import modal
-                call = modal.FunctionCall.from_id(modal_call_id)
-                # Try non-blocking get - TimeoutError means still running
-                try:
-                    call.get(timeout=0)
-                    # Job completed - let /modal-status handle finalization
-                    logger.info(f"[ExportWorker] Modal job {job_id} completed, will finalize on next status check")
-                    continue
-                except TimeoutError:
-                    # Still running on Modal - don't mark as error
-                    logger.info(f"[ExportWorker] Modal job {job_id} still running, keeping as processing")
-                    continue
-            except Exception as e:
-                # Modal check failed - job may have expired or failed
-                logger.warning(f"[ExportWorker] Modal check failed for {job_id}: {e}")
+            # T10360: a DISPATCHED job is never failed here, whatever Modal says.
+            # This routine only knows that THIS process didn't render the job -- it
+            # cannot see the render's output, so it cannot tell "died" from
+            # "finished while we were restarting". `/modal-status` can (it
+            # HEAD-probes the persisted output_key in R2 and finalizes), and
+            # `cleanup_stale_exports` is the terminal backstop. NOTE: that sweep
+            # is NOT an unattended reaper -- its only caller is this same user's
+            # `GET /api/exports/active`, so both it and this routine run on the
+            # owner's next visit. A user who never returns simply has no stuck UI
+            # to see; nothing needs to reap on their behalf.
+            # Failing it here instead just hides a finished render: the frontend
+            # only polls /modal-status for jobs still listed active, and an errored
+            # job is not. That is exactly how sakarati@'s 2026-09-18 Focus export
+            # was lost -- Modal had already uploaded the finished video 2 minutes
+            # before this loop marked the job error.
+            running = check_modal_job_running(modal_call_id)
+            if running:
+                logger.info(f"[ExportWorker] Modal job {job_id} still running, keeping as processing")
+            elif running is None:
+                logger.info(f"[ExportWorker] Modal status unknown for {job_id}, keeping as processing")
+            else:
+                logger.info(f"[ExportWorker] Modal job {job_id} finished, will finalize on next status check")
+            continue
 
-        # No modal_call_id or Modal job is gone - mark as error
+        # Never dispatched to Modal -- nothing is running anywhere, so this one is
+        # genuinely dead and the user must get their credits back.
         logger.warning(f"[ExportWorker] Found orphaned job: {job_id}, marking as error")
         with get_db_connection() as conn:
             cursor = conn.cursor()
             export_job_repository.fail(cursor, job_id, "Server restarted during processing")
             conn.commit()
+        refund_failed_export(job_id)
 
 

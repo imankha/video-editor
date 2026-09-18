@@ -130,14 +130,31 @@ def get(cursor, job_id: str) -> dict | None:
 
 def get_stale_candidates(cursor, max_age_minutes: int) -> list:
     """Jobs still active (pending/processing) older than max_age_minutes —
-    candidates for cleanup_stale_exports' Modal-liveness check."""
+    candidates for cleanup_stale_exports' Modal-liveness check.
+
+    T10360 added `output_key` and `age_minutes`: the sweep must check whether the
+    render actually produced its object in R2 before failing a job (a FINISHED
+    generator call is indistinguishable from a dead one by Modal status alone),
+    and must be able to give up on a permanently-UNKNOWN job by age instead of
+    skipping it forever. Rows are read by NAME, never unpacked positionally.
+
+    `output_key` is v028 and this is a HOT READ (GET /api/exports/active), so it is
+    projected only when present -- rolling-deploy skew, same rule as every other
+    post-v023 column (see database.column_exists). Absent, it reads NULL, and
+    `reconcile_dispatched_export` then refuses to call anything `dead`: with no key
+    there is no R2 probe, and without one we cannot prove the render produced
+    nothing. The age backstop still terminates such a job."""
+    from ..database import column_exists
+    has_output_key = column_exists(cursor, "export_jobs", "output_key")
+    output_key_col = "output_key" if has_output_key else "NULL AS output_key"
     cursor.execute(
-        """
-        SELECT id, modal_call_id
+        f"""
+        SELECT id, modal_call_id, {output_key_col},
+               (julianday('now') - julianday(created_at)) * 1440 AS age_minutes
         FROM export_jobs
         WHERE status IN (?, ?)
           AND created_at < datetime('now', ? || ' minutes')
-        """,
+        """,  # output_key_col is one of two literals, never user input
         (ExportStatus.PENDING.value, ExportStatus.PROCESSING.value, f'-{max_age_minutes}'),
     )
     return cursor.fetchall()

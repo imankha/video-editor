@@ -28,6 +28,7 @@ from ..database import get_db_connection, get_user_data_path
 from ..highlight_transform import round_credits_half_up
 from ..profile_context import get_current_profile_id
 from ..services import export_job_repository
+from ..storage import file_exists_in_r2
 from ..user_context import get_current_user_id
 from ..utils.encoding import encode_data
 
@@ -163,11 +164,19 @@ def update_job_complete(job_id: str, output_video_id: int, output_filename: str)
 
 
 def update_job_error(job_id: str, error_message: str):
-    """Mark job as failed with error message."""
+    """Mark job as failed with error message, and refund what it charged.
+
+    T10360: every caller of this is a RECOVERY path (`/modal-status`,
+    `resume-progress`) -- by construction the process that reserved the credits is
+    gone, so its own refund handler never ran. The refund is idempotent with that
+    handler, so a job that somehow got both is still only refunded once.
+    """
     with get_db_connection() as conn:
         cursor = conn.cursor()
         export_job_repository.fail(cursor, job_id, error_message)
         conn.commit()
+    from ..services.export_helpers import refund_failed_export
+    refund_failed_export(job_id)
 
 
 def delete_export_job(job_id: str) -> bool:
@@ -231,15 +240,39 @@ def check_modal_job_running(modal_call_id: str) -> bool | None:
     """Check if a Modal job is still running using its call_id.
 
     Three-state (T4240):
-    - True  -> still running (positive evidence).
-    - False -> definitively not running: a result was retrieved.
-    - None  -> UNKNOWN: Modal is unavailable or the API/transport errored, so we
-      could not determine the state. Callers MUST NOT treat None as "dead" -- killing
-      a paid job requires positive evidence it finished. A transient Modal API hiccup
-      previously returned False here and let cleanup_stale_exports mark live jobs error.
+    - True  -> still running (queued or executing).
+    - False -> definitively not running: Modal recorded a TERMINAL input status.
+    - None  -> UNKNOWN: Modal is unavailable, the API/transport errored, or the
+      input record aged out. Callers MUST NOT treat None as "dead" -- killing a
+      paid job requires positive evidence. A transient Modal API hiccup previously
+      returned False here and let cleanup_stale_exports mark live jobs error.
+
+    **T10360 -- this asks Modal a DIFFERENT question than it used to, because the
+    old one had no answer.** It used to call `FunctionCall.get(timeout=0)`, which
+    reads the OUTPUT store. Every `modal_call_id` we persist comes from
+    `process_clips_ai`, a generator invoked via `remote_gen` (framing/overlay
+    capture no id at all) -- and a generator's only output is a `GeneratorDone`
+    marker that the in-band consumer EXPIRES as it reads it (`clear_on_success`),
+    so a second process asking for it gets `NotFoundError` every time, whether the
+    render succeeded, failed, or is still going. That made this function a constant
+    `None` for every job in the database and the entire recovery mechanism inert.
+    Verified against the 2026-09-18 incident's own call id.
+
+    `get_call_graph()` reads the INPUT record instead, which is not consumed and is
+    still queryable hours later (same verification). It fails safe: an unrecognised
+    future status maps to PENDING (`InputStatus._missing_`), and an aged-out record
+    comes back `[]`, which we report as UNKNOWN.
+
+    **`False` DOES NOT MEAN FAILURE.** A generator that finished perfectly also
+    records SUCCESS, and `process_clips_ai` catches its own errors and yields
+    `{"status": "error"}` before returning normally -- so SUCCESS covers both.
+    Any caller that turns `False` into a failed job MUST first check whether the
+    render object landed in R2. Use `reconcile_dispatched_export` below, which
+    enforces that ordering, instead of calling this directly.
     """
     try:
         import modal
+        from modal.call_graph import InputStatus
     except ImportError:
         return None  # Modal not available -> can't know
 
@@ -250,17 +283,75 @@ def check_modal_job_running(modal_call_id: str) -> bool | None:
         return None  # API error looking up the call -> unknown
 
     try:
-        # Non-blocking check - TimeoutError means still running.
-        call.get(timeout=0)
-        return False  # Got a result -> not running
-    except TimeoutError:
-        return True  # Still running
+        graph = call.get_call_graph()
     except Exception:
-        # Could be the job's own exception (dead) OR a Modal transport error (alive).
-        # We can't safely distinguish, so report UNKNOWN rather than risk killing a
-        # live paid job.
         logger.warning(f"[ExportJobs] Modal status check errored for call {modal_call_id}; status unknown", exc_info=True)
         return None
+
+    info = next((i for i in graph if i.function_call_id == modal_call_id), None)
+    if info is None:
+        # Empty graph = input retention expired. Not evidence of death.
+        logger.info(f"[ExportJobs] Modal has no input record for call {modal_call_id}; status unknown")
+        return None
+    # PENDING = queued or executing (and the bucket any unrecognised future status
+    # falls into). Everything else is terminal: SUCCESS / FAILURE / TIMEOUT /
+    # TERMINATED / INIT_FAILURE.
+    return info.status == InputStatus.PENDING
+
+
+def reconcile_dispatched_export(job: dict) -> str:
+    """What REALLY became of a dispatched export, for the recovery paths whose own
+    render process is gone. Returns one of:
+
+    - `rendered` -> the render object is in R2. Finalize it.
+    - `running`  -> Modal says the input is still PENDING. Leave it alone.
+    - `dead`     -> Modal recorded a terminal status AND nothing landed in R2.
+    - `unknown`  -> we cannot tell. Leave it alone; only the age backstop in
+      `cleanup_stale_exports` may end this state.
+
+    **R2 is checked FIRST, deliberately, and its verdict outranks anything Modal
+    says.** `output_key` is written in the same UPDATE as `modal_call_id` at
+    DISPATCH time (T7210), so the COLUMN proves nothing -- but the OBJECT proves
+    the render finished and uploaded, which is the only fact that survives losing
+    the process that was watching. It is unambiguous per job: the key carries a
+    per-dispatch uuid and Modal writes it with a single final PUT. Asking Modal
+    first would invert the incident's own lesson, since a finished generator call
+    reports the same terminal status as a dead one (see `check_modal_job_running`)
+    -- a Modal-first order refunds users for reels that exist.
+
+    Blocking (an R2 HEAD plus a Modal control-plane round-trip); async callers must
+    offload it (T7040).
+    """
+    output_key = job.get('output_key')
+    if output_key and file_exists_in_r2(get_current_user_id(), output_key):
+        return 'rendered'
+
+    modal_call_id = job.get('modal_call_id')
+    if not modal_call_id:
+        # Never dispatched, or dispatched before the id was persisted. No evidence
+        # either way, which is not a licence to kill the job.
+        return 'unknown'
+
+    running = check_modal_job_running(modal_call_id)
+    if running:
+        return 'running'
+    if running is None:
+        return 'unknown'
+    if not output_key:
+        # Modal says terminal, but with no output_key there was no R2 probe to
+        # answer "terminal HOW?" -- and a SUCCESSFUL generator reports terminal too.
+        # A pre-v028 job, or rolling-deploy skew hiding the column. Not provably
+        # dead, so not killed here; the age backstop still terminates it.
+        return 'unknown'
+    return 'dead'
+
+
+# T10360: how long a job whose Modal status we can NEVER resolve is allowed to
+# sit at 'processing' before the sweep declares it dead. Must clear the longest
+# real render: `process_clips_ai` carries a Modal timeout of 3600s (1h), plus
+# queue time, so 3h is ~3x the ceiling. Only ever applied to a job with NO render
+# object in R2 -- a finished render is delivered regardless of age.
+UNKNOWN_MODAL_GIVEUP_MINUTES = 180
 
 
 def cleanup_stale_exports(max_age_minutes: int = 60):
@@ -285,37 +376,71 @@ def cleanup_stale_exports(max_age_minutes: int = 60):
             return
 
         # Check each candidate - only mark stale if Modal job is NOT running
-        stale_count = 0
+        swept: list[str] = []
         still_running_count = 0
         unknown_count = 0
+        delivered_count = 0
 
-        for job_id, modal_call_id in stale_candidates:
-            if modal_call_id:
-                # Check Modal status before marking stale.
-                running = check_modal_job_running(modal_call_id)
-                if running:  # True -> positively still running
-                    still_running_count += 1
-                    logger.info(f"[ExportJobs] Job {job_id} still running on Modal, not marking stale")
-                    continue
-                if running is None:
-                    # T4240: UNKNOWN (Modal API error). Never mark a paid job error on
-                    # a hunch -- skip it and re-check on the next sweep.
+        for row in stale_candidates:
+            job_id = row['id']
+            verdict = reconcile_dispatched_export(dict(row))
+
+            if verdict == 'rendered':
+                # The render FINISHED -- there is a reel to hand over. Keep the job
+                # active so `/modal-status` finalizes it. Failing it here would
+                # refund the user and silently bin a video they paid for and which
+                # exists: the 2026-09-18 incident, just 60 minutes later.
+                delivered_count += 1
+                logger.info(
+                    f"[ExportJobs] Job {job_id} is stale but its render IS in R2 "
+                    f"({row['output_key']}) -- leaving active to finalize"
+                )
+                continue
+
+            if verdict == 'running':
+                still_running_count += 1
+                logger.info(f"[ExportJobs] Job {job_id} still running on Modal, not marking stale")
+                continue
+
+            if verdict == 'unknown':
+                if (row['age_minutes'] or 0) < UNKNOWN_MODAL_GIVEUP_MINUTES:
+                    # T4240: never mark a paid job error on a hunch -- re-check next sweep.
                     unknown_count += 1
-                    logger.info(f"[ExportJobs] Job {job_id} Modal status unknown (API error), skipping this sweep")
+                    logger.info(f"[ExportJobs] Job {job_id} Modal status unknown, skipping this sweep")
                     continue
+                # T10360: but UNKNOWN must not be permanent. It can repeat on every
+                # sweep (expired input record, Modal down), so "re-check next time"
+                # need not converge -- and a job pinned at 'processing' forever blocks
+                # its project from EVER being re-exported (409 export_in_flight from
+                # insert_export_job_if_none_active) and never returns the credits.
+                # Past the give-up age with nothing in R2, it is dead regardless.
+                logger.warning(
+                    f"[ExportJobs] Job {job_id} Modal status still unknown after "
+                    f"{row['age_minutes']:.0f}min and no render in R2 -- giving up"
+                )
 
-            # Either no modal_call_id or Modal says NOT running (False) - mark as stale
+            # 'dead', or an unknowable one we have given up on. Either way the render
+            # produced nothing, so the user owes nothing for it.
             export_job_repository.fail(cursor, job_id, 'Export timed out (stale)')
-            stale_count += 1
+            swept.append(job_id)
 
         conn.commit()
 
-        if stale_count > 0:
-            logger.warning(f"[ExportJobs] Cleaned up {stale_count} stale exports")
+        if swept:
+            logger.warning(f"[ExportJobs] Cleaned up {len(swept)} stale exports")
+        if delivered_count > 0:
+            logger.info(f"[ExportJobs] {delivered_count} stale exports have a finished render in R2, left to finalize")
         if still_running_count > 0:
             logger.info(f"[ExportJobs] {still_running_count} exports still running on Modal")
         if unknown_count > 0:
             logger.info(f"[ExportJobs] {unknown_count} exports had unknown Modal status, left untouched for next sweep")
+
+    # T10360: a swept job was paid for and produced nothing -- refund it. Runs
+    # AFTER the commit and OUTSIDE the connection block: the credit ledger is
+    # Postgres, so it must not ride inside the per-user SQLite write transaction.
+    from ..services.export_helpers import refund_failed_export
+    for job_id in swept:
+        refund_failed_export(job_id)
 
 
 def get_active_exports() -> list[dict]:
@@ -818,150 +943,84 @@ async def check_modal_status(job_id: str):
                 "message": "This job does not have a Modal call ID"
             }
 
+    # T10360: this used to ask Modal for the call's OUTPUT (`call.get(timeout=0)`),
+    # which for these generator calls always raises NotFoundError -- so the endpoint
+    # answered "expired" for EVERY recoverable export and the R2 probe underneath it
+    # never once executed in production. `reconcile_dispatched_export` asks the two
+    # questions that have answers: is the render in R2, and what does Modal's INPUT
+    # record say. See `check_modal_job_running` for why the old one had no answer.
+    #
+    # Offloaded like GET /active (T7040): the reconciler does a blocking R2 HEAD and
+    # a blocking Modal control-plane round-trip, and this is an async handler on
+    # uvicorn's single worker.
     try:
-        import modal
-
-        # Retrieve the Modal function call
-        call = modal.FunctionCall.from_id(modal_call_id)
-
-        # Try non-blocking get to check if complete
-        try:
-            result = call.get(timeout=0)
-
-            if not isinstance(result, dict):
-                # Generator-based calls (process_clips_ai etc, called via .remote_gen())
-                # return a GeneratorDone marker here, not the dict the function actually
-                # yielded as its last item -- FunctionCall.get() can't replay the stream,
-                # so "done" alone can't distinguish success from a caught-and-yielded
-                # error (process_clips_ai yields {"status": "error"} then returns
-                # normally on failure -- still GeneratorDone either way). T7210 writes
-                # output_key at DISPATCH time now (store_modal_call_id), not only after
-                # a confirmed upload, so its mere presence is no longer proof the object
-                # exists -- HEAD-probe R2 as the actual boundary check before treating
-                # this as success (T4240: never finalize a row pointing at a missing
-                # R2 object).
-                from ..storage import file_exists_in_r2
-                recovery_user_id = get_current_user_id()
-                recovered_output_key = job.get('output_key')
-                if recovered_output_key and file_exists_in_r2(recovery_user_id, recovered_output_key):
-                    logger.info(
-                        f"[ExportJobs] Modal call {modal_call_id} for job {job_id} finished "
-                        f"(generator call) -- output object confirmed in R2, finalizing "
-                        f"from persisted output_key"
-                    )
-                    result = {"status": "success"}
-                else:
-                    error_msg = (
-                        "Modal render finished but produced no output object "
-                        f"(output_key={recovered_output_key!r})"
-                    )
-                    logger.warning(f"[ExportJobs] {error_msg} for job {job_id}, call {modal_call_id}")
-                    if job['status'] == 'processing':
-                        update_job_error(job_id, error_msg)
-                    return {
-                        "status": "error",
-                        "error": error_msg,
-                    }
-
-            # Job is complete - finalize if our DB still shows 'processing'
-            if job['status'] == 'processing':
-                logger.info(f"[ExportJobs] Modal job {job_id} completed while user was away, finalizing...")
-
-                if result.get('status') == 'success':
-                    # Finalize the export (create working_video, update project, etc.)
-                    user_id = get_current_user_id()
-                    finalization = await finalize_modal_export(job, result, user_id)
-
-                    if finalization.get('finalized'):
-                        return {
-                            "status": ExportStatus.COMPLETE,
-                            "result": result,
-                            "message": "Export recovered and finalized successfully",
-                            "working_video_id": finalization.get('working_video_id'),
-                            "output_filename": finalization.get('output_filename'),
-                            "presigned_url": finalization.get('presigned_url')
-                        }
-                    else:
-                        # Finalization failed but Modal succeeded - still return success
-                        logger.warning(f"[ExportJobs] Finalization failed for {job_id}: {finalization.get('error')}")
-                        return {
-                            "status": ExportStatus.COMPLETE,
-                            "result": result,
-                            "message": "Modal completed but finalization failed",
-                            "finalization_error": finalization.get('error')
-                        }
-                else:
-                    # Modal job failed - update export_jobs to error
-                    error_msg = result.get('error', 'Unknown Modal error')
-                    update_job_error(job_id, error_msg)
-                    return {
-                        "status": "error",
-                        "error": error_msg,
-                        "result": result
-                    }
-
-            # Job already finalized (status is 'complete' or 'error')
-            return {
-                "status": ExportStatus.COMPLETE,
-                "result": result,
-                "job_status": job['status']
-            }
-        except TimeoutError:
-            # Still running on Modal
-            # If our DB incorrectly shows 'error' (e.g., from a connection hiccup), fix it
-            if job['status'] == 'error':
-                logger.info(f"[ExportJobs] Modal job {job_id} still running but DB shows error - resetting to processing")
-                with get_db_connection() as conn:
-                    cursor = conn.cursor()
-                    export_job_repository.recover(cursor, job_id)
-                    conn.commit()
-
-            return {
-                "status": "running",
-                "message": "Modal job is still processing"
-            }
-        except Exception as modal_err:
-            # Modal job may have failed or call_id expired
-            error_str = str(modal_err).lower()
-            logger.warning(f"[ExportJobs] Modal call.get failed for {job_id}: {modal_err}")
-
-            # Check for common expiration/not-found patterns
-            if 'not found' in error_str or 'expired' in error_str or 'invalid' in error_str:
-                return {
-                    "status": "expired",
-                    "error": "Modal job expired or not found",
-                    "message": "This export job is too old to recover. The Modal job has expired."
-                }
-
-            return {
-                "status": "error",
-                "error": str(modal_err),
-                "message": "Failed to get Modal job result"
-            }
-
-    except ImportError:
-        return {
-            "status": "error",
-            "error": "Modal SDK not available",
-            "message": "Modal is not installed on this server"
-        }
+        verdict = await anyio.to_thread.run_sync(reconcile_dispatched_export, job)
     except Exception as e:
-        error_str = str(e).lower()
-        logger.error(f"[ExportJobs] Failed to check Modal status for {job_id}: {e}")
-
-        # Check for expiration when retrieving the call itself
-        if 'not found' in error_str or 'expired' in error_str or 'invalid' in error_str:
-            return {
-                "status": "expired",
-                "error": "Modal job expired or not found",
-                "message": "This export job is too old to recover. The Modal job has expired."
-            }
-
+        logger.error(f"[ExportJobs] Failed to check Modal status for {job_id}: {e}", exc_info=True)
         return {
             "status": "error",
             "error": str(e),
             "message": "Failed to retrieve Modal job"
         }
+
+    if verdict == 'rendered':
+        if job['status'] != 'processing':
+            return {
+                "status": ExportStatus.COMPLETE,
+                "job_status": job['status'],
+                "message": "Export already finalized"
+            }
+
+        logger.info(f"[ExportJobs] Modal job {job_id} completed while user was away, finalizing...")
+        # finalize_export's own stage CAS (T7210) settles a race with the in-band
+        # finalizer, so nothing needs to be claimed here.
+        finalization = await finalize_modal_export(job, {"status": "success"}, get_current_user_id())
+
+        if finalization.get('finalized'):
+            return {
+                "status": ExportStatus.COMPLETE,
+                "result": {"status": "success"},
+                "message": "Export recovered and finalized successfully",
+                "working_video_id": finalization.get('working_video_id'),
+                "output_filename": finalization.get('output_filename'),
+                "presigned_url": finalization.get('presigned_url')
+            }
+        # Modal succeeded but we could not finalize. Do NOT fail the job (and so do
+        # not refund it): the render exists and a later poll can still land it.
+        logger.warning(f"[ExportJobs] Finalization failed for {job_id}: {finalization.get('error')}")
+        return {
+            "status": ExportStatus.COMPLETE,
+            "result": {"status": "success"},
+            "message": "Modal completed but finalization failed",
+            "finalization_error": finalization.get('error')
+        }
+
+    if verdict == 'dead':
+        error_msg = "Modal render finished but produced no output object"
+        logger.warning(f"[ExportJobs] {error_msg} for job {job_id}, call {modal_call_id}")
+        if job['status'] == 'processing':
+            update_job_error(job_id, error_msg)   # refunds
+        return {
+            "status": "error",
+            "error": error_msg,
+        }
+
+    # 'running' or 'unknown' -- both mean "do not touch it". UNKNOWN deliberately
+    # reports running rather than erroring: only cleanup_stale_exports' age backstop
+    # may end an unknowable job, and it refunds when it does.
+    if job['status'] == 'error':
+        # DB says error but Modal's input is still pending -- a stale verdict from
+        # before T10360, or a connection hiccup. Put it back.
+        logger.info(f"[ExportJobs] Modal job {job_id} still running but DB shows error - resetting to processing")
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            export_job_repository.recover(cursor, job_id)
+            conn.commit()
+
+    return {
+        "status": "running",
+        "message": "Modal job is still processing"
+    }
 
 
 @router.delete("/{job_id}")
@@ -1044,16 +1103,9 @@ async def resume_progress(job_id: str, background_tasks: BackgroundTasks):
     async def progress_loop():
         """Background task that polls Modal and sends progress updates."""
         import asyncio
+        # T10360: no direct Modal use left here -- reconcile_dispatched_export owns
+        # the SDK call (and already reports UNKNOWN if the SDK is missing).
         try:
-            import modal
-        except ImportError:
-            logger.error(f"[ExportJobs] Modal not available for progress loop {job_id}")
-            _active_progress_loops.discard(job_id)
-            return
-
-        try:
-            call = modal.FunctionCall.from_id(modal_call_id)
-
             # Calculate progress based on elapsed time
             # Use UTC consistently since DB timestamps are in UTC
             started_at = job.get('started_at')
@@ -1078,68 +1130,70 @@ async def resume_progress(job_id: str, background_tasks: BackgroundTasks):
             ]
 
             while True:
-                # Check if job completed
-                try:
-                    result = call.get(timeout=0)
-                    # Job completed - finalize
+                # T10360: polled `call.get(timeout=0)` and read 'not found' as
+                # "Modal job expired" -> update_job_error. For a generator call that
+                # lookup ALWAYS says not-found (see check_modal_job_running), so this
+                # loop would have killed every job it was asked to resume -- harmless
+                # only because /modal-status answered "expired" first and the frontend
+                # never got here. Now that /modal-status reports 'running', this had
+                # to move onto the same reconciler or it would kill (and, post-T10360,
+                # REFUND) every resumed export on its first poll.
+                verdict = await anyio.to_thread.run_sync(reconcile_dispatched_export, job)
+
+                if verdict == 'rendered':
                     logger.info(f"[ExportJobs] Modal job {job_id} completed during progress loop")
-
-                    if result.get('status') == 'success':
-                        user_id = get_current_user_id()
-                        finalization = await finalize_modal_export(job, result, user_id)
-
-                        progress_data = {
-                            "progress": 100,
-                            "message": "Export complete!",
-                            "status": ExportStatus.COMPLETE,
-                            "projectId": project_id,
-                            "projectName": project_name,
-                            "workingVideoId": finalization.get('working_video_id'),
-                        }
-                    else:
-                        error_msg = result.get('error', 'Unknown error')
-                        update_job_error(job_id, error_msg)
-                        progress_data = {
-                            "progress": 0,
-                            "message": f"Export failed: {error_msg}",
-                            "status": ExportStatus.ERROR,
-                            "error": error_msg,
-                            "projectId": project_id,
-                            "projectName": project_name,
-                        }
-
+                    finalization = await finalize_modal_export(
+                        job, {"status": "success"}, get_current_user_id()
+                    )
+                    progress_data = {
+                        "progress": 100,
+                        "message": "Export complete!",
+                        "status": ExportStatus.COMPLETE,
+                        "projectId": project_id,
+                        "projectName": project_name,
+                        "workingVideoId": finalization.get('working_video_id'),
+                    }
                     export_progress[job_id] = progress_data
                     await manager.send_progress(job_id, progress_data)
                     break
 
-                except TimeoutError:
-                    # Still running - calculate and send progress
-                    elapsed = (datetime.utcnow() - start_time).total_seconds()
-                    raw_progress = min(elapsed / estimated_total_seconds, 0.95)
-                    progress = 10 + raw_progress * 80  # 10-90%
-
-                    phase_msg = "Processing..."
-                    for threshold, msg in phases:
-                        if raw_progress >= threshold:
-                            phase_msg = msg
-
+                if verdict == 'dead':
+                    error_msg = "Modal render finished but produced no output object"
+                    logger.warning(f"[ExportJobs] {error_msg} for job {job_id}")
+                    update_job_error(job_id, error_msg)   # refunds
                     progress_data = {
-                        "progress": int(progress),
-                        "message": phase_msg,
-                        "status": "processing",
+                        "progress": 0,
+                        "message": f"Export failed: {error_msg}",
+                        "status": ExportStatus.ERROR,
+                        "error": error_msg,
                         "projectId": project_id,
                         "projectName": project_name,
                     }
                     export_progress[job_id] = progress_data
                     await manager.send_progress(job_id, progress_data)
+                    break
 
-                except Exception as e:
-                    error_str = str(e).lower()
-                    if 'not found' in error_str or 'expired' in error_str:
-                        logger.warning(f"[ExportJobs] Modal job {job_id} expired during progress loop")
-                        update_job_error(job_id, "Modal job expired")
-                        break
-                    logger.warning(f"[ExportJobs] Error polling Modal for {job_id}: {e}")
+                # 'running' or 'unknown' -- keep waiting and keep the bar moving.
+                # UNKNOWN must never end this loop: only cleanup_stale_exports' age
+                # backstop is allowed to declare an unknowable job dead.
+                elapsed = (datetime.utcnow() - start_time).total_seconds()
+                raw_progress = min(elapsed / estimated_total_seconds, 0.95)
+                progress = 10 + raw_progress * 80  # 10-90%
+
+                phase_msg = "Processing..."
+                for threshold, msg in phases:
+                    if raw_progress >= threshold:
+                        phase_msg = msg
+
+                progress_data = {
+                    "progress": int(progress),
+                    "message": phase_msg,
+                    "status": "processing",
+                    "projectId": project_id,
+                    "projectName": project_name,
+                }
+                export_progress[job_id] = progress_data
+                await manager.send_progress(job_id, progress_data)
 
                 await asyncio.sleep(5)  # Poll every 5 seconds
 

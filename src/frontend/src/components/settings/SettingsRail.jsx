@@ -33,7 +33,13 @@ import { ChevronRight, ChevronLeft, X } from 'lucide-react';
  * @param {string} title — mobile drawer header title ("Settings" / "Spotlight settings").
  * @param {React.ReactNode} children — the active tab's body (SettingsPanels + rows).
  */
-const RAIL_TWEEN = 'width 320ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+// T10380: exported so a host that needs to size something ALONGSIDE the rail
+// (e.g. Annotate's Add-footage header strip, which sits above the rail body
+// rather than inside it — see the "CTA never lives inside the rail" rule below)
+// can match its geometry from one source instead of a hand-copied literal.
+export const RAIL_WIDTH_PX = 380;
+export const RAIL_COLLAPSED_WIDTH_PX = 64;
+export const RAIL_TWEEN = 'width 320ms cubic-bezier(0.2, 0.8, 0.2, 1)';
 const DRAWER_TWEEN = 'transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1)';
 
 function TabButton({ tab, isActive, iconsOnly, dimmed, dimTitle, onClick }) {
@@ -155,7 +161,7 @@ export default function SettingsRail({
       data-testid="settings-rail"
       className="hidden lg:flex flex-col shrink-0 self-stretch overflow-hidden"
       style={{
-        width: collapsed ? '64px' : '380px',
+        width: collapsed ? `${RAIL_COLLAPSED_WIDTH_PX}px` : `${RAIL_WIDTH_PX}px`,
         background: '#0f172a',
         borderLeft: '1px solid #334155',
         transition: RAIL_TWEEN,

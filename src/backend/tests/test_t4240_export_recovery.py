@@ -23,7 +23,7 @@ def _in_memory_db():
     cur.execute(
         "CREATE TABLE export_jobs (id TEXT PRIMARY KEY, project_id INTEGER, status TEXT, "
         "output_video_id INTEGER, output_filename TEXT, error TEXT, modal_call_id TEXT, "
-        "created_at TEXT, completed_at TEXT)"
+        "created_at TEXT, completed_at TEXT, output_key TEXT)"
     )
     cur.execute("CREATE TABLE projects (id INTEGER PRIMARY KEY, working_video_id INTEGER)")
     cur.execute(
@@ -100,18 +100,27 @@ def test_cleanup_skips_jobs_with_unknown_modal_status(monkeypatch):
     exports = _patch_conn(monkeypatch, conn)
     # An old 'processing' job with a modal_call_id (a candidate for cleanup).
     conn.execute(
-        "INSERT INTO export_jobs (id, project_id, status, modal_call_id, created_at) "
-        "VALUES (?, ?, ?, ?, datetime('now', '-120 minutes'))",
-        ("job-2", 42, "processing", "call-abc"),
+        "INSERT INTO export_jobs (id, project_id, status, modal_call_id, created_at, output_key) "
+        "VALUES (?, ?, ?, ?, datetime('now', '-120 minutes'), ?)",
+        ("job-2", 42, "processing", "call-abc", "working_videos/w.mp4"),
     )
     conn.commit()
+
+    # T10360 narrowed what "positively not running" licenses: a terminal Modal
+    # status no longer suffices on its own, because a generator that SUCCEEDED
+    # reports the same thing as one that died. The sweep now HEAD-probes the
+    # render object first, so this test stubs that probe too -- the T4240
+    # invariant under test (unknown is skipped, positive evidence is not) is
+    # unchanged, only its precondition is stricter.
+    monkeypatch.setattr(exports, "get_current_user_id", lambda: "user-1")
+    monkeypatch.setattr(exports, "file_exists_in_r2", lambda *a, **k: False)
 
     # Unknown status -> must be skipped.
     monkeypatch.setattr(exports, "check_modal_job_running", lambda _id: None)
     exports.cleanup_stale_exports(max_age_minutes=60)
     assert conn.execute("SELECT status FROM export_jobs WHERE id='job-2'").fetchone()["status"] == "processing"
 
-    # Control: positive 'not running' (False) -> marked error.
+    # Control: terminal Modal status AND no render object in R2 -> marked error.
     monkeypatch.setattr(exports, "check_modal_job_running", lambda _id: False)
     exports.cleanup_stale_exports(max_age_minutes=60)
     assert conn.execute("SELECT status FROM export_jobs WHERE id='job-2'").fetchone()["status"] == "error"

@@ -440,8 +440,10 @@ export function TimelineBase({
         <MobileScrollbar scrollContainerRef={scrollContainerRef} timelineScale={timelineScale} />
       )}
 
-      {/* Zoom hint when playhead layer is selected */}
-      {selectedLayer === 'playhead' && (
+      {/* Zoom hint when playhead layer is selected — only when the mode actually
+          wired the wheel handler (T10370: Annotate never does, so this always read
+          a dead, misleading "100%" there). */}
+      {selectedLayer === 'playhead' && onTimelineZoomByWheel && (
         <div className="hidden lg:block mt-1 text-xs text-gray-500 text-center">
           Scroll to zoom timeline (current: {Math.round(timelineZoom)}%)
         </div>

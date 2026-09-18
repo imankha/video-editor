@@ -1,14 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 /**
- * T9350 — Add footage + Zoom share one toolbar row above the video canvas.
- *
- * "Add footage" moved OUT of the timeline header row (T8910) into a new toolbar
- * row that sits above the canvas, paired with the Zoom control on the right. The
- * button must hide while the under-canvas editor is open (matching its old
- * timeline-header visibility) and the whole row must be gone when no video is
- * loaded.
+ * T10380 — Add footage + Zoom move into a right-side settings rail on desktop,
+ * mirroring Focus/Overlay's SettingsRail. Supersedes T9350's above-canvas toolbar
+ * row (see AnnotateModeView.mobileAddFootage.test.jsx for the mobile-only row that
+ * remains — the rail itself is desktop-only, `hidden lg:flex`).
  */
 
 vi.mock('../components/VideoPlayer', () => ({
@@ -94,42 +91,51 @@ function renderView(overrides = {}) {
   return render(<AnnotateModeView {...props} />);
 }
 
-describe('AnnotateModeView toolbar row (T9350)', () => {
-  it('renders Add footage and Zoom together in a row above the canvas', () => {
+describe('AnnotateModeView settings rail (T10380)', () => {
+  it('renders the settings rail with Zoom, and Add footage above it, not as a row over the canvas', () => {
     renderView();
-    const addFootage = screen.getByTestId('add-footage-button');
+    const rail = screen.getByTestId('settings-rail');
     const zoom = screen.getByTestId('zoom-controls');
-    expect(addFootage).toBeTruthy();
-    expect(zoom).toBeTruthy();
-    // Same toolbar row (Add footage is the row; Zoom is nested within it), and the
-    // row sits before the video player in DOM order.
-    expect(addFootage.parentElement.contains(zoom)).toBe(true);
+    const addFootage = screen.getByTestId('add-footage-button');
+    expect(rail.contains(zoom)).toBe(true);
+    // Add footage lives in the rail's own column (a sibling header above the rail
+    // body), never inside the rail's settings body itself.
+    expect(rail.contains(addFootage)).toBe(false);
     const player = screen.getByTestId('video-player');
-    expect(addFootage.compareDocumentPosition(player) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Rail column follows the video in DOM order (it's the second flex child).
+    expect(player.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('does not render Add footage inside the timeline header anymore', () => {
-    renderView();
-    // Exactly one Add footage button on the surface (the toolbar one), not two.
-    expect(screen.getAllByTestId('add-footage-button')).toHaveLength(1);
-  });
-
-  it('hides Add footage while the under-canvas editor is open, but keeps Zoom', () => {
+  it('hides Add footage while the under-canvas editor is open, but keeps Zoom (rail is permanent)', () => {
     renderView({ showAnnotateOverlay: true }); // underCanvasEditor (desktop, non-fullscreen)
     expect(screen.queryByTestId('add-footage-button')).toBeNull();
     expect(screen.getByTestId('zoom-controls')).toBeTruthy();
+    expect(screen.getByTestId('settings-rail')).toBeTruthy();
   });
 
-  it('drops the whole toolbar row when no video is loaded', () => {
+  it('drops the rail entirely when no video is loaded', () => {
     renderView({ annotateVideoUrl: null });
     expect(screen.queryByTestId('add-footage-button')).toBeNull();
-    expect(screen.queryByTestId('zoom-controls')).toBeNull();
+    expect(screen.queryByTestId('settings-rail')).toBeNull();
   });
 
-  it('does not render Add footage when no addFootage context is provided', () => {
+  it('does not render Add footage when no addFootage context is provided, but Zoom still anchors the rail', () => {
     renderView({ addFootage: null });
     expect(screen.queryByTestId('add-footage-button')).toBeNull();
-    // Zoom still anchors the row.
     expect(screen.getByTestId('zoom-controls')).toBeTruthy();
+  });
+
+  it('drops the rail (and the video) in fullscreen, matching the old toolbar row behavior', () => {
+    renderView({ annotateFullscreen: true });
+    expect(screen.queryByTestId('settings-rail')).toBeNull();
+  });
+
+  it('collapsing the rail also hides Add footage (no icon-only fallback today — documented, not a bug)', () => {
+    renderView();
+    expect(screen.getByTestId('add-footage-button')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('rail-collapse-toggle'));
+    expect(screen.queryByTestId('add-footage-button')).toBeNull();
+    // The rail itself survives collapse (icon-only strip), unlike Add footage.
+    expect(screen.getByTestId('settings-rail')).toBeTruthy();
   });
 });

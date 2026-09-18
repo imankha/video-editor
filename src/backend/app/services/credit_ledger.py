@@ -654,6 +654,61 @@ def refund_credits(
     return result["balance"]
 
 
+def refund_export_charge(user_id: str, export_id: str) -> int:
+    """Refund whatever `export_id` was actually charged, exactly once. Returns the
+    amount refunded (0 when there was no charge, or it was already refunded).
+
+    T10360. For the OUT-OF-BAND failure paths -- startup orphan reconciliation,
+    the stale sweep, `/modal-status` -- where the process that knows
+    `credits_deducted` is gone (a Fly deploy replaced the machine mid-export), so
+    the in-process `refund_credits` handler never ran. sakarati@ lost 11 credits
+    this way on 2026-09-18 when staging redeployed on top of a live Focus export.
+
+    The CHARGE is the source of truth for the amount: `confirm_reservation` wrote
+    one `framing_usage` row under the deterministic key `export:{export_id}`, so
+    nothing extra has to be persisted on the job row to make a later refund exact.
+
+    Idempotent two ways, both against itself and against the in-process handler:
+    the grant lands under `refund:{export_id}` -- the SAME key `refund_credits`
+    uses -- so whichever path runs second applies nothing.
+    """
+    _require_ready()
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT amount, video_seconds FROM credit_transactions "
+            "WHERE user_id = %s AND idempotency_key = %s",
+            (user_id, credit_key("framing_usage", export_id)),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        # Never charged: a free export, or the reservation was released before
+        # it was ever confirmed. Nothing owed.
+        return 0
+
+    amount = -row["amount"]  # the debit is stored negative
+    if amount <= 0:
+        # confirm_reservation is the ONLY writer of a framing_usage row and always
+        # writes -amount, so this cannot arise from our own code. Fail loudly rather
+        # than return 0, which would be indistinguishable from "nothing owed".
+        raise ValueError(
+            f"[CreditLedger] framing_usage row for {export_id} is {row['amount']}, not a debit"
+        )
+
+    result = grant(
+        user_id, amount, "framing_refund", credit_key("framing_refund", export_id),
+        reference_id=export_id, video_seconds=row["video_seconds"],
+    )
+    if not result["applied"]:
+        return 0
+    logger.info(
+        "[CreditLedger] Refunded %s credits to %s for failed export %s (out-of-band)",
+        amount, user_id, export_id,
+    )
+    return amount
+
+
 def get_credit_balance(user_id: str) -> dict:
     """Old contract: returns {"balance": int}."""
     return {"balance": get_balance(user_id)}
