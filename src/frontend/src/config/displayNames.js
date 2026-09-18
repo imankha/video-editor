@@ -513,7 +513,6 @@ export const EDITOR_PANELS = {
   // claim (design doc §3.5: "Do not promise crispness from resolution alone").
   WIDER_FRAME: 'Use a wider frame',
   WIDER_FRAME_ON: 'Back to default frame',
-  WIDER_FRAME_HELPER: 'Shows more of the field around your focus points.',
   UNDO: 'Undo',
   UNDO_NOTHING: 'Nothing to undo',
   // T9950 Slice 3 -- preview approximation disclosure (design doc §4). Exact for

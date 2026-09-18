@@ -2,9 +2,9 @@ import { Undo2, Maximize2, Eye, EyeOff } from 'lucide-react';
 import { EDITOR_PANELS } from '../../config/displayNames';
 
 /**
- * FramingActionRow (T9950) — [Undo] [Use a wider frame] [Preview highlight],
- * plus the wider-frame helper line. Pure presentational: props in, callbacks
- * out, no store reads (design doc §5 Slice 2).
+ * FramingActionRow (T9950) — [Undo] [Use a wider frame] [Preview highlight].
+ * Pure presentational: props in, callbacks out, no store reads (design doc
+ * §5 Slice 2).
  *
  * Preview highlight is wired in Slice 3 — `onTogglePreview` is undefined until
  * then, and the button stays unrendered so Slice 2 ships independently
@@ -65,8 +65,6 @@ export default function FramingActionRow({
           {previewing ? EDITOR_PANELS.PREVIEW_BACK_TO_FRAMING : EDITOR_PANELS.PREVIEW_HIGHLIGHT}
         </button>
       )}
-
-      <span className="w-full text-xs text-gray-500">{EDITOR_PANELS.WIDER_FRAME_HELPER}</span>
 
       {/* T9950 Slice 3 -- approximation disclosure (design doc §4, AC2). Exact
           for crop/timing/format/audio, approximate for image quality and
