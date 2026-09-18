@@ -115,6 +115,16 @@ describe('AnnotateFullscreenOverlay strip — edit-mode "Create clip" button (T8
     expect(screen.queryByText('Clip Out Play')).toBeNull();
     expect(screen.queryByText('Clip Play')).toBeNull();
   });
+
+  // T10310 (2026-09-18 user request): "Rate and Tag" and "Create clip" swapped
+  // positions — Rate and Tag is now the leftmost control, Create clip moved
+  // into the right-hand action group (before Update play).
+  it('places "Rate and Tag" to the left of "Create clip" in the controls row', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={editClip} />);
+    const rateAndTag = screen.getByTestId('add-details-button');
+    const createClip = screen.getByText('Create clip');
+    expect(rateAndTag.compareDocumentPosition(createClip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
 
 describe('AnnotateFullscreenOverlay strip — details panel has no inner scroll (T8960 item 6)', () => {

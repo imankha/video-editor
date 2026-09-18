@@ -1048,23 +1048,20 @@ export function AnnotateFullscreenOverlay({
               (green primary) + "Save and Frame" (cyan, saves and opens Framing).
               Edit mode keeps its separate, unconditional "Create clip" affordance. */}
           <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
-            {/* T9330: a project exists (autoProjectId) OR is being created right
-                now (focusPending) — either way the manual create affordance would
-                be wrong, so show the "Clip created" indicator. Edit mode only. */}
-            {isEditMode && (
-              (existingClip?.autoProjectId || focusPending) ? (
-                <span className="text-xs text-green-400 shrink-0">{ANNOTATE.CLIP_CREATED}</span>
-              ) : (
-                <Button
-                  variant="cyan"
-                  size="sm"
-                  icon={Plus}
-                  onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
-                >
-                  {ANNOTATE.CREATE_CLIP}
-                </Button>
-              )
-            )}
+            {/* T10310: "Rate and Tag" moved to the far left, swapped with
+                "Create clip" (now in the right-hand action group) per user
+                request. */}
+            <button
+              type="button"
+              onClick={() => setDetailsOpen(o => !o)}
+              aria-expanded={detailsOpen}
+              data-testid="add-details-button"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700
+                         rounded text-sm text-gray-300 transition-colors"
+            >
+              {detailsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {detailsLabel}
+            </button>
 
             {!myAthlete && (
               <div className="min-w-[180px] max-w-xs flex-1">
@@ -1073,17 +1070,23 @@ export function AnnotateFullscreenOverlay({
             )}
 
             <div className="ml-auto flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setDetailsOpen(o => !o)}
-                aria-expanded={detailsOpen}
-                data-testid="add-details-button"
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700
-                           rounded text-sm text-gray-300 transition-colors"
-              >
-                {detailsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                {detailsLabel}
-              </button>
+              {/* T9330: a project exists (autoProjectId) OR is being created right
+                  now (focusPending) — either way the manual create affordance would
+                  be wrong, so show the "Clip created" indicator. Edit mode only. */}
+              {isEditMode && (
+                (existingClip?.autoProjectId || focusPending) ? (
+                  <span className="text-xs text-green-400 shrink-0">{ANNOTATE.CLIP_CREATED}</span>
+                ) : (
+                  <Button
+                    variant="cyan"
+                    size="sm"
+                    icon={Plus}
+                    onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
+                  >
+                    {ANNOTATE.CREATE_CLIP}
+                  </Button>
+                )
+              )}
               {/* T10290: primary (green) save first — "Update play" (edit) /
                   "Save play" (create) — then "Save and Frame" (cyan). */}
               <button
