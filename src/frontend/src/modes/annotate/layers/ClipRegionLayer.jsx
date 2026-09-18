@@ -109,12 +109,6 @@ export default function ClipRegionLayer({
     ? regions.find((r) => r.id === activeRegionId) || null
     : null;
 
-  useEffect(() => {
-    const el = activeRegionId ? markerRefs.current.get(activeRegionId) : null;
-    setAnchorRect(el ? el.getBoundingClientRect() : null);
-    // `regions`/`duration` re-run this after a re-layout (zoom, lane split) so the
-    // fixed tooltip does not stick to a stale position.
-  }, [activeRegionId, regions, duration]);
   const [trackWidth, setTrackWidth] = useState(0);
 
   // Measure track width for dynamic mobile marker sizing
@@ -127,6 +121,15 @@ export default function ClipRegionLayer({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    const el = activeRegionId ? markerRefs.current.get(activeRegionId) : null;
+    setAnchorRect(el ? el.getBoundingClientRect() : null);
+    // `regions`/`duration` re-run this after a re-layout (zoom, lane split); `trackWidth`
+    // re-runs it whenever the track itself resizes (fullscreen toggle, viewport resize)
+    // so a SELECTED marker's tooltip (which survives that transition, unlike hover)
+    // doesn't stay pinned to its pre-resize pixel position (T10391).
+  }, [activeRegionId, regions, duration, trackWidth]);
 
   if (!duration) return null;
 
