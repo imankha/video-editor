@@ -22,6 +22,37 @@ video_sequence NULL) — no fake timeline position. The clip surfaces under the 
 (`CLIP_UPLOAD.NOTICE_*`) softened from "won't be linked" to "start out unlinked ... link later". Backfill is
 sound because direct uploads are the ONLY clips created with `game_id IS NULL`. Tests:
 `test_t10300_link_uploaded_clip.py` (12), `DraftTile.test.jsx` T10300 gating block. Prior:)
+updated: 2026-09-17 (T10280 — home-tab guidance: ONE structure for all four tabs, new copy, flow strip
+gone. FRONTEND-ONLY, no schema. **`EmptyTabGuide.jsx` no longer renders a FlowStrip** — `FLOW_STEPS`,
+`STEP_COLORS`, and the `FlowStrip` component were DELETED (the user found the Games . Clips . Reels .
+Published diagram redundant with the tab bar above it). The headline+body are now a NEW exported
+`TabGuideHeader({tab})` (centered `text-lg font-semibold` h2 + `text-sm text-gray-400` body from
+`EMPTY_TAB_GUIDE[tab]`), used by BOTH the empty-state EmptyTabGuide AND the POPULATED Games/Clips tabs
+in `ProjectManager.jsx` (rendered above the Upload game / Upload clip CTA). So all four tabs share one
+guidance structure — the old split where Games/Clips showed only a bare `UPLOAD_ENTRY_HINT` caption
+while Reels/Published had a real header is gone. **`UPLOAD_ENTRY_HINT` (displayNames.js) was DELETED**
+along with its two ProjectManager render sites; the game-vs-clip distinction it carried now lives in
+the Clips tab BODY copy. **New copy** (user's words, 2026-09-17 staging), routed through
+`config/emptyStates.js`, no literals in JSX: Games headline "Review game footage for highlights and
+learning opportunities."; Clips headline "Focus the action on your athlete." (body uses
+`MODE_NAMES.FRAMING`, not a literal); Reels "Build a highlight reel."; Published "View your completed
+work." (body: "...post to social directly." — verified against the PWA share path, see below).
+**Bodies may now be MULTIPLE sentences** (reverses T9390's Decision-2 one-line cut). **Published empty
+state slimmed:** `draftsText(n)` ("You have N clips in progress.") + the "Open Clips" button were
+removed (user did not want an in-progress count); only headline/body + "Go to Games" remain. `clipCount`
+now drives ONLY the Reels "N ready" caption — the `draftClipCount` chain (PublishedReelsPanel computes
+-> CollectionsTab -> EmptyTabGuide) was pruned end-to-end. **PWA share audit (part of this task, no code
+change):** `hooks/useWebShare.js` — when `capability===FULL` (mobile coarse-pointer + `navigator.share`
++ `navigator.canShare({files})`), `webShare` fetches `/api/downloads/{id}/file` and calls
+`navigator.share({files:[File video/mp4]})`, so the VIDEO FILE (not just a link) reaches the OS share
+sheet -> the "post to social directly" claim holds on modern iOS/Android. Degrades to link-only
+`navigator.share({url})` then clipboard when files aren't shareable (older iOS, in-app webviews, desktop
+PWA/fine-pointer). Candidate follow-up (NOT done here): the FULL path is gated on coarse-pointer, so a
+desktop PWA that could accept a file share still degrades to link-only. Tests: `EmptyTabGuide.test.jsx`
+(shared-structure + no-flow-strip + TabGuideHeader export + slimmed Published), `ProjectManager.addVideo`
+(populated Games/Clips render TabGuideHeader), `.fourTabIA`/`.homeTabDefaults`/`.galleryGuard` updated to
+new copy + the guidance-header max-w-md scoped out of the gallery-width guard. QA: no browser/backend in
+this container (documented epic-wide limit) — see final report. Prior:)
 updated: 2026-09-17 (T10240 + T10290 — marked-play stage CTA + play-editor "Save and Frame" / Details /
 Save-closes. FRONTEND-ONLY, no schema. **SHARED create-then-navigate seam (build once, do NOT rebuild a
 third time):** the two container create paths — `handleFullscreenCreateClip` AND `updateClipRegionWithSync`

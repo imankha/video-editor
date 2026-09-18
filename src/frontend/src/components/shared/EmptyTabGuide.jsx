@@ -1,21 +1,18 @@
-import { ChevronRight, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from './Button';
-import { GAME, REEL, HIGHLIGHT, PUBLISHED } from '../../config/themeColors';
-import { CLIP_UPLOAD, LIBRARY_ACTIONS } from '../../config/displayNames';
-import { FLOW_STEPS, EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
+import { CLIP_UPLOAD, LIBRARY_ACTIONS, SECTION_NAMES_SHORT } from '../../config/displayNames';
+import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 
 /**
- * EmptyTabGuide (T8980, revised T9390) - the shared empty state rendered by all
- * four home tabs (Games / In Progress Clips / In Progress Reels / Published) when
- * they have nothing in them. One activation surface: a compact flow strip (sm+
- * only) showing where this tab sits on the path to a published reel, a headline +
- * one short line, an action block, and (Games only) a footer hint.
+ * EmptyTabGuide (T8980, revised T9390, T10280) - the shared empty state rendered
+ * by all four home tabs (Games / In Progress Clips / In Progress Reels / Published)
+ * when they have nothing in them: the shared TabGuideHeader (centered headline +
+ * body), an action block, and (Games only) a footer hint.
  *
- * T9390 (Decision 1): the strip is a 3-node NUMBERED path (Games/Clips/Published)
- * with Reels demoted to an unnumbered, dashed "optional" pill between Clips and
- * Published. The strip renders at sm+ only -- below sm it is dropped entirely (the
- * lit tab bar directly above already orients the user; the "Reels is optional"
- * message now lives in the Reels body line, not only in a graphic).
+ * T10280 (2026-09-17): the flow strip (Games . Clips . Reels . Published diagram)
+ * was DELETED -- the user found it redundant with the tab bar directly above. The
+ * headline/body now come from the same TabGuideHeader the POPULATED Games/Clips
+ * tabs render above their CTA, so all four tabs share one guidance structure.
  *
  * T9390 (Decision 3): Clips at zero games shows Add Video ALONE (no cross-tab Add
  * Game). Reels and Published are gated at the tab bar (ProjectManager) on hasClips,
@@ -24,9 +21,10 @@ import { FLOW_STEPS, EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emp
  *
  * @param {'games'|'clips'|'reels'|'published'} tab - which empty state to render
  * @param {number} gamesCount - the account's game count (branches Clips)
- * @param {number} clipCount  - single-clip drafts in progress (Reels "N ready",
- *                              Published "N in progress"); single source = the
- *                              same clipDrafts count the In Progress Clips badge uses
+ * @param {number} clipCount  - single-clip drafts in progress; drives ONLY the
+ *                              Reels "N ready" caption now (T10280 dropped
+ *                              Published's "N in progress" line). Same clipDrafts
+ *                              count the In Progress Clips badge uses.
  * @param {(navId: string) => void} onNavigate - setActiveTab (frozen tab ids)
  * @param {() => void} onAddGame  - open the Add Game flow (Games tab only)
  * @param {() => void} onAddVideo - open the direct clip-upload (Add Video) flow
@@ -64,19 +62,15 @@ export function EmptyTabGuide({
 
   return (
     <div className="flex flex-col items-center text-center max-w-md mx-auto py-4">
-      <FlowStrip tab={tab} />
-      <h2 className="text-lg font-semibold text-white mb-2">{copy.headline}</h2>
-      <p className="text-sm text-gray-400 mb-5">{copy.body}</p>
+      <TabGuideHeader tab={tab} />
 
-      <div className="w-full mb-4">
+      <div className="w-full mt-5 mb-4">
         {tab === 'games' && <GamesActions onAddGame={onAddGame} />}
         {tab === 'clips' && (
           <ClipsActions gamesCount={gamesCount} onNavigate={onNavigate} onAddVideo={onAddVideo} />
         )}
         {tab === 'reels' && <ReelsActions clipCount={clipCount} onBuildReel={onBuildReel} />}
-        {tab === 'published' && (
-          <PublishedActions clipCount={clipCount} onNavigate={onNavigate} />
-        )}
+        {tab === 'published' && <PublishedActions onNavigate={onNavigate} />}
       </div>
 
       <Footer tab={tab} onNavigate={onNavigate} />
@@ -84,79 +78,35 @@ export function EmptyTabGuide({
   );
 }
 
-// The current tab lit in its own themeColors tab color; others muted. Colors are
-// complete Tailwind class names (purge-safe) sourced from themeColors.js.
-const STEP_COLORS = {
-  games: GAME.bg,
-  clips: REEL.bg,
-  reels: HIGHLIGHT.bg,
-  published: PUBLISHED.bg,
-};
+/**
+ * TabGuideHeader (T10280) - the ONE guidance block every home tab shares: a
+ * centered `text-lg font-semibold` headline over a `text-sm text-gray-400` body,
+ * both from EMPTY_TAB_GUIDE[tab]. Rendered by the empty-state EmptyTabGuide above
+ * its action block, AND by the POPULATED Games/Clips tabs (ProjectManager) above
+ * their upload CTA -- so all four tabs read with one consistent structure instead
+ * of the old split (Reels/Published had this header while Games/Clips showed only
+ * a bare hint caption). Copy-only, no gestures; the caller owns spacing below it.
+ */
+export function TabGuideHeader({ tab }) {
+  const copy = EMPTY_TAB_GUIDE[tab];
+  if (!copy) return null;
+  return (
+    <div className="flex flex-col items-center text-center max-w-md mx-auto">
+      <h2 className="text-lg font-semibold text-white mb-2">{copy.headline}</h2>
+      <p className="text-sm text-gray-400">{copy.body}</p>
+    </div>
+  );
+}
 
 // T9390: decorative top accent border for the partial card, one per tab color.
-// Full class names (purge-safe); mirrors STEP_COLORS' hues as border-top colors.
+// Full class names (purge-safe); the per-tab hues match themeColors' tab colors
+// as border-top colors.
 const STEP_ACCENT_BORDER = {
   games: 'border-t-green-600',
   clips: 'border-t-cyan-600',
   reels: 'border-t-violet-600',
   published: 'border-t-amber-600',
 };
-
-// Flow strip: sm+ only. T9530 (N46, 2026-09-10) removed the step NUMBERS: the
-// numbered 1-2-3 nodes read as a mandatory pipeline ("a clip must pass through a
-// reel before it can be published"), which is false — a single clip publishes on
-// its own. The four destinations now render as unnumbered peer labels
-// (Games . Clips . Reels . Published), the active one lit in its tab color, so the
-// strip orients without prescribing a required order. Reels keeps its dashed
-// "optional" pill (it is a genuine detour, not part of the single-clip path).
-// Dropped entirely below sm -- the lit tab bar above already orients the user.
-function FlowStrip({ tab }) {
-  return (
-    <div className="mb-6 w-full">
-      <ol className="hidden sm:flex items-center justify-center gap-1.5">
-        {FLOW_STEPS.map((step, i) => {
-          const active = step.key === tab;
-          const isLast = i === FLOW_STEPS.length - 1;
-          const nextOptional = !isLast && FLOW_STEPS[i + 1].optional;
-          const dimChevron = step.optional || nextOptional;
-
-          if (step.optional) {
-            return (
-              <li key={step.key} className="flex items-center gap-1.5">
-                <span
-                  className={`flex items-center gap-1 border border-dashed border-gray-600 rounded-full px-2.5 py-1 ${
-                    active ? `${STEP_COLORS[step.key]} text-white` : 'text-gray-500'
-                  }`}
-                >
-                  <span className="text-sm font-medium">{step.label}</span>
-                  {/* "optional" stays muted even when the pill is lit -- the point
-                      is that it never disappears, including on the Reels tab. */}
-                  <span className="text-[10px] text-gray-500 uppercase tracking-wide">· optional</span>
-                </span>
-                {!isLast && <ChevronRight size={16} className="text-gray-700" />}
-              </li>
-            );
-          }
-
-          return (
-            <li key={step.key} className="flex items-center gap-1.5">
-              <span
-                className={`text-sm font-medium px-2.5 py-1 rounded-full ${
-                  active ? `${STEP_COLORS[step.key]} text-white` : 'text-gray-500'
-                }`}
-              >
-                {step.label}
-              </span>
-              {!isLast && (
-                <ChevronRight size={16} className={dimChevron ? 'text-gray-700' : 'text-gray-600'} />
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  );
-}
 
 function GamesActions({ onAddGame }) {
   const c = EMPTY_TAB_GUIDE.games;
@@ -251,20 +201,12 @@ function ReelsActions({ clipCount, onBuildReel }) {
 
 // T9390 (Decision 3): Published is gated on hasClips at the tab bar, so games (or
 // a clip) are guaranteed here -- the old zero-everything "Add Game" branch was
-// deleted as dead code. Two branches remain: drafts in progress, or "cut your
-// first clip" pointing back to Games.
-function PublishedActions({ clipCount, onNavigate }) {
+// deleted as dead code. T10280 dropped the "N clips in progress" draftsText + the
+// "Open Clips" button (the user did not want an in-progress count here), so a
+// single branch remains: the headline/body plus "cut your first clip" pointing
+// back to Games.
+function PublishedActions({ onNavigate }) {
   const c = EMPTY_TAB_GUIDE.published;
-  if (clipCount > 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 w-full">
-        <p className="text-sm text-gray-400">{c.draftsText(clipCount)}</p>
-        <Button variant="cyan" size="lg" onClick={() => onNavigate('projects')}>
-          Open Clips
-        </Button>
-      </div>
-    );
-  }
   return (
     <div className="flex flex-col items-center gap-2 w-full">
       <p className="text-sm text-gray-400">{c.noClipsGamesText}</p>
@@ -315,7 +257,10 @@ function PartialTabGuide({ tab, className = '', onAction }) {
   const copy = PARTIAL_TAB_GUIDE[tab];
   if (!copy) return null;
 
-  const stepLabel = FLOW_STEPS.find((s) => s.key === tab)?.label;
+  // T10280: the tab's short label for the SR-only aria-label (was FLOW_STEPS,
+  // deleted with the flow strip). SECTION_NAMES_SHORT is the same single source
+  // the tab bar uses; keys are the upper-cased tab id.
+  const stepLabel = SECTION_NAMES_SHORT[tab.toUpperCase()];
 
   return (
     <aside

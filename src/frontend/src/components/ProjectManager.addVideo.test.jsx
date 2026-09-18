@@ -88,7 +88,8 @@ vi.mock('./PublishedReelsPanel', () => ({
 
 import { ProjectManager } from './ProjectManager';
 import { useGalleryStore } from '../stores/galleryStore';
-import { UPLOAD_ENTRY_HINT, CLIP_UPLOAD } from '../config/displayNames';
+import { CLIP_UPLOAD } from '../config/displayNames';
+import { EMPTY_TAB_GUIDE } from '../config/emptyStates';
 
 const APP_STATE = { unseenReelsCount: 0, exportingProject: null };
 
@@ -201,22 +202,25 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
   });
 
-  // T9640: both entry points state the game-vs-clip distinction in plain language
-  // AT the entry (not only in the empty-state guide or the post-click clip notice),
-  // and each entry is a real, keyboard-reachable <button> (native focusability +
-  // the shared Button's focus-ring classes -- never a hover-only reveal).
-  it('the game-vs-clip distinction caption renders beside the Upload clip entry (T9640)', async () => {
+  // T10280: the populated Games/Clips tabs now render the SAME centered
+  // TabGuideHeader (headline + body) the empty state uses, above the upload CTA --
+  // replacing the old T9640 one-line UPLOAD_ENTRY_HINT caption. The entry stays a
+  // real, keyboard-reachable <button> (never a hover-only reveal). The
+  // game-vs-clip distinction now lives in the Clips body copy.
+  it('the shared guidance header renders above the populated Clips Upload clip entry (T10280)', async () => {
     renderOnClipsTab({ projects: [{ id: 7, name: 'A clip', game_ids: [], is_auto_created: true }] });
     const uploadClip = await screen.findByRole('button', { name: 'Upload clip' });
     expect(uploadClip.tagName).toBe('BUTTON'); // keyboard-reachable, not a hover div
-    expect(screen.getByText(UPLOAD_ENTRY_HINT.CLIP)).toBeTruthy();
+    expect(screen.getByText(EMPTY_TAB_GUIDE.clips.headline)).toBeTruthy();
+    expect(screen.getByText(EMPTY_TAB_GUIDE.clips.body)).toBeTruthy();
   });
 
-  it('the game-vs-clip distinction caption renders beside the Upload game entry (T9640)', async () => {
+  it('the shared guidance header renders above the populated Games Upload game entry (T10280)', async () => {
     renderOnClipsTab({ games: [{ id: 1, opponent: 'Rivals', video_url: null, game_ids: [] }] });
     fireEvent.click(screen.getByRole('button', { name: /^Games/i }));
     const uploadGame = await screen.findByRole('button', { name: 'Upload game' });
     expect(uploadGame.tagName).toBe('BUTTON');
-    expect(screen.getByText(UPLOAD_ENTRY_HINT.GAME)).toBeTruthy();
+    expect(screen.getByText(EMPTY_TAB_GUIDE.games.headline)).toBeTruthy();
+    expect(screen.getByText(EMPTY_TAB_GUIDE.games.body)).toBeTruthy();
   });
 });

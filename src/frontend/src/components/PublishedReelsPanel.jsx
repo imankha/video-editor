@@ -4,7 +4,6 @@ import { CollectionShareModal } from './CollectionShareModal';
 import { MoveToProfileModal } from './MoveToProfileModal';
 import { CollectionsTab } from './collections/CollectionsTab';
 import { ReelTile } from './collections/ReelTile';
-import { useProjectsStore } from '../stores/projectsStore';
 import { IntroStoryPlayer } from './introcards/IntroStoryPlayer';
 import { ConfidenceBanner } from './ranking/ConfidenceBanner';
 import { RankingGame } from './ranking/RankingGame';
@@ -62,12 +61,6 @@ export function PublishedReelsPanel({
   onNavigateTab,
   onAddGame,
 }) {
-  // T8470 (Part C): the In Progress Clips-tab population - single-clip
-  // auto-drafts. Same predicate ProjectManager's clipDrafts uses, so the
-  // published-list empty-state count can never disagree with the Clips badge.
-  const projects = useProjectsStore((state) => state.projects);
-  const draftClipCount = projects.filter((p) => p.is_auto_created).length;
-
   // useDownloads supplies the per-reel action helpers + formatters. The full-list
   // fetch is disabled (false) — the single view sources members from
   // useCollections, not this list (T3610 §0B.1). `downloads` stays [].
@@ -798,7 +791,6 @@ export function PublishedReelsPanel({
           onIntroCollection={onIntroCollection}
           onDownloadCollection={onDownloadCollection}
           introBadgesByKey={introBadgesByKey}
-          draftClipCount={draftClipCount}
           accountGamesCount={accountGamesCount}
           onNavigateTab={onNavigateTab}
           onAddGame={onAddGame}

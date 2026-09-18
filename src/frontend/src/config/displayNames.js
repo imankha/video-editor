@@ -169,10 +169,10 @@ export const LIBRARY_ACTIONS = {
 // SECTION_NAMES onto these exact words at every breakpoint — the full labels no
 // longer carry an "In Progress" prefix, so SECTION_NAMES and SECTION_NAMES_SHORT
 // now render the SAME set (Games / Clips / Reels / Published). This constant is
-// kept as the single source the EmptyTabGuide flow-strip step labels
-// (emptyStates.js FLOW_STEPS) read from; "Published" sitting next to "Reels" is
-// what reads the middle two as in-progress, so status lives per item, never in
-// the tab name.
+// the single source the tab bar and EmptyTabGuide's partial-variant aria-label
+// read from (T10280 deleted the flow strip that also read it); "Published"
+// sitting next to "Reels" is what reads the middle two as in-progress, so status
+// lives per item, never in the tab name.
 export const SECTION_NAMES_SHORT = {
   GAMES: 'Games',
   CLIPS: 'Clips',
@@ -180,24 +180,13 @@ export const SECTION_NAMES_SHORT = {
   PUBLISHED: 'Published',
 };
 
-// T8380: direct clip upload on the Clips tab. A separate group from
-// SECTION_NAMES (tab labels) -- this is the upload GESTURE plus its one-time
-// consequence notice. T9530 (N02, 2026-09-10) renamed the CTA "Add Video" ->
-// "Upload clip" (object-model verb: you UPLOAD a clip), and renamed the key
-// ADD_VIDEO -> UPLOAD_CLIP to keep the constant greppable by its new label. The
-// notice copy was user-approved 2026-09-05 (softened from an absolute "can't"
-// claim; the "add to a Game instead" pointer was dropped for a terser notice).
-// T9640: one-line game-vs-clip distinction shown BENEATH each upload entry on the
-// populated Games/Clips tabs (the empty-state EmptyTabGuide already pairs its
-// buttons with captions; these give the same plain-language distinction at the
-// non-empty entry points, where the CTA otherwise stands alone). Parallel phrasing
-// states the choice: a full game must have plays marked to yield clips; a short
-// clip skips that and goes straight to Framing. No em dashes (project-wide rule);
-// "Framing" (MODE_NAMES.FRAMING) is the current mode name, used as a noun, never a verb.
-export const UPLOAD_ENTRY_HINT = {
-  GAME: 'A full game needs plays marked before it becomes clips.',
-  CLIP: `A short clip skips straight to ${MODE_NAMES.FRAMING}, no game needed.`,
-};
+// T10280 (2026-09-17): UPLOAD_ENTRY_HINT (the T9640 one-line game-vs-clip
+// distinction shown beneath each populated Games/Clips upload entry) was DELETED.
+// The populated Games/Clips tabs now render the same centered EMPTY_TAB_GUIDE
+// headline + body block (via TabGuideHeader) above their CTA, so the standalone
+// hint caption is redundant. The game-vs-clip distinction now lives in the Clips
+// tab's body copy ("A short clip can also skip straight to Framing, no game
+// needed.") in config/emptyStates.js.
 
 // Division of work shown near the start action (Upload game), so a first-time
 // parent can tell their job (marking plays, framing the crop, picking their
