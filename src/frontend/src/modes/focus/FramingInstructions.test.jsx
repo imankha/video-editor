@@ -17,9 +17,11 @@ describe('FramingInstructions (T9610)', () => {
     expect(screen.queryByText(/step forward in the video/i)).not.toBeNull();
     expect(screen.queryByText(/move the box again to follow them/i)).not.toBeNull();
 
-    // T9860 3.5: the stage reason is stated above the step list.
+    // T9860 3.5: the stage reason is stated above the step list. (2026-09-18
+    // user request: reworded from "framing is you choosing what survives the
+    // crop" to "Focus the action on your player, crop out everything else.")
     expect(screen.getByTestId('framing-instructions').textContent).toMatch(
-      /framing is you choosing what survives the crop/i
+      /focus the action on your player, crop out everything else/i
     );
 
     // The preview prompt points at ordinary playback, before export.

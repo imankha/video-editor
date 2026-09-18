@@ -113,12 +113,13 @@ export const MODE_NAMES = {
 
 // T9860 (Shared Vocabulary epic, copy and concept sweep, design doc section 2.3
 // Section 5): one reason sentence per stage, none using the feature's own name
-// as the reason. Mark play replaces the mechanics-only helper line; Framing and
-// Publish are new; Spotlight replaces FOCUS_PUBLISH.SPOTLIGHT_CAPTION. Declared
+// as the reason. Spotlight replaces FOCUS_PUBLISH.SPOTLIGHT_CAPTION. Declared
 // here (near MODE_NAMES) rather than at the file's end because FOCUS_PUBLISH and
 // OVERLAY_PUBLISH below both read PUBLISH as part of their publish captions.
+// T10310 (2026-09-18 user request): MARK_PLAY ("You are bookmarking, not
+// editing...") was dropped -- the Annotate primary CTA area no longer shows a
+// stage-reason line, only the capture-window mechanic sentence.
 export const STAGE_REASONS = {
-  MARK_PLAY: 'You are bookmarking, not editing, so tap through the whole game and come back to edit later.',
   FRAMING: 'Focus the action on your player, crop out everything else.',
   SPOTLIGHT: 'Twenty-two kids in the same kit: this is how anyone watching knows which one is yours.',
   PUBLISH: 'Nobody else can see this until you share a link.',

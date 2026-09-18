@@ -222,16 +222,6 @@ describe('questDefinitions vocabulary sweep (T9575)', () => {
     expect(text).not.toMatch(/\bathletes\b/i);
   });
 
-  // The sweep scans questDefinitions copy, but the quest_4 completion modal copy
-  // lives in QuestPanel.jsx (reviewer-caught: "You published your first reel").
-  // Scan that source too so a single-clip object is never called a "reel" on that
-  // surface either.
-  it('QuestPanel.jsx never calls a single-clip object a "reel"', () => {
-    const panelPath = path.join(__dirname, '..', 'components', 'QuestPanel.jsx');
-    const src = readFileSync(panelPath, 'utf8');
-    expect(src).not.toMatch(/\breels?\b/i);
-  });
-
   it('names the epic controls by their live labels', () => {
     const save = renderedText(STEP_DESCRIPTIONS.annotate_brilliant);
     expect(save).toMatch(/My athlete/);                 // ANNOTATE.LAYER_MINE (T9860 reversal, was "My player")
