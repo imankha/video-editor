@@ -833,11 +833,12 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
           const readyState = videoRef.current.readyState;
           if (readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
             const newTime = videoToClip(videoRef.current.currentTime);
-            // Clamp playback at clip end
+            // 2026-09-18 (user request): loop back to the clip start at the end
+            // instead of freezing on the last frame -- never pause, so playback
+            // (and isPlaying) just continues from 0.
             if (clipDuration && newTime >= clipDuration) {
-              videoRef.current.pause();
-              videoRef.current.currentTime = clipToVideo(clipDuration);
-              setCurrentTime(clipDuration);
+              videoRef.current.currentTime = clipToVideo(0);
+              setCurrentTime(0);
             } else {
               setCurrentTime(newTime);
             }
