@@ -44,10 +44,16 @@ import { RATING_ADJECTIVES, RATING_NOTATION } from '../../../components/shared/c
  * the editor uses).
  */
 
+// T10570 (user: "the actual icons/badges for what the user has done need to
+// be bigger"): bumped from 22/28px discs (icon 11/14) — these are the four
+// small status discs beside the play name, not just the rating picker's own
+// rows, and they read as too small/hard to tap at the old size.
 const DISC_BASE =
   'relative grid place-items-center rounded-full border-[1.5px] transition-colors shrink-0';
-const DISC_SIZE = { sm: 'w-[22px] h-[22px]', md: 'w-7 h-7' };
-const ICON_SIZE = { sm: 11, md: 14 };
+const DISC_SIZE = { sm: 'w-7 h-7', md: 'w-9 h-9' };
+const ICON_SIZE = { sm: 14, md: 18 };
+const CHECK_SIZE = { sm: 'w-4 h-4', md: 'w-[18px] h-[18px]' };
+const CHECK_ICON_SIZE = { sm: 9, md: 10 };
 
 const DISC_STATE = {
   [BADGE_STATE.UNDONE]: 'border-dashed border-amber-500 bg-amber-500/10 text-amber-400 hover:border-amber-300 hover:text-amber-300',
@@ -81,9 +87,9 @@ function Disc({ state, size, Icon, glyph }) {
       {state === BADGE_STATE.DONE && (
         <span
           aria-hidden="true"
-          className="absolute -right-1 -bottom-1 grid place-items-center w-[13px] h-[13px] rounded-full bg-green-500 ring-2 ring-gray-900"
+          className={`absolute -right-1 -bottom-1 grid place-items-center rounded-full bg-green-500 ring-2 ring-gray-900 ${CHECK_SIZE[size]}`}
         >
-          <Check size={8} strokeWidth={4} className="text-green-950" />
+          <Check size={CHECK_ICON_SIZE[size]} strokeWidth={4} className="text-green-950" />
         </span>
       )}
     </span>
@@ -107,7 +113,7 @@ function Badge({ testId, state, size, Icon, title, label, onClick }) {
     'data-testid': testId,
     'data-state': state,
     title,
-    className: 'flex items-center gap-1.5',
+    className: 'flex items-center gap-1.5 coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]',
   };
   if (actionable) {
     return (
@@ -145,10 +151,15 @@ const RATING_VALUES = [5, 4, 3, 2, 1];
  * T10550: the popup also shows that same notation on every row (ties the row
  * to the eventual collapsed glyph), carries a visible layer-aware heading
  * ("Rate your athlete's play" / "...team's play", matching the existing
- * `mine` split `getRatingCaption` already uses), and on mobile becomes a
- * screen-centered dialog with a dim backdrop (tap to dismiss) instead of an
- * anchored dropdown — an anchored popup this size would run off a narrow
- * screen depending on where the badge sits in the row.
+ * `mine` split `getRatingCaption` already uses, bigger than the row text so
+ * it reads as a real title), and on mobile becomes a dim-backdrop dialog
+ * (tap to dismiss) instead of an anchored dropdown — an anchored popup this
+ * size would run off a narrow screen depending on where the badge sits in
+ * the row. T10560: that mobile dialog is a BOTTOM SHEET (anchored to the
+ * screen's bottom edge, full width, rounded top corners, a small grabber)
+ * rather than a screen-centered box — this control already lives inside the
+ * mobile "Edit play" bottom sheet, so a second bottom sheet sliding up over
+ * it reads as one consistent gesture language instead of a modal-on-modal.
  */
 function RatingBadge({ state, size, rating, onRatingChange, myAthlete }) {
   const [open, setOpen] = useState(false);
@@ -184,28 +195,35 @@ function RatingBadge({ state, size, rating, onRatingChange, myAthlete }) {
         aria-haspopup="true"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5"
+        className="flex items-center gap-1.5 coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"
       >
         <Disc state={state} size={size} Icon={Star} glyph={state === BADGE_STATE.DONE ? RATING_NOTATION[rating] : undefined} />
       </button>
       {open && (
-        // max-sm: a full-screen centered dialog with a dim, tap-to-close
-        // backdrop. sm+: the usual anchored dropdown (backdrop classes are
-        // inert there — no fixed/inset/flex — so the onClick below never
-        // fires from a stray desktop click; the document mousedown listener
-        // handles outside-click on desktop instead).
+        // max-sm: a bottom sheet — anchored to the screen's bottom edge, full
+        // width, dim tap-to-close backdrop behind it — matching the gesture
+        // language of the "Edit play" bottom sheet this control already lives
+        // inside, rather than a modal floating over a modal. sm+: the usual
+        // anchored dropdown (backdrop classes are inert there — no
+        // fixed/inset/flex — so the onClick below never fires from a stray
+        // desktop click; the document mousedown listener handles
+        // outside-click on desktop instead).
         <div
           role="presentation"
           onClick={() => setOpen(false)}
-          className="max-sm:fixed max-sm:inset-0 max-sm:z-50 max-sm:flex max-sm:items-center max-sm:justify-center max-sm:bg-black/60 max-sm:p-4
+          className="max-sm:fixed max-sm:inset-0 max-sm:z-50 max-sm:flex max-sm:items-end max-sm:justify-center max-sm:bg-black/60
                      sm:absolute sm:z-50 sm:top-full sm:left-0 sm:mt-2"
         >
           <div
             data-testid="rating-picker"
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xs sm:w-auto sm:max-w-none sm:min-w-[190px] p-2 rounded-xl border border-gray-700 bg-gray-800 shadow-xl"
+            className="w-full pb-[max(0.5rem,env(safe-area-inset-bottom))] rounded-t-2xl
+                       sm:w-auto sm:max-w-none sm:min-w-[190px] sm:pb-2 sm:rounded-xl
+                       p-2 border border-gray-700 bg-gray-800 shadow-xl"
           >
-            <div className="px-1.5 pt-1 pb-2 text-xs font-semibold text-gray-300">{pickerTitle}</div>
+            {/* Grabber — mobile-only sheet affordance, purely decorative. */}
+            <div aria-hidden="true" className="sm:hidden mx-auto mb-2 mt-1 h-1 w-10 rounded-full bg-gray-600" />
+            <div className="px-1.5 pt-1 pb-2.5 text-lg font-bold text-white">{pickerTitle}</div>
             <div role="radiogroup" aria-label={pickerTitle} className="flex flex-col gap-1">
               {RATING_VALUES.map((value) => (
                 <button
