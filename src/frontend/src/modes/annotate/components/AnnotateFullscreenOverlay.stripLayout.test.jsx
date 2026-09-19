@@ -95,27 +95,28 @@ describe('AnnotateFullscreenOverlay strip — name-first header, always "Edit pl
     expect(onUpdateClip).toHaveBeenCalledWith('c1', { name: 'Great tackle' });
   });
 
-  // KNOWN DEVIATION from design doc § B.2 binding constraint 8 ("ONE Escape
-  // rule, everywhere"): the strip's inline name input wraps onBlur as
-  // `() => { commitName(); setIsEditingName(false); }` rather than passing
-  // `commitName` directly (contrast formBody's input, which no-ops correctly
-  // on Escape — see AnnotateFullscreenOverlay.noSaveButton.test.jsx). That
-  // wrapper closure captures the pre-revert `clipName` from this render, so
-  // commitName still sees the stale (unreverted) value when blur fires
-  // synchronously inside onTextFieldKeyDown's Escape branch, and the "clean"
-  // comparison in commitName does not catch it. This test pins the OBSERVED
-  // behavior (a real write fires) so a future fix that makes it match the
-  // formBody's correct no-op is a visible, intentional test change, not a
-  // silent regression in either direction. Flagged for the report — not fixed
-  // here (out of scope: source is frozen for this task).
-  it('Escape writes the stale (pre-revert) value via commitName due to a strip-only onBlur wrapper (known deviation)', () => {
+  // Regression guard: onTextFieldKeyDown's Escape branch mutates the DOM
+  // node's .value synchronously (in addition to calling draftSetter), and
+  // commitName reads e.target.value when a blur event is available — so the
+  // nested blur() call inside the SAME keydown handler (which fires
+  // commitName before React has flushed the revert's setState) still sees
+  // the reverted value, not the stale pre-revert one. Was a real bug found
+  // during T10610 review: the strip's onBlur wrapper (`() => { commitName();
+  // ... }`) called commitName with no event, and commitName's old
+  // state-only read raced React's batching. See
+  // AnnotateFullscreenOverlay.noSaveButton.test.jsx's equivalent formBody +
+  // strip Escape tests (both real-focused, both now no-op).
+  it('Escape reverts the inline name editor and writes nothing (does not race the nested blur)', () => {
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={editClip} onUpdateClip={onUpdateClip} />);
     fireEvent.click(screen.getByTitle('Rename clip'));
     const input = screen.getByLabelText('Clip name');
+    // Real DOM focus — Escape's e.currentTarget.blur() is a spec no-op on a
+    // non-focused element, which would mask this exact race.
+    input.focus();
     fireEvent.change(input, { target: { value: 'Junk' } });
     fireEvent.keyDown(input, { key: 'Escape' });
-    expect(onUpdateClip).toHaveBeenCalledWith('c1', { name: 'Junk' });
+    expect(onUpdateClip).not.toHaveBeenCalled();
   });
 });
 

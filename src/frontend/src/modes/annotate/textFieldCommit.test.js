@@ -6,7 +6,7 @@ function fakeEvent(key) {
     key,
     stopPropagation: vi.fn(),
     preventDefault: vi.fn(),
-    currentTarget: { blur: vi.fn() },
+    currentTarget: { value: '', blur: vi.fn() },
   };
 }
 
@@ -30,6 +30,14 @@ describe('onTextFieldKeyDown (T10610 § B.2, the ONE Escape rule)', () => {
     const draftSetter = vi.fn();
     onTextFieldKeyDown(fakeEvent('Escape'), { draftSetter, storedValue: undefined });
     expect(draftSetter).toHaveBeenCalledWith('');
+  });
+
+  it('Escape mutates currentTarget.value synchronously (so a nested blur reading e.target.value sees the reverted value, not React state)', () => {
+    const draftSetter = vi.fn();
+    const e = fakeEvent('Escape');
+    e.currentTarget.value = 'Junk';
+    onTextFieldKeyDown(e, { draftSetter, storedValue: 'Corner kick' });
+    expect(e.currentTarget.value).toBe('Corner kick');
   });
 
   it('Enter with allowEnterCommit blurs (routes the commit through the one blur call site), no revert', () => {

@@ -306,12 +306,20 @@ export function AnnotateFullscreenOverlay({
   // T10610 § B.1: commit-on-blur/Enter, no-op when the draft already matches
   // the stored value (the container's own clean-check makes this redundant
   // for correctness, but skips a wasted function call for a stray focus+blur).
-  const commitName = useCallback(() => {
-    if (clipName !== (existingClip.name || '')) onUpdateClip(existingClip.id, { name: clipName });
+  // Reads `e.target.value` (the live DOM value) instead of the closed-over
+  // `clipName` state when a blur event is available — a synchronous Escape
+  // revert (onTextFieldKeyDown) mutates the DOM directly for exactly this
+  // reason, since React's own state update is not applied synchronously and
+  // this handler can run (via the nested blur) before React re-renders. Falls
+  // back to state for a programmatic call with no event (closeWithCommit).
+  const commitName = useCallback((e) => {
+    const value = e?.target?.value ?? clipName;
+    if (value !== (existingClip.name || '')) onUpdateClip(existingClip.id, { name: value });
   }, [clipName, existingClip.id, existingClip.name, onUpdateClip]);
 
-  const commitNotes = useCallback(() => {
-    if (notes !== (existingClip.notes || '')) onUpdateClip(existingClip.id, { notes });
+  const commitNotes = useCallback((e) => {
+    const value = e?.target?.value ?? notes;
+    if (value !== (existingClip.notes || '')) onUpdateClip(existingClip.id, { notes: value });
   }, [notes, existingClip.id, existingClip.notes, onUpdateClip]);
 
   // T10610 § B.4: the ONE close path that commits any dirty text field first.
@@ -652,7 +660,7 @@ export function AnnotateFullscreenOverlay({
                     type="text"
                     value={clipName}
                     onChange={handleNameChange}
-                    onBlur={() => { commitName(); setIsEditingName(false); }}
+                    onBlur={(e) => { commitName(e); setIsEditingName(false); }}
                     onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
                     aria-label="Clip name"
                     placeholder="Clip name"

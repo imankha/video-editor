@@ -181,6 +181,10 @@ describe('AnnotateFullscreenOverlay — the ONE Escape rule (v2 finding 6)', () 
     const onClose = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip, onClose })} layout="overlay" />);
     const input = screen.getByDisplayValue('Play 3');
+    // Real DOM focus (not just fireEvent.change) — Escape's e.currentTarget.blur()
+    // is a spec no-op on a non-focused element, which would mask the real bug
+    // below (a nested synchronous blur reading stale pre-revert state).
+    input.focus();
     fireEvent.change(input, { target: { value: 'Junk' } });
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(input.value).toBe('Play 3');
@@ -193,6 +197,17 @@ describe('AnnotateFullscreenOverlay — the ONE Escape rule (v2 finding 6)', () 
     render(<AnnotateFullscreenOverlay {...baseProps({ onClose })} layout="overlay" />);
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('strip layout: Escape in the inline name editor reverts and does not write (regression: nested blur must not see the stale pre-revert value)', () => {
+    const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
+    render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip })} layout="strip" />);
+    fireEvent.click(screen.getByTitle('Rename clip'));
+    const input = screen.getByLabelText('Clip name');
+    input.focus();
+    fireEvent.change(input, { target: { value: 'Junk' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onUpdateClip).not.toHaveBeenCalled();
   });
 });
 
