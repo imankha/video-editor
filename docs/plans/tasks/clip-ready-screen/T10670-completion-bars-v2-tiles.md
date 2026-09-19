@@ -1,6 +1,6 @@
 # T10670: Completion bars: V2 celebration tiles, headline + Saved chip, "Done for now"
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-19

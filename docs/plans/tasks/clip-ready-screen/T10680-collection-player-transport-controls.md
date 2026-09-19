@@ -1,6 +1,6 @@
 # T10680: CollectionPlayer transport: play/pause glyph, header Play/Pause + Fullscreen, on every finished-reel player
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-19
