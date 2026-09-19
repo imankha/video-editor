@@ -122,7 +122,7 @@ describe('AnnotateFullscreenOverlay strip — no "Create clip" affordance (T1031
     expect(screen.queryByText('Create clip')).toBeNull();
   });
 
-  it('"Rate and Tag" still opens the details disclosure on its own (no longer paired with Create clip)', () => {
+  it('"Notes and Tags" still opens the details disclosure on its own (no longer paired with Create clip)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={editClip} />);
     expect(screen.getByTestId('add-details-button')).toBeTruthy();
   });
@@ -130,8 +130,10 @@ describe('AnnotateFullscreenOverlay strip — no "Create clip" affordance (T1031
 
 describe('AnnotateFullscreenOverlay strip — details panel has no inner scroll (T8960 item 6)', () => {
   it('the opened details panel is not an overflow-y-auto / max-h-64 scroll box', () => {
-    // T10290: details is open by default on desktop, so the panel is already shown.
+    // T10580: details defaults CLOSED on every layout now (rating moved out
+    // to its own always-visible badge) -- open it first.
     const { container } = render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
+    fireEvent.click(screen.getByTestId('add-details-button'));
     expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
     expect(container.querySelector('.overflow-y-auto')).toBeNull();
     expect(container.querySelector('.max-h-64')).toBeNull();

@@ -111,8 +111,11 @@ describe('AnnotateFullscreenOverlay — no amber no_sport wall on mobile (T8140)
 
   it('desktop no_sport create form keeps the in-form picker (T7922 preserved), inside details', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} />);
-    // T9830/T10290: the sport prompt is an optional detail behind the disclosure,
-    // which is open by default on desktop — visible, and hidden when collapsed.
+    // T9830/T10580: the sport prompt is an optional detail behind the
+    // disclosure, which now defaults CLOSED on every layout — hidden until
+    // opened, hidden again when collapsed.
+    expect(screen.queryByText('Pick your sport to tag this clip')).toBeNull();
+    fireEvent.click(screen.getByTestId('add-details-button'));
     expect(screen.getByText('Pick your sport to tag this clip')).toBeTruthy();
     fireEvent.click(screen.getByTestId('add-details-button'));
     expect(screen.queryByText('Pick your sport to tag this clip')).toBeNull();

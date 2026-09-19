@@ -97,10 +97,12 @@ export const ANNOTATE = {
   FRAME_LATER: 'Frame Later',          // N43 — NO_PROJECT create only, stays in Annotate
   FRAME_LATER_HINT: 'Save this play as an editable clip. Frame it whenever you are ready.',
   // T10290: the details disclosure label (was the inline literal "Add details",
-  // then just "Details"). Renamed to "Rate and Tag" 2026-09-18 per user request
-  // (it holds rating + sport + tags + notes) — the count suffix (e.g.
-  // "Rate and Tag (2 tags, note)") is composed at the call site when content exists.
-  DETAILS: 'Rate and Tag',
+  // then just "Details", then "Rate and Tag"). T10580: renamed again to "Notes
+  // and Tags" — T10520 moved rating out to its own badge, so "Rate and Tag" no
+  // longer described what the disclosure actually holds (sport + tags + notes).
+  // The count suffix (e.g. "Notes and Tags (2 tags, note)") is composed at the
+  // call site when content exists.
+  DETAILS: 'Notes and Tags',
   // T9900: caption under the create-in-flight DISABLED "Frame this clip" button, so a
   // briefly-disabled onward action explains its temporary preparation state instead of
   // reading as broken (evidence E09). Clears itself when the project id lands.

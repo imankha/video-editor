@@ -257,11 +257,13 @@ export function AnnotateFullscreenOverlay({
   // unmounts when the editor closes (parent gates the render), so it resets
   // naturally; re-seeding on a clip switch leaves the panel open, which is
   // harmless and avoids a second reset path.
-  // T10290: open by default on desktop (>= md), closed on mobile — the initial
-  // value is the ONLY seed (the reset effect never touches detailsOpen), so a
-  // desktop open lands with details already expanded and mobile keeps the popup
-  // closed until tapped.
-  const [detailsOpen, setDetailsOpen] = useState(!isMobile);
+  // T10290: used to open by default on desktop (>= md) — back when this
+  // disclosure held the rating control, so it needed to be visible without an
+  // extra tap. T10580: rating moved out to its own always-visible badge
+  // (T10520), so the disclosure (now just sport/tags/notes) defaults CLOSED
+  // on every layout. The initial value is the ONLY seed (the reset effect
+  // never touches detailsOpen).
+  const [detailsOpen, setDetailsOpen] = useState(false);
   // T8600 §2.8: strip-only — Focus mid-edit must never silently discard the
   // open form, so the Focus button opens this confirm-then-save-then-navigate
   // prompt instead of navigating directly.

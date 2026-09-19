@@ -36,10 +36,13 @@ const baseProps = {
 };
 
 describe('AnnotateFullscreenOverlay — Esc layering (T8600)', () => {
-  // T10290: details is OPEN by default on desktop, so it's already expanded.
+  // T10580: details now defaults CLOSED on every layout (rating moved out to
+  // its own always-visible badge, so there's no longer a reason to force it
+  // open on desktop) — every test here opens it explicitly first.
   it('Esc closes the details panel first, leaving the editor open', () => {
     const onClose = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" onClose={onClose} />);
+    fireEvent.click(screen.getByTestId('add-details-button'));
     expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
 
     fireEvent.keyDown(window, { key: 'Escape' });
@@ -50,7 +53,8 @@ describe('AnnotateFullscreenOverlay — Esc layering (T8600)', () => {
   it('a second Esc (details already closed) closes the editor', () => {
     const onClose = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" onClose={onClose} />);
-    // First Esc closes the (default-open) details panel; the second closes the editor.
+    fireEvent.click(screen.getByTestId('add-details-button'));
+    // First Esc closes the (now-open) details panel; the second closes the editor.
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).not.toHaveBeenCalled();
     fireEvent.keyDown(window, { key: 'Escape' });
@@ -60,6 +64,7 @@ describe('AnnotateFullscreenOverlay — Esc layering (T8600)', () => {
   it('Esc while typing in the Notes textarea closes details, not the editor', () => {
     const onClose = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" onClose={onClose} />);
+    fireEvent.click(screen.getByTestId('add-details-button'));
     const notes = screen.getByLabelText('Notes (optional)');
     notes.focus();
     fireEvent.keyDown(notes, { key: 'Escape' });
