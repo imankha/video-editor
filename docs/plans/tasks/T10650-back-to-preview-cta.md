@@ -1,6 +1,6 @@
 # T10650: Focus CTA becomes "Back to Preview" when the current framing is already rendered
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-19
