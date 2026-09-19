@@ -1,4 +1,4 @@
-# T10450: Named badge leads the row; rated badge expands in place into a star column
+# T10460: Named badge leads the row; rated badge expands in place into a star column
 
 **Status:** STAGING
 **Impact:** 4

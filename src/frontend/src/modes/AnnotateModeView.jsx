@@ -10,6 +10,7 @@ import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay
 import { ANNOTATE, SHARING } from '../config/displayNames';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
 import { getClipStage, CLIP_STAGE } from './annotate/clipStage';
+import { CLIP_NUDGE_RATING } from './annotate/playProgress';
 import { useCurrentProfile, useProfileStore, useProjectsList } from '../stores';
 import PlaybackControls from './annotate/components/PlaybackControls';
 import { generateClipName } from '../utils/clipDisplayName';
@@ -182,27 +183,53 @@ export function AnnotateModeView({
     : null;
   const selectedClipStage = selectedRegion ? getClipStage(selectedRegion, selectedRegionProject) : null;
   const [frameClipPending, setFrameClipPending] = useState(false);
-  // "Frame Clip" replaces both the editor's old "Create clip" and "Save and
-  // Frame" in one gesture: a project-less play creates its project THEN opens
-  // Framing (same create-then-navigate seam as the editor's old Save and
-  // Frame); a play that already has a project just opens its current stage
+  // T9830/T10240 convention: a synchronously-set REF (not state) guards
+  // against a double-fire from the two buttons sharing one create seam —
+  // state alone would only take effect after a render round-trip.
+  // `frameClipPending` (state) still drives the visible disabled/opacity.
+  const frameCreateInFlightRef = useRef(false);
+  // A play that already has a project just opens its current stage
   // (Framing/Spotlight/Final/Published) via the SAME getClipStage action the
-  // editor's stage CTA uses.
-  const handleFrameClip = useCallback(async () => {
-    if (!selectedRegion || frameClipPending) return;
+  // editor's stage CTA uses — used by both handlers below when a project
+  // already exists, so the single existing-project button behaves exactly as
+  // it did before T10450's NO_PROJECT split.
+  const openExistingProjectStage = useCallback(() => {
+    if (selectedClipStage?.action === 'overlay') onOpenClipInOverlay?.(selectedRegion.autoProjectId);
+    else onOpenClipInFocus?.(selectedRegion.autoProjectId);
+  }, [selectedRegion, selectedClipStage, onOpenClipInFocus, onOpenClipInOverlay]);
+  // T10450: "Frame Now" is the T10310-era "Frame Clip" behavior — a
+  // project-less play creates its project THEN opens Framing in one gesture
+  // (same create-then-navigate seam as the editor's old Save and Frame).
+  const handleFrameNow = useCallback(async () => {
+    if (!selectedRegion || frameCreateInFlightRef.current) return;
     if (selectedRegion.autoProjectId) {
-      if (selectedClipStage?.action === 'overlay') onOpenClipInOverlay?.(selectedRegion.autoProjectId);
-      else onOpenClipInFocus?.(selectedRegion.autoProjectId);
+      openExistingProjectStage();
       return;
     }
+    frameCreateInFlightRef.current = true;
     setFrameClipPending(true);
     try {
       const result = await onFullscreenUpdateClip(selectedRegion.id, { createProject: true });
       if (result?.saveOk && result.projectId) onOpenClipInFocus?.(result.projectId);
     } finally {
+      frameCreateInFlightRef.current = false;
       setFrameClipPending(false);
     }
-  }, [selectedRegion, selectedClipStage, frameClipPending, onFullscreenUpdateClip, onOpenClipInFocus, onOpenClipInOverlay]);
+  }, [selectedRegion, openExistingProjectStage, onFullscreenUpdateClip, onOpenClipInFocus]);
+  // T10450: "Frame Later" creates the project WITHOUT navigating — the play
+  // becomes an editable clip (visible in Clips), left for a later Framing
+  // pass. Only reachable while NO_PROJECT (button isn't rendered otherwise).
+  const handleFrameLater = useCallback(async () => {
+    if (!selectedRegion || frameCreateInFlightRef.current || selectedRegion.autoProjectId) return;
+    frameCreateInFlightRef.current = true;
+    setFrameClipPending(true);
+    try {
+      await onFullscreenUpdateClip(selectedRegion.id, { createProject: true });
+    } finally {
+      frameCreateInFlightRef.current = false;
+      setFrameClipPending(false);
+    }
+  }, [selectedRegion, onFullscreenUpdateClip]);
 
   // T8760 item 10: while a clip is open for editing, the transport readout is
   // clip-relative (elapsed / clip-duration). Null outside clip-edit mode, so
@@ -991,42 +1018,78 @@ export function AnnotateModeView({
           <div className="mt-3 sm:mt-6">
             <div className="space-y-3">
               {/* PRIMARY CTA. T10310 (2026-09-18 user request): once a play is
-                  selected, this splits into [Edit Play] + [Frame Clip] — the
-                  latter replaces the editor's old "Create clip"/"Save and
+                  selected, this splits into [Edit Play] + a Frame action —
+                  which replaces the editor's old "Create clip"/"Save and
                   Frame" with one gesture that creates the clip's project (if
                   it doesn't have one yet) and opens it at its current stage.
-                  Creating a new play keeps the single full-width CTA. */}
+                  T10450 (2026-09-18 user request): while the play has NO
+                  project yet, that single Frame button splits further into
+                  [Frame Now] (create + open Framing immediately) and
+                  [Frame Later] (create only, stays in Annotate — the play
+                  becomes an editable clip for a later Framing pass). Once a
+                  project exists (the play already IS a clip), it's back to
+                  the single stage-CTA button — Frame Now/Later was only ever
+                  about the create decision. Creating a new play keeps the
+                  single full-width CTA. */}
               {isEditMode ? (
-                <div className="flex gap-2">
-                  <button
-                    onClick={onAddClip}
-                    disabled={isSourceExpired}
-                    data-testid="annotate-primary-cta"
-                    title={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Edit the selected play'}
-                    className={`flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg ${
-                      isSourceExpired
-                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed shadow-none'
-                        : 'bg-yellow-600 hover:bg-yellow-500 text-white shadow-yellow-900/40'
-                    }`}
-                  >
-                    <Pencil size={22} />
-                    {ANNOTATE.EDIT_PLAY}
-                  </button>
-                  {selectedRegion && (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
                     <button
-                      onClick={handleFrameClip}
-                      disabled={frameClipPending}
-                      data-testid="annotate-frame-clip-cta"
-                      title={
-                        selectedRegion.autoProjectId && selectedClipStage?.stage !== CLIP_STAGE.FOCUS
-                          ? `Open the clip: ${selectedClipStage.label}`
-                          : ANNOTATE.FRAME_THIS_CLIP_HINT
-                      }
-                      className="flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white shadow-cyan-900/40"
+                      onClick={onAddClip}
+                      disabled={isSourceExpired}
+                      data-testid="annotate-primary-cta"
+                      title={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Edit the selected play'}
+                      className={`flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg ${
+                        isSourceExpired
+                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed shadow-none'
+                          : 'bg-yellow-600 hover:bg-yellow-500 text-white shadow-yellow-900/40'
+                      }`}
                     >
-                      {selectedClipStage?.action === 'overlay' ? <Sparkles size={22} /> : <Crop size={22} />}
-                      {selectedRegion.autoProjectId ? selectedClipStage.label : ANNOTATE.FRAME_CLIP}
+                      <Pencil size={22} />
+                      {ANNOTATE.EDIT_PLAY}
                     </button>
+                    {selectedRegion?.autoProjectId && (
+                      <button
+                        onClick={handleFrameNow}
+                        disabled={frameClipPending}
+                        data-testid="annotate-stage-cta"
+                        title={
+                          selectedClipStage?.stage !== CLIP_STAGE.FOCUS
+                            ? `Open the clip: ${selectedClipStage.label}`
+                            : ANNOTATE.FRAME_THIS_CLIP_HINT
+                        }
+                        className="flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white shadow-cyan-900/40"
+                      >
+                        {selectedClipStage?.action === 'overlay' ? <Sparkles size={22} /> : <Crop size={22} />}
+                        {selectedClipStage.label}
+                      </button>
+                    )}
+                  </div>
+                  {selectedRegion && !selectedRegion.autoProjectId && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleFrameNow}
+                        disabled={frameClipPending}
+                        data-testid="annotate-frame-now-cta"
+                        title={ANNOTATE.FRAME_THIS_CLIP_HINT}
+                        className="flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white shadow-cyan-900/40"
+                      >
+                        <Crop size={22} />
+                        {ANNOTATE.FRAME_NOW}
+                      </button>
+                      <button
+                        onClick={handleFrameLater}
+                        disabled={frameClipPending}
+                        data-testid="annotate-frame-later-cta"
+                        title={ANNOTATE.FRAME_LATER_HINT}
+                        className={`flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg bg-teal-700 hover:bg-teal-600 disabled:opacity-60 text-white shadow-teal-900/40 ${
+                          selectedRegion.rating === CLIP_NUDGE_RATING ? 'motion-safe:animate-pulse' : ''
+                        }`}
+                      >
+                        <Clock size={22} />
+                        {ANNOTATE.FRAME_LATER}
+                      </button>
+                    </div>
                   )}
                 </div>
               ) : (

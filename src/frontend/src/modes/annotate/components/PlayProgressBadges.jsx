@@ -10,7 +10,7 @@ import { RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
  * created. Option C of the 2026-09-18 decision artifact: they sit on the
  * header line beside the play name (desktop strip) or above the footer
  * buttons (the formBody layouts), replacing the loose "Clip created" text.
- * T10450 (user request): the named badge leads the row (it sits right next
+ * T10460 (user request): the named badge leads the row (it sits right next
  * to the name it completes); the rated badge, when clicked, is REPLACED in
  * place by a bare vertical stack of five stars (see RatingBadge) instead of
  * jumping to the Rate and Tag disclosure.
@@ -105,7 +105,7 @@ function Badge({ testId, state, size, Icon, title, label, onClick }) {
 const RATING_VALUES = [5, 4, 3, 2, 1];
 
 /**
- * RatingBadge (T10450, revised same day per user feedback) — the rated
+ * RatingBadge (T10460, revised same day per user feedback) — the rated
  * badge, specialized: clicking it does not open a separate floating panel.
  * The disc itself is REPLACED, in place, by a bare vertical stack of five
  * small stars (5 on top, matching "best first", down to 1) — no box,

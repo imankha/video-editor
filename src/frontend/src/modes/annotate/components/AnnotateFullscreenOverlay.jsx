@@ -630,7 +630,7 @@ export function AnnotateFullscreenOverlay({
     hasProject: !!existingClip?.autoProjectId,
     creating: focusPending || clipCreating,
   });
-  // Each undone badge jumps to the control that completes it. T10450: the
+  // Each undone badge jumps to the control that completes it. T10460: the
   // rated badge is the exception — it opens its own popover (RatingBadge)
   // rather than jumping to the disclosure, so it takes `rating`/
   // `handleRatingChange` directly instead of a jump callback.
