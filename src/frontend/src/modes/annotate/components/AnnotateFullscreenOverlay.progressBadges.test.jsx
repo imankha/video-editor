@@ -29,13 +29,12 @@ const baseProps = {
   isVisible: true,
   currentTime: 30,
   videoDuration: 6000,
-  onCreateClip: () => {},
-  onUpdateClip: () => {},
-  onResume: () => {},
+  onUpdateClip: () => Promise.resolve({ saveOk: true }),
   onClose: () => {},
   onSeek: () => {},
   videoController: {},
-  surface: 'inline_desktop',
+  onDeleteClip: () => {},
+  onAwaitWrites: () => Promise.resolve(true),
 };
 
 // A saved play at the default rating, backend-derived name, no note, no clip.
@@ -57,14 +56,6 @@ describe('strip header badges — states', () => {
     expect(badge('badge-clip').dataset.state).toBe('dormant');
     // The old loose status text is gone from the action row.
     expect(screen.queryByText('Clip created')).toBeNull();
-  });
-
-  it('a fresh CREATE-mode play is NOT rated until the rating control is touched', () => {
-    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={null} />);
-    expect(badge('badge-rated').dataset.state).toBe('undone');
-    fireEvent.click(badge('badge-rated'));
-    fireEvent.click(screen.getByRole('radio', { name: '4 stars - Good' })); // the untouched-looking default value
-    expect(badge('badge-rated').dataset.state).toBe('done');
   });
 
   it('a fully done play shows four done badges and the clip badge reads "Clip created"', () => {
@@ -98,9 +89,20 @@ describe('strip header badges — states', () => {
     expect(screen.getByText('Create clip')).toBeTruthy();
   });
 
-  it('shows the clip badge pending while the parent reports the create in flight', () => {
-    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} focusPending />);
+  it('shows the clip badge pending while the 5-star nudge create call is in flight (clipCreating)', () => {
+    let resolveCreate;
+    const onUpdateClip = vi.fn(() => new Promise((res) => { resolveCreate = res; }));
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps}
+        layout="strip"
+        existingClip={{ ...bareClip, rating: 5 }}
+        onUpdateClip={onUpdateClip}
+      />,
+    );
+    fireEvent.click(badge('badge-clip'));
     expect(badge('badge-clip').dataset.state).toBe('pending');
+    resolveCreate({ saveOk: true, projectId: 42 });
   });
 });
 
@@ -269,20 +271,20 @@ describe('strip header badges — clicks jump to the control', () => {
 
   it('the clip nudge sends the same partial createProject update as Frame clip and stays open', async () => {
     const onUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 7 });
-    const onResume = vi.fn();
+    const onClose = vi.fn();
     render(
       <AnnotateFullscreenOverlay
         {...baseProps}
         layout="strip"
         existingClip={{ ...bareClip, rating: 5 }}
         onUpdateClip={onUpdateClip}
-        onResume={onResume}
+        onClose={onClose}
       />,
     );
     fireEvent.click(badge('badge-clip'));
     await waitFor(() => expect(onUpdateClip).toHaveBeenCalledWith('c1', { createProject: true }));
     // A partial update, not a full save: the editor does not close.
-    expect(onResume).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('a done badge is not a button', () => {
@@ -300,15 +302,14 @@ describe('formBody layouts', () => {
     expect(badge('badge-clip').dataset.state).toBe('dormant');
   });
 
-  it('create mode: the 5-star nudge saves the play AND creates the clip in one gesture', async () => {
-    const onCreateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 9 });
-    render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" onCreateClip={onCreateClip} />);
+  it('the 5-star nudge fires the createProject partial update in the inline layout too', async () => {
+    const onUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 9 });
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" existingClip={bareClip} onUpdateClip={onUpdateClip} />);
     fireEvent.click(badge('badge-rated'));
     fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     expect(badge('badge-clip').dataset.state).toBe('nudge');
     fireEvent.click(badge('badge-clip'));
-    await waitFor(() => expect(onCreateClip).toHaveBeenCalled());
-    expect(onCreateClip.mock.calls[0][0].createProject).toBe(true);
+    await waitFor(() => expect(onUpdateClip).toHaveBeenCalledWith('c1', { createProject: true }));
   });
 });
 

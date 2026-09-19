@@ -1,17 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
+import { useProfileStore } from '../../../stores';
 
-// T8140: one-tap first clip — form defaults ("Play N" auto-name), platform-aware
-// copy, reassurance line, the mobile no-amber rule, and the add_clip_opened_no_save
-// abandonment beacon.
+// T8140: originally covered one-tap create-mode defaults ("Play N" naming),
+// the add_clip_opened_no_save abandonment beacon, and the mobile no-amber
+// sport-picker rule.
+//
+// T10610: create-mode naming and the whole create/save lifecycle moved to
+// AnnotateContainer (the container creates the play, named, before this
+// component ever opens) — that coverage now lives at the container level
+// (AnnotateContainer.createAtTap.test.jsx / markPlayDefaults), out of scope
+// for this component's own tests. The add_clip_opened_no_save beacon and the
+// `surface` prop are deleted entirely (design doc § E row 6) — its render-site
+// coverage is replaced by a container/render-site inventory test, also out of
+// scope here. What survives in THIS file: the mobile no-amber no_sport rule,
+// which is genuine overlay behavior independent of create/edit mode.
 
-const recordUiImpression = vi.fn();
-vi.mock('../../../utils/uiTelemetry', () => ({
-  recordUiImpression: (...args) => recordUiImpression(...args),
-}));
-
-// jsdom lacks matchMedia; the overlay renders through the real useIsMobile hook.
 function mockViewport(matches) {
   window.matchMedia = (query) => ({
     matches,
@@ -25,169 +30,58 @@ function mockViewport(matches) {
   });
 }
 
+const profileOriginal = useProfileStore.getState();
+
 beforeEach(() => {
-  recordUiImpression.mockClear();
   mockViewport(false); // desktop by default
+  useProfileStore.setState({
+    profiles: [{ id: 'p1', sport: 'no_sport' }],
+    currentProfileId: 'p1',
+  });
 });
 
-const baseProps = {
-  isVisible: true,
-  currentTime: 30,
-  videoDuration: 6000,
-  onCreateClip: () => {},
-  onUpdateClip: () => {},
-  onResume: () => {},
-  onClose: () => {},
-  onSeek: () => {},
-  videoController: {},
-  // T8600: required render-site discriminator for the abandonment beacon.
-  // Default layout (no `layout` prop) is the desktop fullscreen dock.
-  surface: 'dock_fullscreen',
+afterEach(() => {
+  useProfileStore.setState(profileOriginal, true);
+});
+
+const existingClip = {
+  id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], name: 'Play 1',
+  notes: '', tagged_teammates: [], my_athlete: true,
 };
 
-// T9830: create mode now has two Save outcomes; the green button is "Save play"
-// (create no draft). Target it by name so it is unambiguous next to the cyan
-// "Create an editable clip".
-const saveButton = () => screen.getByRole('button', { name: 'Save play' });
-
-describe('AnnotateFullscreenOverlay — one-tap defaults (T8140)', () => {
-  it('a nameless new clip saves with the "Play N" default name in one tap', () => {
-    const onCreateClip = vi.fn();
-    const { container } = render(
-      <AnnotateFullscreenOverlay {...baseProps} onCreateClip={onCreateClip} nextClipNumber={3} />
-    );
-    // No typing, no field changes — just Save.
-    fireEvent.click(saveButton());
-    expect(onCreateClip).toHaveBeenCalledTimes(1);
-    expect(onCreateClip.mock.calls[0][0]).toMatchObject({ name: 'Play 3' });
-  });
-
-  it('the "Play N" default is memory-only until Save (never written on open)', () => {
-    const onCreateClip = vi.fn();
-    render(<AnnotateFullscreenOverlay {...baseProps} onCreateClip={onCreateClip} nextClipNumber={1} />);
-    // Opening the form does not create a clip.
-    expect(onCreateClip).not.toHaveBeenCalled();
-  });
-
-  it('a manually typed name overrides the "Play N" default', () => {
-    const onCreateClip = vi.fn();
-    const { container } = render(
-      <AnnotateFullscreenOverlay {...baseProps} onCreateClip={onCreateClip} nextClipNumber={2} />
-    );
-    fireEvent.change(screen.getByPlaceholderText('Enter clip name...'), { target: { value: 'My banger' } });
-    fireEvent.click(saveButton());
-    expect(onCreateClip.mock.calls[0][0]).toMatchObject({ name: 'My banger' });
-  });
-
-  it('shows the reassurance line in create mode only', () => {
-    const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} />);
-    expect(screen.getByText('You can change all of this later.')).toBeTruthy();
-    rerender(
-      <AnnotateFullscreenOverlay
-        {...baseProps}
-        existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [] }}
-      />
-    );
-    expect(screen.queryByText('You can change all of this later.')).toBeNull();
-  });
-});
-
-// T10520: rating moved OUT of the "Optional details" disclosure entirely —
-// the rated badge's popup picker is now the only rating control, and it
-// carries no "(press 1-5)" copy of its own (the global 1-5 keyboard shortcut
-// still works, unaffected by this). The old platform-aware hint tests this
-// block covered no longer apply; see `AnnotateFullscreenOverlay.progressBadges.test.jsx`
-// ("DetailsFields no longer carries its own duplicate Rating row") for the
-// replacement coverage.
+function baseProps(overrides = {}) {
+  return {
+    isVisible: true,
+    currentTime: 30,
+    videoDuration: 6000,
+    existingClip,
+    onUpdateClip: () => Promise.resolve({ saveOk: true }),
+    onClose: () => {},
+    onSeek: () => {},
+    videoController: {},
+    onDeleteClip: () => {},
+    ...overrides,
+  };
+}
 
 describe('AnnotateFullscreenOverlay — no amber no_sport wall on mobile (T8140)', () => {
-  it('mobile no_sport create form shows no amber "Pick your sport" prompt', () => {
+  it('mobile no_sport form shows no amber "Pick your sport" prompt', () => {
     mockViewport(true);
-    render(<AnnotateFullscreenOverlay {...baseProps} />);
-    // Default profile is no_sport; on mobile the amber picker is replaced by the
-    // full-screen question (fired elsewhere), so it must not render in-form.
+    render(<AnnotateFullscreenOverlay {...baseProps()} layout="inline" />);
+    // The amber picker is replaced by the full-screen question (fired
+    // elsewhere), so it must not render in-form.
     expect(screen.queryByText('Pick your sport to tag this clip')).toBeNull();
   });
 
-  it('desktop no_sport create form keeps the in-form picker (T7922 preserved), inside details', () => {
-    render(<AnnotateFullscreenOverlay {...baseProps} />);
+  it('desktop no_sport form keeps the in-form picker (T7922 preserved), inside details', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps()} layout="overlay" />);
     // T9830/T10580: the sport prompt is an optional detail behind the
-    // disclosure, which now defaults CLOSED on every layout — hidden until
+    // disclosure, which defaults CLOSED on every layout — hidden until
     // opened, hidden again when collapsed.
     expect(screen.queryByText('Pick your sport to tag this clip')).toBeNull();
     fireEvent.click(screen.getByTestId('add-details-button'));
     expect(screen.getByText('Pick your sport to tag this clip')).toBeTruthy();
     fireEvent.click(screen.getByTestId('add-details-button'));
     expect(screen.queryByText('Pick your sport to tag this clip')).toBeNull();
-  });
-});
-
-describe('AnnotateFullscreenOverlay — abandonment beacon (T8140)', () => {
-  it('fires add_clip_opened_no_save once when a create-open closes without a save', () => {
-    const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} isVisible={true} />);
-    expect(recordUiImpression).not.toHaveBeenCalled();
-    rerender(<AnnotateFullscreenOverlay {...baseProps} isVisible={false} />);
-    expect(recordUiImpression).toHaveBeenCalledTimes(1);
-    expect(recordUiImpression).toHaveBeenCalledWith('dialog', 'add_clip_opened_no_save:dock_fullscreen');
-  });
-
-  it('does NOT fire when the open ends in a save', async () => {
-    const { container, rerender } = render(
-      <AnnotateFullscreenOverlay {...baseProps} isVisible={true} onCreateClip={() => {}} />
-    );
-    // T9630: handleSave is now async (awaits the real save outcome before
-    // deciding to close) — flush that microtask so the assertion below
-    // doesn't race a pending state update.
-    await act(async () => {
-      fireEvent.click(saveButton());
-    });
-    rerender(<AnnotateFullscreenOverlay {...baseProps} isVisible={false} />);
-    expect(recordUiImpression).not.toHaveBeenCalled();
-  });
-
-  it('does NOT fire for an edit-mode open', () => {
-    const clip = { id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [] };
-    const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} isVisible={true} existingClip={clip} />);
-    rerender(<AnnotateFullscreenOverlay {...baseProps} isVisible={false} existingClip={clip} />);
-    expect(recordUiImpression).not.toHaveBeenCalled();
-  });
-
-  // T9330 §2.8: with stay-open, a create-save no longer closes the overlay
-  // (isVisible stays true) — instead existingClip flips from null to the new
-  // region (CREATING->EDITING). savedThisOpenRef is set synchronously inside
-  // handleSave, BEFORE that transition flips the overlay's own isEditMode
-  // (!!existingClip), so the beacon effect's cleanup (keyed on isEditMode)
-  // must see savedThisOpenRef already true and NOT fire — no phantom
-  // abandonment on a create-save that stays open.
-  it('does NOT fire when a create-save stays open (existingClip flips null -> new region, isVisible unchanged)', async () => {
-    const { container, rerender } = render(
-      <AnnotateFullscreenOverlay {...baseProps} isVisible={true} existingClip={null} onCreateClip={() => {}} />
-    );
-    await act(async () => {
-      fireEvent.click(saveButton());
-    });
-    const newRegion = { id: 'new_1', startTime: 24, endTime: 32, rating: 4, tags: [], autoProjectId: null };
-    rerender(<AnnotateFullscreenOverlay {...baseProps} isVisible={true} existingClip={newRegion} />);
-    expect(recordUiImpression).not.toHaveBeenCalled();
-  });
-});
-
-// T8600 §2.5: `surface` is a required, no-silent-fallback discriminator so a
-// missed render site shows up as its own distinct row instead of quietly
-// polluting a real surface's count.
-describe('AnnotateFullscreenOverlay — beacon surface discriminator (T8600)', () => {
-  it('interpolates the given surface into the beacon name', () => {
-    const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} surface="sheet_mobile" isVisible={true} />);
-    rerender(<AnnotateFullscreenOverlay {...baseProps} surface="sheet_mobile" isVisible={false} />);
-    expect(recordUiImpression).toHaveBeenCalledWith('dialog', 'add_clip_opened_no_save:sheet_mobile');
-  });
-
-  it('falls back to :unknown_surface and warns when surface is missing (no silent fallback)', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} surface={undefined} isVisible={true} />);
-    rerender(<AnnotateFullscreenOverlay {...baseProps} surface={undefined} isVisible={false} />);
-    expect(recordUiImpression).toHaveBeenCalledWith('dialog', 'add_clip_opened_no_save:unknown_surface');
-    expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
   });
 });

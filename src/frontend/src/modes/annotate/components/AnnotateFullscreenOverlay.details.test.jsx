@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
 
 // T8600 C1/C2: Tags + Notes move behind a "Notes and Tags" disclosure.
@@ -23,17 +23,21 @@ function mockViewport(matches) {
 
 beforeEach(() => mockViewport(false)); // desktop by default
 
+const existingClip = {
+  id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], notes: '',
+  my_athlete: true, name: 'Play 1', tagged_teammates: [],
+};
+
 const baseProps = {
   isVisible: true,
   currentTime: 30,
   videoDuration: 6000,
-  onCreateClip: () => {},
-  onUpdateClip: () => {},
-  onResume: () => {},
+  existingClip,
+  onUpdateClip: () => Promise.resolve({ saveOk: true }),
   onClose: () => {},
   onSeek: () => {},
   videoController: {},
-  surface: 'inline_desktop',
+  onDeleteClip: () => {},
 };
 
 // T10580: the disclosure is labelled "Notes and Tags" (was "Rate and Tag" --
@@ -53,7 +57,7 @@ describe('AnnotateFullscreenOverlay — "Notes and Tags" disclosure label (T8600
       <AnnotateFullscreenOverlay
         {...baseProps}
         layout="strip"
-        existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: ['Goal', 'Assist'], notes: 'nice one', my_athlete: true }}
+        existingClip={{ ...existingClip, tags: ['Goal', 'Assist'], notes: 'nice one' }}
       />
     );
     expect(screen.getByText(/Notes and Tags \(2 tags, note\)/)).toBeTruthy();
@@ -93,13 +97,15 @@ describe('AnnotateFullscreenOverlay — mobile full-screen popup (layout="inline
     expect(screen.getByPlaceholderText('Add a note about this clip...')).toBeTruthy();
   });
 
-  it('Done closes the popup without saving', () => {
-    const onCreateClip = vi.fn();
-    render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" onCreateClip={onCreateClip} />);
+  it('Done closes the popup without an extra write beyond a clean notes commit', () => {
+    const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" onUpdateClip={onUpdateClip} />);
     fireEvent.click(screen.getByText('Notes and Tags'));
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    const dialog = screen.getByRole('dialog', { name: 'Notes and Tags' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog', { name: 'Notes and Tags' })).toBeNull();
-    expect(onCreateClip).not.toHaveBeenCalled();
+    // Notes was never touched, so the popup's Done -> commitNotes() is a no-op.
+    expect(onUpdateClip).not.toHaveBeenCalled();
   });
 
   it('Notes is newly available on mobile via the popup (was desktop-only)', () => {

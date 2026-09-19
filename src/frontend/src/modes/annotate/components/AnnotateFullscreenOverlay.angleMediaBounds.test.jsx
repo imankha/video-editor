@@ -33,14 +33,15 @@ const baseProps = {
   isVisible: true,
   currentTime: 130,
   videoDuration: 6000, // the WHOLE backbone timeline -- must NOT be used when an angle is active
-  existingClip: { id: 'c1', startTime: 120, endTime: 150 },
-  onCreateClip: () => {},
-  onUpdateClip: () => {},
-  onResume: () => {},
+  existingClip: {
+    id: 'c1', startTime: 120, endTime: 150, rating: 4, tags: [], notes: '',
+    my_athlete: true, name: 'Play 1', tagged_teammates: [],
+  },
+  onUpdateClip: () => Promise.resolve({ saveOk: true }),
   onClose: () => {},
   onSeek: () => {},
   videoController: {},
-  surface: 'inline_desktop',
+  onDeleteClip: () => {},
 };
 
 describe('ClipScrubRegion media bounds respect the active angle (T9480 review fix, MAJOR #5)', () => {
