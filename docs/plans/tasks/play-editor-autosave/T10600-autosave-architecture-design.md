@@ -152,6 +152,21 @@ that `annotate.md` had flagged as open/unconfirmed. Backend: zero changes needed
 Decision artifact published: https://claude.ai/artifact/QckNNXNcubCBajm66vexyT. Status ->
 WAITING ON USER.
 
+**2026-09-19 (v2):** User asked for a second review (technical + usability) and whether
+"discard" is lost. Answer: yes, by D1/D6 — on close everything is already saved; Delete play
+and edit-it-back are the only ways back. Review verified v1's load-bearing claims against the
+code and found 4 mechanism bugs + 3 consistency gaps, all folded into the doc as v2 with a
+pinning test each: (1) `addClipRegion` :1281 opens the editor BEFORE `await saveClip` :1317,
+so an early trim would POST a duplicate row -> create is now the queued chain head; (2)
+`setRawClipId` is React state, not fresh by the next microtask -> `rawClipIdByRegionRef`
+written synchronously; (3) per-region `failed` flag cleared by ANY later success let Frame
+navigate on stale bounds -> per-key tracking + Retry through the queue; (4) DELETE could beat a
+pending PUT -> queued as chain tail; (5) `onDragEnd` :305 fires on every pointer-up ->
+clean-check in `updateClipRegionWithSync`; (6) Escape meant "abandon" in one field and "save
+and close" in another -> one `onTextFieldKeyDown` rule; (7) sidebar `(auto)` label must read
+`isDefaultPlayName`. User approved folding these in. Artifact republished (same URL). Still
+WAITING ON USER for the design approval itself.
+
 ## Acceptance Criteria
 
 - [ ] `docs/plans/tasks/T10600-design.md` exists and answers A-F above with named functions, not prose
