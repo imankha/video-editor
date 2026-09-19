@@ -1,6 +1,6 @@
 # T10630: ActionBand stacks on narrow widths (Focus/Overlay export bar)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 1
 **Created:** 2026-09-19

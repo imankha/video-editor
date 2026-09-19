@@ -1,6 +1,6 @@
 # T10600: Architect design — per-gesture autosave model for the play editor
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-09-19
