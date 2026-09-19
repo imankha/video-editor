@@ -29,6 +29,7 @@ import apiFetch from '../utils/apiFetch';
 import { AnnotateContainer } from './AnnotateContainer';
 import { useAuthStore } from '../stores/authStore';
 import { useQuestStore } from '../stores/questStore';
+import { useToastStore } from '../components/shared/Toast';
 
 const flushMicrotasks = () => new Promise((r) => setTimeout(r, 0));
 
@@ -76,11 +77,13 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
       removeListener: () => {},
       dispatchEvent: () => false,
     });
+    useToastStore.setState({ toasts: [] });
   });
 
   afterEach(() => {
     useAuthStore.setState(authOriginal, true);
     useQuestStore.setState(questOriginal, true);
+    useToastStore.setState({ toasts: [] });
   });
 
   it('create-then-trim race (finding 1): exactly one POST and one PUT, POST first', async () => {
@@ -173,5 +176,128 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
 
     expect(result.current.clipRegions.length).toBe(1);
     expect(apiFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('per-key failure (finding 3): a failed trim is not cleared by a later successful rating; Retry through the queue clears it', async () => {
+    let trimAttempts = 0;
+    apiFetch.mockImplementation((url, opts) => {
+      if (url.includes('/clips/raw/save')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1 }) });
+      }
+      if (opts?.method === 'PUT') {
+        const body = JSON.parse(opts.body);
+        if (body.start_time !== undefined) {
+          trimAttempts += 1;
+          if (trimAttempts === 1) {
+            return Promise.resolve({ ok: false, status: 503, json: async () => ({ code: 'sync_failed' }) });
+          }
+          return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true }) });
+        }
+        // rating write always succeeds
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    });
+
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    act(() => { result.current.handleAddClipFromButton(); });
+    await act(async () => { await flushMicrotasks(); });
+    const regionId = result.current.clipRegions[0].id;
+
+    // Trim fails (503 sync_failed -> retryable), rating on the SAME region then succeeds.
+    await act(async () => {
+      await result.current.updateClipRegion(regionId, { startTime: 1, endTime: 5 });
+    });
+    await act(async () => {
+      await result.current.updateClipRegion(regionId, { rating: 5 });
+    });
+
+    // The trim's failure must NOT be cleared by the unrelated rating success (v2 finding 3).
+    expect(await result.current.awaitRegionWrites(regionId)).toBe(false);
+
+    // Retry re-enqueues through the SAME region queue (not a direct re-call) and succeeds this time.
+    const toasts = useToastStore.getState().toasts;
+    const retryToast = toasts.find((t) => t.title === 'Could not save to the cloud');
+    expect(retryToast).toBeTruthy();
+    await act(async () => {
+      await retryToast.action.onClick();
+    });
+
+    expect(await result.current.awaitRegionWrites(regionId)).toBe(true);
+  });
+
+  it('queued delete (finding 4): DELETE waits behind a pending PUT, and no failure toast fires', async () => {
+    let resolvePut;
+    const putPromise = new Promise((res) => { resolvePut = res; });
+    apiFetch.mockImplementation((url, opts) => {
+      if (url.includes('/clips/raw/save')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1 }) });
+      }
+      if (opts?.method === 'PUT') return putPromise;
+      if (opts?.method === 'DELETE') {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    });
+
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    act(() => { result.current.handleAddClipFromButton(); });
+    await act(async () => { await flushMicrotasks(); });
+    const regionId = result.current.clipRegions[0].id;
+
+    // Name blur enqueues a PUT — held pending.
+    act(() => { result.current.updateClipRegion(regionId, { name: 'Renamed' }); });
+    await act(async () => { await flushMicrotasks(); });
+    expect(apiFetch).toHaveBeenCalledTimes(2); // POST (settled) + PUT (pending)
+
+    // Delete requested immediately after — must NOT fire until the PUT settles.
+    let deletePromise;
+    act(() => { deletePromise = result.current.handleDeletePlayFromEditor(regionId); });
+    await act(async () => { await flushMicrotasks(); });
+    expect(apiFetch).toHaveBeenCalledTimes(2); // still no DELETE call
+
+    // The region is removed from LOCAL state immediately (D.3) even though the
+    // network delete is still queued behind the pending PUT.
+    expect(result.current.clipRegions.length).toBe(0);
+
+    // Resolve the PUT — the queued DELETE can now fire.
+    await act(async () => {
+      resolvePut({ ok: true, status: 200, json: async () => ({ success: true }) });
+      await deletePromise;
+    });
+    expect(apiFetch).toHaveBeenCalledTimes(3);
+    expect(apiFetch.mock.calls[2][1].method).toBe('DELETE');
+
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts.find((t) => t.title === 'Could not save to the cloud')).toBeUndefined();
+  });
+
+  it('clean-check (finding 5): a write whose value already matches the stored region never touches the network', async () => {
+    apiFetch.mockImplementation((url) => {
+      if (url.includes('/clips/raw/save')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1 }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true }) });
+    });
+
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    act(() => { result.current.handleAddClipFromButton(); });
+    await act(async () => { await flushMicrotasks(); });
+    const region = result.current.clipRegions[0];
+
+    apiFetch.mockClear(); // isolate the assertion to the next write only
+
+    // Re-tapping the already-selected rating (a pointer-down/up with no real
+    // change is the same shape) must cost zero network calls.
+    await act(async () => {
+      await result.current.updateClipRegion(region.id, { rating: region.rating });
+    });
+    expect(apiFetch).not.toHaveBeenCalled();
+
+    // A trim commit with the SAME start/end (a tap with no movement) is likewise a no-op.
+    await act(async () => {
+      await result.current.updateClipRegion(region.id, { startTime: region.startTime, endTime: region.endTime });
+    });
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 });
