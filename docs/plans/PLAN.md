@@ -663,7 +663,9 @@ User ran the full local Playwright suite 2026-08-25 (`npx playwright test`, no f
 
 *T7730, T7740, T7750, T7760, T7770, T7780, T7790, and T7800 are complete — rows archived to [PLAN-archive.md](PLAN-archive.md).*
 
-*All tasks in this section are complete — rows archived to [PLAN-archive.md](PLAN-archive.md).*
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T10640 | [Fix stale "Export" locator in T4880 mobile reachability spec](tasks/T10640-fix-t4880-export-locator.md) | 3 | 1 | 3.0 | TODO | [ ] | Discovered 2026-09-19 verifying T10630: the Framing CTA's name changed to "Generate Framing" (N19) but the spec still looks for "Export", so it stalls to its full 3-minute timeout instead of failing fast. Not a CI blocker (spec isn't in branch-ci.yml) but wastes local verification time on every Focus/Overlay task. One-line locator fix. |
 
 ### SEO & Organic Discovery
 
