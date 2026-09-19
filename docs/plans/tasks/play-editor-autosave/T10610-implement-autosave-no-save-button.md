@@ -1,6 +1,6 @@
 # T10610: Implement autosave — create at Mark Play, persist per gesture, delete the Save/Update buttons
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-09-19
