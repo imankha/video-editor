@@ -42,8 +42,10 @@ test.describe('T8960 — play editor strip layout: live QA', () => {
     await page.waitForTimeout(1500);
   });
 
-  test('items 2-6,8,9 — Mark play (create mode) @gate-a', async ({ page }) => {
-    // Open the strip in CREATE mode via the real "Mark play" CTA.
+  test('items 2,5,6,8,9 — Mark play (create-at-tap) @gate-a', async ({ page }) => {
+    // T10610: tapping "Mark play" creates the region AND the backend row
+    // immediately and opens the strip already in EDIT mode — there is no more
+    // create-mode form to open into.
     const addPlay = page.locator('[data-testid="annotate-primary-cta"]');
     await expect(addPlay).toBeVisible({ timeout: 10000 });
     await expect(addPlay).toHaveText(/Mark play/);
@@ -61,27 +63,29 @@ test.describe('T8960 — play editor strip layout: live QA', () => {
     await saveEvidence(page, 'T8960-2-name-pencil-inline');
     await page.keyboard.press('Escape'); // closes inline edit only
 
-    // --- Item 3: centered "+ Marking a play" title row ---
-    await expect(strip.getByText('Marking a play')).toBeVisible();
+    // --- Item 3 (T10610 REWRITE): the create-mode "+ Marking a play" title
+    // row is retired — there is no create mode left. The header is ALWAYS
+    // "Edit play" now, since the play already exists once the strip is open.
+    await expect(strip.getByText('Marking a play')).toHaveCount(0);
+    await expect(strip.getByText('Edit play')).toBeVisible();
 
     // --- Item 5: My athlete | Team layer control on the top line (header) ---
     await expect(strip.getByRole('radio', { name: /My athlete/ })).toBeVisible();
     await expect(strip.getByRole('radio', { name: /Team/ })).toBeVisible();
     await saveEvidence(page, 'T8960-3-5-title-and-layer-in-header');
 
-    // --- Item 4: "Clip" toggle-button with stateful copy ---
-    const toggleOff = strip.getByText('Just save this play');
-    const toggleOn = strip.getByText('Create an editable clip');
-    // Whichever state it starts in, both copies must be reachable.
-    if (await toggleOff.count()) {
-      await toggleOff.click();
-      await expect(toggleOn).toBeVisible();
-      await toggleOn.click();
-      await expect(strip.getByText('Just save this play')).toBeVisible();
-    } else {
-      await expect(toggleOn).toBeVisible();
-    }
-    await saveEvidence(page, 'T8960-4-clip-toggle-copy');
+    // --- Item 4 (T10610 REWRITE): the create-clip TOGGLE is retired along
+    // with the whole create-mode form it lived in (T10310 already moved the
+    // create-clip decision out of the editor before this task). The surviving
+    // one-tap path is the rating-5 clip-badge nudge (PlayProgressBadges) —
+    // reached via item 7's "Create clip" badge in the edit-mode test below.
+    await expect(strip.getByText('Just save this play')).toHaveCount(0);
+    await expect(strip.getByText('Create an editable clip')).toHaveCount(0);
+    // No Save/Update button exists anywhere — Delete play + Done replace it.
+    await expect(strip.getByRole('button', { name: /^Save/ })).toHaveCount(0);
+    await expect(strip.getByTestId('delete-play-button')).toBeVisible();
+    await expect(strip.getByRole('button', { name: 'Done' })).toBeVisible();
+    await saveEvidence(page, 'T8960-4-no-toggle-delete-and-done-instead');
 
     // --- Item 9: skip/step/restart transport buttons hidden while editor open ---
     for (const title of SKIP_TITLES) {
@@ -110,7 +114,7 @@ test.describe('T8960 — play editor strip layout: live QA', () => {
     expect(Math.abs(after - before), 'click inside the span should move the playhead').toBeGreaterThan(0.3);
     await saveEvidence(page, 'T8960-8-click-in-span-seeks');
 
-    // --- Item 1: play -> loops back to start (create mode) ---
+    // --- Item 1: play -> loops back to start (freshly created play) ---
     // Seed leaves the playhead at the clip start; play and watch the raw video
     // time wrap back down (a real loop), never running away past the span.
     const start0 = await page.locator('video').first().evaluate((v) => v.currentTime);
@@ -126,7 +130,7 @@ test.describe('T8960 — play editor strip layout: live QA', () => {
     }
     console.log(`[T8960] item1 raw video times: ${raw.map((t) => t.toFixed(2)).join(', ')}`);
     expect(sawLoop, `expected the playhead to loop back to the clip start (start~${start0.toFixed(2)}), samples: ${raw.join(', ')}`).toBeTruthy();
-    await saveEvidence(page, 'T8960-1-create-mode-loop');
+    await saveEvidence(page, 'T8960-1-fresh-play-loop');
     const pauseBtn = page.locator('button[title="Pause"]:visible').first();
     if (await pauseBtn.count()) await pauseBtn.click();
 

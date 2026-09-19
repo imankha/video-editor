@@ -30,8 +30,9 @@ const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-carlsbad-trimmed.mp4');
 // :343-382), so a second test uploading the same fixture lands back in the FIRST
 // test's game, WITH its clips. A clip under the playhead then auto-selects
 // (AnnotateContainer.jsx:1216) and flips the CTA to "Edit play" - the strip opens
-// in edit mode and there is no "Save" button. (clip-selection-state-machine.spec.js
-// can use one module-scoped id because it has a single test.)
+// in edit mode. T10610: there is no "Save" button in ANY state now (create-at-tap
+// means every play already exists once the editor is open). (clip-selection-
+// state-machine.spec.js can use one module-scoped id because it has a single test.)
 let testUserSeq = 0;
 function newTestUserId() {
   return `e2e_t8600_${Date.now()}_${++testUserSeq}_${Math.random().toString(36).slice(2, 8)}`;
@@ -147,7 +148,7 @@ test.describe('T8600: Desktop inline play editor strip', () => {
     await clearBrowserState(page);
   });
 
-  test('Mark play opens the strip in place of the timeline; one-tap Save lands "Play 1" @t8600', async ({ page }) => {
+  test('Mark play creates the row immediately and opens the strip already editing "Play 1" @t8600', async ({ page }) => {
     await enterAnnotateMode(page);
     await ensurePaused(page);
     await seekVideoDirect(page, 10);
@@ -157,35 +158,35 @@ test.describe('T8600: Desktop inline play editor strip', () => {
     await expect(timeline).toBeVisible();
     await expect(getStrip(page)).toHaveCount(0);
 
-    // Open via the primary CTA — Mark play (no selection yet).
+    // T10610: the tap ITSELF creates the region + backend row (create-at-tap)
+    // and opens the editor already in EDIT mode — there is no separate Save
+    // step and no create-mode form.
     const primaryCta = page.locator('[data-testid="annotate-primary-cta"]');
     await expect(primaryCta).toHaveText(/Mark play/);
     await primaryCta.click();
     await page.waitForTimeout(800);
 
-    // Strip replaces the timeline; green tint (create mode).
+    // Strip replaces the timeline. The header is ALWAYS "Edit play" now (the
+    // create-mode "Marking a play" title is retired — there is no create mode
+    // left to render it).
     const strip = getStrip(page);
     await expect(strip).toBeVisible();
-    await expect(strip).toContainText('Marking a play');
+    await expect(strip).toContainText('Edit play');
     await expect(timeline).toHaveCount(0);
 
-    // One-tap Save — no fields touched.
-    await strip.locator('button:has-text("Save")').click();
-    await page.waitForTimeout(1000);
-
-    await expect(getStrip(page)).toHaveCount(0);
+    // No fields touched, no Save click — the play already exists.
     await expect(page.locator('[data-testid="clip-row"]', { hasText: 'Play 1' })).toBeVisible();
   });
 
-  test('Edit play opens the yellow strip prefilled; Update does not duplicate @t8600', async ({ page }) => {
+  test('Edit play opens the yellow strip prefilled; a field edit does not duplicate @t8600', async ({ page }) => {
     await enterAnnotateMode(page);
     await ensurePaused(page);
     await seekVideoDirect(page, 10);
 
-    // Create one clip first via one-tap Save.
+    // Create one clip via the create-at-tap gesture — no Save click exists.
     await page.locator('[data-testid="annotate-primary-cta"]').click();
     await page.waitForTimeout(800);
-    await getStrip(page).locator('button:has-text("Save")').click();
+    await getStrip(page).getByRole('button', { name: 'Done' }).click();
     await page.waitForTimeout(1000);
 
     const clipCountBefore = await page.locator('[data-testid="clip-row"]').count();
@@ -203,16 +204,22 @@ test.describe('T8600: Desktop inline play editor strip', () => {
     // T8760 item 4: the header dropped "Editing:"; the pencil ("Rename this
     // play") is the one name-edit affordance.
     await expect(strip.locator('[title="Rename clip"]')).toBeVisible();
-    await expect(strip.locator('button:has-text("Update")')).toBeVisible();
+    // T10610: no Save/Update button anywhere — Delete play + Done replace it.
+    await expect(strip.getByTestId('delete-play-button')).toBeVisible();
+    await expect(strip.getByRole('button', { name: 'Done' })).toBeVisible();
 
-    await strip.locator('button:has-text("Update")').click();
+    // A field edit (name blur) persists on its own gesture — no duplicate row.
+    await strip.locator('[title="Rename clip"]').click();
+    const nameInput = strip.getByLabel('Clip name');
+    await nameInput.fill('T8600 renamed');
+    await nameInput.blur();
     await page.waitForTimeout(1000);
 
     const clipCountAfter = await page.locator('[data-testid="clip-row"]').count();
     expect(clipCountAfter).toBe(clipCountBefore);
   });
 
-  test('the transport-bar Add button is absent while the strip is open @t8600', async ({ page }) => {
+  test('the transport-bar Mark play button is absent while the strip is open @t8600', async ({ page }) => {
     await enterAnnotateMode(page);
     await ensurePaused(page);
     await seekVideoDirect(page, 10);
@@ -221,7 +228,7 @@ test.describe('T8600: Desktop inline play editor strip', () => {
     await page.waitForTimeout(800);
     await expect(getStrip(page)).toBeVisible();
 
-    const transportAdd = page.locator('button[title="Add play ending at current time (A)"]');
+    const transportAdd = page.locator('button[title="Mark play ending at current time (A)"]');
     await expect(transportAdd).toHaveCount(0);
   });
 

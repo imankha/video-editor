@@ -125,31 +125,23 @@ async function countSidebarClips(page) {
   return await page.locator('.border-b.border-gray-800.cursor-pointer').count();
 }
 
-/** Create a clip: click "Add Clip" button to open overlay, then click the Save button */
+/**
+ * Create a clip: T10610 create-at-tap — clicking Mark play creates the region
+ * AND the backend row immediately (no Save click; there is no Save button
+ * anywhere anymore) and opens the editor already in EDIT mode on it.
+ */
 async function createClip(page, seekTime) {
   await ensurePaused(page);
 
   // Seek directly via video element
   await seekVideoDirect(page, seekTime);
 
-  // Click "Add Clip" button to open the overlay
-  const addClipBtn = page.locator('button[title="Add play ending at current time (A)"]');
-  await expect(addClipBtn).toBeVisible({ timeout: 5000 });
-  await addClipBtn.click();
+  // Click "Mark play" — the tap itself creates the play.
+  const markPlayBtn = page.locator('button[title="Mark play ending at current time (A)"]');
+  await expect(markPlayBtn).toBeVisible({ timeout: 5000 });
+  await markPlayBtn.click();
   await page.waitForTimeout(1000);
-
-  // Click the save button explicitly. Opening via "Add Clip" puts the overlay
-  // in CREATING state, so the green action button reads "Save".
-  const saveBtn = page.locator('button.bg-green-600:has-text("Save")').first();
-  const saveVisible = await saveBtn.isVisible().catch(() => false);
-  if (saveVisible) {
-    await saveBtn.click();
-    await page.waitForTimeout(800);
-    console.log(`[Setup] Clip created at t=${seekTime}`);
-    return true;
-  }
-  console.log(`[Setup] Save button not found — overlay may not have opened`);
-  return false;
+  console.log(`[Setup] Clip created at t=${seekTime}`);
 }
 
 // ============================================================================
@@ -290,9 +282,9 @@ test.describe('T690: Clip Selection State Machine', () => {
     await seekVideoDirect(page, 2);
     await page.waitForTimeout(300);
 
-    const addBtn = page.locator('button[title="Add play ending at current time (A)"]').first();
+    const addBtn = page.locator('button[title="Mark play ending at current time (A)"]').first();
     const addVisNone = await addBtn.isVisible().catch(() => false);
-    console.log(`[Test] REQ 4: "Add Clip" when NONE: ${addVisNone} (expect true)`);
+    console.log(`[Test] REQ 4: "Mark play" when NONE: ${addVisNone} (expect true)`);
 
     await firstClip.click();
     await page.waitForTimeout(500);
@@ -305,11 +297,12 @@ test.describe('T690: Clip Selection State Machine', () => {
     // T8590: Non-FS Edit play opens EDIT mode, not CREATE. Regression guard for
     // a bug where ClipsSidePanel's inline (non-fullscreen) overlay render
     // omitted existingClip, so clicking Edit play silently opened a fresh
-    // "Mark play" form and Save created a duplicate clip instead of updating
-    // the selected one. The T8130 guard above only asserted the CTA label, not
-    // what opens after the click, so it never caught this.
+    // "Mark play" form. T10610: there is no create mode left to fall back
+    // into, and no Save/Update click — a field edit (name blur) persists on
+    // its own gesture immediately. The regression this guards is now: editing
+    // the SELECTED clip's name must not create a second (duplicate) row.
     // ========================================================================
-    console.log('\n[Test] === T8590: Non-FS Edit play opens edit mode, Save updates (no duplicate) ===');
+    console.log('\n[Test] === T8590: Non-FS Edit play opens edit mode, name blur updates (no duplicate) ===');
 
     const clipCountBeforeEdit = await page.locator('[data-testid="clip-row"]').count();
     console.log(`[Test] T8590: clip count before edit-open: ${clipCountBeforeEdit}`);
@@ -319,11 +312,10 @@ test.describe('T690: Clip Selection State Machine', () => {
     await primaryCtaT8590.click();
     await page.waitForTimeout(800);
 
-    // Inline overlay must open in EDIT mode: heading "Edit play", the clip's
-    // own name pre-filled (not the fresh-clip default "Play N"), and an
-    // "Update" action button (CREATE mode reads "Save").
-    const overlayHeading = page.locator('h3', { hasText: /Edit play|Mark play/ }).first();
-    await expect(overlayHeading).toHaveText('Edit play');
+    // Inline overlay must open in EDIT mode: heading is ALWAYS "Edit play" now
+    // (there is no create-mode "Marking a play" title left).
+    const overlayHeading = page.locator('h3', { hasText: 'Edit play' }).first();
+    await expect(overlayHeading).toBeVisible();
 
     // .first(): at this viewport (900x600), AnnotateModeView's own mobileInlineForm
     // (useIsMobile is width<1024, a different breakpoint than the sidebar's `sm:`
@@ -336,13 +328,13 @@ test.describe('T690: Clip Selection State Machine', () => {
     expect(prefilledName.length).toBeGreaterThan(0);
     expect(prefilledName).not.toMatch(/^Play \d+$/);
 
-    const updateBtn = page.locator('button.bg-green-600:has-text("Update")').first();
-    await expect(updateBtn).toBeVisible();
-    await updateBtn.click();
+    // Name persists on blur — no Save/Update click exists anymore.
+    await nameField.fill('T8590 renamed play');
+    await nameField.blur();
     await page.waitForTimeout(1000);
 
     const clipCountAfterEdit = await page.locator('[data-testid="clip-row"]').count();
-    console.log(`[Test] T8590: clip count after Save: ${clipCountAfterEdit} (expect unchanged: ${clipCountBeforeEdit})`);
+    console.log(`[Test] T8590: clip count after name blur: ${clipCountAfterEdit} (expect unchanged: ${clipCountBeforeEdit})`);
     expect(clipCountAfterEdit).toBe(clipCountBeforeEdit);
 
     // ========================================================================
@@ -381,15 +373,19 @@ test.describe('T690: Clip Selection State Machine', () => {
       await fsButton.click();
       await page.waitForTimeout(1500);
 
-      // Scope to the green action button so we don't match the "Save" tag chip.
-      const saveOrUpdate = page.locator('button.bg-green-600:has-text("Update"), button.bg-green-600:has-text("Save")').first();
-      const overlayAutoOpened = await saveOrUpdate.isVisible().catch(() => false);
+      // T10610: no Save/Update button exists anywhere anymore. The editor's
+      // presence is detected via its Delete-play control (data-testid,
+      // rendered in every layout) instead — this keeps REQ 8's assertion
+      // logic word-for-word the same (auto-open must be false), only the
+      // locator used to detect "is the overlay open" changed.
+      const overlayOpenIndicator = page.locator('[data-testid="delete-play-button"]').first();
+      const overlayAutoOpened = await overlayOpenIndicator.isVisible().catch(() => false);
       console.log(`  REQ 8: Overlay auto-opened: ${overlayAutoOpened} (expect false)`);
       expect(overlayAutoOpened).toBe(false);
 
       // The explicit "Edit play" toolbar button is how a SELECTED clip is edited now.
       // Scoped by title (not text), since the overlay ITSELF renders "Edit play" text
-      // once open (heading + save button) — the toolbar button is a distinct element.
+      // once open (heading) — the toolbar button is a distinct element.
       // .first(): AnnotateControls renders both a text (sm:flex) and icon-only
       // (sm:hidden) variant sharing the same title — always exactly one is a
       // real match for the viewport, but both exist in the DOM.
@@ -397,30 +393,30 @@ test.describe('T690: Clip Selection State Machine', () => {
       await expect(editToolbarBtn).toBeVisible();
       await editToolbarBtn.click();
       await page.waitForTimeout(800);
-      const overlayVis = await saveOrUpdate.isVisible().catch(() => false);
+      const overlayVis = await overlayOpenIndicator.isVisible().catch(() => false);
       console.log(`  REQ 8: Overlay visible after explicit Edit play click: ${overlayVis}`);
       expect(overlayVis).toBe(true);
 
       // --- REQ 7: Buttons hidden during overlay ---
       console.log('\n  --- REQ 7: Buttons hidden during overlay ---');
       // .first(): same text/icon-only dual-render as editToolbarBtn above.
-      const addOv = await page.locator('button[title="Add play ending at current time (A)"]').first().isVisible().catch(() => false);
+      const addOv = await page.locator('button[title="Mark play ending at current time (A)"]').first().isVisible().catch(() => false);
       const editOv = await editToolbarBtn.isVisible().catch(() => false);
       console.log(`  REQ 7: Add: ${addOv}, Edit: ${editOv} (expect both false)`);
 
       // --- REQ 12: Close overlay keeps selection ---
       console.log('\n  --- REQ 12: Close overlay → SELECTED ---');
-      const cancelBtn = page.locator('button:has-text("Cancel")').first();
-      if (await cancelBtn.isVisible().catch(() => false)) {
-        await cancelBtn.click();
-      } else {
-        const resumeBtn = page.locator('button:has-text("Resume")').first();
-        if (await resumeBtn.isVisible().catch(() => false)) await resumeBtn.click();
+      // Done replaces Cancel/Resume — closing never discards anything now
+      // (every field already persisted on its own gesture), so Done is the
+      // only close affordance left.
+      const doneBtn = page.locator('button:has-text("Done")').first();
+      if (await doneBtn.isVisible().catch(() => false)) {
+        await doneBtn.click();
       }
       await page.waitForTimeout(500);
 
       // Overlay should be closed, but clip still selected (sidebar highlight)
-      const overlayGoneReq12 = !(await saveOrUpdate.isVisible().catch(() => false));
+      const overlayGoneReq12 = !(await overlayOpenIndicator.isVisible().catch(() => false));
       const highlightAfterClose = await page.locator('.border-l-3').isVisible().catch(() => false);
       console.log(`  REQ 12: Overlay gone: ${overlayGoneReq12}, still selected: ${highlightAfterClose}`);
       expect(overlayGoneReq12).toBe(true);
@@ -429,8 +425,8 @@ test.describe('T690: Clip Selection State Machine', () => {
       console.log('\n  --- REQ 5: Edit Clip in FS + SELECTED ---');
       const editBtnFS = page.locator('button:has-text("Edit play")').first();
       const editVisFS = await editBtnFS.isVisible().catch(() => false);
-      const addBtnFSHidden = !(await page.locator('button[title="Add play ending at current time (A)"]').isVisible().catch(() => false));
-      console.log(`  REQ 5: "Edit Clip" visible: ${editVisFS}, "Add Clip" hidden: ${addBtnFSHidden}`);
+      const addBtnFSHidden = !(await page.locator('button[title="Mark play ending at current time (A)"]').isVisible().catch(() => false));
+      console.log(`  REQ 5: "Edit Clip" visible: ${editVisFS}, "Mark play" hidden: ${addBtnFSHidden}`);
       expect(editVisFS).toBe(true);
       expect(addBtnFSHidden).toBe(true);
 
@@ -452,14 +448,14 @@ test.describe('T690: Clip Selection State Machine', () => {
       await page.keyboard.press('ArrowRight');
       await page.waitForTimeout(1200);
       // Overlay should still be open after clip switch
-      const overlayStillOpen = await saveOrUpdate.isVisible().catch(() => false);
+      const overlayStillOpen = await overlayOpenIndicator.isVisible().catch(() => false);
       console.log(`  REQ 11: Overlay still open after clip switch: ${overlayStillOpen}`);
 
       // --- REQ 9: Exit FS → close overlay ---
       console.log('\n  --- REQ 9: Exit FS closes overlay ---');
       await page.keyboard.press('Escape');
       await page.waitForTimeout(800);
-      const overlayGoneReq9 = !(await saveOrUpdate.isVisible().catch(() => false));
+      const overlayGoneReq9 = !(await overlayOpenIndicator.isVisible().catch(() => false));
       console.log(`  REQ 9: Overlay gone after exit FS: ${overlayGoneReq9}`);
       expect(overlayGoneReq9).toBe(true);
 
@@ -497,14 +493,15 @@ test.describe('T690: Clip Selection State Machine', () => {
         await page.waitForTimeout(800);
       }
 
-      // We should now be in EDITING state with overlay open (green action button
-      // reads "Update" when editing, "Save" when creating).
-      const overlayOpen = await page.locator('button.bg-green-600:has-text("Update"), button.bg-green-600:has-text("Save")').first()
+      // We should now be in EDITING state with overlay open — detected via
+      // the Delete-play control, which every layout renders (T10610: there
+      // is no more Save/Update button to key off of).
+      const overlayOpen = await page.locator('[data-testid="delete-play-button"]').first()
         .isVisible().catch(() => false);
       console.log(`[Test] TIMELINE: Overlay open after explicit Edit play click: ${overlayOpen}`);
 
       if (overlayOpen) {
-        // Click timeline far from clips → overlay should close, Add Clip appears
+        // Click timeline far from clips → overlay should close, Mark play appears
         const timelineTrack = page.locator('.bg-gray-700.cursor-pointer.touch-none').last();
         if (await timelineTrack.isVisible().catch(() => false)) {
           const box = await timelineTrack.boundingBox();
@@ -512,11 +509,11 @@ test.describe('T690: Clip Selection State Machine', () => {
             await page.mouse.click(box.x + box.width * 0.95, box.y + box.height / 2);
             await page.waitForTimeout(1500);
 
-            const overlayGone = !(await page.locator('button.bg-green-600:has-text("Update"), button.bg-green-600:has-text("Save")').first()
+            const overlayGone = !(await page.locator('[data-testid="delete-play-button"]').first()
               .isVisible().catch(() => false));
-            const addAppears = await page.locator('button[title="Add play ending at current time (A)"]').first()
+            const addAppears = await page.locator('button[title="Mark play ending at current time (A)"]').first()
               .isVisible().catch(() => false);
-            console.log(`[Test] TIMELINE: Overlay closed: ${overlayGone}, Add Clip: ${addAppears}`);
+            console.log(`[Test] TIMELINE: Overlay closed: ${overlayGone}, Mark play: ${addAppears}`);
           }
         }
       }

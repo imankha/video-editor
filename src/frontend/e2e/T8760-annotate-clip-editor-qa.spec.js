@@ -172,7 +172,10 @@ test.describe('T8760 — clip editor single-playhead + rename: live QA', () => {
     }
 
     // --- Item 5 (continued): close editor, readout reverts to absolute time ---
-    await strip.getByRole('button', { name: 'Cancel', exact: true }).click();
+    // T10610: Cancel is retired -- Done is the only close affordance now
+    // (nothing is ever "unsaved" to discard; every field already persisted on
+    // its own gesture).
+    await strip.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(page.locator('[data-testid="annotate-editor-strip"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="clip-relative-time"]')).toHaveCount(0);
     const absTime = await page.locator('.controls-container .font-mono').first().textContent();
