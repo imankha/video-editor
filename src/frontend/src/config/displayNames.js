@@ -420,6 +420,20 @@ export const FOCUS_PUBLISH = {
   SAVE_DRAFT_CAPTION: 'It is already saved to your drafts. Pick it up whenever you want.',
 };
 
+// T10650: Focus's "Back to Preview" affordance. When the current framing is
+// already rendered, the primary CTA reopens that render instead of paying to
+// re-render byte-identical framing (mode 'preview'); once framing changes, the
+// same label survives as a secondary ghost link beside "Generate Framing" so the
+// previous render stays reachable. No em dashes in this copy.
+export const FOCUS_PREVIEW = {
+  BACK_TO_PREVIEW_LABEL: 'Back to Preview',
+  NO_CREDITS_NOTE: 'No credits needed',
+  // Prefixes a rendered-at timestamp in the left status cell, e.g. "Rendered 3:14 PM".
+  RENDERED_PREFIX: 'Rendered',
+  // Shown (loud, never a silent re-render) when the working-video URL cannot resolve.
+  LOAD_FAILED: 'Could not load your preview. Please try again.',
+};
+
 // T8390: "Add Spotlight Later" toast copy, routed by is_auto_created (T8360 split).
 export const FOCUS_PUBLISH_LATER_TOAST = {
   SINGLE_CLIP: {

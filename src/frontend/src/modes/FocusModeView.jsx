@@ -68,6 +68,14 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   globalTransition,
   onExportComplete,
   saveCurrentClipState,
+  // T10650: Focus "Back to Preview" — derived + owned by FocusScreen, threaded
+  // straight to the presentational ExportButtonView (ExportButtonContainer is
+  // untouched: this is not an export).
+  framingCtaMode,
+  showBackToPreview,
+  onBackToPreview,
+  renderedAt,
+  backToPreviewLoading,
 }, ref) {
   // Container: all business logic
   const container = ExportButtonContainer({
@@ -109,6 +117,11 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         unframedCount={container.unframedCount}
         totalExtractedClips={container.totalExtractedClips}
         isMultiClipMode={container.isMultiClipMode}
+        framingCtaMode={framingCtaMode}
+        showBackToPreview={showBackToPreview}
+        onBackToPreview={onBackToPreview}
+        renderedAt={renderedAt}
+        backToPreviewLoading={backToPreviewLoading}
         isButtonDisabled={container.isButtonDisabled}
         buttonTitle={container.buttonTitle}
         isHighlightEnabled={false}
@@ -271,6 +284,13 @@ export function FocusModeView({
   onProceedToOverlay,
   onExportComplete,
   saveCurrentClipState,  // For backend-authoritative export
+
+  // T10650: Focus "Back to Preview" CTA state (derived in FocusScreen)
+  framingCtaMode,
+  showBackToPreview,
+  onBackToPreview,
+  renderedAt,
+  backToPreviewLoading,
 
   // Context
   cropContextValue,
@@ -950,6 +970,11 @@ export function FocusModeView({
             globalTransition={globalTransition}
             onExportComplete={onExportComplete}
             saveCurrentClipState={saveCurrentClipState}
+            framingCtaMode={framingCtaMode}
+            showBackToPreview={showBackToPreview}
+            onBackToPreview={onBackToPreview}
+            renderedAt={renderedAt}
+            backToPreviewLoading={backToPreviewLoading}
           />
         </div>
       )}

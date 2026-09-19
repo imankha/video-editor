@@ -1,12 +1,21 @@
 import { forwardRef, useImperativeHandle, lazy, Suspense } from 'react';
-import { Download, Loader, AlertCircle } from 'lucide-react';
+import { Download, Loader, AlertCircle, Eye } from 'lucide-react';
 import ActionBand from './ActionBand';
 import PrimaryCta from './PrimaryCta';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
-import { SECTION_NAMES, EXPORT_JOBS, CREDITS } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_JOBS, CREDITS, FOCUS_PREVIEW } from '../config/displayNames';
 import { HIGH_FPS_THRESHOLD } from '../constants/exportFps';
 import { formatLength, PRECISION } from '../utils/timeFormat';
+
+// T10650: render the exported_at ISO timestamp as a short local wall-clock time
+// (e.g. "3:14 PM") for the "Rendered {time}" status line. Guards an unparseable
+// value by returning it verbatim rather than throwing in render.
+function formatRenderedAt(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
 
 /**
  * ExportButtonView - Pure presentational component for export UI
@@ -37,6 +46,17 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   unframedCount,
   totalExtractedClips,
   isMultiClipMode,
+
+  // T10650: Focus "Back to Preview" — when the current framing is already
+  // rendered, the primary CTA reopens that render instead of paying to
+  // re-render (framingCtaMode === 'preview'); once framing changes the same
+  // label survives as a secondary ghost link beside "Generate Framing"
+  // (showBackToPreview). All four props are framing-only and inert for overlay.
+  framingCtaMode = 'generate',
+  showBackToPreview = false,
+  onBackToPreview,
+  renderedAt = null,
+  backToPreviewLoading = false,
 
   // Button state
   isButtonDisabled,
@@ -94,11 +114,47 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         : job.action)
       : job.action;
 
+  // T10650: the primary CTA becomes "Back to Preview" (D2 — fully replaces the
+  // render CTA, no way to force a re-render) only in framing mode, when the
+  // current framing is already rendered and nothing has changed, and never mid-
+  // export. `showBackToPreview` (the secondary ghost link) is the framing-changed
+  // case and is hidden while exporting.
+  const isPreviewCta = isFramingMode && !isCurrentlyExporting && framingCtaMode === 'preview';
+  const ghostBackToPreview = isFramingMode && !isCurrentlyExporting && showBackToPreview;
+
   // LEFT status cell — progress / disconnected / error / failed / success / disabled
   // reason. Rendered in priority order but each independent block is preserved so the
   // existing testids and copy are byte-identical.
   const statusCell = (
     <>
+      {/* T10650: secondary ghost "Back to Preview" — framing changed since the
+          render, so the primary CTA is "Generate Framing" but the previous
+          render is still one tap away. Sits above today's warnings. */}
+      {ghostBackToPreview && (
+        <button
+          type="button"
+          data-testid="back-to-preview-ghost"
+          onClick={onBackToPreview}
+          disabled={backToPreviewLoading}
+          className="inline-flex items-center gap-1.5 self-center sm:self-start text-xs text-blue-300 hover:text-blue-200 underline underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {backToPreviewLoading
+            ? <Loader size={12} className="animate-spin shrink-0" aria-hidden="true" />
+            : <Eye size={12} className="shrink-0" aria-hidden="true" />}
+          <span>{FOCUS_PREVIEW.BACK_TO_PREVIEW_LABEL}</span>
+        </button>
+      )}
+
+      {/* T10650: "Rendered {time}" — the durable reassurance for the preview
+          state (nothing changed since the render). Only when the timestamp is
+          known; the mitigation for the deleted-clip cold-reload gap, not a
+          heuristic. */}
+      {isPreviewCta && renderedAt && (
+        <div data-testid="rendered-at-note" className="text-xs text-gray-400">
+          {`${FOCUS_PREVIEW.RENDERED_PREFIX} ${formatRenderedAt(renderedAt)}`}
+        </div>
+      )}
+
       {/* Unframed clips warning + disabled reason (T8510) */}
       {isFramingMode && hasUnframedClips && !isCurrentlyExporting && (
         <div
@@ -184,7 +240,13 @@ const ExportButtonView = forwardRef(function ExportButtonView({
 
   // RIGHT cost cell — credit estimate + high-fps note (Framing only), or the
   // T9540/Q1 backend-confirmed free-cost caption (Overlay effects render is $0).
-  const costCell = (
+  // T10650 (D2): in the preview state reopening costs nothing, so the whole cost
+  // cell collapses to a single "No credits needed" note.
+  const costCell = isPreviewCta ? (
+    <div data-testid="export-no-credits-note" className="flex items-center gap-1.5 text-xs text-gray-400">
+      <span>{FOCUS_PREVIEW.NO_CREDITS_NOTE}</span>
+    </div>
+  ) : (
     <>
       {/* T9540 (Q1): the effects render charges zero credits — say so honestly. */}
       {!isFramingMode && !isCurrentlyExporting && (
@@ -246,16 +308,29 @@ const ExportButtonView = forwardRef(function ExportButtonView({
       <ActionBand
         status={statusCell}
         cta={
-          <PrimaryCta
-            accent={isFramingMode ? 'focus' : 'overlay'}
-            icon={isCurrentlyExporting ? Loader : Download}
-            iconClassName={isCurrentlyExporting ? 'animate-spin' : ''}
-            onClick={onExport}
-            disabled={isButtonDisabled}
-            title={buttonTitle}
-          >
-            {ctaLabel}
-          </PrimaryCta>
+          isPreviewCta ? (
+            <PrimaryCta
+              accent="focus"
+              icon={backToPreviewLoading ? Loader : Eye}
+              iconClassName={backToPreviewLoading ? 'animate-spin' : ''}
+              onClick={onBackToPreview}
+              disabled={backToPreviewLoading}
+              title={FOCUS_PREVIEW.BACK_TO_PREVIEW_LABEL}
+            >
+              {FOCUS_PREVIEW.BACK_TO_PREVIEW_LABEL}
+            </PrimaryCta>
+          ) : (
+            <PrimaryCta
+              accent={isFramingMode ? 'focus' : 'overlay'}
+              icon={isCurrentlyExporting ? Loader : Download}
+              iconClassName={isCurrentlyExporting ? 'animate-spin' : ''}
+              onClick={onExport}
+              disabled={isButtonDisabled}
+              title={buttonTitle}
+            >
+              {ctaLabel}
+            </PrimaryCta>
+          )
         }
         cost={costCell}
       />

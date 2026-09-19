@@ -126,10 +126,19 @@ export async function handleOverlayExportCompletion(completed, {
 
   // 2b. NAVIGATION / PREVIEW decision — SEPARATE from the publish above. Only
   //     hijack the user's screen (land them on the finished reel) if they are
-  //     STILL in the Overlay editor for THIS project. A user who wandered to
-  //     another screen mid-render keeps their place; the publish already fired.
+  //     STILL in the editor for THIS project. T10660: the gate widened from
+  //     OVERLAY-only to FRAMING-or-OVERLAY because the one-tap publisher now
+  //     stands in FRAMING (the render fires headlessly, no mode switch) — an
+  //     OVERLAY-only gate would never fire and strand the user on Focus after
+  //     publishing. This stays PURELY the navigation decision: the publish above
+  //     is gated ONLY on the stake, never merged with this (the T9740 split). A
+  //     user who wandered to another screen mid-render keeps their place; the
+  //     publish already fired.
+  const stillInEditorForProject =
+    (currentMode === EDITOR_MODES.OVERLAY || currentMode === EDITOR_MODES.FRAMING) &&
+    completed.projectId === currentProjectId;
   let navigated = false;
-  if (currentMode === EDITOR_MODES.OVERLAY && completed.projectId === currentProjectId) {
+  if (stillInEditorForProject) {
     // Atomic transition: clear selection + reset video + switch mode together so
     // an in-flight project refresh can't resurrect the selection afterward.
     goToProjectManager();

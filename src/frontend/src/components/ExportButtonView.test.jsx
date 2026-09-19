@@ -281,3 +281,65 @@ describe('ExportButtonView — T9540 render/job vocabulary (supersedes T7580)', 
   // the ActionBand — those Reel settings move into the settings rail. The band is the
   // CTA + status + cost cells only. The rail owns that copy now.
 });
+
+describe('ExportButtonView — T10650 Back to Preview CTA', () => {
+  it('preview mode: primary CTA reads "Back to Preview" (replaces Generate Framing) and cost cell reads "No credits needed"', () => {
+    render(<ExportButtonView {...baseProps} framingCtaMode="preview" estimatedCredits={9} creditBalance={42} />);
+    expect(screen.getByRole('button', { name: 'Back to Preview' })).toBeTruthy();
+    // D2: there is NO way to force a re-render in this state.
+    expect(screen.queryByRole('button', { name: /Generate Framing/ })).toBeNull();
+    expect(screen.getByTestId('export-no-credits-note').textContent).toContain('No credits needed');
+    // The credit estimate is fully replaced.
+    expect(screen.queryByTestId('export-credit-estimate')).toBeNull();
+  });
+
+  it('preview mode: clicking the CTA fires onBackToPreview and NOT onExport', () => {
+    const onBackToPreview = vi.fn();
+    const onExport = vi.fn();
+    render(<ExportButtonView {...baseProps} framingCtaMode="preview" onBackToPreview={onBackToPreview} onExport={onExport} />);
+    screen.getByRole('button', { name: 'Back to Preview' }).click();
+    expect(onBackToPreview).toHaveBeenCalledTimes(1);
+    expect(onExport).not.toHaveBeenCalled();
+  });
+
+  it('preview mode: shows "Rendered {time}" when renderedAt is known', () => {
+    render(<ExportButtonView {...baseProps} framingCtaMode="preview" renderedAt="2026-09-19T15:14:00Z" />);
+    expect(screen.getByTestId('rendered-at-note').textContent).toMatch(/^Rendered /);
+  });
+
+  it('preview mode: no "Rendered" line when renderedAt is null (mitigation, not a heuristic)', () => {
+    render(<ExportButtonView {...baseProps} framingCtaMode="preview" renderedAt={null} />);
+    expect(screen.queryByTestId('rendered-at-note')).toBeNull();
+  });
+
+  it('generate + showBackToPreview: primary CTA stays "Generate Framing" and a ghost "Back to Preview" appears', () => {
+    const onBackToPreview = vi.fn();
+    const onExport = vi.fn();
+    render(<ExportButtonView {...baseProps} framingCtaMode="generate" showBackToPreview={true}
+      onBackToPreview={onBackToPreview} onExport={onExport} estimatedCredits={9} creditBalance={42} />);
+    expect(screen.getByRole('button', { name: 'Generate Framing' })).toBeTruthy();
+    // Credit estimate still shows (paid re-render path).
+    expect(screen.getByTestId('export-credit-estimate')).toBeTruthy();
+    const ghost = screen.getByTestId('back-to-preview-ghost');
+    ghost.click();
+    expect(onBackToPreview).toHaveBeenCalledTimes(1);
+    expect(onExport).not.toHaveBeenCalled();
+  });
+
+  it('ghost button is hidden while an export is in progress', () => {
+    render(<ExportButtonView {...baseProps} framingCtaMode="generate" showBackToPreview={true} isCurrentlyExporting={true} />);
+    expect(screen.queryByTestId('back-to-preview-ghost')).toBeNull();
+  });
+
+  it('backToPreviewLoading disables the preview CTA (spinner state)', () => {
+    render(<ExportButtonView {...baseProps} framingCtaMode="preview" backToPreviewLoading={true} />);
+    expect(screen.getByRole('button', { name: 'Back to Preview' }).disabled).toBe(true);
+  });
+
+  it('overlay mode is unaffected (Back to Preview is framing-only)', () => {
+    render(<ExportButtonView {...baseProps} isFramingMode={false} framingCtaMode="preview" showBackToPreview={true} />);
+    expect(screen.queryByRole('button', { name: 'Back to Preview' })).toBeNull();
+    expect(screen.queryByTestId('back-to-preview-ghost')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Export clip with effects' })).toBeTruthy();
+  });
+});
