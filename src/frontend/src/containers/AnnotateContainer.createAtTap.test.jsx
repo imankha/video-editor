@@ -300,4 +300,40 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     });
     expect(apiFetch).not.toHaveBeenCalled();
   });
+
+  it('§E row 15: a Mark play tap fires announcePlaySaved exactly once and announceReelCreated zero times', async () => {
+    apiFetch.mockImplementation((url) => {
+      if (url.includes('/clips/raw/save')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: false }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true }) });
+    });
+
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    act(() => { result.current.handleAddClipFromButton(); });
+    await act(async () => { await flushMicrotasks(); });
+
+    const toasts = useToastStore.getState().toasts;
+    const playSavedToasts = toasts.filter((t) => /play/i.test(t.title) && /saved/i.test(t.title));
+    expect(playSavedToasts.length).toBe(1);
+    expect(toasts.find((t) => t.dedupKey === 'reel-created')).toBeUndefined();
+  });
+
+  it('default capture window (moved from the retired captureWindow.test.jsx): clamps to [0, duration]', async () => {
+    apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: false }) });
+
+    // Tap near the start: the 6s "before" window must clamp to 0, not go negative.
+    const early = renderHook(() => AnnotateContainer(baseProps({ currentTime: 1, duration: 120 })));
+    act(() => { early.result.current.handleAddClipFromButton(); });
+    await act(async () => { await flushMicrotasks(); });
+    expect(early.result.current.clipRegions[0].startTime).toBe(0);
+    expect(early.result.current.clipRegions[0].endTime).toBe(3); // 1 + DEFAULT_CLIP_AFTER(2)
+
+    // Tap near the end: the 2s "after" window must clamp to duration, not exceed it.
+    const late = renderHook(() => AnnotateContainer(baseProps({ currentTime: 119, duration: 120 })));
+    act(() => { late.result.current.handleAddClipFromButton(); });
+    await act(async () => { await flushMicrotasks(); });
+    expect(late.result.current.clipRegions[0].startTime).toBe(113); // 119 - DEFAULT_CLIP_BEFORE(6)
+    expect(late.result.current.clipRegions[0].endTime).toBe(120);
+  });
 });

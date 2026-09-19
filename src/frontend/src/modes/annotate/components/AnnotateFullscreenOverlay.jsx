@@ -72,10 +72,9 @@ function CutFromAngleChip({ name }) {
   );
 }
 
-// T9630: labels/colors for the Unsaved/Saving/Saved/error tri-state — derived
-// from real persistence state (see `displayStatus` below), never asserted.
+// T9630: labels/colors for the Saving/Saved/error status, derived from real
+// per-gesture write state (see `displayStatus` below), never asserted.
 const SAVE_STATUS_COPY = {
-  unsaved: { text: 'Unsaved changes', className: 'text-amber-400' },
   saving: { text: 'Saving...', className: 'text-gray-400' },
   saved: { text: 'Saved', className: 'text-green-400' },
   error: { text: "Couldn't save — try again", className: 'text-red-400' },
