@@ -1,6 +1,6 @@
 # T10630: ActionBand stacks on narrow widths (Focus/Overlay export bar)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 1
 **Created:** 2026-09-19
@@ -79,6 +79,16 @@ finding 2, where BEHAVIOR forked).
 ### Progress Log
 
 **2026-09-19**: Filed. Not started.
+
+**2026-09-19**: Implemented inline in the shared tree (dotask container gate). Red test
+confirmed against unmodified markup (2/4 failed on `order-*`/`flex-col` assertions), applied
+`flex-col sm:flex-row` fix per spec, green (4/4 unit, 36/36 relevant set incl. ExportButtonView).
+`vite build` clean. Live-screenshotted Focus at 320/375/393/844px via real dev-login — CTA-first
+stacking confirmed, desktop row byte-identical at 844px. `T4880-mobile-editor-reachable.spec.js`
+hit a pre-existing, unrelated failure (stale "Export" locator vs. current "Generate Framing" CTA
+label) — confirmed independent of this diff, logged to `known-failures.md`, filed as T10640.
+PR #469, Branch CI green (frontend pass, backend correctly skipped — no backend files touched),
+merged (provably verified: red->green test + CI green). Status -> STAGING.
 
 ## Acceptance Criteria
 
