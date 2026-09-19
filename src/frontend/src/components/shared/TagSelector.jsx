@@ -25,7 +25,7 @@ export function TagSelector({ positions, tagsByPosition, selectedTags = [], onTa
       <button
         key={tag.name}
         onClick={() => onTagToggle(tag.name)}
-        className={`flex items-center gap-1 ${cfg.padding} ${cfg.text} ${cfg.rounded || 'rounded'} transition-colors whitespace-nowrap ${
+        className={`flex items-center gap-1 ${cfg.padding} coarse-pointer:min-h-[44px] ${cfg.text} ${cfg.rounded || 'rounded'} transition-colors whitespace-nowrap ${
           isSelected
             ? 'bg-green-600 text-white'
             : 'bg-gray-700 text-gray-300 hover:bg-gray-600'

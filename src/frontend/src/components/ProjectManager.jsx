@@ -1421,7 +1421,7 @@ export function ProjectManager({
       </div>
 
       {/* Header — pt-10 clears the fixed top-right controls on mobile */}
-      <div className="text-center pt-10 sm:pt-0 mb-4">
+      <div className="text-center pt-10 coarse-pointer:pt-12 sm:pt-0 mb-4">
         <LogoWithText className="mx-auto mb-3" logoSize={40} textClassName="text-2xl sm:text-3xl" />
         <p className="text-gray-400 text-sm">Share Your Player's Brilliance</p>
       </div>
@@ -1457,7 +1457,7 @@ export function ProjectManager({
                   <Gamepad2 size={18} className={GAME.accent} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <span className="text-white font-medium truncate block">
+                  <span className="text-white font-medium block break-words sm:truncate">
                     {recentItems.recentGame.name}
                   </span>
                   <div className="hidden sm:block text-xs text-gray-500">
@@ -1497,7 +1497,7 @@ export function ProjectManager({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-medium truncate">
+                    <span className="text-white font-medium break-words sm:truncate">
                       {getProjectDisplayName(recentItems.recentProject)}
                     </span>
                     {recentItems.recentProject.has_final_video && (
@@ -1983,8 +1983,8 @@ export function ProjectManager({
                     DIFFERENT bucketing than DRAFT_STAGE/getDraftStage, see the
                     filteredProjects logic above) */}
                 {filterCounts.showStatusFilter && (
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Phase</span>
+                  <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto scrollbar-hide">
+                    <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1 shrink-0">Phase</span>
                     {[
                       { value: 'all', label: 'All' },
                       // T66: 'complete' and 'uncompleted' removed - completed projects are archived
@@ -2000,7 +2000,7 @@ export function ProjectManager({
                         <button
                           key={opt.value}
                           onClick={() => setStatusFilter(opt.value)}
-                          className={`px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                          className={`px-2.5 py-1 coarse-pointer:min-h-[44px] shrink-0 whitespace-nowrap text-xs rounded transition-colors ${
                             statusFilter === opt.value
                               ? opt.color === 'blue' ? 'bg-blue-600 text-white'
                                 : opt.color === 'gray' ? 'bg-gray-600 text-white'

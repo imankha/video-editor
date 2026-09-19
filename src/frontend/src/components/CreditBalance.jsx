@@ -79,7 +79,7 @@ export function CreditBalance({ showFirstRunHint = false }) {
           console.log('[CreditBalance] Clicked — opening BuyCreditsModal');
           setShowBuyCredits(true);
         }}
-        className="flex items-center gap-1 px-2 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm text-white/80 transition-colors cursor-pointer"
+        className="flex items-center gap-1 px-2 py-1.5 coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px] coarse-pointer:justify-center bg-white/10 hover:bg-white/20 rounded-lg text-sm text-white/80 transition-colors cursor-pointer"
         title={`${balance} credits — click to buy more`}
       >
         <Coins size={14} className="text-yellow-400 shrink-0" />
@@ -89,7 +89,7 @@ export function CreditBalance({ showFirstRunHint = false }) {
       {hintVisible && (
         <div
           data-testid="credit-first-run-hint"
-          className="absolute left-0 top-full mt-1.5 px-2.5 py-1.5 bg-gray-800 border border-gray-600 rounded-lg shadow-xl text-xs text-gray-200 whitespace-nowrap z-40"
+          className="absolute left-0 top-full mt-[100px] sm:mt-1.5 px-2.5 py-1.5 bg-gray-800 border border-gray-600 rounded-lg shadow-xl text-xs text-gray-200 max-w-[160px] whitespace-normal sm:max-w-none sm:whitespace-nowrap z-40"
         >
           You start with {balance} free credits
         </div>

@@ -59,7 +59,7 @@ export function ProfileDropdown() {
     return (
       <button
         onClick={() => requireAuth(() => {})}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 coarse-pointer:min-h-[44px] rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
         title="Sign in to save your work across devices"
       >
         <LogIn size={14} className="text-blue-400" />
@@ -84,7 +84,7 @@ export function ProfileDropdown() {
       <button
         ref={triggerRef}
         onClick={() => setShowDropdown(!showDropdown)}
-        className={`flex items-center justify-center w-8 h-8 rounded-full ${pictureUrl ? '' : 'bg-white/10 hover:bg-white/20'} transition-colors`}
+        className={`flex items-center justify-center w-8 h-8 coarse-pointer:min-w-[44px] coarse-pointer:min-h-[44px] rounded-full ${pictureUrl ? '' : 'bg-white/10 hover:bg-white/20'} transition-colors`}
         title={email}
       >
         {avatarButton}
