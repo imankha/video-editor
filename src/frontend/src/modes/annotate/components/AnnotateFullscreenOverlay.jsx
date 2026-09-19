@@ -1,36 +1,25 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Plus, Pencil, Crop, Sparkles, ChevronDown, ChevronUp, Video } from 'lucide-react';
+import { X, Pencil, Crop, Sparkles, ChevronDown, ChevronUp, Video } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
-import { TeammateTagInput, commitPendingTeammateText, hasUncommittedTeammateText } from '../../../components/shared/TeammateTagInput';
+import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile, useProfileStore, useProjectsList } from '../../../stores';
 import { getClipStage, CLIP_STAGE } from '../clipStage';
 import { useIsMobile } from '../../../hooks/useIsMobile';
-import { recordUiImpression } from '../../../utils/uiTelemetry';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
 import { StarRating } from '../../../components/shared/StarRating';
-import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialog';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
 import { DetailsFields } from './DetailsFields';
 import { PlayProgressBadges } from './PlayProgressBadges';
-import { getPlayProgress, defaultPlayName, CLIP_BADGE } from '../playProgress';
-import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../../../components/shared/clipConstants';
-import { ANNOTATE, MODE_NAMES } from '../../../config/displayNames';
-
-// T9580: the "Save & open …" confirm-dialog destination noun, keyed by stage
-// (decoupled from the CTA button label, which N41 reworded FOCUS to "Frame this
-// clip"). Module scope — a static map, no per-render recreation.
-const STAGE_OPEN_NAME = {
-  [CLIP_STAGE.FOCUS]: MODE_NAMES.FRAMING,
-  [CLIP_STAGE.SPOTLIGHT]: 'Spotlight',
-  [CLIP_STAGE.FINAL]: 'Final',
-  [CLIP_STAGE.PUBLISHED]: 'Published',
-};
+import { DeletePlayButton } from './DeletePlayButton';
+import { getPlayProgress, CLIP_BADGE } from '../playProgress';
+import { onTextFieldKeyDown } from '../textFieldCommit';
+import { ANNOTATE } from '../../../config/displayNames';
 
 // Persists across mounts within the same page session
 let savedDockPosition = 'left';
@@ -103,30 +92,22 @@ function SaveStatusBadge({ status }) {
 }
 
 /**
- * AnnotateFullscreenOverlay - Overlay that appears when paused in fullscreen
+ * AnnotateFullscreenOverlay - the play editor (all four layouts)
  *
- * Features:
- * - Quick clip creation form (or edit existing clip if playhead is in a clip)
- * - Star rating (1-5)
- * - Position selection (attacker, midfielder, defender, goalie)
- * - Tag selection (based on position)
- * - Auto-generated clip name (editable)
- * - Duration slider
- * - Notes input
- * - Press Enter to save and continue playing
- * - Press Escape to cancel
- *
- * When existingClip is provided, we're editing that clip.
- * Otherwise, we're creating a new clip at currentTime.
+ * T10610: this is ALWAYS an editor on an EXISTING play now — the container
+ * creates the play (region + backend row) at the Mark play tap, before this
+ * component ever opens (design doc T10600-design.md § A, D2). There is no
+ * create-mode form and no Save/Update/Cancel button anywhere: every control
+ * persists on its own gesture (§ 2.2's gesture -> write table), Done/X/Escape
+ * commit any dirty text field then close, and Delete play is the only
+ * destructive action.
  */
 export function AnnotateFullscreenOverlay({
   isVisible,
   currentTime,
   videoDuration,
-  existingClip = null,
-  onCreateClip,
+  existingClip,
   onUpdateClip,
-  onResume,
   onClose,
   onSeek,
   videoController,
@@ -134,8 +115,6 @@ export function AnnotateFullscreenOverlay({
   layout = 'overlay',
   teammateSuggestions = [],
   onScrubDragChange,
-  newClipLayerIsMine = true,
-  nextClipNumber = 1,
   // T8600: desktop strip only — opens the clip's project in Focus mode. Same
   // prop name/semantics ClipDetailsEditor already uses.
   onOpenInFocus,
@@ -143,16 +122,15 @@ export function AnnotateFullscreenOverlay({
   // routes here when getClipStage returns action 'overlay'. Same prop name
   // ClipDetailsEditor already uses.
   onOpenInOverlay,
-  // T9330/T10290: `onResumePlaybackOnly` (resume WITHOUT closing) is no longer a
-  // prop — T10290 made every create close the editor via onResume, so the desktop
-  // strip's old stay-open-and-rehydrate path (its only consumer) is gone. The
-  // parent may still pass it; it is simply ignored.
-  // T9330: true while THIS clip's project is being created (create-save in
-  // flight, id not landed yet). Renders a DISABLED "Apply Framing" pending CTA.
-  focusPending = false,
-  // T8600 §2.5: required per-render-site discriminator for the
-  // add_clip_opened_no_save beacon (no default — see the effect below).
-  surface,
+  // T10610 § D.2/D.3: deletes the play the editor is open on (confirm, then
+  // closes + deselects — see AnnotateContainer.handleDeletePlayFromEditor).
+  onDeleteClip,
+  // T10610 § C.4: awaited by the stage CTA before navigating, so a write still
+  // in flight (or failed) can't be followed into Framing/Spotlight.
+  onAwaitWrites,
+  // T10610 § C.5: 'idle' | 'saving' | 'saved' | 'error', the outcome of the
+  // most recent per-gesture write on this region — drives SaveStatusBadge.
+  writeStatus = 'idle',
   // T8892: display name of the active NON-backbone angle (from buildGameTimeline
   // via AnnotateModeView), or null when cutting from the backbone / an angle-free
   // game. Non-null => this play is being cut from an angle; render the "cut from"
@@ -165,26 +143,15 @@ export function AnnotateFullscreenOverlay({
   // timeline (videoDuration) when this is null.
   mediaBounds = null,
 }) {
-  const isEditMode = !!existingClip;
   const isMobile = useIsMobile();
   // T9330: the clip's stage-aware CTA, shared with ClipDetailsEditor via
   // getClipStage. linkedProject is looked up the SAME way ClipDetailsEditor does
   // (useProjectsList by autoProjectId) — single source, not a passed prop.
   const projects = useProjectsList();
-  const linkedProject = existingClip?.autoProjectId
+  const linkedProject = existingClip.autoProjectId
     ? projects.find(p => p.id === existingClip.autoProjectId)
     : null;
-  const clipStage = existingClip ? getClipStage(existingClip, linkedProject) : null;
-  // T9330: the destination-mode noun for the "Save & open …" dialog. T9580
-  // decoupled this from the button LABEL (which N41 reworded FOCUS to "Frame this
-  // clip") — derive it from the stage so the dialog copy stays grammatical
-  // ("...then open Framing"), independent of the CTA wording.
-  const openStageName = STAGE_OPEN_NAME[clipStage?.stage] || MODE_NAMES.FRAMING;
-  // T8140: one-tap first clip — a nameless new clip defaults to "Play N" so the
-  // user can save without typing a name. Display-and-persist default (memory-only
-  // until the Save gesture); never applied in edit mode.
-  // T10410: template single-sourced with its recognizer (isDefaultPlayName).
-  const defaultClipName = isEditMode ? '' : defaultPlayName(nextClipNumber);
+  const clipStage = getClipStage(existingClip, linkedProject);
   const currentProfile = useCurrentProfile();
   const updateProfile = useProfileStore(state => state.updateProfile);
   const sport = currentProfile?.sport || NO_SPORT;
@@ -203,15 +170,11 @@ export function AnnotateFullscreenOverlay({
     setDockPosition(pos);
   }, []);
 
-  const [rating, setRating] = useState(DEFAULT_RATING);
-  const [selectedTags, setSelectedTags] = useState([]);
-  const [clipName, setClipName] = useState('');
-  const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
-  // T10520: session-scoped "has the rating control been touched" flag, same
-  // shape as isNameManuallyEdited — feeds playProgress's `rated` in CREATE
-  // mode only (edit mode is always rated, since a saved play always carries
-  // a real value). Never persisted; a fresh open resets it.
-  const [isRatingManuallyEdited, setIsRatingManuallyEdited] = useState(false);
+  const [rating, setRating] = useState(existingClip.rating || DEFAULT_RATING);
+  const [selectedTags, setSelectedTags] = useState(existingClip.tags || []);
+  // T10610 § B.1/B.2: LOCAL ECHO, seeded from the region, re-seeded ONLY on a
+  // real clip-identity change (the reset effect below) — never a write itself.
+  const [clipName, setClipName] = useState(existingClip.name || '');
   // T8760 item 4: in the strip (desktop edit) layout the header name IS the one
   // edit affordance — clicking the pencil turns it into an inline input. This
   // replaces the standalone name field the button row used to duplicate (item 3).
@@ -220,37 +183,21 @@ export function AnnotateFullscreenOverlay({
   // focus it (the strip has no input until the pencil opens one — there the
   // badge opens the inline editor instead).
   const nameInputRef = useRef(null);
-  // T10410: true while the clip badge's EDIT-mode create call is in flight (the
-  // same partial `{ createProject: true }` update the main screen's Frame clip
+  // T10410: true while the clip badge's create call is in flight (the same
+  // partial `{ createProject: true }` update the main screen's Frame clip
   // button sends). Memory-only view state driven by that one gesture; it clears
   // when the call settles, and the badge flips to done when the parent re-renders
   // with the landed autoProjectId.
   const [clipCreating, setClipCreating] = useState(false);
-  // T10410: the clip id (or null for create mode) the reset effect last seeded
-  // the form from. `undefined` = never seeded, so the first run always seeds.
+  // T10410: the clip id the reset effect last seeded the form from. `undefined`
+  // = never seeded, so the first run always seeds.
   const seededClipIdRef = useRef(undefined);
-  // Mirror currentTime in a ref so the reset effect below reads the playhead
-  // at transition time without re-running on seek-driven updates during drag.
-  // Must NOT be frozen at open time: the overlay can switch edit->create while
-  // staying open (Add Clip pressed while editing), and a stale time would put
-  // the scrub handles outside ClipScrubRegion's window, hiding them.
-  const currentTimeRef = useRef(currentTime);
-  useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
-  // T5700: same pattern — read the mode toggle at transition time without
-  // re-running the reset effect (and wiping an in-progress form) if the user
-  // flips the toggle while the Add Clip form is already open.
-  const newClipLayerIsMineRef = useRef(newClipLayerIsMine);
-  useEffect(() => { newClipLayerIsMineRef.current = newClipLayerIsMine; }, [newClipLayerIsMine]);
 
-  const [scrubStartTime, setScrubStartTime] = useState(
-    Math.max(0, currentTime - DEFAULT_CLIP_BEFORE)
-  );
-  const [scrubEndTime, setScrubEndTime] = useState(
-    Math.min(currentTime + DEFAULT_CLIP_AFTER, videoDuration || Infinity)
-  );
-  const [notes, setNotes] = useState('');
-  const [taggedTeammates, setTaggedTeammates] = useState([]);
-  const [myAthlete, setMyAthlete] = useState(true);
+  const [scrubStartTime, setScrubStartTime] = useState(existingClip.startTime);
+  const [scrubEndTime, setScrubEndTime] = useState(existingClip.endTime);
+  const [notes, setNotes] = useState(existingClip.notes || '');
+  const [taggedTeammates, setTaggedTeammates] = useState(existingClip.tagged_teammates || []);
+  const [myAthlete, setMyAthlete] = useState(existingClip.my_athlete ?? true);
   // T8600: Tags + Notes move behind a "Details" disclosure — one boolean, two
   // presentations (desktop expand-in-place, mobile full-screen popup).
   // Deliberately NOT reset by the [existingClip] effect below: the component
@@ -264,136 +211,48 @@ export function AnnotateFullscreenOverlay({
   // on every layout. The initial value is the ONLY seed (the reset effect
   // never touches detailsOpen).
   const [detailsOpen, setDetailsOpen] = useState(false);
-  // T8600 §2.8: strip-only — Focus mid-edit must never silently discard the
-  // open form, so the Focus button opens this confirm-then-save-then-navigate
-  // prompt instead of navigating directly.
-  const [focusConfirmOpen, setFocusConfirmOpen] = useState(false);
-  // T9830: `createProject` is now ONLY meaningful in edit mode, where it mirrors
-  // whether the clip already has a project (`autoProjectId`) — the edit payload
-  // and `hasUnsavedEdits` read it. In CREATE mode there is no rating-driven
-  // default and no toggle anymore: the two explicit Save buttons ("Create an
-  // editable clip" / "Save play") pass their intent straight into handleSave, so
-  // this state is never read to decide a create outcome. The three rating/layer
-  // auto-flip sites and the `createProjectManuallySet` bookkeeping they needed
-  // are gone.
-  const [createProject, setCreateProject] = useState(false);
-  const handleSaveRef = useRef(null);
   const handleRatingChangeRef = useRef(null);
-  // T9830: in-flight guard so a fast double-click (or Enter during a save)
-  // no-ops the second Save instead of firing a duplicate create — set
-  // synchronously (a ref, not state) so the second click can never slip through
-  // before a re-render. Cleared in handleSave's finally.
-  const saveInFlightRef = useRef(false);
-  // T8140: fires the `add_clip_opened_no_save` impression exactly once per
-  // create-mode open that ends without a save (see effect below). Set true by
-  // handleSave so a saved open never beacons.
-  const savedThisOpenRef = useRef(false);
-  // T9630: real persistence state for the Unsaved/Saving/Saved indicator,
-  // driven ONLY by the Save gesture's promise (never a reactive write) —
-  // 'idle' | 'saving' | 'saved' | 'error'. A rejected/failed save leaves this
-  // at 'error' AND skips the close/resume call below, so the form (and every
-  // field the user typed) stays exactly as it was — no reset, no silent claim
-  // of success.
-  const [saveStatus, setSaveStatus] = useState('idle');
+  // Ref-avoids-stale-closure pattern (same convention as handleRatingChangeRef
+  // above) — the window keydown effect below has a narrow dep array, so it
+  // must call through a ref rather than close over closeWithCommit directly.
+  const closeWithCommitRef = useRef(null);
 
-  // Reset form when existingClip changes (switching between create/edit mode)
+  // Re-seed the form ONLY on a real clip switch (T10610 § B.2: the SAME
+  // guard the overlay already had — extended, not duplicated).
   useEffect(() => {
     // T10410: `existingClip` is a NEW OBJECT after every surgical region update
     // (updateClipRegion spreads the region; the parent's find() memo follows),
-    // including ones this open editor itself triggers — the clip badge's
-    // `{ createProject: true }` and the autoProjectId/rawClipId that land after
-    // it. Those are the SAME play, so re-seeding here would silently discard
-    // every unsaved field edit (the 5-star rating that woke the nudge, a typed
-    // note, a trimmed window). Only a real switch (different clip id, or
-    // create<->edit) resets the form; a same-play identity churn keeps it.
-    const clipKey = existingClip ? existingClip.id : null;
+    // including ones this open editor itself triggers. Those are the SAME
+    // play, so re-seeding here would silently discard every unsaved-but-not-
+    // yet-blurred text draft (the trim/rating/tags fields below all persist
+    // immediately on their own gesture, so they have nothing to lose — only
+    // clipName/notes are drafts that could still be mid-edit). Only a real
+    // switch (different clip id) resets the form; a same-play identity churn
+    // keeps it.
+    const clipKey = existingClip.id;
     const samePlay = seededClipIdRef.current === clipKey;
     seededClipIdRef.current = clipKey;
-    if (samePlay) {
-      // `createProject` is not a user-edited field — it MIRRORS the clip's
-      // project state (hasUnsavedEdits diffs it against autoProjectId), so it
-      // must follow the landed autoProjectId or the form would read dirty.
-      if (existingClip) setCreateProject(!!existingClip.autoProjectId);
-      return;
-    }
-    const t = currentTimeRef.current;
+    if (samePlay) return;
+
     setIsEditingName(false); // T8760: close inline name editing on clip switch
-    setIsRatingManuallyEdited(false); // T10520: edit mode doesn't need this true (isEditMode already covers it)
-    // T10290: every create now closes the editor (the desktop strip no longer
-    // stays open and rehydrates), so a clip switch is always a real switch —
-    // reset the save status unconditionally.
-    setSaveStatus('idle');
-    if (existingClip) {
-      setRating(existingClip.rating || DEFAULT_RATING);
-      setSelectedTags(existingClip.tags || []);
-      setClipName(existingClip.name || '');
-      setIsNameManuallyEdited(!!existingClip.name);
-      setScrubStartTime(existingClip.startTime);
-      setScrubEndTime(existingClip.endTime);
-      setNotes(existingClip.notes || '');
-      setTaggedTeammates(existingClip.tagged_teammates || []);
-      setMyAthlete(existingClip.my_athlete ?? true);
-      setCreateProject(!!existingClip.autoProjectId);
-    } else {
-      setRating(DEFAULT_RATING);
-      setSelectedTags([]);
-      setClipName('');
-      setIsNameManuallyEdited(false);
-      setScrubStartTime(Math.max(0, t - DEFAULT_CLIP_BEFORE));
-      setScrubEndTime(Math.min(t + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
-      setNotes('');
-      setTaggedTeammates([]);
-      setMyAthlete(newClipLayerIsMineRef.current);
-      // T9830: no rating-driven create default anymore — the create-mode Save
-      // outcome is chosen at click time by the two explicit buttons.
-      setCreateProject(false);
-    }
+    setRating(existingClip.rating || DEFAULT_RATING);
+    setSelectedTags(existingClip.tags || []);
+    setClipName(existingClip.name || '');
+    setScrubStartTime(existingClip.startTime);
+    setScrubEndTime(existingClip.endTime);
+    setNotes(existingClip.notes || '');
+    setTaggedTeammates(existingClip.tagged_teammates || []);
+    setMyAthlete(existingClip.my_athlete ?? true);
   }, [existingClip]);
 
-  // Auto-generate clip name when rating, tags, or notes change (unless manually edited)
-  // Guard: skip when existingClip has a name — the reset effect may not have run yet
-  // due to React effect batching, so isNameManuallyEdited could still be stale (false)
-  useEffect(() => {
-    if (!isNameManuallyEdited && !existingClip?.name) {
-      const generatedName = generateClipName(rating, selectedTags, notes);
-      // T8140: fall back to the "Play N" default when nothing else derives a name
-      // (create mode only — defaultClipName is '' when editing).
-      setClipName(generatedName || defaultClipName);
-    }
-  }, [rating, selectedTags, notes, isNameManuallyEdited, existingClip?.name, defaultClipName]);
-
-  // T9830: the notes field moved into the "Optional details" disclosure (it is
-  // no longer a primary create-form control), so there is no field to autofocus
-  // on open — the old notes-autofocus effect is gone.
-
-  // T8140: measure in-form abandonment. When the Add Clip form is opened in
-  // CREATE mode, fire a single `add_clip_opened_no_save` dialog impression on
-  // close/unmount if no save happened. Keyed on the open (isVisible/isEditMode),
-  // NOT on renders or keystrokes, so it beacons at most once per open. Edit opens
-  // never arm it. Uses the existing T7515 `dialog` vocabulary (no schema change).
-  // T8600 §2.5: `surface` (required, no default) discriminates the 4 render
-  // sites via a `:surface` suffix — a render site that forgets to pass it
-  // shows up as its own distinct `unknown_surface` row instead of silently
-  // blending into a real surface's count (no-silent-fallback rule).
-  useEffect(() => {
-    if (!isVisible || isEditMode) return;
-    savedThisOpenRef.current = false;
-    return () => {
-      if (!savedThisOpenRef.current) {
-        if (!surface) {
-          console.warn('[AnnotateFullscreenOverlay] missing `surface` prop on a create-mode open — beacon logged as unknown_surface');
-        }
-        recordUiImpression('dialog', `add_clip_opened_no_save:${surface || 'unknown_surface'}`);
-      }
-    };
-  }, [isVisible, isEditMode, surface]);
-
-  // Handle keyboard shortcuts — uses handleSaveRef to avoid stale closures
-  // (taggedTeammates, myAthlete, createProject would be stale without the ref).
-  // T8600 §2.6: Escape is handled in ONE place for typing and non-typing
-  // targets alike, so it can close the details surface (desktop panel / mobile
-  // popup) first, without discarding the whole play — then the editor itself
-  // on a second Escape. 1-5 and Enter keep ignoring INPUT/TEXTAREA, unchanged.
+  // Handle keyboard shortcuts — uses handleRatingChangeRef to avoid a stale
+  // closure. T8600 §2.6 / T10610 § B.4: Escape is handled in ONE place for
+  // typing and non-typing targets alike: it closes the details surface first
+  // (without discarding the whole play), then closeWithCommit on a second
+  // Escape. A text field's OWN onKeyDown (onTextFieldKeyDown) stops
+  // propagation on Escape, so this window handler only ever sees Escape when
+  // no text field is focused — closeWithCommit's own commits are then no-ops
+  // (the field-level handler already committed or reverted).
   useEffect(() => {
     if (!isVisible) return;
 
@@ -406,28 +265,27 @@ export function AnnotateFullscreenOverlay({
           setDetailsOpen(false);
           return;
         }
-        onClose();
+        closeWithCommitRef.current();
         return;
       }
       if (typing) return;
 
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSaveRef.current();
-      } else if (e.key >= '1' && e.key <= '5') {
+      if (e.key >= '1' && e.key <= '5') {
         handleRatingChangeRef.current(parseInt(e.key, 10));
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isVisible, onClose, detailsOpen]);
+  }, [isVisible, detailsOpen]);
 
+  // T10610 § B.1/D3: rating persists on its OWN gesture now — no more
+  // create-mode "manually edited" tracking (playProgress's `rated` is
+  // unconditionally true; see playProgress.js). The container's clean-check
+  // (constraint 6) makes a re-tap of the already-selected rating a no-op.
   const handleRatingChange = (newRating) => {
-    // T9830: rating no longer flips a create-clip default — it is descriptive
-    // metadata now. Just record it (and the quest-progress side effect).
     setRating(newRating);
-    setIsRatingManuallyEdited(true); // T10520: feeds playProgress's `rated` in create mode
+    onUpdateClip(existingClip.id, { rating: newRating });
     maybeRecordRatedAndTagged(newRating, selectedTags);
   };
   handleRatingChangeRef.current = handleRatingChange;
@@ -437,183 +295,50 @@ export function AnnotateFullscreenOverlay({
       ? selectedTags.filter((t) => t !== tagName)
       : [...selectedTags, tagName];
     setSelectedTags(newTags);
+    onUpdateClip(existingClip.id, { tags: newTags });
     maybeRecordRatedAndTagged(rating, newTags);
   };
 
   const handleNameChange = (e) => {
-    setClipName(e.target.value);
-    setIsNameManuallyEdited(true);
+    setClipName(e.target.value); // local echo only — commitName below writes
   };
 
-  // T9830: `createProjectIntent` is the create-mode Save outcome chosen at click
-  // time — `true` from "Create an editable clip", `false`/undefined from
-  // "Save play" (and from the Enter shortcut, which defaults to the no-draft
-  // save-play-only outcome). Edit mode ignores it and keeps the clip's existing
-  // `createProject` (autoProjectId) — its "Create clip" affordance is separate.
-  const handleSave = async (createProjectIntent) => {
-    // T9830: in-flight guard — a second Save while the first is still awaiting
-    // its round trip is a no-op (double-click / Enter-during-save safety). The
-    // ref is set synchronously so the second call bails BEFORE it can fire a
-    // duplicate create or leave an orphan region. Returns the same `false` a
-    // failed save returns, so no caller mistakes it for a fresh success.
-    if (saveInFlightRef.current) return { saved: false, projectId: null };
-    saveInFlightRef.current = true;
-    try {
-    // T10290: "Save and Frame" passes createProjectIntent=true in BOTH modes so
-    // it always lands a clip to open in Framing. In edit mode the plain "Update
-    // play" gesture passes no intent and keeps the clip's existing project state
-    // (createProject === !!autoProjectId); "Save and Frame" forces a project even
-    // on a play that had none. Create mode is unchanged — its two footer buttons
-    // ("Save play" / "Save and Frame") pass their explicit intent straight in.
-    const saveCreateProject = isEditMode
-      ? (createProjectIntent === true || createProject)
-      : createProjectIntent === true;
-    // T8140: this open ended in a save ATTEMPT — suppress the abandonment
-    // beacon. Set synchronously (not after the await below) since the beacon's
-    // own cleanup can fire on the very next render (e.g. a rerender that flips
-    // isVisible before the save promise settles).
-    savedThisOpenRef.current = true;
-    // T7540: auto-commit any teammate text typed but not Enter-committed (same
-    // effect as pressing Enter) so a pending tag never dead-ends Save. Teammates
-    // are Team-layer only, so only commit when the clip is on the Team layer.
-    // commitPendingTeammateText returns the resulting array synchronously — use
-    // it directly for the payload (setState wouldn't apply within this call).
-    const finalTeammates = myAthlete
-      ? taggedTeammates
-      : commitPendingTeammateText(taggedTeammates);
-    if (finalTeammates !== taggedTeammates) {
-      setTaggedTeammates(finalTeammates);
-    }
-    // T8140: persist the typed name if edited; otherwise let the backend derive
-    // from tags/notes (name '') — except a truly nameless new clip keeps the
-    // "Play N" default so a one-tap save still lands a friendly name.
-    const autoGenName = generateClipName(rating, selectedTags, notes);
-    const nameToSave = isNameManuallyEdited ? clipName : (autoGenName ? '' : defaultClipName);
-    const clipDuration = scrubEndTime - scrubStartTime;
-    // T8600 §2.8: capture the create/update promise so the Focus mid-edit
-    // prompt's "Save & open Focus" can await it before navigating.
-    let savePromise;
-    if (isEditMode) {
-      savePromise = onUpdateClip(existingClip.id, {
-        startTime: scrubStartTime,
-        endTime: scrubEndTime,
-        rating,
-        tags: selectedTags,
-        name: nameToSave,
-        notes,
-        tagged_teammates: finalTeammates,
-        my_athlete: myAthlete,
-        createProject: saveCreateProject,
-      });
-    } else {
-      const clipData = {
-        startTime: scrubStartTime,
-        duration: clipDuration,
-        rating,
-        tags: selectedTags,
-        name: nameToSave,
-        notes,
-        tagged_teammates: finalTeammates,
-        my_athlete: myAthlete,
-        createProject: saveCreateProject,
-      };
-      savePromise = onCreateClip(clipData);
-    }
-    // T9630: derive Unsaved/Saving/Saved from the REAL persistence outcome —
-    // wait for the save to actually land before claiming success. T10240: the
-    // create/update paths now resolve { saveOk, projectId }; older callers/tests
-    // resolve a bare boolean/undefined. Normalize both: only an explicit
-    // saveOk === false (or a bare `false`) is a failure — show the error state,
-    // leave every field exactly as the user left it, and do NOT close or resume
-    // (a failure must never look identical to a success). projectId is the id of
-    // a project created by THIS save (null otherwise), so "Save and Frame" can
-    // navigate into Framing with it.
-    setSaveStatus('saving');
-    let result;
-    try {
-      result = await savePromise;
-    } catch (err) {
-      console.error('[AnnotateFullscreenOverlay] save threw', err);
-      result = { saveOk: false, projectId: null };
-    }
-    const saveOk = (result && typeof result === 'object')
-      ? result.saveOk !== false
-      : result !== false;
-    const createdProjectId = (result && typeof result === 'object')
-      ? (result.projectId ?? null)
-      : null;
-    if (!saveOk) {
-      setSaveStatus('error');
-      return { saved: false, projectId: null };
-    }
-    setSaveStatus('saved');
-    // T10290: every layout now CLOSES the editor on a successful save (the
-    // desktop strip's old stay-open-and-rehydrate-into-edit special case is
-    // gone — "Clicking save should close down the edit mode"). The failed-save
-    // path above already returned without closing, so the form stays open with
-    // the user's edits on failure. No form reset is needed here: the component
-    // unmounts when the parent stops rendering it after onResume closes.
-    onResume();
-    // T10240: hand back the project id created by this save (falling back to an
-    // already-linked project in edit mode) so "Save and Frame" can open Framing.
-    return { saved: true, projectId: createdProjectId ?? existingClip?.autoProjectId ?? null };
-    } finally {
-      // T9830: release the in-flight guard on every exit (success, failure,
-      // throw) so the next real Save gesture can proceed.
-      saveInFlightRef.current = false;
-    }
-  };
-  handleSaveRef.current = handleSave;
+  // T10610 § B.1: commit-on-blur/Enter, no-op when the draft already matches
+  // the stored value (the container's own clean-check makes this redundant
+  // for correctness, but skips a wasted function call for a stray focus+blur).
+  const commitName = useCallback(() => {
+    if (clipName !== (existingClip.name || '')) onUpdateClip(existingClip.id, { name: clipName });
+  }, [clipName, existingClip.id, existingClip.name, onUpdateClip]);
 
-  // T8730: real unsaved-changes detection for the strip's Focus button. Compares
-  // the values handleSave WOULD persist (edit-mode payload, L344-354) against the
-  // loaded clip, so the false-positive "Save this play first?" dialog is gone when
-  // nothing changed. Conservative by design: any field diff — or a teammate typed
-  // but not yet Enter-committed — counts as dirty, because a false NEGATIVE would
-  // silently discard real edits when navigating to Focus. Called on click (not in
-  // render) so the hasUncommittedTeammateText() read reflects the live input.
-  const hasUnsavedEdits = () => {
-    if (!existingClip) return false;
-    const sortedEq = (a, b) =>
-      a.length === b.length &&
-      JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
-    // Mirror handleSave's name logic: what would actually be saved, not the raw
-    // input (an auto-generated display name saves as '' and must not read dirty).
-    const autoGenName = generateClipName(rating, selectedTags, notes);
-    const nameToSave = isNameManuallyEdited ? clipName : (autoGenName ? '' : defaultClipName);
-    return (
-      rating !== (existingClip.rating || DEFAULT_RATING) ||
-      scrubStartTime !== existingClip.startTime ||
-      scrubEndTime !== existingClip.endTime ||
-      notes !== (existingClip.notes || '') ||
-      myAthlete !== (existingClip.my_athlete ?? true) ||
-      createProject !== !!existingClip.autoProjectId ||
-      nameToSave !== (existingClip.name || '') ||
-      !sortedEq(selectedTags, existingClip.tags || []) ||
-      !sortedEq(taggedTeammates, existingClip.tagged_teammates || []) ||
-      (!myAthlete && hasUncommittedTeammateText())
-    );
-  };
+  const commitNotes = useCallback(() => {
+    if (notes !== (existingClip.notes || '')) onUpdateClip(existingClip.id, { notes });
+  }, [notes, existingClip.id, existingClip.notes, onUpdateClip]);
+
+  // T10610 § B.4: the ONE close path that commits any dirty text field first.
+  // Wired at every close site (X buttons, Done, the window Escape branch,
+  // keepMarkingCta) — see design doc § B.4 for why an explicit call is still
+  // needed even though a plain click already blurs the focused input.
+  const closeWithCommit = useCallback(() => {
+    commitName();
+    commitNotes();
+    onClose();
+  }, [commitName, commitNotes, onClose]);
+  closeWithCommitRef.current = closeWithCommit;
+
+  const handleTrimCommit = useCallback((finalStart, finalEnd) => {
+    setScrubStartTime(finalStart);
+    setScrubEndTime(finalEnd);
+    onUpdateClip(existingClip.id, { startTime: finalStart, endTime: finalEnd });
+  }, [existingClip.id, onUpdateClip]);
 
   if (!isVisible) return null;
 
-  // T9630: the Unsaved/Saving/Saved indicator — Saving/error come straight
-  // from the last Save gesture's real outcome; a genuine unsaved edit ALWAYS
-  // wins over a stale 'saved' from an earlier save (hasUnsavedEdits() is
-  // re-derived from current field state every render, so this can never claim
-  // "Saved" while the form no longer matches what was persisted). Create mode
-  // has no persisted baseline to diff against — it only ever shows
-  // saving/saved/error, never a standing "Unsaved" (the T8140 reassurance line
-  // already covers that a fresh form isn't yet saved).
-  const displayStatus = saveStatus === 'saving'
-    ? 'saving'
-    : saveStatus === 'error'
-      ? 'error'
-      : (isEditMode && hasUnsavedEdits())
-        ? 'unsaved'
-        : saveStatus === 'saved'
-          ? 'saved'
-          : null;
+  // T10610 § C.5: writeStatus comes straight from the container's own
+  // per-gesture write outcome — no more local Unsaved/hasUnsavedEdits
+  // derivation (nothing is ever "unsaved" once every control autosaves).
+  const displayStatus = (writeStatus === 'saving' || writeStatus === 'saved' || writeStatus === 'error')
+    ? writeStatus
+    : null;
 
   // T8600: shared disclosure label — surfaces existing tag/note content so an
   // edit-mode user can see there's hidden content before opening it.
@@ -630,15 +355,12 @@ export function AnnotateFullscreenOverlay({
   // loose "Clip created" text the strip's action row used to carry.
   const progress = getPlayProgress({
     rating,
-    isEditMode,
-    isRatingManuallyEdited,
     clipName,
-    isNameManuallyEdited,
-    loadedName: isEditMode ? (existingClip.name || '') : null,
-    loadedHasCustomName: isEditMode ? !!existingClip.hasCustomName : false,
+    loadedName: existingClip.name || '',
+    loadedHasCustomName: !!existingClip.hasCustomName,
     notes,
-    hasProject: !!existingClip?.autoProjectId,
-    creating: focusPending || clipCreating,
+    hasProject: !!existingClip.autoProjectId,
+    creating: clipCreating,
   });
   // Each undone badge jumps to the control that completes it. T10520: the
   // rated badge is the exception — it opens its own popup rating picker
@@ -656,17 +378,10 @@ export function AnnotateFullscreenOverlay({
     // popup), which mounts on this same gesture — focus it once it exists.
     requestAnimationFrame(() => document.getElementById('clip-notes')?.focus());
   };
-  // The 5-star nudge. Edit mode: the same partial `{ createProject: true }`
-  // update the main screen's Frame clip button sends (handleFrameClip), so the
-  // editor stays open and the badge flips to "Clip created" in place; any
-  // unsaved field edits stay in the form for Update play. Create mode: there is
-  // no play yet, so it is the explicit save-and-create outcome (handleSave(true)),
-  // which closes the editor like every other create.
+  // The 5-star nudge: the same partial `{ createProject: true }` update the
+  // main screen's Frame clip button sends — the editor stays open and the
+  // badge flips to "Clip created" in place.
   const handleCreateClipFromBadge = async () => {
-    if (!isEditMode) {
-      handleSave(true);
-      return;
-    }
     if (clipCreating || existingClip.autoProjectId) return;
     setClipCreating(true);
     try {
@@ -683,7 +398,7 @@ export function AnnotateFullscreenOverlay({
       // same-play identity churn a surgical update causes (updateClipRegion
       // spreads the region on every write), matching the reset effect's own
       // samePlay rule just above.
-      key={existingClip?.id ?? 'create'}
+      key={existingClip.id}
       progress={progress}
       size={size}
       className={className}
@@ -694,7 +409,7 @@ export function AnnotateFullscreenOverlay({
       onName={jumpToName}
       onNote={jumpToNote}
       onCreateClip={progress.clip === CLIP_BADGE.NUDGE ? handleCreateClipFromBadge : undefined}
-      createClipTitle={isEditMode ? ANNOTATE.CREATE_CLIP_NUDGE_HINT : ANNOTATE.SAVE_AND_CREATE_CLIP_NUDGE_HINT}
+      createClipTitle={ANNOTATE.CREATE_CLIP_NUDGE_HINT}
     />
   );
 
@@ -703,16 +418,16 @@ export function AnnotateFullscreenOverlay({
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h3 className={`${layout === 'inline' ? 'text-sm' : 'text-lg'} font-semibold text-white`}>
-            {isEditMode ? ANNOTATE.EDIT_PLAY : ANNOTATE.MARK_PLAY}
+            {ANNOTATE.EDIT_PLAY}
           </h3>
           <div className="flex items-center gap-2">
             {layout === 'overlay' && (
               <DockPositionSelector position={dockPosition} onPositionChange={handleDockChange} />
             )}
             <button
-              onClick={onClose}
+              onClick={closeWithCommit}
               className="p-1 hover:bg-gray-700 rounded transition-colors"
-              title="Cancel (Esc)"
+              title="Close (Esc)"
             >
               <X size={20} className="text-gray-400" />
             </button>
@@ -721,12 +436,6 @@ export function AnnotateFullscreenOverlay({
 
         {/* T8892: which camera this play is cut from (angle-active only). */}
         <CutFromAngleChip name={activeSourceName} />
-
-        {/* T8140: reassurance so a first-time user knows the defaults aren't
-            permanent — lowers the perceived cost of a one-tap save. Create only. */}
-        {!isEditMode && (
-          <p className="text-xs text-gray-400 mb-3 -mt-2">You can change all of this later.</p>
-        )}
 
         {/* Clip scrub region - visual timeline for selecting start/end */}
         <ClipScrubRegion
@@ -739,27 +448,22 @@ export function AnnotateFullscreenOverlay({
           onEndTimeChange={setScrubEndTime}
           onSeek={onSeek}
           onDragStart={() => onScrubDragChange?.(true)}
-          onDragEnd={() => onScrubDragChange?.(false)}
+          onDragEnd={(finalStart, finalEnd) => { onScrubDragChange?.(false); handleTrimCommit(finalStart, finalEnd); }}
           videoController={videoController}
           mediaBounds={mediaBounds}
           clipEditorActive
         />
 
-        {/* Clip Name - always rendered to keep panel height stable. T9830: Name
-            is now the first control below the scrub (rating/tags/notes moved into
-            the Optional details disclosure), matching the two-outcome schematic. */}
+        {/* Clip Name — T10610 § B.1/B.2: local-echo draft, commit on blur/Enter only. */}
         <div className="mb-4">
-          <label className="block text-gray-400 text-sm mb-2">
-            {ANNOTATE.CLIP_NAME}
-            {!isNameManuallyEdited && selectedTags.length > 0 && (
-              <span className="text-gray-500 ml-2">(auto-generated)</span>
-            )}
-          </label>
+          <label className="block text-gray-400 text-sm mb-2">{ANNOTATE.CLIP_NAME}</label>
           <input
             ref={nameInputRef}
             type="text"
             value={clipName}
             onChange={handleNameChange}
+            onBlur={commitName}
+            onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
             placeholder="Enter clip name..."
             className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
@@ -774,16 +478,15 @@ export function AnnotateFullscreenOverlay({
           <LayerSegmentedControl
             size={isMobile ? 'md' : 'sm'}
             value={myAthlete}
-            disabled={!!existingClip?.shared_by}
-            disabledReason={existingClip?.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
+            disabled={!!existingClip.shared_by}
+            disabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
             onChange={(mine) => {
               setMyAthlete(mine);
-              // T5725: switching TO My Athlete clears teammate tags — teammates
-              // are Team-layer-only, so a My Athlete clip must never carry them.
-              // Persisted on Save; visible now because the Teammates block hides.
-              // T9830: no create-clip auto-flip here anymore — the layer no longer
-              // drives a Save default.
+              // T5725: switching TO My Athlete clears teammate tags in the SAME
+              // gesture — teammates are Team-layer-only, so a My Athlete clip
+              // must never carry them.
               if (mine) setTaggedTeammates([]);
+              onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
             }}
             className="w-full"
           />
@@ -797,7 +500,7 @@ export function AnnotateFullscreenOverlay({
             <label className="block text-gray-400 text-sm mb-2">Teammates</label>
             <TeammateTagInput
               teammates={taggedTeammates}
-              onChange={setTaggedTeammates}
+              onChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
               suggestions={teammateSuggestions}
             />
           </div>
@@ -837,6 +540,8 @@ export function AnnotateFullscreenOverlay({
               onSetSport={handleSetSport}
               notes={notes}
               onNotesChange={(e) => setNotes(e.target.value)}
+              onNotesCommit={commitNotes}
+              storedNotes={existingClip.notes}
             />
           </div>
         )}
@@ -844,15 +549,8 @@ export function AnnotateFullscreenOverlay({
     </>
   );
 
-  // T9830/T10290: the always-visible, always-enabled save outcome ("Save play" —
-  // saves the marked play only, no draft/render/credits). T10310: "Save and
-  // Frame" moved out to the main screen's Frame Clip button; this editor now
-  // only ever saves. Replaces T9830's "Create an editable clip".
-  const saving = saveStatus === 'saving';
-
-  // T8140: Save/Cancel live in a pinned footer OUTSIDE the scroll area so Save is
-  // always visible without scrolling (390x844 mobile) — the body scrolls, the
-  // footer does not. Shared by the inline and overlay layouts.
+  // T10610 § D.1/D.2: Delete play replaces Cancel everywhere; Done replaces
+  // Save/Update (closeWithCommit commits any dirty text field first).
   const actionsFooter = (
     <div>
       {/* T10410: play-progress badges above the buttons (the formBody layouts'
@@ -861,35 +559,23 @@ export function AnnotateFullscreenOverlay({
       {displayStatus && (
         <div className="mb-1.5"><SaveStatusBadge status={displayStatus} /></div>
       )}
-      {/* T10310 (2026-09-18 user request): "Save and Frame" moved out of the
-          editor onto the main screen's split [Edit Play]/[Frame Clip] row —
-          this footer is now just the plain save + Cancel. The primary is
-          "Save play" (create) / "Update play" (edit). */}
-      <>
-        <button
-          onClick={() => handleSave(isEditMode ? undefined : false)}
-          disabled={saving}
-          className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium rounded-lg transition-colors"
-        >
-          {isEditMode ? ANNOTATE.UPDATE_PLAY : ANNOTATE.SAVE_PLAY}
-        </button>
-        <button
-          onClick={onClose}
-          className="w-full mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
-        >
-          Cancel
-        </button>
-      </>
+      <DeletePlayButton hasProject={!!existingClip.autoProjectId} onDelete={() => onDeleteClip(existingClip.id)} />
+      <button
+        onClick={closeWithCommit}
+        className="w-full mt-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+      >
+        {ANNOTATE.DONE}
+      </button>
     </div>
   );
 
-  // T9330: the stage-aware primary CTA (edit mode, project exists) — full-width,
-  // driven by getClipStage. SHARED by the desktop strip AND the mobile edit
-  // sheet (layout==='inline'), so both surfaces get one label/target. Unsaved
-  // edits route through the T8730 confirm-then-save-then-navigate dialog
-  // (focusConfirmDialog below), which every layout that renders this CTA must
-  // also render.
-  const stageCta = (isEditMode && existingClip?.autoProjectId && clipStage) ? (
+  // T9330/T10610 § C.4: the stage-aware primary CTA (project exists) —
+  // full-width, driven by getClipStage. SHARED by the desktop strip AND the
+  // mobile edit sheet (layout==='inline'), so both surfaces get one
+  // label/target. Awaits the region's write chain before navigating — a
+  // rejected/in-flight tail means "do not navigate", not a confirm dialog
+  // (there is nothing unsaved to confirm anymore).
+  const stageCta = (existingClip.autoProjectId && clipStage) ? (
     <Button
       variant="cyan"
       size="lg"
@@ -899,10 +585,10 @@ export function AnnotateFullscreenOverlay({
       // generic "open the clip" hint.
       title={clipStage.stage === CLIP_STAGE.FOCUS ? ANNOTATE.FRAME_THIS_CLIP_HINT : `Open the clip: ${clipStage.label}`}
       className="w-full coarse-pointer:min-h-[44px]"
-      onClick={() => {
-        if (hasUnsavedEdits()) {
-          setFocusConfirmOpen(true);
-        } else if (clipStage.action === 'overlay') {
+      onClick={async () => {
+        const ok = onAwaitWrites ? await onAwaitWrites(existingClip.id) : true;
+        if (!ok) return;
+        if (clipStage.action === 'overlay') {
           onOpenInOverlay?.(existingClip.autoProjectId);
         } else {
           onOpenInFocus?.(existingClip.autoProjectId);
@@ -918,87 +604,24 @@ export function AnnotateFullscreenOverlay({
   // goes live once setAutoProjectId resolves (pure re-render). Desktop strip
   // only: mobile create closes on save, so the sheet is never open during that
   // window (focusPending stays false).
-  const stagePendingCta = (isEditMode && !existingClip?.autoProjectId && focusPending) ? (
-    <div>
-      <Button
-        variant="cyan"
-        size="lg"
-        icon={Crop}
-        disabled
-        title={ANNOTATE.FRAME_THIS_CLIP_HINT}
-        className="w-full coarse-pointer:min-h-[44px]"
-      >
-        {ANNOTATE.FRAME_THIS_CLIP}
-      </Button>
-      {/* T9900: the button is disabled only while the clip's project is being created —
-          say so, so the brief pause reads as "preparing", not "broken" (E09). */}
-      <p data-testid="clip-preparing-note" className="mt-1.5 text-xs text-center text-gray-400">
-        {ANNOTATE.PREPARING_CLIP}
-      </p>
-    </div>
-  ) : null;
-
   // T9580 (N41): the first-clip invitation's dismiss secondary — "Keep marking
-  // plays". Paired with the FOCUS-stage primary CTA (live "Frame this clip" once
-  // the project lands, or the disabled pending variant while it is being
-  // created), so the invitation reads as the intended two-choice prompt rather
-  // than a single button. Wired to onClose (-> closeOverlay, a pure EDITING->
-  // SELECTED transition with NO seek), so dismissing preserves the playhead and
-  // drops the user straight back to marking. Only at the FOCUS moment: once a
-  // clip has a working video the single stage CTA suffices.
-  const showFocusInvitation =
-    isEditMode && (
-      (existingClip?.autoProjectId && clipStage?.stage === CLIP_STAGE.FOCUS) ||
-      (!existingClip?.autoProjectId && focusPending)
-    );
+  // plays". Paired with the FOCUS-stage primary CTA ("Frame this clip"), so the
+  // invitation reads as the intended two-choice prompt rather than a single
+  // button. Routes through closeWithCommit (a pure EDITING->SELECTED transition
+  // with no seek), so dismissing preserves the playhead and commits any dirty
+  // text field. Only at the FOCUS moment: once a clip has a working video the
+  // single stage CTA suffices.
+  const showFocusInvitation = existingClip.autoProjectId && clipStage?.stage === CLIP_STAGE.FOCUS;
   const keepMarkingCta = showFocusInvitation ? (
     <Button
       variant="ghost"
       size="lg"
       className="w-full coarse-pointer:min-h-[44px]"
-      onClick={onClose}
+      onClick={closeWithCommit}
     >
       {ANNOTATE.KEEP_MARKING_PLAYS}
     </Button>
   ) : null;
-
-  // T8600 §2.8 / T9330: navigating mid-edit is never a silent discard — save
-  // first, then navigate. Copy is STAGE-AWARE ("Save & open Framing" /
-  // "Spotlight" / "Final" / "Published"); the stale "closes the Annotate editor"
-  // line is gone (the editor stays open). openStageName strips the CTA verb
-  // ("Apply Framing" -> "Framing", "View Final" -> "Final"). Rendered by every
-  // layout that shows stageCta (strip + mobile inline edit).
-  const focusConfirmDialog = (
-    <ConfirmationDialog
-      isOpen={focusConfirmOpen}
-      title="Save this play first?"
-      message={`We'll save your changes first, then open ${openStageName}.`}
-      onClose={() => setFocusConfirmOpen(false)}
-      impressionKey="focus_while_editing_play"
-      buttons={[
-        { label: 'Cancel', variant: 'secondary', onClick: () => setFocusConfirmOpen(false) },
-        {
-          label: `Save & open ${openStageName}`,
-          variant: 'primary',
-          onClick: async () => {
-            setFocusConfirmOpen(false);
-            // T9630: a failed save must not navigate away — that would discard
-            // the failure silently and leave the user thinking it saved.
-            // T10240: handleSave now resolves { saved, projectId }; destructure
-            // the boolean (an object is always truthy, so `if (!saved)` on the
-            // object would never catch a failure).
-            const { saved } = await handleSave();
-            if (!saved) return;
-            if (clipStage?.action === 'overlay') {
-              onOpenInOverlay?.(existingClip.autoProjectId);
-            } else {
-              onOpenInFocus?.(existingClip.autoProjectId);
-            }
-          },
-        },
-      ]}
-    />
-  );
 
   if (layout === 'strip') {
     // T8600 C2: the desktop under-canvas editor. Entirely separate markup
@@ -1007,42 +630,32 @@ export function AnnotateFullscreenOverlay({
     // with the Layer/Focus row rendered OUTSIDE the tinted card as its own
     // sibling (this component owns myAthlete state, so the button row lives
     // here rather than being lifted to a state-less parent).
-    const clipDisplayName = existingClip
-      ? (existingClip.name || generateClipName(existingClip.rating, existingClip.tags, existingClip.notes) || 'this play')
-      : '';
-    // T8960 item 2: the name is the first control in BOTH modes. Edit mode shows
-    // the clip's name; create mode shows the auto/default name until renamed.
-    const headerName = isEditMode ? clipDisplayName : (clipName || defaultClipName);
+    // T10610: always the EDIT header now — there is no create mode left.
+    const headerName = existingClip.name || generateClipName(existingClip.rating, existingClip.tags, existingClip.notes) || 'this play';
     return (
       <>
         <div
           data-testid="annotate-editor-strip"
-          className={`rounded-lg border ${isEditMode ? 'bg-yellow-950/20 border-yellow-800/40' : 'bg-green-950/20 border-green-800/40'}`}
+          className="rounded-lg border bg-yellow-950/20 border-yellow-800/40"
         >
           {/* Header row 1 — T8960 items 2+5: the name is the FIRST control in
               BOTH modes (create shows the default/auto name until renamed; the
               pencil opens an inline input — the SAME affordance edit mode uses),
               the My Athlete | Team layer control sits on this top line, then the
               Close button. There is no separate name field in the controls row. */}
-          <div className={`flex items-center justify-between gap-3 px-4 py-2.5 border-b ${isEditMode ? 'border-yellow-800/30' : 'border-green-800/30'}`}>
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-yellow-800/30">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               {isEditingName ? (
                 <>
-                  <Pencil size={16} className={`shrink-0 ${isEditMode ? 'text-yellow-400' : 'text-green-400'}`} />
+                  <Pencil size={16} className="shrink-0 text-yellow-400" />
                   <input
                     type="text"
                     value={clipName}
                     onChange={handleNameChange}
-                    onBlur={() => setIsEditingName(false)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === 'Escape') {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setIsEditingName(false);
-                      }
-                    }}
+                    onBlur={() => { commitName(); setIsEditingName(false); }}
+                    onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
                     aria-label="Clip name"
-                    placeholder={defaultClipName || 'Clip name'}
+                    placeholder="Clip name"
                     autoFocus
                     className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm
                                text-white placeholder-gray-500 focus:border-green-500 focus:outline-none"
@@ -1055,7 +668,7 @@ export function AnnotateFullscreenOverlay({
                   title={ANNOTATE.RENAME_CLIP}
                   className="flex items-center gap-2 min-w-0 group"
                 >
-                  <Pencil size={16} className={`shrink-0 ${isEditMode ? 'text-yellow-400 group-hover:text-yellow-300' : 'text-green-400 group-hover:text-green-300'}`} />
+                  <Pencil size={16} className="shrink-0 text-yellow-400 group-hover:text-yellow-300" />
                   <span className="text-sm font-semibold text-white truncate group-hover:underline">
                     {headerName}
                   </span>
@@ -1071,35 +684,24 @@ export function AnnotateFullscreenOverlay({
                 value={myAthlete}
                 onChange={(mine) => {
                   setMyAthlete(mine);
-                  // T5725: switching TO My Athlete clears teammate tags.
-                  // T9830: no create-clip auto-flip here anymore.
                   if (mine) setTaggedTeammates([]);
+                  onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
                 }}
-                disabled={!!existingClip?.shared_by}
-                disabledReason={existingClip?.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
+                disabled={!!existingClip.shared_by}
+                disabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
               />
-              <button onClick={onClose} title="Cancel (Esc)" className="p-1.5 hover:bg-gray-700/50 rounded transition-colors shrink-0">
+              <button onClick={closeWithCommit} title="Close (Esc)" className="p-1.5 hover:bg-gray-700/50 rounded transition-colors shrink-0">
                 <X size={18} className="text-gray-400" />
               </button>
             </div>
           </div>
 
-          {/* Header row 2 — T8960 item 3: the "+ Adding new play" TITLE, centered
-              on its own row (create mode only; edit mode's name already says what
-              is being edited). */}
-          {!isEditMode ? (
-            <div className="px-4 pt-2 flex items-center justify-center gap-1.5">
-              <Plus size={16} className="text-green-400 shrink-0" />
-              <span className="text-sm font-semibold text-white">{ANNOTATE.MARKING_PLAY_TITLE}</span>
-            </div>
-          ) : (
-            // T9330: symmetric edit-mode title — the editor now stays open after a
-            // create and lands here, so the surface names what it is doing.
-            <div className="px-4 pt-2 flex items-center justify-center gap-1.5">
-              <Pencil size={14} className="text-yellow-400 shrink-0" />
-              <span className="text-sm font-semibold text-white">{ANNOTATE.EDIT_PLAY}</span>
-            </div>
-          )}
+          {/* Header row 2 — symmetric "Edit play" title (T9330: the editor now
+              stays open after a create and always lands here). */}
+          <div className="px-4 pt-2 flex items-center justify-center gap-1.5">
+            <Pencil size={14} className="text-yellow-400 shrink-0" />
+            <span className="text-sm font-semibold text-white">{ANNOTATE.EDIT_PLAY}</span>
+          </div>
 
           {/* T8892: which camera this play is cut from (angle-active only). */}
           {activeSourceName && (
@@ -1120,23 +722,18 @@ export function AnnotateFullscreenOverlay({
               onEndTimeChange={setScrubEndTime}
               onSeek={onSeek}
               onDragStart={() => onScrubDragChange?.(true)}
-              onDragEnd={() => onScrubDragChange?.(false)}
+              onDragEnd={(finalStart, finalEnd) => { onScrubDragChange?.(false); handleTrimCommit(finalStart, finalEnd); }}
               videoController={videoController}
           mediaBounds={mediaBounds}
               clipEditorActive
             />
           </div>
 
-          {/* Controls row — T9830: rating + sport moved into the details
-              disclosure below. T10310 (2026-09-18 user request): "Create clip"
-              and "Save and Frame" both moved out of the editor onto the main
-              screen's split [Edit Play]/[Frame Clip] row — this row is now
-              just Rate and Tag + Save + Cancel (T10410 moved the "Clip created"
-              status up to the header line as the clip badge). */}
+          {/* Controls row — T10610: rating + sport live in the details
+              disclosure below; Delete play + Done replace Save + Cancel
+              (T10410 moved the "Clip created" status up to the header line as
+              the clip badge). */}
           <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
-            {/* T10310: "Rate and Tag" moved to the far left, swapped with
-                "Create clip" (now in the right-hand action group) per user
-                request. */}
             <button
               type="button"
               onClick={() => setDetailsOpen(o => !o)}
@@ -1151,25 +748,25 @@ export function AnnotateFullscreenOverlay({
 
             {!myAthlete && (
               <div className="min-w-[180px] max-w-xs flex-1">
-                <TeammateTagInput teammates={taggedTeammates} onChange={setTaggedTeammates} suggestions={teammateSuggestions} />
+                <TeammateTagInput
+                  teammates={taggedTeammates}
+                  onChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
+                  suggestions={teammateSuggestions}
+                />
               </div>
             )}
 
             <div className="ml-auto flex items-center gap-2 shrink-0">
               {/* T10410: the "Clip created" text that sat here is now the clip
                   badge on the header line (renderProgressBadges). */}
+              <div className="w-32">
+                <DeletePlayButton hasProject={!!existingClip.autoProjectId} onDelete={() => onDeleteClip(existingClip.id)} />
+              </div>
               <button
-                onClick={() => handleSave(isEditMode ? undefined : false)}
-                disabled={saving}
-                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded transition-colors"
+                onClick={closeWithCommit}
+                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
               >
-                {isEditMode ? ANNOTATE.UPDATE_PLAY : ANNOTATE.SAVE_PLAY}
-              </button>
-              <button
-                onClick={onClose}
-                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded transition-colors"
-              >
-                Cancel
+                {ANNOTATE.DONE}
               </button>
             </div>
           </div>
@@ -1187,7 +784,7 @@ export function AnnotateFullscreenOverlay({
               the toggle button itself, no separate Done/X. T9830: rating + the
               (de-ambered) sport prompt now live here, via the shared DetailsFields. */}
           {detailsOpen && (
-            <div className={`border-t px-4 py-3 ${isEditMode ? 'border-yellow-800/30' : 'border-green-800/30'}`}>
+            <div className="border-t px-4 py-3 border-yellow-800/30">
               <DetailsFields
                 tagSet={tagSet}
                 sport={sport}
@@ -1197,18 +794,17 @@ export function AnnotateFullscreenOverlay({
                 onSetSport={handleSetSport}
                 notes={notes}
                 onNotesChange={(e) => setNotes(e.target.value)}
+                onNotesCommit={commitNotes}
+                storedNotes={existingClip.notes}
               />
             </div>
           )}
         </div>
 
-        {/* T9330: the full-width stage-aware primary CTA + the create-in-flight
-            disabled variant (extracted so the mobile inline edit sheet reuses the
-            exact same button + confirm-dialog logic). */}
+        {/* T9330: the full-width stage-aware primary CTA (extracted so the
+            mobile inline edit sheet reuses the exact same button). */}
         {stageCta && <div className="mt-5">{stageCta}</div>}
-        {stagePendingCta && <div className="mt-5">{stagePendingCta}</div>}
         {keepMarkingCta && <div className="mt-2">{keepMarkingCta}</div>}
-        {focusConfirmDialog}
       </>
     );
   }
@@ -1230,7 +826,7 @@ export function AnnotateFullscreenOverlay({
           onEndTimeChange={setScrubEndTime}
           onSeek={onSeek}
           onDragStart={() => onScrubDragChange?.(true)}
-          onDragEnd={() => onScrubDragChange?.(false)}
+          onDragEnd={(finalStart, finalEnd) => { onScrubDragChange?.(false); handleTrimCommit(finalStart, finalEnd); }}
           videoController={videoController}
           mediaBounds={mediaBounds}
           clipEditorActive
@@ -1257,21 +853,11 @@ export function AnnotateFullscreenOverlay({
             ) : null}
           </div>
           <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
-          {/* T9830/T10290: the always-visible save outcome. T10310 (2026-09-18
-              user request): "Save and Frame" moved out onto the main screen's
-              split [Edit Play]/[Frame Clip] row, so only the plain save remains
-              here. */}
+          <DeletePlayButton hasProject={!!existingClip.autoProjectId} onDelete={() => onDeleteClip(existingClip.id)} variant="icon" />
           <button
-            onClick={() => handleSave(isEditMode ? undefined : false)}
-            disabled={saving}
-            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
-          >
-            {isEditMode ? ANNOTATE.UPDATE_PLAY : ANNOTATE.SAVE_PLAY}
-          </button>
-          <button
-            onClick={onClose}
+            onClick={closeWithCommit}
             className="p-1 hover:bg-gray-700 rounded transition-colors flex-shrink-0"
-            title="Cancel (Esc)"
+            title="Close (Esc)"
           >
             <X size={18} className="text-gray-400" />
           </button>
@@ -1322,7 +908,6 @@ export function AnnotateFullscreenOverlay({
             this layout, so both inherit it. */}
         {isMobile && detailsOpen && (
           <AddDetailsPopup
-            isEditMode={isEditMode}
             tagSet={tagSet}
             sport={sport}
             positions={getPositions(sport)}
@@ -1331,12 +916,11 @@ export function AnnotateFullscreenOverlay({
             onSetSport={handleSetSport}
             notes={notes}
             onNotesChange={(e) => setNotes(e.target.value)}
+            onNotesCommit={commitNotes}
+            storedNotes={existingClip.notes}
             onDone={() => setDetailsOpen(false)}
           />
         )}
-        {/* T9330: the stage CTA above can open the T8730 save-first dialog when
-            the edit form is dirty — render it here too (was strip-only). */}
-        {focusConfirmDialog}
       </div>
     );
   }

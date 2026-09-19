@@ -1,6 +1,7 @@
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
 import { NO_SPORT } from '../constants/tagRegistry';
+import { onTextFieldKeyDown } from '../textFieldCommit';
 
 /**
  * DetailsFields (T9830) — the shared body of the "Optional details" disclosure:
@@ -31,6 +32,12 @@ export function DetailsFields({
   onSetSport,
   notes,
   onNotesChange,
+  // T10610 § B.2: commits the notes draft on blur (a per-gesture write, never
+  // per-keystroke). storedNotes is the persisted value onTextFieldKeyDown
+  // reverts to on Escape — the one Escape rule holds here too (AddDetailsPopup
+  // is a named v2 test site).
+  onNotesCommit,
+  storedNotes = '',
   notesRows = 2,
 }) {
   return (
@@ -59,6 +66,12 @@ export function DetailsFields({
           id="clip-notes"
           value={notes}
           onChange={onNotesChange}
+          onBlur={onNotesCommit}
+          onKeyDown={(e) => onTextFieldKeyDown(e, {
+            draftSetter: (value) => onNotesChange({ target: { value } }),
+            storedValue: storedNotes,
+            allowEnterCommit: false,
+          })}
           placeholder="Add a note about this clip..."
           className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500 resize-none"
           rows={notesRows}

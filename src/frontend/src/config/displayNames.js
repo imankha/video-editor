@@ -54,6 +54,10 @@ export const ANNOTATE = {
   DELETE_PLAY: 'Delete play',              // N14 — delete a bare play marker
   RENAME_CLIP: 'Rename clip',              // N15 — rename action
   CLIP_NAME: 'Clip name',                  // N15 — name field
+  // T10610: the play editor's sole close affordance now that there is no
+  // Save/Update button — commits any dirty text field first (closeWithCommit),
+  // then closes. Nothing is ever discarded.
+  DONE: 'Done',
   PREVIEW_PLAYS: 'Preview plays',          // N26 — playback-all button (was "Playback Annotations")
   PREVIEW_CLIP: 'Preview clip',            // N26 — per-clip preview (unchanged)
   LAYER_LABEL: 'Play category',            // N28 — the control formerly "Clip layer"/"Layer"

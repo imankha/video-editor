@@ -26,7 +26,6 @@ import { ANNOTATE } from '../../../config/displayNames';
  * to reach it — the badge is the one place rating is set now, on every layout).
  */
 export function AddDetailsPopup({
-  isEditMode,
   tagSet,
   sport,
   positions,
@@ -35,8 +34,16 @@ export function AddDetailsPopup({
   onSetSport,
   notes,
   onNotesChange,
+  onNotesCommit,
+  storedNotes = '',
   onDone,
 }) {
+  // T10610 § B.2: the textarea unmounts without blurring when this popup
+  // closes, so Done must commit explicitly (same reasoning as closeWithCommit).
+  const handleDone = () => {
+    onNotesCommit?.();
+    onDone();
+  };
   return createPortal(
     <div
       className={`fixed inset-0 ${Z.MODAL} flex flex-col bg-gray-950/95`}
@@ -44,18 +51,19 @@ export function AddDetailsPopup({
       aria-modal="true"
       aria-label={ANNOTATE.DETAILS}
     >
-      <div className={`h-0.5 shrink-0 ${isEditMode ? 'bg-yellow-500' : 'bg-green-500'}`} />
+      {/* T10610: always the edit-mode accent now — there is no create mode. */}
+      <div className="h-0.5 shrink-0 bg-yellow-500" />
 
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 shrink-0">
         <h2 className="text-base font-semibold text-white">{ANNOTATE.DETAILS}</h2>
         <div className="flex items-center gap-2">
           <button
-            onClick={onDone}
+            onClick={handleDone}
             className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
           >
             Done
           </button>
-          <button onClick={onDone} title="Close" className="p-1.5 hover:bg-gray-800 rounded transition-colors">
+          <button onClick={handleDone} title="Close" className="p-1.5 hover:bg-gray-800 rounded transition-colors">
             <X size={20} className="text-gray-400" />
           </button>
         </div>
@@ -71,6 +79,8 @@ export function AddDetailsPopup({
           onSetSport={onSetSport}
           notes={notes}
           onNotesChange={onNotesChange}
+          onNotesCommit={onNotesCommit}
+          storedNotes={storedNotes}
           notesRows={4}
         />
       </div>
