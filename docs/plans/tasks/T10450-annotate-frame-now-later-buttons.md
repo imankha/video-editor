@@ -1,6 +1,6 @@
 # T10450: Split the T10310 Frame button into Frame Now / Frame Later
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-18
