@@ -884,8 +884,9 @@ export function AnnotateFullscreenOverlay({
   if (layout === 'inline') {
     // T8140: flex column = scrolling body (min-h-0 lets it shrink inside a bounded
     // flex parent — the ClipsSidePanel sidebar, the mobileFs sheet, the mobile
-    // bottom sheet) + a pinned footer that stays reachable without scrolling
-    // (T4933 short-sidebar case AND the 390x844 mobile Save-below-the-fold case).
+    // bottom sheet) + a pinned footer (Delete play + Done, T10610) that stays
+    // reachable without scrolling (T4933 short-sidebar case AND the 390x844
+    // mobile below-the-fold case).
     return (
       <div data-add-clip-form className="border-t border-gray-700 flex flex-col min-h-0 max-h-full">
         <div className="p-3 overflow-y-auto min-h-0 flex-1">{formBody}</div>
