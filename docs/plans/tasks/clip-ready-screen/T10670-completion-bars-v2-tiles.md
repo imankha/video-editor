@@ -1,6 +1,6 @@
 # T10670: Completion bars: V2 celebration tiles, headline + Saved chip, "Done for now"
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-19
@@ -100,18 +100,40 @@ in the mockup header. This task must not touch `CollectionPlayer.jsx`.
 ## Implementation
 
 ### Steps
-1. [ ] Branch `feature/T10670-completion-bars-v2-tiles`
-2. [ ] `displayNames.js`: paste section B blocks; delete `SAVE_DRAFT_CAPTION` in both; grep proves no other reader
-3. [ ] Rewrite `FocusPublishActionBar.jsx` per section C (tile anatomy, class tables, keyframes, headline row, exit link)
-4. [ ] Mirror into `OverlayPublishActionBar.jsx` per section D
-5. [ ] Update the two unit test files + the two exit tests + the two e2e specs
-6. [ ] Real-browser check at 390, 1024, 1100, 1280px: no horizontal scrollbar, one row at lg+, rows on phone, motion plays once, hover lift, keyboard order, Enter/Space
-7. [ ] Reviewer on the diff; fix; curated relevant test set green; push; Branch CI green
-8. [ ] T9590 task-file pointer + knowledge doc line; commit with `T10670:` subject prefix
+1. [x] Branch `feature/T10670-completion-bars-v2-tiles`
+2. [x] `displayNames.js`: paste section B blocks; delete `SAVE_DRAFT_CAPTION` in both; grep proves no other reader
+3. [x] Rewrite `FocusPublishActionBar.jsx` per section C (tile anatomy, class tables, keyframes, headline row, exit link)
+4. [x] Mirror into `OverlayPublishActionBar.jsx` per section D
+5. [x] Update the two unit test files + the two exit tests + the two e2e specs
+6. [x] Real-browser check at 390, 1024, 1100, 1280px: no horizontal scrollbar, one row at lg+, rows on phone, motion plays once, hover lift, keyboard order, Enter/Space
+7. [x] Reviewer on the diff; fix; curated relevant test set green; push; Branch CI green
+8. [x] T9590 task-file pointer + knowledge doc line; commit with `T10670:` subject prefix
 
 ### Progress Log
 
 **2026-09-19**: Filed from the approved design. Not started.
+
+**2026-09-19 23:32**: Implemented via container worker (`reel-task-t10670`), commit `dd843785`.
+Both action bars rewritten as tile-is-the-button celebration cards; headline + "Saved" chip;
+"Done for now" exit; displayNames.js section B pasted verbatim; `SAVE_DRAFT_CAPTION` deleted.
+52 relevant tests green, eslint clean. Reviewer APPROVED (0 blocking/0 major, 2 minor fixed).
+Live-browser evidence at 390/1024/1100/1280px in `C:\work\tasks\t10670\qa\` (8 screenshots):
+1-col @390 with footer 402px (<=420 target), 3-col no-overflow @1024/1100/1280,
+`data-tutorial-target="focus-publish"` count = 1 on Focus / 0 on Overlay, primary + exit tiles
+visible. Pushed as PR-ready branch; **Branch CI green** (frontend job; backend correctly skipped,
+layer-scoped). **Held for user test, not auto-merged** — the acceptance criteria are substantially
+visual/subjective ("more pop", primary tile visually dominant, motion feel), the same class of
+judgment call as T10620 (see WAVE.md). Manual test steps below.
+
+**User test steps** (branch `feature/T10670-completion-bars-v2-tiles`):
+1. Export a Focus framing render and an Overlay render on a test clip; open the completion preview for each.
+2. Check the headline reads "Your clip is ready" with a green "Saved" chip (no green sentence, no visible "Save" verb anywhere).
+3. Confirm the tiles themselves feel tappable/clickable (no separate pill button inside) and look "fun"/have visual pop — primary tile (Add spotlight on Focus, Publish on Overlay) should stand out with a gradient + glow + a single one-shot pulse.
+4. Resize to 390px: tiles stack as horizontal rows, footer fits comfortably above the video (~400px, not ~520px).
+5. Resize to 1024/1100/1280px: one row of three tiles, no horizontal scrollbar.
+6. Tab through: order should be primary -> secondary -> tertiary -> "Done for now"; Enter/Space activates the focused tile.
+7. Click "Done for now": should navigate away with no caption text under it.
+8. If everything reads well, merge PR (branch already pushed + CI green) and the status will move to STAGING.
 
 ## Acceptance Criteria
 
