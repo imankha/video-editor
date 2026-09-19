@@ -94,11 +94,40 @@ describe('strip header badges — states', () => {
 });
 
 describe('strip header badges — clicks jump to the control', () => {
+  it('renders named before rated, note, then clip (named sits right after the play name)', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
+    const ids = screen.getAllByTestId(/^badge-/).map((el) => el.dataset.testid);
+    expect(ids).toEqual(['badge-named', 'badge-rated', 'badge-noted', 'badge-clip']);
+  });
+
   it('the name badge opens the inline rename input', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
     expect(screen.queryByLabelText('Clip name')).toBeNull();
     fireEvent.click(badge('badge-named'));
     expect(screen.getByLabelText('Clip name')).toBeTruthy();
+  });
+
+  it('the rated badge opens a vertical rating picker (not the Rate and Tag disclosure)', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
+    expect(screen.queryByRole('menu', { name: 'Rate this play' })).toBeNull();
+    fireEvent.click(badge('badge-rated'));
+    const menu = screen.getByRole('menu', { name: 'Rate this play' });
+    expect(menu).toBeTruthy();
+    // 5 is listed first (best-first), down to 1.
+    const options = screen.getAllByRole('menuitemradio');
+    expect(options.map((o) => o.textContent)).toEqual([
+      'Brilliant', 'Good', 'Interesting', 'Technical Lapse', 'Mental Lapse',
+    ]);
+  });
+
+  it('picking a rating from the picker sets it and closes the picker', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
+    fireEvent.click(badge('badge-rated'));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Brilliant' }));
+    expect(badge('badge-rated').dataset.state).toBe('done');
+    expect(screen.queryByRole('menu', { name: 'Rate this play' })).toBeNull();
+    // The clip nudge wakes at 5 stars, same as the disclosure's own stars.
+    expect(badge('badge-clip').dataset.state).toBe('nudge');
   });
 
   it('typing a name flips the name badge to done', () => {

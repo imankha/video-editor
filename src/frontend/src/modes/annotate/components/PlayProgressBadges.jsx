@@ -1,13 +1,18 @@
+import { useEffect, useRef, useState } from 'react';
 import { Star, Pencil, AlignLeft, Clapperboard, Check, Loader2 } from 'lucide-react';
 import { BADGE_STATE, CLIP_BADGE } from '../playProgress';
 import { ANNOTATE } from '../../../config/displayNames';
+import { RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
 
 /**
  * PlayProgressBadges (T10410) — four small badges that turn the play editor's
- * optional work into a visible checklist: rated, named, note added, clip
+ * optional work into a visible checklist: named, rated, note added, clip
  * created. Option C of the 2026-09-18 decision artifact: they sit on the
  * header line beside the play name (desktop strip) or above the footer
  * buttons (the formBody layouts), replacing the loose "Clip created" text.
+ * T10450 (user request): the named badge leads the row (it sits right next
+ * to the name it completes); the rated badge opens its own vertical picker
+ * (see RatingBadge) instead of jumping to the Rate and Tag disclosure.
  *
  * Visual states (one treatment per state, never mixed):
  *   - undone:  dashed amber outline (T10440: was gray, read as disabled);
@@ -22,8 +27,11 @@ import { ANNOTATE } from '../../../config/displayNames';
  *
  * The clip badge is the only one with a visible text label, because it is the
  * one status that changes what the user can do next; the other three name
- * themselves via title/aria-label. Every badge is a pure read of props — this
- * component holds no state and persists nothing.
+ * themselves via title/aria-label. Every badge is a pure read of props and
+ * persists nothing itself — RatingBadge holds a transient open/closed UI
+ * state for its popover only, never the rating value (that stays owned by
+ * the caller via `rating`/`onRatingChange`, the same setter every other
+ * rating control in the editor uses).
  */
 
 const DISC_BASE =
@@ -93,11 +101,107 @@ function Badge({ testId, state, size, Icon, title, label, onClick }) {
   );
 }
 
+const RATING_VALUES = [5, 4, 3, 2, 1];
+
+/**
+ * RatingBadge (T10450) — the rated badge, specialized: clicking it opens a
+ * small vertical popover of all five ratings (5 at top, matching "best
+ * first") instead of jumping to the horizontal star row in the Rate and Tag
+ * disclosure. Picking a rating calls the SAME `onRatingChange` every other
+ * rating control in the editor uses, then closes. Closes on outside click,
+ * Escape, or a selection; the open/closed flag is the only state this file
+ * holds — the rating value itself is never held here.
+ */
+function RatingBadge({ state, size, rating, onRatingChange }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const actionable = state === BADGE_STATE.UNDONE;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+    };
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  const title = state === BADGE_STATE.DONE ? ANNOTATE.PLAY_RATED : ANNOTATE.RATE_PLAY;
+  const shared = { 'data-testid': 'badge-rated', 'data-state': state, title, className: 'flex items-center gap-1.5' };
+  const disc = <Disc state={state} size={size} Icon={Star} />;
+
+  return (
+    <div ref={rootRef} className="relative">
+      {actionable ? (
+        <button
+          type="button"
+          aria-label={title}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          {...shared}
+        >
+          {disc}
+        </button>
+      ) : (
+        <span role="img" aria-label={title} {...shared}>
+          {disc}
+        </span>
+      )}
+      {open && (
+        <div
+          role="menu"
+          aria-label={ANNOTATE.RATE_PLAY}
+          data-testid="rating-picker"
+          className="absolute z-50 top-full left-0 mt-1 flex flex-col gap-0.5 p-1.5 rounded-lg border border-gray-700 bg-gray-800 shadow-xl"
+        >
+          {RATING_VALUES.map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="menuitemradio"
+              aria-checked={rating === value}
+              onClick={() => {
+                onRatingChange(value);
+                setOpen(false);
+              }}
+              className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm whitespace-nowrap transition-colors ${
+                rating === value ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <span className="flex items-center gap-0.5 shrink-0">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Star
+                    key={i}
+                    size={11}
+                    fill={i <= value ? '#fbbf24' : 'transparent'}
+                    color={i <= value ? '#fbbf24' : '#6b7280'}
+                    strokeWidth={1.5}
+                  />
+                ))}
+              </span>
+              {RATING_ADJECTIVES[value]}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * @param {object} p
  * @param {{rated: boolean, named: boolean, noted: boolean, clip: string}} p.progress  from getPlayProgress
  * @param {'sm'|'md'} [p.size]
- * @param {() => void} p.onRate      jump to the rating control
+ * @param {number} p.rating  current rating value, for the picker's selected row
+ * @param {(value: number) => void} p.onRatingChange  the editor's existing rating setter
  * @param {() => void} p.onName      jump to the name control
  * @param {() => void} p.onNote      jump to the note control
  * @param {() => void} p.onCreateClip  create the clip (nudge state only)
@@ -107,7 +211,8 @@ function Badge({ testId, state, size, Icon, title, label, onClick }) {
 export function PlayProgressBadges({
   progress,
   size = 'md',
-  onRate,
+  rating,
+  onRatingChange,
   onName,
   onNote,
   onCreateClip,
@@ -131,20 +236,18 @@ export function PlayProgressBadges({
     // any other announcement, so let screen readers hear the label change.
     <div data-testid="play-progress-badges" aria-live="polite" className={`flex items-center gap-2 ${className}`}>
       <Badge
-        testId="badge-rated"
-        state={progress.rated ? BADGE_STATE.DONE : BADGE_STATE.UNDONE}
-        size={size}
-        Icon={Star}
-        title={progress.rated ? ANNOTATE.PLAY_RATED : ANNOTATE.RATE_PLAY}
-        onClick={onRate}
-      />
-      <Badge
         testId="badge-named"
         state={progress.named ? BADGE_STATE.DONE : BADGE_STATE.UNDONE}
         size={size}
         Icon={Pencil}
         title={progress.named ? ANNOTATE.PLAY_NAMED : ANNOTATE.NAME_PLAY}
         onClick={onName}
+      />
+      <RatingBadge
+        state={progress.rated ? BADGE_STATE.DONE : BADGE_STATE.UNDONE}
+        size={size}
+        rating={rating}
+        onRatingChange={onRatingChange}
       />
       <Badge
         testId="badge-noted"

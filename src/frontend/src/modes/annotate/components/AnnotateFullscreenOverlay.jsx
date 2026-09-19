@@ -630,13 +630,10 @@ export function AnnotateFullscreenOverlay({
     hasProject: !!existingClip?.autoProjectId,
     creating: focusPending || clipCreating,
   });
-  // Each undone badge jumps to the control that completes it.
-  const jumpToRating = () => {
-    setDetailsOpen(true);
-    // The stars live inside the disclosure (open by default on desktop, so the
-    // click would otherwise be inert there) — focus the first star once mounted.
-    requestAnimationFrame(() => document.getElementById('clip-rating')?.querySelector('button')?.focus());
-  };
+  // Each undone badge jumps to the control that completes it. T10450: the
+  // rated badge is the exception — it opens its own popover (RatingBadge)
+  // rather than jumping to the disclosure, so it takes `rating`/
+  // `handleRatingChange` directly instead of a jump callback.
   const jumpToName = () => {
     if (layout === 'strip') setIsEditingName(true);
     else nameInputRef.current?.focus();
@@ -671,7 +668,8 @@ export function AnnotateFullscreenOverlay({
       progress={progress}
       size={size}
       className={className}
-      onRate={jumpToRating}
+      rating={rating}
+      onRatingChange={handleRatingChange}
       onName={jumpToName}
       onNote={jumpToNote}
       onCreateClip={progress.clip === CLIP_BADGE.NUDGE ? handleCreateClipFromBadge : undefined}
