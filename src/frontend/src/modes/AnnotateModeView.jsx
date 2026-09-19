@@ -79,12 +79,17 @@ export function AnnotateModeView({
   getAnnotateRegionAtTime,
 
   // Fullscreen overlay handlers
-  onFullscreenCreateClip,
   onFullscreenUpdateClip,
-  onOverlayResume,
-  // T9330: resume playback WITHOUT closing — desktop strip stays open on create.
-  onOverlayResumePlayback,
   onOverlayClose,
+  // T10610 § D.3: deletes the play the editor is open on.
+  onDeletePlayFromEditor,
+  // T10610 § C.4: awaited before navigating into Framing/Spotlight, both from
+  // the editor's own stage CTA (threaded through as onAwaitWrites) and from
+  // this view's own Frame Now/Later row and openExistingProjectStage.
+  onAwaitRegionWrites,
+  // T10610 § C.5: 'idle' | 'saving' | 'saved' | 'error' — drives the editor's
+  // SaveStatusBadge now that there is no Save button.
+  writeStatus = 'idle',
 
   // Layer selection
   annotateSelectedLayer,
@@ -118,15 +123,11 @@ export function AnnotateModeView({
   // T2905: Share annotated playback (game invitations — opens SharePlaybackDialog).
   // T9810: this is now the primary "Share plays" action on every surface.
   onSharePlayback,
-  // T5700: which layer NEW clips default to (mode toggle)
-  newClipLayerIsMine = true,
   // T8600: desktop strip only — opens the clip's project in Focus mode.
   onOpenClipInFocus,
   // T9330: opens the clip's project in Spotlight (Overlay mode) for the strip's
-  // stage CTA; and the clip whose project is being created right now (drives the
-  // strip's disabled "Apply Framing" pending CTA).
+  // stage CTA.
   onOpenClipInOverlay,
-  pendingProjectClipId = null,
   // T8890: angle strip + source switching (null for angle-free games)
   angleData = null,
   angleSwitcher = null,
@@ -193,22 +194,30 @@ export function AnnotateModeView({
   // editor's stage CTA uses — used by both handlers below when a project
   // already exists, so the single existing-project button behaves exactly as
   // it did before T10450's NO_PROJECT split.
-  const openExistingProjectStage = useCallback(() => {
+  const openExistingProjectStage = useCallback(async () => {
+    // T10610 § C.4: this is the pure-navigation path — await the region's
+    // write chain before opening Framing/Spotlight, or a trim released just
+    // before this click could lose the race.
+    const ok = onAwaitRegionWrites ? await onAwaitRegionWrites(selectedRegion.id) : true;
+    if (!ok) return;
     if (selectedClipStage?.action === 'overlay') onOpenClipInOverlay?.(selectedRegion.autoProjectId);
     else onOpenClipInFocus?.(selectedRegion.autoProjectId);
-  }, [selectedRegion, selectedClipStage, onOpenClipInFocus, onOpenClipInOverlay]);
+  }, [selectedRegion, selectedClipStage, onOpenClipInFocus, onOpenClipInOverlay, onAwaitRegionWrites]);
   // T10450: "Frame Now" is the T10310-era "Frame Clip" behavior — a
   // project-less play creates its project THEN opens Framing in one gesture
   // (same create-then-navigate seam as the editor's old Save and Frame).
   const handleFrameNow = useCallback(async () => {
     if (!selectedRegion || frameCreateInFlightRef.current) return;
     if (selectedRegion.autoProjectId) {
-      openExistingProjectStage();
+      await openExistingProjectStage();
       return;
     }
     frameCreateInFlightRef.current = true;
     setFrameClipPending(true);
     try {
+      // T10610 § C.4: the create branch's ordering is already guaranteed by
+      // the region's own write queue (this call IS that queued write) — no
+      // separate await needed here.
       const result = await onFullscreenUpdateClip(selectedRegion.id, { createProject: true });
       if (result?.saveOk && result.projectId) onOpenClipInFocus?.(result.projectId);
     } finally {
@@ -273,30 +282,31 @@ export function AnnotateModeView({
   const desktopEditorOpen = showAnnotateOverlay && !isMobile;
   const mobileInlineForm = underCanvasEditor && isMobile;
 
-  // T8140: one-tap first clip helpers.
-  // "Play N" default name for a new clip = existing clip count + 1.
-  const nextClipNumber = (clipRegions?.length || 0) + 1;
   // Full-screen "What sport is this?" question, shown once per session at a
-  // MOBILE user's first clip save while their profile is still no_sport. Desktop
-  // keeps the in-form picker (it also has the top-bar sport control), so the
-  // question is mobile-only — no double prompt. The answer persists through the
-  // existing profile-sport gesture (updateProfile), never a new write path.
+  // MOBILE user's first Mark-play tap while their profile is still no_sport.
+  // Desktop keeps the in-form picker (it also has the top-bar sport control),
+  // so the question is mobile-only — no double prompt. The answer persists
+  // through the existing profile-sport gesture (updateProfile), never a new
+  // write path.
+  // T10610: this used to fire from the editor's create-mode Save gesture
+  // (handleCreateClipWithSportPrompt wrapping onCreateClip); the create now
+  // happens at the Mark play TAP itself (D2), so the prompt moves here. Guard
+  // on "about to create" (no region selected, editor not already open) —
+  // the same tap edits an existing SELECTED clip instead, which must never
+  // trigger this first-clip question.
   const currentProfile = useCurrentProfile();
   const currentSport = currentProfile?.sport || NO_SPORT;
   const updateProfile = useProfileStore(state => state.updateProfile);
   const [sportQuestionOpen, setSportQuestionOpen] = useState(false);
   const sportAskedRef = useRef(false);
-  const handleCreateClipWithSportPrompt = useCallback((clipData) => {
-    // T9630: return the save promise — the overlay's handleSave awaits/derives
-    // its Unsaved/Saving/Saved state from this; a dropped return silently made
-    // every create-mode save look instantly "done".
-    const savePromise = onFullscreenCreateClip(clipData);
-    if (isMobile && currentSport === NO_SPORT && !sportAskedRef.current) {
+  const handleAddClipWithSportPrompt = useCallback(() => {
+    const aboutToCreate = !annotateSelectedRegionId && !showAnnotateOverlay;
+    onAddClip();
+    if (aboutToCreate && isMobile && currentSport === NO_SPORT && !sportAskedRef.current) {
       sportAskedRef.current = true;
       setSportQuestionOpen(true);
     }
-    return savePromise;
-  }, [onFullscreenCreateClip, isMobile, currentSport]);
+  }, [onAddClip, annotateSelectedRegionId, showAnnotateOverlay, isMobile, currentSport]);
 
   // Playback fullscreen — independent from annotate fullscreen (CSS fixed positioning)
   const [playbackFullscreen, setPlaybackFullscreen] = useState(false);
@@ -780,7 +790,7 @@ export function AnnotateModeView({
                     onSpeedChange={onSpeedChange}
                     isFullscreen={annotateFullscreen}
                     onToggleFullscreen={onToggleFullscreen}
-                    onAddClip={underCanvasEditor ? undefined : onAddClip}
+                    onAddClip={underCanvasEditor ? undefined : handleAddClipWithSportPrompt}
                     isEditMode={isEditMode}
                     videoController={videoController}
                     clipEditBounds={clipEditBounds}
@@ -835,21 +845,19 @@ export function AnnotateModeView({
                     currentTime={currentTime}
                     videoDuration={duration || annotateVideoMetadata?.duration || 0}
                     existingClip={existingClip}
-                    onCreateClip={handleCreateClipWithSportPrompt}
                     onUpdateClip={onFullscreenUpdateClip}
-                    onResume={onOverlayResume}
                     onClose={onOverlayClose}
+                    onDeleteClip={onDeletePlayFromEditor}
+                    onAwaitWrites={onAwaitRegionWrites}
+                    writeStatus={writeStatus}
                     onSeek={seek}
                     videoController={videoController}
                     isFullscreen={false}
                     layout={isLandscape ? 'landscape-inline' : 'inline'}
-                    surface="fullscreen_mobile"
                     activeSourceName={activeSourceName}
                     mediaBounds={activeSourceMediaBounds}
                     teammateSuggestions={teammateSuggestions}
                     onScrubDragChange={setIsDraggingScrub}
-                    newClipLayerIsMine={newClipLayerIsMine}
-                    nextClipNumber={nextClipNumber}
                     // T9330: mobile edit sheet gets the shared stage CTA (design §2.6)
                     onOpenInFocus={onOpenClipInFocus}
                     onOpenInOverlay={onOpenClipInOverlay}
@@ -877,7 +885,7 @@ export function AnnotateModeView({
                       onSpeedChange={onSpeedChange}
                       isFullscreen={annotateFullscreen}
                       onToggleFullscreen={onToggleFullscreen}
-                      onAddClip={onAddClip}
+                      onAddClip={handleAddClipWithSportPrompt}
                       isEditMode={isEditMode}
                       videoController={videoController}
                       clipEditBounds={clipEditBounds}
@@ -959,24 +967,20 @@ export function AnnotateModeView({
                 currentTime={currentTime}
                 videoDuration={duration || annotateVideoMetadata?.duration || 0}
                 existingClip={existingClip}
-                onCreateClip={handleCreateClipWithSportPrompt}
                 onUpdateClip={onFullscreenUpdateClip}
-                onResume={onOverlayResume}
-                onResumePlaybackOnly={onOverlayResumePlayback}
                 onClose={onOverlayClose}
+                onDeleteClip={onDeletePlayFromEditor}
+                onAwaitWrites={onAwaitRegionWrites}
+                writeStatus={writeStatus}
                 onSeek={seek}
                 videoController={videoController}
                 isFullscreen={annotateFullscreen}
                 layout="strip"
-                surface="inline_desktop"
                 activeSourceName={activeSourceName}
                 mediaBounds={activeSourceMediaBounds}
                 teammateSuggestions={teammateSuggestions}
-                newClipLayerIsMine={newClipLayerIsMine}
-                nextClipNumber={nextClipNumber}
                 onOpenInFocus={onOpenClipInFocus}
                 onOpenInOverlay={onOpenClipInOverlay}
-                focusPending={!!existingClip && existingClip.id === pendingProjectClipId && !existingClip.autoProjectId}
               />
             </div>
           )}
@@ -1035,7 +1039,7 @@ export function AnnotateModeView({
                 <div className="space-y-2">
                   <div className="flex gap-2">
                     <button
-                      onClick={onAddClip}
+                      onClick={handleAddClipWithSportPrompt}
                       disabled={isSourceExpired}
                       data-testid="annotate-primary-cta"
                       title={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Edit the selected play'}
@@ -1094,7 +1098,7 @@ export function AnnotateModeView({
                 </div>
               ) : (
                 <button
-                  onClick={onAddClip}
+                  onClick={handleAddClipWithSportPrompt}
                   disabled={isSourceExpired}
                   data-testid="annotate-primary-cta"
                   title={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Mark a play ending at the current time'}
@@ -1248,20 +1252,18 @@ export function AnnotateModeView({
             currentTime={currentTime}
             videoDuration={duration || annotateVideoMetadata?.duration || 0}
             existingClip={existingClip}
-            onCreateClip={handleCreateClipWithSportPrompt}
             onUpdateClip={onFullscreenUpdateClip}
-            onResume={onOverlayResume}
             onClose={onOverlayClose}
+            onDeleteClip={onDeletePlayFromEditor}
+            onAwaitWrites={onAwaitRegionWrites}
+            writeStatus={writeStatus}
             onSeek={seek}
             videoController={videoController}
             isFullscreen={false}
             layout="inline"
-            surface="sheet_mobile"
             activeSourceName={activeSourceName}
             mediaBounds={activeSourceMediaBounds}
             teammateSuggestions={teammateSuggestions}
-            newClipLayerIsMine={newClipLayerIsMine}
-            nextClipNumber={nextClipNumber}
             // T9330: mobile edit sheet gets the shared stage CTA (design §2.6)
             onOpenInFocus={onOpenClipInFocus}
             onOpenInOverlay={onOpenClipInOverlay}

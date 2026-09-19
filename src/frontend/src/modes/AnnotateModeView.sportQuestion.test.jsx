@@ -3,8 +3,14 @@ import { describe, it, expect, vi } from 'vitest';
 
 /**
  * T8140 — the full-screen "What sport is this?" question is wired to a MOBILE
- * first clip save while the profile is still no_sport, and answers persist
- * through the existing profile-sport gesture (updateProfile).
+ * user's first Mark-play TAP while the profile is still no_sport, and answers
+ * persist through the existing profile-sport gesture (updateProfile).
+ *
+ * T10610: this used to fire from the editor's create-mode Save gesture
+ * (onCreateClip) — the create now happens at the Mark play TAP itself (D2),
+ * so the trigger moved to AnnotateModeView's own onAddClip wrapper
+ * (handleAddClipWithSportPrompt). The stub below exposes onAddClip instead of
+ * the retired onCreateClip.
  */
 
 const updateProfileMock = vi.fn(() => Promise.resolve());
@@ -14,15 +20,15 @@ vi.mock('../components/shared/VideoLoadingOverlay', () => ({ VideoLoadingOverlay
 vi.mock('../components/ZoomControls', () => ({ default: () => <div /> }));
 vi.mock('./annotate', () => ({
   AnnotateMode: () => <div />,
-  AnnotateControls: () => <div />,
-  NotesOverlay: () => <div />,
-  // Stub overlay: exposes a Save button that fires the create handler so we can
-  // drive the mobile first-save path without the real form.
-  AnnotateFullscreenOverlay: ({ onCreateClip }) => (
-    <button data-testid="stub-save" onClick={() => onCreateClip({ rating: 4, tags: [], name: 'Play 1' })}>
-      stub-save
+  // Stub controls: exposes a Mark-play button that fires onAddClip so we can
+  // drive the mobile first-tap path without the real transport bar.
+  AnnotateControls: ({ onAddClip }) => (
+    <button data-testid="stub-add-clip" onClick={() => onAddClip?.()}>
+      stub-add-clip
     </button>
   ),
+  NotesOverlay: () => <div />,
+  AnnotateFullscreenOverlay: () => <div data-testid="stub-overlay" />,
 }));
 vi.mock('./annotate/components/PlaybackControls', () => ({ default: () => <div /> }));
 vi.mock('../components/shared', () => ({ Button: ({ children }) => <button>{children}</button> }));
@@ -49,7 +55,9 @@ function renderView(overrides = {}) {
     isPlaying: false,
     handlers: {},
     annotateFullscreen: false,
-    showAnnotateOverlay: true, // form open
+    // T10610: NOT open yet — the sport question fires at the TAP that is
+    // about to create a play, before the editor opens.
+    showAnnotateOverlay: false,
     togglePlay: vi.fn(),
     stepForward: vi.fn(),
     stepBackward: vi.fn(),
@@ -67,10 +75,10 @@ function renderView(overrides = {}) {
     onSelectRegion: vi.fn(),
     onDeleteRegion: vi.fn(),
     onAddClip: vi.fn(),
-    onFullscreenCreateClip: vi.fn(),
     onFullscreenUpdateClip: vi.fn(),
-    onOverlayResume: vi.fn(),
     onOverlayClose: vi.fn(),
+    onDeletePlayFromEditor: vi.fn(),
+    onAwaitRegionWrites: vi.fn(() => Promise.resolve(true)),
     getAnnotateRegionAtTime: () => null,
     annotateSelectedLayer: 'clips',
     onLayerSelect: vi.fn(),
@@ -85,24 +93,24 @@ function renderView(overrides = {}) {
   return render(<AnnotateModeView {...props} />);
 }
 
-describe('AnnotateModeView — first-save sport question (T8140)', () => {
-  it('opens the full-screen sport question after a mobile no_sport first save', () => {
+describe('AnnotateModeView — first-tap sport question (T8140, T10610)', () => {
+  it('opens the full-screen sport question after a mobile no_sport Mark-play tap', () => {
     renderView();
     expect(screen.queryByRole('dialog', { name: 'What sport is this?' })).toBeNull();
-    fireEvent.click(screen.getByTestId('stub-save'));
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
     expect(screen.getByRole('dialog', { name: 'What sport is this?' })).toBeTruthy();
   });
 
-  it('still calls the real create handler (clip saves in one tap)', () => {
-    const onFullscreenCreateClip = vi.fn();
-    renderView({ onFullscreenCreateClip });
-    fireEvent.click(screen.getByTestId('stub-save'));
-    expect(onFullscreenCreateClip).toHaveBeenCalledTimes(1);
+  it('still calls the real onAddClip handler (the tap creates the play in one gesture)', () => {
+    const onAddClip = vi.fn();
+    renderView({ onAddClip });
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
+    expect(onAddClip).toHaveBeenCalledTimes(1);
   });
 
   it('picking a sport persists via updateProfile and closes the question', () => {
     renderView();
-    fireEvent.click(screen.getByTestId('stub-save'));
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
     // Pick the first sport button inside the dialog.
     const dialog = screen.getByRole('dialog', { name: 'What sport is this?' });
     const sportButtons = dialog.querySelectorAll('button');
@@ -111,11 +119,17 @@ describe('AnnotateModeView — first-save sport question (T8140)', () => {
     expect(screen.queryByRole('dialog', { name: 'What sport is this?' })).toBeNull();
   });
 
-  it('does not re-ask on a second save in the same session', () => {
+  it('does not re-ask on a second tap in the same session', () => {
     renderView();
-    fireEvent.click(screen.getByTestId('stub-save'));
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
     fireEvent.click(screen.getByRole('button', { name: 'Skip for now' })); // dismiss
-    fireEvent.click(screen.getByTestId('stub-save')); // second save
+    fireEvent.click(screen.getByTestId('stub-add-clip')); // second tap
+    expect(screen.queryByRole('dialog', { name: 'What sport is this?' })).toBeNull();
+  });
+
+  it('does not ask when the tap is editing an already-SELECTED play, not creating one', () => {
+    renderView({ annotateSelectedRegionId: 'r1', clipRegions: [{ id: 'r1' }] });
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
     expect(screen.queryByRole('dialog', { name: 'What sport is this?' })).toBeNull();
   });
 });

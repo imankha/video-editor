@@ -2,10 +2,13 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 /**
- * T8600 §2.5 — render-site inventory. All four AnnotateFullscreenOverlay
- * render sites must pass both `existingClip` (T8590 invariant) and `surface`
- * (beacon discriminator) — a render site that forgets either silently
- * regresses to the pre-T8590/T8600 bug shape with no error.
+ * T10610 § E row 6 (replaces the retired .beaconSurfaces.test.jsx, whose
+ * `add_clip_opened_no_save` beacon + `surface` discriminator are both gone) —
+ * render-site inventory. Every AnnotateFullscreenOverlay render site must
+ * pass `existingClip` (T8590 invariant) AND, since T10610, `onDeleteClip` +
+ * `onAwaitWrites` (every layout needs Delete play and the Frame-ordering
+ * await) — a render site that forgets any of these silently regresses with
+ * no error.
  */
 
 let mockIsMobile = false;
@@ -22,7 +25,13 @@ vi.mock('./annotate', () => ({
   AnnotateControls: () => <div />,
   NotesOverlay: () => <div />,
   AnnotateFullscreenOverlay: (props) => (
-    <div data-testid="overlay-render" data-layout={props.layout} data-surface={props.surface}>
+    <div
+      data-testid="overlay-render"
+      data-layout={props.layout}
+      data-has-delete={props.onDeleteClip ? 'present' : 'absent'}
+      data-has-await={props.onAwaitWrites ? 'present' : 'absent'}
+      data-write-status={props.writeStatus ?? 'absent'}
+    >
       {props.existingClip ? `existingClip:${props.existingClip.id}` : 'existingClip:null'}
     </div>
   ),
@@ -81,6 +90,9 @@ function renderView(overrides = {}) {
     onSelectRegion: vi.fn(),
     onDeleteRegion: vi.fn(),
     onAddClip: vi.fn(),
+    onDeletePlayFromEditor: vi.fn(),
+    onAwaitRegionWrites: vi.fn(() => Promise.resolve(true)),
+    writeStatus: 'idle',
     getAnnotateRegionAtTime: () => null,
     annotateSelectedLayer: 'clips',
     onLayerSelect: vi.fn(),
@@ -95,39 +107,48 @@ function renderView(overrides = {}) {
   return render(<AnnotateModeView {...props} />);
 }
 
-describe('AnnotateFullscreenOverlay render-site inventory (T8600 §2.5, T8590)', () => {
-  // T9500: desktop fullscreen now renders the shared strip (surface=inline_desktop,
-  // layout=strip), not the old dock (dock_fullscreen). Parity with normal mode.
-  it('desktop fullscreen: shared strip surface=inline_desktop, existingClip present', () => {
+describe('AnnotateFullscreenOverlay render-site inventory (T10610)', () => {
+  // T9500: desktop fullscreen renders the shared strip (layout=strip), not the old dock.
+  it('desktop fullscreen: strip layout, existingClip + onDeleteClip + onAwaitWrites present', () => {
     mockIsMobile = false;
     renderView({ annotateFullscreen: true });
     const el = screen.getByTestId('overlay-render');
-    expect(el.dataset.surface).toBe('inline_desktop');
     expect(el.dataset.layout).toBe('strip');
+    expect(el.dataset.hasDelete).toBe('present');
+    expect(el.dataset.hasAwait).toBe('present');
     expect(el.textContent).toBe('existingClip:c1');
   });
 
-  it('mobile fullscreen sheet: surface=fullscreen_mobile, existingClip present', () => {
+  it('mobile fullscreen sheet: existingClip + onDeleteClip + onAwaitWrites present', () => {
     mockIsMobile = true;
     renderView({ annotateFullscreen: true });
     const el = screen.getByTestId('overlay-render');
-    expect(el.dataset.surface).toBe('fullscreen_mobile');
+    expect(el.dataset.hasDelete).toBe('present');
+    expect(el.dataset.hasAwait).toBe('present');
     expect(el.textContent).toBe('existingClip:c1');
   });
 
-  it('mobile bottom sheet: surface=sheet_mobile, existingClip present', () => {
+  it('mobile bottom sheet: existingClip + onDeleteClip + onAwaitWrites present', () => {
     mockIsMobile = true;
     renderView({ annotateFullscreen: false });
     const el = screen.getByTestId('overlay-render');
-    expect(el.dataset.surface).toBe('sheet_mobile');
+    expect(el.dataset.hasDelete).toBe('present');
+    expect(el.dataset.hasAwait).toBe('present');
     expect(el.textContent).toBe('existingClip:c1');
   });
 
-  it('desktop strip: surface=inline_desktop, existingClip present', () => {
+  it('desktop strip (windowed): existingClip + onDeleteClip + onAwaitWrites present', () => {
     mockIsMobile = false;
     renderView({ annotateFullscreen: false });
     const el = screen.getByTestId('overlay-render');
-    expect(el.dataset.surface).toBe('inline_desktop');
+    expect(el.dataset.hasDelete).toBe('present');
+    expect(el.dataset.hasAwait).toBe('present');
     expect(el.textContent).toBe('existingClip:c1');
+  });
+
+  it('threads writeStatus through to the editor on every render site', () => {
+    mockIsMobile = false;
+    renderView({ annotateFullscreen: false, writeStatus: 'saving' });
+    expect(screen.getByTestId('overlay-render').dataset.writeStatus).toBe('saving');
   });
 });
