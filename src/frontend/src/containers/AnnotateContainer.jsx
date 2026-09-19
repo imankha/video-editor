@@ -34,6 +34,9 @@ import { generateClipName } from '../utils/clipDisplayName';
 import { SECTION_NAMES, MODE_NAMES } from '../config/displayNames';
 import { setPendingGame } from '../utils/pendingNavigation';
 import { beginGameVideoLoad, computeResumePosition, seekVideoElementWhenReady } from './annotateVideoLoad';
+import { NEW_PLAY_DEFAULT_RATING, DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
+import { defaultPlayName } from '../modes/annotate/playProgress';
+import { createRegionWriteQueue } from '../modes/annotate/regionWriteQueue';
 
 // T7790: max time a clip import will wait for an in-flight upload to create the
 // game record before giving up. Generous ceiling — a real cold upload creates the
@@ -526,7 +529,6 @@ export function AnnotateContainer({
     selectionState,
     selectClip,
     editClip,
-    startCreating,
     closeOverlay,
     deselectClip,
     selectedRegionId: annotateSelectedRegionId,
@@ -557,13 +559,33 @@ export function AnnotateContainer({
   } = useAnnotate(annotateVideoMetadata, {
     selectedRegionId: annotateSelectedRegionId,
     onSelect: useCallback((id) => id ? selectClip(id) : deselectClip(), [selectClip, deselectClip]),
-    // T9330: the create edge lands EDITING on the just-created region (atomic
-    // CREATING->EDITING) so the editor STAYS OPEN after a create. The mobile
-    // divergence (sheet closes on create) is NOT here — it lives in the save
-    // handler's resume-vs-close split (handleOverlayResume closes; the strip's
-    // resume-playback-only keeps it open), so the transition is uniform.
+    // T10610: the create-at-tap edge lands EDITING on the just-created region
+    // (atomic NONE->EDITING, no CREATING stopover) so the editor opens on the
+    // play the tap just created. Always closes the SAME way (closeWithCommit
+    // -> onClose) regardless of how it was reached, so there is no
+    // create-vs-edit divergence left to keep in sync here.
     onCreateSelect: useCallback((id) => editClip(id), [editClip]),
   });
+
+  // T10610 § C.1/C.3: clipRegionsRef is assigned during every render so async
+  // callbacks (chained write-queue .then()s) read the LATEST regions, not a
+  // stale closure. rawClipIdByRegionRef is written SYNCHRONOUSLY on the save
+  // path because setRawClipId (React state) is not guaranteed flushed by the
+  // time the next chained microtask runs — see § C.3 for the full rationale.
+  const clipRegionsRef = useRef(clipRegions);
+  clipRegionsRef.current = clipRegions;
+  const rawClipIdByRegionRef = useRef(new Map());
+  // Per-region FIFO write queue (regionWriteQueue.js) — a ref so it survives
+  // re-renders and is never re-created.
+  const writeQueueRef = useRef(null);
+  writeQueueRef.current ??= createRegionWriteQueue();
+  // Synchronous double-tap guard for Mark play (T9830/T10450 convention: a ref,
+  // not state, so two taps inside one event-loop tick can't both pass the check).
+  const markPlayInFlightRef = useRef(false);
+  // T10610 § C.5: memory-only view state reflecting the outcome of the most
+  // recent per-gesture write — drives SaveStatusBadge. Not reactive persistence:
+  // it is set by the SAME handler that enqueues the write, never by a useEffect.
+  const [writeStatus, setWriteStatus] = useState('idle');
 
   // Real-time clip saving hook
   const {
@@ -1178,7 +1200,7 @@ export function AnnotateContainer({
   const handleToggleFullscreen = useCallback(() => {
     const newFS = !annotateFullscreen;
     setAnnotateFullscreen(newFS);
-    if (!newFS && isMobile && (selectionState.type === 'EDITING' || selectionState.type === 'CREATING')) {
+    if (!newFS && isMobile && selectionState.type === 'EDITING') {
       // T9500: mobile only. On desktop the editor persists into the under-canvas
       // strip (same fiber), so an in-progress play survives exiting fullscreen.
       closeOverlay();
@@ -1208,43 +1230,15 @@ export function AnnotateContainer({
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, annotateFullscreen);
 
-  /**
-   * Handle Add Clip button click (non-fullscreen mode).
-   * Creating a new clip requires auth (shows login modal if guest).
-   * Editing an existing clip does not require auth.
-   * Context (paused video, timestamp) is preserved through the auth modal.
-   */
-  const handleAddClipFromButton = useCallback(() => {
-    effectivePause();
-    if (selectionState.type === 'SELECTED') {
-      editClip(selectionState.clipId);
-    } else {
-      requireAuth(() => {
-        startCreating();
-        // Quest 1 step: completes "Find an Amazing Play" the moment the form opens.
-        useQuestStore.getState().recordAchievement('add_clip_opened');
-      });
-    }
-  }, [effectivePause, selectionState, editClip, startCreating, requireAuth]);
-
   // T8480: shared handler for the three `result.project_created` sites below
   // (see announceReelCreated at module scope).
   const notifyReelCreated = useCallback((projectId, clipName) => {
     announceReelCreated(projectId, { onOpenReelInFocus, fetchProjects, clipName });
   }, [onOpenReelInFocus, fetchProjects]);
 
-  // T9330: which just-created clip is waiting for its project id to land.
-  // The editor stays open on the new clip after a create (see onCreateSelect);
-  // while `create_project` was requested and the backend round trip hasn't
-  // answered yet, the strip CTA shows a DISABLED "Apply Framing". This is
-  // transient view state driven by the Save gesture (memory-only, never
-  // persisted, never a reactive write) — it clears the instant setAutoProjectId
-  // lands (or the save fails). A specific clip id (not a bool) so an unrelated
-  // no-project clip opened mid-flight never inherits the pending CTA.
-  const [pendingProjectClipId, setPendingProjectClipId] = useState(null);
-
   /**
-   * Handle creating a clip from fullscreen overlay
+   * Handle creating a clip from fullscreen overlay (and, since T10610, from
+   * the Mark play tap itself — see handleAddClipFromButton below).
    * Now saves to backend in real-time (if video is uploaded and we have a gameId)
    */
   const handleFullscreenCreateClip = useCallback(async (clipData) => {
@@ -1289,170 +1283,186 @@ export function AnnotateContainer({
       videoSeq,
       { tagged_teammates: clipData.tagged_teammates, my_athlete: clipData.my_athlete, videoDuration: segmentDuration },
     );
-    // T9630: real persistence outcome for the overlay's Unsaved/Saving/Saved
-    // indicator — same true/false contract as updateClipRegionWithSync below
-    // (true = durably saved, or nothing needed saving; false = it did not
-    // land). Starts false: a rejected/never-created region is a real failure.
-    let saveOk = false;
-    // T10240: the created project id, threaded back to the caller SYNCHRONOUSLY
-    // (was only delivered later via setAutoProjectId). This is the shared
-    // create-then-navigate seam: T10290's "Save and Frame" and T10240's
-    // "Frame clip" both need the id the instant the create resolves so they can
-    // navigate into Framing without waiting for a re-render.
-    let createdProjectId = null;
-    if (newRegion) {
-      console.log('[CreateClip] Stored region:', newRegion.id, 'actual:', newRegion.startTime, '-', newRegion.endTime, 'seq:', newRegion.videoSequence);
-      // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek
-      effectiveSeek(clipData.startTime);
+    if (!newRegion) return { saveOk: false, projectId: null };
 
-      // T9330: arm the disabled "Apply Framing" pending CTA for this clip while
-      // the project is being created (only when we'll actually save + a project
-      // was requested). Cleared in every result branch below.
-      if (annotateGameId && clipData.createProject) {
-        setPendingProjectClipId(newRegion.id);
-      }
+    console.log('[CreateClip] Stored region:', newRegion.id, 'actual:', newRegion.startTime, '-', newRegion.endTime, 'seq:', newRegion.videoSequence);
+    // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek
+    effectiveSeek(clipData.startTime);
 
-      // Save to backend if we have a game ID (game record exists in DB even during upload)
-      if (annotateGameId) {
-        const result = await saveClip(annotateGameId, {
-          start_time: newRegion.startTime,
-          end_time: newRegion.endTime,
-          name: newRegion.name,
-          rating: newRegion.rating,
-          tags: newRegion.tags,
-          notes: newRegion.notes,
-          video_sequence: videoSeq,
-          tagged_teammates: newRegion.tagged_teammates,
-          my_athlete: newRegion.my_athlete,
-          ...(clipData.createProject != null && { create_project: clipData.createProject }),
-        });
-        saveOk = !!result?.raw_clip_id;
-
-        // T9330: the create round trip has answered — release the pending CTA in
-        // EVERY case, including saveClip returning null (dedup guard, sync_failed
-        // 503, or a thrown/other-HTTP error caught in useRawClipSave). Clearing
-        // here rather than per-branch is what prevents a permanently-disabled
-        // "Apply Framing" on the just-cut clip in the sync-failure flow. When a
-        // project WAS created, setAutoProjectId below lands the live stage CTA;
-        // when it wasn't, no CTA shows — both correct with pending cleared.
-        setPendingProjectClipId(null);
-
-        if (result?.notFound) {
-          // T8180: the game was deleted out from under this annotate session (ghost).
-          // The region is ALREADY in clipRegions (added above) so the user's work is
-          // preserved in memory and stays on screen — we do NOT navigate away or drop
-          // it. Surface a loud, persistent error with an explicit way back to the
-          // games list, and refresh that list so the ghost game drops off.
-          useGamesDataStore.getState().fetchGames();
-          toast.error('This game no longer exists', {
-            message: "Your clip couldn't be saved because this game was removed. Your work is still on screen — head back to your games to continue.",
-            duration: 0,
-            dedupKey: 'annotate-ghost-game',
-            action: {
-              label: 'Back to games',
-              onClick: () => useEditorStore.getState().redirectToMode(EDITOR_MODES.PROJECT_MANAGER),
-            },
-          });
-        } else if (result?.raw_clip_id) {
-          setRawClipId(newRegion.id, result.raw_clip_id);
-
-          if (result.project_created) {
-            createdProjectId = result.project_id;
-            setAutoProjectId(newRegion.id, result.project_id);
-            notifyReelCreated(result.project_id, reelToastClipName(newRegion));
-          } else {
-            // T9450: a saved confirmation gated on the REAL persistence response
-            // (this Save gesture's saveClip resolving with a raw_clip_id), never a
-            // pre-save claim. A failed save (null result / sync_failed 503) skips
-            // this branch, so the user's on-screen edits are retained un-"saved".
-            // The project_created path already confirms via notifyReelCreated;
-            // this bare-play path names the play it saved (T9580 AC #1).
-            announcePlaySaved(reelToastClipName(newRegion));
-          }
-        }
-      } else {
-        // T9630: no game record to save against yet — nothing was attempted,
-        // so this is not a failure (mirrors updateClipRegionWithSync's
-        // equivalent branch).
-        saveOk = true;
-      }
+    if (!annotateGameId) {
+      // T9630: no game record to save against yet — nothing was attempted, so
+      // this is not a failure (mirrors updateClipRegionWithSync's equivalent
+      // branch). Nothing to queue: the region's first field write takes the
+      // SAVE path itself (§ A.4 — the backend natural key + this region's own
+      // FIFO chain make that safe even if two fields are edited in a row).
+      return { saveOk: true, projectId: null };
     }
-    // T10240: return the save outcome AND the created project id (null when no
-    // project was created — e.g. a "Save play" with createProject off) so the
-    // overlay's "Save and Frame" can navigate into Framing the instant the create
-    // resolves. T10290 dropped the desktop strip's stay-open-and-rehydrate
-    // behavior: every create now closes the editor via handleSave's onResume().
-    return { saveOk, projectId: createdProjectId };
+
+    // T10610 § A.1/C.3: the create POST is the HEAD of this region's write
+    // chain. addClipRegion already ran synchronously and the editor is open
+    // and interactive while this network call is still in flight — any field
+    // write that fires in that window must wait behind it, or it would find no
+    // rawClipId yet and POST a SECOND row for the same region (the natural key
+    // includes end_time, so a moved trim would not dedupe against it).
+    const createFn = async () => {
+      // T10610 § C.4: Retry re-enqueues through this region's queue (never a
+      // direct re-call), same reason as sendRegionUpdate's own retry closure.
+      const retry = () => writeQueueRef.current.enqueue(newRegion.id, ['__create'], createFn);
+      const result = await saveClip(annotateGameId, {
+        start_time: newRegion.startTime,
+        end_time: newRegion.endTime,
+        name: newRegion.name,
+        rating: newRegion.rating,
+        tags: newRegion.tags,
+        notes: newRegion.notes,
+        video_sequence: videoSeq,
+        tagged_teammates: newRegion.tagged_teammates,
+        my_athlete: newRegion.my_athlete,
+        ...(clipData.createProject != null && { create_project: clipData.createProject }),
+      }, retry);
+      const saveOk = !!result?.raw_clip_id;
+      // T10240: the created project id, threaded back to the caller
+      // SYNCHRONOUSLY (was only delivered later via setAutoProjectId) — the
+      // shared create-then-navigate seam Frame Now/Later rely on.
+      let createdProjectId = null;
+
+      if (result?.notFound) {
+        // T8180: the game was deleted out from under this annotate session (ghost).
+        // The region is ALREADY in clipRegions (added above) so the user's work is
+        // preserved in memory and stays on screen — we do NOT navigate away or drop
+        // it. Surface a loud, persistent error with an explicit way back to the
+        // games list, and refresh that list so the ghost game drops off.
+        useGamesDataStore.getState().fetchGames();
+        toast.error('This game no longer exists', {
+          message: "Your clip couldn't be saved because this game was removed. Your work is still on screen — head back to your games to continue.",
+          duration: 0,
+          dedupKey: 'annotate-ghost-game',
+          action: {
+            label: 'Back to games',
+            onClick: () => useEditorStore.getState().redirectToMode(EDITOR_MODES.PROJECT_MANAGER),
+          },
+        });
+      } else if (result?.raw_clip_id) {
+        // T10610 § C.3: written synchronously, BEFORE setRawClipId (React
+        // state, not guaranteed flushed by the time the next chained write's
+        // .then() runs) — sendRegionUpdate reads this map first.
+        rawClipIdByRegionRef.current.set(newRegion.id, result.raw_clip_id);
+        setRawClipId(newRegion.id, result.raw_clip_id);
+
+        if (result.project_created) {
+          createdProjectId = result.project_id;
+          setAutoProjectId(newRegion.id, result.project_id);
+          notifyReelCreated(result.project_id, reelToastClipName(newRegion));
+        } else {
+          // T9450/D5: a saved confirmation gated on the REAL persistence
+          // response (this gesture's saveClip resolving with a raw_clip_id),
+          // never a pre-save claim. Fires exactly once, at creation.
+          announcePlaySaved(reelToastClipName(newRegion));
+        }
+      }
+      return { saveOk, projectId: createdProjectId };
+    };
+    return writeQueueRef.current.enqueue(newRegion.id, ['__create'], createFn);
   }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, isOverlapTimeline, activeSourceSequence, gameVideos, notifyReelCreated]);
 
   /**
-   * Update a clip region - syncs to backend
-   * This wraps the local updateClipRegion to also sync with the backend
+   * T10610 § A.1 (D2): Mark play tap creates the region AND the backend row
+   * immediately, then opens the editor in edit mode on it (via addClipRegion's
+   * onCreateSelect -> editClip wiring). Editing an existing (SELECTED) clip
+   * still just opens the editor on it — no create involved. Context (paused
+   * video, timestamp) is preserved through the auth modal.
    */
-  const updateClipRegionWithSync = useCallback(async (regionId, updates) => {
-    // Find the region BEFORE updating to get current values
-    const region = clipRegions.find(r => r.id === regionId);
+  const handleAddClipFromButton = useCallback(() => {
+    effectivePause();
+    if (selectionState.type === 'SELECTED') {
+      editClip(selectionState.clipId);
+      return;
+    }
+    if (selectionState.type === 'EDITING') {
+      // Editor already open (e.g. the fullscreen toolbar's Add play button can
+      // still fire while EDITING) — creating a second play here is not an
+      // expressed need; a silent close-and-create would be surprising.
+      return;
+    }
+    requireAuth(async () => {
+      if (markPlayInFlightRef.current) return; // synchronous double-tap guard
+      markPlayInFlightRef.current = true;
+      // Quest 1 step: completes "Find an Amazing Play" at the TAP, unchanged.
+      useQuestStore.getState().recordAchievement('add_clip_opened');
+      try {
+        const t = effectiveCurrentTime;
+        const s = Math.max(0, t - DEFAULT_CLIP_BEFORE);
+        const effectiveDur = multiVideo?.totalDuration ?? annotateVideoMetadata?.duration ?? videoDuration ?? 0;
+        const e = Math.min(t + DEFAULT_CLIP_AFTER, effectiveDur || Infinity);
+        await handleFullscreenCreateClip({
+          startTime: s, // VIRTUAL time — handleFullscreenCreateClip converts (§ A.2)
+          duration: e - s,
+          rating: NEW_PLAY_DEFAULT_RATING,
+          tags: [],
+          name: defaultPlayName(clipRegionsRef.current.length + 1),
+          notes: '',
+          tagged_teammates: [],
+          my_athlete: newClipLayerIsMine,
+          createProject: false,
+        });
+      } finally {
+        markPlayInFlightRef.current = false;
+      }
+    });
+  }, [
+    effectivePause, selectionState, editClip, requireAuth, effectiveCurrentTime,
+    multiVideo, annotateVideoMetadata, videoDuration, newClipLayerIsMine, handleFullscreenCreateClip,
+  ]);
+
+  /**
+   * T10610 § C.2: the network half of a region update, queued so it can never
+   * run out of order or overlap another write on the SAME region. Re-reads
+   * BOTH the region and the raw clip id at EXECUTION time (not call time) —
+   * `clipRegionsRef`/`rawClipIdByRegionRef`, never a closed-over `region` —
+   * because a queued write can run long after the gesture that enqueued it,
+   * by which point earlier writes in the same chain may have changed both.
+   */
+  const sendRegionUpdate = useCallback(async (regionId, actualUpdates) => {
+    const region = clipRegionsRef.current.find(r => r.id === regionId);
     if (!region) {
       console.warn('[AnnotateContainer] Region not found for update:', regionId);
       return { saveOk: false, projectId: null };
     }
-    // T10240: the project id created by THIS call (createProject: true on a play
-    // that had none), threaded back synchronously so "Frame clip" / "Save and
-    // Frame" can open it in Framing without waiting for setAutoProjectId to
-    // re-render. Null when this update created no project. Shared seam with
-    // handleFullscreenCreateClip — both create paths resolve { saveOk, projectId }.
+    // T10240: the project id created by THIS call, threaded back synchronously
+    // so Frame Now/Later can navigate without waiting for setAutoProjectId to
+    // re-render. Shared seam with handleFullscreenCreateClip.
     let createdProjectId = null;
 
-    if (updates.createProject != null) {
-      console.log('[CreateReel] updateClipRegionWithSync entered', {
+    if (actualUpdates.createProject != null) {
+      console.log('[CreateReel] sendRegionUpdate entered', {
         regionId,
         rawClipId: region.rawClipId,
         autoProjectId: region.autoProjectId,
         annotateGameId,
-        createProject: updates.createProject,
+        createProject: actualUpdates.createProject,
       });
     }
 
-    // In multi-video mode, startTime/endTime from the sidebar are virtual — convert to actual
-    let actualUpdates = updates;
-    if (fullTimeline && (updates.startTime !== undefined || updates.endTime !== undefined)) {
-      actualUpdates = { ...updates };
-      if (isOverlapTimeline) {
-        // An existing region's source is fixed (region.videoSequence); map the
-        // edited virtual bounds back into THAT source's file time.
-        const seq = region.videoSequence ?? fullTimeline.virtualToActual(effectiveCurrentTime).videoSequence;
-        if (updates.startTime !== undefined) {
-          actualUpdates.startTime = fullTimeline.virtualToSource(updates.startTime, seq).fileTime;
-        }
-        if (updates.endTime !== undefined) {
-          actualUpdates.endTime = fullTimeline.virtualToSource(updates.endTime, seq).fileTime;
-        }
-      } else {
-        if (updates.startTime !== undefined) {
-          actualUpdates.startTime = fullTimeline.virtualToActual(updates.startTime).actualTime;
-        }
-        if (updates.endTime !== undefined) {
-          actualUpdates.endTime = fullTimeline.virtualToActual(updates.endTime).actualTime;
-        }
-      }
-    }
-
-    // Update locally first
-    updateClipRegion(regionId, actualUpdates);
-
     // Skip backend sync if no game ID
     if (!annotateGameId) {
-      if (updates.createProject != null) {
+      if (actualUpdates.createProject != null) {
         console.warn('[CreateReel] ABORT: no annotateGameId, cannot sync to backend');
       }
-      // T9630: nothing to persist yet (no game record) — the local update above
-      // always applies, so this is not a failure for the caller's save-status UI.
+      // T9630: nothing to persist yet (no game record) — the local update
+      // already applied synchronously in updateClipRegionWithSync, so this is
+      // not a failure for the caller's save-status UI.
       return { saveOk: true, projectId: null };
     }
 
+    // T10610 § C.3: the ref map (written synchronously on the SAVE path below)
+    // wins over `region.rawClipId` (React state — not guaranteed flushed yet
+    // by the time this queued write runs). A region restored from the DB and
+    // never SAVEd this session has no ref-map entry, so it falls back cleanly.
+    const rawClipId = rawClipIdByRegionRef.current.get(regionId) ?? region.rawClipId;
+
     // If clip doesn't have rawClipId, save it to backend first
-    if (!region.rawClipId) {
-      if (updates.createProject != null) {
+    if (!rawClipId) {
+      if (actualUpdates.createProject != null) {
         console.log('[CreateReel] Taking SAVE path (no rawClipId)');
       }
 
@@ -1474,10 +1484,12 @@ export function AnnotateContainer({
       }
 
       const result = await saveClip(annotateGameId, clipData);
-      if (updates.createProject != null) {
+      if (actualUpdates.createProject != null) {
         console.log('[CreateReel] SAVE path result:', result);
       }
       if (result?.raw_clip_id) {
+        // T10610 § C.3: synchronous, BEFORE setRawClipId (React state).
+        rawClipIdByRegionRef.current.set(region.id, result.raw_clip_id);
         setRawClipId(region.id, result.raw_clip_id);
 
         if (result.project_created) {
@@ -1513,11 +1525,15 @@ export function AnnotateContainer({
       }
 
       if (Object.keys(backendUpdates).length > 0) {
-        if (updates.createProject != null) {
-          console.log('[CreateReel] Taking UPDATE path', { clipId: region.rawClipId, backendUpdates });
+        if (actualUpdates.createProject != null) {
+          console.log('[CreateReel] Taking UPDATE path', { clipId: rawClipId, backendUpdates });
         }
-        const result = await updateClipRemote(region.rawClipId, backendUpdates);
-        if (updates.createProject != null) {
+        // T10610 § C.4: retry re-enqueues through THIS region's queue, so a
+        // real fix clears the failed key instead of a direct retry that the
+        // queue's bookkeeping never sees.
+        const retry = () => writeQueueRef.current.enqueue(regionId, Object.keys(actualUpdates), () => sendRegionUpdate(regionId, actualUpdates));
+        const result = await updateClipRemote(rawClipId, backendUpdates, retry);
+        if (actualUpdates.createProject != null) {
           console.log('[CreateReel] UPDATE path result:', result);
         }
         if (result?.project_created) {
@@ -1528,74 +1544,174 @@ export function AnnotateContainer({
         // T9630: updateClipRemote (useRawClipSave.updateClip) returns null on
         // any failure (thrown error / sync_failed 503, already toasted there).
         return { saveOk: !!result, projectId: createdProjectId };
-      } else if (updates.createProject != null) {
+      } else if (actualUpdates.createProject != null) {
         console.warn('[CreateReel] ABORT: backendUpdates was empty, nothing sent to backend');
         return { saveOk: false, projectId: null };
       }
       // Nothing needed persisting (e.g. a redundant update) — not a failure.
       return { saveOk: true, projectId: null };
     }
-  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, activeSourceSequence, fullTimeline, isOverlapTimeline, effectiveCurrentTime, notifyReelCreated]);
+  }, [annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, activeSourceSequence, notifyReelCreated]);
+
+  /**
+   * T10610 § C.2: clean-check (binding constraint 6) — a gesture whose value
+   * already equals the stored region value costs nothing: no local write, no
+   * network write. `createProject` is an ACTION, not a field, so it is never
+   * "clean" (excluded from the comparison).
+   */
+  const isCleanAgainst = useCallback((region, actualUpdates) => {
+    const keys = Object.keys(actualUpdates).filter((k) => k !== 'createProject');
+    if (keys.length === 0) return true;
+    return keys.every((key) => {
+      if (key === 'duration') {
+        // Mirrors sendRegionUpdate's own duration->start_time computation
+        // (endTime held fixed); an explicit startTime in the same payload
+        // already covers the comparison.
+        if (actualUpdates.startTime !== undefined) return true;
+        return Math.max(0, region.endTime - actualUpdates.duration) === region.startTime;
+      }
+      const value = actualUpdates[key];
+      const stored = region[key];
+      if (Array.isArray(value) || Array.isArray(stored)) {
+        return JSON.stringify(value ?? []) === JSON.stringify(stored ?? []);
+      }
+      return (value ?? null) === (stored ?? null);
+    });
+  }, []);
+
+  /**
+   * Update a clip region - syncs to backend.
+   *
+   * T10610 § C.2: split into a synchronous local half (clean-check +
+   * updateClipRegion, so the UI never lags behind a drag/keystroke) and a
+   * QUEUED network half (sendRegionUpdate, via writeQueueRef) so writes on one
+   * region can never arrive out of order or overlap. This is now the ONE
+   * place every field commit, in both editors, funnels through.
+   */
+  const updateClipRegionWithSync = useCallback((regionId, updates) => {
+    // T10610 § C.3: read via the ref, not the `clipRegions` closure — this
+    // function is itself called synchronously from gesture handlers, so a
+    // closure would usually be fresh here, but the ref keeps this and
+    // sendRegionUpdate reading the SAME source of truth.
+    const region = clipRegionsRef.current.find(r => r.id === regionId);
+    if (!region) {
+      console.warn('[AnnotateContainer] Region not found for update:', regionId);
+      return Promise.resolve({ saveOk: false, projectId: null });
+    }
+
+    // In multi-video mode, startTime/endTime from the caller are virtual — convert to actual
+    let actualUpdates = updates;
+    if (fullTimeline && (updates.startTime !== undefined || updates.endTime !== undefined)) {
+      actualUpdates = { ...updates };
+      if (isOverlapTimeline) {
+        // An existing region's source is fixed (region.videoSequence); map the
+        // edited virtual bounds back into THAT source's file time.
+        const seq = region.videoSequence ?? fullTimeline.virtualToActual(effectiveCurrentTime).videoSequence;
+        if (updates.startTime !== undefined) {
+          actualUpdates.startTime = fullTimeline.virtualToSource(updates.startTime, seq).fileTime;
+        }
+        if (updates.endTime !== undefined) {
+          actualUpdates.endTime = fullTimeline.virtualToSource(updates.endTime, seq).fileTime;
+        }
+      } else {
+        if (updates.startTime !== undefined) {
+          actualUpdates.startTime = fullTimeline.virtualToActual(updates.startTime).actualTime;
+        }
+        if (updates.endTime !== undefined) {
+          actualUpdates.endTime = fullTimeline.virtualToActual(updates.endTime).actualTime;
+        }
+      }
+    }
+
+    if (isCleanAgainst(region, actualUpdates)) {
+      return Promise.resolve({ saveOk: true, projectId: region.autoProjectId ?? null });
+    }
+
+    // Update locally first — SYNCHRONOUS, never queued, so the UI tracks the
+    // gesture instantly regardless of network latency.
+    updateClipRegion(regionId, actualUpdates);
+
+    setWriteStatus('saving');
+    const written = writeQueueRef.current.enqueue(
+      regionId,
+      Object.keys(actualUpdates),
+      () => sendRegionUpdate(regionId, actualUpdates),
+    );
+    written.then((result) => {
+      setWriteStatus(result && result.saveOk === false ? 'error' : 'saved');
+    });
+    return written;
+  }, [updateClipRegion, fullTimeline, isOverlapTimeline, effectiveCurrentTime, isCleanAgainst, sendRegionUpdate]);
 
   /**
    * Handle updating an existing clip from fullscreen overlay.
    * Uses updateClipRegionWithSync for backend sync.
    *
    * T9630: no longer closes the overlay itself — it returns the real
-   * persistence outcome so the overlay's own Save gesture
-   * (AnnotateFullscreenOverlay.handleSave) can decide whether to close. A
-   * failed save must leave the form open with the user's edits intact rather
-   * than closing unconditionally and silently discarding the failure.
-   * T10240: the outcome is now { saveOk, projectId } (projectId set only when
-   * this update created the auto-project) so "Save and Frame" / "Frame clip"
-   * can navigate into Framing with the new id.
+   * persistence outcome. T10240: the outcome is { saveOk, projectId }
+   * (projectId set only when this update created the auto-project) so
+   * Frame Now/Later can navigate with the new id.
    */
   const handleFullscreenUpdateClip = useCallback((regionId, updates) => {
     return updateClipRegionWithSync(regionId, updates);
   }, [updateClipRegionWithSync]);
 
   /**
-   * Delete a clip region - syncs to backend if the clip has been saved
+   * T10610 § C.4: awaited by the Frame / stage CTA before navigating — resolves
+   * `false` while the region's write chain is still in flight OR its last
+   * attempt on some field failed (per-key tracking in regionWriteQueue), so a
+   * trim that hasn't reached the server yet can never be followed into Framing.
    */
-  const deleteClipRegion = useCallback(async (regionId) => {
-    // Find the region to get its rawClipId before deleting locally
-    const region = clipRegions.find(r => r.id === regionId);
-    const rawClipId = region?.rawClipId;
-
-    // Delete locally first
-    deleteClipRegionLocal(regionId);
-
-    // Sync to backend if the clip was saved
-    if (rawClipId) {
-      await deleteClipRemote(rawClipId);
-    }
-  }, [clipRegions, deleteClipRegionLocal, deleteClipRemote]);
+  const awaitRegionWrites = useCallback((regionId) => {
+    return writeQueueRef.current.settle(regionId);
+  }, []);
 
   /**
-   * Handle closing the fullscreen overlay without creating a clip
+   * Delete a clip region - syncs to backend if the clip has been saved.
+   * T10610 § D.3 / binding constraint 7: the network delete is QUEUED behind
+   * any pending writes on this region — a name blur enqueues a PUT; deleting
+   * 300ms later must not race ahead of it and 404 a PUT for a play that no
+   * longer exists. This is the ONE delete implementation both the sidebar's
+   * plain delete (SELECTED, no overlay to close) and handleDeletePlayFromEditor
+   * (EDITING) share.
+   */
+  const deleteClipRegion = useCallback((regionId) => {
+    const region = clipRegionsRef.current.find(r => r.id === regionId);
+    const rawClipId = rawClipIdByRegionRef.current.get(regionId) ?? region?.rawClipId;
+
+    // Delete locally first — immediate, regardless of network state.
+    deleteClipRegionLocal(regionId);
+
+    if (!rawClipId) return Promise.resolve(true);
+
+    const deleteFn = () => {
+      const retry = () => writeQueueRef.current.enqueue(regionId, ['__delete'], deleteFn);
+      return deleteClipRemote(rawClipId, retry);
+    };
+    return writeQueueRef.current.enqueue(regionId, ['__delete'], deleteFn);
+  }, [deleteClipRegionLocal, deleteClipRemote]);
+
+  /**
+   * T10610 § D.3: deleting the play the EDITOR is open on must also close it —
+   * `existingClip` would otherwise become null while EDITING, rendering an
+   * impossible create form. `forget` drops the region's write-queue bookkeeping
+   * once the delete settles (nothing will ever write this region again).
+   */
+  const handleDeletePlayFromEditor = useCallback(async (regionId) => {
+    closeOverlay();   // EDITING -> SELECTED
+    deselectClip();   // SELECTED -> NONE
+    await deleteClipRegion(regionId);
+    writeQueueRef.current.forget(regionId);
+  }, [closeOverlay, deselectClip, deleteClipRegion]);
+
+  /**
+   * Handle closing the fullscreen overlay without discarding anything (D1/D6:
+   * there is nothing to discard — closeWithCommit, inside the overlay itself,
+   * commits any dirty text field before calling this).
    */
   const handleOverlayClose = useCallback(() => {
     closeOverlay();
   }, [closeOverlay]);
-
-  /**
-   * Handle resuming playback from fullscreen overlay
-   */
-  const handleOverlayResume = useCallback(() => {
-    closeOverlay();
-    effectiveTogglePlay();
-  }, [closeOverlay, effectiveTogglePlay]);
-
-  /**
-   * T9330: resume playback WITHOUT closing the overlay. Used by the desktop
-   * strip's create-save so the editor stays open on the just-created clip while
-   * playback resumes (matching today's felt behavior — the strip doesn't cover
-   * the canvas). The split is deliberate: handleOverlayResume conflated
-   * close+play, which can't express "keep editing, keep playing".
-   */
-  const handleOverlayResumePlayback = useCallback(() => {
-    effectiveTogglePlay();
-  }, [effectiveTogglePlay]);
 
   // T2750: In unified multi-video mode, convert virtual time to actual and match
   // against the correct video's clips. Clips store actual per-video times.
@@ -1638,7 +1754,7 @@ export function AnnotateContainer({
       setActiveSourceSequence(null);
       setFallbackLabel(null);
     }
-    if (selectionState.type === 'EDITING' || selectionState.type === 'CREATING') {
+    if (selectionState.type === 'EDITING') {
       if (!getRegionAtTimeUnified(time)) {
         closeOverlay();
       }
@@ -1679,7 +1795,7 @@ export function AnnotateContainer({
   }, [clipRegions, selectionState, selectClip, editClip, effectiveSeek, effectiveCurrentTime, fullTimeline, isOverlapTimeline, switchToSource]);
 
   // Effect: Auto-select/deselect based on playhead position
-  // EDITING and CREATING are immune — scrub handles move playhead without deselecting
+  // EDITING is immune — scrub handles move playhead without deselecting
   // FRAME_TOLERANCE: the browser's seeked event snaps to frame boundaries, which can be
   // slightly before startTime (e.g., seek(30) → seeked fires with 29.967). Without
   // tolerance, this would immediately deselect the clip the user just clicked.
@@ -1687,7 +1803,7 @@ export function AnnotateContainer({
     if (!annotateVideoUrl) return;
     const { type, clipId } = selectionState;
 
-    if (type === 'EDITING' || type === 'CREATING') return;
+    if (type === 'EDITING') return;
     if (scrubLockedRef.current) return; // Sidebar scrub in progress — don't deselect
     if (hasUncommittedTeammateText()) return;
 
@@ -1981,9 +2097,9 @@ export function AnnotateContainer({
     annotateClipCount,
     isLoadingAnnotations,
     ANNOTATE_MAX_NOTES_LENGTH,
-    // T9330: the clip whose project is being created right now (create-save in
-    // flight) — drives the strip's disabled "Apply Framing" pending CTA.
-    pendingProjectClipId,
+    // T10610: per-gesture write status ('idle'|'saving'|'saved'|'error'),
+    // driving SaveStatusBadge now that there is no Save button (§ C.5).
+    writeStatus,
 
     // Handlers
     handleGameVideoSelect,
@@ -1993,8 +2109,7 @@ export function AnnotateContainer({
     handleFullscreenCreateClip,
     handleFullscreenUpdateClip,
     handleOverlayClose,
-    handleOverlayResume,
-    handleOverlayResumePlayback,
+    handleDeletePlayFromEditor,
     handleSelectRegion,
     handleTimelineSeek, // Seek + close overlay if target outside clips (timeline gesture)
     setAnnotatePlaybackSpeed,
@@ -2003,6 +2118,7 @@ export function AnnotateContainer({
     // Clip region actions (wrapped with backend sync)
     updateClipRegion: updateClipRegionWithSync,
     deleteClipRegion,
+    awaitRegionWrites, // T10610 § C.4: Frame/stage CTA awaits this before navigating
     importAnnotations: importAnnotationsWithRawClips,
     getAnnotateRegionAtTime: getRegionAtTimeUnified,
     selectAnnotateRegion, // Raw select for keyboard shortcuts (doesn't seek)
