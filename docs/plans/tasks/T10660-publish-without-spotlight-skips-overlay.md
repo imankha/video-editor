@@ -1,6 +1,6 @@
 # T10660: "Publish without spotlight" must never route the user through the Overlay editor
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-19

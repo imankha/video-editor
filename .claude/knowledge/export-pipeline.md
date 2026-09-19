@@ -1,5 +1,18 @@
 ---
 domain: export-pipeline
+updated: 2026-09-19 (T10660 — Focus "Publish without spotlight" fires the overlay render HEADLESSLY.
+`POST /api/export/render-overlay` is backend-authoritative (body {project_id, export_id,
+effect_type}; reads highlights/text/effect from working_videos), so the one-tap publish no longer
+mounts the Overlay screen to reach an export button. NEW `utils/startOverlayPublishRender.js` mirrors
+`ExportButtonContainer`'s overlay branch (generateExportId -> useExportStore.startExport(...,
+'overlay') -> exportWebSocketManager.connect -> POST -> completion fired ONCE via a local one-shot
+guarding the DUAL TRANSPORT: a no-keyframes render returns HTTP 200 AND sends a WS complete frame).
+This is a DELIBERATE 2nd copy of the overlay-start sequence (abstract-on-3rd-duplication exception);
+do NOT unify with ExportButtonContainer here. Completion routes through the EXISTING
+handleExportComplete/handleOverlayExportCompletion (publish gated ONLY on the publishIntent stake,
+the T9740 double-fire guard preserved; navigation gate widened FRAMING-or-OVERLAY). Errors (POST
+reject / 409 export_in_flight / WS error) clear the stake + toast, no navigation. Deleted the
+frontend `scheduleExportWhenReady.js` readiness poll. No backend/Modal change.)
 updated: 2026-09-17 (T4390 — finalize + publish single writers landed. The task file's site
 inventory was STALE: T5630/T4175/T4380 had already consolidated 3 of the 5 claimed finalize
 copies and 1 of the 3 claimed publish writers, so the real remaining scope was smaller than the

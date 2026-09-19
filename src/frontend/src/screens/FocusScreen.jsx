@@ -16,8 +16,9 @@ import { toast } from '../components/shared';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
-import { FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST } from '../config/displayNames';
+import { FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST, FOCUS_PREVIEW } from '../config/displayNames';
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
+import { deriveFramingCtaState } from '../utils/framingCtaState';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { resultRetentionNote } from '../utils/resultRetentionNote';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
@@ -96,6 +97,9 @@ export function FocusScreen({
   // T740: outdated clips dialog and state removed — framing always uses latest boundaries
   // Mobile sidebar toggle
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  // T10650: spinner while resolveWorkingVideoPreviewUrl resolves the "Back to
+  // Preview" URL. Ephemeral gesture state, never persisted.
+  const [backToPreviewLoading, setBackToPreviewLoading] = useState(false);
   // T8390: post-export preview + publish-exit action bar (overlay is an offer,
   // not a stage; the preview mounts BEFORE any choice, replacing T8520's
   // choose-then-preview card with preview-first per the approved design).
@@ -109,6 +113,14 @@ export function FocusScreen({
   const openPreview = useFocusCompletionStore((s) => s.openPreview);
   const closePreview = useFocusCompletionStore((s) => s.closePreview);
   const previewOpen = completionPreview?.projectId === projectId;
+  // T10660: "Publish without spotlight" now renders headlessly (the user stays in
+  // Focus with the preview open), so the Publish card's loading state is derived
+  // straight from the publish-intent stake for THIS project — no local flag to
+  // reset. The stake is set in handlePublish and cleared by
+  // handleOverlayExportCompletion on completion (its idempotency token) or by
+  // App's error path, so this tracks the render's whole lifetime.
+  const publishIntentProjectId = usePublishIntentStore((s) => s.projectId);
+  const publishLoading = publishIntentProjectId === projectId;
   // T9100: FocusScreen no longer READS the shared workingVideo record (the
   // post-export preview now uses the completion store); it still WRITES it via
   // setWorkingVideo. So the reactive selector is gone, but the store action stays.
@@ -1096,6 +1108,19 @@ export function FocusScreen({
 
     setFramingChangedSinceExport(false);
 
+    // T10650: the render just stamped working_clips.exported_at server-side, but
+    // our in-memory clips still carry the pre-render version (an in-session edit
+    // to an exported clip mints a new version with exported_at NULL, fetched at
+    // edit time). Without this refetch the durable staleness signal stays NULL in
+    // memory, so deriveFramingCtaState would read "stale" and show "Generate
+    // Framing" instead of "Back to Preview" until a reload. Part of the
+    // completion gesture flow (a read, not reactive persistence).
+    try {
+      await fetchProjectClips();
+    } catch (err) {
+      console.warn('[FocusScreen] Failed to refresh clips after export (continuing):', err);
+    }
+
     if (onProceedToOverlay) {
       try {
         await onProceedToOverlay(renderedVideoBlob, clipMetadata);
@@ -1110,7 +1135,7 @@ export function FocusScreen({
     if (!workingVideoSet) {
       console.error('[FocusScreen] Cannot offer overlay — working video not set');
     }
-  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, clipMetadataCache, globalAspectRatio, refreshProject, projectId, onExportComplete, setIsLoadingWorkingVideo, openPreview]);
+  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, clipMetadataCache, globalAspectRatio, refreshProject, projectId, onExportComplete, setIsLoadingWorkingVideo, openPreview, fetchProjectClips]);
 
   // T9790: acknowledge the completed framing job on the decision gesture. The
   // live completion path (offerFocusCompletionPreview) deliberately does NOT
@@ -1166,49 +1191,45 @@ export function FocusScreen({
 
   // T8390: Publish — renamed from "Finish Now" now that the user has actually
   // watched the preview before deciding. ONE tap, TRUE publish: this fires the
-  // same spotlight-less overlay render "Finish Now" always fired, but also
-  // stakes the publish INTENT via publishIntentStore before triggering it.
-  // App.jsx's shared export-completion handler (the T8530 "land the user on
-  // the finished reel" block) reads that flag when THIS project's render
-  // completes and auto-runs the publish gesture instead of waiting for a
-  // second tap — see publishIntentStore.js for why a store (not a plain ref)
-  // is the right shape for a cross-component signal here.
+  // spotlight-less overlay render and stakes the publish INTENT via
+  // publishIntentStore before triggering it. App.jsx's shared export-completion
+  // handler (handleOverlayExportCompletion) reads that stake when THIS project's
+  // render completes and auto-runs the publish gesture — see publishIntentStore.js
+  // for why a store (not a plain ref) is the right shape for that cross-component
+  // signal.
   //
-  // T9740: fire OVERLAY's export button, not Focus's own. The bug this fixes
-  // (twice — original + PR #417's regression) was NEVER "the delay was too
-  // short". It was that Focus's own export button and Overlay's export button
-  // shared ONE ref: `setEditorMode('overlay')` is a synchronous Zustand set,
-  // but React hasn't yet unmounted Focus / mounted Overlay when the readiness
-  // poll's first (synchronous) tick runs, so a poll keyed on "some button is
-  // mounted" was satisfied on tick zero by Focus's STILL-MOUNTED button and
-  // fired the framing render endpoint instead of the overlay one. App.jsx now
-  // owns two separate refs (focus vs overlay) and hands us a scheduler bound to
-  // OVERLAY's ref specifically via `onPublishWithoutSpotlight`, so the poll can
-  // only ever be satisfied by Overlay's button — by construction, in any tick,
-  // under any React scheduling. Called UNGUARDED: a missing prop must crash
-  // loudly (no-silent-fallbacks), never no-op the one-tap promise away.
+  // T10660: the render now fires HEADLESSLY (App's onPublishWithoutSpotlight ->
+  // startOverlayPublishRender), so this NO LONGER switches editorMode or closes
+  // the preview. The user keeps watching their video in the open completion
+  // preview while it publishes; the Publish card shows `publishLoading` (derived
+  // from the stake). This supersedes T9740's whole reason for existing: that fix
+  // fought a mechanism that fired OVERLAY's export button by mounting the Overlay
+  // screen and polling for the button — a premise that was wrong, since
+  // /api/export/render-overlay is backend-authoritative and needs no mounted
+  // screen. (One-line pointer so nobody reinvents the poll: it existed only to
+  // reach a mounted overlay export button; the headless render removes that need.)
+  // Called UNGUARDED: a missing onPublishWithoutSpotlight prop must crash loudly
+  // (no-silent-fallbacks), never no-op the one-tap promise away.
   const handlePublish = useCallback(() => {
-    // Re-entrancy guard: two Publish clicks landing in the same tick (before
-    // React unmounts the button on setShowExportCompletePreview(false)) must
-    // not schedule two renders -> two publish attempts. The store itself is
-    // the mutex: if this project's intent is already staked, a render is
-    // already in flight for it.
+    // Re-entrancy guard: two Publish taps in the same tick must not stake/fire
+    // twice. The store is the mutex: if this project's intent is already staked,
+    // a render is already in flight for it.
     if (usePublishIntentStore.getState().projectId === projectId) return;
     acknowledgeCompletionJob();
-    closePreview();
+    // T10660: preview stays OPEN (no closePreview / no setEditorMode). The user
+    // keeps watching while the reel publishes; the Publish card shows its loading
+    // state, derived above from this staked intent.
     useQuestStore.getState().recordAchievement('overlay_declined');
     usePublishIntentStore.getState().set(projectId);
-    // Safety net: ExportButtonContainer exposes no onError callback here, so
-    // a render that fails leaves no precise clear point — expire the stake
-    // instead of leaving it staked forever (see PUBLISH_INTENT_TIMEOUT_MS).
-    // This is also the bound the overlay-publish poll relies on: once the
-    // stake clears, the poll stops trying (and reports abandonment) on its own.
+    // Safety-net backstop ONLY (T10660): the headless render now surfaces a
+    // precise failure point (App's onError clears the stake + toasts), so this is
+    // no longer the primary error path — it just bounds the staleness window if a
+    // render somehow neither completes nor errors (see PUBLISH_INTENT_TIMEOUT_MS).
     setTimeout(() => {
       if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     }, PUBLISH_INTENT_TIMEOUT_MS);
-    setEditorMode('overlay');
     onPublishWithoutSpotlight(projectId);
-  }, [setEditorMode, onPublishWithoutSpotlight, projectId, closePreview, acknowledgeCompletionJob]);
+  }, [onPublishWithoutSpotlight, projectId, acknowledgeCompletionJob]);
 
   // T8390: Refocus — go back and reframe. The preview is an overlay ON TOP of
   // the still-mounted Focus editor, so closing it IS "back to editing"; no new
@@ -1226,6 +1247,40 @@ export function FocusScreen({
     // T8390: defense-in-depth clear (see handleAddSpotlight comment above).
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
   }, [projectId, closePreview, acknowledgeCompletionJob]);
+
+  // T10650: the action-band CTA state. Derived at render time from the durable
+  // render pointer (project.working_video_id), the latest clips' exported_at
+  // stamps, and the in-session framingChangedSinceExport flag — persist NOTHING
+  // (the whole feature is derived, no redundant state). See deriveFramingCtaState
+  // for why exported_at is the durable staleness signal that survives a reload.
+  const framingCtaState = useMemo(
+    () => deriveFramingCtaState({
+      workingVideoId: project?.working_video_id,
+      clips,
+      framingChangedSinceExport,
+    }),
+    [project?.working_video_id, clips, framingChangedSinceExport]
+  );
+
+  // T10650: reopen the already-rendered working video (the "Back to Preview" CTA
+  // and its ghost twin). Resolve the URL in one HTTP call and reopen the SAME
+  // completion preview + four-choice action bar; NEVER a silent re-render. A null
+  // URL is loud (toast) and starts nothing. jobId is null so reopening an
+  // already-acknowledged completion acknowledges nothing.
+  const handleBackToPreview = useCallback(async () => {
+    if (backToPreviewLoading) return;
+    setBackToPreviewLoading(true);
+    try {
+      const url = await resolveWorkingVideoPreviewUrl(projectId);
+      if (!url) {
+        toast.error(FOCUS_PREVIEW.LOAD_FAILED);
+        return;
+      }
+      openPreview({ projectId, previewUrl: url, openMode: EDITOR_MODES.FRAMING, jobId: null });
+    } finally {
+      setBackToPreviewLoading(false);
+    }
+  }, [backToPreviewLoading, projectId, openPreview]);
 
   // Derive game name for selected clip
   const selectedClipGameName = useMemo(() => {
@@ -1453,6 +1508,11 @@ export function FocusScreen({
       onProceedToOverlay={handleProceedToOverlayInternal}
       onExportComplete={onExportComplete}
       saveCurrentClipState={framingSaveCurrentClipState}
+      framingCtaMode={framingCtaState.mode}
+      showBackToPreview={framingCtaState.showBackToPreview}
+      onBackToPreview={handleBackToPreview}
+      renderedAt={framingCtaState.renderedAt}
+      backToPreviewLoading={backToPreviewLoading}
       cropContextValue={cropContextValue}
     />
       </div>
@@ -1478,6 +1538,7 @@ export function FocusScreen({
           actionBar={(
             <FocusPublishActionBar
               onPublish={handlePublish}
+              publishLoading={publishLoading}
               onAddSpotlight={handleAddSpotlight}
               onRefocus={handleRefocus}
               onSaveDraft={handleAddSpotlightLater}
