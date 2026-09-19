@@ -1,6 +1,6 @@
 # T10400: Fullscreen shouldn't auto-open the play editor when a play is selected
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-18
@@ -66,6 +66,11 @@ addressed:
   ambiguous text, since the overlay itself renders "Edit play" text once open).
 - `.claude/knowledge/annotate.md` updated with a landmine entry (this doc).
 - Comment moved to the function's JSDoc instead of floating mid-body.
+
+**Merged 2026-09-18 (user: "merge it directly"):** local master fast-forwarded to
+`origin/master` (which had moved ahead with PR #466, unrelated), branch merged with `--no-ff`
+(no conflicts — disjoint files from #466), 51/51 curated tests re-run green post-merge, pushed to
+`origin/master` (`b1572d06`). Feature branch deleted (local + remote) per repo convention.
 
 **Live-drive verification (real browser, dev servers on 5173/8000):** wrote a throwaway temp e2e
 spec (not committed — deleted after use) that creates a game + one play via the plain UI (no TSV
