@@ -1,0 +1,118 @@
+# T10620: Mobile portrait — compact editor strip under a visible video
+
+**Status:** TODO
+**Impact:** 7
+**Complexity:** 4
+**Created:** 2026-09-19
+**Updated:** 2026-09-19
+**Epic:** [play-editor-autosave/EPIC.md](EPIC.md) (task 3 of 4, M-tier). **Blocked by T10610** (no pinned Save footer anymore; editor always in edit mode).
+
+## Problem
+
+Reproduced live 2026-09-19 at 393x852 (real account) — screenshots in the epic's decision
+artifact. On a portrait phone the play editor renders as `AnnotateModeView.jsx`'s
+`mobileInlineForm` sheet: `fixed inset-x-0 bottom-0 z-40 ... max-h-[85vh]` wrapping
+`AnnotateFullscreenOverlay layout="inline" surface="sheet_mobile"`. It covers ~85% of the
+viewport; only a thumbnail-strip sliver of the video remains above it. The trim handles and
+the `<| 1:14.3 |> -> <| 1:22.3 |>` nudge controls are the whole point of the editor on this
+surface and they have no video to refer to. User: "I need to see the video in order for the
+levers for the edit timing to make sense." Same sheet, same problem for a just-marked play
+and for editing an existing one (one component, one wrapper).
+
+The sheet was `position: fixed` + `max-h-[85vh]` for ONE reason (T8140): to pin a Save
+footer on screen at 390x844. T10610 removes that footer, so the constraint is gone.
+
+## Solution (EPIC D8 — Option B from the artifact, ui-designer recommendation)
+
+Extend the shipped `landscape-inline` compact-strip pattern (`AnnotateFullscreenOverlay.jsx`
+~1216-1288: `ClipScrubRegion compact` + one dense controls row, `border-t px-3 py-2`, no
+sheet) to portrait, rendered IN FLOW directly under the video card — not fixed, not a sheet.
+
+Layout (top to bottom, portrait phone, editor open):
+1. Video card — guaranteed visible height (design target: the video keeps at least the
+   height it has when the editor is closed on the same viewport; do NOT shrink it to make
+   room, the strip is short instead).
+2. Strip row 1: `ClipScrubRegion compact` (trim bar + the T9480 typed-entry readouts) with
+   the play-progress badges (T10410) right-aligned if they fit at 393px, else on their own
+   compact row.
+3. Strip row 2: clip name input (flex-1, `min-w-0`, truncates) + "Notes and Tags" disclosure
+   button (`flex-none`, `whitespace-nowrap`) + Done/X (`flex-none`). The artifact mockup's
+   overflow bug (Update button clipped off-screen because none of the three had shrink
+   priority) is the exact regression to test for: the two buttons never shrink, the input
+   absorbs the squeeze.
+4. Stage CTA (Frame / Apply Spotlight / View Final — `stageCta`) full width below the strip
+   when the clip has a project; the T10310 main-screen [Edit Play]/[Frame] row stays hidden
+   while the editor is open (as today).
+5. Play category (My athlete / Team), rating (already a popup badge, T10520/T10560), tags,
+   notes, teammates, sport prompt, Delete play: all behind the "Notes and Tags" disclosure
+   -> `AddDetailsPopup` (mobile full-screen popup, T8600). It may cover the video; none of
+   those fields need it. Rename the disclosure label if category now lives there
+   (`ANNOTATE.DETAILS` is the single source; propose "Details" or keep "Notes and Tags"
+   and put category on strip row 2 if it fits — decide by measuring at 360px, the
+   narrowest supported width per the `responsiveness` skill).
+
+Implementation shape: add `layout="portrait-strip"` (or generalise `landscape-inline` with
+an `orientation` prop — pick whichever leaves ONE markup path for both phone orientations;
+do not copy the block). `AnnotateModeView.jsx` renders it in flow where `mobileInlineForm`
+renders the sheet today (`~1244-1270`), removing `fixed inset-x-0 bottom-0 z-40 max-h-[85vh]
+rounded-t-2xl` and the sheet's `[@media(max-height:700px)]:pb-9` keyboard padding hack
+(T8790/F3), which existed only for the pinned footer. Keep `surface="sheet_mobile"`'s
+analytics value only if any beacon still reads it after T10610 (grep).
+
+`mobileFs` (mobile fullscreen, T9500) is a separate surface and out of scope unless the
+same wrapper feeds it — check `AnnotateModeView.jsx` ~575-600 and say so in the report.
+
+## Context
+
+### Relevant Files (REQUIRED)
+- `src/frontend/src/modes/AnnotateModeView.jsx` — mobile sheet wrapper (~1230-1270), `mobileInlineForm`/`underCanvasEditor` derivation (~264-274), video card wrapper with `backdrop-blur-lg` (the T10420 landmine — in-flow rendering sidesteps it; document that in the knowledge doc)
+- `src/frontend/src/modes/annotate/components/AnnotateFullscreenOverlay.jsx` — new/generalised strip layout; `inline` layout becomes desktop-sidebar-only (ClipsSidePanel) or is deleted if unused on mobile after this
+- `src/frontend/src/modes/annotate/components/AddDetailsPopup.jsx` + `DetailsFields.jsx` — receives category + Delete play if they move behind the disclosure
+- `src/frontend/src/modes/annotate/components/ClipScrubRegion.jsx` — `compact` variant (no step chevrons; click-to-edit readouts) — verify touch targets under `coarse-pointer:` (real touch project, not a resized mouse viewport — see annotate.md's 2026-09-18 false-positive landmine)
+- `src/frontend/src/hooks/useIsMobile.js` — the real mobile predicate (max-width 1023px OR coarse pointer); never a Tailwind `sm:` split for this decision (T10590 finding 2)
+- `src/frontend/e2e/T4880-mobile-editor-reachable.spec.js` (pattern for the real-touch mobile drive) and `e2e/helpers/usabilityAudit.js`
+- Tests: `AnnotateFullscreenOverlay.mobileStageCta.test.jsx`, `AnnotateFullscreenOverlay.details.test.jsx`, `AnnotateModeView.frameClip.test.jsx`; new `AnnotateFullscreenOverlay.portraitStrip.test.jsx`
+- `.claude/knowledge/annotate.md` — T8140/T8790/T10420 entries for this surface get a "retired by T10620" note
+
+### Related Tasks
+- Depends on: T10610 (no Save footer; editor always edit mode)
+- Design source: epic decision artifact, Problem 1 "Recommended" panel + option ledger
+- Prior art: `landscape-inline` (T7350-era), T8600 `AddDetailsPopup`, T10420 (why fixed-inside-blur breaks)
+
+### Technical Notes
+- Guaranteed video height is the acceptance bar, measured, not eyeballed: at 393x852 and
+  375x667 (iPhone SE class) the video element's on-screen height with the editor open must
+  be >= its height with the editor closed minus 0px (the strip pushes content below, it does
+  not overlay the video). If the page must scroll to reach the strip on the SE, that is
+  acceptable; the video being covered is not.
+- Real-device check owed: Playwright cannot reproduce iOS Safari's dynamic toolbar (T4880
+  caveat). Flag it in the report as the staging-verification step, not as done.
+- Keyboard: with the name input on the strip, the soft keyboard pushes/covers content —
+  test typing a name at 393x852 with the keyboard emulated (viewport height reduced to ~480)
+  and confirm the input stays visible (scrollIntoView on focus is acceptable; a fixed
+  wrapper is not).
+
+## Implementation
+
+### Steps
+1. [ ] Branch `feature/T10620-portrait-editor-strip`; load `annotate.md` (T8140, T8600, T9500, T10420, T10590 entries) + the epic
+2. [ ] Measure the current closed-editor video height at 393x852 / 375x667 / 360x740 (Playwright, real touch project) — record in the task file
+3. [ ] Implement the portrait strip layout + in-flow render; move overflow fields into the disclosure; wire Done + Delete play
+4. [ ] Unit tests: layout renders no sheet wrapper on mobile portrait; strip row 2 buttons carry `flex-none`; disclosure holds the moved fields; `useIsMobile` decides the split
+5. [ ] Live-drive (real touch emulation): trim with the video visible; keyboard-open name entry; SE height; landscape unchanged; desktop unchanged
+6. [ ] Reviewer (fresh context) on the diff; knowledge doc update; push; CI verdict; hand to user WITH screenshots at the three widths (visual judgment -> user test gate, not auto-merge)
+
+### Progress Log
+
+**2026-09-19**: Filed. Not started.
+
+## Acceptance Criteria
+
+- [ ] Portrait phone, editor open: the video's on-screen height equals its editor-closed height (measured at 393x852, 375x667, 360x740)
+- [ ] Trim bar, readouts, and name are visible together with the video without scrolling at 393x852
+- [ ] No `position: fixed` editor wrapper on mobile portrait; no `max-h-[85vh]`
+- [ ] Strip row 2: Done and the disclosure button never clip or shrink; the name input truncates instead (unit + screenshot)
+- [ ] All fields removed from the strip are reachable via the disclosure; Delete play reachable
+- [ ] Landscape-inline and desktop layouts unchanged (existing tests still pass unmodified)
+- [ ] Screenshots at 360/375/393 widths attached; real-device iOS check listed as owed
+- [ ] `annotate.md` updated; relevant tests green; lint clean; Branch CI green
