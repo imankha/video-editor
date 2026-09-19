@@ -1,6 +1,6 @@
 # T10500: Mobile UI audit fixes — touch targets, tooltip overlap, chip wrap, title truncation
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-18
