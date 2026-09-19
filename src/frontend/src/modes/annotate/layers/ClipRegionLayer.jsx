@@ -2,7 +2,8 @@ import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Video } from 'lucide-react';
 import { generateClipName } from '../../../utils/clipDisplayName';
-import { RATING_NOTATION, RATING_BADGE_COLORS, getRatingLabel } from '../../../components/shared/clipConstants';
+import { RATING_NOTATION, RATING_BADGE_COLORS, BRILLIANT_RATING, getRatingLabel } from '../../../components/shared/clipConstants';
+import { BrilliantIcon } from '../../../components/shared/BrilliantIcon';
 import { ANNOTATE } from '../../../config/displayNames';
 import { formatInstant, PRECISION } from '../../../utils/timeFormat';
 
@@ -170,6 +171,9 @@ export default function ClipRegionLayer({
           const rating = region.rating || 3;
           const notation = RATING_NOTATION[rating];
           const color = RATING_COLORS[rating];
+          // T10430: Brilliant renders the drawn disc icon; its marker box goes
+          // transparent so only the layer underline / angle accent frame it.
+          const isBrilliant = rating === BRILLIANT_RATING;
           // Use same fallback logic as ClipListItem
           const displayName = region.name || generateClipName(rating, region.tags || [], region.notes || '') || '';
           const layerColor = layerColorFor(region);
@@ -219,25 +223,26 @@ export default function ClipRegionLayer({
               {/* Desktop: rating notation badge */}
               <div
                 className={`
-                  hidden sm:block relative px-1.5 py-0.5 rounded font-bold transition-all duration-150
+                  hidden sm:block relative rounded font-bold transition-all duration-150
+                  ${isBrilliant ? 'px-0.5 pt-0.5' : 'px-1.5 py-0.5'}
                   ${isSelected
                     ? 'text-lg ring-2 ring-white shadow-lg'
                     : 'text-sm hover:scale-110'
                   }
                 `}
                 style={{
-                  backgroundColor: color,
+                  backgroundColor: isBrilliant ? 'transparent' : color,
                   color: '#ffffff',
                   textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-                  border: '1px solid rgba(0,0,0,0.3)',
+                  border: isBrilliant ? '1px solid transparent' : '1px solid rgba(0,0,0,0.3)',
                   borderBottom: `2px solid ${layerColor}`,
                   ...(isAngle && { borderTop: `2px solid ${ANGLE_ACCENT}` }),
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  boxShadow: isBrilliant ? 'none' : '0 1px 3px rgba(0,0,0,0.3)',
                 }}
                 title={isAngle ? `${getRatingLabel(rating)} — from an angle` : getRatingLabel(rating)}
                 aria-label={isAngle ? `${getRatingLabel(rating)} — angle clip` : getRatingLabel(rating)}
               >
-                {notation}
+                {isBrilliant ? <BrilliantIcon size={isSelected ? 30 : 24} /> : notation}
                 {isAngle && (
                   <span
                     className="absolute -top-1.5 -right-1.5 flex items-center justify-center rounded-full bg-violet-600 text-white"

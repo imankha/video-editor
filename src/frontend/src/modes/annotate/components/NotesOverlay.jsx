@@ -1,5 +1,6 @@
 import React from 'react';
-import { RATING_NOTATION, RATING_BADGE_COLORS, getRatingLabel } from '../../../components/shared/clipConstants';
+import { RATING_NOTATION, RATING_BADGE_COLORS, BRILLIANT_RATING, getRatingLabel } from '../../../components/shared/clipConstants';
+import { BrilliantIcon } from '../../../components/shared/BrilliantIcon';
 
 // Border colors come from the ONE rating palette in clipConstants (was a local copy).
 const RATING_COLORS = RATING_BADGE_COLORS;
@@ -60,7 +61,12 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, isVisible,
           {gameClock && (
             <span className="tabular-nums text-[#666] sm:absolute sm:left-0 sm:top-0">{gameClock}</span>
           )}
-          {notation && (
+          {notation && rating === BRILLIANT_RATING && (
+            <span className="inline-flex self-center sm:mr-1.5 sm:align-middle" aria-label={getRatingLabel(rating)}>
+              <BrilliantIcon size={18} />
+            </span>
+          )}
+          {notation && rating !== BRILLIANT_RATING && (
             <span className="text-[#666] sm:mr-1.5" aria-label={getRatingLabel(rating)}>
               {notation}
             </span>

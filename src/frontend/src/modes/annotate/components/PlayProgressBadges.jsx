@@ -10,8 +10,10 @@ import { ANNOTATE } from '../../../config/displayNames';
  * buttons (the formBody layouts), replacing the loose "Clip created" text.
  *
  * Visual states (one treatment per state, never mixed):
- *   - undone:  dashed gray outline; clicking jumps to the control that
- *              completes it (the button is the affordance).
+ *   - undone:  dashed amber outline (T10430: was gray, read as disabled);
+ *              clicking jumps to the control that completes it (the button
+ *              is the affordance). Never pulses — pulse stays reserved for
+ *              the clip badge's nudge, which is more urgent.
  *   - done:    green fill + a small check mark in the corner.
  *   - nudge:   amber, pulsing (clip badge only: 5 stars and no clip yet).
  *   - pending: spinner (clip badge only: the project is being created).
@@ -30,7 +32,7 @@ const DISC_SIZE = { sm: 'w-[22px] h-[22px]', md: 'w-7 h-7' };
 const ICON_SIZE = { sm: 11, md: 14 };
 
 const DISC_STATE = {
-  [BADGE_STATE.UNDONE]: 'border-dashed border-gray-500 text-gray-500 hover:border-gray-300 hover:text-gray-300',
+  [BADGE_STATE.UNDONE]: 'border-dashed border-amber-500 bg-amber-500/10 text-amber-400 hover:border-amber-300 hover:text-amber-300',
   [BADGE_STATE.DONE]: 'border-solid border-green-500 bg-green-500/15 text-green-400',
   [BADGE_STATE.NUDGE]: 'border-solid border-amber-500 bg-amber-500/15 text-amber-300 motion-safe:animate-pulse',
   [BADGE_STATE.PENDING]: 'border-solid border-cyan-600 bg-cyan-600/10 text-cyan-300',

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Info, Play, Users, Share2, Video, Tag, StickyNote } from 'lucide-react';
-import { getRatingDisplay, getRatingLabel } from '../../../components/shared/clipConstants';
+import { getRatingDisplay, getRatingLabel, BRILLIANT_RATING } from '../../../components/shared/clipConstants';
+import { BrilliantIcon } from '../../../components/shared/BrilliantIcon';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { ANNOTATE } from '../../../config/displayNames';
 import { formatInstant, PRECISION } from '../../../utils/timeFormat';
@@ -121,20 +122,31 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
       }}
     >
       <div className={`flex items-center px-2 ${isMobile ? 'py-3' : 'py-1.5'}`}>
-        {/* Rating notation badge */}
-        <div
-          className={`${isMobile ? 'px-1.5 py-1 mr-2.5' : 'px-1 py-0.5 mr-2'} rounded font-bold text-xs flex-shrink-0`}
-          style={{
-            backgroundColor: badgeColor,
-            color: '#ffffff',
-            textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-            fontSize: isMobile ? '11px' : '10px',
-          }}
-          title={getRatingLabel(rating)}
-          aria-label={getRatingLabel(rating)}
-        >
-          {notation}
-        </div>
+        {/* Rating notation badge. T10430: Brilliant (5) is a drawn disc icon,
+            the other ratings stay notation text on a colored rectangle. */}
+        {rating === BRILLIANT_RATING ? (
+          <div
+            className={`${isMobile ? 'mr-2.5' : 'mr-2'} flex-shrink-0`}
+            title={getRatingLabel(rating)}
+            aria-label={getRatingLabel(rating)}
+          >
+            <BrilliantIcon size={isMobile ? 24 : 20} />
+          </div>
+        ) : (
+          <div
+            className={`${isMobile ? 'px-1.5 py-1 mr-2.5' : 'px-1 py-0.5 mr-2'} rounded font-bold text-xs flex-shrink-0`}
+            style={{
+              backgroundColor: badgeColor,
+              color: '#ffffff',
+              textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+              fontSize: isMobile ? '11px' : '10px',
+            }}
+            title={getRatingLabel(rating)}
+            aria-label={getRatingLabel(rating)}
+          >
+            {notation}
+          </div>
+        )}
 
         {/* Layer chip (T5700): fixed left cluster, always visible */}
         <div className="mr-2 flex-shrink-0">

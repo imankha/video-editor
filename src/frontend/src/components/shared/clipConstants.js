@@ -23,13 +23,19 @@ export const RATING_NOTATION = {
   5: '!!',   // Excellent
 };
 
+// T10430: the one rating that creates a clip. It gets its own drawn badge
+// (components/shared/BrilliantIcon.jsx) instead of notation text on a rectangle.
+export const BRILLIANT_RATING = 5;
+
 // Rating badge colors (color-blind safe palette)
+// T10430: Brilliant moved from light green (#66BB6A, near-indistinguishable
+// from Good's green at badge size) to a saturated teal so it pops.
 export const RATING_BADGE_COLORS = {
   1: '#C62828', // Brick Red - Blunder
   2: '#F9A825', // Amber Yellow - Weak
   3: '#1565C0', // Strong Blue - Interesting
-  4: '#2E7D32', // Teal-Green - Good
-  5: '#66BB6A', // Light Green - Excellent
+  4: '#2E7D32', // Green - Good
+  5: '#17B3A3', // Teal - Brilliant
 };
 
 // Background tint colors for selected items (derived from badge colors)
@@ -37,8 +43,8 @@ export const RATING_BACKGROUND_COLORS = {
   1: 'rgba(198, 40, 40, 0.15)',   // Brick Red
   2: 'rgba(249, 168, 37, 0.15)',  // Amber Yellow
   3: 'rgba(21, 101, 192, 0.15)',  // Strong Blue
-  4: 'rgba(46, 125, 50, 0.15)',   // Teal-Green
-  5: 'rgba(102, 187, 106, 0.15)', // Light Green
+  4: 'rgba(46, 125, 50, 0.15)',   // Green
+  5: 'rgba(23, 179, 163, 0.15)',  // Teal
 };
 
 // Default rating when none is set

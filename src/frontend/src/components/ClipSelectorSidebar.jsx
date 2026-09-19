@@ -3,7 +3,8 @@ import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, Check, Cro
 import { ClipLibraryModal } from './ClipLibraryModal';
 import { UploadClipModal } from './UploadClipModal';
 import { Button } from './shared/Button';
-import { getRatingDisplay } from './shared/clipConstants';
+import { getRatingDisplay, BRILLIANT_RATING } from './shared/clipConstants';
+import { BrilliantIcon } from './shared/BrilliantIcon';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { createGameLookup } from '../utils/gameNameLookup';
 import { clipCropKeyframes, clipSourceDuration } from '../utils/clipSelectors';
@@ -250,7 +251,12 @@ export function ClipSelectorSidebar({
                 </div>
 
                 {/* Rating badge (if clip has rating from annotate) */}
-                {hasRating && (
+                {hasRating && clip.rating === BRILLIANT_RATING && (
+                  <div className="mr-2 flex-shrink-0" title={`Rating: ${clip.rating}/5`}>
+                    <BrilliantIcon size={20} />
+                  </div>
+                )}
+                {hasRating && clip.rating !== BRILLIANT_RATING && (
                   <div
                     className="px-1.5 py-0.5 mr-2 rounded font-bold text-xs flex-shrink-0"
                     style={{
