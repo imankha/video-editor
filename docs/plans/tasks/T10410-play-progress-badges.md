@@ -1,6 +1,6 @@
 # T10410: Play progress badges in the Edit play editor
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-18
@@ -68,7 +68,7 @@ name). The region carries it as `hasCustomName`, kept coherent at the one local 
 3. [x] Badge component + overlay wiring (strip header, formBody footer)
 4. [x] Backend `has_custom_name` + region mapping
 5. [x] Tests green, Reviewer findings fixed
-6. [ ] Live nudge check, CI green, merge
+6. [x] Live nudge check, CI green, merged PR #467 (Reviewer APPROVED on the fix commit)
 
 ### Progress Log
 
@@ -89,8 +89,8 @@ the same-day "Frame" rename; now derived from `ANNOTATE.FRAME_THIS_CLIP`).
 
 ## Acceptance Criteria
 
-- [ ] Strip header shows four badges after the name; the old "Clip created" text is gone
-- [ ] Rated/named/note badges fill green with a check when done; clicking an undone one jumps to its control
-- [ ] Clip badge: dormant below 5 stars, amber "Create clip" at 5 stars, pending spinner, green "Clip created"
-- [ ] A backend-derived name and a "Play N" default never read as "named"
-- [ ] Tests pass
+- [x] Strip header shows four badges after the name; the old "Clip created" text is gone
+- [x] Rated/named/note badges fill green with a check when done; clicking an undone one jumps to its control
+- [x] Clip badge: dormant below 5 stars, amber "Create clip" at 5 stars, pending spinner, green "Clip created"
+- [x] A backend-derived name and a "Play N" default never read as "named"
+- [x] Tests pass
