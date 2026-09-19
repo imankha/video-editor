@@ -1,6 +1,6 @@
 # T10500: Mobile UI audit fixes — touch targets, tooltip overlap, chip wrap, title truncation
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-18
@@ -109,6 +109,13 @@ Explicitly out of scope, left as follow-ups rather than guessed at blind:
 **2026-09-18**: Implemented, reviewed, fixed all MAJOR findings, tests + lint green. Pushed for
 the user's live-browser review (this project's own responsiveness-skill policy requires a headed
 visual pass before a mobile CSS change is considered verified — jsdom/lint can't see real layout).
+
+**2026-09-18**: User asked to merge directly (skipping the live-browser pass) after CI review.
+Branch CI verified green (`frontend` pass, `backend` correctly skipped — no backend files
+changed, `changes` pass) via `gh pr checks`. PR #468 merged to master (merge commit `a48594e9`).
+The live 375×812 touch-emulated + 844×390 landscape check flagged above was NOT done — reopen
+this task if the tooltip offset, header clearance, or the landscape-inline tag lane look wrong
+on staging.
 
 ## Acceptance Criteria
 

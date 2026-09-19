@@ -1,5 +1,26 @@
 ---
 domain: annotate
+updated: 2026-09-18 (T10500 — mobile UI audit fixes, cross-domain (Home + Annotate).
+**LANDMINE for future audits: `coarse-pointer:` touch-target checks are FALSE POSITIVES in a
+plain-resized-viewport Playwright browser.** This codebase floors touch targets at 44px via
+a custom Tailwind variant (`tailwind.config.js` `coarse-pointer` = `@media (hover: none) and
+(pointer: coarse)`), used extensively (`shared/Button.jsx`'s `iconOnly` sizes, `ClipScrubRegion`'s
+T7350 step chevrons, the Phase/Aspect filter chips) and asserted by `e2e/helpers/usabilityAudit.js`
+Invariant #4 — but ONLY on real touch-emulated Playwright PROJECTS. A UI-audit agent that just
+calls `browser_resize()` on a real-mouse Chromium instance reports `pointer: fine` regardless of
+viewport width, so every `coarse-pointer:`-gated control reads as "too small" even though it is
+already correctly floored on a real phone. Before filing a touch-target finding, verify
+`window.matchMedia('(hover: none) and (pointer: coarse)').matches` is true in the test context, or
+check the control's className for `coarse-pointer:min-*` first. **Genuine gap found and fixed:**
+`ClipDetailsEditor.jsx`'s own LOCAL `StarRating` (line ~39, a T9630-era byte-copy of
+`shared/StarRating.jsx` that was never reconciled) had no touch floor at all — fixed to match its
+shared twin. Same fix applied to the shared `StarRating.jsx` and `TagSelector.jsx` chip buttons
+(both previously had zero touch-target handling, not a false positive). **Known residual risk, not
+yet live-verified:** the `landscape-inline` Annotate layout (~844×390, the most vertically
+constrained surface in the app) puts StarRating + TagSelector's tag lane on one `flex items-center`
+row (`AnnotateFullscreenOverlay.jsx` ~1224-1244); the new 44px floors could squeeze that lane
+(it has `overflow-x-auto`, so tags stay reachable by scroll, not clipped) — flagged by a fresh
+Reviewer, not yet checked in a real browser at that exact size. Prior:)
 updated: 2026-09-18 (T10450 — the T10310 main-screen play-selected row's NO_PROJECT
 [Frame Clip] button splits into two explicit outcomes. `AnnotateModeView.jsx`'s single
 `handleFrameClip` became `handleFrameNow` (create the project if needed, then open
