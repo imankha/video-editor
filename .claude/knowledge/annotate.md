@@ -171,10 +171,13 @@ project when `createProjectIntent===true` in BOTH modes (so edit-mode Save-and-F
 play still lands a clip; plain "Update play" passes no intent and keeps the clip's existing state).
 The `focusConfirmDialog` now destructures `const { saved } = await handleSave()` — an OBJECT return is
 always truthy, so the old `if (!saved)` bool check would have silently navigated past a failed save.
-(2) "Add details" -> "Details" everywhere (`ANNOTATE.DETAILS`; AddDetailsPopup heading + `aria-label`).
-`detailsOpen` now seeds `useState(!isMobile)` (open on desktop >= md, closed on mobile) — seeded ONLY at
-init; the `[existingClip]` reset effect NEVER touches `detailsOpen`, so a desktop open lands expanded and
-a clip-switch can't re-close it. `detailsLabel` keeps the count suffix ("Details (2 tags, note)").
+(2) "Add details" -> "Details" -> "Rate and Tag" -> **"Notes and Tags"** (T10580; `ANNOTATE.DETAILS`;
+AddDetailsPopup heading + `aria-label` follow the same constant). **STALE as of T10520/T10580, see the
+play-progress-badges section below for current reality:** `detailsOpen` no longer seeds `!isMobile` —
+T10580 flipped it to seed `useState(false)` unconditionally (closed on EVERY layout), because T10520
+moved rating out of this disclosure entirely, removing the reason desktop needed it open by default. The
+`[existingClip]` reset effect still NEVER touches `detailsOpen` (only the initial seed matters).
+`detailsLabel` keeps the count suffix ("Notes and Tags (2 tags, note)").
 (3) SAVE NOW CLOSES EDIT MODE: the desktop-strip create branch dropped its stay-open-and-rehydrate-into-edit
 special case — `handleSave` always calls `onResume()` on success (failed save unchanged: error state, form
 stays open). DELETED: `skipNextStatusResetRef` + the reset-effect's skip branch (a clip switch is always a
@@ -401,13 +404,16 @@ true) and "Save play" (green, `ANNOTATE.SAVE_PLAY`, createProject false). NO new
 constants (T9860 owns vocabulary). `handleSave(createProjectIntent)`: create mode uses the clicked
 button's intent; EDIT mode ignores it and keeps `createProject` state (= existingClip.autoProjectId,
 still read by the edit payload + hasUnsavedEdits); the Enter shortcut defaults to save-play-only (no
-draft). **Rating + the sport prompt moved into the existing `detailsOpen` disclosure** in every layout
-via a NEW shared `DetailsFields.jsx` (rating + tags/sport + notes), rendered by 3 hosts: desktop strip
-panel, desktop formBody expand-in-place panel (formBody's "Add details" button is now unconditional,
-not `isMobile`-only), and the mobile `AddDetailsPopup` (extended to carry rating + sport). Only ONE
-DetailsFields mounts at a time (hosts are mutually exclusive by layout/viewport) so the `clip-notes`
-id stays unique. **Landscape-inline keeps rating INLINE** (deviation): it never had the T8600
-disclosure and is the most height-starved surface — documented in the T9830 outcome record. **In-flight
+draft). ~~Rating + the sport prompt moved into the existing `detailsOpen` disclosure~~ **SUPERSEDED by
+T10520 (2026-09-19) — see "Play progress badges" below: rating moved back OUT of this disclosure, into
+its own always-visible popup badge.** The sport prompt + tags + notes still live in the shared
+`DetailsFields.jsx`, rendered by the same 3 hosts: desktop strip panel, desktop formBody expand-in-place
+panel (formBody's "Add details" button is unconditional, not `isMobile`-only), and the mobile
+`AddDetailsPopup`. Only ONE `DetailsFields` mounts at a time (hosts are mutually exclusive by
+layout/viewport) so the `clip-notes` id stays unique. **Landscape-inline keeps rating INLINE**
+(deviation, now the norm rather than an exception — see below): it never had the T8600 disclosure and is
+the most height-starved surface, so it kept its own bespoke `StarRating` row when T10520 gave every OTHER
+layout a popup badge instead. **In-flight
 save guard:** `saveInFlightRef` (a ref, set synchronously at the top of handleSave, cleared in a
 `finally`) no-ops a second Save while one is awaiting its round trip — fixes the real double-click bug
 (useRawClipSave's pendingSaves dedup returned null → false "Couldn't save" for a duplicate of a
@@ -1519,22 +1525,61 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `viewed_duration = MAX(...)` high-water.
 
 ## Invariants & rules
-- **Play-progress badges are a PURE READ of editor state (T10410, 2026-09-18).** The Edit play editor
-  shows four badges — rated / named / note / clip — via `playProgress.getPlayProgress` +
-  `PlayProgressBadges` (header line after the name on the desktop strip, above the footer buttons on
-  the formBody layouts; none on landscape-inline). Rulings: rated = `rating !== DEFAULT_RATING` (a
-  deliberate 4 reads un-rated, accepted); named = user-typed (never the one-tap `Play N`, never a
-  backend-derived name); clip badge dormant below 5 stars, amber nudge at 5 with no clip, spinner while
-  `focusPending || clipCreating`, green **Clip created** once `autoProjectId` lands (this REPLACED the
-  strip's loose "Clip created" span). Nothing is persisted; the edit-mode nudge reuses the main
-  screen's partial `onUpdateClip(id, { createProject: true })` seam (stays open, flips in place),
-  create mode's nudge is `handleSave(true)`. **Landmine the badge exposed:** the raw-clip API's `name`
-  is ALWAYS populated (`derive_clip_name` fills it) and the frontend CANNOT reproduce that derivation
-  (TF-IDF titles, 30- vs 40-char truncation, tags-vs-notes priority differ), so "is this name the
-  user's?" needs the backend's `RawClipResponse.has_custom_name` (= `bool(stored name)`), carried on
-  regions as `hasCustomName` and kept coherent at the ONE local write site (`updateClipRegion`: Save
-  sends `''` for derive, non-empty for custom). Never compare `region.name` to `generateClipName` to
-  decide custom-vs-derived.
+- **Play-progress badges are a PURE READ of editor state (T10410, 2026-09-18; rewritten through
+  T10590, 2026-09-19 — five follow-up rounds the SAME day, all user-driven live-testing corrections).**
+  The Edit play editor shows four badges — **named / rated / noted / clip** (T10460 reordered named
+  first, next to the name it completes; was rated-first) — via `playProgress.getPlayProgress` +
+  `PlayProgressBadges.jsx` (header line after the name on the desktop strip, above the footer buttons on
+  the formBody layouts; none on landscape-inline, which keeps its own bespoke inline `StarRating` row —
+  the one surface never touched by any of this).
+  - **`rated` no longer means "differs from a default" (T10520 REPLACED the T10410 ruling):** it's
+    `isEditMode || isRatingManuallyEdited`. A saved play is ALWAYS rated (a real 1-5 value is always on
+    record, whatever it is); a fresh create-mode play is rated once the control has been touched THIS
+    SESSION (`isRatingManuallyEdited`, a session flag in `AnnotateFullscreenOverlay.jsx`, same shape as
+    the pre-existing `isNameManuallyEdited`, set in `handleRatingChange`, reset on a real clip switch —
+    NOT on same-play identity churn, same rule as every other form field). The old `defaultRating`
+    param is gone from `getPlayProgress` entirely.
+  - **The rated badge is the ONLY rating control anywhere in the editor** (except landscape-inline).
+    `DetailsFields.jsx`'s old duplicate horizontal star row is DELETED — T10410's original design put
+    rating inside the "Optional details" disclosure; T10520 pulled it back out into the badge itself.
+    Clicking the rated badge (in ANY state — unlike the other three badges, it never becomes an inert
+    span once done, since a rating is a value you revisit) opens a popup: bordered box with 5 rows
+    (star count + adjective + `RATING_NOTATION` chess glyph, best-first) on desktop, a bottom sheet
+    (full width, rounded top, grabber, explicit X — no backdrop-close, this codebase's standing rule)
+    on mobile. **The mobile/desktop split is driven by `isMobile` (`useIsMobile()`), threaded down as a
+    prop** — NOT a CSS breakpoint (`AnnotateFullscreenOverlay.jsx` -> `PlayProgressBadges` ->
+    `RatingBadge`) — a CSS-breakpoint version shipped first and disagreed with `useIsMobile`'s
+    1023px/coarse-pointer threshold in the 640-1023px band, opening the desktop dropdown variant
+    downward off the bottom of the mobile sheet on any real tablet. Once DONE, the collapsed badge's
+    disc glyph is the rating's own `RATING_NOTATION` (`!!/!/!?/?/??`) instead of a generic star icon.
+  - **Escape landmine, fixed:** the popup's own Escape handler lives on `document` (component-local, no
+    `window` access); the editor's Escape handler lives on `window` and unconditionally closes the whole
+    editor when `detailsOpen` is false. Without `stopPropagation()` in the popup's handler, a single
+    Escape closed BOTH — discarding the whole unsaved play. Fixed by stopping propagation in the popup's
+    `document`-level listener (bubble phase reaches `document` before `window`, so this is sufficient).
+    Tests must dispatch from `document`/a real node to catch this — `fireEvent.keyDown(window, ...)`
+    (used by most keyboard tests in this file) skips `document`-level listeners in jsdom entirely and
+    will never reproduce a document/window double-handling bug.
+  - **`<PlayProgressBadges key={existingClip?.id ?? 'create'}>`** — the popup's own `open` boolean has
+    no way to observe a clip switch (RatingBadge isn't passed the clip id), so the whole badges row is
+    keyed on clip identity instead: remounts (closing any open popup) on a REAL switch, stays mounted
+    across the same-play identity churn `updateClipRegion`'s surgical spreads cause (matching the reset
+    effect's own `samePlay` rule — see the reset-effect note above).
+  - Named = user-typed (never the one-tap `Play N`, never a backend-derived name); clip badge dormant
+    below 5 stars, amber nudge at 5 with no clip, spinner while `focusPending || clipCreating`, green
+    **Clip created** once `autoProjectId` lands (this REPLACED the strip's loose "Clip created" span).
+    Nothing is persisted; the edit-mode nudge reuses the main screen's partial
+    `onUpdateClip(id, { createProject: true })` seam (stays open, flips in place), create mode's nudge
+    is `handleSave(true)`. **Landmine the badge exposed:** the raw-clip API's `name` is ALWAYS populated
+    (`derive_clip_name` fills it) and the frontend CANNOT reproduce that derivation (TF-IDF titles, 30-
+    vs 40-char truncation, tags-vs-notes priority differ), so "is this name the user's?" needs the
+    backend's `RawClipResponse.has_custom_name` (= `bool(stored name)`), carried on regions as
+    `hasCustomName` and kept coherent at the ONE local write site (`updateClipRegion`: Save sends `''`
+    for derive, non-empty for custom). Never compare `region.name` to `generateClipName` to decide
+    custom-vs-derived.
+  - **"Notes and Tags" (T10580, was "Rate and Tag", was "Details"):** the `DetailsFields` disclosure
+    (now just sport-prompt/tags/notes, rating having moved out) defaults CLOSED on every layout —
+    T10410/T10290's desktop-open-by-default existed only because rating used to live there.
 - **Reel creation SELECTS the new project so Focus unlocks immediately (T8480).** All three
   `result.project_created` sites in `AnnotateContainer.jsx` funnel through `announceReelCreated`
   (module-scope, exported for unit test), which calls

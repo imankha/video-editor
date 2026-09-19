@@ -168,29 +168,68 @@ describe('strip header badges — clicks jump to the control', () => {
     ]);
   });
 
-  it('the popup heading is layer-aware: "your athlete\'s" vs "your team\'s" (T10550)', () => {
+  it('the popup heading is layer-aware: "your athlete\'s" vs "your team\'s"', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, my_athlete: true }} />);
+    fireEvent.click(badge('badge-rated'));
+    expect(screen.getByRole('radiogroup', { name: "Rate your athlete's play" })).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' })); // picking a row closes the popup
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Team' })); // flip the layer toggle
+    fireEvent.click(badge('badge-rated'));
+    expect(screen.getByRole('radiogroup', { name: "Rate your team's play" })).toBeTruthy();
+  });
+
+  it('T10590 (Reviewer): a REAL clip switch closes the popup rather than silently relabeling it', () => {
+    // PlayProgressBadges is keyed on clip id specifically so an open popup
+    // doesn't survive onto a DIFFERENT play with a stale heading/selection.
     const { rerender } = render(
       <AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, my_athlete: true }} />,
     );
     fireEvent.click(badge('badge-rated'));
     expect(screen.getByRole('radiogroup', { name: "Rate your athlete's play" })).toBeTruthy();
 
-    // Popup stays open across the rerender (same component instance); its
-    // heading must track the new clip's layer without another click.
     rerender(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, id: 'c2', my_athlete: false }} />);
-    expect(screen.getByRole('radiogroup', { name: "Rate your team's play" })).toBeTruthy();
+    // Scoped by testid, not role="radiogroup" -- the Layer segmented control
+    // ("Play category") is also a radiogroup and stays mounted throughout.
+    expect(screen.queryByTestId('rating-picker')).toBeNull();
   });
 
-  it('tapping the mobile backdrop closes the popup; tapping inside it does not (T10550)', () => {
+  it('an outside click (desktop) closes the popup', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
     fireEvent.click(badge('badge-rated'));
-    const backdrop = screen.getByRole('presentation');
-    // Clicking the box itself (a descendant of the backdrop) must NOT close it.
-    fireEvent.click(screen.getByRole('radiogroup', { name: "Rate your athlete's play" }));
-    expect(screen.queryByRole('radiogroup', { name: "Rate your athlete's play" })).toBeTruthy();
-    // Clicking the backdrop element itself closes it.
-    fireEvent.click(backdrop);
+    expect(screen.getByRole('radiogroup', { name: "Rate your athlete's play" })).toBeTruthy();
+    fireEvent.mouseDown(document.body);
     expect(screen.queryByRole('radiogroup', { name: "Rate your athlete's play" })).toBeNull();
+  });
+
+  // T10590 (Reviewer): mobile is now driven by the editor's own `isMobile`
+  // (threaded down), not a CSS breakpoint, and backdrop-tap no longer closes
+  // the sheet (project rule: no backdrop-close) -- an explicit X does.
+  describe('mobile bottom sheet', () => {
+    beforeEach(() => {
+      window.matchMedia = (query) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      });
+    });
+
+    it('the X closes the sheet; tapping the dimmed backdrop does not', () => {
+      render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
+      fireEvent.click(badge('badge-rated'));
+      const group = screen.getByRole('radiogroup', { name: "Rate your athlete's play" });
+      expect(group).toBeTruthy();
+      const backdrop = screen.getByRole('presentation');
+      fireEvent.click(backdrop);
+      expect(screen.queryByRole('radiogroup', { name: "Rate your athlete's play" })).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+      expect(screen.queryByRole('radiogroup', { name: "Rate your athlete's play" })).toBeNull();
+    });
   });
 
   it('the rated badge stays clickable once done, so the rating can be set again and again (T10520)', () => {
@@ -213,8 +252,11 @@ describe('strip header badges — clicks jump to the control', () => {
 
   it('DetailsFields no longer carries its own duplicate Rating row (the badge is the only rating control)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
-    // detailsOpen defaults true on desktop, so the disclosure (Tags/Notes) is
-    // already rendered here -- assert it has no "Rating" label of its own.
+    // T10580: detailsOpen now defaults CLOSED -- open the disclosure first
+    // (Reviewer: this assertion was vacuous when the panel was never
+    // mounted at all) so this actually re-checks the panel's own content.
+    fireEvent.click(screen.getByTestId('add-details-button'));
+    expect(screen.getByLabelText('Notes (optional)')).toBeTruthy(); // sanity: the panel really is open
     expect(screen.queryByText(/^Rating/)).toBeNull();
   });
 

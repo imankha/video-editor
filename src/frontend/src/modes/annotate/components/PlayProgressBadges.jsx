@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Star, Pencil, AlignLeft, Clapperboard, Check, Loader2 } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Star, Pencil, AlignLeft, Clapperboard, Check, Loader2, X } from 'lucide-react';
 import { BADGE_STATE, CLIP_BADGE } from '../playProgress';
 import { ANNOTATE } from '../../../config/displayNames';
 import { RATING_ADJECTIVES, RATING_NOTATION } from '../../../components/shared/clipConstants';
@@ -106,7 +106,13 @@ function Badge({ testId, state, size, Icon, title, label, onClick }) {
   const content = (
     <>
       <Disc state={state} size={size} Icon={Icon} />
-      {label && <span className={`text-[11px] leading-none whitespace-nowrap ${labelClass}`}>{label}</span>}
+      {/* T10590 (Reviewer): aria-live scoped HERE, not on the whole badges
+          row — only the clip badge ever passes `label` (its text is the one
+          thing that changes without another announcement: dormant -> nudge
+          -> pending -> done), so a live region around all four badges was
+          making the screen reader re-announce the whole row, including the
+          rating popup's five options, every time it opened. */}
+      {label && <span aria-live="polite" className={`text-[11px] leading-none whitespace-nowrap ${labelClass}`}>{label}</span>}
     </>
   );
   const shared = {
@@ -149,21 +155,32 @@ const RATING_VALUES = [5, 4, 3, 2, 1];
  * notation (`RATING_NOTATION`: !!/!/!?/?/??) instead of a generic star, so
  * the collapsed badge shows WHICH rating was given at a glance.
  * T10550: the popup also shows that same notation on every row (ties the row
- * to the eventual collapsed glyph), carries a visible layer-aware heading
+ * to the eventual collapsed glyph) and carries a visible layer-aware heading
  * ("Rate your athlete's play" / "...team's play", matching the existing
  * `mine` split `getRatingCaption` already uses, bigger than the row text so
- * it reads as a real title), and on mobile becomes a dim-backdrop dialog
- * (tap to dismiss) instead of an anchored dropdown — an anchored popup this
- * size would run off a narrow screen depending on where the badge sits in
- * the row. T10560: that mobile dialog is a BOTTOM SHEET (anchored to the
- * screen's bottom edge, full width, rounded top corners, a small grabber)
- * rather than a screen-centered box — this control already lives inside the
- * mobile "Edit play" bottom sheet, so a second bottom sheet sliding up over
- * it reads as one consistent gesture language instead of a modal-on-modal.
+ * it reads as a real title). T10560: on mobile it's a BOTTOM SHEET (anchored
+ * to the screen's bottom edge, full width, rounded top corners, a small
+ * grabber) rather than a screen-centered box or an anchored dropdown — this
+ * control already lives inside the mobile "Edit play" bottom sheet, so a
+ * second bottom sheet sliding up over it reads as one consistent gesture
+ * language instead of a modal-on-modal.
+ * T10590 (Reviewer round): the mobile/desktop split is now driven by the
+ * SAME `isMobile` the editor itself computes (`useIsMobile()`, threaded down
+ * as a prop), not a separate `max-sm:`/`sm:` CSS breakpoint — the two used
+ * to disagree in the 640-1023px band (and on any coarse-pointer tablet at
+ * any width), so a real touch device could get the mobile bottom-sheet
+ * EDITOR but the desktop anchored-dropdown PICKER, which opens downward from
+ * the pinned footer and runs off the bottom of the sheet. Also dropped
+ * backdrop-tap-to-close on the mobile sheet — this codebase has a standing
+ * "no backdrop-close" rule (see `AddDetailsPopup.jsx`) — in favor of an
+ * explicit X, matching that same convention; the backdrop still dims and
+ * still blocks clicks from reaching whatever is behind it, it just doesn't
+ * close on tap anymore.
  */
-function RatingBadge({ state, size, rating, onRatingChange, myAthlete }) {
+function RatingBadge({ state, size, rating, onRatingChange, myAthlete, isMobile }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
+  const headingId = useId();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -171,7 +188,17 @@ function RatingBadge({ state, size, rating, onRatingChange, myAthlete }) {
       if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
     };
     const onKeyDown = (e) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key !== 'Escape') return;
+      // T10590 (Reviewer BLOCKING): stopPropagation so this Escape doesn't
+      // ALSO reach AnnotateFullscreenOverlay's window-level Escape handler,
+      // which — with the picker treated as "handled" here — would otherwise
+      // fall through to closing the whole editor (discarding the unsaved
+      // play: name, note, tags, trim) on the SAME keypress that just closed
+      // the picker. document fires before window in the bubble phase, so
+      // stopping it here is sufficient; no `!open` guard needed since this
+      // listener is itself only attached while `open` is true.
+      e.stopPropagation();
+      setOpen(false);
     };
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
@@ -192,7 +219,7 @@ function RatingBadge({ state, size, rating, onRatingChange, myAthlete }) {
         data-state={state}
         title={title}
         aria-label={title}
-        aria-haspopup="true"
+        aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1.5 coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"
@@ -200,31 +227,44 @@ function RatingBadge({ state, size, rating, onRatingChange, myAthlete }) {
         <Disc state={state} size={size} Icon={Star} glyph={state === BADGE_STATE.DONE ? RATING_NOTATION[rating] : undefined} />
       </button>
       {open && (
-        // max-sm: a bottom sheet — anchored to the screen's bottom edge, full
-        // width, dim tap-to-close backdrop behind it — matching the gesture
-        // language of the "Edit play" bottom sheet this control already lives
-        // inside, rather than a modal floating over a modal. sm+: the usual
-        // anchored dropdown (backdrop classes are inert there — no
-        // fixed/inset/flex — so the onClick below never fires from a stray
-        // desktop click; the document mousedown listener handles
-        // outside-click on desktop instead).
         <div
           role="presentation"
-          onClick={() => setOpen(false)}
-          className="max-sm:fixed max-sm:inset-0 max-sm:z-50 max-sm:flex max-sm:items-end max-sm:justify-center max-sm:bg-black/60
-                     sm:absolute sm:z-50 sm:top-full sm:left-0 sm:mt-2"
+          className={
+            isMobile
+              ? 'fixed inset-0 z-50 flex items-end justify-center bg-black/60'
+              : 'absolute z-50 top-full left-0 mt-2'
+          }
         >
           <div
             data-testid="rating-picker"
-            onClick={(e) => e.stopPropagation()}
-            className="w-full pb-[max(0.5rem,env(safe-area-inset-bottom))] rounded-t-2xl
-                       sm:w-auto sm:max-w-none sm:min-w-[190px] sm:pb-2 sm:rounded-xl
-                       p-2 border border-gray-700 bg-gray-800 shadow-xl"
+            className={
+              isMobile
+                ? 'w-full pb-[max(0.5rem,env(safe-area-inset-bottom))] rounded-t-2xl p-2 border border-gray-700 bg-gray-800 shadow-xl'
+                : 'w-auto min-w-[190px] pb-2 rounded-xl p-2 border border-gray-700 bg-gray-800 shadow-xl'
+            }
           >
-            {/* Grabber — mobile-only sheet affordance, purely decorative. */}
-            <div aria-hidden="true" className="sm:hidden mx-auto mb-2 mt-1 h-1 w-10 rounded-full bg-gray-600" />
-            <div className="px-1.5 pt-1 pb-2.5 text-lg font-bold text-white">{pickerTitle}</div>
-            <div role="radiogroup" aria-label={pickerTitle} className="flex flex-col gap-1">
+            {isMobile ? (
+              <>
+                {/* Grabber — mobile-only sheet affordance, purely decorative. */}
+                <div aria-hidden="true" className="mx-auto mb-2 mt-1 h-1 w-10 rounded-full bg-gray-600" />
+                <div className="flex items-start justify-between gap-2 px-1.5 pt-1 pb-2.5">
+                  <div id={headingId} className="text-lg font-bold text-white">{pickerTitle}</div>
+                  {/* T10590: explicit close, replacing backdrop-tap-to-close
+                      (project rule: no backdrop-close — Done/X only). */}
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    aria-label="Close"
+                    className="shrink-0 p-1 -m-1 rounded text-gray-400 hover:text-white hover:bg-gray-700/70 coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div id={headingId} className="px-1.5 pt-1 pb-2.5 text-lg font-bold text-white">{pickerTitle}</div>
+            )}
+            <div role="radiogroup" aria-labelledby={headingId} className="flex flex-col gap-1">
               {RATING_VALUES.map((value) => (
                 <button
                   key={value}
@@ -273,6 +313,7 @@ function RatingBadge({ state, size, rating, onRatingChange, myAthlete }) {
  * @param {number} p.rating  current rating value, for the picker's selected row
  * @param {(value: number) => void} p.onRatingChange  the editor's existing rating setter
  * @param {boolean} p.myAthlete  the editor's layer toggle — picks the rating popup's heading
+ * @param {boolean} p.isMobile  the editor's own `useIsMobile()` — picks the rating popup's mobile-sheet vs desktop-dropdown presentation
  * @param {() => void} p.onName      jump to the name control
  * @param {() => void} p.onNote      jump to the note control
  * @param {() => void} p.onCreateClip  create the clip (nudge state only)
@@ -285,6 +326,7 @@ export function PlayProgressBadges({
   rating,
   onRatingChange,
   myAthlete,
+  isMobile,
   onName,
   onNote,
   onCreateClip,
@@ -304,9 +346,7 @@ export function PlayProgressBadges({
     : ANNOTATE.CLIP_BADGE_DORMANT_HINT;
 
   return (
-    // aria-live: the clip badge walks dormant -> nudge -> pending -> done without
-    // any other announcement, so let screen readers hear the label change.
-    <div data-testid="play-progress-badges" aria-live="polite" className={`flex items-center gap-2 ${className}`}>
+    <div data-testid="play-progress-badges" className={`flex items-center gap-2 ${className}`}>
       <Badge
         testId="badge-named"
         state={progress.named ? BADGE_STATE.DONE : BADGE_STATE.UNDONE}
@@ -320,6 +360,7 @@ export function PlayProgressBadges({
         size={size}
         rating={rating}
         onRatingChange={onRatingChange}
+        isMobile={isMobile}
         myAthlete={myAthlete}
       />
       <Badge

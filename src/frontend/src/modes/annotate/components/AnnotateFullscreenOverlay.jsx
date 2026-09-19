@@ -677,12 +677,20 @@ export function AnnotateFullscreenOverlay({
   };
   const renderProgressBadges = (size, className = '') => (
     <PlayProgressBadges
+      // T10590 (Reviewer finding): keyed on clip identity so the rated
+      // badge's open popup resets on a REAL clip switch, but — like the
+      // existingClip object itself — stays mounted (and open) across the
+      // same-play identity churn a surgical update causes (updateClipRegion
+      // spreads the region on every write), matching the reset effect's own
+      // samePlay rule just above.
+      key={existingClip?.id ?? 'create'}
       progress={progress}
       size={size}
       className={className}
       rating={rating}
       onRatingChange={handleRatingChange}
       myAthlete={myAthlete}
+      isMobile={isMobile}
       onName={jumpToName}
       onNote={jumpToNote}
       onCreateClip={progress.clip === CLIP_BADGE.NUDGE ? handleCreateClipFromBadge : undefined}

@@ -164,19 +164,27 @@ describe('AnnotateFullscreenOverlay — rating is an optional detail, no outcome
     expect(screen.queryByText(/one more star|another star/)).toBeNull();
   });
 
-  it('T10520: rating is reachable via the badge regardless of the details disclosure state (formBody)', () => {
+  it('T10520/T10580: rating is reachable via the badge regardless of the details disclosure state (formBody)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
-    // Collapsing the "Optional details" disclosure (Tags/Notes) no longer
-    // affects rating at all — the rated badge and its popup picker live
-    // outside the disclosure entirely, so the default is checkable either way.
-    fireEvent.click(screen.getByTestId('add-details-button')); // collapse it
+    // T10580: the "Optional details" disclosure (Tags/Notes) now defaults
+    // CLOSED, but the rated badge and its popup picker live outside it
+    // entirely — check the badge works both while it's still closed AND
+    // after opening it (Reviewer: an earlier version of this test only ever
+    // exercised one of the two states despite the "regardless of" claim).
+    fireEvent.click(screen.getByTestId('badge-rated'));
+    expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.keyDown(document, { key: 'Escape' }); // close the picker without opening details
+    fireEvent.click(screen.getByTestId('add-details-button')); // now open details too
     fireEvent.click(screen.getByTestId('badge-rated'));
     expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
   });
 
-  it('T10520: same on the strip layout', () => {
+  it('T10520/T10580: same on the strip layout', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" surface="inline_desktop" newClipLayerIsMine={true} />);
-    fireEvent.click(screen.getByTestId('add-details-button')); // collapse it
+    fireEvent.click(screen.getByTestId('badge-rated'));
+    expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(screen.getByTestId('add-details-button'));
     fireEvent.click(screen.getByTestId('badge-rated'));
     expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
   });

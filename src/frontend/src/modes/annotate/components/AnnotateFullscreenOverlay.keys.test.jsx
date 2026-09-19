@@ -71,6 +71,22 @@ describe('AnnotateFullscreenOverlay — Esc layering (T8600)', () => {
     expect(screen.queryByLabelText('Notes (optional)')).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  // T10590 (Reviewer BLOCKING): the rating picker's OWN Escape handler is on
+  // `document` (RatingBadge has no `window`-level access), so without
+  // stopPropagation the SAME keypress also reached this file's window-level
+  // handler and discarded the whole editor. Dispatching from `document` (not
+  // `window`, which every other test here uses and which SKIPS
+  // document-level listeners entirely in jsdom) is required to reproduce it.
+  it('Esc closes the rating picker only -- it does not also discard the editor', () => {
+    const onClose = vi.fn();
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" onClose={onClose} />);
+    fireEvent.click(screen.getByTestId('badge-rated'));
+    expect(screen.getByRole('radiogroup', { name: "Rate your athlete's play" })).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('radiogroup', { name: "Rate your athlete's play" })).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
 
 describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unchanged)', () => {
