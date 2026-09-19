@@ -79,6 +79,18 @@ export const ANNOTATE = {
   // as FRAME_THIS_CLIP above, which is likewise a literal (not MODE_NAMES-derived).
   FRAME_CLIP: 'Frame clip',                // N42 — NO_PROJECT create + open Framing
   SAVE_AND_FRAME: 'Save and Frame',        // N42 — editor save + open Framing
+  // T10440 (2026-09-18 user request): the T10310 main-screen row's NO_PROJECT
+  // case splits FRAME_CLIP into two explicit outcomes instead of one button
+  // that always both creates and navigates. "Frame Now" is FRAME_CLIP's old
+  // behavior (create the project, then open Framing); "Frame Later" creates
+  // the project WITHOUT navigating — the play becomes an editable clip, left
+  // for a later Framing pass (same create call as clipStage's NO_PROJECT
+  // "create" action, `navigate: false`). A play that already has a project
+  // keeps the single existing stage-CTA button (Frame/Apply Spotlight/View
+  // Final/View Published) — this split applies ONLY before a clip exists.
+  FRAME_NOW: 'Frame Now',              // N43 — NO_PROJECT create + open Framing immediately
+  FRAME_LATER: 'Frame Later',          // N43 — NO_PROJECT create only, stays in Annotate
+  FRAME_LATER_HINT: 'Save this play as an editable clip. Frame it whenever you are ready.',
   // T10290: the details disclosure label (was the inline literal "Add details",
   // then just "Details"). Renamed to "Rate and Tag" 2026-09-18 per user request
   // (it holds rating + sport + tags + notes) — the count suffix (e.g.
