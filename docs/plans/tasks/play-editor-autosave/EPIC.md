@@ -133,10 +133,10 @@ also retires the T10420 backdrop-filter containing-block landmine for this surfa
 
 ## Completion criteria
 
-- [ ] T10600 design approved by the user (decision artifact)
-- [ ] No Save/Update button renders in any play-editor layout; every field in D3 persists on its gesture (unit-tested per field, red->green)
-- [ ] Mark play creates the row at the tap; closing the editor never discards; Delete play removes it
-- [ ] Sidebar `ClipDetailsEditor` no longer writes per keystroke
-- [ ] Portrait phone: trimming happens with the video visible (real-device check, 393x852 + iPhone SE)
-- [ ] Focus/Overlay bottom band never wraps its captions one word per line at 393px
-- [ ] `.claude/knowledge/annotate.md` updated (new persistence contract, retired landmines T8140/T10420 for this surface)
+- [x] T10600 design approved by the user (decision artifact)
+- [x] No Save/Update button renders in any play-editor layout; every field in D3 persists on its gesture (unit-tested per field, red->green) — T10610, PR #470
+- [x] Mark play creates the row at the tap; closing the editor never discards; Delete play removes it — T10610, PR #470
+- [x] Sidebar `ClipDetailsEditor` no longer writes per keystroke — T10610, PR #470
+- [ ] Portrait phone: trimming happens with the video visible (real-device check, 393x852 + iPhone SE) — T10620 (PR #472) proved this in Playwright emulation (video height open == closed exactly at 393x852/375x667/360x740, zero fixed-sheet elements, video never covered); the REAL-DEVICE iOS Safari check (dynamic toolbar) is still owed, per T4880's known Playwright limitation
+- [x] Focus/Overlay bottom band never wraps its captions one word per line at 393px — T10630, PR #469
+- [x] `.claude/knowledge/annotate.md` updated (new persistence contract, retired landmines T8140/T10420 for this surface)

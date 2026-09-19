@@ -1,6 +1,6 @@
 # T10620: Mobile portrait — compact editor strip under a visible video
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-19
