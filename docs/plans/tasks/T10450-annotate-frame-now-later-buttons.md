@@ -1,4 +1,4 @@
-# T10440: Split the T10310 Frame button into Frame Now / Frame Later
+# T10450: Split the T10310 Frame button into Frame Now / Frame Later
 
 **Status:** WIP
 **Impact:** 5
@@ -45,10 +45,17 @@ when `region.rating === 5`.
   navigate-after-create decision changes per button.
 - Concurrent-session note: this repo's shared main checkout had unrelated
   uncommitted WIP already claiming task id T10430 (a "Brilliant" 5-star badge
-  icon) at start of this task, so this task took the next free id, T10440, and
-  was implemented in a disposable worktree (`C:/tmp/master-wt-t10440`) rather
-  than `git checkout -b` in the shared tree, per
-  `[[project_concurrent_agents_shared_worktree]]`.
+  icon) at the start of this task, so it was implemented under T10440 in a
+  disposable worktree (`C:/tmp/master-wt-t10440`) rather than `git checkout -b`
+  in the shared tree, per
+  `[[project_concurrent_agents_shared_worktree]]`. At merge time, origin/master
+  turned out to ALSO already have a different, unrelated T10440 task landed
+  (Play progress badges undone-color fix) — a second, independent collision on
+  the same id from another concurrent session. This task was renamed T10440 ->
+  T10450 (file, branch, PLAN.md row, code comments) before merging. Lesson:
+  checking the shared tree's uncommitted state at task start is not enough —
+  re-check origin/master's task ids again right before merge, since another
+  session can land a new id in between.
 
 ## Implementation
 

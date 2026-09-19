@@ -79,7 +79,7 @@ export const ANNOTATE = {
   // as FRAME_THIS_CLIP above, which is likewise a literal (not MODE_NAMES-derived).
   FRAME_CLIP: 'Frame clip',                // N42 — NO_PROJECT create + open Framing
   SAVE_AND_FRAME: 'Save and Frame',        // N42 — editor save + open Framing
-  // T10440 (2026-09-18 user request): the T10310 main-screen row's NO_PROJECT
+  // T10450 (2026-09-18 user request): the T10310 main-screen row's NO_PROJECT
   // case splits FRAME_CLIP into two explicit outcomes instead of one button
   // that always both creates and navigates. "Frame Now" is FRAME_CLIP's old
   // behavior (create the project, then open Framing); "Frame Later" creates

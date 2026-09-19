@@ -192,12 +192,12 @@ export function AnnotateModeView({
   // (Framing/Spotlight/Final/Published) via the SAME getClipStage action the
   // editor's stage CTA uses — used by both handlers below when a project
   // already exists, so the single existing-project button behaves exactly as
-  // it did before T10440's NO_PROJECT split.
+  // it did before T10450's NO_PROJECT split.
   const openExistingProjectStage = useCallback(() => {
     if (selectedClipStage?.action === 'overlay') onOpenClipInOverlay?.(selectedRegion.autoProjectId);
     else onOpenClipInFocus?.(selectedRegion.autoProjectId);
   }, [selectedRegion, selectedClipStage, onOpenClipInFocus, onOpenClipInOverlay]);
-  // T10440: "Frame Now" is the T10310-era "Frame Clip" behavior — a
+  // T10450: "Frame Now" is the T10310-era "Frame Clip" behavior — a
   // project-less play creates its project THEN opens Framing in one gesture
   // (same create-then-navigate seam as the editor's old Save and Frame).
   const handleFrameNow = useCallback(async () => {
@@ -216,7 +216,7 @@ export function AnnotateModeView({
       setFrameClipPending(false);
     }
   }, [selectedRegion, openExistingProjectStage, onFullscreenUpdateClip, onOpenClipInFocus]);
-  // T10440: "Frame Later" creates the project WITHOUT navigating — the play
+  // T10450: "Frame Later" creates the project WITHOUT navigating — the play
   // becomes an editable clip (visible in Clips), left for a later Framing
   // pass. Only reachable while NO_PROJECT (button isn't rendered otherwise).
   const handleFrameLater = useCallback(async () => {
@@ -1022,7 +1022,7 @@ export function AnnotateModeView({
                   which replaces the editor's old "Create clip"/"Save and
                   Frame" with one gesture that creates the clip's project (if
                   it doesn't have one yet) and opens it at its current stage.
-                  T10440 (2026-09-18 user request): while the play has NO
+                  T10450 (2026-09-18 user request): while the play has NO
                   project yet, that single Frame button splits further into
                   [Frame Now] (create + open Framing immediately) and
                   [Frame Later] (create only, stays in Annotate — the play

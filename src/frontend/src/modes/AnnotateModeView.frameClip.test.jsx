@@ -8,7 +8,7 @@ import { describe, it, expect, vi } from 'vitest';
  *    into [Edit Play] + a Frame action.
  *  - The "You are bookmarking, not editing..." stage-reason line is gone.
  *
- * T10440 (2026-09-18 user request):
+ * T10450 (2026-09-18 user request):
  *  - While the play has NO project yet, the Frame action splits into
  *    [Frame Now] (create the project, then opens Framing immediately) and
  *    [Frame Later] (create the project only, no navigation — the play
@@ -104,7 +104,7 @@ function renderView(overrides = {}) {
   return render(<AnnotateModeView {...buildProps(overrides)} />);
 }
 
-describe('AnnotateModeView — play-selected CTA row (T10310/T10440)', () => {
+describe('AnnotateModeView — play-selected CTA row (T10310/T10450)', () => {
   it('splits into [Edit Play] + [Frame Now] + [Frame Later] once a project-less play is selected', () => {
     renderView({
       isEditMode: true,

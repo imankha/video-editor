@@ -1,6 +1,6 @@
 ---
 domain: annotate
-updated: 2026-09-18 (T10440 — the T10310 main-screen play-selected row's NO_PROJECT
+updated: 2026-09-18 (T10450 — the T10310 main-screen play-selected row's NO_PROJECT
 [Frame Clip] button splits into two explicit outcomes. `AnnotateModeView.jsx`'s single
 `handleFrameClip` became `handleFrameNow` (create the project if needed, then open
 Framing — byte-identical to the old behavior) and `handleFrameLater` (create the
@@ -19,11 +19,11 @@ pass caught the first draft comparing against an inlined `5` instead). New
 `ANNOTATE.FRAME_NOW`/`FRAME_LATER`/`FRAME_LATER_HINT` in
 `displayNames.js` — `ANNOTATE.FRAME_CLIP` is UNCHANGED and still used by
 `clipStage.js`'s own NO_PROJECT `createActions` (consumed by `ClipDetailsEditor`,
-a different surface — the T10440 split is scoped to the T10310 row only, not the
+a different surface — the T10450 split is scoped to the T10310 row only, not the
 inline play editor). **Concurrent-session note:** the shared main checkout already
 had unrelated uncommitted WIP claiming task id T10430 (a "Brilliant" 5-star badge
 icon, `components/shared/BrilliantIcon.jsx` + `clipConstants.js`'s new
-`BRILLIANT_RATING`) at this task's start, so T10440 was implemented in a disposable
+`BRILLIANT_RATING`) at this task's start, so T10450 was implemented in a disposable
 worktree (`git worktree add`, not `git checkout -b` in the shared tree) per
 `.claude/knowledge`'s own concurrent-session precedent — never assume the next
 gap-based task id is free without checking the shared tree's uncommitted state
