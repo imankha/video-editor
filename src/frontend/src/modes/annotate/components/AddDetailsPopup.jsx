@@ -1,6 +1,9 @@
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { DetailsFields } from './DetailsFields';
+import { LayerSegmentedControl } from './LayerSegmentedControl';
+import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
+import { DeletePlayButton } from './DeletePlayButton';
 import { Z } from '../../../constants/zLayers';
 import { ANNOTATE } from '../../../config/displayNames';
 
@@ -37,6 +40,20 @@ export function AddDetailsPopup({
   onNotesCommit,
   storedNotes = '',
   onDone,
+  // T10620: the mobile PORTRAIT strip (layout="portrait-strip") has no room for
+  // category / teammates / Delete play on its two-row strip at 360px, so it
+  // passes them here to live behind the disclosure. ALL OPTIONAL — the
+  // inline/mobileFs hosts omit them (those keep category+teammates in the form
+  // body and Delete in the pinned footer), so their popup stays byte-identical.
+  myAthlete,
+  onLayerChange,
+  layerDisabled = false,
+  layerDisabledReason = '',
+  taggedTeammates = [],
+  onTeammatesChange,
+  teammateSuggestions = [],
+  hasProject = false,
+  onDelete,
 }) {
   // T10610 § B.2: the textarea unmounts without blurring when this popup
   // closes, so Done must commit explicitly (same reasoning as closeWithCommit).
@@ -70,6 +87,32 @@ export function AddDetailsPopup({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
+        {/* T10620 (portrait strip only): category first, then teammates when on
+            the Team layer — same per-gesture writes the form body uses. */}
+        {onLayerChange && (
+          <div className="mb-4">
+            <label className="block text-gray-400 text-sm mb-2">{ANNOTATE.LAYER_LABEL}</label>
+            <LayerSegmentedControl
+              size="md"
+              value={myAthlete}
+              disabled={layerDisabled}
+              disabledReason={layerDisabledReason}
+              onChange={onLayerChange}
+              className="w-full"
+            />
+          </div>
+        )}
+        {onLayerChange && !myAthlete && onTeammatesChange && (
+          <div className="mb-4">
+            <label className="block text-gray-400 text-sm mb-2">Teammates</label>
+            <TeammateTagInput
+              teammates={taggedTeammates}
+              onChange={onTeammatesChange}
+              suggestions={teammateSuggestions}
+            />
+          </div>
+        )}
+
         <DetailsFields
           tagSet={tagSet}
           sport={sport}
@@ -83,6 +126,13 @@ export function AddDetailsPopup({
           storedNotes={storedNotes}
           notesRows={4}
         />
+
+        {/* T10620 (portrait strip only): Delete play, moved off the strip. */}
+        {onDelete && (
+          <div className="mt-4 border-t border-gray-700 pt-4">
+            <DeletePlayButton hasProject={hasProject} onDelete={onDelete} />
+          </div>
+        )}
       </div>
     </div>,
     document.body

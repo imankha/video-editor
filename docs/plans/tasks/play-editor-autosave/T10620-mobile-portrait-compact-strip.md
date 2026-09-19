@@ -106,7 +106,59 @@ same wrapper feeds it — check `AnnotateModeView.jsx` ~575-600 and say so in th
 
 **2026-09-19**: Filed. Not started.
 
-**2026-09-19**: Implemented in a container worker (single commit 08185c93, purely additive to
+**2026-09-19 (implementation, worker on `feature/T10620-portrait-editor-strip`)**:
+
+- **New `layout="portrait-strip"` branch** in `AnnotateFullscreenOverlay.jsx` — an
+  IN-FLOW compact strip, its OWN branch (not a generalised `landscape-inline`: the two
+  differ substantially — landscape is height-starved with rating+tags inline and NO
+  disclosure/name-input; portrait has room for a name input + a details disclosure).
+  Keeping them separate leaves `landscape-inline` byte-identical (Reviewer checklist) while
+  every persistence handler + shared block (`ClipScrubRegion compact`, the progress badges
+  incl. the rating popup, `stageCta`, `AddDetailsPopup`, `DeletePlayButton`) is reused from
+  component scope — no copied write logic. Rows: (1) `ClipScrubRegion compact`; (1b)
+  progress badges on their own row; (2) name input (`flex-1 min-w-0`) + disclosure + Done
+  (both `flex-none whitespace-nowrap`); then the full-width `stageCta`; overflow fields
+  behind the disclosure.
+- **`AnnotateModeView.jsx`**: the `mobileInlineForm` render moved UP to render in flow
+  directly under the video card (sibling of the video-player div, inside the windowed
+  wrapper) with `layout="portrait-strip"`. The old `fixed inset-x-0 bottom-0 z-40
+  max-h-[85vh] rounded-t-2xl` sheet AND its `[@media(max-height:700px)]:pb-9` keyboard hack
+  (T8790/F3) are removed. In flow ⇒ the T10420 backdrop-filter containing-block trap no
+  longer applies to this surface.
+- **`AddDetailsPopup.jsx`**: gained OPTIONAL `myAthlete/onLayerChange/layerDisabled/
+  layerDisabledReason`, `taggedTeammates/onTeammatesChange/teammateSuggestions`, and
+  `hasProject/onDelete`. Only `portrait-strip` passes them; the `inline`/`mobileFs` hosts
+  omit them ⇒ their popup stays byte-identical.
+- **Design call (360px ambiguity, M-tier — no design gate):** category (My athlete / Team),
+  teammates and Delete play live BEHIND the disclosure, NOT on strip row 2. Rationale: at
+  360px a segmented control on row 2 crushes the name input below a usable width, and none
+  of those fields are needed while trimming. Rating is NOT duplicated into the disclosure —
+  the rated progress-badge popup is the single source for rating on every layout (T10520);
+  duplicating it would reintroduce the control T10520 deliberately removed. `ANNOTATE.DETAILS`
+  stays the single source for the disclosure label.
+- **`mobileFs` (T9500) scope:** SEPARATE surface — `mobileFs = annotateFullscreen &&
+  isMobile`, mutually exclusive with `mobileInlineForm = showAnnotateOverlay &&
+  !annotateFullscreen && isMobile`. It has its own render site (`AnnotateModeView.jsx` ~835,
+  its own `absolute inset-x-0 bottom-0 maxHeight:70vh` wrapper) and keeps `layout="inline"`.
+  NOT touched by this task.
+- **Tests (all green):** new `AnnotateFullscreenOverlay.portraitStrip.test.jsx` (12 — no
+  fixed/85vh wrapper, no Save/Update button, row-2 flex-none shrink priority + name absorbs
+  squeeze, name commit-on-blur, category/tags/notes/teammates/Delete reachable via
+  disclosure, per-gesture writes, stage CTA); new `AnnotateModeView.portraitStrip.test.jsx`
+  (2 — `useIsMobile` decides portrait-strip vs desktop strip, NOT a `sm:` split); updated
+  `AnnotateModeView.renderSiteInventory.test.jsx` (windowed-mobile site now asserts
+  `layout=portrait-strip`). Regression: 107 (mobileStageCta/details/frameClip/stripLayout/
+  noSaveButton/teammates/layer/progressBadges/saveStatus/keys) unmodified; full annotate
+  suite 631 pass; eslint 0 errors.
+- **OWED (container has no browser cache + no backend venv/.env — cannot dev-login a real
+  account to load real video):** the video-height measurement at 393×852 / 375×667 /
+  360×740 (closed vs. open), the real-touch live-drive, and the iOS-Safari dynamic-toolbar
+  real-device check. Structural acceptance is met (in-flow render can't overlay the video;
+  video keeps its natural windowed height as a sibling above the strip), but the MEASURED
+  numbers the acceptance bar demands must be captured by the supervisor/user on a real
+  device before merge (this is the visual/UX test-and-merge gate the kickoff describes).
+
+**2026-09-19 (supervisor summary + live measurement)**: Implemented in a container worker (single commit 08185c93, purely additive to
 `AnnotateFullscreenOverlay`/`AddDetailsPopup`; landscape-inline/strip/overlay layouts
 byte-identical). New `layout="portrait-strip"` renders in flow under the video card; the old
 `fixed inset-x-0 bottom-0 max-h-[85vh]` sheet + its keyboard-padding hack are deleted. Category
@@ -132,6 +184,13 @@ video's center resolves inside the video area both before and after the editor o
 Screenshots (closed + open, all 3 widths) saved to `C:\work\tasks\t10620\qa\`. Real-device iOS
 Safari dynamic-toolbar check is still owed (Playwright cannot reproduce it, per T4880's known
 caveat) — this measurement covers everything Playwright *can* verify.
+
+**2026-09-19 (user feedback + fix)**: User tested the pushed branch live and asked for the
+disclosure label to read "Details" instead of "Notes and Tags" (it now also holds category,
+teammates, and Delete play, so the old name undersold it and produced a redundant "Notes and
+Tags (note)" suffix). One-line change to the single-source `ANNOTATE.DETAILS` constant
+(commit 45d784b3), propagating everywhere via that constant; two test files' hardcoded
+literal assertions updated to match. 19 relevant tests green, lint clean, Branch CI green.
 
 ## Acceptance Criteria
 
