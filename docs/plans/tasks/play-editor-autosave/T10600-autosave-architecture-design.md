@@ -1,6 +1,6 @@
 # T10600: Architect design — per-gesture autosave model for the play editor
 
-**Status:** WAITING ON USER
+**Status:** DECIDED
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-09-19
@@ -164,13 +164,15 @@ navigate on stale bounds -> per-key tracking + Retry through the queue; (4) DELE
 pending PUT -> queued as chain tail; (5) `onDragEnd` :305 fires on every pointer-up ->
 clean-check in `updateClipRegionWithSync`; (6) Escape meant "abandon" in one field and "save
 and close" in another -> one `onTextFieldKeyDown` rule; (7) sidebar `(auto)` label must read
-`isDefaultPlayName`. User approved folding these in. Artifact republished (same URL). Still
-WAITING ON USER for the design approval itself.
+`isDefaultPlayName`. User approved folding these in. Artifact republished (same URL).
+
+**2026-09-19: APPROVED by the user (v2).** Design doc committed to master. Status -> DECIDED.
+T10610 may start; kickoff for a fresh /dotask session written to `C:\tmp\kickoff-t10610-t10620.md`.
 
 ## Acceptance Criteria
 
-- [ ] `docs/plans/tasks/T10600-design.md` exists and answers A-F above with named functions, not prose
-- [ ] Zero `useEffect`-driven writes anywhere in the plan; every write names its gesture
-- [ ] Sidebar per-keystroke write is explicitly fixed by the same pattern as the overlay
-- [ ] Frame-after-trim ordering is guaranteed by design (chain + await), not by timing
-- [ ] User approved the decision artifact
+- [x] `docs/plans/tasks/T10600-design.md` exists and answers A-F above with named functions, not prose
+- [x] Zero `useEffect`-driven writes anywhere in the plan; every write names its gesture
+- [x] Sidebar per-keystroke write is explicitly fixed by the same pattern as the overlay
+- [x] Frame-after-trim ordering is guaranteed by design (chain + await), not by timing (v2: per-key failure tracking, create as chain head, ref map for `rawClipId`)
+- [x] User approved the decision artifact (2026-09-19, v2)

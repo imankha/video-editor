@@ -1,0 +1,376 @@
+<title>Autosave Design Gate</title>
+<style>
+:root{
+  --bg:#faf9f7; --surface:#ffffff; --surface-2:#f1efe9;
+  --ink:#1c1b19; --ink-dim:#57534a; --ink-faint:#8c8577;
+  --line:#e4e0d6; --line-strong:#cfc8b8;
+  --accent:#8a5a2b; --accent-ink:#ffffff; --accent-soft:#f3e6d4;
+  --good:#2f6b4f; --good-soft:#e3efe8;
+  --bad:#a3372b; --bad-soft:#f6e4e1;
+  --mono-bg:#221f1a; --mono-ink:#e9e2d3; --mono-accent:#e0a35c;
+  --shadow: 0 1px 2px rgba(28,27,25,.04), 0 8px 24px -12px rgba(28,27,25,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#171512; --surface:#201d19; --surface-2:#2a2621;
+    --ink:#efe9df; --ink-dim:#c1b8a9; --ink-faint:#8a8172;
+    --line:#3a352d; --line-strong:#4a4438;
+    --accent:#e0a35c; --accent-ink:#221a0e; --accent-soft:#3a2c17;
+    --good:#7cc9a3; --good-soft:#20342a;
+    --bad:#e8897c; --bad-soft:#3a231f;
+    --mono-bg:#0f0d0b; --mono-ink:#e9e2d3; --mono-accent:#e0a35c;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#171512; --surface:#201d19; --surface-2:#2a2621;
+  --ink:#efe9df; --ink-dim:#c1b8a9; --ink-faint:#8a8172;
+  --line:#3a352d; --line-strong:#4a4438;
+  --accent:#e0a35c; --accent-ink:#221a0e; --accent-soft:#3a2c17;
+  --good:#7cc9a3; --good-soft:#20342a;
+  --bad:#e8897c; --bad-soft:#3a231f;
+  --mono-bg:#0f0d0b; --mono-ink:#e9e2d3; --mono-accent:#e0a35c;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  font-size:15px; line-height:1.55;
+}
+::selection{ background:var(--accent-soft); }
+
+.wrap{ max-width:920px; margin:0 auto; padding:48px 24px 96px; }
+
+h1,h2,h3{ font-family:"Fraunces", Georgia, serif; text-wrap:balance; color:var(--ink); }
+h1{ font-size:32px; font-weight:600; margin:0 0 6px; letter-spacing:-0.01em; }
+h2{ font-size:21px; font-weight:600; margin:0 0 4px; }
+h3{ font-size:16px; font-weight:600; margin:0 0 2px; }
+p{ margin:0 0 12px; color:var(--ink-dim); max-width:68ch; }
+code, .mono{ font-family:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+code{ background:var(--surface-2); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:0.86em; }
+
+/* ---------- masthead ---------- */
+.masthead{
+  display:flex; justify-content:space-between; align-items:flex-start; gap:24px;
+  padding-bottom:28px; margin-bottom:32px; border-bottom:1px solid var(--line);
+}
+.eyebrow{
+  font-family:"JetBrains Mono", monospace; font-size:11.5px; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--accent); font-weight:600; margin-bottom:10px; display:flex; align-items:center; gap:8px;
+}
+.eyebrow .dot{ width:6px; height:6px; border-radius:50%; background:var(--accent); }
+.masthead .sub{ margin:8px 0 0; }
+.gate-chip{
+  flex:none; text-align:right;
+}
+.status-pill{
+  display:inline-flex; align-items:center; gap:6px; font-family:"JetBrains Mono",monospace;
+  font-size:11.5px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+  padding:6px 12px; border-radius:999px; background:var(--accent-soft); color:var(--accent);
+  border:1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.gate-chip .meta{ margin-top:8px; font-size:12px; color:var(--ink-faint); line-height:1.5; }
+.gate-chip .meta a{ color:var(--ink-dim); }
+
+/* ---------- section rhythm ---------- */
+section{ margin:40px 0; }
+section > h2{ margin-bottom:14px; }
+.lede{ font-size:15.5px; }
+
+/* ---------- constraint strip ---------- */
+.constraints{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1px;
+  background:var(--line); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  margin:16px 0 0;
+}
+.constraints .cell{ background:var(--surface); padding:14px 16px; }
+.constraints .cell .k{ font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-bottom:5px; }
+.constraints .cell .v{ font-size:13.5px; color:var(--ink); font-weight:500; }
+
+/* ---------- before/after state table ---------- */
+.state-flow{
+  display:grid; grid-template-columns:1fr auto 1fr; gap:16px; align-items:stretch; margin-top:16px;
+}
+.state-col{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 20px; box-shadow:var(--shadow); }
+.state-col h3{ font-size:12px; font-family:"JetBrains Mono",monospace; text-transform:uppercase; letter-spacing:.07em; margin-bottom:12px; color:var(--ink-faint); }
+.state-col.before h3{ color:var(--bad); }
+.state-col.after h3{ color:var(--good); }
+.state-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.state-list li{
+  display:flex; align-items:baseline; gap:8px; font-size:13.5px; padding:8px 10px; border-radius:7px; background:var(--surface-2);
+}
+.state-list li.gone{ text-decoration:line-through; color:var(--ink-faint); background:transparent; border:1px dashed var(--line-strong); }
+.state-list .tag{ font-family:"JetBrains Mono",monospace; font-size:11px; font-weight:700; color:var(--accent); flex:none; }
+.arrow-col{ display:flex; align-items:center; justify-content:center; color:var(--ink-faint); font-size:22px; }
+
+/* ---------- gesture/commit table ---------- */
+.commit-table{ width:100%; border-collapse:collapse; margin-top:16px; font-size:13.5px; }
+.commit-table th{
+  text-align:left; font-family:"JetBrains Mono",monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--ink-faint); font-weight:600; padding:0 12px 10px; border-bottom:1px solid var(--line-strong);
+}
+.commit-table td{ padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+.commit-table tr:last-child td{ border-bottom:none; }
+.commit-table tr:hover td{ background:var(--surface-2); }
+.commit-table .payload{ font-family:"JetBrains Mono",monospace; font-size:12.5px; color:var(--accent); white-space:nowrap; }
+.commit-table .gesture{ color:var(--ink-dim); }
+.commit-table .control{ font-weight:600; }
+
+/* ---------- chain diagram ---------- */
+.chain-card{
+  background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:24px 26px; box-shadow:var(--shadow); margin-top:16px;
+}
+.chain-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+.chain-node{
+  font-family:"JetBrains Mono",monospace; font-size:12.5px; padding:8px 13px; border-radius:8px;
+  background:var(--surface-2); border:1px solid var(--line-strong); white-space:nowrap;
+}
+.chain-node.write{ background:var(--accent-soft); border-color:color-mix(in srgb, var(--accent) 40%, transparent); color:var(--accent); font-weight:600; }
+.chain-node.gate{ background:var(--good-soft); border-color:color-mix(in srgb, var(--good) 40%, transparent); color:var(--good); font-weight:600; }
+.chain-arrow{ color:var(--ink-faint); font-size:16px; }
+.chain-caption{ font-size:13px; color:var(--ink-dim); border-top:1px solid var(--line); padding-top:14px; margin-top:2px; }
+.chain-caption code{ font-size:12px; }
+
+/* ---------- retirement list ---------- */
+.retire-summary{
+  display:flex; gap:14px; flex-wrap:wrap; margin:16px 0 18px;
+}
+.retire-stat{ background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px 20px; box-shadow:var(--shadow); }
+.retire-stat .num{ font-family:"Fraunces",serif; font-size:26px; font-weight:600; color:var(--accent); line-height:1; }
+.retire-stat .lbl{ font-size:11.5px; color:var(--ink-faint); margin-top:4px; }
+.retire-list{ display:flex; flex-direction:column; gap:6px; }
+.retire-item{
+  display:grid; grid-template-columns:22px 1fr auto; gap:12px; align-items:baseline;
+  padding:9px 12px; border-radius:7px; font-size:13px;
+}
+.retire-item:nth-child(odd){ background:var(--surface-2); }
+.retire-item .n{ font-family:"JetBrains Mono",monospace; color:var(--ink-faint); font-size:11px; }
+.retire-item .sym{ font-family:"JetBrains Mono",monospace; color:var(--ink); }
+.retire-item .test{ color:var(--ink-faint); font-size:11.5px; text-align:right; white-space:nowrap; }
+
+/* ---------- open questions ---------- */
+.qlist{ display:flex; flex-direction:column; gap:12px; margin-top:14px; }
+.qcard{ background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:16px 18px; box-shadow:var(--shadow); }
+.qcard .qhead{ display:flex; justify-content:space-between; gap:10px; align-items:baseline; margin-bottom:6px; }
+.qcard .qid{ font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--accent); font-weight:700; }
+.qcard p{ margin:0; font-size:13.5px; }
+.qcard .rec{ margin-top:8px; font-size:13px; color:var(--good); display:flex; gap:6px; }
+.qcard .rec b{ font-weight:600; }
+
+/* ---------- footer / CTA ---------- */
+.gate-footer{
+  margin-top:48px; padding:24px 26px; border-radius:12px; background:var(--surface); border:1px solid var(--line-strong);
+  box-shadow:var(--shadow); display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap;
+}
+.gate-footer p{ margin:0; font-size:13.5px; }
+.gate-footer .path{ margin-top:4px; }
+.next-badge{
+  flex:none; font-family:"JetBrains Mono",monospace; font-size:12px; font-weight:700; color:var(--accent-ink);
+  background:var(--accent); padding:10px 18px; border-radius:999px;
+}
+
+.deviations{ background:var(--accent-soft); border:1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius:10px; padding:16px 18px; margin-top:16px; }
+.deviations h3{ font-size:13px; color:var(--accent); margin-bottom:8px; }
+.deviations ul{ margin:0; padding-left:18px; }
+.deviations li{ font-size:13px; color:var(--ink-dim); margin-bottom:6px; }
+.deviations li:last-child{ margin-bottom:0; }
+
+@media (max-width:640px){
+  .masthead{ flex-direction:column; }
+  .gate-chip{ text-align:left; }
+  .state-flow{ grid-template-columns:1fr; }
+  .arrow-col{ transform:rotate(90deg); padding:4px 0; }
+  .commit-table{ display:block; overflow-x:auto; }
+  .retire-item{ grid-template-columns:20px 1fr; }
+  .retire-item .test{ grid-column:2; text-align:left; }
+}
+</style>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+
+<div class="wrap">
+
+  <div class="masthead">
+    <div>
+      <div class="eyebrow"><span class="dot"></span>Design gate &middot; T10600</div>
+      <h1>Per-gesture autosave for the play editor</h1>
+      <p class="sub">The mechanism for removing the Save/Update button (EPIC D1&ndash;D8) &mdash; create at the tap, one write per field, ordered delivery, delete instead of cancel.</p>
+    </div>
+    <div class="gate-chip">
+      <span class="status-pill">v2 &middot; Awaiting your approval</span>
+      <div class="meta">Full doc: <a href="#"><code>docs/plans/tasks/T10600-design.md</code></a><br>Blocks T10610 (implementation)<br>v2 folds in 7 code-verified review findings</div>
+    </div>
+  </div>
+
+  <section>
+    <p class="lede">The play editor is currently a submit-form hiding inside an autosave app: nine fields collected locally, one <code>handleSave</code> payload on click. This design routes every field through the seam <code>ClipDetailsEditor.jsx</code> already proved out &mdash; <b style="color:var(--ink)">one gesture, one field, one PUT</b> &mdash; and answers the three things that needed real design before code: how a play comes to exist without a Save click, how two editors converge on one text-commit pattern, and how out-of-order writes get an ordering guarantee without a version counter.</p>
+    <div class="constraints">
+      <div class="cell"><div class="k">Persistence</div><div class="v">Zero <code>useEffect</code> writes, anywhere</div></div>
+      <div class="cell"><div class="k">Debounce</div><div class="v">None &mdash; blur / Enter / drag&#8209;end / tap only</div></div>
+      <div class="cell"><div class="k">Seam</div><div class="v">One route: <code>PUT /clips/raw/{id}</code></div></div>
+      <div class="cell"><div class="k">Text pattern</div><div class="v">Identical in both editors &mdash; no <code>persist:false</code></div></div>
+      <div class="cell"><div class="k">Discard</div><div class="v">Gone, except: Escape in a text field reverts that field</div></div>
+      <div class="cell"><div class="k">Queue</div><div class="v">Create is the chain head, Delete the tail, Retry re-enqueues</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What changed in v2</h2>
+    <p>A second review verified v1&rsquo;s load-bearing claims against the code. Four were wrong in ways that would have shipped races; three were smaller consistency gaps. All seven are now in the doc, each with a pinning test.</p>
+    <div class="retire-list">
+      <div class="retire-item"><span class="n">01</span><span class="sym">Create POST queued as chain head &mdash; the editor opens <em>before</em> the POST resolves (<code>addClipRegion</code> :1281 is sync, <code>await saveClip</code> :1317 is not), so an early trim would have POSTed a duplicate row</span><span class="test">blocking</span></div>
+      <div class="retire-item"><span class="n">02</span><span class="sym"><code>rawClipIdByRegionRef</code> written synchronously &mdash; <code>setRawClipId</code> is React state, not fresh by the next microtask; v1&rsquo;s &ldquo;closed by construction&rdquo; claim was not</span><span class="test">blocking</span></div>
+      <div class="retire-item"><span class="n">03</span><span class="sym">Failure tracked per payload key, Retry routes through the queue &mdash; v1 let a successful rating tap clear a failed trim, so Frame navigated on stale bounds (the exact D4 case)</span><span class="test">major</span></div>
+      <div class="retire-item"><span class="n">04</span><span class="sym">Delete queued behind pending writes &mdash; otherwise a DELETE can beat a name PUT, the PUT 404s, and a Retry toast appears for a play that no longer exists</span><span class="test">major</span></div>
+      <div class="retire-item"><span class="n">05</span><span class="sym">Clean-check on every commit, in one place &mdash; <code>onDragEnd</code> fires on every pointer-up whether the handle moved or not; a no-op tap cost a durable PUT + R2 round trip</span><span class="test">minor</span></div>
+      <div class="retire-item"><span class="n">06</span><span class="sym">One Escape rule &mdash; v1 had Escape mean &ldquo;abandon&rdquo; in the strip&rsquo;s inline name field but &ldquo;save and close&rdquo; in the form body</span><span class="test">minor</span></div>
+      <div class="retire-item"><span class="n">07</span><span class="sym">Sidebar &ldquo;(auto)&rdquo; label reads <code>isDefaultPlayName</code> &mdash; every play now carries &ldquo;Play N&rdquo; as a real name, so a <code>has_custom_name</code>-derived flag would never show it again</span><span class="test">minor</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>A. The state machine collapses</h2>
+    <p>Today a play doesn&rsquo;t exist until Save, so the editor needs a <code>CREATING</code> state for a row that isn&rsquo;t there yet. Once Mark&nbsp;Play creates the row at the tap, the editor only ever opens on something real &mdash; <code>CREATING</code> loses its only producer.</p>
+    <div class="state-flow">
+      <div class="state-col before">
+        <h3>Before &mdash; 4 states</h3>
+        <ul class="state-list">
+          <li><span class="tag">01</span> NONE &mdash; no selection</li>
+          <li><span class="tag">02</span> SELECTED &mdash; clip highlighted</li>
+          <li><span class="tag">03</span> EDITING &mdash; overlay open, existing clip</li>
+          <li><span class="tag">04</span> CREATING &mdash; overlay open, <em>no</em> clip yet</li>
+        </ul>
+      </div>
+      <div class="arrow-col">&#8594;</div>
+      <div class="state-col after">
+        <h3>After &mdash; 3 states</h3>
+        <ul class="state-list">
+          <li><span class="tag">01</span> NONE &mdash; unchanged</li>
+          <li><span class="tag">02</span> SELECTED &mdash; unchanged</li>
+          <li><span class="tag">03</span> EDITING &mdash; the <em>only</em> editor state; reached from the T10310 row, the toolbar, or the create tap</li>
+          <li class="gone"><span class="tag">&mdash;</span> CREATING &mdash; deleted, no producer remains</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>B. Every field, one commit point</h2>
+    <p>This table <em>is</em> the persistence contract &mdash; the full gesture&nbsp;&rarr;&nbsp;write mapping T10610 implements verbatim. Nothing outside this table ever writes, and every row is a no-op when the value didn&rsquo;t change.</p>
+    <table class="commit-table">
+      <thead><tr><th>Control</th><th>Gesture</th><th>Payload</th></tr></thead>
+      <tbody>
+        <tr><td class="control">Mark play</td><td class="gesture">tap</td><td class="payload">POST /clips/raw/save (full create)</td></tr>
+        <tr><td class="control">Trim start/end</td><td class="gesture">drag&#8209;end, typed entry, or step chevron</td><td class="payload">{startTime, endTime}</td></tr>
+        <tr><td class="control">Rating</td><td class="gesture">tap in popup, or 1&ndash;5 key</td><td class="payload">{rating}</td></tr>
+        <tr><td class="control">Tags</td><td class="gesture">chip tap</td><td class="payload">{tags}</td></tr>
+        <tr><td class="control">Play category</td><td class="gesture">segmented&#8209;control tap</td><td class="payload">{my_athlete}</td></tr>
+        <tr><td class="control">Clip name</td><td class="gesture">input blur, or Enter</td><td class="payload">{name}</td></tr>
+        <tr><td class="control">Notes</td><td class="gesture">textarea blur</td><td class="payload">{notes}</td></tr>
+        <tr><td class="control">Teammates</td><td class="gesture">Enter&#8209;commit / remove chip</td><td class="payload">{tagged_teammates}</td></tr>
+        <tr><td class="control">Frame / stage CTA</td><td class="gesture">click (awaits the chain first)</td><td class="payload">{createProject: true}</td></tr>
+        <tr><td class="control">Delete play</td><td class="gesture">click &rarr; confirm click</td><td class="payload">DELETE /clips/raw/{id} (queued last)</td></tr>
+        <tr><td class="control">Done / X / Escape (no field focused)</td><td class="gesture">click / key</td><td class="payload">commits any dirty text, then closes &mdash; no other write</td></tr>
+        <tr><td class="control">Escape (inside a text field)</td><td class="gesture">key</td><td class="payload">nothing &mdash; reverts the field, stays open</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>C. Ordering without a version counter</h2>
+    <p>Independent per-field writes can race &mdash; a trim released a beat before Frame is tapped, or a beat after Mark play while the create POST is still in flight. A per-region promise chain (modelled on <code>actionClient.js</code>&rsquo;s FIFO, no version threading) serializes everything that touches the <em>same</em> region: the create is the head, field writes chain behind it, Retry re-enqueues, Delete is the tail. Frame waits for the tail to settle.</p>
+    <div class="chain-card">
+      <div class="chain-row">
+        <span class="chain-node">Mark play</span><span class="chain-arrow">&#8594;</span>
+        <span class="chain-node write">enqueue(A, create)</span><span class="chain-arrow">&#8594;</span>
+        <span class="chain-node">POST /save</span>
+      </div>
+      <div class="chain-row">
+        <span class="chain-node">drag&#8209;end (POST still in flight)</span><span class="chain-arrow">&#8594;</span>
+        <span class="chain-node write">enqueue(A, trim)</span><span class="chain-arrow">&#8594;</span>
+        <span class="chain-node">waits for id</span><span class="chain-arrow">&#8594;</span>
+        <span class="chain-node">PUT {startTime,endTime}</span>
+      </div>
+      <div class="chain-row">
+        <span class="chain-node">tap Frame, 100ms later</span><span class="chain-arrow">&#8594;</span>
+        <span class="chain-node gate">awaitRegionWrites(A)</span><span class="chain-arrow">&#8594;</span>
+        <span class="chain-node">tail settles</span><span class="chain-arrow">&#8594;</span>
+        <span class="chain-node gate">navigate</span>
+      </div>
+      <div class="chain-caption">Failure is tracked <b>per field</b>: a failed trim stays failed until a trim write lands, no matter how many rating taps succeed in between. A rejected tail leaves the Retry toast up and the CTA does <b>not</b> navigate &mdash; no new dialog; Retry goes back through the same queue, so a real fix clears it. Chaining + a synchronously written <code>rawClipId</code> map (not React state, which isn&rsquo;t fresh by the next microtask) closes the stale&#8209;closure race <code>annotate.md</code>&rsquo;s T9630 entry flagged as open.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>E. Retirement, mapped to what pins it</h2>
+    <p>Every deleted symbol below is a <b style="color:var(--ink))">rewrite</b> of its pinning test, not a deletion of coverage &mdash; the full doc names the exact replacement assertion for all 15.</p>
+    <div class="retire-summary">
+      <div class="retire-stat"><div class="num">15</div><div class="lbl">symbols retired</div></div>
+      <div class="retire-stat"><div class="num">15</div><div class="lbl">tests rewritten, 0 dropped</div></div>
+      <div class="retire-stat"><div class="num">4</div><div class="lbl">beyond the task file&rsquo;s own list</div></div>
+    </div>
+    <div class="retire-list">
+      <div class="retire-item"><span class="n">01</span><span class="sym">handleSave / handleSaveRef</span><span class="test">explicitOutcomes.test.jsx</span></div>
+      <div class="retire-item"><span class="n">02</span><span class="sym">hasUnsavedEdits, 'unsaved' status</span><span class="test">saveStatus.test.jsx</span></div>
+      <div class="retire-item"><span class="n">03</span><span class="sym">focusConfirmDialog</span><span class="test">focusPrompt.test.jsx &rarr; frameOrdering.test.jsx</span></div>
+      <div class="retire-item"><span class="n">04</span><span class="sym">focusPending / stagePendingCta / pendingProjectClipId</span><span class="test">stayOpen.test.jsx</span></div>
+      <div class="retire-item"><span class="n">05</span><span class="sym">add_clip_opened_no_save beacon</span><span class="test">oneTap.test.jsx, beaconSurfaces.test.jsx</span></div>
+      <div class="retire-item"><span class="n">06</span><span class="sym">Enter&#8209;to&#8209;save shortcut</span><span class="test">keys.test.jsx</span></div>
+      <div class="retire-item"><span class="n">07</span><span class="sym">SAVE_PLAY / UPDATE_PLAY / SAVE_AND_FRAME</span><span class="test">by&#8209;label across 4 files</span></div>
+      <div class="retire-item"><span class="n">08</span><span class="sym">MARKING_PLAY_TITLE, create&#8209;mode header</span><span class="test">stripLayout.test.jsx</span></div>
+      <div class="retire-item"><span class="n">09</span><span class="sym">isNameManuallyEdited + auto&#8209;name effect</span><span class="test">namePreservation.test.jsx</span></div>
+      <div class="retire-item"><span class="n">10</span><span class="sym">isRatingManuallyEdited</span><span class="test">progressBadges.test.jsx</span></div>
+      <div class="retire-item"><span class="n">11</span><span class="sym">defaultClipName, nextClipNumber</span><span class="test">oneTap.test.jsx &rarr; markPlayDefaults.test.jsx</span></div>
+      <div class="retire-item"><span class="n">12</span><span class="sym">SELECTION_STATES.CREATING</span><span class="test">useClipSelection.test.js</span></div>
+      <div class="retire-item"><span class="n">13</span><span class="sym">handleOverlayResume as save&#8209;close path</span><span class="test">saveStatus.test.jsx</span></div>
+      <div class="retire-item"><span class="n">14</span><span class="sym">saveInFlightRef</span><span class="test">explicitOutcomes.test.jsx &rarr; markPlayInFlightRef</span></div>
+      <div class="retire-item"><span class="n">15</span><span class="sym">AnnotateContainer.reelCreated gap</span><span class="test">reelCreated.test.jsx (add 1 case)</span></div>
+    </div>
+    <div class="deviations">
+      <h3>Added beyond the task file (flagged, not sprung)</h3>
+      <ul>
+        <li>A distinctly-named <code>NEW_PLAY_DEFAULT_RATING</code> constant &mdash; <code>DEFAULT_RATING</code> currently means <code>4</code> in two files and <code>3</code> in a third; the tap needs one unambiguous value.</li>
+        <li><code>handleDeletePlayFromEditor</code> must close the overlay <em>and</em> deselect before deleting &mdash; otherwise deleting the play you&rsquo;re editing leaves <code>EDITING</code> pointed at a missing clip.</li>
+        <li>Three e2e specs beyond the three the task file named (T8730 dirty&#8209;check, the T8600/T8960/T8760 family, clip&#8209;selection&#8209;state&#8209;machine) need their Save/Cancel locators updated.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Open questions</h2>
+    <div class="qlist">
+      <div class="qcard">
+        <div class="qhead"><h3>The fullscreen toolbar&rsquo;s &ldquo;Add play (A)&rdquo; while already editing</h3><span class="qid">Q1</span></div>
+        <p>Under create&#8209;at&#8209;tap this becomes a no&#8209;op while an editor is already open. Should it instead close the current one and start a second play?</p>
+        <div class="rec">&#10003; <b>Recommendation: no&#8209;op.</b> A silent close&#8209;and&#8209;create is more surprising than doing nothing.</div>
+      </div>
+      <div class="qcard">
+        <div class="qhead"><h3>&ldquo;Play saved&rdquo; toast on every tap</h3><span class="qid">Q2</span></div>
+        <p>It now fires once per Mark&nbsp;Play tap. Does that get chatty for someone marking several plays in a row?</p>
+        <div class="rec">&#10003; <b>Recommendation: keep it.</b> It&rsquo;s the only confirmation the row exists at all &mdash; revisit with real usage data.</div>
+      </div>
+      <div class="qcard">
+        <div class="qhead"><h3>Does Done resume playback?</h3><span class="qid">Q3</span></div>
+        <p><code>handleOverlayResume</code> (close + resume) loses its only caller. Should Done also un&#8209;pause, or just close?</p>
+        <div class="rec">&#10003; <b>Recommendation: just close.</b> Matches the explicit entry/exit direction from T10400; the user presses play themselves.</div>
+      </div>
+      <div class="qcard">
+        <div class="qhead"><h3>Save&#8209;status scope</h3><span class="qid">Q4</span></div>
+        <p>Should the saving/saved/error badge track per&#8209;region state, or one global flag for whichever editor is open?</p>
+        <div class="rec">&#10003; <b>Recommendation: global&#8209;per&#8209;editor.</b> Only one editor is ever open at a time &mdash; matches today&rsquo;s <code>saveStatus</code> shape.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="gate-footer">
+    <div>
+      <h3 style="margin:0;">Approve to unblock T10610</h3>
+      <p class="path">Full 750&#8209;line spec with file/line references: <code>docs/plans/tasks/T10600-design.md</code></p>
+    </div>
+    <div class="next-badge">T10610 &middot; L&#8209;tier implementation</div>
+  </div>
+
+</div>
