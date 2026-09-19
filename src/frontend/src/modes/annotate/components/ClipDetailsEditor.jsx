@@ -51,7 +51,7 @@ function StarRating({ rating, onRatingChange }) {
         <button
           key={starNum}
           onClick={() => onRatingChange(starNum)}
-          className="p-0.5 hover:scale-110 transition-transform"
+          className="p-0.5 coarse-pointer:min-w-[44px] coarse-pointer:min-h-[44px] coarse-pointer:flex coarse-pointer:items-center coarse-pointer:justify-center hover:scale-110 transition-transform"
           title={`${starNum} star${starNum > 1 ? 's' : ''}`}
         >
           <Star

@@ -297,7 +297,7 @@ export function CardCarousel({ children, ariaLabel, className = '', fillerSlot =
           aria-label="Scroll left"
           onClick={() => page(-1)}
           disabled={!scrollState.canScrollLeft}
-          className={`absolute -left-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full
+          className={`absolute -left-2 sm:-left-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full
                      flex items-center justify-center border border-gray-600 shadow-lg
                      transition-colors
                      ${scrollState.canScrollLeft
@@ -315,7 +315,7 @@ export function CardCarousel({ children, ariaLabel, className = '', fillerSlot =
           aria-label="Scroll right"
           onClick={() => page(1)}
           disabled={!scrollState.canScrollRight}
-          className={`absolute -right-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full
+          className={`absolute -right-2 sm:-right-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full
                      flex items-center justify-center border border-gray-600 shadow-lg
                      transition-colors
                      ${scrollState.canScrollRight

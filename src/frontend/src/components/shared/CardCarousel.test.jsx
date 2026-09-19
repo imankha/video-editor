@@ -105,9 +105,13 @@ describe('CardCarousel (T5672)', () => {
       expect(btn.className).toMatch(/text-white/);
     }
 
-    // Positioned half-out past the row's own edges
-    expect(leftBtn.className).toMatch(/-left-4/);
-    expect(rightBtn.className).toMatch(/-right-4/);
+    // Positioned half-out past the row's own edges — a narrower inset on
+    // touch-narrow/mouse-narrow windows (`-left-2`/`-right-2`), restored to
+    // the original desktop inset from `sm:` up (T-mobile-audit-2026-09-18).
+    expect(leftBtn.className).toMatch(/-left-2\b/);
+    expect(leftBtn.className).toMatch(/sm:-left-4\b/);
+    expect(rightBtn.className).toMatch(/-right-2\b/);
+    expect(rightBtn.className).toMatch(/sm:-right-4\b/);
   });
 
   it('dims and disables the left arrow at scroll start, right arrow at scroll end', () => {

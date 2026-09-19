@@ -912,9 +912,9 @@ function App() {
           </div>
           {/* T1740: Legal footer */}
           <footer className="text-center py-6 text-xs text-gray-500 space-x-3">
-            <a href="/privacy" className="hover:text-gray-300 transition-colors">Privacy Policy</a>
+            <a href="/privacy" className="hover:text-gray-300 transition-colors coarse-pointer:inline-flex coarse-pointer:items-center coarse-pointer:min-h-[44px] coarse-pointer:px-2">Privacy Policy</a>
             <span>|</span>
-            <a href="/terms" className="hover:text-gray-300 transition-colors">Terms of Service</a>
+            <a href="/terms" className="hover:text-gray-300 transition-colors coarse-pointer:inline-flex coarse-pointer:items-center coarse-pointer:min-h-[44px] coarse-pointer:px-2">Terms of Service</a>
           </footer>
         </div>
         {/* Global Export Indicator - shows progress on ProjectsScreen too */}
