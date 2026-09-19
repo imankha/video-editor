@@ -1431,6 +1431,22 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `viewed_duration = MAX(...)` high-water.
 
 ## Invariants & rules
+- **Play-progress badges are a PURE READ of editor state (T10410, 2026-09-18).** The Edit play editor
+  shows four badges — rated / named / note / clip — via `playProgress.getPlayProgress` +
+  `PlayProgressBadges` (header line after the name on the desktop strip, above the footer buttons on
+  the formBody layouts; none on landscape-inline). Rulings: rated = `rating !== DEFAULT_RATING` (a
+  deliberate 4 reads un-rated, accepted); named = user-typed (never the one-tap `Play N`, never a
+  backend-derived name); clip badge dormant below 5 stars, amber nudge at 5 with no clip, spinner while
+  `focusPending || clipCreating`, green **Clip created** once `autoProjectId` lands (this REPLACED the
+  strip's loose "Clip created" span). Nothing is persisted; the edit-mode nudge reuses the main
+  screen's partial `onUpdateClip(id, { createProject: true })` seam (stays open, flips in place),
+  create mode's nudge is `handleSave(true)`. **Landmine the badge exposed:** the raw-clip API's `name`
+  is ALWAYS populated (`derive_clip_name` fills it) and the frontend CANNOT reproduce that derivation
+  (TF-IDF titles, 30- vs 40-char truncation, tags-vs-notes priority differ), so "is this name the
+  user's?" needs the backend's `RawClipResponse.has_custom_name` (= `bool(stored name)`), carried on
+  regions as `hasCustomName` and kept coherent at the ONE local write site (`updateClipRegion`: Save
+  sends `''` for derive, non-empty for custom). Never compare `region.name` to `generateClipName` to
+  decide custom-vs-derived.
 - **Reel creation SELECTS the new project so Focus unlocks immediately (T8480).** All three
   `result.project_created` sites in `AnnotateContainer.jsx` funnel through `announceReelCreated`
   (module-scope, exported for unit test), which calls

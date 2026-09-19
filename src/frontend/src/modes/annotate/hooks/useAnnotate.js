@@ -406,6 +406,9 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       startTime: clampedStart,
       endTime: Math.min(actualEndTime, clampDuration),
       name: name || '',
+      // T10410: a locally created region's name is stored verbatim, so it is a
+      // custom name exactly when non-empty (mirrors the backend's has_custom_name).
+      hasCustomName: !!name,
       position: position || '',
       tags: tags || [],
       notes: notes || '',
@@ -474,9 +477,13 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         }
       }
 
-      // Handle name update
+      // Handle name update. T10410: the editor's Save sends '' to mean "derive"
+      // and a non-empty string to mean "custom" (AnnotateFullscreenOverlay
+      // nameToSave), so the region's hasCustomName follows the same write —
+      // the pair stays coherent at this single local write site.
       if (updates.name !== undefined) {
         updated.name = updates.name;
+        updated.hasCustomName = updates.name !== '';
       }
 
       // Handle notes update (enforce max length)
@@ -689,6 +696,11 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         startTime: Math.max(0, Math.min(startTime, effectiveDuration - MIN_CLIP_DURATION)),
         endTime: Math.min(endTime, effectiveDuration),
         name: annotation.name || '',
+        // T10410: the backend's `name` is ALWAYS populated (derived when nothing
+        // is stored), so it carries a separate `has_custom_name`. A camelCase
+        // (TSV-imported) annotation has no derivation step — its name IS the
+        // user's, so a non-empty name is custom there.
+        hasCustomName: annotation.has_custom_name ?? annotation.hasCustomName ?? !!annotation.name,
         position: '',
         tags: annotation.tags || [],
         notes: (annotation.notes || '').slice(0, MAX_NOTES_LENGTH),

@@ -17,6 +17,8 @@ import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialo
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
 import { DetailsFields } from './DetailsFields';
+import { PlayProgressBadges } from './PlayProgressBadges';
+import { getPlayProgress, CLIP_BADGE } from '../playProgress';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../../../components/shared/clipConstants';
 import { ANNOTATE, MODE_NAMES } from '../../../config/displayNames';
 
@@ -208,6 +210,16 @@ export function AnnotateFullscreenOverlay({
   // edit affordance — clicking the pencil turns it into an inline input. This
   // replaces the standalone name field the button row used to duplicate (item 3).
   const [isEditingName, setIsEditingName] = useState(false);
+  // T10410: the formBody layouts' name input, so the "Name this play" badge can
+  // focus it (the strip has no input until the pencil opens one — there the
+  // badge opens the inline editor instead).
+  const nameInputRef = useRef(null);
+  // T10410: true while the clip badge's EDIT-mode create call is in flight (the
+  // same partial `{ createProject: true }` update the main screen's Frame clip
+  // button sends). Memory-only view state driven by that one gesture; it clears
+  // when the call settles, and the badge flips to done when the parent re-renders
+  // with the landed autoProjectId.
+  const [clipCreating, setClipCreating] = useState(false);
   // Mirror currentTime in a ref so the reset effect below reads the playhead
   // at transition time without re-running on seek-driven updates during drag.
   // Must NOT be frozen at open time: the overlay can switch edit->create while
@@ -580,6 +592,66 @@ export function AnnotateFullscreenOverlay({
     ? ANNOTATE.DETAILS
     : `${ANNOTATE.DETAILS} (${[tagCount ? `${tagCount} tag${tagCount > 1 ? 's' : ''}` : null, hasNote ? 'note' : null].filter(Boolean).join(', ')})`;
 
+  // T10410: the four play-progress badges (rated / named / note / clip) — a pure
+  // read of the form state above plus the loaded clip. Rendered beside the name
+  // on the desktop strip's header line and above the footer buttons on the
+  // formBody layouts (decision artifact Option C, 2026-09-18). Replaces the
+  // loose "Clip created" text the strip's action row used to carry.
+  const progress = getPlayProgress({
+    rating,
+    defaultRating: DEFAULT_RATING,
+    clipName,
+    isNameManuallyEdited,
+    loadedName: isEditMode ? (existingClip.name || '') : null,
+    loadedHasCustomName: isEditMode ? !!existingClip.hasCustomName : false,
+    notes,
+    hasProject: !!existingClip?.autoProjectId,
+    creating: focusPending || clipCreating,
+  });
+  // Each undone badge jumps to the control that completes it.
+  const jumpToRating = () => setDetailsOpen(true);
+  const jumpToName = () => {
+    if (layout === 'strip') setIsEditingName(true);
+    else nameInputRef.current?.focus();
+  };
+  const jumpToNote = () => {
+    setDetailsOpen(true);
+    // The notes field lives inside the disclosure (desktop panel / mobile
+    // popup), which mounts on this same gesture — focus it once it exists.
+    requestAnimationFrame(() => document.getElementById('clip-notes')?.focus());
+  };
+  // The 5-star nudge. Edit mode: the same partial `{ createProject: true }`
+  // update the main screen's Frame clip button sends (handleFrameClip), so the
+  // editor stays open and the badge flips to "Clip created" in place; any
+  // unsaved field edits stay in the form for Update play. Create mode: there is
+  // no play yet, so it is the explicit save-and-create outcome (handleSave(true)),
+  // which closes the editor like every other create.
+  const handleCreateClipFromBadge = async () => {
+    if (!isEditMode) {
+      handleSave(true);
+      return;
+    }
+    if (clipCreating || existingClip.autoProjectId) return;
+    setClipCreating(true);
+    try {
+      await onUpdateClip(existingClip.id, { createProject: true });
+    } finally {
+      setClipCreating(false);
+    }
+  };
+  const renderProgressBadges = (size, className = '') => (
+    <PlayProgressBadges
+      progress={progress}
+      size={size}
+      className={className}
+      onRate={jumpToRating}
+      onName={jumpToName}
+      onNote={jumpToNote}
+      onCreateClip={progress.clip === CLIP_BADGE.NUDGE ? handleCreateClipFromBadge : undefined}
+      createClipTitle={isEditMode ? ANNOTATE.CREATE_CLIP_NUDGE_HINT : ANNOTATE.SAVE_AND_CREATE_CLIP_NUDGE_HINT}
+    />
+  );
+
   const formBody = (
     <>
         {/* Header */}
@@ -638,6 +710,7 @@ export function AnnotateFullscreenOverlay({
             )}
           </label>
           <input
+            ref={nameInputRef}
             type="text"
             value={clipName}
             onChange={handleNameChange}
@@ -739,6 +812,9 @@ export function AnnotateFullscreenOverlay({
   // footer does not. Shared by the inline and overlay layouts.
   const actionsFooter = (
     <div>
+      {/* T10410: play-progress badges above the buttons (the formBody layouts'
+          equivalent of the strip's header-line placement). */}
+      {renderProgressBadges('sm', 'mb-2 justify-center')}
       {displayStatus && (
         <div className="mb-1.5"><SaveStatusBadge status={displayStatus} /></div>
       )}
@@ -942,6 +1018,9 @@ export function AnnotateFullscreenOverlay({
                   </span>
                 </button>
               )}
+              {/* T10410 (Option C): progress badges on the identity line, right
+                  after the name. */}
+              {renderProgressBadges('md', 'ml-2')}
             </div>
             <div className="flex items-center gap-3 shrink-0">
               <LayerSegmentedControl
@@ -1034,9 +1113,8 @@ export function AnnotateFullscreenOverlay({
             )}
 
             <div className="ml-auto flex items-center gap-2 shrink-0">
-              {isEditMode && (existingClip?.autoProjectId || focusPending) && (
-                <span className="text-xs text-green-400 shrink-0">{ANNOTATE.CLIP_CREATED}</span>
-              )}
+              {/* T10410: the "Clip created" text that sat here is now the clip
+                  badge on the header line (renderProgressBadges). */}
               <button
                 onClick={() => handleSave(isEditMode ? undefined : false)}
                 disabled={saving}

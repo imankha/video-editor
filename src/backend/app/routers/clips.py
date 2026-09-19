@@ -145,6 +145,12 @@ class RawClipResponse(BaseModel):
     created_at: str
     shared_by: str | None = None
     source: str = 'game'  # T10300: 'game' (annotate-cut) | 'upload' (direct upload)
+    # T10410: whether `name` is a user-typed name (stored) rather than one derived
+    # by derive_clip_name. `name` alone can't tell the client — it is ALWAYS
+    # populated here (derived when nothing is stored), and the derivation is not
+    # reproducible client-side (TF-IDF titles, different truncation). Read by the
+    # Annotate editor's "Play named" progress badge.
+    has_custom_name: bool = False
 
 
 class RawClipCreate(BaseModel):
@@ -947,6 +953,7 @@ async def list_raw_clips(game_id: int | None = None, min_rating: int | None = No
                 tagged_teammates=tagged_teammates,
                 my_athlete=my_athlete,
                 source=clip['source'],
+                has_custom_name=bool(clip['name']),
             ))
         return result
 
@@ -997,6 +1004,7 @@ async def get_raw_clip(clip_id: int):
             my_athlete=my_athlete,
             shared_by=clip['shared_by'],
             source=clip['source'],
+            has_custom_name=bool(clip['name']),
         )
 
 
