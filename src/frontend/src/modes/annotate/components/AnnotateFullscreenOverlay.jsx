@@ -347,13 +347,8 @@ export function AnnotateFullscreenOverlay({
     ? writeStatus
     : null;
 
-  // T8600: shared disclosure label — surfaces existing tag/note content so an
-  // edit-mode user can see there's hidden content before opening it.
-  const tagCount = selectedTags.length;
-  const hasNote = notes.trim().length > 0;
-  const detailsLabel = !tagCount && !hasNote
-    ? ANNOTATE.DETAILS
-    : `${ANNOTATE.DETAILS} (${[tagCount ? `${tagCount} tag${tagCount > 1 ? 's' : ''}` : null, hasNote ? 'note' : null].filter(Boolean).join(', ')})`;
+  // T8600: shared disclosure label.
+  const detailsLabel = ANNOTATE.DETAILS;
 
   // T10410: the four play-progress badges (rated / named / note / clip) — a pure
   // read of the form state above plus the loaded clip. Rendered beside the name
@@ -967,11 +962,6 @@ export function AnnotateFullscreenOverlay({
             {ANNOTATE.DONE}
           </button>
         </div>
-
-        {/* Per-gesture save feedback — its own line so it never widens row 2. */}
-        {displayStatus && (
-          <p className="mt-1"><SaveStatusBadge status={displayStatus} /></p>
-        )}
 
         {/* Stage CTA (Frame / Apply Spotlight / View Final) full width below the
             strip when the clip has a project. */}
