@@ -1,5 +1,53 @@
 ---
 domain: annotate
+updated: 2026-09-19 (T10620 — mobile PORTRAIT play editor is now an IN-FLOW compact strip
+directly UNDER the video, not a fixed bottom sheet. FRONTEND-ONLY, no schema, layout-only
+(zero new writes — every field still persists through T10610's existing per-gesture seam).
+**New `layout="portrait-strip"`** in `AnnotateFullscreenOverlay.jsx` (its OWN branch, added
+between `landscape-inline` and `inline` — NOT a generalised landscape-inline: landscape is
+height-starved with rating+tags inline and no disclosure/name-input, portrait has room for a
+name input + a details disclosure; keeping them separate leaves `landscape-inline`
+byte-identical and reuses every persistence handler + shared block — `ClipScrubRegion
+compact`, the progress badges incl. the rating popup, `stageCta`, `AddDetailsPopup`,
+`DeletePlayButton` — from component scope, so no write logic is copied). Rows: (1)
+`ClipScrubRegion compact`; (1b) progress badges on their own row; (2) name input
+(`flex-1 min-w-0`, truncates) + "Notes and Tags" disclosure + Done (the two buttons carry
+`flex-none whitespace-nowrap` so a long name can never push them off-screen — the artifact
+mockup's clipped-button bug, pinned by `AnnotateFullscreenOverlay.portraitStrip.test.jsx`);
+then the full-width `stageCta`; overflow fields behind the disclosure.
+**RETIRED for THIS surface (T8140/T8790/T10420):** `AnnotateModeView.jsx`'s
+`mobileInlineForm` render moved UP to render in flow directly under the video card (sibling
+of the video-player div, inside the windowed wrapper) with `layout="portrait-strip"`. The
+`fixed inset-x-0 bottom-0 z-40 max-h-[85vh] rounded-t-2xl` sheet (T8140, pinned only to keep
+the now-gone Save footer visible) AND the `[@media(max-height:700px)]:pb-9` keyboard-padding
+hack (T8790/F3, same reason) are DELETED. Because the strip is IN FLOW, the T10420
+backdrop-filter containing-block trap (a `fixed` descendant anchoring to the frosted
+`backdrop-blur-lg` wrapper instead of the viewport) NO LONGER APPLIES to this surface — that
+trap only bites `fixed`/`absolute` descendants. **Design call (360px, M-tier, no design
+gate):** category (My athlete / Team), teammates and Delete play live BEHIND the disclosure,
+not on strip row 2 (a segmented control on row 2 crushes the name input below a usable width
+at 360px; none of those fields are needed while trimming). Rating is NOT duplicated into the
+disclosure — the rated progress-badge popup stays the single source for setting a rating on
+every layout (T10520); `ANNOTATE.DETAILS` stays the single source for the disclosure label.
+**`AddDetailsPopup.jsx`** gained OPTIONAL `myAthlete`/`onLayerChange`/`layerDisabled`/
+`layerDisabledReason`, `taggedTeammates`/`onTeammatesChange`/`teammateSuggestions`,
+`hasProject`/`onDelete` — ONLY `portrait-strip` passes them, so the `inline`/`mobileFs`
+popup renders byte-identical without them. **`mobileFs` (T9500) is a SEPARATE surface** —
+`mobileFs = annotateFullscreen && isMobile`, mutually exclusive with `mobileInlineForm =
+showAnnotateOverlay && !annotateFullscreen && isMobile`; it keeps its own render site (~835,
+`absolute inset-x-0 bottom-0 maxHeight:70vh`) and `layout="inline"`, UNTOUCHED. The
+`layout="inline"` branch itself survives (still used by `mobileFs` portrait AND the
+`ClipsSidePanel` sidebar). Split is gated by `useIsMobile` (max-width 1023px OR coarse
+pointer), NEVER a Tailwind `sm:` breakpoint (T10590 finding 2) — pinned by
+`AnnotateModeView.portraitStrip.test.jsx`. Tests: new `AnnotateFullscreenOverlay.
+portraitStrip.test.jsx` (12) + `AnnotateModeView.portraitStrip.test.jsx` (2); updated
+`renderSiteInventory` windowed-mobile assertion to `portrait-strip`; 631 annotate unit
+tests green. **QA OWED (container has no browser + no backend venv/.env):** the measured
+video-height numbers (closed vs. open at 393×852/375×667/360×740), the real-touch live-drive,
+and the iOS-Safari dynamic-toolbar real-device check are OWED to the staging/real-device
+pass — structural acceptance is met (an in-flow sibling strip can't overlay the video and
+the video keeps its natural windowed height), but the MEASURED numbers the acceptance bar
+demands were not capturable here. Prior:)
 updated: 2026-09-19 (T10610 — the play editor is autosave, no Save/Update/Cancel button
 anywhere. FRONTEND-ONLY (backend `RawClipUpdate`/`update_raw_clip` already supported every
 field optional; zero backend changes). Supersedes/rewrites the T8140, T9330, T9630, T9830, and

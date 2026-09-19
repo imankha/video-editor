@@ -831,6 +831,47 @@ export function AnnotateModeView({
             )}
           </div>
 
+          {/* T10620: mobile PORTRAIT add/edit editor — an in-flow compact strip
+              rendered DIRECTLY under the video card (a sibling of the video
+              player div above, inside the same windowed wrapper), NOT a fixed
+              bottom sheet. Replaces the old `fixed inset-x-0 bottom-0 z-40
+              max-h-[85vh] rounded-t-2xl` sheet that hid ~85% of the video: its
+              only reason to be `fixed` was pinning the Save footer on screen
+              (T8140), and T10610 removed that footer. In flow, the video the
+              trim handles refer to stays visible above the strip, and the
+              T10420 backdrop-filter containing-block trap no longer applies
+              (it only bites `fixed`/`absolute` descendants). The `[@media
+              (max-height:700px)]:pb-9` keyboard-padding hack (T8790/F3) is gone
+              with the sheet — it existed only to lift the pinned footer clear of
+              the soft keyboard. `mobileFs` (T9500) is a SEPARATE surface, gated
+              on `annotateFullscreen` and mutually exclusive with this one; it
+              keeps `layout="inline"` and is untouched by this task. */}
+          {mobileInlineForm && (
+            <div className="mt-2">
+              <AnnotateFullscreenOverlay
+                isVisible={showAnnotateOverlay}
+                currentTime={currentTime}
+                videoDuration={duration || annotateVideoMetadata?.duration || 0}
+                existingClip={existingClip}
+                onUpdateClip={onFullscreenUpdateClip}
+                onClose={onOverlayClose}
+                onDeleteClip={onDeletePlayFromEditor}
+                onAwaitWrites={onAwaitRegionWrites}
+                writeStatus={writeStatus}
+                onSeek={seek}
+                videoController={videoController}
+                isFullscreen={false}
+                layout="portrait-strip"
+                activeSourceName={activeSourceName}
+                mediaBounds={activeSourceMediaBounds}
+                teammateSuggestions={teammateSuggestions}
+                // T9330: mobile edit sheet gets the shared stage CTA (design §2.6)
+                onOpenInFocus={onOpenClipInFocus}
+                onOpenInOverlay={onOpenClipInOverlay}
+              />
+            </div>
+          )}
+
           {/* Mobile fullscreen: YouTube-style overlay controls + timeline */}
           {mobileFs && (
             <>
@@ -1231,45 +1272,11 @@ export function AnnotateModeView({
         )}
       </div>
 
-      {/* Mobile inline add/edit clip form. T8140: a fixed, viewport-anchored
-          bottom sheet (max-h-[85vh], flex column) so the pinned Save footer
-          inside the inline overlay is ALWAYS visible without scrolling at
-          390x844 — an in-flow form would let Save fall below the page fold.
-          T10420 (user report, 2026-09-18): this MUST live outside the
-          `backdrop-blur-lg` "Main Editor Area" wrapper above — Chrome/Safari
-          give a `backdrop-filter` ancestor its own containing block for
-          `position: fixed` descendants, so a fixed child anchors to THAT
-          div's edges instead of the real viewport. That div only wraps the
-          video card, so the sheet's `bottom-0` was landing mid-page: the
-          sheet's top got pushed off the top of the screen (title/scrub bar
-          unreachable) and everything below the video card down to the true
-          viewport bottom sat empty. Rendering it as a sibling here, past the
-          wrapper's closing tag, restores a real viewport containing block. */}
-      {mobileInlineForm && (
-        <div className="fixed inset-x-0 bottom-0 z-40 flex flex-col max-h-[85vh] bg-gray-900/95 rounded-t-2xl shadow-2xl overflow-hidden">
-          <AnnotateFullscreenOverlay
-            isVisible={showAnnotateOverlay}
-            currentTime={currentTime}
-            videoDuration={duration || annotateVideoMetadata?.duration || 0}
-            existingClip={existingClip}
-            onUpdateClip={onFullscreenUpdateClip}
-            onClose={onOverlayClose}
-            onDeleteClip={onDeletePlayFromEditor}
-            onAwaitWrites={onAwaitRegionWrites}
-            writeStatus={writeStatus}
-            onSeek={seek}
-            videoController={videoController}
-            isFullscreen={false}
-            layout="inline"
-            activeSourceName={activeSourceName}
-            mediaBounds={activeSourceMediaBounds}
-            teammateSuggestions={teammateSuggestions}
-            // T9330: mobile edit sheet gets the shared stage CTA (design §2.6)
-            onOpenInFocus={onOpenClipInFocus}
-            onOpenInOverlay={onOpenClipInOverlay}
-          />
-        </div>
-      )}
+      {/* T10620: the mobile portrait add/edit editor moved UP to render in flow
+          directly under the video card (see the `mobileInlineForm` block inside
+          the Main Editor Area above). The old fixed `max-h-[85vh]` bottom sheet
+          that lived here — and its T10420 outside-the-blur-wrapper placement —
+          is retired: an in-flow strip does not need a viewport containing block. */}
 
       {/* Technical readouts (resolution/format/size) - 2026-09-18 (user request):
           moved below the bottom CTA (Preview plays/Share plays above) and

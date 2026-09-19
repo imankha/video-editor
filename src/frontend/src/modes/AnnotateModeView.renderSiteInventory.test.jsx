@@ -128,10 +128,13 @@ describe('AnnotateFullscreenOverlay render-site inventory (T10610)', () => {
     expect(el.textContent).toBe('existingClip:c1');
   });
 
-  it('mobile bottom sheet: existingClip + onDeleteClip + onAwaitWrites present', () => {
+  // T10620: the windowed mobile-portrait editor is now the in-flow
+  // `portrait-strip`, not the old fixed max-h-[85vh] bottom sheet.
+  it('mobile portrait strip: portrait-strip layout, existingClip + onDeleteClip + onAwaitWrites present', () => {
     mockIsMobile = true;
     renderView({ annotateFullscreen: false });
     const el = screen.getByTestId('overlay-render');
+    expect(el.dataset.layout).toBe('portrait-strip');
     expect(el.dataset.hasDelete).toBe('present');
     expect(el.dataset.hasAwait).toBe('present');
     expect(el.textContent).toBe('existingClip:c1');

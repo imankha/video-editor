@@ -880,6 +880,143 @@ export function AnnotateFullscreenOverlay({
     );
   }
 
+  if (layout === 'portrait-strip') {
+    // T10620: mobile PORTRAIT editor — an in-flow compact strip rendered
+    // DIRECTLY under the video card (AnnotateModeView), NOT a fixed bottom
+    // sheet. Replaces the old `layout="inline"` sheet (fixed inset-x-0 bottom-0
+    // max-h-[85vh]) whose whole point was pinning a Save footer (T8140) — that
+    // footer is gone (T10610), so the video the trim handles refer to can stay
+    // visible above the strip. Being in flow also retires the T10420
+    // backdrop-filter containing-block trap for this surface (that trap only
+    // bites `fixed`/`absolute` descendants).
+    //
+    // Deliberately its OWN branch, not a generalised landscape-inline: the two
+    // differ substantially (landscape is height-starved — rating+tags inline,
+    // NO disclosure, NO name input; portrait has room for a name input + a
+    // details disclosure). Keeping them separate leaves landscape-inline
+    // byte-identical (Reviewer checklist) while every PERSISTENCE handler and
+    // shared building block (ClipScrubRegion compact, the progress badges incl.
+    // the rating popup, stageCta, AddDetailsPopup, DeletePlayButton) is reused
+    // from the component scope above — no copied write logic.
+    //
+    // Layout decision (360px, the narrowest supported width): category
+    // (My athlete / Team), teammates and Delete play live BEHIND the disclosure,
+    // not on strip row 2 — a segmented control on row 2 would crush the name
+    // input below a usable width at 360px, and none of those fields are needed
+    // while trimming. Rating is NOT duplicated into the disclosure: the rated
+    // progress badge's popup is the single source for setting a rating on every
+    // layout (T10520), so it stays on the badges row only.
+    return (
+      <div data-add-clip-form data-testid="annotate-portrait-strip" className="border-t border-gray-700 px-3 py-2">
+        {/* T8892: which camera this play is cut from (angle-active only). */}
+        <CutFromAngleChip name={activeSourceName} />
+
+        {/* Strip row 1: compact trim bar + the T9480 typed-entry readouts. */}
+        <ClipScrubRegion
+          currentTime={currentTime}
+          videoDuration={videoDuration}
+          existingClip={existingClip}
+          startTime={scrubStartTime}
+          endTime={scrubEndTime}
+          onStartTimeChange={setScrubStartTime}
+          onEndTimeChange={setScrubEndTime}
+          onSeek={onSeek}
+          onDragStart={() => onScrubDragChange?.(true)}
+          onDragEnd={(finalStart, finalEnd) => { onScrubDragChange?.(false); handleTrimCommit(finalStart, finalEnd); }}
+          videoController={videoController}
+          mediaBounds={mediaBounds}
+          clipEditorActive
+          compact
+        />
+
+        {/* Row 1b: play-progress badges on their OWN row — they don't fit beside
+            the full-width scrub bar at 360px. The rated badge's popup is the one
+            way to set a rating on this surface (single-source, T10520). */}
+        {renderProgressBadges('sm', 'mt-1.5 flex-wrap')}
+
+        {/* Strip row 2: name input absorbs the squeeze (flex-1 min-w-0,
+            truncates); the disclosure + Done buttons NEVER shrink (flex-none,
+            whitespace-nowrap). This is the artifact mockup's clipped-button
+            regression — pinned by AnnotateFullscreenOverlay.portraitStrip.test. */}
+        <div className="flex items-center gap-2 mt-1.5">
+          <input
+            ref={nameInputRef}
+            type="text"
+            value={clipName}
+            onChange={handleNameChange}
+            onBlur={commitName}
+            onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
+            aria-label={ANNOTATE.CLIP_NAME}
+            placeholder="Name this play"
+            className="flex-1 min-w-0 px-3 py-2 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
+          />
+          <button
+            type="button"
+            onClick={() => setDetailsOpen(o => !o)}
+            aria-expanded={detailsOpen}
+            data-testid="add-details-button"
+            className="flex-none whitespace-nowrap flex items-center gap-1.5 px-3 py-2 coarse-pointer:min-h-[44px] bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+          >
+            <ChevronDown size={14} />
+            {detailsLabel}
+          </button>
+          <button
+            onClick={closeWithCommit}
+            className="flex-none whitespace-nowrap px-4 py-2 coarse-pointer:min-h-[44px] bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {ANNOTATE.DONE}
+          </button>
+        </div>
+
+        {/* Per-gesture save feedback — its own line so it never widens row 2. */}
+        {displayStatus && (
+          <p className="mt-1"><SaveStatusBadge status={displayStatus} /></p>
+        )}
+
+        {/* Stage CTA (Frame / Apply Spotlight / View Final) full width below the
+            strip when the clip has a project. */}
+        {stageCta && <div className="mt-2">{stageCta}</div>}
+        {keepMarkingCta && <div className="mt-1.5">{keepMarkingCta}</div>}
+
+        {/* Everything else lives behind the disclosure -> full-screen popup (may
+            cover the video; none of these are needed while trimming). Category,
+            teammates and Delete play join the shared tags/notes/sport fields
+            here on this surface only (optional props — the inline/mobileFs
+            AddDetailsPopup render below stays byte-identical without them). */}
+        {detailsOpen && (
+          <AddDetailsPopup
+            tagSet={tagSet}
+            sport={sport}
+            positions={getPositions(sport)}
+            selectedTags={selectedTags}
+            onTagToggle={handleTagToggle}
+            onSetSport={handleSetSport}
+            notes={notes}
+            onNotesChange={(e) => setNotes(e.target.value)}
+            onNotesCommit={commitNotes}
+            storedNotes={existingClip.notes}
+            onDone={() => setDetailsOpen(false)}
+            myAthlete={myAthlete}
+            onLayerChange={(mine) => {
+              setMyAthlete(mine);
+              // T5725: switching TO My Athlete clears teammate tags in the SAME
+              // gesture (teammates are Team-layer-only).
+              if (mine) setTaggedTeammates([]);
+              onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
+            }}
+            layerDisabled={!!existingClip.shared_by}
+            layerDisabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
+            taggedTeammates={taggedTeammates}
+            onTeammatesChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
+            teammateSuggestions={teammateSuggestions}
+            hasProject={!!existingClip.autoProjectId}
+            onDelete={() => onDeleteClip(existingClip.id)}
+          />
+        )}
+      </div>
+    );
+  }
+
   if (layout === 'inline') {
     // T8140: flex column = scrolling body (min-h-0 lets it shrink inside a bounded
     // flex parent — the ClipsSidePanel sidebar, the mobileFs sheet, the mobile
