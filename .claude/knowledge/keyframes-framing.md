@@ -1,5 +1,20 @@
 ---
 domain: keyframes-framing
+updated: 2026-09-19 (T10660 — "Publish without spotlight" no longer routes through Overlay: the
+one-tap publish fires the overlay render HEADLESSLY (backend-authoritative POST
+/api/export/render-overlay needs no mounted Overlay screen), so FocusScreen.handlePublish drops
+setEditorMode('overlay') and keeps the completion preview open; App's handlePublishWithoutSpotlight
+calls the NEW utils/startOverlayPublishRender.js (one-shot completion guarding the HTTP-200 + WS
+dual transport) and on completion calls handleExportComplete({mode: OVERLAY}) — mode = render type,
+not location. handleOverlayExportCompletion's navigation gate widened OVERLAY-only -> FRAMING-or-
+OVERLAY. scheduleExportWhenReady.js (+ scheduleOverlayPublishExport) and its tests DELETED; the
+shared-ref readiness poll is retired (overlayExportButtonRef kept ONLY for the mode-switch dialog +
+payment-return auto-export). See the "one-tap Publish fires HEADLESSLY" invariant below, which
+supersedes the T9740 v2 poll. T10650 (same day, sibling task): Focus CTA becomes "Back to Preview"
+when the current framing is already rendered — pure utils/framingCtaState.js deriveFramingCtaState
+('generate'|'preview' + ghost link), using clips.exported_at as the DURABLE staleness signal; the
+export-completion callback now refetches clips (fetchProjectClips) so that signal is fresh in-memory
+before the band re-shows.)
 updated: 2026-09-15 (T9950 — Simplify manual framing / preview actual output before export, 3
 slices, all frontend-only, no schema change (design doc `T9950-design.md`, amended §9). **Slice 1**:
 the segment/speed/trim timeline track collapses behind an "Advanced editing" disclosure
@@ -247,22 +262,44 @@ so the estimate ticks the instant a speed/trim/split/clip-count gesture lands �
   `/api/credits` zero-balance so no real render fires, responsive 375/desktop).
 
 ## Invariants & rules
-- **Export button refs are PER MODE, never shared (T9740 v2, 2026-09-12).** `App.jsx` owns two
-  separate `useRef(null)` objects — `focusExportButtonRef` (→ `<FocusScreen>`) and
+- **One-tap "Publish without spotlight" fires the overlay render HEADLESSLY (T10660, 2026-09-19 —
+  SUPERSEDES T9740 v2's poll).** `POST /api/export/render-overlay` is backend-authoritative (body =
+  `{project_id, export_id, effect_type}`; the endpoint reads highlights/text/effect from
+  `working_videos`), so NO mounted Overlay screen is needed to fire it. `FocusScreen.handlePublish`
+  no longer switches `editorMode` and no longer closes the completion preview — the user stays in
+  FRAMING watching their reel, and the Publish card's loading state is DERIVED from the
+  publish-intent stake (`usePublishIntentStore` selector, no local flag). App's
+  `handlePublishWithoutSpotlight` calls `startOverlayPublishRender` (utils/) which:
+  `generateExportId` → `useExportStore.startExport(id, projectId, 'overlay')` (so
+  `GlobalExportIndicator` shows progress with no Overlay mounted) → `exportWebSocketManager.connect`
+  → POST → fires completion ONCE via a local one-shot (`settled`) that guards the documented
+  DUAL-TRANSPORT (a no-keyframes render returns HTTP 200 AND sends a WS `complete` frame). On
+  completion App calls the EXISTING `handleExportComplete({projectId, mode: EDITOR_MODES.OVERLAY})` —
+  `mode` describes the RENDER TYPE, not where the user stands. `handleOverlayExportCompletion`'s
+  navigation gate widened from OVERLAY-only to FRAMING-or-OVERLAY (the publisher now stands in
+  FRAMING); publish stays gated ONLY on the stake (the T9740 stake-claim split is preserved as the
+  SECOND double-fire guard). Errors (POST reject / 409 `export_in_flight` / WS error) clear the
+  stake + toast + leave the user on Focus with the preview open; the 5-min `PUBLISH_INTENT_TIMEOUT_MS`
+  is a backstop only, not the primary error path. `scheduleExportWhenReady.js`
+  (`scheduleExportWhenReady` + `scheduleOverlayPublishExport`) and its tests are DELETED — do NOT
+  reintroduce a shared-ref readiness poll; it existed only to reach a mounted overlay export button,
+  a need the headless render removes. The duplication between `startOverlayPublishRender` and
+  `ExportButtonContainer`'s overlay branch is a DELIBERATE "abstract on the 3rd duplication"
+  exception; do not unify them.
+- **Export button refs are PER MODE, never shared (T9740 v2, 2026-09-12; scope narrowed by T10660).**
+  `App.jsx` owns two separate `useRef(null)` objects — `focusExportButtonRef` (→ `<FocusScreen>`) and
   `overlayExportButtonRef` (→ `<OverlayScreen>`) — because Focus's and Overlay's `ExportButtonView`
   imperative handles are two semantically different instances (framing render vs overlay render,
   distinct endpoints) that mount/unmount independently as the editor mode swaps. **Do NOT re-merge
-  them into one ref, and do NOT gate export readiness on `editorMode === EDITOR_MODES.OVERLAY`.** A
-  shared ref let a readiness poll (`!!ref.current`) be satisfied on tick zero by whichever button was
-  still mounted — Focus's, during the framing→overlay transition — firing the WRONG render (PR #417's
-  regression, burning a real render with no final video). The store-state gate does NOT fix it:
-  `setEditorMode` is a synchronous Zustand `set()`, so `editorMode` is already `'overlay'` on the
-  tick-zero check while a shared ref still holds Focus's handle — store state lags the ref/mount by a
-  tick. `scheduleOverlayPublishExport` (scheduleExportWhenReady.js) polls `overlayExportButtonRef`
-  specifically, so "is Overlay's button mounted?" is answerable BY CONSTRUCTION with no timing
-  dependency. The payment-return auto-export and `handleModeSwitchExport` (App.jsx) both pick the ref
-  by the mode they act on. `FocusScreen.handlePublish` no longer touches a ref directly — it calls the
-  `onPublishWithoutSpotlight(projectId)` prop UNGUARDED (a missing prop must crash loudly, not no-op).
+  them into one ref.** The refs remain because `handleModeSwitchExport` (the mode-switch dialog) and
+  the payment-return auto-export still trigger a mounted button by the mode they act on. **T10660:
+  `overlayExportButtonRef` is NO LONGER used by one-tap publish** (that path is headless now — see
+  the invariant above); it is retained ONLY for those two remaining callers. Historical note (why
+  the ref split happened): a shared ref let a readiness poll (`!!ref.current`) be satisfied on tick
+  zero by whichever button was still mounted — Focus's, during the framing→overlay transition —
+  firing the WRONG render (PR #417's regression). A store-state gate did NOT fix it (`setEditorMode`
+  is a synchronous Zustand `set()`, so `editorMode` lagged the ref/mount by a tick); the poll that
+  chased it is now gone entirely.
 - **The movement "preview" is ORDINARY PLAYBACK, not a separate mechanism (T9610, 2026-09-11).**
   `FocusScreen.jsx:787` computes `currentCropState = dragCrop || interpolateCrop(currentTime)`
   (memoized on `currentTime`); the `CropOverlay` reticule renders `currentCrop` over the video, and

@@ -112,6 +112,51 @@ describe('handleOverlayExportCompletion (T9740 fix v3)', () => {
     expect(publish).toHaveBeenCalledTimes(1);
   });
 
+  it('(b2) T10660: one-tap publisher stands in FRAMING for THIS project -> publish fires AND navigation/preview fires (widened gate)', async () => {
+    usePublishIntentStore.getState().set(7);
+    const { deps, publish, goToProjectManager, openFinishedReel } = makeDeps({
+      state: {
+        editorMode: 'framing',   // headless render: the user never left Focus
+        selectedProjectId: 7,    // ...still on the SAME project
+        projects: [{ id: 7, name: 'Reel', aspect_ratio: '9:16', final_video_id: 6 }],
+      },
+    });
+
+    await handleOverlayExportCompletion({ projectId: 7, mode: 'overlay' }, deps);
+
+    expect(publish).toHaveBeenCalledWith({ openGallery: false, projectId: 7 });
+    // With the OLD overlay-only gate this would have been skipped, stranding the
+    // user on Focus after publishing. The widened gate lands them on the reel.
+    expect(goToProjectManager).toHaveBeenCalledTimes(1);
+    expect(openFinishedReel).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 7 }),
+      { alreadyPublished: true },
+    );
+  });
+
+  it('(c2) T10660: WS + HTTP double-fire from FRAMING publishes exactly once and navigates once', async () => {
+    usePublishIntentStore.getState().set(7);
+    let resolveFetch;
+    const gated = new Promise((r) => { resolveFetch = r; });
+    const { deps, publish, goToProjectManager } = makeDeps({
+      state: {
+        editorMode: 'framing',
+        selectedProjectId: 7,
+        projects: [{ id: 7, name: 'Reel', final_video_id: 6 }],
+      },
+      fetchProjects: vi.fn(() => gated),
+    });
+    const completed = { projectId: 7, mode: 'overlay' };
+
+    const p1 = handleOverlayExportCompletion(completed, deps);
+    const p2 = handleOverlayExportCompletion(completed, deps);
+    resolveFetch([{ id: 7, final_video_id: 6 }]);
+    await Promise.all([p1, p2]);
+
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(goToProjectManager).toHaveBeenCalledTimes(1);
+  });
+
   it('(d) NO intent staked (the "Add spotlight" case) -> publish is NEVER called and nothing navigates (AC3 lock)', async () => {
     // no stake
     const { deps, publish, goToProjectManager, openFinishedReel, toastSuccess } = makeDeps();

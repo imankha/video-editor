@@ -4,30 +4,30 @@ import { useState, useCallback } from 'react';
 import { FocusPublishActionBar } from '../../components/FocusPublishActionBar';
 import { FOCUS_PUBLISH, FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST } from '../../config/displayNames';
 import { usePublishIntentStore } from '../../stores/publishIntentStore';
-import { scheduleExportWhenReady } from '../../utils/scheduleExportWhenReady';
 
 // T8390: FocusScreen is a very large screen that cannot be mounted in isolation
 // (dozens of stores/hooks/contexts). This test harness reproduces the post-export
 // preview + publish-exit action bar exactly as FocusScreen renders it (supersedes
 // T8520's exportCompleteChoice.test.jsx, whose 3-button card this task replaced),
 // plus the four gesture handlers verbatim, wired to injectable spies. It asserts
-// the WIRING CONTRACT: which store call, toast, and navigation each choice fires,
-// and that the render trigger is deferred. The action bar render (labels,
-// data-tutorial-target) is real (FocusPublishActionBar, not reproduced).
+// the WIRING CONTRACT: which store call, toast, and navigation each choice fires.
+// The action bar render (labels, data-tutorial-target) is real
+// (FocusPublishActionBar, not reproduced).
 //
 // Publish-intent staking goes through the REAL usePublishIntentStore (not a
 // spy) because the re-entrancy guard + timeout-expiry Reviewer flagged (T8390
 // review) are conditional on the store's actual current value — a spy can't
 // exercise that branch.
 //
-// T9740: the render trigger is no longer a bare 500ms timer — it's
-// scheduleExportWhenReady polling `deps.isReady()` (real function, mirrors
-// FocusScreen's `!!exportButtonRef.current`). Tests control readiness via
-// `deps.isReady`, not a fixed timer advance; see scheduleExportWhenReady.test.js
-// for the scheduler's own unit coverage in isolation.
+// T10660: "Publish without spotlight" now renders HEADLESSLY. handlePublish no
+// longer switches editorMode, no longer closes the preview, and no longer polls
+// for a mounted overlay export button — it just stakes the intent and calls the
+// injected `onPublishWithoutSpotlight(projectId)` (App wires that to
+// startOverlayPublishRender). The preview STAYS open and the Publish card shows
+// `publishLoading` (derived from the stake). The old scheduleExportWhenReady poll
+// (and its readiness/triggerExport deps) is gone with the mechanism.
 
 const PUBLISH_INTENT_TIMEOUT_MS = 5 * 60 * 1000;
-const POLL_INTERVAL_MS = 150;
 
 /**
  * Mirrors FocusScreen's post-export preview + publish-exit action bar. `deps`
@@ -35,8 +35,11 @@ const POLL_INTERVAL_MS = 150;
  * can spy on them.
  */
 function FocusPublishExitHarness({ deps, startOpen = false, isAutoCreated = false, projectId = 42 }) {
-  const { setEditorMode, recordAchievement, goToProjectManager, triggerExport, toastSuccess, isReady } = deps;
+  const { setEditorMode, recordAchievement, goToProjectManager, toastSuccess, onPublishWithoutSpotlight } = deps;
   const [showExportCompletePreview, setShowExportCompletePreview] = useState(startOpen);
+  // T10660: the Publish card's loading state is derived from the stake (as in
+  // the real FocusScreen), not local state.
+  const publishLoading = usePublishIntentStore((s) => s.projectId) === projectId;
 
   // The gesture-driven completion callback (export finished).
   const onExportComplete = useCallback(() => {
@@ -60,24 +63,16 @@ function FocusPublishExitHarness({ deps, startOpen = false, isAutoCreated = fals
     goToProjectManager();
   }, [recordAchievement, goToProjectManager, toastSuccess, isAutoCreated, projectId]);
 
+  // T10660: no setEditorMode, no closePreview, no poll — stake + delegate.
   const handlePublish = useCallback(() => {
     if (usePublishIntentStore.getState().projectId === projectId) return;
-    setShowExportCompletePreview(false);
-    // Real handlePublish also calls setExportPreviewUrl(null) here (T9100)
-    // — omitted deliberately, this harness has no export-preview URL state.
     recordAchievement('overlay_declined');
     usePublishIntentStore.getState().set(projectId);
     setTimeout(() => {
       if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     }, PUBLISH_INTENT_TIMEOUT_MS);
-    setEditorMode('overlay');
-    scheduleExportWhenReady({
-      isReady,
-      fire: triggerExport,
-      shouldContinue: () => usePublishIntentStore.getState().projectId === projectId,
-      intervalMs: POLL_INTERVAL_MS,
-    });
-  }, [recordAchievement, setEditorMode, triggerExport, projectId, isReady]);
+    onPublishWithoutSpotlight(projectId);
+  }, [recordAchievement, onPublishWithoutSpotlight, projectId]);
 
   const handleRefocus = useCallback(() => {
     setShowExportCompletePreview(false);
@@ -91,6 +86,7 @@ function FocusPublishExitHarness({ deps, startOpen = false, isAutoCreated = fals
         <div data-testid="export-complete-preview">
           <FocusPublishActionBar
             onPublish={handlePublish}
+            publishLoading={publishLoading}
             onAddSpotlight={handleAddSpotlight}
             onRefocus={handleRefocus}
             onSaveDraft={handleAddSpotlightLater}
@@ -106,12 +102,9 @@ function makeDeps() {
     setEditorMode: vi.fn(),
     recordAchievement: vi.fn(),
     goToProjectManager: vi.fn(),
-    triggerExport: vi.fn(),
     toastSuccess: vi.fn(),
-    // Defaults to "never ready" so tests that don't care about the render
-    // trigger (Add Spotlight, Save draft, Edit framing) can assert
-    // triggerExport is never called without racing the poll.
-    isReady: vi.fn().mockReturnValue(false),
+    // T10660: the headless one-tap publish delegate (App -> startOverlayPublishRender).
+    onPublishWithoutSpotlight: vi.fn(),
   };
 }
 
@@ -162,7 +155,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     expect(deps.setEditorMode).toHaveBeenCalledWith('overlay');
     expect(deps.recordAchievement).not.toHaveBeenCalled();
     expect(deps.goToProjectManager).not.toHaveBeenCalled();
-    expect(deps.triggerExport).not.toHaveBeenCalled();
+    expect(deps.onPublishWithoutSpotlight).not.toHaveBeenCalled();
     expect(usePublishIntentStore.getState().projectId).toBeNull();
     // 2026-09-08: every action-bar choice confirms what happened + what's next.
     expect(deps.toastSuccess).toHaveBeenCalledWith(
@@ -185,7 +178,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     );
     expect(deps.goToProjectManager).toHaveBeenCalledTimes(1);
     expect(deps.setEditorMode).not.toHaveBeenCalled();
-    expect(deps.triggerExport).not.toHaveBeenCalled();
+    expect(deps.onPublishWithoutSpotlight).not.toHaveBeenCalled();
   });
 
   it('"Save draft" shows the SINGLE-CLIP toast when is_auto_created', () => {
@@ -213,7 +206,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     expect(deps.toastSuccess).not.toHaveBeenCalled();
   });
 
-  it('"Publish" records overlay_declined, stakes the publish intent, switches to overlay, and triggers the render once the export button becomes ready', () => {
+  it('T10660: "Publish" records overlay_declined, stakes the intent, and delegates to the headless render — NO editorMode switch, preview stays OPEN, card shows loading', () => {
     const deps = makeDeps();
     render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
 
@@ -222,66 +215,27 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     expect(deps.recordAchievement).toHaveBeenCalledTimes(1);
     expect(deps.recordAchievement).toHaveBeenCalledWith('overlay_declined');
     expect(usePublishIntentStore.getState().projectId).toBe(42);
-    expect(deps.setEditorMode).toHaveBeenCalledWith('overlay');
-    // Render is deferred until the overlay export button mounts.
-    expect(deps.triggerExport).not.toHaveBeenCalled();
-
-    // T9740: not ready yet — even well past the OLD fixed 500ms delay, a
-    // still-hydrating workingVideo must not leave the trigger stranded.
-    act(() => { vi.advanceTimersByTime(2000); });
-    expect(deps.triggerExport).not.toHaveBeenCalled();
-
-    // The overlay export button finally mounts (workingVideo hydrated).
-    deps.isReady.mockReturnValue(true);
-    act(() => { vi.advanceTimersByTime(POLL_INTERVAL_MS); });
-    expect(deps.triggerExport).toHaveBeenCalledTimes(1);
+    // AC1: the render fires headlessly — editorMode is never touched.
+    expect(deps.setEditorMode).not.toHaveBeenCalled();
+    // Delegates to the injected headless-render trigger with the project id.
+    expect(deps.onPublishWithoutSpotlight).toHaveBeenCalledTimes(1);
+    expect(deps.onPublishWithoutSpotlight).toHaveBeenCalledWith(42);
+    // AC2: the preview stays open and the Publish card shows its loading state.
+    expect(screen.getByTestId('export-complete-preview')).toBeTruthy();
+    expect(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }).disabled).toBe(true);
   });
 
-  it('T9740: stake cleared (e.g. Refocus) before the export button becomes ready stops the poll — triggerExport never fires', () => {
-    const deps = makeDeps();
-    render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
-
-    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }));
-    expect(usePublishIntentStore.getState().projectId).toBe(42);
-
-    // User backs out before the gate ever opens.
-    usePublishIntentStore.getState().clear();
-    act(() => { vi.advanceTimersByTime(5000); });
-
-    expect(deps.triggerExport).not.toHaveBeenCalled();
-  });
-
-  it('T9740: a hydration that never completes relies on the existing 5-minute safety net, not a new deadline — no fire, no leaked timer', () => {
-    const deps = makeDeps();
-    render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
-
-    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }));
-
-    // One extra interval past the timeout so the poll's next tick (which may
-    // land on the very same instant as the safety-net clear) has a chance to
-    // observe the cleared stake and stop, rather than racing the assertion.
-    act(() => { vi.advanceTimersByTime(PUBLISH_INTENT_TIMEOUT_MS + POLL_INTERVAL_MS); });
-
-    expect(usePublishIntentStore.getState().projectId).toBeNull();
-    expect(deps.triggerExport).not.toHaveBeenCalled();
-    // The poll stopped when the stake cleared — nothing left pending.
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it('T8390 review: double-tap Publish (two clicks before the button unmounts) stakes/triggers only ONCE', () => {
+  it('T10660: double-tap Publish stakes and delegates only ONCE (re-entrancy guard)', () => {
     const deps = makeDeps();
     render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
 
     const publishBtn = screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL });
     fireEvent.click(publishBtn);
-    fireEvent.click(publishBtn); // same tick, preview hasn't unmounted yet
+    fireEvent.click(publishBtn); // second tap while the stake is already set
 
     expect(deps.recordAchievement.mock.calls.filter((c) => c[0] === 'overlay_declined')).toHaveLength(1);
-    expect(deps.setEditorMode).toHaveBeenCalledTimes(1);
-
-    deps.isReady.mockReturnValue(true);
-    act(() => { vi.advanceTimersByTime(POLL_INTERVAL_MS); });
-    expect(deps.triggerExport).toHaveBeenCalledTimes(1);
+    expect(deps.onPublishWithoutSpotlight).toHaveBeenCalledTimes(1);
+    expect(deps.setEditorMode).not.toHaveBeenCalled();
   });
 
   it('T8390 review: a staked publish intent expires after the safety-net timeout (bounds staleness if the render never completes)', () => {

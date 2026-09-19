@@ -16,7 +16,7 @@ import { DraftReelPreview } from './components/DraftReelPreview';
 import { FocusCompletionRecovery } from './components/FocusCompletionRecovery';
 import { openFinishedReel } from './utils/finishedReelNav';
 import { usePublishIntentStore } from './stores/publishIntentStore';
-import { scheduleOverlayPublishExport } from './utils/scheduleExportWhenReady';
+import { startOverlayPublishRender } from './utils/startOverlayPublishRender';
 import { handleOverlayExportCompletion } from './utils/handleOverlayExportCompletion';
 import { usePublishProject } from './hooks/usePublishProject';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
@@ -563,16 +563,16 @@ function App() {
     }
   }, [editorMode, isCheckingSession, annotateBrilliantDone]);
 
-  // Export button refs (for triggering export programmatically from the mode
-  // switch dialog, the payment-return auto-export, and Focus's one-tap Publish).
-  // T9740: ONE ref per mode, never shared. Focus's export button and Overlay's
-  // export button are two semantically different instances (framing render vs
-  // overlay render, distinct endpoints) that mount/unmount independently as the
-  // editor mode swaps. Sharing a single ref let a readiness poll be satisfied by
-  // whichever button happened to still be mounted on tick zero (Focus's, during
-  // the framing->overlay transition), firing the WRONG render — the PR #417
-  // regression. Separate refs make "is Overlay's button mounted?" answerable by
-  // construction, with no mode tag or timing dependency.
+  // Export button refs, for triggering an export programmatically from the mode-
+  // switch dialog and the payment-return auto-export. T9740: ONE ref per mode,
+  // never shared — Focus's and Overlay's export buttons are semantically distinct
+  // instances (framing render vs overlay render, different endpoints) that
+  // mount/unmount independently as the editor mode swaps, so a shared ref could
+  // fire the wrong render (PR #417). T10660: Focus's one-tap "Publish without
+  // spotlight" NO LONGER uses overlayExportButtonRef — it renders headlessly via
+  // startOverlayPublishRender — but the ref is RETAINED because the mode-switch
+  // dialog (handleModeSwitchExport) and the payment-return auto-export still
+  // trigger a mounted overlay button through it.
   const focusExportButtonRef = useRef(null);
   const overlayExportButtonRef = useRef(null);
 
@@ -612,24 +612,32 @@ function App() {
     });
   }, [fetchProjects, publishFocusExit]);
 
-  // T9740: Focus's "Publish without spotlight" one-tap trigger. Schedules the
-  // OVERLAY export button's render as soon as it mounts (it isn't mounted at
-  // click time — Overlay hydrates the just-rendered working video async). Bound
-  // to `overlayExportButtonRef` specifically so the poll can never be satisfied
-  // by Focus's own still-mounted button. `onAbandon` fires only if the poll
-  // gives up (publish-intent stake expired before Overlay's button ever
-  // mounted) — surface a loud error + a recovery toast instead of the old
-  // silent stranding.
-  const handleScheduleOverlayPublishExport = useCallback((projectId) => {
-    scheduleOverlayPublishExport({
-      overlayExportButtonRef,
+  // T10660: Focus's "Publish without spotlight" one-tap trigger. Fires the
+  // overlay render HEADLESSLY (POST /api/export/render-overlay is
+  // backend-authoritative), so the user never leaves Focus — no editorMode
+  // switch, no mounted Overlay screen, no readiness poll. This SUPERSEDES T9740's
+  // scheduleOverlayPublishExport (deleted): that mechanism existed only to reach
+  // a MOUNTED overlay export button, a premise the headless render removes.
+  const handlePublishWithoutSpotlight = useCallback((projectId) => {
+    startOverlayPublishRender({
       projectId,
-      onAbandon: () => {
-        console.error('[App] T9740: one-tap publish abandoned - overlay export button never mounted for project', projectId);
-        toast.error("Couldn't start the render", { message: 'Tap Export clip with effects to finish publishing.' });
+      onComplete: () => {
+        // `mode` describes the RENDER TYPE (an overlay render), NOT where the
+        // user is standing — the one-tap publisher stands in FRAMING.
+        // handleExportComplete routes the publish + navigation off the staked
+        // intent (gated on the stake, never on editorMode).
+        handleExportComplete({ projectId, mode: EDITOR_MODES.OVERLAY });
+      },
+      onError: (error, meta) => {
+        console.error('[App] T10660: one-tap publish render failed for project', projectId, error, meta);
+        // Clear the stake so the Publish card re-enables immediately (not only
+        // after the 5-min safety-net) and leave the user on Focus with the
+        // preview still open — we never navigated away.
+        if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
+        toast.error("Couldn't publish your reel", { message: 'Please try again.' });
       },
     });
-  }, []);
+  }, [handleExportComplete]);
 
   // Handler for loading saved games from ProjectManager
   // Sets pendingGameId in sessionStorage and navigates to annotate mode
@@ -995,7 +1003,7 @@ function App() {
               <FocusScreen
                 onExportComplete={handleExportComplete}
                 exportButtonRef={focusExportButtonRef}
-                onPublishWithoutSpotlight={handleScheduleOverlayPublishExport}
+                onPublishWithoutSpotlight={handlePublishWithoutSpotlight}
               />
             </Suspense>
           )}
