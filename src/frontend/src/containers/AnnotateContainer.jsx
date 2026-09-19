@@ -1167,19 +1167,23 @@ export function AnnotateContainer({
   });
 
   /**
-   * Handle fullscreen toggle - uses CSS fixed positioning instead of browser API
+   * Handle fullscreen toggle - uses CSS fixed positioning instead of browser API.
+   *
+   * T10400: entering fullscreen with a play SELECTED used to auto-open the editor
+   * (T690 REQ 8), back when fullscreen was the only way to reach it. T10310 put an
+   * [Edit Play]/[Frame Clip] row on the main screen the moment a play is selected,
+   * so fullscreen no longer needs to double as an editor entry point -- it just
+   * goes fullscreen, same as with nothing selected.
    */
   const handleToggleFullscreen = useCallback(() => {
     const newFS = !annotateFullscreen;
     setAnnotateFullscreen(newFS);
-    if (newFS && selectionState.type === 'SELECTED') {
-      editClip(selectionState.clipId);
-    } else if (!newFS && isMobile && (selectionState.type === 'EDITING' || selectionState.type === 'CREATING')) {
+    if (!newFS && isMobile && (selectionState.type === 'EDITING' || selectionState.type === 'CREATING')) {
       // T9500: mobile only. On desktop the editor persists into the under-canvas
       // strip (same fiber), so an in-progress play survives exiting fullscreen.
       closeOverlay();
     }
-  }, [annotateFullscreen, setAnnotateFullscreen, selectionState, editClip, closeOverlay, isMobile]);
+  }, [annotateFullscreen, setAnnotateFullscreen, selectionState, closeOverlay, isMobile]);
 
   // T740: After clipRegions update from importAnnotations, select the clip matching pendingSelectSeekTime
   // Used by both Framing→Annotate navigation and share link navigation.
@@ -1792,19 +1796,17 @@ export function AnnotateContainer({
   // Effect: Handle Escape key to exit fullscreen
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // T10400: exiting via Escape is now IDENTICAL to clicking the fullscreen
+      // toggle (the only asymmetry — auto-opening the editor on ENTER — is gone),
+      // so this reuses handleToggleFullscreen instead of duplicating its exit logic.
       if (e.key === 'Escape' && annotateFullscreen) {
-        setAnnotateFullscreen(false);
-        // T9500: match handleToggleFullscreen — only mobile closes the editor on
-        // fullscreen exit; desktop keeps it open in the under-canvas strip.
-        if (isMobile && (selectionState.type === 'EDITING' || selectionState.type === 'CREATING')) {
-          closeOverlay();
-        }
+        handleToggleFullscreen();
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [annotateFullscreen, setAnnotateFullscreen, selectionState, closeOverlay, isMobile]);
+  }, [annotateFullscreen, handleToggleFullscreen]);
 
   // Track playing state for other effects that may need it
   useEffect(() => {
