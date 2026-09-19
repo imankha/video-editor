@@ -295,9 +295,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     annotateClipCount,
     isLoadingAnnotations,
     ANNOTATE_MAX_NOTES_LENGTH,
-    pendingProjectClipId,
+    // T10610 § C.5: per-gesture write status, driving the editor's SaveStatusBadge.
+    writeStatus,
     // T5700/T6400: which layer a new clip inherits (no toggle) + clip-list layer filter
-    newClipLayerIsMine,
     layerFilter,
     setLayerFilter,
     // Handlers
@@ -305,11 +305,10 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     handleLoadGame,
     handleToggleFullscreen,
     handleAddClipFromButton,
-    handleFullscreenCreateClip,
     handleFullscreenUpdateClip,
     handleOverlayClose,
-    handleOverlayResume,
-    handleOverlayResumePlayback,
+    // T10610 § D.3: deletes the play the editor is open on.
+    handleDeletePlayFromEditor,
     handleSelectRegion: handleSelectAnnotateRegion,
     handleTimelineSeek,
     setAnnotatePlaybackSpeed,
@@ -317,6 +316,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     // Clip region actions
     updateClipRegion,
     deleteClipRegion,
+    // T10610 § C.4: awaited by Frame/stage CTAs before navigating.
+    awaitRegionWrites,
     importAnnotations,
     getAnnotateRegionAtTime,
     selectAnnotateRegion,
@@ -730,6 +731,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           onSetLayerFilter={setLayerFilter}
           onOpenClipInFocus={openClipInFocus}
           onOpenClipInOverlay={openClipInOverlay}
+          onAwaitWrites={awaitRegionWrites}
           getAngleName={getAngleName}
         />
       </div>
@@ -770,6 +772,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
                 }
                 setShowMobileSidebar(false);
               }}
+              onAwaitWrites={awaitRegionWrites}
               getAngleName={getAngleName}
             />
             <button
@@ -869,23 +872,21 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         onAddClip={handleAddClipFromButton}
         getAnnotateRegionAtTime={getAnnotateRegionAtTime}
         // Fullscreen overlay handlers
-        onFullscreenCreateClip={handleFullscreenCreateClip}
         onFullscreenUpdateClip={handleFullscreenUpdateClip}
-        onOverlayResume={handleOverlayResume}
-        onOverlayResumePlayback={handleOverlayResumePlayback}
         onOverlayClose={handleOverlayClose}
+        // T10610 § D.3/C.4/C.5
+        onDeletePlayFromEditor={handleDeletePlayFromEditor}
+        onAwaitRegionWrites={awaitRegionWrites}
+        writeStatus={writeStatus}
         // Layer selection
         annotateSelectedLayer={annotateSelectedLayer}
         onLayerSelect={setAnnotateSelectedLayer}
         // Upload state
         isUploadingGameVideo={isUploadingGameVideo}
-        // T5700: which layer NEW clips default to (mode toggle)
-        newClipLayerIsMine={newClipLayerIsMine}
         // T8600: desktop strip's Focus button (edit mode, existingClip.autoProjectId)
         onOpenClipInFocus={openClipInFocus}
-        // T9330: strip stage CTA Spotlight target + the in-flight pending-project clip
+        // T9330: strip stage CTA Spotlight target
         onOpenClipInOverlay={openClipInOverlay}
-        pendingProjectClipId={pendingProjectClipId}
         // T710: Annotation playback
         playback={playback}
         lockScrub={lockScrub}

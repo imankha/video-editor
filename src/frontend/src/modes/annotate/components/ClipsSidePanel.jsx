@@ -60,6 +60,8 @@ export function ClipsSidePanel({
   onSetLayerFilter,
   onOpenClipInFocus,
   onOpenClipInOverlay,
+  // T10610 § C.4: awaited by ClipDetailsEditor's stage button before navigating.
+  onAwaitWrites,
   // T8890: (videoSequence) -> angle display name, or null for backbone / angle-free.
   getAngleName = null,
 }) {
@@ -175,6 +177,7 @@ export function ClipsSidePanel({
               // NO_PROJECT "Frame clip" action can navigate into Framing.
               onOpenInFocus={onOpenClipInFocus}
               onOpenInOverlay={onOpenClipInOverlay}
+              onAwaitWrites={onAwaitWrites}
             />
           </div>
         </>
@@ -345,6 +348,7 @@ export function ClipsSidePanel({
                 teammateSuggestions={teammateSuggestions}
                 onOpenInFocus={onOpenClipInFocus}
                 onOpenInOverlay={onOpenClipInOverlay}
+                onAwaitWrites={onAwaitWrites}
               />
             </div>
           )}
