@@ -1,5 +1,22 @@
 ---
 domain: annotate
+updated: 2026-09-18 (T10400 — fullscreen no longer auto-opens the play editor for a
+SELECTED clip. **LANDMINE fixed:** `AnnotateContainer.handleToggleFullscreen` had an
+`if (newFS && selectionState.type === 'SELECTED') editClip(...)` branch, deliberate since T690
+(March, REQ 8) back when fullscreen was the ONLY surface that could reach the play editor.
+T10310 (same day, earlier) put a standalone [Edit Play]/[Frame Clip] row on the main screen the
+moment a play is selected, so that auto-open stopped being a shortcut and became a surprise —
+user report: clicking plain Fullscreen opened the editor as if "Edit play" had been clicked.
+Fix: the branch is gone; entering fullscreen only sets `annotateFullscreen`. The T9500 mobile
+exit-closes-overlay branch is untouched, and the Escape-key handler now just calls
+`handleToggleFullscreen()` instead of duplicating its exit logic (the two paths were byte-identical
+once the auto-open asymmetry was removed). Explicit entry points into the editor for a SELECTED
+clip: the T10310 row, and the fullscreen toolbar's "Edit play" button (`AnnotateControls.jsx`,
+`title="Edit selected play (A)"`) — never fullscreen itself. **Guard is e2e-only, not CI-covered:**
+`clip-selection-state-machine.spec.js`'s REQ 8 block asserts the no-auto-open behavior, but
+Playwright is not wired into Branch CI and no unit test touches `handleToggleFullscreen` — a
+regression here would ship silently unless someone runs that spec (or live-drives the flow)
+before merging. Prior:)
 updated: 2026-09-18 (T10300 — link a directly-uploaded clip to a game later. **NEW `raw_clips.source`
 discriminator** (`profile_db` migration v053; `TEXT NOT NULL DEFAULT 'game'`, values `'game'` = annotate-cut,
 `'upload'` = direct upload). Both direct-upload insert sites write `source='upload'` (`clips.py` batch

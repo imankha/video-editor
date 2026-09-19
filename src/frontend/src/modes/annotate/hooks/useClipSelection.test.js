@@ -233,23 +233,27 @@ describe('useClipSelection', () => {
   });
 
   // ============================================================================
-  // Full scenario: selection survives fullscreen toggle
+  // Full scenario: explicit edit open/close preserves selection
   // ============================================================================
 
-  describe('fullscreen toggle scenarios', () => {
-    it('SELECTED → editClip (enter fullscreen) → closeOverlay (exit fullscreen) → SELECTED', () => {
+  // T10400: editClip() is no longer invoked automatically by entering fullscreen
+  // (that auto-open was removed — see AnnotateContainer.handleToggleFullscreen);
+  // this exercises the same SELECTED -> EDITING -> SELECTED transitions the way
+  // an explicit "Edit play" click / overlay close now drive them.
+  describe('explicit edit-open/close scenarios', () => {
+    it('SELECTED → editClip (Edit play click) → closeOverlay (overlay close) → SELECTED', () => {
       const { result } = renderHook(() => useClipSelection());
 
       // User selects a clip
       act(() => result.current.selectClip('clip_1'));
       expect(result.current.selectionState.type).toBe(SELECTION_STATES.SELECTED);
 
-      // Enter fullscreen → open overlay
+      // Explicit "Edit play" click → open overlay
       act(() => result.current.editClip('clip_1'));
       expect(result.current.selectionState.type).toBe(SELECTION_STATES.EDITING);
       expect(result.current.isOverlayOpen).toBe(true);
 
-      // Exit fullscreen → close overlay, keep selection
+      // Close overlay → keep selection
       act(() => result.current.closeOverlay());
       expect(result.current.selectionState.type).toBe(SELECTION_STATES.SELECTED);
       expect(result.current.selectedRegionId).toBe('clip_1');

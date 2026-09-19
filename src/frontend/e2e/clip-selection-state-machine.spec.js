@@ -358,29 +358,54 @@ test.describe('T690: Clip Selection State Machine', () => {
     await firstClip.click();
     await page.waitForTimeout(500);
 
+    // T10400: a playing video races two things the REQ 8 check below depends on —
+    // auto-deselect (SELECTED -> NONE once the playhead leaves the clip span) and
+    // the fullscreen controls' 3s auto-hide timer (useFullscreenControls). Pausing
+    // first removes both races; on master this didn't matter because fullscreen
+    // used to auto-open the editor (EDITING is immune to auto-deselect).
+    await ensurePaused(page);
+
     const fsButton = page.locator('button[title="Fullscreen"]');
     const hasFsBtn = await fsButton.isVisible().catch(() => false);
 
     if (!hasFsBtn) {
       console.log('[Test] SKIP fullscreen: button not visible (screen too wide)');
     } else {
-      // --- REQ 8: Enter FS + SELECTED → overlay auto-opens ---
-      console.log('\n  --- REQ 8: Enter FS with SELECTED → overlay ---');
+      // --- REQ 8 (T10400, revised): Enter FS + SELECTED → fullscreen only, overlay
+      //     stays CLOSED. Until T10310 added the main-screen [Edit Play]/[Frame Clip]
+      //     row, fullscreen was the only way to reach the editor, so entering FS with
+      //     a clip SELECTED used to auto-open it (T690's original REQ 8). That's no
+      //     longer the only entry point, so the auto-open was removed — clicking
+      //     Fullscreen must never be indistinguishable from clicking Edit play. ---
+      console.log('\n  --- REQ 8: Enter FS with SELECTED → stays SELECTED, no auto-open ---');
       await fsButton.click();
       await page.waitForTimeout(1500);
 
-      // Entering FS with an existing clip SELECTED transitions to EDITING, so the
-      // overlay's action button reads "Update" (it's "Save" only when CREATING).
       // Scope to the green action button so we don't match the "Save" tag chip.
       const saveOrUpdate = page.locator('button.bg-green-600:has-text("Update"), button.bg-green-600:has-text("Save")').first();
+      const overlayAutoOpened = await saveOrUpdate.isVisible().catch(() => false);
+      console.log(`  REQ 8: Overlay auto-opened: ${overlayAutoOpened} (expect false)`);
+      expect(overlayAutoOpened).toBe(false);
+
+      // The explicit "Edit play" toolbar button is how a SELECTED clip is edited now.
+      // Scoped by title (not text), since the overlay ITSELF renders "Edit play" text
+      // once open (heading + save button) — the toolbar button is a distinct element.
+      // .first(): AnnotateControls renders both a text (sm:flex) and icon-only
+      // (sm:hidden) variant sharing the same title — always exactly one is a
+      // real match for the viewport, but both exist in the DOM.
+      const editToolbarBtn = page.locator('button[title="Edit selected play (A)"]').first();
+      await expect(editToolbarBtn).toBeVisible();
+      await editToolbarBtn.click();
+      await page.waitForTimeout(800);
       const overlayVis = await saveOrUpdate.isVisible().catch(() => false);
-      console.log(`  REQ 8: Overlay visible: ${overlayVis}`);
+      console.log(`  REQ 8: Overlay visible after explicit Edit play click: ${overlayVis}`);
       expect(overlayVis).toBe(true);
 
       // --- REQ 7: Buttons hidden during overlay ---
       console.log('\n  --- REQ 7: Buttons hidden during overlay ---');
-      const addOv = await page.locator('button[title="Add play ending at current time (A)"]').isVisible().catch(() => false);
-      const editOv = await page.locator('button:has-text("Edit play")').isVisible().catch(() => false);
+      // .first(): same text/icon-only dual-render as editToolbarBtn above.
+      const addOv = await page.locator('button[title="Add play ending at current time (A)"]').first().isVisible().catch(() => false);
+      const editOv = await editToolbarBtn.isVisible().catch(() => false);
       console.log(`  REQ 7: Add: ${addOv}, Edit: ${editOv} (expect both false)`);
 
       // --- REQ 12: Close overlay keeps selection ---
@@ -463,11 +488,20 @@ test.describe('T690: Clip Selection State Machine', () => {
       await fsBtn2.click();
       await page.waitForTimeout(1500);
 
+      // T10400: fullscreen no longer auto-opens the editor for a SELECTED clip —
+      // reach EDITING explicitly via the "Edit play" toolbar button, same as a user
+      // would, before exercising the timeline-click-closes-overlay behavior below.
+      const editBtnTimeline = page.locator('button:has-text("Edit play")').first();
+      if (await editBtnTimeline.isVisible().catch(() => false)) {
+        await editBtnTimeline.click();
+        await page.waitForTimeout(800);
+      }
+
       // We should now be in EDITING state with overlay open (green action button
       // reads "Update" when editing, "Save" when creating).
       const overlayOpen = await page.locator('button.bg-green-600:has-text("Update"), button.bg-green-600:has-text("Save")').first()
         .isVisible().catch(() => false);
-      console.log(`[Test] TIMELINE: Overlay open after entering FS: ${overlayOpen}`);
+      console.log(`[Test] TIMELINE: Overlay open after explicit Edit play click: ${overlayOpen}`);
 
       if (overlayOpen) {
         // Click timeline far from clips → overlay should close, Add Clip appears
