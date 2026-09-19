@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { getAllSupportedTagNames } from '../constants/tagRegistry';
-import { DEFAULT_CLIP_DURATION } from '../../../components/shared/clipConstants';
+import { DEFAULT_CLIP_DURATION, NEW_PLAY_DEFAULT_RATING as DEFAULT_RATING } from '../../../components/shared/clipConstants';
 import { track } from '../../../utils/analytics';
 import { setAnnotateSnapshot } from '../../../utils/editorContext';
 
@@ -215,7 +215,8 @@ export function validateTsvContent(content) {
 const MIN_CLIP_DURATION = 1.0; // seconds (enforced)
 const MAX_CLIP_DURATION = 60.0; // seconds (max for slider)
 const MAX_NOTES_LENGTH = 280; // characters (like a tweet)
-const DEFAULT_RATING = 4; // default star rating ("Good")
+// T10610: NEW_PLAY_DEFAULT_RATING replaces this file's own hardcoded 4 — same
+// value, single-sourced in clipConstants.js instead of duplicated here.
 
 // Color palette for clip regions (auto-assigned cyclically)
 const CLIP_COLORS = [
