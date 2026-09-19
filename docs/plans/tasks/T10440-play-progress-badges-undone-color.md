@@ -1,4 +1,4 @@
-# T10430: Play progress badges - undone state reads as disabled, should be amber
+# T10440: Play progress badges - undone state reads as disabled, should be amber
 
 **Status:** STAGING
 **Impact:** 3

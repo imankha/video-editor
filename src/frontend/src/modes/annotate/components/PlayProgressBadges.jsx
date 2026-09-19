@@ -10,7 +10,7 @@ import { ANNOTATE } from '../../../config/displayNames';
  * buttons (the formBody layouts), replacing the loose "Clip created" text.
  *
  * Visual states (one treatment per state, never mixed):
- *   - undone:  dashed amber outline (T10430: was gray, read as disabled);
+ *   - undone:  dashed amber outline (T10440: was gray, read as disabled);
  *              clicking jumps to the control that completes it (the button
  *              is the affordance). Never pulses — pulse stays reserved for
  *              the clip badge's nudge, which is more urgent.
