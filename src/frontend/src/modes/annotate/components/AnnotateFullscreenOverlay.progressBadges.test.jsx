@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
 import { useProjectsStore } from '../../../stores/projectsStore';
 
@@ -107,25 +107,29 @@ describe('strip header badges — clicks jump to the control', () => {
     expect(screen.getByLabelText('Clip name')).toBeTruthy();
   });
 
-  it('the rated badge opens a vertical rating picker (not the Rate and Tag disclosure)', () => {
+  it('clicking the rated badge replaces it in place with a 5-star column (not a popup, not the disclosure)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
-    expect(screen.queryByRole('menu', { name: 'Rate this play' })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'Rate this play' })).toBeNull();
     fireEvent.click(badge('badge-rated'));
-    const menu = screen.getByRole('menu', { name: 'Rate this play' });
-    expect(menu).toBeTruthy();
-    // 5 is listed first (best-first), down to 1.
-    const options = screen.getAllByRole('menuitemradio');
-    expect(options.map((o) => o.textContent)).toEqual([
-      'Brilliant', 'Good', 'Interesting', 'Technical Lapse', 'Mental Lapse',
+    const group = screen.getByRole('radiogroup', { name: 'Rate this play' });
+    expect(group).toBeTruthy();
+    // Still the same badge-rated element -- expanded in place, not a separate popup.
+    expect(group.dataset.testid).toBe('badge-rated');
+    // 5 is listed first (best-first, top of the vertical stack), down to 1.
+    // Scoped to the group -- the Layer segmented control also uses role="radio".
+    const options = within(group).getAllByRole('radio');
+    expect(options.map((o) => o.getAttribute('aria-label'))).toEqual([
+      '5 stars - Brilliant', '4 stars - Good', '3 stars - Interesting',
+      '2 stars - Technical Lapse', '1 star - Mental Lapse',
     ]);
   });
 
-  it('picking a rating from the picker sets it and closes the picker', () => {
+  it('picking a star from the expanded column sets the rating and collapses back to the disc', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
     fireEvent.click(badge('badge-rated'));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Brilliant' }));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     expect(badge('badge-rated').dataset.state).toBe('done');
-    expect(screen.queryByRole('menu', { name: 'Rate this play' })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'Rate this play' })).toBeNull();
     // The clip nudge wakes at 5 stars, same as the disclosure's own stars.
     expect(badge('badge-clip').dataset.state).toBe('nudge');
   });

@@ -11,8 +11,9 @@ import { RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
  * header line beside the play name (desktop strip) or above the footer
  * buttons (the formBody layouts), replacing the loose "Clip created" text.
  * T10450 (user request): the named badge leads the row (it sits right next
- * to the name it completes); the rated badge opens its own vertical picker
- * (see RatingBadge) instead of jumping to the Rate and Tag disclosure.
+ * to the name it completes); the rated badge, when clicked, is REPLACED in
+ * place by a bare vertical stack of five stars (see RatingBadge) instead of
+ * jumping to the Rate and Tag disclosure.
  *
  * Visual states (one treatment per state, never mixed):
  *   - undone:  dashed amber outline (T10440: was gray, read as disabled);
@@ -29,9 +30,9 @@ import { RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
  * one status that changes what the user can do next; the other three name
  * themselves via title/aria-label. Every badge is a pure read of props and
  * persists nothing itself — RatingBadge holds a transient open/closed UI
- * state for its popover only, never the rating value (that stays owned by
- * the caller via `rating`/`onRatingChange`, the same setter every other
- * rating control in the editor uses).
+ * flag only, never the rating value (that stays owned by the caller via
+ * `rating`/`onRatingChange`, the same setter every other rating control in
+ * the editor uses).
  */
 
 const DISC_BASE =
@@ -104,18 +105,23 @@ function Badge({ testId, state, size, Icon, title, label, onClick }) {
 const RATING_VALUES = [5, 4, 3, 2, 1];
 
 /**
- * RatingBadge (T10450) — the rated badge, specialized: clicking it opens a
- * small vertical popover of all five ratings (5 at top, matching "best
- * first") instead of jumping to the horizontal star row in the Rate and Tag
- * disclosure. Picking a rating calls the SAME `onRatingChange` every other
- * rating control in the editor uses, then closes. Closes on outside click,
- * Escape, or a selection; the open/closed flag is the only state this file
- * holds — the rating value itself is never held here.
+ * RatingBadge (T10450, revised same day per user feedback) — the rated
+ * badge, specialized: clicking it does not open a separate floating panel.
+ * The disc itself is REPLACED, in place, by a bare vertical stack of five
+ * small stars (5 on top, matching "best first", down to 1) — no box,
+ * border, shadow, or adjective text, just the stars every other star
+ * control in the app already draws. Sibling badges shift right in the flow
+ * (this is inline, not absolutely positioned) while it's expanded. Picking
+ * a star calls the SAME `onRatingChange` every other rating control in the
+ * editor uses, then collapses back to the disc; so does an outside click or
+ * Escape. The open/closed flag is the only state this file holds — the
+ * rating value itself is never held here.
  */
 function RatingBadge({ state, size, rating, onRatingChange }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const actionable = state === BADGE_STATE.UNDONE;
+  const iconSize = ICON_SIZE[size];
 
   useEffect(() => {
     if (!open) return undefined;
@@ -133,66 +139,56 @@ function RatingBadge({ state, size, rating, onRatingChange }) {
     };
   }, [open]);
 
+  if (open) {
+    return (
+      <div
+        ref={rootRef}
+        role="radiogroup"
+        aria-label={ANNOTATE.RATE_PLAY}
+        data-testid="badge-rated"
+        data-state={state}
+        className="flex flex-col items-center gap-0.5"
+      >
+        {RATING_VALUES.map((value) => (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={rating === value}
+            aria-label={`${value} star${value > 1 ? 's' : ''} - ${RATING_ADJECTIVES[value]}`}
+            onClick={() => {
+              onRatingChange(value);
+              setOpen(false);
+            }}
+            className="p-0.5 hover:scale-110 transition-transform"
+          >
+            <Star
+              size={iconSize}
+              fill={value <= rating ? '#fbbf24' : 'transparent'}
+              color={value <= rating ? '#fbbf24' : '#6b7280'}
+              strokeWidth={1.5}
+            />
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   const title = state === BADGE_STATE.DONE ? ANNOTATE.PLAY_RATED : ANNOTATE.RATE_PLAY;
   const shared = { 'data-testid': 'badge-rated', 'data-state': state, title, className: 'flex items-center gap-1.5' };
   const disc = <Disc state={state} size={size} Icon={Star} />;
 
+  if (actionable) {
+    return (
+      <button type="button" aria-label={title} aria-haspopup="true" onClick={() => setOpen(true)} {...shared}>
+        {disc}
+      </button>
+    );
+  }
   return (
-    <div ref={rootRef} className="relative">
-      {actionable ? (
-        <button
-          type="button"
-          aria-label={title}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-          {...shared}
-        >
-          {disc}
-        </button>
-      ) : (
-        <span role="img" aria-label={title} {...shared}>
-          {disc}
-        </span>
-      )}
-      {open && (
-        <div
-          role="menu"
-          aria-label={ANNOTATE.RATE_PLAY}
-          data-testid="rating-picker"
-          className="absolute z-50 top-full left-0 mt-1 flex flex-col gap-0.5 p-1.5 rounded-lg border border-gray-700 bg-gray-800 shadow-xl"
-        >
-          {RATING_VALUES.map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="menuitemradio"
-              aria-checked={rating === value}
-              onClick={() => {
-                onRatingChange(value);
-                setOpen(false);
-              }}
-              className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm whitespace-nowrap transition-colors ${
-                rating === value ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-              }`}
-            >
-              <span className="flex items-center gap-0.5 shrink-0">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <Star
-                    key={i}
-                    size={11}
-                    fill={i <= value ? '#fbbf24' : 'transparent'}
-                    color={i <= value ? '#fbbf24' : '#6b7280'}
-                    strokeWidth={1.5}
-                  />
-                ))}
-              </span>
-              {RATING_ADJECTIVES[value]}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <span role="img" aria-label={title} {...shared}>
+      {disc}
+    </span>
   );
 }
 
