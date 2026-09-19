@@ -142,8 +142,15 @@ const RATING_VALUES = [5, 4, 3, 2, 1];
  * T10530: once DONE, the disc's glyph is the rating's own chess-style
  * notation (`RATING_NOTATION`: !!/!/!?/?/??) instead of a generic star, so
  * the collapsed badge shows WHICH rating was given at a glance.
+ * T10550: the popup also shows that same notation on every row (ties the row
+ * to the eventual collapsed glyph), carries a visible layer-aware heading
+ * ("Rate your athlete's play" / "...team's play", matching the existing
+ * `mine` split `getRatingCaption` already uses), and on mobile becomes a
+ * screen-centered dialog with a dim backdrop (tap to dismiss) instead of an
+ * anchored dropdown — an anchored popup this size would run off a narrow
+ * screen depending on where the badge sits in the row.
  */
-function RatingBadge({ state, size, rating, onRatingChange }) {
+function RatingBadge({ state, size, rating, onRatingChange, myAthlete }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
 
@@ -164,6 +171,7 @@ function RatingBadge({ state, size, rating, onRatingChange }) {
   }, [open]);
 
   const title = state === BADGE_STATE.DONE ? ANNOTATE.PLAY_RATED : ANNOTATE.RATE_PLAY;
+  const pickerTitle = myAthlete ? ANNOTATE.RATE_ATHLETES_PLAY : ANNOTATE.RATE_TEAMS_PLAY;
 
   return (
     <div ref={rootRef} className="relative">
@@ -181,43 +189,58 @@ function RatingBadge({ state, size, rating, onRatingChange }) {
         <Disc state={state} size={size} Icon={Star} glyph={state === BADGE_STATE.DONE ? RATING_NOTATION[rating] : undefined} />
       </button>
       {open && (
+        // max-sm: a full-screen centered dialog with a dim, tap-to-close
+        // backdrop. sm+: the usual anchored dropdown (backdrop classes are
+        // inert there — no fixed/inset/flex — so the onClick below never
+        // fires from a stray desktop click; the document mousedown listener
+        // handles outside-click on desktop instead).
         <div
-          data-testid="rating-picker"
-          className="absolute z-50 top-full left-0 mt-2 min-w-[190px] p-2 rounded-xl border border-gray-700 bg-gray-800 shadow-xl"
+          role="presentation"
+          onClick={() => setOpen(false)}
+          className="max-sm:fixed max-sm:inset-0 max-sm:z-50 max-sm:flex max-sm:items-center max-sm:justify-center max-sm:bg-black/60 max-sm:p-4
+                     sm:absolute sm:z-50 sm:top-full sm:left-0 sm:mt-2"
         >
-          <div role="radiogroup" aria-label={ANNOTATE.RATE_PLAY} className="flex flex-col gap-1">
-            {RATING_VALUES.map((value) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={rating === value}
-                aria-label={`${value} star${value > 1 ? 's' : ''} - ${RATING_ADJECTIVES[value]}`}
-                onClick={() => {
-                  onRatingChange(value);
-                  setOpen(false);
-                }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm whitespace-nowrap
-                            coarse-pointer:min-h-[44px] coarse-pointer:py-3 transition-colors ${
-                  rating === value
-                    ? 'bg-gray-700 text-white'
-                    : 'text-gray-300 hover:bg-gray-700/70 hover:text-white'
-                }`}
-              >
-                <span className="flex items-center gap-0.5 shrink-0">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <Star
-                      key={i}
-                      size={14}
-                      fill={i <= value ? '#fbbf24' : 'transparent'}
-                      color={i <= value ? '#fbbf24' : '#6b7280'}
-                      strokeWidth={1.5}
-                    />
-                  ))}
-                </span>
-                {RATING_ADJECTIVES[value]}
-              </button>
-            ))}
+          <div
+            data-testid="rating-picker"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xs sm:w-auto sm:max-w-none sm:min-w-[190px] p-2 rounded-xl border border-gray-700 bg-gray-800 shadow-xl"
+          >
+            <div className="px-1.5 pt-1 pb-2 text-xs font-semibold text-gray-300">{pickerTitle}</div>
+            <div role="radiogroup" aria-label={pickerTitle} className="flex flex-col gap-1">
+              {RATING_VALUES.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={rating === value}
+                  aria-label={`${value} star${value > 1 ? 's' : ''} - ${RATING_ADJECTIVES[value]}`}
+                  onClick={() => {
+                    onRatingChange(value);
+                    setOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm whitespace-nowrap
+                              coarse-pointer:min-h-[44px] coarse-pointer:py-3 transition-colors ${
+                    rating === value
+                      ? 'bg-gray-700 text-white'
+                      : 'text-gray-300 hover:bg-gray-700/70 hover:text-white'
+                  }`}
+                >
+                  <span className="flex items-center gap-0.5 shrink-0">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <Star
+                        key={i}
+                        size={14}
+                        fill={i <= value ? '#fbbf24' : 'transparent'}
+                        color={i <= value ? '#fbbf24' : '#6b7280'}
+                        strokeWidth={1.5}
+                      />
+                    ))}
+                  </span>
+                  {RATING_ADJECTIVES[value]}
+                  <span className="ml-auto font-black tabular-nums" aria-hidden="true">{RATING_NOTATION[value]}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -231,6 +254,7 @@ function RatingBadge({ state, size, rating, onRatingChange }) {
  * @param {'sm'|'md'} [p.size]
  * @param {number} p.rating  current rating value, for the picker's selected row
  * @param {(value: number) => void} p.onRatingChange  the editor's existing rating setter
+ * @param {boolean} p.myAthlete  the editor's layer toggle — picks the rating popup's heading
  * @param {() => void} p.onName      jump to the name control
  * @param {() => void} p.onNote      jump to the note control
  * @param {() => void} p.onCreateClip  create the clip (nudge state only)
@@ -242,6 +266,7 @@ export function PlayProgressBadges({
   size = 'md',
   rating,
   onRatingChange,
+  myAthlete,
   onName,
   onNote,
   onCreateClip,
@@ -277,6 +302,7 @@ export function PlayProgressBadges({
         size={size}
         rating={rating}
         onRatingChange={onRatingChange}
+        myAthlete={myAthlete}
       />
       <Badge
         testId="badge-noted"

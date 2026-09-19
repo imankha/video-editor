@@ -680,6 +680,7 @@ export function AnnotateFullscreenOverlay({
       className={className}
       rating={rating}
       onRatingChange={handleRatingChange}
+      myAthlete={myAthlete}
       onName={jumpToName}
       onNote={jumpToNote}
       onCreateClip={progress.clip === CLIP_BADGE.NUDGE ? handleCreateClipFromBadge : undefined}

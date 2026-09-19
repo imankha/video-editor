@@ -35,6 +35,11 @@ export const ANNOTATE = {
   // consistency per the user's ruling.
   PLAY_RATED: 'Play rated',
   RATE_PLAY: 'Rate this play',
+  // T10550: the rating popup's own visible heading (+ its accessible name, so
+  // they match) — layer-aware like `getRatingCaption`'s existing `mine` split,
+  // so a Team play never claims to be "your athlete's".
+  RATE_ATHLETES_PLAY: "Rate your athlete's play",
+  RATE_TEAMS_PLAY: "Rate your team's play",
   PLAY_NAMED: 'Play named',
   NAME_PLAY: 'Name this play',
   NOTE_ADDED: 'Note added',

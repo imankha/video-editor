@@ -120,9 +120,9 @@ describe('strip header badges — clicks jump to the control', () => {
 
   it('clicking the rated badge opens a popup box with all five ratings, best-first', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
-    expect(screen.queryByRole('radiogroup', { name: 'Rate this play' })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: "Rate your athlete's play" })).toBeNull();
     fireEvent.click(badge('badge-rated'));
-    const group = screen.getByRole('radiogroup', { name: 'Rate this play' });
+    const group = screen.getByRole('radiogroup', { name: "Rate your athlete's play" });
     expect(group).toBeTruthy();
     // The popup is a SEPARATE element from the badge itself (T10520 round 3 —
     // not an in-place expansion of the badge, a floating box anchored to it).
@@ -142,7 +142,7 @@ describe('strip header badges — clicks jump to the control', () => {
     fireEvent.click(badge('badge-rated'));
     fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     expect(badge('badge-rated').dataset.state).toBe('done');
-    expect(screen.queryByRole('radiogroup', { name: 'Rate this play' })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: "Rate your athlete's play" })).toBeNull();
     // The clip nudge wakes at 5 stars.
     expect(badge('badge-clip').dataset.state).toBe('nudge');
   });
@@ -156,6 +156,41 @@ describe('strip header badges — clicks jump to the control', () => {
     fireEvent.click(badge('badge-rated'));
     fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     expect(badge('badge-rated').textContent).toBe('!!');
+  });
+
+  it('each row in the popup also shows its own chess notation (T10550)', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
+    fireEvent.click(badge('badge-rated'));
+    const group = screen.getByRole('radiogroup', { name: "Rate your athlete's play" });
+    const rows = within(group).getAllByRole('radio');
+    expect(rows.map((r) => r.textContent)).toEqual([
+      'Brilliant!!', 'Good!', 'Interesting!?', 'Technical Lapse?', 'Mental Lapse??',
+    ]);
+  });
+
+  it('the popup heading is layer-aware: "your athlete\'s" vs "your team\'s" (T10550)', () => {
+    const { rerender } = render(
+      <AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, my_athlete: true }} />,
+    );
+    fireEvent.click(badge('badge-rated'));
+    expect(screen.getByRole('radiogroup', { name: "Rate your athlete's play" })).toBeTruthy();
+
+    // Popup stays open across the rerender (same component instance); its
+    // heading must track the new clip's layer without another click.
+    rerender(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, id: 'c2', my_athlete: false }} />);
+    expect(screen.getByRole('radiogroup', { name: "Rate your team's play" })).toBeTruthy();
+  });
+
+  it('tapping the mobile backdrop closes the popup; tapping inside it does not (T10550)', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
+    fireEvent.click(badge('badge-rated'));
+    const backdrop = screen.getByRole('presentation');
+    // Clicking the box itself (a descendant of the backdrop) must NOT close it.
+    fireEvent.click(screen.getByRole('radiogroup', { name: "Rate your athlete's play" }));
+    expect(screen.queryByRole('radiogroup', { name: "Rate your athlete's play" })).toBeTruthy();
+    // Clicking the backdrop element itself closes it.
+    fireEvent.click(backdrop);
+    expect(screen.queryByRole('radiogroup', { name: "Rate your athlete's play" })).toBeNull();
   });
 
   it('the rated badge stays clickable once done, so the rating can be set again and again (T10520)', () => {
