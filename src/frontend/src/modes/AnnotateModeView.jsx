@@ -955,38 +955,6 @@ export function AnnotateModeView({
           )}
         </div>
 
-        {/* Mobile inline add/edit clip form. T8140: a fixed, viewport-anchored
-            bottom sheet (max-h-[85vh], flex column) so the pinned Save footer
-            inside the inline overlay is ALWAYS visible without scrolling at
-            390x844 — an in-flow form would let Save fall below the page fold. */}
-        {mobileInlineForm && (
-          <div className="fixed inset-x-0 bottom-0 z-40 flex flex-col max-h-[85vh] bg-gray-900/95 rounded-t-2xl shadow-2xl overflow-hidden">
-            <AnnotateFullscreenOverlay
-              isVisible={showAnnotateOverlay}
-              currentTime={currentTime}
-              videoDuration={duration || annotateVideoMetadata?.duration || 0}
-              existingClip={existingClip}
-              onCreateClip={handleCreateClipWithSportPrompt}
-              onUpdateClip={onFullscreenUpdateClip}
-              onResume={onOverlayResume}
-              onClose={onOverlayClose}
-              onSeek={seek}
-              videoController={videoController}
-              isFullscreen={false}
-              layout="inline"
-              surface="sheet_mobile"
-              activeSourceName={activeSourceName}
-              mediaBounds={activeSourceMediaBounds}
-              teammateSuggestions={teammateSuggestions}
-              newClipLayerIsMine={newClipLayerIsMine}
-              nextClipNumber={nextClipNumber}
-              // T9330: mobile edit sheet gets the shared stage CTA (design §2.6)
-              onOpenInFocus={onOpenClipInFocus}
-              onOpenInOverlay={onOpenClipInOverlay}
-            />
-          </div>
-        )}
-
         {/* T8140: full-screen "What sport is this?" question at a mobile first
             save. Answer persists via the existing profile-sport gesture; Skip
             proceeds (the clip is already saved) so it can't dead-end. */}
@@ -1195,6 +1163,48 @@ export function AnnotateModeView({
           </div>
         )}
       </div>
+
+      {/* Mobile inline add/edit clip form. T8140: a fixed, viewport-anchored
+          bottom sheet (max-h-[85vh], flex column) so the pinned Save footer
+          inside the inline overlay is ALWAYS visible without scrolling at
+          390x844 — an in-flow form would let Save fall below the page fold.
+          T10420 (user report, 2026-09-18): this MUST live outside the
+          `backdrop-blur-lg` "Main Editor Area" wrapper above — Chrome/Safari
+          give a `backdrop-filter` ancestor its own containing block for
+          `position: fixed` descendants, so a fixed child anchors to THAT
+          div's edges instead of the real viewport. That div only wraps the
+          video card, so the sheet's `bottom-0` was landing mid-page: the
+          sheet's top got pushed off the top of the screen (title/scrub bar
+          unreachable) and everything below the video card down to the true
+          viewport bottom sat empty. Rendering it as a sibling here, past the
+          wrapper's closing tag, restores a real viewport containing block. */}
+      {mobileInlineForm && (
+        <div className="fixed inset-x-0 bottom-0 z-40 flex flex-col max-h-[85vh] bg-gray-900/95 rounded-t-2xl shadow-2xl overflow-hidden">
+          <AnnotateFullscreenOverlay
+            isVisible={showAnnotateOverlay}
+            currentTime={currentTime}
+            videoDuration={duration || annotateVideoMetadata?.duration || 0}
+            existingClip={existingClip}
+            onCreateClip={handleCreateClipWithSportPrompt}
+            onUpdateClip={onFullscreenUpdateClip}
+            onResume={onOverlayResume}
+            onClose={onOverlayClose}
+            onSeek={seek}
+            videoController={videoController}
+            isFullscreen={false}
+            layout="inline"
+            surface="sheet_mobile"
+            activeSourceName={activeSourceName}
+            mediaBounds={activeSourceMediaBounds}
+            teammateSuggestions={teammateSuggestions}
+            newClipLayerIsMine={newClipLayerIsMine}
+            nextClipNumber={nextClipNumber}
+            // T9330: mobile edit sheet gets the shared stage CTA (design §2.6)
+            onOpenInFocus={onOpenClipInFocus}
+            onOpenInOverlay={onOpenClipInOverlay}
+          />
+        </div>
+      )}
 
       {/* Technical readouts (resolution/format/size) - 2026-09-18 (user request):
           moved below the bottom CTA (Preview plays/Share plays above) and

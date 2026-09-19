@@ -1,5 +1,19 @@
 ---
 domain: annotate
+updated: 2026-09-18 (T10420 — mobile "Edit Play" sheet was anchored to the wrong containing
+block. **LANDMINE fixed:** `AnnotateModeView.jsx`'s `mobileInlineForm` sheet
+(`fixed inset-x-0 bottom-0`) was nested INSIDE the "Main Editor Area" wrapper div that gets
+`bg-white/10 backdrop-blur-lg` whenever `!annotateFullscreen` — a `backdrop-filter` ancestor
+becomes the containing block for `position: fixed` descendants in Chromium/WebKit, so `bottom-0`
+anchored to that (video-card-only) wrapper's bottom instead of the real viewport. Symptom
+(user screenshot): sheet's top pushed off-screen (title/scrub bar unreachable), large empty band
+of page background below Cancel down to the real bottom. Fix: moved the sheet to render as a
+sibling AFTER the wrapper's closing tag — pure JSX relocation. **Same pattern exists in
+`FocusModeView.jsx`/`OverlayModeView.jsx`** (`!isFullscreen && !mobileFs`-gated
+`backdrop-blur-lg` wrapper) — checked both, no live bug today because their only `fixed`
+descendant is fullscreen-gated (mutually exclusive with the blur branch), but any new `fixed`
+element added inside one of these three wrappers in windowed mode will hit this same trap. See
+T10420. Prior:)
 updated: 2026-09-18 (T10400 — fullscreen no longer auto-opens the play editor for a
 SELECTED clip. **LANDMINE fixed:** `AnnotateContainer.handleToggleFullscreen` had an
 `if (newFS && selectionState.type === 'SELECTED') editClip(...)` branch, deliberate since T690
