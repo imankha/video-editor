@@ -1,6 +1,6 @@
 # T10620: Mobile portrait — compact editor strip under a visible video
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-19
@@ -106,13 +106,40 @@ same wrapper feeds it — check `AnnotateModeView.jsx` ~575-600 and say so in th
 
 **2026-09-19**: Filed. Not started.
 
+**2026-09-19**: Implemented in a container worker (single commit 08185c93, purely additive to
+`AnnotateFullscreenOverlay`/`AddDetailsPopup`; landscape-inline/strip/overlay layouts
+byte-identical). New `layout="portrait-strip"` renders in flow under the video card; the old
+`fixed inset-x-0 bottom-0 max-h-[85vh]` sheet + its keyboard-padding hack are deleted. Category
+placed behind the "Notes and Tags" disclosure (a 360px segmented control would crush the name
+input); rating stays on the existing badge popup, not duplicated. `mobileFs` confirmed untouched
+(separate, mutually-exclusive surface). Reviewer approved (0 blocking/major, 2 no-action minor).
+738 tests green (631 full annotate suite + 12 new portraitStrip + 2 useIsMobile-gating +
+regression), lint clean. Branch CI green. PR not yet opened — **visual task, held for user
+test per standing instruction, not auto-merged.**
+
+**Live measurement (run by the supervisor session directly, via a real account/game, since the
+container had no browser/backend to do this itself):**
+
+| Width | Editor-closed video height | Editor-open video height | Fixed sheet present? | Video covered? |
+|---|---|---|---|---|
+| 393x852 | 197.4px | 197.4px (identical) | No (0 found) | No |
+| 375x667 (SE) | 187.3px | 187.3px (identical) | No (0 found) | No |
+| 360x740 | 178.9px | 178.9px (identical) | No (0 found) | No |
+
+All three widths: open height == closed height exactly (video never shrinks or gets covered),
+zero `.fixed.inset-x-0.bottom-0` elements remain in the DOM, and `elementFromPoint` at the
+video's center resolves inside the video area both before and after the editor opens.
+Screenshots (closed + open, all 3 widths) saved to `C:\work\tasks\t10620\qa\`. Real-device iOS
+Safari dynamic-toolbar check is still owed (Playwright cannot reproduce it, per T4880's known
+caveat) — this measurement covers everything Playwright *can* verify.
+
 ## Acceptance Criteria
 
-- [ ] Portrait phone, editor open: the video's on-screen height equals its editor-closed height (measured at 393x852, 375x667, 360x740)
-- [ ] Trim bar, readouts, and name are visible together with the video without scrolling at 393x852
-- [ ] No `position: fixed` editor wrapper on mobile portrait; no `max-h-[85vh]`
-- [ ] Strip row 2: Done and the disclosure button never clip or shrink; the name input truncates instead (unit + screenshot)
-- [ ] All fields removed from the strip are reachable via the disclosure; Delete play reachable
-- [ ] Landscape-inline and desktop layouts unchanged (existing tests still pass unmodified)
-- [ ] Screenshots at 360/375/393 widths attached; real-device iOS check listed as owed
-- [ ] `annotate.md` updated; relevant tests green; lint clean; Branch CI green
+- [x] Portrait phone, editor open: the video's on-screen height equals its editor-closed height (measured at 393x852, 375x667, 360x740) — confirmed exactly equal at all 3 widths, supervisor live measurement
+- [x] Trim bar, readouts, and name are visible together with the video without scrolling at 393x852 — confirmed by screenshot
+- [x] No `position: fixed` editor wrapper on mobile portrait; no `max-h-[85vh]` — confirmed by grep (worker) and a live DOM check (supervisor, 0 matches at all 3 widths)
+- [x] Strip row 2: Done and the disclosure button never clip or shrink; the name input truncates instead (unit + screenshot) — confirmed by screenshot at all 3 widths
+- [ ] All fields removed from the strip are reachable via the disclosure; Delete play reachable — worker-claimed, NOT independently verified by the supervisor (did not open the disclosure popup live); verify before/during user test
+- [x] Landscape-inline and desktop layouts unchanged (existing tests still pass unmodified) — confirmed, diff is purely additive to those layouts
+- [x] Screenshots at 360/375/393 widths attached; real-device iOS check listed as owed — see `C:\work\tasks\t10620\qa\`
+- [x] `annotate.md` updated; relevant tests green; lint clean; Branch CI green
