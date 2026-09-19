@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Video } from 'lucide-react';
 import { generateClipName } from '../../../utils/clipDisplayName';
-import { RATING_NOTATION, getRatingLabel } from '../../../components/shared/clipConstants';
+import { RATING_NOTATION, RATING_BADGE_COLORS, getRatingLabel } from '../../../components/shared/clipConstants';
 import { ANNOTATE } from '../../../config/displayNames';
 import { formatInstant, PRECISION } from '../../../utils/timeFormat';
 
@@ -50,15 +50,8 @@ function MarkerTooltip({ anchorRect, accentColor, children }) {
 // instant), not a span -- floors at second precision via the shared formatInstant.
 const formatTime = (seconds) => formatInstant(seconds, PRECISION.SECOND);
 
-// Rating to color map (color-blind safe palette)
-// Brightness scales from darkest (1⭐) to brightest (5⭐)
-const RATING_COLORS = {
-  1: '#C62828', // Brick Red - Blunder
-  2: '#F9A825', // Amber Yellow - Weak/Caution
-  3: '#1565C0', // Strong Blue - Interesting
-  4: '#2E7D32', // Teal-Green - Good
-  5: '#66BB6A', // Light Green - Excellent (festive!)
-};
+// Rating to color map: the ONE palette in clipConstants (was a local copy).
+const RATING_COLORS = RATING_BADGE_COLORS;
 
 // T5700: layer tint — a secondary cue (colored underline foot), NOT a
 // replacement for the rating hue above, which stays the primary scanning signal.

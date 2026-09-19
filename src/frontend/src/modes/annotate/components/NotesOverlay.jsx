@@ -1,14 +1,8 @@
 import React from 'react';
-import { RATING_NOTATION, getRatingLabel } from '../../../components/shared/clipConstants';
+import { RATING_NOTATION, RATING_BADGE_COLORS, getRatingLabel } from '../../../components/shared/clipConstants';
 
-// Rating colors for border (matching ClipRegionLayer)
-const RATING_COLORS = {
-  1: '#C62828',  // Red - Blunder
-  2: '#F9A825',  // Amber - Mistake
-  3: '#1565C0',  // Blue - Interesting
-  4: '#2E7D32',  // Green - Good
-  5: '#66BB6A',  // Light Green - Brilliant
-};
+// Border colors come from the ONE rating palette in clipConstants (was a local copy).
+const RATING_COLORS = RATING_BADGE_COLORS;
 
 /**
  * NotesOverlay - Displays clip name, rating notation, and notes as text overlay on the video
