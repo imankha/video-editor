@@ -1,6 +1,6 @@
 # T10600: Architect design — per-gesture autosave model for the play editor
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-09-19
@@ -129,14 +129,28 @@ Escape), `focusPrompt`, `stayOpen`, `stripLayout`, `mobileStageCta`, `namePreser
 ## Implementation
 
 ### Steps
-1. [ ] Load the three knowledge docs above, then read the listed files (no broader audit)
-2. [ ] Spawn the `architect` agent with this file + EPIC.md; it writes `docs/plans/tasks/T10600-design.md`
-3. [ ] Build the decision artifact (state table before/after, commit-point table, chain diagram, retirement list) and hand it to the user
-4. [ ] Status -> WAITING ON USER; on approval -> DECIDED, and T10610 may start
+1. [x] Load the three knowledge docs above, then read the listed files (no broader audit)
+2. [x] Spawn the `architect` agent with this file + EPIC.md; it writes `docs/plans/tasks/T10600-design.md`
+3. [x] Build the decision artifact (state table before/after, commit-point table, chain diagram, retirement list) and hand it to the user
+4. [x] Status -> WAITING ON USER; on approval -> DECIDED, and T10610 may start
 
 ### Progress Log
 
 **2026-09-19**: Filed from the mobile trim audit (decision artifact linked in EPIC.md). Not started.
+
+**2026-09-19**: Architect agent wrote `docs/plans/tasks/T10600-design.md` (750 lines): create-at-tap
+call sequence collapses `CREATING` out of `useClipSelection` (3-state machine); one local-echo +
+commit-on-blur text pattern for both editors (`closeWithCommit` handles Escape/X/Done); a new
+`regionWriteQueue.js` per-region FIFO (modelled on, not adopting, `actionClient.js`) with
+`awaitRegionWrites` exposed on the container API for Frame to await; `DeletePlayButton` extracted
+as the one sanctioned 2nd-copy abstraction; 15 retired symbols each mapped to the test file that
+pins it today plus the replacement assertion (rewrite, not delete). 4 additions beyond the task
+file's own ask, each flagged: `NEW_PLAY_DEFAULT_RATING` (resolves a silent 4-vs-3 `DEFAULT_RATING`
+collision), `handleDeletePlayFromEditor` must close+deselect before deleting, 4 extra retirement
+rows, 3 extra e2e specs needing locator updates. Structurally closes the T9630 stale-closure race
+that `annotate.md` had flagged as open/unconfirmed. Backend: zero changes needed (verified).
+Decision artifact published: https://claude.ai/artifact/QckNNXNcubCBajm66vexyT. Status ->
+WAITING ON USER.
 
 ## Acceptance Criteria
 
