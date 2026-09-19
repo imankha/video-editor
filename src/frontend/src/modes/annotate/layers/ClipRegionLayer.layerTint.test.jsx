@@ -11,33 +11,40 @@ beforeEach(() => {
   };
 });
 
-// T5700: marker tint is a SECONDARY cue (colored underline foot) — rating stays
-// the primary hue (background), never overwritten by the layer color.
+// T5700: layer tint is a SECONDARY cue — rating stays the primary hue (the disc
+// icon), never overwritten by the layer color. T10430: the cue moved from a
+// fixed-width underline foot on the marker to a span bar covering the clip's
+// real startTime..endTime range along the track.
 describe('ClipRegionLayer — layer tint (T5700)', () => {
-  it('tints a My Athlete marker cyan and a Team marker amber, without changing the rating background', () => {
+  it('draws a cyan span for a My Athlete clip and an amber span for a Team clip, each over its real time range', () => {
     const regions = [
       { id: 'mine', startTime: 0, endTime: 5, rating: 4, my_athlete: true },
       { id: 'team', startTime: 10, endTime: 15, rating: 4, my_athlete: false },
     ];
     render(<ClipRegionLayer regions={regions} duration={100} selectedRegionId={null} onSelectRegion={() => {}} />);
 
-    const badges = screen.getAllByText('!'); // rating-4 notation, both markers
-    expect(badges).toHaveLength(2);
+    // Both markers are the same rating-4 disc; the layer never changes the disc color.
+    const icons = screen.getAllByTestId('rating-icon');
+    expect(icons).toHaveLength(2);
+    expect(icons.map((i) => i.dataset.rating)).toEqual(['4', '4']);
+    expect(screen.getAllByText('!')).toHaveLength(2); // notation kept for a11y/textContent
 
-    const mineStyle = badges[0].style;
-    const teamStyle = badges[1].style;
-    // Same rating background on both — layer never overwrites the primary hue.
-    expect(mineStyle.backgroundColor).toBe(teamStyle.backgroundColor);
-    // Distinct layer-color underline foot.
-    expect(mineStyle.borderBottom).toContain('rgb(6, 182, 212)'); // cyan-500 #06b6d4
-    expect(teamStyle.borderBottom).toContain('rgb(245, 158, 11)'); // amber-500 #f59e0b
+    const spans = screen.getAllByTestId('clip-span');
+    expect(spans).toHaveLength(2);
+    expect(spans[0].style.backgroundColor).toBe('rgb(6, 182, 212)'); // cyan-500 #06b6d4
+    expect(spans[1].style.backgroundColor).toBe('rgb(245, 158, 11)'); // amber-500 #f59e0b
+    // 0-5s and 10-15s of a 100s track.
+    expect(spans[0].style.left).toBe('0%');
+    expect(spans[0].style.width).toBe('5%');
+    expect(spans[1].style.left).toBe('10%');
+    expect(spans[1].style.width).toBe('5%');
   });
 
-  it('a legacy my_athlete=null marker tints as My Athlete (cyan), matching the ?? true rule', () => {
+  it('a legacy my_athlete=null clip spans as My Athlete (cyan), matching the ?? true rule', () => {
     const regions = [{ id: 'legacy', startTime: 0, endTime: 5, rating: 3, my_athlete: null }];
     render(<ClipRegionLayer regions={regions} duration={100} selectedRegionId={null} onSelectRegion={() => {}} />);
-    const badge = screen.getByText('!?');
-    expect(badge.style.borderBottom).toContain('rgb(6, 182, 212)');
+    expect(screen.getByTestId('rating-icon').dataset.rating).toBe('3');
+    expect(screen.getByTestId('clip-span').style.backgroundColor).toBe('rgb(6, 182, 212)');
   });
 
   // T6400: the tooltip no longer names the layer (user: "we should rely on coloring

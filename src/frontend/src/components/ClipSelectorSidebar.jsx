@@ -3,8 +3,8 @@ import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, Check, Cro
 import { ClipLibraryModal } from './ClipLibraryModal';
 import { UploadClipModal } from './UploadClipModal';
 import { Button } from './shared/Button';
-import { getRatingDisplay, BRILLIANT_RATING } from './shared/clipConstants';
-import { BrilliantIcon } from './shared/BrilliantIcon';
+import { getRatingDisplay } from './shared/clipConstants';
+import { RatingIcon } from './shared/RatingIcon';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { createGameLookup } from '../utils/gameNameLookup';
 import { clipCropKeyframes, clipSourceDuration } from '../utils/clipSelectors';
@@ -251,23 +251,9 @@ export function ClipSelectorSidebar({
                 </div>
 
                 {/* Rating badge (if clip has rating from annotate) */}
-                {hasRating && clip.rating === BRILLIANT_RATING && (
+                {hasRating && (
                   <div className="mr-2 flex-shrink-0" title={`Rating: ${clip.rating}/5`}>
-                    <BrilliantIcon size={20} />
-                  </div>
-                )}
-                {hasRating && clip.rating !== BRILLIANT_RATING && (
-                  <div
-                    className="px-1.5 py-0.5 mr-2 rounded font-bold text-xs flex-shrink-0"
-                    style={{
-                      backgroundColor: ratingInfo.badgeColor,
-                      color: '#ffffff',
-                      textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-                      border: '1px solid rgba(0,0,0,0.3)',
-                    }}
-                    title={`Rating: ${clip.rating}/5`}
-                  >
-                    {ratingInfo.notation}
+                    <RatingIcon rating={clip.rating} size={20} />
                   </div>
                 )}
 

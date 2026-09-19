@@ -2,8 +2,8 @@ import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Video } from 'lucide-react';
 import { generateClipName } from '../../../utils/clipDisplayName';
-import { RATING_NOTATION, RATING_BADGE_COLORS, BRILLIANT_RATING, getRatingLabel } from '../../../components/shared/clipConstants';
-import { BrilliantIcon } from '../../../components/shared/BrilliantIcon';
+import { RATING_BADGE_COLORS, getRatingLabel } from '../../../components/shared/clipConstants';
+import { RatingIcon } from '../../../components/shared/RatingIcon';
 import { ANNOTATE } from '../../../config/displayNames';
 import { formatInstant, PRECISION } from '../../../utils/timeFormat';
 
@@ -163,20 +163,45 @@ export default function ClipRegionLayer({
     >
       {/* Inner track area */}
       <div className="relative h-full">
+        {/* T10430: layer-colored span bar per clip, covering its REAL
+            startTime..endTime range along the track (was a fixed-width
+            underline foot on the marker). Hover/select highlights it. */}
+        {regions.map((region) => {
+          const isActive = region.id === selectedRegionId || region.id === hoveredRegionId;
+          const startPct = timeToPercent(region.startTime);
+          const widthPct = Math.max(timeToPercent(region.endTime) - startPct, 0);
+          return (
+            <div
+              key={`span-${region.id}`}
+              data-testid="clip-span"
+              data-region-id={region.id}
+              className="absolute rounded-full cursor-pointer transition-all duration-150"
+              style={{
+                left: `${startPct}%`,
+                width: `${widthPct}%`,
+                minWidth: '3px',
+                bottom: isActive ? '3px' : '4px',
+                height: isActive ? '5px' : '3px',
+                backgroundColor: layerColorFor(region),
+                opacity: isActive ? 1 : 0.8,
+                zIndex: isActive ? 6 : 5,
+              }}
+              onClick={(e) => handleMarkerClick(e, region.id)}
+              onMouseEnter={() => setHoveredRegionId(region.id)}
+              onMouseLeave={() => setHoveredRegionId(null)}
+            />
+          );
+        })}
+
         {/* Clip markers */}
         {regions.map((region) => {
           const isSelected = region.id === selectedRegionId;
           const isHovered = region.id === hoveredRegionId;
           const left = timeToPercent((region.startTime + region.endTime) / 2);
           const rating = region.rating || 3;
-          const notation = RATING_NOTATION[rating];
           const color = RATING_COLORS[rating];
-          // T10430: Brilliant renders the drawn disc icon; its marker box goes
-          // transparent so only the layer underline / angle accent frame it.
-          const isBrilliant = rating === BRILLIANT_RATING;
           // Use same fallback logic as ClipListItem
           const displayName = region.name || generateClipName(rating, region.tags || [], region.notes || '') || '';
-          const layerColor = layerColorFor(region);
           const layerName = layerNameFor(region);
           const isAngle = !!angleSequences && region.videoSequence != null
             && (angleSequences.has ? angleSequences.has(region.videoSequence) : angleSequences.includes?.(region.videoSequence));
@@ -214,35 +239,24 @@ export default function ClipRegionLayer({
                     height: isSelected ? '28px' : '20px',
                     backgroundColor: color,
                     border: '1px solid rgba(0,0,0,0.3)',
-                    borderBottom: `3px solid ${layerColor}`,
                     ...(isAngle && { borderTop: `2px solid ${ANGLE_ACCENT}` }),
                     boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                   }}
                 />
               </div>
-              {/* Desktop: rating notation badge */}
+              {/* Desktop: rating disc icon (T10430). No filled box: the layer
+                  is carried by the span bar under the track, an angle by a
+                  violet ring around the disc. */}
               <div
                 className={`
-                  hidden sm:block relative rounded font-bold transition-all duration-150
-                  ${isBrilliant ? 'px-0.5 pt-0.5' : 'px-1.5 py-0.5'}
-                  ${isSelected
-                    ? 'text-lg ring-2 ring-white shadow-lg'
-                    : 'text-sm hover:scale-110'
-                  }
+                  hidden sm:block relative rounded-full transition-all duration-150
+                  ${isSelected ? 'ring-2 ring-white' : 'hover:scale-110'}
                 `}
-                style={{
-                  backgroundColor: isBrilliant ? 'transparent' : color,
-                  color: '#ffffff',
-                  textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-                  border: isBrilliant ? '1px solid transparent' : '1px solid rgba(0,0,0,0.3)',
-                  borderBottom: `2px solid ${layerColor}`,
-                  ...(isAngle && { borderTop: `2px solid ${ANGLE_ACCENT}` }),
-                  boxShadow: isBrilliant ? 'none' : '0 1px 3px rgba(0,0,0,0.3)',
-                }}
+                style={isAngle ? { border: `2px solid ${ANGLE_ACCENT}` } : undefined}
                 title={isAngle ? `${getRatingLabel(rating)} — from an angle` : getRatingLabel(rating)}
                 aria-label={isAngle ? `${getRatingLabel(rating)} — angle clip` : getRatingLabel(rating)}
               >
-                {isBrilliant ? <BrilliantIcon size={isSelected ? 30 : 24} /> : notation}
+                <RatingIcon rating={rating} size={isSelected ? 30 : 24} />
                 {isAngle && (
                   <span
                     className="absolute -top-1.5 -right-1.5 flex items-center justify-center rounded-full bg-violet-600 text-white"

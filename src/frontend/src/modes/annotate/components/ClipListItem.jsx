@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Info, Play, Users, Share2, Video, Tag, StickyNote } from 'lucide-react';
-import { getRatingDisplay, getRatingLabel, BRILLIANT_RATING } from '../../../components/shared/clipConstants';
-import { BrilliantIcon } from '../../../components/shared/BrilliantIcon';
+import { getRatingDisplay, getRatingLabel } from '../../../components/shared/clipConstants';
+import { RatingIcon } from '../../../components/shared/RatingIcon';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { ANNOTATE } from '../../../config/displayNames';
 import { formatInstant, PRECISION } from '../../../utils/timeFormat';
@@ -78,7 +78,7 @@ const formatTime = (seconds) => formatInstant(seconds, PRECISION.SECOND);
  */
 export function ClipListItem({ region, index, isSelected, isPlaybackActive = false, onClick, isMobile = false, onViewDetails, onJumpToClip, gameClock = null, angleName = null }) {
   const rating = region.rating || 3;
-  const { notation, badgeColor, backgroundColor } = getRatingDisplay(rating);
+  const { badgeColor, backgroundColor } = getRatingDisplay(rating);
 
   // T3960: scroll the selected row into view so an auto-selection (e.g. the
   // reel's source clip when arriving from Framing) is visible even when it sits
@@ -122,31 +122,14 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
       }}
     >
       <div className={`flex items-center px-2 ${isMobile ? 'py-3' : 'py-1.5'}`}>
-        {/* Rating notation badge. T10430: Brilliant (5) is a drawn disc icon,
-            the other ratings stay notation text on a colored rectangle. */}
-        {rating === BRILLIANT_RATING ? (
-          <div
-            className={`${isMobile ? 'mr-2.5' : 'mr-2'} flex-shrink-0`}
-            title={getRatingLabel(rating)}
-            aria-label={getRatingLabel(rating)}
-          >
-            <BrilliantIcon size={isMobile ? 24 : 20} />
-          </div>
-        ) : (
-          <div
-            className={`${isMobile ? 'px-1.5 py-1 mr-2.5' : 'px-1 py-0.5 mr-2'} rounded font-bold text-xs flex-shrink-0`}
-            style={{
-              backgroundColor: badgeColor,
-              color: '#ffffff',
-              textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-              fontSize: isMobile ? '11px' : '10px',
-            }}
-            title={getRatingLabel(rating)}
-            aria-label={getRatingLabel(rating)}
-          >
-            {notation}
-          </div>
-        )}
+        {/* Rating badge: drawn disc icon for every rating (T10430). */}
+        <div
+          className={`${isMobile ? 'mr-2.5' : 'mr-2'} flex-shrink-0`}
+          title={getRatingLabel(rating)}
+          aria-label={getRatingLabel(rating)}
+        >
+          <RatingIcon rating={rating} size={isMobile ? 24 : 20} />
+        </div>
 
         {/* Layer chip (T5700): fixed left cluster, always visible */}
         <div className="mr-2 flex-shrink-0">
