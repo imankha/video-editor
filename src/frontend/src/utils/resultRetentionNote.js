@@ -1,9 +1,12 @@
-// T9870: the honest "your work is already saved" line shown above the post-export
-// completion action grid (FocusPublishActionBar / OverlayPublishActionBar).
+// T9870 / T10670: the honest "your work is already saved" reassurance for the
+// post-export completion bar (FocusPublishActionBar / OverlayPublishActionBar).
+// T10670 renders the returned string as a one-word "Saved" chip beside the
+// completion headline (was a green sentence above the grid); the deriver is
+// unchanged -- it still returns the RESULT_RETENTION value for the project's state.
 //
 // AC1: the backend finalizer persists the working/final video at export completion,
 // so the completion surface must confirm the result is durably retained privately --
-// making the quiet "Save draft" click visibly redundant, not the thing that saves.
+// making the quiet exit link visibly redundant, not the thing that saves.
 //
 // Derived ONCE from real project state via draftStage.getDraftStatus (the single
 // Draft/Private/Published source, T9860). This is a pure read; it triggers no write,

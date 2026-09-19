@@ -43,7 +43,9 @@ const LABELS = ['Publish', 'Reapply spotlight', 'Reapply Framing'];
 // names explicitly for the breakpoint landmine.
 async function gridColumnCount(bar) {
   return bar.evaluate((el) => {
-    const grid = el.querySelector(':scope > div');
+    // T10670: the bar's first child div is now the headline row; the tile grid is
+    // the element carrying the `grid` class.
+    const grid = el.querySelector('.grid');
     const cols = getComputedStyle(grid).gridTemplateColumns.trim();
     return cols.split(/\s+/).filter(Boolean).length;
   });
@@ -54,7 +56,7 @@ async function gridColumnCount(bar) {
 // nowrap title to overflow — the failure mode both landmines share.
 async function gridOverflowPx(bar) {
   return bar.evaluate((el) => {
-    const grid = el.querySelector(':scope > div');
+    const grid = el.querySelector('.grid');
     return grid.scrollWidth - grid.clientWidth;
   });
 }
@@ -74,8 +76,9 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
     }
     // The quiet Save-draft link is present but OUTSIDE the card grid.
     await expect(page.getByTestId('overlay-save-draft')).toBeVisible();
-    // Publish is the dominant PRIMARY (its card is the tinted/ringed cyan one).
-    await expect(page.getByTestId('overlay-choice-primary').getByRole('button', { name: 'Publish', exact: true })).toBeVisible();
+    // Publish is the dominant PRIMARY. T10670: the tile IS the button, so the
+    // "Publish" button carries the primary tile's data-testid directly.
+    await expect(page.getByRole('button', { name: 'Publish', exact: true })).toHaveAttribute('data-testid', 'overlay-choice-primary');
     // Reapply Framing carries the honest paid-re-export cost warning caption.
     await expect(bar.getByText(/uses credits/i)).toBeVisible();
     await saveEvidence(page, 'T9110-criterion-preview-actionbar-desktop');
