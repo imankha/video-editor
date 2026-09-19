@@ -27,7 +27,24 @@ export const ANNOTATE = {
   SAVE_PLAY_AND_CLIP: 'Save play and create clip', // N08 — save + produce a clip
   UPDATE_PLAY: 'Update play',              // N08 — edit-mode save
   CREATE_CLIP: 'Create clip',              // N09 — manual create-clip action
-  CLIP_CREATED: 'Clip created',            // N09 — created indicator
+  CLIP_CREATED: 'Clip created',            // N09 — created indicator (T10410: the clip badge's done label)
+  // T10410 (2026-09-18 user request, Option C of the decision artifact): the
+  // four play-progress badges beside the play name. Done/undone pairs share one
+  // noun each so the badge reads the same either way ("Play rated" / "Rate this
+  // play"). "Note" (not "description") is the field's existing label, kept for
+  // consistency per the user's ruling.
+  PLAY_RATED: 'Play rated',
+  RATE_PLAY: 'Rate this play',
+  PLAY_NAMED: 'Play named',
+  NAME_PLAY: 'Name this play',
+  NOTE_ADDED: 'Note added',
+  ADD_NOTE: 'Add a note',
+  // The clip badge's 5-star nudge (edit mode: creates the clip in place; create
+  // mode: saves the play and creates the clip in one gesture) and its dormant
+  // hover copy below 5 stars.
+  CREATE_CLIP_NUDGE_HINT: '5 stars! Create a clip',
+  SAVE_AND_CREATE_CLIP_NUDGE_HINT: '5 stars! Save the play and create a clip',
+  CLIP_BADGE_DORMANT_HINT: 'Rate the play 5 stars to create a clip',
   DELETE_CLIP: 'Delete clip',              // N14 — delete a play that has a clip
   DELETE_PLAY: 'Delete play',              // N14 — delete a bare play marker
   RENAME_CLIP: 'Rename clip',              // N15 — rename action

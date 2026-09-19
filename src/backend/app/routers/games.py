@@ -2466,6 +2466,10 @@ def load_annotations_from_db(game_id: int) -> list:
                 'start_time': row['start_time'],
                 'end_time': row['end_time'],
                 'name': name,
+                # T10410: `name` above is ALWAYS populated (generated when nothing is
+                # stored), so the editor's "Play named" badge needs the stored-vs-
+                # generated distinction explicitly. Same field as RawClipResponse.
+                'has_custom_name': bool(row['name']),
                 'rating': row['rating'],
                 'tags': tags,
                 'notes': row['notes'] or '',
