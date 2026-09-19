@@ -125,6 +125,24 @@ export default function ClipRegionLayer({
     // doesn't stay pinned to its pre-resize pixel position (T10391).
   }, [activeRegionId, regions, duration, trackWidth]);
 
+  // T10510: scrolling any ancestor (the page, a fullscreen strip, a sidebar)
+  // moves the marker in the viewport without touching activeRegionId/regions/
+  // duration/trackWidth, so the effect above never re-fires and the `fixed`
+  // tooltip is left pointing at its pre-scroll pixel position. Listen on
+  // window with capture so a scroll fired on ANY descendant scroll container
+  // is caught (scroll events don't bubble, but capture-phase listeners still
+  // see them travel down from window) and recompute directly off the DOM
+  // rather than waiting for a React state change that never comes.
+  useEffect(() => {
+    if (!activeRegionId) return undefined;
+    const recompute = () => {
+      const el = markerRefs.current.get(activeRegionId);
+      setAnchorRect(el ? el.getBoundingClientRect() : null);
+    };
+    window.addEventListener('scroll', recompute, true);
+    return () => window.removeEventListener('scroll', recompute, true);
+  }, [activeRegionId]);
+
   if (!duration) return null;
 
   // Mobile marker width: fit all clips without overlap
