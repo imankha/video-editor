@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useClipSelection, SELECTION_STATES } from './useClipSelection';
 
@@ -26,6 +26,21 @@ describe('useClipSelection', () => {
     it('derives isEditMode=false from NONE', () => {
       const { result } = renderHook(() => useClipSelection());
       expect(result.current.isEditMode).toBe(false);
+    });
+  });
+
+  // ============================================================================
+  // T10610: only 3 states exist now — CREATING/startCreating are gone
+  // ============================================================================
+
+  describe('T10610: CREATING is retired', () => {
+    it('SELECTION_STATES has exactly NONE/SELECTED/EDITING', () => {
+      expect(Object.keys(SELECTION_STATES).sort()).toEqual(['EDITING', 'NONE', 'SELECTED']);
+    });
+
+    it('startCreating is not exposed on the hook', () => {
+      const { result } = renderHook(() => useClipSelection());
+      expect(result.current.startCreating).toBeUndefined();
     });
   });
 
@@ -107,6 +122,22 @@ describe('useClipSelection', () => {
   });
 
   // ============================================================================
+  // TRANSITIONS: NONE → EDITING directly (T10610 create-at-tap: a play is
+  // created + selected atomically via editClip, with no CREATING stopover)
+  // ============================================================================
+
+  describe('NONE → EDITING (create-at-tap)', () => {
+    it('editClip from NONE goes straight to EDITING with the new clipId', () => {
+      const { result } = renderHook(() => useClipSelection());
+      act(() => result.current.editClip('new_clip'));
+
+      expect(result.current.selectionState.type).toBe(SELECTION_STATES.EDITING);
+      expect(result.current.selectedRegionId).toBe('new_clip');
+      expect(result.current.isOverlayOpen).toBe(true);
+    });
+  });
+
+  // ============================================================================
   // TRANSITIONS: EDITING → SELECTED (close overlay keeps selection)
   // ============================================================================
 
@@ -122,60 +153,25 @@ describe('useClipSelection', () => {
       expect(result.current.isOverlayOpen).toBe(false);
       expect(result.current.isEditMode).toBe(true);
     });
-  });
 
-  // ============================================================================
-  // TRANSITIONS: NONE → CREATING
-  // ============================================================================
-
-  describe('NONE → CREATING', () => {
-    it('startCreating transitions to CREATING', () => {
+    it('closeOverlay from EDITING reached via create-at-tap keeps the clip selected (never NONE)', () => {
       const { result } = renderHook(() => useClipSelection());
-      act(() => result.current.startCreating());
-
-      expect(result.current.selectionState.type).toBe(SELECTION_STATES.CREATING);
-    });
-
-    it('derives isOverlayOpen=true from CREATING', () => {
-      const { result } = renderHook(() => useClipSelection());
-      act(() => result.current.startCreating());
-      expect(result.current.isOverlayOpen).toBe(true);
-    });
-
-    it('derives selectedRegionId=null from CREATING', () => {
-      const { result } = renderHook(() => useClipSelection());
-      act(() => result.current.startCreating());
-      expect(result.current.selectedRegionId).toBeNull();
-    });
-
-    it('derives isEditMode=false from CREATING', () => {
-      const { result } = renderHook(() => useClipSelection());
-      act(() => result.current.startCreating());
-      expect(result.current.isEditMode).toBe(false);
-    });
-  });
-
-  // ============================================================================
-  // TRANSITIONS: CREATING → NONE (close overlay)
-  // ============================================================================
-
-  describe('CREATING → NONE (close overlay)', () => {
-    it('closeOverlay transitions from CREATING to NONE', () => {
-      const { result } = renderHook(() => useClipSelection());
-      act(() => result.current.startCreating());
+      act(() => result.current.editClip('new_clip'));
       act(() => result.current.closeOverlay());
 
-      expect(result.current.selectionState.type).toBe(SELECTION_STATES.NONE);
-      expect(result.current.isOverlayOpen).toBe(false);
+      // T10610 D6: closing never discards. There is no CREATING->NONE branch
+      // anymore because the play already exists by the time the editor is open.
+      expect(result.current.selectionState.type).toBe(SELECTION_STATES.SELECTED);
+      expect(result.current.selectionState.clipId).toBe('new_clip');
     });
   });
 
   // ============================================================================
-  // TRANSITIONS: EDITING + select different clip → EDITING(other)
+  // TRANSITIONS: EDITING + select different clip → SELECTED(other)
   // ============================================================================
 
-  describe('EDITING → EDITING (select different clip)', () => {
-    it('selectClip while EDITING transitions to EDITING with new clipId', () => {
+  describe('EDITING → SELECTED (select different clip)', () => {
+    it('selectClip while EDITING transitions to SELECTED with new clipId', () => {
       const { result } = renderHook(() => useClipSelection());
       act(() => result.current.editClip('clip_1'));
       act(() => result.current.selectClip('clip_2'));
@@ -204,20 +200,6 @@ describe('useClipSelection', () => {
   });
 
   // ============================================================================
-  // CREATING is immune to deselect
-  // ============================================================================
-
-  describe('CREATING is immune to deselectClip', () => {
-    it('deselectClip is a no-op when CREATING', () => {
-      const { result } = renderHook(() => useClipSelection());
-      act(() => result.current.startCreating());
-      act(() => result.current.deselectClip());
-
-      expect(result.current.selectionState.type).toBe(SELECTION_STATES.CREATING);
-    });
-  });
-
-  // ============================================================================
   // SELECTED → SELECTED (click different clip)
   // ============================================================================
 
@@ -240,7 +222,7 @@ describe('useClipSelection', () => {
   // (that auto-open was removed — see AnnotateContainer.handleToggleFullscreen);
   // this exercises the same SELECTED -> EDITING -> SELECTED transitions the way
   // an explicit "Edit play" click / overlay close now drive them.
-  describe('explicit edit-open/close scenarios', () => {
+  describe('explicit edit-open/close scenarios (REQ 8, T10400)', () => {
     it('SELECTED → editClip (Edit play click) → closeOverlay (overlay close) → SELECTED', () => {
       const { result } = renderHook(() => useClipSelection());
 
@@ -262,23 +244,22 @@ describe('useClipSelection', () => {
   });
 
   // ============================================================================
-  // Full scenario: create clip flow
+  // Full scenario: create-at-tap flow (T10610 replaces the old CREATING flow —
+  // the region+row are created BEFORE the editor opens, so editClip lands
+  // straight on EDITING; there is no intermediate "no clipId yet" state)
   // ============================================================================
 
-  describe('create clip flow', () => {
-    it('NONE → startCreating → selectClip (after save) → SELECTED', () => {
+  describe('create-at-tap flow (T10610)', () => {
+    it('NONE → editClip(newRegionId) lands directly on EDITING, never NONE/CREATING', () => {
       const { result } = renderHook(() => useClipSelection());
 
-      // Click "Add Clip" with no selection
-      act(() => result.current.startCreating());
-      expect(result.current.isOverlayOpen).toBe(true);
-      expect(result.current.selectedRegionId).toBeNull();
+      // Mark play tap: the container creates the region+row synchronously, then
+      // calls editClip(newRegion.id) via addClipRegion's onCreateSelect wiring.
+      act(() => result.current.editClip('new_clip'));
 
-      // After saving, addClipRegion calls onSelect which calls selectClip
-      act(() => result.current.selectClip('new_clip'));
-      expect(result.current.selectionState.type).toBe(SELECTION_STATES.SELECTED);
+      expect(result.current.selectionState.type).toBe(SELECTION_STATES.EDITING);
+      expect(result.current.isOverlayOpen).toBe(true);
       expect(result.current.selectedRegionId).toBe('new_clip');
-      expect(result.current.isOverlayOpen).toBe(false);
     });
   });
 });
