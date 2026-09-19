@@ -1,6 +1,6 @@
 # T10610: Implement autosave — create at Mark Play, persist per gesture, delete the Save/Update buttons
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-09-19
@@ -107,6 +107,19 @@ where it is more specific):
 ### Progress Log
 
 **2026-09-19**: Filed. Not started.
+
+**2026-09-19**: Implemented per T10600-design.md v2 in a container worker (14 ordered commits,
+58 files, +3243/-2736). All 15 § E retirement rows confirmed gone by grep with tests rewritten
+(not deleted); all 7 v2 mandatory tests verified red->green; Reviewer pass clean (`useEffect`
+audit, no new persistence path) with 3 minor findings fixed. Found and fixed a real bug along
+the way: an Escape-then-nested-blur race that could write a stale pre-revert value. 269 relevant
+tests green, lint clean, Branch CI green (frontend job; backend correctly skipped). Merged as
+PR #470 (commit 206ac3a2) per feedback_merge_when_provably_verified — provable by the red->green
+v2 test suite + CI green. **Owed:** live QA on staging (container had no docker/Postgres/
+live-stack, a precedented limitation also hit by T9630/T9810/T9820/T9830/T9850) — verify the
+"Save this play first?" dialog is gone and the full gesture-write contract works end-to-end on
+staging before considering this fully done. `.claude/knowledge/annotate.md` and
+`persistence-sync.md` updated with the new persistence contract.
 
 ## Acceptance Criteria
 
