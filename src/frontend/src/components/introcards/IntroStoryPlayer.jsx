@@ -95,6 +95,12 @@ export function IntroStoryPlayer({
   // update) (T6730 audit finding C).
   const regionRef = useRef(region);
   regionRef.current = region;
+  // T10680: native-fullscreen target for CollectionPlayer's Fullscreen button.
+  // The composite scrubber below is a SIBLING of CollectionPlayer's panel (its
+  // own fixed z-90 container), so fullscreen-ing the panel alone would drop the
+  // bar. This wrapper encloses BOTH, so native fullscreen keeps the scrubber
+  // visible. CollectionPlayer requests fullscreen on this via `fullscreenTarget`.
+  const fullscreenRef = useRef(null);
   // Where a boundary-crossing scrub should land inside the reels region —
   // applied by CollectionPlayer's own useStoryPlayback via goTo. Paired with
   // `landingToken` (MAJOR #4) so a repeat scrub to the SAME (index, fraction)
@@ -239,7 +245,12 @@ export function IntroStoryPlayer({
   }, [intro, introDurMs, durationsSec, onScrub]);
 
   return (
-    <>
+    // T10680: a layout-neutral wrapper (both children are `fixed inset-0`, so it
+    // collapses to zero flow height) that CollectionPlayer targets for NATIVE
+    // fullscreen via `fullscreenTarget` -- so the z-90 composite scrubber, a
+    // sibling of the z-70 panel, stays on screen in fullscreen instead of being
+    // dropped (a panel-only requestFullscreen renders only the panel subtree).
+    <div ref={fullscreenRef}>
       {/* BLOCKING #1: CompositeScrubber's own root has no position/z-index, so
           as a bare sibling of the fixed/z-layered region renderers below it
           painted BEHIND both (invisible + unclickable in the real browser --
@@ -266,6 +277,11 @@ export function IntroStoryPlayer({
         <CollectionPlayer
           reels={reels}
           renderScrubber={false}
+          // T10680: transport stays ON here -- this is the ONLY player the
+          // Published/Downloads tabs mount, and the user asked for controls on
+          // the published player. Native fullscreen targets the wrapper above so
+          // the composite scrubber survives.
+          fullscreenTarget={fullscreenRef}
           initialIndex={reelsLanding?.index ?? 0}
           initialSeekFraction={reelsLanding?.fraction ?? null}
           landingToken={landingToken}
@@ -273,7 +289,7 @@ export function IntroStoryPlayer({
           {...collectionPlayerProps}
         />
       )}
-    </>
+    </div>
   );
 }
 

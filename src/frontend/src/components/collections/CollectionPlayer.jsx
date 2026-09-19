@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { X, Download, Loader, Pencil, Scale, Share2, FolderInput } from 'lucide-react';
+import { X, Download, Loader, Pencil, Scale, Share2, FolderInput, Play, Pause, Maximize, Minimize } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { Z } from '../../constants/zLayers';
 import { RATIO } from '../../constants/aspectRatios';
@@ -100,6 +100,28 @@ const SWIPE_THRESHOLD_PX = 48;
  *                                     the correct reel segment while this component's OWN internal bar
  *                                     stays suppressed. Omitted -> no-op (every other caller keeps its
  *                                     own internal bar, which reads activeIndex/segmentProgress directly).
+ * @param {boolean=} transport     - T10680: default true. Adds the on-screen transport affordances a
+ *                                     finished-reel player should carry: a center play/pause glyph
+ *                                     inside the tap/swipe zone (persistent Play while paused, a Pause
+ *                                     flashed for one beat then faded on the play edge; pointer-events-none
+ *                                     so it never steals the center-tap toggle), plus header Play/Pause and
+ *                                     Fullscreen icon buttons before Close. Fullscreen = CSS expand
+ *                                     (`expanded` fills the panel and drops the actionBar footer) layered
+ *                                     with native `requestFullscreen` on the PANEL where available, and
+ *                                     iPhone's `video.webkitEnterFullscreen()` where it is not. Escape
+ *                                     leaves fullscreen first (closes only on a second press). When false
+ *                                     the glyph, both buttons, the expand state and the Escape guard are
+ *                                     all absent. Kept ON for every finished-reel caller including the
+ *                                     IntroStoryPlayer-mounted Published/Downloads players (see
+ *                                     `fullscreenTarget`); it is NOT opted out there.
+ * @param {object=} fullscreenTarget - T10680: optional ref to an ancestor element to request NATIVE
+ *                                     fullscreen on instead of the panel. IntroStoryPlayer needs this:
+ *                                     its composite scrubber is a SIBLING of the panel (a separate
+ *                                     fixed z-90 container), so native fullscreen on the panel alone
+ *                                     would drop the bar. It points this at a wrapper enclosing BOTH the
+ *                                     panel and the scrubber. Omitted -> native fullscreen targets the
+ *                                     panel (byte-identical for every standalone caller). The CSS
+ *                                     `expanded` path is unaffected either way.
  */
 export function CollectionPlayer({
   reels,
@@ -125,6 +147,8 @@ export function CollectionPlayer({
   reRankLoadingId,
   handleGlyph,
   renderScrubber = true,
+  transport = true,
+  fullscreenTarget = null,
 }) {
   const videoRef = useRef(null);
   const panelRef = useRef(null);
@@ -143,6 +167,10 @@ export function CollectionPlayer({
   const [loadError, setLoadError] = useState(false);
   const [stalled, setStalled] = useState(false);
   const [reloadNonce, setReloadNonce] = useState(0);
+  // T10680 transport: `expanded` drives the CSS fullscreen (panel fills, footer
+  // drops); `glyphFaded` fades the center glyph one beat after the play edge.
+  const [expanded, setExpanded] = useState(false);
+  const [glyphFaded, setGlyphFaded] = useState(false);
 
   const handleAllEnded = useCallback(() => onEnded?.(), [onEnded]);
   const handleReelChange = useCallback(
@@ -153,6 +181,7 @@ export function CollectionPlayer({
   const {
     activeIndex,
     activeReel,
+    isPlaying,
     segmentProgress,
     next,
     prev,
@@ -182,17 +211,87 @@ export function CollectionPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landingToken, initialSeekFraction]);
 
-  // Keyboard: arrows navigate, space toggles, escape closes.
+  // T10680 fullscreen. Primary mechanism is our CSS `expanded` (fills the panel,
+  // drops the footer — works everywhere); native fullscreen is layered on where
+  // the browser has it. On the PANEL (not the <video>) so our scrubber/header/
+  // glyph stay visible. iPhone Safari has no Element.requestFullscreen — its only
+  // fullscreen is the native video player via webkitEnterFullscreen; there we do
+  // NOT set `expanded` (the native player covers everything and returns cleanly).
+  // Every native call is guarded with ?. (jsdom has none).
+  const enterFullscreen = useCallback(() => {
+    const video = videoRef.current;
+    if (!document.fullscreenEnabled && typeof video?.webkitEnterFullscreen === 'function') {
+      video.webkitEnterFullscreen();
+      return;
+    }
+    setExpanded(true);
+    // Native fullscreen on the caller-provided ancestor when given (IntroStoryPlayer,
+    // whose composite scrubber sits OUTSIDE the panel), else the panel itself.
+    // requestFullscreen returns a promise that rejects when the browser refuses
+    // (no user activation, blocked in an iframe, etc.); swallow it — the CSS
+    // `expanded` fallback already gives the big view, so a refused native request
+    // must not surface as an unhandled rejection.
+    const target = fullscreenTarget?.current ?? panelRef.current;
+    target?.requestFullscreen?.()?.catch?.(() => {});
+  }, [fullscreenTarget]);
+
+  const exitFullscreen = useCallback(() => {
+    if (document.fullscreenElement) document.exitFullscreen?.()?.catch?.(() => {});
+    setExpanded(false);
+  }, []);
+
+  const toggleExpanded = useCallback(() => {
+    if (expanded) exitFullscreen();
+    else enterFullscreen();
+  }, [expanded, enterFullscreen, exitFullscreen]);
+
+  // Reflect a browser-initiated fullscreen exit (Esc, the browser's own control)
+  // back into `expanded` so the layout collapses when the native element leaves.
+  useEffect(() => {
+    if (!transport) return undefined;
+    const onFsChange = () => {
+      if (!document.fullscreenElement) setExpanded(false);
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, [transport]);
+
+  // Unmount while in native fullscreen: exit it so we don't leave the browser
+  // stuck fullscreen over whatever renders next.
+  useEffect(() => {
+    return () => {
+      if (document.fullscreenElement) document.exitFullscreen?.()?.catch?.(() => {});
+    };
+  }, []);
+
+  // T10680 glyph fade: persistent Play while paused; on the paused->playing edge
+  // flash the Pause glyph for one beat, then fade it out (600ms). One setTimeout,
+  // cleared on the next edge / unmount. No rAF, no new loop.
+  useEffect(() => {
+    if (!transport) return undefined;
+    if (!isPlaying) { setGlyphFaded(false); return undefined; }
+    setGlyphFaded(false);
+    const timer = setTimeout(() => setGlyphFaded(true), 600);
+    return () => clearTimeout(timer);
+  }, [transport, isPlaying]);
+
+  // Keyboard: arrows navigate, space toggles, escape closes. T10680 Escape guard:
+  // while expanded, Escape leaves fullscreen first and does NOT close — the player
+  // closes only on a second Escape (matches native fullscreen exit expectations).
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
       else if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
       else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
-      else if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+      else if (e.key === 'Escape') {
+        e.preventDefault();
+        if (transport && expanded) { exitFullscreen(); return; }
+        onClose();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [next, prev, togglePlay, onClose]);
+  }, [next, prev, togglePlay, onClose, transport, expanded, exitFullscreen]);
 
   // Modal contract: lock background scroll while the player is open so the
   // page behind can't move under the fixed overlay. Restored on close/unmount.
@@ -328,7 +427,9 @@ export function CollectionPlayer({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`fixed inset-0 ${Z.PLAYER} bg-black flex flex-col select-none outline-none md:inset-12 md:rounded-xl md:overflow-hidden`}>
+        className={`fixed inset-0 ${Z.PLAYER} bg-black flex flex-col select-none outline-none ${
+          expanded ? 'rounded-none' : 'md:inset-12 md:rounded-xl md:overflow-hidden'
+        }`}>
       {/* Segmented progress bar — each segment is a scrub target: hover shows the
           reel name, click jumps to that reel and seeks to the clicked fraction.
           The visible bar stays 4px; a taller transparent hit region (py-2) makes
@@ -463,6 +564,35 @@ export function CollectionPlayer({
               className={reRankLoadingId === activeReel.id ? '[&_svg]:animate-spin' : ''}
             />
           ) : null}
+          {/* T10680: header transport — Play/Pause + Fullscreen, same ghost/sm/
+              iconOnly shape as Re-edit/Re-rank/Close, appended immediately BEFORE
+              Close. coarse-pointer:min-h-11 floors the touch target to 44px.
+              Present only when `transport` (default true); absent for the
+              IntroStoryPlayer opt-out so that caller is byte-identical. */}
+          {transport && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={isPlaying ? Pause : Play}
+                iconOnly
+                onClick={togglePlay}
+                title={isPlaying ? 'Pause' : 'Play'}
+                aria-label={isPlaying ? 'Pause' : 'Play'}
+                className="coarse-pointer:min-h-11"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={expanded ? Minimize : Maximize}
+                iconOnly
+                onClick={toggleExpanded}
+                title={expanded ? 'Exit fullscreen' : 'Fullscreen'}
+                aria-label={expanded ? 'Exit fullscreen' : 'Fullscreen'}
+                className="coarse-pointer:min-h-11"
+              />
+            </>
+          )}
           {/* T7730: icon-only close button had no text/aria-label, so it had no
               accessible name at all (screen readers + role-based selectors could
               not find it). */}
@@ -526,6 +656,25 @@ export function CollectionPlayer({
           </div>
         )}
 
+        {/* T10680: center play/pause glyph, INSIDE the tap/swipe container so it
+            never intercepts the center-tap toggle (pointer-events-none). Persistent
+            Play at rest while paused (also the cue when the browser blocks unmuted
+            autoplay); a Pause flashed for one beat then faded after the play edge.
+            aria-hidden — the accessible control is the header button above. */}
+        {transport && (
+          <div
+            data-testid="collection-player-play-glyph"
+            aria-hidden="true"
+            className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-500 ${
+              glyphFaded ? 'opacity-0' : 'opacity-100'
+            }`}
+          >
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm ring-1 ring-white/20">
+              {isPlaying ? <Pause size={32} /> : <Play size={32} className="ml-1" />}
+            </div>
+          </div>
+        )}
+
         {/* Per-reel title overlay, fades in on reel change */}
         {activeReel.name && (
           <div
@@ -541,8 +690,10 @@ export function CollectionPlayer({
 
       {/* T8390: optional full-width footer rendered after the video area — the
           mirror of statusBanner (header side). The caller (FocusScreen) owns
-          content/behavior; this component just reserves the slot. */}
-      {actionBar}
+          content/behavior; this component just reserves the slot. T10680: while
+          `expanded` (fullscreen), the footer is dropped so the portrait video
+          fills the panel; header + scrubber stay. */}
+      {expanded ? null : actionBar}
 
       <style>{`
         @keyframes collectionPlayerTitleFade {
