@@ -1,6 +1,6 @@
 # T10420: Mobile "Edit Play" sheet anchored to the wrong containing block
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-18
@@ -58,8 +58,8 @@ inside those wrappers (a new mobile sheet, popover, etc.) would hit the same tra
    these don't exercise real CSS layout in jsdom, so they confirm no regression to render logic
    but do NOT independently confirm the positioning fix itself.
 4. [x] UI designer agent opinion sought (see Progress Log).
-5. [ ] User to verify on an actual mobile device/viewport that the sheet now sits flush against
-   the real bottom of the screen with the title/scrub bar visible at the top.
+5. [x] Skipped by user request ("please just merge in") — merged on code-level fix +
+   UI-designer review confidence instead of a device verification pass; see Progress Log.
 
 ### Progress Log
 
@@ -80,10 +80,19 @@ surfaced, not yet actioned:
 Scrim addition intentionally NOT done in this task — it's a new visual affordance the user didn't
 ask for, not a fix, and deserves its own explicit go-ahead.
 
+**Merged 2026-09-18 (user: "please just merge in"):** local master verified == origin/master
+before merging (no divergence). Merged `--no-ff` into master, no conflicts, 51/51 curated tests
+re-run green post-merge. Pushed to `origin/master`. This was NOT independently visually verified
+on a real mobile device before merging — the user accepted the code-level fix + fresh-context
+UI-designer review as sufficient to land, understanding automated tests can't exercise the actual
+CSS containing-block behavior. If the sheet still looks wrong on-device, reopen this task.
+
 ## Acceptance Criteria
 
 - [x] The "Edit Play" mobile sheet's `fixed`/`bottom-0` resolves against the real viewport, not an
       intermediate `backdrop-filter` ancestor.
 - [x] No behavior/prop changes to `AnnotateFullscreenOverlay`; lint clean; curated tests green.
 - [ ] User confirms on a real mobile viewport that all elements (title, scrub bar, name, category,
-      disclosure, Update/Cancel) are visible with no dead space below.
+      disclosure, Update/Cancel) are visible with no dead space below. **Not yet confirmed** —
+      shipped to staging on code-level confidence per user's merge request; revisit if the sheet
+      still looks off on-device.
