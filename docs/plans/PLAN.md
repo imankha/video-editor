@@ -255,6 +255,20 @@ CONTIGUOUS.
 | T10620 | ↳ [Mobile portrait: compact editor strip under a visible video](tasks/play-editor-autosave/T10620-mobile-portrait-compact-strip.md) | 7 | 4 | 1.8 | TODO | [ ] | Epic 3/4, M-tier, blocked by T10610. Extends the shipped `landscape-inline` strip to portrait, rendered IN FLOW under the video card (the `fixed ... max-h-[85vh]` sheet existed only to pin the now-deleted Save footer, T8140; in-flow also retires the T10420 containing-block landmine here). Acceptance bar is measured: video on-screen height with the editor open == closed at 393x852 / 375x667 / 360x740. Overflow fields go behind the existing Notes-and-Tags disclosure popup. Visual -> user test gate with screenshots; real-device iOS check owed. |
 | T10630 | ↳ [ActionBand stacks on narrow widths (Focus/Overlay export bar)](tasks/play-editor-autosave/T10630-action-band-mobile-stack.md) | 5 | 1 | 5.0 | STAGING | [ ] | Epic 4/4, S-tier, file-disjoint (only `components/ActionBand.jsx` + a new unit test). `flex-col sm:flex-row` with CTA first on mobile, status/cost as full-width centered lines; desktop byte-identical. Covers Focus AND Overlay (shared component). T4880's reachability spec must keep passing. Provable -> merge when green. |
 
+### Milestone: Focus Result Loop (user-ordered 2026-09-19)
+
+**Filed 2026-09-19 from the user's own session.** Two halves of one complaint about what happens
+AFTER a framing render: the app forgets the video it just made you, and the one action that says
+"no spotlight" walks you through the Spotlight editor anyway. Both are Focus-side only, frontend
+only, no schema. **Strict order T10650 -> T10660** (shared file `src/frontend/src/screens/FocusScreen.jsx`,
+so they cannot run in parallel). T10650 carries the user's two design rulings (D1/D2 in the task
+file); T10660 carries the verified root cause and supersedes T9740's readiness-poll mechanism.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T10650 | [Focus CTA becomes "Back to Preview" when the current framing is already rendered](tasks/T10650-back-to-preview-cta.md) | 7 | 3 | 2.3 | TODO | [ ] | 1/2, M-tier. Re-entering Focus after a render offers only "Generate Framing", so seeing your own video again costs credits for a byte-identical re-render. New pure `framingCtaState.js` derives state from `project.working_video_id` + a durable staleness read (`working_clips.exported_at IS NULL`, survives reload) + the in-session `framingChangedSinceExport`. Unchanged: "Back to Preview" REPLACES the CTA and the cost cell reads "No credits needed" (user ruling D2); changed: "Generate Framing" returns with a ghost "Back to Preview" in the band's left cell (D1). Reopens the SAME `focusCompletionStore` preview, no second surface. |
+| T10660 | ["Publish without spotlight" must never route the user through the Overlay editor](tasks/T10660-publish-without-spotlight-skips-overlay.md) | 6 | 3 | 2.0 | TODO | [ ] | 2/2, M-tier, blocked by T10650 (shared file). Root cause verified: `handlePublish` does `setEditorMode('overlay')` purely so T9740's readiness poll can find OVERLAY's mounted export button, but `POST /api/export/render-overlay` is fully backend-authoritative (`{project_id, export_id, effect_type}`; the renderer reads `working_videos`). Fire it headlessly from Focus via a small `startOverlayPublishRender.js`, keep the preview open with `publishLoading`, widen `handleOverlayExportCompletion`'s navigation gate to FRAMING, delete `scheduleExportWhenReady.js` + `overlayExportButtonRef`. Publish-intent stake stays as the double-delivery idempotency token. |
+
 ## Single-Server Priority (2026-07-18; durability re-escalated 2026-07-24)
 
 The stack is currently ONE server. **Correction (2026-07-24): the durability epic is NOT safely
