@@ -16,8 +16,9 @@ import { toast } from '../components/shared';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
-import { FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST } from '../config/displayNames';
+import { FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST, FOCUS_PREVIEW } from '../config/displayNames';
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
+import { deriveFramingCtaState } from '../utils/framingCtaState';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { resultRetentionNote } from '../utils/resultRetentionNote';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
@@ -96,6 +97,9 @@ export function FocusScreen({
   // T740: outdated clips dialog and state removed — framing always uses latest boundaries
   // Mobile sidebar toggle
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  // T10650: spinner while resolveWorkingVideoPreviewUrl resolves the "Back to
+  // Preview" URL. Ephemeral gesture state, never persisted.
+  const [backToPreviewLoading, setBackToPreviewLoading] = useState(false);
   // T8390: post-export preview + publish-exit action bar (overlay is an offer,
   // not a stage; the preview mounts BEFORE any choice, replacing T8520's
   // choose-then-preview card with preview-first per the approved design).
@@ -1096,6 +1100,19 @@ export function FocusScreen({
 
     setFramingChangedSinceExport(false);
 
+    // T10650: the render just stamped working_clips.exported_at server-side, but
+    // our in-memory clips still carry the pre-render version (an in-session edit
+    // to an exported clip mints a new version with exported_at NULL, fetched at
+    // edit time). Without this refetch the durable staleness signal stays NULL in
+    // memory, so deriveFramingCtaState would read "stale" and show "Generate
+    // Framing" instead of "Back to Preview" until a reload. Part of the
+    // completion gesture flow (a read, not reactive persistence).
+    try {
+      await fetchProjectClips();
+    } catch (err) {
+      console.warn('[FocusScreen] Failed to refresh clips after export (continuing):', err);
+    }
+
     if (onProceedToOverlay) {
       try {
         await onProceedToOverlay(renderedVideoBlob, clipMetadata);
@@ -1110,7 +1127,7 @@ export function FocusScreen({
     if (!workingVideoSet) {
       console.error('[FocusScreen] Cannot offer overlay — working video not set');
     }
-  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, clipMetadataCache, globalAspectRatio, refreshProject, projectId, onExportComplete, setIsLoadingWorkingVideo, openPreview]);
+  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, clipMetadataCache, globalAspectRatio, refreshProject, projectId, onExportComplete, setIsLoadingWorkingVideo, openPreview, fetchProjectClips]);
 
   // T9790: acknowledge the completed framing job on the decision gesture. The
   // live completion path (offerFocusCompletionPreview) deliberately does NOT
@@ -1226,6 +1243,40 @@ export function FocusScreen({
     // T8390: defense-in-depth clear (see handleAddSpotlight comment above).
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
   }, [projectId, closePreview, acknowledgeCompletionJob]);
+
+  // T10650: the action-band CTA state. Derived at render time from the durable
+  // render pointer (project.working_video_id), the latest clips' exported_at
+  // stamps, and the in-session framingChangedSinceExport flag — persist NOTHING
+  // (the whole feature is derived, no redundant state). See deriveFramingCtaState
+  // for why exported_at is the durable staleness signal that survives a reload.
+  const framingCtaState = useMemo(
+    () => deriveFramingCtaState({
+      workingVideoId: project?.working_video_id,
+      clips,
+      framingChangedSinceExport,
+    }),
+    [project?.working_video_id, clips, framingChangedSinceExport]
+  );
+
+  // T10650: reopen the already-rendered working video (the "Back to Preview" CTA
+  // and its ghost twin). Resolve the URL in one HTTP call and reopen the SAME
+  // completion preview + four-choice action bar; NEVER a silent re-render. A null
+  // URL is loud (toast) and starts nothing. jobId is null so reopening an
+  // already-acknowledged completion acknowledges nothing.
+  const handleBackToPreview = useCallback(async () => {
+    if (backToPreviewLoading) return;
+    setBackToPreviewLoading(true);
+    try {
+      const url = await resolveWorkingVideoPreviewUrl(projectId);
+      if (!url) {
+        toast.error(FOCUS_PREVIEW.LOAD_FAILED);
+        return;
+      }
+      openPreview({ projectId, previewUrl: url, openMode: EDITOR_MODES.FRAMING, jobId: null });
+    } finally {
+      setBackToPreviewLoading(false);
+    }
+  }, [backToPreviewLoading, projectId, openPreview]);
 
   // Derive game name for selected clip
   const selectedClipGameName = useMemo(() => {
@@ -1453,6 +1504,11 @@ export function FocusScreen({
       onProceedToOverlay={handleProceedToOverlayInternal}
       onExportComplete={onExportComplete}
       saveCurrentClipState={framingSaveCurrentClipState}
+      framingCtaMode={framingCtaState.mode}
+      showBackToPreview={framingCtaState.showBackToPreview}
+      onBackToPreview={handleBackToPreview}
+      renderedAt={framingCtaState.renderedAt}
+      backToPreviewLoading={backToPreviewLoading}
       cropContextValue={cropContextValue}
     />
       </div>
