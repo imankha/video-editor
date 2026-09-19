@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Star, Pencil, AlignLeft, Clapperboard, Check, Loader2 } from 'lucide-react';
 import { BADGE_STATE, CLIP_BADGE } from '../playProgress';
 import { ANNOTATE } from '../../../config/displayNames';
-import { RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
+import { RATING_ADJECTIVES, RATING_NOTATION } from '../../../components/shared/clipConstants';
 
 /**
  * PlayProgressBadges (T10410) — four small badges that turn the play editor's
@@ -57,12 +57,24 @@ const DISC_STATE = {
   [BADGE_STATE.DORMANT]: 'border-dotted border-gray-600 text-gray-600 opacity-40',
 };
 
-function Disc({ state, size, Icon }) {
+// glyph: an optional notation string (e.g. "!!") that replaces Icon — used by
+// the rated badge once DONE, so the disc shows WHICH rating was given instead
+// of a generic star. Two-character glyphs (!!, !?, ??) run a touch smaller so
+// both characters clear the disc.
+function Disc({ state, size, Icon, glyph }) {
   const iconSize = ICON_SIZE[size];
   return (
     <span className={`${DISC_BASE} ${DISC_SIZE[size]} ${DISC_STATE[state]}`}>
       {state === BADGE_STATE.PENDING ? (
         <Loader2 size={iconSize} className="animate-spin" />
+      ) : glyph ? (
+        <span
+          aria-hidden="true"
+          className="font-black leading-none select-none"
+          style={{ fontSize: glyph.length > 1 ? iconSize * 0.75 : iconSize }}
+        >
+          {glyph}
+        </span>
       ) : (
         <Icon size={iconSize} />
       )}
@@ -127,6 +139,9 @@ const RATING_VALUES = [5, 4, 3, 2, 1];
  * control left — DetailsFields' old duplicate star row is gone), then
  * closes; so does an outside click or Escape. The open/closed flag is the
  * only state this file holds — the rating value itself is never held here.
+ * T10530: once DONE, the disc's glyph is the rating's own chess-style
+ * notation (`RATING_NOTATION`: !!/!/!?/?/??) instead of a generic star, so
+ * the collapsed badge shows WHICH rating was given at a glance.
  */
 function RatingBadge({ state, size, rating, onRatingChange }) {
   const [open, setOpen] = useState(false);
@@ -163,7 +178,7 @@ function RatingBadge({ state, size, rating, onRatingChange }) {
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1.5"
       >
-        <Disc state={state} size={size} Icon={Star} />
+        <Disc state={state} size={size} Icon={Star} glyph={state === BADGE_STATE.DONE ? RATING_NOTATION[rating] : undefined} />
       </button>
       {open && (
         <div

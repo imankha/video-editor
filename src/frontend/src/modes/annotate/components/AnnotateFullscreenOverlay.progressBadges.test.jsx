@@ -147,6 +147,17 @@ describe('strip header badges — clicks jump to the control', () => {
     expect(badge('badge-clip').dataset.state).toBe('nudge');
   });
 
+  it('the done badge shows the rating\'s own chess notation, not a generic star (T10530)', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating: 1 }} />);
+    expect(badge('badge-rated').textContent).toBe('??');
+    fireEvent.click(badge('badge-rated'));
+    fireEvent.click(screen.getByRole('radio', { name: '3 stars - Interesting' }));
+    expect(badge('badge-rated').textContent).toBe('!?');
+    fireEvent.click(badge('badge-rated'));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
+    expect(badge('badge-rated').textContent).toBe('!!');
+  });
+
   it('the rated badge stays clickable once done, so the rating can be set again and again (T10520)', () => {
     // Edit mode: rated is already 'done' from the first render (any real
     // rating counts, not just non-default values).
