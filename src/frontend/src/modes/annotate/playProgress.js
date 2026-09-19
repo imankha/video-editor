@@ -62,12 +62,9 @@ export function isDefaultPlayName(name) {
 /**
  * @param {object} p
  * @param {number} p.rating            current form rating
- * @param {boolean} p.isEditMode       editing an existing (already-saved) play
- * @param {boolean} p.isRatingManuallyEdited  the rating control was touched this session (create mode)
  * @param {string} p.clipName          current form name
- * @param {boolean} p.isNameManuallyEdited  the editor's manual-edit flag
- * @param {string|null} p.loadedName   existingClip.name (edit mode) or null
- * @param {boolean} p.loadedHasCustomName  existingClip.hasCustomName (edit mode)
+ * @param {string|null} p.loadedName   existingClip.name
+ * @param {boolean} p.loadedHasCustomName  existingClip.hasCustomName
  * @param {string} p.notes             current form notes
  * @param {boolean} p.hasProject       existingClip.autoProjectId is set
  * @param {boolean} p.creating         a create-project call is in flight
@@ -75,10 +72,7 @@ export function isDefaultPlayName(name) {
  */
 export function getPlayProgress({
   rating,
-  isEditMode,
-  isRatingManuallyEdited,
   clipName,
-  isNameManuallyEdited,
   loadedName = null,
   loadedHasCustomName = false,
   notes,
@@ -88,7 +82,6 @@ export function getPlayProgress({
   const trimmedName = (clipName || '').trim();
   const nameChangedThisSession = loadedName == null || trimmedName !== (loadedName || '').trim();
   const named =
-    !!isNameManuallyEdited &&
     trimmedName.length > 0 &&
     !isDefaultPlayName(trimmedName) &&
     (nameChangedThisSession || !!loadedHasCustomName);
@@ -100,7 +93,11 @@ export function getPlayProgress({
   else clip = CLIP_BADGE.DORMANT;
 
   return {
-    rated: isEditMode || isRatingManuallyEdited,
+    // T10610: the editor is ALWAYS editing an already-created play now (D2 —
+    // create-at-tap means a play exists with a real rating from the moment
+    // the editor opens), so this badge is unconditionally done. No more
+    // create-mode "touched this session" gate to track.
+    rated: true,
     named,
     noted: (notes || '').trim().length > 0,
     clip,

@@ -95,7 +95,12 @@ async function uploadGameAndEnterAnnotate(page) {
   }, undefined, { timeout: 120000 });
 }
 
-/** Seek to a gap and open the "Mark play" form (ANNOTATE.MARK_PLAY, T9520). */
+/**
+ * Seek to a gap and tap "Mark play" (ANNOTATE.MARK_PLAY, T9520). T10610:
+ * the tap itself creates the region AND the backend row immediately (no
+ * blank form to fill out first) and opens the strip already in EDIT mode
+ * on the new play.
+ */
 async function openMarkPlayForm(page) {
   const candidates = [30, 45, 60, 20, 15, 8];
   const addBtn = page.getByTestId('annotate-primary-cta');
@@ -160,11 +165,17 @@ test('one time-format rule: drag + exact entry stay consistent, billing matches 
   expect(afterDragText).not.toBe(beforeDragText);
   console.log(`[T9480:qa] drag proof: "${beforeDragText}" -> "${afterDragText}"`);
 
-  // --- Exact entry: type 2.9 into the start field (AC2).
+  // --- Exact entry: type 2.9 into the start field (AC2). T10610: the play
+  // already exists (create-at-tap) and this Enter commit PERSISTS immediately
+  // via TrimTimeField's onCommitComplete -> ClipScrubRegion's onDragEnd ->
+  // {startTime, endTime} -- no Save click involved, and none exists anymore.
   await form.getByTestId('trim-field-start').click();
   const startInput = form.getByTestId('trim-field-input-start');
   await startInput.fill('2.9');
-  await startInput.press('Enter');
+  const [trimPut] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/api/clips/raw/') && r.request().method() === 'PUT'),
+    startInput.press('Enter'),
+  ]);
   await page.waitForTimeout(300);
 
   const startReadout = await form.getByTestId('trim-field-start').innerText();
@@ -178,34 +189,30 @@ test('one time-format rule: drag + exact entry stay consistent, billing matches 
   expect(spanReadout).not.toMatch(/credit/i);
   console.log(`[T9480:qa] start=${startReadout} end=${endReadout} span=${spanReadout}`);
 
-  // --- Save the clip, then verify the Focus export estimate + billable
-  // disclosure match what would actually be charged. A 4/5-star rating
-  // offers "Create an editable clip" (produces a Focus-able project); fall
-  // back to a plain "Save play" for lower ratings.
-  const saveButton = form.locator('button:has-text("Create an editable clip")').first();
-  const plainSaveButton = form.locator('button:has-text("Save play")').first();
-  if (await saveButton.isVisible().catch(() => false)) {
-    await saveButton.click();
-  } else if (await plainSaveButton.isVisible().catch(() => false)) {
-    await plainSaveButton.click();
-  }
-  await page.waitForTimeout(1500);
-
-  // The play saved above may not yet have produced a raw_clip (a play and its
-  // editable clip are two separate DB rows) -- the strip now shows "Create
-  // clip" in edit mode if so; click it to guarantee a raw_clip exists.
-  const createClipButton = form.locator('button:has-text("Create clip")').first();
-  if (await createClipButton.isVisible().catch(() => false)) {
-    await createClipButton.click();
-    await page.waitForTimeout(1500);
-  }
-
+  // --- The committed trim actually reached the server: read the clip back
+  // and confirm reopening the play (no click that could be mistaken for a
+  // save) shows the SAME value the readout showed above.
+  const clipId = trimPut.url().match(/\/clips\/raw\/(\d+)/)[1];
   const clips = await page.evaluate(async () => {
     const res = await fetch('/api/clips/raw');
     return res.ok ? await res.json() : [];
   });
-  expect(clips.length).toBeGreaterThan(0);
-  const savedClip = clips[clips.length - 1];
+  const savedClip = clips.find((c) => String(c.id) === String(clipId));
+  expect(savedClip).toBeTruthy();
+  expect(savedClip.start_time).toBeCloseTo(2.9, 1);
+
+  // Close and reopen the play (Done, then re-select + Edit play) -- the
+  // formatted readout must reflect the PERSISTED value, not a stale local echo.
+  await form.getByRole('button', { name: 'Done' }).click();
+  await page.waitForTimeout(500);
+  await page.getByTestId('annotate-primary-cta').click();
+  await page.waitForTimeout(800);
+  const reopenedForm = page.getByTestId('annotate-editor-strip');
+  await expect(reopenedForm).toBeVisible({ timeout: 5000 });
+  expect(await reopenedForm.getByTestId('trim-field-start').innerText()).toBe('0:02.9');
+
+  // --- Verify the Focus export estimate + billable disclosure match what
+  // would actually be charged for the persisted span.
   const exactSeconds = savedClip.end_time - savedClip.start_time;
   const expectedCredits = roundCreditsHalfUp(exactSeconds);
   console.log(`[T9480:qa] saved clip span=${exactSeconds}s -> expected ${expectedCredits} credits`);

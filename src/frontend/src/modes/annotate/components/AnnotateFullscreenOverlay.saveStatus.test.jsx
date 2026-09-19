@@ -1,11 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
 
-// T9630 AC3: Unsaved/Saving/Saved derived from the REAL persistence outcome of
-// the Save gesture's promise (onCreateClip/onUpdateClip resolving true/false),
-// never asserted. A failed save must show the error state, retain every field
-// exactly as typed, and NOT close/resume.
+// T10610 § C.5: there is no more local saveStatus derived from a Save-button
+// click. The `writeStatus` PROP (owned by AnnotateContainer, reflecting the
+// per-gesture write chain's outcome) drives SaveStatusBadge directly.
+// 'unsaved' is retired entirely — nothing is ever "unsaved" once every
+// control autosaves on its own gesture (SAVE_STATUS_COPY.unsaved is deleted
+// from the component). Replaces .explicitOutcomes.test.jsx's save-status
+// coverage per design doc § E row 3.
 
 function mockViewport(matches) {
   window.matchMedia = (query) => ({
@@ -13,12 +16,6 @@ function mockViewport(matches) {
     addEventListener: () => {}, removeEventListener: () => {},
     addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
   });
-}
-
-function deferred() {
-  let resolve;
-  const promise = new Promise((res) => { resolve = res; });
-  return { promise, resolve };
 }
 
 const existingClip = {
@@ -30,74 +27,53 @@ const baseProps = {
   currentTime: 30,
   videoDuration: 6000,
   existingClip,
-  onCreateClip: () => {},
-  onResume: () => {},
+  onUpdateClip: () => Promise.resolve({ saveOk: true }),
   onClose: () => {},
   onSeek: () => {},
   videoController: {},
-  surface: 'inline_desktop',
-  layout: 'strip',
+  onDeleteClip: () => {},
+  onAwaitWrites: () => Promise.resolve(true),
 };
 
-describe('AnnotateFullscreenOverlay — Unsaved/Saving/Saved (T9630 AC3)', () => {
-  it('shows "Saving..." while the update promise is pending', async () => {
+describe('AnnotateFullscreenOverlay — SaveStatusBadge driven by the writeStatus prop (T10610 § C.5)', () => {
+  it('idle (default) renders no status badge', () => {
     mockViewport(false);
-    const { promise, resolve } = deferred();
-    const onUpdateClip = vi.fn(() => promise);
-    render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Update play' }));
-    expect((await screen.findByTestId('save-status')).textContent).toBe('Saving...');
-    resolve(true);
-    await waitFor(() => expect(screen.getByTestId('save-status').textContent).toBe('Saved'));
-  });
-
-  it('a rejected/failed save shows an error state and does NOT close the editor', async () => {
-    mockViewport(false);
-    const onUpdateClip = vi.fn(() => Promise.resolve(false));
-    const onResume = vi.fn();
-    render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} onResume={onResume} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Update play' }));
-    await waitFor(() => expect(screen.getByTestId('save-status').textContent).toMatch(/couldn't save/i));
-    expect(onResume).not.toHaveBeenCalled();
-    // The form is still on screen with the SAME clip, untouched.
-    expect(screen.getByText('My banger')).toBeTruthy();
-  });
-
-  it('a save that throws is treated the same as a failed save (error, stays open)', async () => {
-    mockViewport(false);
-    const onUpdateClip = vi.fn(() => Promise.reject(new Error('network down')));
-    const onResume = vi.fn();
-    render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} onResume={onResume} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Update play' }));
-    await waitFor(() => expect(screen.getByTestId('save-status').textContent).toMatch(/couldn't save/i));
-    expect(onResume).not.toHaveBeenCalled();
-  });
-
-  it('a successful save closes/resumes as before', async () => {
-    mockViewport(false);
-    const onUpdateClip = vi.fn(() => Promise.resolve(true));
-    const onResume = vi.fn();
-    render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} onResume={onResume} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Update play' }));
-    await waitFor(() => expect(onResume).toHaveBeenCalledTimes(1));
-  });
-
-  it('editing a field after a successful save shows "Unsaved changes" again (real derived state, not a stale "Saved")', async () => {
-    mockViewport(false);
-    const onUpdateClip = vi.fn(() => Promise.resolve(true));
-    // Use a non-closing layout path isn't available for edit mode (edit always
-    // resumes/closes) — assert against the pre-save dirty detection instead,
-    // which is the same `hasUnsavedEdits()` the badge reads.
-    render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} />);
-    // T10520: rating is set via the rated badge's popup picker.
-    fireEvent.click(screen.getByTestId('badge-rated'));
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
-    expect(screen.getByTestId('save-status').textContent).toBe('Unsaved changes');
-  });
-
-  it('a freshly opened, untouched edit form shows no status (never claims saved before any save attempt)', () => {
-    mockViewport(false);
-    render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={() => Promise.resolve(true)} />);
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
     expect(screen.queryByTestId('save-status')).toBeNull();
+  });
+
+  it('saving renders "Saving..."', () => {
+    mockViewport(false);
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" writeStatus="saving" />);
+    expect(screen.getByTestId('save-status').textContent).toBe('Saving...');
+  });
+
+  it('saved renders "Saved"', () => {
+    mockViewport(false);
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" writeStatus="saved" />);
+    expect(screen.getByTestId('save-status').textContent).toBe('Saved');
+  });
+
+  it('error renders the failure copy', () => {
+    mockViewport(false);
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" writeStatus="error" />);
+    expect(screen.getByTestId('save-status').textContent).toMatch(/couldn't save/i);
+  });
+
+  it('never renders "Unsaved changes" — the whole concept is retired', () => {
+    mockViewport(false);
+    for (const writeStatus of ['idle', 'saving', 'saved', 'error']) {
+      const { unmount } = render(
+        <AnnotateFullscreenOverlay {...baseProps} layout="strip" writeStatus={writeStatus} />
+      );
+      expect(screen.queryByText('Unsaved changes')).toBeNull();
+      unmount();
+    }
+  });
+
+  it('the formBody (overlay) layout also reflects writeStatus', () => {
+    mockViewport(false);
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="overlay" writeStatus="error" />);
+    expect(screen.getByTestId('save-status').textContent).toMatch(/couldn't save/i);
   });
 });

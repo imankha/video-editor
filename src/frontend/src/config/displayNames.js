@@ -17,15 +17,12 @@ export const ANNOTATE = {
   // N05 helper: the default capture window is 6s before + 2s after the tap = 8s
   // (DEFAULT_CLIP_BEFORE + DEFAULT_CLIP_AFTER, single-sourced in clipConstants.js — T9840).
   MARK_PLAY_HELPER: 'Captures 6 seconds before and 2 after',
-  MARKING_PLAY_TITLE: 'Marking a play',    // N05 — create-editor header title
   PLAYS_HEADING: 'Plays',                  // N06 — sidebar list heading
   // N07 — create-an-editable-clip toggle. Positive polarity both states (T9450):
   // ON produces a clip, OFF just saves the play. Never a "Don't …" double negative.
   CREATE_EDITABLE_CLIP: 'Create an editable clip',
   JUST_SAVE_PLAY: 'Just save this play',
-  SAVE_PLAY: 'Save play',                  // N08 — save a play only
   SAVE_PLAY_AND_CLIP: 'Save play and create clip', // N08 — save + produce a clip
-  UPDATE_PLAY: 'Update play',              // N08 — edit-mode save
   CREATE_CLIP: 'Create clip',              // N09 — manual create-clip action
   CLIP_CREATED: 'Clip created',            // N09 — created indicator (T10410: the clip badge's done label)
   // T10410 (2026-09-18 user request, Option C of the decision artifact): the
@@ -54,6 +51,10 @@ export const ANNOTATE = {
   DELETE_PLAY: 'Delete play',              // N14 — delete a bare play marker
   RENAME_CLIP: 'Rename clip',              // N15 — rename action
   CLIP_NAME: 'Clip name',                  // N15 — name field
+  // T10610: the play editor's sole close affordance now that there is no
+  // Save/Update button — commits any dirty text field first (closeWithCommit),
+  // then closes. Nothing is ever discarded.
+  DONE: 'Done',
   PREVIEW_PLAYS: 'Preview plays',          // N26 — playback-all button (was "Playback Annotations")
   PREVIEW_CLIP: 'Preview clip',            // N26 — per-clip preview (unchanged)
   LAYER_LABEL: 'Play category',            // N28 — the control formerly "Clip layer"/"Layer"
@@ -74,16 +75,14 @@ export const ANNOTATE = {
   // does; this reuses its "what Framing does" sentence verbatim.
   FRAME_THIS_CLIP_HINT: 'Framing focuses the camera on your player and lets you trim and add slo-mo to key moments.',
   KEEP_MARKING_PLAYS: 'Keep marking plays', // N41 — invitation dismiss secondary
-  // T10240/T10290 (N42): the two Framing-entry actions. "Frame"/"Save and Frame"
-  // is the VERB form of the Framing mode (MODE_NAMES.FRAMING = 'Framing', T9860) —
-  // deliberately NOT the old "Focus" mode name, and NOT the noun "Framing" (which
-  // would read "Framing clip"). FRAME_CLIP pairs with CREATE_CLIP as the two
-  // NO_PROJECT stage actions (create-only vs create-and-open-Framing, T10240);
-  // SAVE_AND_FRAME is the editor's create-then-open-Framing outcome (T10290 —
-  // replaces the old CREATE_EDITABLE_CLIP second button). Same verb-vs-noun split
-  // as FRAME_THIS_CLIP above, which is likewise a literal (not MODE_NAMES-derived).
+  // T10240 (N42): the Framing-entry action. "Frame" is the VERB form of the
+  // Framing mode (MODE_NAMES.FRAMING = 'Framing', T9860) — deliberately NOT
+  // the old "Focus" mode name, and NOT the noun "Framing" (which would read
+  // "Framing clip"). FRAME_CLIP pairs with CREATE_CLIP as the two NO_PROJECT
+  // stage actions (create-only vs create-and-open-Framing, T10240).
+  // T10610: SAVE_AND_FRAME (the editor's create-then-open-Framing outcome)
+  // is retired — there is no save gesture left to attach it to.
   FRAME_CLIP: 'Frame clip',                // N42 — NO_PROJECT create + open Framing
-  SAVE_AND_FRAME: 'Save and Frame',        // N42 — editor save + open Framing
   // T10450 (2026-09-18 user request): the T10310 main-screen row's NO_PROJECT
   // case splits FRAME_CLIP into two explicit outcomes instead of one button
   // that always both creates and navigates. "Frame Now" is FRAME_CLIP's old

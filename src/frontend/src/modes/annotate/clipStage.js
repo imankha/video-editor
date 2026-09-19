@@ -26,8 +26,7 @@ import { ANNOTATE } from '../../config/displayNames';
 export const CLIP_STAGE = {
   // The clip has no project yet — manual-create territory (ClipDetailsEditor's
   // "Create Clip" affordance). NOT this CTA's job; the stage CTA only renders
-  // once a project exists (or is being created — the overlay shows a disabled
-  // "Apply Framing" during that in-flight window via its own `focusPending`).
+  // once a project exists.
   NO_PROJECT: 'NO_PROJECT',
   // A project exists but no working video yet (fresh draft, drifted, or a
   // below-migration project with a null snapshot) — open it in Framing.

@@ -75,34 +75,40 @@ test.describe('T9580 — persistent first-clip invitation: live QA', () => {
       if (/Mark play/i.test((await primaryCta.textContent()) || '')) break;
     }
     await expect(primaryCta, 'need an empty stretch so the CTA reads "Mark play"').toHaveText(/Mark play/i, { timeout: 5000 });
-    await primaryCta.click();
+
+    // T10610: the tap itself creates the region AND the backend row
+    // immediately (create-at-tap) — there is no blank form to fill out and no
+    // Save/toggle step. The editor opens already in EDIT mode on the new play.
+    // Criterion 1: a toast names the object the tap just persisted ("Saved
+    // play \"Play N\"" — announcePlaySaved, since the tap always passes
+    // createProject:false; a clip/project is a separate, later decision).
+    await expect(page.getByText(/Saved play "Play \d+"|Play saved/i)).toBeVisible({ timeout: 15000 });
+    await saveEvidence(page, 'T9580-1-save-says-which-object-created');
 
     const strip = page.locator('[data-testid="annotate-editor-strip"]');
     await expect(strip).toBeVisible({ timeout: 10000 });
 
-    // Rate it (valid play) and ensure the "Create an editable clip" toggle is ON.
-    await page.locator('button[title="5 stars"]').first().click();
-    const createToggle = strip.getByRole('button', { name: /Create an editable clip|Just save this play/ });
-    if ((await createToggle.count()) && (await createToggle.getAttribute('aria-pressed')) === 'false') {
-      await createToggle.click();
-    }
-    await saveEvidence(page, 'T9580-0-create-strip-before-save');
+    // Rate it 5 stars via the RatingBadge popup — this nudges the clip badge
+    // into its NUDGE state (T10520/getPlayProgress's CLIP_NUDGE_RATING rule),
+    // the T10310-era replacement for the old create-clip toggle.
+    await strip.getByTestId('badge-rated').click();
+    await page.getByTestId('rating-picker').getByRole('radio', { name: /^5 stars/ }).click();
+    await saveEvidence(page, 'T9580-0-rated-five-stars');
 
-    // --- Save: persists the marker + creates the clip ---
-    const saveBtn = strip.getByRole('button', { name: /Save play and create clip/ });
-    await expect(saveBtn).toBeVisible();
-    await saveBtn.click();
+    // Clicking the nudged clip badge creates the project (the ONE remaining
+    // one-tap path to a clip from inside the editor — AnnotateFullscreenOverlay's
+    // handleCreateClipFromBadge, {createProject:true}). Once autoProjectId
+    // lands, the overlay's own FOCUS-stage invitation (stageCta +
+    // keepMarkingCta, design doc § F.2) appears as a page-level sibling.
+    await strip.getByTestId('badge-clip').click();
 
-    // Criterion 1: a toast names the object it created ("... is now in Clips").
-    await expect(page.getByText(/is now in Clips/i)).toBeVisible({ timeout: 15000 });
-    await saveEvidence(page, 'T9580-1-save-says-which-object-created');
-
-    // Criterion 2: the editor STAYS OPEN with the persistent invitation. The
-    // stage CTA + "Keep marking plays" render as SIBLINGS after the strip's own
-    // closing div (same fragment, not nested inside data-testid="annotate-editor-strip") —
-    // so query at page scope, matching how the other CTA suites query it.
+    // Criterion 2: the editor STAYS OPEN with the persistent invitation
+    // (Frame CTA + "Keep marking plays" render as page-level siblings, outside
+    // the strip's own DOM). The button's visible TEXT is "Frame" (ANNOTATE.
+    // FRAME_THIS_CLIP) — the longer "Framing focuses the camera..." copy is
+    // only the hover title, not the label.
     await expect(strip).toBeVisible();
-    const frameCta = page.getByRole('button', { name: 'Frame this clip' });
+    const frameCta = page.getByRole('button', { name: 'Frame' });
     const keepMarking = page.getByRole('button', { name: 'Keep marking plays' });
     await expect(frameCta).toBeVisible({ timeout: 15000 });
     await expect(keepMarking).toBeVisible();

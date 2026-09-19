@@ -7,8 +7,8 @@ import { describe, it, expect, vi } from 'vitest';
  * When the add/edit editor is open on desktop non-fullscreen, the strip
  * (AnnotateFullscreenOverlay layout="strip") replaces the timeline and the
  * CTA/Playback/Share block. It must receive existingClip (T8590 invariant,
- * re-homed here now that the sidebar render is gone) and a surface tag for
- * the beacon discriminator.
+ * re-homed here now that the sidebar render is gone) and, since T10610, the
+ * onDeleteClip/onAwaitWrites wiring every render site now needs.
  */
 
 vi.mock('../components/VideoPlayer', () => ({
@@ -28,7 +28,8 @@ vi.mock('./annotate', () => ({
     <div
       data-testid={props.layout === 'strip' ? 'strip' : 'overlay'}
       data-layout={props.layout}
-      data-surface={props.surface}
+      data-has-delete={props.onDeleteClip ? 'present' : 'absent'}
+      data-has-await={props.onAwaitWrites ? 'present' : 'absent'}
     >
       {props.existingClip ? `existingClip:${props.existingClip.id}` : 'existingClip:null'}
     </div>
@@ -88,6 +89,8 @@ function buildProps(overrides = {}) {
     onSelectRegion: vi.fn(),
     onDeleteRegion: vi.fn(),
     onAddClip: vi.fn(),
+    onDeletePlayFromEditor: vi.fn(),
+    onAwaitRegionWrites: vi.fn(() => Promise.resolve(true)),
     getAnnotateRegionAtTime: () => null,
     annotateSelectedLayer: 'clips',
     onLayerSelect: vi.fn(),
@@ -128,9 +131,11 @@ describe('AnnotateModeView — desktop under-canvas editor strip (T8600)', () =>
     expect(strip.textContent).toBe('existingClip:c1');
   });
 
-  it('passes a surface tag for the beacon discriminator', () => {
+  it('passes onDeleteClip/onAwaitWrites (T10610 — every render site needs both)', () => {
     renderView({ showAnnotateOverlay: true });
-    expect(screen.getByTestId('strip').dataset.surface).toBe('inline_desktop');
+    const strip = screen.getByTestId('strip');
+    expect(strip.dataset.hasDelete).toBe('present');
+    expect(strip.dataset.hasAwait).toBe('present');
   });
 
   // T9500: desktop fullscreen now uses the SAME bottom-center strip as normal
@@ -139,7 +144,7 @@ describe('AnnotateModeView — desktop under-canvas editor strip (T8600)', () =>
     renderView({ showAnnotateOverlay: true, annotateFullscreen: true });
     const strip = screen.getByTestId('strip');
     expect(strip.dataset.layout).toBe('strip');
-    expect(strip.dataset.surface).toBe('inline_desktop');
+    expect(strip.dataset.hasDelete).toBe('present');
     expect(screen.queryByTestId('overlay')).toBeNull();
   });
 

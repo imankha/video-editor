@@ -1,17 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { getPlayProgress, isDefaultPlayName, CLIP_BADGE } from './playProgress';
 
-// T10410: the play-progress badge derivation. Pins the 2026-09-18 rulings,
-// revised 2026-09-19 (T10520) for `rated`: named = a real user-typed name
-// (never "Play N", never a backend-derived name); clip badge dormant below 5
-// stars, nudging at 5, pending while creating, done once a project exists.
+// T10410: the play-progress badge derivation. Pins the 2026-09-18 rulings.
+// T10610 revision: the editor is ALWAYS editing an already-created play now
+// (create-at-tap), so `rated` is unconditionally true and the create-mode
+// "touched this session" tracking (isRatingManuallyEdited/isNameManuallyEdited)
+// is gone — named is derived purely from the current/loaded name values.
 
 const base = {
   rating: 4,
-  isEditMode: false,
-  isRatingManuallyEdited: false,
   clipName: '',
-  isNameManuallyEdited: false,
   loadedName: null,
   loadedHasCustomName: false,
   notes: '',
@@ -20,17 +18,10 @@ const base = {
 };
 
 describe('getPlayProgress — rated', () => {
-  it('is false in create mode before the rating control has been touched, regardless of value', () => {
-    expect(getPlayProgress(base).rated).toBe(false);
-    expect(getPlayProgress({ ...base, rating: 5 }).rated).toBe(false);
-  });
-  it('is true in create mode once touched this session, even at the untouched-looking default value', () => {
-    expect(getPlayProgress({ ...base, isRatingManuallyEdited: true }).rated).toBe(true);
-    expect(getPlayProgress({ ...base, rating: 4, isRatingManuallyEdited: true }).rated).toBe(true);
-  });
-  it('is ALWAYS true in edit mode, whatever the rating value — a saved play always has a real rating', () => {
-    expect(getPlayProgress({ ...base, isEditMode: true, rating: 4 }).rated).toBe(true);
-    expect(getPlayProgress({ ...base, isEditMode: true, rating: 1 }).rated).toBe(true);
+  it('is ALWAYS true, whatever the rating value — a play always has a real rating from creation (T10610)', () => {
+    expect(getPlayProgress({ ...base, rating: 4 }).rated).toBe(true);
+    expect(getPlayProgress({ ...base, rating: 1 }).rated).toBe(true);
+    expect(getPlayProgress({ ...base, rating: 5 }).rated).toBe(true);
   });
 });
 
@@ -38,28 +29,28 @@ describe('getPlayProgress — named', () => {
   it('is false for the one-tap "Play N" default even though it is stored as a name', () => {
     expect(isDefaultPlayName('Play 7')).toBe(true);
     expect(getPlayProgress({
-      ...base, clipName: 'Play 7', isNameManuallyEdited: true, loadedName: 'Play 7', loadedHasCustomName: true,
+      ...base, clipName: 'Play 7', loadedName: 'Play 7', loadedHasCustomName: true,
     }).named).toBe(false);
   });
-  it('is true when the user typed a name this session (create mode)', () => {
-    expect(getPlayProgress({ ...base, clipName: 'Banger', isNameManuallyEdited: true }).named).toBe(true);
+  it('is true when the current draft is a real user-typed name', () => {
+    expect(getPlayProgress({ ...base, clipName: 'Banger' }).named).toBe(true);
   });
-  it('is false when the name is blank even if flagged manually edited', () => {
-    expect(getPlayProgress({ ...base, clipName: '   ', isNameManuallyEdited: true }).named).toBe(false);
+  it('is false when the name is blank', () => {
+    expect(getPlayProgress({ ...base, clipName: '   ' }).named).toBe(false);
   });
-  it('edit mode: a loaded DERIVED name (has_custom_name false, unchanged) is not "named"', () => {
+  it('a loaded DERIVED name (has_custom_name false, unchanged) is not "named"', () => {
     expect(getPlayProgress({
-      ...base, clipName: 'Good Goal', isNameManuallyEdited: true, loadedName: 'Good Goal', loadedHasCustomName: false,
+      ...base, clipName: 'Good Goal', loadedName: 'Good Goal', loadedHasCustomName: false,
     }).named).toBe(false);
   });
-  it('edit mode: a loaded CUSTOM name (has_custom_name true, unchanged) is "named"', () => {
+  it('a loaded CUSTOM name (has_custom_name true, unchanged) is "named"', () => {
     expect(getPlayProgress({
-      ...base, clipName: "Ava's header", isNameManuallyEdited: true, loadedName: "Ava's header", loadedHasCustomName: true,
+      ...base, clipName: "Ava's header", loadedName: "Ava's header", loadedHasCustomName: true,
     }).named).toBe(true);
   });
-  it('edit mode: retyping over a derived name counts as named', () => {
+  it('retyping over a derived name counts as named', () => {
     expect(getPlayProgress({
-      ...base, clipName: 'Renamed', isNameManuallyEdited: true, loadedName: 'Good Goal', loadedHasCustomName: false,
+      ...base, clipName: 'Renamed', loadedName: 'Good Goal', loadedHasCustomName: false,
     }).named).toBe(true);
   });
 });

@@ -5,14 +5,15 @@ import { useState, useCallback, useRef } from 'react';
  *
  * NONE      — no clip selected
  * SELECTED  — clip highlighted in sidebar, "Edit Clip" button visible
- * EDITING   — overlay open for existing clip (immune to playhead deselect)
- * CREATING  — overlay open for new clip, no clipId (immune to playhead deselect)
+ * EDITING   — overlay open for a clip (immune to playhead deselect). T10610:
+ *             this is the ONLY editor state — a play is created at the Mark
+ *             Play tap, so the editor never opens on a clip that doesn't
+ *             exist yet (the old CREATING state had no other purpose).
  */
 export const SELECTION_STATES = {
   NONE: 'NONE',
   SELECTED: 'SELECTED',
   EDITING: 'EDITING',
-  CREATING: 'CREATING',
 };
 
 /**
@@ -27,7 +28,6 @@ export const SELECTION_STATES = {
  *   { type: 'NONE' }
  *   { type: 'SELECTED', clipId: string }
  *   { type: 'EDITING', clipId: string }
- *   { type: 'CREATING' }
  */
 export function useClipSelection() {
   const [state, setState] = useState({ type: SELECTION_STATES.NONE });
@@ -45,17 +45,10 @@ export function useClipSelection() {
     setState({ type: SELECTION_STATES.EDITING, clipId });
   }, []);
 
-  const startCreating = useCallback(() => {
-    setState({ type: SELECTION_STATES.CREATING });
-  }, []);
-
   const closeOverlay = useCallback(() => {
     setState(prev => {
       if (prev.type === SELECTION_STATES.EDITING) {
         return { type: SELECTION_STATES.SELECTED, clipId: prev.clipId };
-      }
-      if (prev.type === SELECTION_STATES.CREATING) {
-        return { type: SELECTION_STATES.NONE };
       }
       return prev;
     });
@@ -63,8 +56,8 @@ export function useClipSelection() {
 
   const deselectClip = useCallback(() => {
     setState(prev => {
-      // EDITING and CREATING are immune to deselect (scrub handles, overlay open)
-      if (prev.type === SELECTION_STATES.EDITING || prev.type === SELECTION_STATES.CREATING) {
+      // EDITING is immune to deselect (overlay open, scrub handles live)
+      if (prev.type === SELECTION_STATES.EDITING) {
         return prev;
       }
       return { type: SELECTION_STATES.NONE };
@@ -76,7 +69,7 @@ export function useClipSelection() {
     ? state.clipId
     : null;
 
-  const isOverlayOpen = state.type === SELECTION_STATES.EDITING || state.type === SELECTION_STATES.CREATING;
+  const isOverlayOpen = state.type === SELECTION_STATES.EDITING;
 
   const isEditMode = state.type === SELECTION_STATES.SELECTED;
 
@@ -84,7 +77,6 @@ export function useClipSelection() {
     selectionState: state,
     selectClip,
     editClip,
-    startCreating,
     closeOverlay,
     deselectClip,
     selectedRegionId,

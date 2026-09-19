@@ -1,5 +1,77 @@
 ---
 domain: annotate
+updated: 2026-09-19 (T10610 — the play editor is autosave, no Save/Update/Cancel button
+anywhere. FRONTEND-ONLY (backend `RawClipUpdate`/`update_raw_clip` already supported every
+field optional; zero backend changes). Supersedes/rewrites the T8140, T9330, T9630, T9830, and
+T10290 entries below (each corrected in place, not deleted — the design doc's own instruction:
+"every row is a REWRITE" — see `docs/plans/tasks/T10600-design.md` for the full mechanism).
+**The persistence contract (§2.2 of the design doc), now the ground truth for this surface:**
+Mark play TAP creates the region AND the backend row immediately (`AnnotateContainer.
+handleAddClipFromButton` -> `handleFullscreenCreateClip`) — the editor NEVER opens on a play
+that doesn't exist yet; `existingClip` is a required, always-non-null prop on
+`AnnotateFullscreenOverlay` now (no more create-mode fork). Every other control — trim
+(`ClipScrubRegion.onDragEnd`, covers drag/typed/step), rating tap, tag chip, layer toggle,
+teammates commit/remove — persists on ITS OWN gesture via `onUpdateClip(id, {onlyThatField})`,
+routed through the SAME seam as always (`updateClipRegionWithSync` -> `useRawClipSave.updateClip`
+-> `PUT /clips/raw/{id}`). Name and notes stay local-echo (unchanged pattern), committing on
+blur/Enter only via a shared `onTextFieldKeyDown` (`modes/annotate/textFieldCommit.js`) used by
+BOTH editors (overlay + `ClipDetailsEditor` sidebar) — Escape inside a focused field reverts the
+draft and blurs WITHOUT writing (the only discard that survives); Escape/X/Done elsewhere calls
+`closeWithCommit` (commits any dirty text field, then closes — nothing is ever discarded).
+Delete play (`DeletePlayButton.jsx`, full/icon variant) replaces Cancel in every layout.
+**Per-region write ordering (`modes/annotate/regionWriteQueue.js`, NEW file):** a plain FIFO
+factory (`createRegionWriteQueue`, no React) modelled on `actionClient.js`'s chain idea but
+WITHOUT version threading (`raw_clips` has no version counter — EPIC non-goal). The create POST
+is the chain HEAD (a field write racing the in-flight create can't take the SAVE path and
+duplicate the row); the DELETE is the chain TAIL (queued behind pending writes, so a delete right
+after an edit can't race ahead and 404 the edit). Failure tracking is PER PAYLOAD KEY, not per
+region — a failed trim followed by a successful rating tap must not silently clear the trim's
+failure. `AnnotateContainer` exposes `awaitRegionWrites(regionId)` (= the queue's `settle`) on its
+API; the Frame/stage CTA (editor's own + the T10310 main-screen row + the sidebar's stage button)
+all await it before navigating, so a write still in flight or failed blocks navigation instead of
+showing a "save first?" dialog (that whole confirm-then-navigate flow, `focusConfirmOpen`/
+`focusConfirmDialog`, is deleted — there is nothing left to be unsaved). `rawClipIdByRegionRef`
+(a `Map`, written SYNCHRONOUSLY on the SAVE path) resolves a region's `raw_clip_id` for a queued
+write — required because `setRawClipId` is React state and is not guaranteed flushed by the time
+the next chained write's `.then()` runs. **Landmine avoided (v2 finding, not yet hit in prod):**
+a naive "queue the create, don't worry about ordering" implementation still duplicates a row if a
+field write races the create — closed by chaining + the ref map together, pinned by
+`AnnotateContainer.createAtTap.test.jsx`'s create-then-trim-race and ref-map-freshness tests.
+**Landmine fixed by this task (found and fixed in the SAME commit, not left open):** a
+`.blur()` call fired synchronously inside a keydown handler (Escape's revert-then-blur) can invoke
+`onBlur` BEFORE React flushes the revert's `setState`, so a commit handler reading the reverted
+value from REACT STATE (a closed-over variable) sees the stale pre-revert value instead and fires
+a real write — `onTextFieldKeyDown` now ALSO mutates the DOM node's `.value` synchronously so a
+commit handler reading `e.target.value` (not state) is correct regardless of React's batching
+timing. A jsdom test that never truly `.focus()`es the field masks this (`.blur()` on a
+non-focused element is a spec no-op) — any future field wired through this helper needs a
+REAL-focus regression test (see `AnnotateFullscreenOverlay.noSaveButton.test.jsx`'s Escape tests),
+not just `fireEvent.change` + `fireEvent.keyDown`. **`DEFAULT_RATING` landmine (design doc's own
+"code smell being paid off"):** `NEW_PLAY_DEFAULT_RATING = 4` (`clipConstants.js`) is the value a
+freshly created play starts at — distinct from the SAME FILE's `DEFAULT_RATING = 3`, a legacy
+DISPLAY fallback for a rating that is somehow missing entirely. Two different constants, similar
+names, same file — do not "simplify" them into one without checking every call site.
+**Retired (grep-confirmed zero remaining callers):** `handleSave`/`handleSaveRef`,
+`saveInFlightRef` (-> `markPlayInFlightRef`, now guards the TAP not a Save click),
+`hasUnsavedEdits`, `isNameManuallyEdited` + the auto-generate-name effect,
+`isRatingManuallyEdited`, `defaultClipName`/`nextClipNumber` (the container computes the "Play N"
+name at tap time now), the `add_clip_opened_no_save` beacon + `savedThisOpenRef` + the `surface`
+prop (a create-open that ends without a save no longer exists), `focusPending`/`stagePendingCta`/
+`pendingProjectClipId`/`onResumePlaybackOnly`/`handleOverlayResumePlayback`/`handleOverlayResume`
+(T9330's stay-open machinery — dead since T10290, actually deleted now), `SELECTION_STATES.
+CREATING`/`startCreating` (`useClipSelection.js`, 3-state machine: NONE/SELECTED/EDITING),
+`ANNOTATE.SAVE_PLAY`/`UPDATE_PLAY`/`SAVE_AND_FRAME`/`MARKING_PLAY_TITLE`. Tests: every retired
+symbol's pinning test was REWRITTEN (not deleted) to the new contract — see
+`docs/plans/tasks/T10600-design.md` § E for the full retirement-to-replacement-assertion table.
+**T8140/T10420 landmine — RATIONALE voided here, CSS fix deferred to T10620:** the mobile bottom
+sheet's `position: fixed inset-x-0 bottom-0` (`AnnotateModeView.jsx`, the `mobileInlineForm`
+render) was originally pinned so a Save button stayed reachable without scrolling (T8140) — that
+reason is GONE (no Save button left to protect), but T10610 did NOT change the CSS itself; the
+sheet is still `fixed`, and the T10420 backdrop-filter containing-block landmine for this surface
+is UNCHANGED (still live) until T10620 (play-editor-autosave EPIC task 3) actually moves it to
+render in-flow under the video. Do not assume T10420 is retired just because T10610 landed.
+QA: live-drive owed (this container has no browser) — see the task's own report for the
+`dev-verify.sh` script + acceptance-criteria-to-evidence map. Prior:)
 updated: 2026-09-18 (T10500 — mobile UI audit fixes, cross-domain (Home + Annotate).
 **LANDMINE for future audits: `coarse-pointer:` touch-target checks are FALSE POSITIVES in a
 plain-resized-viewport Playwright browser.** This codebase floors touch targets at 44px via
@@ -142,7 +214,14 @@ desktop PWA that could accept a file share still degrades to link-only. Tests: `
 new copy + the guidance-header max-w-md scoped out of the gallery-width guard. QA: no browser/backend in
 this container (documented epic-wide limit) — see final report. Prior:)
 updated: 2026-09-17 (T10240 + T10290 — marked-play stage CTA + play-editor "Save and Frame" / Details /
-Save-closes. FRONTEND-ONLY, no schema. **SHARED create-then-navigate seam (build once, do NOT rebuild a
+Save-closes. **T10290's own Save/Update/Save-and-Frame/Cancel machinery below is SUPERSEDED by T10610
+(2026-09-19): there is no Save button anywhere, so "SAVE NOW CLOSES EDIT MODE" (item 3 below) no longer
+applies — Done just closes (nothing to discard, nothing to keep open). The DEAD CODE this entry flagged as
+"removal deferred" (focusPending/stagePendingCta/pendingProjectClipId/onResumePlaybackOnly/
+handleOverlayResumePlayback) is ACTUALLY DELETED now, not just inert — see the T10610 entry at the top of
+this file for the full mechanism.** T10240's stage-CTA/getClipStage/create-then-navigate-seam material
+below is STILL CURRENT (T10610 didn't touch `getClipStage` or the seam's `{saveOk, projectId}` shape,
+only what CALLS it). FRONTEND-ONLY, no schema. **SHARED create-then-navigate seam (build once, do NOT rebuild a
 third time):** the two container create paths — `handleFullscreenCreateClip` AND `updateClipRegionWithSync`
 (AnnotateContainer.jsx) — now RESOLVE `{ saveOk, projectId }` (was a bare `saveOk` bool; the id used to
 arrive only later via `setAutoProjectId`). `projectId` is set ONLY when THIS call created the auto-project
@@ -393,7 +472,14 @@ Preview plays). QA: container has no browser (same limit as T9830/T9820/T9630) �
 `new-user-flow.spec.js` left intact (its Create-Reel step already sets auto_project_id, so the step
 completes earlier but every assertion still holds). Prior:)
 updated: 2026-09-14 (T9830 — the play editor now offers TWO explicit, always-visible, always-enabled
-create outcomes instead of a rating-driven default. **What was removed:** the create-mode "Clip"
+create outcomes instead of a rating-driven default. **SUPERSEDED by T10610 (2026-09-19): the two-outcome
+buttons this entry describes are GONE (T10310 already reduced them to one "Frame Clip" outside the editor;
+T10610 removed the last button, "Save play", from the editor itself — there is no create mode left, the
+editor only ever edits an already-created play). `saveInFlightRef` (the in-flight Save guard) is retired
+along with `handleSave`; its job (stop a double-fire) moved to the TAP — `markPlayInFlightRef` in
+`AnnotateContainer.handleAddClipFromButton`. See the T10610 entry at the top of this file.** The material
+below documents the T9830-era mechanism for historical context; treat it as PRIOR STATE, not current
+behavior. **What was removed:** the create-mode "Clip"
 toggle (desktop formBody + strip), the label-switching single Save button (SAVE_PLAY vs
 SAVE_PLAY_AND_CLIP at 4 render sites), the THREE rating/layer auto-flip sites
 (`if (!createProjectManuallySet) setCreateProject(rating===5 && mine)` — create seed, rating handler,
@@ -540,7 +626,14 @@ section for the exact numeric-comparison rule). Annotate's own span readout gets
 `data-testid="clip-length"` but names NO cost — Annotate charges nothing; inventing one there would
 be a new lie. Design: `docs/plans/tasks/T9480-design.md`. Prior:)
 updated: 2026-09-12 (T9630 — rating/tags/notes/saved-state presentation cleanup, 4 acceptance
-criteria. **AC1 (one rating mapping everywhere) — was NOT fully satisfied despite N35's
+criteria. **SUPERSEDED IN PART by T10610 (2026-09-19): AC3's tri-state ('Unsaved changes'/'Saving'/
+'Saved'/error) below is now per-GESTURE, not per-Save — 'unsaved' is DELETED from `SAVE_STATUS_COPY`
+(nothing is ever unsaved once every control autosaves) and `SaveStatusBadge` is driven by a `writeStatus`
+PROP from the container, not local `saveStatus` + `hasUnsavedEdits()`. The three missing-`return` fixes
+below still matter — the seam still resolves `{saveOk, projectId}`, now consumed by
+`updateClipRegionWithSync`'s split local/queued halves instead of `handleSave`. See the T10610 entry at
+the top of this file.** AC1/AC2/AC4 below are UNCHANGED and current. **AC1 (one rating mapping everywhere)
+— was NOT fully satisfied despite N35's
 `getRatingLabel` already existing.** `AnnotateFullscreenOverlay.jsx`'s local `StarRating` rendered
 the gold star row AND the bare chess-notation glyph (`RATING_NOTATION[rating]`, e.g. `!`) side by
 side — the literal "four stars and an exclamation mark compete" bug the report named, with the full
@@ -561,13 +654,18 @@ NOT reproducible, no code change.** `AnnotateFullscreenOverlay`'s auto-generate-
 (not local state), so it survives the React-batching race the effect's own comment warns about.
 `ClipDetailsEditor`'s notes handler (`handleNotesChange`) and `useAnnotate.updateClipRegion` both do
 surgical single-field merges — a `{notes: ...}` patch never touches `name`. Regression tests added
-for both surfaces pin this (`AnnotateFullscreenOverlay.namePreservation.test.jsx`). **Found but
-NOT fixed (separate, deeper issue, flagged for a follow-up task):** `updateClipRegionWithSync`'s
-"no rawClipId yet" branch reads `region` from the closure captured at call time — two field-specific
-edits on the SAME not-yet-backend-persisted clip, fired before either's save round-trip completes
-(no re-render in between), could theoretically save with a stale `name`. This is a general async-race
-in the unsaved-clip save path, not specific to notes, and needs the Expert agent per CLAUDE.md's
-async-timing escalation rule if it's ever confirmed live. **AC3 (real Unsaved/Saving/Saved, never
+for both surfaces pin this (`AnnotateFullscreenOverlay.namePreservation.test.jsx`). **FIXED by T10610
+(2026-09-19) — this is no longer open.** The race described here (`updateClipRegionWithSync`'s
+"no rawClipId yet" branch reading `region` from a closure captured at call time, so two field-specific
+edits on the same not-yet-backend-persisted clip fired before either's round-trip completes could
+theoretically save with stale data) is closed structurally by two things together: (1) a per-region FIFO
+chain (`regionWriteQueue.js`) means the SECOND edit's network call cannot start until the first has
+resolved — no more "fired before either completes"; (2) `sendRegionUpdate` (the split network half) now
+re-reads BOTH the region (via `clipRegionsRef`, assigned every render) and the raw clip id (via
+`rawClipIdByRegionRef`, a Map written SYNCHRONOUSLY on the SAVE path — React state alone is not
+guaranteed flushed by the time the chained write runs) at EXECUTION time, never from a closure captured
+at enqueue time. No Expert escalation was needed — the fix is structural, not a targeted patch. Pinned by
+`AnnotateContainer.createAtTap.test.jsx`'s ref-map-freshness test. **AC3 (real Unsaved/Saving/Saved, never
 asserted) — was a real, substantial gap.** `handleSave`'s `savePromise` was silently vacuous: THREE
 separate missing-`return` bugs (`AnnotateModeView.handleCreateClipWithSportPrompt` discarded
 `onFullscreenCreateClip`'s return; `AnnotateContainer.handleFullscreenCreateClip` never returned its
@@ -655,7 +753,18 @@ to both task files). "Play full clip" (OverlayModeView/Spotlight) + guide copy (
 + Focus clip selector + reel-assembly modal left to the sibling children (T9550/T9560/T9530).
 Prior:)
 updated: 2026-09-10 (T9330 — clipping a play KEEPS THE EDITOR OPEN + one stage-aware CTA shared by
-the strip and the sidebar. **Stay-open:** `addClipRegion` (useAnnotate.js) gained an `onCreateSelect`
+the strip and the sidebar. **SUPERSEDED by T10610 (2026-09-19): "stay-open after create" (the whole
+premise of the CREATING->EDITING transition + the resume-vs-close split below) is superseded by
+create-at-tap — there is no create mode left for the editor to "stay open after"; the play already
+exists (region + backend row) by the time the editor opens, so it is ALWAYS in the "stayed open"
+shape this entry describes, just never via a save gesture. The `onCreateSelect` -> `editClip` wiring
+(the very first sentence below) SURVIVES UNCHANGED and is now the mechanism create-at-tap itself uses
+— it just fires from `AnnotateContainer.handleAddClipFromButton` (the Mark-play tap) instead of from a
+Save click. Everything else in this entry — `pendingProjectClipId`, `focusPending`,
+`handleOverlayResumePlayback`, `handleOverlayResume`, the resume-vs-close split — is DELETED (T10290
+first flagged it dead code, T10610 actually removed it). See the T10610 entry at the top of this
+file.** The material below documents the T9330-era mechanism for historical context. **Stay-open:**
+`addClipRegion` (useAnnotate.js) gained an `onCreateSelect`
 option; the container wires it to `editClip(newRegion.id)` so the create edge is CREATING->EDITING
 (atomic, no SELECTED flash) instead of the old onSelect->selectClip->CREATING->SELECTED close. The
 transition is UNIFORM across surfaces; the mobile-vs-desktop divergence lives ONLY in the save

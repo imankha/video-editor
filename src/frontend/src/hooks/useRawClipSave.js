@@ -122,9 +122,11 @@ export function useRawClipSave(activeGameIdRef = null) {
    *
    * @param {number} gameId - The game ID to extract from
    * @param {object} clipData - Clip data including start_time, end_time, etc.
+   * @param {Function} [retry] - T10610: optional override for the Retry
+   *   action's onClick — see updateClip's jsdoc for why.
    * @returns {object|null} - { raw_clip_id, filename, project_created, project_id }
    */
-  const saveClip = useCallback(async (gameId, clipData) => {
+  const saveClip = useCallback(async (gameId, clipData, retry) => {
     // Create a unique key for this save operation
     const saveKey = `${gameId}-${clipData.start_time}-${clipData.end_time}`;
 
@@ -173,7 +175,7 @@ export function useRawClipSave(activeGameIdRef = null) {
         // Surface a clip-appropriate not-saved state + Retry — never a silent success.
         if (response.status === 503 && syncFailedCode(errorData) === 'sync_failed') {
           setError(CLIP_SYNC_FAILED_COPY.save.message);
-          surfaceClipSyncFailed('save', () => saveClip(gameId, clipData));
+          surfaceClipSyncFailed('save', retry ?? (() => saveClip(gameId, clipData)));
           return null;
         }
         // T8180: the game was deleted out from under the user (ghost session). The
@@ -217,9 +219,14 @@ export function useRawClipSave(activeGameIdRef = null) {
    *
    * @param {number} clipId - The raw clip ID to update
    * @param {object} updates - Partial update object
+   * @param {Function} [retry] - T10610: optional override for the Retry
+   *   action's onClick (defaults to re-calling this same gesture directly).
+   *   The play editor's per-region write queue passes a closure that
+   *   re-enqueues through the queue instead, so a Retry can't land out of
+   *   order with a newer write on the same region.
    * @returns {object|null} - { success, project_created, project_id }
    */
-  const updateClip = useCallback(async (clipId, updates) => {
+  const updateClip = useCallback(async (clipId, updates, retry) => {
     setIsSaving(true);
     setError(null);
 
@@ -241,7 +248,7 @@ export function useRawClipSave(activeGameIdRef = null) {
         // T5350: durable clip update committed locally but never reached R2 (T4320).
         if (response.status === 503 && syncFailedCode(errorData) === 'sync_failed') {
           setError(CLIP_SYNC_FAILED_COPY.update.message);
-          surfaceClipSyncFailed('update', () => updateClip(clipId, updates));
+          surfaceClipSyncFailed('update', retry ?? (() => updateClip(clipId, updates)));
           return null;
         }
         throw new Error(errorData.detail || 'Failed to update clip');
@@ -276,9 +283,11 @@ export function useRawClipSave(activeGameIdRef = null) {
    * - Working clips that reference this clip
    *
    * @param {number} clipId - The raw clip ID to delete
+   * @param {Function} [retry] - T10610: optional override for the Retry
+   *   action's onClick — see updateClip's jsdoc for why.
    * @returns {boolean} - true if successful
    */
-  const deleteClip = useCallback(async (clipId) => {
+  const deleteClip = useCallback(async (clipId, retry) => {
     setIsSaving(true);
     setError(null);
 
@@ -293,7 +302,7 @@ export function useRawClipSave(activeGameIdRef = null) {
         // T5350: durable clip delete committed locally but never reached R2 (T4320).
         if (response.status === 503 && syncFailedCode(errorData) === 'sync_failed') {
           setError(CLIP_SYNC_FAILED_COPY.delete.message);
-          surfaceClipSyncFailed('delete', () => deleteClip(clipId));
+          surfaceClipSyncFailed('delete', retry ?? (() => deleteClip(clipId)));
           return false;
         }
         throw new Error(errorData.detail || 'Failed to delete clip');

@@ -6,9 +6,14 @@ import { useProjectsStore } from '../../../stores/projectsStore';
 // T9330 (design §2.6): the MOBILE edit sheet (layout="inline") must carry the
 // SAME stage-aware CTA as the desktop strip — Frame this clip / Apply Spotlight /
 // View Final / View Published — so editing a clip-with-a-project on a phone has a
-// path into Focus/Spotlight/the finished video. A live-verification gap found the
-// mobile sheet only rendered Update/Cancel. Edit mode only: mobile CREATE still
-// closes on save (Save/Cancel) and needs no stage CTA.
+// path into Focus/Spotlight/the finished video.
+//
+// T10610: the T8730 "dirty check" confirm dialog ("Save this play first?") is
+// DELETED — there is nothing to be dirty about anymore (every field commits
+// on its own gesture). The stage CTA now just awaits onAwaitWrites(id) before
+// navigating (design doc § C.4), same as the desktop strip
+// (see AnnotateFullscreenOverlay.frameOrdering.test.jsx). There is also no
+// more create mode, so the old "create mode shows no stage CTA" test is gone.
 
 function mockViewport(matches) {
   window.matchMedia = (query) => ({
@@ -30,19 +35,17 @@ const baseProps = {
   isVisible: true,
   currentTime: 30,
   videoDuration: 6000,
-  onCreateClip: () => {},
-  onUpdateClip: () => {},
-  onResume: () => {},
+  onUpdateClip: () => Promise.resolve({ saveOk: true }),
   onClose: () => {},
   onSeek: () => {},
   videoController: {},
-  surface: 'sheet_mobile',
+  onDeleteClip: () => {},
   layout: 'inline',
 };
 
 const editClip = {
   id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], notes: '',
-  name: 'My cool play', my_athlete: true,
+  name: 'My cool play', my_athlete: true, tagged_teammates: [],
 };
 
 describe('AnnotateFullscreenOverlay mobile inline sheet — stage CTA (T9330 §2.6)', () => {
@@ -68,44 +71,37 @@ describe('AnnotateFullscreenOverlay mobile inline sheet — stage CTA (T9330 §2
     expect(screen.getByRole('button', { name: 'Apply Spotlight' })).toBeTruthy();
   });
 
-  it('clicking the stage CTA with an untouched form navigates directly (onOpenInFocus)', () => {
+  it('clicking the stage CTA awaits onAwaitWrites and navigates when it resolves true', async () => {
+    const onAwaitWrites = vi.fn(() => Promise.resolve(true));
     const onOpenInFocus = vi.fn();
     render(
       <AnnotateFullscreenOverlay
         {...baseProps}
         existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: null, reelSourceEndTime: null }}
+        onAwaitWrites={onAwaitWrites}
         onOpenInFocus={onOpenInFocus}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Frame' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Frame' }));
+    expect(onAwaitWrites).toHaveBeenCalledWith('c1');
     expect(screen.queryByText('Save this play first?')).toBeNull();
     expect(onOpenInFocus).toHaveBeenCalledWith(42);
   });
 
-  it('dirty edit routes through the T8730 save-first dialog (rendered in the inline layout)', () => {
+  it('a pending/failed write chain (onAwaitWrites resolves false) blocks navigation with no dialog', async () => {
+    const onAwaitWrites = vi.fn(() => Promise.resolve(false));
     const onOpenInFocus = vi.fn();
     render(
       <AnnotateFullscreenOverlay
         {...baseProps}
         existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: null, reelSourceEndTime: null }}
+        onAwaitWrites={onAwaitWrites}
         onOpenInFocus={onOpenInFocus}
       />
     );
-    // Make the form dirty (rating 4 -> 5), then tap the CTA: must prompt, not navigate.
-    // T10520: rating is set via the badge's popup picker (the pinned footer's
-    // badges are visible without opening "Add details" — that popup no
-    // longer carries a rating control at all).
-    fireEvent.click(screen.getByTestId('badge-rated'));
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Frame' }));
-    expect(screen.getByText('Save this play first?')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Frame' }));
+    expect(onAwaitWrites).toHaveBeenCalledWith('c1');
+    expect(screen.queryByText('Save this play first?')).toBeNull();
     expect(onOpenInFocus).not.toHaveBeenCalled();
-  });
-
-  it('create mode (no existing clip) shows NO stage CTA — just Save/Cancel', () => {
-    render(<AnnotateFullscreenOverlay {...baseProps} existingClip={null} />);
-    expect(screen.queryByRole('button', { name: 'Frame' })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Apply Spotlight|View Final|View Published/ })).toBeNull();
-    expect(screen.getByRole('button', { name: /^Save play/ })).toBeTruthy();
   });
 });

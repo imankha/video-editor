@@ -128,66 +128,67 @@ test.describe('T8490: rating caption — desktop strip', () => {
     await clearBrowserState(page);
   });
 
-  test('shows the 5-state caption across ratings and layers @t8490', async ({ page }) => {
+  // T10610: the create-clip toggle + free-text caption panel this test used to
+  // drive were already superseded by T10310 (the create-clip decision moved
+  // out of the editor onto the main-screen split CTA) before this task. The
+  // rating control left in the strip is the RatingBadge popup
+  // (PlayProgressBadges.jsx) — its rows carry the SAME star-semantics
+  // (adjective + chess-style notation) this spec is really protecting, so the
+  // rewrite drives that popup instead of a caption string. The primary CTA
+  // now creates the play immediately (create-at-tap) and opens the strip
+  // already in EDIT mode — there is no separate Save step.
+  test('rating popup shows the star-semantics adjective + notation, and persists via surgical PUT @t8490', async ({ page }) => {
     await enterAnnotateMode(page);
     await ensurePaused(page);
     await seekVideoDirect(page, 10);
 
-    await page.locator('[data-testid="annotate-primary-cta"]').click();
+    const [saveResp] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/clips/raw/save') && r.request().method() === 'POST'),
+      page.locator('[data-testid="annotate-primary-cta"]').click(),
+    ]);
+    const clipId = (await saveResp.json()).raw_clip_id;
     await page.waitForTimeout(800);
 
     const strip = page.locator('[data-testid="annotate-editor-strip"]');
     await expect(strip).toBeVisible();
 
-    // Default rating (4, "Good"), creation toggle OFF -> save-only caption (T9820).
-    await expect(strip).toContainText('Good play (!) - this saves the play without creating a clip.');
+    // No Save button anywhere — Delete play + Done replace it (T10610 § D/§ E row 1).
+    await expect(strip.getByRole('button', { name: /^Save/ })).toHaveCount(0);
+    await expect(strip.getByTestId('delete-play-button')).toBeVisible();
+    await expect(strip.getByRole('button', { name: 'Done' })).toBeVisible();
+
+    // Default rating is 4 ("Good") — open the popup and confirm the row shows
+    // the same adjective + notation the retired caption used to state inline.
+    await strip.getByTestId('badge-rated').click();
+    const picker = page.getByTestId('rating-picker');
+    await expect(picker).toBeVisible();
+    await expect(picker.getByRole('radio', { name: /^4 stars - Good/ })).toHaveAttribute('aria-checked', 'true');
     await saveEvidence(page, 'T8490-strip-rating4-mine');
 
-    // Rating 2 -> "Technical lapse" learn-from caption
-    await strip.locator('button[title="2 stars"]').click();
-    await expect(strip).toContainText('Technical lapse (?) - a play to learn from.');
+    // Rating 2 -> "Technical Lapse" (the learn-from band), persisted via a
+    // surgical PUT carrying ONLY {rating} (T10610 § 2.2 gesture table).
+    const [put2] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
+      picker.getByRole('radio', { name: /^2 stars - Technical Lapse/ }).click(),
+    ]);
+    expect(put2.postDataJSON()).toEqual({ rating: 2 });
     await saveEvidence(page, 'T8490-strip-rating2');
 
-    // Rating 5 + My athlete (default layer) -> auto-enables creation (T9820).
-    await strip.locator('button[title="5 stars"]').click();
-    await expect(strip).toContainText('Brilliant play (!!) - this play will also become an editable clip.');
-    await expect(strip.locator('button:has-text("Save")')).toBeVisible();
+    // Rating 5 ("Brilliant") + My athlete (default layer).
+    await strip.getByTestId('badge-rated').click();
+    const [put5] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
+      page.getByTestId('rating-picker').getByRole('radio', { name: /^5 stars - Brilliant/ }).click(),
+    ]);
+    expect(put5.postDataJSON()).toEqual({ rating: 5 });
     await saveEvidence(page, 'T8490-strip-rating5-mine');
 
-    // Switch to Team -> auto-flip leaves creation OFF -> save-only caption (T9820).
-    await page.locator('[role="radio"][aria-label="Team"]').click();
-    await expect(strip).toContainText('Brilliant team play (!!) - this saves the play without creating a clip.');
+    // Delete play + Done stay reachable throughout (never covered/off-screen) —
+    // this is the surviving form of the old "Save stays reachable" assertion
+    // now that there is no Save button to check.
+    await expect(strip.getByTestId('delete-play-button')).toBeInViewport();
+    await expect(strip.getByRole('button', { name: 'Done' })).toBeInViewport();
     await saveEvidence(page, 'T8490-strip-rating5-team');
-
-    // Save stays reachable throughout (never covered/off-screen). Scope to the
-    // footer Save button (T9520: "Save play"/"Save play and create clip") so the
-    // match is unambiguous — the toggle's "Just save this play" also contains "save".
-    await expect(strip.getByRole('button', { name: /^Save play/ })).toBeInViewport();
-  });
-
-  // T9820 / E47 regression: at four stars with the create-clip toggle manually
-  // ON, the caption must reflect the intent and the CTA must agree — never demand
-  // another star. Kept as its own test because toggling manually disables the
-  // rating-5 auto-flip for the rest of the session.
-  test('E47: four stars + create toggle ON -> caption and CTA agree, no star demand @t9820', async ({ page }) => {
-    await enterAnnotateMode(page);
-    await ensurePaused(page);
-    await seekVideoDirect(page, 10);
-
-    await page.locator('[data-testid="annotate-primary-cta"]').click();
-    await page.waitForTimeout(800);
-
-    const strip = page.locator('[data-testid="annotate-editor-strip"]');
-    await expect(strip).toBeVisible();
-
-    // Default rating is 4; enable creation via the toggle.
-    await strip.getByRole('button', { name: 'Just save this play' }).click();
-
-    await expect(strip).toContainText('Good play (!) - this play will also become an editable clip.');
-    await expect(strip).not.toContainText('one more star');
-    // CTA agrees with the intent (T9520 copy: "Save play and create clip").
-    await expect(strip.getByRole('button', { name: 'Save play and create clip' })).toBeVisible();
-    await saveEvidence(page, 'T9820-strip-rating4-create-on');
   });
 });
 
@@ -207,27 +208,44 @@ test.describe('T8490: rating caption — mobile bottom sheet', () => {
     await clearBrowserState(page);
   });
 
-  test('shows the caption in the mobile sheet with Save still reachable at 320x844 @t8490', async ({ page }) => {
+  // T10610: same rewrite as the desktop strip test above — the caption panel
+  // is gone; the RatingBadge popup (a mobile bottom sheet here, per
+  // PlayProgressBadges' isMobile split) carries the star-semantics adjective +
+  // notation instead, and the create-at-tap primary CTA opens the sheet
+  // already in EDIT mode with the play already persisted.
+  test('rating popup (mobile sheet) shows star semantics, Done still reachable at 320x844 @t8490', async ({ page }) => {
     await enterAnnotateMode(page);
     await ensurePaused(page);
     await seekVideoDirect(page, 10);
 
-    await page.locator('[data-testid="annotate-primary-cta"]').click();
+    const [saveResp] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/clips/raw/save') && r.request().method() === 'POST'),
+      page.locator('[data-testid="annotate-primary-cta"]').click(),
+    ]);
+    const clipId = (await saveResp.json()).raw_clip_id;
     await page.waitForTimeout(800);
 
     const sheet = page.locator('[data-add-clip-form]');
     await expect(sheet).toBeVisible();
-    await expect(sheet).toContainText('Good play (!) - this saves the play without creating a clip.');
+
+    await sheet.getByTestId('badge-rated').click();
+    const picker = page.getByTestId('rating-picker');
+    await expect(picker).toBeVisible();
+    await expect(picker.getByRole('radio', { name: /^4 stars - Good/ })).toHaveAttribute('aria-checked', 'true');
     await saveEvidence(page, 'T8490-mobile-320-rating4-mine');
 
-    await sheet.locator('button[title="5 stars"]').click();
-    await expect(sheet).toContainText('Brilliant play (!!) - this play will also become an editable clip.');
+    const [put5] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
+      picker.getByRole('radio', { name: /^5 stars - Brilliant/ }).click(),
+    ]);
+    expect(put5.postDataJSON()).toEqual({ rating: 5 });
     await saveEvidence(page, 'T8490-mobile-320-rating5-mine');
 
-    // The pinned footer keeps Save reachable without scrolling (T8140).
-    const saveButton = sheet.getByRole('button', { name: 'Save' });
-    await expect(saveButton).toBeVisible();
-    await expect(saveButton).toBeInViewport();
-    await saveEvidence(page, 'T8490-mobile-320-save-reachable');
+    // The pinned footer keeps Done reachable without scrolling (T8140) — the
+    // surviving form of the old "Save reachable" assertion.
+    const doneButton = sheet.getByRole('button', { name: 'Done' });
+    await expect(doneButton).toBeVisible();
+    await expect(doneButton).toBeInViewport();
+    await saveEvidence(page, 'T8490-mobile-320-done-reachable');
   });
 });

@@ -22,17 +22,21 @@ function mockViewport(matches) {
 
 beforeEach(() => mockViewport(false)); // desktop
 
+const existingClip = {
+  id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], notes: '',
+  my_athlete: true, name: 'Play 1', tagged_teammates: [], videoSequence: 2,
+};
+
 const baseProps = {
   isVisible: true,
   currentTime: 30,
   videoDuration: 6000,
-  onCreateClip: () => {},
-  onUpdateClip: () => {},
-  onResume: () => {},
+  existingClip,
+  onUpdateClip: () => Promise.resolve({ saveOk: true }),
   onClose: () => {},
   onSeek: () => {},
   videoController: {},
-  surface: 'inline_desktop',
+  onDeleteClip: () => {},
 };
 
 describe('AnnotateFullscreenOverlay — "cut from {angle}" chip (T8892)', () => {
@@ -59,8 +63,6 @@ describe('AnnotateFullscreenOverlay — "cut from {angle}" chip (T8892)', () => 
       <AnnotateFullscreenOverlay
         {...baseProps}
         layout="overlay"
-        surface="dock_fullscreen"
-        existingClip={{ id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: [], notes: '', my_athlete: true, videoSequence: 2 }}
         activeSourceName="sideline"
       />
     );
@@ -73,7 +75,6 @@ describe('AnnotateFullscreenOverlay — "cut from {angle}" chip (T8892)', () => 
       <AnnotateFullscreenOverlay
         {...baseProps}
         layout="landscape-inline"
-        surface="fullscreen_mobile"
         activeSourceName="sideline"
       />
     );
@@ -82,7 +83,7 @@ describe('AnnotateFullscreenOverlay — "cut from {angle}" chip (T8892)', () => 
 
   it('landscape-inline: renders NOTHING for the backbone', () => {
     render(
-      <AnnotateFullscreenOverlay {...baseProps} layout="landscape-inline" surface="fullscreen_mobile" activeSourceName={null} />
+      <AnnotateFullscreenOverlay {...baseProps} layout="landscape-inline" activeSourceName={null} />
     );
     expect(screen.queryByTestId('cut-from-angle')).toBeNull();
   });

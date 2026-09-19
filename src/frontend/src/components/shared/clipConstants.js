@@ -50,6 +50,13 @@ export const RATING_BACKGROUND_COLORS = {
 // Default rating when none is set
 export const DEFAULT_RATING = 3;
 
+// T10610: rating a freshly created play starts at, BEFORE the user ever taps a
+// star. Distinct from DEFAULT_RATING (3) above, which is a display-only fallback
+// for a clip that somehow has no rating at all — the two happened to both be
+// called DEFAULT_RATING (4 in two files) prior to this task; that collision is
+// why this one gets its own name.
+export const NEW_PLAY_DEFAULT_RATING = 4;
+
 // T9840: default capture window for a "Mark play" tap — 6 seconds before the
 // tap + 2 seconds after (8s total, was 9+3=12). The post-roll is intentional:
 // parents tap AFTER they see a good play, so the seconds following the tap hold

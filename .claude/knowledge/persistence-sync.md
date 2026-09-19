@@ -1,5 +1,11 @@
 ---
 domain: persistence-sync
+updated: 2026-09-19 (T10610: Annotate's play editor gained its own per-region FIFO write queue,
+`regionWriteQueue.js` — modelled on this doc's T4330 `actionClient.js` FIFO idea but deliberately
+WITHOUT version threading/409 handling (`raw_clips` has no version counter, EPIC non-goal). Zero
+changes to the CAS/sync machinery, `actionClient.js`, or any backend sync path this doc otherwise
+covers — see the T4330 section's new cross-reference below, and `.claude/knowledge/annotate.md`'s
+T10610 entry for the full mechanism.)
 updated: 2026-09-15 (T9870 — autosave + retain finished private results, frontend-only, NO new write
 path. Reconciliation finding relevant here: (1) in-progress crop/spotlight/trim edits already
 autosave surgically per gesture through `api/actionClient.js` → `/actions` (invariant 8) — this IS
@@ -1480,6 +1486,18 @@ determinism, `mapResult` shape preservation), `overlayActionStore.test.js` (409 
 queued, not the generic rejection toast), backend two-writer 409 per endpoint
 (`test_overlay_actions.py::TestOverlayActionVersionConflict`,
 `test_framing_action_version_conflict.py`), migration idempotency (`test_t4330_migration_v044.py`).
+
+**T10610 cross-reference (2026-09-19): Annotate has its OWN per-region FIFO, deliberately NOT
+this client.** `src/frontend/src/modes/annotate/regionWriteQueue.js` (`createRegionWriteQueue`)
+gives the play editor the SAME "same-entity writes serialize, different entities don't block
+each other" FIFO idea as `actionClient.js` above, modelled on it directly — but WITHOUT version
+threading or 409 handling, because `raw_clips` has no version counter and isn't getting one (an
+explicit EPIC non-goal, not an oversight: single-writer-per-play in practice, a second tab editing
+the same play stays last-write-wins same as before). Do not "unify" the two queues — they solve
+the same shaped problem for two backends with genuinely different concurrency guarantees
+(`raw_clips`'s whole-row `PUT`/`POST`/`DELETE` vs `working_clips`/overlay's versioned whole-blob
+RMW). See `.claude/knowledge/annotate.md`'s T10610 entry for the full mechanism (create-POST-as-
+chain-head, DELETE-as-chain-tail, per-payload-key failure tracking).
 
 ## T4360 — Explicit orderings: BEGIN IMMEDIATE + activation invariants
 
