@@ -1,14 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { getPlayProgress, isDefaultPlayName, CLIP_BADGE } from './playProgress';
 
-// T10410: the play-progress badge derivation. Pins the 2026-09-18 rulings:
-// rated = rating differs from the default; named = a real user-typed name
+// T10410: the play-progress badge derivation. Pins the 2026-09-18 rulings,
+// revised 2026-09-19 (T10520) for `rated`: named = a real user-typed name
 // (never "Play N", never a backend-derived name); clip badge dormant below 5
 // stars, nudging at 5, pending while creating, done once a project exists.
 
 const base = {
   rating: 4,
-  defaultRating: 4,
+  isEditMode: false,
+  isRatingManuallyEdited: false,
   clipName: '',
   isNameManuallyEdited: false,
   loadedName: null,
@@ -19,12 +20,17 @@ const base = {
 };
 
 describe('getPlayProgress — rated', () => {
-  it('is false at the untouched default rating', () => {
+  it('is false in create mode before the rating control has been touched, regardless of value', () => {
     expect(getPlayProgress(base).rated).toBe(false);
+    expect(getPlayProgress({ ...base, rating: 5 }).rated).toBe(false);
   });
-  it('is true for any rating other than the default (ruling 1b)', () => {
-    expect(getPlayProgress({ ...base, rating: 5 }).rated).toBe(true);
-    expect(getPlayProgress({ ...base, rating: 1 }).rated).toBe(true);
+  it('is true in create mode once touched this session, even at the untouched-looking default value', () => {
+    expect(getPlayProgress({ ...base, isRatingManuallyEdited: true }).rated).toBe(true);
+    expect(getPlayProgress({ ...base, rating: 4, isRatingManuallyEdited: true }).rated).toBe(true);
+  });
+  it('is ALWAYS true in edit mode, whatever the rating value — a saved play always has a real rating', () => {
+    expect(getPlayProgress({ ...base, isEditMode: true, rating: 4 }).rated).toBe(true);
+    expect(getPlayProgress({ ...base, isEditMode: true, rating: 1 }).rated).toBe(true);
   });
 });
 

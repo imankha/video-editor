@@ -71,14 +71,15 @@ describe('AnnotateFullscreenOverlay — Esc layering (T8600)', () => {
 describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unchanged)', () => {
   it('typing "1" in the clip name field does not change the rating', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
-    // T9830/T10290: rating lives behind the details disclosure, which is open by
-    // default on desktop — the "4 stars · Good" label is already visible.
     // T8960: the name is a pencil button until clicked; open the inline input.
     fireEvent.click(screen.getByTitle('Rename clip'));
     const nameInput = screen.getByLabelText('Clip name');
     fireEvent.keyDown(nameInput, { key: '1' });
-    // Default rating (4 stars) label is "4 stars · Good" (T9630 N35); unaffected by the keypress.
-    expect(screen.getByText('4 stars · Good')).toBeTruthy();
+    // T10520: rating now lives in the rated badge's popup picker — open it
+    // and confirm the default (4 stars · Good) is still checked, unaffected
+    // by the keypress typed into the name field.
+    fireEvent.click(screen.getByTestId('badge-rated'));
+    expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('Enter (not typing) triggers Save', () => {

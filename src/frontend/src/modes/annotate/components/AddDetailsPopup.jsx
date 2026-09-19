@@ -17,16 +17,16 @@ import { ANNOTATE } from '../../../config/displayNames';
  * No backdrop-close — dismissal is Done or X only (project's standing rule).
  * Does NOT save; the sheet's pinned Save footer stays the only save gesture.
  *
- * T9830: now carries Rating + the (de-ambered) Sport prompt alongside Tags +
- * Notes via the shared DetailsFields — rating is an OPTIONAL detail now, so it
- * lives behind the disclosure on mobile too. The old T8140 "mobile stays clean,
- * no in-form sport picker" rule is superseded: the picker is de-ambered and one
- * tap behind the disclosure, not an amber wall on the first-clip path.
+ * T9830: carries the (de-ambered) Sport prompt alongside Tags + Notes via the
+ * shared DetailsFields. The old T8140 "mobile stays clean, no in-form sport
+ * picker" rule is superseded: the picker is de-ambered and one tap behind the
+ * disclosure, not an amber wall on the first-clip path. T10520: Rating no
+ * longer lives here — it moved to the `PlayProgressBadges` rated badge in the
+ * pinned footer underneath this popup (close this popup, or the strip header,
+ * to reach it — the badge is the one place rating is set now, on every layout).
  */
 export function AddDetailsPopup({
   isEditMode,
-  rating,
-  onRatingChange,
   tagSet,
   sport,
   positions,
@@ -63,8 +63,6 @@ export function AddDetailsPopup({
 
       <div className="flex-1 overflow-y-auto p-4">
         <DetailsFields
-          rating={rating}
-          onRatingChange={onRatingChange}
           tagSet={tagSet}
           sport={sport}
           positions={positions}

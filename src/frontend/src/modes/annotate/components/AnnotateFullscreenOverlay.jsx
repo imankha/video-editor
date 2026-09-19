@@ -207,6 +207,11 @@ export function AnnotateFullscreenOverlay({
   const [selectedTags, setSelectedTags] = useState([]);
   const [clipName, setClipName] = useState('');
   const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
+  // T10520: session-scoped "has the rating control been touched" flag, same
+  // shape as isNameManuallyEdited — feeds playProgress's `rated` in CREATE
+  // mode only (edit mode is always rated, since a saved play always carries
+  // a real value). Never persisted; a fresh open resets it.
+  const [isRatingManuallyEdited, setIsRatingManuallyEdited] = useState(false);
   // T8760 item 4: in the strip (desktop edit) layout the header name IS the one
   // edit affordance — clicking the pencil turns it into an inline input. This
   // replaces the standalone name field the button row used to duplicate (item 3).
@@ -311,6 +316,7 @@ export function AnnotateFullscreenOverlay({
     }
     const t = currentTimeRef.current;
     setIsEditingName(false); // T8760: close inline name editing on clip switch
+    setIsRatingManuallyEdited(false); // T10520: edit mode doesn't need this true (isEditMode already covers it)
     // T10290: every create now closes the editor (the desktop strip no longer
     // stays open and rehydrates), so a clip switch is always a real switch —
     // reset the save status unconditionally.
@@ -419,6 +425,7 @@ export function AnnotateFullscreenOverlay({
     // T9830: rating no longer flips a create-clip default — it is descriptive
     // metadata now. Just record it (and the quest-progress side effect).
     setRating(newRating);
+    setIsRatingManuallyEdited(true); // T10520: feeds playProgress's `rated` in create mode
     maybeRecordRatedAndTagged(newRating, selectedTags);
   };
   handleRatingChangeRef.current = handleRatingChange;
@@ -621,7 +628,8 @@ export function AnnotateFullscreenOverlay({
   // loose "Clip created" text the strip's action row used to carry.
   const progress = getPlayProgress({
     rating,
-    defaultRating: DEFAULT_RATING,
+    isEditMode,
+    isRatingManuallyEdited,
     clipName,
     isNameManuallyEdited,
     loadedName: isEditMode ? (existingClip.name || '') : null,
@@ -630,10 +638,12 @@ export function AnnotateFullscreenOverlay({
     hasProject: !!existingClip?.autoProjectId,
     creating: focusPending || clipCreating,
   });
-  // Each undone badge jumps to the control that completes it. T10460: the
-  // rated badge is the exception — it opens its own popover (RatingBadge)
-  // rather than jumping to the disclosure, so it takes `rating`/
-  // `handleRatingChange` directly instead of a jump callback.
+  // Each undone badge jumps to the control that completes it. T10520: the
+  // rated badge is the exception — it opens its own popup rating picker
+  // (RatingBadge) rather than jumping to the disclosure, so it takes
+  // `rating`/`handleRatingChange` directly instead of a jump callback. It is
+  // also the only badge that stays clickable once DONE, since a rating is a
+  // value you may want to change again, not a one-time checkbox.
   const jumpToName = () => {
     if (layout === 'strip') setIsEditingName(true);
     else nameInputRef.current?.focus();
@@ -808,9 +818,6 @@ export function AnnotateFullscreenOverlay({
         {!isMobile && detailsOpen && (
           <div className="mb-4 border-t border-gray-700 pt-4">
             <DetailsFields
-              rating={rating}
-              onRatingChange={handleRatingChange}
-              showKeyHint
               tagSet={tagSet}
               sport={sport}
               positions={getPositions(sport)}
@@ -1171,9 +1178,6 @@ export function AnnotateFullscreenOverlay({
           {detailsOpen && (
             <div className={`border-t px-4 py-3 ${isEditMode ? 'border-yellow-800/30' : 'border-green-800/30'}`}>
               <DetailsFields
-                rating={rating}
-                onRatingChange={handleRatingChange}
-                showKeyHint
                 tagSet={tagSet}
                 sport={sport}
                 positions={getPositions(sport)}
@@ -1308,8 +1312,6 @@ export function AnnotateFullscreenOverlay({
         {isMobile && detailsOpen && (
           <AddDetailsPopup
             isEditMode={isEditMode}
-            rating={rating}
-            onRatingChange={handleRatingChange}
             tagSet={tagSet}
             sport={sport}
             positions={getPositions(sport)}

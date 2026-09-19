@@ -92,10 +92,11 @@ describe('AnnotateFullscreenOverlay mobile inline sheet — stage CTA (T9330 §2
       />
     );
     // Make the form dirty (rating 4 -> 5), then tap the CTA: must prompt, not navigate.
-    // T9830: on mobile the rating lives inside the full-screen "Add details" popup.
-    fireEvent.click(screen.getByTestId('add-details-button'));
-    fireEvent.click(screen.getByTitle('5 stars'));
-    fireEvent.click(screen.getByRole('button', { name: 'Done' })); // close the popup
+    // T10520: rating is set via the badge's popup picker (the pinned footer's
+    // badges are visible without opening "Add details" — that popup no
+    // longer carries a rating control at all).
+    fireEvent.click(screen.getByTestId('badge-rated'));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     fireEvent.click(screen.getByRole('button', { name: 'Frame' }));
     expect(screen.getByText('Save this play first?')).toBeTruthy();
     expect(onOpenInFocus).not.toHaveBeenCalled();

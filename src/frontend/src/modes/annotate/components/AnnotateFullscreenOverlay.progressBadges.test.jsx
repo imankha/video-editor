@@ -47,14 +47,24 @@ const bareClip = {
 const badge = (id) => screen.getByTestId(id);
 
 describe('strip header badges — states', () => {
-  it('a bare play shows all three undone and the clip badge dormant', () => {
+  it('an edit-mode play is ALWAYS rated, even at a plain value; named/noted still undone', () => {
+    // T10520: rated no longer compares against a "default" — edit mode means
+    // a real rating is on record, period, whatever the value.
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
-    expect(badge('badge-rated').dataset.state).toBe('undone');
+    expect(badge('badge-rated').dataset.state).toBe('done');
     expect(badge('badge-named').dataset.state).toBe('undone');
     expect(badge('badge-noted').dataset.state).toBe('undone');
     expect(badge('badge-clip').dataset.state).toBe('dormant');
     // The old loose status text is gone from the action row.
     expect(screen.queryByText('Clip created')).toBeNull();
+  });
+
+  it('a fresh CREATE-mode play is NOT rated until the rating control is touched', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={null} />);
+    expect(badge('badge-rated').dataset.state).toBe('undone');
+    fireEvent.click(badge('badge-rated'));
+    fireEvent.click(screen.getByRole('radio', { name: '4 stars - Good' })); // the untouched-looking default value
+    expect(badge('badge-rated').dataset.state).toBe('done');
   });
 
   it('a fully done play shows four done badges and the clip badge reads "Clip created"', () => {
@@ -81,7 +91,8 @@ describe('strip header badges — states', () => {
 
   it('rating a play 5 stars wakes the clip badge into the "Create clip" nudge', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
-    fireEvent.click(screen.getByTitle('5 stars'));
+    fireEvent.click(badge('badge-rated'));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     expect(badge('badge-rated').dataset.state).toBe('done');
     expect(badge('badge-clip').dataset.state).toBe('nudge');
     expect(screen.getByText('Create clip')).toBeTruthy();
@@ -107,15 +118,17 @@ describe('strip header badges — clicks jump to the control', () => {
     expect(screen.getByLabelText('Clip name')).toBeTruthy();
   });
 
-  it('clicking the rated badge replaces it in place with a 5-star column (not a popup, not the disclosure)', () => {
+  it('clicking the rated badge opens a popup box with all five ratings, best-first', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
     expect(screen.queryByRole('radiogroup', { name: 'Rate this play' })).toBeNull();
     fireEvent.click(badge('badge-rated'));
     const group = screen.getByRole('radiogroup', { name: 'Rate this play' });
     expect(group).toBeTruthy();
-    // Still the same badge-rated element -- expanded in place, not a separate popup.
-    expect(group.dataset.testid).toBe('badge-rated');
-    // 5 is listed first (best-first, top of the vertical stack), down to 1.
+    // The popup is a SEPARATE element from the badge itself (T10520 round 3 —
+    // not an in-place expansion of the badge, a floating box anchored to it).
+    expect(group.closest('[data-testid="rating-picker"]')).toBeTruthy();
+    expect(badge('badge-rated')).toBeTruthy();
+    // 5 is listed first (best-first, top of the box), down to 1.
     // Scoped to the group -- the Layer segmented control also uses role="radio".
     const options = within(group).getAllByRole('radio');
     expect(options.map((o) => o.getAttribute('aria-label'))).toEqual([
@@ -124,14 +137,39 @@ describe('strip header badges — clicks jump to the control', () => {
     ]);
   });
 
-  it('picking a star from the expanded column sets the rating and collapses back to the disc', () => {
+  it('picking a star sets the rating and closes the popup', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
     fireEvent.click(badge('badge-rated'));
     fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     expect(badge('badge-rated').dataset.state).toBe('done');
     expect(screen.queryByRole('radiogroup', { name: 'Rate this play' })).toBeNull();
-    // The clip nudge wakes at 5 stars, same as the disclosure's own stars.
+    // The clip nudge wakes at 5 stars.
     expect(badge('badge-clip').dataset.state).toBe('nudge');
+  });
+
+  it('the rated badge stays clickable once done, so the rating can be set again and again (T10520)', () => {
+    // Edit mode: rated is already 'done' from the first render (any real
+    // rating counts, not just non-default values).
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating: 5 }} />);
+    expect(badge('badge-rated').dataset.state).toBe('done');
+    expect(badge('badge-rated').tagName).toBe('BUTTON'); // never an inert span, unlike the other badges
+    fireEvent.click(badge('badge-rated'));
+    fireEvent.click(screen.getByRole('radio', { name: '2 stars - Technical Lapse' }));
+    expect(badge('badge-rated').dataset.state).toBe('done'); // still done -- edit mode always is
+    // Reopen: the picker reflects the just-picked value.
+    fireEvent.click(badge('badge-rated'));
+    expect(screen.getByRole('radio', { name: '2 stars - Technical Lapse' }).getAttribute('aria-checked')).toBe('true');
+    // Change it again.
+    fireEvent.click(screen.getByRole('radio', { name: '4 stars - Good' }));
+    fireEvent.click(badge('badge-rated'));
+    expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('DetailsFields no longer carries its own duplicate Rating row (the badge is the only rating control)', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
+    // detailsOpen defaults true on desktop, so the disclosure (Tags/Notes) is
+    // already rendered here -- assert it has no "Rating" label of its own.
+    expect(screen.queryByText(/^Rating/)).toBeNull();
   });
 
   it('typing a name flips the name badge to done', () => {
@@ -177,7 +215,8 @@ describe('formBody layouts', () => {
   it('create mode: the 5-star nudge saves the play AND creates the clip in one gesture', async () => {
     const onCreateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 9 });
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" onCreateClip={onCreateClip} />);
-    fireEvent.click(screen.getByTitle('5 stars'));
+    fireEvent.click(badge('badge-rated'));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     expect(badge('badge-clip').dataset.state).toBe('nudge');
     fireEvent.click(badge('badge-clip'));
     await waitFor(() => expect(onCreateClip).toHaveBeenCalled());
@@ -192,7 +231,8 @@ describe('same-play identity churn keeps unsaved edits (Reviewer BLOCKING #2)', 
   // not treat that as a clip switch and wipe the form.
   it('re-rendering with a new object for the same clip id preserves the 5-star edit and typed name', () => {
     const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
-    fireEvent.click(screen.getByTitle('5 stars'));
+    fireEvent.click(badge('badge-rated'));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     fireEvent.click(badge('badge-named'));
     fireEvent.change(screen.getByLabelText('Clip name'), { target: { value: 'Banger' } });
     expect(badge('badge-clip').dataset.state).toBe('nudge');
@@ -202,13 +242,16 @@ describe('same-play identity churn keeps unsaved edits (Reviewer BLOCKING #2)', 
     expect(badge('badge-clip').dataset.state).toBe('done');
     expect(badge('badge-rated').dataset.state).toBe('done');
     expect(screen.getByLabelText('Clip name').value).toBe('Banger');
-    expect(screen.getByText('5 stars · Brilliant')).toBeTruthy();
+    fireEvent.click(badge('badge-rated'));
+    expect(screen.getByRole('radio', { name: '5 stars - Brilliant' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('a DIFFERENT clip id still resets the form', () => {
     const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
-    fireEvent.click(screen.getByTitle('5 stars'));
+    fireEvent.click(badge('badge-rated'));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     rerender(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, id: 'c2', rating: 3 }} />);
-    expect(screen.getByText('3 stars · Interesting')).toBeTruthy();
+    fireEvent.click(badge('badge-rated'));
+    expect(screen.getByRole('radio', { name: '3 stars - Interesting' }).getAttribute('aria-checked')).toBe('true');
   });
 });

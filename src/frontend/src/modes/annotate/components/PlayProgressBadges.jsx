@@ -10,17 +10,26 @@ import { RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
  * created. Option C of the 2026-09-18 decision artifact: they sit on the
  * header line beside the play name (desktop strip) or above the footer
  * buttons (the formBody layouts), replacing the loose "Clip created" text.
- * T10460 (user request): the named badge leads the row (it sits right next
- * to the name it completes); the rated badge, when clicked, is REPLACED in
- * place by a bare vertical stack of five stars (see RatingBadge) instead of
- * jumping to the Rate and Tag disclosure.
+ * T10460: the named badge leads the row (it sits right next to the name it
+ * completes). T10520 (round 3, after live testing found round 2's inline
+ * expand-in-place too cramped and hard to hit on mobile): the rated badge
+ * opens a proper popup box (RatingBadge) — bordered, padded, roomy touch
+ * targets — anchored below the badge, instead of squeezing itself into the
+ * badge row. It is also now the ONLY way to set a rating anywhere in the
+ * editor (DetailsFields' old duplicate horizontal star row is gone) and
+ * stays clickable in EVERY state, not just while undone — a rating is a
+ * value you may revisit, not a one-time checkbox. "Rated" itself no longer
+ * means "differs from the default 4"; it means the play has a real rating on
+ * record (see playProgress.js).
  *
  * Visual states (one treatment per state, never mixed):
  *   - undone:  dashed amber outline (T10440: was gray, read as disabled);
- *              clicking jumps to the control that completes it (the button
- *              is the affordance). Never pulses — pulse stays reserved for
- *              the clip badge's nudge, which is more urgent.
- *   - done:    green fill + a small check mark in the corner.
+ *              clicking opens the control that completes it. Never pulses —
+ *              pulse stays reserved for the clip badge's nudge, more urgent.
+ *   - done:    green fill + a small check mark in the corner. The rated
+ *              badge STAYS clickable in this state (T10520) so the rating
+ *              can be changed again; the other badges do not (an established
+ *              open question, not addressed here).
  *   - nudge:   amber, pulsing (clip badge only: 5 stars and no clip yet).
  *   - pending: spinner (clip badge only: the project is being created).
  *   - dormant: faded (clip badge only: below 5 stars) — kept in the row so
@@ -105,23 +114,23 @@ function Badge({ testId, state, size, Icon, title, label, onClick }) {
 const RATING_VALUES = [5, 4, 3, 2, 1];
 
 /**
- * RatingBadge (T10460, revised same day per user feedback) — the rated
- * badge, specialized: clicking it does not open a separate floating panel.
- * The disc itself is REPLACED, in place, by a bare vertical stack of five
- * small stars (5 on top, matching "best first", down to 1) — no box,
- * border, shadow, or adjective text, just the stars every other star
- * control in the app already draws. Sibling badges shift right in the flow
- * (this is inline, not absolutely positioned) while it's expanded. Picking
- * a star calls the SAME `onRatingChange` every other rating control in the
- * editor uses, then collapses back to the disc; so does an outside click or
- * Escape. The open/closed flag is the only state this file holds — the
- * rating value itself is never held here.
+ * RatingBadge (T10520, round 3) — the rated badge. ALWAYS a clickable
+ * button, in every state (unlike the other three badges) — a rating is a
+ * value you may want to revisit, not a one-time checkbox, so it never
+ * becomes an inert span. Clicking it opens a roomy popup box anchored below
+ * the badge: five rows, one per rating (5/"Brilliant" on top, best-first,
+ * down to 1/"Mental Lapse"), each a real touch target
+ * (`coarse-pointer:min-h-[44px]`) with its star count and adjective label —
+ * round 2's bare inline star column tested cramped and hard to hit on
+ * mobile, hence the box. Picking a row calls the SAME `onRatingChange`
+ * every other rating control in the editor uses (this IS the only rating
+ * control left — DetailsFields' old duplicate star row is gone), then
+ * closes; so does an outside click or Escape. The open/closed flag is the
+ * only state this file holds — the rating value itself is never held here.
  */
 function RatingBadge({ state, size, rating, onRatingChange }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
-  const actionable = state === BADGE_STATE.UNDONE;
-  const iconSize = ICON_SIZE[size];
 
   useEffect(() => {
     if (!open) return undefined;
@@ -139,56 +148,65 @@ function RatingBadge({ state, size, rating, onRatingChange }) {
     };
   }, [open]);
 
-  if (open) {
-    return (
-      <div
-        ref={rootRef}
-        role="radiogroup"
-        aria-label={ANNOTATE.RATE_PLAY}
+  const title = state === BADGE_STATE.DONE ? ANNOTATE.PLAY_RATED : ANNOTATE.RATE_PLAY;
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
         data-testid="badge-rated"
         data-state={state}
-        className="flex flex-col items-center gap-0.5"
+        title={title}
+        aria-label={title}
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5"
       >
-        {RATING_VALUES.map((value) => (
-          <button
-            key={value}
-            type="button"
-            role="radio"
-            aria-checked={rating === value}
-            aria-label={`${value} star${value > 1 ? 's' : ''} - ${RATING_ADJECTIVES[value]}`}
-            onClick={() => {
-              onRatingChange(value);
-              setOpen(false);
-            }}
-            className="p-0.5 hover:scale-110 transition-transform"
-          >
-            <Star
-              size={iconSize}
-              fill={value <= rating ? '#fbbf24' : 'transparent'}
-              color={value <= rating ? '#fbbf24' : '#6b7280'}
-              strokeWidth={1.5}
-            />
-          </button>
-        ))}
-      </div>
-    );
-  }
-
-  const title = state === BADGE_STATE.DONE ? ANNOTATE.PLAY_RATED : ANNOTATE.RATE_PLAY;
-  const shared = { 'data-testid': 'badge-rated', 'data-state': state, title, className: 'flex items-center gap-1.5' };
-  const disc = <Disc state={state} size={size} Icon={Star} />;
-
-  if (actionable) {
-    return (
-      <button type="button" aria-label={title} aria-haspopup="true" onClick={() => setOpen(true)} {...shared}>
-        {disc}
+        <Disc state={state} size={size} Icon={Star} />
       </button>
-    );
-  }
-  return (
-    <span role="img" aria-label={title} {...shared}>
-      {disc}
-    </span>
+      {open && (
+        <div
+          data-testid="rating-picker"
+          className="absolute z-50 top-full left-0 mt-2 min-w-[190px] p-2 rounded-xl border border-gray-700 bg-gray-800 shadow-xl"
+        >
+          <div role="radiogroup" aria-label={ANNOTATE.RATE_PLAY} className="flex flex-col gap-1">
+            {RATING_VALUES.map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={rating === value}
+                aria-label={`${value} star${value > 1 ? 's' : ''} - ${RATING_ADJECTIVES[value]}`}
+                onClick={() => {
+                  onRatingChange(value);
+                  setOpen(false);
+                }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm whitespace-nowrap
+                            coarse-pointer:min-h-[44px] coarse-pointer:py-3 transition-colors ${
+                  rating === value
+                    ? 'bg-gray-700 text-white'
+                    : 'text-gray-300 hover:bg-gray-700/70 hover:text-white'
+                }`}
+              >
+                <span className="flex items-center gap-0.5 shrink-0">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Star
+                      key={i}
+                      size={14}
+                      fill={i <= value ? '#fbbf24' : 'transparent'}
+                      color={i <= value ? '#fbbf24' : '#6b7280'}
+                      strokeWidth={1.5}
+                    />
+                  ))}
+                </span>
+                {RATING_ADJECTIVES[value]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

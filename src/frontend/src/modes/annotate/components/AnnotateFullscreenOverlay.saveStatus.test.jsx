@@ -89,8 +89,9 @@ describe('AnnotateFullscreenOverlay — Unsaved/Saving/Saved (T9630 AC3)', () =>
     // resumes/closes) — assert against the pre-save dirty detection instead,
     // which is the same `hasUnsavedEdits()` the badge reads.
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={onUpdateClip} />);
-    // T9830/T10290: rating is behind the details disclosure, open by default on desktop.
-    fireEvent.click(screen.getByTitle('5 stars'));
+    // T10520: rating is set via the rated badge's popup picker.
+    fireEvent.click(screen.getByTestId('badge-rated'));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     expect(screen.getByTestId('save-status').textContent).toBe('Unsaved changes');
   });
 

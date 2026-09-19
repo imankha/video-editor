@@ -164,20 +164,20 @@ describe('AnnotateFullscreenOverlay — rating is an optional detail, no outcome
     expect(screen.queryByText(/one more star|another star/)).toBeNull();
   });
 
-  it('rating lives behind the details disclosure, not inline in the primary form (formBody)', () => {
+  it('T10520: rating is reachable via the badge regardless of the details disclosure state (formBody)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} newClipLayerIsMine={true} />);
-    // T10290: the disclosure is open by default on desktop, so the rating label
-    // is visible inside the panel. Collapsing the disclosure hides it — proving
-    // it lives INSIDE the disclosure, not in the always-visible primary form.
-    expect(screen.getByText('4 stars · Good')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('add-details-button'));
-    expect(screen.queryByText('4 stars · Good')).toBeNull();
+    // Collapsing the "Optional details" disclosure (Tags/Notes) no longer
+    // affects rating at all — the rated badge and its popup picker live
+    // outside the disclosure entirely, so the default is checkable either way.
+    fireEvent.click(screen.getByTestId('add-details-button')); // collapse it
+    fireEvent.click(screen.getByTestId('badge-rated'));
+    expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
   });
 
-  it('rating lives behind the details disclosure on the strip layout too', () => {
+  it('T10520: same on the strip layout', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" surface="inline_desktop" newClipLayerIsMine={true} />);
-    expect(screen.getByText('4 stars · Good')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('add-details-button'));
-    expect(screen.queryByText('4 stars · Good')).toBeNull();
+    fireEvent.click(screen.getByTestId('add-details-button')); // collapse it
+    fireEvent.click(screen.getByTestId('badge-rated'));
+    expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
   });
 });

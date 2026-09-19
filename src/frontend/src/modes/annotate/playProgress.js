@@ -5,8 +5,14 @@
  * nothing new is persisted and the badges can never drift from the fields.
  *
  * User rulings (2026-09-18, decision artifact):
- *   - RATED means the rating differs from the untouched default (4 stars).
- *     A deliberate 4 therefore reads as un-rated — accepted trade-off.
+ *   - RATED (T10520, revised 2026-09-19): true whenever the play has a real
+ *     rating ON RECORD — edit mode is ALWAYS rated (a saved play always
+ *     carries a genuine 1-5 value, whatever it is), and create mode is rated
+ *     once the user has touched the rating control this session. No longer
+ *     compares against a "default" value: the original rule ("differs from
+ *     the untouched default 4") read a deliberate 4 as un-rated, which the
+ *     user rejected after testing it live — "green doesn't mean not 4, it
+ *     just means it's been set."
  *   - NAMED means a user-typed name: not blank, not the one-tap "Play N"
  *     default, and either changed in this session or stored as a custom name
  *     on the backend (`hasCustomName`, from `has_custom_name`). The loaded
@@ -56,7 +62,8 @@ export function isDefaultPlayName(name) {
 /**
  * @param {object} p
  * @param {number} p.rating            current form rating
- * @param {number} p.defaultRating     the untouched default (DEFAULT_RATING)
+ * @param {boolean} p.isEditMode       editing an existing (already-saved) play
+ * @param {boolean} p.isRatingManuallyEdited  the rating control was touched this session (create mode)
  * @param {string} p.clipName          current form name
  * @param {boolean} p.isNameManuallyEdited  the editor's manual-edit flag
  * @param {string|null} p.loadedName   existingClip.name (edit mode) or null
@@ -68,7 +75,8 @@ export function isDefaultPlayName(name) {
  */
 export function getPlayProgress({
   rating,
-  defaultRating,
+  isEditMode,
+  isRatingManuallyEdited,
   clipName,
   isNameManuallyEdited,
   loadedName = null,
@@ -92,7 +100,7 @@ export function getPlayProgress({
   else clip = CLIP_BADGE.DORMANT;
 
   return {
-    rated: rating !== defaultRating,
+    rated: isEditMode || isRatingManuallyEdited,
     named,
     noted: (notes || '').trim().length > 0,
     clip,

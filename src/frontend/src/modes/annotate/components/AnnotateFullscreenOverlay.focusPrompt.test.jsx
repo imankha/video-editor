@@ -174,9 +174,9 @@ describe('AnnotateFullscreenOverlay — Focus with no unsaved changes navigates 
     const onOpenInFocus = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} onUpdateClip={vi.fn()} onOpenInFocus={onOpenInFocus} />);
     // Change the rating (4 -> 5): a genuine edit, so the prompt must appear.
-    // T9830/T10290: rating lives behind the details disclosure, open by default
-    // on desktop — the stars are visible without opening it.
-    fireEvent.click(screen.getByTitle('5 stars'));
+    // T10520: rating is set via the rated badge's popup picker.
+    fireEvent.click(screen.getByTestId('badge-rated'));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     fireEvent.click(screen.getByRole('button', { name: FRAME_CTA }));
     expect(screen.getByText('Save this play first?')).toBeTruthy();
     expect(onOpenInFocus).not.toHaveBeenCalled();

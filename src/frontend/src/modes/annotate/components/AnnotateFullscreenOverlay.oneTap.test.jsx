@@ -92,27 +92,13 @@ describe('AnnotateFullscreenOverlay — one-tap defaults (T8140)', () => {
   });
 });
 
-// T9830: rating moved into the "Optional details" disclosure. The platform-aware
-// keyboard hint still rides with the rating label — kept on the desktop
-// expand-in-place panel, dropped in the mobile popup.
-describe('AnnotateFullscreenOverlay — platform-aware rating copy (T8140/T9830)', () => {
-  it('desktop keeps the "(press 1-5)" keyboard hint (inside details)', () => {
-    render(<AnnotateFullscreenOverlay {...baseProps} />);
-    // T10290: details is open by default on desktop, so the hint is visible;
-    // collapsing the disclosure hides it (proving it lives inside the panel).
-    expect(screen.getByText('Rating (press 1-5)')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('add-details-button'));
-    expect(screen.queryByText('Rating (press 1-5)')).toBeNull();
-  });
-
-  it('mobile drops the keyboard hint (inside the details popup)', () => {
-    mockViewport(true);
-    render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" />);
-    fireEvent.click(screen.getByTestId('add-details-button'));
-    expect(screen.queryByText('Rating (press 1-5)')).toBeNull();
-    expect(screen.getByText('Rating')).toBeTruthy();
-  });
-});
+// T10520: rating moved OUT of the "Optional details" disclosure entirely —
+// the rated badge's popup picker is now the only rating control, and it
+// carries no "(press 1-5)" copy of its own (the global 1-5 keyboard shortcut
+// still works, unaffected by this). The old platform-aware hint tests this
+// block covered no longer apply; see `AnnotateFullscreenOverlay.progressBadges.test.jsx`
+// ("DetailsFields no longer carries its own duplicate Rating row") for the
+// replacement coverage.
 
 describe('AnnotateFullscreenOverlay — no amber no_sport wall on mobile (T8140)', () => {
   it('mobile no_sport create form shows no amber "Pick your sport" prompt', () => {
