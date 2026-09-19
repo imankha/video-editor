@@ -47,10 +47,14 @@ function sourcesAt(timeline, playhead) {
   });
 }
 
+// T10610: existingClip is a required prop now (the editor never opens on a
+// play that doesn't exist yet) — this test only cares about the angle chip,
+// so a minimal stub play is enough.
 const baseOverlayProps = {
   isVisible: true, currentTime: 700, videoDuration: 1500,
-  onCreateClip: () => {}, onUpdateClip: () => {}, onResume: () => {},
-  onClose: () => {}, onSeek: () => {}, videoController: {}, surface: 'inline_desktop',
+  existingClip: { id: 'c1', startTime: 694, endTime: 702, rating: 4, tags: [], notes: '', name: 'Play 1' },
+  onUpdateClip: () => {},
+  onClose: () => {}, onSeek: () => {}, videoController: {},
 };
 
 describe('T8892 angle-name integration — every surface reads the real filename', () => {
