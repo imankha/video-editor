@@ -125,25 +125,6 @@ async function countSidebarClips(page) {
   return await page.locator('.border-b.border-gray-800.cursor-pointer').count();
 }
 
-/**
- * Create a clip: T10610 create-at-tap — clicking Mark play creates the region
- * AND the backend row immediately (no Save click; there is no Save button
- * anywhere anymore) and opens the editor already in EDIT mode on it.
- */
-async function createClip(page, seekTime) {
-  await ensurePaused(page);
-
-  // Seek directly via video element
-  await seekVideoDirect(page, seekTime);
-
-  // Click "Mark play" — the tap itself creates the play.
-  const markPlayBtn = page.locator('button[title="Mark play ending at current time (A)"]');
-  await expect(markPlayBtn).toBeVisible({ timeout: 5000 });
-  await markPlayBtn.click();
-  await page.waitForTimeout(1000);
-  console.log(`[Setup] Clip created at t=${seekTime}`);
-}
-
 // ============================================================================
 // Test
 // ============================================================================
