@@ -18,7 +18,7 @@ import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
 import { DetailsFields } from './DetailsFields';
 import { PlayProgressBadges } from './PlayProgressBadges';
-import { getPlayProgress, CLIP_BADGE } from '../playProgress';
+import { getPlayProgress, defaultPlayName, CLIP_BADGE } from '../playProgress';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../../../components/shared/clipConstants';
 import { ANNOTATE, MODE_NAMES } from '../../../config/displayNames';
 
@@ -183,7 +183,8 @@ export function AnnotateFullscreenOverlay({
   // T8140: one-tap first clip — a nameless new clip defaults to "Play N" so the
   // user can save without typing a name. Display-and-persist default (memory-only
   // until the Save gesture); never applied in edit mode.
-  const defaultClipName = isEditMode ? '' : `Play ${nextClipNumber}`;
+  // T10410: template single-sourced with its recognizer (isDefaultPlayName).
+  const defaultClipName = isEditMode ? '' : defaultPlayName(nextClipNumber);
   const currentProfile = useCurrentProfile();
   const updateProfile = useProfileStore(state => state.updateProfile);
   const sport = currentProfile?.sport || NO_SPORT;
@@ -220,6 +221,9 @@ export function AnnotateFullscreenOverlay({
   // when the call settles, and the badge flips to done when the parent re-renders
   // with the landed autoProjectId.
   const [clipCreating, setClipCreating] = useState(false);
+  // T10410: the clip id (or null for create mode) the reset effect last seeded
+  // the form from. `undefined` = never seeded, so the first run always seeds.
+  const seededClipIdRef = useRef(undefined);
   // Mirror currentTime in a ref so the reset effect below reads the playhead
   // at transition time without re-running on seek-driven updates during drag.
   // Must NOT be frozen at open time: the overlay can switch edit->create while
@@ -287,6 +291,24 @@ export function AnnotateFullscreenOverlay({
 
   // Reset form when existingClip changes (switching between create/edit mode)
   useEffect(() => {
+    // T10410: `existingClip` is a NEW OBJECT after every surgical region update
+    // (updateClipRegion spreads the region; the parent's find() memo follows),
+    // including ones this open editor itself triggers — the clip badge's
+    // `{ createProject: true }` and the autoProjectId/rawClipId that land after
+    // it. Those are the SAME play, so re-seeding here would silently discard
+    // every unsaved field edit (the 5-star rating that woke the nudge, a typed
+    // note, a trimmed window). Only a real switch (different clip id, or
+    // create<->edit) resets the form; a same-play identity churn keeps it.
+    const clipKey = existingClip ? existingClip.id : null;
+    const samePlay = seededClipIdRef.current === clipKey;
+    seededClipIdRef.current = clipKey;
+    if (samePlay) {
+      // `createProject` is not a user-edited field — it MIRRORS the clip's
+      // project state (hasUnsavedEdits diffs it against autoProjectId), so it
+      // must follow the landed autoProjectId or the form would read dirty.
+      if (existingClip) setCreateProject(!!existingClip.autoProjectId);
+      return;
+    }
     const t = currentTimeRef.current;
     setIsEditingName(false); // T8760: close inline name editing on clip switch
     // T10290: every create now closes the editor (the desktop strip no longer
@@ -609,7 +631,12 @@ export function AnnotateFullscreenOverlay({
     creating: focusPending || clipCreating,
   });
   // Each undone badge jumps to the control that completes it.
-  const jumpToRating = () => setDetailsOpen(true);
+  const jumpToRating = () => {
+    setDetailsOpen(true);
+    // The stars live inside the disclosure (open by default on desktop, so the
+    // click would otherwise be inert there) — focus the first star once mounted.
+    requestAnimationFrame(() => document.getElementById('clip-rating')?.querySelector('button')?.focus());
+  };
   const jumpToName = () => {
     if (layout === 'strip') setIsEditingName(true);
     else nameInputRef.current?.focus();
@@ -1088,8 +1115,8 @@ export function AnnotateFullscreenOverlay({
               disclosure below. T10310 (2026-09-18 user request): "Create clip"
               and "Save and Frame" both moved out of the editor onto the main
               screen's split [Edit Play]/[Frame Clip] row — this row is now
-              just Save + Cancel (plus the "Clip created" status when a project
-              already exists). */}
+              just Rate and Tag + Save + Cancel (T10410 moved the "Clip created"
+              status up to the header line as the clip badge). */}
           <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
             {/* T10310: "Rate and Tag" moved to the far left, swapped with
                 "Create clip" (now in the right-hand action group) per user

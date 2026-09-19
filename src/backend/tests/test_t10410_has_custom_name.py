@@ -113,3 +113,18 @@ def test_list_endpoint_carries_the_same_flag(client, game_id):
     by_id = {c["id"]: c for c in resp.json()}
     assert by_id[custom_id]["has_custom_name"] is True
     assert by_id[derived_id]["has_custom_name"] is False
+
+
+def test_game_annotations_payload_carries_the_flag(client, game_id):
+    """The Annotate editor loads regions from the GAME payload
+    (games.load_annotations_from_db), not /clips/raw -- that loader also fills
+    `name` in when nothing is stored, so it must carry has_custom_name too."""
+    from app.routers.games import load_annotations_from_db
+
+    custom_id = _save(client, game_id, name="Custom")
+    derived_id = _save(client, game_id)
+    by_id = {a["id"]: a for a in load_annotations_from_db(game_id)}
+    assert by_id[custom_id]["name"] == "Custom"
+    assert by_id[custom_id]["has_custom_name"] is True
+    assert by_id[derived_id]["name"]  # generated, still populated
+    assert by_id[derived_id]["has_custom_name"] is False

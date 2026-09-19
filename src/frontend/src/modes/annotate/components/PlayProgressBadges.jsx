@@ -1,5 +1,5 @@
 import { Star, Pencil, AlignLeft, Clapperboard, Check, Loader2 } from 'lucide-react';
-import { CLIP_BADGE } from '../playProgress';
+import { BADGE_STATE, CLIP_BADGE } from '../playProgress';
 import { ANNOTATE } from '../../../config/displayNames';
 
 /**
@@ -30,23 +30,23 @@ const DISC_SIZE = { sm: 'w-[22px] h-[22px]', md: 'w-7 h-7' };
 const ICON_SIZE = { sm: 11, md: 14 };
 
 const DISC_STATE = {
-  undone: 'border-dashed border-gray-500 text-gray-500 hover:border-gray-300 hover:text-gray-300',
-  done: 'border-solid border-green-500 bg-green-500/15 text-green-400',
-  nudge: 'border-solid border-amber-500 bg-amber-500/15 text-amber-300 motion-safe:animate-pulse',
-  pending: 'border-solid border-cyan-600 bg-cyan-600/10 text-cyan-300',
-  dormant: 'border-dotted border-gray-600 text-gray-600 opacity-40',
+  [BADGE_STATE.UNDONE]: 'border-dashed border-gray-500 text-gray-500 hover:border-gray-300 hover:text-gray-300',
+  [BADGE_STATE.DONE]: 'border-solid border-green-500 bg-green-500/15 text-green-400',
+  [BADGE_STATE.NUDGE]: 'border-solid border-amber-500 bg-amber-500/15 text-amber-300 motion-safe:animate-pulse',
+  [BADGE_STATE.PENDING]: 'border-solid border-cyan-600 bg-cyan-600/10 text-cyan-300',
+  [BADGE_STATE.DORMANT]: 'border-dotted border-gray-600 text-gray-600 opacity-40',
 };
 
 function Disc({ state, size, Icon }) {
   const iconSize = ICON_SIZE[size];
   return (
     <span className={`${DISC_BASE} ${DISC_SIZE[size]} ${DISC_STATE[state]}`}>
-      {state === 'pending' ? (
+      {state === BADGE_STATE.PENDING ? (
         <Loader2 size={iconSize} className="animate-spin" />
       ) : (
         <Icon size={iconSize} />
       )}
-      {state === 'done' && (
+      {state === BADGE_STATE.DONE && (
         <span
           aria-hidden="true"
           className="absolute -right-1 -bottom-1 grid place-items-center w-[13px] h-[13px] rounded-full bg-green-500 ring-2 ring-gray-900"
@@ -59,9 +59,12 @@ function Disc({ state, size, Icon }) {
 }
 
 function Badge({ testId, state, size, Icon, title, label, onClick }) {
-  const actionable = typeof onClick === 'function' && (state === 'undone' || state === 'nudge');
+  const actionable =
+    typeof onClick === 'function' && (state === BADGE_STATE.UNDONE || state === BADGE_STATE.NUDGE);
   const labelClass =
-    state === 'done' ? 'text-green-300' : state === 'nudge' ? 'text-amber-300' : 'text-gray-500';
+    state === BADGE_STATE.DONE ? 'text-green-300'
+    : state === BADGE_STATE.NUDGE ? 'text-amber-300'
+    : 'text-gray-500';
   const content = (
     <>
       <Disc state={state} size={size} Icon={Icon} />
@@ -122,10 +125,12 @@ export function PlayProgressBadges({
     : ANNOTATE.CLIP_BADGE_DORMANT_HINT;
 
   return (
-    <div data-testid="play-progress-badges" className={`flex items-center gap-2 ${className}`}>
+    // aria-live: the clip badge walks dormant -> nudge -> pending -> done without
+    // any other announcement, so let screen readers hear the label change.
+    <div data-testid="play-progress-badges" aria-live="polite" className={`flex items-center gap-2 ${className}`}>
       <Badge
         testId="badge-rated"
-        state={progress.rated ? 'done' : 'undone'}
+        state={progress.rated ? BADGE_STATE.DONE : BADGE_STATE.UNDONE}
         size={size}
         Icon={Star}
         title={progress.rated ? ANNOTATE.PLAY_RATED : ANNOTATE.RATE_PLAY}
@@ -133,7 +138,7 @@ export function PlayProgressBadges({
       />
       <Badge
         testId="badge-named"
-        state={progress.named ? 'done' : 'undone'}
+        state={progress.named ? BADGE_STATE.DONE : BADGE_STATE.UNDONE}
         size={size}
         Icon={Pencil}
         title={progress.named ? ANNOTATE.PLAY_NAMED : ANNOTATE.NAME_PLAY}
@@ -141,7 +146,7 @@ export function PlayProgressBadges({
       />
       <Badge
         testId="badge-noted"
-        state={progress.noted ? 'done' : 'undone'}
+        state={progress.noted ? BADGE_STATE.DONE : BADGE_STATE.UNDONE}
         size={size}
         Icon={AlignLeft}
         title={progress.noted ? ANNOTATE.NOTE_ADDED : ANNOTATE.ADD_NOTE}

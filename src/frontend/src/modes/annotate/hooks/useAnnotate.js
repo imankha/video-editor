@@ -189,6 +189,9 @@ export function validateTsvContent(content) {
       startTime,
       endTime: startTime + clipDuration,
       name: clipName || '',
+      // T10410: a TSV clip_name is the user's own text (no derivation step),
+      // so it is custom exactly when present — set explicitly, never inferred.
+      hasCustomName: !!clipName,
       tags,
       notes: notes || '',
       rating
@@ -241,6 +244,21 @@ function formatTimestampForName(seconds) {
  */
 function generateClipId() {
   return `clip_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+
+/**
+ * T10410: read a loaded annotation's stored-vs-generated name flag. The games
+ * payload sends snake_case `has_custom_name`; a camelCase annotation (already a
+ * region shape) carries `hasCustomName`. Anything else is a producer that forgot
+ * the field — say so loudly and treat the name as generated (the badge then
+ * shows the nudge, the visible-and-recoverable direction).
+ */
+export function readHasCustomName(annotation) {
+  if (typeof annotation.has_custom_name === 'boolean') return annotation.has_custom_name;
+  if (typeof annotation.hasCustomName === 'boolean') return annotation.hasCustomName;
+  console.warn('[useAnnotate] annotation is missing has_custom_name; treating its name as generated', annotation.id ?? annotation.raw_clip_id);
+  return false;
 }
 
 export default function useAnnotate(videoMetadata, { selectedRegionId = null, onSelect, onCreateSelect } = {}) {
@@ -696,11 +714,11 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         startTime: Math.max(0, Math.min(startTime, effectiveDuration - MIN_CLIP_DURATION)),
         endTime: Math.min(endTime, effectiveDuration),
         name: annotation.name || '',
-        // T10410: the backend's `name` is ALWAYS populated (derived when nothing
-        // is stored), so it carries a separate `has_custom_name`. A camelCase
-        // (TSV-imported) annotation has no derivation step — its name IS the
-        // user's, so a non-empty name is custom there.
-        hasCustomName: annotation.has_custom_name ?? annotation.hasCustomName ?? !!annotation.name,
+        // T10410: the backend's `name` is ALWAYS populated (generated when nothing
+        // is stored — games.load_annotations_from_db), so custom-vs-generated
+        // travels as its own `has_custom_name`. No name-based fallback: a missing
+        // field is a backend bug (warn), never something `!!name` could answer.
+        hasCustomName: readHasCustomName(annotation),
         position: '',
         tags: annotation.tags || [],
         notes: (annotation.notes || '').slice(0, MAX_NOTES_LENGTH),

@@ -151,3 +151,31 @@ describe('formBody layouts', () => {
     expect(onCreateClip.mock.calls[0][0].createProject).toBe(true);
   });
 });
+
+describe('same-play identity churn keeps unsaved edits (Reviewer BLOCKING #2)', () => {
+  // updateClipRegion spreads the region on EVERY surgical update, so the parent
+  // hands the editor a NEW existingClip object for the SAME play — e.g. the
+  // autoProjectId landing after the clip badge's create. The reset effect must
+  // not treat that as a clip switch and wipe the form.
+  it('re-rendering with a new object for the same clip id preserves the 5-star edit and typed name', () => {
+    const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
+    fireEvent.click(screen.getByTitle('5 stars'));
+    fireEvent.click(badge('badge-named'));
+    fireEvent.change(screen.getByLabelText('Clip name'), { target: { value: 'Banger' } });
+    expect(badge('badge-clip').dataset.state).toBe('nudge');
+
+    // The create lands: same id, new identity, autoProjectId set.
+    rerender(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, autoProjectId: 42 }} />);
+    expect(badge('badge-clip').dataset.state).toBe('done');
+    expect(badge('badge-rated').dataset.state).toBe('done');
+    expect(screen.getByLabelText('Clip name').value).toBe('Banger');
+    expect(screen.getByText('5 stars · Brilliant')).toBeTruthy();
+  });
+
+  it('a DIFFERENT clip id still resets the form', () => {
+    const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
+    fireEvent.click(screen.getByTitle('5 stars'));
+    rerender(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, id: 'c2', rating: 3 }} />);
+    expect(screen.getByText('3 stars · Interesting')).toBeTruthy();
+  });
+});

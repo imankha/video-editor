@@ -35,7 +35,9 @@ export function DetailsFields({
 }) {
   return (
     <>
-      <div className="mb-4">
+      {/* T10410: stable id so the "Rate this play" progress badge can focus the
+          stars (same contract as the `clip-notes` id below: one mount at a time). */}
+      <div id="clip-rating" className="mb-4">
         <label className="block text-gray-400 text-sm mb-2">
           Rating{showKeyHint ? ' (press 1-5)' : ''}
         </label>

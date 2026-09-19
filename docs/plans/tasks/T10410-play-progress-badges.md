@@ -67,11 +67,25 @@ name). The region carries it as `hasCustomName`, kept coherent at the one local 
 2. [x] Pure derivation + unit tests
 3. [x] Badge component + overlay wiring (strip header, formBody footer)
 4. [x] Backend `has_custom_name` + region mapping
-5. [ ] Tests green, Reviewer, merge
+5. [x] Tests green, Reviewer findings fixed
+6. [ ] Live nudge check, CI green, merge
 
 ### Progress Log
 
-**2026-09-18**: Built per rulings in container checkout C:\work\tasks\10410.
+**2026-09-18**: Built per rulings in container checkout C:\work\tasks\10410. Fresh Reviewer REJECTED
+with 2 BLOCKING findings, both real and both fixed: (1) the Annotate editor loads regions from the
+GAME payload (`games.load_annotations_from_db`), not `/clips/raw`, so `has_custom_name` never arrived
+and the `?? !!name` fallback lit "named" for every tagged play -- the games loader now emits the flag,
+the frontend reads it strictly (`readHasCustomName`, warns on a missing field, no name fallback), TSV
+sets it explicitly; (2) every surgical region update spreads the region so the editor's `existingClip`
+is a NEW OBJECT for the SAME play, and the reset effect (keyed on the object) re-seeded the form --
+the clip badge's own create therefore wiped the 5-star edit that woke it. The effect now keys on
+clip id (same play -> keep the form, only re-mirror `createProject` from the landed autoProjectId).
+Seam tests added for both (games payload -> importAnnotations -> region; rerender with a new object,
+same id). MAJORs fixed (strict reader, seam-shaped fixture); MINORs taken: BADGE_STATE enum,
+`defaultPlayName` shared with its recognizer, rating badge focuses the stars, aria-live, stale comment.
+Also fixed the pre-existing master-red `focusPrompt` test (stale "frame this clip" selector after
+the same-day "Frame" rename; now derived from `ANNOTATE.FRAME_THIS_CLIP`).
 
 ## Acceptance Criteria
 

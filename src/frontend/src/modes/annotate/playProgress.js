@@ -19,11 +19,21 @@
  *     play has a project.
  */
 
-export const CLIP_BADGE = {
-  DORMANT: 'dormant',
+/** Every visual state a badge can be in (PlayProgressBadges renders exactly these). */
+export const BADGE_STATE = {
+  UNDONE: 'undone',
+  DONE: 'done',
   NUDGE: 'nudge',
   PENDING: 'pending',
-  DONE: 'done',
+  DORMANT: 'dormant',
+};
+
+/** The subset the clip badge cycles through (it is never plain "undone"). */
+export const CLIP_BADGE = {
+  DORMANT: BADGE_STATE.DORMANT,
+  NUDGE: BADGE_STATE.NUDGE,
+  PENDING: BADGE_STATE.PENDING,
+  DONE: BADGE_STATE.DONE,
 };
 
 /** The rating that counts as "worth a clip" — the clip badge's nudge trigger. */
@@ -31,10 +41,14 @@ export const CLIP_NUDGE_RATING = 5;
 
 /**
  * The one-tap default name the create form persists when nothing else derives
- * a name (`Play ${nextClipNumber}` in AnnotateFullscreenOverlay). Stored as a
- * real name on the backend, so it comes back as a custom name — exclude it
- * here so a one-tap play never reads as "named".
+ * a name (T8140). Single source for the template AND its recognizer: the name is
+ * stored as a real name on the backend, so it comes back as a custom name, and
+ * `isDefaultPlayName` excludes it so a one-tap play never reads as "named".
  */
+export function defaultPlayName(clipNumber) {
+  return `Play ${clipNumber}`;
+}
+
 export function isDefaultPlayName(name) {
   return /^Play \d+$/.test((name || '').trim());
 }
