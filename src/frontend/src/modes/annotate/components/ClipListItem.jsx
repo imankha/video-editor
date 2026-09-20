@@ -77,7 +77,7 @@ const formatTime = (seconds) => formatInstant(seconds, PRECISION.SECOND);
  * omit it and the row renders without a time.
  */
 export function ClipListItem({ region, index, isSelected, isPlaybackActive = false, onClick, isMobile = false, onViewDetails, onJumpToClip, gameClock = null, angleName = null }) {
-  const rating = region.rating || 3;
+  const rating = region.rating ?? null;
   const { badgeColor, backgroundColor } = getRatingDisplay(rating);
 
   // T3960: scroll the selected row into view so an auto-selection (e.g. the

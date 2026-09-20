@@ -31,7 +31,11 @@ export const ANNOTATE = {
   // play"). "Note" (not "description") is the field's existing label, kept for
   // consistency per the user's ruling.
   PLAY_RATED: 'Play rated',
-  RATE_PLAY: 'Rate this play',
+  // T10690: the rated badge's unset copy — reuses BADGE_STATE.UNDONE's amber
+  // dashed treatment (no new badge state; see PlayProgressBadges.RatingBadge).
+  // Replaces the old generic RATE_PLAY prompt now that "no rating yet" is a
+  // real, persisted state rather than a create-form transient.
+  PLAY_NOT_RATED: 'Not rated yet',
   // T10550: the rating popup's own visible heading (+ its accessible name, so
   // they match) — layer-aware like `getRatingCaption`'s existing `mine` split,
   // so a Team play never claims to be "your athlete's".

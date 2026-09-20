@@ -78,7 +78,7 @@ export function ClipLibraryModal({
       if (existingClipIds.includes(clip.id)) return false;
 
       // Rating filter
-      const clipRating = clip.rating || 0;
+      const clipRating = clip.rating ?? 0;
       if (minRating > 0 && clipRating < minRating) return false;
 
       // Game filter
@@ -114,7 +114,7 @@ export function ClipLibraryModal({
   const availableTags = useMemo(() => {
     const baseFiltered = clips.filter(clip => {
       if (existingClipIds.includes(clip.id)) return false;
-      const clipRating = clip.rating || 0;
+      const clipRating = clip.rating ?? 0;
       if (minRating > 0 && clipRating < minRating) return false;
       if (selectedGameIds.length > 0 && !selectedGameIds.includes(clip.game_id)) return false;
       return true;
@@ -132,7 +132,7 @@ export function ClipLibraryModal({
     const countMap = {};
     clips.forEach(clip => {
       if (existingClipIds.includes(clip.id)) return;
-      const clipRating = clip.rating || 0;
+      const clipRating = clip.rating ?? 0;
       if (clip.game_id && (minRating === 0 || clipRating >= minRating)) {
         countMap[clip.game_id] = (countMap[clip.game_id] || 0) + 1;
       }
@@ -342,8 +342,8 @@ export function ClipLibraryModal({
                               <Star
                                 key={n}
                                 size={12}
-                                fill={n <= (clip.rating || 0) ? '#fbbf24' : 'transparent'}
-                                color={n <= (clip.rating || 0) ? '#fbbf24' : '#6b7280'}
+                                fill={n <= (clip.rating ?? 0) ? '#fbbf24' : 'transparent'}
+                                color={n <= (clip.rating ?? 0) ? '#fbbf24' : '#6b7280'}
                               />
                             ))}
                           </span>

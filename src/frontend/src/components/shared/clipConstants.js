@@ -47,15 +47,11 @@ export const RATING_BACKGROUND_COLORS = {
   5: 'rgba(23, 179, 163, 0.15)',  // Teal
 };
 
-// Default rating when none is set
-export const DEFAULT_RATING = 3;
-
-// T10610: rating a freshly created play starts at, BEFORE the user ever taps a
-// star. Distinct from DEFAULT_RATING (3) above, which is a display-only fallback
-// for a clip that somehow has no rating at all — the two happened to both be
-// called DEFAULT_RATING (4 in two files) prior to this task; that collision is
-// why this one gets its own name.
-export const NEW_PLAY_DEFAULT_RATING = 4;
+// T10690: neutral color for an unrated clip (rating === null) — deliberately
+// outside the RATING_BADGE_COLORS/RATING_BACKGROUND_COLORS 1-5 palettes so an
+// unrated clip can never be mistaken for a real star value.
+export const UNRATED_BADGE_COLOR = '#64748b'; // slate
+export const UNRATED_BACKGROUND_COLOR = 'rgba(100, 116, 139, 0.15)'; // slate tint
 
 // T9840: default capture window for a "Mark play" tap — 6 seconds before the
 // tap + 2 seconds after (8s total, was 9+3=12). The post-roll is intentional:
@@ -69,6 +65,9 @@ export const DEFAULT_CLIP_AFTER = 2;   // seconds after the tap
 export const DEFAULT_CLIP_DURATION = DEFAULT_CLIP_BEFORE + DEFAULT_CLIP_AFTER; // 8s total
 
 // T8490 / T9820: one-line caption explaining what a rating means for the play.
+// T10690: `!rating` covers null AND undefined — the no-rating branch below is
+// now a real, reachable state (a freshly created play carries no rating until
+// the user picks one), not just a create-form transient.
 // The creation clause is driven by the LIVE create-clip intent (`createIntent`,
 // the AnnotateFullscreenOverlay toggle), NOT by the star count. Star-threshold
 // copy ("one more star creates a clip", "five stars creates a clip") was a false
@@ -95,6 +94,8 @@ export function getRatingCaption(rating, mine, createIntent) {
 // `hasReel` (does a clip already exist) instead of predicting one from the star
 // count. The rating===4 branch previously repeated the same false "one more star
 // creates a clip" threshold; it now mirrors the 5-star branch's hasReel wording.
+// T10690: `!rating` covers null AND undefined — same reachable-unrated-state note
+// as getRatingCaption above.
 export function getEditRatingCaption(rating, mine, hasReel) {
   if (!rating) return 'How good was this play? Rate it 1 to 5.';
   if (rating === 1) return `Mental lapse (${RATING_NOTATION[1]}) - a play to learn from.`;
@@ -117,22 +118,24 @@ export function getEditRatingCaption(rating, mine, hasReel) {
 // mix of chess notation / bare adjective / "(4/5)"). Pairs the star count with the
 // canonical RATING_ADJECTIVES word.
 export function getRatingLabel(rating) {
-  const r = rating || DEFAULT_RATING;
-  const stars = `${r} star${r === 1 ? '' : 's'}`;
-  return `${stars} · ${RATING_ADJECTIVES[r]}`;
+  if (rating == null) return 'Not rated';
+  const stars = `${rating} star${rating === 1 ? '' : 's'}`;
+  return `${stars} · ${RATING_ADJECTIVES[rating]}`;
 }
 
 /**
  * Get rating display info for a given rating value
- * @param {number} rating - Rating value (1-5)
+ * @param {number|null} rating - Rating value (1-5), or null for "not rated"
  * @returns {Object} - { notation, badgeColor, backgroundColor }
  */
 export function getRatingDisplay(rating) {
-  const r = rating || DEFAULT_RATING;
+  if (rating == null) {
+    return { notation: '', badgeColor: UNRATED_BADGE_COLOR, backgroundColor: UNRATED_BACKGROUND_COLOR };
+  }
   return {
-    notation: RATING_NOTATION[r] || RATING_NOTATION[DEFAULT_RATING],
-    badgeColor: RATING_BADGE_COLORS[r] || RATING_BADGE_COLORS[DEFAULT_RATING],
-    backgroundColor: RATING_BACKGROUND_COLORS[r] || RATING_BACKGROUND_COLORS[DEFAULT_RATING],
+    notation: RATING_NOTATION[rating],
+    badgeColor: RATING_BADGE_COLORS[rating],
+    backgroundColor: RATING_BACKGROUND_COLORS[rating],
   };
 }
 

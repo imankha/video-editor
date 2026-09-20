@@ -49,7 +49,6 @@ function DockPositionSelector({ position, onPositionChange }) {
 // DEFAULT_CLIP_BEFORE / DEFAULT_CLIP_AFTER (the tap-to-range capture window) are
 // single-sourced in clipConstants.js (T9840) and imported above, so this
 // overlay's default and useAnnotate's addClipRegion default stay one policy.
-const DEFAULT_RATING = 4; // "Good"
 
 /**
  * CutFromAngleChip (T8892) — while the active source is a non-backbone angle, the
@@ -169,7 +168,7 @@ export function AnnotateFullscreenOverlay({
     setDockPosition(pos);
   }, []);
 
-  const [rating, setRating] = useState(existingClip.rating || DEFAULT_RATING);
+  const [rating, setRating] = useState(existingClip.rating ?? null);
   const [selectedTags, setSelectedTags] = useState(existingClip.tags || []);
   // T10610 § B.1/B.2: LOCAL ECHO, seeded from the region, re-seeded ONLY on a
   // real clip-identity change (the reset effect below) — never a write itself.
@@ -234,7 +233,7 @@ export function AnnotateFullscreenOverlay({
     if (samePlay) return;
 
     setIsEditingName(false); // T8760: close inline name editing on clip switch
-    setRating(existingClip.rating || DEFAULT_RATING);
+    setRating(existingClip.rating ?? null);
     setSelectedTags(existingClip.tags || []);
     setClipName(existingClip.name || '');
     setScrubStartTime(existingClip.startTime);

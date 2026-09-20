@@ -94,11 +94,18 @@ commit handler reading `e.target.value` (not state) is correct regardless of Rea
 timing. A jsdom test that never truly `.focus()`es the field masks this (`.blur()` on a
 non-focused element is a spec no-op) — any future field wired through this helper needs a
 REAL-focus regression test (see `AnnotateFullscreenOverlay.noSaveButton.test.jsx`'s Escape tests),
-not just `fireEvent.change` + `fireEvent.keyDown`. **`DEFAULT_RATING` landmine (design doc's own
-"code smell being paid off"):** `NEW_PLAY_DEFAULT_RATING = 4` (`clipConstants.js`) is the value a
-freshly created play starts at — distinct from the SAME FILE's `DEFAULT_RATING = 3`, a legacy
-DISPLAY fallback for a rating that is somehow missing entirely. Two different constants, similar
-names, same file — do not "simplify" them into one without checking every call site.
+not just `fireEvent.change` + `fireEvent.keyDown`. **`DEFAULT_RATING`/`NEW_PLAY_DEFAULT_RATING`
+landmine RETIRED by T10710 (2026-09-20):** both constants are now DELETED from `clipConstants.js`.
+`raw_clips.rating` is nullable (T10700's `v054` migration) and the frontend no longer seeds or
+coerces a missing rating back to a number anywhere — create-at-tap omits the field, `useAnnotate`'s
+`clampRating()` helper preserves `null` through `loadAnnotations`/pending-import, and the shared
+`getRatingLabel`/`getRatingDisplay`/`RatingIcon` primitives render an explicit "not rated" state
+(`UNRATED_BADGE_COLOR`/`UNRATED_BACKGROUND_COLOR`, a dashed neutral `RatingIcon` disc) instead of
+substituting a fake 1-5 value. If a `DEFAULT_RATING`-shaped constant reappears anywhere, that is a
+regression of this task, not a legitimate reintroduction — the two intentional exceptions are
+`useAnnotate.js`'s `generateTsvContent` (TSV export format, out of scope, literal `|| 3`) and
+`projectDataStore.js`'s `uploadClipWithMetadata` (the direct-upload-with-metadata flow has no
+unrated UI affordance; its backend endpoint intentionally keeps `rating: int = Form(3)`).
 **Retired (grep-confirmed zero remaining callers):** `handleSave`/`handleSaveRef`,
 `saveInFlightRef` (-> `markPlayInFlightRef`, now guards the TAP not a Save click),
 `hasUnsavedEdits`, `isNameManuallyEdited` + the auto-generate-name effect,
@@ -1532,7 +1539,8 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `ProjectManager` (no persisted "seen" marker, no reactive persistence); the banner deep-links
   to the Games tab (`setActiveTab('games')`). Banner-only by product decision — no email digest.
 - **One annotation = one `raw_clips` row** (per-user SQLite, not Postgres). Region shape:
-  `{id, rawClipId, startTime, endTime, name, tags, notes(≤280), rating(1-5, default 4),
+  `{id, rawClipId, startTime, endTime, name, tags, notes(≤280), rating(1-5 or null — T10710, no
+  default seeded),
   videoSequence, tagged_teammates, my_athlete, autoProjectId}` (useAnnotate.js:10-30, constants
   L209-213). Natural key everywhere: `(game_id, end_time, video_sequence)`.
 - **Gesture persistence** (ClipDetailsEditor → `updateClipRegionWithSync`, AnnotateContainer:832-948):
@@ -1689,13 +1697,18 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `PlayProgressBadges.jsx` (header line after the name on the desktop strip, above the footer buttons on
   the formBody layouts; none on landscape-inline, which keeps its own bespoke inline `StarRating` row —
   the one surface never touched by any of this).
-  - **`rated` no longer means "differs from a default" (T10520 REPLACED the T10410 ruling):** it's
-    `isEditMode || isRatingManuallyEdited`. A saved play is ALWAYS rated (a real 1-5 value is always on
-    record, whatever it is); a fresh create-mode play is rated once the control has been touched THIS
-    SESSION (`isRatingManuallyEdited`, a session flag in `AnnotateFullscreenOverlay.jsx`, same shape as
-    the pre-existing `isNameManuallyEdited`, set in `handleRatingChange`, reset on a real clip switch —
-    NOT on same-play identity churn, same rule as every other form field). The old `defaultRating`
-    param is gone from `getPlayProgress` entirely.
+  - **`rated` rule history — changed three times in four days, see `playProgress.js`'s own header
+    comment for the full text (do not re-litigate without reading it first):**
+    T10520 rejected "differs from a default" (`isEditMode || isRatingManuallyEdited`) live —
+    "green doesn't mean not 4, it just means it's been set." T10610 then made create-at-tap seed a
+    real `rating` at creation (`NEW_PLAY_DEFAULT_RATING = 4`) and hardcoded `rated: true`
+    unconditionally, since every play now "had" a rating from the moment it existed. **T10690/T10710
+    (2026-09-20) REVERSED the seed**: `raw_clips.rating` is nullable (`v054` migration), create-at-tap
+    sends no rating at all, and `rated: rating != null` is now a real read of real data — a fresh
+    play's rated badge shows `BADGE_STATE.UNDONE` (amber, title "Not rated yet") until the user picks
+    a rating. No new `BADGE_STATE` was added — C1's locked decision reuses `UNDONE`'s existing look.
+    `isRatingManuallyEdited`/session-flag tracking does not exist; `getPlayProgress` takes the current
+    `rating` value directly.
   - **The rated badge is the ONLY rating control anywhere in the editor** (except landscape-inline).
     `DetailsFields.jsx`'s old duplicate horizontal star row is DELETED — T10410's original design put
     rating inside the "Optional details" disclosure; T10520 pulled it back out into the badge itself.
@@ -2169,12 +2182,13 @@ The full checklist for an 11th→Nth sport:
   SEPARATE finding from T7870's deletion bug — revoking credit would be a product-policy change, out of
   scope here. Corroborated across all four reported accounts (T7870/T7880/T7920 own the per-account
   root causes; T7930 is the umbrella label fix for the SIGNAL).
-  - **Rating distribution audit:** `raw_clips.rating` (1-5, app-default 4, `INTEGER NOT NULL` per
-    database.py profile_db schema) lives ONLY in each per-profile SQLite, never in the Postgres
-    analytics aggregate — no dashboard can answer "how many clips at each star". `scripts/audit_rating_distribution.py`
-    (read-only, mirrors `audit_clip_dimensions.py`; `--env dev|staging|prod`) tallies
-    `COUNT(*) GROUP BY rating` across every account and reports NULL/out-of-range buckets separately as
-    schema-drift signals.
+  - **Rating distribution audit:** `raw_clips.rating` (1-5, or NULL — nullable as of T10700's `v054`
+    migration; no app-side default seeded since T10710, see the `rated` rule history above) lives
+    ONLY in each per-profile SQLite, never in the Postgres analytics aggregate — no dashboard can
+    answer "how many clips at each star". `scripts/audit_rating_distribution.py` (read-only, mirrors
+    `audit_clip_dimensions.py`; `--env dev|staging|prod`) tallies `COUNT(*) GROUP BY rating` across
+    every account; NULL is now an expected, legitimate bucket (an unrated play), not a schema-drift
+    signal — only an out-of-range non-null value (outside 1-5) still indicates drift.
 - **TSV clip import must WAIT for the in-flight upload's game id, never one-shot-drop (T7790, 2026-08-26).**
   `importAnnotationsWithRawClips` (AnnotateContainer.jsx) imports annotations to the UI immediately,
   then saves each as a `raw_clips` row via `saveClip(gameId, ...)`. The game id comes from

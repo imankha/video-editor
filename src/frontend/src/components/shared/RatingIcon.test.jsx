@@ -28,9 +28,11 @@ describe('RatingIcon', () => {
     unmount();
   });
 
-  it('falls back to the default rating (3) for a missing rating', () => {
+  it('T10690: renders a dedicated unrated disc for null/undefined, never a fabricated 3-star', () => {
     render(<RatingIcon rating={undefined} />);
-    expect(screen.getByTestId('rating-icon').dataset.rating).toBe('3');
+    const icon = screen.getByTestId('rating-icon');
+    expect(icon.dataset.rating).toBe('unrated');
+    expect(icon.textContent).toMatch(/not rated/i);
   });
 
   it('Brilliant is teal, distinct from the 4-star green', () => {

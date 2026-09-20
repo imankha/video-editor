@@ -7,7 +7,7 @@ import { RATING_ADJECTIVES } from '../components/shared/clipConstants';
  *
  * Priority: notes > rating+tags > empty string
  *
- * @param {number} rating - Clip rating (1-5)
+ * @param {number|null} rating - Clip rating (1-5), or null if not rated yet
  * @param {string[]} selectedTags - Tags assigned to the clip
  * @param {string} notes - Clip notes text
  * @returns {string} Generated clip name
@@ -34,12 +34,15 @@ export function generateClipName(rating, selectedTags, notes = '') {
   // Fallback: rating + tags
   if (!selectedTags || selectedTags.length === 0) return '';
 
-  const adjective = RATING_ADJECTIVES[rating] || 'Interesting';
   const tagPart = selectedTags.length === 1
     ? selectedTags[0]
     : selectedTags.slice(0, -1).join(', ') + ' and ' + selectedTags[selectedTags.length - 1];
 
-  return `${adjective} ${tagPart}`;
+  // T10690: a NULL rating means no rating on record, mirroring the backend's
+  // derive_clip_name exactly — no invented adjective ("Interesting Goal"
+  // would assert a judgment the user never made).
+  if (rating == null) return tagPart;
+  return `${RATING_ADJECTIVES[rating]} ${tagPart}`;
 }
 
 /**

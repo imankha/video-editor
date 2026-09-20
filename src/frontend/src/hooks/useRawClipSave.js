@@ -149,7 +149,7 @@ export function useRawClipSave(activeGameIdRef = null) {
         start_time: clipData.start_time,
         end_time: clipData.end_time,
         name: clipData.name || '',
-        rating: clipData.rating || 3,
+        rating: clipData.rating ?? null,
         tags: clipData.tags || [],
         notes: clipData.notes || '',
         ...(clipData.video_sequence != null && { video_sequence: clipData.video_sequence }),

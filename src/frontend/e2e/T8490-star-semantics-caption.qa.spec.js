@@ -157,19 +157,29 @@ test.describe('T8490: rating caption — desktop strip', () => {
     await expect(strip.getByTestId('delete-play-button')).toBeVisible();
     await expect(strip.getByRole('button', { name: 'Done' })).toBeVisible();
 
-    // Default rating is 4 ("Good") — open the popup and confirm the row shows
-    // the same adjective + notation the retired caption used to state inline.
+    // T10690/T10710: create-at-tap no longer seeds a rating (raw_clips.rating
+    // is nullable) — the play starts genuinely UNRATED, so the popup opens
+    // with NO row checked, not a hidden default of 4. Pick 4 stars ("Good")
+    // ourselves, confirming the row's adjective + notation, before continuing
+    // with this test's rating-change assertions below.
     await strip.getByTestId('badge-rated').click();
     const picker = page.getByTestId('rating-picker');
     await expect(picker).toBeVisible();
-    await expect(picker.getByRole('radio', { name: /^4 stars - Good/ })).toHaveAttribute('aria-checked', 'true');
+    await expect(picker.getByRole('radio', { name: /^4 stars - Good/ })).toHaveAttribute('aria-checked', 'false');
+    const [put4] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
+      picker.getByRole('radio', { name: /^4 stars - Good/ }).click(),
+    ]);
+    expect(put4.postDataJSON()).toEqual({ rating: 4 });
     await saveEvidence(page, 'T8490-strip-rating4-mine');
 
     // Rating 2 -> "Technical Lapse" (the learn-from band), persisted via a
     // surgical PUT carrying ONLY {rating} (T10610 § 2.2 gesture table).
+    // Picking a row closes the popup, so reopen it first.
+    await strip.getByTestId('badge-rated').click();
     const [put2] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
-      picker.getByRole('radio', { name: /^2 stars - Technical Lapse/ }).click(),
+      page.getByTestId('rating-picker').getByRole('radio', { name: /^2 stars - Technical Lapse/ }).click(),
     ]);
     expect(put2.postDataJSON()).toEqual({ rating: 2 });
     await saveEvidence(page, 'T8490-strip-rating2');
@@ -231,12 +241,20 @@ test.describe('T8490: rating caption — mobile bottom sheet', () => {
     await sheet.getByTestId('badge-rated').click();
     const picker = page.getByTestId('rating-picker');
     await expect(picker).toBeVisible();
-    await expect(picker.getByRole('radio', { name: /^4 stars - Good/ })).toHaveAttribute('aria-checked', 'true');
+    // T10690/T10710: unrated at create-at-tap — no row starts checked.
+    await expect(picker.getByRole('radio', { name: /^4 stars - Good/ })).toHaveAttribute('aria-checked', 'false');
+    const [put4] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
+      picker.getByRole('radio', { name: /^4 stars - Good/ }).click(),
+    ]);
+    expect(put4.postDataJSON()).toEqual({ rating: 4 });
     await saveEvidence(page, 'T8490-mobile-320-rating4-mine');
 
+    // Picking a row closes the sheet, so reopen it first.
+    await sheet.getByTestId('badge-rated').click();
     const [put5] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
-      picker.getByRole('radio', { name: /^5 stars - Brilliant/ }).click(),
+      page.getByTestId('rating-picker').getByRole('radio', { name: /^5 stars - Brilliant/ }).click(),
     ]);
     expect(put5.postDataJSON()).toEqual({ rating: 5 });
     await saveEvidence(page, 'T8490-mobile-320-rating5-mine');

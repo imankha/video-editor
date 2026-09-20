@@ -3,9 +3,10 @@ import { getPlayProgress, isDefaultPlayName, CLIP_BADGE } from './playProgress';
 
 // T10410: the play-progress badge derivation. Pins the 2026-09-18 rulings.
 // T10610 revision: the editor is ALWAYS editing an already-created play now
-// (create-at-tap), so `rated` is unconditionally true and the create-mode
-// "touched this session" tracking (isRatingManuallyEdited/isNameManuallyEdited)
-// is gone — named is derived purely from the current/loaded name values.
+// (create-at-tap) — the create-mode "touched this session" tracking
+// (isRatingManuallyEdited/isNameManuallyEdited) is gone — named is derived
+// purely from the current/loaded name values. T10690 revised `rated` again:
+// see the rule-history comment in playProgress.js.
 
 const base = {
   rating: 4,
@@ -18,9 +19,19 @@ const base = {
 };
 
 describe('getPlayProgress — rated', () => {
-  it('is ALWAYS true, whatever the rating value — a play always has a real rating from creation (T10610)', () => {
-    expect(getPlayProgress({ ...base, rating: 4 }).rated).toBe(true);
+  // T10690/T10710: raw_clips.rating is now NULLABLE — a freshly Marked play
+  // has NO rating on record until the user picks one, so `rated` must go back
+  // to being a real read of `rating != null` instead of the T10610-era
+  // unconditional `true`. `!=` (not `!==`) is deliberate: it must cover BOTH
+  // `null` (loaded from the backend) and `undefined` (a create-at-tap payload
+  // that omits the field).
+  it('is false when the play genuinely has no rating on record (null/undefined), true for any real 1-5 value', () => {
+    expect(getPlayProgress({ ...base, rating: null }).rated).toBe(false);
+    expect(getPlayProgress({ ...base, rating: undefined }).rated).toBe(false);
     expect(getPlayProgress({ ...base, rating: 1 }).rated).toBe(true);
+    expect(getPlayProgress({ ...base, rating: 2 }).rated).toBe(true);
+    expect(getPlayProgress({ ...base, rating: 3 }).rated).toBe(true);
+    expect(getPlayProgress({ ...base, rating: 4 }).rated).toBe(true);
     expect(getPlayProgress({ ...base, rating: 5 }).rated).toBe(true);
   });
 });
@@ -75,5 +86,13 @@ describe('getPlayProgress — clip badge', () => {
   it('is done once the play has a project, and done wins over pending', () => {
     expect(getPlayProgress({ ...base, hasProject: true }).clip).toBe(CLIP_BADGE.DONE);
     expect(getPlayProgress({ ...base, hasProject: true, creating: true }).clip).toBe(CLIP_BADGE.DONE);
+  });
+
+  // T10710: an unrated play (`rating: null`) must not be mistaken for a
+  // 5-star play by `rating === CLIP_NUDGE_RATING` (`null === 5` is already
+  // false, so this pins the "no change needed" verdict from the design doc's
+  // B table as a real regression guard, not just an assertion by inspection).
+  it('stays dormant (never nudges) when the play has no rating on record', () => {
+    expect(getPlayProgress({ ...base, rating: null }).clip).toBe(CLIP_BADGE.DORMANT);
   });
 });
