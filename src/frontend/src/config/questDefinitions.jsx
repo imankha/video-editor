@@ -137,7 +137,7 @@ export const STEP_TITLES = {
   rate_clip: 'Rate & tag the play',
   annotate_brilliant: 'Save your play',
   // N40 (T9560): one label in guide, action, AND error — reuse the established
-  // "Preview plays" action label (displayNames.ANNOTATE.PREVIEW_PLAYS) instead of a
+  // "Review plays" action label (displayNames.ANNOTATE.PREVIEW_PLAYS) instead of a
   // second name ("Watch Your Clips Back") for the same action.
   playback_annotations: ANNOTATE.PREVIEW_PLAYS,
   // Quest 2 — Frame Your Highlight

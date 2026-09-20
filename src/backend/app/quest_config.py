@@ -118,7 +118,7 @@ ALL_STEP_IDS = [s for q in QUEST_DEFINITIONS for s in q["step_ids"]]
 # (src/frontend/src/config/questDefinitions.jsx) plain-string labels and must stay in
 # sync with it, exactly like the quest titles/step_ids already duplicated across the
 # two layers. N40: `playback_annotations` uses the one established action label
-# "Preview plays" (displayNames.ANNOTATE.PREVIEW_PLAYS) so guide, action, and error agree.
+# "Review plays" (displayNames.ANNOTATE.PREVIEW_PLAYS) so guide, action, and error agree.
 STEP_TITLES = {
     # T9575: sentence case across the whole checklist, mirroring the frontend
     # STEP_TITLES exactly (pinned by questDefinitions.test.jsx "FE/BE STEP_TITLES
@@ -132,7 +132,7 @@ STEP_TITLES = {
     "add_clip": "Mark an amazing play",
     "rate_clip": "Rate & tag the play",
     "annotate_brilliant": "Save your play",
-    "playback_annotations": "Preview plays",  # N40
+    "playback_annotations": "Review plays",  # N40
     "return_home": "Head back home",
     "open_framing": "Open your clip",
     "position_crop": "Keep your athlete in frame",

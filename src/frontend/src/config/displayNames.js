@@ -55,7 +55,7 @@ export const ANNOTATE = {
   // Save/Update button — commits any dirty text field first (closeWithCommit),
   // then closes. Nothing is ever discarded.
   DONE: 'Done',
-  PREVIEW_PLAYS: 'Preview plays',          // N26 — playback-all button (was "Playback Annotations")
+  PREVIEW_PLAYS: 'Review plays',           // N26 — playback-all button (was "Playback Annotations"/"Preview plays")
   PREVIEW_CLIP: 'Preview clip',            // N26 — per-clip preview (unchanged)
   LAYER_LABEL: 'Play category',            // N28 — the control formerly "Clip layer"/"Layer"
   LAYER_MINE: 'My athlete',                // N28, reversed by T9860 (2026-09-14)

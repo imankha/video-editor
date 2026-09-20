@@ -570,7 +570,7 @@ export function AnnotateModeView({
   return (
     <>
       {/* Video Metadata (resolution/format/size) moved 2026-09-18 (user request)
-          to a de-emphasized footer below the bottom CTA (Preview plays/Share
+          to a de-emphasized footer below the bottom CTA (Review plays/Share
           plays) -- see the end of this component. */}
 
       {/* Main Editor Area */}
@@ -1164,7 +1164,7 @@ export function AnnotateModeView({
               )}
 
               {/* T10310 (2026-09-18 user request): once a play is selected,
-                  these whole-game actions (Preview plays / Share plays / tagged
+                  these whole-game actions (Review plays / Share plays / tagged
                   sharing) are gone — only the play-specific actions above
                   apply. They come back once nothing is selected. */}
               {!isEditMode && (hasAnnotateClips ? (
@@ -1279,7 +1279,7 @@ export function AnnotateModeView({
           is retired: an in-flow strip does not need a viewport containing block. */}
 
       {/* Technical readouts (resolution/format/size) - 2026-09-18 (user request):
-          moved below the bottom CTA (Preview plays/Share plays above) and
+          moved below the bottom CTA (Review plays/Share plays above) and
           de-emphasized (small/quiet). Same content, least-important placement. */}
       {annotateVideoMetadata && !annotateFullscreen && (
         <div className="hidden lg:flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">

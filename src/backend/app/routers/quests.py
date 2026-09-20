@@ -244,7 +244,7 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set | None = None) -> d
     # (B05·R4). Per the brief, first-result guidance completes on saved playable
     # VALUE, not a mandatory source-preview click, so OR-satisfy it with a genuine
     # saved result — reusing the same `rc["reels"] >= 1` (own auto-project clip)
-    # signal annotate_brilliant/rate_clip already key off. Preview plays stays a
+    # signal annotate_brilliant/rate_clip already key off. Review plays stays a
     # sufficient path (so nothing that already completed regresses); this only ever
     # makes completion EASIER to reach, and because it derives here — the single
     # choke point /progress and /claim-reward share — the displayed and claimable

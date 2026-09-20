@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 /**
  * T10310 (2026-09-18 user request):
- *  - Once a play is selected, the whole-game "Preview plays"/"Share plays"
+ *  - Once a play is selected, the whole-game "Review plays"/"Share plays"
  *    row is gone (only play-specific actions apply); the primary CTA splits
  *    into [Edit Play] + a Frame action.
  *  - The "You are bookmarking, not editing..." stage-reason line is gone.
@@ -150,7 +150,7 @@ describe('AnnotateModeView — play-selected CTA row (T10310/T10450)', () => {
     expect(screen.getByRole('button', { name: /^frame later$/i }).className).toMatch(/animate-pulse/);
   });
 
-  it('hides Preview plays and Share plays once a play is selected, even with clips present', () => {
+  it('hides Review plays and Share plays once a play is selected, even with clips present', () => {
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
@@ -158,13 +158,13 @@ describe('AnnotateModeView — play-selected CTA row (T10310/T10450)', () => {
       annotateSelectedRegionId: 'r1',
       onSharePlayback: vi.fn(),
     });
-    expect(screen.queryByRole('button', { name: /preview plays/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /review plays/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /share plays/i })).toBeNull();
   });
 
-  it('shows Preview plays and Share plays again once nothing is selected', () => {
+  it('shows Review plays and Share plays again once nothing is selected', () => {
     renderView({ isEditMode: false, hasAnnotateClips: true, onSharePlayback: vi.fn() });
-    expect(screen.getByRole('button', { name: /preview plays/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /review plays/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /share plays/i })).toBeTruthy();
   });
 
