@@ -333,6 +333,69 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     expect(outcome).toEqual({ saveOk: true, projectId: 99 });
   });
 
+  // Frame Now navigates straight into Framing as part of this same
+  // call's outcome, so the "is now in Clips" toast would be announcing a
+  // screen the user is already leaving. Frame Later has no navigation, so it
+  // still needs the toast to confirm the play became a clip.
+  it('Frame Now (createProject + silent) creates the project without firing the "is now in Clips" toast', async () => {
+    apiFetch.mockImplementation((url, opts) => {
+      if (url.includes('/clips/raw/save')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: false }) });
+      }
+      if (opts?.method === 'PUT') {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true, project_created: true, project_id: 99 }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true }) });
+    });
+
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    act(() => { result.current.handleAddClipFromButton(); });
+    await act(async () => { await flushMicrotasks(); });
+    const region = result.current.clipRegions[0];
+
+    apiFetch.mockClear();
+    // Clear the "Play saved" toast the initial mark-play-tap creation above
+    // already fired, so this assertion is only about the update call below.
+    useToastStore.setState({ toasts: [] });
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.updateClipRegion(region.id, { createProject: true, silent: true });
+    });
+
+    expect(outcome).toEqual({ saveOk: true, projectId: 99 });
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+  });
+
+  it('Frame Later (createProject, no silent) still fires the "is now in Clips" toast', async () => {
+    apiFetch.mockImplementation((url, opts) => {
+      if (url.includes('/clips/raw/save')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: false }) });
+      }
+      if (opts?.method === 'PUT') {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true, project_created: true, project_id: 99 }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true }) });
+    });
+
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    act(() => { result.current.handleAddClipFromButton(); });
+    await act(async () => { await flushMicrotasks(); });
+    const region = result.current.clipRegions[0];
+
+    apiFetch.mockClear();
+    // Clear the "Play saved" toast the initial mark-play-tap creation above
+    // already fired, so this assertion is only about the update call below.
+    useToastStore.setState({ toasts: [] });
+
+    await act(async () => {
+      await result.current.updateClipRegion(region.id, { createProject: true });
+    });
+
+    expect(useToastStore.getState().toasts).toHaveLength(1);
+    expect(useToastStore.getState().toasts[0].title).toMatch(/is now in Clips/);
+  });
+
   it('§E row 15: a Mark play tap fires announcePlaySaved exactly once and announceReelCreated zero times', async () => {
     apiFetch.mockImplementation((url) => {
       if (url.includes('/clips/raw/save')) {
