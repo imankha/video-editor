@@ -1,6 +1,6 @@
 # T10670: Completion bars: V2 celebration tiles, headline + Saved chip, "Done for now"
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-19
@@ -134,6 +134,9 @@ judgment call as T10620 (see WAVE.md). Manual test steps below.
 6. Tab through: order should be primary -> secondary -> tertiary -> "Done for now"; Enter/Space activates the focused tile.
 7. Click "Done for now": should navigate away with no caption text under it.
 8. If everything reads well, merge PR (branch already pushed + CI green) and the status will move to STAGING.
+
+**2026-09-20**: User reviewed on the deployed dev stack and approved. PR #473 merged
+(`cc85bf4b`). Status -> STAGING.
 
 ## Acceptance Criteria
 

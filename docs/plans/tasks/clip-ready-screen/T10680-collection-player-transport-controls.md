@@ -1,6 +1,6 @@
 # T10680: CollectionPlayer transport: play/pause glyph, header Play/Pause + Fullscreen, on every finished-reel player
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-19
@@ -94,13 +94,13 @@ are the "Video controls" panes of https://claude.ai/artifact/9w4SKRvSbdNzMLpwFxN
 ## Implementation
 
 ### Steps
-1. [ ] Branch `feature/T10680-collection-player-transport`
-2. [ ] Red tests in `CollectionPlayer.test.jsx` for the six cases above
-3. [ ] Implement glyph + header transport + expand + Escape guard + `transport` prop
-4. [ ] `IntroStoryPlayer` opt-out; verify RankingGame still plays/advances with transport on
-5. [ ] Real browser: Focus completion preview, library Published reel, public share link, at desktop and 390px; native fullscreen enter/exit; Escape twice; iPhone Safari if available
-6. [ ] Reviewer on the diff; fix; curated relevant test set green; push; Branch CI green
-7. [ ] Knowledge doc line; commit with `T10680:` subject prefix
+1. [x] Branch `feature/T10680-collection-player-transport`
+2. [x] Red tests in `CollectionPlayer.test.jsx` for the six cases above
+3. [x] Implement glyph + header transport + expand + Escape guard + `transport` prop
+4. [x] `IntroStoryPlayer` -- kept transport ON instead of opting out (see DEVIATION below); RankingGame verified still plays/advances
+5. [x] Real browser: desktop + mobile-390 verified via dev-only diag harnesses; iPhone Safari native path NOT verified (no device in this environment) -- accepted gap
+6. [x] Reviewer on the diff; fix; curated relevant test set green; push; Branch CI green
+7. [x] Knowledge doc line; commit with `T10680:` subject prefix
 
 ### Progress Log
 
@@ -129,6 +129,10 @@ No opt-out remains anywhere — every finished-reel player now carries the contr
 a real display); the CSS-`expanded` path + Escape guard + composite-scrubber survival ARE verified
 in a real browser (Playwright, two dev-only diag harnesses, VP9 WebM for real playback). True OS
 fullscreen + iPhone native player are owed on a real device before STAGING is called good.
+
+**2026-09-20**: User tested the deployed dev stack (desktop + mobile-width) and approved merging.
+PR #474 merged (`5f11f1eb`). Status -> STAGING. The real-device iOS Safari native-fullscreen
+check remains owed (no iPhone available in this environment) -- flagged, not blocking.
 
 ## Acceptance Criteria
 

@@ -1,7 +1,8 @@
 # Clip Ready Screen
 
-**Status:** IN_PROGRESS
+**Status:** COMPLETE (iPhone Safari device check owed, non-blocking)
 **Started:** 2026-09-19
+**Completed:** 2026-09-20
 
 ## Goal
 
@@ -30,23 +31,31 @@ sure the video player for published videos has the same controls."
 
 | ID | Task | Status |
 |----|------|--------|
-| T10670 | [Completion bars: V2 celebration tiles, headline + Saved chip, "Done for now"](T10670-completion-bars-v2-tiles.md) | WIP |
-| T10680 | [CollectionPlayer transport: play/pause glyph, header Play/Pause + Fullscreen, on every finished-reel player](T10680-collection-player-transport-controls.md) | WAITING ON USER |
+| T10670 | [Completion bars: V2 celebration tiles, headline + Saved chip, "Done for now"](T10670-completion-bars-v2-tiles.md) | STAGING |
+| T10680 | [CollectionPlayer transport: play/pause glyph, header Play/Pause + Fullscreen, on every finished-reel player](T10680-collection-player-transport-controls.md) | STAGING |
 
-The two tasks are **file-disjoint and may run in parallel**: T10670 owns the two action bars,
+The two tasks were **file-disjoint and ran in parallel**: T10670 owns the two action bars,
 `displayNames.js`, `resultRetentionNote.js` and their tests; T10680 owns `CollectionPlayer.jsx`,
-`useStoryPlayback.js`, the `IntroStoryPlayer` opt-out and their tests. Neither touches
+`useStoryPlayback.js`, `IntroStoryPlayer.jsx` and their tests. Neither touches
 `FocusScreen.jsx` / `OverlayScreen.jsx` (T10680 makes the controls default-on so no mount site
-changes), which keeps both clear of the Focus Result Loop tasks T10650/T10660.
+changes), which kept both clear of the Focus Result Loop tasks T10650/T10660.
+
+**Deviation from the original plan (T10680, expert-escalated):** `IntroStoryPlayer` was NOT
+opted out of transport. It turned out to be the SOLE mount site for `PublishedReelsPanel` — i.e.
+the My Reels Published-tab player — so opting it out would have removed the new controls from
+exactly the player the user asked for ("make sure the video player for published videos has the
+same controls"). Transport stays ON there instead, with a `fullscreenTarget` wrapper so the
+composite scrubber survives native fullscreen. See the task file's Progress Log for detail.
 
 ## Completion Criteria
 
-- [ ] Focus and Overlay completion footers match the V2 mockup at 1024px+ (three tiles in one
+- [x] Focus and Overlay completion footers match the V2 mockup at 1024px+ (three tiles in one
       row) and at 390px (three horizontal rows), with the headline, the Saved chip, no "Save"
       verb anywhere on the screen, and "Done for now" as the exit.
-- [ ] The completion preview, the library Draft/Published player and the public share-link viewer
+- [x] The completion preview, the library Draft/Published player and the public share-link viewer
       all show a play glyph while paused, and Play/Pause + Fullscreen in the header.
-- [ ] iPhone Safari: fullscreen opens the native video player and returns cleanly.
-- [ ] Escape leaves fullscreen first, closes the player only on the second press.
-- [ ] Unit + e2e specs listed in each task updated; Branch CI green on both branches.
-- [ ] `.claude/knowledge/export-pipeline.md` "post-export preview" lines updated (Stage 7).
+- [ ] iPhone Safari: fullscreen opens the native video player and returns cleanly. **Owed** — no
+      iPhone available in this environment; CSS-expand fullscreen + Escape guard verified instead.
+- [x] Escape leaves fullscreen first, closes the player only on the second press.
+- [x] Unit + e2e specs listed in each task updated; Branch CI green on both branches.
+- [x] `.claude/knowledge/export-pipeline.md` "post-export preview" lines updated (Stage 7).
