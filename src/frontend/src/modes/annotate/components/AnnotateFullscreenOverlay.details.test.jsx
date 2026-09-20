@@ -97,14 +97,17 @@ describe('AnnotateFullscreenOverlay — mobile full-screen popup (layout="inline
     expect(screen.getByPlaceholderText('Add a note about this clip...')).toBeTruthy();
   });
 
-  it('Done closes the popup without an extra write beyond a clean notes commit', () => {
+  it('the X button closes the popup without an extra write beyond a clean notes commit', () => {
+    // Done was removed (it was a second button doing exactly what X does) —
+    // X is now the popup's one dismissal control, per the no-backdrop-close rule.
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" onUpdateClip={onUpdateClip} />);
     fireEvent.click(screen.getByText('Details'));
     const dialog = screen.getByRole('dialog', { name: 'Details' });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+    expect(within(dialog).queryByRole('button', { name: 'Done' })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
-    // Notes was never touched, so the popup's Done -> commitNotes() is a no-op.
+    // Notes was never touched, so closing -> commitNotes() is a no-op.
     expect(onUpdateClip).not.toHaveBeenCalled();
   });
 

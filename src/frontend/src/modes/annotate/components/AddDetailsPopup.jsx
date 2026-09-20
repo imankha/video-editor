@@ -17,8 +17,11 @@ import { ANNOTATE } from '../../../config/displayNames';
  * stacking context (a z-index cannot escape an ancestor's stacking context, the
  * T5700 clip-marker-tooltip landmine).
  *
- * No backdrop-close — dismissal is Done or X only (project's standing rule).
- * Does NOT save; the sheet's pinned Save footer stays the only save gesture.
+ * No backdrop-close (project's standing rule) — dismissal is the X button
+ * only; Done was removed since it was a second button doing the exact same
+ * thing (commit notes, close). Does NOT save beyond that notes commit; the
+ * sheet's pinned rated badge / Delete play footer stays where every other
+ * field is set.
  *
  * T9830: carries the (de-ambered) Sport prompt alongside Tags + Notes via the
  * shared DetailsFields. The old T8140 "mobile stays clean, no in-form sport
@@ -56,8 +59,12 @@ export function AddDetailsPopup({
   onDelete,
 }) {
   // T10610 § B.2: the textarea unmounts without blurring when this popup
-  // closes, so Done must commit explicitly (same reasoning as closeWithCommit).
-  const handleDone = () => {
+  // closes, so closing must commit explicitly (same reasoning as
+  // closeWithCommit). Done and X used to both call this and did the exact
+  // same thing (there is no separate save step here — notes are the only
+  // thing that needs a commit-on-close), so Done was removed; X alone is the
+  // single dismissal, matching the "Done or X only, never both" rule below.
+  const handleClose = () => {
     onNotesCommit?.();
     onDone();
   };
@@ -73,17 +80,9 @@ export function AddDetailsPopup({
 
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 shrink-0">
         <h2 className="text-base font-semibold text-white">{ANNOTATE.DETAILS}</h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleDone}
-            className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            Done
-          </button>
-          <button onClick={handleDone} title="Close" className="p-1.5 hover:bg-gray-800 rounded transition-colors">
-            <X size={20} className="text-gray-400" />
-          </button>
-        </div>
+        <button onClick={handleClose} title="Close" className="p-1.5 hover:bg-gray-800 rounded transition-colors">
+          <X size={20} className="text-gray-400" />
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
