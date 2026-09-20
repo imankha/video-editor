@@ -39,6 +39,8 @@ export function BeforeAfterSlider({
   const afterVideoRef = useRef<HTMLVideoElement>(null)
   const sliderPosRef = useRef(sliderPos)
   useEffect(() => { sliderPosRef.current = sliderPos }, [sliderPos])
+  const hasInteractedRef = useRef(hasInteracted)
+  useEffect(() => { hasInteractedRef.current = hasInteracted }, [hasInteracted])
 
   // Gate the video download on visibility + idle. Honour Save-Data and the
   // reduced-data preference by never auto-loading.
@@ -135,8 +137,12 @@ export function BeforeAfterSlider({
     const durationMs = 1000
     let start: number | null = null
     const timer = setTimeout(() => {
+      // A user who has already grabbed the handle by the time this fires owns
+      // the slider now -- don't yank it back to the scripted position.
+      if (hasInteractedRef.current) return
       setHasRevealed(true)
       const animate = (ts: number) => {
+        if (hasInteractedRef.current) return
         if (!start) start = ts
         const t = Math.min((ts - start) / durationMs, 1)
         const eased = t * t * (3 - 2 * t)
@@ -182,6 +188,16 @@ export function BeforeAfterSlider({
     if (e.pointerType !== 'touch') updateSlider(e.clientX)
     containerRef.current?.setPointerCapture(e.pointerId)
   }, [updateSlider])
+
+  // The hit zone is touch-action:none, so a press starting there can never
+  // turn out to be a scroll in disguise -- unlike a touch on the wider
+  // container, it's always a real grab. Claim ownership immediately so the
+  // reveal tween (below) can't yank the slider out from under a thumb that's
+  // holding still before its first move.
+  const handleKnobPointerDown = useCallback((e: React.PointerEvent) => {
+    setHasInteracted(true)
+    handlePointerDown(e)
+  }, [handlePointerDown])
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!isDragging) return
@@ -270,7 +286,28 @@ export function BeforeAfterSlider({
               After
             </div>
 
-            {/* Slider line + handle */}
+            {/* Handle hit zone. touch-action:none opts this band out of iOS's
+                scroll-gesture recognition -- the container around it stays
+                touch-pan-y (so a swipe starting elsewhere on the mockup still
+                scrolls the page), but a touch that starts here can never be
+                reinterpreted as a scroll and cancelled mid-drag (T10740: that
+                cancel was what froze the slider on iPhone). Sized like the
+                visible knob rather than the container's full height -- a
+                full-height no-scroll column would kill page scroll over the
+                mockup, the exact regression 72ce7a2d5 fixed. */}
+            {!blocked && (
+              <div
+                className="absolute top-1/2 h-24 w-16 touch-none"
+                style={{ left: `${sliderPos}%`, transform: 'translate(-50%, -50%)' }}
+                onPointerDown={handleKnobPointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+              />
+            )}
+
+            {/* Slider line + handle (visual only -- pointer-events-none lets
+                hits fall through to the hit zone behind it) */}
             <div
               className={`absolute top-0 bottom-0 w-0.5 bg-white/80 pointer-events-none transition-opacity duration-300 ${videosReady ? 'opacity-100' : 'opacity-0'}`}
               style={{ left: `${sliderPos}%`, transform: 'translateX(-50%)' }}
@@ -289,7 +326,7 @@ export function BeforeAfterSlider({
 
             {/* Mobile swipe hint */}
             {!hasInteracted && (
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/70 rounded-full text-white text-xs font-medium md:hidden animate-fade-in">
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/70 rounded-full text-white text-xs font-medium md:hidden animate-fade-in pointer-events-none">
                 Swipe to compare
               </div>
             )}
