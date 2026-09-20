@@ -26,6 +26,40 @@ def _ctx():
     set_current_profile_id(TEST_PROFILE_ID)
 
 
+def _encode_tags(tags):
+    from app.utils.encoding import encode_data
+    return encode_data(tags)
+
+
+@pytest.fixture
+def game_and_client():
+    """A game row + the module-level client, context set. Used by the T10690
+    NULL-rating-carried test (site coverage across clips.py + games.py)."""
+    _ctx()
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO games (name, blake3_hash) VALUES ('T4280 rating', ?)",
+            (f"hash_{uuid.uuid4().hex[:16]}",),
+        )
+        game_id = cur.lastrowid
+        conn.commit()
+    yield client, game_id
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        raw_ids = [r[0] for r in cur.execute(
+            "SELECT id FROM raw_clips WHERE game_id = ?", (game_id,)
+        ).fetchall()]
+        if raw_ids:
+            placeholders = ",".join("?" for _ in raw_ids)
+            cur.execute(
+                f"DELETE FROM working_clips WHERE raw_clip_id IN ({placeholders})", raw_ids
+            )
+        cur.execute("DELETE FROM raw_clips WHERE game_id = ?", (game_id,))
+        cur.execute("DELETE FROM games WHERE id = ?", (game_id,))
+        conn.commit()
+
+
 # --- #1: no fabricated crop geometry ----------------------------------------
 
 @pytest.fixture
@@ -137,15 +171,83 @@ def test_local_processor_raises_on_probe_failure(tmp_path):
         )
 
 
-# --- #6: one NULL-rating helper, used everywhere ----------------------------
+# --- #6: T10690 repealed the single-substitution rule -----------------------
+# normalize_rating/UNRATED_RATING are DELETED (not just changed) -- the new
+# rule is "NULL means unrated, everywhere", with three distinct explicit
+# treatments at the three former call sites, not one shared coercer. See
+# docs/plans/tasks/T10690-design.md § 3.A.3.
 
-def test_normalize_rating_single_semantics(caplog):
-    from app.queries import normalize_rating, UNRATED_RATING
-    import logging
+def test_normalize_rating_is_deleted():
+    """The repealed helper and its constant must no longer exist -- keeping
+    either around risks a caller re-importing the substitute-3 behavior."""
+    import app.queries as queries_module
 
-    with caplog.at_level(logging.ERROR):
-        assert normalize_rating(None, context="t") == UNRATED_RATING  # logged fallback
-    assert any("NULL rating" in r.message for r in caplog.records)
-    # Real values (including an unexpected 0) are trusted, not overridden.
-    assert normalize_rating(5) == 5
-    assert normalize_rating(0) == 0
+    assert not hasattr(queries_module, "normalize_rating")
+    assert not hasattr(queries_module, "UNRATED_RATING")
+
+
+def test_null_rating_is_carried_not_substituted(game_and_client):
+    """The three former normalize_rating call sites (clips.py auto-project-name
+    derivation, clips.py clip_list, games.py game_stats rating counts) must
+    return/count None rather than inventing a 3 for an unrated clip.
+
+    Seeds an unrated clip directly at the DB layer (RawClipCreate.rating still
+    defaults to 3 today -- A.2 not yet landed -- so going through the create
+    endpoint would immediately re-invent a rating; that gap is a separate,
+    already-covered concern). This test isolates the three read-site
+    treatments (A.3/A.4), calling the same functions the endpoints call
+    rather than routing through the endpoints themselves.
+    """
+    client, game_id = game_and_client
+
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO projects (name, aspect_ratio) VALUES ('T4280', '9:16')"
+        )
+        project_id = cur.lastrowid
+        cur.execute(
+            "INSERT INTO raw_clips (filename, rating, game_id, end_time, tags) "
+            "VALUES ('', NULL, ?, 99.0, ?)",
+            (game_id, _encode_tags(["Goal"])),
+        )
+        clip_id = cur.lastrowid
+        cur.execute(
+            "INSERT INTO working_clips (project_id, raw_clip_id) VALUES (?, ?)",
+            (project_id, clip_id),
+        )
+        conn.commit()
+
+    # Site 1: clips.py:~1090 auto-project name derivation (_create_auto_project_for_clip).
+    # An unrated clip must not be silently named "Interesting Goal".
+    from app.routers.clips import _create_auto_project_for_clip
+
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        new_project_id = _create_auto_project_for_clip(cur, clip_id, clip_name="")
+        conn.commit()
+    proj_resp = client.get(f"/api/projects/{new_project_id}")
+    assert proj_resp.status_code == 200, proj_resp.text
+    # "Interesting" is get_rating_adjective's default for rating=3 -- the old
+    # normalize_rating substitution. The unrated project name must be
+    # adjective-free ("Goal"), never "Interesting Goal".
+    assert proj_resp.json()["name"] == "Goal", proj_resp.json()["name"]
+
+    # Site 2: clips.py:~1752 clip_list -- rating flows through as None, not 3.
+    list_resp = client.get(f"/api/clips/projects/{project_id}/clips")
+    assert list_resp.status_code == 200, list_resp.text
+    clips = list_resp.json()
+    by_raw_id = {c.get("raw_clip_id"): c for c in clips}
+    assert clip_id in by_raw_id, clips
+    assert by_raw_id[clip_id]["rating"] is None
+
+    # Site 3: games.py:~1355 game_stats rating counts -- an unrated play must
+    # not be double-counted as a 3-star ("interesting") badge.
+    from app.routers.games import _compute_athlete_stats
+
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        stats = _compute_athlete_stats(cur, [game_id])
+    assert stats[game_id]["interesting_count"] == 0, (
+        "an unrated clip must not be counted toward the 3-star ladder"
+    )

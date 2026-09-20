@@ -1179,7 +1179,7 @@ def ensure_database():
             CREATE TABLE IF NOT EXISTS raw_clips (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 filename TEXT NOT NULL,
-                rating INTEGER NOT NULL,
+                rating INTEGER,
                 tags BLOB,
                 name TEXT,
                 notes TEXT,
