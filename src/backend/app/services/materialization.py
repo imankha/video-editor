@@ -677,7 +677,7 @@ def _insert_clip(
             game_id, video_sequence, tagged_teammates, my_athlete, shared_by)
            VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""",
         (
-            clip.get("rating", 3),
+            clip.get("rating"),
             tags,
             clip.get("name"),
             clip.get("notes"),

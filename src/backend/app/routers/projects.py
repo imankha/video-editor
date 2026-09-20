@@ -714,8 +714,11 @@ async def create_project(project: ProjectCreate):
 
 def _build_clips_filter_query(game_ids: list[int], min_rating: int, tags: list[str]):
     """Build SQL query and params for filtering raw clips."""
-    # min_rating = 0 means "All clips" (include everything regardless of rating)
-    if min_rating <= 0:
+    # T10690: 1 is the minimum real star, so "1+" has never excluded a RATED
+    # clip -- treat <= 1 as "no rating filter" so unrated (NULL) plays stay
+    # reachable in the picker. A genuine 2+/3+/4+/5+ filter still excludes
+    # them (NULL is not >= 2).
+    if min_rating <= 1:
         query = """
             SELECT rc.id, rc.filename, rc.rating, rc.tags, rc.name, rc.notes,
                    rc.start_time, rc.end_time, rc.game_id,
@@ -776,7 +779,7 @@ async def preview_clips(request: ClipsPreviewRequest):
             total_duration += duration
 
             tags = decode_data(clip['tags']) or []
-            clip_name = derive_clip_name(clip['name'], clip['rating'] or 0, tags, clip['notes'] or '') or f"Clip {clip['id']}"
+            clip_name = derive_clip_name(clip['name'], clip['rating'], tags, clip['notes'] or '') or f"Clip {clip['id']}"
             clips_info.append({
                 'id': clip['id'],
                 'name': clip_name,
@@ -1591,7 +1594,7 @@ async def check_outdated_clips(project_id: int):
                 tags = decode_data(row['tags']) or []
                 clip_name = derive_clip_name(
                     row['clip_name'],
-                    row['rating'] or 3,
+                    row['rating'],
                     tags,
                     row['notes'] or ''
                 )

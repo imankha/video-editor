@@ -13,32 +13,8 @@ from app.constants import get_rating_adjective
 
 logger = logging.getLogger(__name__)
 
-# T4280: NULL-rating semantics, decided ONCE and used at every read site, replacing the
-# three divergent invented defaults (games.py `or 3`, clips.py `or 5`, clips.py `or 3`)
-# -- three fallbacks for one field was the smoking gun of the silent-fallback audit.
-# raw_clips.rating is NOT NULL, so a missing rating at read time is anomalous (an
-# unmatched join or an un-migrated row): surface it (log ERROR) rather than hide it, and
-# fall back to a single documented value. UNRATED_RATING is the neutral middle ("interesting").
-UNRATED_RATING = 3
 
-
-def normalize_rating(rating, *, context: str = "") -> int:
-    """Return a usable clip rating, logging when the stored value was missing (a bug).
-
-    Trusts any real stored value (including an unexpected 0); only a NULL is substituted,
-    and only with a log so the anomaly stays visible. See T4280.
-    """
-    if rating is None:
-        logger.error(
-            f"[rating] NULL rating encountered{f' ({context})' if context else ''}; "
-            f"raw_clips.rating is NOT NULL so this is a data bug -- using the unrated "
-            f"default {UNRATED_RATING}. Investigate the source."
-        )
-        return UNRATED_RATING
-    return rating
-
-
-def derive_clip_name(stored_name: str | None, rating: int, tags: list[str], notes: str = '', generated_title: str = '') -> str:
+def derive_clip_name(stored_name: str | None, rating: int | None, tags: list[str], notes: str = '', generated_title: str = '') -> str:
     """
     Derive a clip name from rating and tags if no custom name is stored.
 
@@ -49,7 +25,7 @@ def derive_clip_name(stored_name: str | None, rating: int, tags: list[str], note
 
     Args:
         stored_name: The name stored in the database (None or empty = auto-generate)
-        rating: Star rating 1-5
+        rating: Star rating 1-5, or None for an unrated clip (no adjective is invented)
         tags: List of tag short names (e.g., ["Goal", "Dribble"])
         notes: Optional notes text to use as fallback when no tags
         generated_title: Optional TF-IDF generated title from notes (pre-computed)
@@ -76,15 +52,18 @@ def derive_clip_name(stored_name: str | None, rating: int, tags: list[str], note
             return result
         return ''
 
-    adjective = get_rating_adjective(rating)
-
     # Tags are already short names (Goal, Assist, Dribble, etc.)
     if len(tags) == 1:
         tag_part = tags[0]
     else:
         tag_part = ', '.join(tags[:-1]) + ' and ' + tags[-1]
 
-    return f"{adjective} {tag_part}"
+    # T10690: NULL rating -> no adjective. get_rating_adjective would invent
+    # "Interesting" (its 1-5 lookup default), silently un-blanking a rating the
+    # user deliberately never gave.
+    if rating is None:
+        return tag_part
+    return f"{get_rating_adjective(rating)} {tag_part}"
 
 
 def latest_working_clips_subquery(alias: str = "wc", project_filter: bool = True) -> str:

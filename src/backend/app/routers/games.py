@@ -27,7 +27,6 @@ from app.constants import GameCreateStatus, GameStatus, GameType, ShareClipScope
 from app.database import column_exists, ensure_directories, get_db_connection
 from app.middleware.db_sync import durable_sync
 from app.profile_context import get_current_profile_id
-from app.queries import normalize_rating
 from app.services.auth_db import (
     delete_ref,
     get_game_storage_ref,
@@ -196,7 +195,7 @@ def get_game_video_url(blake3_hash: str, video_filename: str) -> str:
 
 
 
-def generate_clip_name(rating: int, tags: list) -> str:
+def generate_clip_name(rating: int | None, tags: list) -> str:
     """
     Generate a default clip name based on rating and tags.
     Must match frontend generateClipName() in soccerTags.js.
@@ -205,15 +204,16 @@ def generate_clip_name(rating: int, tags: list) -> str:
     if not tags:
         return ''
 
-    adjective = get_rating_adjective(rating)
-
     # Tags are already short names (stored that way by the frontend)
     if len(tags) == 1:
         tag_part = tags[0]
     else:
         tag_part = ', '.join(tags[:-1]) + ' and ' + tags[-1]
 
-    return f"{adjective} {tag_part}"
+    # T10690: NULL rating -> no invented adjective (see queries.derive_clip_name).
+    if rating is None:
+        return tag_part
+    return f"{get_rating_adjective(rating)} {tag_part}"
 
 
 def format_short_date(iso_date: str | None) -> str:
@@ -1352,7 +1352,11 @@ def _compute_athlete_stats(cursor, game_ids: list) -> dict:
             continue
 
         stats = per_game[gid]
-        rating = normalize_rating(row['rating'], context=f"game_stats game={gid}")
+        rating = row['rating']
+        # T10690: an unrated play counts toward no star badge (previously
+        # normalize_rating silently substituted 3, double-counting it as
+        # "interesting" -- the exact bug this task exists to stop). Tag badges
+        # below are independent of rating and still count for unrated plays.
         if rating == 5:
             stats['brilliant_count'] += 1
         elif rating == 4:

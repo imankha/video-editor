@@ -32,7 +32,7 @@ from app.database import (
 from app.highlight_transform import canonicalize_segments_data, to_splits_only
 from app.middleware.db_sync import durable_sync
 from app.profile_context import get_current_profile_id
-from app.queries import derive_clip_name, latest_working_clips_subquery, normalize_rating
+from app.queries import derive_clip_name, latest_working_clips_subquery
 from app.services.credit_ledger import credit_key, debit, get_credit_balance
 from app.services.default_crop import refit_crop_keyframes
 from app.services.media_probe import probe_r2_video
@@ -132,7 +132,7 @@ class RawClipResponse(BaseModel):
     id: int
     filename: str
     file_url: str | None = None  # Presigned R2 URL or None (use local proxy)
-    rating: int
+    rating: int | None  # T10690: NULL = no rating on record (unset, not "interesting")
     tags: list[str]
     name: str | None = None
     notes: str | None = None
@@ -159,7 +159,7 @@ class RawClipCreate(BaseModel):
     start_time: float
     end_time: float
     name: str = ""
-    rating: int = 3
+    rating: int | None = None  # T10690: absent/None = no rating given at create time
     tags: list[str] = []
     notes: str = ""
     video_sequence: int | None = None  # T82: which video in multi-video game (1-based)
@@ -914,6 +914,8 @@ async def list_raw_clips(game_id: int | None = None, min_rating: int | None = No
             params.append(game_id)
 
         if min_rating is not None:
+            # T10690: SQL `NULL >= n` evaluates to NULL (falsy in a WHERE), so
+            # any real min_rating filter correctly excludes unrated clips.
             query += " AND rating >= ?"
             params.append(min_rating)
 
@@ -1087,7 +1089,7 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
     if clip_name:
         project_name = clip_name
     elif clip_data:
-        rating = normalize_rating(clip_data['rating'], context=f"project_name raw_clip={raw_clip_id}")
+        rating = clip_data['rating']
         tags = decode_data(clip_data['tags']) or []
         notes = clip_data['notes'] or ''
         generated_title = ''
@@ -1298,9 +1300,12 @@ async def save_raw_clip(
             my_athlete_val = 0 if clip_data.my_athlete is False else 1
 
             # Include boundaries_version increment if start_time changed
+            # T10690: COALESCE(?, rating) -- a retried create that omits rating
+            # (idempotent-retry semantics, no rating field sent) must not NULL
+            # out a rating the user set in between. An explicit rating always wins.
             if boundaries_changed:
                 cursor.execute("""
-                    UPDATE raw_clips SET name = ?, rating = ?, tags = ?, notes = ?, start_time = ?,
+                    UPDATE raw_clips SET name = ?, rating = COALESCE(?, rating), tags = ?, notes = ?, start_time = ?,
                         tagged_teammates = ?, my_athlete = ?,
                         boundaries_version = COALESCE(boundaries_version, 0) + 1,
                         boundaries_updated_at = datetime('now')
@@ -1318,7 +1323,7 @@ async def save_raw_clip(
                 logger.info(f"Clip {clip_id} start_time changed, incrementing boundaries_version")
             else:
                 cursor.execute("""
-                    UPDATE raw_clips SET name = ?, rating = ?, tags = ?, notes = ?, start_time = ?,
+                    UPDATE raw_clips SET name = ?, rating = COALESCE(?, rating), tags = ?, notes = ?, start_time = ?,
                         tagged_teammates = ?, my_athlete = ?
                     WHERE id = ?
                 """, (
@@ -1749,7 +1754,7 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
         result = []
         for clip in clips:
             tags = decode_data(clip['raw_tags']) or []
-            rating = normalize_rating(clip['raw_rating'], context="clip_list")
+            rating = clip['raw_rating']
             raw_filename = clip['raw_filename']
             uploaded_filename = clip['uploaded_filename']
 
