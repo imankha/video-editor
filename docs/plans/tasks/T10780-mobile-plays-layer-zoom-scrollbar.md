@@ -32,6 +32,11 @@ Two changes, both inside the existing timeline machinery (no new abstraction):
    Fix its `sm:hidden` gate (640 px) so it shows for the whole `useIsMobile` range (1023 px or
    coarse pointer), not just below 640 px. Native touch swiping on the plays row also scrolls
    because the container is already `overflow-x: auto`.
+   **It must be a real mobile control (user ruling 2026-09-20):** finger-sized, not the
+   current 24 px sliver. Touch target >= 44 px tall (the whole track row is the hit area,
+   drawn as a 36 px pill inside it), thumb at least 56 px wide with a visible grip, 8 px of
+   air above (from the plays track) and 12 px below (before Edit play), edge-to-edge with the
+   plays track so a thumb at 0% or 100% lines up with the first/last play.
 
 The playhead must stay reachable: `TimelineBase` already auto-follows during playback and
 resets to the start on a seek-to-0. Add the one missing case: when a seek that is NOT
@@ -85,6 +90,14 @@ more code, and the RegionLayer touch handlers already fight page zoom, see
   width there is ~700 px, so 3x = ~2100 px; acceptable, but if it feels excessive scale from
   measured track width instead (`Math.max(1, 900 / trackClientWidth)`) so any device lands at
   desktop density. Decide at implementation; the fixed constant is the simpler first cut.
+- **Playback follow already exists** (`computeFollowScrollTarget`, TimelineBase.jsx:11): it
+  nudges the window only when the playhead crosses a 15% margin band, so while playing
+  forward the playhead rides the RIGHT edge with almost no lookahead. On a phone at 3x that
+  reads as "the playhead is about to fall off". Change the forward case to re-anchor the
+  playhead at ~1/3 from the left (page-forward), keeping the backward case as is. Parameterize
+  the anchor so Focus/Overlay (desktop wheel-zoom) keep their current behaviour byte-identical
+  unless the reviewer agrees the new anchor is strictly better there too. The 2% start guard
+  and the 2 s manual-scroll pause stay. Unit-test the pure function for both anchors.
 - Do NOT persist zoom or scroll position (no persisted view state).
 - Initial scroll position: on mount, scroll so the current playhead is visible (a returning
   user lands on the play they were editing), not at 0.
@@ -95,8 +108,14 @@ more code, and the RegionLayer touch handlers already fight page zoom, see
 1. [ ] `AnnotateTimeline`: `const mobileScale = isMobile ? 3 : 1` -> `timelineZoom={mobileScale * 100}` `timelineScale={mobileScale}`
 2. [ ] `TimelineBase`: gate the `Zoom: N%` badge on a new `showZoomBadge` prop (Focus/Overlay
    keep it; Annotate passes false); change `MobileScrollbar` root to `lg:hidden` + `ml-20 lg:ml-32`
+2b. [ ] `MobileScrollbar`: finger-sized. Row `min-h-[44px]` hit area (`py-1`), 36 px visual
+   pill, thumb `min-w-[56px]` with a 3-line grip glyph, `mt-2 mb-3` spacing. Focus/Overlay
+   share this component at < 1024 px, so they get the same larger bar; that is intended.
 3. [ ] `TimelineBase`: scroll playhead into view on a non-playback seek that lands off-screen
    (extend the existing seek-to-start effect; reuse `computeFollowScrollTarget`)
+3b. [ ] `computeFollowScrollTarget`: forward crossing re-anchors the playhead at ~1/3 from the
+   left (page-forward with lookahead) for the mobile Annotate timeline; pure-function unit
+   tests for both anchors; Focus/Overlay unchanged
 4. [ ] `TimelineBase`: on mount with `timelineScale > 1`, scroll the playhead into view
 5. [ ] Unit tests: mobile renders scale 3 + scrollbar; desktop renders scale 1 + no scrollbar;
    off-screen seek scrolls the container; mount scrolls to playhead
@@ -116,10 +135,21 @@ more code, and the RegionLayer touch handlers already fight page zoom, see
       wide for a 6 s play on a 90 min game at 360 px)
 - [ ] A drag-able scrollbar sits directly under the plays track, thumb ~1/3 of the track,
       aligned with the track (not under the label column)
+- [ ] The scrollbar is finger-sized: hit area >= 44 px tall (measured via
+      `getBoundingClientRect` in the e2e spec), thumb >= 56 px wide with a visible grip, and
+      >= 8 px gap above / >= 12 px below; a thumb drag starting anywhere in the row moves the
+      window (no dead zone at the row's edges)
 - [ ] Dragging the thumb scrolls the track; swiping the plays row scrolls the track; swiping
       the scrubber row still seeks
-- [ ] Playhead auto-follows during playback (existing) and scrolls into view after tapping a
-      play, using prev/next play, or opening a play from the list
+- [ ] **Playback follow (user ruling 2026-09-20):** while playing, the window moves on its
+      own so the playhead stays where a user expects it: never off screen, and always with
+      upcoming content visible ahead of it. Concretely: when the playhead reaches the right
+      15% margin the window re-anchors so the playhead sits about 1/3 in from the left
+      (page-forward with lookahead), not pinned to the right edge. Verified live on a phone
+      viewport by playing across the visible edge at least twice, and after a manual scroll
+      the follow resumes once the 2 s manual-scroll pause expires
+- [ ] Playhead scrolls into view after tapping a play, using prev/next play, or opening a
+      play from the list (non-playback seeks)
 - [ ] Angle strip (games with added footage) scales with the plays track and stays aligned
 - [ ] Desktop (>= 1024 px, fine pointer) is byte-identical: scale 1, no scrollbar, no badge
 - [ ] No `Zoom: 300%` badge on mobile

@@ -90,12 +90,14 @@
   .bubble { position: absolute; top: 4px; transform: translateX(-50%); background: #0b1220; border: 1px solid #334155; border-radius: 4px; padding: 2px 6px; font-size: 10px; white-space: nowrap; z-index: 3; font-family: "IBM Plex Mono", monospace; }
   .bubble b { color: #93c5fd; font-weight: 500; }
 
-  .sb-wrap { display: grid; grid-template-columns: 56px 1fr; margin-top: 6px; }
-  .sb { height: 22px; border-radius: 999px; background: var(--app-thumb-track); position: relative; touch-action: none; cursor: grab; border: 1px solid #2c3140; }
-  .sb .thumb { position: absolute; top: 3px; bottom: 3px; border-radius: 999px; background: var(--app-thumb); }
+  .sb-wrap { display: grid; grid-template-columns: 56px 1fr; margin: 8px 0 12px; }
+  .sb { min-height: 44px; padding: 4px 0; position: relative; touch-action: none; cursor: grab; }
+  .sb .rail { position: absolute; left: 0; right: 0; top: 4px; bottom: 4px; border-radius: 999px; background: var(--app-thumb-track); border: 1px solid #2c3140; }
+  .sb .thumb { position: absolute; top: 4px; bottom: 4px; min-width: 56px; border-radius: 999px; background: var(--app-thumb); display: grid; place-items: center; box-shadow: 0 1px 0 rgba(255,255,255,.08) inset; }
+  .sb .thumb::before { content: ""; width: 18px; height: 12px; background: repeating-linear-gradient(90deg, #d1d5db 0 2px, transparent 2px 6px); opacity: .8; border-radius: 1px; }
   .sb:active { cursor: grabbing; }
   .sb:active .thumb { background: #9ca3af; }
-  .ghost-sb { height: 22px; margin-top: 6px; border-radius: 999px; border: 1px dashed #374151; display: grid; place-items: center; font-size: 10px; color: #6b7280; margin-left: 56px; }
+  .ghost-sb { height: 44px; margin: 8px 0 12px; border-radius: 999px; border: 1px dashed #374151; display: grid; place-items: center; font-size: 10px; color: #6b7280; margin-left: 56px; }
 
   .cta { margin-top: 12px; display: grid; gap: 8px; }
   .cta .edit { height: 44px; border-radius: 10px; background: #d97706; display: grid; place-items: center; font-weight: 600; font-size: 15px; color: #fff; }
@@ -175,7 +177,7 @@
             </div>
           </div>
         </div>
-        <div class="sb-wrap"><div></div><div class="sb" id="after-sb" role="scrollbar" aria-label="Timeline scroll" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"><div class="thumb" id="after-thumb"></div></div></div>
+        <div class="sb-wrap"><div></div><div class="sb" id="after-sb" role="scrollbar" aria-label="Timeline scroll" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"><div class="rail"></div><div class="thumb" id="after-thumb"></div></div></div>
         <div class="cta"><div class="edit">✎ Edit play</div><div class="row"><div class="now">⌗ Frame Now</div><div class="later">◷ Frame Later</div></div></div>
       </div>
       <div class="demo-bar">
@@ -183,7 +185,7 @@
         <button class="demo" id="btn-next">Next play ▶</button>
         <button class="demo" id="btn-follow">Simulate playback for 8 s</button>
       </div>
-      <p class="note">This frame is live: drag the grey scrollbar, swipe the plays row, or use the buttons. Prev/Next demonstrate the one new behaviour, a seek that lands off screen scrolls the playhead into view. Playback auto-follow already exists.</p>
+      <p class="note">This frame is live: drag the grey scrollbar (finger-sized, 44 px hit area with a grip on the thumb), swipe the plays row, or use the buttons. Prev/Next show a seek that lands off screen scrolling the playhead into view. Simulate playback shows the follow: the window pages forward when the playhead nears the right edge, keeping upcoming plays in view.</p>
     </div>
   </section>
 
@@ -192,7 +194,7 @@
       <div class="fact"><span class="k">Play width, 6 s play</span><span class="v">4 px <small>today</small></span></div>
       <div class="fact"><span class="k">Play width, 6 s play</span><span class="v">13 px <small>at 300%</small></span></div>
       <div class="fact"><span class="k">Visible window</span><span class="v">30 min <small>of 90 at 300%</small></span></div>
-      <div class="fact"><span class="k">Scrollbar thumb</span><span class="v">33 % <small>of track</small></span></div>
+      <div class="fact"><span class="k">Scrollbar hit area</span><span class="v">44 px <small>tall, thumb ≥ 56 px</small></span></div>
     </div>
   </section>
 
@@ -203,8 +205,8 @@
       <tbody>
         <tr><td>Film row (scrubber)</td><td>Seeks, as today (the row is <code>touch-none</code>)</td><td>Seeks to that time</td></tr>
         <tr><td>Plays row</td><td>Scrolls the window (native <code>overflow-x</code>)</td><td>Selects the play</td></tr>
-        <tr><td>Scrollbar</td><td>Drags the window; thumb tracks native scroll both ways</td><td>Jumps the window there</td></tr>
-        <tr><td>Play button</td><td>n/a</td><td>Window auto-follows the playhead while playing (existing behaviour)</td></tr>
+        <tr><td>Scrollbar</td><td>Drags the window; thumb tracks native scroll both ways. Finger-sized: 44 px hit area, thumb at least 56 px wide with a grip, 8 px above and 12 px below</td><td>Jumps the window there</td></tr>
+        <tr><td>Play button</td><td>n/a</td><td>Window follows the playhead while playing: when it reaches the right 15% margin the window pages forward so the playhead sits 1/3 in from the left, with the next plays visible ahead of it</td></tr>
         <tr><td>Prev / Next play, Edit play, list</td><td>n/a</td><td>New: if the seek lands off screen, the window scrolls to the playhead</td></tr>
       </tbody>
     </table></div>
@@ -330,7 +332,7 @@
       placeHead('after', t); document.getElementById('after-time').textContent = fmt(t);
       document.getElementById('after-bubble').innerHTML = `<b>${fmt(t).slice(3)}</b>`;
       const x = headPx(), right = sc.scrollLeft + sc.clientWidth;
-      if (x > right - 40) sc.scrollLeft = x - sc.clientWidth * 0.3;
+      if (x > right - sc.clientWidth * 0.15) sc.scrollLeft = x - sc.clientWidth / 3; // page forward: playhead re-anchors 1/3 in
       if (n >= 80) { clearInterval(timer); timer = null; sc.style.scrollBehavior = ''; }
     }, 100);
   });
