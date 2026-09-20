@@ -4,9 +4,11 @@ import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
 
 // T8600 C1/C2: Tags + Notes move behind a "Details" disclosure.
 // Desktop (layout='strip') expands in place; mobile (layout='inline',
-// isMobile) opens a full-screen popup portaled to document.body. The
-// disclosure label counts existing tags/notes so edit-mode users see there
-// is hidden content.
+// isMobile) opens a full-screen popup portaled to document.body.
+// c92fd726 (user feedback, screenshot, 2026-09-19): the disclosure's
+// "(N tags, note)" count suffix read as confusing clutter on the compact
+// strip and was dropped everywhere the label is shared — it now always
+// reads plain "Details", regardless of existing tags/notes.
 
 function mockViewport(matches) {
   window.matchMedia = (query) => ({
@@ -46,13 +48,13 @@ const baseProps = {
 // so "Notes and Tags" undersold what it held. It defaults CLOSED on every layout,
 // not just mobile -- T10290's desktop-open-by-default existed only because
 // rating used to live here and needed to be visible without an extra tap.
-describe('AnnotateFullscreenOverlay — "Details" disclosure label (T8600/T10290/T10580/T10620)', () => {
-  it('shows "Details" when there are no tags and no note', () => {
+describe('AnnotateFullscreenOverlay — "Details" disclosure label (T8600/T10290/T10580/T10620/c92fd726)', () => {
+  it('shows plain "Details" when there are no tags and no note', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
     expect(screen.getByText('Details')).toBeTruthy();
   });
 
-  it('counts tags and note presence in the label once selected', () => {
+  it('still shows plain "Details" (no count suffix) once tags/notes exist (c92fd726: dropped as clutter)', () => {
     render(
       <AnnotateFullscreenOverlay
         {...baseProps}
@@ -60,7 +62,8 @@ describe('AnnotateFullscreenOverlay — "Details" disclosure label (T8600/T10290
         existingClip={{ ...existingClip, tags: ['Goal', 'Assist'], notes: 'nice one' }}
       />
     );
-    expect(screen.getByText(/Details \(2 tags, note\)/)).toBeTruthy();
+    expect(screen.getByText('Details')).toBeTruthy();
+    expect(screen.queryByText(/Details \(/)).toBeNull();
   });
 });
 
