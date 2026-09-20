@@ -106,6 +106,35 @@ describe('strip header badges — states', () => {
   });
 });
 
+// T10710: raw_clips.rating is nullable now (T10700/v054) — a freshly Marked
+// play has NO rating on record until the user picks one, so the rated badge
+// must show a genuine "unset" visual (reusing UNDONE's amber-dashed
+// treatment, C1-A) instead of the old unconditional DONE.
+describe('strip header badges — unset rating (T10710)', () => {
+  it('a fresh play with no rating renders the rated badge UNDONE (amber dashed, hollow star, "Not rated yet")', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating: null }} />);
+    const ratedBadge = badge('badge-rated');
+    expect(ratedBadge.dataset.state).toBe('undone');
+    // No notation glyph is drawn for an unset rating — the disc shows the
+    // hollow Star icon, not a chess-notation character.
+    expect(ratedBadge.textContent).toBe('');
+    expect(ratedBadge.title).toBe('Not rated yet');
+    expect(ratedBadge.getAttribute('aria-label')).toBe('Not rated yet');
+  });
+
+  it('selecting a rating flips the badge to DONE with the correct notation glyph', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating: null }} />);
+    const ratedBadge = badge('badge-rated');
+    expect(ratedBadge.dataset.state).toBe('undone');
+
+    fireEvent.click(ratedBadge);
+    fireEvent.click(screen.getByRole('radio', { name: '4 stars - Good' }));
+
+    expect(badge('badge-rated').dataset.state).toBe('done');
+    expect(badge('badge-rated').textContent).toBe('!');
+  });
+});
+
 describe('strip header badges — clicks jump to the control', () => {
   it('renders named before rated, note, then clip (named sits right after the play name)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);

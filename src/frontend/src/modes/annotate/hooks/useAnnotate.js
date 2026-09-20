@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { getAllSupportedTagNames } from '../constants/tagRegistry';
-import { DEFAULT_CLIP_DURATION, NEW_PLAY_DEFAULT_RATING as DEFAULT_RATING } from '../../../components/shared/clipConstants';
+import { DEFAULT_CLIP_DURATION } from '../../../components/shared/clipConstants';
 import { track } from '../../../utils/analytics';
 import { setAnnotateSnapshot } from '../../../utils/editorContext';
 
@@ -17,7 +17,8 @@ import { setAnnotateSnapshot } from '../../../utils/editorContext';
  *   - position: player position (attacker, midfielder, defender, goalie)
  *   - tags: array of tag names for the clip
  *   - notes: user notes (max 280 chars, shown as overlay during playback)
- *   - rating: 1-5 star rating (default 3)
+ *   - rating: 1-5 star rating, or null if the play has not been rated yet
+ *     (T10690: raw_clips.rating is nullable; no code path invents a star)
  *   - color: region display color (auto-assigned)
  *   - createdAt: creation timestamp
  *
@@ -45,6 +46,16 @@ function parseTimeToSeconds(timeStr) {
   const minutes = parseInt(parts[0], 10);
   const seconds = parseInt(parts[1], 10);
   return minutes * 60 + seconds;
+}
+
+/**
+ * T10690: clamp a loaded rating into 1-5, preserving null/undefined as null —
+ * the one place a stored rating gets defensively bounds-checked, distinct from
+ * inventing a value when none was ever given. Used by both importAnnotations
+ * (loadAnnotations) and the pending-annotations effect.
+ */
+function clampRating(rating) {
+  return rating == null ? null : Math.max(1, Math.min(5, rating));
 }
 
 /**
@@ -78,7 +89,11 @@ export function generateTsvContent(clipRegions) {
   // Generate data rows
   const rows = sorted.map(region => {
     const startTime = formatSecondsForTsv(region.startTime);
-    const rating = region.rating || DEFAULT_RATING;
+    // T10690: TSV round-trip is explicitly OUT OF SCOPE (design doc § B11,
+    // deferred) — this external file format still requires a 1-5 rating cell,
+    // so it keeps its own literal default rather than reaching for a display
+    // default that no longer exists.
+    const rating = region.rating || 3;
     const tags = (region.tags || []).join(',');
     const clipName = region.name || '';
     // Calculate duration with 1 decimal precision
@@ -215,8 +230,6 @@ export function validateTsvContent(content) {
 const MIN_CLIP_DURATION = 1.0; // seconds (enforced)
 const MAX_CLIP_DURATION = 60.0; // seconds (max for slider)
 const MAX_NOTES_LENGTH = 280; // characters (like a tweet)
-// T10610: NEW_PLAY_DEFAULT_RATING replaces this file's own hardcoded 4 — same
-// value, single-sourced in clipConstants.js instead of duplicated here.
 
 // Color palette for clip regions (auto-assigned cyclically)
 const CLIP_COLORS = [
@@ -308,7 +321,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
           position: '',
           tags: annotation.tags || [],
           notes: (annotation.notes || '').slice(0, MAX_NOTES_LENGTH),
-          rating: Math.max(1, Math.min(5, annotation.rating || DEFAULT_RATING)),
+          rating: clampRating(annotation.rating),
           videoSequence: annotation.videoSequence ?? annotation.video_sequence ?? null,
           tagged_teammates: annotation.tagged_teammates ?? annotation.taggedTeammates ?? null,
           my_athlete: annotation.my_athlete ?? annotation.myAthlete ?? true,
@@ -389,12 +402,12 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
    * @param {number} startTime - Start time in seconds
    * @param {number} customDuration - Optional custom duration (default: 15s)
    * @param {string} notes - Optional notes for the clip
-   * @param {number} rating - Optional rating (1-5, default: 3)
+   * @param {number|null} rating - Optional rating (1-5), null if not rated yet
    * @param {string} position - Optional position (attacker, midfielder, defender, goalie)
    * @param {Array} tags - Optional array of tag names
    * @param {string} name - Optional clip name (auto-generated if not provided)
    */
-  const addClipRegion = useCallback((startTime, customDuration = DEFAULT_CLIP_DURATION, notes = '', rating = DEFAULT_RATING, position = '', tags = [], name = '', videoSequence = null, { tagged_teammates = null, my_athlete = true, videoDuration = null } = {}) => {
+  const addClipRegion = useCallback((startTime, customDuration = DEFAULT_CLIP_DURATION, notes = '', rating = null, position = '', tags = [], name = '', videoSequence = null, { tagged_teammates = null, my_athlete = true, videoDuration = null } = {}) => {
     if (!duration) {
       console.warn('[useAnnotate] Cannot add clip region - no duration set');
       return null;
@@ -431,7 +444,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       position: position || '',
       tags: tags || [],
       notes: notes || '',
-      rating: rating || DEFAULT_RATING,
+      rating: rating ?? null,
       videoSequence: videoSequence,
       tagged_teammates: tagged_teammates,
       my_athlete: my_athlete,
@@ -659,7 +672,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       // NOTE: position removed - not used by backend
       tags: region.tags || [],
       notes: region.notes || '',
-      rating: region.rating || 3,
+      rating: region.rating ?? null,
       video_sequence: region.videoSequence || null,
       tagged_teammates: region.tagged_teammates || null,
       my_athlete: region.my_athlete ?? true,
@@ -723,7 +736,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         position: '',
         tags: annotation.tags || [],
         notes: (annotation.notes || '').slice(0, MAX_NOTES_LENGTH),
-        rating: Math.max(1, Math.min(5, annotation.rating || DEFAULT_RATING)),
+        rating: clampRating(annotation.rating),
         videoSequence: annotation.videoSequence ?? annotation.video_sequence ?? null,
         autoProjectId: annotation.autoProjectId ?? annotation.auto_project_id ?? null,
         // T8070: the start/end window this clip's linked reel was built from.
@@ -824,6 +837,5 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
     MIN_CLIP_DURATION,
     MAX_CLIP_DURATION,
     DEFAULT_CLIP_DURATION,
-    DEFAULT_RATING,
   };
 }

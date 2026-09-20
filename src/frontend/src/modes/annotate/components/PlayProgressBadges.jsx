@@ -22,6 +22,12 @@ import { RATING_ADJECTIVES, RATING_NOTATION } from '../../../components/shared/c
  * means "differs from the default 4"; it means the play has a real rating on
  * record (see playProgress.js).
  *
+ * T10690: the unrated state deliberately reuses UNDONE's existing amber-dashed
+ * look rather than a new badge state — an unrated play is not different in
+ * kind from an unnamed or un-noted one, so it gets the same "to do" treatment.
+ * Only the copy changes (title becomes "Not rated yet"). Do not "fix" this
+ * into its own BADGE_STATE without re-reading the T10690 design doc § C1.
+ *
  * Visual states (one treatment per state, never mixed):
  *   - undone:  dashed amber outline (T10440: was gray, read as disabled);
  *              clicking opens the control that completes it. Never pulses —
@@ -208,7 +214,7 @@ function RatingBadge({ state, size, rating, onRatingChange, myAthlete, isMobile 
     };
   }, [open]);
 
-  const title = state === BADGE_STATE.DONE ? ANNOTATE.PLAY_RATED : ANNOTATE.RATE_PLAY;
+  const title = state === BADGE_STATE.DONE ? ANNOTATE.PLAY_RATED : ANNOTATE.PLAY_NOT_RATED;
   const pickerTitle = myAthlete ? ANNOTATE.RATE_ATHLETES_PLAY : ANNOTATE.RATE_TEAMS_PLAY;
 
   return (

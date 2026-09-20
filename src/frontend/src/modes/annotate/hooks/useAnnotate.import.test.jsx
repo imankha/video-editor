@@ -153,6 +153,35 @@ describe('T4060 - annotations render into the Annotate timeline', () => {
     expect(api.current.regionsWithLayout.length).toBe(32);
   });
 
+  // T10710 THE CRITICAL REGRESSION GUARD: raw_clips.rating is nullable now
+  // (T10700/v054). importAnnotations (useAnnotate.js's loadAnnotations path,
+  // ~line 726) must preserve a NULL rating from the loaded backend data
+  // across a page reload — today it re-invents a default via
+  // `Math.max(1, Math.min(5, annotation.rating || DEFAULT_RATING))`, which
+  // alone would defeat this entire task if left unfixed (a load-bearing miss
+  // the design doc calls out by name). A real 1-5 value must still survive
+  // the round trip unchanged.
+  it('preserves a null rating from loaded annotation data — never coerces it to a number', () => {
+    const api = mountHarness();
+    const game = makeLoadGame({ duration: 120, count: 1 });
+    game.annotations[0].rating = null;
+
+    act(() => { api.current.loadGame(game); });
+
+    expect(api.current.regionsWithLayout.length).toBe(1);
+    expect(api.current.regionsWithLayout[0].rating).toBeNull();
+  });
+
+  it('preserves a real 1-5 rating unchanged across the same load path', () => {
+    const api = mountHarness();
+    const game = makeLoadGame({ duration: 120, count: 1 });
+    game.annotations[0].rating = 2;
+
+    act(() => { api.current.loadGame(game); });
+
+    expect(api.current.regionsWithLayout[0].rating).toBe(2);
+  });
+
   // --- Role of the WRONG video-element duration (T4000 early /video src) ---
 
   it('FRESH load AFTER the <video> reported a wrong short duration first: recovers', () => {

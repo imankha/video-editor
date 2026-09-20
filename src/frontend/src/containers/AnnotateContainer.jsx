@@ -34,7 +34,7 @@ import { generateClipName } from '../utils/clipDisplayName';
 import { SECTION_NAMES, MODE_NAMES } from '../config/displayNames';
 import { setPendingGame } from '../utils/pendingNavigation';
 import { beginGameVideoLoad, computeResumePosition, seekVideoElementWhenReady } from './annotateVideoLoad';
-import { NEW_PLAY_DEFAULT_RATING, DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
+import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
 import { defaultPlayName } from '../modes/annotate/playProgress';
 import { createRegionWriteQueue } from '../modes/annotate/regionWriteQueue';
 
@@ -1056,7 +1056,7 @@ export function AnnotateContainer({
                 start_time: annotation.start_time,
                 end_time: annotation.end_time,
                 name: annotation.name || '',
-                rating: annotation.rating || 3,
+                rating: annotation.rating ?? null,
                 tags: annotation.tags || [],
                 notes: annotation.notes || '',
                 video_sequence: annotation.video_sequence || null,
@@ -1397,7 +1397,8 @@ export function AnnotateContainer({
         await handleFullscreenCreateClip({
           startTime: s, // VIRTUAL time — handleFullscreenCreateClip converts (§ A.2)
           duration: e - s,
-          rating: NEW_PLAY_DEFAULT_RATING,
+          // T10690: no rating seeded at create-at-tap — the play carries no
+          // rating until the user picks one (raw_clips.rating is nullable).
           tags: [],
           name: defaultPlayName(clipRegionsRef.current.length + 1),
           notes: '',
@@ -2010,7 +2011,7 @@ export function AnnotateContainer({
               start_time: annotation.startTime ?? annotation.start_time ?? 0,
               end_time: annotation.endTime ?? annotation.end_time ?? 0,
               name: annotation.name || '',
-              rating: annotation.rating || 3,
+              rating: annotation.rating ?? null,
               tags: annotation.tags || [],
               notes: annotation.notes || '',
               video_sequence: annotation.videoSequence ?? annotation.video_sequence ?? null,

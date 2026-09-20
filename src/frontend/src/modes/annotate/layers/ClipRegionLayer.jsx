@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Video } from 'lucide-react';
 import { generateClipName } from '../../../utils/clipDisplayName';
-import { RATING_BADGE_COLORS, getRatingLabel } from '../../../components/shared/clipConstants';
+import { getRatingLabel, getRatingDisplay } from '../../../components/shared/clipConstants';
 import { RatingIcon } from '../../../components/shared/RatingIcon';
 import { ANNOTATE } from '../../../config/displayNames';
 import { formatInstant, PRECISION } from '../../../utils/timeFormat';
@@ -50,9 +50,6 @@ function MarkerTooltip({ anchorRect, accentColor, children }) {
 // T9480: the active region's end time is a POSITION on the game timeline (an
 // instant), not a span -- floors at second precision via the shared formatInstant.
 const formatTime = (seconds) => formatInstant(seconds, PRECISION.SECOND);
-
-// Rating to color map: the ONE palette in clipConstants (was a local copy).
-const RATING_COLORS = RATING_BADGE_COLORS;
 
 // T5700: layer tint — a secondary cue (colored underline foot), NOT a
 // replacement for the rating hue above, which stays the primary scanning signal.
@@ -216,8 +213,8 @@ export default function ClipRegionLayer({
           const isSelected = region.id === selectedRegionId;
           const isHovered = region.id === hoveredRegionId;
           const left = timeToPercent((region.startTime + region.endTime) / 2);
-          const rating = region.rating || 3;
-          const color = RATING_COLORS[rating];
+          const rating = region.rating ?? null;
+          const color = getRatingDisplay(rating).badgeColor;
           // Use same fallback logic as ClipListItem
           const displayName = region.name || generateClipName(rating, region.tags || [], region.notes || '') || '';
           const layerName = layerNameFor(region);
@@ -303,7 +300,7 @@ export default function ClipRegionLayer({
             <span className="text-gray-500 mx-1">|</span>
             <span className="text-gray-400">{activeRegion.index + 1}.</span>{' '}
             {activeRegion.name
-              || generateClipName(activeRegion.rating || 3, activeRegion.tags || [], activeRegion.notes || '')
+              || generateClipName(activeRegion.rating ?? null, activeRegion.tags || [], activeRegion.notes || '')
               || ''}
           </MarkerTooltip>
         )}

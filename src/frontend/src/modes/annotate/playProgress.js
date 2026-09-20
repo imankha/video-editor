@@ -5,14 +5,19 @@
  * nothing new is persisted and the badges can never drift from the fields.
  *
  * User rulings (2026-09-18, decision artifact):
- *   - RATED (T10520, revised 2026-09-19): true whenever the play has a real
- *     rating ON RECORD — edit mode is ALWAYS rated (a saved play always
- *     carries a genuine 1-5 value, whatever it is), and create mode is rated
- *     once the user has touched the rating control this session. No longer
- *     compares against a "default" value: the original rule ("differs from
- *     the untouched default 4") read a deliberate 4 as un-rated, which the
- *     user rejected after testing it live — "green doesn't mean not 4, it
- *     just means it's been set."
+ *   - RATED (T10690, 2026-09-19): true exactly when the play has a rating ON
+ *     RECORD — `rating != null`. `raw_clips.rating` is NULLABLE (migration
+ *     v054): a play created by Mark-play carries NO rating until the user
+ *     picks one, and NULL is a legitimate state, never an anomaly.
+ *     History, so this does not get re-litigated a fourth time:
+ *       T10520  "differs from the untouched default 4" -> rejected live by the
+ *               user: "green doesn't mean not 4, it just means it's been set."
+ *       T10610  create-at-tap seeded rating=4, so `rated` was hardcoded true ->
+ *               rejected: the badge claimed credit before the user touched it.
+ *       T10690  the seed was removed and the column made nullable, so the
+ *               predicate is finally a real read of real data. A session-only
+ *               "touched" flag was explicitly considered and REJECTED by the
+ *               user in favour of the schema change.
  *   - NAMED means a user-typed name: not blank, not the one-tap "Play N"
  *     default, and either changed in this session or stored as a custom name
  *     on the backend (`hasCustomName`, from `has_custom_name`). The loaded
@@ -89,15 +94,15 @@ export function getPlayProgress({
   let clip;
   if (hasProject) clip = CLIP_BADGE.DONE;
   else if (creating) clip = CLIP_BADGE.PENDING;
+  // T10690: `rating === CLIP_NUDGE_RATING` is already false for `null` — an
+  // unrated play does not nudge. No change needed, just no longer reachable
+  // with an invented rating.
   else if (rating === CLIP_NUDGE_RATING) clip = CLIP_BADGE.NUDGE;
   else clip = CLIP_BADGE.DORMANT;
 
   return {
-    // T10610: the editor is ALWAYS editing an already-created play now (D2 —
-    // create-at-tap means a play exists with a real rating from the moment
-    // the editor opens), so this badge is unconditionally done. No more
-    // create-mode "touched this session" gate to track.
-    rated: true,
+    // T10690: `!=` is deliberate — covers null AND undefined.
+    rated: rating != null,
     named,
     noted: (notes || '').trim().length > 0,
     clip,

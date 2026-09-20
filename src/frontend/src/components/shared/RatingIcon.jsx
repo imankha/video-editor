@@ -1,4 +1,4 @@
-import { RATING_BADGE_COLORS, RATING_NOTATION, DEFAULT_RATING } from './clipConstants';
+import { RATING_BADGE_COLORS, RATING_NOTATION, UNRATED_BADGE_COLOR } from './clipConstants';
 
 /**
  * RatingIcon - the rating badge as a drawn disc icon (T10430).
@@ -55,16 +55,43 @@ const GLYPHS = {
   5: () => <><Exclamation cx={24} /><Exclamation cx={40} /></>,
 };
 
-export function RatingIcon({ rating, size = 20, className = '' }) {
-  const r = RATING_NOTATION[rating] ? rating : DEFAULT_RATING;
-  const face = RATING_BADGE_COLORS[r];
-  const rim = darken(face);
-  const Glyph = GLYPHS[r];
+// T10690: rating === null is a real "not rated" state, not an anomaly — render
+// a dedicated unrated disc (dashed neutral ring, transparent face, no glyph)
+// instead of falling back to a fake star. One definition, inherited by every
+// RatingIcon consumer.
+function UnratedDisc({ size, className }) {
   return (
     <span
       className={`inline-flex items-center justify-center ${className}`}
       data-testid="rating-icon"
-      data-rating={r}
+      data-rating="unrated"
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 64 64"
+        aria-hidden="true"
+        focusable="false"
+        style={{ display: 'block' }}
+      >
+        <circle cx="32" cy="32" r="27" fill="transparent" stroke={UNRATED_BADGE_COLOR} strokeWidth="4" strokeDasharray="7 6" />
+      </svg>
+      <span className="sr-only">Not rated</span>
+    </span>
+  );
+}
+
+export function RatingIcon({ rating, size = 20, className = '' }) {
+  if (rating == null) return <UnratedDisc size={size} className={className} />;
+
+  const face = RATING_BADGE_COLORS[rating];
+  const rim = darken(face);
+  const Glyph = GLYPHS[rating];
+  return (
+    <span
+      className={`inline-flex items-center justify-center ${className}`}
+      data-testid="rating-icon"
+      data-rating={rating}
     >
       <svg
         width={size}
@@ -86,7 +113,7 @@ export function RatingIcon({ rating, size = 20, className = '' }) {
           <Glyph />
         </g>
       </svg>
-      <span className="sr-only">{RATING_NOTATION[r]}</span>
+      <span className="sr-only">{RATING_NOTATION[rating]}</span>
     </span>
   );
 }

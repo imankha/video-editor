@@ -6,6 +6,8 @@ import { useQuestStore } from '../stores/questStore';
 // fullscreen/mobile overlay) the user is in. Call this from every rating/tag change
 // handler with the clip's post-change rating and tags.
 export function maybeRecordRatedAndTagged(rating, tags) {
+  // T10690: `null >= 1` is already false — an unrated play correctly never
+  // completes this step. Do not "fix" this into a null check; it's already right.
   if (rating >= 1 && (tags?.length ?? 0) >= 1) {
     useQuestStore.getState().recordAchievement('clip_rated');
   }

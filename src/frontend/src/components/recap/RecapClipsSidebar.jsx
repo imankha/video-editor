@@ -14,7 +14,7 @@ export function RecapClipsSidebar({ clips, activeClipId, onSeekToClip }) {
       {clips.map((clip, index) => {
         const isActive = clip.id === activeClipId;
         const region = {
-          rating: clip.rating || 3,
+          rating: clip.rating ?? null,
           tags: Array.isArray(clip.tags) ? clip.tags : [],
           notes: clip.notes || '',
           name: clip.name || '',

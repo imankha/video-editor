@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getRatingCaption, getEditRatingCaption, getRatingLabel } from './clipConstants';
+import { getRatingCaption, getEditRatingCaption, getRatingLabel, getRatingDisplay, RATING_BADGE_COLORS, RATING_BACKGROUND_COLORS } from './clipConstants';
 
 // T9520 N35: the ONE documented star-to-descriptor mapping ("4 stars · Good"),
 // used for the rating title/aria across the play list, the play editor and the
@@ -13,9 +13,23 @@ describe('getRatingLabel (N35 star-to-descriptor mapping)', () => {
     expect(getRatingLabel(5)).toBe('5 stars · Brilliant');
   });
 
-  it('falls back to the default rating (3) when none is set', () => {
-    expect(getRatingLabel(null)).toBe('3 stars · Interesting');
-    expect(getRatingLabel(0)).toBe('3 stars · Interesting');
+});
+
+// T10690/T10710: raw_clips.rating is nullable now — a play can genuinely have
+// NO rating on record. `getRatingLabel(null)` must stop inventing "3 stars ·
+// Interesting" (the old DEFAULT_RATING fallback) and instead say so plainly;
+// `getRatingDisplay(null)` must not draw one of the five real rating colors
+// for a rating that was never given.
+describe('getRatingLabel / getRatingDisplay — genuinely unrated (T10710)', () => {
+  it('getRatingLabel(null) says "Not rated", not a fabricated 3-star default', () => {
+    expect(getRatingLabel(null)).toBe('Not rated');
+  });
+
+  it('getRatingDisplay(null) has no notation and uses a neutral color, not one of the 1-5 palettes', () => {
+    const display = getRatingDisplay(null);
+    expect(display.notation).toBe('');
+    expect(Object.values(RATING_BADGE_COLORS)).not.toContain(display.badgeColor);
+    expect(Object.values(RATING_BACKGROUND_COLORS)).not.toContain(display.backgroundColor);
   });
 });
 

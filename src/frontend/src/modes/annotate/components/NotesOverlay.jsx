@@ -1,5 +1,5 @@
 import React from 'react';
-import { RATING_NOTATION, RATING_BADGE_COLORS, getRatingLabel } from '../../../components/shared/clipConstants';
+import { RATING_NOTATION, RATING_BADGE_COLORS, UNRATED_BADGE_COLOR, getRatingLabel } from '../../../components/shared/clipConstants';
 import { RatingIcon } from '../../../components/shared/RatingIcon';
 
 // Border colors come from the ONE rating palette in clipConstants (was a local copy).
@@ -27,7 +27,9 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, isVisible,
   }
 
   const notation = rating ? RATING_NOTATION[rating] || '' : '';
-  const borderColor = rating ? RATING_COLORS[rating] || RATING_COLORS[3] : RATING_COLORS[3];
+  // T10690: an unrated clip's border is neutral, not a borrowed "Interesting"
+  // blue — a NULL rating is a real state, never a value to substitute.
+  const borderColor = rating ? RATING_COLORS[rating] : UNRATED_BADGE_COLOR;
 
   return (
     <div

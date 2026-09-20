@@ -12,7 +12,7 @@ import ClipScrubRegion from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { DeletePlayButton } from './DeletePlayButton';
-import { getEditRatingCaption, getRatingLabel } from '../../../components/shared/clipConstants';
+import { getEditRatingCaption, getRatingLabel, UNRATED_BADGE_COLOR, UNRATED_BACKGROUND_COLOR } from '../../../components/shared/clipConstants';
 import { getClipStage, CLIP_STAGE } from '../clipStage';
 import { isDefaultPlayName } from '../playProgress';
 import { onTextFieldKeyDown } from '../textFieldCommit';
@@ -173,7 +173,7 @@ export function ClipDetailsEditor({
   const isTeamLayer = (region.my_athlete ?? true) === false;
 
   // Derive display name from region.name or auto-generate from rating+tags
-  const displayName = region.name || generateClipName(region.rating || 3, region.tags || [], region.notes || '') || '';
+  const displayName = region.name || generateClipName(region.rating ?? null, region.tags || [], region.notes || '') || '';
   // T10610 § A.5 (v2 finding 7): reads the SAME recognizer the "named" badge
   // uses. Every play now carries a real name ("Play N") from the moment it's
   // created, so the old has_custom_name-style flag would never show "(auto)"
@@ -256,9 +256,11 @@ export function ClipDetailsEditor({
     }
   }, [onAwaitWrites, region.id, region.autoProjectId, clipStage.action, onOpenInOverlay, onOpenInFocus]);
 
-  const rating = region.rating || 3;
-  const ratingColor = RATING_COLORS[rating] || RATING_COLORS[3];
-  const ratingBorderColor = RATING_BORDER_COLORS[rating] || RATING_BORDER_COLORS[3];
+  const rating = region.rating ?? null;
+  // T10690: an unrated clip's panel tint is neutral, not a borrowed "3" color
+  // — a NULL rating is a real state, never a value to substitute.
+  const ratingColor = rating == null ? UNRATED_BACKGROUND_COLOR : RATING_COLORS[rating];
+  const ratingBorderColor = rating == null ? UNRATED_BADGE_COLOR : RATING_BORDER_COLORS[rating];
 
   return (
     <div
@@ -303,7 +305,7 @@ export function ClipDetailsEditor({
         <div className="flex items-center gap-2">
           <label className="text-gray-400 text-xs w-16 shrink-0">Rating</label>
           <StarRating
-            rating={region.rating || 3}
+            rating={rating}
             onRatingChange={handleRatingChange}
           />
         </div>
