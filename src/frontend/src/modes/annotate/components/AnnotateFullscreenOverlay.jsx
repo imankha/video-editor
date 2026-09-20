@@ -643,8 +643,10 @@ export function AnnotateFullscreenOverlay({
           {/* Header row 1 — T8960 items 2+5: the name is the FIRST control in
               BOTH modes (create shows the default/auto name until renamed; the
               pencil opens an inline input — the SAME affordance edit mode uses),
-              the My Athlete | Team layer control sits on this top line, then the
-              Close button. There is no separate name field in the controls row. */}
+              the My Athlete | Team layer control sits on this top line. There
+              is no separate name field in the controls row. No header X here:
+              it was a duplicate of the Done button below (both routed through
+              closeWithCommit with identical behavior). */}
           <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-yellow-800/30">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               {isEditingName ? (
@@ -692,9 +694,6 @@ export function AnnotateFullscreenOverlay({
                 disabled={!!existingClip.shared_by}
                 disabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
               />
-              <button onClick={closeWithCommit} title="Close (Esc)" className="p-1.5 hover:bg-gray-700/50 rounded transition-colors shrink-0">
-                <X size={18} className="text-gray-400" />
-              </button>
             </div>
           </div>
 
