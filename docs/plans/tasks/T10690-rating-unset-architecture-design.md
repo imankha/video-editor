@@ -1,6 +1,6 @@
 # T10690: Architect design — true "unset" rating state (nullable raw_clips.rating)
 
-**Status:** WAITING ON USER
+**Status:** DECIDED
 **Impact:** 5
 **Complexity:** 6
 **Created:** 2026-09-19
@@ -137,7 +137,7 @@ existing pre-migration clip, which always has 1-5).
 2. [x] Spawn the `architect` agent with this file; it writes `docs/plans/tasks/T10690-design.md`
 3. [x] Build the decision artifact (schema diff, call-site table, badge-state mock, the
    reachable-vs-not "clear rating" question) and hand it to the user
-4. [ ] Status -> WAITING ON USER; on approval -> DECIDED, and the implementation task may be filed
+4. [x] Status -> WAITING ON USER; on approval -> DECIDED, and the implementation task may be filed
 
 ### Progress Log
 
@@ -174,6 +174,22 @@ unrated derived clip name drops its adjective; (4) whether a TSV export round-tr
 ships with this or is deferred; (5) whether `ShareGameModal` omits its rating chip for unrated
 plays. Suggested split once approved: backend/compat PR first, frontend PR second (shipping
 frontend first would 500 every Mark-play tap). Status -> WAITING ON USER.
+
+**2026-09-19: APPROVED by the user ("spec approved, proceed").** Went with the artifact's
+recommended option on each open question, EXCEPT #4 which the artifact left with no
+recommendation — deferred as the more conservative default (kept explicit as a call made without
+a user signal, flagged back to the user in the handoff):
+1. Unset badge = option A, reuse `UNDONE`'s amber dashed look, copy "Not rated yet". No new
+   `BADGE_STATE` member.
+2. No "clear rating" action in v1 — unset is reachable only pre-first-rating.
+3. Unrated derived name drops the adjective ("Goal and Dribble", not "Interesting Goal and Dribble").
+4. TSV round-trip fix DEFERRED (kept an explicit `|| 3` in the TSV writer only) — flag to the user
+   as a call made without an explicit recommendation in the artifact; can be pulled into scope on
+   request.
+5. `ShareGameModal` omits its rating chip entirely for an unrated play.
+
+Status -> DECIDED. Filed implementation as two tasks (backend/compat first, frontend second,
+matching the artifact's ship-order risk mitigation): T10700, T10710.
 
 ## Acceptance Criteria
 
