@@ -1,6 +1,6 @@
 # T10750: Annotate entry fires a ~32x select+seek storm ("Maximum update depth exceeded")
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-20
@@ -49,7 +49,59 @@ stack bottomed out at `setIsSeeking` (`videoStore.js:57`) / `handleSeeking` (`us
 but that is the MESSENGER, not the culprit: a DOM-event-driven store write cannot be the passive
 loop. Do not "fix" `setIsSeeking`.
 
-## Open question (expert consulted, unresolved as of filing)
+## Root cause: React LANE STARVATION (expert, 2026-09-20 — verified against source)
+
+The selection update is never **reverted**; it is never **rendered**.
+
+1. `selectClip()` is called from a PASSIVE effect. `flushPassiveEffects` lowers priority, so every
+   setState scheduled inside a `useEffect` is **DefaultLane**.
+2. In the same effect body `effectiveSeek()` -> `useVideo.seek` (`hooks/useVideo.js:421`) writes
+   zustand twice: `setIsSeeking(true); setCurrentTime(validTime)`. zustand always allocates a new
+   state object, and `useVideo.js:127` subscribes **selector-less** (`useVideoStore()` destructure,
+   VERIFIED), so the snapshot always differs -> `handleStoreChange` -> `forceStoreRerender` ->
+   `scheduleUpdateOnFiber(..., SyncLane)` unconditionally, even for a value-identical write.
+3. React renders SyncLane first, and `updateReducer` SKIPS any update whose lane is not in
+   `renderLanes` — so the DefaultLane `{type:'SELECTED'}` is deferred and the hook renders
+   `{type:'NONE'}`. **That is the `state: NONE` in the capture.**
+4. That commit re-runs the effect, because `useVideo.seek` is a plain UNMEMOIZED function
+   (`useVideo.js:421`, VERIFIED) -> `effectiveSeek` -> `handleSelectRegion` identity churns
+   (`AnnotateContainer.jsx:1772`) -> the T3960 effect's dep list churns (`AnnotateScreen.jsx:564`).
+5. It reads `annotateSelectedRegionId === null` (skipped, not reverted), selects+seeks again -> a
+   new SyncLane update -> SyncLane is always pending and **DefaultLane starves**. It ends only at
+   the 40-attempt cap.
+
+Consistent with every observation: the 40-pair burst = the cap; `state: NONE` every time; refs
+advance normally (refs are synchronous, lane-immune); no remount (a remount would STOP it).
+
+**Consequence for the fix:** a retry effect CANNOT observe its own success here — the observation
+channel (useState -> next render) is exactly what the loop starves. Any "re-issue until it sticks"
+shape is unfixable in principle, not just buggy.
+
+## Fix plan
+
+**A (this task).** Delete the retry effect `AnnotateScreen.jsx:507-564` plus
+`pendingSourceSelectAttemptsRef` / `pendingSourceClipIdRef`. A one-shot equivalent already exists:
+`AnnotateContainer.jsx:1212-1228` (T740), fed by `handleLoadGame`, which nulls its ref
+unconditionally so it fires exactly once. If matching by `rawClipId` (rather than seek time) is
+required, carry the source clip id into that seam and widen ITS matcher — do NOT add a second path.
+Success condition is data-in-hand, not observed-after-the-fact: `importAnnotations` RETURNS the
+created regions (`useAnnotate.js:766`), so the target region is known synchronously at the load
+seam. Select once, drop the breadcrumb. A later auto-deselect because the playhead is out of range
+is CORRECT behavior, not a retry trigger.
+
+**B (separate task — the amplifier, T6190's lesson applied to videoStore).** `useVideo.js:127`
+should use selector-scoped reads (`useVideoStore(s => s.x)`), and the returned actions (`seek`,
+`play`, `pause`, `togglePlay`, `step*`) should be `useCallback`-wrapped. Unmemoized functions in
+published dep lists are what re-arm every effect on this screen each render.
+
+**C (separate task — real, visible in the same log).** `useVideo.js:424`
+`const effectiveDuration = duration || (clipDuration ?? videoRef.current.duration) || 0` silently
+clamps a legitimate seek to 0 when duration is not yet known. Log line 95:
+`SEEK requested=181.290090s clamped=0.000000s` — which caused the single legitimate `[AutoDeselect]`
+on line 96. This is the banned silent-fallback-on-internal-data pattern (CLAUDE.md); it should
+refuse or defer, not clamp to 0.
+
+## Superseded: earlier open question (kept for the record)
 
 Why does the selection never stick? `selectClip` writes `{type:'SELECTED', clipId}` into
 `useClipSelection`'s `useState` (`modes/annotate/hooks/useClipSelection.js:40-42`), yet the next
