@@ -15,8 +15,8 @@ profile_db/ (every prior migration here is ADD COLUMN / DROP COLUMN only).
 
 Three tables carry a cascading FK to raw_clips(id) ON DELETE CASCADE:
 working_clips (database.py ~1256), modal_tasks (~1519), clip_teammates (~1690).
-Under `foreign_keys=ON` (the setting both database.py's get_db_connection() and
-materialization.py's opener use), a bare `DROP TABLE raw_clips` is an implicit
+Under `foreign_keys=ON` (the setting both database.py's get_db_connection helper
+and materialization.py's opener use), a bare `DROP TABLE raw_clips` is an implicit
 cascading DELETE and would silently wipe every working clip in the profile. This
 migration forces `PRAGMA foreign_keys=OFF` around the rebuild REGARDLESS of the
 caller's setting -- it must not depend on the seam connection's default (which

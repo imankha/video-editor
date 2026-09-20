@@ -192,7 +192,17 @@ POST_V023_COLUMNS = {
     #   'upload'), analogous to v050's kind='clip' write path -- not a list read
     #   this below-head fixture drives, so it is left unguarded (a below-head DB
     #   migrates JIT on access before any live request reaches it).
-HEAD_VERSION_AUDITED = 53  # v053 (T10300): raw_clips.source, column_exists-guarded reads
+    # v054 (T10700/T10690 raw_clips.rating nullable) adds NO column -> nothing to guard.
+    #   It is a full table rebuild-and-copy (SQLite can't ALTER COLUMN DROP NOT NULL)
+    #   that changes rating's NOT NULL-ness only; the column already exists, under the
+    #   same name, on every profile back to the FLOOR_VERSION audit -- there is no new
+    #   column name for a hot read to miss. And unlike an added-column window (a
+    #   below-head row genuinely lacks the field until migrated), there is no
+    #   not-yet-migrated read/write window to guard here at all: the JIT seam
+    #   (migrations/__init__.py run_profile_seam) runs pending migrations to head
+    #   SYNCHRONOUSLY before any query touches the profile DB, so no request ever
+    #   observes rating as still NOT NULL post-deploy.
+HEAD_VERSION_AUDITED = 54  # v054 (T10700): raw_clips.rating nullable, no column added
 
 
 def _cleanup(user_id: str) -> None:
