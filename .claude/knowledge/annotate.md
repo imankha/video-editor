@@ -1,5 +1,11 @@
 ---
 domain: annotate
+updated: 2026-09-20 (T10750 — the Annotate-entry clip selection is ONE SHOT, consumed in
+`AnnotateContainer`'s `pendingSelectTargetRef` effect. AnnotateScreen's T3960 retry selector was
+DELETED: it re-issued select+seek until the selection "stuck" and could never observe its own
+success (lane starvation — see the invariant "Annotate-entry selection fires exactly once" below),
+producing a ~40x select+seek storm per entry. `useVideo.seek` also stopped clamping to 0 when no
+duration is known — it refuses loudly instead. Do NOT reintroduce a retry here.)
 updated: 2026-09-19 (T10620 — mobile PORTRAIT play editor is now an IN-FLOW compact strip
 directly UNDER the video, not a fixed bottom sheet. FRONTEND-ONLY, no schema, layout-only
 (zero new writes — every field still persists through T10610's existing per-gesture seam).
@@ -1690,6 +1696,38 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `viewed_duration = MAX(...)` high-water.
 
 ## Invariants & rules
+- **Annotate-entry clip selection fires EXACTLY ONCE — never retry it (T10750, 2026-09-20).**
+  The navigation breadcrumb (`pendingSourceClipId` / `pendingClipSeekTime`, set by
+  `App.handleEditInAnnotate`, share-link entry and Recap "Create clip") is handed to
+  `handleLoadGame` and consumed by the SINGLE `pendingSelectTargetRef` effect in
+  `AnnotateContainer`. It matches the exact `rawClipId` first, falls back to a 0.5s seek-time
+  proximity match, warns when nothing matches, and nulls the ref unconditionally so it cannot
+  re-fire. **Why a retry is impossible here, not merely buggy:** `selectClip` runs in a passive
+  effect (DefaultLane) while the accompanying seek writes zustand through `useVideo`'s
+  selector-less `useVideoStore()` subscription (SyncLane, scheduled unconditionally via
+  `forceStoreRerender`). React renders SyncLane first and `updateReducer` SKIPS updates whose lane
+  is not in `renderLanes`, so the selection is DEFERRED, a retry reads `NONE`, fires again, and
+  starves its own update — AnnotateScreen's old T3960 effect did exactly this, ~40 select+seek
+  pairs per entry until its attempt cap, with React logging `Maximum update depth exceeded`.
+  (That warning names whatever setState comes next — its branch is `nestedPassiveUpdateCount > 50`
+  — so do NOT chase the callee it names; the first capture pointed at `setIsSeeking`, innocently.)
+  The effect's `videoDuration > 0` check is a PRECONDITION, not an outcome retry, and it
+  **exempts `multiVideo`**: AnnotateScreen passes `handlers={{}}` in multi-video, so
+  `useVideo.handleLoadedMetadata` — the only writer of that store `duration` — never fires and it
+  stays 0 all session, while the proxy's seek resolves against the virtual timeline and never
+  reads it. Gating on it there silently discards every breadcrumb on a game with added footage.
+  Pinned by `AnnotateContainer.pendingSelection.test.jsx` (a CALL-COUNT test — with the disarm
+  removed the test worker dies of the infinite loop). Note the harness subtlety: it must hand the
+  container a FRESH `seek` identity each render (the real screen churns it), or the effect never
+  re-runs and the test passes vacuously against a retry.
+- **`useVideo.seek` REFUSES when no duration is known — it does not clamp to 0 (T10750).**
+  `effectiveDuration = duration || (clipDuration ?? video.duration) || 0` used to turn every
+  pre-metadata seek into a seek-to-0, parking the playhead outside the target clip so the
+  playhead-driven auto-deselect wiped a selection that had just been made (live:
+  `SEEK requested=181.290090s clamped=0.000000s`). It now warns and returns. Scoped to callers
+  that pass NO `clampToVisibleRange` (Annotate, Overlay) — that is the branch where the fallback
+  bites; Focus supplies its own clamp fn and is deliberately unaffected. Pinned by
+  `useVideo.seekRefusesWithoutDuration.test.js`.
 - **Play-progress badges are a PURE READ of editor state (T10410, 2026-09-18; rewritten through
   T10590, 2026-09-19 — five follow-up rounds the SAME day, all user-driven live-testing corrections).**
   The Edit play editor shows four badges — **named / rated / noted / clip** (T10460 reordered named

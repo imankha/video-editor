@@ -1,6 +1,6 @@
 # T10750: Annotate entry fires a ~32x select+seek storm ("Maximum update depth exceeded")
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-20
