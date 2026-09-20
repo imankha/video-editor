@@ -31,26 +31,49 @@
  * is NOT treated as foreign: this guard exists to catch a known mismatch, not
  * to gate on the absence of a field. Callers keep their previous behavior there.
  *
+ * COMPARED AS STRINGS ON PURPOSE. `selectedProjectId` is not reliably numeric:
+ * the auth-return and payment-return paths read it back out of `sessionStorage`
+ * (`authStore.js`, `BuyCreditsModal.jsx`) and `projectsStore.selectProject`
+ * stores that argument verbatim, so `projectId` can arrive here as `"41"` while
+ * every clip row carries a numeric `project_id` (required on
+ * `WorkingClipResponse`). A strict `!==` would then call EVERY clip foreign and
+ * leave Focus permanently blank on those paths — and blank crop hooks are what
+ * the payment path's auto-export would persist. This guard must fail OPEN on a
+ * type mismatch (pre-fix behavior, a transient wrong request) rather than CLOSED
+ * (no video at all, and it never heals). The ids are coerced at their
+ * sessionStorage boundary too, but the catastrophic failure mode lives here, so
+ * this is the half that must be tolerant.
+ *
  * @param {{project_id?: number|null}} clip - a working-clip row
  * @param {number|string|null|undefined} projectId - the project the screen is showing
  * @returns {boolean} true => ignore this clip and wait for the fresh list
  */
 export function isClipFromAnotherProject(clip, projectId) {
   if (!clip || clip.project_id == null || projectId == null) return false;
-  return clip.project_id !== projectId;
+  return String(clip.project_id) !== String(projectId);
 }
 
 /**
  * After a `playback-url` request, should the caller fall back to the `/stream`
  * proxy?
  *
- * The fallback is for TRANSPORT failures — a dropped connection, or a 5xx where
- * the proxy is a genuinely different code path worth trying. A 4xx is our own
- * endpoint rejecting the (project_id, clip_id) pair we sent: the proxy resolves
- * the SAME pair (`clips.py` `/stream`) and fails identically, so retrying it
- * only converts an internal bug into a dead `<video>` src that the player
- * mislabels as an expired source. Per CLAUDE.md "No silent fallbacks for
- * internal data", that case must fail loudly instead.
+ * ONLY 404 suppresses the fallback, because 404 is the one status both endpoints
+ * provably agree on: they run the IDENTICAL row query
+ * (`WHERE wc.id = ? AND wc.project_id = ?`, `clips.py` in both
+ * `get_clip_playback_url` and `stream_working_clip_bounded`), so a 404 from one
+ * is a guaranteed 404 from the other. Retrying it only converts an internal bug
+ * into a dead `<video>` src that the player mislabels as an expired source — the
+ * exact masking this task removes, per CLAUDE.md "No silent fallbacks for
+ * internal data".
+ *
+ * A blanket "no fallback on any 4xx" would be WRONG, and 422 is the live proof:
+ * `get_clip_playback_url` raises 422 when the game video has no blake3 hash,
+ * BEFORE presigning, while `/stream` has no such check and `get_game_video_url`
+ * falls back to the pre-T80 per-user `{user}/games/{filename}` storage for
+ * exactly that case. The clips list still populates `game_video_url` for those
+ * rows (`if blake3 or clip['game_video_filename']`), so for a legacy
+ * blake3-less game the proxy is the path that actually works. Do not widen this
+ * to all 4xx without first proving no such videos remain in dev/staging/prod.
  *
  * 410 `source_expired` never reaches here — `getClipVideoConfig` handles it
  * earlier and renders the deliberate T8310 expired panel.
@@ -61,5 +84,5 @@ export function isClipFromAnotherProject(clip, projectId) {
  */
 export function shouldRetryClipVideoViaProxy(status) {
   if (status == null) return true; // threw before a response — transport failure
-  return !(status >= 400 && status < 500);
+  return status !== 404;
 }

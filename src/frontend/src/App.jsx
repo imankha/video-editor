@@ -314,7 +314,10 @@ function App() {
           }, 100);
           setTimeout(() => clearInterval(waitForGames), 5000);
         } else if (authReturnProjectId) {
-          useProjectsStore.getState().selectProject(authReturnProjectId);
+          // T10740: sessionStorage hands back a STRING; selectProject stores its
+          // argument verbatim, so without this `selectedProjectId` stays a string
+          // and every downstream strict id comparison silently diverges.
+          useProjectsStore.getState().selectProject(Number(authReturnProjectId));
           useEditorStore.getState().setEditorMode(authReturnMode);
         } else {
           useEditorStore.getState().setEditorMode(authReturnMode);
@@ -371,7 +374,10 @@ function App() {
         sessionStorage.removeItem('paymentAutoExport');
 
         if (returnProjectId) {
-          useProjectsStore.getState().selectProject(returnProjectId);
+          // T10740: same sessionStorage string->number coercion as the auth-return
+          // path above (this one matters most — the payment return auto-fires an
+          // export, and a mistyped id must not reach that path).
+          useProjectsStore.getState().selectProject(Number(returnProjectId));
         }
         if (returnMode) {
           useEditorStore.getState().setEditorMode(returnMode);

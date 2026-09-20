@@ -29,6 +29,19 @@ describe('isClipFromAnotherProject (T10740 stale-clip guard)', () => {
     expect(isClipFromAnotherProject({ id: 903, project_id: null }, 42)).toBe(false);
   });
 
+  // T10740 review finding (BLOCKING): `selectedProjectId` is a STRING on the
+  // auth-return and payment-return paths (sessionStorage -> selectProject stores
+  // it verbatim), while clip rows carry a numeric project_id. A strict !== would
+  // call every clip foreign and leave Focus permanently blank there — and the
+  // payment path auto-exports, so blank crop hooks would get persisted.
+  it('treats a string projectId as equal to the numeric project_id it denotes', () => {
+    expect(isClipFromAnotherProject({ id: 906, project_id: 42 }, '42')).toBe(false);
+  });
+
+  it('still flags a genuine mismatch when the ids are differently typed', () => {
+    expect(isClipFromAnotherProject({ id: 907, project_id: 41 }, '42')).toBe(true);
+  });
+
   it('does not flag when the screen has no project id yet', () => {
     expect(isClipFromAnotherProject({ id: 904, project_id: 41 }, null)).toBe(false);
     expect(isClipFromAnotherProject({ id: 905, project_id: 41 }, undefined)).toBe(false);
@@ -47,10 +60,25 @@ describe('shouldRetryClipVideoViaProxy (T10740 no silent fallback)', () => {
     expect(shouldRetryClipVideoViaProxy(404)).toBe(false);
   });
 
-  it('does NOT retry the proxy on any other 4xx', () => {
-    for (const status of [400, 401, 403, 409, 422, 499]) {
-      expect(shouldRetryClipVideoViaProxy(status)).toBe(false);
+  // T10740 review finding (MAJOR): a blanket no-fallback-on-4xx rule would break
+  // pre-T80 legacy videos. playback-url 422s when the game video has no blake3
+  // hash, BEFORE presigning; /stream has no such check and presigns the old
+  // per-user {user}/games/{filename} object instead. For those rows the proxy is
+  // the path that works, so 422 MUST keep falling back.
+  it('DOES retry the proxy on 422 (legacy blake3-less video the proxy can still serve)', () => {
+    expect(shouldRetryClipVideoViaProxy(422)).toBe(true);
+  });
+
+  it('only 404 suppresses the fallback — the one status both endpoints provably share', () => {
+    for (const status of [400, 401, 403, 409, 499]) {
+      expect(shouldRetryClipVideoViaProxy(status)).toBe(true);
     }
+  });
+
+  it('does not suppress the fallback on 410 (handled earlier as source_expired)', () => {
+    // Pinned so a reordering that let 410 reach this predicate can't silently
+    // start proxy-retrying a genuinely expired source.
+    expect(shouldRetryClipVideoViaProxy(410)).toBe(true);
   });
 
   it('DOES retry the proxy on a 5xx (the proxy is a genuinely different path)', () => {

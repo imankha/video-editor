@@ -65,11 +65,48 @@ gap to wait for.
 
 ## Tests
 
-Red-green unit coverage in `src/frontend/src/screens/FocusScreen.staleClipGuard.test.jsx`.
+Red-green unit coverage in `src/frontend/src/screens/clipVideoResolution.test.js` (13 assertions).
+Verified red by temporarily reverting the module to the behavior under test: 3 failed against the
+pre-fix behavior, and 4 more against the pre-review behavior (see Review outcome). 74/74 green
+across the relevant set (this file + `focusOverlayTransition`, `focusCompletionPreview`,
+`focusBackToPreview`, `FocusModeView.clipIdentity`, `AnnotateModeView.frameClip`,
+`AnnotateContainer.createAtTap`, `AnnotateContainer.reelCreated`).
+
+## Review outcome (Reviewer agent, fresh context, 2026-09-20)
+
+Verdict NEEDS REVISION on the first commit; all three findings verified against source and fixed in
+the follow-up commit.
+
+1. **BLOCKING — strict `!==` failed CLOSED on a type mismatch.** `selectedProjectId` is a STRING on
+   the auth-return and payment-return paths: both stash it in `sessionStorage`
+   (`authStore.js`, `BuyCreditsModal.jsx`) and `projectsStore.selectProject` stores the argument
+   verbatim. Clip rows carry a numeric `project_id`, so `41 !== "41"` would have called EVERY clip
+   foreign and left Focus permanently blank there — worse than the bug being fixed, because nothing
+   heals it, and the payment path auto-fires an export whose `saveCurrentClipState` would then
+   persist EMPTY crop keyframes (the T4020 empty-shadow class). Fixed by comparing as strings (fails
+   OPEN on a type mismatch), plus a `Number()` coercion at both `sessionStorage` read sites so the
+   store stops holding a string at all.
+2. **MAJOR — the blanket "no fallback on any 4xx" rule broke legacy videos.** Only 404 is provably
+   shared by the two endpoints (identical `WHERE wc.id = ? AND wc.project_id = ?` row query). 422 is
+   NOT: `get_clip_playback_url` raises it when the game video has no blake3 hash, before presigning,
+   while `/stream` has no such check and `get_game_video_url` presigns the pre-T80 per-user
+   `{user}/games/{filename}` object. The clips list still populates `game_video_url` for those rows,
+   so for a blake3-less legacy game the proxy is the path that works. Narrowed to 404 only.
+3. **MAJOR — doc named a test file that was never written** (`FocusScreen.staleClipGuard.test.jsx`).
+   Corrected above.
+
+Accepted-with-pushback: the Reviewer also asked for a render-level test pinning that the clip-switch
+effect's bail precedes `restoreSegmentState`/`restoreCropState`. `FocusScreen` is ~1600 lines and
+has no existing render harness (every test on this screen targets extracted pure modules), so a
+mount test would be a large, flake-prone lift for one ordering assertion the Reviewer verified by
+reading. Real-browser verification of the actual reported flow is the stronger evidence and is the
+open item below.
 
 ## Acceptance Criteria
 
-- [ ] Focus never requests a clip id against a project id it does not belong to
-- [ ] A 4xx from `playback-url` does not silently retry `/stream` and does not surface as "expired"
-- [ ] The Annotate -> Frame navigation still loads the correct clip once the fresh list lands
-- [ ] New tests fail without the fix, pass with it; existing Focus/annotate specs stay green
+- [x] Focus never requests a clip id against a project id it does not belong to
+- [x] A 404 from `playback-url` does not silently retry `/stream` and does not surface as "expired"
+- [x] A 422 (legacy blake3-less video) still falls back to the proxy
+- [x] A string `projectId` never causes a legitimate clip to be rejected
+- [x] New tests fail without the fix, pass with it; existing Focus/annotate specs stay green
+- [ ] Real-browser check of the reported flow: Frame Later -> Frame loads the correct clip
