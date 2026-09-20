@@ -1719,7 +1719,12 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   Pinned by `AnnotateContainer.pendingSelection.test.jsx` (a CALL-COUNT test — with the disarm
   removed the test worker dies of the infinite loop). Note the harness subtlety: it must hand the
   container a FRESH `seek` identity each render (the real screen churns it), or the effect never
-  re-runs and the test passes vacuously against a retry.
+  re-runs and the test passes vacuously against a retry. **Live-verified 2026-09-20 (T10770)** on a
+  genuine 2-video game, both directions: Focus→Annotate correctly selects the breadcrumb clip with
+  playhead inside range on video sequence 1 AND sequence 2 (the previously-untested direction). A
+  single harmless `[AutoDeselect]` log can fire once during init (an early render referencing a
+  default/first region before the multi-video duration resolves) and self-corrects in the same
+  pass — not a retry, not a loop, no visible flicker.
 - **`useVideo.seek` REFUSES when no duration is known — it does not clamp to 0 (T10750).**
   `effectiveDuration = duration || (clipDuration ?? video.duration) || 0` used to turn every
   pre-metadata seek into a seek-to-0, parking the playhead outside the target clip so the

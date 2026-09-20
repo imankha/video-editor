@@ -1,6 +1,6 @@
 # T10770: Verify Annotate-entry clip selection on a MULTI-VIDEO game
 
-**Status:** TODO
+**Status:** WAITING ON USER (verification complete, PASS — no code changed; awaiting Resolve)
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-20
@@ -81,8 +81,48 @@ used as a precondition in the same one-shot.
 
 ## Acceptance Criteria
 
-- [ ] A genuinely multi-video game exists in the test environment (state which, and where)
-- [ ] Focus -> Annotate on that game selects the reel's source clip, playhead inside the clip
-- [ ] Verified for a clip on a non-first video sequence
-- [ ] No select/seek burst, no `matched no region`, no `Refusing seek`
-- [ ] Result recorded here (pass = close it; fail = file the proxy-readiness fix, do NOT retry-loop)
+- [x] A genuinely multi-video game exists in the test environment (state which, and where)
+- [x] Focus -> Annotate on that game selects the reel's source clip, playhead inside the clip
+- [x] Verified for a clip on a non-first video sequence
+- [x] No select/seek burst, no `matched no region`, no `Refusing seek`
+- [x] Result recorded here (pass = close it; fail = file the proxy-readiness fix, do NOT retry-loop)
+
+## Result (2026-09-20) — PASS
+
+**Environment:** dev, `imankh+devfixture@gmail.com`, game id 11 ("Game uploaded Sep 20"), created via
+"Upload game" with 2 files at once (`uploadMultiVideoGame` create-time path — the existing-game
+"Add footage" attach path is separately broken, see T10790, filed below; unrelated to this
+verification and not on the code path this task exercises). Confirmed via direct DB read:
+`game_videos` has 2 rows (sequence 1: 300.84s, offset 0; sequence 2: 89.32s, offset 300.84).
+
+**Repro driven exactly as specified** (real clicks via Playwright MCP against the running dev
+stack, fresh full page load before each check — see Traps): Home → click a clip card → Focus opens
+→ click the "Annotate" mode-switcher button.
+
+- **Clip on video sequence 1** ("Play 1", local start 18.69s): settled state showed playhead at
+  `00:00:18.688`, Clip Details panel open on "Play 1", header badge "0'18" · Brilliant · Play 1".
+  Exact match.
+- **Clip on video sequence 2** ("Play 2", local start 27.17s, offset 300.84): settled state showed
+  playhead at `00:05:28.007` = 300.841867 + 27.165584, Clip Details panel open on "Play 2". Exact
+  match — this is the case with no prior direct evidence per the task's "Why this exists" section.
+- Console: no `matched no region`, no `Refusing seek`, in either run.
+- **One transient, non-blocking observation**: on both runs (including after a hard reload,
+  ruling out stale client state), a single `[AutoDeselect] Deselecting clip_<id> playhead: 0.00
+  clipVirtual: 18.69 - 26.69 seq: 1 regionAtPlayhead: none` fires once during init — before the
+  `useAnnotate` "Auto-Initializing with duration" log reports the FULL multi-video duration — then
+  the real one-shot correctly selects the target clip. This looks like an early render picking up
+  a default/first-region reference before the multi-video timeline duration resolves, immediately
+  self-corrected in the same pass (not a retry, not a loop, no visible flicker, final state
+  correct both times). Distinct from the T10750 bug class (that was an infinite retry storm; this
+  is a single harmless transitional log). Not filing a task for it — flagging here in case a future
+  session sees the same log and wonders.
+
+**Side finding (unrelated to T10750/T10760, filed separately):** the dev backend was found running
+a 2-day-old, non-`--reload` process serving stale schemas (a `rating: int` pre-T10700 schema),
+which produced a false-negative 422 while marking the first test play. Restarted per the
+documented `uvicorn --reload` command; unrelated to this task's verdict, mentioned only so a future
+session isn't confused by old `python.exe -m uvicorn ... --port 8000` processes with no
+`--reload` flag sitting around in this shared dev environment.
+
+**Verdict:** PASS. T10750's `multiVideo` exemption is correct in both directions the task worried
+about. Safe for T10760 to proceed and re-run this same check afterwards as its regression gate.

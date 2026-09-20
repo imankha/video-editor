@@ -4,6 +4,13 @@
 
 ## Current Focus
 
+**2026-09-20 addition, unplaced — [T10790](tasks/T10790-add-footage-attach-422-required-sequence.md):
+"Add footage to game" 422s on every real attempt (live on master since 2026-09-07, not
+dev-specific).** Found incidentally while doing live verification for T10770. Impact 9 / Complexity
+2 — a one-line Pydantic fix (`VideoReference.sequence` required → optional) plus a boundary-level
+test. Needs a placement decision (bugs-before-features policy suggests it jumps the queue given a
+core action is fully broken); left here for triage rather than self-inserted into a milestone.
+
 **NEXT DEPLOY = [Milestone: Deploy Candidate](#milestone-deploy-candidate-user-ordered-2026-09-17-the-next-deploy) (user-ordered 2026-09-17).** Filed from the user's own staging
 run: three crash paths to re-verify (T10230), two clip-upload bugs (T10250/T10260), upload-failure
 observability (T10270, the "do we have enough logging" answer is no), pricing single-source
