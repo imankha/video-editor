@@ -285,6 +285,20 @@ so both are clear of T10650/T10660. Design gate already satisfied (user approval
 | T10670 | [Completion bars: V2 celebration tiles, headline + Saved chip, "Done for now"](tasks/clip-ready-screen/T10670-completion-bars-v2-tiles.md) | 7 | 4 | 1.8 | STAGING | [ ] | Epic 1/2, M-tier. `FocusPublishActionBar` + `OverlayPublishActionBar` rewritten so the tile IS the button (inner pill deleted, `aria-labelledby`, one tab stop, Enter/Space), icon discs, cyan gradient + glow + single pulse on the primary, 60ms stagger, horizontal rows on phones (footer ~520 -> ~405px); headline "Your clip is ready" + one-word "Saved" chip replaces the green sentence; "Save draft" + caption -> "Done for now", no caption; captions short and roman (`displayNames.js` section B verbatim). T8390 grid string / `rounded-xl` / nowrap titles byte-identical; `data-tutorial-target="focus-publish"` moves pill -> Publish tile. Records the T9590 exceptions (pill removed, exit does not name its destination). |
 | T10680 | [CollectionPlayer transport: play/pause glyph, header Play/Pause + Fullscreen, on every finished-reel player](tasks/clip-ready-screen/T10680-collection-player-transport-controls.md) | 7 | 4 | 1.8 | STAGING | [ ] | Epic 2/2, M-tier, parallel with T10670. `useStoryPlayback` already exposes `isPlaying`; the player never reads it. Adds a 64px center glyph (persistent while paused, fades 600ms after play, `pointer-events-none` so tap zones + `CompositeScrubber` are untouched), ghost Play/Pause + Maximize/Minimize buttons before Close in the header, CSS expand (panel `inset-0`, `actionBar` unmounted) layered with `panel.requestFullscreen` where available and `video.webkitEnterFullscreen` on iPhone, Escape-leaves-fullscreen-first guard. `transport` prop DEFAULT ON so the completion preview, library Draft/Published player and public share viewer all get it with no mount edits; `IntroStoryPlayer` opts out. Real-browser + iPhone Safari check owed. |
 
+### Milestone: Rating Unset State (user-ordered 2026-09-19)
+
+**Filed 2026-09-19 from a screenshot-driven question about the Annotate rated badge.** T10610
+(merged same day) made the rated badge unconditionally green, since create-at-tap now seeds every
+play with a real default rating (`NEW_PLAY_DEFAULT_RATING = 4`). User saw this, was told it
+reverses a decision made hours earlier, and ruled explicitly for a true null rating over a
+session-only "touched" flag: a play can have NO rating on record until the user picks one, which
+needs a schema change (`raw_clips.rating` currently `NOT NULL`). First task is the Architect
+design gate; a follow-up implementation task (Migration agent required) gets filed once approved.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T10690 | [Architect design: true "unset" rating state (nullable raw_clips.rating)](tasks/T10690-rating-unset-architecture-design.md) | 5 | 6 | 0.8 | TODO | [ ] | Design gate. Must answer: `profile_db` migration making `raw_clips.rating` nullable (SQLite rebuild-and-copy, no backfill needed — this widens a valid domain, it isn't correcting bad data); which `clips.py` request models legitimately accept a null rating (create-at-tap: yes; bulk import/video-upload defaults: TBD); `normalize_rating`/`derive_clip_name` contract for `None`; the badge's new "unset" visual (distinct from the other three badges' amber `UNDONE`, or reused — get an explicit ruling); whether a rating is clearable back to unset once set. Design only, no source edits. |
+
 ## Single-Server Priority (2026-07-18; durability re-escalated 2026-07-24)
 
 The stack is currently ONE server. **Correction (2026-07-24): the durability epic is NOT safely
