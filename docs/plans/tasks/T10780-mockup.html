@@ -1,0 +1,340 @@
+<title>Mobile Plays Track Zoom</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #f3f4f7;
+    --surface: #ffffff;
+    --ink: #14171f;
+    --ink-2: #4b5160;
+    --ink-3: #7c8293;
+    --line: #dcdfe7;
+    --accent: #2563eb;
+    --accent-ink: #1d4ed8;
+    --good: #16a34a;
+    --warn-bg: #fff7e6;
+    --warn-ink: #8a5a00;
+    /* phone frames are the app itself and stay dark in both themes */
+    --app-bg: #0f1218;
+    --app-panel: #1f2937;
+    --app-track: #374151;
+    --app-track-2: #1f2937;
+    --app-label: #111827;
+    --app-progress: #2563eb;
+    --app-play: #22c55e;
+    --app-play-dim: #15803d;
+    --app-selected: #3b82f6;
+    --app-text: #e5e7eb;
+    --app-dot: #22d3ee;
+    --app-thumb: #6b7280;
+    --app-thumb-track: #1f2937;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1015; --surface: #171a21; --ink: #e8eaf0; --ink-2: #b4b9c6; --ink-3: #7f8595;
+      --line: #2a2f3b; --accent: #5b8def; --accent-ink: #8fb0f5; --good: #3ccb6a;
+      --warn-bg: #2a2410; --warn-ink: #e4bc5a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1015; --surface: #171a21; --ink: #e8eaf0; --ink-2: #b4b9c6; --ink-3: #7f8595;
+    --line: #2a2f3b; --accent: #5b8def; --accent-ink: #8fb0f5; --good: #3ccb6a;
+    --warn-bg: #2a2410; --warn-ink: #e4bc5a;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 "IBM Plex Sans", system-ui, sans-serif; margin: 0; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 20px 64px; display: grid; gap: 36px; }
+  h1, h2, h3 { font-family: "Barlow Semi Condensed", "Arial Narrow", sans-serif; text-wrap: balance; margin: 0; letter-spacing: 0.005em; }
+  h1 { font-size: 34px; font-weight: 700; line-height: 1.1; }
+  h2 { font-size: 22px; font-weight: 600; }
+  h3 { font-size: 17px; font-weight: 600; }
+  p { max-width: 66ch; margin: 0; color: var(--ink-2); }
+  .eyebrow { font-family: "IBM Plex Mono", monospace; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+  header { display: grid; gap: 10px; }
+  .lede { color: var(--ink-2); font-size: 16px; }
+  code { font-family: "IBM Plex Mono", monospace; font-size: 0.9em; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 1px 5px; border-radius: 4px; }
+
+  .compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 28px; align-items: start; }
+  .panel { display: grid; gap: 12px; }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .tag { font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-3); }
+  .tag.now { border-color: color-mix(in srgb, var(--warn-ink) 50%, transparent); color: var(--warn-ink); background: var(--warn-bg); }
+  .tag.proposed { border-color: color-mix(in srgb, var(--good) 50%, transparent); color: var(--good); }
+
+  /* ---- phone frame: the app, always dark ---- */
+  .phone { width: 360px; max-width: 100%; margin: 0 auto; background: var(--app-bg); border-radius: 28px; padding: 14px 10px 18px; border: 1px solid #2c3140; box-shadow: 0 18px 40px -20px rgba(0,0,0,.6); color: var(--app-text); font-family: "IBM Plex Sans", system-ui, sans-serif; }
+  .video { height: 118px; border-radius: 10px; background:
+      linear-gradient(180deg, #7b8794 0 38%, #5c7a3e 38% 100%); position: relative; overflow: hidden; margin-bottom: 8px; }
+  .video::after { content: ""; position: absolute; left: 12%; right: 12%; bottom: 18px; height: 1px; background: rgba(255,255,255,.45); }
+  .controls { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 10px; font-family: "IBM Plex Mono", monospace; font-size: 12px; color: #cbd5e1; }
+  .controls .play { width: 34px; height: 28px; border-radius: 6px; background: #16a34a; display: grid; place-items: center; color: white; font-size: 11px; }
+
+  .tl { display: grid; grid-template-columns: 56px 1fr; column-gap: 0; border: 1px solid #2c3140; border-radius: 10px; overflow: hidden; background: var(--app-track-2); }
+  .labels { display: grid; grid-template-rows: 30px 44px; background: var(--app-label); }
+  .labels div { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 11px; }
+  .labels .film { color: #a78bfa; border-bottom: 1px solid #2c3140; }
+  .labels .plays { color: var(--app-play); }
+  .scroller { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .scroller::-webkit-scrollbar { display: none; }
+  .inner { position: relative; min-width: 100%; }
+  .scrub { position: relative; height: 30px; background: var(--app-track); border-bottom: 1px solid #2c3140; }
+  .scrub .progress { position: absolute; left: 8px; top: 0; bottom: 0; background: var(--app-progress); }
+  .lane { position: relative; height: 44px; }
+  .chip { position: absolute; top: 9px; height: 20px; min-width: 2px; border-radius: 4px; background: var(--app-play); box-shadow: inset 0 0 0 1px rgba(0,0,0,.35); }
+  .chip.selected { background: var(--app-selected); box-shadow: 0 0 0 2px #93c5fd; }
+  .chip .name { position: absolute; left: 4px; top: 2px; font-size: 10px; line-height: 16px; color: #062a12; font-weight: 600; white-space: nowrap; overflow: hidden; max-width: calc(100% - 6px); }
+  .chip.selected .name { color: #0b1a33; }
+  .dot { position: absolute; bottom: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--app-dot); transform: translateX(-50%); }
+  .dot.gold { background: #f59e0b; }
+  .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: white; transform: translateX(-50%); pointer-events: none; z-index: 2; }
+  .playhead::before { content: ""; position: absolute; top: -1px; left: 50%; width: 10px; height: 10px; border-radius: 50%; background: white; transform: translateX(-50%); }
+  .bubble { position: absolute; top: 4px; transform: translateX(-50%); background: #0b1220; border: 1px solid #334155; border-radius: 4px; padding: 2px 6px; font-size: 10px; white-space: nowrap; z-index: 3; font-family: "IBM Plex Mono", monospace; }
+  .bubble b { color: #93c5fd; font-weight: 500; }
+
+  .sb-wrap { display: grid; grid-template-columns: 56px 1fr; margin-top: 6px; }
+  .sb { height: 22px; border-radius: 999px; background: var(--app-thumb-track); position: relative; touch-action: none; cursor: grab; border: 1px solid #2c3140; }
+  .sb .thumb { position: absolute; top: 3px; bottom: 3px; border-radius: 999px; background: var(--app-thumb); }
+  .sb:active { cursor: grabbing; }
+  .sb:active .thumb { background: #9ca3af; }
+  .ghost-sb { height: 22px; margin-top: 6px; border-radius: 999px; border: 1px dashed #374151; display: grid; place-items: center; font-size: 10px; color: #6b7280; margin-left: 56px; }
+
+  .cta { margin-top: 12px; display: grid; gap: 8px; }
+  .cta .edit { height: 44px; border-radius: 10px; background: #d97706; display: grid; place-items: center; font-weight: 600; font-size: 15px; color: #fff; }
+  .cta .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cta .row div { height: 40px; border-radius: 10px; display: grid; place-items: center; font-weight: 600; font-size: 14px; color: #fff; }
+  .cta .now { background: #0891b2; } .cta .later { background: #0f766e; }
+
+  .demo-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button.demo { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+  button.demo:hover { border-color: var(--accent); }
+  button.demo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .note { font-size: 13px; color: var(--ink-3); }
+
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .fact { border-top: 2px solid var(--line); padding-top: 10px; display: grid; gap: 2px; }
+  .fact .k { font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+  .fact .v { font-family: "Barlow Semi Condensed", sans-serif; font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .fact .v small { font-size: 14px; color: var(--ink-3); font-family: "IBM Plex Sans", sans-serif; font-weight: 500; margin-left: 4px; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+  .tablewrap { overflow-x: auto; }
+  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .opt { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 8px; background: var(--surface); }
+  .opt.rec { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+  .opt h3 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .opt ul { margin: 0; padding-left: 18px; color: var(--ink-2); display: grid; gap: 4px; }
+  .rec-tag { font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent-ink); }
+  @media (prefers-reduced-motion: no-preference) { .scroller { scroll-behavior: smooth; } }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">T10780 · Annotate · mobile</div>
+    <h1>Zoom the plays track on phones, add a scrollbar</h1>
+    <p class="lede">On a phone the whole game is squeezed into about 280 px, so plays become an unreadable smear. Proposal: render the Annotate timeline at 3x on mobile, which the existing timeline code already supports, and show the touch scrollbar that is already built but never triggered in Annotate.</p>
+  </header>
+
+  <section class="compare">
+    <div class="panel">
+      <div class="panel-head"><h2>Today on staging</h2><span class="tag now">100% · fits viewport</span></div>
+      <div class="phone" aria-label="Current mobile Annotate timeline">
+        <div class="video"></div>
+        <div class="controls"><span>⏮ ◀ </span><span class="play">▶</span><span>↺ ▶ </span><span>00:44:22</span></div>
+        <div class="tl">
+          <div class="labels"><div class="film">🎞</div><div class="plays">✂ Plays</div></div>
+          <div class="scroller" id="before-scroller">
+            <div class="inner" id="before-inner" style="width:100%">
+              <div class="scrub"><div class="progress" id="before-progress"></div></div>
+              <div class="lane" id="before-lane"></div>
+              <div class="playhead" id="before-playhead"></div>
+              <div class="bubble" id="before-bubble"><b>44:22</b> | 14. Play 23</div>
+            </div>
+          </div>
+        </div>
+        <div class="ghost-sb">no scrollbar: nothing to scroll</div>
+        <div class="cta"><div class="edit">✎ Edit play</div><div class="row"><div class="now">⌗ Frame Now</div><div class="later">◷ Frame Later</div></div></div>
+      </div>
+      <p class="note">Same 90 minute game, 24 plays. Each play is 4 to 8 px wide; neighbours at 12:10 and 12:40 touch. The selected play is only findable by its colour.</p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Proposed</h2><span class="tag proposed">300% · scrolls</span></div>
+      <div class="phone" aria-label="Proposed mobile Annotate timeline">
+        <div class="video"></div>
+        <div class="controls"><span>⏮ ◀ </span><span class="play">▶</span><span>↺ ▶ </span><span id="after-time">00:44:22</span></div>
+        <div class="tl">
+          <div class="labels"><div class="film">🎞</div><div class="plays">✂ Plays</div></div>
+          <div class="scroller" id="after-scroller">
+            <div class="inner" id="after-inner" style="width:300%">
+              <div class="scrub"><div class="progress" id="after-progress"></div></div>
+              <div class="lane" id="after-lane"></div>
+              <div class="playhead" id="after-playhead"></div>
+              <div class="bubble" id="after-bubble"><b>44:22</b> | 14. Play 23</div>
+            </div>
+          </div>
+        </div>
+        <div class="sb-wrap"><div></div><div class="sb" id="after-sb" role="scrollbar" aria-label="Timeline scroll" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"><div class="thumb" id="after-thumb"></div></div></div>
+        <div class="cta"><div class="edit">✎ Edit play</div><div class="row"><div class="now">⌗ Frame Now</div><div class="later">◷ Frame Later</div></div></div>
+      </div>
+      <div class="demo-bar">
+        <button class="demo" id="btn-prev">◀ Prev play</button>
+        <button class="demo" id="btn-next">Next play ▶</button>
+        <button class="demo" id="btn-follow">Simulate playback for 8 s</button>
+      </div>
+      <p class="note">This frame is live: drag the grey scrollbar, swipe the plays row, or use the buttons. Prev/Next demonstrate the one new behaviour, a seek that lands off screen scrolls the playhead into view. Playback auto-follow already exists.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="facts">
+      <div class="fact"><span class="k">Play width, 6 s play</span><span class="v">4 px <small>today</small></span></div>
+      <div class="fact"><span class="k">Play width, 6 s play</span><span class="v">13 px <small>at 300%</small></span></div>
+      <div class="fact"><span class="k">Visible window</span><span class="v">30 min <small>of 90 at 300%</small></span></div>
+      <div class="fact"><span class="k">Scrollbar thumb</span><span class="v">33 % <small>of track</small></span></div>
+    </div>
+  </section>
+
+  <section style="display:grid;gap:14px">
+    <h2>Gesture map on the phone</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Where you touch</th><th>Horizontal swipe does</th><th>Tap does</th></tr></thead>
+      <tbody>
+        <tr><td>Film row (scrubber)</td><td>Seeks, as today (the row is <code>touch-none</code>)</td><td>Seeks to that time</td></tr>
+        <tr><td>Plays row</td><td>Scrolls the window (native <code>overflow-x</code>)</td><td>Selects the play</td></tr>
+        <tr><td>Scrollbar</td><td>Drags the window; thumb tracks native scroll both ways</td><td>Jumps the window there</td></tr>
+        <tr><td>Play button</td><td>n/a</td><td>Window auto-follows the playhead while playing (existing behaviour)</td></tr>
+        <tr><td>Prev / Next play, Edit play, list</td><td>n/a</td><td>New: if the seek lands off screen, the window scrolls to the playhead</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section style="display:grid;gap:14px">
+    <h2>Zoom level: one decision</h2>
+    <div class="options">
+      <div class="opt rec">
+        <h3>A · Fixed 300% on mobile <span class="rec-tag">Recommended</span></h3>
+        <ul>
+          <li>One constant in <code>AnnotateTimeline</code>; desktop untouched.</li>
+          <li>Matches laptop density: 360 px phone track becomes ~840 px of content.</li>
+          <li>No zoom controls, no badge, nothing to persist.</li>
+          <li>Landscape phones get ~2100 px of content; if that feels like too much, scale from the measured track width instead (same code path, one expression).</li>
+        </ul>
+      </div>
+      <div class="opt">
+        <h3>B · Pinch to zoom, 100 to 500%</h3>
+        <ul>
+          <li>Adds a two-finger gesture handler on the track plus a zoom indicator.</li>
+          <li>Conflicts with browser page zoom; the plays layer already has to fight that (<code>RegionLayer.jsx:117</code>).</li>
+          <li>Needs a reset affordance and a story for where the window lands after a zoom.</li>
+          <li>Can layer on top of A later if users ask for it.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  // 90 minute game, 24 plays: [start seconds, duration seconds, name]. Play 23 (idx 13) is selected.
+  const DURATION = 90 * 60;
+  const PLAYS = [
+    [ 190, 7,'Play 1'],[ 340, 6,'Play 2'],[ 520, 9,'Play 3'],[ 730,12,'Play 4'],[ 760, 6,'Play 5'],
+    [ 900, 8,'Play 8'],[1180, 7,'Play 9'],[1400,10,'Play 12'],[1530, 6,'Play 13'],[1680, 9,'Play 14'],
+    [1900, 7,'Play 15'],[2140, 8,'Play 17'],[2380, 6,'Play 19'],[2656,10,'Play 23'],[2930, 8,'Play 24'],
+    [3250, 7,'Play 26'],[3520,12,'Play 27'],[3700, 6,'Play 28'],[3980, 9,'Play 30'],[4230, 7,'Play 31'],
+    [4520, 8,'Play 33'],[4700, 6,'Play 34'],[4990,10,'Play 36'],[5200, 8,'Play 37'],
+  ];
+  const SELECTED = 13;
+  const EDGE = 8; // px, stands in for EDGE_PADDING
+  const pct = s => (s / DURATION) * 100;
+  const fmt = s => { const m = Math.floor(s/60), r = Math.floor(s%60); return '00:' + String(m).padStart(2,'0') + ':' + String(r).padStart(2,'0'); };
+
+  function renderLane(laneId, withNames) {
+    const lane = document.getElementById(laneId);
+    lane.innerHTML = '';
+    PLAYS.forEach((p, i) => {
+      const chip = document.createElement('div');
+      chip.className = 'chip' + (i === SELECTED ? ' selected' : '');
+      chip.style.left = `calc(${EDGE}px + (100% - ${EDGE*2}px) * ${pct(p[0])/100})`;
+      chip.style.width = `calc((100% - ${EDGE*2}px) * ${pct(p[1])/100})`;
+      if (withNames) { const n = document.createElement('span'); n.className = 'name'; n.textContent = p[2]; chip.appendChild(n); }
+      chip.title = p[2];
+      lane.appendChild(chip);
+      const dot = document.createElement('div');
+      dot.className = 'dot' + (i === 4 ? ' gold' : '');
+      dot.style.left = `calc(${EDGE}px + (100% - ${EDGE*2}px) * ${pct(p[0] + p[1]/2)/100})`;
+      lane.appendChild(dot);
+    });
+  }
+
+  function placeHead(prefix, t) {
+    const x = `calc(${EDGE}px + (100% - ${EDGE*2}px) * ${pct(t)/100})`;
+    document.getElementById(prefix + '-playhead').style.left = x;
+    document.getElementById(prefix + '-bubble').style.left = x;
+    document.getElementById(prefix + '-progress').style.width = `calc((100% - ${EDGE*2}px) * ${pct(t)/100})`;
+  }
+
+  renderLane('before-lane', false);
+  renderLane('after-lane', true);
+  let t = 2662; // 44:22
+  placeHead('before', t);
+  placeHead('after', t);
+
+  // ---- after frame: scrollbar synced with native scroll ----
+  const sc = document.getElementById('after-scroller');
+  const sb = document.getElementById('after-sb');
+  const thumb = document.getElementById('after-thumb');
+  const SCALE = 3;
+  thumb.style.width = `${Math.max(20, 100 / SCALE)}%`;
+  function syncThumb() {
+    const max = sc.scrollWidth - sc.clientWidth;
+    const f = max > 0 ? sc.scrollLeft / max : 0;
+    thumb.style.left = `${f * (100 - Math.max(20, 100 / SCALE))}%`;
+    sb.setAttribute('aria-valuenow', Math.round(f * 100));
+  }
+  sc.addEventListener('scroll', syncThumb);
+  function dragTo(clientX) {
+    const r = sb.getBoundingClientRect();
+    const f = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    sc.scrollLeft = f * (sc.scrollWidth - sc.clientWidth);
+  }
+  sb.addEventListener('pointerdown', e => { sb.setPointerCapture(e.pointerId); dragTo(e.clientX); sc.style.scrollBehavior = 'auto'; });
+  sb.addEventListener('pointermove', e => { if (e.buttons) dragTo(e.clientX); });
+  sb.addEventListener('pointerup', () => { sc.style.scrollBehavior = ''; });
+  sb.addEventListener('keydown', e => { if (e.key === 'ArrowRight') sc.scrollLeft += 40; if (e.key === 'ArrowLeft') sc.scrollLeft -= 40; });
+
+  // scroll playhead into view if it's outside the window (the one NEW behaviour)
+  function headPx() { return EDGE + (sc.scrollWidth - EDGE*2) * (t / DURATION); }
+  function ensureVisible() {
+    const x = headPx(), left = sc.scrollLeft, w = sc.clientWidth;
+    if (x < left + 24 || x > left + w - 24) sc.scrollLeft = Math.max(0, x - w * 0.35);
+  }
+  function seekTo(sec, label) {
+    t = sec; placeHead('after', t);
+    document.getElementById('after-time').textContent = fmt(t);
+    document.getElementById('after-bubble').innerHTML = `<b>${fmt(t).slice(3)}</b> | ${label}`;
+    ensureVisible();
+  }
+  let idx = SELECTED;
+  document.getElementById('btn-next').addEventListener('click', () => { idx = Math.min(PLAYS.length - 1, idx + 1); seekTo(PLAYS[idx][0], `${idx+1}. ${PLAYS[idx][2]}`); });
+  document.getElementById('btn-prev').addEventListener('click', () => { idx = Math.max(0, idx - 1); seekTo(PLAYS[idx][0], `${idx+1}. ${PLAYS[idx][2]}`); });
+
+  // simulate playback: playhead advances, window follows when the head nears the right edge
+  let timer = null;
+  document.getElementById('btn-follow').addEventListener('click', () => {
+    if (timer) return;
+    let n = 0; sc.style.scrollBehavior = 'auto';
+    timer = setInterval(() => {
+      t += 6; n += 1; // 6 s of game time per tick for a quick demo
+      placeHead('after', t); document.getElementById('after-time').textContent = fmt(t);
+      document.getElementById('after-bubble').innerHTML = `<b>${fmt(t).slice(3)}</b>`;
+      const x = headPx(), right = sc.scrollLeft + sc.clientWidth;
+      if (x > right - 40) sc.scrollLeft = x - sc.clientWidth * 0.3;
+      if (n >= 80) { clearInterval(timer); timer = null; sc.style.scrollBehavior = ''; }
+    }, 100);
+  });
+
+  // initial: land on the selected play, like the proposed mount behaviour
+  requestAnimationFrame(() => { sc.style.scrollBehavior = 'auto'; ensureVisible(); syncThumb(); sc.style.scrollBehavior = ''; });
+</script>
