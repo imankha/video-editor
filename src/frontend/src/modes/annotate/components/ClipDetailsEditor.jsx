@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Star, Plus, Crop, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Star, Crop, Sparkles } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
@@ -110,13 +110,6 @@ export function ClipDetailsEditor({
     updateProfile(currentProfile.id, { sport: nextSport }).catch(() => {});
   }, [updateProfile, currentProfile?.id]);
 
-  // T10240: prevents a double-click from firing two creates while the first
-  // create-clip round trip is in flight. A ref (not state) so the guard is set
-  // synchronously and the buttons never need to render disabled (the NO_PROJECT
-  // actions are always enabled — the branch simply disappears once autoProjectId
-  // lands and the stage advances to FOCUS).
-  const creatingRef = useRef(false);
-
   // Local scrub state — same pattern as AnnotateFullscreenOverlay.
   // Dragging updates local state instantly; persisted to parent on change.
   const [scrubStartTime, setScrubStartTime] = useState(region.startTime);
@@ -135,23 +128,6 @@ export function ClipDetailsEditor({
     setNameDraft(region.name || '');
     setNotesDraft(region.notes || '');
   }, [region.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // T10240: the two NO_PROJECT create actions. Both create the auto-project via
-  // the same backend path (onUpdate -> updateClipRegionWithSync's
-  // `createProject: true`); "Create clip" stays in Annotate (the reel-created
-  // toast fires from the container), "Frame clip" additionally opens the new
-  // project in Framing using the id returned SYNCHRONOUSLY by the create path
-  // (the shared create-then-navigate seam), never waiting for a re-render.
-  const handleCreateClip = useCallback(async (navigate) => {
-    if (creatingRef.current) return;
-    creatingRef.current = true;
-    try {
-      const result = await onUpdate({ createProject: true });
-      if (navigate && result?.projectId) onOpenInFocus?.(result.projectId);
-    } finally {
-      creatingRef.current = false;
-    }
-  }, [onUpdate, onOpenInFocus]);
 
   const hasReel = !!region.autoProjectId;
   const notesLength = notesDraft.length;
@@ -417,35 +393,14 @@ export function ClipDetailsEditor({
         {/* Stage control — driven by the shared getClipStage helper (same stage +
             label as the desktop strip CTA). T8070 staleness + T8470 fresh-draft
             both live inside getClipStage.
-            - NO_PROJECT (T10240): no longer a dead end. Two ALWAYS-enabled create
-              actions, rendered on mobile too so a phone can Frame a clip: "Create
-              clip" (create, stay in Annotate; reel-created toast from the container)
-              and "Frame clip" (create, then open Framing via the synchronously-
-              returned project id). The branch disappears the moment autoProjectId
-              lands and the stage advances.
+            - NO_PROJECT: no create affordance in this panel (removed 2026-09-20
+              per user request); a clip's project is created elsewhere.
             - every OTHER stage: DESKTOP ONLY — a button that OPENS the clip's
               existing project (Apply Framing / Apply Spotlight / View Final / View
               Published), routing action 'overlay' -> Spotlight, else Framing.
               Drifted and below-migration projects land on "Apply Framing" (open
               it), never back on create — a project that EXISTS should open. */}
-        {clipStage.stage === CLIP_STAGE.NO_PROJECT ? (
-          <div className="flex items-center justify-between gap-2">
-            <label className="text-gray-400 text-xs shrink-0">Clip</label>
-            <div className="flex gap-2">
-              {clipStage.createActions.map((a) => (
-                <Button
-                  key={a.key}
-                  variant="cyan"
-                  size="sm"
-                  icon={a.navigate ? Crop : Plus}
-                  onClick={() => handleCreateClip(a.navigate)}
-                >
-                  {a.label}
-                </Button>
-              ))}
-            </div>
-          </div>
-        ) : !isMobile ? (
+        {clipStage.stage === CLIP_STAGE.NO_PROJECT ? null : !isMobile ? (
           <div className="flex items-center justify-between">
             <label className="text-gray-400 text-xs">Clip</label>
             <Button
