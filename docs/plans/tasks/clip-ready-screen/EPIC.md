@@ -31,7 +31,7 @@ sure the video player for published videos has the same controls."
 | ID | Task | Status |
 |----|------|--------|
 | T10670 | [Completion bars: V2 celebration tiles, headline + Saved chip, "Done for now"](T10670-completion-bars-v2-tiles.md) | WIP |
-| T10680 | [CollectionPlayer transport: play/pause glyph, header Play/Pause + Fullscreen, on every finished-reel player](T10680-collection-player-transport-controls.md) | WIP |
+| T10680 | [CollectionPlayer transport: play/pause glyph, header Play/Pause + Fullscreen, on every finished-reel player](T10680-collection-player-transport-controls.md) | WAITING ON USER |
 
 The two tasks are **file-disjoint and may run in parallel**: T10670 owns the two action bars,
 `displayNames.js`, `resultRetentionNote.js` and their tests; T10680 owns `CollectionPlayer.jsx`,
