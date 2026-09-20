@@ -422,6 +422,18 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     if (videoRef.current && videoRef.current.src) {
       // Get duration from video element if not set (overlay mode)
       const effectiveDuration = duration || (clipDuration ?? videoRef.current.duration) || 0;
+      // T10750: REFUSE rather than clamp when no duration is known yet. The old
+      // `|| 0` trailing fallback turned every early seek into a seek-to-0, which
+      // put the playhead outside the target clip and let the playhead-driven
+      // auto-deselect wipe a selection that had just been made. That is a silent
+      // fallback on internal data (CLAUDE.md) — it must fail visibly instead.
+      // Callers that need the seek to land wait for a real duration.
+      if (!clampToVisibleRange && !(effectiveDuration > 0)) {
+        console.warn(
+          `[VIDEO] Refusing seek to ${time.toFixed(3)}s — duration unknown (would have clamped to 0).`
+        );
+        return;
+      }
       // Use centralized validation to prevent seeking to trimmed frames
       const validTime = clampToVisibleRange
         ? clampToVisibleRange(time)

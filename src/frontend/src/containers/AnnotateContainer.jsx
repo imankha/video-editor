@@ -685,8 +685,13 @@ export function AnnotateContainer({
   // Whether the loaded game is single-video (multi-video resume is out of scope).
   const isSingleVideoRef = useRef(false);
 
-  // T740: Pending clip selection from Framing → Annotate navigation
-  const pendingSelectSeekTimeRef = useRef(null);
+  // T740: Pending clip selection from Framing → Annotate navigation.
+  // T10750: holds `{ seekTime, sourceClipId }` — this is the SINGLE seam that
+  // consumes the navigation breadcrumb. AnnotateScreen used to run a SECOND,
+  // retrying selector for `sourceClipId`; it could never observe its own
+  // success (see the lane-starvation note on the consuming effect below) and
+  // was deleted.
+  const pendingSelectTargetRef = useRef(null);
 
   // Restore video state from active upload if navigating back from Games screen
   // This allows users to click on the uploading game card and return to annotation
@@ -957,7 +962,7 @@ export function AnnotateContainer({
    * Handle loading a saved game into annotate mode.
    * T3430: Uses single /load endpoint, falls back to individual fetches.
    */
-  const handleLoadGame = useCallback(async (gameId, pendingClipSeekTime = null) => {
+  const handleLoadGame = useCallback(async (gameId, pendingClipSeekTime = null, pendingSourceClipId = null) => {
     if (PROFILING_ENABLED) performance.mark('gesture:load-game:start');
     setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
     // bug 27p: clear any prior game's expired flag before /load resolves so an
@@ -1073,8 +1078,14 @@ export function AnnotateContainer({
 
         importAnnotations(gameData.annotations, gameDuration);
 
-        if (pendingClipSeekTime != null) {
-          pendingSelectSeekTimeRef.current = pendingClipSeekTime;
+        // T10750: arm the ONE selection seam with whichever breadcrumb(s) the
+        // navigation carried. `importAnnotations` just ran, so the regions this
+        // targets already exist with their `rawClipId` populated.
+        if (pendingClipSeekTime != null || pendingSourceClipId != null) {
+          pendingSelectTargetRef.current = {
+            seekTime: pendingClipSeekTime,
+            sourceClipId: pendingSourceClipId,
+          };
         }
       }
 
@@ -1207,12 +1218,37 @@ export function AnnotateContainer({
     }
   }, [annotateFullscreen, setAnnotateFullscreen, selectionState, closeOverlay, isMobile]);
 
-  // T740: After clipRegions update from importAnnotations, select the clip matching pendingSelectSeekTime
-  // Used by both Framing→Annotate navigation and share link navigation.
+  // T740: After clipRegions update from importAnnotations, select the clip the
+  // navigation targeted. Used by Framing→Annotate, share-link, and (T10750) the
+  // reel's source clip.
+  //
+  // T10750 — THIS MUST STAY A ONE-SHOT. Do not turn it back into a "re-issue
+  // until the selection sticks" retry. `selectClip` runs here in a PASSIVE
+  // effect, so its setState is DefaultLane, while `effectiveSeek`'s zustand
+  // writes schedule SyncLane through a selector-less `useVideoStore()`
+  // subscription. React renders SyncLane first and skips updates whose lane
+  // isn't in renderLanes, so the selection is DEFERRED, not applied — a retry
+  // reads `NONE`, fires again, and starves its own update until a 40-attempt
+  // cap (the ~32x select+seek storm). A retry here cannot observe its own
+  // success, by construction. Fire once from data in hand instead.
   useEffect(() => {
-    if (pendingSelectSeekTimeRef.current == null || clipRegions.length === 0) return;
-    const seekTime = pendingSelectSeekTimeRef.current;
-    const match = clipRegions.find(r => Math.abs(r.startTime - seekTime) < 0.5);
+    const target = pendingSelectTargetRef.current;
+    if (target == null || clipRegions.length === 0) return;
+    // Gate on a seekable video: `seek` needs a real duration or the playhead
+    // lands short of the clip and the playhead-driven auto-deselect below
+    // immediately wipes the selection. This is a PRECONDITION (the effect still
+    // fires exactly once, when it can land), not a retry on an outcome.
+    if (!(videoDuration > 0)) return;
+
+    const { seekTime, sourceClipId } = target;
+    // Prefer identity over position: the breadcrumb's raw_clips id is exact,
+    // whereas the seek-time match is a 0.5s proximity guess.
+    const match = (sourceClipId != null
+      && clipRegions.find(r => r.rawClipId === sourceClipId || r.id === sourceClipId))
+      || (seekTime != null
+        && clipRegions.find(r => Math.abs(r.startTime - seekTime) < 0.5))
+      || null;
+
     if (match) {
       selectClip(match.id);
       let seekTarget = match.startTime;
@@ -1223,9 +1259,15 @@ export function AnnotateContainer({
       }
       effectiveSeek(seekTarget);
       setAnnotateSelectedLayer('clips');
+    } else {
+      // Fail visibly rather than silently retrying forever.
+      console.warn(
+        '[AnnotateContainer] Pending clip selection matched no region — dropping breadcrumb.',
+        { sourceClipId, seekTime, regionCount: clipRegions.length }
+      );
     }
-    pendingSelectSeekTimeRef.current = null;
-  }, [clipRegions, selectClip, effectiveSeek, fullTimeline, isOverlapTimeline]);
+    pendingSelectTargetRef.current = null;
+  }, [clipRegions, videoDuration, selectClip, effectiveSeek, fullTimeline, isOverlapTimeline]);
 
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, annotateFullscreen);
