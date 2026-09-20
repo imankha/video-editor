@@ -1,6 +1,6 @@
 # T10710: Nullable rating — frontend unset badge + stop seeding a default
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 5
 **Created:** 2026-09-19
@@ -172,6 +172,28 @@ descriptor function" invariant):
 ### Progress Log
 
 **2026-09-19**: Filed from the approved T10690 design, blocked by T10700. Not started.
+
+**2026-09-20**: T10700 landed on staging; worker went start-to-PUSHREADY in one pass (~31 min):
+27 files, kills 3 `DEFAULT_RATING`/`NEW_PLAY_DEFAULT_RATING` copies, unset badge reuses `UNDONE`
+(no new state), shared unrated treatment added once in `getRatingLabel`/`getRatingDisplay`/
+`RatingIcon`, fixed a stale e2e spec (`T8490`) that assumed create-at-tap always seeds `rating=4`.
+Reviewer APPROVED, zero blocking findings. Live e2e (`T10710-unrated-badge.qa.spec.js`) driven
+against a real account, passed. One test-scope deviation caught and resolved by the supervisor:
+the worker's final sweep ran the full `vitest related` candidate list (2175 tests, 1 failure) well
+beyond the relevant-set policy; the failure (`uploadManager.attachVideo.test.js`, unrelated to
+rating) was confirmed to be cross-test pollution from the oversized run, not a real regression -
+passed clean in isolation (3/3). The properly curated relevant-set run (6 files/78 tests) was also
+green with a genuine red->green transition (`getRatingLabel(null)` failed pre-fix, passes after).
+Supervisor independently re-verified the grep gate (`rating \|\| `): 2 remaining hits, both
+sanctioned exceptions (the deferred TSV writer now using a literal `3` since `DEFAULT_RATING` was
+deleted; the direct video-upload-with-metadata flow, which mirrors the backend's own unchanged
+`Form(3)` default) - confirmed by reading both call sites. Both default-rating constants confirmed
+fully removed from source. CI green (frontend job only, correctly layer-scoped). Provably verified
+-> merged without waiting, PR #478 (`bc1426ba`). Status -> STAGING.
+
+**Feature complete.** T10690 (design) -> T10700 (backend) -> T10710 (frontend) all merged same
+day. The rated badge now genuinely reflects whether a play has been rated, for the first time
+since T10610 made every play carry a real default rating from creation.
 
 ## Acceptance Criteria
 
