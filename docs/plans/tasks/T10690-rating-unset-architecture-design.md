@@ -1,6 +1,6 @@
 # T10690: Architect design — true "unset" rating state (nullable raw_clips.rating)
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 5
 **Complexity:** 6
 **Created:** 2026-09-19
@@ -132,10 +132,10 @@ existing pre-migration clip, which always has 1-5).
 ## Implementation
 
 ### Steps
-1. [ ] Load `.claude/knowledge/annotate.md` (rating-related entries) + `persistence-sync.md`'s
+1. [x] Load `.claude/knowledge/annotate.md` (rating-related entries) + `persistence-sync.md`'s
    migration section, then read the files listed above (no broader audit)
-2. [ ] Spawn the `architect` agent with this file; it writes `docs/plans/tasks/T10690-design.md`
-3. [ ] Build the decision artifact (schema diff, call-site table, badge-state mock, the
+2. [x] Spawn the `architect` agent with this file; it writes `docs/plans/tasks/T10690-design.md`
+3. [x] Build the decision artifact (schema diff, call-site table, badge-state mock, the
    reachable-vs-not "clear rating" question) and hand it to the user
 4. [ ] Status -> WAITING ON USER; on approval -> DECIDED, and the implementation task may be filed
 
@@ -144,6 +144,36 @@ existing pre-migration clip, which always has 1-5).
 **2026-09-19**: Filed from a screenshot-driven UI question about the rated badge, after
 surfacing the conflict with T10610 (merged same day) and getting the user's explicit ruling
 (true null rating over a session-only touched-flag). Not started.
+
+**2026-09-19 (architect):** `docs/plans/tasks/T10690-design.md` written. Decision artifact:
+https://claude.ai/artifact/2zgMz83fZa7cAA3NE1tF8g (source `docs/plans/tasks/T10690-decision-artifact.html`).
+Migration target `v054_raw_clips_rating_nullable.py` (v053 is current head — recheck unmerged
+siblings before implementing). Found beyond the task file's own ask: (1) SQLite's rebuild-and-copy
+for `DROP NOT NULL` runs with `foreign_keys=ON` in two existing openers
+(`database.py:1753`, `materialization.py:63`) and would **cascade-delete** `working_clips`/
+`modal_tasks`/`clip_teammates` rows via `DROP TABLE raw_clips` — migration must force
+`PRAGMA foreign_keys=OFF` itself; (2) `DROP TABLE` also resets `sqlite_sequence`, so ids get
+reused, and `final_videos.source_clip_id` (T3630) holds frozen ids with no FK — capture/restore
+`seq` and reindex; (3) `RawClipResponse.rating` MUST become `int | None` or every clip list on an
+unrated row 500s; (4) `normalize_rating`/`UNRATED_RATING` get deleted (their contract is the
+repealed rule), 3 callers each need an explicit treatment, notably `games.py:1355` which today
+would silently badge an unrated play as 3 stars; (5) a THIRD file-local `DEFAULT_RATING = 4` at
+`AnnotateFullscreenOverlay.jsx:52` and a re-invented 4 in `useAnnotate.js:726`'s `loadAnnotations`
+— either one alone would defeat the whole task if missed; (6) `projects.py:715`'s
+`COALESCE(rc.rating,0) >= 1` would make unrated plays invisible in multi-clip clip pickers.
+Bulk-import (`or 5`) and video-upload-form (`Form(3)`) defaults are kept as-is (no unrated
+affordance on those flows), which confines NULL to annotate-created plays. `CLIP_NUDGE_RATING`,
+the quest step, auto-export and Glicko seeding verified already null-safe; no rating-driven
+`my_athlete` auto-flip exists. Open questions posed in the artifact for the user's ruling (not
+silently picked): (1) unset badge visual — recommends reusing `UNDONE`'s amber dashed look with
+"Not rated yet" copy, flagging honestly that gray was already ruled out (T10440) and the "other
+badges default to something" framing doesn't fully hold; (2) whether a rating is clearable back
+to unset once set (recommends NO for v1 — YES requires `clips.py:1499`'s `if update.rating is not
+None` to become a `model_fields_set` check, ~10 LOC, fully specced either way); (3) whether an
+unrated derived clip name drops its adjective; (4) whether a TSV export round-trip fix (~6 LOC)
+ships with this or is deferred; (5) whether `ShareGameModal` omits its rating chip for unrated
+plays. Suggested split once approved: backend/compat PR first, frontend PR second (shipping
+frontend first would 500 every Mark-play tap). Status -> WAITING ON USER.
 
 ## Acceptance Criteria
 

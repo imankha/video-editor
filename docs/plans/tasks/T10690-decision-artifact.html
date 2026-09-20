@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rating Unset Design</title>
+<style>
+  :root {
+    --bg: #111827;
+    --panel: #1f2937;
+    --panel-2: #0f172a;
+    --border: #374151;
+    --border-strong: #4b5563;
+    --text: #ffffff;
+    --text-2: #d1d5db;
+    --text-3: #9ca3af;
+    --blue: #3b82f6;
+    --purple: #9333ea;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --yellow: #eab308;
+    --red: #ef4444;
+    --slate: #64748b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text-2);
+    font-family: system-ui, -apple-system, sans-serif; line-height: 1.55;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1 { color: var(--text); font-size: 24px; font-weight: 700; margin: 0 0 6px; }
+  h2 { color: var(--text); font-size: 18px; font-weight: 600; margin: 44px 0 12px;
+       padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { color: var(--text); font-size: 15px; font-weight: 600; margin: 24px 0 8px; }
+  .meta { font-size: 13px; color: var(--text-3); margin-bottom: 20px; }
+  .meta span { color: var(--yellow); font-weight: 600; }
+  p { font-size: 14px; }
+  code, .mono {
+    font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px;
+    background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 4px; color: #93c5fd;
+  }
+  pre {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px; color: #e5e7eb;
+  }
+  pre .del { color: #f87171; }
+  pre .add { color: #4ade80; }
+  pre .cm  { color: #6b7280; }
+  .callout {
+    background: rgba(147,51,234,0.08); border: 1px solid rgba(147,51,234,0.35);
+    border-radius: 8px; padding: 14px 16px; font-size: 13.5px; margin: 16px 0;
+  }
+  .callout.warn { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.35); }
+  .callout.ok { background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.35); }
+  .callout b { color: var(--text); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 8px; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--text); font-weight: 600; background: var(--panel); font-size: 12px;
+       text-transform: uppercase; letter-spacing: .04em; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px;
+         border-radius: 999px; white-space: nowrap; }
+  .tag.change { background: rgba(245,158,11,0.18); color: #fcd34d; border: 1px solid rgba(245,158,11,0.4); }
+  .tag.must   { background: rgba(239,68,68,0.18); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
+  .tag.none   { background: rgba(107,114,128,0.18); color: #d1d5db; border: 1px solid rgba(107,114,128,0.4); }
+  .tag.ok     { background: rgba(34,197,94,0.15); color: #86efac; border: 1px solid rgba(34,197,94,0.35); }
+  .tag.oos    { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.35); }
+  .cards { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
+  .card {
+    flex: 1 1 300px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+  }
+  .card.rec { border-color: rgba(34,197,94,0.55); box-shadow: 0 0 0 1px rgba(34,197,94,0.15) inset; }
+  .card.no  { border-color: rgba(239,68,68,0.4); opacity: .85; }
+  .card h4 { margin: 0 0 4px; color: var(--text); font-size: 14px; }
+  .card .sub { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-3); margin-bottom: 10px; }
+  .card ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; }
+  .card li { margin-bottom: 4px; }
+  .pill { display:inline-block; font-size:10px; font-weight:700; letter-spacing:.06em;
+          text-transform:uppercase; padding:2px 8px; border-radius:999px; margin-bottom:8px; }
+  .pill.rec { background: rgba(34,197,94,0.2); color:#86efac; }
+  .pill.alt { background: rgba(59,130,246,0.2); color:#93c5fd; }
+  .pill.no  { background: rgba(239,68,68,0.2); color:#fca5a5; }
+
+  /* badge mocks (mirror PlayProgressBadges DISC_STATE classes) */
+  .mock { background: #111827; border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+  .badge-row { display: flex; align-items: flex-start; gap: 26px; flex-wrap: wrap; }
+  .badge { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 104px; text-align: center; }
+  .badge .cap { font-size: 11px; color: var(--text-3); line-height: 1.3; }
+  .badge .cap b { color: var(--text-2); display: block; font-size: 11.5px; }
+  .disc {
+    position: relative; width: 44px; height: 44px; border-radius: 999px;
+    display: grid; place-items: center; border-width: 1.5px; border-style: solid;
+  }
+  .disc.undone { border-style: dashed; border-color: #f59e0b; background: rgba(245,158,11,0.10); color: #fbbf24; }
+  .disc.done   { border-style: solid;  border-color: #22c55e; background: rgba(34,197,94,0.15); color: #4ade80; }
+  .disc.unsetB { border-style: dashed; border-color: rgba(245,158,11,0.5); background: transparent; color: rgba(252,211,77,0.7); }
+  .disc.unsetC { border-style: dashed; border-color: #6b7280; background: transparent; color: #9ca3af; }
+  .disc.dormant{ border-style: dotted; border-color: #4b5563; color: #4b5563; opacity: .4; }
+  .disc .glyph { font-weight: 900; font-size: 20px; line-height: 1; }
+  .disc .glyph.two { font-size: 15px; }
+  .disc .check {
+    position: absolute; right: -4px; bottom: -4px; width: 20px; height: 20px; border-radius: 999px;
+    background: #22c55e; display: grid; place-items: center; box-shadow: 0 0 0 2px #111827;
+  }
+  .rowmock { display:flex; align-items:center; gap: 14px; background:#1f2937; border:1px solid var(--border);
+             border-radius: 10px; padding: 12px 14px; margin: 10px 0; flex-wrap: wrap; }
+  .rowmock .lbl { font-size: 12px; color: var(--text-3); width: 128px; flex: none; }
+  .q { background: var(--panel); border: 1px solid var(--border-strong); border-left: 3px solid var(--yellow);
+       border-radius: 8px; padding: 14px 16px; margin: 14px 0; }
+  .q .qh { color: var(--text); font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+  .small { font-size: 12.5px; color: var(--text-3); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>T10690: true "unset" rating state (nullable <code>raw_clips.rating</code>)</h1>
+<div class="meta">
+  Design gate &middot; <span>WAITING ON USER</span> &middot; 2026-09-19 &middot;
+  Full design: <code>docs/plans/tasks/T10690-design.md</code>
+</div>
+
+<div class="callout">
+  <b>Already settled, not re-litigated here:</b> a true nullable rating, chosen over a session-only
+  "touched" flag, knowing it reverses part of T10610 which merged today. This is a
+  <b>domain widening, not a data fix</b>. Every existing rating is a real 1 to 5 star value; nothing
+  is backfilled and nothing is rewritten. The migration only changes what the column <i>permits</i>.
+</div>
+
+<div class="callout ok">
+  <b>Good news from the audit:</b> the backend was already written defensively against a missing
+  rating. <code>glicko.seed_rating(None)</code> already returns a neutral seed ("no silent star
+  guess"), <code>collection_metadata</code> already carries <code>quality_score = None</code>,
+  <code>auto_export</code> already filters <code>rating IS NOT NULL</code>, and Focus mode's clip
+  sidebar already tests <code>clip.rating != null</code>. The real work is the migration, the
+  Annotate surfaces, and removing <b>nine</b> <code>|| DEFAULT</code> coercions.
+</div>
+
+<h2>A. Schema change</h2>
+
+<h3>The column</h3>
+<pre><span class="cm">-- src/backend/app/database.py:1182  (profile_db track, PRAGMA user_version)</span>
+  CREATE TABLE raw_clips (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    filename  TEXT NOT NULL,
+<span class="del">-   rating    INTEGER NOT NULL,</span>
+<span class="add">+   rating    INTEGER,            -- NULL = no rating on record (T10690, v054)</span>
+    ...
+  )</pre>
+
+<p class="small">SQLite cannot <code>ALTER COLUMN ... DROP NOT NULL</code>, and there is
+<b>no table-rebuild precedent in <code>migrations/profile_db/</code></b>: all 53 existing ones are
+<code>ADD COLUMN</code> or <code>DROP COLUMN</code>. New file
+<code>v054_raw_clips_rating_nullable.py</code> follows SQLite's official 12-step procedure. Four
+traps it must handle, each one silent data loss if missed:</p>
+
+<table>
+  <tr><th style="width:26%">Trap</th><th>Why it bites</th><th style="width:30%">Handling</th></tr>
+  <tr>
+    <td><b>FK cascade on <code>DROP TABLE</code></b></td>
+    <td>Three tables reference <code>raw_clips(id) ON DELETE CASCADE</code>
+      (<code>working_clips</code>, <code>modal_tasks</code>, <code>clip_teammates</code>). With
+      <code>foreign_keys=ON</code>, dropping the old table is an implicit <code>DELETE FROM</code>
+      and <b>would delete every working clip in the profile.</b></td>
+    <td><code>PRAGMA foreign_keys=OFF</code> around the rebuild (set outside a transaction, where it
+      is not a no-op), plus <code>foreign_key_check</code> before commit. Never rely on the caller's
+      default: two openers use ON.</td>
+  </tr>
+  <tr>
+    <td><b>Indexes die with the table</b></td>
+    <td><code>idx_raw_clips_game_id</code>, <code>idx_raw_clips_rating</code>, and the UNIQUE
+      <code>idx_raw_clips_game_end_time_seq</code> (the game-cut natural key).</td>
+    <td>Capture their <code>sql</code> from <code>sqlite_master</code> before the drop, replay
+      verbatim after the rename.</td>
+  </tr>
+  <tr>
+    <td><b><code>sqlite_sequence</code> reset</b></td>
+    <td>The <code>AUTOINCREMENT</code> counter is deleted with the table. If any clip was ever
+      deleted, new ids <b>reuse</b> old ones, and <code>final_videos.source_clip_id</code>
+      (T3630 ranking) holds frozen raw-clip ids with no cascade, so a published reel would silently
+      re-point at a different play.</td>
+    <td>Read <code>seq</code> before the drop, restore <code>MAX(old, new)</code> after.</td>
+  </tr>
+  <tr>
+    <td><b>Partial crash</b></td>
+    <td>This is the first profile_db migration that commits inside <code>up()</code>. A crash before
+      the runner stamps <code>user_version = 54</code> leaves a nullable column at v053.</td>
+    <td>The "already nullable, return" guard makes a re-run a no-op. Harmless by construction.</td>
+  </tr>
+</table>
+
+<p class="small"><b>No backfill.</b> Existing <code>1..5</code> values copy across byte-identical.
+The migration runs itself just-in-time at each profile's next access (JIT seam), so there is no
+operator step.</p>
+
+<h3>Typed <code>rating</code> fields, ruled one by one</h3>
+<table>
+  <tr><th style="width:34%">Model / param</th><th style="width:13%">Today</th><th style="width:15%">Target</th><th>Why</th></tr>
+  <tr><td><code>RawClipResponse.rating</code> <span class="small">clips.py:135</span></td><td><code>int</code></td>
+      <td><span class="tag must">int | None</span></td>
+      <td><b>Mandatory.</b> Pydantic would raise on a NULL row and 500 every clip list.</td></tr>
+  <tr><td><code>RawClipCreate.rating</code> <span class="small">clips.py:162</span></td><td><code>int = 3</code></td>
+      <td><span class="tag must">int | None = None</span></td>
+      <td>The create-at-tap path. Absent means "no rating on record".</td></tr>
+  <tr><td><code>RawClipUpdate.rating</code> <span class="small">clips.py:174</span></td><td><code>int | None = None</code></td>
+      <td><span class="tag none">unchanged*</span></td>
+      <td><code>None</code> already means "field absent" for all ten fields. <b>*Changes only if you
+      approve "clear rating"</b>, see C2.</td></tr>
+  <tr><td><code>WorkingClipResponse.rating</code> <span class="small">clips.py:237</span></td><td><code>int | None</code></td>
+      <td><span class="tag none">unchanged</span></td><td>Already nullable (joined).</td></tr>
+  <tr><td>Bulk import <code>ClipUploadItem.rating</code> <span class="small">clips.py:1972 and 2152 (<code>or 5</code>)</span></td>
+      <td><code>int | None</code>, defaults 5</td><td><span class="tag none">keep 5</span></td>
+      <td>A bulk-imported clip has <b>no unrated affordance anywhere in that flow</b>, so a NULL
+      there would be unreachable dead state.</td></tr>
+  <tr><td>Video upload <code>rating: int = Form(3)</code> <span class="small">clips.py:2200</span></td>
+      <td>defaults 3</td><td><span class="tag none">keep 3</span></td>
+      <td>Same reasoning. Keeping both confines NULL to <b>annotate-created plays</b>, the one
+      surface with a picker.</td></tr>
+  <tr><td><code>normalize_rating</code> and <code>UNRATED_RATING</code> <span class="small">queries.py:16-38</span></td>
+      <td>NULL: log ERROR, return 3</td><td><span class="tag must">DELETE</span></td>
+      <td>Its contract <i>is</i> the rule this task repeals ("rating is NOT NULL so NULL is a bug").
+      Its three callers each need a different explicit treatment: derived name (drop the adjective),
+      clip list (pass through), and <b>game stats (skip the row; counting an unrated play as a
+      3-star badge is exactly the bug this task exists to stop)</b>.</td></tr>
+  <tr><td><code>derive_clip_name(rating)</code> <span class="small">queries.py:41</span> and its frontend twin
+      <code>generateClipName</code></td><td>always an adjective</td>
+      <td><span class="tag change">null: no adjective</span></td>
+      <td>"Interesting Goal" re-asserts a rating in the one place users actually read it. Unrated
+      becomes just "Goal and Dribble".</td></tr>
+  <tr><td><code>_build_clips_filter_query(min_rating)</code> <span class="small">projects.py:715</span></td>
+      <td><code>COALESCE(rating,0) &gt;= 1</code></td><td><span class="tag change">treat &le;1 as no filter</span></td>
+      <td><b>Found a bug-in-waiting:</b> with the default <code>min_rating = 1</code>, unrated plays
+      would silently vanish from the multi-clip clip pickers. "1+" has never excluded a rated clip,
+      so this is safe and one line.</td></tr>
+</table>
+
+<h2>B and D. Every call site, classified</h2>
+
+<p class="small"><b>The DRY problem of this task:</b> nine independent
+<code>rating || DEFAULT</code> coercions stand between the DB and the screen. One missed site
+silently re-invents a star and defeats the change. <code>useAnnotate.js:726</code> alone would undo
+it on every page load. Mitigation: both "default rating" constants are <b>deleted</b>, so a missed
+site becomes a build error, plus a grep gate in review.</p>
+
+<h3>Write path (B)</h3>
+<table>
+  <tr><th style="width:34%">Site</th><th style="width:26%">Today</th><th style="width:24%">Target</th><th>Note</th></tr>
+  <tr><td><code>AnnotateContainer.jsx:1400</code></td><td><code>rating: NEW_PLAY_DEFAULT_RATING</code></td>
+      <td><span class="tag must">delete the line</span></td><td>The payload simply says nothing about rating.</td></tr>
+  <tr><td><code>useRawClipSave.js:152</code></td><td><code>clipData.rating || 3</code></td>
+      <td><code>?? null</code></td><td>Wire-level coercion.</td></tr>
+  <tr><td><code>useAnnotate.js:726</code> <i>(loadAnnotations)</i></td><td><code>clamp(rating || 4)</code></td>
+      <td><span class="tag must">preserve null</span></td><td><b>The critical one:</b> backend to region model.</td></tr>
+  <tr><td><code>useAnnotate.js:311 / 397 / 434 / 81</code></td><td><code>|| DEFAULT_RATING</code></td>
+      <td><code>?? null</code> or <code>clampRating()</code></td><td>Import path, TSV, addClipRegion.</td></tr>
+  <tr><td><code>AnnotateFullscreenOverlay.jsx:52</code></td><td><code>const DEFAULT_RATING = 4</code></td>
+      <td><span class="tag must">delete</span></td><td><b>A third, file-local copy</b> that the T10610 note missed.</td></tr>
+  <tr><td><code>AnnotateFullscreenOverlay.jsx:172, 237</code></td><td><code>existingClip.rating || 4</code></td>
+      <td><code>?? null</code></td><td>The editor's local echo must be able to hold null.</td></tr>
+  <tr><td><code>clipConstants.js:58</code> <code>NEW_PLAY_DEFAULT_RATING</code></td><td>= 4</td>
+      <td><span class="tag must">delete</span></td><td>Zero callers left. The bulk-import 5 and upload 3 are separate backend literals.</td></tr>
+  <tr><td><code>save_raw_clip</code> retry branch <span class="small">clips.py:1303-1326</span></td>
+      <td><code>SET rating = ?</code></td><td><code>rating = COALESCE(?, rating)</code></td>
+      <td>Otherwise a retried create NULLs a rating set in between.</td></tr>
+</table>
+
+<h3>Rating-driven branches, already safe with <code>null</code></h3>
+<table>
+  <tr><th style="width:38%">Branch</th><th style="width:22%">With null</th><th>Verdict</th></tr>
+  <tr><td>5-star clip nudge <code>rating === CLIP_NUDGE_RATING</code> <span class="small">playProgress.js:92</span></td>
+      <td><code>false</code>, so <code>DORMANT</code></td><td><span class="tag ok">no change</span> An unrated play does not nudge.</td></tr>
+  <tr><td>Quest step <code>rating &gt;= 1</code> <span class="small">questAchievements.js:9</span></td>
+      <td><code>false</code></td><td><span class="tag ok">no change</span> (add a comment so nobody "fixes" it)</td></tr>
+  <tr><td>Auto-export "brilliant" selection <span class="small">auto_export.py:164 and 241</span></td>
+      <td>excluded</td><td><span class="tag ok">no change</span>, already <code>WHERE rating IS NOT NULL</code></td></tr>
+  <tr><td>Glicko seed for a single-clip reel <span class="small">glicko.py:30</span></td>
+      <td>neutral 1500</td><td><span class="tag ok">no change</span>, already documented for "unrated"</td></tr>
+  <tr><td>Rating-driven auto <code>my_athlete</code> or project flip</td><td>n/a</td>
+      <td><span class="tag ok">does not exist</span>. T9830 made clip creation an explicit flag only.</td></tr>
+</table>
+
+<h3>Display sites (D)</h3>
+<p class="small">The null branch lands in the <b>three shared primitives</b> (N35's "one rating
+descriptor function"), not in eight call sites. Call sites just stop coercing.</p>
+<table>
+  <tr><th style="width:36%">Site</th><th style="width:16%">Sees null?</th><th>Action</th></tr>
+  <tr><td><code>getRatingLabel()</code> <span class="small">clipConstants.js:119</span></td><td><span class="tag must">yes</span></td>
+      <td>Add <code>if (rating == null) return 'Not rated'</code>. <b>The one string every surface shows.</b> Today it returns "3 stars &middot; Interesting".</td></tr>
+  <tr><td><code>getRatingDisplay()</code> <span class="small">clipConstants.js:130</span></td><td><span class="tag must">yes</span></td>
+      <td>Null gives empty notation plus neutral slate colors (two new constants).</td></tr>
+  <tr><td><code>RatingIcon</code> <span class="small">RatingIcon.jsx:59</span></td><td><span class="tag must">yes</span></td>
+      <td>Null renders an unrated disc (dashed slate ring, no glyph, sr-only "Not rated"). Today an unrated clip draws the <b>blue <code>!?</code></b> disc. One definition, inherited by three surfaces.</td></tr>
+  <tr><td><code>DEFAULT_RATING = 3</code> <span class="small">clipConstants.js:51</span></td><td>n/a</td>
+      <td><span class="tag must">delete</span> once the three above stop using it. This is the structural guarantee against a re-introduced per-site fallback.</td></tr>
+  <tr><td><code>ClipListItem.jsx:80</code> (play list)</td><td><span class="tag must">yes</span></td><td>Drop <code>|| 3</code>, everything else inherits.</td></tr>
+  <tr><td><code>ClipRegionLayer.jsx:219</code> (timeline markers)</td><td><span class="tag must">yes</span></td><td>Drop <code>|| 3</code>, take the marker color from <code>getRatingDisplay</code> instead of a second palette index.</td></tr>
+  <tr><td><code>NotesOverlay.jsx:29-30</code> (in-video)</td><td><span class="tag change">yes</span></td><td>The notation guard is already correct. Only the border color's silent blue fallback changes to neutral.</td></tr>
+  <tr><td><code>ClipDetailsEditor</code> local <code>StarRating</code> and shared <code>StarRating</code></td><td><span class="tag ok">yes</span></td>
+      <td>The label already routes through <code>getRatingLabel</code>, so "Not rated" comes for free, with zero filled stars. <b>Note:</b> the landscape-inline layout does still have a second rating control despite the comment claiming otherwise. Same setter, no new write path.</td></tr>
+  <tr><td><code>getRatingCaption</code> and <code>getEditRatingCaption</code></td><td><span class="tag ok">yes</span></td>
+      <td><b>Already correct</b> (<code>if (!rating)</code>). Comment update only.</td></tr>
+  <tr><td><code>ClipSelectorSidebar.jsx:208</code> (Focus)</td><td><span class="tag ok">yes</span></td><td><b>No change</b>, already <code>!= null</code>.</td></tr>
+  <tr><td><code>ShareGameModal.jsx:55-61</code></td><td><span class="tag change">yes</span></td><td>Needs a branch. Recommend omitting the chip for unrated plays. <i>See open question 5.</i></td></tr>
+  <tr><td><code>RecapPlayerModal</code>, <code>RecapClipsSidebar</code></td><td><span class="tag change">yes</span></td><td>Render through the shared primitives. Audit for pre-coercion during implementation.</td></tr>
+  <tr><td><code>RATING_NOTATION / ADJECTIVES / COLORS</code> maps</td><td>n/a</td>
+      <td><span class="tag none">unchanged</span>, no null key. A lookup-table default is exactly the invisible fallback being removed.</td></tr>
+  <tr><td><code>rank.py</code>, <code>glicko.py</code>, <code>final_videos.rating</code>, <code>useRanking</code>, <code>reelOrder</code>, <code>useCollections</code></td>
+      <td><span class="tag oos">N/A</span></td>
+      <td><b>Glicko rating (an Elo-like float), not stars.</b> 47 hits in <code>rank.py</code> alone. Out of scope, listed so nobody "fixes" them.</td></tr>
+</table>
+
+<h2>C1. The unset badge, pick a look</h2>
+
+<h3>Today vs. after (a freshly marked play, before the user touches anything)</h3>
+<div class="mock">
+  <div class="rowmock">
+    <div class="lbl">Today (T10610)</div>
+    <div class="badge-row">
+      <div class="badge"><div class="disc undone">&#9998;</div><div class="cap"><b>Named</b>undone</div></div>
+      <div class="badge"><div class="disc done"><span class="glyph">!</span><span class="check">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#052e16" stroke-width="4"><path d="M4 12l5 5L20 6"/></svg></span></div>
+        <div class="cap"><b>Rated</b>done, <i>the complaint</i></div></div>
+      <div class="badge"><div class="disc undone">&#9776;</div><div class="cap"><b>Note</b>undone</div></div>
+      <div class="badge"><div class="disc dormant">&#9673;</div><div class="cap"><b>Clip</b>dormant</div></div>
+    </div>
+  </div>
+  <div class="rowmock">
+    <div class="lbl">After, option A</div>
+    <div class="badge-row">
+      <div class="badge"><div class="disc undone">&#9998;</div><div class="cap"><b>Named</b>undone</div></div>
+      <div class="badge"><div class="disc undone">&#9734;</div><div class="cap"><b>Rated</b>"Not rated yet"</div></div>
+      <div class="badge"><div class="disc undone">&#9776;</div><div class="cap"><b>Note</b>undone</div></div>
+      <div class="badge"><div class="disc dormant">&#9673;</div><div class="cap"><b>Clip</b>dormant</div></div>
+    </div>
+  </div>
+  <div class="rowmock">
+    <div class="lbl">After, option B</div>
+    <div class="badge-row">
+      <div class="badge"><div class="disc undone">&#9998;</div><div class="cap"><b>Named</b>undone</div></div>
+      <div class="badge"><div class="disc unsetB">&#9734;</div><div class="cap"><b>Rated</b>unset (own state)</div></div>
+      <div class="badge"><div class="disc undone">&#9776;</div><div class="cap"><b>Note</b>undone</div></div>
+      <div class="badge"><div class="disc dormant">&#9673;</div><div class="cap"><b>Clip</b>dormant</div></div>
+    </div>
+  </div>
+  <div class="rowmock">
+    <div class="lbl">After, option C</div>
+    <div class="badge-row">
+      <div class="badge"><div class="disc undone">&#9998;</div><div class="cap"><b>Named</b>undone</div></div>
+      <div class="badge"><div class="disc unsetC">&#9734;</div><div class="cap"><b>Rated</b>gray (reads disabled)</div></div>
+      <div class="badge"><div class="disc undone">&#9776;</div><div class="cap"><b>Note</b>undone</div></div>
+      <div class="badge"><div class="disc dormant">&#9673;</div><div class="cap"><b>Clip</b>dormant</div></div>
+    </div>
+  </div>
+  <div class="rowmock">
+    <div class="lbl">Once rated (5)</div>
+    <div class="badge-row">
+      <div class="badge"><div class="disc undone">&#9998;</div><div class="cap"><b>Named</b>undone</div></div>
+      <div class="badge"><div class="disc done"><span class="glyph two">!!</span><span class="check">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#052e16" stroke-width="4"><path d="M4 12l5 5L20 6"/></svg></span></div>
+        <div class="cap"><b>Rated</b>done</div></div>
+      <div class="badge"><div class="disc undone">&#9776;</div><div class="cap"><b>Note</b>undone</div></div>
+      <div class="badge"><div class="disc undone" style="border-style:solid;background:rgba(245,158,11,0.15);color:#fcd34d">&#9673;</div>
+        <div class="cap"><b>Clip</b>nudge (pulsing)</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card rec">
+    <div class="pill rec">Recommended</div>
+    <h4>A. Reuse the UNDONE treatment</h4>
+    <div class="sub">amber dashed ring, hollow star, copy "Not rated yet"</div>
+    <ul>
+      <li><b>Zero new visual state.</b> <code>rated: false</code> already routes to UNDONE, and the
+        disc already shows a star outline with no notation. The only edits are the predicate and the copy.</li>
+      <li>Honest: the row then reads "three things you haven't done yet", which is what it is.</li>
+      <li><b>Worth weighing:</b> the premise that the other badges "default to something" does not
+        quite hold. An unnamed play has no custom name, an un-noted play has no note. Same shape as
+        unrated.</li>
+      <li>Risk: three amber badges on every fresh play may feel naggy on a 30-play game.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="pill alt">Alternative</div>
+    <h4>B. Its own <code>UNSET</code> state</h4>
+    <div class="sub">same amber hue, lower emphasis: border-amber-500/50, text-amber-300/70, no fill</div>
+    <ul>
+      <li>Says "optional, not pending". Visually recessive next to the two action badges.</li>
+      <li>Stays in the amber family, so it never reads disabled.</li>
+      <li>Costs: one enum member, one class row, one mapping change (about 6 LOC) plus a test.</li>
+      <li>Risk: at 44px the difference from UNDONE is subtle and may read as an accident.</li>
+    </ul>
+  </div>
+  <div class="card no">
+    <div class="pill no">Not recommended</div>
+    <h4>C. Gray or neutral</h4>
+    <div class="sub">dashed slate ring, gray star</div>
+    <ul>
+      <li>Maximum separation from the "to do" badges, but:</li>
+      <li><b>T10440 already reverted gray</b> on these exact badges because
+        <i>"gray read as disabled"</i>. Re-introducing it on the one badge the user is meant to tap
+        first re-runs that regression.</li>
+      <li>It also collides with DORMANT (dotted gray) on the clip badge.</li>
+    </ul>
+  </div>
+</div>
+<p class="small">In every option the disc shows a hollow star and <b>no</b> notation glyph (notation
+exists only for 1 to 5), no check mark, and the picker opens with <b>no row selected</b>. That last
+part is already true, since <code>aria-checked={rating === value}</code> is false for all five rows
+when the rating is null.</p>
+
+<h2>C2. Can a rating be cleared back to unset?</h2>
+<div class="cards">
+  <div class="card rec">
+    <div class="pill rec">Recommended</div>
+    <h4>No. Unset is only reachable before the first rating</h4>
+    <ul>
+      <li><code>rating</code> stays a <code>1..5</code> int on every write: one code path, no
+        absent-vs-explicit-null ambiguity.</li>
+      <li>"I rated it and now want it unrated" is a rare need, and the value is always changeable.</li>
+      <li>Consequence to accept: the unset visual is a first-time-only affordance.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="pill alt">If you want it</div>
+    <h4>Yes. A "No rating yet" row in the picker</h4>
+    <ul>
+      <li>One extra picker row calling the <b>same</b> <code>onRatingChange(null)</code> setter. It
+        is a real tap, so the gesture-persistence rule holds with no new write path.</li>
+      <li>Requires <code>clips.py:1499</code> to switch from <code>if update.rating is not None</code>
+        to <code>if 'rating' in update.model_fields_set</code>. The model uses <code>None</code>
+        to mean "absent" for all ten fields, so clearing is currently <b>inexpressible</b>.</li>
+      <li>About 10 LOC plus a test. A dedicated <code>/clear-rating</code> endpoint was considered
+        and rejected (a second write path for one field).</li>
+    </ul>
+  </div>
+</div>
+
+<h2>Risks worth your attention</h2>
+<table>
+  <tr><th style="width:28%">Risk</th><th style="width:12%">Severity</th><th>Mitigation</th></tr>
+  <tr><td>Frontend ships before the migration, so every Mark-play tap 500s on NOT NULL</td><td><span class="tag must">High</span></td>
+      <td>Two-PR ship order: backend first (fully backward compatible), verified on staging, then frontend.</td></tr>
+  <tr><td>The rebuild cascade-deletes <code>working_clips</code></td><td><span class="tag must">Critical</span></td>
+      <td>Explicit FK-off window, <code>foreign_key_check</code>, and a test asserting child rows survive.</td></tr>
+  <tr><td>Raw-clip id reuse re-points a published reel's frozen <code>source_clip_id</code></td><td><span class="tag change">Medium</span></td>
+      <td>Capture and restore <code>sqlite_sequence</code>.</td></tr>
+  <tr><td>One missed <code>|| DEFAULT</code> silently re-invents a star</td><td><span class="tag must">High</span></td>
+      <td>Delete both default constants so a missed site becomes a build error, plus a grep gate in review.</td></tr>
+  <tr><td>Migration number collision with an unmerged sibling branch</td><td><span class="tag change">Low, recurring</span></td>
+      <td>Re-check origin branches at implementation time (known landmine).</td></tr>
+</table>
+
+<h2>Decisions needed from you</h2>
+
+<div class="q">
+  <div class="qh">1. C1, unset badge visual</div>
+  <b>A</b> reuse UNDONE's amber dashed plus "Not rated yet" <i>(recommended)</i> &nbsp;|&nbsp;
+  <b>B</b> its own lower-emphasis amber UNSET state &nbsp;|&nbsp;
+  <b>C</b> gray <i>(not recommended, T10440 regression)</i>
+</div>
+
+<div class="q">
+  <div class="qh">2. C2, can a set rating be cleared back to unset?</div>
+  <b>No</b>, unset is pre-first-rating only <i>(recommended)</i> &nbsp;|&nbsp;
+  <b>Yes</b>, add a "No rating yet" row to the picker (about 10 LOC, changes the PUT contract)
+</div>
+
+<div class="q">
+  <div class="qh">3. Derived name for an unrated but tagged play</div>
+  <b>"Goal and Dribble"</b> with no adjective <i>(recommended)</i> &nbsp;|&nbsp;
+  keep <b>"Interesting Goal and Dribble"</b>
+</div>
+
+<div class="q">
+  <div class="qh">4. TSV round-trip (small scope item)</div>
+  Include the empty-rating-cell import/export fix (about 6 LOC, keeps export and import honest)
+  &nbsp;|&nbsp; defer it and keep an explicit <code>|| 3</code> in the TSV writer only
+</div>
+
+<div class="q">
+  <div class="qh">5. ShareGameModal</div>
+  Omit the rating chip entirely for an unrated play <i>(recommended, it is a compact chip row)</i>
+  &nbsp;|&nbsp; show the neutral unrated disc there too
+</div>
+
+<p class="small" style="margin-top:28px">On approval the implementation task is filed as Tier L
+(schema change plus a profile_db migration, three layers, 15+ files, needing the Migration agent,
+Tester Phase 1 and a Reviewer fan-out), split into a backend/compat PR and a frontend PR.</p>
+
+</div>
+</body>
+</html>
