@@ -1557,10 +1557,13 @@ export function AnnotateContainer({
    * T10610 § C.2: clean-check (binding constraint 6) — a gesture whose value
    * already equals the stored region value costs nothing: no local write, no
    * network write. `createProject` is an ACTION, not a field, so it is never
-   * "clean" (excluded from the comparison).
+   * "clean" — bail out before the key-diff instead of filtering it out of
+   * `keys`, or a createProject-only payload (Frame Now/Later's ONLY key) diffs
+   * against an empty key list and wrongly short-circuits as a no-op.
    */
   const isCleanAgainst = useCallback((region, actualUpdates) => {
-    const keys = Object.keys(actualUpdates).filter((k) => k !== 'createProject');
+    if (actualUpdates.createProject != null) return false;
+    const keys = Object.keys(actualUpdates);
     if (keys.length === 0) return true;
     return keys.every((key) => {
       if (key === 'duration') {
