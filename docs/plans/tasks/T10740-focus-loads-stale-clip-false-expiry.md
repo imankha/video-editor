@@ -1,6 +1,6 @@
 # T10740: Focus loads the previous project's clip and reports it as an expired video
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-09-20
@@ -102,6 +102,40 @@ mount test would be a large, flake-prone lift for one ordering assertion the Rev
 reading. Real-browser verification of the actual reported flow is the stronger evidence and is the
 open item below.
 
+## Live verification (real browser, dev stack, 2026-09-20)
+
+Drove the REPORTED flow as the real account (`dev-login` as imankh@gmail.com, Playwright), by
+clicking only — no store manipulation:
+
+1. Home -> clip tile "adf" -> Focus opens on project 1 (this is the ordinary gesture that leaves
+   project 1's clips in the store).
+2. Mode switcher -> Annotate.
+3. Select the project-less play "Play 2" -> both "Frame Now" and "Frame Later" render (the
+   reported starting state).
+4. "Frame Later" -> toast `Play 2 is now in Clips` (verbatim the reported notification).
+5. "Frame" stage CTA -> Focus.
+
+The stale condition REPRODUCED, and the guard caught it — console, 4x:
+
+```
+[Framing] Ignoring stale clip 1 from project 1 while this screen is project 6 - waiting for the fresh clips list
+```
+
+Result: clip-video requests were `projects/1/clips/1/playback-url -> 200` and
+`projects/6/clips/6/playback-url -> 200`. **No mismatched pair, no 404** — pre-fix this is exactly
+where `projects/6/clips/1/...` would have gone out, 404'd, silently retried `/stream`, and surfaced
+as the false expiry. On screen: no expiry copy, correct clip ("Play 2"), `<video>` at
+`readyState 4` off R2.
+
+Unrelated observation, NOT caused by this change and NOT fixed here: a React
+`Maximum update depth exceeded` warning fires intermittently on the Focus -> Annotate transition
+(seen on 2 of 3 runs, including runs where this task's guard never fired at all — same code path,
+different outcomes, so it is a pre-existing flaky condition in that transition, likely the T6190
+hazard class). Worth its own ticket.
+
+Dev data created for this check (a probe play, and the project "Frame Later" made) was deleted
+afterwards; dev is back to its prior state (2 plays, 1 project).
+
 ## Acceptance Criteria
 
 - [x] Focus never requests a clip id against a project id it does not belong to
@@ -109,4 +143,5 @@ open item below.
 - [x] A 422 (legacy blake3-less video) still falls back to the proxy
 - [x] A string `projectId` never causes a legitimate clip to be rejected
 - [x] New tests fail without the fix, pass with it; existing Focus/annotate specs stay green
-- [ ] Real-browser check of the reported flow: Frame Later -> Frame loads the correct clip
+- [x] Real-browser check of the reported flow: Frame Later -> Frame loads the correct clip
+      (stale condition reproduced live, guard fired, no mismatched request, no false expiry)
