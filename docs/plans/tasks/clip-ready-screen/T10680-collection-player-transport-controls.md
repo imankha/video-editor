@@ -113,8 +113,8 @@ header Play/Pause + Fullscreen + `expanded` CSS-fullscreen (native `requestFulls
 **DEVIATION from step 4 (approved via expert consult, honoring AC #5 + user intent).** The
 approved step 4 said "explicit opt-out ONLY in IntroStoryPlayer (`transport={false}`)". That is
 based on a stale premise: **`PublishedReelsPanel` — the primary My Reels *Published tab* player
-for every published reel — mounts its player through `IntroStoryPlayer`, not a bare
-CollectionPlayer** (so does `DownloadsPanel`). A blanket opt-out would strip Play/Pause +
+for every published reel, and the SOLE `IntroStoryPlayer` mount — mounts its player
+through `IntroStoryPlayer`, not a bare CollectionPlayer**. A blanket opt-out would strip Play/Pause +
 Fullscreen from exactly the player the user pointed at ("make sure the video player for published
 videos has the same controls"), failing AC #5. Resolution (expert-designed): **keep `transport`
 ON in IntroStoryPlayer**; added a `fullscreenTarget` ref prop to `CollectionPlayer` and a
