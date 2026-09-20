@@ -24,10 +24,13 @@ describe('FramingInstructions (T9610)', () => {
     expect(steps).toMatch(/slow-mo to capture key athlete movements/i);
 
     // T9860 3.5: the stage reason is stated above the instructional copy, and reads
-    // as the headline -- bigger (text-sm) than the steps/focus-point copy (text-xs).
+    // as the headline -- font-medium/gray-200 vs the steps' plain gray-300. Both are
+    // text-sm (2026-09-20: steps bumped from text-xs/gray-400 for legibility against
+    // the translucent panel).
     const reason = screen.getByText(/focus the action on your player, crop out everything else/i);
     expect(reason.className).toMatch(/text-sm/);
-    expect(screen.getByTestId('framing-instructions-steps').className).toMatch(/text-xs/);
+    expect(reason.className).toMatch(/font-medium/);
+    expect(screen.getByTestId('framing-instructions-steps').className).toMatch(/text-sm/);
 
     // The preview prompt points at ordinary playback, before export.
     const prompt = screen.getByTestId('framing-preview-prompt').textContent;
@@ -64,7 +67,7 @@ describe('FramingInstructions (T9610)', () => {
       <FramingInstructions focusPointCount={1} expanded onToggle={vi.fn()} />
     );
     // Before framing success: muted.
-    expect(screen.getByTestId('framing-preview-prompt').className).toMatch(/text-gray-400/);
+    expect(screen.getByTestId('framing-preview-prompt').className).toMatch(/text-gray-300/);
 
     rerender(<FramingInstructions focusPointCount={2} expanded onToggle={vi.fn()} />);
     // After two focus points: emphasized.

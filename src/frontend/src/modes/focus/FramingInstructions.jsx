@@ -58,8 +58,10 @@ export default function FramingInstructions({ focusPointCount = 0, expanded, onT
               (2026-09-18 user request) so it reads as the headline, not a footnote. */}
           <p className="mt-2 text-sm font-medium text-gray-200">{STAGE_REASONS.FRAMING}</p>
 
-          {/* 2026-09-18 user request: plain instructional copy, not a numbered list. */}
-          <p data-testid="framing-instructions-steps" className="mt-2 text-xs text-gray-400">
+          {/* 2026-09-18 user request: plain instructional copy, not a numbered list.
+              text-sm/gray-300 (not text-xs/gray-400) for contrast against the
+              translucent panel over the purple background (2026-09-20 legibility fix). */}
+          <p data-testid="framing-instructions-steps" className="mt-2 text-sm text-gray-300">
             Move the box so it captures your athlete and the play. Play the video and
             re-adjust the box as needed so it stays focused on your player. Also use
             slow-mo to capture key athlete movements.
@@ -67,7 +69,7 @@ export default function FramingInstructions({ focusPointCount = 0, expanded, onT
 
           {/* Distinguish the MANUAL focus points from the mode's automatic reframing,
               so the capability is neither over- nor under-claimed. */}
-          <p className="mt-2 text-xs text-gray-400">
+          <p className="mt-2 text-sm text-gray-300">
             Each spot you set is a {noun}. Your reel moves smoothly between the {noun}s
             you place by hand.
           </p>
@@ -77,7 +79,7 @@ export default function FramingInstructions({ focusPointCount = 0, expanded, onT
           <p
             data-testid="framing-preview-prompt"
             className={`mt-2 flex items-center gap-2 text-sm ${
-              hasFramingSuccess ? 'font-medium text-blue-200' : 'text-gray-400'
+              hasFramingSuccess ? 'font-medium text-blue-200' : 'text-gray-300'
             }`}
           >
             <Play size={14} className="shrink-0" aria-hidden="true" />
