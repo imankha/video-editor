@@ -56,7 +56,7 @@ vi.mock('./IntroPreRoll', () => ({
 // CollectionPlayer's own goTo apply it. Assertions below check those routing
 // props landed on the mock instead of the unreachable mockGoTo.
 vi.mock('../collections/CollectionPlayer', () => ({
-  CollectionPlayer: ({ reels, renderScrubber, initialIndex, initialSeekFraction, landingToken, onProgress }) => {
+  CollectionPlayer: ({ reels, renderScrubber, initialIndex, initialSeekFraction, landingToken, onProgress, transport, fullscreenTarget }) => {
     // Expose onProgress on the DOM node itself (jsdom keeps live object refs
     // on properties, unlike data-* attrs which stringify) so BLOCKING #2 tests
     // can invoke exactly what IntroStoryPlayer wired to CollectionPlayer.
@@ -64,6 +64,8 @@ vi.mock('../collections/CollectionPlayer', () => ({
       <div
         data-testid="collection-player"
         data-render-scrubber={String(renderScrubber)}
+        data-transport={String(transport)}
+        data-has-fullscreen-target={String(!!fullscreenTarget)}
         data-initial-index={initialIndex}
         data-initial-seek-fraction={initialSeekFraction}
         data-landing-token={landingToken}
@@ -126,6 +128,17 @@ describe('IntroStoryPlayer region routing + boundary handoff (T6710 — RED)', (
   it('CollectionPlayer is always rendered with renderScrubber={false} (composite supplies its own bar)', () => {
     render(<IntroStoryPlayer intro={null} aspect="9:16" reels={REELS} title="T" onClose={vi.fn()} />);
     expect(screen.getByTestId('collection-player').dataset.renderScrubber).toBe('false');
+  });
+
+  // T10680: this composite IS the primary Published/Downloads player, so it must
+  // KEEP transport controls (NOT opted out) -- the user asked for controls on the
+  // published player. Native fullscreen is redirected to a wrapper enclosing the
+  // out-of-panel composite scrubber via fullscreenTarget so the bar survives.
+  it('keeps transport ON and passes a fullscreenTarget so the composite bar survives fullscreen', () => {
+    render(<IntroStoryPlayer intro={null} aspect="9:16" reels={REELS} title="T" onClose={vi.fn()} />);
+    const player = screen.getByTestId('collection-player');
+    expect(player.dataset.transport).not.toBe('false');
+    expect(player.dataset.hasFullscreenTarget).toBe('true');
   });
 
   it('onIntroEnded (forward auto-continue) -> region becomes "reels" and goTo(0,0) is called', () => {

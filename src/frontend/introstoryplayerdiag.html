@@ -1,0 +1,22 @@
+<!doctype html>
+<!--
+  T10680 DEV-ONLY diagnostic harness: the IntroStoryPlayer-mounted player (the
+  Published/Downloads shape) with intro=null, proving in a real browser that
+  entering fullscreen keeps the composite scrubber visible. NOT a production
+  page: Vite's build entry is index.html only and this file is not added to
+  rollupOptions.input, so it never ships (same as the other *diag.html harnesses).
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IntroStoryPlayer transport diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #111827; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/introstoryplayerdiag/main.jsx"></script>
+  </body>
+</html>

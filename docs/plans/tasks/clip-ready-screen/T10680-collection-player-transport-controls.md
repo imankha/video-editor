@@ -106,6 +106,30 @@ are the "Video controls" panes of https://claude.ai/artifact/9w4SKRvSbdNzMLpwFxN
 
 **2026-09-19**: Filed from the approved design. Not started.
 
+**2026-09-19 (impl)**: Implemented on `feature/T10680-collection-player-transport`. Glyph +
+header Play/Pause + Fullscreen + `expanded` CSS-fullscreen (native `requestFullscreen`, iPhone
+`webkitEnterFullscreen`) + Escape guard + `transport` prop (default true) in `CollectionPlayer.jsx`.
+
+**DEVIATION from step 4 (approved via expert consult, honoring AC #5 + user intent).** The
+approved step 4 said "explicit opt-out ONLY in IntroStoryPlayer (`transport={false}`)". That is
+based on a stale premise: **`PublishedReelsPanel` — the primary My Reels *Published tab* player
+for every published reel, and the SOLE `IntroStoryPlayer` mount — mounts its player
+through `IntroStoryPlayer`, not a bare CollectionPlayer**. A blanket opt-out would strip Play/Pause +
+Fullscreen from exactly the player the user pointed at ("make sure the video player for published
+videos has the same controls"), failing AC #5. Resolution (expert-designed): **keep `transport`
+ON in IntroStoryPlayer**; added a `fullscreenTarget` ref prop to `CollectionPlayer` and a
+layout-neutral wrapper `<div ref={fullscreenRef}>` in `IntroStoryPlayer` enclosing BOTH the panel
+and its z-90 composite scrubber, so native fullscreen keeps the scrubber visible (a panel-only
+`requestFullscreen` would drop the sibling bar). `renderScrubber={false}` unchanged (no double
+bar). RankingGame keeps transport ON (default); its replay overlay is a finished-reel preview.
+No opt-out remains anywhere — every finished-reel player now carries the controls.
+
+**Real-device iOS gap (accepted, precedented):** iPhone `webkitEnterFullscreen` and true OS
+`requestFullscreen` are not exercised in headless CI (Chromium refuses native fullscreen without
+a real display); the CSS-`expanded` path + Escape guard + composite-scrubber survival ARE verified
+in a real browser (Playwright, two dev-only diag harnesses, VP9 WebM for real playback). True OS
+fullscreen + iPhone native player are owed on a real device before STAGING is called good.
+
 ## Acceptance Criteria
 
 - [ ] Paused: the center play glyph is visible at rest; playing: it fades within ~600ms; it never intercepts a tap (center-tap still toggles, left/right thirds still prev/next)

@@ -69,3 +69,35 @@ test.describe('Editor affordances are absent in the public shared viewer @stagin
     });
   }
 });
+
+// T10680: the public viewer mounts a bare CollectionPlayer (transport defaults
+// ON), so it SHOULD expose the universal transport affordances — Play/Pause and
+// Fullscreen — alongside the always-present Share, while still hiding the
+// author-only editor affordances asserted above.
+test.describe('Transport controls are present in the public shared viewer @staging-gate @gate-c', () => {
+  test('public SharedCollectionView player shows Play/Pause + Fullscreen (not editor affordances)', async ({ page }) => {
+    await page.route(`**/api/shared/collection/${SHARE_TOKEN}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          title: 'Game Highlights',
+          aspect_ratio: '9:16',
+          members: [
+            { id: 1, name: 'Goal vs Carlsbad', presigned_url: 'about:blank', duration: 10 },
+          ],
+        }),
+      }),
+    );
+
+    await page.goto(`/shared/collection/${SHARE_TOKEN}`);
+
+    // Player chrome is up.
+    await expect(page.getByRole('button', { name: 'Share' })).toBeVisible();
+
+    // Transport affordances by accessible name. The video can't play (about:blank),
+    // so the toggle rests on "Play"; assert the Fullscreen enter control too.
+    await expect(page.getByRole('button', { name: 'Play' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Fullscreen' })).toBeVisible();
+  });
+});

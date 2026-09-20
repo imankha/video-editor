@@ -1,29 +1,45 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { CollectionPlayer } from './CollectionPlayer';
 
-// Plain button so we can query by title; drop the icon/variant props.
+// Plain button so we can query by title; drop the icon/variant props. Passes
+// aria-label through (T10680: the transport buttons' accessible name), and lets
+// getByRole/getByTitle resolve them.
 vi.mock('../shared/Button', () => ({
   // Mirror the real Button's disabled-or-loading semantics so `loading` (T8530's
   // Publish spinner) also disables the mocked button, matching production.
-  Button: ({ onClick, disabled, loading, title, children }) => (
-    <button onClick={onClick} disabled={disabled || loading} title={title}>{children}</button>
+  Button: ({ onClick, disabled, loading, title, children, 'aria-label': ariaLabel }) => (
+    <button onClick={onClick} disabled={disabled || loading} title={title} aria-label={ariaLabel}>
+      {children}
+    </button>
   ),
 }));
 
-// Drive activeReel deterministically from the first passed reel.
-const { mockGoTo } = vi.hoisted(() => ({ mockGoTo: vi.fn() }));
+// Drive activeReel deterministically from the first passed reel. `playback` is a
+// mutable hoisted state so a test can flip isPlaying (T10680 glyph fade) before
+// rendering; togglePlay is a spy so the transport Play/Pause wiring is testable.
+const { mockGoTo, mockTogglePlay, playback } = vi.hoisted(() => ({
+  mockGoTo: vi.fn(),
+  mockTogglePlay: vi.fn(),
+  playback: { isPlaying: false },
+}));
 vi.mock('./useStoryPlayback', () => ({
   useStoryPlayback: (_ref, reels) => ({
     activeIndex: 0,
     activeReel: reels[0],
+    isPlaying: playback.isPlaying,
     segmentProgress: 0,
     next: vi.fn(),
     prev: vi.fn(),
     goTo: mockGoTo,
-    togglePlay: vi.fn(),
+    togglePlay: mockTogglePlay,
   }),
 }));
+
+beforeEach(() => {
+  playback.isPlaying = false;
+  mockTogglePlay.mockClear();
+});
 
 describe('CollectionPlayer timeline segments (T5100)', () => {
   // reel0 is the active reel (its name shows in the bottom overlay); hover
@@ -403,5 +419,138 @@ describe('CollectionPlayer onProgress callback (T6710 Stage 4.5 BLOCKING #2)', (
     expect(() =>
       render(<CollectionPlayer reels={barReels} title="T" onClose={vi.fn()} />),
     ).not.toThrow();
+  });
+});
+
+// T10680: transport controls (center play/pause glyph + header Play/Pause +
+// Fullscreen), default ON, opt-out via transport={false}. Native fullscreen is
+// verified in a real browser (jsdom has no requestFullscreen); these cover the
+// CSS-expand path, the Escape guard, and the fullscreenchange reset.
+describe('CollectionPlayer transport controls (T10680)', () => {
+  const reels = [{ id: 1, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null }];
+  const GLYPH = 'collection-player-play-glyph';
+
+  const closeIndex = () =>
+    screen.getAllByRole('button').findIndex((b) => (b.getAttribute('aria-label') || '') === 'Close');
+  const buttonIndex = (name) =>
+    screen.getAllByRole('button').findIndex((b) => (b.getAttribute('aria-label') || '') === name);
+
+  it('shows the center play glyph (Play icon) while paused, at full opacity', () => {
+    playback.isPlaying = false;
+    render(<CollectionPlayer reels={reels} title="T" onClose={vi.fn()} />);
+    const glyph = screen.getByTestId(GLYPH);
+    expect(glyph).toBeTruthy();
+    expect(glyph.getAttribute('aria-hidden')).toBe('true');
+    expect(glyph.className).toContain('pointer-events-none');
+    expect(glyph.className).toContain('opacity-100');
+    expect(glyph.className).not.toContain('opacity-0');
+  });
+
+  it('fades the glyph within ~600ms after playback starts', () => {
+    vi.useFakeTimers();
+    try {
+      playback.isPlaying = true;
+      render(<CollectionPlayer reels={reels} title="T" onClose={vi.fn()} />);
+      // Shown for one beat right after the play edge.
+      expect(screen.getByTestId(GLYPH).className).toContain('opacity-100');
+      act(() => { vi.advanceTimersByTime(600); });
+      expect(screen.getByTestId(GLYPH).className).toContain('opacity-0');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('renders Play/Pause and Fullscreen buttons by accessible name, before Close', () => {
+    render(<CollectionPlayer reels={reels} title="T" onClose={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Play' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Fullscreen' })).toBeTruthy();
+    // DOM order: both transport buttons precede Close in the toolbar cluster.
+    expect(buttonIndex('Play')).toBeLessThan(closeIndex());
+    expect(buttonIndex('Fullscreen')).toBeLessThan(closeIndex());
+  });
+
+  it('labels the Play button as Pause while playing and toggles playback on click', () => {
+    playback.isPlaying = true;
+    render(<CollectionPlayer reels={reels} title="T" onClose={vi.fn()} />);
+    const pauseBtn = screen.getByRole('button', { name: 'Pause' });
+    fireEvent.click(pauseBtn);
+    expect(mockTogglePlay).toHaveBeenCalledTimes(1);
+  });
+
+  it('expanding (Fullscreen) hides the actionBar slot; the header stays', () => {
+    render(
+      <CollectionPlayer
+        reels={reels}
+        title="T"
+        onClose={vi.fn()}
+        actionBar={<div data-testid="collection-player-action-bar">bar</div>}
+      />,
+    );
+    expect(screen.getByTestId('collection-player-action-bar')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Fullscreen' }));
+    expect(screen.queryByTestId('collection-player-action-bar')).toBeNull();
+    // Header Close survives fullscreen; the toggle now reads "Exit fullscreen".
+    expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Exit fullscreen' })).toBeTruthy();
+  });
+
+  it('Escape while expanded leaves fullscreen (no onClose); the next Escape closes', () => {
+    const onClose = vi.fn();
+    render(
+      <CollectionPlayer
+        reels={reels}
+        title="T"
+        onClose={onClose}
+        actionBar={<div data-testid="collection-player-action-bar">bar</div>}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Fullscreen' }));
+    expect(screen.queryByTestId('collection-player-action-bar')).toBeNull();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    // Left fullscreen: the footer is back.
+    expect(screen.getByTestId('collection-player-action-bar')).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('a browser-initiated fullscreen exit (fullscreenchange, no element) resets expanded', () => {
+    render(
+      <CollectionPlayer
+        reels={reels}
+        title="T"
+        onClose={vi.fn()}
+        actionBar={<div data-testid="collection-player-action-bar">bar</div>}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Fullscreen' }));
+    expect(screen.queryByTestId('collection-player-action-bar')).toBeNull();
+
+    // document.fullscreenElement is null in jsdom -> the listener collapses expand.
+    act(() => { document.dispatchEvent(new Event('fullscreenchange')); });
+    expect(screen.getByTestId('collection-player-action-bar')).toBeTruthy();
+  });
+
+  it('transport={false} renders none of it and keeps the caller byte-identical', () => {
+    const onClose = vi.fn();
+    render(
+      <CollectionPlayer
+        reels={reels}
+        title="T"
+        onClose={onClose}
+        transport={false}
+        actionBar={<div data-testid="collection-player-action-bar">bar</div>}
+      />,
+    );
+    expect(screen.queryByTestId(GLYPH)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Play' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Fullscreen' })).toBeNull();
+    // actionBar still rendered; no expand state to hide it.
+    expect(screen.getByTestId('collection-player-action-bar')).toBeTruthy();
+    // Escape falls straight through to onClose (guard is a no-op with no transport).
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
