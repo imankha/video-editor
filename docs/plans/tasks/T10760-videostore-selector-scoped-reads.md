@@ -6,6 +6,8 @@
 **Created:** 2026-09-20
 **Updated:** 2026-09-20
 
+**Handoff context:** [HANDOFF-T10760-T10770.md](HANDOFF-T10760-T10770.md) — sequencing, environment facts, and the traps from the originating session.
+
 ## Problem
 
 `src/frontend/src/hooks/useVideo.js:127` destructures the store selector-less:
