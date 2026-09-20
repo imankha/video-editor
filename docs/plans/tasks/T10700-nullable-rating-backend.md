@@ -1,6 +1,6 @@
 # T10700: Nullable rating — backend migration + compat (v054)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 6
 **Created:** 2026-09-19
