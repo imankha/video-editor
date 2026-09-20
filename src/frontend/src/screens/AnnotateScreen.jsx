@@ -149,14 +149,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const getLastPlayheadRef = useRef(null);
   // Ref to clip regions for annotate-to-framing project selection
   const clipRegionsRef = useRef([]);
-  // T3960: source clip id captured from the pending-game breadcrumb (set when
-  // arriving via "Edit in Annotate" from a draft reel). consumePendingGame()
-  // runs once and clears sessionStorage, so we stash the value here and let a
-  // separate effect select the matching clip region once clips have loaded.
-  const pendingSourceClipIdRef = useRef(null);
-  // T3960: bounds the select-on-load retry loop so a clip that can never land
-  // (e.g. video never becomes seekable) can't spin the effect forever.
-  const pendingSourceSelectAttemptsRef = useRef(0);
 
   // Handlers
   // T8180: the game the user was annotating turned out to be deleted (a "ghost
@@ -476,92 +468,22 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     const controller = new AbortController();
     isLoadingRef.current = true;
 
-    // T3960: remember the reel's source clip so we can re-select it in the
-    // Clips sidebar once clipRegions finish loading (see effect below).
-    pendingSourceClipIdRef.current = pending.sourceClipId;
-    pendingSourceSelectAttemptsRef.current = 0;
-
-    handleLoadGame(pending.gameId, pending.seekTime);
+    // T3960/T10750: the reel's source clip is handed to the load seam, which
+    // arms AnnotateContainer's single one-shot selection effect. This screen no
+    // longer runs a retrying selector of its own (it could never observe its
+    // own success — see that effect's comment).
+    handleLoadGame(pending.gameId, pending.seekTime, pending.sourceClipId);
     return () => controller.abort();
   }, [handleLoadGame]);
 
-  // T3960: once clips load AND the video is seekable, select the reel's source
-  // clip in the Clips sidebar. The breadcrumb carries the working clip's
-  // raw_clips id; loaded regions carry that same id in rawClipId (backend sends
-  // raw_clip_id; see useAnnotate import).
-  //
-  // We go through handleSelectAnnotateRegion (NOT the raw selectAnnotateRegion):
-  // it selects AND seeks the playhead into the clip. Two timing hazards:
-  //   1. Seek clamps to 0 if the video element has no duration yet, so the
-  //      playhead lands outside the clip and AnnotateContainer's playhead-driven
-  //      auto-deselect immediately wipes the selection. So we GATE on the video
-  //      being seekable — useVideo's `duration` is set on loadedmetadata and is
-  //      the exact value the seek clamp reads, so `duration > 0` means the seek
-  //      will land at the real clip time instead of clamping to 0.
-  //   2. We only clear pendingSourceClipIdRef once the selection has actually
-  //      STUCK (the clip is selected AND the playhead sits within its range, the
-  //      same range test the auto-deselect effect uses). Until then we keep the
-  //      ref and retry on later renders (video-ready, regions, playhead changes).
-  // A bounded attempt counter prevents an infinite (re)select loop if it can
-  // never land.
-  useEffect(() => {
-    const sourceClipId = pendingSourceClipIdRef.current;
-    if (sourceClipId == null) return; // nothing pending, or already landed
-
-    const region = clipRegions.length === 0
-      ? null
-      : clipRegions.find(r => r.rawClipId === sourceClipId || r.id === sourceClipId);
-
-    // useVideo sets `duration` on loadedmetadata; it is the same value the seek
-    // clamp reads, so >0 means a seek will not clamp to 0.
-    const videoSeekable = duration > 0;
-
-    // Has the selection landed and stuck? Mirror AnnotateContainer's auto-deselect
-    // range math (virtual offset in multi-video mode + frame tolerance).
-    let within = false;
-    if (region) {
-      let clipStart = region.startTime;
-      let clipEnd = region.endTime;
-      if (fullTimeline && region.videoSequence) {
-        const v = toVirtual(region);
-        clipStart = v.start;
-        clipEnd = v.end;
-      }
-      const FRAME_TOLERANCE = 0.15;
-      within = effectiveCurrentTime >= clipStart - FRAME_TOLERANCE
-        && effectiveCurrentTime <= clipEnd + FRAME_TOLERANCE;
-    }
-    const isSelected = region != null && annotateSelectedRegionId === region.id;
-
-    if (clipRegions.length === 0) return; // wait for clips to load
-
-    // No match yet (e.g. rawClipId not populated). Keep the ref so a later
-    // render can still resolve it; no-op if the source clip was deleted.
-    if (!region) return;
-
-    // Selection has stuck → success. Clear the ref so we stop retrying.
-    if (isSelected && within) {
-      pendingSourceClipIdRef.current = null;
-      return;
-    }
-
-    // Don't (re)select until the video can actually seek without clamping to 0.
-    if (!videoSeekable) return;
-
-    // Already selected, but the seek hasn't landed the playhead in range yet —
-    // wait for the 'seeked' event rather than re-issuing (which would thrash).
-    if (isSelected) return;
-
-    // Bound the retry loop.
-    if (pendingSourceSelectAttemptsRef.current >= 40) {
-      pendingSourceClipIdRef.current = null;
-      return;
-    }
-
-    // Video is seekable but selection hasn't stuck yet → (re)issue select + seek.
-    pendingSourceSelectAttemptsRef.current += 1;
-    handleSelectAnnotateRegion(region.id);
-  }, [clipRegions, duration, annotateSelectedRegionId, effectiveCurrentTime, fullTimeline, toVirtual, handleSelectAnnotateRegion]);
+  // T3960 retry effect REMOVED by T10750. It re-issued select+seek until the
+  // selection "stuck", but it could never observe its own success: selectClip
+  // runs in a passive effect (DefaultLane) while the accompanying seek writes
+  // zustand through a selector-less subscription (SyncLane), so React deferred
+  // the selection, the effect read NONE, and it re-fired until its 40-attempt
+  // cap -- a ~32x select+seek storm on every Annotate entry. The breadcrumb is
+  // now handed to handleLoadGame above and consumed ONCE by AnnotateContainer's
+  // pendingSelectTargetRef effect. Do not reintroduce a retry here.
 
   // Handle pending game file from ProjectsScreen (when "Add Game" was clicked)
   // Supports both single-video (file) and multi-video (files array in details)
