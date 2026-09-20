@@ -33,6 +33,7 @@ import { useFocusCompletionStore } from '../stores/focusCompletionStore';
 import { useProject } from '../contexts/ProjectContext';
 import { shouldPersistFocusForOverlayTransition, shouldSkipFocusCompletionPreview } from './focusOverlayTransition';
 import { offerFocusCompletionPreview } from './focusCompletionOffer';
+import { isClipFromAnotherProject, shouldRetryClipVideoViaProxy } from './clipVideoResolution';
 import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
 
 // T8390: safety-net expiry for a staked publish intent (see handlePublish).
@@ -473,6 +474,16 @@ export function FocusScreen({
    * Game clips use the game video URL with a clip offset; uploaded/extracted clips use file_url directly.
    */
   const getClipVideoConfig = useCallback(async (clip) => {
+    // T10740: refuse a clip left over from a DIFFERENT project (see
+    // clipVideoResolution.js). Checked BEFORE the cache so the stale pair never
+    // occupies a cache slot the fresh list would then hit.
+    if (isClipFromAnotherProject(clip, projectId)) {
+      console.warn(
+        `[Framing] Ignoring stale clip ${clip.id} from project ${clip.project_id} `
+        + `while this screen is project ${projectId} - waiting for the fresh clips list`
+      );
+      return { url: null, gameUrl: null, clipRange: null };
+    }
     if (clip.game_video_url && clip.start_time != null && clip.end_time != null) {
       const cached = clipVideoConfigCacheRef.current.get(clip.id);
       if (cached && performance.now() - cached.ts < CLIP_CONFIG_CACHE_TTL_MS) {
@@ -493,6 +504,15 @@ export function FocusScreen({
               canExtend = !!(body?.detail?.code === 'source_expired' && body?.detail?.can_extend);
             } catch { /* body optional */ }
             return { url: null, gameUrl: null, clipRange: null, sourceExpired: true, canExtend };
+          }
+          // T10740: a 4xx is OUR endpoint rejecting the pair we sent; the proxy
+          // resolves the SAME pair and fails identically (see clipVideoResolution.js).
+          if (!res.ok && !shouldRetryClipVideoViaProxy(res.status)) {
+            console.error(
+              `[Framing] playback-url ${res.status} for project=${projectId} clip=${clip.id} `
+              + '- not falling back to the proxy (it resolves the same pair)'
+            );
+            return { url: null, gameUrl: null, clipRange: null };
           }
           if (!res.ok) throw new Error(`${res.status}`);
           const data = await res.json();
@@ -686,6 +706,12 @@ export function FocusScreen({
       console.warn('[FocusScreen] Selected clip not found:', selectedClipId);
       return;
     }
+    // T10740: this effect restores crop/segment state into the hooks BEFORE it
+    // resolves a video URL, so the guard inside getClipVideoConfig is too late
+    // here — a leftover clip from the previous project would push ITS keyframes
+    // into this project's editor. Bail before touching any hook state; the fresh
+    // clips list re-fires this effect moments later with the right clip.
+    if (isClipFromAnotherProject(newClip, projectId)) return;
 
     // Set restoring flag synchronously BEFORE async work.
     // This prevents the sync effects (declared after this effect) from writing
