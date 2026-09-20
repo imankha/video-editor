@@ -218,7 +218,11 @@ export function AnnotateModeView({
       // T10610 § C.4: the create branch's ordering is already guaranteed by
       // the region's own write queue (this call IS that queued write) — no
       // separate await needed here.
-      const result = await onFullscreenUpdateClip(selectedRegion.id, { createProject: true });
+      // `silent` suppresses the "is now in Clips" toast — Frame Now
+      // navigates straight into Framing below, so the toast would just be
+      // announcing a screen the user is already leaving. Frame Later keeps it
+      // (see handleFrameLater) since it has no navigation to confirm the move.
+      const result = await onFullscreenUpdateClip(selectedRegion.id, { createProject: true, silent: true });
       if (result?.saveOk && result.projectId) onOpenClipInFocus?.(result.projectId);
     } finally {
       frameCreateInFlightRef.current = false;

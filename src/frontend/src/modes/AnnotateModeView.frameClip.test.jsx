@@ -189,7 +189,7 @@ describe('AnnotateModeView — play-selected CTA row (T10310/T10450)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^frame now$/i }));
 
-    expect(onFullscreenUpdateClip).toHaveBeenCalledWith('r1', { createProject: true });
+    expect(onFullscreenUpdateClip).toHaveBeenCalledWith('r1', { createProject: true, silent: true });
     await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(99));
   });
 

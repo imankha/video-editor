@@ -1529,7 +1529,11 @@ export function AnnotateContainer({
         if (result.project_created) {
           createdProjectId = result.project_id;
           setAutoProjectId(region.id, result.project_id);
-          notifyReelCreated(result.project_id, reelToastClipName(region));
+          // Frame Now navigates straight into Framing as this call's
+          // own outcome — a toast announcing the same thing the navigation
+          // just showed is redundant. Frame Later (no navigation) still wants
+          // it, so only Frame Now sets `silent`.
+          if (!actualUpdates.silent) notifyReelCreated(result.project_id, reelToastClipName(region));
         }
         // T9630: real persistence outcome for the caller's tri-state save UI.
         return { saveOk: true, projectId: createdProjectId };
@@ -1567,7 +1571,9 @@ export function AnnotateContainer({
         if (result?.project_created) {
           createdProjectId = result.project_id;
           setAutoProjectId(region.id, result.project_id);
-          notifyReelCreated(result.project_id, reelToastClipName(region));
+          // See the matching guard above — Frame Now's navigation
+          // already confirms the clip landed, so it opts out of the toast.
+          if (!actualUpdates.silent) notifyReelCreated(result.project_id, reelToastClipName(region));
         }
         // T9630: updateClipRemote (useRawClipSave.updateClip) returns null on
         // any failure (thrown error / sync_failed 503, already toasted there).
