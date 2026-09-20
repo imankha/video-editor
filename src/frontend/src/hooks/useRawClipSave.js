@@ -157,9 +157,6 @@ export function useRawClipSave(activeGameIdRef = null) {
         ...(clipData.tagged_teammates != null && { tagged_teammates: clipData.tagged_teammates }),
         ...(clipData.my_athlete != null && { my_athlete: clipData.my_athlete }),
       };
-      if (clipData.create_project) {
-        console.log('[CreateReel] saveClip sending POST /clips/raw/save', { create_project: payload.create_project, game_id: payload.game_id });
-      }
       const response = await apiFetch(`${API_BASE_URL}/clips/raw/save`, {
         method: 'POST',
         headers: withClientGameHeader({ 'Content-Type': 'application/json' }, activeGameIdRef),
@@ -168,9 +165,6 @@ export function useRawClipSave(activeGameIdRef = null) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        if (clipData.create_project) {
-          console.error('[CreateReel] saveClip got HTTP error:', response.status, errorData);
-        }
         // T5350: durable clip save committed locally but never reached R2 (T4320).
         // Surface a clip-appropriate not-saved state + Retry — never a silent success.
         if (response.status === 503 && syncFailedCode(errorData) === 'sync_failed') {
@@ -190,11 +184,6 @@ export function useRawClipSave(activeGameIdRef = null) {
       }
 
       const result = await response.json();
-      console.log('[useRawClipSave] Saved clip:', result.raw_clip_id);
-
-      if (result.project_created) {
-        console.log('[useRawClipSave] Auto-created project:', result.project_id);
-      }
 
       refreshQuestProgress();
       return result;
@@ -231,9 +220,6 @@ export function useRawClipSave(activeGameIdRef = null) {
     setError(null);
 
     try {
-      if (updates.create_project) {
-        console.log('[CreateReel] updateClip sending PUT /clips/raw/' + clipId, { updates });
-      }
       const response = await apiFetch(`${API_BASE_URL}/clips/raw/${clipId}`, {
         method: 'PUT',
         headers: withClientGameHeader({ 'Content-Type': 'application/json' }, activeGameIdRef),
@@ -242,9 +228,6 @@ export function useRawClipSave(activeGameIdRef = null) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        if (updates.create_project) {
-          console.error('[CreateReel] updateClip got HTTP error:', response.status, errorData);
-        }
         // T5350: durable clip update committed locally but never reached R2 (T4320).
         if (response.status === 503 && syncFailedCode(errorData) === 'sync_failed') {
           setError(CLIP_SYNC_FAILED_COPY.update.message);
@@ -255,14 +238,6 @@ export function useRawClipSave(activeGameIdRef = null) {
       }
 
       const result = await response.json();
-      console.log('[useRawClipSave] Updated clip:', clipId);
-      if (updates.create_project) {
-        console.log('[CreateReel] updateClip response:', { project_created: result.project_created, project_id: result.project_id });
-      }
-
-      if (result.project_created) {
-        console.log('[useRawClipSave] Auto-created project:', result.project_id);
-      }
 
       refreshQuestProgress();
       return result;

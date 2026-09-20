@@ -301,6 +301,38 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
+  // T10450 regression: a createProject-only payload (Frame Now/Later's exact
+  // shape) has no other field to diff, so filtering `createProject` out of the
+  // clean-check's key list (rather than treating its presence as never-clean)
+  // left an empty key list — trivially "clean" — and silently dropped the
+  // create with zero network calls, zero toast, zero navigation.
+  it('Frame Now/Later (createProject-only, no other field changed) still reaches the network and creates the project', async () => {
+    apiFetch.mockImplementation((url, opts) => {
+      if (url.includes('/clips/raw/save')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: false }) });
+      }
+      if (opts?.method === 'PUT') {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true, project_created: true, project_id: 99 }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true }) });
+    });
+
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    act(() => { result.current.handleAddClipFromButton(); });
+    await act(async () => { await flushMicrotasks(); });
+    const region = result.current.clipRegions[0];
+
+    apiFetch.mockClear();
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.updateClipRegion(region.id, { createProject: true });
+    });
+
+    expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('/clips/raw/1'), expect.objectContaining({ method: 'PUT' }));
+    expect(outcome).toEqual({ saveOk: true, projectId: 99 });
+  });
+
   it('§E row 15: a Mark play tap fires announcePlaySaved exactly once and announceReelCreated zero times', async () => {
     apiFetch.mockImplementation((url) => {
       if (url.includes('/clips/raw/save')) {
