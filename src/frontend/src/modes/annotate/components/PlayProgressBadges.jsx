@@ -50,10 +50,10 @@ import { RATING_ADJECTIVES, RATING_NOTATION } from '../../../components/shared/c
 // rows, and they read as too small/hard to tap at the old size.
 const DISC_BASE =
   'relative grid place-items-center rounded-full border-[1.5px] transition-colors shrink-0';
-const DISC_SIZE = { sm: 'w-7 h-7', md: 'w-9 h-9' };
-const ICON_SIZE = { sm: 14, md: 18 };
-const CHECK_SIZE = { sm: 'w-4 h-4', md: 'w-[18px] h-[18px]' };
-const CHECK_ICON_SIZE = { sm: 9, md: 10 };
+const DISC_SIZE = { sm: 'w-8 h-8', md: 'w-11 h-11' };
+const ICON_SIZE = { sm: 15, md: 20 };
+const CHECK_SIZE = { sm: 'w-[18px] h-[18px]', md: 'w-5 h-5' };
+const CHECK_ICON_SIZE = { sm: 10, md: 11 };
 
 const DISC_STATE = {
   [BADGE_STATE.UNDONE]: 'border-dashed border-amber-500 bg-amber-500/10 text-amber-400 hover:border-amber-300 hover:text-amber-300',
@@ -346,7 +346,7 @@ export function PlayProgressBadges({
     : ANNOTATE.CLIP_BADGE_DORMANT_HINT;
 
   return (
-    <div data-testid="play-progress-badges" className={`flex items-center gap-2 ${className}`}>
+    <div data-testid="play-progress-badges" className={`flex items-center gap-3 ${className}`}>
       <Badge
         testId="badge-named"
         state={progress.named ? BADGE_STATE.DONE : BADGE_STATE.UNDONE}

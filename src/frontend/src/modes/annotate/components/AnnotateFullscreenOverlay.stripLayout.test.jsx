@@ -8,11 +8,16 @@ import { useProjectsStore } from '../../../stores/projectsStore';
 //  - item 5: My Athlete | Team layer control on header row 1
 //  - item 6: details panel has no inner scroll
 //
-// T10610: there is no create mode left (design doc § E row 9) — the strip
-// ALWAYS renders the "Edit play" header, so the old "create mode shows a
-// default name" / "centers the Marking a play title" tests (item 3/4, and the
-// retired "one create outcome" Save-button block) are removed entirely. The
-// name+pencil inline-edit affordance is genuine edit-mode behavior and stays.
+// T10610: there is no create mode left (design doc § E row 9), so the old
+// "create mode shows a default name" / "centers the Marking a play title"
+// tests (item 3/4, and the retired "one create outcome" Save-button block)
+// are removed entirely. The name+pencil inline-edit affordance is genuine
+// edit-mode behavior and stays.
+//
+// The strip's redundant centered "Edit play" header row (T9330) was removed
+// per user feedback — the play name row above it already identifies what's
+// being edited, so this file's row-2 header no longer renders on the strip
+// layout.
 
 beforeEach(() => {
   window.matchMedia = (query) => ({
@@ -48,11 +53,12 @@ const editClip = {
   name: 'My cool play', notes: '', tagged_teammates: [],
 };
 
-describe('AnnotateFullscreenOverlay strip — name-first header, always "Edit play" (T8960 items 2+3, T10610)', () => {
-  it('the strip ALWAYS renders the "Edit play" header — there is no create mode', () => {
+describe('AnnotateFullscreenOverlay strip — name-first header, no redundant title (T8960 items 2+3, T10610)', () => {
+  it('does not render a separate "Edit play"/"Marking a play" title row — the name row is the only header', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={editClip} />);
-    expect(screen.getByText('Edit play')).toBeTruthy();
+    expect(screen.queryByText('Edit play')).toBeNull();
     expect(screen.queryByText('Marking a play')).toBeNull();
+    expect(screen.getByText('My cool play')).toBeTruthy();
   });
 
   it('shows the clip name behind a pencil affordance (no inline input yet)', () => {

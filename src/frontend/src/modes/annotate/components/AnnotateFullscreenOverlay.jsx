@@ -698,13 +698,6 @@ export function AnnotateFullscreenOverlay({
             </div>
           </div>
 
-          {/* Header row 2 — symmetric "Edit play" title (T9330: the editor now
-              stays open after a create and always lands here). */}
-          <div className="px-4 pt-2 flex items-center justify-center gap-1.5">
-            <Pencil size={14} className="text-yellow-400 shrink-0" />
-            <span className="text-sm font-semibold text-white">{ANNOTATE.EDIT_PLAY}</span>
-          </div>
-
           {/* T8892: which camera this play is cut from (angle-active only). */}
           {activeSourceName && (
             <div className="px-4 pt-2">
@@ -732,9 +725,9 @@ export function AnnotateFullscreenOverlay({
           </div>
 
           {/* Controls row — T10610: rating + sport live in the details
-              disclosure below; Delete play + Done replace Save + Cancel
-              (T10410 moved the "Clip created" status up to the header line as
-              the clip badge). */}
+              disclosure below. Delete play + Done now render AFTER that
+              disclosure (see below) so they always follow the expanded
+              content instead of sitting above it. */}
           <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
             <button
               type="button"
@@ -757,20 +750,6 @@ export function AnnotateFullscreenOverlay({
                 />
               </div>
             )}
-
-            <div className="ml-auto flex items-center gap-2 shrink-0">
-              {/* T10410: the "Clip created" text that sat here is now the clip
-                  badge on the header line (renderProgressBadges). */}
-              <div className="w-32">
-                <DeletePlayButton hasProject={!!existingClip.autoProjectId} onDelete={() => onDeleteClip(existingClip.id)} />
-              </div>
-              <button
-                onClick={closeWithCommit}
-                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
-              >
-                {ANNOTATE.DONE}
-              </button>
-            </div>
           </div>
 
           {/* T9630: Unsaved/Saving/Saved — own row so it never widens the
@@ -801,6 +780,24 @@ export function AnnotateFullscreenOverlay({
               />
             </div>
           )}
+
+          {/* Delete play + Done — placed after the details disclosure (open or
+              closed) so toggling "Details" reveals content ABOVE these
+              buttons rather than pushing them down past already-visible
+              controls. */}
+          <div className={`px-4 pb-3 flex items-center justify-end gap-2 ${detailsOpen ? 'pt-2 border-t border-yellow-800/30' : ''}`}>
+            <div className="w-32">
+              {/* T10410: the "Clip created" text that sat here is now the clip
+                  badge on the header line (renderProgressBadges). */}
+              <DeletePlayButton hasProject={!!existingClip.autoProjectId} onDelete={() => onDeleteClip(existingClip.id)} />
+            </div>
+            <button
+              onClick={closeWithCommit}
+              className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
+            >
+              {ANNOTATE.DONE}
+            </button>
+          </div>
         </div>
 
         {/* T9330: the full-width stage-aware primary CTA (extracted so the
