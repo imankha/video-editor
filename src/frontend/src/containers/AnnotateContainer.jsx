@@ -1433,21 +1433,8 @@ export function AnnotateContainer({
     // re-render. Shared seam with handleFullscreenCreateClip.
     let createdProjectId = null;
 
-    if (actualUpdates.createProject != null) {
-      console.log('[CreateReel] sendRegionUpdate entered', {
-        regionId,
-        rawClipId: region.rawClipId,
-        autoProjectId: region.autoProjectId,
-        annotateGameId,
-        createProject: actualUpdates.createProject,
-      });
-    }
-
     // Skip backend sync if no game ID
     if (!annotateGameId) {
-      if (actualUpdates.createProject != null) {
-        console.warn('[CreateReel] ABORT: no annotateGameId, cannot sync to backend');
-      }
       // T9630: nothing to persist yet (no game record) — the local update
       // already applied synchronously in updateClipRegionWithSync, so this is
       // not a failure for the caller's save-status UI.
@@ -1462,10 +1449,6 @@ export function AnnotateContainer({
 
     // If clip doesn't have rawClipId, save it to backend first
     if (!rawClipId) {
-      if (actualUpdates.createProject != null) {
-        console.log('[CreateReel] Taking SAVE path (no rawClipId)');
-      }
-
       // Merge current values with updates for the save
       const clipData = {
         start_time: actualUpdates.startTime ?? region.startTime,
@@ -1484,9 +1467,6 @@ export function AnnotateContainer({
       }
 
       const result = await saveClip(annotateGameId, clipData);
-      if (actualUpdates.createProject != null) {
-        console.log('[CreateReel] SAVE path result:', result);
-      }
       if (result?.raw_clip_id) {
         // T10610 § C.3: synchronous, BEFORE setRawClipId (React state).
         rawClipIdByRegionRef.current.set(region.id, result.raw_clip_id);
@@ -1525,17 +1505,11 @@ export function AnnotateContainer({
       }
 
       if (Object.keys(backendUpdates).length > 0) {
-        if (actualUpdates.createProject != null) {
-          console.log('[CreateReel] Taking UPDATE path', { clipId: rawClipId, backendUpdates });
-        }
         // T10610 § C.4: retry re-enqueues through THIS region's queue, so a
         // real fix clears the failed key instead of a direct retry that the
         // queue's bookkeeping never sees.
         const retry = () => writeQueueRef.current.enqueue(regionId, Object.keys(actualUpdates), () => sendRegionUpdate(regionId, actualUpdates));
         const result = await updateClipRemote(rawClipId, backendUpdates, retry);
-        if (actualUpdates.createProject != null) {
-          console.log('[CreateReel] UPDATE path result:', result);
-        }
         if (result?.project_created) {
           createdProjectId = result.project_id;
           setAutoProjectId(region.id, result.project_id);
@@ -1544,11 +1518,10 @@ export function AnnotateContainer({
         // T9630: updateClipRemote (useRawClipSave.updateClip) returns null on
         // any failure (thrown error / sync_failed 503, already toasted there).
         return { saveOk: !!result, projectId: createdProjectId };
-      } else if (actualUpdates.createProject != null) {
-        console.warn('[CreateReel] ABORT: backendUpdates was empty, nothing sent to backend');
-        return { saveOk: false, projectId: null };
       }
       // Nothing needed persisting (e.g. a redundant update) — not a failure.
+      // (createProject always lands a key in backendUpdates above, so this
+      // branch is never the create-project path.)
       return { saveOk: true, projectId: null };
     }
   }, [annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, activeSourceSequence, notifyReelCreated]);
