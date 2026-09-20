@@ -25,7 +25,7 @@ Console, ~32 iterations of exactly this pair, all identical:
 ```
 
 Counts across one session: `[SelectClip] Found region` = 65, `[DetectionSeek] SEEK requested` = 67,
-`[AutoDeselect] Deselecting` = **1**, `Maximum update depth` = 2. Full capture: `./t10750-console.log`.
+`[AutoDeselect] Deselecting` = **1**, `Maximum update depth` = 2. Capture reproducible via the steps in Acceptance Criteria (dev stack, cycle Focus<->Annotate).
 
 Three facts that constrain the cause:
 
