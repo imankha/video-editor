@@ -1,6 +1,6 @@
 # T10700: Nullable rating — backend migration + compat (v054)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 6
 **Created:** 2026-09-19
@@ -164,6 +164,20 @@ a rated clip, so this is safe and doesn't change filtering for any existing (rat
 ### Progress Log
 
 **2026-09-19**: Filed from the approved T10690 design. Not started.
+
+**2026-09-20**: Worker went start-to-PUSHREADY in one pass (~23 min): migration + models +
+`normalize_rating` removal + filter fix + COALESCE retry fix, plus one extra coercion site
+(`export_helpers.py`) found by its own grep sweep. Reviewer APPROVED after one follow-up (added
+`modal_tasks` to the migration test's cascade-survival fixture). Live QA verified against a real
+running server. First Branch CI push came back red on two structural guards this migration's
+version bump tripped (`test_t6030`'s `HEAD_VERSION_AUDITED` forcing-function, and `test_t8190`'s
+seam-reentrancy regex false-positiving on the migration's own docstring prose) - both fixed
+(doc-only changes, no logic change) and confirmed green against the full 174-test relevant set.
+Second CI push hit one unrelated pre-existing flake already documented in
+`known-failures.md` (`test_t6200_concurrency`'s burst test, CI-load-sensitive) - confirmed via a
+same-SHA rerun passing clean. Red->green proof produced directly against the pre-implementation
+commit (no v054 file, `rating INTEGER NOT NULL`, `RawClipCreate.rating: int = 3`). Merged PR #477
+(`e1fc7e73`). Status -> STAGING. T10710 may now start.
 
 ## Acceptance Criteria
 
