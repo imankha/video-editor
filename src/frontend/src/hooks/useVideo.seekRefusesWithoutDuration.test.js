@@ -18,11 +18,13 @@ import { useVideoStore } from '../stores';
  * It must now REFUSE (warn + no-op) instead of clamping.
  */
 
-function makeFakeVideo({ duration = NaN } = {}) {
+// currentTime starts at a NON-ZERO value on purpose: the bug wrote 0 here, so
+// asserting "still 42" is a real assertion where "still 0" would be vacuous.
+function makeFakeVideo({ duration = NaN, currentTime = 42 } = {}) {
   return {
     src: 'blob:fake',
     duration,
-    currentTime: 0,
+    currentTime,
     paused: true,
     readyState: 0,
     pause: vi.fn(),
@@ -65,7 +67,7 @@ describe('useVideo.seek — refuses instead of clamping to 0 (T10750)', () => {
     act(() => { result.current.seek(181.29); });
 
     // The whole bug: this used to become 0.
-    expect(video.currentTime).toBe(0); // untouched (its initial value)
+    expect(video.currentTime).toBe(42); // untouched, NOT clamped to 0
     expect(useVideoStore.getState().currentTime).toBe(0); // no bogus 0 written as a real position
     expect(useVideoStore.getState().isSeeking).toBe(false); // no seek was started
     expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/Refusing seek to 181\.290s/));
@@ -81,6 +83,21 @@ describe('useVideo.seek — refuses instead of clamping to 0 (T10750)', () => {
 
     expect(video.currentTime).toBeCloseTo(181.29, 3);
     expect(useVideoStore.getState().isSeeking).toBe(true);
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringMatching(/Refusing seek/));
+  });
+
+  it('does NOT refuse when the caller supplies its own clampToVisibleRange (Focus scoping)', () => {
+    // Focus calls useVideo(getSegmentAtTime, clampToVisibleRange) and its clamp
+    // fn owns the range entirely — `effectiveDuration` never participates there,
+    // so the refusal must not apply. Pins the axis the guard is scoped on.
+    setStore({ duration: 0, clipDuration: null });
+    const video = makeFakeVideo({ duration: NaN });
+    const { result } = renderHook(() => useVideo(null, (t) => t));
+    act(() => { result.current.videoRef.current = video; });
+
+    act(() => { result.current.seek(12.5); });
+
+    expect(video.currentTime).toBeCloseTo(12.5, 3);
     expect(warnSpy).not.toHaveBeenCalledWith(expect.stringMatching(/Refusing seek/));
   });
 

@@ -1046,6 +1046,15 @@ export function AnnotateContainer({
         setServerTeammateTags(teammateTagsData);
       }
 
+      // T10750: arm (or DISARM) the ONE selection seam with whichever
+      // breadcrumb(s) this navigation carried. Assigned unconditionally, and
+      // OUTSIDE the annotations branch below, so a target that never got
+      // consumed cannot survive into a later handleLoadGame for a different
+      // game and fire against its regions.
+      pendingSelectTargetRef.current = (pendingClipSeekTime != null || pendingSourceClipId != null)
+        ? { seekTime: pendingClipSeekTime, sourceClipId: pendingSourceClipId }
+        : null;
+
       // Import saved annotations if they exist
       if (gameData.annotations && gameData.annotations.length > 0) {
         const gameDuration = isMultiVideo
@@ -1077,16 +1086,6 @@ export function AnnotateContainer({
         }
 
         importAnnotations(gameData.annotations, gameDuration);
-
-        // T10750: arm the ONE selection seam with whichever breadcrumb(s) the
-        // navigation carried. `importAnnotations` just ran, so the regions this
-        // targets already exist with their `rawClipId` populated.
-        if (pendingClipSeekTime != null || pendingSourceClipId != null) {
-          pendingSelectTargetRef.current = {
-            seekTime: pendingClipSeekTime,
-            sourceClipId: pendingSourceClipId,
-          };
-        }
       }
 
       // T8030: a new clip always defaults to My Athlete, regardless of what
@@ -1234,17 +1233,29 @@ export function AnnotateContainer({
   useEffect(() => {
     const target = pendingSelectTargetRef.current;
     if (target == null || clipRegions.length === 0) return;
-    // Gate on a seekable video: `seek` needs a real duration or the playhead
-    // lands short of the clip and the playhead-driven auto-deselect below
-    // immediately wipes the selection. This is a PRECONDITION (the effect still
-    // fires exactly once, when it can land), not a retry on an outcome.
-    if (!(videoDuration > 0)) return;
+    // Gate on a seekable video: the single-video `seek` needs a real duration
+    // or the playhead lands short of the clip and the playhead-driven
+    // auto-deselect below immediately wipes the selection. PRECONDITION (the
+    // effect still fires exactly once, when it can land), never a retry on an
+    // outcome.
+    //
+    // MULTI-VIDEO IS EXEMPT ON PURPOSE. With `multiVideo`, AnnotateScreen
+    // renders the proxy's A/B elements and passes `handlers={{}}`, so
+    // `useVideo.handleLoadedMetadata` — the only writer of the store `duration`
+    // this reads — never fires and it stays 0 for the whole session. Meanwhile
+    // `effectiveSeek` is the proxy's seek, which resolves against the virtual
+    // timeline and never consults that duration, so it has no clamp-to-0
+    // failure mode. Gating on it there would silently discard every breadcrumb
+    // on a game with added footage.
+    if (!multiVideo && !(videoDuration > 0)) return;
 
     const { seekTime, sourceClipId } = target;
     // Prefer identity over position: the breadcrumb's raw_clips id is exact,
     // whereas the seek-time match is a 0.5s proximity guess.
+    // (Matching on `r.id` too would be dead code: region ids are generated
+    // strings, `clip_${Date.now()}_${rand}`, never a numeric raw_clips id.)
     const match = (sourceClipId != null
-      && clipRegions.find(r => r.rawClipId === sourceClipId || r.id === sourceClipId))
+      && clipRegions.find(r => r.rawClipId === sourceClipId))
       || (seekTime != null
         && clipRegions.find(r => Math.abs(r.startTime - seekTime) < 0.5))
       || null;
@@ -1267,7 +1278,7 @@ export function AnnotateContainer({
       );
     }
     pendingSelectTargetRef.current = null;
-  }, [clipRegions, videoDuration, selectClip, effectiveSeek, fullTimeline, isOverlapTimeline]);
+  }, [clipRegions, videoDuration, multiVideo, selectClip, effectiveSeek, fullTimeline, isOverlapTimeline]);
 
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, annotateFullscreen);
