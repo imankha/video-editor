@@ -1,6 +1,6 @@
 # T10710: Nullable rating — frontend unset badge + stop seeding a default
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 5
 **Created:** 2026-09-19
