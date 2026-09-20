@@ -220,9 +220,11 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     // Delegates to the injected headless-render trigger with the project id.
     expect(deps.onPublishWithoutSpotlight).toHaveBeenCalledTimes(1);
     expect(deps.onPublishWithoutSpotlight).toHaveBeenCalledWith(42);
-    // AC2: the preview stays open and the Publish card shows its loading state.
+    // AC2: the preview stays open and the Publish tile shows its loading state.
+    // T10670: the tile IS the button (a role="button" div), so loading is signalled
+    // via aria-disabled rather than the native <button> .disabled property.
     expect(screen.getByTestId('export-complete-preview')).toBeTruthy();
-    expect(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }).getAttribute('aria-disabled')).toBe('true');
   });
 
   it('T10660: double-tap Publish stakes and delegates only ONCE (re-entrancy guard)', () => {

@@ -152,9 +152,11 @@ export const MODE_NAMES = {
 
 // T9860 (Shared Vocabulary epic, copy and concept sweep, design doc section 2.3
 // Section 5): one reason sentence per stage, none using the feature's own name
-// as the reason. Spotlight replaces FOCUS_PUBLISH.SPOTLIGHT_CAPTION. Declared
-// here (near MODE_NAMES) rather than at the file's end because FOCUS_PUBLISH and
-// OVERLAY_PUBLISH below both read PUBLISH as part of their publish captions.
+// as the reason. T9860 aliased FOCUS_PUBLISH.SPOTLIGHT_CAPTION to SPOTLIGHT;
+// T10670 broke that alias (the Focus completion tile now has its own short caption)
+// so SPOTLIGHT stands alone as the Spotlight-mode reason line. Declared here (near
+// MODE_NAMES) rather than at the file's end because FOCUS_PUBLISH and OVERLAY_PUBLISH
+// below both read PUBLISH as part of their publish captions.
 // T10310 (2026-09-18 user request): MARK_PLAY ("You are bookmarking, not
 // editing...") was dropped -- the Annotate primary CTA area no longer shows a
 // stage-reason line, only the capture-window mechanic sentence.
@@ -387,16 +389,17 @@ export const EXPORT_PROGRESS = {
   ETA_VARIES: 'Time remaining varies.',
 };
 
-// T8390 / re-hierarchized T9590: Focus's post-export publish-exit action bar
-// (FocusPublishActionBar). T9590 (2026-09-10) DELIBERATELY REVERSES T8390's flat
-// four-equal-weight layout (and the 2026-09-08 "Publish Now"/"Add Spotlight Now"
-// pairing that supported it) into a three-level hierarchy + a quiet Save-draft --
-// product owner decision, recorded with the conflict at filing:
+// T8390 / re-hierarchized T9590 / T10670 celebration tiles: Focus's post-export
+// completion action bar (FocusPublishActionBar). T9590 (2026-09-10) established the
+// three-level hierarchy + a quiet exit; T10670 (2026-09-19, approved V2 design)
+// turned each choice into an icon-forward TILE that IS the button, added a HEADLINE
+// row with a one-word "Saved" chip (RESULT_RETENTION below) in place of the green
+// retention sentence, and renamed the exit link to "Done for now" (no caption --
+// SAVE_DRAFT_CAPTION was deleted; only the two bars + their tests read it):
 //   PRIMARY   Add spotlight             (dominant; opens the Spotlight editor, no export)
 //   SECONDARY Publish without spotlight (publishes the framed reel as-is)
 //   TERTIARY  Edit framing              (back into Framing; the paid re-export path)
-//   QUIET     Save draft                (defer; replaces the old "Add Spotlight Later",
-//                                        whose spotlight-framed destination is gone)
+//   QUIET     Done for now              (leave the flow; the landing toast names Clips/Reels)
 // Captions state each destination + the honest cost/audience BEFORE the click
 // (T9590 acceptance). PUBLISH_CAPTION's audience wording is verified against the
 // real endpoints (downloads.py publish -> moves the reel to the owner's own
@@ -407,18 +410,19 @@ export const EXPORT_PROGRESS = {
 // destination and that precondition instead of the "anyone with the link" claim,
 // which was false as a consequence of publishing alone (T9860 D5).
 // EDIT_FRAMING_CAPTION keeps the honest "uses credits" re-export warning.
+// T10670: SPOTLIGHT_CAPTION stops aliasing STAGE_REASONS.SPOTLIGHT (the 22-kids
+// sentence stays the Spotlight-mode reason line; it is too long for a tile caption)
+// and HEADLINE is a new completion title; EXPORT_JOBS.framing.completed
+// ("Framing ready") stays the toast/job-row string. No em dashes anywhere.
 export const FOCUS_PUBLISH = {
+  HEADLINE: 'Your clip is ready',
   ADD_SPOTLIGHT_LABEL: 'Add spotlight',
-  SPOTLIGHT_CAPTION: STAGE_REASONS.SPOTLIGHT,
+  SPOTLIGHT_CAPTION: 'Point out your athlete to everyone watching.',
   PUBLISH_LABEL: 'Publish without spotlight',
-  PUBLISH_CAPTION: `Files it under Published as is. ${STAGE_REASONS.PUBLISH}`,
+  PUBLISH_CAPTION: `Goes to Published. ${STAGE_REASONS.PUBLISH}`,
   EDIT_FRAMING_LABEL: 'Edit framing',
-  EDIT_FRAMING_CAPTION: 'Reframe and export again, uses credits.',
-  SAVE_DRAFT_LABEL: 'Save draft',
-  // T9870: retention honesty. The framing render already saved this as a private
-  // draft (see RESULT_RETENTION note above the grid) -- this link only leaves the
-  // flow, it is NOT what keeps the work. Say "it's already yours", not "save it now".
-  SAVE_DRAFT_CAPTION: 'It is already saved to your drafts. Pick it up whenever you want.',
+  EDIT_FRAMING_CAPTION: 'Reframe and export again. Uses credits.',
+  SAVE_DRAFT_LABEL: 'Done for now',
 };
 
 // T10650: Focus's "Back to Preview" affordance. When the current framing is
@@ -458,16 +462,17 @@ export const FOCUS_ADD_SPOTLIGHT_TOAST = {
   message: 'Now add a spotlight to your reel -- you can still publish it whenever you\'re ready.',
 };
 
-// T9110 / re-hierarchized T9590: Overlay's post-export publish-exit action bar
-// (OverlayPublishActionBar). T9590 re-hierarchizes IN LOCKSTEP with FOCUS_PUBLISH
-// above (REVERSES T9110's flat four-equal-weight mirror). On THIS screen the
-// spotlight is already applied, so the promoted forward action is Publish (Focus
-// promotes "Add spotlight" instead -- the hierarchy tracks pipeline position, not
-// a fixed action):
+// T9110 / re-hierarchized T9590 / T10670 celebration tiles: Overlay's post-export
+// completion action bar (OverlayPublishActionBar). T9590 re-hierarchized IN LOCKSTEP
+// with FOCUS_PUBLISH above; T10670 (2026-09-19, approved V2 design) mirrors Focus's
+// tile treatment here (icon-forward tiles, headline + "Saved" chip, "Done for now"
+// exit, SAVE_DRAFT_CAPTION deleted). On THIS screen the spotlight is already applied,
+// so the promoted forward action is Publish (Focus promotes "Add spotlight" instead
+// -- the hierarchy tracks pipeline position, not a fixed action):
 //   PRIMARY   Publish           (dominant; the reel is finished)
 //   SECONDARY Reapply spotlight (back into Spotlight editing)
 //   TERTIARY  Reapply Framing   (reframe; the paid re-export path)
-//   QUIET     Save draft        (defer; replaces the old "Publish Later")
+//   QUIET     Done for now      (leave the flow; the landing toast names Clips/Reels)
 // PUBLISH_CAPTION states the destination + the honest precondition BEFORE the tap.
 // T9670 §4, live-verified by T9710 (2026-09-13): publishing moves the reel to
 // Published and creates no link and grants no audience by itself -- sharing a
@@ -475,35 +480,31 @@ export const FOCUS_ADD_SPOTLIGHT_TOAST = {
 // honest "uses credits" warning, verbatim with Focus's so the two read as one
 // system.
 export const OVERLAY_PUBLISH = {
+  HEADLINE: 'Your clip is ready',
   PUBLISH_LABEL: 'Publish',
-  PUBLISH_CAPTION: `Files it under Published. ${STAGE_REASONS.PUBLISH}`,
+  PUBLISH_CAPTION: `Goes to Published. ${STAGE_REASONS.PUBLISH}`,
   REAPPLY_OVERLAY_LABEL: 'Reapply spotlight',
-  REAPPLY_OVERLAY_CAPTION: 'Go back and redo the spotlight on your reel.',
+  REAPPLY_OVERLAY_CAPTION: 'Go back and redo the spotlight.',
   REAPPLY_FOCUS_LABEL: `Reapply ${MODE_NAMES.FRAMING}`,
-  REAPPLY_FOCUS_CAPTION: 'Reframe and export again, uses credits.',
-  SAVE_DRAFT_LABEL: 'Save draft',
-  // T9870: retention honesty. The finished highlight is ALREADY saved and watchable
-  // (see RESULT_RETENTION note above the grid) -- this link only leaves the flow, it
-  // is not what keeps the reel. Publish stays a separate, deliberate choice.
-  SAVE_DRAFT_CAPTION: 'It is already saved and only you can see it. Publish whenever you are ready.',
+  REAPPLY_FOCUS_CAPTION: 'Reframe and export again. Uses credits.',
+  SAVE_DRAFT_LABEL: 'Done for now',
 };
 
-// T9870: the post-export retention reassurance shown ABOVE each completion action
-// grid. AC1 ("completion is durably retrievable without a redundant Save-draft
-// step"): the backend finalizer already persisted the result at export completion,
-// so the completion surface must SAY the work is safe -- leaving with zero extra
-// clicks is fine. Composed entirely from shipped T9860 vocabulary (draftStage.js
-// DRAFT_STATUS / DRAFT_STAGE_LABELS), never new product wording. The AC4 guard
-// lives in the deriver (resultRetentionNote.js): an already-published reel gets the
-// PUBLISHED line and is never told "only you can see it".
+// T9870 / T10670: the post-export retention reassurance, now rendered as a one-word
+// CHIP beside the completion HEADLINE (T10670 replaced the green sentence above the
+// grid -- the "your work is safe" reassurance is carried by the "Saved" chip plus the
+// absence of any "Save" verb on the screen). AC1 still holds (leaving with zero extra
+// clicks is fine); the AC4 guard still lives in the deriver (resultRetentionNote.js):
+// an already-published reel gets the PUBLISHED chip and is never told "only you can
+// see it". Composed from shipped draftStage vocabulary, never new product wording.
 export const RESULT_RETENTION = {
-  // Overlay completion: a FINAL video exists -> private and ready to watch.
-  PRIVATE_READY: 'Saved. Private and ready to watch, only you can see it.',
+  // Overlay completion: a FINAL video exists -> saved and ready to watch.
+  PRIVATE_READY: 'Saved',
   // Focus completion: a framing WORKING video exists -> saved, still a draft.
-  PRIVATE_DRAFT: 'Saved to your drafts. Only you can see it.',
+  PRIVATE_DRAFT: 'Saved',
   // Either completion, when the reel is already published (re-export of a shared
-  // reel): never claim "only you can see it", never imply a visibility change.
-  PUBLISHED: 'Saved. This reel is already published, its link is unchanged.',
+  // reel): never imply a visibility change; the existing link is unchanged.
+  PUBLISHED: 'Saved. Link unchanged',
 };
 
 // T9110: "Reapply Framing" confirmation toast. Mirrors FOCUS_ADD_SPOTLIGHT_TOAST's

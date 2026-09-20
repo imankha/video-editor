@@ -91,8 +91,9 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
     await expect(bar.getByRole('button', { name: 'Publish without spotlight', exact: true })).toBeVisible();
     await expect(bar.getByRole('button', { name: 'Edit framing', exact: true })).toBeVisible();
     await expect(page.getByTestId('focus-save-draft')).toBeVisible();
-    // Add spotlight is the dominant PRIMARY (its card is the tinted/ringed cyan one).
-    await expect(page.getByTestId('focus-choice-primary').getByRole('button', { name: 'Add spotlight', exact: true })).toBeVisible();
+    // Add spotlight is the dominant PRIMARY. T10670: the tile IS the button, so the
+    // "Add spotlight" button carries the primary tile's data-testid directly.
+    await expect(page.getByRole('button', { name: 'Add spotlight', exact: true })).toHaveAttribute('data-testid', 'focus-choice-primary');
 
     await saveEvidence(page, 'T8390-criterion-preview-actionbar-desktop');
 

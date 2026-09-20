@@ -1,5 +1,26 @@
 ---
 domain: export-pipeline
+updated: 2026-09-19 (T10670 — post-export completion footer redesigned as V2 "celebration tiles"
+(FocusPublishActionBar + OverlayPublishActionBar, frontend-only, no schema/Modal). Each choice is now
+an icon-forward TILE that IS the button: the inner pill `<Button>` is GONE, the tile `<div>` carries
+role="button" + tabIndex={0} + handleCardKeyDown and names itself via aria-labelledby (title span) +
+aria-describedby (caption span) — one tab stop, one accessible name per choice. The green retention
+SENTENCE above the grid became a one-word "Saved" CHIP beside a new HEADLINE ("Your clip is ready");
+`data-testid=focus/overlay-retention-note` stays on the chip; `resultRetentionNote` is unchanged (it
+just returns the shorter RESULT_RETENTION values now). The exit link is "Done for now" (ArrowLeft, NO
+caption — `FOCUS/OVERLAY_PUBLISH.SAVE_DRAFT_CAPTION` deleted; the landing toast still names
+Clips/Reels). `data-tutorial-target="focus-publish"` MOVED from the pill to the Publish tile (still
+exactly one element). The old inner-button `data-testid="overlay-publish-now"` is RETIRED (a DOM node
+can't carry two data-testids; the tile is addressable as `overlay-choice-primary` / role button
+"Publish"). publishLoading -> `aria-disabled` + a `Loader` spinner in the disc (no native
+`.disabled`). Mobile tiles are horizontal rows (`flex-row` default, `lg:flex-col`); footer drops from
+~520px to ~402px at 390px (live-measured). The T8390 grid landmine string is byte-identical (only gap
+4 -> 3); titles stay in `whitespace-nowrap`, no `overflow-x-auto`. All keyframes are `motion-safe:`
+and NONE loop (tiles stagger 60/120/180ms via delays baked into the arbitrary animate value — NOT an
+inline animationDelay, which would clobber the primary's second animation; one `primaryPulse` at
+400ms). displayNames `FOCUS_PUBLISH`/`OVERLAY_PUBLISH`/`RESULT_RETENTION` revalued + a `HEADLINE` key
+added; `SPOTLIGHT_CAPTION` no longer aliases `STAGE_REASONS.SPOTLIGHT` (that 22-kids sentence stays
+the Spotlight-mode reason line). Out of scope: CollectionPlayer transport/fullscreen (T10680).)
 updated: 2026-09-19 (T10660 — Focus "Publish without spotlight" fires the overlay render HEADLESSLY.
 `POST /api/export/render-overlay` is backend-authoritative (body {project_id, export_id,
 effect_type}; reads highlights/text/effect from working_videos), so the one-tap publish no longer

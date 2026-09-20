@@ -77,3 +77,18 @@ preserving through the hierarchy change; do not rebuild the bar from scratch.
 - [ ] Keyboard order follows the visual hierarchy
 - [ ] Relevant test set (curated ~10, per CLAUDE.md Test Scope Policy) green, with output attached
 - [ ] Branch CI green
+
+## Follow-up: superseded presentation (T10670, 2026-09-19)
+
+T10670 ("Completion bars: V2 celebration tiles") reworked the PRESENTATION of both completion bars
+while KEEPING this task's hierarchy contract intact. Two deliberate exceptions to record here so the
+history stays legible rather than looking like drift:
+
+- **The primary "filled cyan pill button in a tinted card" is gone.** Each choice is now a single
+  icon-forward TILE that IS the button (no inner pill). Dominance is preserved by the primary tile's
+  cyan gradient + glow + a single pulse; this task's acceptance is about DOMINANCE and DOM/tab order,
+  not the pill, so both still hold.
+- **The quiet exit no longer states its destination.** It was renamed "Save draft" -> "Done for now"
+  with no caption (the false "Save" model T9870 found is retired). This is an accepted exception to
+  this task's "every alternative states its destination": the landing toast still names Clips/Reels,
+  and the retention "Saved" chip carries the reassurance. Handlers are unchanged (navigation-only).
