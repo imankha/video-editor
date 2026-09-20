@@ -1,5 +1,11 @@
 ---
 domain: keyframes-framing
+updated: 2026-09-20 (T10740 — Focus's clip loaders now REFUSE a clip belonging to another project,
+and a 404 from `playback-url` no longer falls back to the `/stream` proxy. See the two invariants
+"Focus never loads a clip from another project" and "A 404 from our own playback-url fails loudly"
+below. New pure module `src/frontend/src/screens/clipVideoResolution.js` + render harness
+`src/frontend/src/screens/__tests__/focusScreenStaleClipGuard.test.jsx` — the FIRST test that
+mounts the real FocusScreen; reuse it rather than rebuilding the mock set.)
 updated: 2026-09-19 (T10660 — "Publish without spotlight" no longer routes through Overlay: the
 one-tap publish fires the overlay render HEADLESSLY (backend-authoritative POST
 /api/export/render-overlay needs no mounted Overlay screen), so FocusScreen.handlePublish drops
@@ -262,6 +268,35 @@ so the estimate ticks the instant a speed/trim/split/clip-count gesture lands �
   `/api/credits` zero-balance so no real render fires, responsive 375/desktop).
 
 ## Invariants & rules
+- **Focus never loads a clip from ANOTHER project (T10740, 2026-09-20).** `FocusScreen`'s clip
+  loaders call `isClipFromAnotherProject(clip, projectId)` (`screens/clipVideoResolution.js`) and
+  bail when it is true. **Why this is needed:** `App.handleModeChange` fires `invalidateClips`
+  FIRE-AND-FORGET then switches editor mode immediately, and `projectDataStore.fetchClips` only
+  writes `clips` when the response lands — nothing calls the existing `clearClips` on that path. So
+  for one window `FocusScreen` renders the NEW `projectId` over the PREVIOUS project's `clips` +
+  `selectedClipId`, and its `[]`-deps mount loader fires on them at once. Pairing those ids is not
+  just stale, it is IMPOSSIBLE (`clips.py` matches `WHERE wc.id = ? AND wc.project_id = ?`), so the
+  request can only 404. That 404 used to reach `<video>` as a dead src and surface as the FALSE
+  "source storage may have expired" (a real 410 renders the T8310 panel and never mounts a player —
+  that asymmetry is how you tell the two apart in a bug report). The guard lives at the
+  `getClipVideoConfig` choke point **before the config cache** (so a bad pair can't occupy a cache
+  slot) AND as an explicit early bail in the clip-switch effect, which restores crop/segment state
+  into the hooks BEFORE it resolves a URL — the choke-point guard is too late there, and a foreign
+  clip's keyframes reaching the hooks is state an export can persist. **Compare ids as STRINGS:**
+  `selectedProjectId` is a string on the auth-return and payment-return paths (both stash it in
+  `sessionStorage`; `projectsStore.selectProject` stores the argument verbatim) while clip rows
+  carry a numeric `project_id`, so a strict `!==` would call EVERY clip foreign and leave Focus
+  permanently blank — failing CLOSED here is worse than the bug, since nothing heals it and the
+  payment path auto-exports. Do NOT "fix" this by adding a `clipsProjectId` store field: the
+  identity is already in the data (`WorkingClipResponse.project_id` is required).
+- **A 404 from our own `playback-url` FAILS LOUDLY — no `/stream` fallback (T10740).**
+  `shouldRetryClipVideoViaProxy(status)` returns false ONLY for 404, the one status the two
+  endpoints provably share (identical row query). The proxy resolves the SAME pair, so retrying a
+  404 just hides an internal bug behind a dead player. **Do NOT widen this to all 4xx:**
+  `get_clip_playback_url` raises **422** when the game video has no blake3 hash, BEFORE presigning,
+  while `/stream` has no such check and `get_game_video_url` presigns the pre-T80 per-user
+  `{user}/games/{filename}` object — for a blake3-less legacy game the proxy is the path that
+  WORKS. 410 `source_expired` is handled earlier and never reaches the predicate.
 - **One-tap "Publish without spotlight" fires the overlay render HEADLESSLY (T10660, 2026-09-19 —
   SUPERSEDES T9740 v2's poll).** `POST /api/export/render-overlay` is backend-authoritative (body =
   `{project_id, export_id, effect_type}`; the endpoint reads highlights/text/effect from

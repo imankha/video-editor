@@ -1,6 +1,6 @@
 # T10740: Focus loads the previous project's clip and reports it as an expired video
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-09-20
