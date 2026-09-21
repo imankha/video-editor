@@ -1,6 +1,6 @@
 # T10180: Result-surface Publish -> visibility-review -> link-ready UI
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 7
 **Created:** 2026-09-15
