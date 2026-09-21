@@ -9,10 +9,12 @@ import { ChevronRight } from 'lucide-react';
  * @param {string} type - Category type ('Games' or 'Clips')
  * @param {string} gameName - Name of the clip's source game (optional, e.g. "Vs Carlsbad Game Sep 1")
  * @param {string} itemName - Name of the selected item (optional)
+ * @param {string} itemMeta - De-emphasized detail shown after itemName (optional, e.g. the
+ *   in-match game clock "0'26\"" - the one clip fact not otherwise on this row)
  * @param {function} onTypeClick - Callback when type label is clicked (navigates home)
  * @param {function} onGameClick - Callback when the game name is clicked (navigates to Annotate for that game)
  */
-export function Breadcrumb({ type, gameName, itemName, onTypeClick, onGameClick }) {
+export function Breadcrumb({ type, gameName, itemName, itemMeta, onTypeClick, onGameClick }) {
   return (
     <div className="flex items-center gap-2 min-w-0">
       {onTypeClick ? (
@@ -45,6 +47,9 @@ export function Breadcrumb({ type, gameName, itemName, onTypeClick, onGameClick 
         <>
           <ChevronRight className="w-4 h-4 text-gray-600 flex-shrink-0" />
           <span className="text-white font-semibold text-sm sm:text-lg truncate">{itemName}</span>
+          {itemMeta && (
+            <span className="text-gray-500 text-xs sm:text-sm flex-shrink-0">· {itemMeta}</span>
+          )}
         </>
       )}
     </div>

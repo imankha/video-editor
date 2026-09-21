@@ -854,44 +854,24 @@ export function OverlayModeView({
           </button>
         </div>
       )}
-      {/* Clip identity (title/tags/game clock) - 2026-09-18 (user request): split
-          from the technical readouts (dimensions/duration/fps), which moved to a
-          de-emphasized footer below the bottom CTA. */}
-      {!isFullscreen && (effectiveOverlayMetadata ? (
+      {/* Title + game name now live in the breadcrumb above (Clips > Game > Clip,
+          the game name clickable to jump to Annotate) - see UnifiedHeader / Breadcrumb.
+          The in-match game clock moved onto that same breadcrumb row (Breadcrumb's
+          itemMeta). No separate desktop identity bar needed here anymore (matches
+          the Focus/T10310 precedent - see FocusModeView.jsx). */}
+      {/* Tags keep their own card (unrelated to the identity bar above) since
+          they're the one piece of this block with real visual weight. */}
+      {!isFullscreen && videoTags?.length > 0 && (
         <div className="hidden lg:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 lg:p-4 border border-white/20">
-          <div className="flex flex-col gap-1 text-sm text-gray-300">
-            {videoTitle && <span className="font-semibold text-white">{videoTitle}</span>}
-            {videoTags?.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {videoTags.map(tag => (
-                  <span key={tag} className="px-2 py-0.5 bg-blue-500/30 text-blue-200 text-xs rounded">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-            {/* T5670: game name + in-match game clock (matches Annotate) */}
-            {gameName && gameClock && (
-              <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                <span className="truncate max-w-[220px]">{gameName}</span>
-                <span className="text-gray-600">·</span>
-                <span className="flex-shrink-0">{gameClock}</span>
-              </div>
-            )}
+          <div className="flex flex-wrap gap-1">
+            {videoTags.map(tag => (
+              <span key={tag} className="px-2 py-0.5 bg-blue-500/30 text-blue-200 text-xs rounded">
+                {tag}
+              </span>
+            ))}
           </div>
         </div>
-      ) : isLoading && (
-        <div className="hidden lg:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20 animate-pulse">
-          <div className="flex items-center justify-between">
-            <div className="h-4 bg-gray-600 rounded w-32"></div>
-            <div className="flex space-x-6">
-              <div className="h-4 bg-gray-600 rounded w-24"></div>
-              <div className="h-4 bg-gray-600 rounded w-20"></div>
-              <div className="h-4 bg-gray-600 rounded w-16"></div>
-            </div>
-          </div>
-        </div>
-      ))}
+      )}
 
       {/* Main Editor Area */}
       <div className={`${(isFullscreen || mobileFs) ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-6 border border-white/20'}`}>

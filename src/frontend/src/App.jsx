@@ -25,6 +25,7 @@ import { useExportRecovery } from './hooks/useExportRecovery';
 import { useSessionHeartbeat } from './hooks/useSessionHeartbeat';
 import { ConfirmationDialog, toast, UnifiedHeader } from './components/shared';
 import { getProjectDisplayName } from './utils/clipDisplayName';
+import { clipGameClock } from './utils/timeFormat';
 import { SECTION_NAMES, MODE_NAMES } from './config/displayNames';
 // Screen components (self-contained, own their hooks)
 // ProjectsScreen is static — it's the home/landing screen loaded on every visit
@@ -144,6 +145,17 @@ function App() {
   const fetchProjects = useProjectsStore(state => state.fetchProjects);
   const clearSelection = useProjectsStore(state => state.clearSelection);
   const discardUncommittedChanges = useProjectsStore(state => state.discardUncommittedChanges);
+
+  // In-match game clock for the breadcrumb's item segment (Clips > Game > "Play 4 · 0'26\"").
+  // Sourced from the projects LIST item (clip_game_start_time), not the `selectedProject`
+  // detail response, which carries no game info — same source OverlayScreen already reuses
+  // this formatter from. null for multi-clip reels (no single in-match instant); that's not
+  // a gap, so it's simply hidden rather than guessed.
+  const projects = useProjectsStore(state => state.projects);
+  const selectedClipGameClock = useMemo(() => {
+    const item = projects.find(p => p.id === selectedProjectId);
+    return clipGameClock({ startTime: item?.clip_game_start_time });
+  }, [projects, selectedProjectId]);
 
   // T3455: Capture campaign params from URL (first-touch attribution)
   useEffect(() => {
@@ -993,6 +1005,7 @@ function App() {
             breadcrumbGameName={selectedClipGameName}
             onGameNameClick={() => handleModeChange(EDITOR_MODES.ANNOTATE)}
             breadcrumbItemName={getProjectDisplayName(selectedProject)}
+            breadcrumbItemMeta={selectedClipGameClock}
             editorMode={editorMode}
             onModeChange={handleModeChange}
             hasProject={true}

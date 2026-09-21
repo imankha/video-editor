@@ -25,6 +25,7 @@ export function UnifiedHeader({
   breadcrumbGameName,
   onGameNameClick,
   breadcrumbItemName,
+  breadcrumbItemMeta,
   editorMode,
   onModeChange,
   hasProject = false,
@@ -85,6 +86,7 @@ export function UnifiedHeader({
             gameName={breadcrumbGameName}
             onGameClick={onGameNameClick}
             itemName={breadcrumbItemName}
+            itemMeta={breadcrumbItemMeta}
             onTypeClick={onHomeClick}
           />
         </div>
