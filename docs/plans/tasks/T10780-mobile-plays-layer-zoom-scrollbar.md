@@ -1,6 +1,6 @@
 # T10780: Mobile Annotate timeline is zoomed in with a horizontal scrollbar
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-20
@@ -140,9 +140,17 @@ on stashed master, confirmed not caused by this change. Pushed, NOT merged: the 
 zoom/scrollbar feel is a genuine UX judgment call, so this is a hand-off for a real-phone
 test, not an auto-merge. Test steps below.
 
+**2026-09-21 (later)**: User phone + desktop test found three issues, each fixed by the supervisor
+in the worker checkout with red->green proof: (1) TWO horizontal bars + a vertical bar (inline
+`scrollbarWidth` style overrode the mobile hide rule; stale 6.75rem mobile `totalLayerHeight`
+overshot the lane) -> `08bdaeb3` + `66cdf977`; (2) mouse could not drag (touch+click only,
+"finite positions") -> Pointer Events + capture, `2d0b7ed8`. 12/12 e2e, 67 unit, CI green.
+User verdict: merge. **PR #483 merged 2026-09-21 -> STAGING.** Follow-up found on the same test:
+T10800 (player letterbox, pre-existing).
+
 ## Acceptance Criteria
 
-- [ ] On a phone (<= 1023 px or coarse pointer) the Annotate plays track renders at 3x the
+- [x] On a phone (<= 1023 px or coarse pointer) the Annotate plays track renders at 3x the
       viewport width; individual plays are distinguishable and tappable (each chip >= 12 px
       wide for a 6 s play on a 90 min game at 360 px)
 - [ ] A drag-able scrollbar sits directly under the plays track, thumb ~1/3 of the track,
