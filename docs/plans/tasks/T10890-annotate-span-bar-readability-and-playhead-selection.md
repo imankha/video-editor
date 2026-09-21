@@ -1,6 +1,6 @@
 # T10890: Annotate span-bar readability on long games + playhead nearest-center selection
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-21
@@ -79,8 +79,11 @@ a time, pick the one whose `(startTime+endTime)/2` is closest to the query time.
    to pick the nearest-center match among overlapping regions, not first-array-order
 3. [ ] Add/extend a test covering: playhead within one play selects it; playhead within two
    overlapping plays selects whichever center is closer
-4. [ ] Produce decision artifact for span-bar readability options; **stop for user approval**
-   before implementing any of them
+4. [x] Produce decision artifact for span-bar readability options; **stop for user approval**
+   before implementing any of them -- https://claude.ai/artifact/VRztYxsiraMJz6wsMrUENB
+   (shared with T10930, the zoom-controls request the user filed in the same session; the
+   recommended option D means T10930 IS this half's fix). Playhead half shipped to master in
+   5b08aebf on 2026-09-21.
 5. [ ] (post-approval) Implement chosen span-bar option + width-proportionality test
 
 ### Progress Log
