@@ -26,11 +26,14 @@ export default function useZoom() {
   }, []);
 
   /**
-   * Reset zoom to 100% and center pan
+   * Reset zoom to 100% and center pan. Idempotent -- a caller that resets
+   * unconditionally on some OTHER gesture (e.g. a text position preset click,
+   * T10790) shouldn't force a fresh panOffset object (and the re-render that
+   * comes with it) when the preview is already centered.
    */
   const resetZoom = useCallback(() => {
-    setZoom(1);
-    setPanOffset({ x: 0, y: 0 });
+    setZoom((prev) => (prev === 1 ? prev : 1));
+    setPanOffset((prev) => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }));
   }, []);
 
   /**

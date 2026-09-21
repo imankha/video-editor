@@ -12,9 +12,29 @@ import { POSITION_PRESETS, matchPreset, presetKey } from '../../constants/textPo
  * An arbitrary stored position (e.g. a pre-round-3 block) highlights NOTHING --
  * never silently snapped or migrated (project rule: no persisted runtime
  * fixups).
+ *
+ * T10790: presets are FULL-FRAME fractions (0.08/0.92 insets from each edge --
+ * textPositionPresets.js), but the video preview has its own independent
+ * zoom/pan (framing/spotlight precision editing) that can crop the visible
+ * viewport down to the center of the frame. A user who zoomed in for other
+ * work, then clicks e.g. "top right", gets a CORRECTLY-placed element that
+ * lands outside the current cropped view -- reading as "the preset put it way
+ * off in the corner" when it's actually just out of frame in the zoomed
+ * preview (confirmed live: the same preset sits with comfortable margin at
+ * 100% zoom, and is pushed fully off-screen by ~150%). A preset click implies
+ * "show me where this lands in my frame", so it snaps the preview back to
+ * 100%/centered via `onResetZoom` -- the same full-frame view the fractions
+ * are defined against -- rather than leaving the result apparently invisible.
+ * `onResetZoom` (useZoom.js's `resetZoom`) is idempotent, so this calls it
+ * unconditionally rather than re-deriving useZoom's own `isZoomed` here.
  */
-export default function PositionPresetGrid({ spec, onChange }) {
+export default function PositionPresetGrid({ spec, onChange, onResetZoom }) {
   const matched = matchPreset(spec.position, spec.align);
+
+  const handlePresetClick = (p) => {
+    onChange({ ...spec, position: { x: p.x, y: p.y }, align: p.align });
+    onResetZoom?.();
+  };
 
   return (
     <div className="flex flex-col gap-1">
@@ -31,7 +51,7 @@ export default function PositionPresetGrid({ spec, onChange }) {
               aria-pressed={isActive}
               aria-label={`Position: ${p.vertical} ${p.horizontal}`}
               title={`${p.vertical} ${p.horizontal}`}
-              onClick={() => onChange({ ...spec, position: { x: p.x, y: p.y }, align: p.align })}
+              onClick={() => handlePresetClick(p)}
               className={`w-8 h-8 rounded border flex items-center justify-center transition-colors coarse-pointer:w-11 coarse-pointer:h-11 ${
                 isActive
                   ? 'bg-cyan-500 border-cyan-300'

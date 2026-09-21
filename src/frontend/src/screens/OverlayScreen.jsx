@@ -1100,9 +1100,16 @@ export function OverlayScreen({
       // playhead into it, or the force-switch-to-Text-tab gesture below
       // would land on a tab that immediately reads as empty/disabled.
       seek(newRegion.startTime);
+      // T10790: a fresh region's first element defaults to the top-right
+      // preset (pickDefaultPreset) -- same "lands outside a zoomed/cropped
+      // preview" issue as a manual preset click (PositionPresetGrid
+      // docstring), except here the user gets no visible result at all to
+      // reason about. resetZoom is idempotent, so this is a no-op when
+      // already centered.
+      resetZoom();
     }
     return newRegion?.id ?? null;
-  }, [addRegion, projectId, canSyncActions, setOverlayChangedSinceExport, selectRegion, seek]);
+  }, [addRegion, projectId, canSyncActions, setOverlayChangedSinceExport, selectRegion, seek, resetZoom]);
 
   // "Add text" WITH a region already selected: appends a new ELEMENT into
   // that region -- the region's timing is untouched, no second time span is
@@ -1115,9 +1122,13 @@ export function OverlayScreen({
         overlayActions.createText(projectId, newElement.id, newElement.spec, undefined, undefined, regionId));
     }
     setOverlayChangedSinceExport(true);
-    if (newElement) selectElement(newElement.id, newElement.regionId);
+    if (newElement) {
+      selectElement(newElement.id, newElement.regionId);
+      // T10790: same default-preset landing issue as wrappedAddRegion above.
+      resetZoom();
+    }
     return newElement?.id ?? null;
-  }, [addElement, projectId, canSyncActions, setOverlayChangedSinceExport, selectElement]);
+  }, [addElement, projectId, canSyncActions, setOverlayChangedSinceExport, selectElement, resetZoom]);
 
   const wrappedMoveTextStart = useCallback((id, newStartTime) => {
     const updated = moveRegionStart(id, newStartTime);

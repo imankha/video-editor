@@ -60,6 +60,8 @@ export default function TextManagementPanel({
   // this element's row so canvas double-click lands the user in the panel field.
   inlineEditingElementId = null,
   onEndInlineEdit,
+  // T10790: threaded to PositionPresetGrid -- see its docstring.
+  onResetZoom,
 }) {
   const selectedRegion = selectedRegionId ? regions.find((r) => r.id === selectedRegionId) || null : null;
   const selectedElement = selectedRegion && selectedElementId
@@ -262,6 +264,7 @@ export default function TextManagementPanel({
             <PositionPresetGrid
               spec={selectedElement.spec}
               onChange={(nextSpec) => onUpdateTextSpec && onUpdateTextSpec(selectedElement.id, nextSpec)}
+              onResetZoom={onResetZoom}
             />
             <TextSpecEditor
               spec={selectedElement.spec}

@@ -129,6 +129,24 @@ describe('TextManagementPanel — two-column layout, region+element management (
     expect(onUpdateTextSpec.mock.calls[0][1].position).toEqual({ x: 0.08, y: 0.08 });
   });
 
+  // T10790: pins the prop-threading seam down to PositionPresetGrid -- a
+  // dropped/misspelled onResetZoom prop anywhere along this path would
+  // otherwise degrade to "preset clicks never reset zoom" with no failing test.
+  it('threads onResetZoom down to the position grid', () => {
+    const onResetZoom = vi.fn();
+    render(
+      <TextManagementPanel
+        regions={[REGION_A]}
+        selectedRegionId="r1"
+        selectedElementId="a1"
+        onUpdateTextSpec={() => {}}
+        onResetZoom={onResetZoom}
+      />
+    );
+    fireEvent.click(screen.getByTestId('text-position-top-left'));
+    expect(onResetZoom).toHaveBeenCalledTimes(1);
+  });
+
   it('the settings column has its OWN element (fixed box) independent of the list column', () => {
     // Structural check that the two-column layout exists (round 4 item 3):
     // a dedicated settings container that isn't inside the region list.

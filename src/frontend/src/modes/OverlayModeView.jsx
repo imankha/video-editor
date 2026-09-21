@@ -796,6 +796,10 @@ export function OverlayModeView({
       // selected element's row; blur/Escape/Enter on its input ends inline edit.
       inlineEditingElementId={inlineEditingElementId}
       onEndInlineEdit={endInlineEdit}
+      // T10790: lets a position preset click snap a zoomed preview back to
+      // 100% (PositionPresetGrid docstring) -- same onResetZoom every other
+      // overlay layer on this screen already reads.
+      onResetZoom={onResetZoom}
     />
   );
 

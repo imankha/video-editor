@@ -47,4 +47,31 @@ describe('PositionPresetGrid (T6630 round 3)', () => {
     // The rest of the spec is preserved (never a partial delta).
     expect(patch.text).toBe('GOAL');
   });
+
+  // T10790: presets are full-frame fractions (8% edge insets). When the video
+  // preview is zoomed in (e.g. left over from framing/spotlight work), that
+  // inset can land outside the cropped visible viewport -- reading as "the
+  // preset put it way off in the corner" when it's really just out of view.
+  // A preset click snaps the preview back to 100%/centered so the result is
+  // immediately visible. `onResetZoom` (useZoom's `resetZoom`) is idempotent,
+  // so the grid calls it unconditionally rather than re-deriving zoom state.
+  it('calls onResetZoom AND still emits the position patch when a preset is clicked', () => {
+    const onChange = vi.fn();
+    const onResetZoom = vi.fn();
+    const spec = baseSpec();
+    render(<PositionPresetGrid spec={spec} onChange={onChange} onResetZoom={onResetZoom} />);
+    fireEvent.click(screen.getByTestId('text-position-top-right'));
+
+    expect(onResetZoom).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const topRight = POSITION_PRESETS.find((p) => p.vertical === 'top' && p.horizontal === 'right');
+    const patch = onChange.mock.calls[0][0];
+    expect(patch.position).toEqual({ x: topRight.x, y: topRight.y });
+    expect(patch.align).toBe(topRight.align);
+  });
+
+  it('does not throw when onResetZoom is not provided', () => {
+    render(<PositionPresetGrid spec={baseSpec()} onChange={() => {}} />);
+    expect(() => fireEvent.click(screen.getByTestId('text-position-top-right'))).not.toThrow();
+  });
 });
