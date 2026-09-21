@@ -53,6 +53,14 @@ export function AnnotateTimeline({
 }) {
   const isMobile = useIsMobile();
 
+  // T10780: the whole game is illegible squeezed into ~280 CSS px on a phone.
+  // Render the plays track (and the scrubber/angle strip above it, which are all
+  // % positioned so they scale for free) at a fixed 3x on mobile — roughly
+  // desktop density. Desktop stays at 1 (byte-identical). Option A: a fixed
+  // constant, NOT `useTimelineZoom` — no wheel zoom, no pinch, no persisted view
+  // state, no zoom badge.
+  const mobileScale = isMobile ? 3 : 1;
+
   // T8890: render angle UI ONLY when angles genuinely exist (EPIC: zero angles =
   // zero pixels). For an angle-free game angleData is null, so every branch below
   // is inert and the DOM is byte-identical to pre-T8890.
@@ -165,10 +173,16 @@ export function AnnotateTimeline({
       layerLabels={layerLabels}
       totalLayerHeight={totalLayerHeight}
       isPlaying={isPlaying}
-      // Disable zoom/trim features for Annotate mode
-      timelineZoom={100}
-      timelineScale={1}
+      // T10780: fixed 3x on mobile (a constant, not user zoom state) so the
+      // touch scrollbar shows and the plays are legible; 1x = byte-identical
+      // desktop. No zoom badge (not a state the user changed) and the mobile
+      // follow re-anchors the playhead 1/3 in on a forward crossing + scrolls a
+      // non-playback/mount off-screen playhead into view (page-forward).
+      timelineZoom={mobileScale * 100}
+      timelineScale={mobileScale}
       timelineScrollPosition={0}
+      showZoomBadge={false}
+      followAnchor="page-forward"
       selectedLayer={selectedLayer}
       onLayerSelect={onLayerSelect}
     >

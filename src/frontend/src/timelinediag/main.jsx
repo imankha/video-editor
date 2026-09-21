@@ -25,6 +25,22 @@ function getScaleFromQuery() {
   return Number.isFinite(scale) && scale > 0 ? scale : 1.93;
 }
 
+// T10780: optional query knobs, both DEFAULT-OFF so the T5647 run
+// (?scale=1.93, no other params) stays byte-identical.
+//  - anchor=page-forward -> exercise the mobile-Annotate follow (re-anchor 1/3
+//    in on a forward crossing + scroll a non-playback/mount off-screen playhead
+//    into view). Absent -> undefined -> TimelineBase's default 'margin'.
+//  - fluid=1 -> let the harness fill the viewport width (maxWidth 900) so a phone
+//    viewport actually constrains the scroll container's clientWidth. The T5647
+//    run keeps the fixed 900px width.
+function getFollowAnchorFromQuery() {
+  const a = new URLSearchParams(window.location.search).get('anchor');
+  return a === 'page-forward' ? 'page-forward' : undefined;
+}
+function getFluidFromQuery() {
+  return new URLSearchParams(window.location.search).get('fluid') === '1';
+}
+
 function TimelineDiagHarness() {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -33,6 +49,8 @@ function TimelineDiagHarness() {
   const rafRef = useRef(null);
   const lastTsRef = useRef(null);
   const scale = getScaleFromQuery();
+  const followAnchor = getFollowAnchorFromQuery();
+  const fluid = getFluidFromQuery();
 
   const tick = useCallback((ts) => {
     if (lastTsRef.current == null) lastTsRef.current = ts;
@@ -66,8 +84,13 @@ function TimelineDiagHarness() {
     setCurrentTime(Math.max(0, Math.min(t, DURATION)));
   };
 
+  const outerStyle = fluid
+    ? { margin: '24px auto', width: '100%', maxWidth: 900 }
+    : { margin: '24px auto', width: 900 };
+  const innerStyle = fluid ? { width: '100%' } : { width: 900 };
+
   return (
-    <div style={{ margin: '24px auto', width: 900 }}>
+    <div style={outerStyle}>
       <div
         data-testid="status"
         style={{ color: '#d1d5db', fontSize: 13, marginBottom: 16, fontFamily: 'monospace' }}
@@ -82,7 +105,9 @@ function TimelineDiagHarness() {
           Pause
         </button>
       </div>
-      <div style={{ width: 900 }}>
+      {/* T10780: sentinel below the timeline so a spec can measure the gap from
+          the scrollbar bottom to the next control (>= 12px via mb-3). */}
+      <div style={innerStyle}>
         <TimelineBase
           currentTime={currentTime}
           duration={DURATION}
@@ -96,7 +121,14 @@ function TimelineDiagHarness() {
           onLayerSelect={setSelectedLayer}
           layerLabels={<div style={{ color: '#9ca3af', fontSize: 11, padding: 4 }}>Video</div>}
           isPlaying={isPlaying}
+          followAnchor={followAnchor}
         />
+      </div>
+      <div
+        data-testid="below-timeline-sentinel"
+        style={{ height: 24, background: '#374151', color: '#9ca3af', fontSize: 11, padding: 4 }}
+      >
+        (next control)
       </div>
     </div>
   );
