@@ -1,19 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Star, Crop, Sparkles } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
-import { useCurrentProfile, useProfileStore, useProjectsList } from '../../../stores';
+import { useCurrentProfile, useProfileStore } from '../../../stores';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import ClipScrubRegion from './ClipScrubRegion';
-import { Button } from '../../../components/shared/Button';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { DeletePlayButton } from './DeletePlayButton';
 import { getEditRatingCaption, getRatingLabel, UNRATED_BADGE_COLOR, UNRATED_BACKGROUND_COLOR } from '../../../components/shared/clipConstants';
-import { getClipStage, CLIP_STAGE } from '../clipStage';
 import { isDefaultPlayName } from '../playProgress';
 import { onTextFieldKeyDown } from '../textFieldCommit';
 import { ANNOTATE } from '../../../config/displayNames';
@@ -93,9 +91,6 @@ export function ClipDetailsEditor({
   onScrubLock,
   onScrubUnlock,
   teammateSuggestions = [],
-  onOpenInFocus,
-  onOpenInOverlay,
-  onAwaitWrites,
 }) {
   const isMobile = useIsMobile();
   const currentProfile = useCurrentProfile();
@@ -131,18 +126,6 @@ export function ClipDetailsEditor({
 
   const hasReel = !!region.autoProjectId;
   const notesLength = notesDraft.length;
-
-  // T8060/T9330: once the clip has its own project, the stage control tracks it
-  // through Focus -> Spotlight -> Final/Published, using the same
-  // has_working_video/has_final_video/is_published fields DraftTile reads for the
-  // Clips list. T9330 extracted this into the shared getClipStage helper so this
-  // sidebar and the desktop strip (AnnotateFullscreenOverlay) compute ONE stage,
-  // one vocabulary. T8070 staleness (exact-equality snapshot) and T8470 Part D
-  // (fresh draft = live link) both live inside the helper now. Display-level only
-  // — region.autoProjectId is never mutated by it.
-  const projects = useProjectsList();
-  const linkedProject = hasReel ? projects.find(p => p.id === region.autoProjectId) : null;
-  const clipStage = getClipStage(region, linkedProject);
 
   // T5725: teammate tagging is a Team-layer-only affordance. Legacy-NULL rule
   // (`my_athlete ?? true` => My Athlete) — never read region.my_athlete bare.
@@ -217,20 +200,6 @@ export function ClipDetailsEditor({
   const handleTeammatesChange = (newTeammates) => {
     onUpdate({ tagged_teammates: newTeammates });
   };
-
-  // T10610 § C.4: the sidebar's own "open existing project" stage button is
-  // the same Frame-ordering hazard the overlay has — await the region's write
-  // chain before navigating so a trim released just before this click can't
-  // lose the race into Framing/Spotlight.
-  const handleOpenStage = useCallback(async () => {
-    const ok = onAwaitWrites ? await onAwaitWrites(region.id) : true;
-    if (!ok) return;
-    if (clipStage.action === 'overlay') {
-      onOpenInOverlay(region.autoProjectId);
-    } else {
-      onOpenInFocus(region.autoProjectId);
-    }
-  }, [onAwaitWrites, region.id, region.autoProjectId, clipStage.action, onOpenInOverlay, onOpenInFocus]);
 
   const rating = region.rating ?? null;
   // T10690: an unrated clip's panel tint is neutral, not a borrowed "3" color
@@ -390,33 +359,10 @@ export function ClipDetailsEditor({
           </div>
         )}
 
-        {/* Stage control — driven by the shared getClipStage helper (same stage +
-            label as the desktop strip CTA). T8070 staleness + T8470 fresh-draft
-            both live inside getClipStage.
-            - NO_PROJECT: no create affordance in this panel (removed 2026-09-20
-              per user request); a clip's project is created elsewhere.
-            - every OTHER stage: DESKTOP ONLY — a button that OPENS the clip's
-              existing project (Apply Framing / Apply Spotlight / View Final / View
-              Published), routing action 'overlay' -> Spotlight, else Framing.
-              Drifted and below-migration projects land on "Apply Framing" (open
-              it), never back on create — a project that EXISTS should open. */}
-        {clipStage.stage === CLIP_STAGE.NO_PROJECT ? null : !isMobile ? (
-          <div className="flex items-center justify-between">
-            <label className="text-gray-400 text-xs">Clip</label>
-            <Button
-              variant="cyan"
-              size="sm"
-              icon={clipStage.action === 'overlay' ? Sparkles : Crop}
-              // 2026-09-18 (user request): FOCUS-stage rollover, same
-              // already-approved copy as the desktop strip's CTA.
-              title={clipStage.stage === CLIP_STAGE.FOCUS ? ANNOTATE.FRAME_THIS_CLIP_HINT : undefined}
-              onClick={handleOpenStage}
-            >
-              {clipStage.label}
-            </Button>
-          </div>
-        ) : null}
-
+        {/* No stage / open-project control here (removed 2026-09-20, user
+            request): the Frame / Apply Spotlight / View Final CTA lives in the
+            strip under the video (AnnotateFullscreenOverlay via getClipStage),
+            and the NO_PROJECT create affordance was already gone. */}
         {/* Delete Button — T10610 § D.1: shared with every overlay layout */}
         <DeletePlayButton hasProject={!!region.autoProjectId} onDelete={onDelete} />
       </div>

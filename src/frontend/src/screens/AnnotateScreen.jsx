@@ -651,9 +651,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           boundaryOffsets={multiVideo?.boundaryOffsets}
           layerFilter={layerFilter}
           onSetLayerFilter={setLayerFilter}
-          onOpenClipInFocus={openClipInFocus}
-          onOpenClipInOverlay={openClipInOverlay}
-          onAwaitWrites={awaitRegionWrites}
           getAngleName={getAngleName}
         />
       </div>
@@ -694,7 +691,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
                 }
                 setShowMobileSidebar(false);
               }}
-              onAwaitWrites={awaitRegionWrites}
               getAngleName={getAngleName}
             />
             <button

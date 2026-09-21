@@ -58,10 +58,6 @@ export function ClipsSidePanel({
   boundaryOffsets,
   layerFilter = 'all',
   onSetLayerFilter,
-  onOpenClipInFocus,
-  onOpenClipInOverlay,
-  // T10610 § C.4: awaited by ClipDetailsEditor's stage button before navigating.
-  onAwaitWrites,
   // T8890: (videoSequence) -> angle display name, or null for backbone / angle-free.
   getAngleName = null,
 }) {
@@ -173,11 +169,6 @@ export function ClipsSidePanel({
               onScrubLock={onScrubLock}
               onScrubUnlock={onScrubUnlock}
               teammateSuggestions={teammateSuggestions}
-              // T10240: the mobile detail takeover needs onOpenInFocus so its
-              // NO_PROJECT "Frame clip" action can navigate into Framing.
-              onOpenInFocus={onOpenClipInFocus}
-              onOpenInOverlay={onOpenClipInOverlay}
-              onAwaitWrites={onAwaitWrites}
             />
           </div>
         </>
@@ -346,9 +337,6 @@ export function ClipsSidePanel({
                 onScrubLock={onScrubLock}
                 onScrubUnlock={onScrubUnlock}
                 teammateSuggestions={teammateSuggestions}
-                onOpenInFocus={onOpenClipInFocus}
-                onOpenInOverlay={onOpenClipInOverlay}
-                onAwaitWrites={onAwaitWrites}
               />
             </div>
           )}

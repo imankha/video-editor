@@ -98,3 +98,67 @@ describe('ClipRegionLayer — tooltip repositions on scroll (T10510)', () => {
     addSpy.mockRestore();
   });
 });
+
+// T10810: a marker's bounding rect ignores clipping. With the track zoomed and
+// scrolled (mobile 3x since T10780), a selected marker that has scrolled out of
+// the `.timeline-scroll-container` viewport -- or sits under the opaque lane
+// label column -- still reports a screen position, so the portalled tooltip
+// kept rendering at the left edge of the phone with no marker under it.
+describe('ClipRegionLayer — tooltip hides while the marker is scrolled out of view (T10810)', () => {
+  const regions = [
+    { id: 'a', startTime: 0, endTime: 5, rating: 4, name: 'Great press', my_athlete: true },
+  ];
+
+  function renderInScroller() {
+    const scroller = document.createElement('div');
+    scroller.className = 'timeline-scroll-container';
+    document.body.appendChild(scroller);
+    const utils = render(
+      <ClipRegionLayer regions={regions} duration={100} selectedRegionId="a" onSelectRegion={() => {}} />,
+      { container: scroller },
+    );
+    return { scroller, ...utils };
+  }
+
+  // jsdom has no layout: fake the scroller's viewport at x=200..600 and put the
+  // marker's center wherever the test needs it.
+  function stubRects(scroller, markerLeft) {
+    return vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function rect() {
+      if (this === scroller) return { left: 200, right: 600, top: 0, bottom: 48, width: 400, height: 48 };
+      if (this.classList?.contains('clip-marker')) {
+        return { left: markerLeft, right: markerLeft + 24, top: 10, bottom: 34, width: 24, height: 24 };
+      }
+      return { left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 };
+    });
+  }
+
+  it('renders the tooltip when the marker is inside the scroll viewport', () => {
+    const { scroller, unmount } = renderInScroller();
+    const spy = stubRects(scroller, 300);
+    act(() => { document.body.dispatchEvent(new Event('scroll')); });
+    expect(document.querySelector('[data-testid="clip-marker-tooltip"]')).not.toBeNull();
+    spy.mockRestore();
+    unmount();
+    scroller.remove();
+  });
+
+  it('hides the tooltip when the marker has scrolled left of the viewport (under the lane label)', () => {
+    const { scroller, unmount } = renderInScroller();
+    const spy = stubRects(scroller, 100);
+    act(() => { document.body.dispatchEvent(new Event('scroll')); });
+    expect(document.querySelector('[data-testid="clip-marker-tooltip"]')).toBeNull();
+    spy.mockRestore();
+    unmount();
+    scroller.remove();
+  });
+
+  it('hides the tooltip when the marker has scrolled right of the viewport', () => {
+    const { scroller, unmount } = renderInScroller();
+    const spy = stubRects(scroller, 700);
+    act(() => { document.body.dispatchEvent(new Event('scroll')); });
+    expect(document.querySelector('[data-testid="clip-marker-tooltip"]')).toBeNull();
+    spy.mockRestore();
+    unmount();
+    scroller.remove();
+  });
+});
