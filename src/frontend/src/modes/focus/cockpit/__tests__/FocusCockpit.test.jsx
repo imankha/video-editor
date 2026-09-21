@@ -64,12 +64,12 @@ describe('FocusCockpit (T10840 shell)', () => {
     expect(screen.getByTestId('cockpit-actions')).toBeTruthy();
   });
 
-  it('uses h-dvh + overflow-hidden, never h-screen / inset-0 (D7 iOS-toolbar invariant)', () => {
+  it('uses h-dvh + overflow-hidden, never h-screen / inset-0 (D7 iOS-toolbar invariant)', () => { // viewport-unit-ok: description text, not a real occurrence
     renderCockpit();
     const shell = screen.getByTestId('focus-cockpit');
     expect(shell.className).toContain('h-dvh');
     expect(shell.className).toContain('overflow-hidden');
-    expect(shell.className).not.toContain('h-screen');
+    expect(shell.className).not.toContain('h-screen'); // viewport-unit-ok: negative assertion
     expect(shell.className).not.toMatch(/(^|\s)inset-0(\s|$)/);
   });
 
