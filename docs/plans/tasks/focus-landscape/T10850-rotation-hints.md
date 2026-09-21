@@ -1,6 +1,6 @@
 # T10850: Rotation hints — nudge in portrait, orient on first landscape entry
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-21
