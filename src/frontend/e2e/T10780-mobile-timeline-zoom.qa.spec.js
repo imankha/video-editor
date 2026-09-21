@@ -116,26 +116,77 @@ test.describe('T10780 mobile timeline — TimelineBase mechanics (harness)', () 
         const before = (await rects(page)).scrollLeft;
         expect(before).toBe(0);
 
-        // Drag starting at the very top edge of the row (the py-1 padding band) to
-        // prove the whole 44px row is the hit target, not just the visual pill.
-        await page.evaluate((sel) => {
-          const el = document.querySelector(sel);
-          const r = el.getBoundingClientRect();
-          const x0 = r.left + r.width * 0.1;
-          const x1 = r.left + r.width * 0.8;
-          const yTop = r.top + 2; // within the top padding band
-          const mk = (type, target, x) => {
-            const t = new Touch({ identifier: 7, target, clientX: x, clientY: yTop });
-            return new TouchEvent(type, { bubbles: true, cancelable: true, touches: type === 'touchend' ? [] : [t], targetTouches: type === 'touchend' ? [] : [t], changedTouches: [t] });
-          };
-          el.dispatchEvent(mk('touchstart', el, x0));
-          document.dispatchEvent(mk('touchmove', document, x1));
-          document.dispatchEvent(mk('touchend', document, x1));
-        }, SCROLLBAR_TRACK);
+        // Real CDP touch, starting at the very top edge of the row (the py-1
+        // padding band) to prove the whole 44px row is the hit target, not just
+        // the visual pill.
+        const r = await page.locator(SCROLLBAR_TRACK).boundingBox();
+        await cdpSwipe(page, r.x + r.width * 0.1, r.x + r.width * 0.8, r.y + 2);
 
         const after = (await rects(page)).scrollLeft;
         expect(after, 'a touch starting at the row edge moved the window').toBeGreaterThan(0);
         await saveEvidence(page, `criterion-scrollbar-drag-${vp.name}`);
+      });
+
+      test('a MOUSE drag works too: continuous, grab keeps its offset, release outside the row still lands', async ({ page }) => {
+        // User ruling 2026-09-21: "work great using touch or mouse". The first cut
+        // was touch + click only, so a mouse got click-to-jump ("finite
+        // positions") and a mouseup outside the row was a lost gesture.
+        await page.goto(HARNESS_MOBILE);
+        await expect(page.locator(SCROLLBAR_TRACK)).toBeVisible();
+        const track = await page.locator(SCROLLBAR_TRACK).boundingBox();
+        const thumb0 = await page.locator(SCROLLBAR_THUMB).boundingBox();
+        const y = track.y + track.height / 2;
+
+        // 1) press ON the thumb (no jump), drag right in small steps -> scrollLeft
+        //    rises monotonically at every step (continuous, not stepped).
+        const grabX = thumb0.x + thumb0.width * 0.5;
+        await page.mouse.move(grabX, y);
+        await page.mouse.down();
+        expect((await rects(page)).scrollLeft, 'pressing on the thumb does not jump').toBe(0);
+        const samples = [];
+        for (let i = 1; i <= 10; i++) {
+          await page.mouse.move(grabX + i * 12, y);
+          samples.push((await rects(page)).scrollLeft);
+        }
+        for (let i = 1; i < samples.length; i++) {
+          expect(samples[i], `step ${i} moved the window (continuous drag)`).toBeGreaterThan(samples[i - 1]);
+        }
+        // the thumb stayed under the cursor (grab offset preserved): its center
+        // is within a few px of the cursor
+        const thumb1 = await page.locator(SCROLLBAR_THUMB).boundingBox();
+        expect(Math.abs((thumb1.x + thumb1.width / 2) - (grabX + 120)), 'thumb stays under the cursor').toBeLessThanOrEqual(4);
+
+        // 2) keep dragging while the cursor leaves the row (below it, into the
+        //    page) and release THERE: capture keeps the gesture alive, the window
+        //    keeps following, and nothing is lost on the outside release.
+        const beforeExit = (await rects(page)).scrollLeft;
+        await page.mouse.move(grabX + 160, y + 120);
+        const outside = (await rects(page)).scrollLeft;
+        expect(outside, 'drag continues while the cursor is outside the row').toBeGreaterThan(beforeExit);
+        await page.mouse.up();
+        const released = (await rects(page)).scrollLeft;
+        expect(released, 'release outside the row keeps the position').toBe(outside);
+        // and after release, moving the mouse no longer scrolls
+        await page.mouse.move(grabX, y);
+        expect((await rects(page)).scrollLeft, 'no drag after release').toBe(released);
+
+        // 3) press on the RAIL left of the thumb: the thumb centers under the
+        //    cursor (jump), then a drag continues from there.
+        const railX = track.x + 8;
+        await page.mouse.move(railX, y);
+        await page.mouse.down();
+        // scrollLeft is written synchronously on the press; the thumb's DOM
+        // position follows on the next frame (scroll event -> React state), so
+        // assert the model now and poll the view.
+        expect((await rects(page)).scrollLeft, 'rail press near the left end jumps the window to 0').toBe(0);
+        await expect.poll(async () => {
+          const t = await page.locator(SCROLLBAR_THUMB).boundingBox();
+          return Math.abs((t.x + t.width / 2) - railX) <= t.width / 2 + 2;
+        }, { message: 'rail press centers the thumb under the cursor (clamped at 0)' }).toBe(true);
+        await page.mouse.move(railX + 60, y);
+        expect((await rects(page)).scrollLeft, 'drag continues after a rail press').toBeGreaterThan(0);
+        await page.mouse.up();
+        await saveEvidence(page, `criterion-scrollbar-mouse-drag-${vp.name}`);
       });
 
       test('a non-playback seek past the right margin re-anchors the playhead ~1/3 in (page-forward)', async ({ page }) => {

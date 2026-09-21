@@ -510,7 +510,7 @@ export function TimelineBase({
 }
 
 /**
- * MobileScrollbar - Touch-friendly scrollbar for zoomed timelines (T10780).
+ * MobileScrollbar - finger/mouse scrollbar for zoomed timelines (T10780).
  * Hidden on lg+ screens where the native scrollbar + a fine pointer are usable.
  *
  * A REAL finger control (user ruling 2026-09-20): the whole row is a >= 44px hit
@@ -519,10 +519,25 @@ export function TimelineBase({
  * `mb-3` 12px below (before the Edit-play strip). The row is offset `ml-20
  * lg:ml-32` so it lines up edge-to-edge with the plays track, never the label
  * column.
+ *
+ * Input is POINTER EVENTS with pointer capture (user ruling 2026-09-21: "work
+ * great using touch or mouse"). The first cut listened to touch + click only, so
+ * a mouse could not drag at all - it could only click-to-jump, which read as
+ * "finite positions", and a mouseup outside the row was a lost gesture. Now:
+ *  - press ON the thumb grabs it, preserving the grab offset (the thumb stays
+ *    under the finger/cursor, no jump);
+ *  - press on the rail centers the thumb under the pointer, then keeps dragging;
+ *  - capture keeps the drag alive anywhere on screen until release, and
+ *    `touch-none` on the row stops the browser panning the page meanwhile.
+ * Continuous: every pointermove writes `scrollLeft` from the pointer position,
+ * so the track follows 1:1 with no steps.
  */
 function MobileScrollbar({ scrollContainerRef, timelineScale }) {
   const trackRef = React.useRef(null);
   const thumbRef = React.useRef(null);
+  // Grab offset (px from the thumb's left edge to the pointer) while dragging;
+  // null when idle. A ref, not state: it must never trigger a render.
+  const grabOffsetRef = React.useRef(null);
   const thumbWidthPercent = Math.max(20, (1 / timelineScale) * 100);
   const [thumbLeftPx, setThumbLeftPx] = React.useState(0);
 
@@ -550,31 +565,78 @@ function MobileScrollbar({ scrollContainerRef, timelineScale }) {
     return () => container.removeEventListener('scroll', sync);
   }, [scrollContainerRef, thumbWidthPercent]);
 
-  const handleDrag = useCallback((clientX) => {
+  // Geometry shared by press + move: rail rect, rendered thumb width, travel.
+  const geometry = useCallback(() => {
     const track = trackRef.current;
     const container = scrollContainerRef.current;
-    if (!track || !container) return;
+    if (!track || !container) return null;
     const rect = track.getBoundingClientRect();
-    const fraction = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const thumbWidth = thumbRef.current
+      ? thumbRef.current.getBoundingClientRect().width
+      : (rect.width * thumbWidthPercent) / 100;
+    const maxThumbLeft = Math.max(0, rect.width - thumbWidth);
     const maxScroll = container.scrollWidth - container.clientWidth;
-    container.scrollLeft = fraction * maxScroll;
-  }, [scrollContainerRef]);
+    return { rect, thumbWidth, maxThumbLeft, maxScroll, container };
+  }, [scrollContainerRef, thumbWidthPercent]);
 
-  const handleTouchStart = useCallback((e) => {
-    handleDrag(e.touches[0].clientX);
-    const onMove = (ev) => { ev.preventDefault(); handleDrag(ev.touches[0].clientX); };
-    const onEnd = () => { document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onEnd); };
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('touchend', onEnd);
-  }, [handleDrag]);
+  // Place the thumb's LEFT edge at `thumbLeft` px within the rail (clamped) and
+  // write the matching scrollLeft. The scroll event then re-syncs the thumb.
+  const scrollToThumbLeft = useCallback((g, thumbLeft) => {
+    const clamped = Math.max(0, Math.min(g.maxThumbLeft, thumbLeft));
+    const fraction = g.maxThumbLeft > 0 ? clamped / g.maxThumbLeft : 0;
+    g.container.scrollLeft = fraction * g.maxScroll;
+  }, []);
+
+  const handlePointerDown = useCallback((e) => {
+    // Primary button only for mouse; touch/pen always primary.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const g = geometry();
+    if (!g) return;
+    e.preventDefault();
+    const x = e.clientX - g.rect.left;
+    const thumbLeft = thumbRef.current
+      ? thumbRef.current.getBoundingClientRect().left - g.rect.left
+      : 0;
+    const onThumb = x >= thumbLeft && x <= thumbLeft + g.thumbWidth;
+    // On the thumb: keep the grab offset (no jump). On the rail: center the
+    // thumb under the pointer and drag from there.
+    const offset = onThumb ? x - thumbLeft : g.thumbWidth / 2;
+    grabOffsetRef.current = offset;
+    if (!onThumb) scrollToThumbLeft(g, x - offset);
+    // Capture so the drag survives leaving the row (jsdom has no capture API).
+    if (e.currentTarget.setPointerCapture) {
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+    }
+  }, [geometry, scrollToThumbLeft]);
+
+  const handlePointerMove = useCallback((e) => {
+    if (grabOffsetRef.current === null) return;
+    const g = geometry();
+    if (!g) return;
+    e.preventDefault();
+    scrollToThumbLeft(g, e.clientX - g.rect.left - grabOffsetRef.current);
+  }, [geometry, scrollToThumbLeft]);
+
+  const handlePointerEnd = useCallback((e) => {
+    if (grabOffsetRef.current === null) return;
+    grabOffsetRef.current = null;
+    if (e.currentTarget.releasePointerCapture) {
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    }
+  }, []);
 
   return (
     <div
       ref={trackRef}
       data-testid="mobile-scrollbar-track"
-      className="lg:hidden ml-20 lg:ml-32 mt-2 mb-3 py-1 min-h-[44px] flex items-center relative touch-none"
-      onTouchStart={handleTouchStart}
-      onClick={(e) => { handleDrag(e.clientX); }}
+      role="scrollbar"
+      aria-orientation="horizontal"
+      aria-label="Scroll timeline"
+      className="lg:hidden ml-20 lg:ml-32 mt-2 mb-3 py-1 min-h-[44px] flex items-center relative touch-none select-none cursor-grab active:cursor-grabbing"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
     >
       {/* 36px visual rail pill */}
       <div className="relative w-full h-9 bg-gray-800 rounded-full">

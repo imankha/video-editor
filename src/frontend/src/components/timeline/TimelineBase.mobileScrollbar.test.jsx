@@ -8,7 +8,8 @@ import { TimelineBase } from './TimelineBase';
  * with a grip, 8 px above / 12 px below (mt-2 / mb-3). A touch anywhere in the row
  * drags the window (no dead zone at the row's vertical edges). The bar renders in
  * the DOM whenever timelineScale > 1; `lg:hidden` hides it on true desktop (CSS,
- * not exercised by jsdom).
+ * not exercised by jsdom). Input is Pointer Events (mouse AND touch, with
+ * capture) - see the drag contract tests below.
  */
 
 afterEach(() => cleanup());
@@ -74,9 +75,10 @@ describe('MobileScrollbar — finger-sized geometry (T10780)', () => {
     expect(screen.queryByTestId('mobile-scrollbar-track')).toBeNull();
   });
 
-  it('a touchstart + touchmove on the track scrolls the container', () => {
-    const { track } = renderBar();
-    const container = document.querySelector('.timeline-scroll-container');
+  // Pointer-event drag contract (user ruling 2026-09-21: "work great using
+  // touch or mouse"). The first cut listened to touch + click only, so a mouse
+  // could not drag at all (click-to-jump read as "finite positions").
+  function scrollable(container) {
     let scrollLeft = 0;
     Object.defineProperty(container, 'scrollWidth', { configurable: true, get: () => 900 });
     Object.defineProperty(container, 'clientWidth', { configurable: true, get: () => 300 });
@@ -85,13 +87,80 @@ describe('MobileScrollbar — finger-sized geometry (T10780)', () => {
       get: () => scrollLeft,
       set: (v) => { scrollLeft = v; },
     });
+  }
+  // Pin the thumb at 100px wide sitting at the rail's left edge (rail = 300px,
+  // so the thumb travels 0..200px and maps onto scrollLeft 0..600).
+  function pinThumb(left = 0) {
+    const thumb = screen.getByTestId('mobile-scrollbar-thumb');
+    thumb.getBoundingClientRect = () => ({
+      left, top: 4, right: left + 100, bottom: 40, width: 100, height: 36, x: left, y: 4,
+    });
+    return thumb;
+  }
 
-    // touch at 50% of the 300px row -> fraction 0.5 -> 0.5 * (900-300) = 300
-    fireEvent.touchStart(track, { touches: [{ clientX: 150 }] });
-    expect(container.scrollLeft).toBeCloseTo(300, 5);
+  for (const pointerType of ['mouse', 'touch']) {
+    it(`${pointerType}: pressing on the rail centers the thumb under the pointer, then a drag follows 1:1`, () => {
+      const { track } = renderBar();
+      const container = document.querySelector('.timeline-scroll-container');
+      scrollable(container);
+      pinThumb(0);
 
-    // a move to the far right edge drives it to maxScroll
-    fireEvent.touchMove(document, { touches: [{ clientX: 300 }] });
+      // press at x=150 on the rail (thumb spans 0..100 -> not on the thumb):
+      // thumb centers under the pointer -> thumbLeft 100 -> 100/200 * 600 = 300
+      fireEvent.pointerDown(track, { pointerType, button: 0, pointerId: 1, clientX: 150, clientY: 20 });
+      expect(container.scrollLeft).toBeCloseTo(300, 5);
+
+      // move to x=250 -> thumbLeft 200 (max) -> 600
+      fireEvent.pointerMove(track, { pointerType, pointerId: 1, clientX: 250, clientY: 20 });
+      expect(container.scrollLeft).toBeCloseTo(600, 5);
+
+      // move back to x=100 -> thumbLeft 50 -> 150 (continuous, no steps)
+      fireEvent.pointerMove(track, { pointerType, pointerId: 1, clientX: 100, clientY: 20 });
+      expect(container.scrollLeft).toBeCloseTo(150, 5);
+
+      // release -> further moves do nothing
+      fireEvent.pointerUp(track, { pointerType, pointerId: 1, clientX: 100, clientY: 20 });
+      fireEvent.pointerMove(track, { pointerType, pointerId: 1, clientX: 250, clientY: 20 });
+      expect(container.scrollLeft).toBeCloseTo(150, 5);
+    });
+
+    it(`${pointerType}: pressing ON the thumb grabs it without a jump and keeps the grab offset`, () => {
+      const { track } = renderBar();
+      const container = document.querySelector('.timeline-scroll-container');
+      scrollable(container);
+      pinThumb(0);
+
+      // press at x=80, inside the thumb (0..100): no jump
+      fireEvent.pointerDown(track, { pointerType, button: 0, pointerId: 2, clientX: 80, clientY: 20 });
+      expect(container.scrollLeft).toBe(0);
+
+      // drag +40px -> thumbLeft 40 -> 40/200 * 600 = 120 (offset 80 preserved)
+      fireEvent.pointerMove(track, { pointerType, pointerId: 2, clientX: 120, clientY: 20 });
+      expect(container.scrollLeft).toBeCloseTo(120, 5);
+    });
+  }
+
+  it('a drag keeps working when the pointer leaves the row (capture), and clamps at the ends', () => {
+    const { track } = renderBar();
+    const container = document.querySelector('.timeline-scroll-container');
+    scrollable(container);
+    pinThumb(0);
+    fireEvent.pointerDown(track, { pointerType: 'mouse', button: 0, pointerId: 3, clientX: 50, clientY: 20 });
+    // way off to the right and below the row -> clamps to the end, still dragging
+    fireEvent.pointerMove(track, { pointerType: 'mouse', pointerId: 3, clientX: 900, clientY: 400 });
     expect(container.scrollLeft).toBeCloseTo(600, 5);
+    // way off to the left -> clamps to 0
+    fireEvent.pointerMove(track, { pointerType: 'mouse', pointerId: 3, clientX: -500, clientY: -50 });
+    expect(container.scrollLeft).toBe(0);
+  });
+
+  it('a secondary mouse button does not start a drag', () => {
+    const { track } = renderBar();
+    const container = document.querySelector('.timeline-scroll-container');
+    scrollable(container);
+    pinThumb(0);
+    fireEvent.pointerDown(track, { pointerType: 'mouse', button: 2, pointerId: 4, clientX: 150, clientY: 20 });
+    fireEvent.pointerMove(track, { pointerType: 'mouse', pointerId: 4, clientX: 250, clientY: 20 });
+    expect(container.scrollLeft).toBe(0);
   });
 });
