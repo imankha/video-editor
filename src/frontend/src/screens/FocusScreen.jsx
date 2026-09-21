@@ -8,6 +8,7 @@ import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useVideo } from '../hooks/useVideo';
 import { useClipManager } from '../hooks/useClipManager';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
+import { useIsCockpit } from '../hooks/useIsMobile';
 import { useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ClipSelectorSidebar } from '../components/ClipSelectorSidebar';
@@ -56,8 +57,18 @@ export function FocusScreen({
   onProceedToOverlay,
   exportButtonRef: externalExportButtonRef,
   onPublishWithoutSpotlight,
+  // T10840: routes the cockpit's transport-rail Back chevron through App's
+  // handleModeChange (with its framing-changed safety dialog) — the cockpit
+  // shell covers the UnifiedHeader, so its Home button is unreachable there.
+  onExitToHome,
 }) {
   const setEditorMode = useEditorStore(state => state.setEditorMode);
+
+  // T10840 (D1/D3): a phone held sideways enters the landscape cockpit — a pure
+  // derivation, no state/effect. When true, the 224px clip sidebar and its mobile
+  // toggle are gated off here (clips live in the cockpit's Clips sheet instead);
+  // FocusModeView early-returns the cockpit shell on the same derivation.
+  const cockpit = useIsCockpit();
 
   // Project context
   const { projectId, project, aspectRatio: projectAspectRatio, refresh: refreshProject } = useProject();
@@ -429,6 +440,7 @@ export function FocusScreen({
     handleDetrimEnd: framingHandleDetrimEnd,
     handleKeyframeClick: framingHandleKeyframeClick,
     handleKeyframeDelete: framingHandleKeyframeDelete,
+    handleKeyframeTimeMove: framingHandleKeyframeTimeMove,
     handleCopyCrop: framingHandleCopyCrop,
     handlePasteCrop: framingHandlePasteCrop,
     handleAddSplit: framingHandleAddSplit,
@@ -1388,8 +1400,10 @@ export function FocusScreen({
 
   return (
     <div className="flex h-full">
-      {/* Sidebar - hidden on mobile, visible on sm+ */}
-      {(hasClips && clips.length > 0) ? (
+      {/* Sidebar - hidden on mobile, visible on sm+. T10840 (D3): gated off in the
+          landscape cockpit, where clips live in the Clips sheet instead — otherwise
+          the 224px rail would eat the cockpit's width exactly as it does today. */}
+      {!cockpit && ((hasClips && clips.length > 0) ? (
         <div className="hidden sm:flex">
           <ClipSelectorSidebar {...sidebarProps} />
         </div>
@@ -1403,7 +1417,7 @@ export function FocusScreen({
             </div>
           </div>
         </div>
-      )}
+      ))}
 
       {/* Mobile sidebar overlay */}
       {showMobileSidebar && hasClips && clips.length > 0 && (
@@ -1426,8 +1440,9 @@ export function FocusScreen({
 
       {/* Main content */}
       <div className="flex-1 min-w-0">
-        {/* Mobile clips toggle */}
-        {hasClips && clips.length > 0 && (
+        {/* Mobile clips toggle. T10840 (D3): gated off in the cockpit — the Clips
+            rail button opens the Clips sheet instead. */}
+        {!cockpit && hasClips && clips.length > 0 && (
           <div className="flex sm:hidden px-3 pt-2">
             <button
               onClick={() => setShowMobileSidebar(true)}
@@ -1485,6 +1500,7 @@ export function FocusScreen({
       onCropComplete={framingHandleCropComplete}
       onKeyframeClick={handleKeyframeClickWithIndex}
       onKeyframeDelete={framingHandleKeyframeDelete}
+      onKeyframeTimeMove={framingHandleKeyframeTimeMove}
       onCopyCrop={framingHandleCopyCrop}
       onPasteCrop={framingHandlePasteCrop}
       zoom={zoom}
@@ -1540,6 +1556,9 @@ export function FocusScreen({
       renderedAt={framingCtaState.renderedAt}
       backToPreviewLoading={backToPreviewLoading}
       cropContextValue={cropContextValue}
+      cockpit={cockpit}
+      clipSidebarProps={sidebarProps}
+      onExitToHome={onExitToHome}
     />
       </div>
 

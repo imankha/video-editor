@@ -14,6 +14,7 @@ import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
 import FocusClipsPanel from '../components/settings/FocusClipsPanel';
 import { CropOverlay } from './focus';
 import { FocusTimelineBlock } from './focus/FocusTimelineBlock';
+import FocusCockpit from './focus/cockpit/FocusCockpit';
 import FramingInstructions from './focus/FramingInstructions';
 import FramingActionRow from './focus/FramingActionRow';
 import { formatLength, PRECISION } from '../utils/timeFormat';
@@ -222,6 +223,7 @@ export function FocusModeView({
   onCropComplete,
   onKeyframeClick,
   onKeyframeDelete,
+  onKeyframeTimeMove,
   onCopyCrop,
   onPasteCrop,
 
@@ -295,6 +297,12 @@ export function FocusModeView({
 
   // Context
   cropContextValue,
+
+  // T10840: landscape cockpit — the derivation is computed once in FocusScreen
+  // (useIsCockpit) and passed down so there is a single source of truth.
+  cockpit = false,
+  clipSidebarProps,
+  onExitToHome,
 }) {
   const [dimOpacity, setDimOpacity] = useState(0.2);
   const [touchMode, setTouchMode] = useState('crop');
@@ -494,6 +502,82 @@ export function FocusModeView({
       showSegments={advancedOpen}
     />
   ) : null;
+
+  // T10840 (D3): a phone held sideways gets the cockpit — a distinct precision
+  // layout, NOT the scrolling portrait/tablet column. Early-return here, ABOVE
+  // the `bg-white/10 backdrop-blur-lg` card below, so no backdrop-filter ancestor
+  // exists over the sheets (the T10420 / T10820 containing-block trap). All hooks
+  // above have already run, so this conditional return is rules-of-hooks safe.
+  if (cockpit) {
+    return (
+      <FocusCockpit
+        videoRef={videoRef}
+        videoUrl={videoUrl}
+        handlers={handlers}
+        clipRange={clipRange}
+        metadata={metadata}
+        currentCropState={currentCropState}
+        aspectRatio={aspectRatio}
+        rotation={rotation}
+        onSetRotation={onSetRotation}
+        onCropChange={onCropChange}
+        onCropComplete={onCropComplete}
+        zoom={zoom}
+        panOffset={panOffset}
+        onZoomByWheel={onZoomByWheel}
+        onPanChange={onPanChange}
+        selectedCropKeyframeIndex={selectedCropKeyframeIndex}
+        isLoading={isLoading}
+        isProjectLoading={isProjectLoading}
+        isVideoElementLoading={isVideoElementLoading}
+        loadingProgress={loadingProgress}
+        loadingElapsedSeconds={loadingElapsedSeconds}
+        loadingStage={loadingStage}
+        error={error}
+        isSourceExpired={isSourceExpired}
+        canExtendSource={canExtendSource}
+        isUrlExpiredError={isUrlExpiredError}
+        onRetryVideo={onRetryVideo}
+        clipTitle={clipTitle}
+        clipGameName={clipGameName}
+        selectedClipEffectiveDuration={selectedClipEffectiveDuration}
+        globalAspectRatio={globalAspectRatio}
+        currentTime={currentTime}
+        duration={duration}
+        isPlaying={isPlaying}
+        togglePlay={togglePlay}
+        stepForward={stepForward}
+        stepBackward={stepBackward}
+        onExitToHome={onExitToHome}
+        keyframes={keyframes}
+        framerate={framerate}
+        seek={seek}
+        onKeyframeDelete={onKeyframeDelete}
+        onKeyframeTimeMove={onKeyframeTimeMove}
+        onCopyCrop={onCopyCrop}
+        canUndoFraming={canUndoFraming}
+        onUndoFraming={onUndoFraming}
+        framingCtaMode={framingCtaMode}
+        onBackToPreview={onBackToPreview}
+        backToPreviewLoading={backToPreviewLoading}
+        includeAudio={includeAudio}
+        onIncludeAudioChange={onIncludeAudioChange}
+        onAspectRatioChange={onAspectRatioChange}
+        clipSidebarProps={clipSidebarProps}
+        focusTimelineBlock={focusTimelineBlock}
+        videoFile={videoFile}
+        getFilteredKeyframesForExport={getFilteredKeyframesForExport}
+        getSegmentExportData={getSegmentExportData}
+        hasClips={hasClips}
+        clipsWithCurrentState={clipsWithCurrentState}
+        globalTransition={globalTransition}
+        onProceedToOverlay={onProceedToOverlay}
+        onExportComplete={onExportComplete}
+        saveCurrentClipState={saveCurrentClipState}
+        exportButtonRef={exportButtonRef}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-0">

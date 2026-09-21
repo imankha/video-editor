@@ -1,5 +1,41 @@
 ---
 domain: keyframes-framing
+updated: 2026-09-21 (T10840 — Focus on a landscape phone gets a distinct COCKPIT layout, not the
+scrolling portrait/tablet column. Entry is a PURE derivation `useIsCockpit() = useIsMobile() &&
+useIsLandscape()` (`hooks/useIsMobile.js`) — no state, no effect, no store field; jsdom's matchMedia
+returns false so every existing test stays on the portrait path (both `useIsMobile` and
+`useIsLandscape` are now matchMedia-guarded, so mounting the real FocusScreen in a jsdom test with no
+matchMedia mock no longer throws). Two mount points, one derivation (D3): `screens/FocusScreen.jsx`
+gates the `hidden sm:flex` clip sidebar + the mobile clips toggle on `!cockpit`, and
+`modes/FocusModeView.jsx` early-returns `<FocusCockpit/>` ABOVE the `bg-white/10 backdrop-blur-lg`
+card (so no backdrop-filter ancestor traps the sheets). New subtree
+`src/frontend/src/modes/focus/cockpit/`: FocusCockpit (shell: `fixed inset-x-0 top-0 z-[100] h-dvh`
+— NEVER `inset-0`/`h-screen`, T4880 — with `env(safe-area-inset-left/right/bottom)` padding on BOTH
+sides, D7, the single most likely shipping bug: play button behind the iOS notch — headless E2E
+CANNOT catch it, real-device iOS both rotation directions is OWED), TransportRail (Zone A: back /
+step / play / two-line timecode), ActionRail (Zone D: Clips/Setup/Undo/Preview + `~N cr` + a COMPACT
+`PrimaryCta` — D9, same `data-testid="primary-cta"`, 64x60, box-invariant per sheet state — driving
+the SAME `ExportButtonContainer` the portrait ActionBand uses; the rail sits `z-50` above the sheet
+scrim so the CTA is never dimmed), CockpitTimelineStrip (Zone C: tap=seek, drag=scrub,
+long-press+drag=jog÷4, tap-diamond=seek+select→Copy/Delete popover, drag-diamond=move-in-time; NO
+timeline zoom; markers use the shared `calc(EDGE_PADDING=20px + (100% - 40px) * pct)` formula
+mirrored from `TimelineBase.jsx:114`, never a bare `%`; 13px diamonds carry a 44px `-inset-4` hit
+box), CockpitSheet (Zone E: `absolute` inside the shell — NEVER `fixed`, D6 — slides from the right,
+scrim `pointer-events-none`/no-backdrop-tap-close, X-only). Sheets reuse `ClipSelectorSidebar` +
+`FocusSettingsPanel` + the extracted `FocusTimelineBlock` (Trim) verbatim. New surgical handler
+`FocusContainer.handleKeyframeTimeMove` routes the diamond-drag through the EXISTING
+`focusActions.moveCropKeyframe` action (single write path, optimistic remove+re-add with rollback —
+NOT a new persistence path). `CropOverlay` now treats `pointercancel` as ABANDON (D12): a rotate
+mid-drag fires pointercancel → drag refs cleared, NO `onCropComplete`, no partial keyframe written
+(distinct `handlePointerCancel`, wired on the crop rect + resize handles; straighten tool unchanged).
+`FocusScreen` threads `cockpit`, `clipSidebarProps` (its own `sidebarProps`) and `onExitToHome`
+(App's `handleModeChange(PROJECT_MANAGER)`, so the rail Back chevron keeps the framing-changed safety
+dialog — the cockpit shell covers the UnifiedHeader). The D14 rotation HINTS (RotateNudge +
+CockpitIntroCard) are T10850, NOT built here. Coverage: `hooks/__tests__/useIsCockpit.test.js`,
+`modes/focus/cockpit/__tests__/{FocusCockpit,ActionRail,CockpitTimelineStrip}.test.jsx`,
+`components/PrimaryCta.test.jsx`, `e2e/T10840-focus-landscape-cockpit.qa.spec.js` (unrun in this
+container — no dev stack; OWED on staging + the real-device iOS check). Existing FocusModeView/
+FocusTimeline/CropOverlay/stale-clip-guard tests pass UNEDITED.)
 updated: 2026-09-20 (T10740 — Focus's clip loaders now REFUSE a clip belonging to another project,
 and a 404 from `playback-url` no longer falls back to the `/stream` proxy. See the two invariants
 "Focus never loads a clip from another project" and "A 404 from our own playback-url fails loudly"

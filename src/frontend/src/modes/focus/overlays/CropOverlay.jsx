@@ -320,6 +320,25 @@ export default function CropOverlay({
   /**
    * Handle pointer down on crop rectangle (start drag)
    */
+  /**
+   * Handle pointer cancel (D12) — a layout change during an in-flight drag
+   * (e.g. rotating the phone into / out of the landscape cockpit) fires
+   * `pointercancel`. Abandon the drag/resize WITHOUT emitting onCropComplete:
+   * no partial keyframe is written and no persist fires; the last committed
+   * keyframe stands. This is deliberately distinct from handlePointerUp, which
+   * commits the drag. Reads nothing transient — it only clears the drag refs.
+   */
+  const handlePointerCancel = useCallback((e) => {
+    draggingRef.current = false;
+    resizingRef.current = false;
+    resizeHandleRef.current = null;
+    cropStartRef.current = null;
+    e?.currentTarget?.releasePointerCapture?.(e.pointerId);
+  }, []);
+
+  /**
+   * Handle pointer down on crop rectangle (start drag)
+   */
   const handleCropPointerDown = (e) => {
     if (e.target.classList.contains('crop-handle')) return;
 
@@ -610,7 +629,7 @@ export default function CropOverlay({
         onPointerDown={handleCropPointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         title="Drag to move the crop box. Drag corners or edges to resize. This sets the visible area of your highlight."
       >
         {/* Grid lines */}
@@ -666,7 +685,7 @@ export default function CropOverlay({
             onPointerDown={(e) => handleResizePointerDown(e, handle.name)}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
           />
         ))}
       </div>

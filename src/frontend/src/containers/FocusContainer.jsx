@@ -823,6 +823,57 @@ export function FocusContainer({
   }, [duration, framerate, keyframes, getCropDataAtTime, removeKeyframe, addOrUpdateKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData, framingHistory, applyInverseKeyframeState]);
 
   /**
+   * Handle moving a focus point in TIME (T10840 D10 — the cockpit timeline
+   * strip's diamond-drag). Keeps the SAME crop, only its frame changes, via the
+   * existing surgical `move_crop_keyframe` action (not a new persistence path).
+   * Optimistic remove+re-add through the same hook mutators every other edit
+   * uses (single write path), with rollback on failure. A no-op when the frame
+   * is unchanged or the destination already carries a distinct keyframe.
+   */
+  const handleKeyframeTimeMove = useCallback(async (oldTime, newTime) => {
+    const oldFrame = Math.round(oldTime * framerate);
+    const newFrame = Math.round(newTime * framerate);
+    if (oldFrame === newFrame) return;
+
+    const sourceKf = keyframes.find(kf => kf.frame === oldFrame);
+    if (!sourceKf) return;
+    // Refuse to land on top of a DISTINCT existing keyframe (min-spacing is
+    // enforced backend-side too; this keeps the optimistic state honest).
+    if (keyframes.some(kf => kf.frame === newFrame && kf !== sourceKf)) return;
+
+    const cropData = { x: sourceKf.x, y: sourceKf.y, width: sourceKf.width, height: sourceKf.height };
+    const origin = sourceKf.origin || 'user';
+    const callerClipId = selectedClipId;
+    const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
+
+    clipHasUserEditsRef.current = true;
+    removeKeyframe(oldTime, duration);
+    addOrUpdateKeyframe(newTime, cropData, duration, origin);
+    onUserEdit?.();
+    setFramingChangedSinceExport?.(true);
+
+    if (callerClipId) {
+      const updatedKfs = previousStoreKfs
+        .filter(kf => kf.frame !== oldFrame)
+        .concat([{ ...sourceKf, frame: newFrame }]);
+      updateClipData(callerClipId, { crop_data: updatedKfs });
+    }
+
+    const clipId = selectedClip?.id;
+    if (selectedProjectId && clipId) {
+      const result = await focusActions.moveCropKeyframe(selectedProjectId, clipId, oldFrame, newFrame);
+      if (!result.success) {
+        if (callerClipId) updateClipData(callerClipId, { crop_data: previousStoreKfs });
+        if (latestSelectedClipIdRef.current === callerClipId) {
+          removeKeyframe(newTime, duration);
+          addOrUpdateKeyframe(oldTime, cropData, duration, origin);
+        }
+        toast.error('Failed to move focus point', { message: result.error });
+      }
+    }
+  }, [framerate, keyframes, duration, selectedClipId, selectedClip, selectedProjectId, removeKeyframe, addOrUpdateKeyframe, onUserEdit, setFramingChangedSinceExport, updateClipData]);
+
+  /**
    * Handler for copy crop at current time
    */
   const handleCopyCrop = useCallback((time = currentTime) => {
@@ -1135,6 +1186,7 @@ export function FocusContainer({
     handleDetrimEnd,
     handleKeyframeClick,
     handleKeyframeDelete,
+    handleKeyframeTimeMove,
     handleCopyCrop,
     handlePasteCrop,
     handleAddSplit,
