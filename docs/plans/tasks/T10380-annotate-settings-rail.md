@@ -99,3 +99,13 @@ live-drive.
 - [x] New tests green, existing Annotate regression suite green, build clean
 - [ ] Live-drive on staging/dev (not possible this session — Playwright browser was already in
       use by another concurrent session on this shared machine)
+
+## Outcome (2026-09-21 deploy reconciliation)
+
+Shipped DIVERGED from this spec. The rail was implemented (commit `1a2fca90`, 2026-09-18) and
+removed the same day by T10390 after a live look; T10391-T10395 then placed the controls in their
+natural homes: Focus's zoom control moved onto the video transport bar (T10395), Add footage moved
+into the whole-game CTA row (T10393), and the zoom reset button is always rendered, disabled at
+100% (T10394). The goal this task was filed for - no extra toolbar row pushing the Annotate
+timeline down - is met by that layout. There is no Annotate settings rail in the shipped product;
+`SettingsRail` remains Focus/Overlay-only.
