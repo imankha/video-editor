@@ -1724,7 +1724,11 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   playhead inside range on video sequence 1 AND sequence 2 (the previously-untested direction). A
   single harmless `[AutoDeselect]` log can fire once during init (an early render referencing a
   default/first region before the multi-video duration resolves) and self-corrects in the same
-  pass — not a retry, not a loop, no visible flicker.
+  pass — not a retry, not a loop, no visible flicker. **The SyncLane amplifier is now DEFUSED
+  (T10760, 2026-09-21):** `useVideo` reads the store through per-slice selectors, so a
+  value-identical `setCurrentTime` (the RAF loop's ~60/sec write) no longer schedules a SyncLane
+  re-render — but the invariant STILL holds regardless, because a passive-effect retry racing a
+  SyncLane seek is wrong in principle, not only under the old pressure; do not reintroduce one.
 - **`useVideo.seek` REFUSES when no duration is known — it does not clamp to 0 (T10750).**
   `effectiveDuration = duration || (clipDuration ?? video.duration) || 0` used to turn every
   pre-metadata seek into a seek-to-0, parking the playhead outside the target clip so the

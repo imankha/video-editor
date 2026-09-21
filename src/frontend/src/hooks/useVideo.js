@@ -94,37 +94,43 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // larger than clipDuration even though only the clip body was transferred).
   const isProxyLoadRef = useRef(false);
 
-  // Get state and setters from the store
-  const {
-    videoFile,
-    videoUrl,
-    metadata,
-    isPlaying,
-    currentTime,
-    duration,
-    clipOffset,
-    clipDuration,
-    isSeeking,
-    isBuffering,
-    error,
-    isLoading,
-    isVideoElementLoading,
-    loadingProgress,
-    loadingElapsedSeconds,
-    setVideoFile,
-    setVideoUrl,
-    setMetadata,
-    setIsPlaying,
-    setCurrentTime,
-    setDuration,
-    setIsSeeking,
-    setIsBuffering,
-    setError,
-    setIsLoading,
-    setVideoLoaded,
-    setVideoElementReady,
-    setLoadingProgress,
-  } = useVideoStore();
+  // T10760: selector-scoped reads. A selector-less `useVideoStore()` subscribes
+  // to the WHOLE store, so every write (incl. value-identical ones, since zustand
+  // allocates a fresh state object each set) schedules a SyncLane re-render of
+  // this hook and all its consumers. The RAF loop writes `currentTime` ~60x/sec,
+  // so whole editor screens re-rendered at that rate. One selector per slice we
+  // actually use means a subscriber re-renders ONLY when that slice changes.
+  // (Same fix T6190 applied to focusStore; never applied to videoStore until now.)
+  // NOTE: object-returning selectors would re-allocate every render and defeat
+  // the point — keep them scalar, one per slice.
+  const videoFile = useVideoStore((s) => s.videoFile);
+  const videoUrl = useVideoStore((s) => s.videoUrl);
+  const metadata = useVideoStore((s) => s.metadata);
+  const isPlaying = useVideoStore((s) => s.isPlaying);
+  const currentTime = useVideoStore((s) => s.currentTime);
+  const duration = useVideoStore((s) => s.duration);
+  const clipOffset = useVideoStore((s) => s.clipOffset);
+  const clipDuration = useVideoStore((s) => s.clipDuration);
+  const isSeeking = useVideoStore((s) => s.isSeeking);
+  const isBuffering = useVideoStore((s) => s.isBuffering);
+  const error = useVideoStore((s) => s.error);
+  const isLoading = useVideoStore((s) => s.isLoading);
+  const isVideoElementLoading = useVideoStore((s) => s.isVideoElementLoading);
+  const loadingProgress = useVideoStore((s) => s.loadingProgress);
+  const loadingElapsedSeconds = useVideoStore((s) => s.loadingElapsedSeconds);
+  // Setters are stable store-level references (zustand returns the same fn each
+  // render), so selecting them individually keeps useCallback dep arrays stable.
+  const setVideoUrl = useVideoStore((s) => s.setVideoUrl);
+  const setMetadata = useVideoStore((s) => s.setMetadata);
+  const setIsPlaying = useVideoStore((s) => s.setIsPlaying);
+  const setCurrentTime = useVideoStore((s) => s.setCurrentTime);
+  const setDuration = useVideoStore((s) => s.setDuration);
+  const setIsSeeking = useVideoStore((s) => s.setIsSeeking);
+  const setIsBuffering = useVideoStore((s) => s.setIsBuffering);
+  const setError = useVideoStore((s) => s.setError);
+  const setIsLoading = useVideoStore((s) => s.setIsLoading);
+  const setVideoLoaded = useVideoStore((s) => s.setVideoLoaded);
+  const setVideoElementReady = useVideoStore((s) => s.setVideoElementReady);
 
   // Clip offset translation — converts between 0-based clip time (what the app sees)
   // and absolute video element time (what the <video> element uses).
@@ -136,7 +142,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * Load a video file
    * @param {File} file - Video file to load
    */
-  const loadVideo = async (file) => {
+  const loadVideo = useCallback(async (file) => {
     setError(null);
     setIsLoading(true);
 
@@ -171,7 +177,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       setError(err.message || 'Failed to load video');
       setIsLoading(false);
     }
-  };
+  }, [videoUrl, setError, setIsLoading, setVideoLoaded]);
 
   /**
    * Load a video from URL (for server-side clips)
@@ -368,7 +374,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * Note: Check videoRef.current.src instead of videoUrl to support overlay mode
    * where the video src is set externally (not via loadVideo)
    */
-  const play = async () => {
+  const play = useCallback(async () => {
     if (videoRef.current && videoRef.current.src) {
       try {
         await videoRef.current.play();
@@ -379,22 +385,22 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         }
       }
     }
-  };
+  }, []);
 
   /**
    * Pause video
    */
-  const pause = () => {
+  const pause = useCallback(() => {
     if (videoRef.current) {
       videoRef.current.pause();
       setIsPlaying(false);
     }
-  };
+  }, [setIsPlaying]);
 
   /**
    * Toggle play/pause - async to handle play() promise
    */
-  const togglePlay = async () => {
+  const togglePlay = useCallback(async () => {
     // Use video element's paused state as source of truth to handle desync
     // between isPlaying store state and actual video state (e.g., stuck buffering)
     if (videoRef.current && !videoRef.current.paused) {
@@ -402,7 +408,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     } else {
       await play();
     }
-  };
+  }, [pause, play]);
 
   /**
    * Seek to specific time
@@ -418,7 +424,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * frame actually changes. This prevents tracking squares from desyncing
    * during scrubbing.
    */
-  const seek = (time) => {
+  const seek = useCallback((time) => {
     if (videoRef.current && videoRef.current.src) {
       // Get duration from video element if not set (overlay mode)
       const effectiveDuration = duration || (clipDuration ?? videoRef.current.duration) || 0;
@@ -508,14 +514,14 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         seekWatchdogRef.current = null;
       }, 8000);
     }
-  };
+  }, [duration, clipDuration, clampToVisibleRange, currentTime, isSeeking, clipToVideo, videoToClip, setIsSeeking, setCurrentTime, setIsBuffering]);
 
   /**
    * Step forward one frame
    * Uses frame-based calculation to avoid floating point accumulation errors.
    * Note: Check videoRef.current.src to support overlay mode
    */
-  const stepForward = () => {
+  const stepForward = useCallback(() => {
     if (videoRef.current && videoRef.current.src) {
       const framerate = getFramerate(videoRef.current);
       const effectiveDuration = duration || videoRef.current.duration || 0;
@@ -528,14 +534,14 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       const newTime = targetFrame / framerate;
       seek(newTime);
     }
-  };
+  }, [duration, currentTime, seek]);
 
   /**
    * Step backward one frame
    * Uses frame-based calculation to avoid floating point accumulation errors.
    * Note: Check videoRef.current.src to support overlay mode
    */
-  const stepBackward = () => {
+  const stepBackward = useCallback(() => {
     if (videoRef.current && videoRef.current.src) {
       const framerate = getFramerate(videoRef.current);
       // Convert current time to frame, subtract 1, convert back to time
@@ -546,43 +552,43 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       const newTime = targetFrame / framerate;
       seek(newTime);
     }
-  };
+  }, [currentTime, seek]);
 
   /**
    * Restart video - resets playhead to beginning (or first visible frame if start is trimmed)
    * Note: Check videoRef.current.src to support overlay mode
    */
-  const restart = () => {
+  const restart = useCallback(() => {
     if (videoRef.current && videoRef.current.src) {
       pause();
       // seek(0) will automatically clamp to first visible frame if start is trimmed
       seek(0);
     }
-  };
+  }, [pause, seek]);
 
   /**
    * Seek forward by a specified number of seconds
    * Used for keyboard navigation (arrow keys)
    * @param {number} seconds - Number of seconds to seek forward (default 5)
    */
-  const seekForward = (seconds = 5) => {
+  const seekForward = useCallback((seconds = 5) => {
     if (videoRef.current && videoRef.current.src) {
       const newTime = currentTime + seconds;
       seek(newTime); // seek() handles clamping to valid range
     }
-  };
+  }, [currentTime, seek]);
 
   /**
    * Seek backward by a specified number of seconds
    * Used for keyboard navigation (arrow keys)
    * @param {number} seconds - Number of seconds to seek backward (default 5)
    */
-  const seekBackward = (seconds = 5) => {
+  const seekBackward = useCallback((seconds = 5) => {
     if (videoRef.current && videoRef.current.src) {
       const newTime = currentTime - seconds;
       seek(newTime); // seek() handles clamping to valid range
     }
-  };
+  }, [currentTime, seek]);
 
   // Video element event handlers
   const handleTimeUpdate = () => {
