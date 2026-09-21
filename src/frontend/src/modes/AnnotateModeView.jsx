@@ -27,11 +27,34 @@ import { Button } from '../components/shared';
  * 1. Annotating (default) — normal video player, timeline, clip editing
  * 2. Playback — dual-video ping-pong, virtual timeline, NotesOverlay per clip
  */
+
+// T10800: the non-fullscreen Annotate stage boxes (single-video, multi-video and
+// playback/recap) are aspect-fit — mirrors Overlay's useAspectStage (T5676) — so
+// `object-contain` never leaves letterbox bands. The box's shape comes from the
+// inline `aspectRatio` style (see `stageAspectStyle`); these classes size it:
+// `max-h-[60vh]` at ALL widths caps a tall 9:16 phone source so the timeline
+// stays reachable, and `lg:w-fit lg:h-[60vh]` pins the desktop height (width
+// derived from the ratio) so a landscape source is never TALLER than today's box.
+const STAGE_ASPECT_BOX_CLASS = 'mx-auto w-full max-w-full max-h-[60vh] lg:w-fit lg:h-[60vh] lg:max-h-[60vh]';
+// The ONE surviving fixed-height letterbox box — used ONLY when the video's
+// dimensions are genuinely unknown (a legacy game row with NULL video_width /
+// video_height, resolved to `stageAspect === null`). This is the explicit,
+// warned "dimensions unknown" branch, not a silent 16/9 coercion.
+const STAGE_UNKNOWN_DIMS_CLASS = 'h-[40vh] sm:h-[60vh]';
+
 export function AnnotateModeView({
   // Video control
   videoController,
   annotateVideoUrl,
   annotateVideoMetadata,
+  // T10800: the game row's video_width/video_height (raw, from GET /api/games/{id}),
+  // kept separate from annotateVideoMetadata so the stage box can be aspect-shaped
+  // BEFORE the <video> element has loaded its own dimensions (no layout jump on
+  // load), and even when metadata is null (a row with dims but no probed duration).
+  gameVideoWidth,
+  gameVideoHeight,
+  // T10800: identifies the game for the explicit unknown-dimensions warning.
+  gameId,
   annotateContainerRef,
   currentTime,
   duration,
@@ -269,6 +292,38 @@ export function AnnotateModeView({
   const mobileFs = annotateFullscreen && isMobile;
   const [isDraggingScrub, setIsDraggingScrub] = useState(false);
 
+  // T10800: ONE resolved aspect for every non-fullscreen Annotate stage box
+  // (single-video, multi-video, and playback/recap), so all three read the same
+  // value. Priority: the live <video> element's metadata -> the game row's
+  // video_width/video_height (box shaped correctly before the picture loads) ->
+  // null. There is deliberately NO 16-by-9 coercion (CLAUDE.md: no silent
+  // fallbacks for internal data): a genuinely-unknown-dimensions game is an
+  // EXPLICIT, warned branch (below) that keeps today's fixed letterbox box.
+  const stageAspect = useMemo(() => {
+    const mw = annotateVideoMetadata?.width;
+    const mh = annotateVideoMetadata?.height;
+    if (mw > 0 && mh > 0) return { width: mw, height: mh };
+    if (gameVideoWidth > 0 && gameVideoHeight > 0) return { width: gameVideoWidth, height: gameVideoHeight };
+    return null;
+  }, [annotateVideoMetadata?.width, annotateVideoMetadata?.height, gameVideoWidth, gameVideoHeight]);
+  const stageAspectStyle = stageAspect
+    ? { aspectRatio: `${stageAspect.width} / ${stageAspect.height}` }
+    : undefined;
+  // Diagnostic-only (console, never a store/network write — not the banned
+  // reactive-persistence effect): warn once per game when dimensions are unknown
+  // so the fixed-box fallback is a named, greppable state rather than a silent
+  // letterbox.
+  useEffect(() => {
+    if (!stageAspect && gameId != null) {
+      console.warn(
+        `[AnnotateModeView] Game ${gameId}: video dimensions unknown (no element ` +
+        `metadata and no game row video_width/video_height). Falling back to the ` +
+        `fixed-height letterbox stage box. Re-probe dimensions at upload finalize ` +
+        `to enable the aspect-fit stage.`
+      );
+    }
+  }, [stageAspect, gameId]);
+
   // T8600: the under-canvas editor (strip on desktop, inline sheet on mobile)
   // replaces the timeline + CTA/Playback/Share block below the video whenever
   // the add/edit overlay is open and we're not in fullscreen. `isMobile`
@@ -405,11 +460,13 @@ export function AnnotateModeView({
             className={`relative bg-gray-900 ${isFS ? 'w-full' : 'rounded-lg'} overflow-hidden cursor-pointer`}
             onClick={mobilePlaybackFs ? () => { playback.togglePlay(); playbackFsControls.handleTapVideo(); } : () => playback.togglePlay()}
           >
-            <div className={`relative ${isFS ? 'w-full' : 'h-[40vh] sm:h-[60vh]'}`}
+            <div className={`relative ${isFS ? (stageAspect ? 'w-full' : 'w-full h-full') : (stageAspect ? STAGE_ASPECT_BOX_CLASS : STAGE_UNKNOWN_DIMS_CLASS)}`}
               style={isFS ? {
                 maxHeight: mobilePlaybackFs ? '100dvh' : 'calc(100dvh - 120px)',
-                aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}`,
-              } : undefined}
+                // T10800: routed through the shared resolved aspect (no 16-by-9
+                // coercion); fullscreen keeps its own sizing otherwise untouched.
+                ...(stageAspect ? { aspectRatio: `${stageAspect.width} / ${stageAspect.height}` } : {}),
+              } : stageAspectStyle}
             >
               {/* Video A */}
               {/* T9510: author-supplied aria-label sits above the browser's
@@ -606,7 +663,9 @@ export function AnnotateModeView({
                    Reuses the Games-menu expired language (yellow + Clock). */
                 <div className={annotateFullscreen
                   ? 'absolute inset-0 flex items-center justify-center bg-yellow-950/20'
-                  : 'flex items-center justify-center h-[40vh] sm:h-[60vh] rounded-lg bg-yellow-950/20 border border-yellow-800/40'}
+                  // T10800: no picture here, so keep today's fixed box (routed
+                  // through the shared unknown-dims constant, not a literal).
+                  : `flex items-center justify-center ${STAGE_UNKNOWN_DIMS_CLASS} rounded-lg bg-yellow-950/20 border border-yellow-800/40`}
                 >
                   <div className="text-center max-w-md px-6">
                     <Clock size={40} className="mx-auto mb-3 text-yellow-500" />
@@ -619,8 +678,8 @@ export function AnnotateModeView({
                 </div>
               ) : multiVideo ? (
                 /* T2750: Dual video elements for multi-video scrub */
-                <div className={annotateFullscreen ? 'absolute inset-0' : 'relative'}
-                     style={annotateFullscreen ? undefined : { aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}` }}>
+                <div className={annotateFullscreen ? 'absolute inset-0' : `relative ${stageAspect ? STAGE_ASPECT_BOX_CLASS : STAGE_UNKNOWN_DIMS_CLASS}`}
+                     style={annotateFullscreen ? undefined : stageAspectStyle}>
                   {/* T9510: same ARIA contract as the playback dual-video (see
                       note above) — these editing/scrub elements share the A/B
                       source-swap churn and onError handler, so an author label +
@@ -724,10 +783,17 @@ export function AnnotateModeView({
                   )}
                 </div>
               ) : (
-                <div className={annotateFullscreen ? 'absolute inset-0' : 'contents'}>
+                <div
+                  className={annotateFullscreen ? 'absolute inset-0' : `relative ${stageAspect ? STAGE_ASPECT_BOX_CLASS : STAGE_UNKNOWN_DIMS_CLASS}`}
+                  style={annotateFullscreen ? undefined : stageAspectStyle}
+                >
                   <VideoPlayer
                     videoRef={videoController._renderRefs.videoARef}
                     videoUrl={annotateVideoUrl}
+                    // T10800: the wrapper above is the aspect-sized stage box, so
+                    // VideoPlayer fills it (w-full h-full) instead of imposing its
+                    // own fixed 40/60vh height. Fullscreen owns its own sizing.
+                    fitToAspect={!annotateFullscreen}
                     handlers={handlers}
                     onVideoClick={togglePlay}
                     isLoading={isLoading}

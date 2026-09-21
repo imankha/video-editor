@@ -336,7 +336,7 @@ export function VideoPlayer({
           })()}
         </div>
       ) : error ? (
-        <div role="alert" aria-live="assertive" className="flex items-center justify-center h-[40vh] sm:h-[60vh] bg-black/70">
+        <div role="alert" aria-live="assertive" className={`flex items-center justify-center ${fitToAspect ? 'h-full' : 'h-[40vh] sm:h-[60vh]'} bg-black/70`}>
           <div className="text-center max-w-md px-4">
             <div className="text-red-500 text-4xl mb-4">⚠️</div>
             <p className="text-red-400 font-semibold mb-2">Video failed to load</p>
@@ -352,7 +352,7 @@ export function VideoPlayer({
           </div>
         </div>
       ) : isLoading ? (
-        <div className="flex items-center justify-center h-[40vh] sm:h-[60vh] text-gray-400">
+        <div className={`flex items-center justify-center ${fitToAspect ? 'h-full' : 'h-[40vh] sm:h-[60vh]'} text-gray-400`}>
           <div className="text-center">
             <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-gray-600 border-t-purple-500"></div>
             <p className="mt-4 text-sm text-gray-300">{loadingMessage}</p>
@@ -360,7 +360,7 @@ export function VideoPlayer({
         </div>
       ) : (
         <div
-          className={`flex items-center justify-center h-[40vh] sm:h-[60vh] text-gray-400 transition-colors ${
+          className={`flex items-center justify-center ${fitToAspect ? 'h-full' : 'h-[40vh] sm:h-[60vh]'} text-gray-400 transition-colors ${
             isDragging ? 'bg-blue-600/20 border-2 border-blue-500 border-dashed' : ''
           }`}
         >

@@ -240,6 +240,12 @@ export function AnnotateContainer({
   const [gameVideos, setGameVideos] = useState(null);
   // [{ sequence, url, duration, width, height, serverUrl? }]
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
+  // T10800: the game row's raw video_width/video_height ({width, height} or
+  // null), set once on game load (applyGameData). Kept separate from
+  // annotateVideoMetadata so AnnotateModeView can aspect-shape the stage box
+  // before the <video> element loads, and even when metadata is null (a row with
+  // dims but no probed duration). View-only; never persisted.
+  const [annotateGameDims, setAnnotateGameDims] = useState(null);
 
   // T3050: Refresh multi-video presigned URLs when they expire.
   // Concurrent calls are safe — getGame() deduplicates in-flight requests.
@@ -917,6 +923,21 @@ export function AnnotateContainer({
       schedulePlaybackUrlRefresh(gameData.id, playbackUrlData.expires_in);
     }
     setAnnotateVideoMetadata(videoMetadata);
+    // T10800: raw game-row dimensions for the aspect-fit stage box. Multi-video
+    // uses the first video's dims (falling back to the game-level columns);
+    // single-video uses the game columns. Null when the row has NULL dims (the
+    // explicit "dimensions unknown" branch in AnnotateModeView), no 16/9 guess.
+    const rawGameWidth = isMultiVideo
+      ? (gameData.videos[0].video_width || gameData.video_width)
+      : gameData.video_width;
+    const rawGameHeight = isMultiVideo
+      ? (gameData.videos[0].video_height || gameData.video_height)
+      : gameData.video_height;
+    setAnnotateGameDims(
+      rawGameWidth > 0 && rawGameHeight > 0
+        ? { width: rawGameWidth, height: rawGameHeight }
+        : null,
+    );
     // bug 27p: authoritative expiry from /load. When expired, the video area
     // renders a deliberate expired state instead of loading the dead source.
     setAnnotateSourceExpired(gameData.storage_status === 'expired');
@@ -2106,6 +2127,8 @@ export function AnnotateContainer({
     // State
     annotateVideoUrl,
     annotateVideoMetadata,
+    // T10800: raw game-row dims for the aspect-fit stage box (see applyGameData).
+    annotateGameDims,
     annotateGameName,
     annotateSourceExpired,
     annotateFullscreen,

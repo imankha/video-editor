@@ -1,5 +1,21 @@
 ---
 domain: annotate
+updated: 2026-09-21 (T10800 — the non-fullscreen Annotate player is now ASPECT-FIT, not a fixed
+`h-[40vh] sm:h-[60vh]` letterbox box (killed the black bands above/below a 16:9 picture on a
+phone; ~120px reclaimed for the timeline/CTAs). Reuses T5676's `VideoPlayer fitToAspect` +
+CSS-`aspectRatio` stage box wholesale — no new sizing mechanism. All THREE non-fullscreen stage
+boxes (single-video editor, multi-video A/B, playback/recap) read ONE resolved `stageAspect`
+(element metadata -> game row `video_width`/`video_height` -> null); the `|| 16 / || 9` coercions
+that used to live inline are gone. Null (legacy NULL-dims row) is an EXPLICIT, `console.warn`-ed
+branch that keeps today's fixed box (constant `STAGE_UNKNOWN_DIMS_CLASS`, the file's only
+`h-[40vh]`). Box classes = `STAGE_ASPECT_BOX_CLASS` (`mx-auto w-full max-w-full max-h-[60vh]
+lg:w-fit lg:h-[60vh] lg:max-h-[60vh]`) — 60vh cap at ALL widths (9:16 phone source stays
+short), lg pins height so desktop is never taller than the old 60vh floor. `VideoPlayer`'s
+loading/error/empty states honor `fitToAspect` (`h-full`) so the box doesn't jump on load.
+Container threads raw dims via new view-only `annotateGameDims` (set in `applyGameData`, never
+persisted) -> `gameVideoWidth`/`gameVideoHeight`/`gameId` props. **Fullscreen and `mobileFs` own
+their own sizing and are byte-identical** (proven: FS aspect string is identical when metadata is
+present, the only real case). See § "Player sizing model" below.)
 updated: 2026-09-20 (T10750 — the Annotate-entry clip selection is ONE SHOT, consumed in
 `AnnotateContainer`'s `pendingSelectTargetRef` effect. AnnotateScreen's T3960 retry selector was
 DELETED: it re-issued select+seek until the selection "stuck" and could never observe its own
@@ -1472,6 +1488,46 @@ updated: 2026-08-21 (T4340 segments_data is write-time-canonical now, migration 
 The Annotate screen (game video → clip regions → raw_clips), game loading/resume, multi-video
 virtual timeline, clip metadata editing, the recap viewer's annotate features (T4130), and backend
 clip/segment persistence in `clips.py`/`games.py`.
+
+## Player sizing model — aspect-fit, not fixed-vh (T10800, 2026-09-21)
+
+The Annotate video player's NON-fullscreen stage is aspect-fit (T5676 lineage, same pattern
+Overlay/Focus use), NOT a fixed `h-[40vh] sm:h-[60vh]` box. Before T10800 the fixed box left tall
+black letterbox bands above/below a 16:9 picture on a phone; now the box shrink-wraps the picture.
+
+- **One resolved aspect.** `AnnotateModeView` computes `stageAspect` once (`useMemo`): the `<video>`
+  element metadata (`annotateVideoMetadata.width/height`) → the game row's `video_width`/`video_height`
+  (so the box is shaped BEFORE the picture loads — no layout jump) → `null`. There is deliberately NO
+  16-by-9 coercion — the old inline `annotateVideoMetadata?.width || 16` guards (playback FS box +
+  multi-video box) are gone; all sites read `stageAspect`/`stageAspectStyle`.
+- **The `null` branch is explicit + warned.** A legacy game row with NULL dims resolves to
+  `stageAspect === null`, which keeps today's fixed box via the module constant
+  `STAGE_UNKNOWN_DIMS_CLASS = 'h-[40vh] sm:h-[60vh]'` (the file's ONLY `h-[40vh]`) and fires a
+  once-per-game `console.warn` naming the game id (diagnostic-only effect; no store/network write).
+- **Box classes** = `STAGE_ASPECT_BOX_CLASS = 'mx-auto w-full max-w-full max-h-[60vh] lg:w-fit
+  lg:h-[60vh] lg:max-h-[60vh]'` + inline `style={{ aspectRatio: 'W / H' }}`. `max-h-[60vh]` at ALL
+  widths caps a tall 9:16 phone source (object-contain pillarboxes that rare case) so the timeline
+  stays reachable; `lg:w-fit lg:h-[60vh]` pins desktop height (width derived from the ratio) so a
+  landscape source is never TALLER than the old 60vh floor (Annotate uses 60vh, NOT Overlay's 70vh —
+  no Overlay-style desktop trade-off).
+- **Three surfaces, one value:** single-video editor path (VideoPlayer wrapper, now passes
+  `fitToAspect={!annotateFullscreen}`), multi-video A/B box, and the playback/recap box all use the
+  two constants above.
+- **VideoPlayer picture-less states** (loading/error/empty) honor `fitToAspect` (`h-full` instead of
+  their own `h-[40vh] sm:h-[60vh]`) so the box doesn't jump when the video paints.
+- **`.video-container` stays the ResizeObserver target** (T5590) — unchanged in `VideoPlayer.jsx`;
+  resizing the aspect box is safe because of that RO. NotesOverlay/AngleSwitcherBadge are
+  corner-anchored `absolute` badges INSIDE the box (they do NOT use `useVideoDisplayRect`); with the
+  box now equal to the video aspect they land on the video corners with no band to drift into.
+- **Fullscreen and `mobileFs` own their own sizing** and are byte-identical (the FS aspect string is
+  identical to master when metadata is present, the only real case; a null-dims FS playback box now
+  falls back to `w-full h-full` rather than a coerced 16/9, avoiding a 0-height collapse).
+- **Data plumbing:** raw game dims are exposed by `AnnotateContainer`'s view-only `annotateGameDims`
+  state (set in `applyGameData` on game load — a gesture, never a reactive effect; never persisted),
+  threaded through `AnnotateScreen` as `gameVideoWidth`/`gameVideoHeight`/`gameId`.
+- Coverage: `AnnotateModeView.aspectStage.test.jsx`, `VideoPlayer.t10800.test.jsx`, and real-browser
+  `e2e/T10800-annotate-aspect-stage.qa.spec.js` (393x852 / 360x740 no-bands + Mark-play-reachable,
+  desktop 60vh cap, fullscreen full-bleed).
 
 ## Entry points
 - **Screen**: `src/frontend/src/screens/AnnotateScreen.jsx` — single source of truth for annotate
