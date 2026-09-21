@@ -12,7 +12,8 @@ import { Button } from '../components/shared';
 import SettingsRail from '../components/settings/SettingsRail';
 import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
 import FocusClipsPanel from '../components/settings/FocusClipsPanel';
-import { FocusMode, CropOverlay } from './focus';
+import { CropOverlay } from './focus';
+import { FocusTimelineBlock } from './focus/FocusTimelineBlock';
 import FramingInstructions from './focus/FramingInstructions';
 import FramingActionRow from './focus/FramingActionRow';
 import { formatLength, PRECISION } from '../utils/timeFormat';
@@ -440,6 +441,60 @@ export function FocusModeView({
   // Project total is redundant with the per-clip chip when there's a single clip.
   const isMultiClip = hasClips && (clipsWithCurrentState?.length || 0) > 1;
 
+  // T10830: the framing timeline block, built once and rendered by whichever of
+  // the two mutually-exclusive layouts is active (ordinary vs mobile-fullscreen).
+  // Guarded on videoUrl so getTimelineScale() is evaluated exactly when it was
+  // before the extraction (once, only when a video is loaded).
+  const focusTimelineBlock = videoUrl ? (
+    <FocusTimelineBlock
+      videoRef={videoRef}
+      videoUrl={videoUrl}
+      metadata={metadata}
+      currentTime={currentTime}
+      duration={duration}
+      cropContextValue={cropContextValue}
+      currentCropState={currentCropState}
+      aspectRatio={aspectRatio}
+      cropKeyframes={keyframes}
+      framerate={framerate}
+      selectedCropKeyframeIndex={selectedCropKeyframeIndex}
+      copiedCrop={copiedCrop}
+      onCropChange={onCropChange}
+      onCropComplete={onCropComplete}
+      onCropKeyframeClick={onKeyframeClick}
+      onCropKeyframeDelete={onKeyframeDelete}
+      onCropKeyframeCopy={onCopyCrop}
+      onCropKeyframePaste={onPasteCrop}
+      zoom={zoom}
+      panOffset={panOffset}
+      segments={segments}
+      segmentBoundaries={segmentBoundaries}
+      segmentVisualLayout={segmentVisualLayout}
+      visualDuration={visualDuration || duration}
+      trimRange={trimRange}
+      trimHistory={trimHistory}
+      onAddSegmentBoundary={onAddSegmentBoundary}
+      onRemoveSegmentBoundary={onRemoveSegmentBoundary}
+      onSegmentSpeedChange={onSegmentSpeedChange}
+      onSegmentTrim={onSegmentTrim}
+      onDetrimStart={onDetrimStart}
+      onDetrimEnd={onDetrimEnd}
+      sourceTimeToVisualTime={sourceTimeToVisualTime}
+      visualTimeToSourceTime={visualTimeToSourceTime}
+      selectedLayer={selectedLayer}
+      onLayerSelect={onLayerSelect}
+      onSeek={seek}
+      timelineZoom={timelineZoom}
+      onTimelineZoomByWheel={onTimelineZoomByWheel}
+      timelineScale={getTimelineScale()}
+      timelineScrollPosition={timelineScrollPosition}
+      onTimelineScrollPositionChange={onTimelineScrollPositionChange}
+      isPlaying={isPlaying}
+      isFullscreen={isFullscreen}
+      showSegments={advancedOpen}
+    />
+  ) : null;
+
   return (
     <div className="flex flex-col min-h-0">
       {/* Error Message */}
@@ -666,55 +721,7 @@ export function FocusModeView({
           )}
 
           {/* Timeline - desktop fullscreen & non-fullscreen */}
-          {!mobileFs && videoUrl && (
-          <FocusMode
-            videoRef={videoRef}
-            videoUrl={videoUrl}
-            metadata={metadata}
-            currentTime={currentTime}
-            duration={duration}
-            cropContextValue={cropContextValue}
-            currentCropState={currentCropState}
-            aspectRatio={aspectRatio}
-            cropKeyframes={keyframes}
-            framerate={framerate}
-            selectedCropKeyframeIndex={selectedCropKeyframeIndex}
-            copiedCrop={copiedCrop}
-            onCropChange={onCropChange}
-            onCropComplete={onCropComplete}
-            onCropKeyframeClick={onKeyframeClick}
-            onCropKeyframeDelete={onKeyframeDelete}
-            onCropKeyframeCopy={onCopyCrop}
-            onCropKeyframePaste={onPasteCrop}
-            zoom={zoom}
-            panOffset={panOffset}
-            segments={segments}
-            segmentBoundaries={segmentBoundaries}
-            segmentVisualLayout={segmentVisualLayout}
-            visualDuration={visualDuration || duration}
-            trimRange={trimRange}
-            trimHistory={trimHistory}
-            onAddSegmentBoundary={onAddSegmentBoundary}
-            onRemoveSegmentBoundary={onRemoveSegmentBoundary}
-            onSegmentSpeedChange={onSegmentSpeedChange}
-            onSegmentTrim={onSegmentTrim}
-            onDetrimStart={onDetrimStart}
-            onDetrimEnd={onDetrimEnd}
-            sourceTimeToVisualTime={sourceTimeToVisualTime}
-            visualTimeToSourceTime={visualTimeToSourceTime}
-            selectedLayer={selectedLayer}
-            onLayerSelect={onLayerSelect}
-            onSeek={seek}
-            timelineZoom={timelineZoom}
-            onTimelineZoomByWheel={onTimelineZoomByWheel}
-            timelineScale={getTimelineScale()}
-            timelineScrollPosition={timelineScrollPosition}
-            onTimelineScrollPositionChange={onTimelineScrollPositionChange}
-            isPlaying={isPlaying}
-            isFullscreen={isFullscreen}
-            showSegments={advancedOpen}
-          />
-        )}
+          {!mobileFs && focusTimelineBlock}
 
         {/* T9950 Slice 1: "Trim and Slo-mo" disclosure — moved directly under
             the timeline 2026-09-18 per user request (it toggles the timeline's
@@ -775,55 +782,9 @@ export function FocusModeView({
                       onToggleFullscreen={onToggleFullscreen}
                     />
                   )}
-                  {videoUrl && (
+                  {focusTimelineBlock && (
                     <div className="bg-gray-900/90 px-2 py-0.5">
-                      <FocusMode
-                        videoRef={videoRef}
-                        videoUrl={videoUrl}
-                        metadata={metadata}
-                        currentTime={currentTime}
-                        duration={duration}
-                        cropContextValue={cropContextValue}
-                        currentCropState={currentCropState}
-                        aspectRatio={aspectRatio}
-                        cropKeyframes={keyframes}
-                        framerate={framerate}
-                        selectedCropKeyframeIndex={selectedCropKeyframeIndex}
-                        copiedCrop={copiedCrop}
-                        onCropChange={onCropChange}
-                        onCropComplete={onCropComplete}
-                        onCropKeyframeClick={onKeyframeClick}
-                        onCropKeyframeDelete={onKeyframeDelete}
-                        onCropKeyframeCopy={onCopyCrop}
-                        onCropKeyframePaste={onPasteCrop}
-                        zoom={zoom}
-                        panOffset={panOffset}
-                        segments={segments}
-                        segmentBoundaries={segmentBoundaries}
-                        segmentVisualLayout={segmentVisualLayout}
-                        visualDuration={visualDuration || duration}
-                        trimRange={trimRange}
-                        trimHistory={trimHistory}
-                        onAddSegmentBoundary={onAddSegmentBoundary}
-                        onRemoveSegmentBoundary={onRemoveSegmentBoundary}
-                        onSegmentSpeedChange={onSegmentSpeedChange}
-                        onSegmentTrim={onSegmentTrim}
-                        onDetrimStart={onDetrimStart}
-                        onDetrimEnd={onDetrimEnd}
-                        sourceTimeToVisualTime={sourceTimeToVisualTime}
-                        visualTimeToSourceTime={visualTimeToSourceTime}
-                        selectedLayer={selectedLayer}
-                        onLayerSelect={onLayerSelect}
-                        onSeek={seek}
-                        timelineZoom={timelineZoom}
-                        onTimelineZoomByWheel={onTimelineZoomByWheel}
-                        timelineScale={getTimelineScale()}
-                        timelineScrollPosition={timelineScrollPosition}
-                        onTimelineScrollPositionChange={onTimelineScrollPositionChange}
-                        isPlaying={isPlaying}
-                        isFullscreen={isFullscreen}
-                        showSegments={advancedOpen}
-                      />
+                      {focusTimelineBlock}
                     </div>
                   )}
                 </div>
