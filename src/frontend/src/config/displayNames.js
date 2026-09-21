@@ -669,3 +669,16 @@ export const RETENTION = {
   EXPORTED: 'Reels you export are kept for good and are free to store.',
   DRAFT: 'An unexported draft stays viewable, but you need its source to re-edit or export it, so finish the ones you want to keep before the 30 days are up.',
 };
+
+// T10190: the shared finished-result surface (CollectionPlayer + the card CTAs
+// that open it), single source. WATCH_HIGHLIGHT/WATCH_MARKED_PLAYS are the
+// entry-point card CTAs (DraftTile.jsx, ReelTile.jsx); LOADING/LOAD_ERROR are
+// CollectionPlayer's T9470 skeleton/retry copy (state machine unchanged, copy
+// only); BACK_TO_GAME is the new opt-in backlink affordance (design §2.4).
+export const RESULT_SURFACE = {
+  WATCH_HIGHLIGHT: 'Watch finished highlight',
+  WATCH_MARKED_PLAYS: 'Watch marked plays',
+  LOADING: 'Loading your highlight...',
+  LOAD_ERROR: "Couldn't load the video. Try again.",
+  BACK_TO_GAME: 'Back to game plays',
+};

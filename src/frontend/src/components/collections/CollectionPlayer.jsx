@@ -3,7 +3,7 @@ import { X, Download, Loader, Pencil, Scale, Share2, FolderInput, Play, Pause, M
 import { Button } from '../shared/Button';
 import { Z } from '../../constants/zLayers';
 import { RATIO } from '../../constants/aspectRatios';
-import { LIBRARY_ACTIONS } from '../../config/displayNames';
+import { LIBRARY_ACTIONS, RESULT_SURFACE } from '../../config/displayNames';
 import { useStoryPlayback } from './useStoryPlayback';
 import { formatGameClock } from '../../utils/timeFormat';
 import { PlayheadHandle } from '../shared/PlayheadHandle';
@@ -122,6 +122,14 @@ const SWIPE_THRESHOLD_PX = 48;
  *                                     panel and the scrubber. Omitted -> native fullscreen targets the
  *                                     panel (byte-identical for every standalone caller). The CSS
  *                                     `expanded` path is unaffected either way.
+ * @param {Function=} onBackToGame   - T10190: () => void; shows a "Back to game plays" affordance next
+ *                                     to the header title when set. CollectionPlayer stays presentational
+ *                                     -- it renders purely off whether the prop is passed, never off reel
+ *                                     shape; the caller (DraftReelPreview/FocusScreen/OverlayScreen) gates
+ *                                     on resolving exactly one source game and builds the handler (design
+ *                                     §2.4). Omitted -> no affordance, byte-identical for every caller that
+ *                                     never passes it (public /shared viewer, Published/IntroStoryPlayer,
+ *                                     DownloadsPanel, RankingGame).
  */
 export function CollectionPlayer({
   reels,
@@ -149,6 +157,7 @@ export function CollectionPlayer({
   renderScrubber = true,
   transport = true,
   fullscreenTarget = null,
+  onBackToGame,
 }) {
   const videoRef = useRef(null);
   const panelRef = useRef(null);
@@ -470,18 +479,36 @@ export function CollectionPlayer({
       {/* Header: source game + in-match minute for the active reel (T3920),
           falling back to the group title for multi-clip reels with no game. */}
       <div className="flex items-center justify-between gap-2 px-3 py-2">
-        <h3 className="text-white text-sm font-medium truncate min-w-0">
-          {activeReel.gameName ? (
-            <>
-              {activeReel.gameName}
-              {formatGameClock(activeReel.gameStartTime) && (
-                <span className="ml-2 font-mono text-gray-300">
-                  {formatGameClock(activeReel.gameStartTime)}
-                </span>
-              )}
-            </>
-          ) : title}
-        </h3>
+        <div className="flex items-center gap-3 min-w-0">
+          <h3 className="text-white text-sm font-medium truncate min-w-0">
+            {activeReel.gameName ? (
+              <>
+                {activeReel.gameName}
+                {formatGameClock(activeReel.gameStartTime) && (
+                  <span className="ml-2 font-mono text-gray-300">
+                    {formatGameClock(activeReel.gameStartTime)}
+                  </span>
+                )}
+              </>
+            ) : title}
+          </h3>
+          {/* T10190 §2.4: a NAMED backlink control, not the title itself made
+              clickable -- keeps the title purely informational (read as a
+              heading) and the backlink a distinct button with its own
+              accessible name. Renders iff the caller passes onBackToGame;
+              this component does no gating on reel shape (that's the
+              caller's job -- single-source-game check). */}
+          {onBackToGame && (
+            <button
+              type="button"
+              onClick={onBackToGame}
+              title={RESULT_SURFACE.BACK_TO_GAME}
+              className="shrink-0 text-xs text-cyan-300 hover:text-cyan-200 underline underline-offset-2 truncate"
+            >
+              {RESULT_SURFACE.BACK_TO_GAME}
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-2 shrink-0">
           {/* T8530: Publish is the PRIMARY action in the DRAFT state — first in the
               cluster, occupying the same slot Share takes once published. Labeled
@@ -617,11 +644,12 @@ export function CollectionPlayer({
         {!videoReady && (
           <div
             data-testid="collection-player-skeleton"
-            aria-hidden="true"
-            className={`absolute animate-pulse rounded-lg bg-white/5 ${
+            className={`absolute animate-pulse rounded-lg bg-white/5 flex items-center justify-center ${
               isPortrait ? 'h-full aspect-[9/16]' : 'w-full aspect-video'
             }`}
-          />
+          >
+            <span className="text-xs text-gray-400">{RESULT_SURFACE.LOADING}</span>
+          </div>
         )}
 
         <video
@@ -648,7 +676,7 @@ export function CollectionPlayer({
             role="alert"
           >
             <span className="text-sm text-gray-200">
-              {loadError ? "Couldn't load this video." : 'Still loading...'}
+              {loadError ? RESULT_SURFACE.LOAD_ERROR : 'Still loading...'}
             </span>
             <Button variant="secondary" size="sm" title="Retry" onClick={handleReload}>
               Retry

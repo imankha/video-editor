@@ -44,7 +44,7 @@ const baseProps = () => ({
 
 const renderTile = (overrides = {}) => render(<ReelTile {...baseProps()} {...overrides} />);
 const kebabBtn = () => screen.getByRole('button', { name: 'More actions' });
-const playBtn = () => screen.getByRole('button', { name: 'Play video' });
+const playBtn = () => screen.getByRole('button', { name: 'Watch marked plays' });
 
 describe('T6300 ReelTile persistent actions', () => {
   it('Play is ALWAYS visible (no opacity gate) regardless of pointer type', () => {
@@ -187,7 +187,7 @@ describe('T6300 ReelTile persistent actions', () => {
     renderTile({ canOpenSource: () => false });
     // T6890: rename now starts from the pencil beside the name, not the kebab.
     fireEvent.click(screen.getByRole('button', { name: 'Rename reel' }));
-    expect(screen.queryByRole('button', { name: 'Play video' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Watch marked plays' })).toBeNull();
   });
 
   it('does not render the old hover-cluster wrapper or long-press touch handlers', () => {

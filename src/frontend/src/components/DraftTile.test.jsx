@@ -567,7 +567,7 @@ describe('DraftTile (T5672)', () => {
     it('the ready-state Preview button opens the consolidated surface instead of a tile-local modal', () => {
       const project = completed;
       renderTile(project);
-      fireEvent.click(screen.getByTitle('Preview video'));
+      fireEvent.click(screen.getByTitle('Watch finished highlight'));
       expect(openFinishedReel).toHaveBeenCalledWith(expect.objectContaining(project));
       // No tile-local modal chrome mounts anywhere in the document.
       expect(document.querySelector('.fixed.inset-4')).toBeNull();
@@ -577,7 +577,7 @@ describe('DraftTile (T5672)', () => {
     it('opens the consolidated surface for a LANDSCAPE source too (aspect-independent)', () => {
       const project = { ...completed, aspect_ratio: '16:9' };
       renderTile(project);
-      fireEvent.click(screen.getByTitle('Preview video'));
+      fireEvent.click(screen.getByTitle('Watch finished highlight'));
       expect(openFinishedReel).toHaveBeenCalledWith(expect.objectContaining(project));
     });
   });

@@ -108,7 +108,7 @@ describe('T6420 ReelTile inline hover preview', () => {
     act(() => vi.advanceTimersByTime(PREVIEW_WARM_DELAY_MS));
     expect(video().getAttribute('src')).toBe(EXPECTED_STREAM);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Play video' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Watch marked plays' }));
     expect(props.onPlay).toHaveBeenCalled();
     expect(video().getAttribute('src')).toBeNull(); // released before the player opens
   });

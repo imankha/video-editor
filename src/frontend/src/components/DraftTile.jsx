@@ -22,7 +22,7 @@ import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { API_BASE } from '../config';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
-import { SECTION_NAMES, LIBRARY_ACTIONS, MODE_NAMES, CLIP_LINK } from '../config/displayNames';
+import { SECTION_NAMES, LIBRARY_ACTIONS, MODE_NAMES, CLIP_LINK, RESULT_SURFACE } from '../config/displayNames';
 import { toast } from './shared/Toast';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
@@ -753,7 +753,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {!isReadyToPublish && (
         <div data-testid="tile-actions" className={`absolute top-9 right-1.5 z-30 flex flex-col items-end gap-1 transition-opacity ${actionsVisibility}`}>
           {isComplete && project.final_video_id && (
-            <Button variant="secondary" size="sm" icon={Play} iconOnly onClick={(e) => { e.stopPropagation(); openFinishedReel(project); }} title="Preview video" className={actionBtnClass} />
+            <Button variant="secondary" size="sm" icon={Play} iconOnly onClick={(e) => { e.stopPropagation(); openFinishedReel(project); }} title={RESULT_SURFACE.WATCH_HIGHLIGHT} className={actionBtnClass} />
           )}
           {/* T6890: the rename pencil moved OUT of this rail to sit beside the name
               in the bottom scrim (above). It is no longer stacked here. */}
@@ -856,8 +856,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); openFinishedReel(project); }}
-              title="Preview video"
-              aria-label="Preview video"
+              title={RESULT_SURFACE.WATCH_HIGHLIGHT}
+              aria-label={RESULT_SURFACE.WATCH_HIGHLIGHT}
               className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium bg-white/10 ring-1 ring-inset ring-white/25 backdrop-blur-sm text-white hover:bg-white/20 hover:ring-white/40 active:scale-[0.98] transition-all coarse-pointer:min-h-[44px]"
             >
               <Play size={14} />

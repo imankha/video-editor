@@ -273,8 +273,14 @@ vi.mock('../../stores', () => {
   const questState = { recordAchievement: vi.fn() };
   const useQuestStore = { getState: () => questState };
 
-  const projectsState = { selectedProjectId: 42 };
-  const useProjectsStore = { getState: () => projectsState };
+  const projectsState = { selectedProjectId: 42, projects: [] };
+  // T10190: FocusScreen now also reads useProjectsStore as a selector-hook
+  // (mirroring OverlayScreen's existing projectListItem derivation), so the
+  // mock must be callable, not just a `.getState()` bag.
+  function useProjectsStore(selector) {
+    return selector(projectsState);
+  }
+  useProjectsStore.getState = () => projectsState;
 
   return {
     useProjectDataStore,
