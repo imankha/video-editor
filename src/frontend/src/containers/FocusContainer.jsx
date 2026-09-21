@@ -1264,6 +1264,7 @@ export function FocusTimeline({
   visualTimeToSourceTime,
   timelineZoom,
   onTimelineZoomByWheel,
+  timelineZoomControls, // T10930: {zoomIn, zoomOut, resetZoom} -> TimelineZoomChip
   timelineScale,
   timelineScrollPosition,
   onTimelineScrollPositionChange,
@@ -1299,6 +1300,7 @@ export function FocusTimeline({
       visualTimeToSourceTime={visualTimeToSourceTime}
       timelineZoom={timelineZoom}
       onTimelineZoomByWheel={onTimelineZoomByWheel}
+      timelineZoomControls={timelineZoomControls}
       timelineScale={timelineScale}
       timelineScrollPosition={timelineScrollPosition}
       onTimelineScrollPositionChange={onTimelineScrollPositionChange}

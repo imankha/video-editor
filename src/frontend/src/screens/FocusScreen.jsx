@@ -339,7 +339,15 @@ export function FocusScreen({
     zoomByWheel: timelineZoomByWheel,
     updateScrollPosition: updateTimelineScrollPosition,
     getTimelineScale,
+    zoomIn: timelineZoomIn,
+    zoomOut: timelineZoomOut,
+    resetZoom: resetTimelineZoom,
   } = useTimelineZoom();
+  // T10930: the visible `-  N%  +` chip (TimelineBase) — wheel zoom's affordance.
+  const timelineZoomControls = useMemo(
+    () => ({ zoomIn: timelineZoomIn, zoomOut: timelineZoomOut, resetZoom: resetTimelineZoom }),
+    [timelineZoomIn, timelineZoomOut, resetTimelineZoom],
+  );
 
   // Wrap saveFramingEdits to bind projectId
   const boundSaveFramingEdits = useCallback((clipId, data) => {
@@ -1541,6 +1549,7 @@ export function FocusScreen({
       timelineZoom={timelineZoom}
       timelineScrollPosition={timelineScrollPosition}
       onTimelineZoomByWheel={timelineZoomByWheel}
+      timelineZoomControls={timelineZoomControls}
       onTimelineScrollPositionChange={updateTimelineScrollPosition}
       getTimelineScale={getTimelineScale}
       segments={segments}

@@ -235,6 +235,7 @@ export function OverlayModeView({
   timelineZoom,
   timelineScrollPosition,
   onTimelineZoomByWheel,
+  timelineZoomControls, // T10930: {zoomIn, zoomOut, resetZoom} -> TimelineZoomChip
   onTimelineScrollPositionChange,
   getTimelineScale,
 
@@ -1013,6 +1014,7 @@ export function OverlayModeView({
             visualTimeToSourceTime={(t) => t}
             timelineZoom={timelineZoom}
             onTimelineZoomByWheel={onTimelineZoomByWheel}
+            timelineZoomControls={timelineZoomControls}
             timelineScale={getTimelineScale()}
             timelineScrollPosition={timelineScrollPosition}
             onTimelineScrollPositionChange={onTimelineScrollPositionChange}
@@ -1107,6 +1109,7 @@ export function OverlayModeView({
                         visualTimeToSourceTime={(t) => t}
                         timelineZoom={timelineZoom}
                         onTimelineZoomByWheel={onTimelineZoomByWheel}
+                        timelineZoomControls={timelineZoomControls}
                         timelineScale={getTimelineScale()}
                         timelineScrollPosition={timelineScrollPosition}
                         onTimelineScrollPositionChange={onTimelineScrollPositionChange}

@@ -25,6 +25,7 @@ export function OverlayTimeline({
   visualTimeToSourceTime = (t) => t,
   timelineZoom = 100,
   onTimelineZoomByWheel,
+  timelineZoomControls, // T10930: {zoomIn, zoomOut, resetZoom} -> TimelineZoomChip
   timelineScale = 1,
   timelineScrollPosition = 0,
   onTimelineScrollPositionChange,
@@ -114,6 +115,7 @@ export function OverlayTimeline({
       visualTimeToSourceTime={visualTimeToSourceTime}
       timelineZoom={timelineZoom}
       onTimelineZoomByWheel={onTimelineZoomByWheel}
+      timelineZoomControls={timelineZoomControls}
       timelineScale={timelineScale}
       timelineScrollPosition={timelineScrollPosition}
       onTimelineScrollPositionChange={onTimelineScrollPositionChange}

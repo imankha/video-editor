@@ -452,7 +452,15 @@ export function OverlayScreen({
     updateScrollPosition: updateTimelineScrollPosition,
     getTimelineScale,
     setZoom: setTimelineZoom,
+    zoomIn: timelineZoomIn,
+    zoomOut: timelineZoomOut,
+    resetZoom: resetTimelineZoom,
   } = useTimelineZoom();
+  // T10930: the visible `-  N%  +` chip (TimelineBase) — wheel zoom's affordance.
+  const timelineZoomControls = useMemo(
+    () => ({ zoomIn: timelineZoomIn, zoomOut: timelineZoomOut, resetZoom: resetTimelineZoom }),
+    [timelineZoomIn, timelineZoomOut, resetTimelineZoom],
+  );
 
   // =========================================
   // AUTO-ZOOM: Ensure detection markers have 48px minimum spacing
@@ -1788,6 +1796,7 @@ export function OverlayScreen({
       timelineZoom={timelineZoom}
       timelineScrollPosition={timelineScrollPosition}
       onTimelineZoomByWheel={timelineZoomByWheel}
+      timelineZoomControls={timelineZoomControls}
       onTimelineScrollPositionChange={updateTimelineScrollPosition}
       getTimelineScale={getTimelineScale}
       // Layers

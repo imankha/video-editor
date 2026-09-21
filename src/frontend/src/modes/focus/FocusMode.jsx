@@ -68,6 +68,7 @@ export function FocusMode({
   onSeek,
   timelineZoom,
   onTimelineZoomByWheel,
+  timelineZoomControls, // T10930: {zoomIn, zoomOut, resetZoom} -> TimelineZoomChip
   timelineScale,
   timelineScrollPosition,
   onTimelineScrollPositionChange,
@@ -116,6 +117,7 @@ export function FocusMode({
             visualTimeToSourceTime={visualTimeToSourceTime}
             timelineZoom={timelineZoom}
             onTimelineZoomByWheel={onTimelineZoomByWheel}
+            timelineZoomControls={timelineZoomControls}
             timelineScale={timelineScale}
             timelineScrollPosition={timelineScrollPosition}
             onTimelineScrollPositionChange={onTimelineScrollPositionChange}

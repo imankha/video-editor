@@ -247,6 +247,7 @@ export function FocusModeView({
   timelineZoom,
   timelineScrollPosition,
   onTimelineZoomByWheel,
+  timelineZoomControls, // T10930: {zoomIn, zoomOut, resetZoom} -> TimelineZoomChip
   onTimelineScrollPositionChange,
   getTimelineScale,
 
@@ -495,6 +496,7 @@ export function FocusModeView({
       onSeek={seek}
       timelineZoom={timelineZoom}
       onTimelineZoomByWheel={onTimelineZoomByWheel}
+      timelineZoomControls={timelineZoomControls}
       timelineScale={getTimelineScale()}
       timelineScrollPosition={timelineScrollPosition}
       onTimelineScrollPositionChange={onTimelineScrollPositionChange}
