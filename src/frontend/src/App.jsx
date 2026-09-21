@@ -1023,6 +1023,7 @@ function App() {
                 onExportComplete={handleExportComplete}
                 exportButtonRef={focusExportButtonRef}
                 onPublishWithoutSpotlight={handlePublishWithoutSpotlight}
+                onExitToHome={() => handleModeChange(EDITOR_MODES.PROJECT_MANAGER)}
               />
             </Suspense>
           )}

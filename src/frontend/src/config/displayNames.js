@@ -443,6 +443,31 @@ export const FOCUS_PREVIEW = {
   LOAD_FAILED: 'Could not load your preview. Please try again.',
 };
 
+// T10840: the landscape-phone "cockpit" layout — edge-rail labels, sheet titles,
+// and the two rotation hints (D14). Kept here so the parent-facing copy is
+// single-sourced, matching the rest of the editor vocabulary.
+export const FOCUS_COCKPIT = {
+  // Zone A / D rail button labels (10px, under a Lucide icon).
+  BACK: 'Back',
+  CLIPS: 'Clips',
+  SETUP: 'Setup',
+  UNDO: 'Undo',
+  PREVIEW: 'Preview',
+  // Compact CTA, two 10px lines (D9 / D13).
+  GENERATE_LINE_1: 'Generate',
+  GENERATE_LINE_2: 'Framing',
+  BACK_TO_PREVIEW_LINE_1: 'Back to',
+  BACK_TO_PREVIEW_LINE_2: 'Preview',
+  // Zone E sheet titles.
+  SHEET_CLIPS: 'Clips',
+  SHEET_SETUP: 'Setup',
+  SHEET_TRIM: 'Trim and slo-mo',
+  CLOSE_SHEET: 'Close',
+  // Timeline strip caps (D10).
+  ADD_FOCUS_POINT: 'Add focus point',
+  OPEN_TRIM: 'Trim and slo-mo',
+};
+
 // T8390: "Add Spotlight Later" toast copy, routed by is_auto_created (T8360 split).
 export const FOCUS_PUBLISH_LATER_TOAST = {
   SINGLE_CLIP: {

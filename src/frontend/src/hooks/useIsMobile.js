@@ -8,11 +8,12 @@ const LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 500px)';
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
     return window.matchMedia(MOBILE_QUERY).matches;
   });
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
     const mql = window.matchMedia(MOBILE_QUERY);
     const handler = (e) => setIsMobile(e.matches);
     mql.addEventListener('change', handler);
@@ -48,11 +49,12 @@ export function useIsCoarsePointer() {
 
 export function useIsLandscape() {
   const [isLandscape, setIsLandscape] = useState(() => {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
     return window.matchMedia(LANDSCAPE_QUERY).matches;
   });
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
     const mql = window.matchMedia(LANDSCAPE_QUERY);
     const handler = (e) => setIsLandscape(e.matches);
     mql.addEventListener('change', handler);
@@ -60,4 +62,17 @@ export function useIsLandscape() {
   }, []);
 
   return isLandscape;
+}
+
+// Detect the "cockpit" condition: a phone held sideways. A PURE derivation of the two
+// hooks above (D1) — no state, no effect, no store field. When true, Focus renders its
+// distinct landscape cockpit layout (full-bleed stage, edge rails, one timeline strip,
+// no scroll) instead of the scrolling portrait/tablet layout. jsdom's matchMedia returns
+// `matches: false`, so this is false in every jsdom unit test by construction.
+export function useIsCockpit() {
+  // Call both hooks unconditionally (rules-of-hooks); `&&` would short-circuit
+  // the second call when the first is false.
+  const isMobile = useIsMobile();
+  const isLandscape = useIsLandscape();
+  return isMobile && isLandscape;
 }
