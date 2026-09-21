@@ -393,13 +393,20 @@ export function TimelineBase({
         </div>
 
         {/* Scrollable timeline tracks container */}
+        {/* Native scrollbar visibility is CSS-driven (index.css
+            `.timeline-scroll-container`), keyed on `timeline-scroll-zoomed` and
+            the SAME lg breakpoint as MobileScrollbar's `lg:hidden`, so exactly
+            one bar shows at any width: the custom finger bar below lg, the
+            native bar at lg+ only when wheel-zoomed. T10780: the previous inline
+            `scrollbarWidth: 'auto'` beat the stylesheet's mobile hide rule the
+            moment Annotate went 3x, showing BOTH bars, and on Windows the native
+            bar's layout height also spawned a vertical scrollbar. */}
         <div
           ref={scrollContainerRef}
-          className="ml-20 lg:ml-32 overflow-x-auto timeline-scroll-container"
+          className={`ml-20 lg:ml-32 overflow-x-auto timeline-scroll-container${
+            timelineScale > 1 ? ' timeline-scroll-zoomed' : ''
+          }`}
           onScroll={handleScroll}
-          style={{
-            scrollbarWidth: timelineScale > 1 ? 'auto' : 'none',
-          }}
         >
           {/* Scaled timeline content */}
           <div

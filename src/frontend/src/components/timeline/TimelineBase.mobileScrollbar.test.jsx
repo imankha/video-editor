@@ -54,6 +54,26 @@ describe('MobileScrollbar — finger-sized geometry (T10780)', () => {
     expect(track.className).toContain('lg:ml-32');
   });
 
+  it('native scrollbar visibility is class-driven, never an inline style (one bar at a time)', () => {
+    // T10780 regression: an inline `scrollbarWidth: 'auto'` beat index.css's
+    // mobile hide rule the moment Annotate went 3x, so the native bar rendered
+    // UNDER the custom finger bar (two scrollbars), and on Windows its layout
+    // height spawned a vertical scrollbar too. The container must carry the
+    // `timeline-scroll-zoomed` marker (index.css shows the native bar only at
+    // lg+ with it) and no inline scrollbar style at all.
+    renderBar();
+    const zoomed = document.querySelector('.timeline-scroll-container');
+    expect(zoomed.className).toContain('timeline-scroll-zoomed');
+    expect(zoomed.style.scrollbarWidth).toBe('');
+    expect(zoomed.getAttribute('style')).toBeNull();
+    cleanup();
+    render(<TimelineBase {...baseProps} timelineScale={1} />);
+    const flat = document.querySelector('.timeline-scroll-container');
+    expect(flat.className).not.toContain('timeline-scroll-zoomed');
+    expect(flat.getAttribute('style')).toBeNull();
+    expect(screen.queryByTestId('mobile-scrollbar-track')).toBeNull();
+  });
+
   it('a touchstart + touchmove on the track scrolls the container', () => {
     const { track } = renderBar();
     const container = document.querySelector('.timeline-scroll-container');

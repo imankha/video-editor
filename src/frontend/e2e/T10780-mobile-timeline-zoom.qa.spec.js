@@ -51,6 +51,14 @@ async function rects(page) {
       scrollLeft: scroller ? scroller.scrollLeft : null,
       clientWidth: scroller ? scroller.clientWidth : null,
       scrollWidth: scroller ? scroller.scrollWidth : null,
+      // Native-bar accounting (regression found on the first phone test, 2026-09-21):
+      // offsetHeight - clientHeight is the layout height a NON-overlay native
+      // horizontal scrollbar takes (0 when hidden / overlay); scrollHeight >
+      // clientHeight means the container has vertical overflow (a vertical bar).
+      nativeBarHeight: scroller ? scroller.offsetHeight - scroller.clientHeight : null,
+      verticalOverflow: scroller ? scroller.scrollHeight - scroller.clientHeight : null,
+      scrollbarWidthCss: scroller ? getComputedStyle(scroller).scrollbarWidth : null,
+      overflowY: scroller ? getComputedStyle(scroller).overflowY : null,
     };
   }, { sc: SCROLL_CONTAINER, ph: PLAYHEAD, tr: SCROLLBAR_TRACK, th: SCROLLBAR_THUMB, se: SENTINEL });
 }
@@ -88,6 +96,14 @@ test.describe('T10780 mobile timeline — TimelineBase mechanics (harness)', () 
         // Criterion: >= 8px above (from the track), >= 12px below (before next control)
         expect(r.track.top - r.scroller.bottom, '>= 8px gap above the scrollbar').toBeGreaterThanOrEqual(7);
         expect(r.sentinel.top - r.track.bottom, '>= 12px gap below the scrollbar').toBeGreaterThanOrEqual(11);
+
+        // Criterion (user's first phone test, 2026-09-21): exactly ONE horizontal
+        // bar and NO vertical bar. The native bar is hidden below lg and the
+        // container never overflows vertically.
+        expect(r.scrollbarWidthCss, 'native scrollbar hidden on mobile').toBe('none');
+        expect(r.nativeBarHeight, 'native horizontal bar takes no layout height').toBe(0);
+        expect(r.overflowY, 'container never scrolls vertically').toBe('hidden');
+        expect(r.verticalOverflow, 'no vertical overflow inside the timeline').toBeLessThanOrEqual(0);
 
         await saveEvidence(page, `criterion-scrollbar-fingersize-${vp.name}`);
       });
@@ -177,6 +193,8 @@ test.describe('T10780 mobile timeline — TimelineBase mechanics (harness)', () 
       await expect(page.locator(SCROLLBAR_TRACK)).toHaveCount(0);
       const r = await rects(page);
       expect(r.scrollWidth / r.clientWidth, 'no horizontal overscroll at scale 1').toBeLessThanOrEqual(1.02);
+      expect(r.scrollbarWidthCss, 'desktop at scale 1 shows no native bar either').toBe('none');
+      expect(r.nativeBarHeight, 'no native bar layout height at scale 1').toBe(0);
       await saveEvidence(page, 'criterion-desktop-no-scrollbar');
     });
   });
