@@ -7,7 +7,7 @@
  *
  * T3700: copy is outcome-framed and jargon-free. Never say "set crop keyframes" —
  * say "keep your player in the shot." Button references must match the renamed
- * terminal buttons: "Generate Framing" (framing) and "Export clip with effects" (overlay) (T9540).
+ * terminal buttons: "Generate Framing" (framing) and "Export" (overlay) (T9540).
  */
 
 import { Image, Plus, Star, Film, Crosshair, FolderOpen, CheckCircle, Video } from 'lucide-react';

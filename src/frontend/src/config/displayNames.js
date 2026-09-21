@@ -368,7 +368,7 @@ export const EXPORT_JOBS = {
     jobNoun: MODE_NAMES.FRAMING,                       // job-list row noun, was "Framing Export"
   },
   overlay: {
-    action: 'Export clip with effects',       // N20 — render CTA, was "Add Spotlight"
+    action: 'Export',                          // render CTA, was "Export clip with effects" (N20), before that "Add Spotlight"
     inProgress: 'Exporting clip...',          // N20
     completed: 'Clip ready',                  // N21
     jobNoun: 'Effects',                        // job-list row noun, was "Overlay Export"

@@ -228,7 +228,7 @@ describe('questDefinitions vocabulary sweep (T9575)', () => {
     expect(save).toMatch(/Create an editable clip/);   // ANNOTATE.CREATE_EDITABLE_CLIP (was "Create Reel")
     expect(renderedText(STEP_DESCRIPTIONS.add_clip)).toMatch(/Mark play/); // ANNOTATE.MARK_PLAY (was "Add Play")
     expect(renderedText(STEP_DESCRIPTIONS.choose_shape)).toMatch(/Around athlete/); // EDITOR_PANELS (D3, was "Around player"/"Body")
-    expect(STEP_TITLES.export_overlay).toBe('Export clip with effects'); // EXPORT_JOBS.overlay.action
+    expect(STEP_TITLES.export_overlay).toBe('Export'); // EXPORT_JOBS.overlay.action
   });
 });
 
