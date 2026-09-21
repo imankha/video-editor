@@ -1,5 +1,34 @@
 ---
 domain: annotate
+updated: 2026-09-21 (T10890/T10930 + hotfixes T10900/T10910/T10920, all on master same day.
+**Timeline zoom is now REAL user state on every viewport (T10930):** `AnnotateModeView` owns
+`useTimelineZoom(isMobile ? 300 : 100)` and hands `{timelineZoom, zoomByWheel, zoomIn, zoomOut,
+resetZoom}` as the `zoom` prop to ALL THREE `AnnotateMode` mount sites (windowed / fullscreen strip /
+mobile fullscreen) — it lives in the view, not `AnnotateTimeline`, precisely because the timeline
+REMOUNTS across those sites and a fullscreen toggle must not reset the zoom. T10780's fixed 3x is
+now the phone's DEFAULT (100-500% reachable), and `AnnotateTimeline` without a `zoom` prop still
+falls back to those constants (harnesses). The visible control is `components/timeline/
+TimelineZoomChip.jsx` (`-  N%  +`, % resets, 44px on coarse pointers), rendered by `TimelineBase`
+whenever `timelineZoomControls={zoomIn,zoomOut,resetZoom}` is passed (Annotate, Focus, Overlay all
+pass it; the read-only "Zoom: N%" badge survives only for modes that don't). Wheel zoom stays gated
+on the playhead layer; the touch scroll pill / native bar / page-forward follow are unchanged. Never
+persisted. **Span bars are honest and stay so (T10890 verdict):** on an 88-min game one track pixel
+is 5-7 s, so at 100% nearly every 4-30 s play sits under `ClipRegionLayer`'s 3px `minWidth` and all
+bars look identical — measured, NOT a regression; zoom is the fix (26 s = 10.5px vs 10 s = 4px at
+300%). Do not "fix" the floor with a fake width. **Playhead -> play matching (T10890):**
+`modes/annotate/regionAtTime.js` — `pickNearestCenterRegion` (nearest CENTER among overlapping
+candidates; equal distance -> shorter span; never array order) + the ONE `FRAME_TOLERANCE` (0.15s)
+shared by `useAnnotate.getRegionAtTime`, `AnnotateContainer.getRegionAtTimeUnified` AND the
+auto-deselect effect (previously only deselect had it, so an edge-snapped seek matched nothing).
+The nearest pick fires on NONE->SELECTED and on leaving the selected play; while inside a selected
+play the selection is deliberately NOT re-evaluated. **Landmine (T10910):** Tailwind `sr-only` is
+`position:absolute` — inside a NON-positioned wrapper its containing block is the viewport, so it
+escapes the `h-dvh overflow-hidden` shell and grows the DOCUMENT (every off-screen clip-list row's
+`RatingIcon` label did; page scrolled 339px past the UI). `RatingIcon` wrappers are `relative` now;
+any new `sr-only` needs a positioned ancestor. T10900: the strip's delete slot is `min-w-[8rem]`,
+not `w-32` (the 2-button confirm state overflowed onto Done). T10920: Review-plays uses `ListVideo`;
+`NotesOverlay` takes `clipStage` and marks PUBLISHED (check) / clip-not-published (film) top-right,
+from the same `getClipStage` lookup as the strip CTA. Prior:)
 updated: 2026-09-21 (T10800 — the non-fullscreen Annotate player is now ASPECT-FIT, not a fixed
 `h-[40vh] sm:h-[60vh]` letterbox box (killed the black bands above/below a 16:9 picture on a
 phone; ~120px reclaimed for the timeline/CTAs). Reuses T5676's `VideoPlayer fitToAspect` +
@@ -2128,12 +2157,17 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   filtering into per-lane arrays (it reflects position in the full chronological list, not
   position-within-lane). Covered by `AnnotateTimeline.twoLane.test.jsx` (unit) and
   `e2e/T5700-two-lanes.qa.spec.js` (real-browser QA, including the T4933 landscape case).
-- **Mobile 3x zoom + finger scrollbar + page-forward follow (T10780).** On a phone the whole
+- **Mobile 3x zoom + finger scrollbar + page-forward follow (T10780). SUPERSEDED in part by
+  T10930 (2026-09-21, see header): the 3x is now the phone's DEFAULT zoom from `useTimelineZoom`
+  owned by `AnnotateModeView`, the chip/wheel move it 100-500%, and the "does NOT use
+  useTimelineZoom" landmine below no longer holds — only the no-pinch and never-persist parts do.**
+  On a phone the whole
   game squeezed into ~280 CSS px made every play an unreadable sliver. `AnnotateTimeline` now
   renders the plays track at a **fixed 3x on `isMobile`** (`const mobileScale = isMobile ? 3 : 1`
   → `timelineScale`/`timelineZoom={mobileScale*100}`); desktop stays 1x, byte-identical. Chips /
   angle strip / playhead are all `%` positioned inside `TimelineBase`'s scaled inner div
-  (`width: scale*100%`), so they scale for free — no per-layer change. **LANDMINE: Annotate
+  (`width: scale*100%`), so they scale for free — no per-layer change. **LANDMINE (historical,
+  see T10930 note above): Annotate
   deliberately does NOT use `useTimelineZoom`** — the scale is a CONSTANT (Option A; pinch-zoom /
   Option B was explicitly deferred). No wheel zoom, no persisted view state, and it passes
   `showZoomBadge={false}` so `TimelineBase` suppresses the `Zoom: N%` badge (that badge means "a

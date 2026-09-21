@@ -1,6 +1,6 @@
 # T10930: Annotate timeline zoom in/out with a visible control, desktop and mobile
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-21
@@ -57,12 +57,22 @@ Zoom stays view state for the life of the screen, never persisted (T10780 decisi
 CLAUDE.md: no persisted view state). Wheel zoom must remain gated on the playhead layer so the
 lanes still scroll. Tier M, frontend only, no schema.
 
+## Progress Log
+
+**2026-09-21**: Approved (option D + chip on both). Shipped in two commits: Annotate (hook owned by
+AnnotateModeView, chip in TimelineBase, phone default 300%) and the Focus/Overlay threading. Tests:
+TimelineZoomChip (2), AnnotateTimeline.mobileZoom (6, rewritten), AnnotateModeView.timelineZoom (3,
+incl. zoom survives a fullscreen remount); Focus/Overlay regression set 26 files / 107 green. Live
+Playwright on the fixture game: desktop chip 100% -> 300%, longest (26.2 s) span 3.36 -> 10.5 px vs
+a 10 s span 3 -> 4.0 px; phone opens at 300% with 44x44 targets and the scroll pill, zooms out to
+100% (pill gone). Screenshots checked once.
+
 ## Acceptance Criteria
 
-- [ ] Desktop: -/+/reset chip visible on the Annotate track; wheel over the scrub row zooms
-- [ ] Phone: same chip with 44 px targets, opens at 300%, can reach 100% and 500%; scroll pill
+- [x] Desktop: -/+/reset chip visible on the Annotate track; wheel over the scrub row zooms
+- [x] Phone: same chip with 44 px targets, opens at 300%, can reach 100% and 500%; scroll pill
       appears above 100%
-- [ ] Above 100% the track scrolls and follows the playhead (existing T5647 behaviour)
-- [ ] Live-drive on the fixture game: at 300% the 26 s play's span bar is measurably wider than a
+- [x] Above 100% the track scrolls and follows the playhead (existing T5647 behaviour)
+- [x] Live-drive on the fixture game: at 300% the 26 s play's span bar is measurably wider than a
       10 s play's (closes T10890's readability half)
-- [ ] Focus/Overlay show the chip too and their existing wheel behaviour is unchanged
+- [x] Focus/Overlay show the chip too and their existing wheel behaviour is unchanged

@@ -1,6 +1,6 @@
 # T10890: Annotate span-bar readability on long games + playhead nearest-center selection
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-21
@@ -75,16 +75,16 @@ a time, pick the one whose `(startTime+endTime)/2` is closest to the query time.
 
 ### Steps
 1. [x] Investigate H1 vs H2 empirically (drive-app-as-user, dev fixture game id=1)
-2. [ ] Fix `getRegionAtTime` (useAnnotate.js) and `getRegionAtTimeUnified` (AnnotateContainer.jsx)
+2. [x] Fix `getRegionAtTime` (useAnnotate.js) and `getRegionAtTimeUnified` (AnnotateContainer.jsx)
    to pick the nearest-center match among overlapping regions, not first-array-order
-3. [ ] Add/extend a test covering: playhead within one play selects it; playhead within two
+3. [x] Add/extend a test covering: playhead within one play selects it; playhead within two
    overlapping plays selects whichever center is closer
 4. [x] Produce decision artifact for span-bar readability options; **stop for user approval**
    before implementing any of them -- https://claude.ai/artifact/VRztYxsiraMJz6wsMrUENB
    (shared with T10930, the zoom-controls request the user filed in the same session; the
    recommended option D means T10930 IS this half's fix). Playhead half shipped to master in
    5b08aebf on 2026-09-21.
-5. [ ] (post-approval) Implement chosen span-bar option + width-proportionality test
+5. [x] (post-approval) Option D approved: the span bar stays honest and T10930 (zoom chip) is the fix; width proportionality at 300% proved live in T10930 (26 s = 10.5 px vs 10 s = 4 px)
 
 ### Progress Log
 
@@ -122,8 +122,7 @@ implementation of that half is blocked on user's choice.
 
 ## Acceptance Criteria
 
-- [ ] Clicking/scrubbing the playhead into a single play's start..end range selects that play
-- [ ] With overlapping plays, the one whose center is closest to the playhead is selected
-- [ ] Unit test proves both cases
-- [ ] Span-bar readability: user has approved one option from the decision artifact before any
-      behavior change ships
+- [x] Clicking/scrubbing the playhead into a single play's start..end range selects that play
+- [x] With overlapping plays, the one whose center is closest to the playhead is selected
+- [x] Unit test proves both cases
+- [x] Span-bar readability: option D approved 2026-09-21; shipped via T10930
