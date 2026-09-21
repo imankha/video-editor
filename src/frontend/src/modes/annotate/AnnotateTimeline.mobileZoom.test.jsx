@@ -1,13 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { AnnotateTimeline } from './AnnotateTimeline';
 
 /**
  * T10780 — the Annotate plays track is illegible on phones because the whole game
- * is squeezed into ~280 CSS px. On mobile the timeline renders at a fixed 3x
- * (Option A, no pinch-zoom) with a finger-sized touch scrollbar; on desktop it is
- * byte-identical to before (scale 1, no scrollbar, no zoom badge). Annotate uses a
- * fixed CONSTANT, never `useTimelineZoom` — so no "Zoom: N%" badge appears.
+ * is squeezed into ~280 CSS px, so it renders at 3x there with a finger-sized
+ * touch scrollbar; desktop is 1x with neither.
+ *
+ * T10930 — that 3x is now the phone's DEFAULT zoom, not a constant: the `zoom`
+ * prop (useTimelineZoom, owned by AnnotateModeView) drives the scale 100-500%
+ * on every viewport, and the `-  N%  +` chip is the visible control. Without a
+ * `zoom` prop (harnesses, these defaults) the T10780 constants still apply and
+ * no chip renders.
  */
 
 // jsdom lacks ResizeObserver; ClipRegionLayer/AngleLanes only use it for sizing.
@@ -51,28 +55,79 @@ const baseProps = {
   onDeleteRegion: () => {},
 };
 
+function zoomProp(timelineZoom) {
+  return { timelineZoom, zoomByWheel: vi.fn(), zoomIn: vi.fn(), zoomOut: vi.fn(), resetZoom: vi.fn() };
+}
+
 // The scaled inner div is the scroll container's only element child.
 function scaledInnerDiv() {
   const scroller = document.querySelector('.timeline-scroll-container');
   return scroller?.firstElementChild;
 }
 
-describe('AnnotateTimeline mobile 3x zoom + scrollbar (T10780)', () => {
-  it('mobile: renders the scaled track at 300% with the touch scrollbar and no zoom badge', () => {
+describe('AnnotateTimeline defaults without a zoom prop (T10780 constants)', () => {
+  it('mobile: renders the scaled track at 300% with the touch scrollbar and no chip', () => {
     stubMatchMedia(true);
     render(<AnnotateTimeline {...baseProps} />);
 
     expect(scaledInnerDiv().style.width).toBe('300%');
     expect(screen.getByTestId('mobile-scrollbar-track')).toBeTruthy();
+    expect(screen.queryByTestId('timeline-zoom-chip')).toBeNull();
     expect(screen.queryByText(/Zoom:/)).toBeNull();
   });
 
-  it('desktop: renders the track at 100% with no scrollbar and no zoom badge (byte-identical)', () => {
+  it('desktop: renders the track at 100% with no scrollbar and no chip', () => {
     stubMatchMedia(false);
     render(<AnnotateTimeline {...baseProps} />);
 
     expect(scaledInnerDiv().style.width).toBe('100%');
     expect(screen.queryByTestId('mobile-scrollbar-track')).toBeNull();
+    expect(screen.queryByTestId('timeline-zoom-chip')).toBeNull();
+  });
+});
+
+describe('AnnotateTimeline user zoom (T10930)', () => {
+  it('desktop at 100%: chip shows 100%, track fits, no scrollbar; + calls zoomIn', () => {
+    stubMatchMedia(false);
+    const zoom = zoomProp(100);
+    render(<AnnotateTimeline {...baseProps} zoom={zoom} />);
+
+    expect(screen.getByTestId('timeline-zoom-reset').textContent).toBe('100%');
+    expect(scaledInnerDiv().style.width).toBe('100%');
+    expect(screen.queryByTestId('mobile-scrollbar-track')).toBeNull();
+    fireEvent.click(screen.getByTestId('timeline-zoom-in'));
+    expect(zoom.zoomIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('desktop at 300%: the scaled track is 300% wide and the chip reads 300%', () => {
+    stubMatchMedia(false);
+    render(<AnnotateTimeline {...baseProps} zoom={zoomProp(300)} />);
+
+    expect(scaledInnerDiv().style.width).toBe('300%');
+    expect(screen.getByTestId('timeline-zoom-reset').textContent).toBe('300%');
+    // The old read-only badge never renders alongside the chip.
     expect(screen.queryByText(/Zoom:/)).toBeNull();
+  });
+
+  it('mobile zoomed OUT to 100%: whole game fits, scroll pill gone, chip still there', () => {
+    stubMatchMedia(true);
+    const zoom = zoomProp(100);
+    render(<AnnotateTimeline {...baseProps} zoom={zoom} />);
+
+    expect(scaledInnerDiv().style.width).toBe('100%');
+    expect(screen.queryByTestId('mobile-scrollbar-track')).toBeNull();
+    expect(screen.getByTestId('timeline-zoom-chip')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('timeline-zoom-out'));
+    // Already at the floor: the chip disables zoom-out rather than calling through.
+    expect(zoom.zoomOut).not.toHaveBeenCalled();
+  });
+
+  it('mobile at 500%: scaled to 500% with the scroll pill', () => {
+    stubMatchMedia(true);
+    render(<AnnotateTimeline {...baseProps} zoom={zoomProp(500)} />);
+
+    expect(scaledInnerDiv().style.width).toBe('500%');
+    expect(screen.getByTestId('mobile-scrollbar-track')).toBeTruthy();
+    expect(screen.getByTestId('timeline-zoom-in').disabled).toBe(true);
   });
 });

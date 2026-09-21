@@ -7,10 +7,14 @@ import { useState, useCallback } from 'react';
  * - 100% = Timeline fits exactly in viewport (no scrollbar needed)
  * - >100% = Timeline is larger than viewport (scrollbar appears)
  * - Cannot zoom out below 100%
+ *
+ * @param {number} [initialZoom=100] starting zoom percentage (clamped). T10930:
+ *   Annotate on a phone opens at 300% (T10780's fixed scale becomes the default,
+ *   not the only value). Read once at mount; never persisted.
  */
-export default function useTimelineZoom() {
+export default function useTimelineZoom(initialZoom = 100) {
   // Zoom level as percentage (100 = fits viewport, >100 = larger than viewport)
-  const [timelineZoom, setTimelineZoom] = useState(100);
+  const [timelineZoom, setTimelineZoom] = useState(() => Math.min(500, Math.max(100, initialZoom)));
 
   // Scroll position as percentage (0-100)
   const [scrollPosition, setScrollPosition] = useState(0);

@@ -18,6 +18,7 @@ import { clipGameClock } from '../utils/timeFormat';
 import { formatFileSize } from '../utils/fileValidation';
 import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
+import useTimelineZoom from '../hooks/useTimelineZoom';
 import { Button } from '../components/shared';
 
 /**
@@ -291,6 +292,20 @@ export function AnnotateModeView({
   const playbackFsControls = useFullscreenControls({ isPlaying: playback?.isPlaying });
   const mobileFs = annotateFullscreen && isMobile;
   const [isDraggingScrub, setIsDraggingScrub] = useState(false);
+
+  // T10930: timeline zoom lives HERE, not in AnnotateTimeline, because the
+  // timeline is mounted at three sites (windowed / fullscreen strip / mobile
+  // fullscreen) and remounts across them -- a zoom the user set must survive a
+  // fullscreen toggle. Phone opens at 300% (T10780's density), desktop at 100%.
+  // View state for the life of this screen; never persisted.
+  const timelineZoomState = useTimelineZoom(isMobile ? 300 : 100);
+  const timelineZoomProps = useMemo(() => ({
+    timelineZoom: timelineZoomState.timelineZoom,
+    zoomByWheel: timelineZoomState.zoomByWheel,
+    zoomIn: timelineZoomState.zoomIn,
+    zoomOut: timelineZoomState.zoomOut,
+    resetZoom: timelineZoomState.resetZoom,
+  }), [timelineZoomState.timelineZoom, timelineZoomState.zoomByWheel, timelineZoomState.zoomIn, timelineZoomState.zoomOut, timelineZoomState.resetZoom]);
 
   // T10800: ONE resolved aspect for every non-fullscreen Annotate stage box
   // (single-video, multi-video, and playback/recap), so all three read the same
@@ -904,6 +919,7 @@ export function AnnotateModeView({
                       onLayerSelect={onLayerSelect}
                       boundaryOffsets={boundaryOffsets}
                       angleData={angleData}
+                      zoom={timelineZoomProps}
                     />
                   </div>
                 )}
@@ -1025,6 +1041,7 @@ export function AnnotateModeView({
                         onLayerSelect={onLayerSelect}
                         boundaryOffsets={boundaryOffsets}
                         angleData={angleData}
+                        zoom={timelineZoomProps}
                       />
                     </div>
                   </div>
@@ -1069,6 +1086,7 @@ export function AnnotateModeView({
                 angleData={angleData}
                 amberFootage={amberFootage}
                 onFixAmberFootage={onFixAmberFootage}
+                zoom={timelineZoomProps}
               />
             </div>
           )}

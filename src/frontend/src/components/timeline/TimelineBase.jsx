@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { Undo2 } from 'lucide-react';
 import { formatTimeSimple } from '../../utils/timeFormat';
+import { TimelineZoomChip } from './TimelineZoomChip';
 
 /**
  * Pixel-based follow-playhead target: where the scroll container should sit so the
@@ -85,6 +86,11 @@ export function TimelineBase({
   // nudge. 'page-forward' = mobile Annotate — re-anchor the playhead ~1/3 in on a
   // forward crossing AND scroll a non-playback/mount off-screen playhead into view.
   followAnchor = 'margin',
+  // T10930: the visible zoom control. When a mode passes useTimelineZoom's
+  // {zoomIn, zoomOut, resetZoom} here, the `-  N%  +` chip renders where the
+  // read-only badge sat (and the badge does not); absent = badge behaviour as
+  // before, so modes that have not wired it are byte-identical.
+  timelineZoomControls = null,
 }) {
   const pageForward = followAnchor === 'page-forward';
   const timelineRef = React.useRef(null);
@@ -379,7 +385,16 @@ export function TimelineBase({
       {/* Zoom indicator (timestamps removed - redundant with player timecode).
           T10780: suppressed on mobile Annotate (showZoomBadge=false) where the
           scale is a fixed constant, not a user-changed state. */}
-      {showZoomBadge && timelineZoom > 100 && (
+      {timelineZoomControls ? (
+        <div className="flex justify-end mb-0.5 lg:mb-2 pr-2">
+          <TimelineZoomChip
+            zoom={timelineZoom}
+            onZoomIn={timelineZoomControls.zoomIn}
+            onZoomOut={timelineZoomControls.zoomOut}
+            onZoomReset={timelineZoomControls.resetZoom}
+          />
+        </div>
+      ) : showZoomBadge && timelineZoom > 100 && (
         <div className="flex justify-end mb-0.5 lg:mb-2 text-xs text-gray-400 pr-2">
           <span className="text-blue-400">Zoom: {Math.round(timelineZoom)}%</span>
         </div>

@@ -28,6 +28,8 @@ export default function AnnotateMode({
   // T8910: no-timestamp landing footage (amber warning bars) + Fix-timing tap.
   amberFootage = [],
   onFixAmberFootage,
+  // T10930: useTimelineZoom state owned by AnnotateModeView (see AnnotateTimeline).
+  zoom = null,
 }) {
   if (!duration) return null;
 
@@ -48,6 +50,7 @@ export default function AnnotateMode({
         angleData={angleData}
         amberFootage={amberFootage}
         onFixAmberFootage={onFixAmberFootage}
+        zoom={zoom}
       />
     </div>
   );

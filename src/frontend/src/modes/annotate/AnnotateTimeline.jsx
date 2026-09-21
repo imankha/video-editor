@@ -13,7 +13,7 @@ import { ANNOTATE } from '../../config/displayNames';
  * This is a simpler timeline than Overlay mode:
  * - Video track for playhead/scrubbing
  * - Clip regions layer with draggable start/end handles
- * - No zoom/trim complexity needed
+ * - Zoom 100-500% via the `zoom` prop (T10930); no trim
  *
  * Layer selection:
  * - Clicking playhead layer label selects 'playhead' (arrow keys step frames)
@@ -50,16 +50,20 @@ export function AnnotateTimeline({
   // other game, so the timeline DOM stays byte-identical (zero amber pixels).
   amberFootage = [],
   onFixAmberFootage,
+  // T10930: user zoom (useTimelineZoom, owned by AnnotateModeView so a
+  // fullscreen toggle -- which remounts this timeline -- keeps the zoom):
+  // { timelineZoom, zoomByWheel, zoomIn, zoomOut, resetZoom }. Absent (unit
+  // tests, harnesses) = T10780's fixed scale: 3x on a phone, 1x on desktop.
+  zoom = null,
 }) {
   const isMobile = useIsMobile();
 
-  // T10780: the whole game is illegible squeezed into ~280 CSS px on a phone.
-  // Render the plays track (and the scrubber/angle strip above it, which are all
-  // % positioned so they scale for free) at a fixed 3x on mobile — roughly
-  // desktop density. Desktop stays at 1 (byte-identical). Option A: a fixed
-  // constant, NOT `useTimelineZoom` — no wheel zoom, no pinch, no persisted view
-  // state, no zoom badge.
-  const mobileScale = isMobile ? 3 : 1;
+  // T10780: the whole game is illegible squeezed into ~280 CSS px on a phone, so
+  // the plays track (and the scrubber/angle strip above it, all % positioned)
+  // renders at 3x there. T10930 made that the phone's DEFAULT zoom rather than
+  // its only value: the chip/wheel can take it 100-500% on every viewport.
+  const timelineZoom = zoom ? zoom.timelineZoom : (isMobile ? 300 : 100);
+  const timelineScale = timelineZoom / 100;
 
   // T8890: render angle UI ONLY when angles genuinely exist (EPIC: zero angles =
   // zero pixels). For an angle-free game angleData is null, so every branch below
@@ -181,14 +185,16 @@ export function AnnotateTimeline({
       layerLabels={layerLabels}
       totalLayerHeight={totalLayerHeight}
       isPlaying={isPlaying}
-      // T10780: fixed 3x on mobile (a constant, not user zoom state) so the
-      // touch scrollbar shows and the plays are legible; 1x = byte-identical
-      // desktop. No zoom badge (not a state the user changed) and the mobile
-      // follow re-anchors the playhead 1/3 in on a forward crossing + scrolls a
-      // non-playback/mount off-screen playhead into view (page-forward).
-      timelineZoom={mobileScale * 100}
-      timelineScale={mobileScale}
+      // T10930: real zoom state. Above 100% the touch scrollbar (phone) / native
+      // bar (desktop) shows and the follow re-anchors the playhead 1/3 in on a
+      // forward crossing + scrolls a non-playback/mount off-screen playhead into
+      // view (page-forward, T10780). The chip is the visible control; the wheel
+      // (scrub row selected) is the desktop shortcut. No read-only badge.
+      timelineZoom={timelineZoom}
+      timelineScale={timelineScale}
       timelineScrollPosition={0}
+      onTimelineZoomByWheel={zoom?.zoomByWheel}
+      timelineZoomControls={zoom ? { zoomIn: zoom.zoomIn, zoomOut: zoom.zoomOut, resetZoom: zoom.resetZoom } : null}
       showZoomBadge={false}
       followAnchor="page-forward"
       selectedLayer={selectedLayer}
