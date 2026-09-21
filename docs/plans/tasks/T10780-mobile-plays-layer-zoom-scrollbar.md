@@ -1,10 +1,10 @@
 # T10780: Mobile Annotate timeline is zoomed in with a horizontal scrollbar
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-20
-**Updated:** 2026-09-20
+**Updated:** 2026-09-21
 
 ## Problem
 
@@ -128,6 +128,18 @@ more code, and the RegionLayer touch handlers already fight page zoom, see
 
 **2026-09-20**: Filed from a staging screenshot. Mockup artifact published.
 
+**2026-09-21**: `/dotask T10780` implemented via container worker on branch
+`feature/T10780-mobile-timeline-zoom-scrollbar` (commit `3dea0650`). Reviewer approved
+(desktop byte-identical for Annotate/Focus/Overlay confirmed, angle strip aligns at 3x,
+44/56px scrollbar geometry + pixel-measured thumb travel correct, no reactive persistence).
+70 unit tests green. 10/10 e2e green in real Chromium at 393x852, 360x740, and desktop,
+including real CDP touch gestures on the dev fixture account's longest game (102 min, 62
+plays). Branch CI green (frontend job; backend correctly skipped, layer-scoped). One
+pre-existing `screen-usability` failure (T5674 report-pill overlap) reproduces identically
+on stashed master, confirmed not caused by this change. Pushed, NOT merged: the mobile
+zoom/scrollbar feel is a genuine UX judgment call, so this is a hand-off for a real-phone
+test, not an auto-merge. Test steps below.
+
 ## Acceptance Criteria
 
 - [ ] On a phone (<= 1023 px or coarse pointer) the Annotate plays track renders at 3x the
@@ -153,4 +165,23 @@ more code, and the RegionLayer touch handlers already fight page zoom, see
 - [ ] Angle strip (games with added footage) scales with the plays track and stays aligned
 - [ ] Desktop (>= 1024 px, fine pointer) is byte-identical: scale 1, no scrollbar, no badge
 - [ ] No `Zoom: 300%` badge on mobile
-- [ ] Curated relevant tests green; Branch CI green
+- [x] Curated relevant tests green (70 unit + 10 e2e); Branch CI green (frontend, layer-scoped)
+
+## Manual test steps (branch: `feature/T10780-mobile-timeline-zoom-scrollbar`)
+
+1. Fetch the branch, run the frontend dev server, open Annotate on a phone (or DevTools
+   device toolbar) at 393x852 and 360x740 on a game with 15+ plays.
+2. **Zoom**: plays should read as individually visible chips, not a smear (compare against
+   the mockup's "before" panel).
+3. **Scrollbar**: a grey pill sits under the plays track with a visible 3-line grip. Drag it
+   with a finger/mouse across its full range - the plays track should scroll smoothly with
+   no dead zone at either end, and the thumb should not overshoot the rail at 100%.
+4. **Swipe**: swipe left/right on the plays row itself - it should scroll. Swipe on the
+   scrubber row above it - it should seek, not scroll.
+5. **Jump-to-play**: tap a play near the edge of the visible window, or use prev/next play -
+   the window should scroll so the playhead and its play are visible.
+6. **Playback follow**: hit play near the right edge of the visible window and let it run -
+   the window should page forward, landing the playhead about 1/3 in from the left with
+   upcoming plays visible ahead of it, never right at the edge.
+7. **Desktop check**: same screen at a normal laptop width - should look and behave exactly
+   as it does today (no scrollbar, no 3x zoom, no badge).
