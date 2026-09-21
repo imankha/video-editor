@@ -189,6 +189,44 @@ export default function CockpitTimelineStrip({
             </div>
           );
         })}
+
+        {/* Copy / Delete popover ABOVE the strip (D10) — replaces the old floating
+            red delete FAB that overlapped the track. Rendered INSIDE the track so
+            its `markerLeft` `100%` resolves against the SAME width the diamonds
+            use (the strip container is wider by the two caps + gaps, so a
+            strip-relative offset would drift from the diamond toward the right
+            edge). Pointer events are stopped here so the track's scrub/seek
+            handlers never fire from a tap on Copy/Delete. */}
+        {selectedPct != null && (
+          <div
+            data-testid="cockpit-keyframe-popover"
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+            className="absolute bottom-full z-50 mb-1 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-gray-700 bg-gray-900 p-1 shadow-lg"
+            style={{ left: markerLeft(selectedPct) }}
+          >
+            <button
+              type="button"
+              data-testid="cockpit-keyframe-copy"
+              onClick={() => { onCopyCrop?.(selectedTime); setSelectedTime(null); }}
+              title="Copy keyframe"
+              aria-label="Copy keyframe"
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-200 hover:bg-white/10"
+            >
+              <Copy size={18} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              data-testid="cockpit-keyframe-delete"
+              onClick={() => { onKeyframeDelete?.(selectedTime); setSelectedTime(null); }}
+              title="Delete keyframe"
+              aria-label="Delete keyframe"
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-red-400 hover:bg-red-500/10"
+            >
+              <Trash2 size={18} aria-hidden="true" />
+            </button>
+          </div>
+        )}
       </div>
 
       <button
@@ -201,37 +239,6 @@ export default function CockpitTimelineStrip({
       >
         <Scissors size={20} aria-hidden="true" />
       </button>
-
-      {/* Copy / Delete popover ABOVE the strip (D10) — replaces the old floating
-          red delete FAB that overlapped the track. */}
-      {selectedPct != null && (
-        <div
-          data-testid="cockpit-keyframe-popover"
-          className="absolute bottom-full z-50 mb-1 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-gray-700 bg-gray-900 p-1 shadow-lg"
-          style={{ left: `calc(56px + ${markerLeft(selectedPct)})` }}
-        >
-          <button
-            type="button"
-            data-testid="cockpit-keyframe-copy"
-            onClick={() => { onCopyCrop?.(selectedTime); setSelectedTime(null); }}
-            title="Copy keyframe"
-            aria-label="Copy keyframe"
-            className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-200 hover:bg-white/10"
-          >
-            <Copy size={18} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            data-testid="cockpit-keyframe-delete"
-            onClick={() => { onKeyframeDelete?.(selectedTime); setSelectedTime(null); }}
-            title="Delete keyframe"
-            aria-label="Delete keyframe"
-            className="flex h-11 w-11 items-center justify-center rounded-lg text-red-400 hover:bg-red-500/10"
-          >
-            <Trash2 size={18} aria-hidden="true" />
-          </button>
-        </div>
-      )}
     </div>
   );
 }

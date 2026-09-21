@@ -8,6 +8,7 @@ import { ClipSelectorSidebar } from '../../../components/ClipSelectorSidebar';
 import FocusSettingsPanel from '../../../components/settings/FocusSettingsPanel';
 import { formatLength, PRECISION } from '../../../utils/timeFormat';
 import { FOCUS_COCKPIT } from '../../../config/displayNames';
+import { Z } from '../../../constants/zLayers';
 import TransportRail from './TransportRail';
 import ActionRail from './ActionRail';
 import CockpitTimelineStrip from './CockpitTimelineStrip';
@@ -126,7 +127,16 @@ export default function FocusCockpit({
   return (
     <div
       data-testid="focus-cockpit"
-      className="fixed inset-x-0 top-0 z-[100] flex h-dvh overflow-hidden bg-black"
+      // z: the cockpit is the full-bleed EDITOR surface, not an app overlay — it
+      // only has to cover the in-flow editor + the (normal-flow, un-z'd)
+      // UnifiedHeader, and must sit BELOW every app overlay so they cover it: the
+      // completion preview (Z.PLAYER, D15 — "the preview already covers the
+      // cockpit"), the framing-changed exit dialog (Z.MODAL), toasts (Z.TOAST).
+      // The design's literal `z-[100]` (= Z.TOAST) contradicted D15 by out-stacking
+      // all of them; Z.DROPDOWN is the highest app rung still below Z.MODAL. The
+      // cockpit's own sheets/BuyCreditsModal live inside this stacking context and
+      // are unaffected.
+      className={`fixed inset-x-0 top-0 ${Z.DROPDOWN} flex h-dvh overflow-hidden bg-black`}
       style={{
         paddingLeft: 'env(safe-area-inset-left)',
         paddingRight: 'env(safe-area-inset-right)',

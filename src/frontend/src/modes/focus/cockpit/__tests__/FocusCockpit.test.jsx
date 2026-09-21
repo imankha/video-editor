@@ -70,7 +70,18 @@ describe('FocusCockpit (T10840 shell)', () => {
     expect(shell.className).toContain('h-dvh');
     expect(shell.className).toContain('overflow-hidden');
     expect(shell.className).not.toContain('h-screen');
-    expect(shell.className).not.toContain('inset-0');
+    expect(shell.className).not.toMatch(/(^|\s)inset-0(\s|$)/);
+  });
+
+  it('sits BELOW the modal/player layers so the completion preview + exit dialog cover it (D15)', () => {
+    // Regression for the z-[100] shell that out-stacked Z.PLAYER (completion
+    // preview) and Z.MODAL (framing-changed exit dialog). The cockpit must be
+    // below z-50 (MODAL); Z.DROPDOWN is z-40.
+    renderCockpit();
+    const shell = screen.getByTestId('focus-cockpit');
+    expect(shell.className).toContain('z-40');
+    expect(shell.className).not.toContain('z-[100]');
+    expect(shell.className).not.toContain('z-[70]');
   });
 
   it('is fixed inset-x-0 top-0 (the positioning that pairs with the safe-area insets, D7)', () => {
