@@ -7,6 +7,8 @@
     "predev": "node generate-version.js || echo 'Warning: Could not generate version info'",
     "dev": "vite",
     "prebuild": "node generate-version.js || echo 'Warning: Could not generate version info'",
+    "prebuild:staging": "node generate-version.js || echo 'Warning: Could not generate version info'",
+    "prebuild:production": "node generate-version.js || echo 'Warning: Could not generate version info'",
     "build": "vite build",
     "build:staging": "vite build --mode staging",
     "build:production": "vite build --mode production",
