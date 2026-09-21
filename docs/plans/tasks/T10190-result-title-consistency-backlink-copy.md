@@ -1,6 +1,6 @@
 # T10190: Result-surface title consistency, back-to-game backlink, and copy centralization
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 5
 **Created:** 2026-09-15
