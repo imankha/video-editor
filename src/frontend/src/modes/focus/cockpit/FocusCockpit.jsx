@@ -13,6 +13,7 @@ import TransportRail from './TransportRail';
 import ActionRail from './ActionRail';
 import CockpitTimelineStrip from './CockpitTimelineStrip';
 import CockpitSheet from './CockpitSheet';
+import CockpitIntroCard, { useCockpitIntroSeen } from './CockpitIntroCard';
 
 const BuyCreditsModal = lazy(() =>
   import('../../../components/BuyCreditsModal').then((m) => ({ default: m.BuyCreditsModal })));
@@ -65,6 +66,12 @@ export default function FocusCockpit({
   const [previewing, setPreviewing] = useState(false);
   const [straightenVisible, setStraightenVisible] = useState(false);
   const [dimOpacity, setDimOpacity] = useState(0.2);
+
+  // T10850 (D14): the first-entry card + the one-shot rings on Play and the CTA
+  // are all driven by this single flag. `seen` is read lazily (never an effect);
+  // `markSeen` is the named-gesture write, called by the card's "Got it" tap and
+  // by the first pointerdown on the stage below — NEVER on render.
+  const { seen: introSeen, markSeen: dismissIntro } = useCockpitIntroSeen();
 
   const closeSheet = () => setActiveSheet(null);
 
@@ -150,11 +157,19 @@ export default function FocusCockpit({
         stepForward={stepForward}
         stepBackward={stepBackward}
         onExitToHome={onExitToHome}
+        ring={!introSeen}
       />
 
       {/* Center column: stage over the timeline strip */}
       <div data-testid="cockpit-stage" className="relative flex min-w-0 flex-1 flex-col">
-        <div className="relative min-h-0 flex-1 bg-black">
+        {/* T10850 (D14): the first touch on the stage is the OTHER dismissal gesture
+            for the intro card. Attached to the stage's own pointer handling (not a
+            competing document listener); only live while the card is showing so it
+            never writes on an ordinary later tap. */}
+        <div
+          className="relative min-h-0 flex-1 bg-black"
+          onPointerDown={introSeen ? undefined : dismissIntro}
+        >
           <VideoPlayer
             videoRef={videoRef}
             videoUrl={videoUrl}
@@ -221,6 +236,11 @@ export default function FocusCockpit({
               {outputLabel}
             </div>
           )}
+
+          {/* T10850 (D14): first-entry card, over the stage. Gated on `!introSeen`
+              (cockpit && !seen); "Got it" and the stage pointerdown above both call
+              the same named-gesture write. */}
+          {!introSeen && <CockpitIntroCard onDismiss={dismissIntro} />}
         </div>
 
         <CockpitTimelineStrip
@@ -252,6 +272,7 @@ export default function FocusCockpit({
         onGenerate={exportCtrl.handleExport}
         onBackToPreview={onBackToPreview}
         backToPreviewLoading={backToPreviewLoading}
+        ring={!introSeen}
       />
 
       {/* Zone E — side sheets. Clips + Setup reuse the existing panels verbatim;
