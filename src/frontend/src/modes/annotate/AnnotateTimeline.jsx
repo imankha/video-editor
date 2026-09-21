@@ -53,18 +53,34 @@ export function AnnotateTimeline({
 }) {
   const isMobile = useIsMobile();
 
+  // T10780: the whole game is illegible squeezed into ~280 CSS px on a phone.
+  // Render the plays track (and the scrubber/angle strip above it, which are all
+  // % positioned so they scale for free) at a fixed 3x on mobile — roughly
+  // desktop density. Desktop stays at 1 (byte-identical). Option A: a fixed
+  // constant, NOT `useTimelineZoom` — no wheel zoom, no pinch, no persisted view
+  // state, no zoom badge.
+  const mobileScale = isMobile ? 3 : 1;
+
   // T8890: render angle UI ONLY when angles genuinely exist (EPIC: zero angles =
   // zero pixels). For an angle-free game angleData is null, so every branch below
   // is inert and the DOM is byte-identical to pre-T8890.
   const hasAngles = !!angleData && angleData.angles.length > 0;
   const shownAngleRows = hasAngles ? (isMobile ? 1 : Math.min(angleData.laneCount, 3)) : 0;
 
-  // Fixed layer height for Annotate.
-  // Mobile: Video (h-8 = 2rem) + single Clips track (ClipRegionLayer's track root
-  // is always h-12 = 3rem) + margin + buffer.
-  // Desktop: Video (h-12 = 3rem) + My Athlete lane (h-12) + Team lane (h-12) + margins + buffer.
-  // The angle strip adds height ONLY when angles exist.
-  const baseHeightRem = isMobile ? 6.75 : 9.75;
+  // Fixed layer height for Annotate. TimelineBase draws the playhead at
+  // `totalLayerHeight - 0.25rem`, so this must equal the in-flow lane stack
+  // + 0.25rem EXACTLY: any excess is a playhead tail overshooting the lanes,
+  // which (the scroll container is overflow-x:auto) grew a VERTICAL scrollbar on
+  // non-overlay-scrollbar browsers (Windows) -- the user's first T10780 phone
+  // test. index.css now pins the container overflow-y:hidden as the structural
+  // guard; the e2e spec asserts zero vertical overflow on the real screen.
+  // Mobile: Video (h-8 = 2rem) + mt-1 (0.25rem) + single Clips track
+  //   (ClipRegionLayer's track root is always h-12 = 3rem) = 5.25rem + 0.25.
+  //   (Was 6.75rem since Clipify #100: a 20px tail below the lane.)
+  // Desktop: Video (h-12 = 3rem) + mt-1 + My Athlete lane (h-12) + mt-1 + Team
+  //   lane (h-12) = 9.5rem + 0.25.
+  // The angle strip adds height ONLY when angles exist (same terms as its DOM).
+  const baseHeightRem = isMobile ? 5.5 : 9.75;
   const angleExtraRem = hasAngles
     ? (isMobile ? 1.125 /* mt-1 + h-3.5 */ : 0.25 + shownAngleRows * 1.375 /* mt-1 + rows*(h-5+mb-0.5) */)
     : 0;
@@ -165,10 +181,16 @@ export function AnnotateTimeline({
       layerLabels={layerLabels}
       totalLayerHeight={totalLayerHeight}
       isPlaying={isPlaying}
-      // Disable zoom/trim features for Annotate mode
-      timelineZoom={100}
-      timelineScale={1}
+      // T10780: fixed 3x on mobile (a constant, not user zoom state) so the
+      // touch scrollbar shows and the plays are legible; 1x = byte-identical
+      // desktop. No zoom badge (not a state the user changed) and the mobile
+      // follow re-anchors the playhead 1/3 in on a forward crossing + scrolls a
+      // non-playback/mount off-screen playhead into view (page-forward).
+      timelineZoom={mobileScale * 100}
+      timelineScale={mobileScale}
       timelineScrollPosition={0}
+      showZoomBadge={false}
+      followAnchor="page-forward"
       selectedLayer={selectedLayer}
       onLayerSelect={onLayerSelect}
     >

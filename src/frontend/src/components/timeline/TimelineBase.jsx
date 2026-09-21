@@ -7,15 +7,25 @@ import { formatTimeSimple } from '../../utils/timeFormat';
  * playhead stays within a 15%-of-viewport margin of either edge. Operates entirely in
  * pixels (unlike percent-of-content vs percent-of-maxScroll, which diverge once
  * timelineScale != 1 and let the playhead drift off-screen at zoom).
+ *
+ * `anchor` (T10780) controls the FORWARD crossing only:
+ *  - 'margin' (default, Focus/Overlay): nudge just far enough to sit inside the
+ *    right 15% margin — the playhead rides the right edge with little lookahead.
+ *  - 'page-forward' (mobile Annotate): re-anchor the playhead ~1/3 in from the
+ *    left, so upcoming plays stay visible ahead of it (page-forward with lookahead).
+ * The BACKWARD crossing is anchor-independent (always the left margin), so a
+ * reverse seek behaves identically in every mode.
  */
-export function computeFollowScrollTarget({ scrollLeft, scrollWidth, clientWidth, maxScroll, progress, edgePadding }) {
+export function computeFollowScrollTarget({ scrollLeft, scrollWidth, clientWidth, maxScroll, progress, edgePadding, anchor = 'margin' }) {
   const playheadPx = edgePadding + (scrollWidth - 2 * edgePadding) * (progress / 100);
   const margin = clientWidth * 0.15;
   let target = scrollLeft;
   if (playheadPx < scrollLeft + margin) {
     target = playheadPx - margin;
   } else if (playheadPx > scrollLeft + clientWidth - margin) {
-    target = playheadPx - clientWidth + margin;
+    target = anchor === 'page-forward'
+      ? playheadPx - clientWidth / 3
+      : playheadPx - clientWidth + margin;
   }
   return Math.max(0, Math.min(target, maxScroll));
 }
@@ -67,7 +77,16 @@ export function TimelineBase({
   onDetrimStart,
   onDetrimEnd,
   isPlaying = false, // Only auto-scroll when video is playing
+  // T10780: show the "Zoom: N%" badge (Focus/Overlay, where zoom is a user
+  // state). Annotate passes false: its scale is a fixed mobile constant, not a
+  // state the user changed, so the badge would be misleading.
+  showZoomBadge = true,
+  // T10780: follow-scroll anchor. 'margin' (default) = Focus/Overlay right-edge
+  // nudge. 'page-forward' = mobile Annotate — re-anchor the playhead ~1/3 in on a
+  // forward crossing AND scroll a non-playback/mount off-screen playhead into view.
+  followAnchor = 'margin',
 }) {
+  const pageForward = followAnchor === 'page-forward';
   const timelineRef = React.useRef(null);
   const scrollContainerRef = React.useRef(null);
   const layersContainerRef = React.useRef(null);
@@ -296,6 +315,7 @@ export function TimelineBase({
       maxScroll,
       progress,
       edgePadding: EDGE_PADDING,
+      anchor: followAnchor,
     });
 
     // Only touch scrollLeft (and thus fire a scroll event) when it actually
@@ -306,30 +326,60 @@ export function TimelineBase({
       lastAutoScrollValueRef.current = target;
       container.scrollLeft = target;
     }
-  }, [progress, timelineScale, isPlaying]);
+  }, [progress, timelineScale, isPlaying, followAnchor]);
 
-  // Scroll the timeline back to the start when the playhead jumps to the start
-  // (Restart / reset button seeks to 0). The auto-scroll above only follows
-  // during playback, so on a zoomed-in timeline a manual seek-to-start would
-  // move the playhead off-screen while the view stayed scrolled away. Reset is
-  // an explicit gesture, so it overrides the recent-manual-scroll guard. We key
-  // off the transition *to* the start, not being idle there, so it doesn't
-  // fight a user who scrolled while parked at the beginning.
+  // Keep the playhead reachable outside of playback. Two behaviors share this
+  // effect (it already watches `progress`, so no second scroll mechanism):
+  //  - page-forward (mobile Annotate): ANY non-playback seek (tap a play,
+  //    prev/next, open from list) OR the initial mount that lands the playhead
+  //    outside the window scrolls it back into view. Playback is owned by the
+  //    auto-scroll effect above, so we bow out while playing.
+  //  - default (Focus/Overlay): unchanged legacy behavior — snap back to the
+  //    start ONLY on the transition *to* the start (Restart/reset seeks to 0),
+  //    keyed off the crossing (not idling there) so it doesn't fight a user who
+  //    scrolled while parked at the beginning. Reset is an explicit gesture, so
+  //    it overrides the recent-manual-scroll guard.
   const prevProgressRef = React.useRef(progress);
   React.useEffect(() => {
     const prevProgress = prevProgressRef.current;
     prevProgressRef.current = progress;
     const container = scrollContainerRef.current;
     if (!container || timelineScale <= 1) return;
+
+    if (pageForward) {
+      if (isPlaying) return; // playback follow is owned by the effect above
+      const maxScroll = container.scrollWidth - container.clientWidth;
+      if (maxScroll <= 0) return;
+      const target = computeFollowScrollTarget({
+        scrollLeft: container.scrollLeft,
+        scrollWidth: container.scrollWidth,
+        clientWidth: container.clientWidth,
+        maxScroll,
+        progress,
+        edgePadding: EDGE_PADDING,
+        anchor: followAnchor,
+      });
+      if (target !== container.scrollLeft) {
+        // Mark as programmatic so handleScroll doesn't arm the 2s manual-scroll
+        // pause for our own write.
+        isAutoScrollingRef.current = true;
+        lastAutoScrollValueRef.current = target;
+        container.scrollLeft = target;
+      }
+      return;
+    }
+
     if (progress < 0.5 && prevProgress >= 0.5) {
       container.scrollLeft = 0;
     }
-  }, [progress, timelineScale]);
+  }, [progress, timelineScale, pageForward, isPlaying, followAnchor]);
 
   return (
     <div className="timeline-container py-0.5 lg:py-4">
-      {/* Zoom indicator (timestamps removed - redundant with player timecode) */}
-      {timelineZoom > 100 && (
+      {/* Zoom indicator (timestamps removed - redundant with player timecode).
+          T10780: suppressed on mobile Annotate (showZoomBadge=false) where the
+          scale is a fixed constant, not a user-changed state. */}
+      {showZoomBadge && timelineZoom > 100 && (
         <div className="flex justify-end mb-0.5 lg:mb-2 text-xs text-gray-400 pr-2">
           <span className="text-blue-400">Zoom: {Math.round(timelineZoom)}%</span>
         </div>
@@ -343,13 +393,20 @@ export function TimelineBase({
         </div>
 
         {/* Scrollable timeline tracks container */}
+        {/* Native scrollbar visibility is CSS-driven (index.css
+            `.timeline-scroll-container`), keyed on `timeline-scroll-zoomed` and
+            the SAME lg breakpoint as MobileScrollbar's `lg:hidden`, so exactly
+            one bar shows at any width: the custom finger bar below lg, the
+            native bar at lg+ only when wheel-zoomed. T10780: the previous inline
+            `scrollbarWidth: 'auto'` beat the stylesheet's mobile hide rule the
+            moment Annotate went 3x, showing BOTH bars, and on Windows the native
+            bar's layout height also spawned a vertical scrollbar. */}
         <div
           ref={scrollContainerRef}
-          className="ml-20 lg:ml-32 overflow-x-auto timeline-scroll-container"
+          className={`ml-20 lg:ml-32 overflow-x-auto timeline-scroll-container${
+            timelineScale > 1 ? ' timeline-scroll-zoomed' : ''
+          }`}
           onScroll={handleScroll}
-          style={{
-            scrollbarWidth: timelineScale > 1 ? 'auto' : 'none',
-          }}
         >
           {/* Scaled timeline content */}
           <div
@@ -453,65 +510,148 @@ export function TimelineBase({
 }
 
 /**
- * MobileScrollbar - Touch-friendly scrollbar for zoomed timelines on mobile.
- * Hidden on sm+ screens where native scrollbar is usable.
+ * MobileScrollbar - finger/mouse scrollbar for zoomed timelines (T10780).
+ * Hidden on lg+ screens where the native scrollbar + a fine pointer are usable.
+ *
+ * A REAL finger control (user ruling 2026-09-20): the whole row is a >= 44px hit
+ * area (`min-h-[44px]` + `py-1`) drawn as a 36px pill, with a >= 56px thumb that
+ * carries a 3-line grip. `mt-2` puts 8px of air above (from the plays track) and
+ * `mb-3` 12px below (before the Edit-play strip). The row is offset `ml-20
+ * lg:ml-32` so it lines up edge-to-edge with the plays track, never the label
+ * column.
+ *
+ * Input is POINTER EVENTS with pointer capture (user ruling 2026-09-21: "work
+ * great using touch or mouse"). The first cut listened to touch + click only, so
+ * a mouse could not drag at all - it could only click-to-jump, which read as
+ * "finite positions", and a mouseup outside the row was a lost gesture. Now:
+ *  - press ON the thumb grabs it, preserving the grab offset (the thumb stays
+ *    under the finger/cursor, no jump);
+ *  - press on the rail centers the thumb under the pointer, then keeps dragging;
+ *  - capture keeps the drag alive anywhere on screen until release, and
+ *    `touch-none` on the row stops the browser panning the page meanwhile.
+ * Continuous: every pointermove writes `scrollLeft` from the pointer position,
+ * so the track follows 1:1 with no steps.
  */
 function MobileScrollbar({ scrollContainerRef, timelineScale }) {
   const trackRef = React.useRef(null);
+  const thumbRef = React.useRef(null);
+  // Grab offset (px from the thumb's left edge to the pointer) while dragging;
+  // null when idle. A ref, not state: it must never trigger a render.
+  const grabOffsetRef = React.useRef(null);
   const thumbWidthPercent = Math.max(20, (1 / timelineScale) * 100);
-  const [thumbLeft, setThumbLeft] = React.useState(0);
+  const [thumbLeftPx, setThumbLeftPx] = React.useState(0);
 
-  // Sync thumb position from native scroll
+  // Sync thumb position from native scroll. Travel is measured in PIXELS against
+  // the thumb's ACTUAL rendered width (which honors min-w-[56px]); using the
+  // percent width here would overshoot the rail at wide zooms where
+  // 100/scale% renders narrower than the 56px floor.
   React.useEffect(() => {
     const container = scrollContainerRef.current;
-    if (!container) return;
+    const track = trackRef.current;
+    if (!container || !track) return;
     const sync = () => {
       const maxScroll = container.scrollWidth - container.clientWidth;
-      if (maxScroll <= 0) { setThumbLeft(0); return; }
+      if (maxScroll <= 0) { setThumbLeftPx(0); return; }
       const scrollFraction = container.scrollLeft / maxScroll;
-      const maxThumbLeft = 100 - thumbWidthPercent;
-      setThumbLeft(scrollFraction * maxThumbLeft);
+      const railWidth = track.clientWidth;
+      const thumbWidth = thumbRef.current
+        ? thumbRef.current.offsetWidth
+        : (railWidth * thumbWidthPercent) / 100;
+      const maxThumbLeft = Math.max(0, railWidth - thumbWidth);
+      setThumbLeftPx(scrollFraction * maxThumbLeft);
     };
     container.addEventListener('scroll', sync);
     sync();
     return () => container.removeEventListener('scroll', sync);
   }, [scrollContainerRef, thumbWidthPercent]);
 
-  const handleDrag = useCallback((clientX) => {
+  // Geometry shared by press + move: rail rect, rendered thumb width, travel.
+  const geometry = useCallback(() => {
     const track = trackRef.current;
     const container = scrollContainerRef.current;
-    if (!track || !container) return;
+    if (!track || !container) return null;
     const rect = track.getBoundingClientRect();
-    const fraction = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const thumbWidth = thumbRef.current
+      ? thumbRef.current.getBoundingClientRect().width
+      : (rect.width * thumbWidthPercent) / 100;
+    const maxThumbLeft = Math.max(0, rect.width - thumbWidth);
     const maxScroll = container.scrollWidth - container.clientWidth;
-    container.scrollLeft = fraction * maxScroll;
-  }, [scrollContainerRef]);
+    return { rect, thumbWidth, maxThumbLeft, maxScroll, container };
+  }, [scrollContainerRef, thumbWidthPercent]);
 
-  const handleTouchMove = useCallback((e) => {
+  // Place the thumb's LEFT edge at `thumbLeft` px within the rail (clamped) and
+  // write the matching scrollLeft. The scroll event then re-syncs the thumb.
+  const scrollToThumbLeft = useCallback((g, thumbLeft) => {
+    const clamped = Math.max(0, Math.min(g.maxThumbLeft, thumbLeft));
+    const fraction = g.maxThumbLeft > 0 ? clamped / g.maxThumbLeft : 0;
+    g.container.scrollLeft = fraction * g.maxScroll;
+  }, []);
+
+  const handlePointerDown = useCallback((e) => {
+    // Primary button only for mouse; touch/pen always primary.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const g = geometry();
+    if (!g) return;
     e.preventDefault();
-    handleDrag(e.touches[0].clientX);
-  }, [handleDrag]);
+    const x = e.clientX - g.rect.left;
+    const thumbLeft = thumbRef.current
+      ? thumbRef.current.getBoundingClientRect().left - g.rect.left
+      : 0;
+    const onThumb = x >= thumbLeft && x <= thumbLeft + g.thumbWidth;
+    // On the thumb: keep the grab offset (no jump). On the rail: center the
+    // thumb under the pointer and drag from there.
+    const offset = onThumb ? x - thumbLeft : g.thumbWidth / 2;
+    grabOffsetRef.current = offset;
+    if (!onThumb) scrollToThumbLeft(g, x - offset);
+    // Capture so the drag survives leaving the row (jsdom has no capture API).
+    if (e.currentTarget.setPointerCapture) {
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+    }
+  }, [geometry, scrollToThumbLeft]);
 
-  const handleTouchStart = useCallback((e) => {
-    handleDrag(e.touches[0].clientX);
-    const onMove = (ev) => { ev.preventDefault(); handleDrag(ev.touches[0].clientX); };
-    const onEnd = () => { document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onEnd); };
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('touchend', onEnd);
-  }, [handleDrag]);
+  const handlePointerMove = useCallback((e) => {
+    if (grabOffsetRef.current === null) return;
+    const g = geometry();
+    if (!g) return;
+    e.preventDefault();
+    scrollToThumbLeft(g, e.clientX - g.rect.left - grabOffsetRef.current);
+  }, [geometry, scrollToThumbLeft]);
+
+  const handlePointerEnd = useCallback((e) => {
+    if (grabOffsetRef.current === null) return;
+    grabOffsetRef.current = null;
+    if (e.currentTarget.releasePointerCapture) {
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    }
+  }, []);
 
   return (
     <div
       ref={trackRef}
       data-testid="mobile-scrollbar-track"
-      className="sm:hidden ml-20 sm:ml-32 mt-1 h-6 bg-gray-800 rounded-full relative touch-none"
-      onTouchStart={handleTouchStart}
-      onClick={(e) => { handleDrag(e.clientX); }}
+      role="scrollbar"
+      aria-orientation="horizontal"
+      aria-label="Scroll timeline"
+      className="lg:hidden ml-20 lg:ml-32 mt-2 mb-3 py-1 min-h-[44px] flex items-center relative touch-none select-none cursor-grab active:cursor-grabbing"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
     >
-      <div
-        className="absolute top-0.5 bottom-0.5 bg-gray-500 rounded-full active:bg-gray-400"
-        style={{ left: `${thumbLeft}%`, width: `${thumbWidthPercent}%` }}
-      />
+      {/* 36px visual rail pill */}
+      <div className="relative w-full h-9 bg-gray-800 rounded-full">
+        <div
+          ref={thumbRef}
+          data-testid="mobile-scrollbar-thumb"
+          className="absolute top-1 bottom-1 min-w-[56px] bg-gray-500 rounded-full active:bg-gray-400 flex items-center justify-center gap-0.5"
+          style={{ left: `${thumbLeftPx}px`, width: `${thumbWidthPercent}%` }}
+        >
+          {/* 3-line grip glyph */}
+          <span className="w-0.5 h-3 rounded-full bg-gray-300/80" />
+          <span className="w-0.5 h-3 rounded-full bg-gray-300/80" />
+          <span className="w-0.5 h-3 rounded-full bg-gray-300/80" />
+        </div>
+      </div>
     </div>
   );
 }

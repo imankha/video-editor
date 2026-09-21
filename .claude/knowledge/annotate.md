@@ -2069,6 +2069,30 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   filtering into per-lane arrays (it reflects position in the full chronological list, not
   position-within-lane). Covered by `AnnotateTimeline.twoLane.test.jsx` (unit) and
   `e2e/T5700-two-lanes.qa.spec.js` (real-browser QA, including the T4933 landscape case).
+- **Mobile 3x zoom + finger scrollbar + page-forward follow (T10780).** On a phone the whole
+  game squeezed into ~280 CSS px made every play an unreadable sliver. `AnnotateTimeline` now
+  renders the plays track at a **fixed 3x on `isMobile`** (`const mobileScale = isMobile ? 3 : 1`
+  → `timelineScale`/`timelineZoom={mobileScale*100}`); desktop stays 1x, byte-identical. Chips /
+  angle strip / playhead are all `%` positioned inside `TimelineBase`'s scaled inner div
+  (`width: scale*100%`), so they scale for free — no per-layer change. **LANDMINE: Annotate
+  deliberately does NOT use `useTimelineZoom`** — the scale is a CONSTANT (Option A; pinch-zoom /
+  Option B was explicitly deferred). No wheel zoom, no persisted view state, and it passes
+  `showZoomBadge={false}` so `TimelineBase` suppresses the `Zoom: N%` badge (that badge means "a
+  state the USER changed", which is false here). The touch scrollbar (`MobileScrollbar`, only
+  rendered when `timelineScale>1`) is a real finger control: whole row is a `min-h-[44px]` hit
+  area (36px pill inside, `py-1`), thumb `min-w-[56px]` with a 3-line grip, `mt-2 mb-3` (8px above
+  / 12px below), gate is `lg:hidden` + `ml-20 lg:ml-32` to match the label column (was `sm:hidden`
+  — so Focus/Overlay also get the larger bar in the 640-1023px band, intended). Thumb travel is
+  measured in PIXELS against the thumb's actual `offsetWidth` (honours the 56px floor) so it can't
+  overshoot the rail when `100/scale%` < 56px. Follow: Annotate passes `followAnchor="page-forward"`
+  to `TimelineBase` — on a forward crossing into the right 15% margin the window re-anchors so the
+  playhead sits ~1/3 in (page-forward lookahead) instead of riding the right edge; `computeFollow
+  ScrollTarget` gained an `anchor` option (`'margin'` default = Focus/Overlay unchanged). The same
+  page-forward mode also scrolls a NON-playback off-screen seek (tap a play / prev-next / mount)
+  into view — folded into the existing seek-to-start effect (NO second scroll container, NO new
+  state, NO write path: this task persists nothing). Covered by `AnnotateTimeline.mobileZoom.test.jsx`,
+  `TimelineBase.mobileScrollbar.test.jsx`, `TimelineBase.autoscroll.test.jsx` (anchor + into-view),
+  and `e2e/T10780-mobile-timeline-zoom.qa.spec.js` (harness mechanics + real-screen gestures).
 
 ## "No Sport" sentinel (T7850) — new profiles default here, not to soccer
 New profiles are created with `sport = 'no_sport'` (never chosen), NOT the old
