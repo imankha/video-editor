@@ -62,7 +62,7 @@ const GLYPHS = {
 function UnratedDisc({ size, className }) {
   return (
     <span
-      className={`inline-flex items-center justify-center ${className}`}
+      className={`relative inline-flex items-center justify-center ${className}`}
       data-testid="rating-icon"
       data-rating="unrated"
     >
@@ -88,8 +88,12 @@ export function RatingIcon({ rating, size = 20, className = '' }) {
   const rim = darken(face);
   const Glyph = GLYPHS[rating];
   return (
+    // `relative`: the sr-only label below is position:absolute; without a
+    // positioned ancestor its containing block is the viewport, so it escapes
+    // the app shell's overflow-hidden and every off-screen clip-list row's icon
+    // extended the DOCUMENT, letting the page scroll past the UI (T10910).
     <span
-      className={`inline-flex items-center justify-center ${className}`}
+      className={`relative inline-flex items-center justify-center ${className}`}
       data-testid="rating-icon"
       data-rating={rating}
     >
