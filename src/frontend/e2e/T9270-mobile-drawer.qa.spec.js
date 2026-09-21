@@ -47,6 +47,26 @@ function assertBoxesEqual(a, b, label) {
   }
 }
 
+// The action band is `sticky bottom-0`: it only pins to the viewport bottom once
+// scrolled within its own height of the scroll container's end. App's mobile-only
+// `pb-48` (48 * 4 = 192px) content padding means a scroll landing anywhere in that
+// last 192px un-sticks the band by up to that much — a real, pre-existing (T8790)
+// mobile quirk, NOT something this panel change can move (the panel is `absolute`,
+// contributes zero in-flow height). A baseline taken before vs after an
+// auto-scrolling `.click()` straddles that un-stick range and reads as a CTA
+// "shift" that never happened at a fixed scroll position. Settle the scroll BEFORE
+// the baseline (mirrors T10820-mobile-settings-anchor.qa.spec.js) and assert the
+// gesture itself doesn't scroll, so this failure mode can't come back silently.
+function scrollTopOf(locator) {
+  return locator.evaluate((el) => {
+    let n = el.parentElement;
+    while (n && !(n.scrollHeight > n.clientHeight && /(auto|scroll)/.test(getComputedStyle(n).overflowY))) {
+      n = n.parentElement;
+    }
+    return n ? n.scrollTop : 0;
+  });
+}
+
 async function translateYOf(locator) {
   // Read the live matrix so we assert the actual transform, not just presence.
   // m42 is the vertical translation component (m41 is horizontal, used pre-T10820).
@@ -79,10 +99,26 @@ test.describe('T9270/T10820 mobile settings panel @ 390x844', () => {
       const res = await screen.open(page);
       test.skip(!res.ok, res.reason || `no ${screen.name}-openable draft on this account`);
 
+      // Criterion 10/11: a 64px full-width labelled entry row opens it (not a sliver),
+      // with a DERIVED live-summary second line. Find it and settle the scroll on
+      // it BEFORE taking any "closed" baseline — see scrollTopOf's comment above:
+      // the action band's stuck/unstuck state depends on scroll position, so the
+      // closed and open measurements must share one settled scroll position or the
+      // comparison is meaningless.
+      const row = page.getByTestId('mobile-settings-row');
+      await row.waitFor({ state: 'visible', timeout: 10000 });
+      await row.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(150);
+      const rowBox = await row.boundingBox();
+      expect(rowBox.height, `${screen.name}: settings row is a 64px full-width button`).toBeGreaterThanOrEqual(60);
+      expect(rowBox.width, `${screen.name}: settings row spans the width`).toBeGreaterThan(VP.width * 0.8);
+      const summary = page.getByTestId('mobile-settings-summary');
+      await expect(summary, `${screen.name}: entry row shows a derived summary line`).not.toHaveText('');
+
       const cta = page.getByTestId('primary-cta');
       await cta.waitFor({ state: 'visible', timeout: 20000 });
 
-      // Criterion 8: CTA fully within the viewport on first paint.
+      // Criterion 8: CTA fully within the viewport once scrolled to the row.
       const ctaClosed = await cta.boundingBox();
       assertBoxInViewport(ctaClosed, `${screen.name} CTA (panel closed)`);
 
@@ -93,18 +129,18 @@ test.describe('T9270/T10820 mobile settings panel @ 390x844', () => {
       const tyClosed = await translateYOf(drawer);
       expect(tyClosed, `${screen.name}: panel parked below the fold on load`).toBeGreaterThan(20);
 
-      // Criterion 10/11: a 64px full-width labelled entry row opens it (not a sliver),
-      // with a DERIVED live-summary second line.
-      const row = page.getByTestId('mobile-settings-row');
-      await row.waitFor({ state: 'visible', timeout: 10000 });
-      const rowBox = await row.boundingBox();
-      expect(rowBox.height, `${screen.name}: settings row is a 64px full-width button`).toBeGreaterThanOrEqual(60);
-      expect(rowBox.width, `${screen.name}: settings row spans the width`).toBeGreaterThan(VP.width * 0.8);
-      const summary = page.getByTestId('mobile-settings-summary');
-      await expect(summary, `${screen.name}: entry row shows a derived summary line`).not.toHaveText('');
-
+      const scrollBefore = await scrollTopOf(row);
       await row.click();
       await page.waitForTimeout(450); // 320ms translateY tween
+
+      // The panel is `absolute` (zero in-flow height) and its slide animates only
+      // transform/opacity/visibility — opening it must not scroll the page. This is
+      // what actually guarantees the CTA comparison below is apples-to-apples.
+      const scrollAfter = await scrollTopOf(row);
+      expect(
+        Math.abs(scrollAfter - scrollBefore),
+        `${screen.name}: opening the panel does not scroll the page`
+      ).toBeLessThanOrEqual(1);
 
       // Criterion 10: slid up — transform changed to translateY(0).
       const tyOpen = await translateYOf(drawer);

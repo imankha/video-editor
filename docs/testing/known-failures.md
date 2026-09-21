@@ -49,12 +49,22 @@ CI change was needed.
 Burned down: the two `e2e/T9270-mobile-drawer.qa.spec.js::Focus` rows (CTA y-shift on
 drawer open; a 28px drawer control under the 44px touch floor) were removed by T10820
 (2026-09-20), which rewrote the whole mobile settings surface. Row 1 (CTA y-shift):
-T10820 moves the mobile settings panel out of the stage row's flex layout entirely
-(into the sticky action-band wrapper, `absolute bottom-full`), so its presence can no
-longer perturb the CTA's ancestry the way the old in-row `translateX` drawer did —
-structurally resolved, not independently re-confirmed via a live Playwright run in
-this implementation session (this spec is authored but not run in-container per its
-own docstring; re-verify on the next real device/staging drive). Row 2 (28px control):
+NOT a product bug, on either the old or new drawer — root-caused (expert agent,
+live-drive confirmed) to the spec itself measuring the "closed" CTA baseline before
+`row.click()`'s implicit auto-scroll and the "open" CTA after it. Focus's action band
+is `sticky bottom-0`, and App's mobile-only `pb-48` (192px) content padding means the
+band only pins to the viewport bottom once scrolled within 192px of the page end —
+short of that, `sticky` sits at its static in-flow position, `up to 192px` higher. The
+spec's two measurements straddled that un-stick boundary; the settings panel (always
+`position:absolute`, zero in-flow height, present in both open and closed states) was
+never the mechanism, on this branch or before it. Fixed at the spec level: `row.click()`
+now runs before either CTA measurement (`row.scrollIntoViewIfNeeded()` settles the
+scroll first, matching `T10820-mobile-settings-anchor.qa.spec.js`), plus a new
+assertion that opening the panel does not itself scroll the page. Live-drive confirmed
+green on `imankh@gmail.com`/`9fa7378c` (2026-09-20) — this is not a "re-verify later"
+row. The 192px mobile dead-zone below the CTA at max scroll is real and pre-existing
+(predates T9270/T10820, from T8790's original mobile bar), out of scope here; worth a
+separate S-tier task to trim `pb-48`. Row 2 (28px control):
 root-caused to the default `Toggle` (`components/shared/Button.jsx`) `md` size track
 (`h-7 w-14` = 28x56, matching the failure's `{h:28,w:56}` exactly) used un-gated by
 Focus's "Include audio" row (`FocusSettingsPanel.jsx`) in the mobile-safe subset;
