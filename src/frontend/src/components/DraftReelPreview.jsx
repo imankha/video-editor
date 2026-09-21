@@ -4,12 +4,13 @@ import { API_BASE } from '../config';
 import { CollectionPlayer } from './collections/CollectionPlayer';
 import { PublishLinkFlow } from './PublishLinkFlow';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
-import { useEditorStore } from '../stores/editorStore';
+import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useQuestStore } from '../stores/questStore';
 import { usePublishProject } from '../hooks/usePublishProject';
 import { useWebShare } from '../hooks/useWebShare';
 import { useDownloads } from '../hooks/useDownloads';
 import { toast } from './shared/Toast';
+import { setPendingGame } from '../utils/pendingNavigation';
 
 /**
  * DraftReelPreview (T8530) — the thin, store-aware wrapper that turns an
@@ -108,6 +109,20 @@ function DraftReelPreviewInner({ payload }) {
       gameStartTime: payload.gameStartTime ?? null,
     },
   ];
+
+  // T10190 §3.2 Shaper 2: "Back to game plays" backlink, gated on the snapshot
+  // resolving exactly one source game (payload.gameId, fed by finishedReelNav).
+  // Gesture -> handler -> setPendingGame + setEditorMode(ANNOTATE), the same
+  // gesture-driven primitives App.jsx's handleEditInAnnotate uses. No reactive
+  // effect. payload.sourceClipId is intentionally undefined on this (library/
+  // one-tap) path -- the project-list-item shape finishedReelNav snapshots from
+  // carries no raw_clip_id/source_clip_id, unlike Focus/Overlay which hold the
+  // selected clip directly. setPendingGame tolerates a missing clip id (lands
+  // on the right game+clock, skips T3960 clip re-selection).
+  const handleBackToGame = useCallback(() => {
+    setPendingGame(payload.gameId, payload.gameStartTime, payload.sourceClipId);
+    useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
+  }, [payload.gameId, payload.gameStartTime, payload.sourceClipId]);
 
   // "Publish and get link" click: pure UI transition, NO write (design §2.2).
   const handlePublishClick = useCallback(() => {
@@ -259,6 +274,7 @@ function DraftReelPreviewInner({ payload }) {
       actionBar={actionBar}
       onDownload={handleDownload}
       downloadLoading={downloadingId === payload.finalVideoId}
+      onBackToGame={payload.gameId != null ? handleBackToGame : undefined}
     />
   );
 }

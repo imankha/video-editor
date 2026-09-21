@@ -567,7 +567,7 @@ describe('DraftTile (T5672)', () => {
     it('the ready-state Preview button opens the consolidated surface instead of a tile-local modal', () => {
       const project = completed;
       renderTile(project);
-      fireEvent.click(screen.getByTitle('Preview video'));
+      fireEvent.click(screen.getByTitle('Watch finished highlight'));
       expect(openFinishedReel).toHaveBeenCalledWith(expect.objectContaining(project));
       // No tile-local modal chrome mounts anywhere in the document.
       expect(document.querySelector('.fixed.inset-4')).toBeNull();
@@ -577,8 +577,21 @@ describe('DraftTile (T5672)', () => {
     it('opens the consolidated surface for a LANDSCAPE source too (aspect-independent)', () => {
       const project = { ...completed, aspect_ratio: '16:9' };
       renderTile(project);
-      fireEvent.click(screen.getByTitle('Preview video'));
+      fireEvent.click(screen.getByTitle('Watch finished highlight'));
       expect(openFinishedReel).toHaveBeenCalledWith(expect.objectContaining(project));
+    });
+  });
+
+  // T10190 §2.5/§3.0: the Preview CTA's copy moves to the centralized
+  // RESULT_SURFACE.WATCH_HIGHLIGHT constant (was the ad-hoc "Preview video"
+  // literal at DraftTile.jsx:748). Card CTA, in scope per the design's
+  // "the label is the card CTA the user reads to open the result" rationale.
+  describe('T10190 RESULT_SURFACE copy centralization', () => {
+    it('the Preview CTA reads RESULT_SURFACE.WATCH_HIGHLIGHT, not the old "Preview video" literal', async () => {
+      const { RESULT_SURFACE } = await import('../config/displayNames');
+      const project = { has_final_video: true, final_video_id: 99, is_published: false };
+      renderTile(project);
+      expect(screen.getByTitle(RESULT_SURFACE.WATCH_HIGHLIGHT)).toBeTruthy();
     });
   });
 

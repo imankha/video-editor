@@ -554,3 +554,87 @@ describe('CollectionPlayer transport controls (T10680)', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
+
+// T10190 §2.4/§3.1: the optional onBackToGame prop -- CollectionPlayer stays
+// presentational (no derivation), renders the "Back to game plays" affordance
+// iff the prop is passed. Absent by default so every caller that omits it
+// (public /shared viewer, Published/IntroStoryPlayer, DownloadsPanel,
+// RankingGame) is byte-identical -- this is the cross-surface non-regression
+// guard from design §5.
+describe('CollectionPlayer onBackToGame backlink (T10190)', () => {
+  const gameReel = [{
+    id: 1, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null,
+    gameName: 'Lakers', gameStartTime: 750,
+  }];
+  const noGameReel = [{ id: 1, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null }];
+
+  it('renders the "Back to game plays" affordance when onBackToGame is passed', () => {
+    render(<CollectionPlayer reels={gameReel} title="T" onClose={vi.fn()} onBackToGame={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /back to game plays/i })).toBeTruthy();
+  });
+
+  it('is absent by default when onBackToGame is omitted (public/Published/DownloadsPanel/RankingGame)', () => {
+    render(<CollectionPlayer reels={gameReel} title="T" onClose={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /back to game plays/i })).toBeNull();
+  });
+
+  it('invokes onBackToGame on click', () => {
+    const onBackToGame = vi.fn();
+    render(<CollectionPlayer reels={gameReel} title="T" onClose={vi.fn()} onBackToGame={onBackToGame} />);
+    fireEvent.click(screen.getByRole('button', { name: /back to game plays/i }));
+    expect(onBackToGame).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the affordance even for a reel with no gameName -- gating is the CALLER\'s job (single-game check), not CollectionPlayer\'s', () => {
+    // CollectionPlayer stays presentational: it renders the button purely off
+    // whether the prop was passed, never off reel shape. Multi-game/no-game
+    // gating (game_ids.length === 1) is the shaper's responsibility (§2.4).
+    render(<CollectionPlayer reels={noGameReel} title="T" onClose={vi.fn()} onBackToGame={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /back to game plays/i })).toBeTruthy();
+  });
+});
+
+// T10190 §3.2: title-consistency fallback. A reel with gameName renders
+// "gameName clock"; a reel WITHOUT gameName (multi-clip/no-single-game) falls
+// back to the group title. This is the existing header rule (unchanged), pinned
+// here as the negative-case regression guard the design calls out (§5 risk:
+// "Focus/Overlay title now differs from before").
+describe('CollectionPlayer header title fallback (T10190 regression guard)', () => {
+  it('shows game name + clock when the active reel carries gameName/gameStartTime', () => {
+    const reel = [{ id: 1, name: 'Clip Name', streamUrl: 's', aspect_ratio: '9:16', duration: null,
+      gameName: 'Lakers', gameStartTime: 750 }];
+    render(<CollectionPlayer reels={reel} title="Group Title" onClose={vi.fn()} />);
+    expect(screen.getByRole('dialog').textContent).toContain('Lakers');
+    expect(screen.getByRole('dialog').textContent).toContain('12\'30"');
+  });
+
+  it('falls back to the group/clip title when the reel has no gameName (multi-clip or no-game reel)', () => {
+    const reel = [{ id: 1, name: 'Clip Name', streamUrl: 's', aspect_ratio: '9:16', duration: null }];
+    render(<CollectionPlayer reels={reel} title="Group Title" onClose={vi.fn()} />);
+    const heading = screen.getAllByRole('heading', { level: 3 })[0];
+    expect(heading.textContent).toBe('Group Title');
+  });
+});
+
+// T10190 §2.5/§3.0: copy centralization. CollectionPlayer's skeleton and
+// onError overlay must read from the new RESULT_SURFACE block, not hardcoded
+// literals -- and this must NOT weaken T9470's loading/error/retry/stall state
+// machine (same triggers, same testids, only the copy source changes).
+describe('CollectionPlayer copy centralization (T10190)', () => {
+  it('the skeleton shows RESULT_SURFACE.LOADING copy', async () => {
+    const { RESULT_SURFACE } = await import('../../config/displayNames');
+    const reel = [{ id: 1, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null }];
+    render(<CollectionPlayer reels={reel} title="T" onClose={vi.fn()} />);
+    expect(screen.getByTestId('collection-player-skeleton').textContent).toContain(RESULT_SURFACE.LOADING);
+  });
+
+  it('the onError overlay shows RESULT_SURFACE.LOAD_ERROR copy (T9470 machine unaffected)', async () => {
+    const { RESULT_SURFACE } = await import('../../config/displayNames');
+    const reel = [{ id: 1, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null }];
+    render(<CollectionPlayer reels={reel} title="T" onClose={vi.fn()} />);
+    fireEvent.error(screen.getByTestId('collection-player-video'));
+    expect(screen.getByTestId('collection-player-load-error').textContent).toContain(RESULT_SURFACE.LOAD_ERROR);
+    // T9470 regression guard: Retry is still offered and still drives the same reload.
+    expect(screen.getByText('Retry')).toBeTruthy();
+  });
+});

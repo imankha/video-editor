@@ -44,7 +44,7 @@ const baseProps = () => ({
 
 const renderTile = (overrides = {}) => render(<ReelTile {...baseProps()} {...overrides} />);
 const kebabBtn = () => screen.getByRole('button', { name: 'More actions' });
-const playBtn = () => screen.getByRole('button', { name: 'Play video' });
+const playBtn = () => screen.getByRole('button', { name: 'Watch marked plays' });
 
 describe('T6300 ReelTile persistent actions', () => {
   it('Play is ALWAYS visible (no opacity gate) regardless of pointer type', () => {
@@ -187,7 +187,7 @@ describe('T6300 ReelTile persistent actions', () => {
     renderTile({ canOpenSource: () => false });
     // T6890: rename now starts from the pencil beside the name, not the kebab.
     fireEvent.click(screen.getByRole('button', { name: 'Rename reel' }));
-    expect(screen.queryByRole('button', { name: 'Play video' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Watch marked plays' })).toBeNull();
   });
 
   it('does not render the old hover-cluster wrapper or long-press touch handlers', () => {
@@ -197,5 +197,16 @@ describe('T6300 ReelTile persistent actions', () => {
     expect(card.ontouchstart).toBeFalsy();
     // The Play button no longer sits inside a shared opacity-gated action row.
     expect(container.querySelector('.group-hover\\/tile\\:opacity-100')?.contains(playBtn())).toBeFalsy();
+  });
+});
+
+// T10190 §2.5/§3.0: the Play CTA's copy moves to the centralized
+// RESULT_SURFACE.WATCH_MARKED_PLAYS constant (was the ad-hoc "Play video"
+// literal at ReelTile.jsx:352).
+describe('T10190 RESULT_SURFACE copy centralization', () => {
+  it('the Play CTA reads RESULT_SURFACE.WATCH_MARKED_PLAYS, not the old "Play video" literal', async () => {
+    const { RESULT_SURFACE } = await import('../../config/displayNames');
+    renderTile();
+    expect(screen.getByRole('button', { name: RESULT_SURFACE.WATCH_MARKED_PLAYS })).toBeTruthy();
   });
 });

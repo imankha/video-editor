@@ -43,6 +43,10 @@ export function openFinishedReel(project, { alreadyPublished = false } = {}) {
     clipCount: project.clip_count,
     gameName: project.game_names?.[0] ?? null,
     gameStartTime: project.clip_game_start_time ?? null,
+    // T10190 §3.2: gated to exactly one source game -- null for 0 or >1 games,
+    // since a multi-game/no-game reel has no unambiguous backlink target. Feeds
+    // DraftReelPreview's onBackToGame gating.
+    gameId: project.game_ids?.length === 1 ? project.game_ids[0] : null,
     alreadyPublished,
     openMode,
   });

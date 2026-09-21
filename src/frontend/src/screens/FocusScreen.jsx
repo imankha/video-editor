@@ -36,6 +36,7 @@ import { shouldPersistFocusForOverlayTransition, shouldSkipFocusCompletionPrevie
 import { offerFocusCompletionPreview } from './focusCompletionOffer';
 import { isClipFromAnotherProject, shouldRetryClipVideoViaProxy } from './clipVideoResolution';
 import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
+import { setPendingGame } from '../utils/pendingNavigation';
 
 // T8390: safety-net expiry for a staked publish intent (see handlePublish).
 // ExportButtonContainer exposes no onError callback to this screen, so a
@@ -1374,6 +1375,31 @@ export function FocusScreen({
 
   const isLoadingProjectData = isProjectLoading;
 
+  // T10190 §3.2 Shaper 3: game context for the completion-preview header, same
+  // derivation pattern OverlayScreen already uses (projectListItem off
+  // useProjectsStore). gameStartTime is fed RAW -- CollectionPlayer formats it
+  // internally via formatGameClock. gameId is gated to exactly one source game
+  // (the backlink's unambiguous target requirement); 0 or >1 games -> null, so
+  // no gameName/onBackToGame is fed and the header falls back to `title`.
+  // Declared before the FileUpload early return below (rules-of-hooks: every
+  // hook must run on every render).
+  const focusCompletionProjectListItem = useProjectsStore((state) => state.projects.find((p) => p.id === projectId));
+  const focusCompletionGameName = focusCompletionProjectListItem?.game_names?.[0] || null;
+  const focusCompletionGameStartTime = focusCompletionProjectListItem?.clip_game_start_time ?? null;
+  const focusCompletionGameId = focusCompletionProjectListItem?.game_ids?.length === 1
+    ? focusCompletionProjectListItem.game_ids[0]
+    : null;
+  // Gesture-driven backlink handler (design §2.4), mirroring App.jsx's
+  // handleEditInAnnotate: setPendingGame + setEditorMode(ANNOTATE). Source clip
+  // context comes from the currently selected clip, same field precedence
+  // App.jsx uses (raw_clip_id, falling back to source_clip_id).
+  const handleBackToGame = useCallback(() => {
+    if (focusCompletionGameId == null) return;
+    const sourceClipId = selectedClip?.raw_clip_id ?? selectedClip?.source_clip_id;
+    setPendingGame(focusCompletionGameId, focusCompletionGameStartTime, sourceClipId);
+    useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
+  }, [focusCompletionGameId, focusCompletionGameStartTime, selectedClip]);
+
   // Only show FileUpload when truly empty
   if (!hasClips && !videoUrl && !isLoadingProjectData && !projectId) {
     return (
@@ -1577,9 +1603,17 @@ export function FocusScreen({
             streamUrl: completionPreview.previewUrl,
             aspect_ratio: projectAspectRatio,
             duration: null,
+            // T10190 §3.2 Shaper 3: game context, same derivation pattern
+            // OverlayScreen already uses (projectListItem off useProjectsStore).
+            // RAW gameStartTime -- CollectionPlayer formats internally via
+            // formatGameClock. Absent (multi/no-game project) -> header falls
+            // back to `title` below (unchanged existing rule).
+            gameName: focusCompletionGameName,
+            gameStartTime: focusCompletionGameStartTime,
           }]}
           title={project?.name}
           onClose={handleRefocus}
+          onBackToGame={focusCompletionGameId != null ? handleBackToGame : undefined}
           actionBar={(
             <FocusPublishActionBar
               onPublish={handlePublish}

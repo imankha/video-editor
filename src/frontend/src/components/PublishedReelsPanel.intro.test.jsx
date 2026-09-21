@@ -167,11 +167,11 @@ afterEach(() => {
 });
 
 // Fires the SAME click PublishedReelsPanel wires to ReelTile's Play control --
-// ReelTile renders a dedicated `aria-label="Play video"` button whose onClick
+// ReelTile renders a dedicated `aria-label="Watch marked plays"` button whose onClick
 // is `onPlay(e, download)` (ReelTile.jsx:262), which the panel wires straight
 // to `handlePlay` via `renderDownloadCard`'s `onPlay={handlePlay}` prop.
 async function clickPlayOnFirstReel() {
-  const playButton = await screen.findByRole('button', { name: 'Play video' });
+  const playButton = await screen.findByRole('button', { name: 'Watch marked plays' });
   fireEvent.click(playButton);
 }
 

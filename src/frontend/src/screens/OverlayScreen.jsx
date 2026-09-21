@@ -34,6 +34,7 @@ import { usePublishIntentStore } from '../stores/publishIntentStore';
 import { openFinishedReel } from '../utils/finishedReelNav';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { resultRetentionNote } from '../utils/resultRetentionNote';
+import { setPendingGame } from '../utils/pendingNavigation';
 import { toast } from '../components/shared';
 import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS } from '../config/displayNames';
 
@@ -173,6 +174,22 @@ export function OverlayScreen({
   const projectListItem = useProjectsStore(state => state.projects.find(p => p.id === projectId));
   const gameName = projectListItem?.game_names?.[0] || null;
   const gameClock = clipGameClock({ startTime: projectListItem?.clip_game_start_time });
+  // T10190 §3.2 Shaper 4: gated to exactly one source game (the backlink's
+  // unambiguous target requirement); 0 or >1 games -> null, so no
+  // onBackToGame is fed and the header falls back to `title`.
+  const completionGameId = projectListItem?.game_ids?.length === 1 ? projectListItem.game_ids[0] : null;
+  // Gesture-driven backlink handler (design §2.4), mirroring App.jsx's
+  // handleEditInAnnotate: setPendingGame + setEditorMode(ANNOTATE). Source clip
+  // context comes from the reel's single source clip (gating already ensures a
+  // single game), same field precedence App.jsx uses (raw_clip_id, falling
+  // back to source_clip_id).
+  const handleBackToGame = useCallback(() => {
+    if (completionGameId == null) return;
+    const sourceClip = clips[0];
+    const sourceClipId = sourceClip?.raw_clip_id ?? sourceClip?.source_clip_id;
+    setPendingGame(completionGameId, projectListItem?.clip_game_start_time ?? null, sourceClipId);
+    useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
+  }, [completionGameId, projectListItem, clips]);
 
   // Surface a real data gap without a silent fallback: a reel that references a game
   // should resolve a name, and a single-clip reel should resolve its in-match clock.
@@ -1830,9 +1847,15 @@ export function OverlayScreen({
             streamUrl: `${API_BASE}/api/downloads/${project.final_video_id}/stream`,
             aspect_ratio: project?.aspect_ratio,
             duration: null,
+            // T10190 §3.2 Shaper 4: already-derived gameName (above); RAW
+            // gameStartTime -- NOT the pre-formatted `gameClock` string, which
+            // would double-format in CollectionPlayer's own formatGameClock call.
+            gameName,
+            gameStartTime: projectListItem?.clip_game_start_time ?? null,
           }]}
           title={project?.name}
           onClose={handleReapplyOverlay}
+          onBackToGame={completionGameId != null ? handleBackToGame : undefined}
           actionBar={(
             <OverlayPublishActionBar
               onPublishNow={handlePublishNow}

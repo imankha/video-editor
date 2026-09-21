@@ -52,3 +52,43 @@ describe('openFinishedReel (T9470 scoping)', () => {
     );
   });
 });
+
+// T10190 §3.2 Shaper 1: the snapshot must ALSO carry a `gameId` derived from
+// `project.game_ids`, gated to exactly one source game -- null for 0 or >1
+// games, since a multi-game/no-game reel has no unambiguous backlink target.
+// This feeds DraftReelPreview's onBackToGame gating (design §2.4/§3.2).
+describe('openFinishedReel gameId gating (T10190)', () => {
+  beforeEach(() => {
+    openMock.mockClear();
+    goHomeMock.mockClear();
+  });
+
+  it('feeds gameId when the project resolves exactly one source game', () => {
+    openFinishedReel({ ...project, game_ids: [55] });
+    expect(openMock).toHaveBeenCalledWith(
+      expect.objectContaining({ gameId: 55 }),
+    );
+  });
+
+  it('feeds gameId: null when the project has zero source games', () => {
+    openFinishedReel({ ...project, game_ids: [] });
+    expect(openMock).toHaveBeenCalledWith(
+      expect.objectContaining({ gameId: null }),
+    );
+  });
+
+  it('feeds gameId: null when the project has MORE THAN ONE source game (Mix)', () => {
+    openFinishedReel({ ...project, game_ids: [55, 56] });
+    expect(openMock).toHaveBeenCalledWith(
+      expect.objectContaining({ gameId: null }),
+    );
+  });
+
+  it('feeds gameId: null when game_ids is absent entirely', () => {
+    const { game_ids: _game_ids, ...projectNoGameIds } = { ...project, game_ids: undefined };
+    openFinishedReel(projectNoGameIds);
+    expect(openMock).toHaveBeenCalledWith(
+      expect.objectContaining({ gameId: null }),
+    );
+  });
+});

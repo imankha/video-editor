@@ -12,6 +12,7 @@ import { useTilePreview } from '../../hooks/useTilePreview';
 import { TilePreviewVideo } from './TilePreviewVideo';
 import { IntroCardPicker } from '../introcards/IntroCardPicker';
 import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
+import { RESULT_SURFACE } from '../../config/displayNames';
 
 // T7100: compact byte readout for the in-flight download scrim row (mirrors
 // CollectionHeader's formatBytes, minus the GB rung a single reel never needs).
@@ -349,8 +350,8 @@ export function ReelTile({
           <button
             type="button"
             onClick={(e) => { preview.stop(); onPlay(e, download); }}
-            title="Play video"
-            aria-label="Play video"
+            title={RESULT_SURFACE.WATCH_MARKED_PLAYS}
+            aria-label={RESULT_SURFACE.WATCH_MARKED_PLAYS}
             className={actionBtnClass}
           >
             <Play size={16} className={REEL.accent} />
