@@ -485,13 +485,12 @@ export function FocusModeView({
         {/* T9270: desktop stage row — the editor column (video + timeline) beside the
             settings rail. In fullscreen / mobileFs the container escapes via fixed
             positioning so the row collapses to just the (gated-off) rail. */}
-        {/* T9920: `relative` makes this the containing block for the parked mobile
-            settings drawer + its `absolute inset-0` scrim below (the comment there
-            long claimed it already was — now the code matches). `overflow-x-clip`
-            keeps the drawer's off-canvas translateX(316px) from growing a horizontal
-            scrollbar on the app's inner scroll pane. Clip, not hidden: `overflow-x:
-            hidden` would force overflow-y to auto and trap the sticky/absolute
-            children in this row. */}
+        {/* T10820: `relative overflow-x-clip` no longer contains the mobile settings
+            drawer (it moved to the sticky action-band wrapper below, anchored
+            `absolute bottom-full` there instead — pre-T10820 this row was its
+            containing block via `relative`, with `overflow-x-clip` containing its
+            parked off-canvas translateX(316px)). Left in place here because removing
+            it is a separate cleanup, not verified safe within this task. */}
         <div className="relative overflow-x-clip lg:flex lg:flex-row lg:items-start">
         <div className="flex flex-col w-full lg:flex-1 lg:min-w-0 lg:pr-6">
         {/* T9610: the three-step framing guide — the first thing a first-time parent
@@ -632,7 +631,11 @@ export function FocusModeView({
                 the timeline + export controls reachable below) */}
             {isMobile && !mobileFs && videoUrl && (
               <button
-                onClick={() => setMobileExpanded(true)}
+                // T10820: entering mobile fullscreen unmounts the sticky band wrapper
+                // (and the settings panel inside it), so close the panel from this
+                // same gesture rather than leaving `drawerOpen` stale until the next
+                // render.
+                onClick={() => { setMobileExpanded(true); setDrawerOpen(false); }}
                 className="absolute top-2 right-2 z-10 p-2 min-h-11 min-w-11 flex items-center justify-center rounded-lg bg-black/50 text-white hover:bg-black/70"
                 title="Fullscreen video"
                 aria-label="Expand video to fullscreen"
@@ -892,36 +895,22 @@ export function FocusModeView({
             {focusRailBody(true)}
           </SettingsRail>
         )}
-        {/* T9270: mobile settings drawer — the SAME SettingsRail in translateX mode,
-            opened by the mobile-settings-row below. Positioned absolute inside this
-            relatively-positioned stage row so it never alters the stage box. Holds
-            the mobile-safe subset (Reel + This clip via desktopOnly=false; no dim/zoom
-            or straighten line-drag tool). */}
-        {videoUrl && !isFullscreen && !mobileFs && isMobile && (
-          <SettingsRail
-            isMobile
-            open={drawerOpen}
-            onCloseDrawer={() => setDrawerOpen(false)}
-            tabs={focusRailTabs}
-            activeTab={railTab}
-            onTabChange={setRailTab}
-            title="Settings"
-          >
-            {focusRailBody(false)}
-          </SettingsRail>
-        )}
         </div>
 
         {/* T9270: mobile settings entry row — a 64px full-width labelled button that
-            opens the drawer, with a derived live-summary second line. Hidden in mobile
-            fullscreen (as the toolbar was). Desktop uses the in-flow rail instead. */}
+            opens the panel, with a derived live-summary second line. Hidden in mobile
+            fullscreen (as the toolbar was). Desktop uses the in-flow rail instead.
+            T10820: the row stays exactly where it is and never becomes the panel
+            itself — it flips `aria-expanded`, rotates its chevron, and takes an
+            active border so it still reads as the thing that opened. */}
         {videoUrl && !isFullscreen && !mobileFs && isMobile && (
           <button
             type="button"
             data-testid="mobile-settings-row"
             onClick={() => setDrawerOpen(true)}
-            className="mt-4 w-full h-16 flex items-center gap-3 rounded-[10px] px-3.5 text-left"
-            style={{ border: '1px solid #334155', background: '#0f172a' }}
+            aria-expanded={drawerOpen}
+            className="mt-4 w-full h-16 flex items-center gap-3 rounded-[10px] px-3.5 text-left transition-colors"
+            style={{ border: drawerOpen ? '1px solid #2563eb' : '1px solid #334155', background: '#0f172a' }}
             aria-label="Open settings"
           >
             <Sliders size={20} className="shrink-0 text-gray-300" aria-hidden="true" />
@@ -931,7 +920,11 @@ export function FocusModeView({
                 {mobileSettingsSummary}
               </span>
             </span>
-            <ChevronLeft size={18} className="shrink-0 text-gray-500" aria-hidden="true" />
+            {drawerOpen ? (
+              <ChevronDown size={18} className="shrink-0 text-gray-500" aria-hidden="true" />
+            ) : (
+              <ChevronLeft size={18} className="shrink-0 text-gray-500" aria-hidden="true" />
+            )}
           </button>
         )}
 
@@ -955,7 +948,28 @@ export function FocusModeView({
         // it, but at the `md` boundary (768px) — and again at `lg` (1024px) — the
         // container is full-width with a zero gutter, so those 8px leaked as a
         // horizontal scrollbar on App's inner overflow-auto pane.
-        <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-4">
+        // T10820: `relative overflow-x-clip` added — this sticky wrapper is now also
+        // the mobile settings panel's containing block (`absolute bottom-full`
+        // inside it), which is why the panel is mounted as this div's first child.
+        <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-4 relative overflow-x-clip">
+          {/* T9270: mobile settings panel — the SAME SettingsRail anchored above
+              the band (T10820: `absolute bottom-full`, never `position:fixed`).
+              Opened by the mobile-settings-row above; closed by its own 44x44
+              header close. Holds the mobile-safe subset (Reel + This clip via
+              desktopOnly=false; no dim/zoom or straighten line-drag tool). */}
+          {isMobile && (
+            <SettingsRail
+              isMobile
+              open={drawerOpen}
+              onCloseDrawer={() => setDrawerOpen(false)}
+              tabs={focusRailTabs}
+              activeTab={railTab}
+              onTabChange={setRailTab}
+              title="Settings"
+            >
+              {focusRailBody(false)}
+            </SettingsRail>
+          )}
           <ExportButtonSection
             ref={exportButtonRef}
             videoFile={videoFile}

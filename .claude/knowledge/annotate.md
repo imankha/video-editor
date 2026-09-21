@@ -203,7 +203,10 @@ sibling AFTER the wrapper's closing tag — pure JSX relocation. **Same pattern 
 `backdrop-blur-lg` wrapper) — checked both, no live bug today because their only `fixed`
 descendant is fullscreen-gated (mutually exclusive with the blur branch), but any new `fixed`
 element added inside one of these three wrappers in windowed mode will hit this same trap. See
-T10420. Prior:)
+T10420. T10820 hit exactly this predicted trap (the mobile settings panel needed to escape the
+stage row inside that same wrapper) and resolved it by anchoring the panel to the sticky
+action-band wrapper (`absolute bottom-full`, outside the blur card) instead of portaling —
+a second worked answer beside T10420's sibling-relocation fix. Prior:)
 updated: 2026-09-18 (T10400 — fullscreen no longer auto-opens the play editor for a
 SELECTED clip. **LANDMINE fixed:** `AnnotateContainer.handleToggleFullscreen` had an
 `if (newFS && selectionState.type === 'SELECTED') editClip(...)` branch, deliberate since T690

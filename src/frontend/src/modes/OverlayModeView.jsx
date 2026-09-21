@@ -14,7 +14,7 @@ import OverlaySpotlightPanel from '../components/settings/OverlaySpotlightPanel'
 import { ExportButtonContainer } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
-import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, MousePointerClick } from 'lucide-react';
+import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, ChevronDown, MousePointerClick } from 'lucide-react';
 import { formatInstant, formatLength, PRECISION } from '../utils/timeFormat';
 import { HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { EDITOR_PANELS, MODE_NAMES } from '../config/displayNames';
@@ -696,7 +696,10 @@ export function OverlayModeView({
           the overlay settings + Add Spotlight/export controls reachable below) */}
       {isMobile && !mobileFs && effectiveOverlayVideoUrl && (
         <button
-          onClick={() => setMobileExpanded(true)}
+          // T10820: entering mobile fullscreen unmounts the sticky band wrapper
+          // (and the settings panel inside it), so close the panel from this same
+          // gesture rather than leaving `drawerOpen` stale until the next render.
+          onClick={() => { setMobileExpanded(true); setDrawerOpen(false); }}
           className="absolute top-2 right-2 z-10 p-2 min-h-11 min-w-11 flex items-center justify-center rounded-lg bg-black/50 text-white hover:bg-black/70"
           title="Fullscreen video"
           aria-label="Expand video to fullscreen"
@@ -924,6 +927,10 @@ export function OverlayModeView({
               {controlsEl}
             </div>
           ) : (
+            // T10820: `relative overflow-x-clip` no longer contains a mobile drawer
+            // (the mobile settings panel moved to the sticky action-band wrapper
+            // below, anchored `absolute bottom-full` there instead). Left in place
+            // because removing it is a separate cleanup, not verified safe here.
             <div className="relative overflow-x-clip lg:flex lg:flex-row lg:items-start">
               {/* Video column — shrink-wraps the aspect box so Controls bind to the
                   video width (lg:w-fit); full width when stacked on mobile. T9270:
@@ -947,25 +954,6 @@ export function OverlayModeView({
                   isMobile={false}
                   collapsed={railCollapsed}
                   onToggleCollapse={() => setRailCollapsed((v) => !v)}
-                  tabs={settingsRailTabs}
-                  activeTab={activeRailTab}
-                  onTabChange={setActiveTab}
-                  disabledTabIds={railDisabledTabIds}
-                  disabledTabTitle="No text region under the playhead"
-                  title="Spotlight settings"
-                >
-                  {settingsRailBodies[activeRailTab]}
-                </SettingsRail>
-              )}
-              {/* T9270: mobile settings drawer — the SAME SettingsRail in translateX
-                  mode, position:absolute inside this relatively-positioned stage row
-                  so it never alters the stage box. Opened by the mobile-settings-row
-                  below; closed by its own 44x44 header close. */}
-              {isMobile && (
-                <SettingsRail
-                  isMobile
-                  open={drawerOpen}
-                  onCloseDrawer={() => setDrawerOpen(false)}
                   tabs={settingsRailTabs}
                   activeTab={activeRailTab}
                   onTabChange={setActiveTab}
@@ -1192,16 +1180,19 @@ export function OverlayModeView({
         )}
 
         {/* T9270: mobile settings entry row — a 64px full-width labelled button that
-            opens the drawer, with a derived live-summary second line. Hidden in mobile
+            opens the panel, with a derived live-summary second line. Hidden in mobile
             fullscreen (as the toolbar was). Desktop uses the in-flow rail instead.
-            Replaces the old lg:hidden stacked settings copy. */}
+            T10820: the row stays exactly where it is and never becomes the panel
+            itself — it flips `aria-expanded`, rotates its chevron, and takes an
+            active border so it still reads as the thing that opened. */}
         {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && isMobile && (
           <button
             type="button"
             data-testid="mobile-settings-row"
             onClick={() => setDrawerOpen(true)}
-            className="mt-4 w-full h-16 flex items-center gap-3 rounded-[10px] px-3.5 text-left"
-            style={{ border: '1px solid #334155', background: '#0f172a' }}
+            aria-expanded={drawerOpen}
+            className="mt-4 w-full h-16 flex items-center gap-3 rounded-[10px] px-3.5 text-left transition-colors"
+            style={{ border: drawerOpen ? '1px solid #2563eb' : '1px solid #334155', background: '#0f172a' }}
             aria-label="Open spotlight settings"
           >
             <Sparkles size={20} className="shrink-0 text-gray-300" aria-hidden="true" />
@@ -1211,7 +1202,11 @@ export function OverlayModeView({
                 {mobileSettingsSummary}
               </span>
             </span>
-            <ChevronLeft size={18} className="shrink-0 text-gray-500" aria-hidden="true" />
+            {drawerOpen ? (
+              <ChevronDown size={18} className="shrink-0 text-gray-500" aria-hidden="true" />
+            ) : (
+              <ChevronLeft size={18} className="shrink-0 text-gray-500" aria-hidden="true" />
+            )}
           </button>
         )}
 
@@ -1228,7 +1223,29 @@ export function OverlayModeView({
         // not `sm:-mx-6` — the extra 8px/side over-bleed leaks as horizontal overflow
         // once the container hits full width with no `mx-auto` gutter (md 768 / lg 1024).
         // Identical fix to FocusModeView's action band.
-        <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-4">
+        // T10820: `relative overflow-x-clip` added — this sticky wrapper is now also
+        // the mobile settings panel's containing block (`absolute bottom-full`
+        // inside it), which is why the panel is mounted as this div's first child.
+        <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-4 relative overflow-x-clip">
+          {/* T9270: mobile settings panel — the SAME SettingsRail anchored above
+              the band (T10820: `absolute bottom-full`, never `position:fixed`).
+              Opened by the mobile-settings-row above; closed by its own 44x44
+              header close. */}
+          {isMobile && (
+            <SettingsRail
+              isMobile
+              open={drawerOpen}
+              onCloseDrawer={() => setDrawerOpen(false)}
+              tabs={settingsRailTabs}
+              activeTab={activeRailTab}
+              onTabChange={setActiveTab}
+              disabledTabIds={railDisabledTabIds}
+              disabledTabTitle="No text region under the playhead"
+              title="Spotlight settings"
+            >
+              {settingsRailBodies[activeRailTab]}
+            </SettingsRail>
+          )}
           <OverlayExportButtonSection
             ref={exportButtonRef}
             videoFile={effectiveOverlayFile}
