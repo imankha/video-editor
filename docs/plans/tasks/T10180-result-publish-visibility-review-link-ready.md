@@ -1,6 +1,6 @@
 # T10180: Result-surface Publish -> visibility-review -> link-ready UI
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 6
 **Complexity:** 7
 **Created:** 2026-09-15
@@ -93,16 +93,40 @@ persistence rule throughout: link creation must be gesture-driven, never a react
 5. [ ] Live-verify item 5's download path actually works for a never-published draft before
    shipping it (T9880 flagged this as unverifiable without a backend venv/live environment).
 
+### Progress Log
+
+**2026-09-21**: Implemented via /dotask. Design approved (item 4 split -> T10860, shared
+`LinkReadyCard` extracted, copy approved verbatim). 164/164 unit tests green, Reviewer APPROVE
+WITH NITS (0 blocking). Branch CI green (PR not yet opened - held for the one unproven AC).
+Supervisor live-drove the e2e suite against a real running stack (found + fixed a locator-scoping
+bug in the test itself, not product code): 4/5 criteria proven live (review/cancel/confirm/
+link-ready/copy, publish-failure retry, result-view Download button). The 5th - DraftTile kebab
+Download to disk on a REAL never-published draft - could not be proven: checked `imankh@gmail.com`
+and all 3 profiles of the `imankh+devfixture@gmail.com` fixture, none currently hold a draft
+(has_final_video + not published). This is a fixture-data gap, not a code issue (the backend path
+is independently confirmed ungated). **WAITING ON USER**: see handoff message for options.
+
 ## Acceptance Criteria
 
-- [ ] Explicit "Publish and get link" -> visibility-review -> "Publish and create link" ->
-      link-ready flow exists on the private result surface
-- [ ] Link-ready state has a selectable fallback link (not just silent clipboard copy)
-- [ ] All new copy is policy-accurate, consistent with the T9670 audience contract, no
-      placeholders
+- [x] Explicit "Publish and get link" -> visibility-review -> "Publish and create link" ->
+      link-ready flow exists on the private result surface - live-verified against a real
+      running stack (idle -> review -> cancel; review -> confirm -> link-ready with real
+      clipboard copy)
+- [x] Link-ready state has a selectable fallback link (not just silent clipboard copy) -
+      `LinkReadyCard` extracted, reused by `CollectionShareModal`; selectable readonly input
+      confirmed live
+- [x] All new copy is policy-accurate, consistent with the T9670 audience contract, no
+      placeholders - user-approved verbatim at the design gate
 - [ ] Download is surfaced on the private result view (dropped T10000 scope), verified against
-      a real never-published draft
-- [ ] (If item 4 included) re-exporting a published draft updates or explicitly offers to update
-      the shared link's target, verified live
-- [ ] Relevant test set + live-drive evidence per criterion
-- [ ] Branch CI green
+      a real never-published draft - **result-view Download button live-verified (browser
+      download event fires with correct filename); the DraftTile kebab item's real-file proof
+      is UNPROVEN** - no dev/staging account currently has a never-published draft (checked
+      the plain `imankh@gmail.com` account and all 3 profiles of the `imankh+devfixture@gmail.com`
+      fixture - zero drafts on any of them, a fixture-data gap, not a code defect). Backend code
+      path independently confirmed ungated by Code Expert + Reviewer (`download_file`/
+      `stream_download` do not filter on `published_at`).
+- [x] Item 4 (Update shared version) - split out per design-gate decision, filed as T10860
+- [x] Relevant test set + live-drive evidence per criterion - 164/164 unit tests, 4/5 e2e
+      criteria live-verified against a real running stack (1 skipped: the real-account proof
+      above), Reviewer APPROVE WITH NITS (0 blocking)
+- [x] Branch CI green
