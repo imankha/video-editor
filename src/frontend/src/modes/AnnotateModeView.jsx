@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Play, Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles } from 'lucide-react';
+import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, ListVideo } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
@@ -417,6 +417,15 @@ export function AnnotateModeView({
     if (!isPlaybackMode || !playback?.activeClipId) return null;
     return clipRegions?.find(r => r.id === playback.activeClipId) || null;
   }, [isPlaybackMode, playback?.activeClipId, clipRegions]);
+  // T10920: same getClipStage + useProjectsList lookup as the selected-region
+  // CTA above, so the banner's published/clipped mark can never disagree with
+  // the strip's stage CTA.
+  const activePlaybackClipStage = activePlaybackClip
+    ? getClipStage(
+      activePlaybackClip,
+      activePlaybackClip.autoProjectId ? projectsList.find(p => p.id === activePlaybackClip.autoProjectId) : null,
+    ).stage
+    : null;
 
   // --- PLAYBACK MODE ---
   // Single return tree — toggling fullscreen changes CSS classes, not DOM structure.
@@ -447,7 +456,7 @@ export function AnnotateModeView({
             data-testid="playback-mode-badge"
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 text-xs font-semibold tracking-wide backdrop-blur-sm"
           >
-            <Play size={12} className="fill-cyan-300 text-cyan-300" />
+            <ListVideo size={12} className="text-cyan-300" />
             {ANNOTATE.PREVIEW_PLAYS}
           </span>
         </div>
@@ -532,6 +541,7 @@ export function AnnotateModeView({
                     notes={activePlaybackClip.notes}
                     rating={activePlaybackClip.rating}
                     gameClock={gameClockFor(activePlaybackClip)}
+                    clipStage={activePlaybackClipStage}
                     isVisible={true}
                     isFullscreen={isFS}
                     isMobile={isMobile}
@@ -1250,7 +1260,7 @@ export function AnnotateModeView({
                           : 'bg-green-600 hover:bg-green-700 text-white'
                       }`}
                     >
-                      <Play size={18} />
+                      <ListVideo size={18} />
                       <span>{ANNOTATE.PREVIEW_PLAYS}</span>
                     </button>
                     {/* T9810: game invitations. Repointed from onShare (tagged-player
@@ -1312,7 +1322,7 @@ export function AnnotateModeView({
                     disabled
                     className="text-xs text-gray-600 cursor-not-allowed flex items-center gap-1"
                   >
-                    <Play size={12} />
+                    <ListVideo size={12} />
                     <span>{ANNOTATE.PREVIEW_PLAYS}</span>
                   </button>
                   {/* T9810: game invitations (repointed from onShare, matching the

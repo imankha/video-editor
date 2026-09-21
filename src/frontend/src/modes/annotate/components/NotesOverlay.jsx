@@ -1,6 +1,18 @@
 import React from 'react';
+import { CheckCircle2, Film } from 'lucide-react';
 import { RATING_NOTATION, RATING_BADGE_COLORS, UNRATED_BADGE_COLOR, getRatingLabel } from '../../../components/shared/clipConstants';
 import { RatingIcon } from '../../../components/shared/RatingIcon';
+import { CLIP_STAGE } from '../clipStage';
+
+// T10920: upper-right corner mark for what became of this play. Two states
+// only -- PUBLISHED (check) and "a clip exists but is not published yet"
+// (film glyph: FOCUS / SPOTLIGHT / FINAL). NO_PROJECT draws nothing.
+const CLIP_STATE_MARK = {
+  [CLIP_STAGE.PUBLISHED]: { Icon: CheckCircle2, color: '#16a34a', label: 'Published clip', testId: 'notes-overlay-published' },
+  [CLIP_STAGE.FINAL]: { Icon: Film, color: '#0891b2', label: 'Clip created, not published yet', testId: 'notes-overlay-clipped' },
+  [CLIP_STAGE.SPOTLIGHT]: { Icon: Film, color: '#0891b2', label: 'Clip created, not published yet', testId: 'notes-overlay-clipped' },
+  [CLIP_STAGE.FOCUS]: { Icon: Film, color: '#0891b2', label: 'Clip created, not published yet', testId: 'notes-overlay-clipped' },
+};
 
 // Border colors come from the ONE rating palette in clipConstants (was a local copy).
 const RATING_COLORS = RATING_BADGE_COLORS;
@@ -21,12 +33,13 @@ const RATING_COLORS = RATING_BADGE_COLORS;
  *
  * Only visible when playhead is in a clip region with a name or notes.
  */
-export function NotesOverlay({ name, notes, rating, gameClock = null, isVisible, isFullscreen = false }) {
+export function NotesOverlay({ name, notes, rating, gameClock = null, clipStage = null, isVisible, isFullscreen = false }) {
   if (!isVisible || (!name && !notes)) {
     return null;
   }
 
   const notation = rating ? RATING_NOTATION[rating] || '' : '';
+  const clipMark = clipStage ? CLIP_STATE_MARK[clipStage] || null : null;
   // T10690: an unrated clip's border is neutral, not a borrowed "Interesting"
   // blue — a NULL rating is a real state, never a value to substitute.
   const borderColor = rating ? RATING_COLORS[rating] : UNRATED_BADGE_COLOR;
@@ -48,6 +61,17 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, isVisible,
         border: `4px solid ${borderColor}`,
       }}
     >
+      {clipMark && (
+        <span
+          className="absolute top-1.5 right-2 inline-flex"
+          style={{ color: clipMark.color }}
+          role="img"
+          aria-label={clipMark.label}
+          data-testid={clipMark.testId}
+        >
+          <clipMark.Icon size={18} aria-hidden="true" />
+        </span>
+      )}
       {name && (
         // T5290: below sm the narrow pill laid the absolutely-positioned game clock
         // over the centered name (`8'56"Good Control`). Below sm, lay time + notation
