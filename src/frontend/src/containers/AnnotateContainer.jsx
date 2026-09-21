@@ -37,6 +37,7 @@ import { beginGameVideoLoad, computeResumePosition, seekVideoElementWhenReady } 
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
 import { defaultPlayName } from '../modes/annotate/playProgress';
 import { createRegionWriteQueue } from '../modes/annotate/regionWriteQueue';
+import { pickNearestCenterRegion, FRAME_TOLERANCE } from '../modes/annotate/regionAtTime';
 
 // T7790: max time a clip import will wait for an in-flight upload to create the
 // game record before giving up. Generous ceiling — a real cold upload creates the
@@ -1786,11 +1787,17 @@ export function AnnotateContainer({
       videoSeq = fullTimeline.segments[r.videoIndex].videoSequence;
       fileTime = r.actualTime;
     }
-    return clipRegions.find(r =>
+    // T10890: when plays overlap (angle clips, closely-timed marks), pick
+    // whichever candidate's CENTER is closest to the playhead, not just the
+    // first array-order match. Same FRAME_TOLERANCE as the auto-deselect
+    // check below, so a click landing on a region's edge (seeked snapping to
+    // a frame boundary) still matches instead of selecting nothing.
+    const matches = clipRegions.filter(r =>
       (r.videoSequence ?? 1) === videoSeq &&
-      fileTime >= r.startTime &&
-      fileTime <= r.endTime
-    ) ?? null;
+      fileTime >= r.startTime - FRAME_TOLERANCE &&
+      fileTime <= r.endTime + FRAME_TOLERANCE
+    );
+    return pickNearestCenterRegion(matches, fileTime);
   }, [fullTimeline, isOverlapTimeline, activeSourceSequence, getAnnotateRegionAtTime, clipRegions]);
 
   /**
@@ -1864,7 +1871,6 @@ export function AnnotateContainer({
     if (scrubLockedRef.current) return; // Sidebar scrub in progress — don't deselect
     if (hasUncommittedTeammateText()) return;
 
-    const FRAME_TOLERANCE = 0.15; // ~4 frames at 30fps — handles seek snapping
     const regionAtPlayhead = getRegionAtTimeUnified(effectiveCurrentTime);
 
     if (type === 'SELECTED') {

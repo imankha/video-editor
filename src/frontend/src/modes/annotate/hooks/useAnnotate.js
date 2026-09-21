@@ -3,6 +3,7 @@ import { getAllSupportedTagNames } from '../constants/tagRegistry';
 import { DEFAULT_CLIP_DURATION } from '../../../components/shared/clipConstants';
 import { track } from '../../../utils/analytics';
 import { setAnnotateSnapshot } from '../../../utils/editorContext';
+import { pickNearestCenterRegion, FRAME_TOLERANCE } from '../regionAtTime';
 
 /**
  * useAnnotate - Manages clip regions for extracting clips from full game footage
@@ -625,12 +626,17 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
   }, [updateClipRegion]);
 
   /**
-   * Get the region at a specific time
+   * Get the region at a specific time. When multiple regions overlap the
+   * time (angle clips, closely-timed marks), the one whose CENTER is
+   * closest to `time` wins (T10890) — not just the first array-order match.
    * @param {number} time - Time in seconds
    * @returns {Object|null} - Region at time or null
    */
   const getRegionAtTime = useCallback((time) => {
-    return clipRegions.find(r => time >= r.startTime && time <= r.endTime) || null;
+    const matches = clipRegions.filter(r =>
+      time >= r.startTime - FRAME_TOLERANCE && time <= r.endTime + FRAME_TOLERANCE
+    );
+    return pickNearestCenterRegion(matches, time);
   }, [clipRegions]);
 
   /**
