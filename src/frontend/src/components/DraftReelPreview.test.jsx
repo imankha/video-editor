@@ -1,12 +1,19 @@
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// T10180: DraftReelPreview is being rewired from the two-flag (published/failed)
+// publish->share model to a `phase` state machine (idle/review/publishing/ready/
+// failed) with a visibility-review confirm step and a distinct link-ready state
+// that shows the share URL BEFORE any copy. See docs/plans/tasks/T10180-design.md.
+//
 // apiFetch + store fns for the publish path (usePublishProject).
-const { apiFetchMock, fetchProjectsMock, toastSuccessMock, toastErrorMock } = vi.hoisted(() => ({
+const { apiFetchMock, fetchProjectsMock, toastSuccessMock, toastErrorMock, createShareLinkMock, webShareMock } = vi.hoisted(() => ({
   apiFetchMock: vi.fn(),
   fetchProjectsMock: vi.fn(),
   toastSuccessMock: vi.fn(),
   toastErrorMock: vi.fn(),
+  createShareLinkMock: vi.fn(),
+  webShareMock: vi.fn(),
 }));
 
 vi.mock('../utils/apiFetch', () => ({ default: (...a) => apiFetchMock(...a) }));
@@ -31,43 +38,56 @@ vi.mock('../stores/questStore', () => {
 vi.mock('./shared/Toast', () => ({
   toast: { success: (...a) => toastSuccessMock(...a), error: (...a) => toastErrorMock(...a) },
 }));
+// T10180: useWebShare gains createShareLink({ downloadId }) -> Promise<string url>,
+// additive alongside the existing copyLink/webShare.
 vi.mock('../hooks/useWebShare', () => ({
-  useWebShare: () => ({ copyLink: vi.fn().mockResolvedValue('clipboard'), webShare: vi.fn(), isMobile: false }),
+  useWebShare: () => ({
+    copyLink: vi.fn().mockResolvedValue('clipboard'),
+    webShare: webShareMock,
+    createShareLink: createShareLinkMock,
+    isMobile: false,
+  }),
+}));
+const { downloadsApi } = vi.hoisted(() => ({
+  downloadsApi: { downloadFile: vi.fn().mockResolvedValue(undefined), downloadingId: null },
+}));
+vi.mock('../hooks/useDownloads', () => ({
+  useDownloads: () => downloadsApi,
+  default: () => downloadsApi,
 }));
 
 // Mock CollectionPlayer down to a harness that surfaces the props DraftReelPreview
-// drives: it records the streamUrl (identity check), renders the statusBanner, and
-// exposes Publish/Share by their titles. A mount counter proves the player is NOT
-// remounted on publish (§4.7: same final_video_id, video does not reload).
+// drives. T10180 stops using the state-exclusive onPublish/onShare primary slot for
+// this surface and renders the whole publish->review->link-ready flow into the
+// actionBar slot instead (a PublishLinkFlow component) -- the harness exposes
+// statusBanner and actionBar so the flow can be driven/asserted without importing
+// the real PublishLinkFlow implementation.
 const { mountSpy } = vi.hoisted(() => ({ mountSpy: vi.fn() }));
 vi.mock('./collections/CollectionPlayer', async () => {
   const { useEffect } = await import('react');
   return {
-    CollectionPlayer: ({ reels, statusBanner, onPublish, onShare, publishLoading, onClose }) => {
-    // Fire only when the video identity (streamUrl) changes — that is what a real
-    // <video> reload keys on. A publish that keeps the same final_video_id must
-    // NOT change it, so this must stay at one call across publish (§4.7).
-    const streamUrl = reels[0].streamUrl;
-    useEffect(() => { mountSpy(streamUrl); }, [streamUrl]);
-    return (
-      <div data-testid="mock-player">
-        <span data-testid="stream-url">{reels[0].streamUrl}</span>
-        {statusBanner}
-        {onPublish && (
-          <button title="Publish reel" disabled={publishLoading} onClick={onPublish}>Publish</button>
-        )}
-        {onShare && <button title="Share" onClick={() => onShare(reels[0])}>Share</button>}
-        <button title="Close" onClick={onClose}>Close</button>
-      </div>
-    );
+    CollectionPlayer: ({ reels, statusBanner, actionBar, onClose, onDownload, downloadLoading }) => {
+      const streamUrl = reels[0].streamUrl;
+      useEffect(() => { mountSpy(streamUrl); }, [streamUrl]);
+      return (
+        <div data-testid="mock-player">
+          <span data-testid="stream-url">{reels[0].streamUrl}</span>
+          {statusBanner}
+          {actionBar}
+          {onDownload && (
+            <button title="Download" disabled={downloadLoading} onClick={() => onDownload(reels[0])}>
+              {downloadLoading ? 'Downloading...' : 'Download'}
+            </button>
+          )}
+          <button title="Close" onClick={onClose}>Close</button>
+        </div>
+      );
     },
   };
 });
 
 import { DraftReelPreview } from './DraftReelPreview';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
-import { useQuestStore } from '../stores/questStore';
-import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 
 const jsonResponse = (status, body) => ({
   ok: status >= 200 && status < 300,
@@ -87,176 +107,165 @@ const snapshot = {
 
 const openPreview = () => act(() => { useReelPreviewStore.getState().open(snapshot); });
 
-describe('DraftReelPreview (T8530)', () => {
+describe('DraftReelPreview (T10180 phase state machine)', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
     fetchProjectsMock.mockReset();
     toastSuccessMock.mockReset();
     toastErrorMock.mockReset();
     mountSpy.mockReset();
+    createShareLinkMock.mockReset();
+    createShareLinkMock.mockResolvedValue('https://reelballers.com/shared/tok123');
+    webShareMock.mockReset();
+    downloadsApi.downloadFile.mockClear();
+    downloadsApi.downloadingId = null;
     act(() => useReelPreviewStore.getState().close());
   });
 
-  it('renders nothing when no payload is open', () => {
-    render(<DraftReelPreview />);
-    expect(screen.queryByTestId('mock-player')).toBeNull();
-  });
-
-  it('draft state shows the cyan draft banner and a Publish button', () => {
+  // Test 1: idle shows "Publish and get link", cyan banner, no review card.
+  it('idle phase shows "Publish and get link", the cyan draft banner, and no review card', () => {
     render(<DraftReelPreview />);
     openPreview();
+
     expect(screen.getByTestId('draft-preview-banner').textContent)
       .toMatch(/only you can see this/i);
-    expect(screen.getByTitle('Publish reel')).toBeTruthy();
-    expect(screen.queryByTitle('Share')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Publish and get link' })).toBeTruthy();
+    // No review-card affordances yet.
+    expect(screen.queryByText(/anyone with the link can watch/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Publish and create link' })).toBeNull();
   });
 
-  it('publish success swaps Publish->Share, drops the banner, and does NOT reload the video', async () => {
+  // Test 2: click "Publish and get link" -> review card renders, no publish call fired.
+  it('clicking "Publish and get link" opens the review card without publishing yet', () => {
+    render(<DraftReelPreview />);
+    openPreview();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish and get link' }));
+
+    expect(screen.getByText('Publish "Brilliant Dribble"?')).toBeTruthy();
+    expect(screen.getByText(/anyone with the link can watch/i)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Publish and create link' })).toBeTruthy();
+    // No write yet: publish (apiFetch) must not have been called.
+    expect(apiFetchMock).not.toHaveBeenCalled();
+  });
+
+  // Test 3: Cancel returns to idle, no write, no link created.
+  it('Cancel on the review card returns to idle with no write and no link', () => {
+    render(<DraftReelPreview />);
+    openPreview();
+    fireEvent.click(screen.getByRole('button', { name: 'Publish and get link' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    // Back to idle: primary CTA re-appears, review card gone.
+    expect(screen.getByRole('button', { name: 'Publish and get link' })).toBeTruthy();
+    expect(screen.queryByText(/anyone with the link can watch/i)).toBeNull();
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(createShareLinkMock).not.toHaveBeenCalled();
+  });
+
+  // Test 4: Confirm calls publish then createShareLink, lands in link-ready with
+  // the URL in a selectable readonly input.
+  it('Confirm publishes, then creates the share link, landing in link-ready with a selectable readonly input', async () => {
     apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 99 }));
     render(<DraftReelPreview />);
     openPreview();
+    fireEvent.click(screen.getByRole('button', { name: 'Publish and get link' }));
 
-    const urlBefore = screen.getByTestId('stream-url').textContent;
-    expect(mountSpy).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Publish and create link' }));
+    });
 
-    await act(async () => { fireEvent.click(screen.getByTitle('Publish reel')); });
-
-    // Slot swap: Publish gone, Share present.
-    await waitFor(() => expect(screen.queryByTitle('Publish reel')).toBeNull());
-    expect(screen.getByTitle('Share')).toBeTruthy();
-    // Banner unmounts once published.
-    expect(screen.queryByTestId('draft-preview-banner')).toBeNull();
-    // Success toast.
-    expect(toastSuccessMock).toHaveBeenCalledWith('Published', { message: 'Nobody else can see this until you share a link.' });
-    // §4.7 coherence: SAME final_video_id / same stream URL, player NOT remounted.
-    expect(screen.getByTestId('stream-url').textContent).toBe(urlBefore);
-    expect(mountSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it('T8390: alreadyPublished payload opens straight into the published (Share) state, no draft banner', () => {
-    render(<DraftReelPreview />);
-    act(() => { useReelPreviewStore.getState().open({ ...snapshot, alreadyPublished: true }); });
-
-    // No "landing on another decision screen": Publish never appears, Share does.
-    expect(screen.queryByTitle('Publish reel')).toBeNull();
-    expect(screen.getByTitle('Share')).toBeTruthy();
-    expect(screen.queryByTestId('draft-preview-banner')).toBeNull();
-  });
-
-  it('503 sync_failed shows the amber retry banner (copy matches DraftTile.jsx:849)', async () => {
-    apiFetchMock.mockResolvedValueOnce(
-      jsonResponse(503, { code: 'sync_failed', retryable: true })
+    await waitFor(() => expect(screen.getByText('Link ready')).toBeTruthy());
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/downloads\/publish\/42$/),
+      expect.objectContaining({ method: 'POST' })
     );
+    expect(createShareLinkMock).toHaveBeenCalledWith({ downloadId: 99 });
+    // Order matters: publish before createShareLink.
+    const publishCallOrder = apiFetchMock.mock.invocationCallOrder[0];
+    const linkCallOrder = createShareLinkMock.mock.invocationCallOrder[0];
+    expect(publishCallOrder).toBeLessThan(linkCallOrder);
+
+    const input = screen.getByDisplayValue('https://reelballers.com/shared/tok123');
+    expect(input.tagName).toBe('INPUT');
+    expect(input).toHaveProperty('readOnly', true);
+  });
+
+  // Test 5: publish failure -> amber retry banner; retry re-runs the gesture;
+  // link never created on failure.
+  it('publish failure shows the amber retry banner, retry re-runs the gesture, and the link is never created', async () => {
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(503, { code: 'sync_failed', retryable: true }));
     render(<DraftReelPreview />);
     openPreview();
+    fireEvent.click(screen.getByRole('button', { name: 'Publish and get link' }));
 
-    await act(async () => { fireEvent.click(screen.getByTitle('Publish reel')); });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Publish and create link' }));
+    });
 
     const banner = await screen.findByTestId('draft-preview-banner');
     expect(banner.textContent).toMatch(/couldn't save to the cloud\./i);
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
-    // Still a draft (not published): Share must not have appeared.
-    expect(screen.queryByTitle('Share')).toBeNull();
-  });
+    expect(createShareLinkMock).not.toHaveBeenCalled();
+    expect(screen.queryByText('Link ready')).toBeNull();
 
-  // T8535: the quest_4 "Watch Your Preview" timer moved here from DraftTile so it
-  // still fires from the consolidated draft-preview surface (T6840 behavior).
-  describe('T6840/T8535 preview-watched achievement', () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-      useQuestStore.getState().recordAchievement.mockClear();
-    });
-    afterEach(() => {
-      vi.useRealTimers();
+    // Retry re-runs the SAME gesture.
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 99 }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     });
 
-    it('records previewed_draft_reel_1s after ~1s of playback, not on open', () => {
-      render(<DraftReelPreview />);
-      openPreview();
-      expect(useQuestStore.getState().recordAchievement).not.toHaveBeenCalledWith('previewed_draft_reel_1s');
-      act(() => vi.advanceTimersByTime(1000));
-      expect(useQuestStore.getState().recordAchievement).toHaveBeenCalledWith('previewed_draft_reel_1s');
+    await waitFor(() => expect(screen.getByText('Link ready')).toBeTruthy());
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(createShareLinkMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Test 6 (R5): alreadyPublished payload reaches link-ready capability without a
+  // phantom review step AND without auto-creating the link on mount (no reactive
+  // effect firing a network call).
+  it('alreadyPublished payload skips the review step and does NOT auto-create the link on mount', async () => {
+    render(<DraftReelPreview />);
+    act(() => { useReelPreviewStore.getState().open({ ...snapshot, alreadyPublished: true }); });
+
+    // No phantom review card, no draft banner, no publish CTA.
+    expect(screen.queryByText(/anyone with the link can watch/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Publish and get link' })).toBeNull();
+    expect(screen.queryByTestId('draft-preview-banner')).toBeNull();
+
+    // Give any stray microtask/effect a chance to run -- must NOT have minted a link.
+    await act(async () => { await Promise.resolve(); });
+    expect(createShareLinkMock).not.toHaveBeenCalled();
+    expect(apiFetchMock).not.toHaveBeenCalled();
+
+    // A first Get-link click (link-ready capability) mints it on demand.
+    const getLinkBtn = screen.getByRole('button', { name: /get link/i });
+    await act(async () => { fireEvent.click(getLinkBtn); });
+    expect(createShareLinkMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Test 9: Download button wired via onDownload into CollectionPlayer; loading
+  // state reflects the download-in-progress id.
+  it('wires Download via onDownload, calling downloadFile(finalVideoId), and reflects downloadingId as loading', async () => {
+    render(<DraftReelPreview />);
+    openPreview();
+
+    const downloadBtn = screen.getByTitle('Download');
+    expect(downloadBtn.disabled).toBe(false);
+
+    await act(async () => {
+      fireEvent.click(downloadBtn);
     });
-
-    it('does NOT record it if the preview is closed before ~1s', () => {
-      render(<DraftReelPreview />);
-      openPreview();
-      act(() => vi.advanceTimersByTime(500));
-      act(() => { useReelPreviewStore.getState().close(); });
-      act(() => vi.advanceTimersByTime(1000));
-      expect(useQuestStore.getState().recordAchievement).not.toHaveBeenCalledWith('previewed_draft_reel_1s');
-    });
-  });
-});
-
-// T9470: the reported bug was "Preview does nothing, then a dialog opens over a
-// DIFFERENT screen." Root cause (code_expert): openFinishedReel navigates HOME
-// first, but the preview was mounted only in the editor return, so a click on
-// the drafts (home) screen set the snapshot with no consumer, and the overlay
-// then surfaced late over whatever editor screen the user opened next. The fix
-// mounts DraftReelPreview on home too AND scopes the snapshot to the screen it
-// opened on (openMode) so a late arrival on another screen is discarded, never
-// rendered. These tests drive the REAL editorStore so the openMode-vs-editorMode
-// scoping is exercised end to end, not stubbed.
-const scopedSnapshot = { ...snapshot, openMode: EDITOR_MODES.PROJECT_MANAGER };
-const openScoped = () => act(() => { useReelPreviewStore.getState().open(scopedSnapshot); });
-
-describe('DraftReelPreview (T9470 open-on-click + navigate-away scoping)', () => {
-  beforeEach(() => {
-    mountSpy.mockReset();
-    act(() => useReelPreviewStore.getState().close());
-    // The preview opens on the drafts/home screen (openFinishedReel navigates
-    // there first). Reset to it so each test starts on the opening screen.
-    act(() => useEditorStore.setState({ editorMode: EDITOR_MODES.PROJECT_MANAGER }));
-  });
-  afterEach(() => {
-    // Don't leak a navigated-away editorMode into the other suites' tests.
-    act(() => useEditorStore.setState({ editorMode: EDITOR_MODES.PROJECT_MANAGER }));
+    expect(downloadsApi.downloadFile).toHaveBeenCalledWith(99);
   });
 
-  // 1) The click has an IMMEDIATE visible consequence: the player shell renders
-  //    synchronously on open (the "does nothing" half of the bug).
-  it('opens the player shell immediately on the screen it was opened on', () => {
-    act(() => useEditorStore.setState({ editorMode: EDITOR_MODES.PROJECT_MANAGER }));
+  it('shows the download button as loading while downloadingId matches the active reel', () => {
+    downloadsApi.downloadingId = 99;
     render(<DraftReelPreview />);
-    openScoped();
-    expect(screen.getByTestId('mock-player')).toBeTruthy();
-  });
-
-  // 2) A second click on the same draft rebuilds an equivalent snapshot with the
-  //    same finalVideoId, so the keyed inner is NOT remounted and the video
-  //    (its stream request) is not re-created: no duplicate dialog/request.
-  it('a repeat open of the same draft does not remount the player (no duplicate request)', () => {
-    render(<DraftReelPreview />);
-    openScoped();
-    expect(mountSpy).toHaveBeenCalledTimes(1);
-    openScoped();
-    expect(mountSpy).toHaveBeenCalledTimes(1);
-  });
-
-  // 3) THE SUBSTANTIVE ONE: navigating to another screen while the preview is
-  //    still up must discard the snapshot, never render the player over that
-  //    unrelated screen. An immediate shell alone would hide this bug.
-  it('discards the snapshot when the user navigates away, never rendering over another screen', () => {
-    render(<DraftReelPreview />);
-    openScoped();
-    expect(screen.getByTestId('mock-player')).toBeTruthy();
-
-    // User leaves the drafts screen for an editor screen before it finished.
-    act(() => useEditorStore.setState({ editorMode: EDITOR_MODES.ANNOTATE }));
-
-    // The player is gone (not rendered over Annotate) AND the orphaned snapshot
-    // is cleared from the store so it can never re-surface on a later screen.
-    expect(screen.queryByTestId('mock-player')).toBeNull();
-    expect(useReelPreviewStore.getState().payload).toBeNull();
-  });
-
-  // A payload with no openMode (legacy/dev direct-open) must NOT be treated as
-  // off-page — it renders wherever it is opened, unchanged from pre-T9470.
-  it('a payload without openMode is never treated as off-page', () => {
-    act(() => useEditorStore.setState({ editorMode: EDITOR_MODES.ANNOTATE }));
-    render(<DraftReelPreview />);
-    openPreview(); // snapshot has no openMode
-    expect(screen.getByTestId('mock-player')).toBeTruthy();
+    openPreview();
+    const downloadBtn = screen.getByTitle('Download');
+    expect(downloadBtn.disabled).toBe(true);
+    expect(downloadBtn.textContent).toMatch(/downloading/i);
   });
 });

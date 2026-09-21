@@ -64,6 +64,15 @@ vi.mock('../stores/questStore', () => {
 vi.mock('../stores/profileStore', () => ({
   useCurrentProfile: () => ({ id: 'p1', sport: 'soccer' }),
 }));
+// T10180: the kebab gains a Download item, wired via useDownloads.downloadFile
+// (item 5, design doc §3.5) -- instantiated directly in DraftTile.
+const { downloadsApi } = vi.hoisted(() => ({
+  downloadsApi: { downloadFile: vi.fn().mockResolvedValue(undefined), downloadingId: null },
+}));
+vi.mock('../hooks/useDownloads', () => ({
+  useDownloads: () => downloadsApi,
+  default: () => downloadsApi,
+}));
 
 import { DraftTile } from './DraftTile';
 import { useProjectsStore } from '../stores/projectsStore';
@@ -706,5 +715,60 @@ describe('DraftTile link/unlink affordance (T10300)', () => {
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
     expect(screen.queryByText('Link to game')).toBeNull();
     expect(screen.queryByText(/^Unlink/)).toBeNull();
+  });
+});
+
+// T10180 (item 5): the kebab gains a Download item, gated strictly on
+// isComplete && final_video_id (design doc §3.5/§1.7) -- placed after
+// Open-in-Spotlight, before the Hide/Delete divider. It calls
+// useDownloads().downloadFile(project.final_video_id), the same private-draft
+// stream id the tile already uses (no backend gate on published_at).
+describe('DraftTile Download kebab item (T10180 item 5)', () => {
+  const renderReady = (overrides) => render(
+    <DraftTile
+      project={{ ...baseProject, has_final_video: true, final_video_id: 99, is_published: false, ...overrides }}
+      onSelect={vi.fn()}
+      onSelectWithMode={vi.fn()}
+      onDelete={vi.fn()}
+    />
+  );
+
+  beforeEach(() => {
+    downloadsApi.downloadFile.mockClear();
+  });
+
+  it('renders a Download item in the kebab when isComplete && final_video_id are truthy', () => {
+    renderReady();
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    expect(screen.getByRole('button', { name: /download/i })).toBeTruthy();
+  });
+
+  it('calls downloadFile(project.final_video_id) on click', async () => {
+    renderReady({ final_video_id: 99 });
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /download/i }));
+    });
+    expect(downloadsApi.downloadFile).toHaveBeenCalledWith(99);
+  });
+
+  it('does NOT render Download when the draft is not complete (no final video yet)', () => {
+    render(
+      <DraftTile
+        project={{ ...baseProject, has_final_video: false, final_video_id: null }}
+        onSelect={vi.fn()}
+        onSelectWithMode={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+    // Not-ready drafts don't even show the kebab in the same way; guard by
+    // checking Download never renders regardless of menu state.
+    expect(screen.queryByRole('button', { name: /download/i })).toBeNull();
+  });
+
+  it('does NOT render Download when final_video_id is falsy even if isComplete is true', () => {
+    renderReady({ has_final_video: true, final_video_id: null });
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    expect(screen.queryByRole('button', { name: /download/i })).toBeNull();
   });
 });

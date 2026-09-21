@@ -170,6 +170,27 @@ export const STAGE_REASONS = {
   PUBLISH: 'Nobody else can see this until you share a link.',
 };
 
+// T10180 (design doc §3.1): the private-result-surface publish -> visibility-
+// review -> link-ready vocabulary, single source. Policy-checked against the
+// T9670 audience contract: publishing alone grants no audience; a link is
+// CREATED, never sent/emailed/watched. "Update shared version" (item 4) is
+// deliberately absent -- split to its own follow-up task (T10860).
+export const RESULT_PUBLISH = {
+  // Idle primary action -- starts the review flow, does NOT publish yet.
+  PUBLISH_GET_LINK: 'Publish and get link',
+  // Visibility-review confirm card.
+  REVIEW_TITLE: (name) => `Publish "${name}"?`,
+  REVIEW_BODY: 'Anyone with the link can watch. Publishing creates a link; it does not send it.',
+  REVIEW_CANCEL: 'Cancel',
+  REVIEW_CONFIRM: 'Publish and create link',
+  // Busy + failure (reuse existing amber copy for the retry banner; this is the actionBar label).
+  PUBLISHING: 'Publishing...',
+  // Link-ready success state.
+  LINK_READY: 'Link ready',
+  COPY_LINK: 'Copy link',
+  SHARE_LINK: 'Share link...',   // coarse-pointer native share entry
+};
+
 export const SECTION_NAMES = {
   // Single-clip auto-draft tab (Home). Tab id stays `projects` / URL
   // `/home/reels` (frozen for deep-link compat). T9530 (Shared Vocabulary epic,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Share2, Check, Loader, Globe, Lock, Copy } from 'lucide-react';
+import { X, Share2, Loader, Globe, Lock } from 'lucide-react';
 import { Button } from './shared/Button';
 import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
@@ -8,6 +8,7 @@ import apiFetch from '../utils/apiFetch';
 import { IntroCardCarousel } from './introcards/IntroCardCarousel';
 import { useIntroCardStore } from '../stores/introCardStore';
 import { useProfileStore } from '../stores/profileStore';
+import { LinkReadyCard } from './LinkReadyCard';
 
 const collectionLink = (token) => `${window.location.origin}/shared/collection/${token}`;
 
@@ -210,31 +211,13 @@ export function CollectionShareModal({ definition, title, onClose }) {
               </div>
             </label>
             {isPublic && (
-              <div className="flex items-center gap-2 bg-gray-700/50 rounded-lg px-3 py-2">
-                {creatingPublicLink ? (
-                  <Loader size={14} className="text-gray-400 animate-spin" />
-                ) : publicLink ? (
-                  <>
-                    <input
-                      type="text"
-                      readOnly
-                      value={publicLink}
-                      className="flex-1 bg-transparent text-sm text-gray-300 outline-none truncate"
-                      onFocus={(e) => e.target.select()}
-                    />
-                    <button onClick={handleCopy} className="text-gray-400 hover:text-white transition-colors p-1 flex-shrink-0" title="Copy link">
-                      {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={createPublicLink}
-                    className="text-sm text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
-                  >
-                    Get Link
-                  </button>
-                )}
-              </div>
+              <LinkReadyCard
+                link={publicLink}
+                onGetLink={createPublicLink}
+                creating={creatingPublicLink}
+                copied={copied}
+                onCopy={handleCopy}
+              />
             )}
           </div>
 
