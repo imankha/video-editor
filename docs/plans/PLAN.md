@@ -4,6 +4,14 @@
 
 ## Current Focus
 
+**2026-09-21 addition, unplaced — [T10880](tasks/T10880-pulsating-guidance-audit.md):
+Pulsating next-action guidance, funnel playthrough audit.** Seed observation: in Spotlight (Focus
+mode), when the user hasn't clicked any player-detection tracking box yet, the next one to click
+should pulsate — no screen currently draws the eye to the recommended next action anywhere in the
+funnel. Impact 5 / Complexity 2 as scoped (audit + ranked candidate list only, no implementation);
+likely spawns higher-impact follow-up tasks once locations are prioritized. Left here for triage
+rather than self-inserted into a milestone.
+
 **2026-09-20 addition, unplaced — [T10790](tasks/T10790-add-footage-attach-422-required-sequence.md):
 "Add footage to game" 422s on every real attempt (live on master since 2026-09-07, not
 dev-specific).** Found incidentally while doing live verification for T10770. Impact 9 / Complexity
