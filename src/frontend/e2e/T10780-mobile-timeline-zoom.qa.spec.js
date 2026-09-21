@@ -103,7 +103,9 @@ test.describe('T10780 mobile timeline — TimelineBase mechanics (harness)', () 
         expect(r.scrollbarWidthCss, 'native scrollbar hidden on mobile').toBe('none');
         expect(r.nativeBarHeight, 'native horizontal bar takes no layout height').toBe(0);
         expect(r.overflowY, 'container never scrolls vertically').toBe('hidden');
-        expect(r.verticalOverflow, 'no vertical overflow inside the timeline').toBeLessThanOrEqual(0);
+        // (`verticalOverflow` is asserted on the REAL screen below: this harness
+        // renders no lanes, so the fixed-height playhead overshoots its lone
+        // scrubber row by design.)
 
         await saveEvidence(page, `criterion-scrollbar-fingersize-${vp.name}`);
       });
@@ -256,6 +258,18 @@ test.describe('T10780 mobile Annotate — real screen (gestures + scrollbar)', (
 
     const r0 = await rects(page);
     expect(r0.scrollWidth / r0.clientWidth, 'plays track rendered at ~3x on the phone').toBeGreaterThanOrEqual(2.9);
+
+    // User's first phone test (2026-09-21): ONE horizontal bar, NO vertical bar,
+    // and the full height of the lanes visible ("the full length should be
+    // preserved"). Native bar hidden + zero layout height; the container is
+    // overflow-y hidden AND its lanes fit inside it, so nothing is clipped.
+    expect(r0.scrollbarWidthCss, 'native scrollbar hidden on the real screen').toBe('none');
+    expect(r0.nativeBarHeight, 'no native bar layout height on the real screen').toBe(0);
+    expect(r0.overflowY, 'timeline never scrolls vertically').toBe('hidden');
+    expect(r0.verticalOverflow, 'lanes fit: no vertical overflow inside the timeline').toBeLessThanOrEqual(0);
+    const lane = await page.locator('[data-testid="clip-track-mobile"]').boundingBox();
+    expect(lane.y + lane.height, 'plays lane bottom is inside the timeline box (full length preserved)')
+      .toBeLessThanOrEqual(r0.scroller.bottom + 0.5);
 
     // Gesture ROUTING (deterministic, the actual mechanism): the scrubber row is
     // `touch-none` so the browser routes a horizontal touch to our seek handler
