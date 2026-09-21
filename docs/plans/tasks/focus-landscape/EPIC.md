@@ -30,9 +30,9 @@ Frontend only. No schema, no API, no new persistence path. **Strict order** — 
 
 | ID | Task | Status |
 |----|------|--------|
-| T10830 | [Extract FocusTimelineBlock (mechanical)](T10830-extract-focus-timeline-block.md) | TODO |
-| T10840 | [The landscape cockpit layout](T10840-landscape-cockpit-layout.md) | TODO |
-| T10850 | [Rotation hints, both directions](T10850-rotation-hints.md) | TODO |
+| T10830 | [Extract FocusTimelineBlock (mechanical)](T10830-extract-focus-timeline-block.md) | STAGING |
+| T10840 | [The landscape cockpit layout](T10840-landscape-cockpit-layout.md) | STAGING |
+| T10850 | [Rotation hints, both directions](T10850-rotation-hints.md) | STAGING |
 
 ## Settled decisions
 
@@ -54,12 +54,13 @@ re-litigate, and must not:
 
 ## Completion Criteria
 
-- [ ] All three tasks merged, Branch CI green on each
-- [ ] Focus on a landscape phone has **no vertical scroll**, and the reticule + timeline are
-      visible at the same time
-- [ ] Every existing `FocusModeView` / `FocusTimeline` unit test passes **unedited** (jsdom's
+- [x] All three tasks merged, Branch CI green on each - T10830 (PR #488), T10840 (PR #490), T10850
+      (PR #491), all 2026-09-21
+- [x] Focus on a landscape phone has **no vertical scroll**, and the reticule + timeline are
+      visible at the same time - live-verified by the supervisor at 812x334 and 844x390
+- [x] Every existing `FocusModeView` / `FocusTimeline` unit test passes **unedited** (jsdom's
       `matchMedia` returns `matches: false`, so the portrait path is unchanged by construction)
-- [ ] Real-device check owed and done: **iOS landscape**, both rotation directions, confirming the
+- [ ] **Real-device check owed and done: iOS landscape**, both rotation directions, confirming the
       play button clears the notch (D7 — the single most likely shipping bug; headless E2E cannot
-      catch it)
-- [ ] Live-driven on staging at 812 x 334 against a real account
+      catch it). **STILL OWED** - the one remaining item before this epic is fully done.
+- [ ] Live-driven on staging at 812 x 334 against a real account - owed alongside the iOS check

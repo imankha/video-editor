@@ -1,6 +1,6 @@
 # T10850: Rotation hints — nudge in portrait, orient on first landscape entry
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-21
@@ -104,16 +104,21 @@ Each new test must include an explicit **"render alone writes nothing"** case th
 ### Progress Log
 
 **2026-09-21**: Filed from the Focus landscape design session. User ruled explicitly for
-auto-enter on rotation **plus** a visual hint. Not started.
+auto-enter on rotation **plus** a visual hint. Implemented via /dotask. Reviewer APPROVED (0
+blocking; 1 major - CLAUDE.md's "no localStorage" rule narrowed to document this exact exception,
+D14 - and 1 minor, both addressed). 160 relevant tests green incl. explicit "render alone writes
+nothing" cases; no existing test edited. Live QA 2/2 passed (evidence in worker's `qa/`). Self-check
+confirmed no `useEffect` touches `localStorage`. Merged PR #491 - **last task in the focus-landscape
+epic**; real-device iOS check from T10840 remains the one owed item before the epic is fully done.
 
 ## Acceptance Criteria
 
-- [ ] Portrait Focus on a phone shows the nudge under the stage while the clip has no focus points
-- [ ] The nudge does not appear once dismissed, on this device, across reloads
-- [ ] Rotating in for the first time shows the card; "Got it" or a touch on the stage dismisses it
-- [ ] Neither flag is written on render — proven by an explicit test per hint
-- [ ] No `useEffect` writes to `localStorage` anywhere in the diff
-- [ ] Copy lives in `displayNames.js`, not inline in JSX
-- [ ] Both dismiss controls are >= 44 px with `aria-label`s
-- [ ] **No existing test file was edited**
-- [ ] Lint hooks clean, Branch CI green
+- [x] Portrait Focus on a phone shows the nudge under the stage while the clip has no focus points
+- [x] The nudge does not appear once dismissed, on this device, across reloads
+- [x] Rotating in for the first time shows the card; "Got it" or a touch on the stage dismisses it
+- [x] Neither flag is written on render — proven by an explicit test per hint
+- [x] No `useEffect` writes to `localStorage` anywhere in the diff
+- [x] Copy lives in `displayNames.js`, not inline in JSX
+- [x] Both dismiss controls are >= 44 px with `aria-label`s
+- [x] **No existing test file was edited**
+- [x] Lint hooks clean, Branch CI green
