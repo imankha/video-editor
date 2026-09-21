@@ -1,6 +1,6 @@
 # T10800: Annotate video player wastes vertical space on phones (fixed-vh letterbox)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-21
