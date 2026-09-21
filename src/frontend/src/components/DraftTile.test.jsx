@@ -582,6 +582,19 @@ describe('DraftTile (T5672)', () => {
     });
   });
 
+  // T10190 §2.5/§3.0: the Preview CTA's copy moves to the centralized
+  // RESULT_SURFACE.WATCH_HIGHLIGHT constant (was the ad-hoc "Preview video"
+  // literal at DraftTile.jsx:748). Card CTA, in scope per the design's
+  // "the label is the card CTA the user reads to open the result" rationale.
+  describe('T10190 RESULT_SURFACE copy centralization', () => {
+    it('the Preview CTA reads RESULT_SURFACE.WATCH_HIGHLIGHT, not the old "Preview video" literal', async () => {
+      const { RESULT_SURFACE } = await import('../config/displayNames');
+      const project = { has_final_video: true, final_video_id: 99, is_published: false };
+      renderTile(project);
+      expect(screen.getByTitle(RESULT_SURFACE.WATCH_HIGHLIGHT)).toBeTruthy();
+    });
+  });
+
   // T8320: Reel Drafts surface the source game's expiry the way the Games tab
   // does, via a computed `sourceExpiry` prop ({ expired, daysLeft } | null) that
   // ProjectManager joins at render time from the games list.

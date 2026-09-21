@@ -66,18 +66,26 @@ const { mountSpy } = vi.hoisted(() => ({ mountSpy: vi.fn() }));
 vi.mock('./collections/CollectionPlayer', async () => {
   const { useEffect } = await import('react');
   return {
-    CollectionPlayer: ({ reels, statusBanner, actionBar, onClose, onDownload, downloadLoading }) => {
+    // T10190: harness also surfaces onBackToGame (present/absent) and the
+    // reel's gameId/gameName/gameStartTime so the gating + threading can be
+    // asserted without importing the real CollectionPlayer.
+    CollectionPlayer: ({ reels, statusBanner, actionBar, onClose, onDownload, downloadLoading, onBackToGame }) => {
       const streamUrl = reels[0].streamUrl;
       useEffect(() => { mountSpy(streamUrl); }, [streamUrl]);
       return (
         <div data-testid="mock-player">
           <span data-testid="stream-url">{reels[0].streamUrl}</span>
+          <span data-testid="reel-game-name">{reels[0].gameName ?? ''}</span>
+          <span data-testid="reel-game-start-time">{reels[0].gameStartTime ?? ''}</span>
           {statusBanner}
           {actionBar}
           {onDownload && (
             <button title="Download" disabled={downloadLoading} onClick={() => onDownload(reels[0])}>
               {downloadLoading ? 'Downloading...' : 'Download'}
             </button>
+          )}
+          {onBackToGame && (
+            <button title="Back to game plays" onClick={onBackToGame}>Back to game plays</button>
           )}
           <button title="Close" onClick={onClose}>Close</button>
         </div>
@@ -86,8 +94,18 @@ vi.mock('./collections/CollectionPlayer', async () => {
   };
 });
 
+// T10190 §3.2 Shaper 2: DraftReelPreview must thread payload.gameId through to
+// CollectionPlayer's reel shape AND pass onBackToGame iff payload.gameId != null,
+// wired to setPendingGame(gameId, gameStartTime, sourceClipId) + navigate to
+// ANNOTATE (the same gesture primitives handleEditInAnnotate in App.jsx uses).
+const { setPendingGameMock } = vi.hoisted(() => ({ setPendingGameMock: vi.fn() }));
+vi.mock('../utils/pendingNavigation', () => ({
+  setPendingGame: (...a) => setPendingGameMock(...a),
+}));
+
 import { DraftReelPreview } from './DraftReelPreview';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
+import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 
 const jsonResponse = (status, body) => ({
   ok: status >= 200 && status < 300,
@@ -267,5 +285,46 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
     const downloadBtn = screen.getByTitle('Download');
     expect(downloadBtn.disabled).toBe(true);
     expect(downloadBtn.textContent).toMatch(/downloading/i);
+  });
+});
+
+// T10190 §3.2 Shaper 2: gameId threading + onBackToGame gating/wiring.
+describe('DraftReelPreview gameId threading and onBackToGame (T10190)', () => {
+  beforeEach(() => {
+    setPendingGameMock.mockClear();
+    act(() => useReelPreviewStore.getState().close());
+    act(() => useEditorStore.getState().setEditorMode(EDITOR_MODES.PROJECT_MANAGER));
+  });
+
+  const singleGameSnapshot = {
+    ...snapshot,
+    gameName: 'Lakers',
+    gameStartTime: 750,
+    gameId: 55,
+    sourceClipId: 123,
+  };
+
+  it('passes onBackToGame to CollectionPlayer when payload.gameId is present (single source game)', () => {
+    render(<DraftReelPreview />);
+    act(() => { useReelPreviewStore.getState().open(singleGameSnapshot); });
+
+    expect(screen.getByTitle('Back to game plays')).toBeTruthy();
+  });
+
+  it('omits onBackToGame when payload.gameId is null (multi-game or no-game reel)', () => {
+    render(<DraftReelPreview />);
+    act(() => { useReelPreviewStore.getState().open({ ...snapshot, gameId: null }); });
+
+    expect(screen.queryByTitle('Back to game plays')).toBeNull();
+  });
+
+  it('clicking Back to game plays wires to setPendingGame(gameId, gameStartTime, sourceClipId) and navigates to Annotate', () => {
+    render(<DraftReelPreview />);
+    act(() => { useReelPreviewStore.getState().open(singleGameSnapshot); });
+
+    fireEvent.click(screen.getByTitle('Back to game plays'));
+
+    expect(setPendingGameMock).toHaveBeenCalledWith(55, 750, 123);
+    expect(useEditorStore.getState().editorMode).toBe(EDITOR_MODES.ANNOTATE);
   });
 });

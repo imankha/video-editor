@@ -199,3 +199,14 @@ describe('T6300 ReelTile persistent actions', () => {
     expect(container.querySelector('.group-hover\\/tile\\:opacity-100')?.contains(playBtn())).toBeFalsy();
   });
 });
+
+// T10190 §2.5/§3.0: the Play CTA's copy moves to the centralized
+// RESULT_SURFACE.WATCH_MARKED_PLAYS constant (was the ad-hoc "Play video"
+// literal at ReelTile.jsx:352).
+describe('T10190 RESULT_SURFACE copy centralization', () => {
+  it('the Play CTA reads RESULT_SURFACE.WATCH_MARKED_PLAYS, not the old "Play video" literal', async () => {
+    const { RESULT_SURFACE } = await import('../../config/displayNames');
+    renderTile();
+    expect(screen.getByRole('button', { name: RESULT_SURFACE.WATCH_MARKED_PLAYS })).toBeTruthy();
+  });
+});
