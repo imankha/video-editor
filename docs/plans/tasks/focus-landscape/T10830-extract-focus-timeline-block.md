@@ -1,6 +1,6 @@
 # T10830: Extract FocusTimelineBlock from FocusModeView's two call sites
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-21
