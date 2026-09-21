@@ -69,14 +69,14 @@ export function GameTile({
   const hasAnnotations = (game.clip_count || 0) > 0;
 
   // T8260: secondary-line counts. "annotations" = the existing clip_count (raw_clips
-  // rows saved while annotating), relabeled here only. "reels" = reel_count, the
+  // rows saved while annotating), relabeled here only. "published" = reel_count, the
   // published reels attributable to this game (see games.py _compute_reel_counts).
   // Built in ONE place so T8130's Play/Highlight-Reel rename can update it in a
-  // single edit. The reels segment is omitted entirely when there are none.
+  // single edit. The published segment is omitted entirely when there are none.
   const annotationsLabel = `${game.clip_count} annotation${game.clip_count !== 1 ? 's' : ''}`;
   const reelCount = game.reel_count || 0;
   const countsLabel = reelCount > 0
-    ? `${annotationsLabel} • ${reelCount} reel${reelCount !== 1 ? 's' : ''}`
+    ? `${annotationsLabel} • ${reelCount} published`
     : annotationsLabel;
   const canExtend = game.can_extend !== false;
   const daysLeft = getDaysUntil(game.storage_expires_at);

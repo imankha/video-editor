@@ -303,29 +303,30 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
     expect(secondary.textContent).not.toMatch(/clip/i);
   });
 
-  // T8260: published reels surface as a second segment; omitted entirely at 0.
-  it('appends "N reels" when the game has published reels', () => {
+  // T8260: published count surfaces as a second segment; omitted entirely at 0.
+  // Copy update: the word "reel(s)" is never shown on the tile -- just "N published".
+  it('appends "N published" when the game has published reels', () => {
     render(<GameTile game={{ ...baseGame, reel_count: 3 }} {...handlers()} />);
     const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
     expect(secondary.textContent).toContain('3 annotations');
-    expect(secondary.textContent).toContain('3 reels');
+    expect(secondary.textContent).toContain('3 published');
+    expect(secondary.textContent).not.toMatch(/reel/i);
     expect(secondary.textContent).toContain('•');
   });
 
-  it('omits the reels segment when reel_count is 0 or absent', () => {
+  it('omits the published segment when reel_count is 0 or absent', () => {
     render(<GameTile game={{ ...baseGame, reel_count: 0 }} {...handlers()} />);
     const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
-    expect(secondary.textContent).not.toContain('reel');
+    expect(secondary.textContent).not.toContain('published');
     expect(secondary.textContent).not.toContain('•');
   });
 
-  it('uses singular forms for one annotation and one reel', () => {
+  it('uses singular annotation form for one annotation, with "published" unpluralized', () => {
     render(<GameTile game={{ ...baseGame, clip_count: 1, reel_count: 1 }} {...handlers()} />);
     const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
     expect(secondary.textContent).toContain('1 annotation •');
-    expect(secondary.textContent).toContain('1 reel');
+    expect(secondary.textContent).toContain('1 published');
     expect(secondary.textContent).not.toContain('annotations');
-    expect(secondary.textContent).not.toContain('reels');
   });
 
   // T7330 (reversing T7290's removal): the footer shows the MATCH date with its weekday.
