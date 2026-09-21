@@ -1,6 +1,6 @@
 # T10760: `useVideo` subscribes to the WHOLE videoStore and returns unmemoized actions
 
-**Status:** TODO
+**Status:** WIP (container `reel-task-t10760`, spawned 2026-09-20 — see WAVE.md)
 **Impact:** 4
 **Complexity:** 4
 **Created:** 2026-09-20
