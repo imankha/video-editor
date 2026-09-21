@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Video } from 'lucide-react';
 import { generateClipName } from '../../../utils/clipDisplayName';
-import { getRatingLabel, getRatingDisplay } from '../../../components/shared/clipConstants';
+import { getRatingLabel } from '../../../components/shared/clipConstants';
 import { RatingIcon } from '../../../components/shared/RatingIcon';
 import { ANNOTATE } from '../../../config/displayNames';
 import { formatInstant, PRECISION } from '../../../utils/timeFormat';
@@ -45,6 +45,23 @@ function MarkerTooltip({ anchorRect, accentColor, children }) {
     </div>,
     document.body
   );
+}
+
+// T10810: a marker's bounding rect ignores clipping, so once the zoomed track
+// is scrolled (T10780 mobile 3x, desktop zoom) a marker that has left the
+// visible window -- or sits under the opaque lane-label column -- still
+// reports a screen position and the portalled tooltip keeps rendering at it.
+// Anchor only while the marker's center is inside the horizontal viewport of
+// `.timeline-scroll-container` (TimelineBase); no such ancestor = unclipped.
+function visibleAnchorRect(el) {
+  if (!el) return null;
+  const rect = el.getBoundingClientRect();
+  const scroller = el.closest('.timeline-scroll-container');
+  if (!scroller) return rect;
+  const view = scroller.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  if (centerX < view.left || centerX > view.right) return null;
+  return rect;
 }
 
 // T9480: the active region's end time is a POSITION on the game timeline (an
@@ -102,7 +119,7 @@ export default function ClipRegionLayer({
 
   const [trackWidth, setTrackWidth] = useState(0);
 
-  // Measure track width for dynamic mobile marker sizing
+  // Measure track width so a selected marker's tooltip re-anchors on resize (T10391)
   useEffect(() => {
     const el = trackRef.current;
     if (!el) return;
@@ -115,7 +132,7 @@ export default function ClipRegionLayer({
 
   useEffect(() => {
     const el = activeRegionId ? markerRefs.current.get(activeRegionId) : null;
-    setAnchorRect(el ? el.getBoundingClientRect() : null);
+    setAnchorRect(visibleAnchorRect(el));
     // `regions`/`duration` re-run this after a re-layout (zoom, lane split); `trackWidth`
     // re-runs it whenever the track itself resizes (fullscreen toggle, viewport resize)
     // so a SELECTED marker's tooltip (which survives that transition, unlike hover)
@@ -133,26 +150,13 @@ export default function ClipRegionLayer({
   useEffect(() => {
     if (!activeRegionId) return undefined;
     const recompute = () => {
-      const el = markerRefs.current.get(activeRegionId);
-      setAnchorRect(el ? el.getBoundingClientRect() : null);
+      setAnchorRect(visibleAnchorRect(markerRefs.current.get(activeRegionId)));
     };
     window.addEventListener('scroll', recompute, true);
     return () => window.removeEventListener('scroll', recompute, true);
   }, [activeRegionId]);
 
   if (!duration) return null;
-
-  // Mobile marker width: fit all clips without overlap
-  // Formula: (usableTrackWidth / clipCount) - gap, clamped to [4, 12]
-  const MOBILE_MARKER_MIN = 4;
-  const MOBILE_MARKER_MAX = 12;
-  const MOBILE_MARKER_GAP = 2;
-  const clipCount = regions.length || 1;
-  const usableWidth = trackWidth - (edgePadding * 2);
-  const mobileMarkerWidth = Math.min(
-    MOBILE_MARKER_MAX,
-    Math.max(MOBILE_MARKER_MIN, Math.floor(usableWidth / clipCount) - MOBILE_MARKER_GAP)
-  );
 
   // Convert time to percentage position
   const timeToPercent = (time) => (time / duration) * 100;
@@ -214,7 +218,6 @@ export default function ClipRegionLayer({
           const isHovered = region.id === hoveredRegionId;
           const left = timeToPercent((region.startTime + region.endTime) / 2);
           const rating = region.rating ?? null;
-          const color = getRatingDisplay(rating).badgeColor;
           // Use same fallback logic as ClipListItem
           const displayName = region.name || generateClipName(rating, region.tags || [], region.notes || '') || '';
           const layerName = layerNameFor(region);
@@ -239,32 +242,14 @@ export default function ClipRegionLayer({
               onMouseEnter={() => setHoveredRegionId(region.id)}
               onMouseLeave={() => setHoveredRegionId(null)}
             >
-              {/* Mobile: color bar sized to fit without overlap */}
-              <div
-                className="sm:hidden relative"
-                style={{ padding: '8px 4px' }}
-              >
-                <div
-                  className={`
-                    rounded transition-all duration-150
-                    ${isSelected ? 'ring-2 ring-white shadow-lg' : ''}
-                  `}
-                  style={{
-                    width: `${mobileMarkerWidth}px`,
-                    height: isSelected ? '28px' : '20px',
-                    backgroundColor: color,
-                    border: '1px solid rgba(0,0,0,0.3)',
-                    ...(isAngle && { borderTop: `2px solid ${ANGLE_ACCENT}` }),
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                  }}
-                />
-              </div>
-              {/* Desktop: rating disc icon (T10430). No filled box: the layer
-                  is carried by the span bar under the track, an angle by a
-                  violet ring around the disc. */}
+              {/* Rating disc icon (T10430). No filled box: the layer is carried
+                  by the span bar under the track, an angle by a violet ring around
+                  the disc. T10810: one marker for every viewport -- the old
+                  sm:hidden "fit all clips without overlap" bar predates the
+                  mobile 3x zoom (T10780) and shrank plays to unreadable pills. */}
               <div
                 className={`
-                  hidden sm:block relative rounded-full transition-all duration-150
+                  relative rounded-full transition-all duration-150
                   ${isSelected ? 'ring-2 ring-white' : 'hover:scale-110'}
                 `}
                 style={isAngle ? { border: `2px solid ${ANGLE_ACCENT}` } : undefined}
