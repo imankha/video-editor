@@ -1005,6 +1005,17 @@ keyframed** — camera tilt is constant for a recording.
   (view-local `useState`, default false); fullscreen video is opt-in via a `Maximize` button,
   and the in-fullscreen back button collapses to inline (Home lives in the header). A dvh fix
   ALONE can't help here — controls that aren't rendered can't be scrolled to. Playwright
+- **Focus's mobile settings panel (T9270, re-anchored T10820).** The same `SettingsRail`
+  component Focus's desktop rail uses renders on mobile as a full-width sheet anchored
+  `absolute bottom-full` inside the sticky action-band wrapper (`FocusModeView.jsx`, the
+  `sticky bottom-0` div below the editor column), capped at `MOBILE_PANEL_MAX_VH` (55dvh)
+  with an internal scroll, opened by the `mobile-settings-row` button and closed only by its
+  own header's `drawer-close`. It holds the mobile-safe subset (`focusRailBody(false)`):
+  Reel (aspect ratio, include audio) only — the desktop-only Advanced editing group
+  (straighten, background dim) stays gated off, same as before T10820. See
+  `.claude/references/ui-style-guide.md`'s `SettingsRail` bullet for the full geometry
+  contract and `annotate.md`'s backdrop-filter landmine note for why it can't be
+  `position:fixed`.
   emulation reproduces the layout but NOT the vh/dvh iOS-toolbar behavior; that needs a real
   device. `ModeSwitcher` buttons carry `data-testid="mode-{id}"`.
 - **T4774 "post-video settle gap" is a measurement artifact (profiled, DROP).** The T4770

@@ -49,10 +49,18 @@ export default function FocusSettingsPanel({
           />
         </SettingRow>
         <SettingRow label="Include audio" value={includeAudio ? 'On' : 'Off'}>
+          {/* T10820 (known-failures row 32): this Toggle renders on mobile too (not
+              gated by desktopOnly), and its default h-7 track (28px) sits under the
+              44px coarse-pointer touch floor. `min-height` is set on the same element
+              that paints the track, so `coarse-pointer:min-h-11` grows the track itself
+              to 44px tall on touch (the pill reads taller there; the thumb stays
+              centred) — it does nothing on a fine pointer, where the 28px track ships
+              unchanged. Same pattern as the straighten/dim buttons below. */}
           <Toggle
             checked={includeAudio}
             onChange={onIncludeAudioChange}
             title="Include the clip's original audio in the exported video"
+            className="coarse-pointer:min-h-11"
           />
         </SettingRow>
       </SettingsPanel>

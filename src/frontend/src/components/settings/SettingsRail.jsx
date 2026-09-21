@@ -1,7 +1,8 @@
 import { ChevronRight, ChevronLeft, X } from 'lucide-react';
 
 /**
- * SettingsRail (T9270) — the unified collapsible settings rail on Focus and Overlay.
+ * SettingsRail (T9270; mobile anchored sheet T10820) — the unified collapsible
+ * settings rail on Focus and Overlay.
  *
  * THE GOVERNING RULE: the rail is the THIRD region (after the CTA and the video)
  * and carries NO accent color. The CTA never lives inside it. This component is one
@@ -13,24 +14,36 @@ import { ChevronRight, ChevronLeft, X } from 'lucide-react';
  *     main column reflows for free; the players are container-sized so the stage
  *     grows with no measuring code. Header = collapse chevron + the screen's tabs.
  *
- *   Mobile (isMobile=true): a 316px `position:absolute` drawer between the header and
- *     band, sliding in from the right with `transform: translateX()` ONLY — never a
- *     width animation, and its presence never alters the stage box. `open` drives the
- *     transform. Its own header carries a 44x44 close (X) button. A scrim
- *     (rgba(0,0,0,0.45)) fades over the content behind it. NO backdrop-tap close.
+ *   Mobile (isMobile=true): a full-width sheet ANCHORED to the top edge of the
+ *     host's `sticky bottom-0` action-band wrapper (`absolute bottom-full inset-x-0`),
+ *     never `position:fixed` — a `backdrop-filter` ancestor (the `backdrop-blur-lg`
+ *     card on Focus/Overlay/Annotate) becomes the containing block for `fixed`
+ *     descendants, so anchoring to the already-positioned `sticky` wrapper sidesteps
+ *     that trap by construction (T10420, T10820). Capped at `MOBILE_PANEL_MAX_VH`
+ *     (55dvh) with an internal scroll, sliding up with `transform: translateY()`
+ *     ONLY — never a width or max-height animation — `translateY(100%)` parked to
+ *     `translateY(0)` open. The panel never alters the stage box and never measures
+ *     the action band (`bottom-full` is 100% of the band's own height, so the offset
+ *     resolves itself). Its own header carries a 44x44 close (X) button. A scrim
+ *     (rgba(0,0,0,0.45)) covers the page ABOVE the band only (`bottom-full h-dvh`),
+ *     so the CTA below is never dimmed. NO backdrop-tap close. The panel stays
+ *     ATTACHED while closed (never conditionally rendered), with `visibility`
+ *     delayed 320ms on close so the slide-down is seen before it leaves the a11y
+ *     tree. The pre-T10820 316px right-edge `translateX` drawer geometry has been
+ *     deleted outright, not kept behind a flag.
  *
  * Open/collapsed is EPHEMERAL view state owned by the host (local useState, NEVER
  * persisted — no-persisted-view-state rule). This component only renders it.
  *
  * @param {boolean} isMobile — layout mode selector (from useIsMobile()).
  * @param {boolean} collapsed — desktop: rail is the 64px icon strip.
- * @param {boolean} open — mobile: drawer is slid in (translateX 0).
+ * @param {boolean} open — mobile: panel is slid up (translateY(0)).
  * @param {() => void} onToggleCollapse — desktop chevron handler.
- * @param {() => void} onCloseDrawer — mobile drawer close handler.
+ * @param {() => void} onCloseDrawer — mobile panel close handler.
  * @param {Array<{id,label,icon}>} tabs — the screen's tabs.
  * @param {string} activeTab — the selected tab id (single source of truth, host-owned).
  * @param {(id:string) => void} onTabChange — tab select handler.
- * @param {string} title — mobile drawer header title ("Settings" / "Spotlight settings").
+ * @param {string} title — mobile panel header title ("Settings" / "Spotlight settings").
  * @param {React.ReactNode} children — the active tab's body (SettingsPanels + rows).
  */
 // T10380: exported so a host that needs to size something ALONGSIDE the rail
@@ -40,7 +53,14 @@ import { ChevronRight, ChevronLeft, X } from 'lucide-react';
 export const RAIL_WIDTH_PX = 380;
 export const RAIL_COLLAPSED_WIDTH_PX = 64;
 export const RAIL_TWEEN = 'width 320ms cubic-bezier(0.2, 0.8, 0.2, 1)';
-const DRAWER_TWEEN = 'transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+// T10820: mobile panel geometry — single exported source, replacing the 3
+// hand-copied `316` literals (className, transform, docstring) the pre-T10820
+// side drawer had. min(55dvh, PXpx) was considered for a secondary cap on wide
+// mobile/tablet widths but jsdom's CSSOM (cssstyle) drops `min()` as an invalid
+// value (verified: `style.maxHeight` reads back '' ), so the cap stays a plain
+// dvh value the unit tests can assert on directly.
+export const MOBILE_PANEL_MAX_VH = 55;
+export const MOBILE_PANEL_TWEEN = 'transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1)';
 
 function TabButton({ tab, isActive, iconsOnly, dimmed, dimTitle, onClick }) {
   const Icon = tab.icon;
@@ -86,16 +106,20 @@ export default function SettingsRail({
   children,
 }) {
   const isDimmed = (id) => disabledTabIds.includes(id);
-  // ---- Mobile drawer: position:absolute, translateX only, never a width tween. ----
+  // ---- Mobile: absolute bottom-full sheet, translateY only, never a width/
+  // max-height tween. Anchored inside the host's `sticky bottom-0` action-band
+  // wrapper (T10820) — never `position:fixed` (backdrop-filter containing-block
+  // trap, see the docstring above). ----
   if (isMobile) {
     return (
       <>
-        {/* Scrim over the content behind the drawer. NO backdrop-tap close
-            (house rule feedback_no_backdrop_close) — pointer-events-none so a tap
-            falls through to the stage rather than closing the drawer. */}
+        {/* Scrim covers the page ABOVE the band only (bottom-full h-dvh) so the
+            CTA below the band is never dimmed. NO backdrop-tap close (house rule
+            feedback_no_backdrop_close) — pointer-events-none so a tap falls
+            through to the stage rather than closing the panel. */}
         <div
           aria-hidden="true"
-          className={`absolute inset-0 z-30 bg-black/45 transition-opacity duration-300 pointer-events-none ${
+          className={`absolute bottom-full inset-x-0 h-dvh z-30 bg-black/45 transition-opacity duration-300 pointer-events-none ${
             open ? 'opacity-100' : 'opacity-0'
           }`}
         />
@@ -104,16 +128,23 @@ export default function SettingsRail({
           role="dialog"
           aria-label={title}
           aria-hidden={!open}
-          className="absolute top-0 right-0 bottom-0 z-40 flex flex-col w-[316px] max-w-full"
+          className={`absolute bottom-full inset-x-0 z-40 flex flex-col ${open ? '' : 'pointer-events-none'}`}
           style={{
             background: '#0f172a',
-            borderLeft: '1px solid #334155',
-            boxShadow: '-12px 0 32px rgba(0,0,0,0.5)',
-            transform: open ? 'translateX(0)' : 'translateX(316px)',
-            transition: DRAWER_TWEEN,
+            borderTop: '1px solid #334155',
+            boxShadow: '0 -12px 32px rgba(0,0,0,0.5)',
+            maxHeight: `${MOBILE_PANEL_MAX_VH}dvh`,
+            transform: open ? 'translateY(0)' : 'translateY(100%)',
+            visibility: open ? 'visible' : 'hidden',
+            // Delay hiding (visibility) until AFTER the close transform finishes
+            // so the slide-down is visible; opening needs no delay (instant
+            // visible, so the slide-up is visible from the first frame).
+            transition: open
+              ? MOBILE_PANEL_TWEEN
+              : `${MOBILE_PANEL_TWEEN}, visibility 0s linear 320ms`,
           }}
         >
-          {/* Drawer's own header: title + 44x44 close. The entry row lives OUTSIDE
+          {/* Panel's own header: title + 44x44 close. The entry row lives OUTSIDE
               (in the host), so each state has exactly one obvious control. */}
           <div className="flex items-center justify-between border-b border-gray-700 pl-4 pr-2 h-14 shrink-0">
             <span className="text-sm font-semibold text-gray-200">{title}</span>

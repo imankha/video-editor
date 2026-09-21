@@ -418,11 +418,18 @@ never lives inside the settings container, never resizes, never moves.
   layout modes on `isMobile` (from `useIsMobile()`). Desktop = a 380px in-flow box
   that tweens its **width** to a 64px icon strip when `collapsed`
   (`width 320ms cubic-bezier(0.2,0.8,0.2,1)`); the main column reflows for free.
-  Mobile = a 316px `position:absolute` drawer that slides in with
-  `transform:translateX()` ONLY (never a width tween, never alters the stage box),
-  opened by a 64px full-width `mobile-settings-row` (with a derived summary line),
-  closed by a 44x44 `drawer-close` in the drawer's own header. Scrim is
-  `pointer-events-none` — **no backdrop-tap close** (house rule).
+  Mobile (T10820) = the SAME rail as a full-width panel anchored to the top edge of
+  the sticky action band (`absolute bottom-full` inside the band wrapper, so it is
+  pinned to the viewport bottom without `position:fixed` and without measuring the
+  band), capped at 55dvh with an internal scroll, sliding up with
+  `transform: translateY()` ONLY. It never alters the stage box, never changes page
+  height, and never covers the CTA. It is opened by the unmoved 64px full-width
+  `mobile-settings-row` below the timeline (with a derived summary line) and closed
+  only by the 44x44 `drawer-close` in its own header. Scrim stays
+  `pointer-events-none` — **no backdrop-tap close** (house rule) — and stops at the
+  band's top edge so the CTA is never dimmed. **Never use `position:fixed` inside
+  Focus/Overlay/Annotate's `backdrop-blur-lg` card** — a `backdrop-filter` ancestor
+  becomes the containing block (T10420, T10820).
 - **`SettingRow`** (`components/settings/SettingRow.jsx`): `flex items-center
   justify-between`; left column `text-sm font-medium text-gray-200` label over
   `text-xs text-gray-400` live value; control on the right. `stack` prop wraps wide

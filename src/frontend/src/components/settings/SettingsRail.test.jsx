@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Sparkles, Type } from 'lucide-react';
-import SettingsRail from './SettingsRail';
+import SettingsRail, { MOBILE_PANEL_MAX_VH, MOBILE_PANEL_TWEEN } from './SettingsRail';
 
 afterEach(() => cleanup());
 
@@ -64,27 +64,67 @@ describe('SettingsRail — desktop collapse (T9270)', () => {
   });
 });
 
-describe('SettingsRail — mobile drawer (T9270)', () => {
-  it('closed drawer is translated off-screen (transform only, never a width tween)', () => {
+describe('SettingsRail — mobile anchored sheet (T10820)', () => {
+  it('closed panel is translated below the fold (translateY(100%), transform only, never a width tween)', () => {
     render(
       <SettingsRail isMobile collapsed={false} open={false} tabs={TABS} activeTab="a" onTabChange={() => {}} title="Settings">
         <div>body</div>
       </SettingsRail>
     );
     const drawer = screen.getByTestId('settings-drawer');
-    expect(drawer.style.transform).toBe('translateX(316px)');
+    expect(drawer.style.transform).toBe('translateY(100%)');
     expect(drawer.style.transition).toMatch(/transform/);
     expect(drawer.style.transition).not.toMatch(/width/);
   });
 
-  it('open drawer slides in to translateX(0)', () => {
+  it('open panel slides up to translateY(0)', () => {
     render(
       <SettingsRail isMobile collapsed={false} open tabs={TABS} activeTab="a" onTabChange={() => {}} title="Settings">
         <div>body</div>
       </SettingsRail>
     );
     const drawer = screen.getByTestId('settings-drawer');
-    expect(drawer.style.transform).toBe('translateX(0)');
+    expect(drawer.style.transform).toBe('translateY(0)');
+  });
+
+  it('the panel is anchored with `absolute bottom-full` inside its host wrapper, never `position:fixed` (T10420/T10820 backdrop-filter trap)', () => {
+    render(
+      <SettingsRail isMobile collapsed={false} open tabs={TABS} activeTab="a" onTabChange={() => {}} title="Settings">
+        <div>body</div>
+      </SettingsRail>
+    );
+    const drawer = screen.getByTestId('settings-drawer');
+    expect(drawer.className).toMatch(/\babsolute\b/);
+    expect(drawer.className).toMatch(/\bbottom-full\b/);
+    expect(drawer.className).not.toMatch(/\bfixed\b/);
+    // The retired 316px side-drawer geometry is deleted outright, not kept behind a flag.
+    expect(drawer.className).not.toMatch(/w-\[316px\]/);
+    expect(drawer.style.transform).not.toMatch(/translateX/);
+  });
+
+  it('the panel stays mounted (attached) in the DOM while closed — animatable, never conditionally rendered', () => {
+    render(
+      <SettingsRail isMobile collapsed={false} open={false} tabs={TABS} activeTab="a" onTabChange={() => {}} title="Settings">
+        <div>body</div>
+      </SettingsRail>
+    );
+    // getByTestId throws if the element isn't in the tree at all; a truthy return
+    // proves it's mounted even though `open` is false (no jest-dom matcher in this repo).
+    expect(screen.getByTestId('settings-drawer')).toBeTruthy();
+  });
+
+  it('open panel max-height honors the exported MOBILE_PANEL_MAX_VH geometry const (55dvh cap, T10820)', () => {
+    render(
+      <SettingsRail isMobile collapsed={false} open tabs={TABS} activeTab="a" onTabChange={() => {}} title="Settings">
+        <div>body</div>
+      </SettingsRail>
+    );
+    const drawer = screen.getByTestId('settings-drawer');
+    // The user-approved cap out of the T10820 design doc's open questions (§8).
+    expect(MOBILE_PANEL_MAX_VH).toBe(55);
+    expect(drawer.style.maxHeight).toMatch(new RegExp(`${MOBILE_PANEL_MAX_VH}dvh`));
+    // Transition is driven by the single exported const (parity with desktop's RAIL_TWEEN).
+    expect(drawer.style.transition).toBe(MOBILE_PANEL_TWEEN);
   });
 
   it('the drawer has its own 44x44 close control that fires onCloseDrawer', () => {
