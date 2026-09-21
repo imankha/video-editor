@@ -1,6 +1,6 @@
 # T10840: Focus landscape cockpit — full-bleed stage, edge rails, no scroll
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-09-21
