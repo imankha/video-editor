@@ -51,13 +51,13 @@ export function DeletePlayButton({ hasProject, onDelete, variant = 'full' }) {
       <div className="flex gap-2" data-testid="delete-play-confirm">
         <button
           onClick={handleConfirmDelete}
-          className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
+          className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm whitespace-nowrap transition-colors"
         >
           Confirm Delete
         </button>
         <button
           onClick={handleCancelDelete}
-          className="flex-1 px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded text-sm transition-colors"
+          className="flex-1 px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded text-sm whitespace-nowrap transition-colors"
         >
           Cancel
         </button>

@@ -784,7 +784,10 @@ export function AnnotateFullscreenOverlay({
               buttons rather than pushing them down past already-visible
               controls. */}
           <div className={`px-4 pb-3 flex items-center justify-end gap-2 ${detailsOpen ? 'pt-2 border-t border-yellow-800/30' : ''}`}>
-            <div className="w-32">
+            {/* T10900: min-width, not a fixed w-32 -- the confirm state is TWO
+                buttons ("Confirm Delete" + "Cancel") that overflowed a 128px
+                slot and overlapped Done. */}
+            <div className="min-w-[8rem] shrink-0">
               {/* T10410: the "Clip created" text that sat here is now the clip
                   badge on the header line (renderProgressBadges). */}
               <DeletePlayButton hasProject={!!existingClip.autoProjectId} onDelete={() => onDeleteClip(existingClip.id)} />
