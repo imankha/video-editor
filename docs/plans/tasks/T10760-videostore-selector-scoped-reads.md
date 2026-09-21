@@ -1,6 +1,25 @@
 # T10760: `useVideo` subscribes to the WHOLE videoStore and returns unmemoized actions
 
-**Status:** WIP (container `reel-task-t10760`, spawned 2026-09-20 — see WAVE.md)
+**Status:** STAGING (PR #482 merged `e338274d`, 2026-09-21)
+
+## Result (2026-09-20/21)
+
+Implemented, tested, live-QA'd and reviewer-approved in a single container drive call
+(`reel-task-t10760`). Selector-scoped every `useVideo.js` read (30 scalar selectors) and
+`useCallback`-wrapped all 10 returned actions; API shape unchanged. New tests proven RED against
+the pre-fix code (render-count + action-identity), GREEN after. Curated regression set (8
+files/64 tests) green, including the `AnnotateContainer.pendingSelection` T10750 pin;
+`vitest related` (7 files/29 tests) green across Focus/Overlay/Projects consumers.
+
+Live QA: Annotate scrub/playback, Focus crop-drag during playback, and T10770's exact multi-video
+regression check re-run on game 11 — both video sequences, no burst, no `matched no region`, no
+`Refusing seek`. Overlay live-drive was skipped and DOCUMENTED (not silently) — neither fixture
+account has a publishable reel; its `useVideo` path is covered by the existing
+`overlayVideoSource.test.jsx`.
+
+Fresh-context Reviewer: APPROVED, 0 blocking/major (1 pre-existing out-of-scope minor noted).
+Branch CI green (frontend job; backend correctly skipped). Provably verified (red→green proof +
+CI green) — merged without waiting per standing policy. PR #482, merge commit `e338274d`.
 **Impact:** 4
 **Complexity:** 4
 **Created:** 2026-09-20
