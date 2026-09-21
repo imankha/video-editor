@@ -271,6 +271,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const {
     annotateVideoUrl,
     annotateVideoMetadata,
+    annotateGameDims,
     annotateGameName,
     annotateGameId,
     annotateSourceExpired,
@@ -751,6 +752,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         videoController={videoController}
         annotateVideoUrl={annotateVideoUrl}
         annotateVideoMetadata={annotateVideoMetadata}
+        // T10800: raw game-row dims + id for the aspect-fit stage box / the
+        // explicit unknown-dimensions warning.
+        gameVideoWidth={annotateGameDims?.width}
+        gameVideoHeight={annotateGameDims?.height}
+        gameId={annotateGameId}
         annotateContainerRef={annotateContainerRef}
         currentTime={effectiveCurrentTime}
         duration={effectiveDuration}
