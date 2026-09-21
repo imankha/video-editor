@@ -3,7 +3,7 @@
 **Task file:** [T10190-result-title-consistency-backlink-copy.md](T10190-result-title-consistency-backlink-copy.md)
 **Source investigation:** [T9890-decision-record.md](evaluation-2026-09-13/T9890-decision-record.md)
 **Copy conventions reconciled against:** [T9860-design.md](T9860-design.md) (APPROVED, STAGING)
-**Status:** DRAFT — design gate. Nothing is implemented until the user approves.
+**Status:** APPROVED (user, 2026-09-21) — Option A (game name + game clock, Focus/Overlay aligned up).
 **Written:** 2026-09-21
 **Tier:** L (design-gated). Frontend-only, ~5 source files, no schema change, no backend change.
 
