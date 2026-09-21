@@ -1,6 +1,6 @@
 # T10840: Focus landscape cockpit — full-bleed stage, edge rails, no scroll
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-09-21
@@ -113,21 +113,28 @@ E2E: the new spec + `e2e/T9550-editor-stage-strings.qa.spec.js`.
 ### Progress Log
 
 **2026-09-21**: Filed from the Focus landscape design session; design approved by the user the same
-day off a 6-artboard mockup. Not started.
+day off a 6-artboard mockup. Implemented via /dotask. Reviewer caught + confirmed-fixed 2 real
+defects (z-index blocking preview/exit dialog, popover anchored to viewport instead of track-
+relative coords). Worker's container had no dev stack for the e2e spec (documented as owed);
+supervisor ran it live against a real stack instead - all 3 scenarios (812x334, 844x390, rotate-
+back-to-portrait) passed. Fixed one CI false positive along the way (T4930 viewport-unit gate
+flagged a test asserting the ABSENCE of h-screen). Merged PR #490. **Real-device iOS landscape
+check remains owed** - tracked as the epic-level gate before T10850 and the epic are called done
+(headless Chromium cannot simulate the notch/safe-area behavior).
 
 ## Acceptance Criteria
 
-- [ ] At 812 x 334 and 844 x 390, Focus has **no vertical scroll**
-      (`document.scrollingElement.scrollHeight <= clientHeight`)
-- [ ] The crop reticule and the timeline strip are visible **at the same time**
-- [ ] The 224 px clip sidebar is absent; the Clips rail button opens a sheet with the same rows
-- [ ] Every interactive element has a >= 44 px hit box, including keyframe diamonds
-- [ ] Sheets are `absolute` inside the shell (not `fixed`), slide from the right, and the CTA is
+- [x] At 812 x 334 and 844 x 390, Focus has **no vertical scroll**
+      (`document.scrollingElement.scrollHeight <= clientHeight`) - live-verified
+- [x] The crop reticule and the timeline strip are visible **at the same time** - live-verified
+- [x] The 224 px clip sidebar is absent; the Clips rail button opens a sheet with the same rows
+- [x] Every interactive element has a >= 44 px hit box, including keyframe diamonds
+- [x] Sheets are `absolute` inside the shell (not `fixed`), slide from the right, and the CTA is
       never dimmed by one
-- [ ] Rotating back to 393 x 852 restores the scrolling layout, with no console error and no lost
-      keyframe
-- [ ] Rotating mid-drag abandons the drag without persisting a partial keyframe (D12)
-- [ ] **No existing test file was edited**
+- [x] Rotating back to 393 x 852 restores the scrolling layout, with no console error and no lost
+      keyframe - live-verified
+- [x] Rotating mid-drag abandons the drag without persisting a partial keyframe (D12)
+- [x] **No existing test file was edited**
 - [ ] Real-device iOS landscape verified: the play button clears the notch in both rotation
-      directions (D7)
-- [ ] Lint hooks clean, Branch CI green
+      directions (D7) - **OWED**, needs a physical iPhone; headless E2E cannot catch this
+- [x] Lint hooks clean, Branch CI green
