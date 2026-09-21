@@ -171,7 +171,7 @@ test.describe('T10180: publish -> visibility-review -> link-ready (diag harness,
 
     const banner = page.getByTestId('draft-preview-banner');
     await expect(banner).toContainText("Couldn't save to the cloud", { timeout: 5000 });
-    await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
+    await expect(banner.getByRole('button', { name: 'Retry' })).toBeVisible();
     // Link was never minted on failure.
     await expect(page.getByText('Link ready')).toHaveCount(0);
     await expect(page.locator('input[readonly]')).toHaveCount(0);
@@ -182,7 +182,7 @@ test.describe('T10180: publish -> visibility-review -> link-ready (diag harness,
     await page.route('**/api/downloads/publish/**', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, final_video_id: 999001, archived: true }) })
     );
-    await page.getByRole('button', { name: 'Retry' }).click();
+    await banner.getByRole('button', { name: 'Retry' }).click();
     await expect(page.getByText('Link ready')).toBeVisible({ timeout: 5000 });
   });
 
