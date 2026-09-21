@@ -112,7 +112,7 @@ See `e2e/new-user-flow.spec.js` for the full pattern. The test-login endpoint cr
 - Don't add console.logs in committed code
 - Don't fetch data in View components
 - Don't render components without data guards
-- Don't use localStorage (all persistence via SQLite + R2)
+- Don't use localStorage for user/app data (all such persistence via SQLite + R2). NARROW EXCEPTION (T10850, design D14): a purely per-device UI preference that must survive reload, never reaches the backend, and needs no sync — e.g. a dismissed-hint flag like `rb.focus.rotateNudgeDismissed` / `rb.focus.cockpitIntroSeen` — may use localStorage, read via a lazy `useState` initializer (never a `useEffect`) and written ONLY by a named gesture
 - Don't use time in seconds for keyframes (use frame numbers)
 - Don't use polling when WebSockets are available
 - Don't hold backend API data in React useState (use Zustand stores)

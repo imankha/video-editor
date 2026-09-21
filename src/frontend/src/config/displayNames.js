@@ -489,6 +489,22 @@ export const FOCUS_COCKPIT = {
   OPEN_TRIM: 'Trim and slo-mo',
 };
 
+// T10850 (design D14): the two discovery hints that bracket the landscape flip.
+// Copy lives here (T9550 single-source rule), parent-facing vocabulary — "focus
+// point", never "keyframe". The icons are Lucide, inline, aria-hidden.
+export const FOCUS_HINTS = {
+  // Portrait nudge — a slim bar directly under the stage, shown while the clip
+  // still has no focus points. Dismissed by its 44px X (a named gesture).
+  ROTATE_TITLE: 'Turn sideways for a bigger frame',
+  ROTATE_SUBTITLE: 'Twice the crop area, and nothing scrolls',
+  ROTATE_DISMISS: 'Dismiss',
+  // Landscape first-entry card — shown once, over the stage, on the first
+  // cockpit entry. Dismissed by "Got it" or the first touch on the stage.
+  COCKPIT_INTRO_TITLE: 'More room in landscape',
+  COCKPIT_INTRO_BODY: 'Playback is on the left now, Generate on the right.',
+  COCKPIT_INTRO_CONFIRM: 'Got it',
+};
+
 // T8390: "Add Spotlight Later" toast copy, routed by is_auto_created (T8360 split).
 export const FOCUS_PUBLISH_LATER_TOAST = {
   SINGLE_CLIP: {

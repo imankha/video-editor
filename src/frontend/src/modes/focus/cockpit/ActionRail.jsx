@@ -52,6 +52,10 @@ export default function ActionRail({
   onGenerate,
   onBackToPreview,
   backToPreviewLoading,
+  // T10850 (D14): a one-shot ring while the first-entry card is up, so the eye
+  // finds the CTA. Applied to a WRAPPER, never PrimaryCta itself — its rendered
+  // box must stay byte-identical (T9270 invariant). Static ring, no @keyframes.
+  ring = false,
 }) {
   const isPreviewCta = ctaMode === 'preview';
   const cta = isPreviewCta ? (
@@ -124,7 +128,12 @@ export default function ActionRail({
             {`~${estimatedCredits} cr`}
           </span>
         )}
-        {cta}
+        <div
+          data-testid="cockpit-cta-ring"
+          className={ring ? 'rounded-[12px] ring-2 ring-blue-400 ring-offset-2 ring-offset-[#0f172a]' : ''}
+        >
+          {cta}
+        </div>
       </div>
     </div>
   );

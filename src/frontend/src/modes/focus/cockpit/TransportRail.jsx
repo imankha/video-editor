@@ -32,6 +32,9 @@ export default function TransportRail({
   stepForward,
   stepBackward,
   onExitToHome,
+  // T10850 (D14): a one-shot ring while the first-entry card is up, so the eye
+  // finds Play. A static ring (box-shadow), never a looping @keyframes pulse.
+  ring = false,
 }) {
   const { clock, frac } = formatTimecode(currentTime);
   return (
@@ -66,7 +69,9 @@ export default function TransportRail({
           onClick={togglePlay}
           title={isPlaying ? 'Pause' : 'Play'}
           aria-label={isPlaying ? 'Pause' : 'Play'}
-          className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[#a855f7] text-white shadow-lg shadow-purple-500/40 active:bg-purple-400"
+          className={`flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[#a855f7] text-white shadow-lg shadow-purple-500/40 active:bg-purple-400${
+            ring ? ' ring-2 ring-blue-400 ring-offset-2 ring-offset-gray-900' : ''
+          }`}
         >
           {isPlaying ? <Pause size={22} aria-hidden="true" /> : <Play size={22} aria-hidden="true" />}
         </button>

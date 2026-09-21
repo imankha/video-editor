@@ -14,6 +14,7 @@ import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
 import FocusClipsPanel from '../components/settings/FocusClipsPanel';
 import { CropOverlay } from './focus';
 import { FocusTimelineBlock } from './focus/FocusTimelineBlock';
+import RotateNudge from './focus/RotateNudge';
 import FocusCockpit from './focus/cockpit/FocusCockpit';
 import FramingInstructions from './focus/FramingInstructions';
 import FramingActionRow from './focus/FramingActionRow';
@@ -783,6 +784,27 @@ export function FocusModeView({
               </button>
             )}
           </div>
+
+          {/* T10850 (D14): the portrait rotate nudge sits DIRECTLY under the stage,
+              where the eye lands right after seeing how small the crop box is — not
+              a header, not a toast. It self-gates on isMobile && !isLandscape &&
+              no-focus-points-yet && !dismissed; `focusPointCount` is the crop
+              keyframe list already in scope (no new state). Never rendered inside
+              fullscreen / mobile-fullscreen. */}
+          {/* isLandscape is sourced from `cockpit`: this render path is reached
+              only when cockpit is false, and cockpit = isMobile && isLandscape, so
+              a mobile device here is necessarily portrait (the landscape case
+              early-returned to FocusCockpit above). Passing `cockpit` keeps
+              RotateNudge's D14 condition (isMobile && !isLandscape) exact without a
+              second useIsLandscape() call that would break the FocusModeView tests'
+              useIsMobile mock. */}
+          {!isFullscreen && !mobileFs && videoUrl && (
+            <RotateNudge
+              isMobile={isMobile}
+              isLandscape={cockpit}
+              hasFocusPoints={focusPointCount > 0}
+            />
+          )}
 
           {/* Mobile-only clip title — minimal, under video */}
           {clipTitle && !isFullscreen && !mobileFs && (
