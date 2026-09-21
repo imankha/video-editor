@@ -1,5 +1,31 @@
 ---
 domain: export-pipeline
+updated: 2026-09-21 (T10180 — private-draft result surface gained the T12 target flow: "Publish and
+get link" -> visibility-review confirm (Cancel, no write) -> "Publish and create link" (single
+gesture: `usePublishProject.publish()` then `useWebShare.createShareLink()`) -> link-ready with a
+SELECTABLE readonly link input (not the silent `execCommand` fallback) + Copy/"Share link...". New
+`phase` state machine (`idle|review|publishing|ready|failed`, plus an internal `ready-capable` seed
+for an already-published preview that mints its link on first Get-link click, never on mount) lives
+entirely in `DraftReelPreview.jsx`; the flow renders via a NEW presentational `PublishLinkFlow.jsx`
+into `CollectionPlayer`'s pre-existing `actionBar` slot — CollectionPlayer itself was NOT touched
+(kept inert for Published/DownloadsPanel/`/shared`/IntroStoryPlayer/RankingGame, all of whom also
+mount it). The `onPublish`/`onShare` primary-slot swap this surface used before is retired in favor
+of the actionBar flow. NEW `LinkReadyCard.jsx` extracts the selectable-input+Copy leaf; existing
+`CollectionShareModal.jsx` was refactored (mechanical, behavior-identical) to consume the same leaf.
+`useWebShare.js` gained an additive `createShareLink({downloadId})` that mints/reuses the token and
+RETURNS the URL without copying (needed so link-ready can SHOW the link before any copy) —
+`copyLink`/`webShare` unchanged for other callers. **Item 5 (dropped T10000 scope) confirmed
+buildable pre-publish with NO backend change**: a `final_videos` row is born at EXPORT time
+(`services/publish_final_video.py`, no `published_at` in the INSERT), and `download_file`/
+`stream_download` (`routers/downloads.py`) resolve purely on id with no `published_at` filter — the
+private draft already streams that same id, so Download was wired straight onto it (`DraftReelPreview`
+`onDownload` -> `CollectionPlayer`'s existing prop, plus a new `DraftTile` kebab item), both via
+`useDownloads().downloadFile(project.final_video_id)`. **Item 4 ("Update shared version" — re-point an
+existing share token to a moved `final_video_id` after a private re-export) was deliberately SPLIT
+OUT to a follow-up task (T10860)** — it is the only backend piece and needs its own CAS/durable-sync
++ live-verification story; nothing in this task touches it. Persistence: every new write (`publish()`,
+`createShareLink()`) fires only inside a button's onClick chain, never a reactive effect — verified
+by both a unit test and code review. See `T10180-design.md` for the full state machine.)
 updated: 2026-09-19 (T10670 — post-export completion footer redesigned as V2 "celebration tiles"
 (FocusPublishActionBar + OverlayPublishActionBar, frontend-only, no schema/Modal). Each choice is now
 an icon-forward TILE that IS the button: the inner pill `<Button>` is GONE, the tile `<div>` carries

@@ -116,3 +116,48 @@ describe('useWebShare capability gating (T5220 desktop-share regression, T7350 p
     expect(result.current.capability).toBe(ShareCapability.FULL);
   });
 });
+
+// T10180: link-ready needs to SHOW the share URL before any copy, so copyLink's
+// create-and-immediately-copy shape can't drive it. createShareLink({ downloadId })
+// mints/reuses the token and RETURNS the url string with NO clipboard write --
+// additive, existing copyLink/webShare unchanged for other surfaces (design §2.4).
+describe('useWebShare.createShareLink (T10180 additive create-that-returns-URL)', () => {
+  const originalMatchMedia = window.matchMedia;
+  const originalClipboard = navigator.clipboard;
+
+  beforeEach(() => {
+    mockShareResponse('tok456');
+    navigator.clipboard = { writeText: vi.fn().mockResolvedValue() };
+    mockPointer({ coarse: false });
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+    navigator.clipboard = originalClipboard;
+  });
+
+  it('returns the share URL string and does NOT write to the clipboard', async () => {
+    const { result } = renderHook(() => useWebShare());
+
+    let url;
+    await act(async () => {
+      url = await result.current.createShareLink({ downloadId: 99 });
+    });
+
+    expect(url).toBe(`${window.location.origin}/shared/tok456`);
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+  });
+
+  it('mints via the same single-video share endpoint as copyLink (gesture-driven token create)', async () => {
+    const { result } = renderHook(() => useWebShare());
+
+    await act(async () => {
+      await result.current.createShareLink({ downloadId: 99 });
+    });
+
+    expect(globalThis.apiFetchImpl).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/gallery\/99\/share$/),
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+});

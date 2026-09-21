@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Z } from '../constants/zLayers';
-import { Pencil, CheckCircle, Tag, Loader2, FolderInput, MoreVertical, Trash2, Play, Crop, Layers, EyeOff, Film, AlertTriangle, Clock, Link2, Unlink } from 'lucide-react';
+import { Pencil, CheckCircle, Tag, Loader2, FolderInput, MoreVertical, Trash2, Play, Crop, Layers, EyeOff, Film, AlertTriangle, Clock, Link2, Unlink, Download } from 'lucide-react';
 import { Button } from './shared/Button';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { TilePreviewVideo } from './collections/TilePreviewVideo';
@@ -15,6 +15,7 @@ import { useSyncStore } from '../stores/syncStore';
 import { useExportStore } from '../stores/exportStore';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
 import { usePublishProject } from '../hooks/usePublishProject';
+import { useDownloads } from '../hooks/useDownloads';
 import { useIsCoarsePointer } from '../hooks/useIsMobile';
 import { openFinishedReel } from '../utils/finishedReelNav';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
@@ -56,6 +57,10 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // carrying the T4050 durable-sync contract verbatim). `publishRetry` still
   // drives the in-card Retry surface below on a 503 sync_failed.
   const { publish: publishProject, isPublishing, publishRetry } = usePublishProject(project);
+  // T10180 (item 5): Download kebab item, same private-draft stream id the tile
+  // already uses (no backend gate on published_at, design §1.8/§3.5).
+  // useDownloads(false) — no panel-open fetch needed, this only calls downloadFile.
+  const { downloadFile } = useDownloads(false);
   // T8535: the draft preview is the consolidated DraftReelPreview surface
   // (openFinishedReel) — this tile no longer mounts its own player. Tracking
   // whether THIS project's preview is the one currently open lets the tile
@@ -189,6 +194,19 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   const handleHideFromDrafts = (e) => {
     e.stopPropagation();
     publishProject({ openGallery: false });
+  };
+
+  // T10180 (item 5): Download from the kebab. Not a DB write -- a GET stream to
+  // disk, so no persistence gesture concern; re-throws surfaced as a toast
+  // (useDownloads.downloadFile re-throws on failure).
+  const handleDownload = async (e) => {
+    e.stopPropagation();
+    setMenuOpen(false);
+    try {
+      await downloadFile(project.final_video_id);
+    } catch (err) {
+      toast.error('Download failed', { message: err.message });
+    }
   };
 
   const handleStartRename = (e) => {
@@ -475,6 +493,16 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         <button onClick={(e) => { e.stopPropagation(); handleOverlayClick(); setMenuOpen(false); }} className={`${menuItemClass} hover:bg-gray-600`}>
           <Layers size={18} className="text-gray-300 flex-shrink-0" />
           <span className="text-gray-200">Open in Spotlight</span>
+        </button>
+      )}
+      {/* T10180 (item 5): gated strictly on isComplete && final_video_id -- a
+          completed draft always has a final_video_id, but this stays explicit
+          per the design's gating contract rather than relying on that
+          correlation. */}
+      {isComplete && project.final_video_id && (
+        <button onClick={handleDownload} className={`${menuItemClass} hover:bg-gray-600`}>
+          <Download size={18} className="text-gray-300 flex-shrink-0" />
+          <span className="text-gray-200">Download</span>
         </button>
       )}
       {isComplete && !isReadyToPublish && (

@@ -2,13 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { EyeOff, AlertTriangle } from 'lucide-react';
 import { API_BASE } from '../config';
 import { CollectionPlayer } from './collections/CollectionPlayer';
+import { PublishLinkFlow } from './PublishLinkFlow';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useQuestStore } from '../stores/questStore';
 import { usePublishProject } from '../hooks/usePublishProject';
 import { useWebShare } from '../hooks/useWebShare';
+import { useDownloads } from '../hooks/useDownloads';
 import { toast } from './shared/Toast';
-import { STAGE_REASONS } from '../config/displayNames';
 
 /**
  * DraftReelPreview (T8530) — the thin, store-aware wrapper that turns an
@@ -20,12 +21,15 @@ import { STAGE_REASONS } from '../config/displayNames';
  * snapshot that outlives the source project row, so this survives the post-publish
  * fetchProjects drop (ui-spec §4.2).
  *
- * State machine (ui-spec §4.6): Idle(draft) -> Publishing -> Success (banner
- * unmounts, primary slot swaps Publish->Share, toast.success, one-shot attention
- * ring on Share) -> 503/generic failure (amber retry banner, same gesture). Post-
- * publish coherence (§4.7): SAME final_video_id, the video does NOT reload — only
- * the banner/slot swap. `published` is a local flag driving the slot swap because
- * the archived project drops from the store.
+ * T10180 (design doc): the old two-flag (published/failed) one-tap publish->share
+ * swap is replaced by an explicit `phase` state machine — idle -> review
+ * (visibility-review confirm, no write yet) -> publishing (the write gesture:
+ * publish() then createShareLink()) -> ready (link-ready, selectable readonly
+ * input + Copy) / failed (amber retry, same gesture). The whole flow renders via
+ * `PublishLinkFlow` into CollectionPlayer's `actionBar` slot — the old
+ * state-exclusive onPublish/onShare primary slot is no longer used here (design
+ * §2.1/R2). `statusBanner` still carries the cyan idle / amber failed strip; the
+ * primary buttons live in `actionBar` now.
  */
 export function DraftReelPreview() {
   const payload = useReelPreviewStore((s) => s.payload);
@@ -50,28 +54,30 @@ export function DraftReelPreview() {
 
   if (!payload || offPage) return null;
   // Key on the finalVideoId so a fresh open (a different reel) remounts and resets
-  // the local publish/published state — but a publish of the SAME reel does NOT
-  // change the key, so the video is never reloaded on publish (§4.7). A repeat
-  // click on the SAME draft rebuilds an equivalent snapshot with the same
-  // finalVideoId, so the player is not remounted and no duplicate request fires.
+  // the local phase state — but a publish of the SAME reel does NOT change the
+  // key, so the video is never reloaded on publish (§4.7). A repeat click on the
+  // SAME draft rebuilds an equivalent snapshot with the same finalVideoId, so the
+  // player is not remounted and no duplicate request fires.
   return <DraftReelPreviewInner key={payload.finalVideoId} payload={payload} />;
 }
 
 function DraftReelPreviewInner({ payload }) {
   const close = useReelPreviewStore((s) => s.close);
   const { publish, isPublishing } = usePublishProject({ id: payload.projectId });
-  const { copyLink, webShare, isMobile } = useWebShare();
+  const { copyLink, webShare, createShareLink, isMobile } = useWebShare();
+  const { downloadFile, downloadingId } = useDownloads();
 
-  // Local publish state (the archived project drops from the store, so we can't
-  // derive "published" from it — §4.6/§4.7). T8390: initializes true when the
+  // Phase state machine (design §2.2/§3.3): idle -> review -> publishing ->
+  // ready | failed. T8390: seeds 'idle' with link-ready CAPABILITY when the
   // caller already ran the publish gesture before opening this preview (Focus's
-  // one-tap Publish) — otherwise this would wrongly show the draft/Publish UI
-  // for an already-published reel instead of landing straight on Share.
-  const [published, setPublished] = useState(!!payload.alreadyPublished);
-  const [failed, setFailed] = useState(false);
-  const [ringOn, setRingOn] = useState(false);
-  const ringTimer = useRef(null);
-  useEffect(() => () => clearTimeout(ringTimer.current), []);
+  // one-tap Publish) — 'ready-capable' reaches link-ready via a first Get-link
+  // click WITHOUT auto-creating the link on mount (R5: no reactive effect fires
+  // a network call). alreadyPublished never seeds 'review' or 'publishing'.
+  const [phase, setPhase] = useState(payload.alreadyPublished ? 'ready-capable' : 'idle');
+  const [shareUrl, setShareUrl] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef(null);
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
 
   // T8535 (moved from DraftTile, T6840 origin): quest_4 "Watch Your Preview"
   // fires after ~1s of preview playback, mirroring watched_gallery_video_1s so
@@ -103,59 +109,90 @@ function DraftReelPreviewInner({ payload }) {
     },
   ];
 
-  const handlePublish = useCallback(async () => {
-    setFailed(false);
-    const ok = await publish({ openGallery: false });
-    if (ok) {
-      setPublished(true);
-      toast.success('Published', { message: STAGE_REASONS.PUBLISH });
-      // One-shot attention ring on the freshly-swapped Share button (§4.6).
-      setRingOn(true);
-      clearTimeout(ringTimer.current);
-      ringTimer.current = setTimeout(() => setRingOn(false), 1500);
-    } else {
-      // 503 sync_failed AND generic failure both land here: show the amber retry
-      // banner in place (§4.6). The hook already toasted the generic-failure error.
-      setFailed(true);
-    }
-  }, [publish]);
+  // "Publish and get link" click: pure UI transition, NO write (design §2.2).
+  const handlePublishClick = useCallback(() => {
+    setPhase('review');
+  }, []);
 
-  // Share only appears AFTER publish (published state). ~15-line wiring per §4.5:
-  // coarse pointer -> native share sheet; fine pointer -> copy link + toast. Same
-  // split DownloadsPanel.sharePlayerReel uses.
-  const handleShare = useCallback(async (reel) => {
+  // "Cancel" click: back to idle, no write ever occurred.
+  const handleCancelReview = useCallback(() => {
+    setPhase('idle');
+  }, []);
+
+  // "Publish and create link" click — the single write gesture: publish() then
+  // createShareLink(), entirely inside this onClick chain (CLAUDE.md gesture-
+  // based persistence rule; never a useEffect).
+  const handleConfirmPublish = useCallback(async () => {
+    setPhase('publishing');
+    const ok = await publish({ openGallery: false });
+    if (!ok) {
+      // 503 sync_failed AND generic failure both land here: amber retry banner
+      // in place (§4.6). The hook already toasted the generic-failure error.
+      setPhase('failed');
+      return;
+    }
+    const url = await createShareLink({ downloadId: payload.finalVideoId });
+    setShareUrl(url);
+    setPhase('ready');
+  }, [publish, createShareLink, payload.finalVideoId]);
+
+  // A 'ready-capable' (alreadyPublished) preview mints the link on the FIRST
+  // Get-link click — never on mount (R5). Once minted it behaves exactly like a
+  // freshly-published 'ready' phase.
+  const handleGetLinkCapable = useCallback(async () => {
+    const url = await createShareLink({ downloadId: payload.finalVideoId });
+    setShareUrl(url);
+    setPhase('ready');
+  }, [createShareLink, payload.finalVideoId]);
+
+  // Copy click (fine pointer, ready phase): await clipboard success before
+  // toasting (R7 — no false "copied" before the write lands); LinkReadyCard's
+  // selectable input is the visible fallback for the no-clipboard-API case.
+  const handleCopy = useCallback(async () => {
     try {
-      if (isMobile) {
-        const method = await webShare({
-          downloadId: reel.id,
-          title: reel.name || 'Highlight Reel',
-          text: `Check out ${reel.name || 'this highlight reel'}!`,
-          filename: `${reel.name || 'highlight'}-highlight.mp4`,
-        });
-        if (method === 'clipboard') {
-          toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
-        }
-      } else {
-        await copyLink({ downloadId: reel.id });
+      await copyLink({ downloadId: payload.finalVideoId });
+      toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
+      setCopied(true);
+      clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast.error('Copy failed', { message: err.message });
+    }
+  }, [copyLink, payload.finalVideoId]);
+
+  // "Share link..." click (coarse pointer, ready phase): existing useWebShare
+  // native-share path.
+  const handleNativeShare = useCallback(async () => {
+    try {
+      const method = await webShare({
+        downloadId: payload.finalVideoId,
+        title: payload.name || 'Highlight Reel',
+        text: `Check out ${payload.name || 'this highlight reel'}!`,
+        filename: `${payload.name || 'highlight'}-highlight.mp4`,
+      });
+      if (method === 'clipboard') {
         toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
       }
     } catch (err) {
       if (err.name === 'AbortError') return;
       toast.error('Share failed', { message: err.message });
     }
-    // First interaction clears the attention ring (§4.6).
-    setRingOn(false);
-    clearTimeout(ringTimer.current);
-  }, [isMobile, webShare, copyLink]);
+  }, [webShare, payload.finalVideoId, payload.name]);
+
+  const handleDownload = useCallback(async (reel) => {
+    try {
+      await downloadFile(reel.id);
+    } catch (err) {
+      toast.error('Download failed', { message: err.message });
+    }
+  }, [downloadFile]);
 
   // Status banner: cyan draft strip (idle/publishing) -> amber retry surface on
-  // failure -> nothing once published (§4.4/§4.6). Copy on the amber strip matches
-  // DraftTile's retry card exactly ("Couldn't save to the cloud.") so the two
-  // surfaces read as one system.
+  // failure -> nothing once a link exists or capability is already published
+  // (§4.4/§4.6). Copy on the amber strip matches DraftTile's retry card exactly
+  // ("Couldn't save to the cloud.") so the two surfaces read as one system.
   let statusBanner = null;
-  if (published) {
-    statusBanner = null;
-  } else if (failed) {
+  if (phase === 'failed') {
     statusBanner = (
       <div
         data-testid="draft-preview-banner"
@@ -166,7 +203,7 @@ function DraftReelPreviewInner({ payload }) {
         <span className="min-w-0">Couldn&apos;t save to the cloud.</span>
         <button
           type="button"
-          onClick={handlePublish}
+          onClick={handleConfirmPublish}
           disabled={isPublishing}
           className="ml-auto shrink-0 px-3 py-1 rounded-md text-[11px] font-medium border border-amber-500 text-amber-300 hover:bg-amber-900/30 disabled:opacity-50"
         >
@@ -174,7 +211,7 @@ function DraftReelPreviewInner({ payload }) {
         </button>
       </div>
     );
-  } else {
+  } else if (phase === 'idle' || phase === 'review' || phase === 'publishing') {
     statusBanner = (
       <div
         data-testid="draft-preview-banner"
@@ -182,13 +219,36 @@ function DraftReelPreviewInner({ payload }) {
       >
         <EyeOff size={14} className="shrink-0" aria-hidden="true" />
         <span className="min-w-0">
-          {isPublishing
+          {phase === 'publishing'
             ? 'Publishing...'
             : 'Only you can see this. Publish it to get a share link.'}
         </span>
       </div>
     );
   }
+  // 'ready' and 'ready-capable' (before first Get-link click): no banner.
+
+  // actionBar: the whole publish->review->link-ready flow. 'ready-capable'
+  // (alreadyPublished, no link minted yet) reuses the 'ready' phase render with
+  // a null shareUrl, whose LinkReadyCard shows the Get-link trigger
+  // (onGetLink) instead of the selectable input — so the FIRST link-producing
+  // gesture is that click, never a mount effect (R5).
+  const flowPhase = phase === 'ready-capable' ? 'ready' : phase;
+  const actionBar = (
+    <PublishLinkFlow
+      phase={flowPhase}
+      reelName={payload.name}
+      shareUrl={phase === 'ready-capable' ? null : shareUrl}
+      isMobile={isMobile}
+      copied={copied}
+      onPublishClick={handlePublishClick}
+      onCancel={handleCancelReview}
+      onConfirm={handleConfirmPublish}
+      onCopy={handleCopy}
+      onNativeShare={phase === 'ready-capable' ? handleGetLinkCapable : handleNativeShare}
+      onGetLink={handleGetLinkCapable}
+    />
+  );
 
   return (
     <CollectionPlayer
@@ -196,12 +256,9 @@ function DraftReelPreviewInner({ payload }) {
       title={payload.name}
       onClose={close}
       statusBanner={statusBanner}
-      // Primary slot is state-exclusive: Publish in the draft state, Share once
-      // published. Passing only one keeps CollectionPlayer's render gate simple.
-      onPublish={published ? undefined : handlePublish}
-      publishLoading={isPublishing}
-      onShare={published ? handleShare : undefined}
-      shareRing={ringOn}
+      actionBar={actionBar}
+      onDownload={handleDownload}
+      downloadLoading={downloadingId === payload.finalVideoId}
     />
   );
 }

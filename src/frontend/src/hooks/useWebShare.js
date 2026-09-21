@@ -80,6 +80,15 @@ export function useWebShare() {
     return 'clipboard';
   }, []);
 
+  // T10180 (design §2.4): link-ready needs to SHOW the URL before any copy, so
+  // copyLink's create-and-immediately-copy shape can't drive it. Mints/reuses
+  // the SAME single-video share token as copyLink (in-flight-deduped via
+  // createShareUrl) and RETURNS the url string, with NO clipboard write.
+  // Additive -- copyLink/webShare stay unchanged for their existing callers.
+  const createShareLink = useCallback(async ({ downloadId }) => {
+    return createShareUrl(downloadId);
+  }, []);
+
   const webShare = useCallback(async ({ downloadId, title, text, filename }) => {
     if (capability === ShareCapability.FULL) {
       const resp = await apiFetch(`${API_BASE}/api/downloads/${downloadId}/file`);
@@ -114,5 +123,5 @@ export function useWebShare() {
     return copyLink(opts);
   }, [capability, webShare, copyLink]);
 
-  return { capability, isMobile, share, copyLink, webShare };
+  return { capability, isMobile, share, copyLink, webShare, createShareLink };
 }
