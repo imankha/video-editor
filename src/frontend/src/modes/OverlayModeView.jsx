@@ -14,7 +14,7 @@ import OverlaySpotlightPanel from '../components/settings/OverlaySpotlightPanel'
 import { ExportButtonContainer } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
-import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, ChevronDown, MousePointerClick } from 'lucide-react';
+import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, ChevronDown, ChevronRight, MousePointerClick } from 'lucide-react';
 import { formatInstant, formatLength, PRECISION } from '../utils/timeFormat';
 import { HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { EDITOR_PANELS, MODE_NAMES } from '../config/displayNames';
@@ -294,6 +294,14 @@ export function OverlayModeView({
   // (drawerOpen=false). No useEffect writes these — gesture handlers only.
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // T10970: the timeline's Text lane collapses behind a "Text" disclosure, the
+  // same gesture-override-on-derived-default shape as Focus's Trim and Slo-mo
+  // track (T9950 advancedOverride). EPHEMERAL view state, never a useEffect,
+  // never persisted. Defaults OPEN when the clip already has text regions so a
+  // returning user's text is never hidden; a clip without text defaults closed.
+  const [textLaneOverride, setTextLaneOverride] = useState(null);
+  const textLaneOpen = textLaneOverride ?? textOverlays.length > 0;
 
   // T6630 round 6/7 item 2/1: "all text settings should be for the text
   // regions the playhead is currently on" -- STRICT playhead scoping for the
@@ -1042,6 +1050,7 @@ export function OverlayModeView({
             onDeleteTextRegion={onDeleteTextRegion}
             textLayerHidden={textLayerHidden}
             onToggleTextLayer={onToggleTextLayer}
+            showTextLane={textLaneOpen}
               />
             ) : isLoading ? (
               <div className="animate-pulse">
@@ -1049,6 +1058,22 @@ export function OverlayModeView({
                 <div className="h-24 bg-gray-700 rounded"></div>
               </div>
             ) : null}
+            {/* T10970: "Text" disclosure directly under the timeline -- it toggles
+                the timeline's own Text lane (showTextLane above), mirroring the
+                Trim and Slo-mo disclosure under the Focus timeline. */}
+            {effectiveOverlayVideoUrl && (
+              <button
+                type="button"
+                data-testid="text-lane-disclosure"
+                onClick={() => setTextLaneOverride(!textLaneOpen)}
+                aria-expanded={textLaneOpen}
+                title={EDITOR_PANELS.TEXT_LANE_HINT}
+                className="mt-1 flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-gray-200"
+              >
+                {textLaneOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                {EDITOR_PANELS.TEXT_LANE}
+              </button>
+            )}
           </div>
           )}
 
@@ -1136,7 +1161,8 @@ export function OverlayModeView({
                         onSelectRegion={handleSelectRegion}
                         onDeleteTextRegion={onDeleteTextRegion}
                         textLayerHidden={textLayerHidden}
-            onToggleTextLayer={onToggleTextLayer}
+                        onToggleTextLayer={onToggleTextLayer}
+                        showTextLane={textLaneOpen}
                       />
                     </div>
                   )}

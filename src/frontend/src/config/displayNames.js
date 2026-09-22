@@ -389,7 +389,7 @@ export const EXPORT_JOBS = {
     jobNoun: MODE_NAMES.FRAMING,                       // job-list row noun, was "Framing Export"
   },
   overlay: {
-    action: 'Export',                          // render CTA, was "Export clip with effects" (N20), before that "Add Spotlight"
+    action: 'Apply Overlay',                   // render CTA (T10970, 2026-09-21); was "Export", before that "Export clip with effects" (N20) and "Add Spotlight"
     inProgress: 'Exporting clip...',          // N20
     completed: 'Clip ready',                  // N21
     jobNoun: 'Effects',                        // job-list row noun, was "Overlay Export"
@@ -660,6 +660,10 @@ export const EDITOR_PANELS = {
   PREVIEW_BACK_TO_FRAMING: 'Back to framing',
   PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced at export.',
   PREVIEW_MULTI_CLIP_DISCLOSURE: 'Previewing this clip. Your clips are joined at export.',
+  // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
+  // same shape as TRIM_AND_SLOWMO above (user request 2026-09-21).
+  TEXT_LANE: 'Text',
+  TEXT_LANE_HINT: 'Add a title, name, or caption over the clip.',
 };
 
 // T9480 -- single source for the billing-rule copy, verbatim from

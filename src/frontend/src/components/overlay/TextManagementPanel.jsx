@@ -127,7 +127,7 @@ export default function TextManagementPanel({
       {/* LEFT: region list, each showing its elements. Independent scroll. */}
       <div className="lg:w-2/5 flex flex-col gap-3 lg:overflow-y-auto lg:pr-1" data-testid="text-region-list">
         {regions.length === 0 ? (
-          <p className="text-xs text-gray-500">No text region under the playhead — click the timeline to add one.</p>
+          <p className="text-xs text-gray-500">No text region under the playhead. Open Text under the timeline and click the lane to add one.</p>
         ) : (
           regions.map((region) => {
             const isRegionSelected = region.id === selectedRegionId;
