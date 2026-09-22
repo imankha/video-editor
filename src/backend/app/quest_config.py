@@ -143,7 +143,7 @@ STEP_TITLES = {
     "select_players": "Pick your athlete",
     "choose_color": "Pick your spotlight color",
     "choose_shape": "Choose the spotlight shape",
-    "export_overlay": "Export",
+    "export_overlay": "Apply Overlay",
     "wait_for_overlay": "Render the spotlight",
     "preview_draft": "Watch your preview",
     # T9575 residual #2: this title hardcodes the FE-derived

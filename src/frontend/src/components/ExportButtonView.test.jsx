@@ -74,7 +74,7 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} estimatedCredits={9} creditBalance={42} />);
     expect(screen.queryByTestId('export-credit-estimate')).toBeNull();
     // Overlay primary CTA applies the configured overlay (T7700 reverses T7580's "Create Reel").
-    expect(screen.getByRole('button', { name: 'Export' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Apply Overlay' })).toBeTruthy();
   });
 });
 
@@ -117,7 +117,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     render(<ExportButtonView {...baseProps}
       isFramingMode={false} hasUnframedClips={true} isButtonDisabled={false} />);
     expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Export' }).disabled).toBe(false);
+    expect(screen.getByRole('button', { name: 'Apply Overlay' }).disabled).toBe(false);
   });
 
   it('caption is hidden while an export is in progress', () => {
@@ -226,9 +226,9 @@ describe('ExportButtonView — T9540 render/job vocabulary (supersedes T7580)', 
     expect(screen.getByRole('button', { name: 'Generate Framing (2/3)' })).toBeTruthy();
   });
 
-  it('Overlay primary CTA is "Export" (the render action, not "Add")', () => {
+  it('Overlay primary CTA is "Apply Overlay" (the render action, not "Add")', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} />);
-    expect(screen.getByRole('button', { name: 'Export' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Apply Overlay' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add Spotlight' })).toBeNull();
   });
 
@@ -340,6 +340,6 @@ describe('ExportButtonView — T10650 Back to Preview CTA', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} framingCtaMode="preview" showBackToPreview={true} />);
     expect(screen.queryByRole('button', { name: 'Back to Preview' })).toBeNull();
     expect(screen.queryByTestId('back-to-preview-ghost')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Export' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Apply Overlay' })).toBeTruthy();
   });
 });

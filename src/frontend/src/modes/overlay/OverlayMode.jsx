@@ -70,6 +70,9 @@ export function OverlayMode({
   // T6630 round 2: whole-text-layer visibility toggle (label icon).
   textLayerHidden = false,
   onToggleTextLayer,
+  // T10970: the Text lane sits behind a disclosure (OverlayModeView), same as
+  // Focus's showSegments. Default `true` keeps existing callers/tests unchanged.
+  showTextLane = true,
   // Zoom state (from useZoom in App.jsx)
   zoom,
   panOffset,
@@ -118,10 +121,11 @@ export function OverlayMode({
   // Calculate total layer height for playhead line
   // Video track (h-12=3rem) + Detection layer (h-8=2rem if present) + gap + Highlight regions (h-20=5rem) + Text layer (h-20=5rem, T6630 round 9; was h-24=6rem since round 8 item 4, h-28=7rem since T6610)
   const getTotalLayerHeight = () => {
+    const textLaneHeight = showTextLane ? 5.25 : 0; // Text (5rem) + its gap (0.25rem)
     if (hasDetectionData) {
-      return '15.75rem'; // Video (3rem) + Detection (2rem) + gaps + Highlight regions (5rem) + Text (5rem)
+      return `${10.5 + textLaneHeight}rem`; // Video (3rem) + Detection (2rem) + gaps + Highlight regions (5rem)
     }
-    return '13.5rem'; // Video (3rem) + gap (0.25rem) + Highlight regions (5rem) + Text (5rem) + padding
+    return `${8.25 + textLaneHeight}rem`; // Video (3rem) + gap (0.25rem) + Highlight regions (5rem) + padding
   };
 
   // T5410: default marker position (no override yet) = the open-play window's
@@ -181,24 +185,26 @@ export function OverlayMode({
           layer-level control distinct from the per-block eye (T6620). Mirrors the
           Detection label's show/hide-with-slash idiom below. Whole-layer hide is a
           view-only toggle (memory), never persisted. */}
-      <div
-        className={`mt-0.5 lg:mt-1 h-20 flex items-center justify-center border-r border-gray-700/50 transition-colors cursor-pointer ${
-          textLayerHidden ? 'bg-gray-900 hover:bg-gray-800' : 'bg-cyan-900/30 hover:bg-cyan-900/40'
-        }`}
-        title={textLayerHidden ? 'Show text layer' : 'Hide text layer'}
-        aria-pressed={!textLayerHidden}
-        data-testid="text-layer-toggle"
-        onClick={() => onToggleTextLayer && onToggleTextLayer()}
-      >
-        <div className="relative">
-          <Type size={18} className={textLayerHidden ? 'text-gray-500' : 'text-cyan-300'} />
-          {textLayerHidden && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-6 h-0.5 bg-red-500 rotate-45 transform origin-center" />
-            </div>
-          )}
+      {showTextLane && (
+        <div
+          className={`mt-0.5 lg:mt-1 h-20 flex items-center justify-center border-r border-gray-700/50 transition-colors cursor-pointer ${
+            textLayerHidden ? 'bg-gray-900 hover:bg-gray-800' : 'bg-cyan-900/30 hover:bg-cyan-900/40'
+          }`}
+          title={textLayerHidden ? 'Show text layer' : 'Hide text layer'}
+          aria-pressed={!textLayerHidden}
+          data-testid="text-layer-toggle"
+          onClick={() => onToggleTextLayer && onToggleTextLayer()}
+        >
+          <div className="relative">
+            <Type size={18} className={textLayerHidden ? 'text-gray-500' : 'text-cyan-300'} />
+            {textLayerHidden && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-6 h-0.5 bg-red-500 rotate-45 transform origin-center" />
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Detection Marker Layer Label (only if detection data exists) */}
       {hasDetectionData && (
@@ -283,23 +289,25 @@ export function OverlayMode({
                 ONLY -- add/remove/settings live in the Text tab (OverlayModeView).
                 T6630 round 4: one block per REGION (a time span that can contain
                 multiple elements); the lane's addressable unit is the region. */}
-            <div className="mt-0.5 lg:mt-1">
-              <TextLayer
-                regions={textOverlays}
-                duration={duration}
-                visualDuration={visualDuration || duration}
-                clipBoundaries={clipBoundaries}
-                selectedRegionId={selectedRegionId}
-                onAddRegion={onAddTextRegion}
-                onMoveTextStart={onMoveTextStart}
-                onMoveTextEnd={onMoveTextEnd}
-                onMoveTextBody={onMoveTextBody}
-                onSelectRegion={onSelectRegion}
-                onDeleteTextRegion={onDeleteTextRegion}
-                visualTimeToSourceTime={visualTimeToSourceTime}
-                edgePadding={EDGE_PADDING}
-              />
-            </div>
+            {showTextLane && (
+              <div className="mt-0.5 lg:mt-1">
+                <TextLayer
+                  regions={textOverlays}
+                  duration={duration}
+                  visualDuration={visualDuration || duration}
+                  clipBoundaries={clipBoundaries}
+                  selectedRegionId={selectedRegionId}
+                  onAddRegion={onAddTextRegion}
+                  onMoveTextStart={onMoveTextStart}
+                  onMoveTextEnd={onMoveTextEnd}
+                  onMoveTextBody={onMoveTextBody}
+                  onSelectRegion={onSelectRegion}
+                  onDeleteTextRegion={onDeleteTextRegion}
+                  visualTimeToSourceTime={visualTimeToSourceTime}
+                  edgePadding={EDGE_PADDING}
+                />
+              </div>
+            )}
 
             {/* Detection Marker Layer (only if detection data exists) */}
             {hasDetectionData && (
