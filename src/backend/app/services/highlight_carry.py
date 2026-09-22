@@ -60,6 +60,12 @@ NOTE_LEGACY_UNCERTAIN = "legacy_uncertain"
 SNAPSHOT_FRAMERATE = 30.0
 
 
+def _has_user_geometry(prior_highlights: list[dict] | None) -> bool:
+    """True when at least one prior region has a keyframe, i.e. the user placed
+    a spotlight. Seeded-but-untouched regions (empty `keyframes`) do not count."""
+    return any(r.get("keyframes") for r in (prior_highlights or []))
+
+
 def resolve_carried_highlights(
     *,
     prior_highlights: list[dict] | None,
@@ -80,7 +86,17 @@ def resolve_carried_highlights(
     # Rule 1: no prior user highlights -> this is (effectively) a first export;
     # seed from fresh detection. Checked FIRST so an empty list never falls into
     # the legacy/transform branches.
-    if not prior_highlights:
+    #
+    # T11000: "user highlights" means regions with at least one keyframe. A
+    # detection-seeded region has `keyframes: []` until the user clicks a player
+    # box, and `transform_highlight_region_to_raw` returns None for any region
+    # without keyframes -- so before this rule a re-export made BEFORE the user
+    # picked a player dropped every seeded region ("dropped:N"), refused to
+    # re-seed from the detection that had just run, and left the Spotlight
+    # editor with zero regions and no tracking markers (prod, 2026-09-21). A
+    # keyframe-less region carries no user geometry, so there is nothing for
+    # detection to overwrite (T4350 design Q5 still holds for placed regions).
+    if not _has_user_geometry(prior_highlights):
         return detected_regions, None
 
     # Rule 2: framing unchanged -> the old times/geometry are already correct in
