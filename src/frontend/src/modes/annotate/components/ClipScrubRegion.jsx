@@ -116,7 +116,18 @@ export function ClipScrubRegion({
       ? (existingClip.startTime + existingClip.endTime) / 2
       : currentTime;
   }
-  const anchor = anchorRef.current;
+  // T10960: while EDITING, the anchor follows the LIVE clip midpoint -- the same
+  // snapshot `editHalfWindow` (below) is derived from. `existingClip` is a new
+  // object after every committed trim (T10410), so the half-window already
+  // re-zoomed to the SAVED clip after a drag; a per-id frozen anchor then centered
+  // that narrower window on the OLD clip's midpoint, and whichever handle the
+  // user had NOT dragged could land past 100% -- off the track entirely. Both
+  // inputs from one snapshot means the window always frames the saved clip.
+  // Create mode keeps the frozen ref: its anchor is currentTime, which onSeek
+  // moves on every drag step.
+  const anchor = isEditing
+    ? (existingClip.startTime + existingClip.endTime) / 2
+    : anchorRef.current;
   // T8760 item 8: while EDITING, zoom the timeline to (roughly) the clip's own
   // green region — dropping the ±30s game-context window and its 5-second
   // game-clock ticks the user asked to remove. A margin (half the clip length,
@@ -674,6 +685,7 @@ export function ClipScrubRegion({
 
         {/* Start handle */}
         <div
+          data-testid="scrub-start-handle"
           className="absolute top-0 h-full flex items-center"
           style={{ left: `${startPercent}%`, transform: 'translateX(-50%)' }}
         >
@@ -692,6 +704,7 @@ export function ClipScrubRegion({
 
         {/* End handle */}
         <div
+          data-testid="scrub-end-handle"
           className="absolute top-0 h-full flex items-center"
           style={{ left: `${endPercent}%`, transform: 'translateX(-50%)' }}
         >

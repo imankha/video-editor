@@ -458,3 +458,74 @@ describe('ClipScrubRegion clip-scoped loop (T8760)', () => {
     expect(controller.state.time).toBe(300);
   });
 });
+
+/**
+ * T10960 -- after a committed trim, the OTHER handle must stay on the track.
+ *
+ * Prod repro (imankh, 2026-09-21): an 8.2s clip; the user dragged START in to
+ * leave 2.1s and the END lever vanished off the right edge. The edit-mode window
+ * is `anchor +/- editHalfWindow`; the half-window re-derived from the SAVED clip
+ * (a new `existingClip` object after every commit, T10410) while the anchor
+ * stayed frozen at the OLD clip's midpoint, so the narrower window no longer
+ * contained the untouched end. Both inputs must come from the same snapshot.
+ */
+describe('ClipScrubRegion edit window follows the saved clip (T10960)', () => {
+  const handleLeft = (testId) => parseFloat(screen.getByTestId(testId).style.left);
+
+  function Host({ controller, initialClip, trimmedClip }) {
+    const [clip, setClip] = useState(initialClip);
+    return (
+      <>
+        <button onClick={() => setClip(trimmedClip)}>commit</button>
+        <ClipScrubRegion
+          {...baseProps(controller)}
+          existingClip={clip}
+          startTime={clip.startTime}
+          endTime={clip.endTime}
+          currentTime={clip.startTime}
+          videoDuration={3600}
+          clipEditorActive
+        />
+      </>
+    );
+  }
+
+  it('keeps both handles within 0..100% after start is trimmed in and the clip is saved', () => {
+    const controller = makeController(1435);
+    // 23:55.0 -> 24:03.2 (8.2s), then start dragged in to 24:01.1 (2.1s).
+    const initialClip = { id: 'c1', startTime: 1435.0, endTime: 1443.2 };
+    const trimmedClip = { id: 'c1', startTime: 1441.1, endTime: 1443.2 };
+    render(<Host controller={controller} initialClip={initialClip} trimmedClip={trimmedClip} />);
+
+    expect(handleLeft('scrub-start-handle')).toBeGreaterThanOrEqual(0);
+    expect(handleLeft('scrub-end-handle')).toBeLessThanOrEqual(100);
+
+    fireEvent.click(screen.getByText('commit'));
+
+    // The saved 2.1s clip gets a +/-3.05s window centred on ITS midpoint
+    // (1442.15): start at (1441.1-1439.1)/6.1 and end at (1443.2-1439.1)/6.1.
+    const start = handleLeft('scrub-start-handle');
+    const end = handleLeft('scrub-end-handle');
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeLessThanOrEqual(100);
+    expect(start).toBeCloseTo((2 / 6.1) * 100, 1);
+    expect(end).toBeCloseTo((4.1 / 6.1) * 100, 1);
+  });
+
+  it('does NOT re-anchor in CREATE mode (no existingClip): the window stays put across seeks', () => {
+    const controller = makeController(100);
+    function CreateHost() {
+      const [t, setT] = useState(100);
+      return (
+        <>
+          <button onClick={() => setT(120)}>seek</button>
+          <ClipScrubRegion {...baseProps(controller)} currentTime={t} clipEditorActive />
+        </>
+      );
+    }
+    render(<CreateHost />);
+    const before = handleLeft('scrub-start-handle');
+    fireEvent.click(screen.getByText('seek'));
+    expect(handleLeft('scrub-start-handle')).toBe(before);
+  });
+});

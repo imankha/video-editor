@@ -1,6 +1,6 @@
 ---
 domain: annotate
-updated: 2026-09-21 (T10890/T10930 + hotfixes T10900/T10910/T10920, all on master same day.
+updated: 2026-09-21 (T10960 edit-window anchor landmine; T10890/T10930 + hotfixes T10900/T10910/T10920, all on master same day.
 **Timeline zoom is now REAL user state on every viewport (T10930):** `AnnotateModeView` owns
 `useTimelineZoom(isMobile ? 300 : 100)` and hands `{timelineZoom, zoomByWheel, zoomIn, zoomOut,
 resetZoom}` as the `zoom` prop to ALL THREE `AnnotateMode` mount sites (windowed / fullscreen strip /
@@ -970,7 +970,7 @@ editor; it still holds for the sidebar). `clipEditorActive` stays the structural
 `ClipDetailsEditor` (clipEditorActive false) and normal game playback are untouched, and the create-mode
 seed is once-per-open via `seededClipRef` keyed on the clip id or a `'__create__'` sentinel. The
 edit-only zoom-to-green-region still gates on `isEditing` (`clipEditorActive && existingClip`) -- create
-mode keeps the wide +/-30s game-context window. **Click-inside-span seeks (item 8):** a pointerdown+up
+mode keeps the wide +/-30s game-context window. **LANDMINE fixed (T10960, prod 2026-09-21):** the edit window is `anchor +/- editHalfWindow`; BOTH must derive from the same `existingClip` snapshot. `existingClip` is a NEW object after every committed trim (T10410), so the half-window already re-zoomed to the saved clip, but the anchor was frozen per clip id at the OLD midpoint -- trim start in and the untouched end handle rendered at 117% `left`, off the track. Now `anchor = isEditing ? live clip midpoint : anchorRef` (the frozen ref stays for create mode, whose anchor is `currentTime` that `onSeek` moves mid-drag). Don't re-freeze the edit anchor 'for stability': the half-window is live, so the center must be too. Handles carry `data-testid` `scrub-start-handle`/`scrub-end-handle`. **Click-inside-span seeks (item 8):** a pointerdown+up
 (< 4px = a click, not a drag) on the scrub TRACK between the two handles calls `onSeek(clickTime)` and
 moves neither handle; gated on `clipEditorActive` (sidebar unchanged), inside-span only (outside-span is
 today's no-op), handle presses stopPropagation so they never reach the track handler. Track has
