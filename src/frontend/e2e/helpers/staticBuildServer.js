@@ -81,8 +81,18 @@ export function buildTwoBundles({ frontendDir, outDir }) {
   fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(outDir, { recursive: true });
 
+  // `vite build` defaults to --mode production, which loads a developer's local
+  // (gitignored) .env.production and bakes VITE_API_BASE=https://api.reelballers.com
+  // into the fixture bundle -- every /api/version then leaves this origin, is
+  // CORS-blocked, and the gate can never fire (silently red on any machine with that
+  // file). Process env outranks .env files in Vite, so pin the API base to
+  // same-origin: the fixture serves /api/version itself (T10940).
   const build = () =>
-    execSync('npm run build', { cwd: frontendDir, stdio: 'pipe' });
+    execSync('npm run build', {
+      cwd: frontendDir,
+      stdio: 'pipe',
+      env: { ...process.env, VITE_API_BASE: '' },
+    });
 
   // Build A — plain.
   build();

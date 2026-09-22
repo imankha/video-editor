@@ -38,8 +38,8 @@ import { IS_DEPLOYED_TARGET } from './helpers/targetEnv.js';
  * asked for, and gets its own entry point `npm run test:e2e:sw-gate`. It `test.skip`s
  * when E2E_BASE_URL is set (it owns its origin), matching helpers/targetEnv.js.
  *
- * THROTTLE (why reloads, never a lowered constant). `PROBE_MIN_GAP_MS` and
- * `UPDATE_CHECK_MIN_GAP_MS` are 5 min, but `lastProbeAt`/`lastCheckAt` start at 0 on
+ * THROTTLE (why reloads, never a lowered constant). `PROBE_MIN_GAP_MS` (25s, T10940)
+ * and `UPDATE_CHECK_MIN_GAP_MS` (30s, T9360) gate repeats, but `lastProbeAt`/`lastCheckAt` start at 0 on
  * every fresh page load, so a fresh navigation always gets one un-throttled check +
  * probe. The tests drive the gate with reloads and NEVER touch the production throttle
  * (lowering it or adding a test bypass would weaken exactly what T6210 shipped).
@@ -59,11 +59,16 @@ import { IS_DEPLOYED_TARGET } from './helpers/targetEnv.js';
  * "does the modal appear" assertion, now proven via the real end-to-end auto-run +
  * reload instead of a click.
  *
- * DETERMINISM (the on-load-probe poison, and how case 2+4 avoids it). The gate's positive
+ * DETERMINISM (the on-load-probe race, and how case 2+4 avoids it). The gate's positive
  * case has one real race: pwaUpdate's `registration` closure is populated by
- * `onRegisteredSW`, and if the on-load probe fires (server already ahead) BEFORE that,
- * it answers false and sets `lastProbeAt`, throttling the real probe for 5 min. Case 2
- * sidesteps it structurally: during each load the fake `serverBuild` is held BELOW the
+ * `onRegisteredSW` (workbox-window registers only after window `load`), and the on-load
+ * probe (server already ahead) fires well BEFORE that. Until T10940 that probe answered
+ * false against the null registration and set `lastProbeAt`, throttling the real probe
+ * for 5 min -- which is exactly what a prod user hit after a deploy (stale shell, plain
+ * reload still stale, only a hard refresh escaped). Case 5 below is that shape, run for
+ * real; T10940 makes the probe WAIT for the registration and shortens every cooldown
+ * to 30s. Case 2 predates it and still sidesteps the race structurally so it isolates
+ * the auto-run: during each load the fake `serverBuild` is held BELOW the
  * client build, so `checkServerVersion` early-returns and NO probe runs (throttle stays
  * pristine); only AFTER the SW is active + controlling (which is strictly LATER than
  * onRegisteredSW on a first install) is `serverBuild` flipped ahead and a real
@@ -121,6 +126,12 @@ async function waitForSwReady(page) {
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 30_000 });
 }
 
+/** Resolve on the next MAIN-frame navigation (the auto-run's reload). `framenavigated`
+ *  also fires for child frames (sign-in iframe), which would resolve a bare wait early. */
+function waitForMainFrameNavigation(page, timeout) {
+  return page.waitForEvent('framenavigated', { predicate: (frame) => frame === page.mainFrame(), timeout });
+}
+
 /** Snapshot the real SW registration state from the page. */
 async function swState(page) {
   return page.evaluate(async () => {
@@ -165,12 +176,14 @@ test.describe('T6230 update gate — real ServiceWorker', () => {
   let server;
   let dirA;
   let dirB;
+  let markerUrl;
   let origin;
 
   test.beforeAll(async () => {
     const built = buildTwoBundles({ frontendDir: FRONTEND_DIR, outDir: SCRATCH_DIR });
     dirA = built.dirA;
     dirB = built.dirB;
+    markerUrl = built.markerUrl;
     // The whole test rests on B looking like a NEW worker to a browser holding A. If
     // the two sw.js are identical the fixture is a no-op and every "gate appears"
     // assertion would be a false green — fail LOUD here.
@@ -245,7 +258,11 @@ test.describe('T6230 update gate — real ServiceWorker', () => {
       // reporting the waiting bundle (the over-correction this task guards), or if the
       // auto-run regresses, nothing reloads and this case fails RED.
       server.setServerBuild(SERVER_AHEAD);
-      const navigationPromise = page.waitForEvent('framenavigated', { timeout: 30_000 });
+      // Main-frame navigations only (a sign-in iframe also emits framenavigated). The
+      // budget spans the next 30s visible-poll tick: the return-to-app check shares
+      // pwaUpdate's 30s UPDATE_CHECK_MIN_GAP_MS with that tick, so if the tick fired just
+      // before this dispatch the check that finds the server ahead is the NEXT one.
+      const navigationPromise = waitForMainFrameNavigation(page, 90_000);
       await dispatchReturnToApp(page);
       await navigationPromise;
 
@@ -286,6 +303,62 @@ test.describe('T6230 update gate — real ServiceWorker', () => {
         await expect(progressCard(page), `gate must not appear on reload ${i}`).toHaveCount(0);
         expect((await swState(page)).hasWaiting, `nothing waiting on reload ${i}`).toBe(false);
       }
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('case 5 (T10940 PROD REPRO): deploy already landed, user loads the STALE shell -> new bundle lands with no click and no hard refresh', async ({ browser }) => {
+    test.setTimeout(180_000);
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    try {
+      // A is installed and controlling, as on any prod client before the deploy.
+      server.setCurrentDir(dirA);
+      server.setServerBuild(SERVER_BEHIND);
+      await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' });
+      await waitForSwReady(page);
+
+      // The deploy lands: BOTH halves are live before the user does anything.
+      server.setCurrentDir(dirB);
+      server.setServerBuild(SERVER_AHEAD);
+
+      // The user's "went to prod / refreshed": a plain load, which the OLD worker A
+      // serves from its precache -- the stale shell. Nothing is held behind here: the
+      // on-load /api/version answers "ahead" before workbox has registered, which is
+      // the race that used to poison the probe for 5 minutes.
+      const navigatedAt = Date.now();
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      // A controlling worker at DCL can only be A (B cannot control before the
+      // skipWaiting -> controllerchange that IS the reload awaited below). Not the
+      // marker cache: Chromium's ~1s post-navigation soft update can install B's
+      // precache before this evaluate lands on a slow runner.
+      expect(await page.evaluate(() => !!navigator.serviceWorker.controller),
+        'the stale shell is served by the old controlling worker A').toBe(true);
+      // Proves the navigation below is a real document reload, not a same-document
+      // replaceState (framenavigated fires for those too).
+      await page.evaluate(() => { window.__t10940_pre_reload = 1; });
+
+      // No click, no hard refresh, no visibilitychange: the app must land B on its own.
+      // Budget = the unauthenticated cold-boot guard (30s) + install + quiescence retry;
+      // the pre-T10940 lockout was 5 minutes, so a 90s bound fails RED on the old code.
+      // NOTE: because this fixture is logged out, the 30s guard dominates and this case
+      // pins the combined outcome (registration wait + short cooldown); the registration
+      // wait on its own is pinned by pwaUpdate.test.js ("registration settles later").
+      await waitForMainFrameNavigation(page, 90_000);
+      const landedAfterMs = Date.now() - navigatedAt;
+
+      await waitForSwReady(page);
+      expect(await page.evaluate(() => window.__t10940_pre_reload), 'a real document reload happened').toBeUndefined();
+      const state = await swState(page);
+      expect(state.hasActive, 'B is the active SW after the unaided update').toBe(true);
+      expect(state.hasWaiting, 'nothing left waiting once B took over').toBe(false);
+      // B installed its precache (only B ships the marker); together with the reload
+      // and the consumed waiting worker, that is the swap.
+      expect(await page.evaluate(async (u) => !!(await caches.match(u, { ignoreSearch: true })), markerUrl),
+        'B\'s precache (its marker asset) is present').toBe(true);
+      console.log(`[T10940] stale shell -> new bundle landed unaided in ${landedAfterMs}ms`);
+      expect(landedAfterMs).toBeLessThan(90_000);
     } finally {
       await context.close();
     }

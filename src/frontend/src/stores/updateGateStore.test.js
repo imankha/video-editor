@@ -156,7 +156,7 @@ describe('updateGateStore', () => {
       // own unless checkServerVersion re-invokes it.
       __resetProbeStateForTest();
       __setClientBuildForTest(100);
-      setBundleProbe(async () => ({ hasBundle: true, stillInstalling: false }));
+      setBundleProbe(async () => true);
       useExportStore.setState({ activeExports: { 'e1': {} } });
       flushDurableStateMock.mockResolvedValue(undefined);
       const reloader = vi.fn().mockResolvedValue(undefined);

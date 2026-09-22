@@ -41,6 +41,17 @@ const SW_ACTIVATE_TIMEOUT_MS = 3500;
 // hanging the gate decision forever.
 const SW_INSTALL_TIMEOUT_MS = 10 * 1000;
 
+// T10940: workbox-window's register() waits for the window `load` event
+// (`immediate: false`), so on a fresh page load `registration` stays null until every
+// chunk/image has landed -- seconds on this app -- while the on-load GET /api/version
+// answers in ~200ms. After a real deploy the server is ahead on EVERY load of the
+// stale shell, so the on-load probe used to run against a null registration, answer
+// "no bundle", and burn the probe cooldown: the client then sat on the old bundle
+// for the whole cooldown, and a plain reload just repeated the race (only a hard
+// refresh escaped). The probe now awaits the registration, bounded so a page whose
+// `load` never arrives cannot pin `probeInFlight` forever.
+const REGISTRATION_WAIT_MS = 15 * 1000;
+
 // T9360: the visible-tab poll timer (candidate 1). Module-level so a test can stop
 // it between cases and it never leaks across the suite. setupPwaUpdatePrompt runs
 // exactly once in production (main.jsx), so the interval lives for the app's
@@ -124,6 +135,14 @@ export function setupPwaUpdatePrompt() {
   // not depend on it — a dev server (no real SW build) or a slow/failed
   // registration must not silently disable the backend build-number handshake.
   let registration = null;
+  // T10940: settles (with the registration, or null on a failed registration) so
+  // the bundle probe can wait for it instead of answering against `null` during
+  // the on-load race described at REGISTRATION_WAIT_MS.
+  let settleRegistration;
+  const registrationSettled = new Promise((resolve) => { settleRegistration = resolve; });
+  // vite-plugin-pwa calls neither callback when the browser has no ServiceWorker at
+  // all, so settle now rather than make every probe sit out REGISTRATION_WAIT_MS.
+  if (!('serviceWorker' in navigator)) settleRegistration(null);
 
   const updateSW = registerSW({
     // Tbug40p: a newly-installed waiting bundle no longer auto-raises the gate.
@@ -132,6 +151,10 @@ export function setupPwaUpdatePrompt() {
     onNeedRefresh() {},
     onRegisteredSW(_swUrl, reg) {
       registration = reg || null;
+      settleRegistration(registration);
+    },
+    onRegisterError() {
+      settleRegistration(null);
     },
   });
 
@@ -145,7 +168,7 @@ export function setupPwaUpdatePrompt() {
   // must answer YES to before blocking the user. Registered unconditionally at
   // setup; the probe itself returns false when there is no registration yet, so a
   // slow/failed SW registration under-gates (safe) rather than looping (not safe).
-  setBundleProbe(() => probeForWaitingBundle(() => registration));
+  setBundleProbe(() => probeForWaitingBundle(() => registration, registrationSettled));
 
   // A version check, throttled by UPDATE_CHECK_MIN_GAP_MS so the resume trigger
   // (bursty — a flurry of alt-tabs) and the scheduled visible poll coalesce onto a
@@ -264,37 +287,50 @@ async function landLatestBundle(updateSW, getRegistration) {
  * registering itself, not an update. Treating it as one would gate a client that is
  * already running the newest code it can get, i.e. the loop again.
  *
- * T9310 Gap C — the return type is `{ hasBundle, stillInstalling }`, not a bare
- * boolean, so `appVersion.hasNewerBundle` can tell "genuinely nothing waiting" apart
- * from "a worker is mid-install and just missed the SW_INSTALL_TIMEOUT_MS window on a
- * slow connection". The latter deserves a ~30s re-probe, not the full 5-minute
- * cooldown that would otherwise lock the client out of an update it is seconds from.
+ * T10940: a "no" is always provisional -- appVersion re-probes after one short
+ * cooldown (PROBE_MIN_GAP_MS, 30s) -- so this returns a plain boolean again. T9310
+ * Gap C's two-tier `{ hasBundle, stillInstalling }` cooldown is gone with the 5-minute
+ * gap it was shortening.
+ *
+ * @param {() => ServiceWorkerRegistration|null} getRegistration
+ * @param {Promise<ServiceWorkerRegistration|null>} [registrationSettled] resolves once
+ *   registerSW has settled (T10940); awaited, bounded by REGISTRATION_WAIT_MS, when
+ *   getRegistration() is still null so the on-load probe never answers against a
+ *   registration that simply hasn't happened yet.
  */
-export async function probeForWaitingBundle(getRegistration) {
-  const registration = getRegistration?.();
-  // No registration (SW unsupported, private mode, registration still pending or
-  // failed) — cannot prove a newer bundle exists, so do not gate.
-  if (!registration) return { hasBundle: false, stillInstalling: false };
+export async function probeForWaitingBundle(getRegistration, registrationSettled = null) {
+  let registration = getRegistration?.();
+  if (!registration && registrationSettled) {
+    let boundTimer;
+    try {
+      registration = await Promise.race([
+        registrationSettled,
+        new Promise((resolve) => { boundTimer = setTimeout(() => resolve(null), REGISTRATION_WAIT_MS); }),
+      ]);
+    } finally {
+      clearTimeout(boundTimer);
+    }
+  }
+  // No registration (SW unsupported, private mode, registration failed or still
+  // pending past the bound) — cannot prove a newer bundle exists, so do not gate.
+  if (!registration) return false;
 
   try {
     await registration.update();
   } catch {
     // Offline/flaky — unprovable, so "no". Retried after the probe cooldown.
-    return { hasBundle: false, stillInstalling: false };
+    return false;
   }
 
-  if (registration.waiting) return { hasBundle: true, stillInstalling: false };
+  if (registration.waiting) return true;
 
   const installing = registration.installing;
-  if (!installing) return { hasBundle: false, stillInstalling: false }; // no new bytes.
+  if (!installing) return false; // no new bytes.
 
   await waitForInstalledOrTimeout(installing, SW_INSTALL_TIMEOUT_MS);
-  // Re-read after settling: only `waiting` proves a supersede.
-  if (registration.waiting) return { hasBundle: true, stillInstalling: false };
-  // No waiting worker after the bounded wait. If OUR worker is still in the
-  // 'installing' state it simply didn't finish in time (slow install) → Gap C
-  // asks the caller to retry soon rather than sit out the full cooldown.
-  return { hasBundle: false, stillInstalling: installing.state === 'installing' };
+  // Re-read after settling: only `waiting` proves a supersede. A worker still
+  // installing past the bound is caught by the next probe, 30s later.
+  return !!registration.waiting;
 }
 
 /** Resolve once `worker` leaves the 'installing' state, or on timeout. */

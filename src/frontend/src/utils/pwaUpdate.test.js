@@ -326,12 +326,12 @@ describe('evictStaleDevServiceWorker (T6630 round 4)', () => {
 });
 
 /**
- * T9310 Gap C — probeForWaitingBundle now returns { hasBundle, stillInstalling } so
- * appVersion.hasNewerBundle can tell a slow-install miss (retry in ~30s) apart from
- * "genuinely nothing waiting" (full 5-minute cooldown). Tbug41s's `waiting`-only
- * supersede rule is unchanged — a first-ever install still never reports a bundle.
+ * probeForWaitingBundle answers a plain boolean (T10940 dropped T9310 Gap C's
+ * { hasBundle, stillInstalling } two-tier cooldown along with the 5-minute gap).
+ * Tbug41s's `waiting`-only supersede rule is unchanged -- a first-ever install still
+ * never reports a bundle.
  */
-describe('probeForWaitingBundle (Gap C status)', () => {
+describe('probeForWaitingBundle', () => {
   const makeWorker = (state) => {
     const listeners = {};
     return {
@@ -342,26 +342,26 @@ describe('probeForWaitingBundle (Gap C status)', () => {
     };
   };
 
-  it('no registration -> not gating, not installing', async () => {
-    await expect(probeForWaitingBundle(() => null)).resolves.toEqual({ hasBundle: false, stillInstalling: false });
+  it('no registration and nothing to wait for -> not gating', async () => {
+    await expect(probeForWaitingBundle(() => null)).resolves.toBe(false);
   });
 
-  it('a waiting worker -> hasBundle', async () => {
+  it('a waiting worker -> bundle', async () => {
     const reg = { update: vi.fn().mockResolvedValue(undefined), waiting: {}, installing: null };
-    await expect(probeForWaitingBundle(() => reg)).resolves.toEqual({ hasBundle: true, stillInstalling: false });
+    await expect(probeForWaitingBundle(() => reg)).resolves.toBe(true);
   });
 
   it('no waiting and nothing installing (update found no new bytes) -> nothing', async () => {
     const reg = { update: vi.fn().mockResolvedValue(undefined), waiting: null, installing: null };
-    await expect(probeForWaitingBundle(() => reg)).resolves.toEqual({ hasBundle: false, stillInstalling: false });
+    await expect(probeForWaitingBundle(() => reg)).resolves.toBe(false);
   });
 
-  it('registration.update() rejects (offline) -> nothing, not installing', async () => {
+  it('registration.update() rejects (offline) -> nothing', async () => {
     const reg = { update: vi.fn().mockRejectedValue(new Error('offline')), waiting: null, installing: null };
-    await expect(probeForWaitingBundle(() => reg)).resolves.toEqual({ hasBundle: false, stillInstalling: false });
+    await expect(probeForWaitingBundle(() => reg)).resolves.toBe(false);
   });
 
-  it('a slow install that finishes as waiting within the window -> hasBundle', async () => {
+  it('a slow install that finishes as waiting within the window -> bundle', async () => {
     const worker = makeWorker('installing');
     const reg = { update: vi.fn().mockResolvedValue(undefined), waiting: null, installing: worker };
     const pending = probeForWaitingBundle(() => reg);
@@ -369,26 +369,55 @@ describe('probeForWaitingBundle (Gap C status)', () => {
     worker.state = 'installed';
     reg.waiting = {};
     worker.fire();
-    await expect(pending).resolves.toEqual({ hasBundle: true, stillInstalling: false });
+    await expect(pending).resolves.toBe(true);
   });
 
-  it('a slow install still going when the timeout fires -> stillInstalling (Gap C)', async () => {
+  it('a slow install still going when the timeout fires -> nothing (the next poll tick catches it)', async () => {
     vi.useFakeTimers();
     const worker = makeWorker('installing');
     const reg = { update: vi.fn().mockResolvedValue(undefined), waiting: null, installing: worker };
     const pending = probeForWaitingBundle(() => reg);
     await vi.advanceTimersByTimeAsync(10_000); // past SW_INSTALL_TIMEOUT_MS
-    await expect(pending).resolves.toEqual({ hasBundle: false, stillInstalling: true });
+    await expect(pending).resolves.toBe(false);
     vi.useRealTimers();
   });
 
-  it('a worker that settles to a dead end (redundant, nothing waiting) -> nothing, not installing', async () => {
+  it('a worker that settles to a dead end (redundant, nothing waiting) -> nothing', async () => {
     const worker = makeWorker('installing');
     const reg = { update: vi.fn().mockResolvedValue(undefined), waiting: null, installing: worker };
     const pending = probeForWaitingBundle(() => reg);
     await flushMicrotasks();
     worker.state = 'redundant';
     worker.fire();
-    await expect(pending).resolves.toEqual({ hasBundle: false, stillInstalling: false });
+    await expect(pending).resolves.toBe(false);
+  });
+
+  // T10940 -- THE PROD BUG: on a fresh load the on-load /api/version answer arrives
+  // before workbox-window has registered (it waits for window `load`), so the probe
+  // used to run against a null registration and answer "no", burning the cooldown.
+  describe('T10940: waits for a pending registration instead of answering against null', () => {
+    it('registration settles later with a waiting worker -> bundle (the deploy shape)', async () => {
+      let settle;
+      const registrationSettled = new Promise((r) => { settle = r; });
+      const reg = { update: vi.fn().mockResolvedValue(undefined), waiting: {}, installing: null };
+      const pending = probeForWaitingBundle(() => null, registrationSettled);
+      await flushMicrotasks();
+      expect(reg.update).not.toHaveBeenCalled(); // still waiting for the registration
+      settle(reg);
+      await expect(pending).resolves.toBe(true);
+      expect(reg.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('registration settles as null (registerSW failed) -> nothing', async () => {
+      await expect(probeForWaitingBundle(() => null, Promise.resolve(null))).resolves.toBe(false);
+    });
+
+    it('registration never settles within the bound -> nothing, and the probe resolves', async () => {
+      vi.useFakeTimers();
+      const pending = probeForWaitingBundle(() => null, new Promise(() => {}));
+      await vi.advanceTimersByTimeAsync(15_000); // REGISTRATION_WAIT_MS
+      await expect(pending).resolves.toBe(false);
+      vi.useRealTimers();
+    });
   });
 });

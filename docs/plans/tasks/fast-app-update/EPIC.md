@@ -50,7 +50,8 @@ T9310 (STAGING, merged 2026-09-09) shipped:
 - **Gap A**: `isQuiescent` also requires ~5s of input idle, so a reload no longer lands mid-scrub.
 - **Gap B**: a 2s interval re-tests quiescence while an update is pending, so a deferred update
   resumes with no new API traffic.
-- **Gap C**: `probeForWaitingBundle` returns `{ hasBundle, stillInstalling }`; a "no" caused only by
+- **Gap C** (SUBSUMED by T10940, 2026-09-21: the probe returns a boolean again and EVERY "no" re-probes
+  after a single 25s cooldown, so the still-installing special case no longer exists): `probeForWaitingBundle` returned `{ hasBundle, stillInstalling }`; a "no" caused only by
   a slow install re-probes after ~30s instead of the full 5-minute lockout.
 - **Gap D**: explicitly DEFERRED - no auto-retry of `flush-verify`, because a failure there can be a
   genuine CAS refusal and CLAUDE.md forbids blind-retrying a write path. The manual Retry stays.
