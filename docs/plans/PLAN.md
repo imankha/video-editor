@@ -12,6 +12,17 @@ funnel. Impact 5 / Complexity 2 as scoped (audit + ranked candidate list only, n
 likely spawns higher-impact follow-up tasks once locations are prioritized. Left here for triage
 rather than self-inserted into a milestone.
 
+**2026-09-21 addition, unplaced — [T10950](tasks/T10950-spotlight-frame0-detection-boxes-missing.md):
+Spotlight can show zero player-tracking boxes at a clip's opening frame.** Reported live by
+imankh@gmail.com after a Framing export. Player detection samples only 4 points per highlight
+region (first 2s); if the literal first sample whiffs (frame 0 is a known weak frame for vision —
+same reason poster selection avoids it), no boxes render there even though later samples in the
+same region have real detections. Recommended fix is a frontend-only fallback to the nearest
+sample-with-boxes in `OverlayContainer.jsx`. Impact 4 / Complexity 2 — S/M-tier, no implementation
+done yet (user declined to implement this session, filed for later pickup). Related but distinct
+from T10870 (that one messages around a *project-wide* zero-detection fallback; this is a
+*partial*, single-sample miss within an otherwise-successful region).
+
 **2026-09-20 addition, unplaced — [T10790](tasks/T10790-add-footage-attach-422-required-sequence.md):
 "Add footage to game" 422s on every real attempt (live on master since 2026-09-07, not
 dev-specific).** Found incidentally while doing live verification for T10770. Impact 9 / Complexity
