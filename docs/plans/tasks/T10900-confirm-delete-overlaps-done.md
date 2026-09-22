@@ -1,6 +1,6 @@
 # T10900: "Confirm Delete" overlaps Cancel/Done in the desktop clip-editor strip
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-09-21 prod)
 **Impact:** 5
 **Complexity:** 1
 **Created:** 2026-09-21

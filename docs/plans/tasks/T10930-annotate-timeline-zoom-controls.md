@@ -1,6 +1,6 @@
 # T10930: Annotate timeline zoom in/out with a visible control, desktop and mobile
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-09-21 prod)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-21

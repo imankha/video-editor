@@ -1,6 +1,6 @@
 # T10910: Annotate page scrolls down past all the UI
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-09-21 prod)
 **Impact:** 6
 **Complexity:** 1
 **Created:** 2026-09-21

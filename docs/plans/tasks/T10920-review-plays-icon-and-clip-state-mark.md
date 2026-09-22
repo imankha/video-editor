@@ -1,6 +1,6 @@
 # T10920: Review plays: new icon + published/clipped mark on the play banner
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-09-21 prod)
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-21

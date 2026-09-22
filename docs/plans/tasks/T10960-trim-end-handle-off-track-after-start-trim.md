@@ -1,6 +1,6 @@
 # T10960: Trimming one handle in the clip editor threw the other handle off the track
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-09-21 prod)
 **Impact:** 6
 **Complexity:** 1
 **Created:** 2026-09-21

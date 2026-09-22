@@ -1,6 +1,6 @@
 # T10940: Silent app update did not fire; the user had to hard-refresh to get a new build
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-09-21 prod)
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-09-21

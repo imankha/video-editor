@@ -1,6 +1,6 @@
 # T10890: Annotate span-bar readability on long games + playhead nearest-center selection
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-09-21 prod)
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-21
