@@ -73,7 +73,7 @@ const DISC_STATE = {
 // the rated badge once DONE, so the disc shows WHICH rating was given instead
 // of a generic star. Two-character glyphs (!!, !?, ??) run a touch smaller so
 // both characters clear the disc.
-function Disc({ state, size, Icon, glyph }) {
+export function Disc({ state, size, Icon, glyph }) {
   const iconSize = ICON_SIZE[size];
   return (
     <span className={`${DISC_BASE} ${DISC_SIZE[size]} ${DISC_STATE[state]}`}>

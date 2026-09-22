@@ -75,7 +75,6 @@ export function useProjectLoader() {
   const {
     setProjectClips,
     setWorkingVideo,
-    setAspectRatio,
     setLoading,
     updateClipMetadata,
     setClipMetadataCache,
@@ -126,10 +125,6 @@ export function useProjectLoader() {
         method: 'PATCH',
         rbNonDataWrite: true,
       }).catch(e => console.error('[useProjectLoader] Failed to update project state:', e));
-
-      // Set aspect ratio from project
-      const projectAspectRatio = project.aspect_ratio || '9:16';
-      setAspectRatio(projectAspectRatio);
 
       onProgress({ stage: 'clips', message: 'Loading clips...' });
       setLoading(true, 'clips');
@@ -189,7 +184,7 @@ export function useProjectLoader() {
 
       // Store raw clips and metadata cache in projectDataStore
       setClipMetadataCache(metadataCache);
-      setProjectClips({ clips: clipsData, aspectRatio: projectAspectRatio });
+      setProjectClips({ clips: clipsData });
 
       // Calculate clip metadata for overlay mode
       // Use duration from metadata cache for accurate calculations
@@ -214,7 +209,6 @@ export function useProjectLoader() {
           clips: clipsData,
           clipsData,
           projectId,
-          projectAspectRatio,
           targetClipIndex: clipIndex,
           targetClip: targetClipData,
         });
@@ -265,7 +259,6 @@ export function useProjectLoader() {
         selectedClipIndex: Math.min(clipIndex, clipsData.length - 1),
         workingVideo,
         mode: targetMode,
-        aspectRatio: projectAspectRatio,
         clipMetadata: overlayClipMetadata,
       };
     } catch (err) {
@@ -273,7 +266,7 @@ export function useProjectLoader() {
       setLoading(false);
       throw err;
     }
-  }, [resetProjectData, resetFramingStore, resetOverlayStore, resetVideoStore, setProjectClips, setWorkingVideo, setAspectRatio, setLoading, setClipMetadataCache, updateClipMetadata]);
+  }, [resetProjectData, resetFramingStore, resetOverlayStore, resetVideoStore, setProjectClips, setWorkingVideo, setLoading, setClipMetadataCache, updateClipMetadata]);
 
   return { loadProject };
 }

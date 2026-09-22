@@ -92,7 +92,7 @@ describe('projectDataStore.invalidateClips (T6190)', () => {
     await useProjectDataStore.getState().fetchClips(52);
     expect('clipsLoadedAt' in useProjectDataStore.getState()).toBe(false);
 
-    useProjectDataStore.getState().setProjectClips({ clips: [{ id: 2 }], aspectRatio: '9:16' });
+    useProjectDataStore.getState().setProjectClips({ clips: [{ id: 2 }] });
     expect('clipsLoadedAt' in useProjectDataStore.getState()).toBe(false);
   });
 });

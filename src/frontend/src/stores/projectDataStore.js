@@ -43,8 +43,10 @@ export const useProjectDataStore = create((set, get) => ({
   // Working video (if exported) - { file, url, metadata }
   workingVideo: null,
 
-  // Project aspect ratio (global, applies to all clips)
-  aspectRatio: '9:16',
+  // The reel's aspect ratio is NOT held here (T10980): it is projects.aspect_ratio,
+  // read from projectsStore.selectedProject. A second in-memory copy was only
+  // written on the Drafts open path, so Focus entered from Annotate showed the
+  // previous project's ratio in the selector while the crop box drew the real one.
 
   // Global transition settings between clips
   globalTransition: {
@@ -67,8 +69,6 @@ export const useProjectDataStore = create((set, get) => ({
   }),
 
   setSelectedClipId: (selectedClipId) => set({ selectedClipId }),
-
-  setAspectRatio: (aspectRatio) => set({ aspectRatio }),
 
   setGlobalTransition: (globalTransition) => set({ globalTransition }),
 
@@ -115,11 +115,10 @@ export const useProjectDataStore = create((set, get) => ({
   }),
 
   // Batch update for loading project clips
-  setProjectClips: ({ clips, aspectRatio }) => set((state) => ({
+  setProjectClips: ({ clips }) => set({
     clips,
     selectedClipId: clips.length > 0 ? clips[0].id : null,
-    aspectRatio: aspectRatio || state.aspectRatio,
-  })),
+  }),
 
   // ========== API Methods ==========
 
@@ -189,9 +188,9 @@ export const useProjectDataStore = create((set, get) => ({
    *
    * Surgical gesture: POSTs only the new ratio. The backend updates projects.aspect_ratio
    * and re-fits EVERY clip's crop keyframes (center-preserving). On success we refresh the
-   * clip list so the store holds the authoritative re-fit crop_data, and update the runtime
-   * globalAspectRatio used by export. Caller is responsible for refreshing the selected
-   * project (so projectAspectRatio / the crop reticule pick up the new ratio).
+   * clip list so the store holds the authoritative re-fit crop_data. Caller is responsible
+   * for refreshing the selected project: projects.aspect_ratio is the ONLY copy of the ratio
+   * (selector, reticule and export all read it), so nothing updates until that refresh lands.
    */
   changeAspectRatio: async (projectId, newAspectRatio) => {
     if (!projectId) return { success: false };
@@ -209,7 +208,6 @@ export const useProjectDataStore = create((set, get) => ({
         return { success: false, error: err.error || `HTTP ${response.status}` };
       }
       const result = await response.json();
-      set({ aspectRatio: newAspectRatio });
       await get().fetchClips(projectId);
       return result;
     } catch (err) {
@@ -435,7 +433,6 @@ export const useProjectDataStore = create((set, get) => ({
     clipsFetching: false,
     clipsError: null,
     workingVideo: null,
-    aspectRatio: '9:16',
     globalTransition: { type: 'cut', duration: 0.5 },
     clipMetadata: null,
     isLoading: false,
@@ -447,5 +444,4 @@ export const useProjectDataStore = create((set, get) => ({
 export const useProjectClips = () => useProjectDataStore(state => state.clips);
 export const useSelectedClipId = () => useProjectDataStore(state => state.selectedClipId);
 export const useWorkingVideo = () => useProjectDataStore(state => state.workingVideo);
-export const useProjectAspectRatio = () => useProjectDataStore(state => state.aspectRatio);
 export const useGlobalTransition = () => useProjectDataStore(state => state.globalTransition);

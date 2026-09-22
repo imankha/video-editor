@@ -118,7 +118,6 @@ export function FocusContainer({
   selectClip,
   reorderClips,
   updateClipData,
-  setGlobalAspectRatio,
   setGlobalTransition,
   getClipExportData,
 

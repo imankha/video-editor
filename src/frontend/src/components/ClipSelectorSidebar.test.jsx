@@ -112,4 +112,24 @@ describe('ClipSelectorSidebar', () => {
       expect(screen.queryByLabelText('Edited since this reel was made')).toBeNull();
     });
   });
+
+  // T10980: an unframed clip shows the amber "Frame clip" progress badge (the
+  // next action), a framed one the green done disc — same vocabulary as the
+  // Annotate play-progress badges, never a faded gray icon.
+  describe('framing progress badge (T10980)', () => {
+    it('an unframed clip reads "Frame clip" in the undone state', () => {
+      render(<ClipSelectorSidebar {...defaultProps} clips={[makeClip()]} />);
+      const badge = screen.getByTestId('clip-framing-badge');
+      expect(badge.getAttribute('data-state')).toBe('undone');
+      expect(badge.getAttribute('aria-label')).toBe('Frame clip');
+    });
+
+    it('a clip with a crop keyframe reads "Framed" in the done state', () => {
+      const clip = makeClip({ crop_data: [{ frame: 0, x: 0, y: 0, width: 100, height: 100 }] });
+      render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
+      const badge = screen.getByTestId('clip-framing-badge');
+      expect(badge.getAttribute('data-state')).toBe('done');
+      expect(badge.getAttribute('aria-label')).toBe('Framed');
+    });
+  });
 });

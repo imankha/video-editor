@@ -159,7 +159,6 @@ export function FocusScreen({
     selectClip,
     reorderClips,
     updateClipData,
-    setGlobalAspectRatio,
     setGlobalTransition,
     getExportData: getClipExportData,
   } = useClipManager();
@@ -427,7 +426,6 @@ export function FocusScreen({
     selectClip,
     reorderClips,
     updateClipData,
-    setGlobalAspectRatio,
     setGlobalTransition,
     getClipExportData,
     saveFramingEdits: boundSaveFramingEdits,

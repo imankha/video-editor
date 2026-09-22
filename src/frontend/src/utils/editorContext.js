@@ -52,7 +52,7 @@ export function getEditorContext() {
           id: projects.selectedProjectId,
           clipCount: projectData.clips?.length ?? 0,
           selectedClipId: projectData.selectedClipId,
-          aspectRatio: projectData.aspectRatio,
+          aspectRatio: projects.selectedProject?.aspect_ratio,
         }
       : null,
     game: games.selectedGame
