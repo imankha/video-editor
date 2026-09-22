@@ -384,9 +384,14 @@ export function TimelineBase({
     <div className="timeline-container py-0.5 lg:py-4">
       {/* Zoom indicator (timestamps removed - redundant with player timecode).
           T10780: suppressed on mobile Annotate (showZoomBadge=false) where the
-          scale is a fixed constant, not a user-changed state. */}
+          scale is a fixed constant, not a user-changed state. The scroll hint
+          (T10370: only when the host mode actually wired zoom-by-wheel) sits
+          right next to the control it describes, not off at the page bottom. */}
       {timelineZoomControls ? (
-        <div className="flex justify-end mb-0.5 lg:mb-2 pr-2">
+        <div className="flex items-center justify-end gap-2 mb-0.5 lg:mb-2 pr-2">
+          {selectedLayer === 'playhead' && onTimelineZoomByWheel && (
+            <span className="hidden lg:inline text-xs text-gray-500">Scroll to zoom timeline</span>
+          )}
           <TimelineZoomChip
             zoom={timelineZoom}
             onZoomIn={timelineZoomControls.zoomIn}
@@ -395,7 +400,10 @@ export function TimelineBase({
           />
         </div>
       ) : showZoomBadge && timelineZoom > 100 && (
-        <div className="flex justify-end mb-0.5 lg:mb-2 text-xs text-gray-400 pr-2">
+        <div className="flex items-center justify-end gap-2 mb-0.5 lg:mb-2 text-xs text-gray-400 pr-2">
+          {selectedLayer === 'playhead' && onTimelineZoomByWheel && (
+            <span className="hidden lg:inline text-gray-500">Scroll to zoom timeline</span>
+          )}
           <span className="text-blue-400">Zoom: {Math.round(timelineZoom)}%</span>
         </div>
       )}
@@ -512,14 +520,6 @@ export function TimelineBase({
         <MobileScrollbar scrollContainerRef={scrollContainerRef} timelineScale={timelineScale} />
       )}
 
-      {/* Zoom hint when playhead layer is selected — only when the mode actually
-          wired the wheel handler (T10370: Annotate never does, so this always read
-          a dead, misleading "100%" there). */}
-      {selectedLayer === 'playhead' && onTimelineZoomByWheel && (
-        <div className="hidden lg:block mt-1 text-xs text-gray-500 text-center">
-          Scroll to zoom timeline (current: {Math.round(timelineZoom)}%)
-        </div>
-      )}
     </div>
   );
 }

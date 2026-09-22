@@ -23,7 +23,7 @@ describe('TimelineBase zoom hint', () => {
 
   it('shows the hint when onTimelineZoomByWheel is provided (Focus/Overlay)', () => {
     render(<TimelineBase {...baseProps} onTimelineZoomByWheel={() => {}} timelineZoom={150} />);
-    expect(screen.getByText(/Scroll to zoom timeline \(current: 150%\)/)).toBeTruthy();
+    expect(screen.getByText('Scroll to zoom timeline')).toBeTruthy();
   });
 
   it('hides the hint when the playhead layer is not selected, even with the handler wired', () => {
