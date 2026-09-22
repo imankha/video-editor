@@ -1,5 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
-import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, Check, Crop, AlertTriangle } from 'lucide-react';
+import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, Crop, AlertTriangle } from 'lucide-react';
+import { Disc } from '../modes/annotate/components/PlayProgressBadges';
+import { BADGE_STATE } from '../modes/annotate/playProgress';
 import { ClipLibraryModal } from './ClipLibraryModal';
 import { UploadClipModal } from './UploadClipModal';
 import { Button } from './shared/Button';
@@ -10,7 +12,7 @@ import { createGameLookup } from '../utils/gameNameLookup';
 import { clipCropKeyframes, clipSourceDuration } from '../utils/clipSelectors';
 import { getClipDisplayName } from '../utils/clipDisplayName';
 import { isClipStale } from '../utils/reelStaleness';
-import { EDITOR_PANELS } from '../config/displayNames';
+import { ANNOTATE, EDITOR_PANELS } from '../config/displayNames';
 
 /** Check if clip has real user segment edits (speed changes, trims, or splits) */
 function hasUserSegmentEdits(clip) {
@@ -308,17 +310,19 @@ export function ClipSelectorSidebar({
                   </span>
                 )}
 
-                {/* Framing status indicator */}
-                <div
-                  className={`ml-2 flex-shrink-0 ${isFramed ? 'text-green-400' : 'text-gray-600'}`}
-                  title={isFramed ? 'Framed' : `Needs focus — set a ${EDITOR_PANELS.FOCUS_POINT.toLowerCase()}`}
+                {/* Framing progress badge (T10980): the same amber to-do /
+                    green done disc as the Annotate play-progress badges, so an
+                    unframed clip reads as the next action, not a faded icon. */}
+                <span
+                  role="img"
+                  data-testid="clip-framing-badge"
+                  data-state={isFramed ? BADGE_STATE.DONE : BADGE_STATE.UNDONE}
+                  className="ml-2 flex-shrink-0"
+                  title={isFramed ? EDITOR_PANELS.CLIP_FRAMED : EDITOR_PANELS.FRAME_CLIP_HINT}
+                  aria-label={isFramed ? EDITOR_PANELS.CLIP_FRAMED : ANNOTATE.FRAME_CLIP}
                 >
-                  {isFramed ? (
-                    <Check size={16} className="stroke-[3]" />
-                  ) : (
-                    <Crop size={14} />
-                  )}
-                </div>
+                  <Disc state={isFramed ? BADGE_STATE.DONE : BADGE_STATE.UNDONE} size="sm" Icon={Crop} />
+                </span>
 
                 {/* Delete button */}
                 <Button

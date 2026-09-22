@@ -18,10 +18,10 @@ describe('projectDataStore.changeAspectRatio (T3910)', () => {
     mockApiFetch.mockReset();
     const mod = await import('./projectDataStore');
     useProjectDataStore = mod.useProjectDataStore;
-    useProjectDataStore.setState({ clips: [], aspectRatio: '9:16', _clipsInflight: null, selectedClipId: null });
+    useProjectDataStore.setState({ clips: [], _clipsInflight: null, selectedClipId: null });
   });
 
-  it('POSTs the new ratio, updates globalAspectRatio, and refreshes clips', async () => {
+  it('POSTs the new ratio and refreshes clips', async () => {
     const refitClips = [{ id: 1, crop_data: [{ frame: 0, x: 640, y: 360, width: 640, height: 360 }] }];
     mockApiFetch
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true, aspect_ratio: '16:9', updated_clip_count: 1 }) }) // POST
@@ -38,19 +38,18 @@ describe('projectDataStore.changeAspectRatio (T3910)', () => {
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual({ aspect_ratio: '16:9' });
 
-    const state = useProjectDataStore.getState();
-    expect(state.aspectRatio).toBe('16:9');
-    expect(state.clips).toEqual(refitClips); // refreshed from server
+    // T10980: the store holds NO ratio copy; the caller's project refresh carries it.
+    expect(useProjectDataStore.getState().aspectRatio).toBeUndefined();
+    expect(useProjectDataStore.getState().clips).toEqual(refitClips); // refreshed from server
   });
 
-  it('does not change ratio or refetch when the backend rejects the ratio', async () => {
+  it('does not refetch when the backend rejects the ratio', async () => {
     mockApiFetch.mockResolvedValueOnce({ ok: false, status: 400, json: () => Promise.resolve({ error: 'Invalid aspect ratio' }) });
 
     const result = await useProjectDataStore.getState().changeAspectRatio(42, 'banana');
 
     expect(result.success).toBe(false);
     expect(result.error).toBe('Invalid aspect ratio');
-    expect(useProjectDataStore.getState().aspectRatio).toBe('9:16'); // unchanged
     expect(mockApiFetch).toHaveBeenCalledTimes(1); // no fetchClips
   });
 

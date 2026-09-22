@@ -11,7 +11,7 @@
 export { useEditorStore, EDITOR_MODES, SCREENS, getScreenByType, MODE_PATHS, PATH_TO_MODE, APP_SCREENS, resolveEditorScreen } from './editorStore';
 export { useExportStore } from './exportStore';
 export { useVideoStore } from './videoStore';
-export { useProjectDataStore, useProjectClips, useSelectedClipId, useWorkingVideo, useProjectAspectRatio, useGlobalTransition } from './projectDataStore';
+export { useProjectDataStore, useProjectClips, useSelectedClipId, useWorkingVideo, useGlobalTransition } from './projectDataStore';
 export { useFocusStore, useFocusVideoFile, useFocusIncludeAudio, useFocusChangedSinceExport, useRegisterActiveSaveHandler } from './focusStore';
 export { useOverlayStore, useOverlayEffectType, useOverlayIsLoading } from './overlayStore';
 export { useGalleryStore, useGalleryIsOpen, useGalleryCount, useGalleryActions } from './galleryStore';

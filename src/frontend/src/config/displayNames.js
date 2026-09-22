@@ -664,6 +664,10 @@ export const EDITOR_PANELS = {
   // same shape as TRIM_AND_SLOWMO above (user request 2026-09-21).
   TEXT_LANE: 'Text',
   TEXT_LANE_HINT: 'Add a title, name, or caption over the clip.',
+  // T10980 -- the Focus clip rail's framing badge. Undone reuses ANNOTATE.FRAME_CLIP
+  // as its name; these are the done label and the undone hover copy.
+  CLIP_FRAMED: 'Framed',
+  FRAME_CLIP_HINT: 'Not framed yet. Set a focus point on your athlete.',
 };
 
 // T9480 -- single source for the billing-rule copy, verbatim from

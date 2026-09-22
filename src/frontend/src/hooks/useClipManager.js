@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useEffect } from 'react';
-import { useProjectDataStore } from '../stores';
+import { useProjectDataStore, useProjectsStore } from '../stores';
 import { clipCropKeyframes } from '../utils/clipSelectors';
 
 /**
@@ -15,19 +15,20 @@ export function useClipManager() {
   const {
     clips,
     selectedClipId,
-    aspectRatio: globalAspectRatio,
     globalTransition,
     clipMetadataCache,
-    setClips,
     setSelectedClipId,
-    setAspectRatio: setGlobalAspectRatioState,
     setGlobalTransition,
-    addClip: addClipToStore,
     deleteClip: deleteClipFromStore,
     updateClip: updateClipInStore,
     reorderClips: reorderClipsInStore,
-    clearClips: clearAllClips,
   } = useProjectDataStore();
+
+  // T10980: the reel's ratio is projects.aspect_ratio and nothing else. The
+  // selected project is loaded before the editor mounts (App gates on it), so
+  // the fallback only covers the moment before that gate, never a real project.
+  const projectAspectRatio = useProjectsStore(state => state.selectedProject?.aspect_ratio);
+  const globalAspectRatio = projectAspectRatio || '9:16';
 
   /**
    * Get the currently selected clip object, merged with metadata cache
@@ -47,39 +48,6 @@ export function useClipManager() {
       metadata: meta.metadata,
     };
   }, [clips, selectedClipId, clipMetadataCache]);
-
-  /**
-   * Calculate the centered crop rectangle for a given aspect ratio
-   */
-  const calculateCenteredCrop = useCallback((sourceWidth, sourceHeight, aspectRatio) => {
-    if (!sourceWidth || !sourceHeight) {
-      return { x: 0, y: 0, width: 0, height: 0 };
-    }
-
-    const [ratioW, ratioH] = aspectRatio.split(':').map(Number);
-    const targetRatio = ratioW / ratioH;
-    const videoRatio = sourceWidth / sourceHeight;
-
-    let cropWidth, cropHeight;
-
-    if (videoRatio > targetRatio) {
-      cropHeight = sourceHeight;
-      cropWidth = cropHeight * targetRatio;
-    } else {
-      cropWidth = sourceWidth;
-      cropHeight = cropWidth / targetRatio;
-    }
-
-    const x = (sourceWidth - cropWidth) / 2;
-    const y = (sourceHeight - cropHeight) / 2;
-
-    return {
-      x: Math.round(x),
-      y: Math.round(y),
-      width: Math.round(cropWidth),
-      height: Math.round(cropHeight)
-    };
-  }, []);
 
   /**
    * Effect to ensure the first clip is always selected when clips exist
@@ -120,55 +88,6 @@ export function useClipManager() {
   const updateClipData = useCallback((clipId, data) => {
     updateClipInStore(clipId, data);
   }, [updateClipInStore]);
-
-  /**
-   * Update the global aspect ratio.
-   * Preserves relative offsets of crop keyframes for all clips.
-   *
-   * Reads crop_data from raw clip JSON and dimensions from clipMetadataCache.
-   */
-  const setGlobalAspectRatio = useCallback((newAspectRatio) => {
-    const oldAspectRatio = globalAspectRatio;
-
-    setGlobalAspectRatioState(newAspectRatio);
-
-    // Update all clips' crop keyframes preserving offsets
-    setClips(prev => prev.map(clip => {
-      const cropKeyframes = clipCropKeyframes(clip);
-      if (!cropKeyframes || cropKeyframes.length === 0) {
-        return clip;
-      }
-
-      const meta = clipMetadataCache[clip.id];
-      const sourceWidth = meta?.width || 0;
-      const sourceHeight = meta?.height || 0;
-      if (!sourceWidth || !sourceHeight) return clip;
-
-      const oldCenteredCrop = calculateCenteredCrop(sourceWidth, sourceHeight, oldAspectRatio);
-      const newCenteredCrop = calculateCenteredCrop(sourceWidth, sourceHeight, newAspectRatio);
-
-      const newKeyframes = cropKeyframes.map(kf => {
-        const offsetX = kf.x - oldCenteredCrop.x;
-        const offsetY = kf.y - oldCenteredCrop.y;
-
-        let newX = newCenteredCrop.x + offsetX;
-        let newY = newCenteredCrop.y + offsetY;
-
-        newX = Math.max(0, Math.min(newX, sourceWidth - newCenteredCrop.width));
-        newY = Math.max(0, Math.min(newY, sourceHeight - newCenteredCrop.height));
-
-        return {
-          ...kf,
-          x: Math.round(newX),
-          y: Math.round(newY),
-          width: newCenteredCrop.width,
-          height: newCenteredCrop.height
-        };
-      });
-
-      return { ...clip, crop_data: newKeyframes };
-    }));
-  }, [globalAspectRatio, calculateCenteredCrop, setGlobalAspectRatioState, setClips, clipMetadataCache]);
 
   /**
    * Get export data for all clips
@@ -215,14 +134,10 @@ export function useClipManager() {
     selectClip,
     reorderClips,
     updateClipData,
-    setGlobalAspectRatio,
     setGlobalTransition,
 
     // Export
     getExportData,
-
-    // Helpers
-    calculateCenteredCrop,
   };
 }
 
