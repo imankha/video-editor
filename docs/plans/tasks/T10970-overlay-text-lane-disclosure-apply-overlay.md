@@ -1,6 +1,6 @@
 # T10970: Overlay Text lane behind a disclosure; "Export" CTA renamed "Apply Overlay"
 
-**Status:** STAGING (merged to master 2026-09-21)
+**Status:** DONE (deployed 2026-09-21 prod)
 **Impact:** 3
 **Complexity:** 1
 **Created:** 2026-09-21

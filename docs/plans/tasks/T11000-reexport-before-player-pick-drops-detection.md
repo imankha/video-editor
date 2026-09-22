@@ -1,6 +1,6 @@
 # T11000: Framing re-export before picking a player dropped all tracking (0 regions)
 
-**Status:** STAGING (pushed to master 2026-09-21)
+**Status:** DONE (deployed 2026-09-21 prod)
 **Impact:** 8
 **Complexity:** 1
 **Created:** 2026-09-21
