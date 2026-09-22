@@ -1,6 +1,6 @@
 # T10980: Focus clip rail "Frame clip" badge; aspect-ratio selector reads the project, not a stale copy
 
-**Status:** WIP
+**Status:** STAGING (merged to master 2026-09-21)
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-21
