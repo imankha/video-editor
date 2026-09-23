@@ -1,6 +1,6 @@
 # T11020: Spotlight custom color spectrum + eyedropper
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-22
@@ -83,3 +83,17 @@ production, where the real default is `'#FFFFFF'`.
 - [x] User can sample a color from the video frame via an eyedropper (where supported)
 - [x] Existing preset swatches still work; the readout doesn't misreport a custom color as "White"
 - [x] Frontend unit tests pass
+- [x] Live-verified against the dev fixture account (imankh+devfixture@gmail.com, Play 2
+      clip) on localhost:5173: custom swatch + eyedropper render next to the 5 presets;
+      setting a custom color updates the live spotlight preview, the "Spotlight color"
+      readout correctly says "Custom", and exactly ONE `set_highlight_color` POST fires
+      (confirms the 250ms debounce collapsed the native picker's `input`+`change` events
+      into a single write, `{"highlight_color":"#1A9C4B"}`) -- not simulated with mocks,
+      driven through the real running app.
+
+## Not done this session
+- Not merged to master / not on staging. Left on
+  `feature/T11020-spotlight-custom-color-eyedropper` for the user to review and merge.
+- Real-device eyedropper click (opens an OS-native picker, not something Playwright can
+  drive) was not exercised live -- only its DOM wiring (`new window.EyeDropper()`,
+  feature detection, error handling) is covered by unit tests + code review.
