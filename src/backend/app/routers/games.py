@@ -17,7 +17,7 @@ import contextlib
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
@@ -1010,14 +1010,55 @@ def _ensure_game_storage_refs(cursor, game_id, user_id, profile_id, expires_str)
     return inserted
 
 
+GAME_READY_EMAIL_INACTIVITY_DELAY_SECONDS = 3600  # T7670 follow-up: only email a user who never came back on their own
+
+
+async def _send_game_ready_email_if_still_inactive(
+    user_id: str, email: str, game_name: str, game_id: int, profile_id: str, ready_at: datetime,
+) -> None:
+    """Wait GAME_READY_EMAIL_INACTIVITY_DELAY_SECONDS, then send the T7670 email
+    only if the user has NOT been active since the game went ready — sending it
+    to someone already back in the app would be redundant. Checks Postgres
+    user_segments.last_active_at (the live activity source, not the per-user
+    SQLite mirror which only backfills once) right before sending.
+    """
+    from app.services.email import send_game_ready_email
+
+    await asyncio.sleep(GAME_READY_EMAIL_INACTIVITY_DELAY_SECONDS)
+
+    try:
+        from app.services.pg import get_pg
+
+        with get_pg() as pg:
+            cur = pg.cursor()
+            cur.execute(
+                "SELECT last_active_at FROM user_segments WHERE user_id = %s",
+                (user_id,),
+            )
+            row = cur.fetchone()
+        last_active_at = row["last_active_at"] if row else None
+        if last_active_at and last_active_at > ready_at:
+            logger.debug(
+                f"[game_ready_email] skipped game {game_id}: user active at "
+                f"{last_active_at.isoformat()} since ready_at {ready_at.isoformat()}"
+            )
+            return
+    except Exception as e:
+        # Can't confirm activity -- fall back to sending rather than silently
+        # dropping the notification (best-effort, external dependency).
+        logger.warning(f"[game_ready_email] activity check failed for game {game_id}, sending anyway: {e}")
+
+    await send_game_ready_email(email, game_name, game_id, profile_id)
+
+
 def _maybe_send_game_ready_email(game_id: int, game_name: str) -> None:
-    """Fire the T7670 upload-complete return-trigger email, best-effort.
+    """Schedule the T7670 upload-complete return-trigger email, best-effort.
 
     All eligibility checks run SYNCHRONOUSLY here in request context (where the
-    impersonator contextvar and the user's user.sqlite are available), then only
-    the network send is handed to a fire-and-forget background task. Any failure
-    is swallowed — a game activation must never fail because an email couldn't
-    be sent. Skips:
+    impersonator contextvar and the user's user.sqlite are available), then the
+    delayed inactivity check + network send is handed to a fire-and-forget
+    background task. Any failure is swallowed — a game activation must never
+    fail because an email couldn't be sent. Skips:
       - impersonation: an admin activating a user's game must not email them
         (mirrors record_milestone's T1515 guard);
       - opt-out: the user turned off notification emails;
@@ -1025,7 +1066,6 @@ def _maybe_send_game_ready_email(game_id: int, game_name: str) -> None:
     """
     try:
         from app.services.auth_db import get_user_by_id
-        from app.services.email import send_game_ready_email
         from app.services.poster_warmer import fire_and_forget
         from app.services.user_db import get_notification_email_optout
         from app.user_context import get_current_impersonator_id
@@ -1046,7 +1086,11 @@ def _maybe_send_game_ready_email(game_id: int, game_name: str) -> None:
             return
 
         profile_id = get_current_profile_id()
-        fire_and_forget(send_game_ready_email(email, game_name, game_id, profile_id))
+        fire_and_forget(
+            _send_game_ready_email_if_still_inactive(
+                user_id, email, game_name, game_id, profile_id, datetime.now(UTC),
+            )
+        )
     except Exception as e:
         # Never let the return-trigger email break an activation.
         logger.warning(f"[game_ready_email] failed to schedule for game {game_id}: {e}")

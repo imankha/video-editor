@@ -9,14 +9,28 @@ Models test_game_activate_consistency.py: a real profile DB via ensure_database,
 externalities stubbed. Postgres writes are conftest no-ops.
 """
 
+import asyncio
 import sqlite3
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 USER_ID = "test-user-t7670"
 PROFILE_ID = "testdefault"
 HASH = "b" * 64
+
+
+def _pg_stub(last_active_at=None):
+    """Patch app.services.pg.get_pg to hand back a fake user_segments row."""
+    cur = MagicMock()
+    cur.fetchone.return_value = {"last_active_at": last_active_at}
+    conn = MagicMock()
+    conn.cursor.return_value = cur
+    ctx = MagicMock()
+    ctx.__enter__.return_value = conn
+    ctx.__exit__.return_value = False
+    return patch("app.services.pg.get_pg", return_value=ctx)
 
 
 @pytest.fixture()
@@ -111,9 +125,9 @@ async def test_no_email_when_activation_fails(profile_db):
     with patch.object(games_router, "_validate_video_in_r2", return_value=None), \
          patch.object(games_router, "insert_game_storage_ref", return_value=None), \
          patch.object(games_router, "deduct_credits", return_value={"success": False, "balance": 0}), \
-         patch.object(games_router, "_maybe_send_game_ready_email") as spy:
-        with pytest.raises(HTTPException):
-            await games_router.activate_game(game_id)
+         patch.object(games_router, "_maybe_send_game_ready_email") as spy, \
+         pytest.raises(HTTPException):
+        await games_router.activate_game(game_id)
 
     # Status never flipped -> trigger unreached, no false "ready" email.
     assert spy.call_count == 0
@@ -125,12 +139,18 @@ async def test_no_email_when_activation_fails(profile_db):
 async def test_activation_end_to_end_emits_dev_mode_email(profile_db, monkeypatch, caplog):
     """QA: drive activate_game through the REAL _maybe_send_game_ready_email and
     the REAL send_game_ready_email with RESEND_API_KEY unset. Proves the whole
-    chain fires exactly one dev-mode send carrying the deep link, end to end."""
+    chain fires exactly one dev-mode send carrying the deep link, end to end.
+
+    Inactivity delay collapsed to 0 and the Postgres activity check stubbed to
+    "never active" so the fire-and-forget task sends immediately -- the delay
+    itself is covered separately in the inactivity-gating tests below.
+    """
     import logging
 
     monkeypatch.delenv("RESEND_API_KEY", raising=False)
     from app.routers import games as games_router
 
+    monkeypatch.setattr(games_router, "GAME_READY_EMAIL_INACTIVITY_DELAY_SECONDS", 0)
     game_id = _seed_game(profile_db, status="pending", name="Lions vs Hawks")
 
     s1, s2, s3 = _activate_stubs(games_router)
@@ -138,6 +158,7 @@ async def test_activation_end_to_end_emits_dev_mode_email(profile_db, monkeypatc
          patch("app.user_context.get_current_impersonator_id", return_value=None), \
          patch("app.services.user_db.get_notification_email_optout", return_value=False), \
          patch("app.services.auth_db.get_user_by_id", return_value={"email": "parent@example.com"}), \
+         patch("app.services.pg.get_pg", side_effect=Exception("no pg in this test")), \
          caplog.at_level(logging.WARNING, logger="app.services.email"):
         result = await games_router.activate_game(game_id)
         # Let the fire-and-forget send task run.
@@ -169,18 +190,26 @@ def _guard_patches(*, impersonator=None, opted_out=False, email="p@x.com"):
     )
 
 
-def test_helper_sends_for_eligible_user():
-    from app.user_context import set_current_user_id
+@pytest.mark.asyncio
+async def test_helper_sends_for_eligible_user(monkeypatch):
+    """End to end through the REAL fire_and_forget + inactivity check (delay
+    collapsed to 0, user stubbed as never active) -- proves the helper still
+    reaches send_game_ready_email for an eligible, inactive user."""
     from app.profile_context import set_current_profile_id
+    from app.routers import games as games_router
+    from app.user_context import set_current_user_id
     set_current_user_id(USER_ID)
     set_current_profile_id(PROFILE_ID)
+    monkeypatch.setattr(games_router, "GAME_READY_EMAIL_INACTIVITY_DELAY_SECONDS", 0)
 
-    imp, opt, usr, send, faf = _guard_patches(email="parent@example.com")
-    with imp, opt, usr, send as send_mock, faf as faf_mock:
+    imp, opt, usr, _send, _faf = _guard_patches(email="parent@example.com")
+    with imp, opt, usr, \
+         patch("app.services.email.send_game_ready_email", AsyncMock()) as send_mock, \
+         _pg_stub(last_active_at=None):
         _run_helper(game_id=42, game_name="Lions vs Hawks")
+        await asyncio.sleep(0.05)
 
     send_mock.assert_called_once_with("parent@example.com", "Lions vs Hawks", 42, PROFILE_ID)
-    faf_mock.assert_called_once()
 
 
 def test_helper_skips_during_impersonation():
@@ -211,6 +240,53 @@ def test_helper_skips_when_no_email():
     with imp, opt, usr, send as send_mock, faf:
         _run_helper()
     send_mock.assert_not_called()
+
+
+# ---- inactivity gating (user must NOT have come back on their own) ----------
+
+@pytest.mark.asyncio
+async def test_inactivity_check_sends_when_user_never_returned(monkeypatch):
+    from app.routers import games as games_router
+    monkeypatch.setattr(games_router, "GAME_READY_EMAIL_INACTIVITY_DELAY_SECONDS", 0)
+
+    ready_at = datetime.now(UTC)
+    with patch("app.services.email.send_game_ready_email", AsyncMock()) as send_mock, \
+         _pg_stub(last_active_at=None):
+        await games_router._send_game_ready_email_if_still_inactive(
+            USER_ID, "parent@example.com", "Lions vs Hawks", 42, PROFILE_ID, ready_at,
+        )
+    send_mock.assert_called_once_with("parent@example.com", "Lions vs Hawks", 42, PROFILE_ID)
+
+
+@pytest.mark.asyncio
+async def test_inactivity_check_skips_when_user_already_returned(monkeypatch):
+    from app.routers import games as games_router
+    monkeypatch.setattr(games_router, "GAME_READY_EMAIL_INACTIVITY_DELAY_SECONDS", 0)
+
+    ready_at = datetime.now(UTC)
+    returned_at = ready_at + timedelta(minutes=10)
+    with patch("app.services.email.send_game_ready_email", AsyncMock()) as send_mock, \
+         _pg_stub(last_active_at=returned_at):
+        await games_router._send_game_ready_email_if_still_inactive(
+            USER_ID, "parent@example.com", "Lions vs Hawks", 42, PROFILE_ID, ready_at,
+        )
+    send_mock.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_inactivity_check_sends_when_activity_lookup_fails(monkeypatch):
+    """Best-effort: an unreadable Postgres activity check must not silently
+    drop the notification -- fall back to sending."""
+    from app.routers import games as games_router
+    monkeypatch.setattr(games_router, "GAME_READY_EMAIL_INACTIVITY_DELAY_SECONDS", 0)
+
+    ready_at = datetime.now(UTC)
+    with patch("app.services.email.send_game_ready_email", AsyncMock()) as send_mock, \
+         patch("app.services.pg.get_pg", side_effect=Exception("pg unavailable")):
+        await games_router._send_game_ready_email_if_still_inactive(
+            USER_ID, "parent@example.com", "Lions vs Hawks", 42, PROFILE_ID, ready_at,
+        )
+    send_mock.assert_called_once()
 
 
 # ---- email builder + deep link ----------------------------------------------
