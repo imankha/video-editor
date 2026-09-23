@@ -2,9 +2,9 @@
 
 ## Agent
 
-**Spawn the Implementor agent** to write code:
+**Use the tier-selected implementation path.** S/M normally implement in the driver/worker; use the Implementor for an approved, scoped specification:
 ```
-Task tool with subagent_type: general-purpose
+Agent tool with subagent_type: implementor
 See: .claude/agents/implementor.md
 ```
 
@@ -20,7 +20,7 @@ Execute the approved design. Focus on **implementation quality**: clean code, no
 
 ### When to Delegate
 
-- **4+ source files** in the approved plan → use subagent fan-out
+- **L tier with 4+ independent source files** in the approved plan → use scoped fan-out when useful
 - **1-3 files** → main agent can edit directly (not worth the overhead)
 
 ### Step 1: Dependency Analysis
@@ -56,13 +56,13 @@ API Contract — projectDataStore.js:
 
 ### Step 3: Fan-Out Phase (Parallel Subagents)
 
-Spawn parallel `general-purpose` subagents for consumer files. Rules:
+Spawn parallel `implementor` agents for file-disjoint consumer slices. Rules:
 
 - **Group related files** — a Screen + its Container in one subagent, or 2-3 independent components
 - **Max 3-4 subagents** — diminishing returns beyond that
 - **Each subagent gets:**
   1. Task ID + title (context)
-  2. The plan section for ITS files only (copy from design doc)
+  2. The design document path and section names for ITS files only
   3. API contracts from foundation files (signatures, NOT full source)
   4. Pointer to `.claude/references/coding-standards.md` (single source of truth — instruct the subagent to read it before editing)
   5. Instruction: "Read then edit ONLY your assigned files"
@@ -73,7 +73,7 @@ Spawn parallel `general-purpose` subagents for consumer files. Rules:
 After all consumer subagents complete:
 - Main agent handles file deletions and index.js updates (small, mechanical)
 - Spawn one subagent for test file updates (if needed)
-- Main agent runs `npx vitest related --run {changed files}` + `npm run build` (full suite is Branch CI's job)
+- Main agent names and runs the curated test files + `npm run build` (full suite is Branch CI's job)
 - Main agent fixes any failures (or delegates targeted fixes)
 
 ### What Stays in Main Context
@@ -109,10 +109,10 @@ Tests (1 subagent):
   ClipSelectorSidebar.test.jsx + ExportButtonContainer.test.js
 
 Verify (main agent):
-  npx vitest related --run {changed files} && npm run build
+  npx vitest run <named-test-files> && npm run build
 ```
 
-Context saved: ~60% less file content in main agent.
+This reduces duplicated context; measure actual savings rather than assuming a fixed percentage.
 
 ---
 
@@ -149,7 +149,7 @@ A bug smell is when the "obvious fix" requires:
 - Comparing two things that "should" be the same
 - Adding defensive code for "impossible" states
 
-**If your fix involves keeping two things in sync, you have two sources of truth. That's the real bug.**
+A second writable copy of internal state is a warning sign. Legitimate persistence protocols (CAS, restore-if-newer) still require synchronization; trace ownership before diagnosing duplication.
 
 ### Common Bug Smells
 
@@ -163,50 +163,13 @@ A bug smell is when the "obvious fix" requires:
 
 ### Correct Response to Bug Smells
 
-**DON'T** implement a bandaid fix (sync checks, cache invalidation, refresh calls).
-
-**DO** pause and present options to the user:
-
-```markdown
-## Architecture Issue Detected
-
-The bug symptom is [X], but the root cause is [architectural problem].
-
-**Bandaid fix:** Add sync check between Store A and Store B
-- Pro: Quick, minimal changes
-- Con: Treats symptom, not cause; will have similar bugs
-
-**Proper fix:** Eliminate Store B, derive from Store A
-- Pro: Single source of truth, no sync issues
-- Con: Requires refactoring [list affected files]
-
-**Middle ground:** Make Store B subscribe to Store A
-- Pro: Auto-sync, moderate effort
-- Con: Still two stores, but coupled
-
-Which approach do you prefer?
-```
-
-### Example: Stale Data Bug
-
-**Bug:** "After switching modes, component shows old data"
-
-**Bandaid fix (WRONG):**
-```javascript
-// Check if data matches and reload if not
-if (storeA.id !== storeB.id) {
-  reloadFromStoreA();
-}
-```
-
-**Proper fix (RIGHT):**
-```javascript
-// Eliminate storeB, derive from storeA
-const derivedData = useMemo(() =>
-  transformForUI(storeA.data),
-  [storeA.data]
-);
-```
+Ask the expert to establish the mechanism with code and a failing reproduction.
+Trace which state owns the data, which operation produced the stale copy, and which
+consumer observes it. Propose the smallest fix to that mechanism. Synchronization,
+cache invalidation, and refresh operations are valid when the architecture requires
+them; do not label them wrong merely by name. If duplicate writable state is proven,
+remove or correctly scope it. Use the design gate for material architecture changes;
+ask the user only when viable alternatives have unresolved product tradeoffs.
 
 ### When It's NOT a Bug Smell
 
@@ -224,13 +187,13 @@ These don't indicate architectural problems—just fix them.
 ## Implementation Checklist
 
 Before writing code, verify:
-- [ ] Design document approved (Stage 2)
-- [ ] Failing tests created (Stage 3)
+- [ ] Tier-selected plan ready; design document approved if required (Stage 2)
+- [ ] Regression/test-first evidence ready where applicable (Stage 3 for L)
 - [ ] Understand the pseudo code from design doc
 - [ ] **Check for bug smells** - is this a symptom of a deeper issue?
 
 While writing code:
-- [ ] Follow the approved design exactly
+- [ ] Preserve approved behavior and invariants; report substantive design errors
 - [ ] No state duplication - derive values
 - [ ] Use existing utilities (identified by Architect)
 - [ ] Follow MVC pattern (Screen → Container → View)
@@ -315,9 +278,9 @@ from app.services.export_helpers import (
 
 ## Git Workflow
 
-- **Never commit to master** - Only user commits after testing
+- **Implementation stays on the task branch** - The supervisor owns landing and any authorized status-only bookkeeping on master
 - **Commit when you add value** - Don't wait for manual testing
-- **Never commit broken code** - Run relevant tests first
+- **Implementation commits require relevant verification** - Explicit test-first commits may contain intentional, documented failing tests; incomplete work is never represented as verified
 
 ---
 
@@ -339,4 +302,4 @@ from app.services.export_helpers import (
 
 ## After Implementation Complete
 
-Proceed to [5-automated-testing.md](5-automated-testing.md) to run tests.
+Run initial targeted checks, then migration if needed and Stage 4.5 review. After review fixes, [5-automated-testing.md](5-automated-testing.md) verifies the final state. M follows its shorter test-then-review path.

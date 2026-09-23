@@ -2,9 +2,10 @@
 name: spawn-worker
 description: "Supervisor-side subroutine: spin up ONE permission-free container worker for a task and drive it to a pushed branch via the status-file contract (no polling turns). Not a user command — /dotask (or any supervisor flow the user approved) invokes this per task, respecting the WIP limit of 4 (all pairs file-disjoint, quota fresh)."
 license: MIT
-author: video-editor
-version: 2.0.0
-user_invocable: false
+user-invocable: false
+metadata:
+  author: video-editor
+  version: 2.0.0
 ---
 
 # spawn-worker (supervisor subroutine)
@@ -109,24 +110,23 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    - **Resume rules (`-c` vs fresh — the re-context tax is real):** `-c` re-uses the session
      but after the prompt cache expires (~1h idle) it RE-WRITES the entire conversation as
      cache-creation tokens (~the full context, 100-400k). So: continue with
-     `bash scripts/task.sh drive <SLUG> -c "<next instruction>"` only when the last worker
+     `bash scripts/task.sh drive <SLUG> -c <MODEL_FLAGS> "<next instruction>"` only when the last worker
      activity was recent (status-file timestamp < ~1h old). Otherwise send a FRESH dispatch
-     seeded from files: `bash scripts/task.sh drive <SLUG> "Read /workspace/.dotask-kickoff.md
+     seeded from files: `bash scripts/task.sh drive <SLUG> <MODEL_FLAGS> "Read /workspace/.dotask-kickoff.md
      and /workspace/.dotask-status. Branch <branch> has commits through <sha>. Continue from
      the last STAGE_DONE line."` (~5k tokens vs ~400k.) `-c` is per-container-safe (own
      ~/.claude volume); pre-fix shared-volume containers always get the fresh-seed form.
    - **Worker turn budget ~300:** a worker grinding past ~300 turns without PUSHREADY is a
      signal (mis-tiered task, stuck loop), not normal. Stop it, read the status file, and
      either re-scope or resume fresh from the checkpoint — don't let it run to quota death.
-   - Workers share the user's subscription quota. On "session limit" output: write the time
+   - Workers share the user's subscription quota. Cache-expiry thresholds below are operational heuristics, not guaranteed provider behavior. On "session limit" output: write the time
      down, wait for the reset, then resume via the fresh-seed form (the cache is dead by then
      — never `-c` across a quota gap).
    - **Relay gates to the user**: a BLOCKED status line surfaces the question in the
      supervisor chat; get the answer, pass it down (recent cache: `-c`; else fresh-seed).
-   - The clone carries `.claude/settings.json`, so the eslint/ruff PostToolUse hook runs
-     inside the container too — the worker gets lint feedback automatically.
+   - Bootstrap recreates the hooks configuration when absent (`.claude/settings.json` is gitignored). The hook is best-effort feedback; verify lint explicitly rather than interpreting silence as success.
 
-4. **QA phase (MANDATORY — never push without it):** implementation done is not task done.
+4. **QA phase (MANDATORY — never push without applicable verification):** implementation done is not task done. Documentation/tooling-only work uses direct consistency or tool checks; live application/E2E checks below apply when user flows change.
    The worker must close the feedback loop with evidence, not claims:
    - **Drive the feature live**: exercise the changed flow end-to-end in the running app as a
      real user (`bash scripts/dev-verify.sh e2e/<spec>` — see
@@ -140,8 +140,7 @@ generated the kickoff, and checked file-ownership against other live workers. `S
      lives in (the changed files + what directly consumes them, from the knowledge doc), then
      NAME the set before running it — typically the tests written for this feature plus the
      existing regression tests guarding that corner, plus the one e2e spec for the changed
-     flow. `npx vitest related --run <changed sources>` is a CANDIDATE FINDER, not a run
-     list — curate its output down to the relevant set. More complexity = a bigger relevant
+     flow. Discover candidates from imports and existing coverage, curate, then execute named test files. More complexity = a bigger relevant
      set, chosen deliberately; NEVER a full suite, never a whole layer's tests, never "run
      everything to be safe" — the Branch CI verdict in step 5 IS the full sweep, and Master
      CI re-runs it on merge. The status line names the set: `STAGE_DONE tests "9 relevant:
@@ -163,15 +162,14 @@ generated the kickoff, and checked file-ownership against other live workers. `S
      pytest fixture (seed N rows, assert statement count stays flat; see
      tests/test_query_counter.py); frontend — assert a sane timing budget in the e2e spec
      (e.g. changed screen interactive < 3s on the local stack).
-   - **Pre-existing failures**: compare against docs/testing/known-failures.md instead of
-     re-proving them; a NEW failure not on that list is yours to fix or explain.
+   - **Pre-existing failures**: use docs/testing/known-failures.md as a lead, then substantiate the same failure on the unchanged baseline. Without current evidence, report attribution as unverified; never call a failing run green.
    QA is the single largest token sink in a task (live-driving Playwright, screenshots, full
    test matrix) and is almost entirely spec-following — the acceptance criteria are the spec.
    **Run it on Sonnet at `medium` effort regardless of tier.** If the first `claude -p` run
    finished without this, the supervisor sends a continuation:
-   `claude -p -c --model sonnet --effort medium "QA phase per kickoff: drive the feature live,
+   `bash scripts/task.sh drive <SLUG> -c --model sonnet --effort medium "QA phase per kickoff: drive the changed feature live,
    complete the test matrix, map every acceptance criterion to evidence. Report the evidence."`
-   Fallback if the worker is blocked: supervisor runs `bash scripts/task.sh test <SLUG>`.
+   Apply the resume-age rule above; stale sessions start fresh with explicit model flags and file-based context. Fallback if the worker is blocked: supervisor runs `bash scripts/task.sh test <SLUG>`.
 
 5. **Push, then merge if provably verified (else hand off for user test):** once
    implementation done + QA evidence per criterion + tests green + knowledge doc(s) updated
@@ -182,22 +180,27 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    **Mandatory CI-verdict step (do NOT skip):** after the push, fetch the Branch CI result
    before reporting the branch ready:
    ```
-   # Poll until the run appears (the webhook can lag a few seconds after push)
+   # Resolve the pushed task branch SHA in its own checkout, not the supervisor HEAD.
+   # Supply that value as EXPECTED_HEAD; never select merely the latest branch run.
+   EXPECTED_HEAD=<pushed-task-head-sha>
    for i in 1 2 3 4 5; do
-     RESULT=$(gh run list --workflow "Branch CI" --branch <branch> --limit 1 \
-               --json databaseId,status,conclusion)
+     RESULT=$(gh run list --workflow "Branch CI" --branch <branch> \
+               --limit 20 --json databaseId,headSha,status,conclusion | \
+               jq --arg sha "$EXPECTED_HEAD" '[.[] | select(.headSha == $sha)]')
      [ "$(echo "$RESULT" | jq 'length')" -gt 0 ] && break
      sleep 10
    done
-   RUN_ID=$(echo "$RESULT" | jq -r '.[0].databaseId')
-   # Wait for completion, exit non-zero on failure
+   RUN_ID=$(echo "$RESULT" | jq -r --arg sha "$EXPECTED_HEAD" '[.[] | select(.headSha == $sha)][0].databaseId // empty')
+   # Missing run is unverified. Stop this procedure; do not fall back to another SHA.
+   [ -n "$RUN_ID" ] || { echo "No CI run for expected head"; exit 1; }
    gh run watch "$RUN_ID" --exit-status
-   # Fetch failing job + step names (not full logs) for the verdict line
-   gh run view "$RUN_ID" --json jobs --jq '.jobs[] | select(.conclusion=="failure") | {job:.name, step: [.steps[] | select(.conclusion=="failure") | .name]}'
+   gh run view "$RUN_ID" --json headSha,status,conclusion,jobs
+   # Inspect required job outcomes, including unexpected skips. Failure/cancel/timeout
+   # is not green. If the branch moves, start again for its new head.
    ```
-   - **GREEN**: report `CI verdict: green` and tell the user which branch to test.
+   - **GREEN**: report the exact run/head and proceed to independent proof verification; a user test is conditional on the remaining proof gaps.
    - **RED**: DO NOT tell the user to test yet. Triage in the supervisor chat:
-     1. **Fix in the worker** (`claude -p -c`) if it is a real regression introduced by this task.
+     1. **Fix in the worker** (via `bash scripts/task.sh drive <SLUG> <MODEL_FLAGS> <instruction>`) if it is a real regression introduced by this task, using the explicit model flags and resume-age rules above.
      2. **Attribute to known-failures.md** (`docs/testing/known-failures.md`) if it is a
         pre-existing failure not caused by this task — add the failing job + step + date.
      3. **File a task** if the failure is real but out of scope — then proceed with the
@@ -205,26 +208,15 @@ generated the kickoff, and checked file-ownership against other live workers. `S
      After triage, include `CI verdict: red — <job>/<step> — attributed to known-failures /
      fixed in commit <sha> / task T<id> filed` in the push report before telling the user.
 
-   **Once CI is green, decide merge vs hand-off — [[feedback_merge_when_provably_verified]]
-   is the standing default, not a per-task question:**
-   - **Provably verified** (a test that would have failed before the fix and passes after, on
-     the real production code path — not an argument-shape/mock check — plus CI green) ->
-     merge without waiting for a reply: `gh pr create` -> `gh pr merge --merge
-     --delete-branch` -> flip the task's PLAN.md row + task-file `**Status:**` to STAGING ->
-     commit and push that status flip in the supervisor checkout -> THEN tell the user what
-     merged and why it's proven. If the worker's status file doesn't already contain an
-     explicit red->green transition, produce it yourself before merging rather than skipping
-     it or asking the user to: `git checkout <pre-fix-commit> -- <the changed source files>`
-     (leave the new/updated test files alone), run just the directly-affected test file(s),
-     confirm they fail, `git checkout HEAD -- <those source files>`, confirm they pass again.
-     If the merge needs a `git merge origin/master` first (branch is behind — common when
-     several workers land close together), resolve any conflicts, re-run the same tests to
-     confirm still-green, then push and merge.
-   - **Not provable without a human** (visual/UX judgment, a live external integration, a step
-     only reproducible in staging) -> this is the real "push for the user to test" path: leave
-     the branch open, report CI verdict + specific test steps mapped to acceptance criteria,
-     and wait for their word.
-   - Topic sensitivity (security, payments, P0) is never its own exception to the proof bar.
+   **Apply CLAUDE.md Landing Policy and dotask step 6.** Send the exact revision's proof
+   bundle to a separate `subagent_type: proof-verifier`. Tests should be red before code
+   changes; later-written tests must reproduce the intended failure against pre-change code
+   and pass against the final code using the same test in isolated checkouts. Never check
+   old source files over a shared working tree. Only independently VERIFIED proof, resolved
+   code findings, and green CI for the same head permit automatic merge. Pin the merge to
+   that head. Any conflict resolution or other change requires refreshed affected proof,
+   review, and CI. Insufficient evidence returns to its author; human-only gaps go to the
+   user with exact steps. The worker cannot certify or land its own work.
 
 6. **Cleanup is automatic** via the committed `post-merge` hook (`.githooks/post-merge`)
    when the branch lands on master. Only step in if `/c/tmp/post-merge-cleanup.log` shows the

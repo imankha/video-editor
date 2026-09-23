@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Finalize the task after user approval. Clean up any remaining artifacts and prepare the branch for merge.
+Finalize the task after automated proof or, when required, the user's manual verdict. Clean up artifacts and apply the landing policy in `CLAUDE.md`.
 
 ## Checklist
 
@@ -47,42 +47,42 @@ git add <changed files>
 git commit -m "$(cat <<'EOF'
 T{id}: {final cleanup summary}
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Co-Authored-By: {actual agent identity} <{appropriate attribution email}>
 EOF
 )"
 ```
 
 Do NOT mark the task DONE in this commit. DONE is a user promotion (see CLAUDE.md Task Status Rule).
 
-### 5. Notify User + Mark WAITING ON USER
+### 5. Land or Hand Off
 
-Set the task's Status to `WAITING ON USER` in `docs/plans/PLAN.md` — the work is finished but the task cannot progress until the user tests and merges. The board shows the branch on hover.
+Push the branch through the supervisor and wait for Branch CI. Apply `CLAUDE.md`'s Landing
+Policy:
 
-```
-T{id} complete. Branch `feature/T{id}-*` is ready to merge.
-```
+- Independent Proof Verifier VERIFIED verdict, resolved code findings, and green CI for the same final SHA: create and merge the PR, then set
+  `STAGING` and report the evidence.
+- Human-only verification: set `WAITING ON USER`, leave the branch open, and report exact
+  verification steps and the expected result.
 
 ---
 
 ## Merge -> STAGING
 
-The user reviews and decides when to merge. When the task branch lands on master — whether AI performs the merge (only when the user explicitly asks) or AI confirms the user merged it — set that task's Status from `WAITING ON USER` to `STAGING` in `docs/plans/PLAN.md`. Pushing to master auto-deploys staging, so STAGING is factually true at that point (AI owns this status; see CLAUDE.md Task Status Rule).
+When the task branch lands on master — either through the proof-based automatic path or after
+the user's manual verdict — set that task's Status to `STAGING` in `docs/plans/PLAN.md`.
+Pushing to master auto-deploys staging, so STAGING is factually true at that point.
 
-**Waves.** When several task branches are collapsed into one `integration/*` branch so the user can test them in a single pass, every task in the wave stays `WAITING ON USER` until that integration branch lands on master — then they all go `STAGING` together. Do not record the integration branch name anywhere: the board derives it from the `T{id}:` commit subjects it carries, which is why those subjects are mandatory.
+**Waves.** When several task branches are collapsed into one `integration/*` branch, verify the integrated revision and refresh affected evidence under Landing Policy. Set `WAITING ON USER` only for a required human verdict; otherwise keep active verification `WIP`. When the integration branch lands on master, its tasks go `STAGING` together. Do not record the integration branch name in PLAN.md; it belongs in operational handoffs/WAVE.md: the board derives it from the `T{id}:` commit subjects it carries, which is why those subjects are mandatory.
 
 After merge the user will (optionally) delete the feature branch, verify on staging, then promote `STAGING -> DONE` via the task board "Resolve" button. Being on staging is the test phase — there is no separate TESTING step.
 
-**AI does NOT push or merge to master unless the user explicitly asks** (see [No merge without approval] memory).
-
----
-
 ## Summary
 
-The full workflow completed:
-1. **Task Start** - Branch created, Code Expert audited codebase
+For L-tier, the applicable workflow includes (S/M use their shorter paths):
+1. **Task Start** - Branch created, knowledge loaded, Code Expert used if needed
 2. **Architecture** - Design doc created, user approved
 3. **Test First** - Failing tests created for acceptance criteria
 4. **Implementation** - Code written following approved design
 5. **Automated Testing** - Tester ran tests, all passing
-6. **Manual Testing** - User verified feature works
-7. **Task Complete** - Cleanup done, ready for merge
+6. **Verification** - Automated proof, or a user verdict when proof is impossible
+7. **Task Complete** - Cleanup done and landing policy applied

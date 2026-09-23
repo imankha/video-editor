@@ -2,9 +2,14 @@
 
 ## Purpose
 
-Generate a self-contained handoff prompt that the user takes into a **new conversation** with the Test & Fix Agent. That agent will help the user manually test the feature in the browser, debug any issues found, and fix implementation bugs.
+Generate a self-contained verification handoff for the user, usable in this conversation or an optional fresh Test & Fix conversation. That agent will help the user manually test the feature in the browser, debug any issues found, and fix implementation bugs.
 
-This is a **conversation boundary** -- the implementation AI's job ends here. The user starts a fresh session with only the handoff document as context, keeping that conversation focused and context-efficient.
+Run this stage only when visual judgment, a live external integration, or another human-only
+fact prevents automated proof. If a production-path test demonstrates red before the fix and
+green afterward, a separate Proof Verifier accepts the evidence, and Branch CI is green for that final SHA, skip this stage and use Stage 7's automatic landing
+path.
+
+A fresh conversation is optional. Complete all automatable verification first, then identify the exact human-only observation needed. Preserve unrelated task progress while waiting.
 
 ---
 
@@ -36,7 +41,8 @@ Read this handoff document and help me test, debug, and fix T{id}: {brief descri
 {1-2 sentence summary of what the feature does from the user's perspective}
 
 **Branch:** `feature/T{id}-{description}`
-**Status:** TESTING (all automated tests pass)
+**Status:** WAITING ON USER (awaiting the named human-only observation)
+**Observed verification:** {named checks, actual results, skipped/unverified cases, final SHA}
 
 ---
 
@@ -122,7 +128,7 @@ The handoff must be **self-contained** -- the Test & Fix Agent should NOT need t
 
 ```bash
 git add docs/plans/tasks/T{id}-testing-kickoff.md
-git commit -m "docs: T{id} testing handoff prompt"
+git commit -m "T{id}: Add testing handoff prompt"
 ```
 
 ### 6. Notify User
@@ -132,7 +138,7 @@ T{id} is ready for testing.
 
 **Automated tests:** {X} backend + {Y} frontend passing
 
-**To start testing:** Open a new conversation and say:
+**Optional fresh conversation:** Open a new conversation and say:
 "Read `docs/plans/tasks/T{id}-testing-kickoff.md` and help me test and fix T{id}."
 
 The Test & Fix Agent has everything it needs in that file to help you
@@ -152,7 +158,7 @@ The user works with a fresh AI session that:
 5. **Re-runs tests** to verify fixes don't break existing coverage
 6. **Reports back** to the user when all acceptance criteria pass
 
-The Test & Fix Agent can modify code, run tests, and commit fixes -- it has full access to the branch. It does NOT merge or deploy.
+The Test & Fix session may modify assigned code and run relevant tests. Shared-tree Git operations remain with its orchestrator; isolated workers follow the worker contract. After fixes, refresh affected review/test evidence. It does not merge or deploy merely because a test passed.
 
 ---
 

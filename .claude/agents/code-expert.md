@@ -7,25 +7,27 @@ model: opus
 
 # Code Expert Agent
 
+Read [Shared Agent Contract](../references/agent-contract.md) first.
+
 ## Purpose
 
-Audit the codebase to find all relevant code for a task before implementation begins. Provides the main AI with a comprehensive map of entry points, dependencies, and similar patterns.
+Investigate uncovered code paths to find relevant code for a task before implementation begins. Provides the main AI with a comprehensive map of entry points, dependencies, and similar patterns.
 
 ## When to Invoke
 
 The main AI should spawn this agent at **Task Start** using the Task tool:
 
 ```
-Task tool with subagent_type: Explore
+Agent tool with subagent_type: code-expert
 ```
 
 ## Agent Prompt Template
 
 ```
-You are the Code Expert agent. Your job is to audit the codebase for task T{id}: {task_title}.
+You are the Code Expert agent. Your job is to investigate the uncovered task scope for task T{id}: {task_title}.
 
 ## Task Context
-{paste task description and acceptance criteria}
+{task path and acceptance-criteria section}
 
 ## Your Mission
 

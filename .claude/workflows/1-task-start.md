@@ -9,9 +9,9 @@ git checkout -b feature/T{id}-{short-description}
 
 ### 1b. Mark Task WIP
 
-Set the task's Status column to `WIP` in `docs/plans/PLAN.md` (factual status — AI owns this; see CLAUDE.md Task Status Rule). This is the only status field AI edits at task start. Do NOT touch DONE — that is a user promotion.
+Set the task's Status column to `WIP` in `docs/plans/PLAN.md` (factual status — AI owns this; see CLAUDE.md Task Status Rule). Also update the task file's Status field; container workers delegate both updates to the supervisor. Do NOT touch DONE — that is a user promotion.
 
-`WIP` means AI is actively working. The moment the task is blocked on the user (design gate, question, manual test, branch awaiting merge), switch it to `WAITING ON USER`, and back to `WIP` when they unblock it.
+`WIP` means AI is actively working. The moment the task is blocked on the user (design gate, question, human-only manual test, or branch awaiting the user's merge verdict), switch it to `WAITING ON USER`, and back to `WIP` when they unblock it.
 
 Name the branch `feature/T{id}-{slug}` and start every commit subject with `T{id}:` — the task board derives the branch shown on hover from exactly those two things.
 
@@ -22,10 +22,10 @@ Name the branch `feature/T{id}-{slug}` and start every commit subject with `T{id
 
 ### 3. Run Code Expert Agent
 
-**Spawn the Code Expert agent** to audit the codebase:
+**Load the knowledge docs first.** Spawn Code Expert only for material gaps identified by classification; otherwise use verified knowledge directly:
 
 ```
-Use Task tool with subagent_type: Explore
+Use Agent tool with subagent_type: code-expert
 
 Prompt: See .claude/agents/code-expert.md for full template
 
@@ -67,4 +67,4 @@ Update the task file based on Code Expert report:
 
 ## After Completing This Stage
 
-Proceed to [2-architecture.md](2-architecture.md) to create the design document.
+Follow classification: S implements directly; M uses its brief plan, implementation, tests, and one fresh review; L proceeds to [2-architecture.md](2-architecture.md).

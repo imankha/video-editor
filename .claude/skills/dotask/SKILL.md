@@ -2,9 +2,9 @@
 name: dotask
 description: "Kick off planned tasks in permission-free container workers, driven from THIS supervisor session. WIP limit 4 (all pairs file-disjoint, quota fresh): bank each branch as it lands rather than letting all 4 pile up unreviewed. The supervisor maintains the WAVE.md manifest + per-task status files (stateless supervision — a fresh session bootstraps from files, never from conversation history), spawns workers via spawn-worker, relays gates, and pushes branches for you to test + merge."
 license: MIT
-author: video-editor
-version: 5.0.0
-user_invocable: true
+metadata:
+  author: video-editor
+  version: 5.0.0
 ---
 
 # /dotask
@@ -24,15 +24,16 @@ burn into merges.
   YOUR move — the [spawn-worker](../spawn-worker/SKILL.md) subroutine, invoked once per task.
 - **Worker** = a permission-free CLI Claude (`claude -p`) inside a per-task Docker container
   (`scripts/task.sh`). Separate clone, no permission prompts, user's subscription (seeded
-  ~/.claude; no API key). Lint hooks travel with the clone and run inside the container.
-- **Handoff** = when work is done + tests pass, you PUSH each task branch to GitHub; the user
-  fetches, tests, merges. You never merge without approval.
+  ~/.claude; no API key). Hook scripts travel with the clone; ignored local hook settings must be reconstructed by bootstrap. Hook silence is not proof of a check.
+- **Landing** = when work is done + tests pass, you PUSH each task branch and wait for Branch
+  CI. Merge automatically only when the proof-based landing rule in step 6 is satisfied;
+  otherwise hand the branch to the user for the missing human verdict.
 
 ## When to Apply
 - User says `/dotask <id>` or `/dotask <id> <id> ...` (T#### from `docs/plans/PLAN.md`).
 - Multiple ids = a QUEUE, not necessarily one flat wave: WIP limit is 4 workers, all pairs
   file-disjoint AND the session quota fresh. Tasks beyond 4, or that conflict on files, wait
-  in WAVE.md and start as slots free up (a slot frees when a branch is PUSHED and handed to
+  in WAVE.md and start as slots free up (a slot frees when a branch has its CI verdict and is landed or handed to
   the user).
 - **Container gate (tier check first):** containers pay for themselves on L-tier work and on
   genuinely parallel disjoint tasks. For an S or M single-area task, propose doing it INLINE
@@ -53,7 +54,7 @@ burn into merges.
    the primary files each task touches (from task files + knowledge docs). RULES:
    - **WIP limit: 4 concurrent workers.** Every pair in the wave must share no primary files
      AND the session quota must be fresh. Beyond 4, or on any file conflict, queue in WAVE.md
-     instead of spawning. The user's test+merge gate is serial regardless of worker count — a
+     instead of spawning. Landing coordination is serial regardless of worker count; human testing is conditional on proof gaps — a
      full 4-wide wave means up to 4 branches queued on the user's review at once, so bank
      (push + CI verdict + hand to user) each branch as it lands rather than letting all 4 sit
      unreviewed.
@@ -61,8 +62,7 @@ burn into merges.
      (one container, sequential commits) or queue one behind the other.
    - Tasks inside a strict-serial epic (e.g. export-write-path, keyframe-unification) never
      overlap.
-   - A queued task starts only after the previous branch is PUSHED with its CI verdict
-     reported — bank before you start the next.
+   - Release a slot only after landing or a complete user handoff with CI evidence. A dependent, strict-serial, or same-file successor must wait for its predecessor to MERGE and start from the integrated base; pushing alone does not satisfy the dependency.
    Present the queue plan (who runs now, who's queued, who's merged into one worker) in one
    short table, then proceed — don't wait for approval unless a conflict forces a judgment
    call.
@@ -104,23 +104,20 @@ burn into merges.
    commands and triage paths). A red verdict must be triaged — fix, attribute to
    known-failures.md, or task it — before proceeding.
 
-   **Then decide merge vs hand-off using [[feedback_merge_when_provably_verified]] — this is
-   the standing default, not something to ask about each time:**
-   - **Provably verified** (a test that would have failed before the fix and passes after,
-     exercising the real production code path, plus CI green) -> merge WITHOUT waiting for a
-     reply: `gh pr create` -> `gh pr merge --merge --delete-branch` -> flip PLAN.md/task-file
-     status to STAGING -> commit + push that status flip -> report AFTER, not before. If the
-     worker's own status file doesn't already show a red->green transition (stash the
-     just-fixed source files back to the pre-fix commit, keep the new tests, confirm they
-     fail; restore, confirm they pass) — get that proof yourself in the supervisor session
-     before merging; don't ask the user to supply it and don't skip merging for lack of it
-     when you could produce it in a few minutes.
-   - **Genuinely not provable by a human-absent test** (visual/UX judgment call, a live
-     external integration, something only a human can eyeball) -> hold on the branch, update
-     the WAVE.md row (`stage: pushed`, `next gate: user test`), tell the user which branch is
-     ready with specific test steps mapped to acceptance criteria, and wait.
-   - Severity/sensitivity (security, payments, etc.) is NOT its own exception — the proof
-     standard gates the merge, not the topic.
+   Apply `CLAUDE.md` Landing Policy; this is the single authority for the proof bar.
+   - Dispatch `subagent_type: proof-verifier` in a fresh context with criteria, base/head
+     SHAs, unchanged proof-test contents/hash, commands, and raw evidence paths. Require
+     an independent verdict; worker self-attestation and code approval are insufficient.
+   - MORE_PROOF_REQUIRED: return the exact missing evidence to implementor/tester and
+     repeat verification. For post-hoc tests reproduce pre-fix failure and final success
+     in isolated checkouts, never by reverting shared source files.
+   - VERIFIED plus resolved code findings and green required CI for the final head:
+     create the PR and merge with `gh pr merge --merge --delete-branch --match-head-commit <verified-head-sha>`.
+     Re-fetch head/CI before merging; changed head/base invalidates affected verdicts.
+     Set PLAN.md/task status to STAGING only after merge and report the evidence.
+   - HUMAN_VERIFICATION_REQUIRED or unresolved proof: keep the branch open; continue
+     feasible evidence work, otherwise hand off exact gaps/steps and set WAITING ON USER
+     only when the user's input is needed. Docs/refactors do not silently waive the bar.
 
    Start the next queued task once this one is landed or handed off. Cleanup is automatic on
    merge (post-merge hook); see spawn-worker for the fallback. On merge, delete the task's

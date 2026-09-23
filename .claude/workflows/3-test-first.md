@@ -14,7 +14,7 @@ Create failing tests before implementation. This ensures:
 **Spawn the Tester agent** to analyze coverage and create tests:
 
 ```
-Use Task tool with subagent_type: general-purpose
+Use Agent tool with subagent_type: tester
 
 Prompt: See .claude/agents/tester.md Phase 1 template
 
@@ -41,8 +41,8 @@ Before proceeding, verify the tests:
 ### 3. Commit Failing Tests
 
 ```bash
-git add -A
-git commit -m "test: Add failing tests for T{id}
+git add <explicit-test-paths>
+git commit -m "T{id}: Add failing regression tests
 
 Tests for:
 - [acceptance criterion 1]
@@ -50,7 +50,7 @@ Tests for:
 
 These tests will pass once the feature is implemented.
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+Co-Authored-By: {actual agent identity} <{appropriate attribution email}>"
 ```
 
 ### 4. Document Test Plan
@@ -70,9 +70,9 @@ Update task file Progress Log:
 
 | Type | Location | Command |
 |------|----------|---------|
-| Frontend unit | `src/frontend/src/**/*.test.{js,jsx}` | `npm test` |
-| E2E | `src/frontend/tests/**/*.spec.js` | `npm run test:e2e` |
-| Backend | `src/backend/tests/**/*.py` | `run_tests.py` |
+| Frontend unit | `src/frontend/src/**/*.test.{js,jsx}` | `npx vitest run <named-test-files>` |
+| E2E | `src/frontend/e2e/**/*.spec.js` | `npx playwright test <named-spec>` |
+| Backend | `src/backend/tests/**/*.py` | `python -m pytest <named-test-files>` |
 
 ---
 

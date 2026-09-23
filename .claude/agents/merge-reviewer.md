@@ -7,6 +7,8 @@ model: opus
 
 # Merge Reviewer Agent
 
+Read [Shared Agent Contract](../references/agent-contract.md) first.
+
 ## Purpose
 
 Pre-merge code review that audits all changes in the branch against project coding standards. Specifically guards against sync strategy violations, state management anti-patterns, and architectural regressions.
@@ -21,7 +23,7 @@ When the user asks if a branch is ready to merge, push, or create a PR. Trigger 
 
 ## Input Required
 
-- Branch name (from git status)
+- Branch name, base/head SHAs, task/acceptance-criteria paths, and verification artifact paths
 - Main branch to diff against (usually `master`)
 
 ## Agent Prompt Template
@@ -42,18 +44,18 @@ Work through each checklist item. For each, state PASS or FAIL with specific fil
 
 ### 1. Sync Strategy (CRITICAL)
 
-The #1 priority. Every DB write MUST trace to a named user gesture. Scan ALL changed files for:
+The #1 priority. Every editor persistence write MUST trace to a named user gesture; authorized backend lifecycle operations follow their explicit contracts. Scan ALL changed files for:
 
 **Violations to catch:**
-- [ ] `useEffect` that calls an API endpoint (`fetch`, `axios`, any `/api/` call)
-- [ ] `useEffect` that writes to a Zustand store (`set(`, `setState`, `updateClipData`, `setRawClips`)
-- [ ] `useEffect` that watches hook state arrays (`keyframes`, `segments`, `segmentSpeeds`, `trimRange`) and writes anywhere
+- [ ] `useEffect` that performs a persistence WRITE through an API; read-only loading is allowed
+- [ ] `useEffect` store updates that cause persistence; trace downstream writes rather than banning memory-only loading/normalization
+- [ ] `useEffect` that watches hook state arrays (`keyframes`, `segments`, `segmentSpeeds`, `trimRange`) and triggers persistence
 - [ ] `useEffect` cleanup (`return () => { ... }`) that saves state
 - [ ] Gesture handlers that send ALL state instead of surgical changes (e.g., sending all keyframes when only one was added)
 - [ ] Any `saveFramingEdits`, `updateClipData`, or similar persistence call outside a gesture handler
 
 **For each API call found in changed code, verify:**
-1. What user gesture triggers it? (name the click/drag/keypress)
+1. Is it a read or a persistence write? For an editor write, name the user gesture; distinguish authorized backend lifecycle operations such as migrations/webhooks.
 2. Does the payload contain only what that gesture changed?
 3. Is there a reactive path that could also trigger this call?
 
@@ -65,7 +67,7 @@ The #1 priority. Every DB write MUST trace to a named user gesture. Scan ALL cha
 
 ### 2. State Management
 
-- [ ] No new duplicate state across stores (check Store Ownership Map in state-management skill)
+- [ ] No new duplicate state across stores (check Store Ownership Map in state-management skill; load relevant knowledge docs first)
 - [ ] API data stored in Zustand, not useState
 - [ ] Raw backend data stored, not transformed on write
 - [ ] No new client-side ID generation for backend entities
@@ -103,7 +105,7 @@ If the diff touches any of these (new column, table, or index) or changes stored
 - [ ] The migration is imported in the track's `__init__.py` and appended to its `MIGRATIONS` list
 - [ ] Version number is the next sequential integer (never reused, never skipped)
 - [ ] The base schema (`_SCHEMA_DDL` / `ensure_database()` / `_USER_DB_SCHEMA`) is updated too, so fresh databases match migrated ones
-- [ ] Migration follows the rules in `.claude/agents/migration.md` (no `conn.commit()`, idempotent where possible, schema-only, correct param style per track)
+- [ ] Migration follows the rules in `.claude/agents/migration.md` (no `conn.commit()`, idempotent where possible, approved schema/backfill transformation, correct param style per track)
 
 **Why this matters:** Existing databases were created with older schemas; new columns only appear for new users unless a versioned migration ALTERs them. `user_db`/`profile_db` migrate themselves JIT at the per-user seam on first access (T5083/T5085, hardened by T8190) -- no operator action needed, and no admin endpoint exists for them (T5087 deleted the old bulk sweep). `postgres` is the exception: it does NOT auto-run and must be triggered explicitly after deploy via `POST /api/admin/migrate-postgres` (admin session) or fly ssh. If the diff added a `postgres` migration, flag in your report that a post-deploy migration run is required; for `user_db`/`profile_db` migrations, no flag is needed.
 
@@ -134,7 +136,7 @@ If no violations found:
 - [x] Schema Migrations: {N/A or checked}
 - [x] Keyframe Model: {N/A or checked}
 
-**Recommendation:** Safe to merge.
+**Recommendation:** No blocking code findings at {head_sha}. Supervisor must still validate current CI, acceptance evidence, and CLAUDE.md Landing Policy.
 ```
 
 ### ISSUES FOUND
@@ -155,7 +157,7 @@ If violations detected:
    - {description}
 
 ### Recommendation
-{Fix critical issues before merging / Warnings are minor, merge at your discretion}
+{Resolve BLOCKING/MAJOR findings; remaining MINOR items do not block code approval. Landing still requires supervisor verification.}
 ```
 
 ## Key References
@@ -173,9 +175,8 @@ Read these if you need to understand the rules in depth:
 
 | Severity | Meaning | Action |
 |----------|---------|--------|
-| **Critical** | Sync strategy violation, data corruption risk | MUST fix before merge |
-| **High** | State duplication, missing data guards | Should fix before merge |
-| **Medium** | Code quality, naming, minor architecture | Fix or acknowledge |
-| **Low** | Style, formatting, minor improvements | Optional |
+| **BLOCKING** | Proven security/data corruption risk, hard invariant or acceptance violation | Fix before merge |
+| **MAJOR** | Concrete correctness/maintainability defect | Resolve with evidence under reviewer conversation protocol |
+| **MINOR** | Non-blocking improvement | Optional; no style-only gate |
 
-Sync strategy violations are ALWAYS critical — they cause silent data corruption that compounds over time.
+Proven reactive-persistence violations are BLOCKING — they cause silent data corruption that compounds over time.

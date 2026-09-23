@@ -11,7 +11,7 @@ Create a design document that describes the changes at a high level using diagra
 **Spawn the Architect agent** to create the design document:
 
 ```
-Use Task tool with subagent_type: Plan
+Use Agent tool with subagent_type: architect
 
 Prompt: See .claude/agents/architect.md for full template
 
@@ -70,9 +70,9 @@ Once approved:
 
 ```bash
 git add docs/plans/tasks/T{id}-design.md
-git commit -m "docs: Add approved design for T{id}
+git commit -m "T{id}: Add approved design
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+Co-Authored-By: {actual agent identity} <{appropriate attribution email}>"
 ```
 
 ---
