@@ -8,7 +8,9 @@ import { GameType } from '../constants/gameConstants';
 import { GameFootagePicker } from './GameFootagePicker';
 import { useCreditStore } from '../stores/creditStore';
 import { useQuestStore } from '../stores/questStore';
+import { useProfileStore } from '../stores/profileStore';
 import { calculateUploadCost } from '../utils/storageCost';
+import { parseGameFilename } from '../utils/gameNameParser';
 import { API_BASE } from '../config';
 import { LIBRARY_ACTIONS, DIVISION_OF_WORK } from '../config/displayNames';
 import apiFetch from '../utils/apiFetch';
@@ -35,8 +37,22 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
   const creditBalance = useCreditStore(state => state.balance);
   const creditsLoaded = useCreditStore(state => state.loaded);
   const fetchCredits = useCreditStore(state => state.fetchCredits);
+  // Selected directly (not via useCurrentProfile) and defensively defaulted so
+  // this degrades to "no profile" rather than throwing when a test/host only
+  // stubs a partial profileStore.
+  const currentProfile = useProfileStore(
+    state => (state.profiles || []).find(p => p.id === state.currentProfileId) || null
+  );
+  const setIntroFact = useProfileStore(state => state.setIntroFact);
   const tournamentInputRef = useRef(null);
   const dropdownRef = useRef(null);
+  // Filename autofill (e.g. Veo's "match-<team>-vs-<opponent>-<date>" exports)
+  // — tried once per selection, never overwrites a value the parent already
+  // typed. `parsedOurTeam` is remembered so a successful submit can confirm
+  // it onto the profile (see submitGame).
+  const autofillTriedRef = useRef(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [parsedOurTeam, setParsedOurTeam] = useState(null);
 
   // Fetch existing tournaments when modal opens
   useEffect(() => {
@@ -88,7 +104,20 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
   // store/backend write, so the reactive-persistence ban does not apply.
   const handleFootageChange = useCallback((next) => {
     setFootage(next);
-  }, []);
+
+    // Try the filename autofill on the first video of the first selection
+    // only — never on a later "add more" pick, and never once already tried.
+    if (!autofillTriedRef.current && next.files.length > 0) {
+      autofillTriedRef.current = true;
+      const parsed = parseGameFilename(next.files[0].file.name, currentProfile?.team);
+      if (parsed) {
+        setOpponentName((prev) => prev || parsed.opponentName);
+        setGameDate((prev) => prev || parsed.gameDate);
+        setParsedOurTeam(parsed.ourTeamName);
+        setDetailsOpen(true);
+      }
+    }
+  }, [currentProfile]);
 
   // T8500: only the video gates submit - every metadata field has a default.
   // T8810: any number of files ≥1 is valid (single file = 1-element list).
@@ -114,6 +143,9 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
     setShowTournamentDropdown(false);
     setFootage({ files: [], totalBytes: 0, proxies: {} });
     setPickerKey(k => k + 1); // remount the picker to clear its intake state
+    autofillTriedRef.current = false;
+    setDetailsOpen(false);
+    setParsedOurTeam(null);
   }, []);
 
   const submitGame = useCallback(async () => {
@@ -132,12 +164,24 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
       };
 
       await onCreateGame(gameDetails);
+
+      // The parent went through with the upload — that's the gesture that
+      // confirms the filename-guessed team. Only write it when the profile
+      // doesn't already have one on record; never overwrite an existing value.
+      if (parsedOurTeam && currentProfile && !currentProfile.team) {
+        try {
+          await setIntroFact(currentProfile.id, 'team', parsedOurTeam);
+        } catch (err) {
+          console.error('Failed to save team name to profile:', err);
+        }
+      }
+
       resetForm();
       onClose();
     } finally {
       setIsSubmitting(false);
     }
-  }, [opponentName, gameDate, gameType, tournamentName, footage, onCreateGame, onClose, resetForm]);
+  }, [opponentName, gameDate, gameType, tournamentName, footage, onCreateGame, onClose, resetForm, parsedOurTeam, currentProfile, setIntroFact]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -242,13 +286,22 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
               is closed by default so an upload is still two gestures (pick, submit).
               Every field keeps its default so submit remains gated on the video
               alone (T8500). Native <details> = keyboard-accessible, no extra state. */}
-          <details data-testid="game-details-disclosure" className="group rounded-lg border border-gray-700 bg-gray-900/40">
+          <details
+            data-testid="game-details-disclosure"
+            className="group rounded-lg border border-gray-700 bg-gray-900/40"
+            open={detailsOpen}
+            onToggle={(e) => setDetailsOpen(e.currentTarget.open)}
+          >
             <summary className="flex items-center justify-between cursor-pointer select-none px-3 py-2.5 text-sm font-medium text-gray-300 hover:text-white marker:content-['']">
               <span>Game details (optional)</span>
               <ChevronDown size={16} className="text-gray-400 transition-transform group-open:rotate-180" />
             </summary>
             <div className="px-3 pb-3 pt-1 space-y-4">
-            <p className="text-xs text-gray-500">You can add an opponent and game date later.</p>
+            <p className="text-xs text-gray-500">
+              {parsedOurTeam
+                ? "Filled in from your video's file name. Check it's right."
+                : 'You can add an opponent and game date later.'}
+            </p>
             {/* Opponent Name */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1.5">

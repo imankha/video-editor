@@ -12,6 +12,10 @@ import { AnnotateTimeline } from './AnnotateTimeline';
  * on every viewport, and the `-  N%  +` chip is the visible control. Without a
  * `zoom` prop (harnesses, these defaults) the T10780 constants still apply and
  * no chip renders.
+ *
+ * T11030 — the scrollbar itself is no longer phone-only: it renders whenever
+ * `timelineScale > 1`, on desktop too (previously `lg:hidden`, falling back to
+ * an easy-to-miss OS-native scrollbar there).
  */
 
 // jsdom lacks ResizeObserver; ClipRegionLayer/AngleLanes only use it for sizing.
@@ -99,7 +103,7 @@ describe('AnnotateTimeline user zoom (T10930)', () => {
     expect(zoom.zoomIn).toHaveBeenCalledTimes(1);
   });
 
-  it('desktop at 300%: the scaled track is 300% wide and the chip reads 300%', () => {
+  it('desktop at 300%: the scaled track is 300% wide, the chip reads 300%, and the scrollbar shows', () => {
     stubMatchMedia(false);
     render(<AnnotateTimeline {...baseProps} zoom={zoomProp(300)} />);
 
@@ -107,6 +111,8 @@ describe('AnnotateTimeline user zoom (T10930)', () => {
     expect(screen.getByTestId('timeline-zoom-reset').textContent).toBe('300%');
     // The old read-only badge never renders alongside the chip.
     expect(screen.queryByText(/Zoom:/)).toBeNull();
+    // T11030: desktop gets the same visible scroll affordance as mobile now.
+    expect(screen.getByTestId('mobile-scrollbar-track')).toBeTruthy();
   });
 
   it('mobile zoomed OUT to 100%: whole game fits, scroll pill gone, chip still there', () => {

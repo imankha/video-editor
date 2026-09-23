@@ -32,29 +32,22 @@
   background-color: #9ca3af;
 }
 
-/* Timeline native scrollbar (T10780): exactly ONE horizontal bar at any width.
-   Below lg (1023px) the custom finger-sized MobileScrollbar (TimelineBase.jsx,
-   `lg:hidden`) replaces the native one, so the native bar is always hidden
-   there. At lg+ the native bar shows only while wheel-zoomed
-   (`.timeline-scroll-zoomed`, Focus/Overlay). The container never scrolls
-   vertically: its height is derived from its layers, and a native horizontal
-   bar taking layout height (non-overlay Windows scrollbars) must not spawn a
-   vertical one. These rules replace an inline `scrollbarWidth` style that used
-   to override the mobile hide rule (inline beats stylesheet). */
+/* Timeline native scrollbar (T10780, T11030): the native bar is hidden at
+   EVERY width -- MobileScrollbar (TimelineBase.jsx) is the one visible
+   scrollbar affordance on both phone and desktop now, since the OS-native bar
+   it used to fall back to at lg+ was too easy to miss (auto-hides on some
+   OS/browser combos). The container never scrolls vertically: its height is
+   derived from its layers, and a native horizontal bar taking layout height
+   (non-overlay Windows scrollbars) must not spawn a vertical one. These rules
+   stay class-driven, never an inline `scrollbarWidth` style, which previously
+   beat this stylesheet rule (inline beats stylesheet) and showed a native bar
+   underneath the custom one. */
 .timeline-scroll-container {
   overflow-y: hidden;
   scrollbar-width: none;
 }
 .timeline-scroll-container::-webkit-scrollbar {
   display: none;
-}
-@media (min-width: 1024px) {
-  .timeline-scroll-container.timeline-scroll-zoomed {
-    scrollbar-width: auto;
-  }
-  .timeline-scroll-container.timeline-scroll-zoomed::-webkit-scrollbar {
-    display: block;
-  }
 }
 
 .scrollbar-hide {

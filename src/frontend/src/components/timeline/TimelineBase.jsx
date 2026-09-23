@@ -416,19 +416,19 @@ export function TimelineBase({
         </div>
 
         {/* Scrollable timeline tracks container */}
-        {/* Native scrollbar visibility is CSS-driven (index.css
-            `.timeline-scroll-container`), keyed on `timeline-scroll-zoomed` and
-            the SAME lg breakpoint as MobileScrollbar's `lg:hidden`, so exactly
-            one bar shows at any width: the custom finger bar below lg, the
-            native bar at lg+ only when wheel-zoomed. T10780: the previous inline
-            `scrollbarWidth: 'auto'` beat the stylesheet's mobile hide rule the
-            moment Annotate went 3x, showing BOTH bars, and on Windows the native
-            bar's layout height also spawned a vertical scrollbar. */}
+        {/* T11030: the native scrollbar is unconditionally hidden (index.css
+            `.timeline-scroll-container`) at every width -- the custom finger/
+            mouse bar below (MobileScrollbar, rendered whenever timelineScale>1)
+            is now the ONE affordance on phone AND desktop, since a real desktop
+            user reported the OS-native bar (the old lg+ fallback) too easy to
+            miss. T10780: an inline `scrollbarWidth: 'auto'` previously beat the
+            stylesheet's hide rule the moment Annotate went 3x, showing a native
+            bar UNDER the custom one, and on Windows its layout height also
+            spawned a vertical scrollbar -- the class-driven (never inline) hide
+            below is what prevents that regression. */}
         <div
           ref={scrollContainerRef}
-          className={`ml-20 lg:ml-32 overflow-x-auto timeline-scroll-container${
-            timelineScale > 1 ? ' timeline-scroll-zoomed' : ''
-          }`}
+          className="ml-20 lg:ml-32 overflow-x-auto timeline-scroll-container"
           onScroll={handleScroll}
         >
           {/* Scaled timeline content */}
@@ -526,7 +526,10 @@ export function TimelineBase({
 
 /**
  * MobileScrollbar - finger/mouse scrollbar for zoomed timelines (T10780).
- * Hidden on lg+ screens where the native scrollbar + a fine pointer are usable.
+ * T11030: shown at EVERY width, not just below lg -- it used to hide on lg+
+ * screens in favor of the OS-native scrollbar, but that native bar is easy to
+ * miss (some OS/browser combos auto-hide it until hover), leaving a zoomed
+ * desktop timeline with no visible way to tell it can scroll.
  *
  * A REAL finger control (user ruling 2026-09-20): the whole row is a >= 44px hit
  * area (`min-h-[44px]` + `py-1`) drawn as a 36px pill, with a >= 56px thumb that
@@ -647,7 +650,7 @@ function MobileScrollbar({ scrollContainerRef, timelineScale }) {
       role="scrollbar"
       aria-orientation="horizontal"
       aria-label="Scroll timeline"
-      className="lg:hidden ml-20 lg:ml-32 mt-2 mb-3 py-1 min-h-[44px] flex items-center relative touch-none select-none cursor-grab active:cursor-grabbing"
+      className="ml-20 lg:ml-32 mt-2 mb-3 py-1 min-h-[44px] flex items-center relative touch-none select-none cursor-grab active:cursor-grabbing"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerEnd}

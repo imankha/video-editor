@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import OverlaySpotlightPanel from './OverlaySpotlightPanel';
 import { EDITOR_PANELS } from '../../config/displayNames';
+import HighlightColor from '../../constants/highlightColors';
 
 /**
  * T9550 (Shared Vocabulary epic, N29/N30): the Spotlight styling panel must read in
@@ -198,5 +199,84 @@ describe('OverlaySpotlightPanel single-athlete completion (T9960)', () => {
       />
     );
     expect(screen.queryByText(EDITOR_PANELS.SPOTLIGHT_DURATION)).toBeNull();
+  });
+});
+
+/**
+ * T11020: full color spectrum (native color input) + eyedropper, so a parent can
+ * match the spotlight to their kid's uniform exactly instead of picking the
+ * nearest of 5 presets.
+ */
+describe('OverlaySpotlightPanel custom color + eyedropper (T11020)', () => {
+  const originalEyeDropper = window.EyeDropper;
+
+  afterEach(() => {
+    if (originalEyeDropper === undefined) {
+      delete window.EyeDropper;
+    } else {
+      window.EyeDropper = originalEyeDropper;
+    }
+  });
+
+  it('offers a full-spectrum custom color input alongside the presets', () => {
+    render(<OverlaySpotlightPanel {...baseProps} highlightColor={HighlightColor.WHITE} />);
+    const customInput = screen.getByLabelText(EDITOR_PANELS.SPOTLIGHT_CUSTOM_COLOR);
+    expect(customInput).toBeTruthy();
+    expect(customInput.getAttribute('type')).toBe('color');
+  });
+
+  it('writes an arbitrary hex through the same onHighlightColorChange handler', () => {
+    const onHighlightColorChange = vi.fn();
+    render(
+      <OverlaySpotlightPanel
+        {...baseProps}
+        highlightColor={HighlightColor.WHITE}
+        onHighlightColorChange={onHighlightColorChange}
+      />
+    );
+    const customInput = screen.getByLabelText(EDITOR_PANELS.SPOTLIGHT_CUSTOM_COLOR);
+    fireEvent.change(customInput, { target: { value: '#1a9c4b' } });
+    expect(onHighlightColorChange).toHaveBeenCalledWith('#1A9C4B');
+  });
+
+  it('reads a custom hex as "Custom" instead of misreporting it as a preset', () => {
+    render(<OverlaySpotlightPanel {...baseProps} highlightColor="#1A9C4B" />);
+    expect(screen.getByText('Custom')).toBeTruthy();
+  });
+
+  it('does not render the eyedropper when the browser has no EyeDropper API', () => {
+    delete window.EyeDropper;
+    render(<OverlaySpotlightPanel {...baseProps} highlightColor={HighlightColor.WHITE} />);
+    expect(screen.queryByLabelText(EDITOR_PANELS.SPOTLIGHT_MATCH_UNIFORM)).toBeNull();
+  });
+
+  it('samples a color from the screen via the native EyeDropper API when supported', async () => {
+    const onHighlightColorChange = vi.fn();
+    const open = vi.fn().mockResolvedValue({ sRGBHex: '#2b7fe0' });
+    // EyeDropper is invoked as `new window.EyeDropper()` — a real constructor, so
+    // the mock must be one too (an arrow function/plain vi.fn() can't be `new`ed).
+    window.EyeDropper = function MockEyeDropper() {
+      this.open = open;
+    };
+
+    render(
+      <OverlaySpotlightPanel
+        {...baseProps}
+        highlightColor={HighlightColor.WHITE}
+        onHighlightColorChange={onHighlightColorChange}
+      />
+    );
+    const button = screen.getByLabelText(EDITOR_PANELS.SPOTLIGHT_MATCH_UNIFORM);
+    fireEvent.click(button);
+    await vi.waitFor(() => expect(onHighlightColorChange).toHaveBeenCalledWith('#2B7FE0'));
+  });
+
+  it('disables the custom color input and eyedropper while an export is in flight', () => {
+    window.EyeDropper = function MockEyeDropper() {
+      this.open = vi.fn();
+    };
+    render(<OverlaySpotlightPanel {...baseProps} highlightColor={HighlightColor.WHITE} disabled />);
+    expect(screen.getByLabelText(EDITOR_PANELS.SPOTLIGHT_CUSTOM_COLOR).disabled).toBe(true);
+    expect(screen.getByLabelText(EDITOR_PANELS.SPOTLIGHT_MATCH_UNIFORM).disabled).toBe(true);
   });
 });

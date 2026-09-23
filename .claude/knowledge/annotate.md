@@ -1,5 +1,18 @@
 ---
 domain: annotate
+updated: 2026-09-22 (T11030 — the zoomed-timeline scrollbar (`MobileScrollbar`,
+`components/timeline/TimelineBase.jsx`) now renders at EVERY viewport width, not just
+below `lg`. It used to hide on `lg:hidden` and hand off to the OS-native horizontal
+scrollbar via a `.timeline-scroll-zoomed` CSS class (`index.css`); a real desktop user
+reported that native bar too easy to notice-miss (auto-hides on some OS/browser combos),
+leaving a zoomed timeline with no visible scroll affordance. Fix: dropped `lg:hidden` from
+the bar's className and deleted the `.timeline-scroll-zoomed` media-query rule entirely —
+the native bar is now unconditionally hidden (`scrollbar-width:none` + hidden
+`::-webkit-scrollbar`, no media query) and the one custom pill/thumb bar is the sole
+affordance on phone AND desktop, mouse-draggable via the same pointer-events handling
+built for touch. `timelineScale > 1` is still the only render gate. Applies to every
+`TimelineBase` consumer (Annotate/Focus/Overlay), not just Annotate. Tests updated:
+`TimelineBase.mobileScrollbar.test.jsx`.)
 updated: 2026-09-21 (T10960 edit-window anchor landmine; T10890/T10930 + hotfixes T10900/T10910/T10920, all on master same day.
 **Timeline zoom is now REAL user state on every viewport (T10930):** `AnnotateModeView` owns
 `useTimelineZoom(isMobile ? 300 : 100)` and hands `{timelineZoom, zoomByWheel, zoomIn, zoomOut,
@@ -11,7 +24,8 @@ falls back to those constants (harnesses). The visible control is `components/ti
 TimelineZoomChip.jsx` (`-  N%  +`, % resets, 44px on coarse pointers), rendered by `TimelineBase`
 whenever `timelineZoomControls={zoomIn,zoomOut,resetZoom}` is passed (Annotate, Focus, Overlay all
 pass it; the read-only "Zoom: N%" badge survives only for modes that don't). Wheel zoom stays gated
-on the playhead layer; the touch scroll pill / native bar / page-forward follow are unchanged. Never
+on the playhead layer; the touch scroll pill / page-forward follow are unchanged (the pill's
+lg+ native-bar fallback was later removed — see T11030 in the header). Never
 persisted. **Span bars are honest and stay so (T10890 verdict):** on an 88-min game one track pixel
 is 5-7 s, so at 100% nearly every 4-30 s play sits under `ClipRegionLayer`'s 3px `minWidth` and all
 bars look identical — measured, NOT a regression; zoom is the fix (26 s = 10.5px vs 10 s = 4px at
@@ -2174,8 +2188,9 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   state the USER changed", which is false here). The touch scrollbar (`MobileScrollbar`, only
   rendered when `timelineScale>1`) is a real finger control: whole row is a `min-h-[44px]` hit
   area (36px pill inside, `py-1`), thumb `min-w-[56px]` with a 3-line grip, `mt-2 mb-3` (8px above
-  / 12px below), gate is `lg:hidden` + `ml-20 lg:ml-32` to match the label column (was `sm:hidden`
-  — so Focus/Overlay also get the larger bar in the 640-1023px band, intended). Thumb travel is
+  / 12px below), offset `ml-20 lg:ml-32` to match the label column. **STALE (see T11030 in the
+  header): was gated `lg:hidden` (desktop fell back to the OS-native scrollbar) — now shown at
+  every width.** Thumb travel is
   measured in PIXELS against the thumb's actual `offsetWidth` (honours the 56px floor) so it can't
   overshoot the rail when `100/scale%` < 56px. Follow: Annotate passes `followAnchor="page-forward"`
   to `TimelineBase` — on a forward crossing into the right 15% margin the window re-anchors so the

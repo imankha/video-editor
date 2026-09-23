@@ -608,6 +608,9 @@ export const EDITOR_PANELS = {
   // N29 -- spotlight styling. "Highlight Color" mixed brand + generic for one thing:
   // the spotlight. The shape options say WHERE the spotlight sits vs the player.
   SPOTLIGHT_COLOR: 'Spotlight color',
+  // T11020 -- full-spectrum custom picker + eyedropper, alongside the 5 presets.
+  SPOTLIGHT_CUSTOM_COLOR: 'Custom color',
+  SPOTLIGHT_MATCH_UNIFORM: 'Match color from uniform',
   SPOTLIGHT_AROUND_PLAYER: 'Around athlete', // was "Body" / "Body ellipse"
   SPOTLIGHT_UNDER_PLAYER: 'Under athlete',   // was "Ground" / "Ground spotlight"
   // N30 -- styling sliders in plain words; the component keeps the live px/% readout.

@@ -7,9 +7,13 @@ import { TimelineBase } from './TimelineBase';
  * 2026-09-20): >= 44 px hit area (the whole row is the target), thumb >= 56 px
  * with a grip, 8 px above / 12 px below (mt-2 / mb-3). A touch anywhere in the row
  * drags the window (no dead zone at the row's vertical edges). The bar renders in
- * the DOM whenever timelineScale > 1; `lg:hidden` hides it on true desktop (CSS,
- * not exercised by jsdom). Input is Pointer Events (mouse AND touch, with
- * capture) - see the drag contract tests below.
+ * the DOM whenever timelineScale > 1. Input is Pointer Events (mouse AND touch,
+ * with capture) - see the drag contract tests below.
+ *
+ * T11030 — the bar used to carry `lg:hidden` (desktop fell back to the
+ * OS-native scrollbar via a `.timeline-scroll-zoomed` CSS class); a real
+ * desktop user reported that native bar too easy to miss, so it now renders at
+ * every width and the native bar is unconditionally hidden instead.
  */
 
 afterEach(() => cleanup());
@@ -48,29 +52,30 @@ describe('MobileScrollbar — finger-sized geometry (T10780)', () => {
     expect(thumb.querySelectorAll('span').length).toBeGreaterThanOrEqual(3);
   });
 
-  it('is hidden on lg (desktop) via lg:hidden, and offset to match the label column', () => {
+  it('renders at every width (no lg:hidden), offset to match the label column', () => {
+    // T11030: used to carry `lg:hidden` and hand off to the OS-native
+    // scrollbar on desktop; a real user found that native bar too easy to
+    // miss, so the custom bar is now the one affordance at every width.
     const { track } = renderBar();
-    expect(track.className).toContain('lg:hidden');
+    expect(track.className).not.toContain('lg:hidden');
     expect(track.className).toContain('ml-20');
     expect(track.className).toContain('lg:ml-32');
   });
 
-  it('native scrollbar visibility is class-driven, never an inline style (one bar at a time)', () => {
+  it('native scrollbar stays hidden via class, never an inline style, whether zoomed or not', () => {
     // T10780 regression: an inline `scrollbarWidth: 'auto'` beat index.css's
-    // mobile hide rule the moment Annotate went 3x, so the native bar rendered
-    // UNDER the custom finger bar (two scrollbars), and on Windows its layout
-    // height spawned a vertical scrollbar too. The container must carry the
-    // `timeline-scroll-zoomed` marker (index.css shows the native bar only at
-    // lg+ with it) and no inline scrollbar style at all.
+    // hide rule the moment Annotate went 3x, so the native bar rendered UNDER
+    // the custom finger bar (two scrollbars), and on Windows its layout height
+    // spawned a vertical scrollbar too. index.css hides the native bar
+    // unconditionally (T11030 removed the lg+ zoomed fallback that used to
+    // show it) - no inline scrollbar style must ever reappear.
     renderBar();
     const zoomed = document.querySelector('.timeline-scroll-container');
-    expect(zoomed.className).toContain('timeline-scroll-zoomed');
     expect(zoomed.style.scrollbarWidth).toBe('');
     expect(zoomed.getAttribute('style')).toBeNull();
     cleanup();
     render(<TimelineBase {...baseProps} timelineScale={1} />);
     const flat = document.querySelector('.timeline-scroll-container');
-    expect(flat.className).not.toContain('timeline-scroll-zoomed');
     expect(flat.getAttribute('style')).toBeNull();
     expect(screen.queryByTestId('mobile-scrollbar-track')).toBeNull();
   });

@@ -16,7 +16,7 @@ import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
 import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, ChevronDown, ChevronRight, MousePointerClick } from 'lucide-react';
 import { formatInstant, formatLength, PRECISION } from '../utils/timeFormat';
-import { HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
+import { highlightColorLabel } from '../constants/highlightColors';
 import { EDITOR_PANELS, MODE_NAMES } from '../config/displayNames';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
 import { isRegionUnderPlayhead } from '../utils/textRegionPlayhead';
@@ -847,7 +847,7 @@ export function OverlayModeView({
 
   // T9270: the mobile entry row's live-summary second line. DERIVED from the same
   // state the rows bind to — never a second stored copy.
-  const colorLabel = HIGHLIGHT_COLOR_LABELS[highlightColor] || 'White';
+  const colorLabel = highlightColorLabel(highlightColor);
   const shapeLabel = highlightShape === 'ground'
     ? EDITOR_PANELS.SPOTLIGHT_UNDER_PLAYER
     : EDITOR_PANELS.SPOTLIGHT_AROUND_PLAYER;
