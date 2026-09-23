@@ -21,7 +21,7 @@ const RESPONSE = {
   rates: {
     game: { attempts: 5, succeeded: 4, failed: 1, rate_pct: 80.0 },
     clip: { attempts: 0, succeeded: 0, failed: 0, rate_pct: null,
-            denominator_note: 'outcome-based: clip_upload_attempted is not emitted yet (T8380)' },
+            denominator_note: 'outcome-based (succeeded+failed), not the clip_upload_attempted count' },
   },
 };
 

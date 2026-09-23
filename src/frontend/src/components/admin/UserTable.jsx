@@ -38,18 +38,30 @@ function OriginBadge({ origin }) {
   );
 }
 
+// `title` (optional) becomes the <th> tooltip -- used where the sort dimension
+// is not the number the cell displays (T11010's Games column).
 const COLUMNS = [
   { key: 'email', label: 'Email', align: 'left' },
   { key: 'origin', label: 'Origin', align: 'center' },
   { key: 'last_step', label: 'Last Step', align: 'center' },
   { key: 'acquired_at', label: 'Joined', align: 'right' },
-  { key: 'game_created_count', label: 'Games', align: 'right' },
+  // T11010: the cell renders an attempt/success PAIR (game_tried_count /
+  // game_succeeded_count), both per VIDEO FILE. The sort key stays
+  // game_created_count (per GAME) -- it is the funnel dimension and the only one
+  // with full history, so ranking on it is stable across the T11010 cutover.
+  {
+    key: 'game_created_count', label: 'Games', align: 'right',
+    title: 'Game video uploads: attempted / succeeded (per video file). Sorts by games started, which is the only dimension with full history.',
+  },
   // T8240: label is "Clips Saved" (activity events -- annotate-save + direct-upload
   // attempts/successes), NOT "Published" -- publishing is a different concept
   // (final_videos.published_at) with no cheap Postgres source. Sort key stays
   // clip_created_count (annotate-only) for back-compat; the cell shows the
   // combined tried/succeeded pair (clip_tried_count / clip_succeeded_count).
-  { key: 'clip_created_count', label: 'Clips Saved', align: 'right' },
+  {
+    key: 'clip_created_count', label: 'Clips Saved', align: 'right',
+    title: 'Clips saved or uploaded: attempted / succeeded (annotate-save + direct upload).',
+  },
   { key: 'export_completed_count', label: 'Exports', align: 'right' },
   // T8230: per-type breakdown of the Exports total. Exports stays as the honest
   // grand total (framing + overlay + "other"/recovered), so the residual is never
@@ -103,20 +115,26 @@ const FUNNEL_STEPS = [
 
 function FunnelSummary({ totals }) {
   if (!totals) return null;
-  const max = totals.signed_up || 1;
+  const signedUp = totals.signed_up || 1;
   return (
     <div className="flex items-end gap-2 mb-4 px-1">
       {FUNNEL_STEPS.map((step, i) => {
         const val = totals[step.key] || 0;
-        const pct = Math.round((val / max) * 100);
-        const prevVal = i > 0 ? (totals[FUNNEL_STEPS[i - 1].key] || 1) : val;
-        const convPct = i > 0 ? Math.round((val / prevVal) * 100) : 100;
+        // T11010: share of SIGNED UP, matching FunnelChart. This strip renders
+        // on the same screen from the same funnelTotals object, so a second
+        // percentage semantics here (it used step-over-step) meant one screen
+        // showing two different meanings for the same numbers -- and these
+        // steps are just as non-nested, so it could exceed 100% too.
+        const pct = Math.round((val / signedUp) * 100);
         return (
           <div key={step.key} className="flex-1 text-center">
             <div className="text-white text-sm font-semibold">{val}</div>
-            <div className="text-gray-500 text-[10px]">
+            <div
+              className="text-gray-500 text-[10px]"
+              title={`${val} distinct users reached ${step.label} (${pct}% of signed up)`}
+            >
               {step.label}
-              {i > 0 && <span className="text-gray-600 ml-0.5">({convPct}%)</span>}
+              {i > 0 && <span className="text-gray-600 ml-0.5">({pct}%)</span>}
             </div>
             <div className="mt-1 mx-auto rounded-full h-1.5 bg-white/5">
               <div
@@ -293,6 +311,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                   key={col.key}
                   className={`text-${col.align} px-3 py-2.5 cursor-pointer hover:text-gray-200 transition-colors select-none`}
                   onClick={() => setSort(col.key)}
+                  title={col.title}
                 >
                   <span className="inline-flex items-center gap-1">
                     {col.label}
@@ -368,19 +387,26 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                 </td>
 
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs whitespace-nowrap">
-                  {/* T8220: game_created is an upload ATTEMPT (pending insert, no
-                      R2 bytes yet); game_upload_succeeded is the durable, R2-
-                      verified outcome. Never collapse to one bare number -- an
-                      admin needs both to see attempt/success gaps (e.g. an
-                      outage retry storm) at a glance. */}
-                  {user.game_created_count ?? 0} tried / {user.game_upload_succeeded_count ?? 0} succeeded
+                  {/* T8220: attempted / succeeded, never one bare number -- an admin
+                      needs both to see attempt-vs-success gaps (e.g. an outage retry
+                      storm) at a glance.
+                      T11010: the "/" carries the attempted-vs-succeeded meaning, so
+                      the words are gone (they cost a column's worth of width on every
+                      row to restate the separator). Both halves are per VIDEO FILE:
+                      game_upload_attempted (prepare-upload, bytes about to go) ->
+                      game_upload_succeeded (finalize, R2-verified). They used to be
+                      per-GAME vs per-FILE, so a multi-angle game read as "1 / 5". */}
+                  <span title="Game video uploads: attempted / succeeded (per video file)">
+                    {user.game_tried_count ?? 0} / {user.game_succeeded_count ?? 0}
+                  </span>
                 </td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs whitespace-nowrap">
-                  {/* Clips mirror the Games tried/succeeded pair above: "tried" sums
-                      the annotate-save and direct-upload attempt events, "succeeded"
-                      sums their durable outcomes (clip_created + clip_uploaded) --
-                      never one bare count standing in for the other. */}
-                  {user.clip_tried_count ?? 0} tried / {user.clip_succeeded_count ?? 0} succeeded
+                  {/* Clips mirror the Games pair above. Both flows count: annotate-save
+                      (clip_save_attempted -> clip_created) and direct upload
+                      (clip_upload_attempted -> clip_uploaded). */}
+                  <span title="Clips saved or uploaded: attempted / succeeded (annotate-save + direct upload)">
+                    {user.clip_tried_count ?? 0} / {user.clip_succeeded_count ?? 0}
+                  </span>
                 </td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.export_completed_count ?? 0}</td>
                 {/* T8230: Focus (framing) / Overlay export breakdown of the Exports total. */}

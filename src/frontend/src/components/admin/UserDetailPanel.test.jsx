@@ -17,7 +17,10 @@ describe('UserDetailPanel attempted vs succeeded (T7510)', () => {
     const data = {
       ...BASE_DATA,
       milestones: [
-        { event: 'game_created', at: '2026-08-20T10:00:00Z', count: 4 },
+        // T11010: the attempt half is game_upload_attempted (per VIDEO FILE),
+        // matching game_upload_succeeded's grain and the UserTable cell this
+        // panel opens from. It used to read game_created (per GAME).
+        { event: 'game_upload_attempted', at: '2026-08-20T10:00:00Z', count: 4 },
         {
           event: 'game_upload_failed',
           at: '2026-08-20T10:01:00Z',
@@ -34,6 +37,27 @@ describe('UserDetailPanel attempted vs succeeded (T7510)', () => {
     expect(screen.getByText('4')).toBeTruthy();
     expect(screen.getByText('(-4)')).toBeTruthy();
     expect(screen.getByText('[timeout x3, network x1]')).toBeTruthy();
+  });
+
+  it('does not feed the per-GAME game_created into the per-FILE pair (T11010)', () => {
+    // A multi-angle game: ONE game_created, FIVE files uploaded and landed.
+    // Reading game_created as the attempt made this "5 / 1" -- success
+    // exceeding attempts -- and drove `gap` negative, silently hiding the
+    // red deficit chip that exists to flag a real shortfall.
+    const data = {
+      ...BASE_DATA,
+      milestones: [
+        { event: 'game_created', at: '2026-08-20T10:00:00Z', count: 1 },
+        { event: 'game_upload_attempted', at: '2026-08-20T10:00:30Z', count: 5 },
+        { event: 'game_upload_succeeded', at: '2026-08-20T10:05:00Z', count: 5 },
+      ],
+    };
+    render(<UserDetailPanel data={data} onClose={() => {}} />);
+
+    // Both halves are 5; no deficit chip, because nothing fell short.
+    expect(screen.getAllByText('5').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('(-4)')).toBeNull();
+    expect(screen.queryByText(/^\(-\d+\)$/)).toBeNull();
   });
 
   it('renders annotation_completed under Engagement, not the content-outcome pipeline', () => {

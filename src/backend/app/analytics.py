@@ -200,6 +200,14 @@ FLOW_EVENTS = {
     # Failure reason is encoded into the stored action name as "{event}:{reason}"
     # (record_milestone `reason=`), so per-reason breakdowns are queryable in the
     # user_actions aggregate while the daily_col below rolls all reasons into one.
+    # T11010: the per-FILE attempt that matches game_upload_succeeded's grain.
+    # game_created (above) is per GAME -- a multi-angle game is ONE game_created
+    # but N game_upload_succeeded, which made the admin Games pair read
+    # "1 / 5" (succeeded exceeding tried). Both halves of the admin pair now
+    # fire from the SAME seam (prepare_upload, upload_required path) keyed on
+    # `kind`, so games and clips get symmetric per-file pairs. game_created keeps
+    # its own funnel meaning ("this user attempted an upload") and is untouched.
+    "game_upload_attempted":        {"label": "Game Upload Attempted",      "daily_col": None},
     "game_upload_succeeded":        {"label": "Uploaded",                   "daily_col": "game_uploads_succeeded"},
     "game_upload_failed":           {"label": "Upload Failed",              "daily_col": "game_uploads_failed"},
     "clip_save_attempted":          {"label": "Clip Attempted",             "daily_col": "clips_attempted"},
@@ -207,9 +215,12 @@ FLOW_EVENTS = {
     # T8370: the same attempt/outcome/failure triple as game_created/
     # game_upload_succeeded/game_upload_failed, for the clip-upload path — a
     # success-only event would make the clip-upload success rate 100% by
-    # construction (the exact lie T7510 fixed for games). clip_upload_attempted
-    # fires from the T8380 "Add Clip" gesture (before prepare-upload); this task
-    # ships the durable outcome pair (clip_uploaded / clip_upload_failed).
+    # construction (the exact lie T7510 fixed for games). T8370 shipped the
+    # durable outcome pair (clip_uploaded / clip_upload_failed); T11010 SHIPS the
+    # attempt -- server-side in prepare_upload(kind='clip'), NOT the client "Add
+    # Clip" gesture T8380 sketched. The server seam is one event per clip FILE,
+    # which is exactly clip_uploaded's grain (one per landed raw_clips row); a
+    # click beacon would be per batch and could not be matched against it.
     "clip_upload_attempted":        {"label": "Clip Upload Attempted",      "daily_col": None},
     "clip_upload_failed":           {"label": "Clip Upload Failed",         "daily_col": None},
     "share_attempted":              {"label": "Share Attempted",            "daily_col": None},

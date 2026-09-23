@@ -284,6 +284,12 @@ Mark-play tap until T10700's migration is live on staging).
 
 *All tasks in this section are complete — rows archived to [PLAN-archive.md](PLAN-archive.md).*
 
+### Admin panel correctness (user-reported live 2026-09-22)
+
+| ID | Task | Impact | Complexity | Ratio | Status | Design | Notes |
+|----|------|--------|-----------|-------|--------|--------|-------|
+| T11010 | [Admin upload attempt/success pairs + funnel that reads as users](tasks/T11010-admin-upload-pairs-and-funnel-user-counts.md) | 6 | 2 | 3.0 | STAGING | [ ] | Filed and implemented 2026-09-22 from a live prod admin screenshot. Three read-side defects: (1) `clip_upload_attempted` was registered by T8370 and reserved by T8380 but emitted by NOTHING, so every direct-upload account read "0 tried / N succeeded"; (2) the Games pair mixed grains - `game_created` is per GAME, `game_upload_succeeded` is per VIDEO FILE, so a multi-angle game showed success exceeding attempts ("1 / 5"); (3) the funnel LOOKED like event counts (114%/138%/700%) though both endpoints already `COUNT(DISTINCT user_id)` - caused by `FunnelChart.jsx` looking up `framing_opened`/`framing_exported` when the backend derives keys from the LABEL (`focus_opened`/`focus_exported`), so those rows were a hardcoded 0; by `clip_uploaded` never being listed in `STAGES`; and by step-over-step conversion on non-nested steps. Fix: one new `game_upload_attempted` event (`daily_col: None`, **no migration**) emitted alongside `clip_upload_attempted` from the SAME `prepare_upload` seam keyed on the request's explicit `kind` (user decision: no duration/size threshold - `kind` is already authoritative and validated to a closed set); cells drop the words "tried"/"succeeded" per user decision (the `/` carries it); funnel keys corrected, Clip Uploaded stage added, percentages become share of signed-up so no row can exceed 100%. **Known limitation, disclosed:** the game pair has no history and is not backfillable (synthesising attempts would be fabricated data), so pre-existing accounts read `0 / N` until they upload again. **Does NOT replace [T7465](tasks/investor-analytics/T7465-journey-flow-graph.md)** - that journey graph is still the real answer; this is the cheap honesty fix. |
+
 ## Single-Server Priority (2026-07-18; durability re-escalated 2026-07-24)
 
 The stack is currently ONE server. **Correction (2026-07-24): the durability epic is NOT safely
