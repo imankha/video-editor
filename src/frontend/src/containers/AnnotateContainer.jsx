@@ -60,7 +60,10 @@ const IMPORT_AWAIT_GAME_ID_TIMEOUT_MS = 120000;
  * started, or ended without creating a record — a real failure the caller surfaces).
  */
 async function resolveImportGameId(gameIdRef, timeoutMs = IMPORT_AWAIT_GAME_ID_TIMEOUT_MS) {
-  const readId = () => gameIdRef.current ?? useUploadStore.getState().uploadGameId ?? null;
+  // T11040: `uploadGameId` moved onto the per-upload entry when the store went
+  // multi-upload, so this fallback had been reading `undefined` — restore it via
+  // the store's own selector.
+  const readId = () => gameIdRef.current ?? useUploadStore.getState().getUploadGameId() ?? null;
   const id = readId();
   if (id) return id;
 
@@ -68,7 +71,7 @@ async function resolveImportGameId(gameIdRef, timeoutMs = IMPORT_AWAIT_GAME_ID_T
   while (Date.now() - start < timeoutMs) {
     const store = useUploadStore.getState();
     // No upload in flight and no id anywhere -> nothing will produce one. Stop.
-    if (!store.isUploading() && store.uploadGameId == null && gameIdRef.current == null) {
+    if (!store.isUploading() && store.getUploadGameId() == null && gameIdRef.current == null) {
       return null;
     }
     await new Promise((r) => setTimeout(r, 200));
@@ -230,6 +233,29 @@ export function AnnotateContainer({
   // frontend's active game onto every clip request as a diagnostic header (T7010).
   const annotateGameIdRef = useRef(annotateGameId);
   annotateGameIdRef.current = annotateGameId;
+
+  /**
+   * T11040: the game id a persistence gesture must save against, read at
+   * EXECUTION time.
+   *
+   * The create/update paths below are async callbacks whose closures capture
+   * `annotateGameId` at creation time. A closure created while the id was still
+   * null (the upload window, or any render before applyGameData committed) keeps
+   * seeing null even after the id arrives — and the old guards answered that by
+   * returning `{ saveOk: true }`, silently dropping the write. That is how a
+   * fully-annotated game reached the backend with zero clips: every Mark Play
+   * built a region in memory, reported success, and never issued a request.
+   * Frame Now/Frame Later rode the same guard, so they became no-ops too.
+   *
+   * Same failure and same fix as T7790's `resolveImportGameId` (TSV import) and
+   * T10610's `rawClipIdByRegionRef` (raw clip id): trust the ref, never the
+   * closed-over state. The upload store is the second source because
+   * `onGameCreated` writes both in the same callback.
+   */
+  const resolveSaveGameId = useCallback(
+    () => annotateGameIdRef.current ?? useUploadStore.getState().getUploadGameId() ?? null,
+    [],
+  );
 
   useWakeLock();
 
@@ -783,6 +809,18 @@ export function AnnotateContainer({
       setAnnotateVideoMetadata(combinedMetadata);
       setAnnotateGameId(null);
       setAnnotateGameName(displayName);
+
+      // T11040: uploading a new game from inside Annotate switches games without
+      // going through applyGameData, which is where these accumulators are
+      // normally reset. Leaving them carries the PREVIOUS game's watch progress
+      // onto the new one: the leave handler then writes that stale high-water
+      // mark and playhead against the new game's id. Observed in prod — a freshly
+      // uploaded 87-minute game was stamped with the previous game's 68.5-minute
+      // viewed_duration (a position its video had not even finished uploading to).
+      viewedHighWaterRef.current = new Map();
+      persistedViewedDurationRef.current = 0;
+      lastPlayheadRef.current = null;
+      isSingleVideoRef.current = !isMultiVideo;
 
       // Store multi-video info for video switching (T82)
       if (isMultiVideo) {
@@ -1364,13 +1402,27 @@ export function AnnotateContainer({
     // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek
     effectiveSeek(clipData.startTime);
 
-    if (!annotateGameId) {
-      // T9630: no game record to save against yet — nothing was attempted, so
-      // this is not a failure (mirrors updateClipRegionWithSync's equivalent
-      // branch). Nothing to queue: the region's first field write takes the
-      // SAVE path itself (§ A.4 — the backend natural key + this region's own
-      // FIFO chain make that safe even if two fields are edited in a row).
-      return { saveOk: true, projectId: null };
+    // T11040: resolve at execution time — a closure that captured a null
+    // `annotateGameId` must not drop the save (see resolveSaveGameId).
+    const saveGameId = resolveSaveGameId();
+    if (!saveGameId) {
+      // T11040: every Annotate session in the product reaches this screen
+      // through a saved game, so having no id here is a broken invariant, not
+      // the benign "not uploaded yet" case the old T9630 comment described
+      // (`loadAnnotateVideoFromFile` has had no production caller since).
+      // Fail LOUDLY: reporting saveOk:true here is what let a whole game's
+      // annotations vanish silently.
+      console.error(
+        '[AnnotateContainer] T11040: refusing to create a play with no game id — ' +
+        'the play exists only in memory and will be lost on reload.',
+        { regionId: newRegion.id, uploading: useUploadStore.getState().isUploading() },
+      );
+      toast.error('Could not save this play', {
+        message: "We couldn't tell which game this play belongs to, so it was not saved. Reload the game and try again.",
+        duration: 0,
+        dedupKey: 'annotate-no-game-id',
+      });
+      return { saveOk: false, projectId: null };
     }
 
     // T10610 § A.1/C.3: the create POST is the HEAD of this region's write
@@ -1383,7 +1435,7 @@ export function AnnotateContainer({
       // T10610 § C.4: Retry re-enqueues through this region's queue (never a
       // direct re-call), same reason as sendRegionUpdate's own retry closure.
       const retry = () => writeQueueRef.current.enqueue(newRegion.id, ['__create'], createFn);
-      const result = await saveClip(annotateGameId, {
+      const result = await saveClip(saveGameId, {
         start_time: newRegion.startTime,
         end_time: newRegion.endTime,
         name: newRegion.name,
@@ -1438,7 +1490,7 @@ export function AnnotateContainer({
       return { saveOk, projectId: createdProjectId };
     };
     return writeQueueRef.current.enqueue(newRegion.id, ['__create'], createFn);
-  }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, isOverlapTimeline, activeSourceSequence, gameVideos, notifyReelCreated]);
+  }, [addClipRegion, effectiveSeek, resolveSaveGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, isOverlapTimeline, activeSourceSequence, gameVideos, notifyReelCreated]);
 
   /**
    * T10610 § A.1 (D2): Mark play tap creates the region AND the backend row
@@ -1462,9 +1514,12 @@ export function AnnotateContainer({
     requireAuth(async () => {
       if (markPlayInFlightRef.current) return; // synchronous double-tap guard
       markPlayInFlightRef.current = true;
-      // Quest 1 step: completes "Find an Amazing Play" at the TAP, unchanged.
-      useQuestStore.getState().recordAchievement('add_clip_opened');
       try {
+        // T11040: inside the try — a throw here used to leave the in-flight guard
+        // latched true for the life of the mount, so every later Mark Play tap
+        // returned early and marked nothing, with no request and no error.
+        // Quest 1 step: completes "Find an Amazing Play" at the TAP, unchanged.
+        useQuestStore.getState().recordAchievement('add_clip_opened');
         const t = effectiveCurrentTime;
         const s = Math.max(0, t - DEFAULT_CLIP_BEFORE);
         const effectiveDur = multiVideo?.totalDuration ?? annotateVideoMetadata?.duration ?? videoDuration ?? 0;
@@ -1509,12 +1564,24 @@ export function AnnotateContainer({
     // re-render. Shared seam with handleFullscreenCreateClip.
     let createdProjectId = null;
 
-    // Skip backend sync if no game ID
-    if (!annotateGameId) {
-      // T9630: nothing to persist yet (no game record) — the local update
-      // already applied synchronously in updateClipRegionWithSync, so this is
-      // not a failure for the caller's save-status UI.
-      return { saveOk: true, projectId: null };
+    // T11040: execution-time id, same reason as the create path. This guard is
+    // what silently turned Frame Now / Frame Later into no-ops: they reach the
+    // backend ONLY through this function, so a stale-null closure meant no
+    // project was created, nothing navigated, and no toast fired — the button
+    // simply did nothing.
+    const saveGameId = resolveSaveGameId();
+    if (!saveGameId) {
+      console.error(
+        '[AnnotateContainer] T11040: refusing to update a play with no game id — ' +
+        'this change exists only in memory and will be lost on reload.',
+        { regionId, keys: Object.keys(actualUpdates), uploading: useUploadStore.getState().isUploading() },
+      );
+      toast.error('Could not save this change', {
+        message: "We couldn't tell which game this play belongs to, so your change was not saved. Reload the game and try again.",
+        duration: 0,
+        dedupKey: 'annotate-no-game-id',
+      });
+      return { saveOk: false, projectId: null };
     }
 
     // T10610 § C.3: the ref map (written synchronously on the SAVE path below)
@@ -1542,7 +1609,7 @@ export function AnnotateContainer({
         clipData.create_project = actualUpdates.createProject;
       }
 
-      const result = await saveClip(annotateGameId, clipData);
+      const result = await saveClip(saveGameId, clipData);
       if (result?.raw_clip_id) {
         // T10610 § C.3: synchronous, BEFORE setRawClipId (React state).
         rawClipIdByRegionRef.current.set(region.id, result.raw_clip_id);
@@ -1606,7 +1673,7 @@ export function AnnotateContainer({
       // branch is never the create-project path.)
       return { saveOk: true, projectId: null };
     }
-  }, [annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, activeSourceSequence, notifyReelCreated]);
+  }, [resolveSaveGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, activeSourceSequence, notifyReelCreated]);
 
   /**
    * T10610 § C.2: clean-check (binding constraint 6) — a gesture whose value

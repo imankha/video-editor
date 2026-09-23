@@ -63,6 +63,7 @@ from ..database import (
     sync_db_to_r2_explicit,
     sync_user_db_to_r2_explicit,
 )
+from ..migrations import BelowMigrationFloor, MigrationBlocked
 from ..profile_context import set_current_profile_id
 from ..profiling import (
     dump_profile,
@@ -94,6 +95,44 @@ DURABLE_SYNC_FAILED_RESPONSE = {
     "code": "sync_failed",
     "retryable": True,
 }
+
+
+def migration_exception_response(exc, path: str) -> JSONResponse:
+    """T11040: middleware-side twin of main.py's MigrationBlocked /
+    BelowMigrationFloor handlers.
+
+    Those handlers run inside Starlette's ExceptionMiddleware, which sits BELOW
+    user middleware, so an exception raised in a ``BaseHTTPMiddleware.dispatch``
+    can never reach them -- it escapes as ``RuntimeError: No response returned``
+    and the caller sees an opaque 500. Session-init raises both of these from
+    inside this middleware (``user_session_init`` -> ``ensure_database`` ->
+    ``run_profile_seam``), so the translation has to happen here too.
+
+    Keep the status codes and ``code`` values identical to main.py's handlers:
+    the frontend routes its retry behaviour off them (503 ``pending_migration``
+    is retryable, 500 ``schema_below_floor`` deliberately is not).
+    """
+    if isinstance(exc, BelowMigrationFloor):
+        logger.critical(
+            "[Migration] REFUSED below-floor DB in session-init: track=%s v%03d < floor v%03d path=%s",
+            exc.db_type, exc.current, exc.floor, path,
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": "This account's data is on an unsupported schema version and "
+                "cannot be loaded. Support has been notified.",
+                "code": "schema_below_floor",
+            },
+        )
+    logger.warning(
+        "[Migration] blocked in session-init user=%s profile=%s reason=%s path=%s",
+        exc.user_id, exc.profile_id, exc.reason, path,
+    )
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Your data is being upgraded, please retry", "code": "pending_migration"},
+    )
 
 
 # T7510: routes whose durable-sync 503 (below) is itself a funnel-action
@@ -963,7 +1002,18 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 # The profile_id set on the copied context inside the thread does
                 # not propagate back, so we re-apply it on the request context
                 # below from the returned dict.
-                init_result = await run_in_context(user_session_init, user_id)
+                # T11040: user_session_init -> ensure_database -> run_profile_seam
+                # can raise MigrationBlocked / BelowMigrationFloor. Starlette's
+                # app-level exception handlers (main.py) live BELOW user
+                # middleware, so an exception raised HERE can never reach them:
+                # it escapes BaseHTTPMiddleware as "RuntimeError: No response
+                # returned" and the client gets an opaque 500 instead of the
+                # retryable 503 the JIT-migration design promises. Translate at
+                # the raise site, mirroring those handlers exactly.
+                try:
+                    init_result = await run_in_context(user_session_init, user_id)
+                except (MigrationBlocked, BelowMigrationFloor) as exc:
+                    return migration_exception_response(exc, request.url.path)
                 meta["init_ms"] = (time.perf_counter() - init_start) * 1000
                 profile_id = init_result.get("profile_id")
                 if profile_id:
