@@ -1,5 +1,5 @@
-import { Check, MousePointerClick } from 'lucide-react';
-import { HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS } from '../../constants/highlightColors';
+import { Check, MousePointerClick, Pipette } from 'lucide-react';
+import { HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS, highlightColorLabel } from '../../constants/highlightColors';
 import { HighlightEffect } from '../../constants/highlightEffects';
 import { EDITOR_PANELS } from '../../config/displayNames';
 import { formatLength, PRECISION } from '../../utils/timeFormat';
@@ -78,6 +78,33 @@ export default function OverlaySpotlightPanel({
       ? formatLength(spotlightDurationSeconds, PRECISION.TENTH, { style: 'unit' })
       : null;
 
+  // T11020: a custom color is anything the user picked that isn't one of the 5
+  // named presets (or the "none" sentinel) — the spectrum picker and eyedropper
+  // both write an arbitrary hex through the same onHighlightColorChange handler.
+  const isCustomColor = Boolean(highlightColor) && !HIGHLIGHT_COLOR_ORDER.includes(highlightColor);
+  // <input type="color"> needs a valid 6-digit hex; fall back to the current
+  // custom value or white when the active color is a preset/"none".
+  const customColorInputValue = isCustomColor ? highlightColor : '#FFFFFF';
+  const colorControlsDisabled = disabled || !isHighlightEnabled;
+  const supportsEyedropper = typeof window !== 'undefined' && 'EyeDropper' in window;
+
+  const handleEyedropper = async () => {
+    if (colorControlsDisabled || !supportsEyedropper) return;
+    try {
+      const result = await new window.EyeDropper().open();
+      if (result?.sRGBHex) {
+        onHighlightColorChange?.(result.sRGBHex.toUpperCase());
+      }
+    } catch (err) {
+      // User cancelling (Escape / click-away) throws AbortError -- expected, not
+      // an error. Anything else (insecure context, picker-already-open, ...)
+      // still shouldn't crash the panel, but must not vanish silently either.
+      if (err?.name !== 'AbortError') {
+        console.warn('[OverlaySpotlightPanel] Eyedropper failed:', err);
+      }
+    }
+  };
+
   return (
     <SettingsPanel title="This spotlight">
       {hasSelection && (
@@ -98,7 +125,7 @@ export default function OverlaySpotlightPanel({
       {/* Spotlight color — the six swatches stack under the label (wide control). */}
       <SettingRow
         label={EDITOR_PANELS.SPOTLIGHT_COLOR}
-        value={HIGHLIGHT_COLOR_LABELS[highlightColor] || 'White'}
+        value={highlightColorLabel(highlightColor)}
         stack
       >
         {HIGHLIGHT_COLOR_ORDER.map((color) => {
@@ -138,6 +165,52 @@ export default function OverlaySpotlightPanel({
             </button>
           );
         })}
+        {/* Full spectrum — native color input styled as a conic-gradient swatch,
+            same pattern as TextSpecEditor's "Custom color" picker. */}
+        <label
+          className={`relative flex items-center justify-center w-8 h-8 coarse-pointer:w-12 coarse-pointer:h-12 rounded-full focus-within:ring-2 focus-within:ring-blue-500 ${
+            colorControlsDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+          }`}
+          title={EDITOR_PANELS.SPOTLIGHT_CUSTOM_COLOR}
+        >
+          <span
+            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center overflow-hidden ${
+              isCustomColor ? 'border-white ring-2 ring-white/30' : 'border-gray-600 hover:border-gray-400'
+            }`}
+            style={{
+              background: isCustomColor
+                ? highlightColor
+                : 'conic-gradient(#ef4444,#f59e0b,#eab308,#22c55e,#3b82f6,#a855f7,#ef4444)',
+            }}
+          >
+            {isCustomColor && <Check size={12} className="text-white drop-shadow" strokeWidth={3} />}
+          </span>
+          <input
+            type="color"
+            aria-label={EDITOR_PANELS.SPOTLIGHT_CUSTOM_COLOR}
+            value={customColorInputValue}
+            onChange={(e) => onHighlightColorChange?.(e.target.value.toUpperCase())}
+            disabled={colorControlsDisabled}
+            className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+          />
+        </label>
+        {/* Eyedropper — samples a color from anywhere on screen (the video frame
+            included), so a parent can match the spotlight to the uniform exactly.
+            Chromium-only API; feature-detected out on Firefox/Safari (T11020). */}
+        {supportsEyedropper && (
+          <button
+            type="button"
+            onClick={handleEyedropper}
+            disabled={colorControlsDisabled}
+            aria-label={EDITOR_PANELS.SPOTLIGHT_MATCH_UNIFORM}
+            title={EDITOR_PANELS.SPOTLIGHT_MATCH_UNIFORM}
+            className={`flex items-center justify-center w-8 h-8 coarse-pointer:w-12 coarse-pointer:h-12 rounded-full border-2 border-gray-600 bg-gray-700 text-gray-200 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              colorControlsDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-600 hover:border-gray-400'
+            }`}
+          >
+            <Pipette size={14} />
+          </button>
+        )}
       </SettingRow>
 
       {isHighlightEnabled ? (

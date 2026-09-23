@@ -4,6 +4,12 @@
 
 ## Current Focus
 
+**2026-09-22 addition, unplaced — [T11020](tasks/T11020-spotlight-custom-color-eyedropper.md):
+Spotlight color picker gets a full spectrum + eyedropper, so a parent can match their
+uniform.** User-requested directly in session. Frontend-only (backend already stores/renders
+`highlight_color` as an opaque hex string, confirmed by trace before implementation). Impact 5 /
+Complexity 3, Tier M. Implemented same session.
+
 **2026-09-21 addition, unplaced — [T10880](tasks/T10880-pulsating-guidance-audit.md):
 Pulsating next-action guidance, funnel playthrough audit.** Seed observation: in Spotlight (Focus
 mode), when the user hasn't clicked any player-detection tracking box yet, the next one to click

@@ -1040,15 +1040,30 @@ export function OverlayScreen({
     setOverlayChangedSinceExport(true);
   }, [setHighlightEffectType, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
+  // T11020: the native `<input type="color">` spectrum picker fires the DOM
+  // `input` event continuously while the user drags inside its dialog (unlike
+  // the 5%-step sliders elsewhere in this panel, which only have ~9 discrete
+  // values). Debounce the network write the same way wrappedUpdateTextSpec
+  // does below -- local state still updates on EVERY event so the live preview
+  // tracks the drag, only the POST (a full highlights_data rewrite +
+  // overlay_version bump, per _save_overlay_data) waits.
+  const highlightColorTimerRef = useRef(null);
+  useEffect(() => () => {
+    if (highlightColorTimerRef.current) clearTimeout(highlightColorTimerRef.current);
+  }, []);
+
   const wrappedSetHighlightColor = useCallback((color) => {
     track('overlay_settings_change', { field: 'highlightColor', value: color }, { debugOnly: true });
     setHighlightColor(color);
     // T3700: quest_3 "Pick your highlight color"
     useQuestStore.getState().recordAchievement('overlay_color_set');
-    if (canSyncActions) {
-      dispatchOverlayAction('setHighlightColor', () => overlayActions.setHighlightColor(projectId, color));
-    }
     setOverlayChangedSinceExport(true);
+    if (!canSyncActions) return;
+    if (highlightColorTimerRef.current) clearTimeout(highlightColorTimerRef.current);
+    highlightColorTimerRef.current = setTimeout(() => {
+      highlightColorTimerRef.current = null;
+      dispatchOverlayAction('setHighlightColor', () => overlayActions.setHighlightColor(projectId, color));
+    }, 250);
   }, [setHighlightColor, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   const wrappedSetStrokeWidth = useCallback((val) => {
