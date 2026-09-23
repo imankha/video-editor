@@ -270,6 +270,14 @@ def list_users(
                 SELECT user_id,
                        SUM(count)                                            AS action_count,
                        SUM(count) FILTER (WHERE action = 'game_created')     AS game_created_count,
+                       -- T11010: the Games pair's "tried" half. game_created is per
+                       -- GAME while game_upload_succeeded is per VIDEO FILE, so a
+                       -- multi-angle game read as 1/5 (success exceeding attempt).
+                       -- game_upload_attempted fires once per file at the same
+                       -- prepare_upload seam as its clip twin, so both halves now
+                       -- share one grain. game_created_count stays as the funnel /
+                       -- sort dimension it has always been.
+                       SUM(count) FILTER (WHERE action = 'game_upload_attempted') AS game_upload_attempted_count,
                        SUM(count) FILTER (WHERE action = 'game_upload_succeeded') AS game_upload_succeeded_count,
                        SUM(count) FILTER (WHERE action = 'clip_created')     AS clip_created_count,
                        -- Clip tried/succeeded pair mirrors the Games one (T8220), but a
@@ -279,6 +287,10 @@ def list_users(
                        -- sums both attempt events. clip_created_count above stays the
                        -- annotate-only figure (existing sort key / back-compat); the
                        -- combined succeeded figure is computed in Python below.
+                       -- T11010: clip_upload_attempted is now actually EMITTED
+                       -- (prepare_upload, kind='clip'). Before that this half summed
+                       -- one real event and one dead name, which is why every
+                       -- direct-upload account read "0 tried / N succeeded".
                        SUM(count) FILTER (WHERE action IN ('clip_save_attempted', 'clip_upload_attempted'))
                                                                               AS clip_tried_count,
                        SUM(count) FILTER (WHERE action = 'clip_uploaded')     AS clip_uploaded_count,
@@ -313,6 +325,7 @@ def list_users(
                 s.total_usage_seconds, s.current_session_start,
                 COALESCE(act.action_count, 0)           AS action_count,
                 COALESCE(act.game_created_count, 0)     AS game_created_count,
+                COALESCE(act.game_upload_attempted_count, 0) AS game_upload_attempted_count,
                 COALESCE(act.game_upload_succeeded_count, 0) AS game_upload_succeeded_count,
                 COALESCE(act.clip_created_count, 0)     AS clip_created_count,
                 COALESCE(act.clip_tried_count, 0)       AS clip_tried_count,
@@ -422,6 +435,12 @@ def list_users(
             "origin": row["origin"],
             "acquired_at": str(row["acquired_at"]) if row["acquired_at"] else None,
             "game_created_count": row["game_created_count"],
+            # T11010: the Games cell renders game_tried_count / game_succeeded_count.
+            # Both are per-FILE (prepare_upload attempt -> finalize_upload success),
+            # matching the clip pair below. game_created_count remains exposed for the
+            # per-GAME funnel/sort dimension; the two are deliberately NOT mixed.
+            "game_tried_count": row["game_upload_attempted_count"],
+            "game_succeeded_count": row["game_upload_succeeded_count"],
             "game_upload_succeeded_count": row["game_upload_succeeded_count"],
             "clip_created_count": row["clip_created_count"],
             "clip_tried_count": row["clip_tried_count"],
@@ -1169,10 +1188,11 @@ def list_upload_failures(
 
     game_rate = _rate(game_succeeded, game_failed)
     clip_rate = _rate(clip_succeeded, clip_failed)
-    # T8380: clip_upload_attempted isn't emitted anywhere yet, so the clip
-    # denominator is outcome-based (succeeded+failed), not a true attempt
-    # count -- disclosed rather than silently presented as precise.
-    clip_rate["denominator_note"] = "outcome-based: clip_upload_attempted is not emitted yet (T8380)"
+    # T11010: clip_upload_attempted now fires (prepare_upload, kind='clip'), but
+    # this panel's denominator stays outcome-based (succeeded+failed) so its
+    # per-build windows remain comparable across the change -- disclosed rather
+    # than silently presented as a true attempt count.
+    clip_rate["denominator_note"] = "outcome-based (succeeded+failed), not the clip_upload_attempted count"
 
     return {
         "window": {

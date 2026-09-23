@@ -16,7 +16,16 @@ const ACTION_LABELS = {
   // UPLOAD_ATTEMPT/UPLOAD_SUCCESS pairing for the same taxonomy.
   game_created: 'Games Tried',
   game_upload_succeeded: 'Games Succeeded',
+  // T11010: the per-VIDEO-FILE upload attempts, added so this panel stops
+  // dropping them (an action with no label here simply does not render).
+  // NOTE the grain: game_created above is per GAME, these two are per FILE, so
+  // a multi-angle game is 1 "Games Tried" and N "Game Uploads Tried".
+  game_upload_attempted: 'Game Uploads Tried',
   clip_created: 'Clips Created',
+  // T11010: the direct clip-upload pair (T8370 flow). clip_upload_attempted was
+  // a registered name nothing ever fired until T11010 emitted it at prepare.
+  clip_upload_attempted: 'Clip Uploads Tried',
+  clip_uploaded: 'Clip Uploads Succeeded',
   annotation_completed: 'Watched Annotate Video', // T7930: watched-video, not a clip created
   framing_opened: 'Focus Opened',
   framing_exported: 'Focus Exports',

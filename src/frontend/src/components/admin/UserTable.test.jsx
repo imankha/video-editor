@@ -26,25 +26,51 @@ const BASE_USER = {
   last_active_at: null,
 };
 
-describe('UserTable Games column (T8220 tries vs succeeded)', () => {
-  it('renders the bknoto shape (15 tried / 1 succeeded), never a bare attempt count', () => {
+describe('UserTable Games column (T8220 tries vs succeeded, T11010 per-file pair)', () => {
+  it('renders the bknoto shape (15 / 1), never a bare attempt count', () => {
     const users = [
-      { ...BASE_USER, user_id: 'bknoto', email: 'bknoto@gmail.com', game_created_count: 15, game_upload_succeeded_count: 1 },
+      { ...BASE_USER, user_id: 'bknoto', email: 'bknoto@gmail.com', game_tried_count: 15, game_succeeded_count: 1 },
     ];
     render(<UserTable users={users} onUserClick={() => {}} funnelTotals={{}} />);
 
-    expect(screen.getByText('15 tried / 1 succeeded')).toBeTruthy();
+    expect(screen.getByText('15 / 1')).toBeTruthy();
     // The old bare-count behavior (a lone "15") must not be what's shown.
     expect(screen.queryByText('15')).toBeNull();
   });
 
-  it('renders the chenyh1225 shape (7 tried / 0 succeeded) with the zero explicit, not omitted', () => {
+  it('renders the chenyh1225 shape (7 / 0) with the zero explicit, not omitted', () => {
     const users = [
-      { ...BASE_USER, user_id: 'chenyh1225', email: 'chenyh1225@gmail.com', game_created_count: 7, game_upload_succeeded_count: 0 },
+      { ...BASE_USER, user_id: 'chenyh1225', email: 'chenyh1225@gmail.com', game_tried_count: 7, game_succeeded_count: 0 },
     ];
     render(<UserTable users={users} onUserClick={() => {}} funnelTotals={{}} />);
 
-    expect(screen.getByText('7 tried / 0 succeeded')).toBeTruthy();
+    expect(screen.getByText('7 / 0')).toBeTruthy();
+  });
+
+  it('drops the words "tried"/"succeeded" -- the slash carries that meaning (T11010)', () => {
+    const users = [{ ...BASE_USER, game_tried_count: 4, game_succeeded_count: 4 }];
+    render(<UserTable users={users} onUserClick={() => {}} funnelTotals={{}} />);
+
+    expect(screen.getByText('4 / 4')).toBeTruthy();
+    expect(screen.queryByText(/tried/)).toBeNull();
+    expect(screen.queryByText(/succeeded/)).toBeNull();
+  });
+
+  it('reads the per-FILE game pair, never the per-GAME game_created_count (T11010)', () => {
+    // The grain bug this fixes: game_created is one event per GAME while
+    // game_upload_succeeded is one per VIDEO FILE, so a 5-angle game rendered
+    // "1 / 5" -- success exceeding attempt. The cell must ignore
+    // game_created_count (kept only as the sort/funnel dimension) entirely.
+    const users = [{
+      ...BASE_USER,
+      game_created_count: 1,      // per GAME -- must NOT reach the cell
+      game_tried_count: 5,        // per FILE
+      game_succeeded_count: 5,
+    }];
+    render(<UserTable users={users} onUserClick={() => {}} funnelTotals={{}} />);
+
+    expect(screen.getByText('5 / 5')).toBeTruthy();
+    expect(screen.queryByText('1 / 5')).toBeNull();
   });
 });
 
@@ -63,7 +89,7 @@ describe('UserTable Clips Saved column (T8240 relabel)', () => {
     const users = [{ ...BASE_USER, clip_tried_count: 12, clip_succeeded_count: 9 }];
     render(<UserTable users={users} onUserClick={() => {}} funnelTotals={{}} />);
 
-    expect(screen.getByText('12 tried / 9 succeeded')).toBeTruthy();
+    expect(screen.getByText('12 / 9')).toBeTruthy();
     expect(screen.queryByText('12')).toBeNull();
   });
 
@@ -73,7 +99,7 @@ describe('UserTable Clips Saved column (T8240 relabel)', () => {
     const users = [{ ...BASE_USER, clip_tried_count: 3, clip_succeeded_count: 3 }];
     render(<UserTable users={users} onUserClick={() => {}} funnelTotals={{}} />);
 
-    expect(screen.getByText('3 tried / 3 succeeded')).toBeTruthy();
+    expect(screen.getByText('3 / 3')).toBeTruthy();
   });
 });
 
@@ -84,8 +110,8 @@ describe('UserTable Exports split (T8230 Focus / Overlay)', () => {
         ...BASE_USER,
         user_id: 'bknoto',
         email: 'bknoto@gmail.com',
-        game_created_count: 0,
-        game_upload_succeeded_count: 0,
+        game_tried_count: 0,
+        game_succeeded_count: 0,
         export_completed_count: 9,   // total (Focus + Overlay + other/recovered)
         framing_exported_count: 4,   // Focus
         overlay_exported_count: 3,   // Overlay
@@ -110,8 +136,8 @@ describe('UserTable Exports split (T8230 Focus / Overlay)', () => {
       {
         ...BASE_USER,
         user_id: 'u1',
-        game_created_count: 0,
-        game_upload_succeeded_count: 0,
+        game_tried_count: 0,
+        game_succeeded_count: 0,
         export_completed_count: 1,
         framing_exported_count: 0,
         overlay_exported_count: 0,

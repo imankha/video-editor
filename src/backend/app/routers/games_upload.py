@@ -287,6 +287,23 @@ async def prepare_upload(request: PrepareUploadRequest):
             "can_afford": balance >= upload_cost,
         }
 
+    # T11010: the per-FILE upload ATTEMPT, emitted once the dedup early-return
+    # above is ruled out -- i.e. exactly when this request is about to push bytes
+    # to R2. This is the honest counterpart to finalize_upload's per-file
+    # game_upload_succeeded / the clip batch's per-clip clip_uploaded, so the
+    # admin Games and Clips pairs share one grain on both halves.
+    #
+    # Keyed on `kind`, never on a duration/size heuristic: the client states the
+    # kind and it is validated to a closed set above, so a short game video and a
+    # long highlight source are each filed correctly (a threshold would misfile
+    # both). Deliberately NOT emitted on the EXISTS branch -- a dedup hit pushes
+    # no bytes and can never produce a matching success, so counting it would
+    # reintroduce the attempt/outcome asymmetry this fixes. A resume DOES count:
+    # it is a genuine second attempt at the same file.
+    from app.analytics import record_milestone
+    record_milestone(user_id, "clip_upload_attempted" if is_clip else "game_upload_attempted",
+                     context={"blake3_hash": blake3_hash, "file_size": request.file_size})
+
     # Check for existing pending upload with same hash (resume support).
     # T8370: scope the resume lookup to the SAME kind — the identical hash can
     # legitimately be mid-upload as a game AND (separately) as a clip, and
