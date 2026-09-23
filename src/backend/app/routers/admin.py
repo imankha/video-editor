@@ -441,7 +441,6 @@ def list_users(
             # per-GAME funnel/sort dimension; the two are deliberately NOT mixed.
             "game_tried_count": row["game_upload_attempted_count"],
             "game_succeeded_count": row["game_upload_succeeded_count"],
-            "game_upload_succeeded_count": row["game_upload_succeeded_count"],
             "clip_created_count": row["clip_created_count"],
             "clip_tried_count": row["clip_tried_count"],
             # T8370's clip_uploaded (direct-upload flow) landed after the T8220

@@ -234,7 +234,10 @@ class TestAdminUsers:
         admin = next(u for u in data["users"] if u["user_id"] == "admin-user")
         assert admin["origin"] == "organic"
         assert admin["game_created_count"] == 10
-        assert admin["game_upload_succeeded_count"] == 1
+        assert admin["game_succeeded_count"] == 1
+        # T11010: game_tried_count is the per-FILE attempt (game_upload_attempted),
+        # NOT the per-GAME game_created above -- none is seeded here, so it is 0.
+        assert admin["game_tried_count"] == 0
         assert admin["clip_created_count"] == 25
         # clip_tried_count sums BOTH flows' attempts (30 clip_save_attempted +
         # 4 clip_upload_attempted); clip_succeeded_count sums both flows' durable
@@ -250,15 +253,20 @@ class TestAdminUsers:
         # regular-user has 3 game_created (attempts) and NO game_upload_succeeded
         # rows seeded -- the counts must stay independent, never collapsed.
         assert regular["game_created_count"] == 3
-        assert regular["game_upload_succeeded_count"] == 0
+        assert regular["game_succeeded_count"] == 0
 
     def test_games_tried_vs_succeeded_never_conflated(self, client_with_milestones):
         """T8220: regression for the bknoto/chenyh1225 prod findings -- the
-        People table's game count must show BOTH the attempt (game_created) and
-        the durable outcome (game_upload_succeeded) as independent numbers, never
-        one bare count standing in for the other. admin-user here mirrors
-        bknoto's shape (attempts >> successes, but not zero); regular-user
-        mirrors chenyh1225's shape (attempts with ZERO successes)."""
+        People table's game count must show BOTH the attempt and the durable
+        outcome as independent numbers, never one bare count standing in for the
+        other. admin-user here mirrors bknoto's shape (attempts >> successes, but
+        not zero); regular-user mirrors chenyh1225's shape (attempts with ZERO
+        successes).
+
+        T11010: the displayed pair is now game_tried_count / game_succeeded_count,
+        both per VIDEO FILE. game_created_count survives as the per-GAME funnel
+        and sort dimension -- this test asserts the three stay independent, since
+        collapsing any two of them is how both prod lies were told."""
         resp = client_with_milestones.get(
             "/api/admin/users", headers=_auth_headers("admin-user")
         )
@@ -267,15 +275,18 @@ class TestAdminUsers:
         regular = next(u for u in data["users"] if u["user_id"] == "regular-user")
 
         # Attempts and successes are NOT the same field/value.
-        assert admin["game_created_count"] != admin["game_upload_succeeded_count"]
+        assert admin["game_created_count"] != admin["game_succeeded_count"]
         assert admin["game_created_count"] == 10
-        assert admin["game_upload_succeeded_count"] == 1
+        assert admin["game_succeeded_count"] == 1
+        # And the per-FILE attempt is its own field, never an alias of either --
+        # the per-GAME count must not leak into the displayed pair.
+        assert admin["game_tried_count"] == 0
 
         # A user with attempts and zero successes must show 0, not fall back to
         # the attempt count or omit the field entirely.
         assert regular["game_created_count"] == 3
-        assert "game_upload_succeeded_count" in regular
-        assert regular["game_upload_succeeded_count"] == 0
+        assert "game_succeeded_count" in regular
+        assert regular["game_succeeded_count"] == 0
 
     def test_clips_tried_vs_succeeded_never_conflated(self, client_with_milestones):
         """Mirrors test_games_tried_vs_succeeded_never_conflated for clips. A clip
@@ -355,7 +366,7 @@ class TestAdminUsers:
         assert "admin-user" in user_ids
         admin = next(u for u in data["users"] if u["user_id"] == "admin-user")
         assert admin["game_created_count"] == 0
-        assert admin["game_upload_succeeded_count"] == 0
+        assert admin["game_succeeded_count"] == 0
         assert admin["origin"] == "organic"
 
     def test_pagination(self, client_with_milestones):

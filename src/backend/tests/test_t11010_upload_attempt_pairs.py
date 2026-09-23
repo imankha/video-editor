@@ -97,7 +97,7 @@ def _prepare(client, kind, blake3_hash, file_size=10 * 1024 * 1024):
 class TestAttemptEventsFireAtPrepare:
     def test_game_prepare_emits_game_upload_attempted(self, monkeypatch, recorded):
         """The per-FILE attempt that matches game_upload_succeeded's grain."""
-        monkeypatch.setattr("app.storage.r2_head_object_global", lambda key: None)
+        monkeypatch.setattr("app.routers.games_upload.r2_head_object_global", lambda key: None)
 
         with _client() as client:
             _prepare(client, "game", GAME_HASH)
@@ -110,7 +110,7 @@ class TestAttemptEventsFireAtPrepare:
 
     def test_clip_prepare_emits_clip_upload_attempted(self, monkeypatch, recorded):
         """T8370 reserved this name; before T11010 nothing ever emitted it."""
-        monkeypatch.setattr("app.storage.r2_head_object_global", lambda key: None)
+        monkeypatch.setattr("app.routers.games_upload.r2_head_object_global", lambda key: None)
 
         with _client() as client:
             _prepare(client, "clip", CLIP_HASH)
@@ -126,7 +126,7 @@ class TestAttemptEventsFireAtPrepare:
         so no duration/size threshold is ever consulted -- a 15-second game clip
         and a several-minute highlight source each file correctly.
         """
-        monkeypatch.setattr("app.storage.r2_head_object_global", lambda key: None)
+        monkeypatch.setattr("app.routers.games_upload.r2_head_object_global", lambda key: None)
 
         with _client() as client:
             _prepare(client, "game", GAME_HASH, file_size=1024)            # tiny game
@@ -136,11 +136,13 @@ class TestAttemptEventsFireAtPrepare:
         assert events.count("game_upload_attempted") == 1, events
         assert events.count("clip_upload_attempted") == 1, events
 
-    def test_dedup_hit_emits_no_attempt(self, monkeypatch, recorded):
-        """An EXISTS early-return pushes no bytes and can never produce a matching
-        success, so counting it would recreate the attempt/outcome asymmetry."""
-        # games_upload does `from app.storage import r2_head_object_global`, so the
-        # ROUTER's bound name is what a dedup hit has to be injected into.
+    def test_game_dedup_hit_emits_no_attempt(self, monkeypatch, recorded):
+        """A GAME dedup hit can never produce a matching success.
+
+        game_upload_succeeded fires only in finalize_upload, which needs an
+        upload_session_id this branch never returns -- so counting the dedup hit
+        would be pure attempt inflation.
+        """
         monkeypatch.setattr(
             "app.routers.games_upload.r2_head_object_global",
             lambda key: {"ContentLength": 10 * 1024 * 1024},
@@ -155,10 +157,33 @@ class TestAttemptEventsFireAtPrepare:
         assert "game_upload_attempted" not in events, events
         assert "clip_upload_attempted" not in events, events
 
+    def test_clip_dedup_hit_DOES_emit_an_attempt(self, monkeypatch, recorded):
+        """A CLIP dedup hit CAN be followed by a real success, so it must count.
+
+        clip_uploaded fires from POST /api/clips/upload per newly-created
+        raw_clips row. The R2 clip object is keyed per USER while raw_clips is
+        per PROFILE, so the same file dedup-hitting here and then landing a row
+        under a second profile (or after its old row was deleted) is a real
+        "0 tried / 1 succeeded" if this branch stays silent.
+        """
+        monkeypatch.setattr(
+            "app.routers.games_upload.r2_head_object_global",
+            lambda key: {"ContentLength": 5 * 1024 * 1024},
+        )
+
+        with _client() as client:
+            resp = _prepare(client, "clip", CLIP_HASH)
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["status"] == "exists"
+        events = [e for _, e in recorded]
+        assert "clip_upload_attempted" in events, events
+        assert "game_upload_attempted" not in events, events
+
     def test_rejected_request_emits_no_attempt(self, monkeypatch, recorded):
         """A malformed hash is refused before the seam -- it is an upload FAILURE
         (record_upload_failure), not a byte-pushing attempt."""
-        monkeypatch.setattr("app.storage.r2_head_object_global", lambda key: None)
+        monkeypatch.setattr("app.routers.games_upload.r2_head_object_global", lambda key: None)
 
         with _client() as client:
             resp = _prepare(client, "game", "not-a-hash")

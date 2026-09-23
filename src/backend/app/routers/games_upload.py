@@ -210,6 +210,11 @@ async def prepare_upload(request: PrepareUploadRequest):
         raise HTTPException(status_code=400, detail=f"Invalid upload kind: {kind!r}")
     is_clip = kind == UploadKind.CLIP.value
 
+    # Imported inside the handler (module-level would be circular, same as the
+    # finalize_upload call site below). T11010 emits the per-file attempt from
+    # two branches of this function, so it is bound once here.
+    from app.analytics import record_milestone
+
     # Validate inputs. A malformed hash/size is a real rejected upload attempt (T7970).
     blake3_hash = request.blake3_hash.lower()
     if not validate_blake3_hash(blake3_hash):
@@ -278,6 +283,27 @@ async def prepare_upload(request: PrepareUploadRequest):
     if head_result:
         # Video already exists in R2 - no upload needed
         # Game creation is handled separately by POST /api/games
+        #
+        # T11010: a dedup hit counts as an ATTEMPT for clips but NOT for games,
+        # because the two kinds reach their success event by different routes:
+        #   game  -> game_upload_succeeded fires ONLY in finalize_upload, which
+        #            needs an upload_session_id this branch never returns. A
+        #            dedup hit can therefore never produce a matching success,
+        #            so counting it would be pure attempt inflation.
+        #   clip  -> clip_uploaded fires from a DIFFERENT endpoint
+        #            (POST /api/clips/upload), once per newly-created raw_clips
+        #            row. The R2 clip object is keyed per USER while raw_clips is
+        #            per PROFILE, so a dedup hit here absolutely can be followed
+        #            by a real clip_uploaded: the same file uploaded under a
+        #            second profile, or re-uploaded after its row was deleted.
+        #            Skipping it there would reproduce the "0 tried / 1
+        #            succeeded" shape this task exists to remove.
+        # Same-profile re-posts are idempotent in the batch (already_existing),
+        # so that case books an attempt with no success -- inflation in the safe
+        # direction, which keeps tried >= succeeded readable.
+        if is_clip:
+            await run_in_context(record_milestone, user_id, "clip_upload_attempted",
+                                 {"blake3_hash": blake3_hash, "file_size": request.file_size})
         return {
             "status": UploadStatus.EXISTS,
             "blake3_hash": blake3_hash,
@@ -287,22 +313,28 @@ async def prepare_upload(request: PrepareUploadRequest):
             "can_afford": balance >= upload_cost,
         }
 
-    # T11010: the per-FILE upload ATTEMPT, emitted once the dedup early-return
-    # above is ruled out -- i.e. exactly when this request is about to push bytes
-    # to R2. This is the honest counterpart to finalize_upload's per-file
-    # game_upload_succeeded / the clip batch's per-clip clip_uploaded, so the
-    # admin Games and Clips pairs share one grain on both halves.
+    # T11010: the per-FILE upload ATTEMPT for the byte-pushing path -- the honest
+    # counterpart to finalize_upload's per-file game_upload_succeeded and the
+    # clip batch's per-clip clip_uploaded, so the admin Games and Clips pairs
+    # share one grain on both halves.
     #
     # Keyed on `kind`, never on a duration/size heuristic: the client states the
     # kind and it is validated to a closed set above, so a short game video and a
     # long highlight source are each filed correctly (a threshold would misfile
-    # both). Deliberately NOT emitted on the EXISTS branch -- a dedup hit pushes
-    # no bytes and can never produce a matching success, so counting it would
-    # reintroduce the attempt/outcome asymmetry this fixes. A resume DOES count:
-    # it is a genuine second attempt at the same file.
-    from app.analytics import record_milestone
-    record_milestone(user_id, "clip_upload_attempted" if is_clip else "game_upload_attempted",
-                     context={"blake3_hash": blake3_hash, "file_size": request.file_size})
+    # both). Validation refusals all return BEFORE this point -- they are
+    # recorded upload FAILURES (_write_upload_failure), not attempts.
+    #
+    # A resume DOES count: it is a genuine second attempt at the same file. Two
+    # known over-counts, both inflating only the "tried" half (so tried >=
+    # succeeded still holds, which is what makes the pair readable):
+    #   - a lost ack on an executed prepare retries via apiFetchWithNetworkRetry
+    #     into the resume branch, booking two attempts for one user attempt;
+    #   - an unaffordable upload books an attempt here, because affordability is
+    #     reported (can_afford) rather than refused -- the client aborts, so no
+    #     success can follow. Not a server refusal, so not a failure event.
+    await run_in_context(record_milestone, user_id,
+                         "clip_upload_attempted" if is_clip else "game_upload_attempted",
+                         {"blake3_hash": blake3_hash, "file_size": request.file_size})
 
     # Check for existing pending upload with same hash (resume support).
     # T8370: scope the resume lookup to the SAME kind — the identical hash can

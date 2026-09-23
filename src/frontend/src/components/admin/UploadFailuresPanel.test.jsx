@@ -15,7 +15,7 @@ const RESPONSE = {
   rates: {
     game: { attempts: 5, succeeded: 4, failed: 1, rate_pct: 80.0 },
     clip: { attempts: 0, succeeded: 0, failed: 0, rate_pct: null,
-            denominator_note: 'outcome-based: clip_upload_attempted is not emitted yet (T8380)' },
+            denominator_note: 'outcome-based (succeeded+failed), not the clip_upload_attempted count' },
   },
 };
 
@@ -39,7 +39,9 @@ describe('UploadFailuresPanel (T10270) -- pure view', () => {
     expect(screen.getByText('Clip Upload Rate')).toBeTruthy();
     expect(screen.getByText('80%')).toBeTruthy();
     expect(screen.getByText('4/5 succeeded (1 failed)')).toBeTruthy();
-    expect(screen.getByText(/clip_upload_attempted is not emitted yet/)).toBeTruthy();
+    // T11010: clip_upload_attempted IS emitted now; the note survives because
+    // this panel's denominator stays outcome-based for window-comparability.
+    expect(screen.getByText(/not the clip_upload_attempted count/)).toBeTruthy();
   });
 
   it('renders "--" for a rate with zero attempts, not a misleading 0%', () => {

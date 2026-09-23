@@ -17,9 +17,16 @@ const PIPELINE_STEPS = [
 ];
 
 // T7510: upload attempt vs durable outcome, rendered as a distinct pair.
-const UPLOAD_ATTEMPT = 'game_created';
+// T11010: the attempt is game_upload_attempted (per VIDEO FILE), NOT
+// game_created (per GAME). This panel opens from a UserTable row, and that cell
+// now reads the per-file pair -- the two surfaces must not disagree about the
+// same user. With game_created here a multi-angle game showed success exceeding
+// attempts, which also drove `gap` negative and silently hid the deficit chip.
+// GAME_STARTED stays available as the per-game dimension, shown separately.
+const UPLOAD_ATTEMPT = 'game_upload_attempted';
 const UPLOAD_SUCCESS = 'game_upload_succeeded';
 const UPLOAD_FAILED = 'game_upload_failed';
+const GAME_STARTED = 'game_created';
 
 // T7510: engagement signals — activity that is NOT a content outcome (watched
 // video, opened editors). Rendered in a visually distinct band so the dashboard
@@ -234,6 +241,7 @@ export function UserDetailPanel({ data, onClose }) {
             const failures = failedMs?.failures || successMs?.failures || null;
             const failedTotal = failedMs?.failed_count ?? failedMs?.count
               ?? successMs?.failed_count ?? 0;
+            const startedCount = milestoneByEvent[GAME_STARTED]?.count ?? 0;
             const gap = attemptCount - successCount;
             return (
               <div className="flex items-center gap-1 text-xs overflow-x-auto pb-1">
@@ -242,14 +250,25 @@ export function UserDetailPanel({ data, onClose }) {
 
                 {/* Upload: attempt -> durable success, with the gap surfaced */}
                 <span className="text-gray-600 mx-0.5">-&gt;</span>
-                <span className={attemptMs?.at ? 'text-purple-400 font-mono' : 'text-gray-600 font-mono'}>Upload</span>
+                {/* Lit when the user ever STARTED an upload. game_upload_attempted
+                    has no history before T11010, so the per-game game_created
+                    also lights it -- this is a display state, not a count. */}
+                <span className={(attemptMs?.at || milestoneByEvent[GAME_STARTED]?.at) ? 'text-purple-400 font-mono' : 'text-gray-600 font-mono'}>Upload</span>
                 <span
                   className="font-mono"
-                  title={failures ? `Failures: ${formatFailures(failures)}` : undefined}
+                  title={
+                    `Game video uploads: attempted / succeeded (per video file)`
+                    + `${startedCount ? ` across ${startedCount} game(s) started` : ''}`
+                    + `${failures ? ` -- Failures: ${formatFailures(failures)}` : ''}`
+                  }
                 >
-                  <span className={successCount > 0 ? 'text-green-400' : 'text-gray-500'}>{successCount}</span>
-                  <span className="text-gray-600">/</span>
+                  {/* T11010: attempted / succeeded, same order as the UserTable
+                      cell this panel opens from (it used to read the pair
+                      backwards, which the table's now-wordless "N / M" would
+                      have made impossible to tell apart). */}
                   <span className="text-gray-400">{attemptCount}</span>
+                  <span className="text-gray-600">/</span>
+                  <span className={successCount > 0 ? 'text-green-400' : 'text-gray-500'}>{successCount}</span>
                   {gap > 0 && (
                     <span className="text-red-400 ml-0.5">(-{gap})</span>
                   )}
