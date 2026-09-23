@@ -345,6 +345,26 @@ export const useUploadStore = create((set, get) => {
     ),
 
     /**
+     * T11040: the game id created by an in-flight upload, or null.
+     *
+     * `onGameCreated` writes this onto the entry the moment the backend has a
+     * game row, which is well before the bytes finish — it is the authoritative
+     * id for anything that needs to save while an upload is still running.
+     * Prefers the active entry, then any entry that has one.
+     *
+     * Callers previously read `uploadGameId` off the store root. That field was
+     * moved onto the per-upload entry when the store went multi-upload, so those
+     * reads had been quietly resolving to `undefined` ever since — which is the
+     * shape that makes a save silently drop instead of resolving its game.
+     */
+    getUploadGameId: () => {
+      const state = get();
+      return selectActiveUpload(state)?.gameId
+        ?? state.uploads.find(u => u.gameId != null)?.gameId
+        ?? null;
+    },
+
+    /**
      * Cancel one upload. A queued entry is simply removed (no server session exists
      * yet). Cancelling the active entry advances the queue; its in-flight XHR
      * continues (aborting multipart R2 uploads is complex) but its callback is
