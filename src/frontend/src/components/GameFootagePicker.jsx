@@ -253,7 +253,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
           }`}
         >
           <div className="text-center">
-            <p className="text-green-400 font-medium truncate">{only.name}</p>
+            <p className="text-green-400 font-medium truncate" title={only.name}>{only.name}</p>
             <p className="text-xs text-gray-500 mt-1">
               {(only.size / (1024 * 1024)).toFixed(1)} MB
             </p>
