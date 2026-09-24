@@ -1,6 +1,6 @@
 # T8620: Append-only payments ledger + Stripe backfill
 
-**Status:** WIP (design approved 2026-09-24 with user rulings: item 4 supervisor variant, item 5 async charge-id fill)
+**Status:** STAGING (merged 2026-09-24, PR #500, 2bcee148; proof VERIFIED at f00ba5c4, Branch CI 36058683620 green. Operator after prod deploy: migrate-postgres (v026+v030), then backfill dry-run -> --write on staging, then prod)
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-03
