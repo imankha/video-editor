@@ -1,6 +1,6 @@
 # T8630: Deletion preserves the financial record and is auditable
 
-**Status:** WAITING ON USER (design gate; decision page https://claude.ai/artifact/C8q3f8hfycuvGN89awrmE4)
+**Status:** WIP (design approved 2026-09-24 with supervisor fixes: surrogate key on account_deletions, no "not personal data" claim, shorter confirmation copy)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-03
