@@ -56,6 +56,28 @@ def _grant_or_503(user_id: str, amount: int, source: str, reference_id: str) -> 
     except CreditsUnavailable:
         raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
 
+
+def _field(obj, key):
+    """Read `key` from a Stripe object (attribute access) or a plain dict (test
+    payloads / webhook event objects), returning None if absent on both."""
+    val = getattr(obj, key, None)
+    if val is None and isinstance(obj, dict):
+        val = obj.get(key)
+    return val
+
+
+def _stripe_ts(epoch) -> datetime:
+    """Convert a Stripe unix `created` timestamp to a tz-aware UTC datetime for a
+    ledger row's `occurred_at` (G6: the ledger records STRIPE's timestamp, not
+    ours -- `now()` at write time drifts from the actual money-movement time and
+    reorders history on backfill vs live). Stripe objects always carry `created`;
+    a missing value is logged loudly and falls back to now() only so an
+    otherwise-valid row is not lost."""
+    if epoch:
+        return datetime.fromtimestamp(epoch, tz=UTC)
+    logger.warning("[Payments] Stripe object missing `created`; using now() for occurred_at")
+    return datetime.now(UTC)
+
 def _record_purchase_ledger(
     *, user_id, stripe_object_id, amount_cents, currency, stripe_charge_id,
     pack, credits, occurred_at, source, reraise: bool,
@@ -373,14 +395,19 @@ async def confirm_payment_intent(request: ConfirmIntentRequest, background_tasks
             latest_charge = intent.get("latest_charge")
         stripe_charge_id = latest_charge if isinstance(latest_charge, str) else None
 
-        _record_purchase_ledger(
+        inserted = _record_purchase_ledger(
             user_id=user_id, stripe_object_id=pi_id, amount_cents=amount_cents,
-            currency="usd", stripe_charge_id=stripe_charge_id,
+            currency=_field(intent, "currency") or "usd", stripe_charge_id=stripe_charge_id,
             pack=pack if pack_info else None, credits=credits,
-            occurred_at=datetime.now(UTC), source=payments_ledger.PaymentSource.CONFIRM_INTENT.value,
+            occurred_at=_stripe_ts(_field(intent, "created")),
+            source=payments_ledger.PaymentSource.CONFIRM_INTENT.value,
             reraise=False,
         )
-        if stripe_charge_id is None:
+        # Schedule the async charge-id fill only for a NEWLY-inserted row missing
+        # its charge id (matches sites B/D). A redelivery observing an existing row
+        # does not re-fire a redundant Stripe retrieve; the backfill is the
+        # recovery path for a charge id a swallowed fill never filled.
+        if inserted and stripe_charge_id is None:
             await payments_ledger.schedule_charge_id_fill(pi_id, background_tasks)
 
     logger.info(
@@ -476,7 +503,8 @@ async def stripe_webhook(request: Request):
                 user_id=user_id, stripe_object_id=pi_id, amount_cents=amount_cents,
                 currency=session.get("currency") or "usd", stripe_charge_id=None,
                 pack=pack if pack_info else None, credits=credits,
-                occurred_at=datetime.now(UTC), source=payments_ledger.PaymentSource.WEBHOOK.value,
+                occurred_at=_stripe_ts(session.get("created")),
+                source=payments_ledger.PaymentSource.WEBHOOK.value,
                 reraise=True,
             )
             if inserted:
@@ -545,14 +573,17 @@ async def stripe_webhook(request: Request):
         else:
             latest_charge = intent.get("latest_charge")
             stripe_charge_id = latest_charge if isinstance(latest_charge, str) else None
-            _record_purchase_ledger(
+            inserted = _record_purchase_ledger(
                 user_id=user_id, stripe_object_id=pi_id, amount_cents=amount_cents,
                 currency=intent.get("currency") or "usd", stripe_charge_id=stripe_charge_id,
                 pack=pack if pack_info else None, credits=credits,
-                occurred_at=datetime.now(UTC), source=payments_ledger.PaymentSource.WEBHOOK.value,
+                occurred_at=_stripe_ts(intent.get("created")),
+                source=payments_ledger.PaymentSource.WEBHOOK.value,
                 reraise=True,
             )
-            if stripe_charge_id is None:
+            # Gate on a NEWLY-inserted row (matches sites B/D) so a redelivery
+            # doesn't re-fire a redundant Stripe retrieve for an already-filled row.
+            if inserted and stripe_charge_id is None:
                 await payments_ledger.schedule_charge_id_fill(pi_id, None)
 
         logger.info(
@@ -593,38 +624,73 @@ async def stripe_webhook(request: Request):
     # STEP: this only fires once `charge.refunded` is added to the LIVE-mode webhook
     # endpoint in the Stripe dashboard (webhook events are per-endpoint + per-mode).
     #
-    # T8620: the durable idempotency this comment used to flag as a follow-up is now
-    # CLOSED. The refund keys the `payments` ledger row on the individual `re_...` id
-    # (unique on (stripe_object_id, kind)) and bumps total_spent_cents only when that
-    # insert is genuinely new (`_record_refund_ledger`, below) -- a Stripe redelivery
-    # of the same refund event is a safe no-op on both, not a double-decrement.
+    # T8620 G3: DO NOT read `charge["refunds"]` from the webhook payload. On current
+    # Stripe API versions the Charge no longer embeds `refunds` (default since API
+    # version 2022-11-15), and a webhook payload cannot expand it -- so keying off
+    # the payload silently wrote NO ledger row, logged CRITICAL, and returned 200
+    # (no redelivery), which is worse than the pre-T8620 amount_refunded fallback.
+    # Instead, fetch the authoritative refund list from Stripe and record EACH
+    # money-moved refund idempotently, keyed on its `re_...` id (unique on
+    # (stripe_object_id, kind)). This makes partial + repeated refunds correct and
+    # lets a redelivery (or a later charge.refunded for a second partial refund)
+    # self-heal any refund a prior delivery missed. Cache is decremented ONLY for
+    # rows newly inserted, so a redelivery never double-decrements.
     if event["type"] == "charge.refunded":
         charge = event["data"]["object"]
+        charge_id = charge.get("id")
         user_id = _user_id_for_charge(charge)
         if not user_id:
-            logger.error(f"[Payments] charge.refunded without resolvable user_id: charge={charge.get('id')}")
+            logger.error(f"[Payments] charge.refunded without resolvable user_id: charge={charge_id}")
             return {"status": "error", "message": "No user_id"}
 
-        refund_cents, refund_id = _latest_refund(charge)
-        if refund_cents <= 0:
-            logger.info(f"[Payments] charge.refunded with zero refund delta: charge={charge.get('id')}")
-            return {"status": "ignored", "type": "charge.refunded"}
-
-        if not refund_id:
+        # Fetch the charge's refunds from Stripe (payload can't be trusted to carry
+        # them). A failure here must be LOUD and RE-RAISE so the webhook returns
+        # non-2xx and Stripe redelivers (ruling 4c) -- never a silent 200 that drops
+        # the refund permanently.
+        try:
+            refunds = list(stripe.Refund.list(charge=charge_id, limit=100).auto_paging_iter())
+        except stripe.StripeError:
             logger.critical(
-                "[Payments] charge.refunded: charge %s has a nonzero refund delta but "
-                "no resolvable individual refund id -- cannot key the ledger row",
-                charge.get("id"),
+                "[Payments] charge.refunded: Stripe Refund.list failed for charge %s -- "
+                "re-raising so Stripe redelivers", charge_id, exc_info=True,
             )
-        else:
-            _record_refund_ledger(
-                user_id=user_id, stripe_object_id=refund_id, amount_cents=-refund_cents,
-                currency=charge.get("currency") or "usd", stripe_charge_id=charge.get("id"),
-                occurred_at=datetime.now(UTC), source=payments_ledger.PaymentSource.WEBHOOK.value,
+            raise
+
+        # Status rule: the reconciler (revenue_reconciliation.build_stripe_net_by_user)
+        # nets on the charge's cumulative `amount_refunded`, which Stripe advances only
+        # for SUCCEEDED refunds -- so we count `succeeded` refunds only. Pending refunds
+        # are deliberately skipped here and picked up by a later delivery once they
+        # settle (documented in T8620-design.md §G3).
+        recorded = 0
+        total_cents = 0
+        for refund in refunds:
+            if _field(refund, "status") != "succeeded":
+                continue
+            amount = _field(refund, "amount") or 0
+            re_id = _field(refund, "id")
+            if amount <= 0 or not re_id:
+                continue
+            total_cents += amount
+            inserted = _record_refund_ledger(
+                user_id=user_id, stripe_object_id=re_id, amount_cents=-amount,
+                currency=_field(refund, "currency") or charge.get("currency") or "usd",
+                stripe_charge_id=charge_id,
+                occurred_at=_stripe_ts(_field(refund, "created")),
+                source=payments_ledger.PaymentSource.WEBHOOK.value,
                 reraise=True,
             )
-        logger.info(f"[Payments] Refund recorded: user={user_id}, charge={charge.get('id')}, cents={refund_cents}")
-        return {"status": "refund_recorded", "user_id": user_id, "cents": refund_cents}
+            if inserted:
+                recorded += 1
+
+        if total_cents <= 0:
+            logger.info(f"[Payments] charge.refunded with no succeeded refunds: charge={charge_id}")
+            return {"status": "ignored", "type": "charge.refunded"}
+
+        logger.info(
+            f"[Payments] Refund recorded: user={user_id}, charge={charge_id}, "
+            f"succeeded_cents={total_cents}, new_rows={recorded}"
+        )
+        return {"status": "refund_recorded", "user_id": user_id, "cents": total_cents, "new_rows": recorded}
 
     # Return 200 for all other event types (Stripe expects it)
     return {"status": "ignored", "type": event["type"]}
@@ -645,27 +711,6 @@ def _user_id_for_charge(charge) -> str | None:
         except stripe.StripeError as e:
             logger.error(f"[Payments] Failed to retrieve PI {pi_id} for refund: {e}")
     return None
-
-
-def _latest_refund_amount(charge) -> int:
-    """Cents refunded by THIS refund event. The newest entry in charge.refunds.data is
-    the just-created refund; using it (not the cumulative amount_refunded) keeps partial
-    and repeated refunds correct. Falls back to cumulative if the list is absent."""
-    return _latest_refund(charge)[0]
-
-
-def _latest_refund(charge) -> tuple[int, str | None]:
-    """(cents, refund_id) for THIS refund event. The newest entry in
-    charge.refunds.data is the just-created refund (T8620: also extracts its
-    `re_...` id -- the design's required ledger idempotency key, design §2a --
-    which the amount-only helper above never needed). Falls back to
-    (cumulative amount_refunded, None) if the list is absent; a None id means
-    the ledger row cannot be written (logged CRITICAL at the call site)."""
-    refunds = charge.get("refunds") or {}
-    data = refunds.get("data") if isinstance(refunds, dict) else None
-    if data:
-        return data[0].get("amount", 0) or 0, data[0].get("id")
-    return charge.get("amount_refunded", 0) or 0, None
 
 
 # ---------------------------------------------------------------------------
@@ -764,7 +809,8 @@ async def verify_session(request: Request, background_tasks: BackgroundTasks = N
             user_id=user_id, stripe_object_id=pi_id, amount_cents=amount_cents,
             currency=currency, stripe_charge_id=None,
             pack=pack if pack_info else None, credits=credits,
-            occurred_at=datetime.now(UTC), source=payments_ledger.PaymentSource.VERIFY.value,
+            occurred_at=_stripe_ts(_field(session, "created")),
+            source=payments_ledger.PaymentSource.VERIFY.value,
             reraise=False,
         )
         if inserted:

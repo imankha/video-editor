@@ -11,6 +11,8 @@ import asyncio
 
 import pytest
 
+from app.pricing import CREDIT_PACKS
+
 USER_ID = "user-a"
 
 
@@ -29,7 +31,12 @@ class _FakeRequest:
 # amount so the (now-unconditional) ledger write actually fires instead of
 # logging CRITICAL and skipping (see payments.py's "no silent fallback" guard
 # on a missing amount).
-_PACK_PRICE_CENTS = {"starter": 399, "popular": 699, "best_value": 1299}
+#
+# T10220 prep: derive prices from CREDIT_PACKS (the single pricing source) so
+# that when T10220 reprices a pack, BOTH the fixture's captured amount AND the
+# revenue-once assertions below (which read the same map) move together and stay
+# consistent -- never a hard-coded 699 that silently disagrees post-reprice.
+_PACK_PRICE_CENTS = {key: pack["price_cents"] for key, pack in CREDIT_PACKS.items()}
 
 
 def _checkout_event(session_id="cs_dup_1", credits=40, pack="starter", payment_intent=None):
@@ -160,7 +167,7 @@ class TestWebhookRaceDoesNotDoubleCountRevenue:
         asyncio.run(payments_mod.stripe_webhook(_FakeRequest()))
 
         assert get_credit_balance(USER_ID)["balance"] == 40, "grant is atomic; balance must not double"
-        assert spent_calls == [(USER_ID, 699)], f"revenue double-counted: {spent_calls}"
+        assert spent_calls == [(USER_ID, _PACK_PRICE_CENTS["popular"])], f"revenue double-counted: {spent_calls}"
         assert [m for m in milestone_calls if m[1] == "credit_purchased"] == [(USER_ID, "credit_purchased")]
 
     def test_payment_intent_race_counts_revenue_once(self, monkeypatch):
@@ -174,7 +181,7 @@ class TestWebhookRaceDoesNotDoubleCountRevenue:
         asyncio.run(payments_mod.stripe_webhook(_FakeRequest()))
 
         assert get_credit_balance(USER_ID)["balance"] == 40, "grant is atomic; balance must not double"
-        assert spent_calls == [(USER_ID, 699)], f"revenue double-counted: {spent_calls}"
+        assert spent_calls == [(USER_ID, _PACK_PRICE_CENTS["popular"])], f"revenue double-counted: {spent_calls}"
         assert [m for m in milestone_calls if m[1] == "credit_purchased"] == [(USER_ID, "credit_purchased")]
 
 

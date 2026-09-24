@@ -66,6 +66,50 @@ has been amended in place and this list is the index of what changed.
 Operational carry-over stands: prod owes v026; `migrate-postgres` must run before any
 staging/prod backfill.
 
+## Round-2 amendments (2026-09-24, proof round 2)
+
+The independent proof verifier returned MORE_PROOF_REQUIRED. These amendments correct
+two design statements that the first implementation followed literally and that were
+wrong on current Stripe API versions. Where they conflict with the body below (§2a
+"decision 2a", §4 refund diagram), THIS section is the authority.
+
+- **G3 — refund resolution no longer reads the webhook payload's `refunds`.** The body
+  (decision 2a, §4 diagram) said to key the refund row on
+  `charge["refunds"]["data"][0]["id"]`. That is unsound: on current Stripe API versions
+  a `Charge` object does NOT embed `refunds` (default since API version 2022-11-15) and a
+  webhook payload cannot expand it, and the codebase pins no API version. Reading the
+  payload therefore wrote NO ledger row, logged CRITICAL, returned 200 (no redelivery),
+  and stopped decrementing the cache — strictly worse than pre-T8620's `amount_refunded`
+  fallback. **Corrected mechanism (implemented):** the `charge.refunded` branch fetches the
+  authoritative list with `stripe.Refund.list(charge=<ch id>, limit=100).auto_paging_iter()`
+  and records EACH money-moved refund idempotently, keyed on its own `re_...` id. Partial
+  and repeated refunds are each their own row; a redelivery or a later `charge.refunded`
+  self-heals any refund a prior delivery missed. If `Refund.list` fails, the branch logs
+  CRITICAL and **re-raises** (webhook non-2xx → Stripe redelivers, ruling 4c). The dead
+  `_latest_refund` / `_latest_refund_amount` helpers are deleted; the payload's `refunds`
+  key, if present, is ignored.
+
+- **Refund status rule.** Only refunds whose `status == "succeeded"` are recorded;
+  `pending` / `failed` / `canceled` are skipped. This matches the reconciler
+  (`revenue_reconciliation.build_stripe_net_by_user`), which nets on the charge's cumulative
+  `amount_refunded` — a field Stripe advances only for succeeded refunds. The reconciler has
+  no explicit per-refund status predicate, so `succeeded`-only is the faithful match; a
+  pending refund is deliberately left for a later delivery to record once it settles. The
+  backfill's `_refund_rows` applies the identical rule. There is no `LOST_DISPUTE`-style
+  status set for refunds; the single literal `"succeeded"` lives at both the live site and
+  the backfill.
+
+- **G6 — `occurred_at` is Stripe's timestamp, never `now()`.** Every live write site now
+  sets `occurred_at` from the Stripe object's own `created`: the PaymentIntent's `created`
+  for purchases (sites A/C), the checkout Session's `created` for B/D, and each refund's
+  own `created` for refund rows. `now()` at write time drifts from actual money-movement
+  time and would reorder history relative to the backfill (which already used Stripe's
+  timestamps). A missing `created` logs loudly and falls back to `now()` only so an
+  otherwise-valid row is not dropped (`_stripe_ts` helper). The `has_processed_payment`
+  early-return at `confirm-intent` / `verify_session` is kept as-is; recovery of a missed
+  ledger row at those two user-facing sites depends on the webhook path (C), which is the
+  self-healing site — the user-facing sites swallow on failure by design (ruling 4c).
+
 ---
 
 ## 1. Current state (the holes)

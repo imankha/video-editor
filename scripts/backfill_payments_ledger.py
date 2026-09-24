@@ -117,20 +117,25 @@ def _dispute_lost_row(intent: dict, charge: dict | None):
 
 
 def _refund_rows(charge: dict):
-    """Yield (re_id, amount) for every individual refund on a charge with a
-    nonzero cumulative amount_refunded. Retrieves the refund list explicitly --
-    `fetch_stripe_intents`'s expand does not include the per-refund list."""
+    """Yield (re_id, amount, created) for every SUCCEEDED individual refund on a
+    charge with a nonzero cumulative amount_refunded. Retrieves the refund list
+    explicitly -- `fetch_stripe_intents`'s expand does not include the per-refund
+    list. Status rule matches the live webhook branch and the reconciler
+    (`amount_refunded` advances only for succeeded refunds), so pending/failed/
+    canceled refunds are skipped (T8620-design.md §G3)."""
     if not charge or (charge.get("amount_refunded", 0) or 0) <= 0:
         return
     charge_id = charge.get("id")
     if not charge_id:
         return
-    refund_list = stripe.Refund.list(charge=charge_id)
+    refund_list = stripe.Refund.list(charge=charge_id, limit=100)
     for refund in refund_list.auto_paging_iter():
+        if refund.get("status") != "succeeded":
+            continue
         amount = refund.get("amount", 0) or 0
         refund_id = refund.get("id")
         if refund_id and amount > 0:
-            yield refund_id, amount
+            yield refund_id, amount, refund.get("created")
 
 
 def _iso(created_epoch):
@@ -199,8 +204,9 @@ def run_backfill(config: dict, write: bool):
         else:
             print(f"  purchase kind=purchase user={user_id} amount_cents={amount_cents} stripe_object_id={pi_id}")
 
-        # Refund rows (one per individual re_... id).
-        for refund_id, refund_amount in _refund_rows(charge):
+        # Refund rows (one per individual SUCCEEDED re_... id). Each refund's own
+        # `created` is the occurred_at (G6), not the PI's.
+        for refund_id, refund_amount, refund_created in _refund_rows(charge):
             would_be_rows.append(("refund", user_id, -refund_amount, refund_id))
             if write:
                 with get_pg() as conn:
@@ -208,7 +214,9 @@ def run_backfill(config: dict, write: bool):
                     did_insert = payments_ledger.record_refund(
                         cur, user_id=user_id, stripe_object_id=refund_id,
                         amount_cents=-refund_amount, currency=pi.get("currency") or "usd",
-                        stripe_charge_id=charge_id, occurred_at=occurred_at, source="backfill",
+                        stripe_charge_id=charge_id,
+                        occurred_at=_iso(refund_created) if refund_created else occurred_at,
+                        source="backfill",
                     )
                 inserted["refund"] += 1 if did_insert else 0
                 skipped["refund"] += 0 if did_insert else 1

@@ -207,6 +207,29 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
   the charge id — a second partial refund on the same charge must get its own row).
   `dispute_lost`/`dispute_won` key on the Dispute id (`dp_...`) — reserved, no live writer yet
   (see below).
+- **Refund resolution fetches the list from Stripe — it does NOT read the webhook payload's
+  `refunds` (T8620 round-2 G3, a real correctness fix).** On current Stripe API versions a
+  `Charge` object does NOT embed `refunds` (default since API version 2022-11-15; a webhook
+  payload cannot expand it) and this codebase pins no API version, so the first-draft
+  `charge["refunds"]["data"][0]` wrote NO row, logged CRITICAL, and returned 200 (no
+  redelivery) on every real refund — worse than the pre-T8620 `amount_refunded` fallback. The
+  `charge.refunded` branch now calls `stripe.Refund.list(charge=<ch>, limit=100).auto_paging_iter()`
+  and records EACH refund whose `status == "succeeded"` (pending/failed/canceled skipped),
+  keyed on its own `re_...` id, `occurred_at = refund.created`. Partial + repeated refunds are
+  each their own row; a redelivery or a later `charge.refunded` self-heals a missed refund. A
+  `Refund.list` failure logs CRITICAL and RE-RAISES (webhook non-2xx → redeliver). The
+  `succeeded`-only rule matches the reconciler (`build_stripe_net_by_user` nets on cumulative
+  `amount_refunded`, which Stripe advances only for succeeded refunds); the backfill's
+  `_refund_rows` applies the identical rule. The old `_latest_refund`/`_latest_refund_amount`
+  helpers are DELETED.
+- **`occurred_at` is Stripe's timestamp, never `now()` (T8620 round-2 G6).** Every live site
+  sets it from the source object's own `created`: the PaymentIntent's `created` for purchases
+  (A/C), the Checkout Session's `created` for B/D, each refund's `created` for refund rows
+  (`_stripe_ts`/`_field` helpers in `routers/payments.py`). `now()` at write time drifts from
+  actual money-movement time and reorders history relative to the backfill (which already used
+  Stripe timestamps). A missing `created` logs loudly and falls back to `now()` only so a valid
+  row is not dropped. Recovery of a row missed at the two user-facing sites (which swallow on
+  failure) depends on the webhook path (C), the self-healing site.
 - **Write path is intentionally NOT gated on `credit_ledger.grant()`'s `applied` flag.** The
   ledger insert (`payments_ledger.record_purchase`/`record_refund`) runs on EVERY observation of
   a succeeded/paid Stripe object at all 5 write sites in `routers/payments.py`
