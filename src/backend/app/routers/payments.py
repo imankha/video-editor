@@ -13,15 +13,18 @@ Credit packs come from app/pricing.json via app.pricing.CREDIT_PACKS (single sou
 
 import logging
 import os
+from datetime import UTC, datetime
 
 import stripe
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 
-from ..analytics import decrement_total_spent, increment_total_spent, record_milestone
+from ..analytics import record_milestone
 from ..pricing import CREDIT_PACKS
+from ..services import payments_ledger
 from ..services.auth_db import get_user_by_id
 from ..services.credit_ledger import CreditsUnavailable, credit_key, grant, has_processed_payment
+from ..services.pg import get_pg
 from ..services.user_db import get_stripe_customer_id, set_stripe_customer_id
 from ..user_context import get_current_user_id
 
@@ -36,8 +39,8 @@ def _grant_or_503(user_id: str, amount: int, source: str, reference_id: str) -> 
     (Stripe/the frontend both retry on 5xx, so the window fails loudly, never
     wrongly -- design 4a).
 
-    Callers MUST gate revenue analytics (record_milestone /
-    increment_total_spent) on the returned `applied`. The `has_processed_payment`
+    Callers MUST gate milestone analytics (record_milestone) on the returned
+    `applied`. The `has_processed_payment`
     guard above every call site is a plain UNLOCKED read: two concurrent
     deliveries of the same Stripe event (redelivery, or webhook racing
     /confirm-intent) can both pass it. grant() refuses the second credit
@@ -52,6 +55,67 @@ def _grant_or_503(user_id: str, amount: int, source: str, reference_id: str) -> 
         return grant(user_id, amount, source, key, reference_id=reference_id)
     except CreditsUnavailable:
         raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
+
+def _record_purchase_ledger(
+    *, user_id, stripe_object_id, amount_cents, currency, stripe_charge_id,
+    pack, credits, occurred_at, source, reraise: bool,
+):
+    """Ledger insert + conditional cache bump in ONE `get_pg()` transaction
+    (design §4). Runs on EVERY observation of a succeeded/paid payment — NOT
+    gated on `result["applied"]`; the unique (stripe_object_id, kind) key makes
+    a redelivery a safe no-op. `reraise` selects the site-type failure mode
+    (design §5, ruling 4c): True for webhook sites (so Stripe redelivers),
+    False for user-facing sites (which must swallow so the payer still sees
+    success).
+    """
+    try:
+        with get_pg() as conn:
+            cur = conn.cursor()
+            inserted = payments_ledger.record_purchase(
+                cur, user_id=user_id, stripe_object_id=stripe_object_id,
+                amount_cents=amount_cents, currency=currency,
+                stripe_charge_id=stripe_charge_id, pack=pack, credits=credits,
+                occurred_at=occurred_at, source=source,
+            )
+            if inserted:
+                payments_ledger.bump_total_spent(cur, user_id, amount_cents)
+        return inserted
+    except Exception:
+        logger.critical(
+            "[Payments] Ledger insert failed for purchase pi=%s user=%s amount_cents=%s "
+            "source=%s", stripe_object_id, user_id, amount_cents, source, exc_info=True,
+        )
+        if reraise:
+            raise
+        return False
+
+
+def _record_refund_ledger(
+    *, user_id, stripe_object_id, amount_cents, currency, stripe_charge_id,
+    occurred_at, source, reraise: bool,
+):
+    """Refund counterpart to `_record_purchase_ledger` (design §4)."""
+    try:
+        with get_pg() as conn:
+            cur = conn.cursor()
+            inserted = payments_ledger.record_refund(
+                cur, user_id=user_id, stripe_object_id=stripe_object_id,
+                amount_cents=amount_cents, currency=currency,
+                stripe_charge_id=stripe_charge_id, occurred_at=occurred_at,
+                source=source,
+            )
+            if inserted:
+                payments_ledger.bump_total_spent(cur, user_id, amount_cents)
+        return inserted
+    except Exception:
+        logger.critical(
+            "[Payments] Ledger insert failed for refund re=%s user=%s amount_cents=%s "
+            "source=%s", stripe_object_id, user_id, amount_cents, source, exc_info=True,
+        )
+        if reraise:
+            raise
+        return False
+
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -229,7 +293,7 @@ class ConfirmIntentRequest(BaseModel):
 
 
 @router.post("/confirm-intent")
-async def confirm_payment_intent(request: ConfirmIntentRequest):
+async def confirm_payment_intent(request: ConfirmIntentRequest, background_tasks: BackgroundTasks = None):
     """
     Verify a PaymentIntent succeeded and grant credits.
 
@@ -283,14 +347,41 @@ async def confirm_payment_intent(request: ConfirmIntentRequest):
     new_balance = result["balance"]
 
     pack_info = CREDIT_PACKS.get(pack)
-    # Only record revenue analytics for the delivery that ACTUALLY applied the
+    # Only record milestone analytics for the delivery that ACTUALLY applied the
     # grant -- a concurrent duplicate that lost the idempotency race must not
-    # double-count total_spent_cents (see _grant_or_503).
+    # double-count milestone events (see _grant_or_503).
     if result["applied"]:
         record_milestone(user_id, "payment_completed", {"amount_cents": pack_info["price_cents"] if pack_info else 0, "credits": credits})
         record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
-        if pack_info:
-            increment_total_spent(user_id, pack_info["price_cents"])
+
+    # Site A: ledger insert runs on EVERY observation, not gated on `applied`
+    # (design §4, ruling 4). amount_cents from Stripe's captured amount, never
+    # the local pack price (design §2c). `latest_charge` is a bare id here
+    # (not expanded) -- use it directly if present, else NULL + background fill.
+    amount_cents = getattr(intent, "amount_received", None)
+    if amount_cents is None and isinstance(intent, dict):
+        amount_cents = intent.get("amount_received")
+    if not amount_cents:
+        logger.critical(
+            "[Payments] confirm-intent: succeeded PI %s has no amount_received -- "
+            "internal inconsistency, not inserting a ledger row with a guessed amount",
+            pi_id,
+        )
+    else:
+        latest_charge = getattr(intent, "latest_charge", None)
+        if latest_charge is None and isinstance(intent, dict):
+            latest_charge = intent.get("latest_charge")
+        stripe_charge_id = latest_charge if isinstance(latest_charge, str) else None
+
+        _record_purchase_ledger(
+            user_id=user_id, stripe_object_id=pi_id, amount_cents=amount_cents,
+            currency="usd", stripe_charge_id=stripe_charge_id,
+            pack=pack if pack_info else None, credits=credits,
+            occurred_at=datetime.now(UTC), source=payments_ledger.PaymentSource.CONFIRM_INTENT.value,
+            reraise=False,
+        )
+        if stripe_charge_id is None:
+            await payments_ledger.schedule_charge_id_fill(pi_id, background_tasks)
 
     logger.info(
         f"[Payments] Confirmed + granted {credits} credits to {user_id} "
@@ -342,27 +433,61 @@ async def stripe_webhook(request: Request):
             logger.error(f"[Payments] Webhook missing metadata: user_id={user_id}, credits={credits}")
             return {"status": "error", "message": "Missing metadata"}
 
-        # Fast-path: skip work if already processed
-        if has_processed_payment(user_id, session_id):
-            logger.info(f"[Payments] Duplicate webhook for session {session_id}, skipping")
-            return {"status": "already_processed"}
+        # Fast-path: skip the GRANT if already processed -- but the ledger
+        # insert below still must run on every observation, including this
+        # one (design §4, ruling 4). See the identical comment on the
+        # payment_intent.succeeded branch below for why this must not return
+        # early.
+        already_processed = has_processed_payment(user_id, session_id)
+        if already_processed:
+            logger.info(f"[Payments] Duplicate webhook for session {session_id}, granting skipped, retrying ledger insert")
+            new_balance = None
+            pack_info = CREDIT_PACKS.get(pack)
+            result = {"applied": False}
+        else:
+            # idempotency_key = stripe:{session_id} -- credit_ledger.grant() itself
+            # refuses a double-credit atomically. `applied` gates the milestone
+            # analytics so a redelivery that passed the unlocked
+            # has_processed_payment read above cannot double-count them
+            # (see _grant_or_503).
+            result = _grant_or_503(user_id, credits, "stripe_purchase", session_id)
+            new_balance = result["balance"]
+            pack_info = CREDIT_PACKS.get(pack)
 
-        # idempotency_key = stripe:{session_id} -- credit_ledger.grant() itself
-        # refuses a double-credit atomically. `applied` gates the analytics so a
-        # redelivery that passed the unlocked has_processed_payment read above
-        # cannot double-count revenue (see _grant_or_503).
-        result = _grant_or_503(user_id, credits, "stripe_purchase", session_id)
-        new_balance = result["balance"]
-
-        pack_info = CREDIT_PACKS.get(pack)
         if result["applied"]:
             record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
-            if pack_info:
-                increment_total_spent(user_id, pack_info["price_cents"])
+
+        # Site B: ledger insert runs on EVERY observation, not gated on
+        # `applied` (design §4, ruling 4). Amount from session.amount_total
+        # (already-captured total, no extra Stripe call -- design §2c), keyed
+        # on the PI id (extracted from session["payment_intent"]) so this
+        # converges with the verify_session (D) and payment_intent.succeeded
+        # (C) sites for the same PI.
+        pi_id = session.get("payment_intent")
+        amount_cents = session.get("amount_total")
+        if not pi_id or not amount_cents:
+            logger.critical(
+                "[Payments] webhook checkout.session.completed: session %s missing "
+                "payment_intent/amount_total -- internal inconsistency, not inserting "
+                "a ledger row", session_id,
+            )
+        else:
+            inserted = _record_purchase_ledger(
+                user_id=user_id, stripe_object_id=pi_id, amount_cents=amount_cents,
+                currency=session.get("currency") or "usd", stripe_charge_id=None,
+                pack=pack if pack_info else None, credits=credits,
+                occurred_at=datetime.now(UTC), source=payments_ledger.PaymentSource.WEBHOOK.value,
+                reraise=True,
+            )
+            if inserted:
+                await payments_ledger.schedule_charge_id_fill(pi_id, None)
+
         logger.info(
             f"[Payments] Granted {credits} credits to {user_id} "
             f"(pack={pack}, session={session_id}), balance={new_balance}"
         )
+        if already_processed:
+            return {"status": "already_processed", "credits": credits, "balance": new_balance}
         return {"status": "credits_granted", "credits": credits, "balance": new_balance}
 
     # Handle PaymentIntent success (T526 — inline Payment Element fallback)
@@ -378,27 +503,64 @@ async def stripe_webhook(request: Request):
             logger.error(f"[Payments] Webhook PI missing metadata: user_id={user_id}, credits={credits}")
             return {"status": "error", "message": "Missing metadata"}
 
-        # Fast-path: skip work if already processed
-        if has_processed_payment(user_id, pi_id):
-            logger.info(f"[Payments] Duplicate webhook for PI {pi_id}, skipping")
-            return {"status": "already_processed"}
+        # Fast-path: skip the GRANT if already processed -- but the ledger
+        # insert below still must run on every observation, including this
+        # one (design §4, ruling 4). Gating the ledger behind this same
+        # fast-path would make a redelivery -- the exact case where a prior
+        # ledger write is most likely to have failed -- unable to ever retry
+        # it, defeating the whole point of moving the insert off the one-shot
+        # `applied` gate. So this branch does NOT return early; it skips
+        # straight to the (still unconditional) ledger block below.
+        already_processed = has_processed_payment(user_id, pi_id)
+        if already_processed:
+            logger.info(f"[Payments] Duplicate webhook for PI {pi_id}, granting skipped, retrying ledger insert")
+            new_balance = None
+            pack_info = CREDIT_PACKS.get(pack)
+            result = {"applied": False}
+        else:
+            # idempotency_key = stripe:{pi_id} -- credit_ledger.grant() itself
+            # refuses a double-credit atomically. `applied` gates the milestone
+            # analytics so a redelivery that passed the unlocked
+            # has_processed_payment read above cannot double-count them
+            # (see _grant_or_503).
+            result = _grant_or_503(user_id, credits, "stripe_purchase", pi_id)
+            new_balance = result["balance"]
+            pack_info = CREDIT_PACKS.get(pack)
 
-        # idempotency_key = stripe:{pi_id} -- credit_ledger.grant() itself
-        # refuses a double-credit atomically. `applied` gates the analytics so a
-        # redelivery that passed the unlocked has_processed_payment read above
-        # cannot double-count revenue (see _grant_or_503).
-        result = _grant_or_503(user_id, credits, "stripe_purchase", pi_id)
-        new_balance = result["balance"]
-
-        pack_info = CREDIT_PACKS.get(pack)
         if result["applied"]:
             record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
-            if pack_info:
-                increment_total_spent(user_id, pack_info["price_cents"])
+
+        # Site C: ledger insert runs on EVERY observation, not gated on
+        # `applied` (design §4, ruling 4). Amount from intent["amount_received"]
+        # (already captured, no extra Stripe call -- design §2c);
+        # intent["latest_charge"] is a bare id here, so stripe_charge_id is set
+        # directly with no background fill needed.
+        amount_cents = intent.get("amount_received")
+        if not amount_cents:
+            logger.critical(
+                "[Payments] webhook payment_intent.succeeded: PI %s has no "
+                "amount_received -- internal inconsistency, not inserting a ledger "
+                "row with a guessed amount", pi_id,
+            )
+        else:
+            latest_charge = intent.get("latest_charge")
+            stripe_charge_id = latest_charge if isinstance(latest_charge, str) else None
+            _record_purchase_ledger(
+                user_id=user_id, stripe_object_id=pi_id, amount_cents=amount_cents,
+                currency=intent.get("currency") or "usd", stripe_charge_id=stripe_charge_id,
+                pack=pack if pack_info else None, credits=credits,
+                occurred_at=datetime.now(UTC), source=payments_ledger.PaymentSource.WEBHOOK.value,
+                reraise=True,
+            )
+            if stripe_charge_id is None:
+                await payments_ledger.schedule_charge_id_fill(pi_id, None)
+
         logger.info(
             f"[Payments] Webhook granted {credits} credits to {user_id} "
             f"(pack={pack}, pi={pi_id}), balance={new_balance}"
         )
+        if already_processed:
+            return {"status": "already_processed", "credits": credits, "balance": new_balance}
         return {"status": "credits_granted", "credits": credits, "balance": new_balance}
 
     # Handle PaymentIntent failure (T7510 — attempt-vs-outcome funnel honesty).
@@ -431,12 +593,11 @@ async def stripe_webhook(request: Request):
     # STEP: this only fires once `charge.refunded` is added to the LIVE-mode webhook
     # endpoint in the Stripe dashboard (webhook events are per-endpoint + per-mode).
     #
-    # IDEMPOTENCY LIMITATION (documented follow-up, NOT fixed here): unlike the
-    # credit-grant branches, this decrement has no processed-marker guard, because a
-    # durable one would need a new refund-ledger table and T5760 is constrained to no
-    # schema change. A Stripe redelivery would double-decrement, leaving local BELOW
-    # Stripe net — which the reconciliation pass detects (negative delta) and heal
-    # corrects. Durable refund idempotency is a follow-up alongside dispute webhooks.
+    # T8620: the durable idempotency this comment used to flag as a follow-up is now
+    # CLOSED. The refund keys the `payments` ledger row on the individual `re_...` id
+    # (unique on (stripe_object_id, kind)) and bumps total_spent_cents only when that
+    # insert is genuinely new (`_record_refund_ledger`, below) -- a Stripe redelivery
+    # of the same refund event is a safe no-op on both, not a double-decrement.
     if event["type"] == "charge.refunded":
         charge = event["data"]["object"]
         user_id = _user_id_for_charge(charge)
@@ -444,12 +605,24 @@ async def stripe_webhook(request: Request):
             logger.error(f"[Payments] charge.refunded without resolvable user_id: charge={charge.get('id')}")
             return {"status": "error", "message": "No user_id"}
 
-        refund_cents = _latest_refund_amount(charge)
+        refund_cents, refund_id = _latest_refund(charge)
         if refund_cents <= 0:
             logger.info(f"[Payments] charge.refunded with zero refund delta: charge={charge.get('id')}")
             return {"status": "ignored", "type": "charge.refunded"}
 
-        decrement_total_spent(user_id, refund_cents)
+        if not refund_id:
+            logger.critical(
+                "[Payments] charge.refunded: charge %s has a nonzero refund delta but "
+                "no resolvable individual refund id -- cannot key the ledger row",
+                charge.get("id"),
+            )
+        else:
+            _record_refund_ledger(
+                user_id=user_id, stripe_object_id=refund_id, amount_cents=-refund_cents,
+                currency=charge.get("currency") or "usd", stripe_charge_id=charge.get("id"),
+                occurred_at=datetime.now(UTC), source=payments_ledger.PaymentSource.WEBHOOK.value,
+                reraise=True,
+            )
         logger.info(f"[Payments] Refund recorded: user={user_id}, charge={charge.get('id')}, cents={refund_cents}")
         return {"status": "refund_recorded", "user_id": user_id, "cents": refund_cents}
 
@@ -478,11 +651,21 @@ def _latest_refund_amount(charge) -> int:
     """Cents refunded by THIS refund event. The newest entry in charge.refunds.data is
     the just-created refund; using it (not the cumulative amount_refunded) keeps partial
     and repeated refunds correct. Falls back to cumulative if the list is absent."""
+    return _latest_refund(charge)[0]
+
+
+def _latest_refund(charge) -> tuple[int, str | None]:
+    """(cents, refund_id) for THIS refund event. The newest entry in
+    charge.refunds.data is the just-created refund (T8620: also extracts its
+    `re_...` id -- the design's required ledger idempotency key, design §2a --
+    which the amount-only helper above never needed). Falls back to
+    (cumulative amount_refunded, None) if the list is absent; a None id means
+    the ledger row cannot be written (logged CRITICAL at the call site)."""
     refunds = charge.get("refunds") or {}
     data = refunds.get("data") if isinstance(refunds, dict) else None
     if data:
-        return data[0].get("amount", 0) or 0
-    return charge.get("amount_refunded", 0) or 0
+        return data[0].get("amount", 0) or 0, data[0].get("id")
+    return charge.get("amount_refunded", 0) or 0, None
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +674,7 @@ def _latest_refund_amount(charge) -> int:
 
 
 @router.post("/verify")
-async def verify_session(request: Request):
+async def verify_session(request: Request, background_tasks: BackgroundTasks = None):
     """
     Verify a Stripe Checkout Session and grant credits if paid.
 
@@ -558,8 +741,34 @@ async def verify_session(request: Request):
     pack_info = CREDIT_PACKS.get(pack)
     if result["applied"]:
         record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
-        if pack_info:
-            increment_total_spent(user_id, pack_info["price_cents"])
+
+    # Site D: ledger insert runs on EVERY observation, not gated on `applied`
+    # (design §4, ruling 4). Amount from session.amount_total (already
+    # captured, no extra Stripe call -- design §2c), keyed on the PI id
+    # (extracted from session.payment_intent) so this converges with the
+    # checkout.session.completed (B) and payment_intent.succeeded (C) sites
+    # for the same PI.
+    pi_id = getattr(session, "payment_intent", None)
+    amount_cents = getattr(session, "amount_total", None)
+    if not pi_id or not amount_cents:
+        logger.critical(
+            "[Payments] verify_session: session %s missing payment_intent/"
+            "amount_total -- internal inconsistency, not inserting a ledger row",
+            session_id,
+        )
+    else:
+        currency = getattr(session, "currency", None) or "usd"
+        # User-facing site: ledger failure must never fail the response
+        # (design §5, ruling 4c) -- swallow.
+        inserted = _record_purchase_ledger(
+            user_id=user_id, stripe_object_id=pi_id, amount_cents=amount_cents,
+            currency=currency, stripe_charge_id=None,
+            pack=pack if pack_info else None, credits=credits,
+            occurred_at=datetime.now(UTC), source=payments_ledger.PaymentSource.VERIFY.value,
+            reraise=False,
+        )
+        if inserted:
+            await payments_ledger.schedule_charge_id_fill(pi_id, background_tasks)
 
     logger.info(
         f"[Payments] Verified + granted {credits} credits to {user_id} "

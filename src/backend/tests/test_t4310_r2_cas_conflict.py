@@ -615,7 +615,11 @@ class TestRequestThreadStillSkipsHead:
         # grant_credits is no longer imported here -- stub `grant` instead.
         monkeypatch.setattr(payments_mod, "grant", lambda *a, **k: {"applied": True, "balance": 440})
         monkeypatch.setattr(payments_mod, "record_milestone", lambda *a, **k: None)
-        monkeypatch.setattr(payments_mod, "increment_total_spent", lambda *a, **k: None)
+        # T8620: increment_total_spent no longer exists (moved into
+        # payments_ledger.bump_total_spent, cursor-taking, only called from the
+        # ledger insert path). This fixture's event carries no payment_intent/
+        # amount_total, so the ledger insert branch logs CRITICAL and returns
+        # without touching Postgres -- nothing to stub.
 
         class _FakeRequest:
             headers = {"stripe-signature": "sig"}

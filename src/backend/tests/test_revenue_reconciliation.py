@@ -320,7 +320,7 @@ class TestChargeRefundedWebhook:
                 "payment_intent": "pi_a",
                 "metadata": {"user_id": "user-a"},
                 "amount_refunded": 300,
-                "refunds": {"data": [{"amount": 300}]},
+                "refunds": {"data": [{"id": "re_1", "amount": 300}]},
             }},
         }
         resp = self._post_refund(client, event)
@@ -338,7 +338,7 @@ class TestChargeRefundedWebhook:
                 "payment_intent": "pi_b",
                 "metadata": {},
                 "amount_refunded": 399,
-                "refunds": {"data": [{"amount": 399}]},
+                "refunds": {"data": [{"id": "re_2", "amount": 399}]},
             }},
         }
         pi = {"metadata": {"user_id": "user-b"}}
@@ -357,7 +357,7 @@ class TestChargeRefundedWebhook:
                 "payment_intent": "pi_b",
                 "metadata": {"user_id": "user-b"},
                 "amount_refunded": 5000,
-                "refunds": {"data": [{"amount": 5000}]},
+                "refunds": {"data": [{"id": "re_3", "amount": 5000}]},
             }},
         }
         resp = self._post_refund(client, event)
