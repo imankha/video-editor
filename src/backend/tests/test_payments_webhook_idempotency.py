@@ -11,7 +11,10 @@ import asyncio
 
 import pytest
 
+from app.pricing import CREDIT_PACKS
+
 USER_ID = "user-a"
+POPULAR_PACK_PRICE_CENTS = CREDIT_PACKS["popular"]["price_cents"]
 
 
 class _FakeRequest:
@@ -136,7 +139,7 @@ class TestWebhookRaceDoesNotDoubleCountRevenue:
         asyncio.run(payments_mod.stripe_webhook(_FakeRequest()))
 
         assert get_credit_balance(USER_ID)["balance"] == 40, "grant is atomic; balance must not double"
-        assert spent_calls == [(USER_ID, 699)], f"revenue double-counted: {spent_calls}"
+        assert spent_calls == [(USER_ID, POPULAR_PACK_PRICE_CENTS)], f"revenue double-counted: {spent_calls}"
         assert [m for m in milestone_calls if m[1] == "credit_purchased"] == [(USER_ID, "credit_purchased")]
 
     def test_payment_intent_race_counts_revenue_once(self, monkeypatch):
@@ -150,7 +153,7 @@ class TestWebhookRaceDoesNotDoubleCountRevenue:
         asyncio.run(payments_mod.stripe_webhook(_FakeRequest()))
 
         assert get_credit_balance(USER_ID)["balance"] == 40, "grant is atomic; balance must not double"
-        assert spent_calls == [(USER_ID, 699)], f"revenue double-counted: {spent_calls}"
+        assert spent_calls == [(USER_ID, POPULAR_PACK_PRICE_CENTS)], f"revenue double-counted: {spent_calls}"
         assert [m for m in milestone_calls if m[1] == "credit_purchased"] == [(USER_ID, "credit_purchased")]
 
 
