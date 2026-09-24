@@ -52,6 +52,7 @@ jobs:
           name: routing-manifest
           path: routing-manifest.json
           if-no-files-found: error
+          overwrite: true
 
   instructions:
     needs: changes
@@ -87,6 +88,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python scripts/test_ci_policy.py
+      - run: python scripts/test_landing_gate.py
       - name: Check patch whitespace
         env:
           BASE_SHA: ${{ needs.changes.outputs.base }}

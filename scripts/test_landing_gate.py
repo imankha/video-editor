@@ -1,6 +1,16 @@
 """Adversarial acceptance cases for the supervised landing decision."""
 import copy
+import contextlib
+import hashlib
+import io
+import json
+from pathlib import Path
+import subprocess
+import tempfile
 import unittest
+import uuid
+from types import SimpleNamespace
+from unittest.mock import patch
 import landing_gate as gate
 
 BASE, HEAD = 'a' * 40, 'b' * 40
@@ -84,6 +94,155 @@ class DecisionTests(unittest.TestCase):
         self.pr['head']['repo']['full_name'] = 'owner/repo'
         self.pr['draft'] = True
         self.assertTrue(self.check())
+
+
+class BoundaryTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.checkout = self.root/'candidate'
+        self.checkout.mkdir()
+        self.evidence_root = self.root/'evidence'
+        self.evidence_root.mkdir()
+        def git(*args):
+            return subprocess.check_output(['git','-C',str(self.checkout),*args], stderr=subprocess.DEVNULL).decode().strip()
+        self.git = git
+        git('init')
+        git('config','user.name','Fixture')
+        git('config','user.email','fixture@example.invalid')
+        git('config','core.hooksPath',str(self.root/'no-hooks'))
+        source = self.checkout/'src/backend/example.py'
+        source.parent.mkdir(parents=True)
+        source.write_text('value = 0\n')
+        git('add','.')
+        git('commit','-m','before')
+        base = git('rev-parse','HEAD')
+        source.write_text('value = 1\n')
+        git('add','.')
+        git('commit','-m','after')
+        head = git('rev-parse','HEAD')
+        fixture = DecisionTests()
+        fixture.setUp()
+        self.e = fixture.e
+        self.e.update(base=base,head=head)
+        self.e['tests'][0].update(before=base,after=head)
+        for name, artifact in self.e['artifacts'].items():
+            path = self.evidence_root/artifact['path']
+            path.write_text(name+' evidence\n')
+            artifact['sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+        self.e['tests'][0]['same_test_hash'] = self.e['artifacts']['test']['sha256']
+        self.controller = 'trusted-controller'
+        self.store = gate.Receipts(self.root/'receipts',self.checkout)
+        for role, report in [('proof-verifier',fixture.proof),('reviewer',fixture.review)]:
+            session = str(uuid.uuid4())
+            raw = json.dumps(report).encode()
+            report.update(session_id=session,raw_output_sha256=hashlib.sha256(raw).hexdigest())
+            self.store.save(role,self.e,report,self.controller)
+            (self.store.root/(session+'.json')).write_bytes(raw)
+        self.pr = fixture.pr
+        self.pr['base']['sha'],self.pr['head']['sha'] = base,head
+        self.run = dict(fixture.run,head_sha=head,id=10)
+        self.jobs = fixture.jobs + [{'name':'backend','status':'completed','conclusion':'success'}]
+        self.routes = gate.ci_policy.manifest(self.checkout,base,head)
+        parent = self
+        class Transport:
+            repo='owner/repo'
+            calls=0
+            move_head=False
+            merges=[]
+            def snapshot(self,number,head):
+                self.calls+=1
+                if self.move_head and self.calls>1:
+                    parent.pr['head']['sha']='e'*40
+                return parent.pr,parent.run,parent.jobs
+            def routing(self,run):
+                return parent.routes
+            def merge(self,number,head):
+                self.merges.append((number,head))
+        self.transport=Transport()
+
+    def check(self):
+        return gate.check(self.e,self.evidence_root,self.checkout,self.store,self.transport,self.controller)
+
+    def test_valid_boundary_and_land_calls_merge_once_with_exact_head(self):
+        self.assertTrue(self.check()['eligible'])
+        result=gate.land(self.e,self.evidence_root,self.checkout,self.store,self.transport,self.controller)
+        self.assertTrue(result['merged'])
+        self.assertEqual(self.transport.merges,[(12,self.e['head'])])
+
+    def test_changed_head_between_checks_does_not_merge(self):
+        self.transport.move_head=True
+        with self.assertRaisesRegex(ValueError,'head changed'):
+            gate.land(self.e,self.evidence_root,self.checkout,self.store,self.transport,self.controller)
+        self.assertEqual(self.transport.merges,[])
+
+    def test_tampered_artifact_or_traversal_is_rejected(self):
+        (self.evidence_root/'red.txt').write_text('changed')
+        with self.assertRaisesRegex(ValueError,'changed artifact'):
+            self.check()
+        self.e['artifacts']['test']['path']='../outside'
+        with self.assertRaisesRegex(ValueError,'escapes'):
+            gate.artifact_paths(self.e,self.evidence_root)
+
+    def test_forged_receipt_and_changed_captured_output_rejected(self):
+        path=self.store.root/gate.digest(self.e)/'proof-verifier.json'
+        record=gate.load(path)
+        rawpath=self.store.root/(record['payload']['report']['session_id']+'.json')
+        rawpath.write_text('changed')
+        with self.assertRaisesRegex(ValueError,'output changed'):
+            self.check()
+        record['payload']['report']['verdict']='APPROVED'
+        path.write_text(json.dumps(record))
+        with self.assertRaisesRegex(ValueError,'Untrusted'):
+            self.check()
+
+    def test_worker_authored_approval_and_store_in_checkout_rejected(self):
+        with self.assertRaisesRegex(ValueError,'outside'):
+            gate.Receipts(self.checkout/'store',self.checkout)
+        (self.store.root/gate.digest(self.e)/'proof-verifier.json').unlink()
+        self.e['proof_verifier']={'verdict':'VERIFIED'}
+        with self.assertRaises(OSError):
+            self.check()
+
+    def test_weakened_ci_manifest_and_dirty_checkout_rejected(self):
+        self.routes['required_jobs']=['tooling']
+        with self.assertRaisesRegex(ValueError,'routing mismatch'):
+            self.check()
+        (self.checkout/'untracked.txt').write_text('not reviewed')
+        with self.assertRaisesRegex(ValueError,'must be clean'):
+            self.check()
+
+    def test_capture_launches_fresh_session_and_signs_observed_output(self):
+        evidence_path=self.evidence_root/'evidence.json'
+        evidence_path.write_text(json.dumps(self.e))
+        args=SimpleNamespace(evidence=evidence_path,checkout=self.checkout,role='proof-verifier')
+        real_run=subprocess.run
+        def cli(command,**kwargs):
+            if command[0]!='claude':
+                return real_run(command,**kwargs)
+            self.assertNotIn('--continue',command)
+            self.assertNotIn('--resume',command)
+            session=command[command.index('--session-id')+1]
+            report={'verdict':'VERIFIED','blocking':0,'major':0,'independently_reproduced':True,
+                    'criteria_verified':['C1'],'policy_changes_approved':False,'summary':'Fixture proof'}
+            return SimpleNamespace(returncode=0,stdout=json.dumps({'session_id':session,'structured_output':report,'is_error':False}))
+        with patch.object(gate.subprocess,'run',side_effect=cli), patch.object(gate,'controller_digest',return_value=self.controller), contextlib.redirect_stdout(io.StringIO()):
+            gate.capture(args,self.e,self.store,self.controller)
+        self.assertEqual(self.store.read('proof-verifier',self.e,self.controller)['verdict'],'VERIFIED')
+
+    def test_failed_capture_cannot_create_receipt(self):
+        path=self.store.root/gate.digest(self.e)/'proof-verifier.json'
+        path.unlink()
+        evidence_path=self.evidence_root/'evidence.json'
+        evidence_path.write_text(json.dumps(self.e))
+        args=SimpleNamespace(evidence=evidence_path,checkout=self.checkout,role='proof-verifier')
+        real_run=subprocess.run
+        def cli(command,**kwargs):
+            return SimpleNamespace(returncode=1) if command[0]=='claude' else real_run(command,**kwargs)
+        with patch.object(gate.subprocess,'run',side_effect=cli), self.assertRaisesRegex(ValueError,'no receipt'):
+            gate.capture(args,self.e,self.store,self.controller)
+        self.assertFalse(path.exists())
 
 
 if __name__ == '__main__':

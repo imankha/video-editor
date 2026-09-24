@@ -134,6 +134,13 @@ leave the branch open for the user's decision. Human-only verification uses `WAI
 with exact steps. The supervisor owns landing and sets `STAGING` only after merge.
 Detailed procedure: `.claude/skills/dotask/SKILL.md` step 6.
 
+**Executable supervised gate:** use `scripts/landing_gate.py` from a clean approved
+controller checkout; see [landing-gate usage](docs/plans/landing-gate-usage.md). It captures
+independent verdicts, validates external evidence/receipts and exact-revision CI, and
+performs a head-pinned merge. Candidate code cannot promote a changed controller itself.
+This guards the supervised path; GitHub protection and a trusted server-side publisher
+are separate rollout work. Never claim it prevents direct merges on an unprotected branch.
+
 **DONE rows leave PLAN.md.** The moment a row is promoted to DONE (deploy reconciliation or board Resolve), MOVE it verbatim to [PLAN-archive.md](docs/plans/PLAN-archive.md) under a `## {section} — {subsection}` heading matching its PLAN.md location (create the heading + table header if absent). PLAN.md holds only live work; if a section empties, replace its table with the archive-pointer line. The deploy skill's Step E does this as part of auto-promotion.
 
 **Branch visibility is derived, never recorded.** No branch names in PLAN.md — the board resolves each task's branch from git (branch named `feature/T{id}-slug`, or any commit subject on a branch mentioning `T{id}` — that is how tasks stay attributed after wave branches collapse). Corollary that must hold: **every tracked-task commit subject starts with the task id** (`T5683: ...`), or the task loses attribution once its own branch is deleted.
