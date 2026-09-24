@@ -17,8 +17,13 @@ import { ANNOTATE } from '../../config/displayNames';
  *
  * Layer selection:
  * - Clicking playhead layer label selects 'playhead' (arrow keys step frames)
- * - Clicking a clips layer label or a clip selects 'clips' (arrow keys navigate clips,
- *   across BOTH lanes together - there is one clips layer, split into two tracks)
+ * - Clicking a clips layer label, a clip, or empty clips-track space selects 'clips'
+ *   (arrow keys navigate clips, across BOTH lanes together - there is one clips
+ *   layer, split into two tracks)
+ * - T11050: clicking empty space in a clips track (not on a clip) ALSO seeks the
+ *   playhead there, same as clicking the video track above it -- previously a dead
+ *   click target with no competing gesture (unlike Focus/Overlay's crop/highlight
+ *   tracks, where a background click already adds a keyframe).
  *
  * T5700 follow-up - two clip lanes ("My Athlete" / "Team") on wide viewports, collapsing
  * to the original single tinted track on phones. Gated on `useIsMobile()` (width OR
@@ -230,6 +235,8 @@ export function AnnotateTimeline({
             onDeleteRegion={onDeleteRegion}
             edgePadding={EDGE_PADDING}
             angleSequences={angleData?.angleSequences}
+            onSeek={onSeek}
+            onLayerSelect={() => onLayerSelect?.('clips')}
           />
         </div>
       ) : (
@@ -244,6 +251,8 @@ export function AnnotateTimeline({
               edgePadding={EDGE_PADDING}
               emptyMessage={`No ${ANNOTATE.LAYER_MINE} plays yet`}
               angleSequences={angleData?.angleSequences}
+              onSeek={onSeek}
+              onLayerSelect={() => onLayerSelect?.('clips')}
             />
           </div>
           <div className="mt-0.5 lg:mt-1" data-testid="clip-lane-team">
@@ -256,6 +265,8 @@ export function AnnotateTimeline({
               edgePadding={EDGE_PADDING}
               emptyMessage={`No ${ANNOTATE.LAYER_TEAM} plays yet`}
               angleSequences={angleData?.angleSequences}
+              onSeek={onSeek}
+              onLayerSelect={() => onLayerSelect?.('clips')}
             />
           </div>
         </>
