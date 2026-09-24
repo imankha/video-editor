@@ -191,7 +191,11 @@ class GitHub:
 
 def controller_digest():
     root = Path(__file__).resolve().parents[1]
-    paths = ['scripts/landing_gate.py', 'scripts/ci_policy.py', '.claude/agents/proof-verifier.md', '.claude/agents/reviewer.md']
+    paths = ['scripts/landing_gate.py', 'scripts/ci_policy.py', 'CLAUDE.md',
+             '.claude/references/agent-contract.md', '.claude/schemas/handoffs.md',
+             '.claude/agents/proof-verifier.md', '.claude/agents/reviewer.md']
+    if ci_policy.git(root, 'rev-parse', 'HEAD') != ci_policy.git(root, 'rev-parse', 'origin/master'):
+        raise ValueError('Run the controller from the approved origin/master checkout; bootstrap review is required')
     status = ci_policy.git(root, 'status', '--porcelain', '--', *paths)
     if status.strip():
         raise ValueError('Trusted controller files must be committed and clean')
