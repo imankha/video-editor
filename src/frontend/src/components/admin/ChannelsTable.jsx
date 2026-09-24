@@ -50,6 +50,17 @@ export function ChannelsTable({ data, onRowClick, selectedOrigin }) {
               <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{ch.avg_exports}</td>
             </tr>
           ))}
+          {/* T8650: revenue no origin could attribute (deleted or out-of-window payers).
+              Shown so the campaign revenue reconciles to the platform total. */}
+          {data.unattributed_revenue_cents ? (
+            <tr className="border-t border-white/10">
+              <td className="px-3 py-2.5 text-gray-400 text-xs italic" colSpan={6}>
+                Unattributed <span className="text-gray-500">(deleted or out-of-window payers)</span>
+              </td>
+              <td className="px-3 py-2.5 text-right text-green-400 text-xs">{formatRevenue(data.unattributed_revenue_cents)}</td>
+              <td className="px-3 py-2.5" />
+            </tr>
+          ) : null}
         </tbody>
       </table>
     </div>

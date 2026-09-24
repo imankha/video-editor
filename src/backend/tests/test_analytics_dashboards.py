@@ -179,8 +179,13 @@ class TestChannelsEndpoint:
                     "INSERT INTO user_actions (user_id, action, platform, count) VALUES (%s, %s, %s, %s)",
                     ("user-c", "credit_purchased", platform, 1),
                 )
+            # T8650: revenue now comes from the payments ledger, not total_spent_cents.
+            # One 500-cent purchase row -- the payments subquery is also pre-aggregated
+            # per user, so it must NOT fan out against the 3 export + 2 purchase rows.
             cur.execute(
-                "UPDATE user_segments SET total_spent_cents = 500 WHERE user_id = 'user-c'"
+                """INSERT INTO payments (user_id, kind, amount_cents, currency,
+                                         stripe_object_id, occurred_at, source)
+                   VALUES ('user-c', 'purchase', 500, 'usd', 'pi_fanout', now(), 'backfill')"""
             )
 
         resp = client.get("/api/admin/analytics/channels", headers=_auth())
@@ -189,7 +194,7 @@ class TestChannelsEndpoint:
         assert ch["users"] == 1
         assert ch["exported"] == 1
         assert ch["purchased"] == 1
-        assert ch["revenue_cents"] == 500          # not 500 * 6
+        assert ch["revenue_cents"] == 500          # not 500 * 6 (ledger, no fanout)
         assert ch["avg_exports"] == 6.0            # 6 true exports / 1 exporter, not 12
 
 

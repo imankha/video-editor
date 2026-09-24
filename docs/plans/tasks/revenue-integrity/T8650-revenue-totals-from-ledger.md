@@ -89,3 +89,33 @@ column entirely. Do not force it here.
 - [ ] A test with a ledger row whose user has no `user_segments` row proves the grand total
       still counts it
 - [ ] `total_spent_cents` is documented as a display cache at every definition site
+
+## Implementation notes (2026-09-24)
+
+Backend (`routers/admin.py`): two helpers by `_test_exclusion` —
+`_ledger_revenue_total(cur, exclude_test)` (grand total `SUM(payments.amount_cents)`, no
+`user_segments` join, test exclusion via a `users` anti-join) and `_LEDGER_REVENUE_BY_USER`
+(per-user pre-aggregated subquery LEFT-JOINed into the grouped views, no fanout, GROUP BY
+user_id served by `idx_payments_user`). All four `SUM(total_spent_cents)` reads replaced.
+
+**Grand-total decision (per the task's "sum the ledger directly with no join"):** the two
+`analytics_pulse` revenue headlines are the platform net and are filter-INDEPENDENT (they do
+not vary with the origin/date/paying segment filter, only with test exclusion). This is what
+lets a deleted payer's money keep counting and satisfies "deleting a paying account does not
+change any total"; the per-origin / per-cohort split lives in the channels + cohorts grouped
+views, which now return `unattributed_revenue_cents` (attributed + unattributed == grand
+total). No existing test asserted the headline responded to a segment filter.
+
+**Test-account grand-total behaviour (documented):** a test purchase is excluded WHILE the
+account's `users` row exists (anti-join) but is counted once that row is deleted — there is no
+users row left to recognise it by. One more reason not to delete internal test accounts.
+
+**Deferred to avoid a file conflict:** T8630 owns `services/pg.py`, so the `_SCHEMA_DDL`
+`total_spent_cents` "display cache" column comment is NOT added here. The display-cache role
+is instead documented in `payments_ledger.bump_total_spent`, at the `list_users` per-user read
+in `admin.py`, and in `backend-services.md`.
+
+Docs-only / behavior-preserving? No — this is a behavioral read-side change; proof is the
+red-to-green in `qa/t8650-red-green.txt` (10 behavioral tests red on base 1ff3962b for the
+intended reason, green after). Frontend: `ChannelsTable`/`CohortGrid` render an "Unattributed"
+row when the remainder is nonzero.

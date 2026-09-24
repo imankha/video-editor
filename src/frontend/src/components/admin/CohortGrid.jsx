@@ -60,6 +60,19 @@ export function CohortGrid({ data, onRowClick, selectedPeriod }) {
               </td>
             </tr>
           ))}
+          {/* T8650: revenue no cohort could attribute (deleted or out-of-window payers),
+              shown so cohort revenue reconciles to the platform total. */}
+          {data.unattributed_revenue_cents ? (
+            <tr className="border-t border-white/10">
+              <td className="px-3 py-2 text-gray-400 text-xs italic" colSpan={7}>
+                Unattributed <span className="text-gray-500">(deleted or out-of-window payers)</span>
+              </td>
+              <td className="px-3 py-2 text-right text-green-400 text-xs">
+                {`$${(data.unattributed_revenue_cents / 100).toFixed(0)}`}
+              </td>
+              <td className="px-3 py-2" colSpan={2} />
+            </tr>
+          ) : null}
         </tbody>
       </table>
     </div>
