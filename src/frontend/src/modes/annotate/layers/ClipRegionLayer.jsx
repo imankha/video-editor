@@ -85,6 +85,7 @@ const layerNameFor = (region) => (region.my_athlete === false ? ANNOTATE.LAYER_T
  *
  * Interaction:
  * - Click marker to select it
+ * - Click empty track space to seek the playhead there (T11050)
  * - Delete clips via sidebar (not by clicking)
  * - Shows rating notation: ?? (1), ? (2), !? (3), ! (4), !! (5)
  *
@@ -104,6 +105,12 @@ export default function ClipRegionLayer({
   // videoSequence is in this set gets the violet accent + camera glyph. Absent /
   // empty for angle-free games -> zero visual change (byte-identical common case).
   angleSequences = null,
+  // T11050: seek the playhead when the user clicks empty track space (no clip
+  // there), and select this layer -- same two effects the label column already
+  // triggers, so the track itself isn't a dead click target. Both optional
+  // (omitted in contexts with no seek/layer-select concept, tests/harnesses).
+  onSeek,
+  onLayerSelect,
 }) {
   const trackRef = useRef(null);
   const [hoveredRegionId, setHoveredRegionId] = useState(null);
@@ -171,14 +178,32 @@ export default function ClipRegionLayer({
     }
   };
 
+  // T11050: clicking empty lane space seeks the playhead here, mirroring the
+  // video track above it. Marker/span clicks stopPropagation() above, so they
+  // never reach this handler -- only genuinely empty track space seeks.
+  // Mirrors TimelineBase.getTimeFromPosition's own edge-padding math so a
+  // click lines up with the SAME point on the ruler regardless of which lane
+  // (or the video track) it landed in.
+  const handleTrackClick = (e) => {
+    onLayerSelect?.();
+    if (!onSeek || !trackRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    const usableWidth = rect.width - edgePadding * 2;
+    if (usableWidth <= 0) return;
+    const x = Math.max(0, Math.min(e.clientX - rect.left - edgePadding, usableWidth));
+    onSeek((x / usableWidth) * duration);
+  };
+
   return (
     <div
       ref={trackRef}
-      className="relative h-12 bg-gray-800 rounded"
+      data-testid="clip-track"
+      className={`relative h-12 bg-gray-800 rounded${onSeek ? ' cursor-pointer' : ''}`}
       style={{
         paddingLeft: `${edgePadding}px`,
         paddingRight: `${edgePadding}px`,
       }}
+      onClick={handleTrackClick}
     >
       {/* Inner track area */}
       <div className="relative h-full">

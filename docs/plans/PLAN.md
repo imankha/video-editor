@@ -4,6 +4,14 @@
 
 ## Current Focus
 
+**2026-09-24 addition, unplaced — [T11050](tasks/T11050-annotate-clip-lane-click-seek.md):
+Annotate's clips-lane click didn't move the playhead.** Reported live by imankh@gmail.com.
+The thin video scrub row seeks correctly; the clips lane background (My Athlete/Team tracks,
+or the single mobile lane) had no click handler at all -- a dead click target, unlike Focus/
+Overlay's crop/highlight lanes which already do something on background click. Impact 5 /
+Complexity 2, Tier M. Implemented same session; fresh-context Reviewer approved (MINOR-only
+findings, addressed before commit).
+
 **2026-09-22 addition, unplaced — [T11020](tasks/T11020-spotlight-custom-color-eyedropper.md):
 Spotlight color picker gets a full spectrum + eyedropper, so a parent can match their
 uniform.** User-requested directly in session. Frontend-only (backend already stores/renders
