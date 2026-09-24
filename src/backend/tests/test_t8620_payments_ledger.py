@@ -95,8 +95,17 @@ def payments_env(pg_conn, monkeypatch):
     Mirrors test_payments_webhook_idempotency's `_webhook_env` fixture but does
     NOT stub `increment_total_spent`/`record_milestone` to no-ops -- these tests
     care about the real ledger + cache-bump behavior, not just credit grants.
+
+    Both `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` must be set explicitly
+    here (mirrors test_payments_receipt_email.py's `_setup` fixture) -- the
+    user-facing sites (`confirm_payment_intent`, `verify_session`) 503 on a
+    falsy `STRIPE_SECRET_KEY` before any patched Stripe call runs. Branch CI
+    has no `.env` (only local dev does, where a real key is picked up from the
+    environment), so without this these tests pass locally by leaning on the
+    dev environment and fail red in CI.
     """
     from app.routers import payments as payments_mod
+    monkeypatch.setattr(payments_mod, "STRIPE_SECRET_KEY", "sk_test_dummy")
     monkeypatch.setattr(payments_mod, "STRIPE_WEBHOOK_SECRET", "whsec_test")
     monkeypatch.setattr(payments_mod, "record_milestone", lambda *a, **k: None)
     yield
