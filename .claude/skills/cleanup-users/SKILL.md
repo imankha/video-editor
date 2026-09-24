@@ -1,6 +1,7 @@
 ---
 name: cleanup-users
 description: Migrate and sync a user's database, then clean up other users (especially e2e test accounts)
+user-invocable: true
 disable-model-invocation: true
 allowed-tools: Bash(*)
 argument-hint: "[keep:user-id] [delete:pattern]"

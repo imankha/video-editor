@@ -5,6 +5,7 @@ license: MIT
 metadata:
   author: video-editor
   version: 1.0.0
+user-invocable: true
 ---
 
 # Commit

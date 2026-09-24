@@ -40,6 +40,19 @@ class ValidationTests(unittest.TestCase):
         self.write('CLAUDE.md', '```md\n[x](missing.md)\n```\n[x](docs/{id}.md)')
         self.assertEqual(validate(self.root, ['CLAUDE.md']), [])
 
+    def test_skill_metadata_requires_canonical_name_and_invocation_key(self):
+        self.write('.claude/skills/sample/SKILL.md',
+                   '---\nname: wrong\ndescription: Sample\n---\n')
+        errors = '\n'.join(validate(self.root, []))
+        self.assertIn('skill name must match directory', errors)
+        self.write('.claude/skills/sample/SKILL.md',
+                   '---\nname: sample\ndescription: Sample\nuser_invocable: true\n---\n')
+        self.assertIn('user-invocable', '\n'.join(validate(self.root, [])))
+
+    def test_all_skills_are_checked_by_default(self):
+        self.write('.claude/skills/broken/SKILL.md', '---\nname: broken\n---\n')
+        self.assertIn('missing/non-string description', '\n'.join(validate(self.root, [])))
+
 
 if __name__ == '__main__':
     unittest.main()

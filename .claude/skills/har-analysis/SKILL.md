@@ -4,7 +4,7 @@ description: "Parse HAR files and analyze web performance — waterfall, slow re
 license: MIT
 author: video-editor
 version: 1.0.0
-user_invocable: true
+user-invocable: true
 ---
 
 # HAR Analysis
