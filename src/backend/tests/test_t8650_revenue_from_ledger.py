@@ -30,7 +30,6 @@ from fastapi.testclient import TestClient
 from app.analytics import create_user_segment
 from app.services.auth_db import create_user
 
-
 # --------------------------------------------------------------------------- #
 # Seeding helpers
 # --------------------------------------------------------------------------- #
