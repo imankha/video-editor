@@ -16,41 +16,123 @@ concurrency:
   group: branch-ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  # T6405: decide which layers this branch can possibly have broken, so a
-  # backend-only diff stops paying for the whole frontend job (and vice versa).
-  # Deliberately JOB-level only: within a job the suite still runs IN FULL.
-  # Selecting individual test files from the diff was considered and rejected --
-  # Python's import graph means a storage.py change is exercised by tests that
-  # never name storage (anything importing app.main), so file-name selection
-  # would silently skip real regressions. Sound selection needs coverage data
-  # (testmon), not path matching.
-  # Bias is toward RUNNING: anything shared (scripts/, this workflow) trips both.
   changes:
     runs-on: ubuntu-latest
     outputs:
       frontend: ${{ steps.filter.outputs.frontend }}
       backend: ${{ steps.filter.outputs.backend }}
+      instructions: ${{ steps.filter.outputs.instructions }}
+      tooling: ${{ steps.filter.outputs.tooling }}
+      shrink: ${{ steps.filter.outputs.shrink }}
+      required: ${{ steps.filter.outputs.required }}
+      base: ${{ steps.filter.outputs.base }}
+      head: ${{ steps.filter.outputs.head }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Detect changed layers vs master
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Capture immutable revisions and required checks
         id: filter
+        env:
+          HEAD_SHA: ${{ github.sha }}
         run: |
           git fetch origin master --quiet
-          CHANGED=$(git diff --name-only origin/master...HEAD)
-          echo "changed files:"; echo "$CHANGED"
-          FE=false; BE=false
-          # scripts/ holds the viewport-unit + media-api-base gates the frontend
-          # job runs; this workflow itself must re-validate both layers.
-          if echo "$CHANGED" | grep -qE '^(src/frontend/|scripts/|\.github/workflows/branch-ci\.yml)'; then FE=true; fi
-          if echo "$CHANGED" | grep -qE '^(src/backend/|\.github/workflows/branch-ci\.yml)'; then BE=true; fi
-          echo "frontend=$FE" >> "$GITHUB_OUTPUT"
-          echo "backend=$BE" >> "$GITHUB_OUTPUT"
-          echo "::notice::frontend=$FE backend=$BE"
+          BASE_SHA=$(git rev-parse origin/master)
+          python scripts/ci_policy.py route --base "$BASE_SHA" --head "$HEAD_SHA" --output routing-manifest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: routing-manifest
+          path: routing-manifest.json
+          if-no-files-found: error
+
+  instructions:
+    needs: changes
+    if: needs.changes.outputs.instructions == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.changes.outputs.head }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install PyYAML==6.0.3
+      - run: python scripts/audit-agent-instructions.py
+      - name: Validate agent metadata and changed instruction links
+        env:
+          BASE_SHA: ${{ needs.changes.outputs.base }}
+          HEAD_SHA: ${{ needs.changes.outputs.head }}
+        run: python scripts/validate_agent_instructions.py --base "$BASE_SHA" --head "$HEAD_SHA"
+      - run: python scripts/test_audit_agent_instructions.py
+      - run: python scripts/test_validate_agent_instructions.py
+
+  tooling:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.changes.outputs.head }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python scripts/test_ci_policy.py
+      - name: Check patch whitespace
+        env:
+          BASE_SHA: ${{ needs.changes.outputs.base }}
+          HEAD_SHA: ${{ needs.changes.outputs.head }}
+        run: git diff --check "$BASE_SHA...$HEAD_SHA"
+
+  shrink:
+    needs: changes
+    if: needs.changes.outputs.shrink == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts/shrink-tool
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.changes.outputs.head }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: scripts/shrink-tool/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx vitest run
+
+  ci-ready:
+    if: always()
+    needs: [changes, instructions, tooling, frontend, backend, shrink]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Require every applicable job to succeed
+        env:
+          REQUIRED: ${{ needs.changes.outputs.required }}
+          OUTCOMES: ${{ toJSON(needs) }}
+        run: python scripts/ci_policy.py aggregate --required "$REQUIRED" --outcomes "$OUTCOMES"
 
   frontend:
+    env:
+      BASE_SHA: ${{ needs.changes.outputs.base }}
+      HEAD_SHA: ${{ needs.changes.outputs.head }}
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
@@ -61,6 +143,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ needs.changes.outputs.head }}
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -70,13 +153,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: ESLint (changed files vs master)
         run: |
-          git fetch origin master --quiet
-          CHANGED=$(git diff --name-only origin/master...HEAD -- 'src/frontend/**/*.js' 'src/frontend/**/*.jsx' | sed 's|^src/frontend/||')
-          if [ -n "$CHANGED" ]; then
-            echo "$CHANGED" | xargs npx eslint --no-warn-ignored
-          else
-            echo "no changed frontend JS files"
-          fi
+          git diff --diff-filter=ACMRT --name-only -z "$BASE_SHA...$HEAD_SHA" -- 'src/frontend/**/*.js' 'src/frontend/**/*.jsx' |
+            sed -z 's|^src/frontend/||' | xargs -0 -r npx eslint --no-warn-ignored
       - name: ESLint regression gate (whole src must not regrow the backlog)
         # T4790: froze the eslint backlog at 0 errors / 1019 warnings. Any new
         # error, or warnings past the baseline, fails the branch. Ratchet these
@@ -102,13 +180,6 @@ jobs:
         run: node scripts/check-media-api-base.mjs
       - name: Unit tests (vitest, retry absorbs known flakes)
         run: npx vitest run --retry=2
-      - name: Shrink tool unit tests (T8840 -- own vitest.config.js, own deps)
-        if: always()
-        working-directory: scripts/shrink-tool
-        run: |
-          npm ci --no-audit --no-fund
-          npx vitest run
-
   backend:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
@@ -132,6 +203,8 @@ jobs:
     env:
       # pg_conn fixture creates schema + runs migrations itself on this
       # disposable DB, and its staging/prod DSN guard passes ("ci_test").
+      BASE_SHA: ${{ needs.changes.outputs.base }}
+      HEAD_SHA: ${{ needs.changes.outputs.head }}
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci_test
       APP_ENV: dev
       PYTHONUTF8: '1'
@@ -139,6 +212,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ needs.changes.outputs.head }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -152,13 +226,8 @@ jobs:
         run: pip install -r requirements.prod.txt -r requirements.test.txt ruff
       - name: Ruff (changed files vs master)
         run: |
-          git fetch origin master --quiet
-          CHANGED=$(git diff --name-only origin/master...HEAD -- 'src/backend/**/*.py' | sed 's|^src/backend/||')
-          if [ -n "$CHANGED" ]; then
-            echo "$CHANGED" | xargs ruff check
-          else
-            echo "no changed backend py files"
-          fi
+          git diff --diff-filter=ACMRT --name-only -z "$BASE_SHA...$HEAD_SHA" -- 'src/backend/**/*.py' |
+            sed -z 's|^src/backend/||' | xargs -0 -r ruff check
       - name: Ruff regression gate (whole app must not regrow the backlog)
         # T4790: froze the ruff backlog at 261 errors (all remaining are
         # unsafe-autofix or manual-only rules; see the T4790 report). Fail if the
