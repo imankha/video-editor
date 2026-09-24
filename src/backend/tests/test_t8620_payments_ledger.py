@@ -1204,10 +1204,16 @@ class TestG2BackgroundFillRealPath:
                             lambda pid, **kw: _PI(id=pid, latest_charge=_PI(id="ch_bg_wh")))
 
         async def go():
+            # Snapshot before triggering the webhook and diff after, so a task
+            # some earlier test left pending on a since-closed event loop
+            # (still sitting in this module-level set) is never handed to
+            # this loop's asyncio.gather -- only the task this call itself
+            # registered is awaited.
+            before = set(poster_warmer._background_tasks)
             res = await payments_mod.stripe_webhook(_FakeRequest())
-            pending = list(poster_warmer._background_tasks)
-            assert pending, "no fire_and_forget task was registered (strong ref missing)"
-            await asyncio.gather(*pending)
+            new_tasks = [t for t in poster_warmer._background_tasks if t not in before]
+            assert new_tasks, "no fire_and_forget task was registered (strong ref missing)"
+            await asyncio.gather(*new_tasks)
             return res
 
         res = asyncio.run(go())
