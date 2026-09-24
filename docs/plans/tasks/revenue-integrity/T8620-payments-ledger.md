@@ -1,6 +1,6 @@
 # T8620: Append-only payments ledger + Stripe backfill
 
-**Status:** WAITING ON USER (design gate: 6 decisions in T8620-design.md on the task branch; decision page https://claude.ai/artifact/VgyVb4HUrx3HdNuJiUtddR)
+**Status:** WIP (design approved 2026-09-24 with user rulings: item 4 supervisor variant, item 5 async charge-id fill)
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-03
