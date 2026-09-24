@@ -33,6 +33,9 @@ class RoutingTests(unittest.TestCase):
     def test_nested_instructions_are_not_application_changes(self):
         self.assertEqual(ci_policy.required_jobs(['src/backend/CLAUDE.md', 'src/frontend/.claude/skills/x/SKILL.md']), {'tooling','instructions'})
 
+    def test_executable_inside_skill_is_not_treated_as_documentation(self):
+        self.assertTrue({'frontend','backend'} <= ci_policy.required_jobs(['.claude/skills/x/helper.py']))
+
     def test_docs_have_lightweight_check_and_unknown_configuration_is_conservative(self):
         self.assertEqual(ci_policy.required_jobs(['docs/plans/example.md']), {'tooling'})
         self.assertTrue({'frontend','backend'} <= ci_policy.required_jobs(['unknown.config']))

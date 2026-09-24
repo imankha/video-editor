@@ -25,7 +25,7 @@ def required_jobs(paths):
             raise ValueError(f'Invalid repository path: {path!r}')
         if path.startswith('.github/workflows/') or path in {'scripts/ci_policy.py', 'scripts/test_ci_policy.py'}:
             jobs.update(JOBS)
-        elif '.claude' in parts or PurePosixPath(path).name in {'CLAUDE.md', 'AGENTS.md'} or path in INSTRUCTION_TOOLS:
+        elif ('.claude' in parts and path.endswith('.md')) or PurePosixPath(path).name in {'CLAUDE.md', 'AGENTS.md'} or path in INSTRUCTION_TOOLS:
             jobs.add('instructions')
         elif path in HARNESS:
             jobs.add('instructions')
@@ -67,7 +67,7 @@ def manifest(root, base, head):
     paths = git_paths(root, base, head)
     return {'schema_version': 1, 'base': base, 'head': head, 'paths': paths,
             'required_jobs': sorted(required_jobs(paths)),
-            'policy_hash': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            'policy_hash': hashlib.sha256(Path(__file__).read_text(encoding='utf-8').encode('utf-8')).hexdigest(),
             'reasons': {p: sorted(required_jobs([p])) for p in paths}}
 
 
