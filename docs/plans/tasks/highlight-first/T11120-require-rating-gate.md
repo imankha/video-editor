@@ -21,8 +21,13 @@ the play with details for each rating."
 
 **A gate, never a write.** Leaving the editor on an unrated play opens a **"Rate this play"
 modal** (design: T11100 mockups). It lists 5 Highlight / 4 Good / 3 Interesting / 2 Technical
-Lapse / 1 Mental Lapse, each with stars, adjective and a one-line meaning (rewritten from
-`getRatingCaption`, no "clip"). Picking a row is the rating gesture: it persists the rating
+Lapse / 1 Mental Lapse, each with stars, adjective and a one-line meaning. Approved copy
+(2026-09-24): Highlight "Brilliant Play! Everyone should see it." (owner's exact words), Good
+"A solid play worth remembering.", Interesting "Worth a second look.", Technical Lapse "A touch
+or skill to work on.", Mental Lapse "A decision or focus moment to learn from."; title "Rate
+this play". The editor's rating pill (A2) opens the SAME list, so it is one component. **The
+modal only appears when the play was not rated during the edit** (owner ruling); a rated play
+leaves normally. Picking a row is the rating gesture: it persists the rating
 through the normal path, closes the modal and CONTINUES the original exit (Done on a Highlight
 pick then shows T11130's popup). The modal never closes on backdrop click; its dismissal returns
 to the editor with nothing written. Nothing sets or persists a default rating; no effect watches

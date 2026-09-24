@@ -75,6 +75,9 @@ calling before endpoints go). T11270 last among code tasks (move-only). T11280 d
 
 ## Open questions (answered in the decision artifact)
 
+**All R1-R12 ANSWERED 2026-09-24** (owner agreed with every recommendation; R6 amended as below).
+Recorded in the decision artifact's `answers` collection.
+
 | # | Question |
 |---|---|
 | R1 | Placement: both epics ship in the NEXT version (Deploy Candidate), before the Tutorial Redesign core (T7620/T7630/T7640), the T10320 reshoot and the T9720 gate, since guided mode anchors to final screens. [yes] |
@@ -82,7 +85,7 @@ calling before endpoints go). T11270 last among code tasks (move-only). T11280 d
 | R3 | In-progress multi-clip drafts: A) keep reachable in Clips, Spotlight + publish still work, re-framing refused with a clear message; B) split into single-clip drafts via migration (loses rendered state); C) hide. [A, confirm after T11200 counts] |
 | R4 | Published multi-clip reels: stay viewable / downloadable / shareable under Published "Mixes & compilations"; Re-edit and archive restore hidden for them. [yes] |
 | R5 | Collections (play-as-one, stitched download, collection share, Top Plays, ranking): keep live, or hide until Reels v2? They are single-clip-member features and the seed of T11300. [keep live] |
-| R6 | Old `/home/reels-in-progress` deep links: redirect to Clips. [yes] |
+| R6 | ~~Old `/home/reels-in-progress` deep links: redirect to Clips.~~ RULED 2026-09-24: any unsupported link goes Home (catch-all). |
 | R7 | Landing site: the recruiting-reel page describes multi-clip assembly and ordering, which becomes false. Rewrite now (separate landing deploy). [rewrite now] |
 | R8 | Swapping / replacing the clip inside a project: gone; "make a new clip" instead. [yes] |
 | R9 | Framing rail: drop the clip list entirely; show the clip's name / status in the existing header. [yes] |

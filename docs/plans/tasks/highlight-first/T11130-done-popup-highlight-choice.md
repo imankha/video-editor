@@ -24,11 +24,14 @@ wants the Highlight rating plus Done to be the whole gesture.
      `onOpenClipInFocus(projectId)`. Do NOT reuse `handleCreateClipFromBadge`
      (`AnnotateFullscreenOverlay.jsx:385`): its non-silent path fires the "is now in Clips" toast
      + `selectProject` before navigation.
-   - **Highlight Later** (owner's name for it, round 2; replaces "Keep Annotating"): reuse
+   - **Back to Editing** (owner ruling round 3, 2026-09-24; replaced round 2's "Highlight
+     Later", which replaced "Keep Annotating"), subtext exactly **"Saves play in clips so you
+     can make your highlight later"**. Presentation option per mockups round 3 (H12B). Reuse
      `handleFrameLater` (259): same call without `silent`, stays in Annotate.
      `announceReelCreated` (`AnnotateContainer.jsx:93`) today shows "{name} is now in Clips" with
      an "Open Framing" action; replace its text with EXACTLY **"Highlight moved to clips so you can
-     edit it later"** (the only user-visible "clip" in the flow, owner ruling). Whether the toast
+     edit it later"** (owner ruling round 2), unless the round-3 pick drops the toast because the
+     subtext now says the same thing. "clips" appears only in these owner-written strings. Whether the toast
      keeps an action button is a T11100 design detail; if kept, its label uses the new nouns.
      No separate teaching line in the popup: the toast teaches.
    - Synchronous ref guard against double-create (pattern: `frameCreateInFlightRef` :215, the
@@ -81,7 +84,7 @@ Unit: `AnnotateModeView.frameClip`, `AnnotateFullscreenOverlay.progressBadges` /
 
 - [ ] Red-then-green: Done on a Highlight play that is not yet a highlight shows the popup; 1-4 star Done closes (H3)
 - [ ] Make Highlight Now lands in Frame Highlight on THAT play, exactly one create call
-- [ ] Highlight Later creates exactly one, stays in Annotate, toast reads exactly "Highlight moved to clips so you can edit it later", item appears in the Clips tab
+- [ ] Back to Editing creates exactly one, stays in Annotate, item appears in the Clips tab (toast per the round-3 pick)
 - [ ] Double-tap on either button creates one
 - [ ] No "Create clip" / "Frame" CTA in Annotate (grep + live)
 - [ ] Live-driven desktop + 393 px phone

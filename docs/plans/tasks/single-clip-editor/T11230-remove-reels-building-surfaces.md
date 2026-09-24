@@ -18,7 +18,9 @@ project; v2 stitches PUBLISHED clips), so it is deleted, not hidden.
 
 Delete:
 - Reels tab `inProgressReels` + route `/home/reels-in-progress` (`ProjectManager.jsx:406-412,
-  1554-1572, 2206-2268`; `editorStore.js:52`). Route redirects to Clips (R6).
+  1554-1572, 2206-2268`; `editorStore.js:52`). Owner ruling R6 (2026-09-24): no special
+  redirect for old Reels links; instead **any unsupported link goes Home** (a general
+  catch-all route, which also covers `/home/reels-in-progress`).
 - "Create reel" CTA + `GameClipSelectorModal` (`ProjectManager.jsx:2240-2250, 2286-2294`;
   `GameClipSelectorModal.jsx`), `POST /api/projects/from-clips` (`projects.py:799-893`).
 - `EmptyTabGuide` `reels` / `ReelsActions`, `REELS_PARTIAL_FILLER` (`EmptyTabGuide.jsx:76,187-198`;
@@ -49,7 +51,7 @@ E2E: `cta-visibility`, `new-user-flow`, `regression-tests`, `T9530-library-vocab
 
 ## Acceptance Criteria
 
-- [ ] Red-then-green: home has no Reels tab; `/home/reels-in-progress` lands on Clips
+- [ ] Red-then-green: home has no Reels tab; `/home/reels-in-progress` and any other unknown path land on Home
 - [ ] `from-clips` returns 404/405; no frontend reference remains
 - [ ] Every pre-existing draft still reachable (T11220 fixture)
 - [ ] Live-driven desktop + 393 px

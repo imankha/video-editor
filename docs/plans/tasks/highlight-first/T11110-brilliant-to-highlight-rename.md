@@ -41,10 +41,29 @@ Also drop the "Brilliant" comments in that block (`Excellent` / `Brilliant` note
 `annotate_brilliant` (`quest_config.py:56`), API field `brilliant_count` (`games.py:1405`),
 `auto_export._export_brilliant_clip`. Renaming these needs a migration and buys nothing visible.
 
-**Open (H10):** legacy `projects.name` rows persisted as "Brilliant ..." by
-`_create_auto_project_for_clip` (`clips.py:1099`) and migration v019. Recommended: no backfill
-(names are user-visible data). If the user rules backfill, add a profile_db migration that only
-rewrites names that exactly equal the derived pattern, and include the Migration agent.
+**RULED H10 = port (owner 2026-09-24: "port previous brilliants to highlight").** The rating
+is an integer, so ratings need nothing. But derived names were persisted (audit 2026-09-24):
+
+| Store | Writer | Action |
+|---|---|---|
+| `projects.name` | `clips.py:1099-1108` (only when the clip had no stored name; since T10610 new plays are "Play N", so mostly legacy), `materialization.py:934`, `clips.py:2173`; migration v019 | **Migrate** |
+| `final_videos.name` | copied from `projects.name` at publish (`publish_final_video.py:233-235,285`), v019 (`:89`), reel move (`downloads.py:1768-1775`). Shows in Published, recap, download filename and MP4 title | **Migrate** |
+| `raw_clips.name` from the upload modal auto-fill (`UploadClipModal.jsx:66-73` -> `clips.py:2250-2257`) | looks identical to a typed name | Owner decision (question Q-B1) |
+| Collection names suggested by `GameClipSelectorModal` ("... Brilliants", "Good To Brilliant"), user-accepted | Owner decision (Q-B1) |
+| Postgres `share_videos.video_name` (snapshot at share time, public page title + download name) | postgres track cannot re-derive (inputs live in per-user SQLite) | Owner decision (Q-B2); recommended: leave, consistent with renames not updating snapshots today |
+
+**Migration** (include the Migration agent): a new `profile_db` migration (JIT at the per-user
+seam, no admin step), numbered after v019 (v019 imports live `derive_clip_name`, so accounts
+still below v019 will already get "Highlight ..." from it). Rewrite only names whose origin is
+provable:
+- `projects`: `is_auto_created = 1`, the linked `raw_clips.name` empty, and
+  `p.name == "Brilliant " + tag_part(rc.tags)` using the exact join logic of
+  `queries.py:56-59` -> `"Highlight " + tag_part`. Notes-derived names have no adjective and are
+  untouched. A clip whose tags changed after creation is missed (acceptable: can't prove origin).
+- `final_videos`: same test through `source_clip_id`, only `source_type='brilliant_clip'`, and
+  `fv.name` equal to the old derived name (user renames won't match).
+- R2 project archives (`archive/{id}.msgpack`) are not migrated; only re-inserted when a row is
+  missing, which is rare.
 
 **Open (H11):** quest copy that mentions Brilliant (`questDefinitions.jsx`) is updated here.
 

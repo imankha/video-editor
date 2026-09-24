@@ -32,6 +32,26 @@ new flow makes the RATING the gesture.
 6. Mode bar: **Annotate / Frame Highlight / Add Spotlight**; the last two are clickable only once
    the highlight exists.
 
+### Owner rulings (2026-09-24, round 3)
+
+Recorded on the decision artifact (every question answered, with notes). Beyond "agree with all
+recommendations":
+
+- **Palette P2** and **editor layout A2** approved.
+- **Rate modal** appears ONLY if the play was not rated while editing it. Highlight's meaning
+  line is exactly **"Brilliant Play! Everyone should see it."**
+- **Highlight popup** second option is now **"Back to Editing"** with subtext **"Saves play in
+  clips so you can make your highlight later"** (replaces "Highlight Later"; it still creates
+  the saved item). New presentation options requested (mockups round 3).
+- **Mode bar:** Frame Highlight / Add Spotlight open a new screen, so desktop hover text on
+  locked tabs is fine, but no static text under the tabs. New mobile options requested.
+- **Team plays can become highlights** (H13 = b). Task T11160.
+- **Port previous "Brilliants" to Highlight** (H10 = b): the rating is an integer, but derived
+  names like "Brilliant Goal" were persisted; migration scope in T11110.
+- **No more quests** (H11): remove the whole quest system, keep only what a future opt-in
+  Guided mode needs. Task T11170.
+- **Any unsupported link goes Home** (R6), not just old Reels links (T11230).
+
 ## Vocabulary conflict (confirmed by the owner's round-2 wording, see H1)
 
 This **reverses the 2026-09-13 ruling** in PLAN.md ("Clip and Reel both stand. 'Highlight' is a
@@ -55,6 +75,7 @@ T11120 -> T11130 are strict (same files: `AnnotateFullscreenOverlay.jsx`, `Detai
 | T11120 | [Unrated Done opens the "Rate this play" modal](T11120-require-rating-gate.md) | M | TODO |
 | T11130 | [Highlight popup: Make Highlight Now / Highlight Later; remove Create clip + Frame CTAs](T11130-done-popup-highlight-choice.md) | L | TODO |
 | T11140 | [Mode bar: Frame Highlight / Add Spotlight, gated on the selected play's highlight](T11140-mode-bar-rename-and-gating.md) | M | TODO |
+| T11160 | [Team plays become highlights like any other](T11160-team-plays-become-highlights.md) | M | TODO |
 
 ## Open questions (answered in the decision artifact)
 
