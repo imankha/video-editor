@@ -1,6 +1,6 @@
 # T11070: CI "Ruff (changed files vs master)" step lints nothing
 
-**Status:** WIP
+**Status:** STAGING (merged 2026-09-24, PR #502; proof VERIFIED at cdec21af, Branch CI 36072038232 green)
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-24
