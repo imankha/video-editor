@@ -1,6 +1,6 @@
 # Remove the Quest System
 
-**Status:** TODO (open questions G1-G6 on the decision artifact)
+**Status:** TODO (all questions answered 2026-09-24)
 **Started:** 2026-09-24
 **Impact:** 6 **Complexity:** 5 **Priority:** 1.2
 **Decision artifact:** https://claude.ai/artifact/CWHnjGEUCzqMhgeyQGrzwB
@@ -59,16 +59,16 @@ guided and gets a guided experience to progress them to the next step)."
 Backend deletion ships in the same deploy as the frontend deletion or later, never earlier:
 old cached frontends read the bootstrap quest fields.
 
-## Open questions (decision artifact)
+## Decisions (owner, 2026-09-24)
 
-| # | Question |
+| # | Decision |
 |---|---|
-| G1 | New users keep 88 free credits (8 + 80) as advertised, now as one "welcome" grant? [yes, same amount] |
-| G2 | Has the T9760 admin backfill (`POST /api/admin/backfill-quest-upfront-credits`) been run on prod? If yes, delete the endpoint (the per-login grant stays). [owner knows] |
-| G3 | Approve amending the T7620 guided-mode design: no quest milestone ledger; facts come from games, clips, exports, final_videos, shares. [yes] |
-| G4 | Keep continuous history for the admin funnel's engagement events (crop adjusted, overlay steps, pre-upload events)? Decides whether T11175 is needed or those events just stop. [keep] |
-| G5 | Quest tables (`completed_quests`, `achievements`, panel-collapsed setting): leave inert, or drop via JIT migrations? [drop, after guarding v005/v006] |
-| G6 | Tutorial videos: `TutorialVideoModal` stays (2026-09-17 ruling) and is re-keyed by topic instead of quest id? [yes] |
+| G1 | New users keep **88** free credits (8 + 80), the 80 now a "welcome" grant. |
+| G2 | The T9760 admin backfill was **never run on prod**, but the per-login grant (`session_init`) pays the remainder to every user on their next session, which is the just-in-time path the owner wants. **Delete the admin backfill endpoint** (`admin.py:1400-1419`, `credit_ledger.py:795-861`). |
+| G3 | **Amend T7620**: no quest milestone ledger; guided facts come from games, clips, exports, final_videos, shares. |
+| G4 | **Keep** the admin funnel's engagement events (T11175 reroutes them). |
+| G5 | **Drop** the quest tables via JIT migrations, after guarding v005/v006. |
+| G6 | **Keep** `TutorialVideoModal`, re-keyed by topic. |
 
 ## Completion Criteria
 

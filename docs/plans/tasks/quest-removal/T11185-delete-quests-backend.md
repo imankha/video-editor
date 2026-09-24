@@ -27,11 +27,11 @@
 `games.shared_by` / `raw_clips.shared_by`, all Postgres `credit_transactions` and
 `user_actions` rows.
 
-**Tables (G5):** if "drop": guard v005/v006 with a table-exists check FIRST (they read
+**Tables (G5 = drop, owner 2026-09-24):** guard v005/v006 with a table-exists check FIRST (they read
 `completed_quests`; a user.sqlite below v005 would otherwise 503), then a `user_db` migration
 drops `completed_quests` + deletes the panel-collapsed setting, and a `profile_db` migration
 drops `achievements` (`database.py:1461-1467`). Both JIT, no operator step. Include the
-Migration agent. If "inert": keep the DDL, stop reading/writing.
+Migration agent.
 
 Also amend T7620 §13.1 / T7630 / T10330:40-41 (G3) and the knowledge docs.
 

@@ -2,7 +2,7 @@
 
 **Status:** TODO
 **Impact:** 5
-**Complexity:** 3
+**Complexity:** 4
 **Created:** 2026-09-24
 **Updated:** 2026-09-24
 **Epic:** [Highlight-First Annotate Flow](EPIC.md)
@@ -30,13 +30,15 @@ caption plus the tests pinning it (`clipConstants.test.js:141-146`,
    Remove the caption (T11150 rewrites the rating copy anyway) and its pinning tests.
 2. Downstream behavior once team highlights are common, each per the owner's answer:
 
-| # | Surface | Today | Question |
+Owner answers (2026-09-24, "use recommendations"):
+
+| # | Surface | Today | Decision |
 |---|---|---|---|
-| T1 | Game-card star count (`brilliant_count`, `games.py:1391-1396`) | skips team plays | count team highlights? |
-| T2 | Athlete's season ranking (Glicko pool, seeded by v009; `queries.py:152-186`) | the user's own team reels already enter it (T10070) | keep team highlights in the athlete's ranking? |
-| T3 | Download intro card (`downloads.py:691-705`) | always adds the athlete's intro card | a team highlight opens with the athlete's name card: drop or swap it for team highlights? |
-| T4 | Recap highlights sidebar (`games.py:1990-2015`, `RecapPlayerModal.jsx:117,348`) | doesn't split layers | split by layer? |
-| T5 | Game-expiry auto-export 4-star fallback (`auto_export.py:164-171`) | fallback only when NO 5-star exists in either layer, so a team 5-star now cancels the athlete's 4-star fallback | run the fallback per layer? |
+| T1 | Game-card star count (`brilliant_count`, `games.py:1391-1396`) | skips team plays | **No change**: the card counts the athlete's highlights |
+| T2 | Athlete's season ranking (Glicko pool, seeded by v009; `queries.py:152-186`) | the user's own team reels already enter it (T10070) | **Change: keep team highlights OUT** of the athlete's ranking pool (the ranking is about the athlete). Check T10070's rationale before removing; existing team entries leave the pool |
+| T3 | Download intro card (`downloads.py:691-705`) | always adds the athlete's intro card | **Change: no intro card on team highlights** |
+| T4 | Recap highlights sidebar (`games.py:1990-2015`, `RecapPlayerModal.jsx:117,348`) | doesn't split layers | **Change: split by layer** (My Athlete / Team) |
+| T5 | Game-expiry auto-export 4-star fallback (`auto_export.py:164-171`) | fallback only when NO 5-star exists in either layer | **Change: run the rule per layer** |
 
 The old "My athlete only" default in `GameClipSelectorModal` goes away with the Reels removal
 (T11230). Stale comment to fix: `bootstrap.py:138-141` says team reels are excluded.
@@ -45,7 +47,8 @@ Framing / Spotlight have no layer logic; copy says "Frame your athlete"
 neutral wording for team highlights in the T11280 sweep.
 
 ## Related Tasks
-- Depends on: T11130 (popup), owner answers T1-T5
+- Depends on: T11130 (popup). T2-T5 are backend + recap changes and may split into their own
+  task at classification if the diff exceeds ~200 meaningful lines.
 - Knowledge doc: correct `annotate.md` to say team plays already create highlights on every path
 
 ## Acceptance Criteria

@@ -1,6 +1,6 @@
 # Highlight-First Annotate Flow
 
-**Status:** TODO (WAITING ON USER: decision artifact + badge/flow mockups, round 2)
+**Status:** TODO (design decided 2026-09-24)
 **Started:** 2026-09-24
 **Impact:** 9 **Complexity:** 6 **Priority:** 1.5
 **Sibling epic:** [Single-Clip Editor, Reels removed](../single-clip-editor/EPIC.md) (ships in the same version)
@@ -59,9 +59,11 @@ recommendations":
   moved to Clips so you can edit it later" confirms (M3, follows from M2).
 - **"Clips" capitalized** in the owner-written strings (M4).
 - **Escape is the only no-save exit** from the choice card (M5, ui-designer's call as delegated).
-- Still open on the artifact: M6 (rename the rate modal's exit to "Keep editing"), M7 (mobile
-  locked-tab tap: D2 toast vs D3 shake), QB1-QB2 (other old "Brilliant" names), T1-T5 (team
-  highlight downstream), G1-G6 (quest removal).
+- **Final (owner: "use recommendations for all answers")**: rate modal's exit "Keep editing"
+  (M6); mobile locked tab shows a toast (D2); other "Brilliant" names and share titles left
+  (QB1-QB2); team highlights: not in game-card stars, out of the athlete ranking, no intro card
+  on download, recap split by layer, expiry fallback per layer (T1-T5). **All questions answered;
+  design gate closed.**
 
 ## Vocabulary conflict (confirmed by the owner's round-2 wording, see H1)
 

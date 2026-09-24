@@ -24,7 +24,9 @@ page (`landing/src/site.ts:72-73`, `index.astro:354`).
   on the constants saying exactly that.
 - `CreditHistoryModal.jsx:25-26`: keep `quest_upfront` labelled "Welcome credits"; relabel the
   historic `quest_reward` rows (e.g. "Welcome credits" too). No Postgres row changes.
-- Admin backfill endpoint (`admin.py:1400-1419`): delete if G2 says it already ran on prod.
+- **Delete** the admin backfill endpoint (`admin.py:1400-1419`, `credit_ledger.py:795-861`)
+  and its tests (G2): it never ran on prod, and the per-login grant is the just-in-time path
+  that reaches every user on their next session. Amount stays 88 total (G1).
 - Update the `site.ts` comment that points at `quest_config`.
 
 ## Acceptance Criteria

@@ -48,9 +48,9 @@ is an integer, so ratings need nothing. But derived names were persisted (audit 
 |---|---|---|
 | `projects.name` | `clips.py:1099-1108` (only when the clip had no stored name; since T10610 new plays are "Play N", so mostly legacy), `materialization.py:934`, `clips.py:2173`; migration v019 | **Migrate** |
 | `final_videos.name` | copied from `projects.name` at publish (`publish_final_video.py:233-235,285`), v019 (`:89`), reel move (`downloads.py:1768-1775`). Shows in Published, recap, download filename and MP4 title | **Migrate** |
-| `raw_clips.name` from the upload modal auto-fill (`UploadClipModal.jsx:66-73` -> `clips.py:2250-2257`) | looks identical to a typed name | Owner decision (question Q-B1) |
-| Collection names suggested by `GameClipSelectorModal` ("... Brilliants", "Good To Brilliant"), user-accepted | Owner decision (Q-B1) |
-| Postgres `share_videos.video_name` (snapshot at share time, public page title + download name) | postgres track cannot re-derive (inputs live in per-user SQLite) | Owner decision (Q-B2); recommended: leave, consistent with renames not updating snapshots today |
+| `raw_clips.name` from the upload modal auto-fill (`UploadClipModal.jsx:66-73` -> `clips.py:2250-2257`) | looks identical to a typed name | **Leave** (QB1, owner 2026-09-24) |
+| Collection names suggested by `GameClipSelectorModal` ("... Brilliants", "Good To Brilliant"), user-accepted | **Leave** (QB1) |
+| Postgres `share_videos.video_name` (snapshot at share time, public page title + download name) | postgres track cannot re-derive (inputs live in per-user SQLite) | **Leave** (QB2), consistent with renames not updating snapshots today |
 
 **Migration** (include the Migration agent): a new `profile_db` migration (JIT at the per-user
 seam, no admin step), numbered after v019 (v019 imports live `derive_clip_name`, so accounts

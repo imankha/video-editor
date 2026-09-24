@@ -195,7 +195,7 @@ Row order IS the sequence (2026-08-24): **2026-08-31 P0 insert (bug 47p investig
 | T7160 | ↳ [Mobile: tap-to-select plays preview](tasks/preview-video-improvements/T7160-mobile-tap-select-plays-preview.md) | 7 | 5 | 1.4 | TODO | [ ] | Epic child 2/3, depends on T6420 + T7170. Supersedes T6430. First tap on an eligible tile selects it and starts its inline preview (reusing T6420's WARM/REVEAL machinery + single-active registry, triggered by tap instead of hover); second tap opens it. Neither tile type actually has this scheme today (ReelTile: single tap goes straight to full player; DraftTile: long-press reveals actions, modal preview not inline) — this is new design, not a wire-up. L-tier, Architect gate required; task file lists 4 open design questions including a real ReelTile tap-to-play-speed tradeoff to confirm with the user. |
 | T6440 | ↳ [Autoplay-previews setting + data-saver](tasks/preview-video-improvements/T6440-autoplay-setting-data-saver.md) | 3 | 2 | 1.5 | TODO | [ ] | Epic child 3/3, depends on T6420 (+T7160 for touch, was T6430). Moved unchanged from the merged Tile Video Preview epic. "Autoplay previews" toggle (default ON) in the existing settings surface, persisted gesture-based - Netflix shipped without this and had to add it under user pressure. Data-saver guardrail for metered connections (sideline cellular is exactly this audience). |
 
-### Milestone: Highlight-First + Single-Clip Editor (user request 2026-09-24, placement pending R1)
+### Milestone: Highlight-First + Single-Clip Editor + Quest Removal (user request 2026-09-24, ships in the Deploy Candidate)
 
 **Filed 2026-09-24 from a user request:** "The point is to get users intuitively making
 highlights." Two epics. [Highlight-First Annotate Flow](tasks/highlight-first/EPIC.md): editing a
@@ -206,14 +206,16 @@ Reels and multi-clip editing](tasks/single-clip-editor/EPIC.md): Reels tab + Cre
 Framing/Spotlight become one-clip-only, ~4,000 production LOC removed; Reels returns later as a
 post-publish stitcher ([T11300](tasks/T11300-reels-v2-post-publish-stitcher.md), ICE, NOT next
 version). **This reverses the 2026-09-13 vocabulary ruling** (Highlight as modifier only; mode noun
-Framing) and changes screens the Tutorial Redesign core, T10320 and T9720 anchor to. Open questions
-H1-H14 / R1-R12 live in the two EPIC.md files and the decision artifact; recommended placement
-(R1) is inside the Deploy Candidate, before the Tutorial Redesign core. Table must stay CONTIGUOUS.
+Framing) and changes screens the Tutorial Redesign core, T10320 and T9720 anchor to. **All 55
+questions answered 2026-09-24** (decision artifact https://claude.ai/artifact/CWHnjGEUCzqMhgeyQGrzwB;
+rulings copied into each EPIC.md and task file). **Placement (R1, owner): part of the Deploy
+Candidate, before the Tutorial Redesign core (T7620/T7630/T7640), T10320 and T9720**, which must
+be re-derived against these screens. Table must stay CONTIGUOUS.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 |  | **[Highlight-First Annotate Flow](tasks/highlight-first/EPIC.md)** | 9 | 6 | 1.5 | TODO |  | Rating becomes the gesture that makes a highlight. T11100 design gate first; T11120 -> T11130 strict (same files). |
-| T11100 | ↳ [UX design gate: editor layout, rating modal, Highlight popup, mode bar](tasks/highlight-first/T11100-ux-design-gate.md) | 8 | 2 | 4.0 | WAITING ON USER | [ ] | Round 2 (owner feedback 2026-09-24): no "required" wording, gold for highlights, hierarchy time -> name + rating -> details, no "clip" except the Highlight Later toast. Mockups being redone at the same URL. |
+| T11100 | ↳ [UX design gate: editor layout, rating modal, Highlight popup, mode bar](tasks/highlight-first/T11100-ux-design-gate.md) | 8 | 2 | 4.0 | DECIDED | [ ] | Decided 2026-09-24 after 4 rounds: P2 palette, A2 editor layout, rate modal (only when unrated), B3 in-place choice card (Make Highlight Now / Back to Editing, closes editor, toast), D2 mode bar. Mockups https://claude.ai/artifact/FFGqtZQnE4a9n9PHjANaeA |
 | T11110 | ↳ [Rating 5 becomes "Highlight", in gold](tasks/highlight-first/T11110-brilliant-to-highlight-rename.md) | 6 | 3 | 2.0 | TODO | [x] | UI labels + backend derived names + gold for rating 5; rating 2's Amber Yellow collides with gold (H15). Persisted ids (`brilliant_clip`, `annotate_brilliant`, `brilliant_count`) unchanged. |
 | T11150 | ↳ [Play editor hierarchy (time, name + rating, details) and no "clip" wording in Annotate](tasks/highlight-first/T11150-play-editor-hierarchy-no-clip-word.md) | 7 | 4 | 1.8 | TODO | [ ] | Owner ruling 2026-09-24. All 5 editor layouts; tags + notes behind Details; Play category / sport placement is H16. Before T11120 (same files). |
 | T11120 | ↳ [Unrated Done opens the "Rate this play" modal](tasks/highlight-first/T11120-require-rating-gate.md) | 8 | 4 | 2.0 | TODO | [ ] | A gate, never a write: picking a rating in the modal is the gesture and continues the exit. 7 in-editor exits + 4 outside paths mapped; H5 decides which open it. |

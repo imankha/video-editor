@@ -27,7 +27,16 @@ not the play the user is looking at.
    locked. Clicking opens THAT play's project (await `selectProject`, as `openClipInFocus` :222-234
    does). `ModeSwitcher.jsx` gets explicit props for this.
 3. **Locked-tab explanation** per T11100 section D, with no user-visible "clip" (owner ruling
-   2026-09-24; today's toast "Open a clip to start framing" at `ModeSwitcher.jsx:90-113` goes) (today: toast at `ModeSwitcher.jsx:90-113`).
+   2026-09-24; today's toast "Open a clip to start framing" at `ModeSwitcher.jsx:90-113` goes).
+   **Decided (mockups D + D2):** desktop keeps hover tooltips on locked tabs; **mobile tap on a
+   locked tab shows a transient toast** with the same sentence (existing `toast.info(...,
+   {dedupKey: 'mode-locked'})`); NO static text under the tabs (Frame Highlight / Add Spotlight
+   open a new screen). Mobile labels sit inside each tab (icon + label, one line, 44 px tall),
+   lock icon replaces the tab icon when locked. Active Frame Highlight / Add Spotlight tab is
+   solid gold with dark text; a newly unlocked tab gets a gold hairline. Copy: "Select a
+   Highlight play to frame it." / "Rate a play Highlight, then choose Make Highlight Now." /
+   "Make a highlight first. Spotlight comes after Framing." / "Frame this highlight first.
+   Spotlight opens after you generate Framing." / "Generate Framing to unlock Spotlight." (today: toast at `ModeSwitcher.jsx:90-113`).
    Mobile (<640 px) is icon-only (:135); D decides whether labels appear.
 
 ## Context
