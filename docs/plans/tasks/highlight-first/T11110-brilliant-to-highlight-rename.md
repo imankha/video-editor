@@ -1,4 +1,4 @@
-# T11110: Rename the 5-star "Brilliant" to "Highlight"
+# T11110: Rating 5 becomes "Highlight", in gold
 
 **Status:** TODO
 **Impact:** 6
@@ -28,6 +28,14 @@ Rename the user-facing adjective everywhere it is shown; keep persisted identifi
   (drives `queries.derive_clip_name` and `games.py:216` `generate_clip_name`), so new derived
   names read "Highlight Goal". Label only for `SourceType.BRILLIANT_CLIP` (:235 "Brilliant Clip")
   and `constants/sourceTypes.js:16`.
+
+**Gold (owner ruling 2026-09-24, round 2: "instead of light blue, we should use gold for
+highlights"):** `RATING_BADGE_COLORS[5]` / `RATING_BACKGROUND_COLORS[5]` (`clipConstants.js:33-48`,
+teal `#17B3A3` today) become the gold picked in the T11100 mockups. **Collision:** rating 2
+(Technical Lapse) is Amber Yellow `#F9A825`, indistinguishable from gold at badge size, so it
+gets the recolor ruled in H15; keep the 5-color set color-blind distinguishable. These maps feed
+the timeline, play list, recap and share surfaces, so check every consumer renders the new pair.
+Also drop the "Brilliant" comments in that block (`Excellent` / `Brilliant` notes).
 
 **Do NOT rename (persisted / API identifiers):** `source_type = 'brilliant_clip'`, quest step id
 `annotate_brilliant` (`quest_config.py:56`), API field `brilliant_count` (`games.py:1405`),
@@ -61,5 +69,6 @@ rewrites names that exactly equal the derived pattern, and include the Migration
 
 - [ ] Red-then-green: a test asserting the 5-star label is "Highlight" fails on master, passes after
 - [ ] New derived names read "Highlight ..." (backend test)
+- [ ] Rating 5 renders gold and rating 2 renders the H15 color on every consumer of the color maps
 - [ ] `grep -ri brilliant src/frontend/src` shows only persisted identifiers, no UI copy
 - [ ] Persisted identifiers unchanged; explicit lint clean

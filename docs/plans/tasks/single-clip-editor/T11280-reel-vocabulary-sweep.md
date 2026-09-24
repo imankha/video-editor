@@ -26,6 +26,12 @@ consistency is not done here, T7700/T9320 precedent).
 | Legal / pricing "exported reels" (review wording) | `PrivacyPolicy.jsx`, `TermsOfService.jsx`, `BuyCreditsModal.jsx:131` |
 | Landing (R7): recruiting-reel page claims multi-clip ordering/assembly | `src/landing` `useCases.ts:34-110`; also check `cameras.ts`, `sports.ts`, `index.astro`, `how-it-works.astro` (194 hits / 24 files; keep "highlight reel" SEO phrasing only where it stays true) |
 
+**"clip" too (owner ruling 2026-09-24, round 2):** "remove the word Clip entirely, that's no
+longer a part of the mental model." Annotate's copy is T11150; if H17 rules every parent-facing
+screen, this sweep also removes user-visible "clip" from Framing, Spotlight, Home, Published,
+share pages and emails. The Home "Clips" tab name and the Highlight Later toast are the
+exceptions pending H18.
+
 Rules: no em dashes; never claim autonomous framing/tracking; brand "ReelBallers" unchanged.
 Landing ships via the separate landing deploy (`/deploy-landing`).
 

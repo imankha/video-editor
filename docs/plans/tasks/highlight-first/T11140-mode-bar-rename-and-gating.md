@@ -1,4 +1,4 @@
-# T11140: Mode bar - Frame Highlight / Add Spotlight, gated on the selected play's clip
+# T11140: Mode bar - Frame Highlight / Add Spotlight, gated on the selected play's highlight
 
 **Status:** TODO
 **Impact:** 7
@@ -26,7 +26,8 @@ not the play the user is looking at.
    SPOTLIGHT, `useProjectsList` lookup at `AnnotateModeView.jsx:205-209`). No play selected = both
    locked. Clicking opens THAT play's project (await `selectProject`, as `openClipInFocus` :222-234
    does). `ModeSwitcher.jsx` gets explicit props for this.
-3. **Locked-tab explanation** per T11100 section D (today: toast at `ModeSwitcher.jsx:90-113`).
+3. **Locked-tab explanation** per T11100 section D, with no user-visible "clip" (owner ruling
+   2026-09-24; today's toast "Open a clip to start framing" at `ModeSwitcher.jsx:90-113` goes) (today: toast at `ModeSwitcher.jsx:90-113`).
    Mobile (<640 px) is icon-only (:135); D decides whether labels appear.
 
 ## Context

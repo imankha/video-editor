@@ -1,4 +1,4 @@
-# T11120: Require a star rating to leave the play editor
+# T11120: Unrated Done opens the "Rate this play" modal
 
 **Status:** TODO
 **Impact:** 8
@@ -9,23 +9,31 @@
 
 ## Problem
 
-Every new play enters the editor with `rating` NULL (`AnnotateContainer.jsx` `handleAddClipFromButton`
-:1502, :1530). Unrated plays are silently excluded from recap and auto-export
-(`auto_export.py:241`), get no adjective in derived names, and in the new flow cannot become a
-highlight. The rating has to be a required step, not an optional one.
+Every new play enters the editor with `rating` NULL (`AnnotateContainer.jsx`
+`handleAddClipFromButton` :1502, :1530). Unrated plays are silently excluded from recap and
+auto-export (`auto_export.py:241`) and, in the new flow, can never become a highlight.
+
+Owner ruling 2026-09-24 (round 2): don't bog the UI down with the word "required"; the UI just
+ACTS required. "If the user clicks done without rating it, pop a modal popup asking user to rate
+the play with details for each rating."
 
 ## Solution
 
-A **gate, never a write.** Leaving the editor on an unrated play is blocked and the rating control
-is surfaced (presentation per T11100 section C). Nothing sets or persists a default rating, and no
-effect watches the rating (CLAUDE.md gesture-based persistence).
+**A gate, never a write.** Leaving the editor on an unrated play opens a **"Rate this play"
+modal** (design: T11100 mockups). It lists 5 Highlight / 4 Good / 3 Interesting / 2 Technical
+Lapse / 1 Mental Lapse, each with stars, adjective and a one-line meaning (rewritten from
+`getRatingCaption`, no "clip"). Picking a row is the rating gesture: it persists the rating
+through the normal path, closes the modal and CONTINUES the original exit (Done on a Highlight
+pick then shows T11130's popup). The modal never closes on backdrop click; its dismissal returns
+to the editor with nothing written. Nothing sets or persists a default rating; no effect watches
+the rating (CLAUDE.md gesture-based persistence).
 
-### Exit paths to gate (H5 decides the set; recommended: all)
+### Exit paths (H5 decides the set; recommended: all)
 Through `closeWithCommit` (`AnnotateFullscreenOverlay.jsx:327`): formBody X (:429), actionsFooter
 Done (:565), strip Done (:788), landscape X (:850), portrait-strip Done (:949), `keepMarkingCta`
 (:621), window Escape (:260-266).
 
-Outside `closeWithCommit` (need their own check):
+Outside `closeWithCommit` (each needs its own check):
 - empty timeline click -> `closeOverlay()` (`AnnotateContainer.jsx:1888-1891`)
 - mobile fullscreen exit incl. Escape (`handleToggleFullscreen` :1273-1277, Escape effect
   :2043-2055; the document listener fires before the overlay's window listener)
@@ -36,14 +44,12 @@ Always allowed: Delete play (`handleDeletePlayFromEditor` :1825).
 
 ### Landmines
 - The rating picker stops Escape propagation on the document (`PlayProgressBadges` :206); keep
-  the gate's Escape ordering correct on mobile fullscreen.
-- Rating commit is async (region write queue). The gate checks the in-memory rating the user just
-  picked, not a server round-trip.
-- Sidebar `ClipDetailsEditor.jsx` (SELECTED, non-edit play): no gate recommended (it only ever
-  sees plays that already passed the editor, except legacy NULL rows - H6).
-- Legacy NULL-rated plays (H6): gated when their editor next opens; no backfill migration.
-- The UI cannot un-rate today and the backend PUT ignores `rating: null` (`clips.py:1504`); keep it
-  that way.
+  Escape ordering right with the modal on top of the mobile fullscreen editor.
+- Rating commit is async (region write queue). The continued exit must await region writes
+  before any navigation (T11130's Make Highlight Now path).
+- Sidebar `ClipDetailsEditor.jsx`: no modal (it only sees plays that already left the editor,
+  except legacy unrated rows, H6).
+- The UI cannot un-rate and the backend PUT ignores `rating: null` (`clips.py:1504`); keep it so.
 
 ## Context
 
@@ -51,19 +57,20 @@ Always allowed: Delete play (`handleDeletePlayFromEditor` :1825).
 - `src/frontend/src/modes/annotate/components/AnnotateFullscreenOverlay.jsx`
 - `src/frontend/src/containers/AnnotateContainer.jsx` (path per knowledge doc)
 - `src/frontend/src/screens/AnnotateScreen.jsx`
-- `src/frontend/src/config/displayNames.js` (gate copy)
+- `src/frontend/src/config/displayNames.js`, `components/shared/clipConstants.js` (meanings)
 
 ### Tests to update
 `AnnotateFullscreenOverlay.noSaveButton` (Escape/Done), `.keys`, `.portraitStrip`, `.stripLayout`,
 `AnnotateContainer.createAtTap`.
 
 ### Related Tasks
-- Depends on: T11100 (section C pick)
-- Blocks: T11130 (same files, strict order)
+- Depends on: T11100 (modal design), T11150 (strict order, same files)
+- Blocks: T11130
 
 ## Acceptance Criteria
 
-- [ ] Red-then-green per gated exit path: unrated play cannot be left; rated play leaves normally
+- [ ] Red-then-green per gated exit: unrated play opens the modal instead of leaving; rated play leaves normally
+- [ ] Picking a rating in the modal saves it and completes the original exit
+- [ ] Dismissing the modal writes nothing (network log)
 - [ ] Delete play works on an unrated play
-- [ ] No new write path: network log shows no rating PUT unless the user picked a star
 - [ ] Live-driven desktop + 393 px portrait + landscape phone

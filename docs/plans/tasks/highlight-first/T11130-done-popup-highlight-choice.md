@@ -1,4 +1,4 @@
-# T11130: Done popup (Make Highlight Now / Keep Annotating); remove Create clip + Frame CTAs; new badges
+# T11130: Highlight popup (Make Highlight Now / Highlight Later); remove Create clip + Frame CTAs
 
 **Status:** TODO
 **Impact:** 9
@@ -15,18 +15,22 @@ wants the Highlight rating plus Done to be the whole gesture.
 
 ## Solution
 
-1. **Popup on Done** when the play is rated Highlight (5) and has no clip (`selectedRegion.autoProjectId`
-   empty). Presentation + copy per T11100 section B.
+1. **Popup on Done** when the play is rated Highlight (5) and is not yet a highlight
+   (`selectedRegion.autoProjectId` empty). Presentation + copy per T11100 section B (H12B). Gold
+   is the Highlight color; the primary button is gold. No user-visible "clip" anywhere in it.
    - **Make Highlight Now**: reuse the Frame Now path exactly - `AnnotateModeView.jsx`
      `handleFrameNow` (233): `onFullscreenUpdateClip(id, {createProject: true, silent: true})`,
      await region writes (`awaitRegionWrites`, the rating commit is queued), then
      `onOpenClipInFocus(projectId)`. Do NOT reuse `handleCreateClipFromBadge`
      (`AnnotateFullscreenOverlay.jsx:385`): its non-silent path fires the "is now in Clips" toast
      + `selectProject` before navigation.
-   - **Keep Annotating**: reuse `handleFrameLater` (259): same call without `silent`, stays in
-     Annotate. `announceReelCreated` (`AnnotateContainer.jsx:93`) shows the "{name} is now in Clips"
-     toast; its copy becomes the teaching line (make it a highlight later from Clips), and its
-     "Open Framing" action uses the new noun.
+   - **Highlight Later** (owner's name for it, round 2; replaces "Keep Annotating"): reuse
+     `handleFrameLater` (259): same call without `silent`, stays in Annotate.
+     `announceReelCreated` (`AnnotateContainer.jsx:93`) today shows "{name} is now in Clips" with
+     an "Open Framing" action; replace its text with EXACTLY **"Highlight moved to clips so you can
+     edit it later"** (the only user-visible "clip" in the flow, owner ruling). Whether the toast
+     keeps an action button is a T11100 design detail; if kept, its label uses the new nouns.
+     No separate teaching line in the popup: the toast teaches.
    - Synchronous ref guard against double-create (pattern: `frameCreateInFlightRef` :215, the
      T9830/T10240 convention). The badge's state-only guard is not enough.
    - Escape / dismissal per H4 (recommended: back to the editor, no write). Never close on backdrop.
@@ -39,10 +43,9 @@ wants the Highlight rating plus Done to be the whole gesture.
      `FRAME_LATER_HINT`, `CREATE_EDITABLE_CLIP`, `SAVE_PLAY_AND_CLIP`, and `FRAME_THIS_CLIP*` /
      `KEEP_MARKING_PLAYS` if H8 removes the stage CTA. **Check consumers first**: `FRAME_CLIP` is
      also used by `ClipSelectorSidebar:322` (Focus) and `PREPARING_CLIP` by `ProjectManager:1661`.
-3. **Badges**: implement the T11100 section A pick in `PlayProgressBadges.jsx`
-   (+ `playProgress.js` `CLIP_NUDGE_RATING` semantics). All mockup options drop the chess
-   notation (`!!` etc.) the rated badge and picker show today (`PlayProgressBadges.jsx:233,304`).
-   Team plays (H13) follow the user's ruling.
+3. **Badges**: the clip badge and its 5-star nudge go (`playProgress.js` `CLIP_NUDGE_RATING`
+   semantics); the "already a highlight" state renders per the T11100 A pick, in gold, without
+   the word clip. The editor re-layout itself is T11150. Team plays follow H13.
 4. Quest copy pointing at removed controls: `questDefinitions.jsx:174` (`annotate_brilliant`) and
    :180 (`playback_annotations`). Persisted step ids unchanged.
 
@@ -72,13 +75,13 @@ Unit: `AnnotateModeView.frameClip`, `AnnotateFullscreenOverlay.progressBadges` /
 `T8960`, `T8760`, `T9550-editor-stage-strings`, `manifests/screenManifests.js`, `tutorial-capture-annotate`.
 
 ### Related Tasks
-- Depends on: T11100 (A, B picks), T11120 (strict order, same files), T11110 (label)
+- Depends on: T11100 (A, B picks), T11150 + T11120 (strict order, same files), T11110 (label, gold)
 
 ## Acceptance Criteria
 
-- [ ] Red-then-green: Done on an unclipped Highlight play shows the popup; 1-4 star Done closes (H3)
-- [ ] Make Highlight Now lands in Frame Highlight on THAT play's clip, exactly one create call
-- [ ] Keep Annotating creates exactly one clip, stays in Annotate, teaching line visible, clip in Clips
-- [ ] Double-tap on either button creates one clip
+- [ ] Red-then-green: Done on a Highlight play that is not yet a highlight shows the popup; 1-4 star Done closes (H3)
+- [ ] Make Highlight Now lands in Frame Highlight on THAT play, exactly one create call
+- [ ] Highlight Later creates exactly one, stays in Annotate, toast reads exactly "Highlight moved to clips so you can edit it later", item appears in the Clips tab
+- [ ] Double-tap on either button creates one
 - [ ] No "Create clip" / "Frame" CTA in Annotate (grep + live)
 - [ ] Live-driven desktop + 393 px phone
