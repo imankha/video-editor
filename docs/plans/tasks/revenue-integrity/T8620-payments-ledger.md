@@ -1,6 +1,6 @@
 # T8620: Append-only payments ledger + Stripe backfill
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-03

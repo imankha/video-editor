@@ -1,6 +1,6 @@
 # T10220: Rebalance monetization: 12.99 / 22.99 / 32.99 ladder
 
-**Status:** TODO (deferred until AFTER the Deploy Candidate ships, user ruling 2026-09-17)
+**Status:** WIP (started 2026-09-24 via /dotask; user's /dotask call taken as the go-ahead past the Deploy Candidate deferral. Merge held: a master push of pricing.json auto-deploys the prod landing)
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-09-17
