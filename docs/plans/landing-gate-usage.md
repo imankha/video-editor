@@ -118,4 +118,8 @@ Tests cover pure decisions, actual temporary Git checkouts, signed receipt/artif
 tampering, manifest changes, and head movement between check and land. GitHub transport
 is fake in those boundary fixtures, so they do not prove server-side enforcement.
 Use a real PR to exercise the read-only GitHub transport and workflow integration;
-capture/live model behavior must be separately validated when subscription quota permits.
+Live capture was also exercised through the production CLI in disposable Git controller
+and candidate fixtures: a fresh Claude session returned MORE_PROOF_REQUIRED for
+deliberately incomplete proof, and its stored receipt passed integrity validation.
+This validates capture, structured output, and receipt storage; it is not a live
+GitHub merge test or proof of general agent quality.
