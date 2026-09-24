@@ -74,6 +74,10 @@ nul
 formal annotations/*
 !formal annotations/test.short/
 !formal annotations/test.short/**
+formal annotations/test.short/staging-verification-fixture-5min.mp4
+
+# Per-env Modal deploy output
+src/backend/app/modal_functions/deploy_result.staging.txt
 
 # Task manager config (session cookies)
 scripts/.task-manager-config.json
