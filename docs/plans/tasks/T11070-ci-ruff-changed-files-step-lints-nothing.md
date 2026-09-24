@@ -59,6 +59,18 @@ clone and run the old inline step (verbatim) and the new step:
 | New clean file | exit 0 | exit 0 |
 | ESLint `no-undef` added to a changed file | exit 0, no output | exit 123 (xargs: eslint failed) |
 | ESLint clean change | exit 0 | exit 0 |
+| Pure `git mv` of a backlog file (7 findings) | exit 0 | exit 0 (compared against the old path, 7 -> 7) |
+| Rename plus small edit | exit 0 | exit 0 |
+| New file whose path contains a space, with F401 | exit 0 | exit 1 |
+| New top-level backend file with F401 | exit 0 | exit 1 |
+| ruff crashes (exit 2) | exit 0 | exit 1, names the crash |
+
+Round 2, after the proof verifier's findings: renames and copies are compared against their
+old path, a ruff exit of 2 or more fails the step, the finding regex accepts paths with spaces,
+and both pathspecs use `*.py` / `*.js` so top-level files are included. The widened ESLint
+pathspec reaches `e2e/`; the one ESLint error in scope there (`no-empty-pattern` in
+`e2e/T8110-admin-test-filter-sort.qa.spec.js`, an unused `({}, testInfo)` hook argument) is
+fixed. The 14 remaining e2e errors are in `.mjs` scratch scripts the pathspec does not match.
 
 ## Acceptance Criteria
 

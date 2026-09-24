@@ -156,8 +156,9 @@ jobs:
       - name: ESLint (changed files vs master)
         run: |
           # T11070: pathspecs anchored with :(top); unanchored they resolved
-          # relative to src/frontend, matched nothing, and linted nothing.
-          git diff --diff-filter=ACMRT --name-only -z "$BASE_SHA...$HEAD_SHA" -- ':(top)src/frontend/**/*.js' ':(top)src/frontend/**/*.jsx' |
+          # relative to src/frontend, matched nothing, and linted nothing. '*.js'
+          # (not '**/*.js') so top-level files like vite.config.js count too.
+          git diff --diff-filter=ACMRT --name-only -z "$BASE_SHA...$HEAD_SHA" -- ':(top)src/frontend/*.js' ':(top)src/frontend/*.jsx' |
             sed -z 's|^src/frontend/||' | xargs -0 -r npx eslint --no-warn-ignored
       - name: ESLint regression gate (whole src must not regrow the backlog)
         # T4790: froze the eslint backlog at 0 errors / 1019 warnings. Any new
