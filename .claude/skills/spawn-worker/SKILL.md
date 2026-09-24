@@ -217,6 +217,11 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    that head. Any conflict resolution or other change requires refreshed affected proof,
    review, and CI. Insufficient evidence returns to its author; human-only gaps go to the
    user with exact steps. The worker cannot certify or land its own work.
+   The supervisor captures both independent verdicts and uses `scripts/landing_gate.py`
+   from the approved controller checkout. Follow [landing-gate-usage.md](../../../docs/plans/landing-gate-usage.md);
+   never replace a blocked gate with a direct `gh pr merge` call. Gate bootstrap/promotion
+   requires the documented human-reviewed process; receipt capture is a host operation,
+   not a worker continuation through `task.sh drive`.
 
 6. **Cleanup is automatic** via the committed `post-merge` hook (`.githooks/post-merge`)
    when the branch lands on master. Only step in if `/c/tmp/post-merge-cleanup.log` shows the

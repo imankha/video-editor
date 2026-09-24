@@ -105,6 +105,10 @@ burn into merges.
    known-failures.md, or task it — before proceeding.
 
    Apply `CLAUDE.md` Landing Policy; this is the single authority for the proof bar.
+   Use the supervisor gate documented in [landing-gate-usage.md](../../../docs/plans/landing-gate-usage.md).
+   Run its `capture` commands for reviewer and proof-verifier from the clean approved
+   controller checkout. Keep evidence and signed receipts outside the worker checkout.
+   A worker-supplied verdict or a prose-only review does not replace captured receipts.
    - Dispatch `subagent_type: proof-verifier` in a fresh context with criteria, base/head
      SHAs, unchanged proof-test contents/hash, commands, and raw evidence paths. Require
      an independent verdict; worker self-attestation and code approval are insufficient.
@@ -112,8 +116,10 @@ burn into merges.
      repeat verification. For post-hoc tests reproduce pre-fix failure and final success
      in isolated checkouts, never by reverting shared source files.
    - VERIFIED plus resolved code findings and green required CI for the final head:
-     create the PR and merge with `gh pr merge --merge --delete-branch --match-head-commit <verified-head-sha>`.
-     Re-fetch head/CI before merging; changed head/base invalidates affected verdicts.
+     create the PR, then run `python scripts/landing_gate.py check` and `land` with the
+     external evidence/store and candidate checkout arguments from the usage guide.
+     The gate re-fetches CI/head/base and applies the exact-head merge precondition.
+     Do not bypass a blocked verdict with a direct merge command.
      Set PLAN.md/task status to STAGING only after merge and report the evidence.
    - HUMAN_VERIFICATION_REQUIRED or unresolved proof: keep the branch open; continue
      feasible evidence work, otherwise hand off exact gaps/steps and set WAITING ON USER
