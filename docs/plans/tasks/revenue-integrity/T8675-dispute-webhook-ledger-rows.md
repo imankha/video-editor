@@ -40,8 +40,17 @@ No automated refund or account behaviour (EPIC decision 6).
 - Depends on: T8620
 - Interacts with: T8640 (reconciliation causes), T8670 (scheduled drift alert)
 
+## Also in scope: refunds that settle later (added 2026-09-24, T8620 proof verification)
+
+T8620 records only `succeeded` refunds when `charge.refunded` fires. A refund that is still
+`pending` at that moment is skipped, and no handler reacts when it later settles, so it reaches
+the ledger only on another refund event for the same charge or a backfill re-run. Card refunds
+normally succeed immediately, so the exposure is small. Handle `charge.refund.updated` (or
+`refund.updated`) through the same idempotent `record_refund` path.
+
 ## Acceptance Criteria
 
 - [ ] A lost dispute writes exactly one negative `dispute_lost` row; a redelivery writes none
 - [ ] A won dispute writes no row
+- [ ] A refund that settles after `charge.refunded` fired writes its row exactly once
 - [ ] The per-user `SUM(amount_cents)` matches the Stripe net the reconciler computes after a lost dispute
