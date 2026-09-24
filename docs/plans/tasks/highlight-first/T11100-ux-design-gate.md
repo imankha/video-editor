@@ -63,6 +63,11 @@ height-starved); it needs the rate modal and Highlight popup too, likely as cent
 and the implementing task must design it against the live layout. 393 px no-scroll is by
 construction only; not yet browser-checked.
 
+**2026-09-24 (round 3/4)**: Owner picked P2, A2, rate modal C (Highlight meaning "Brilliant
+Play! Everyone should see it."), popup **B3** (Back to Editing closes the editor; toast
+confirms; "Clips" capitalized; Escape-only cancel). Open: M6, M7 (D2 vs D3). Mockups v3 at the
+same URL.
+
 ## Acceptance Criteria
 
 - [ ] User has picked A and B, approved C, D and the palette (or given a redirect)

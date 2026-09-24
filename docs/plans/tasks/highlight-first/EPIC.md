@@ -52,6 +52,17 @@ recommendations":
   Guided mode needs. Task T11170.
 - **Any unsupported link goes Home** (R6), not just old Reels links (T11230).
 
+### Owner rulings (2026-09-24, round 4)
+
+- **Popup presentation B3**: the editor swaps in place to a gold choice card.
+- **Back to Editing closes the editor** and returns to marking plays (M2); toast "Highlight
+  moved to Clips so you can edit it later" confirms (M3, follows from M2).
+- **"Clips" capitalized** in the owner-written strings (M4).
+- **Escape is the only no-save exit** from the choice card (M5, ui-designer's call as delegated).
+- Still open on the artifact: M6 (rename the rate modal's exit to "Keep editing"), M7 (mobile
+  locked-tab tap: D2 toast vs D3 shake), QB1-QB2 (other old "Brilliant" names), T1-T5 (team
+  highlight downstream), G1-G6 (quest removal).
+
 ## Vocabulary conflict (confirmed by the owner's round-2 wording, see H1)
 
 This **reverses the 2026-09-13 ruling** in PLAN.md ("Clip and Reel both stand. 'Highlight' is a
