@@ -1,5 +1,15 @@
 ---
 domain: backend-services
+updated: 2026-09-24 (T8630, Revenue Record Integrity epic 2/6: **account deletion now preserves
+and audits the revenue record.** New `account_deletions` table (Postgres, v031, `id BIGSERIAL`
+PK per a design-gate PK-bug catch, NOT `user_id` PK) records who/when/which-path/had-money for
+every real `users`-row deletion; `payments_ledger.stamp_account_deleted` marks surviving
+`payments` rows `account_deleted_at` (NULL-gated, never filters revenue); a new DB trigger
+(`trg_payments_append_only`/`trg_payments_no_truncate`) enforces the T8620 append-only
+invariant structurally, not just by grep. `scripts/delete_user.py` gained `--force-paid`
+(fail-before-first-delete across `--all`/`--all-except`). 4 privacy-copy surfaces updated with
+user-approved exact wording. Full design: docs/plans/tasks/revenue-integrity/T8630-design.md.
+See "Account deletion contract (T8630)" section below.)
 updated: 2026-09-24 (T8620, Revenue Record Integrity epic 1/6: **new append-only `payments`
 table (Postgres, v030)** -- the first local per-payment financial record; today the only local
 revenue value is `user_segments.total_spent_cents`, a mutable counter with no history that is
@@ -16,7 +26,9 @@ statement against this table anywhere in the codebase). **Append-only is enforce
 review grep, not a DB trigger** -- exactly TWO in-place writes are permitted codebase-wide:
 `fill_missing_charge_id` (this task, gated `WHERE stripe_charge_id IS NULL`, fills asynchronously
 via a background task scheduled AFTER the ledger row's transaction commits, never blocks/fails the
-payment) and T8630's future `account_deleted_at` stamp (reserved column, written by nothing yet).
+payment) and T8630's `account_deleted_at` stamp (`payments_ledger.stamp_account_deleted`, NULL-gated).
+**T8630 (2026-09-24) added a DB-level trigger enforcing the same invariant structurally, in
+addition to the grep** -- see "Account deletion contract (T8630)" below.
 **The ledger insert is deliberately NOT gated on `result["applied"]`** -- it runs on every
 observation of a succeeded/paid payment at all 4 purchase sites (`confirm_payment_intent`, webhook
 `checkout.session.completed`, webhook `payment_intent.succeeded`, `verify_session`) and the refund
@@ -270,16 +282,20 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
   these two. **The credit grant itself is never affected either way** — it runs first, in its
   own transaction, fully committed before the ledger block executes; EPIC decision 6 forbids
   coupling the two ledgers, so a ledger failure can never roll back a real grant.
-- **Append-only is enforced by convention + a review grep, not a DB trigger** (a blanket
-  `REVOKE UPDATE`/trigger was rejected in the design gate — it would need to special-case the
-  one legitimate future exception, T8630's `account_deleted_at` stamp, before that stamp's
-  contract even exists). **Exactly TWO in-place writes are permitted in the whole codebase:**
-  (1) `payments_ledger.fill_missing_charge_id(cur, stripe_object_id, stripe_charge_id)` — the
-  SOLE `UPDATE payments` statement anywhere, `WHERE stripe_object_id = %s AND kind = 'purchase'
-  AND stripe_charge_id IS NULL`, syntactically incapable of touching any other column; and (2)
-  T8630's future `account_deleted_at` stamp (reserved column, nothing writes it yet). Nothing may
-  ever `UPDATE amount_cents`/`kind`/`stripe_object_id`/`user_id`/`occurred_at`, and nothing may
-  `DELETE` a row — grep-verified in review, re-verify on any future touch to this table.
+- **Append-only is enforced by a review grep AND (as of T8630) a DB-level trigger.** At T8620
+  time a blanket `REVOKE UPDATE`/trigger was rejected in the design gate pending the one
+  legitimate future exception (T8630's `account_deleted_at` stamp); T8630 then shipped that
+  trigger once the stamp's contract existed. **Exactly TWO in-place writes are permitted in
+  the whole codebase:** (1) `payments_ledger.fill_missing_charge_id(cur, stripe_object_id,
+  stripe_charge_id)` — `WHERE stripe_object_id = %s AND kind = 'purchase' AND stripe_charge_id
+  IS NULL`, syntactically incapable of touching any other column; and (2)
+  `payments_ledger.stamp_account_deleted(cur, user_id)` — `WHERE user_id = %s AND
+  account_deleted_at IS NULL`. Nothing may ever `UPDATE amount_cents`/`kind`/`stripe_object_id`/
+  `user_id`/`occurred_at`/`currency`/`pack`/`credits`/`recorded_at`/`source`, and nothing may
+  `DELETE` or `TRUNCATE` a row — grep-verified in review (`tests/test_t8620_payments_ledger.py`
+  `TestT11AppendOnlyGrep`, allowlist widened by T8630 to both writers) AND enforced structurally
+  by `trg_payments_append_only`/`trg_payments_no_truncate` (see "Account deletion contract
+  (T8630)" below) — re-verify both on any future touch to this table.
 - **`stripe_charge_id` async background fill.** Where the charge id isn't already in hand at
   insert time (webhook `checkout.session.completed`, `verify_session`; occasionally
   `confirm_payment_intent`), the row inserts with `stripe_charge_id = NULL` and a background task
@@ -325,6 +341,72 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
 - **Full design + the six approved rulings (dispute scope, append-only enforcement, cache-bump
   fix shape, write-path/failure-mode split, async charge-id fill, backfill guardrail):**
   `docs/plans/tasks/revenue-integrity/T8620-design.md`.
+
+### Account deletion contract (T8630)
+Revenue Record Integrity epic 2/6. Fixes the two 2026-09-03 incident holes: deletion used to
+silently destroy the revenue record, and left no trace that a deletion happened at all.
+
+- **`account_deletions` (Postgres, v031):** `id BIGSERIAL PRIMARY KEY` (NOT `user_id` — a
+  design-gate bug catch: `_reset_test_account` re-creates the same `user_id`, so a second reset
+  of the same test account must write a SECOND row, not collide on a duplicate key), `user_id
+  TEXT NOT NULL` + index `(user_id, deleted_at)`, `deleted_at`, `actor TEXT` (`self`|`admin`|
+  `script` — `admin` reserved, no code path emits it yet), `path TEXT` (`privacy_endpoint`|
+  `delete_user_script`|`reset_test_account`), `had_payments BOOLEAN`, `net_cents INTEGER`
+  (signed `SUM(payments.amount_cents)` at deletion time), `note TEXT`. One row per DELETION
+  EVENT. No email column, no FK to `users` — answers who/when/which-path/how-much without
+  personal data. Sole writer: `services/account_deletions.py`'s `record_account_deletion(cur,
+  *, user_id, actor: DeletionActor, path: DeletionPath, note=None)` — plain `INSERT`, no
+  `account_deletions` trigger (out of scope by design, append-only by INSERT-only convention).
+- **The `payments.account_deleted_at` stamp** is a write to `payments`, so it lives in
+  `payments_ledger.py` (the ledger's sole writer), not in `account_deletions.py`:
+  `stamp_account_deleted(cur, user_id)` — `UPDATE ... WHERE user_id = %s AND account_deleted_at
+  IS NULL`, NULL-gated for idempotency, `to_regclass`-guarded for a pre-v031 environment.
+  Never filters any revenue query (T8650) — it is account metadata, not a money fact.
+- **Three real delete paths, each in ONE transaction with its own `DELETE FROM users`** (stamp
+  + audit BEFORE the delete, so a rollback leaves neither and a commit leaves both):
+  `privacy.delete_account` (actor=`self`, path=`privacy_endpoint`, stamps + audits — the CCPA
+  self-serve path NEVER refuses); `auth._reset_test_account` (actor=`self`,
+  path=`reset_test_account`, audits but does NOT stamp — the same `user_id` is re-created
+  immediately on the same login, so a persistent "deleted" stamp would misdescribe a live
+  account); `scripts/delete_user.py::delete_one` (actor=`script`, path=`delete_user_script`,
+  stamps + audits, `note="forced past payment guard"` when `--force-paid` overrode a refusal).
+  `_purge_user_data` and `DELETE /api/auth/user` deliberately get NEITHER — neither deletes the
+  `users` row (the former is a shared helper with a 4th caller that keeps the account alive;
+  the latter is test cleanup only).
+- **`scripts/delete_user.py --force-paid` guard:** `check_payment_guard(pg_conn, rows,
+  force_paid)` runs as ONE pre-pass over every target in `main()`, BEFORE the deletion loop —
+  so `--all`/`--all-except` refuse the whole run before the first delete, not halfway through.
+  Skipped when `--dry-run` (nothing is deleted in dry-run, so nothing needs refusing; a
+  deliberate scope call flagged at review, not a gap in AC3 — a future task could extend the
+  preview to also print the refusal block if that matters more than the extra branch).
+  `payment_summary(pg_conn, user_id)` is script-local read-only reporting (never imports into
+  `payments_ledger.py` — it doesn't write). The write helpers (`stamp_account_deleted`,
+  `record_account_deletion`) ARE imported from the app, so the script and the app share one
+  SQL definition of "what a deletion writes" — never duplicated inline.
+- **DB-level append-only trigger on `payments` (`trg_payments_append_only` +
+  `trg_payments_no_truncate`, both in v031 + `pg.py` `_SCHEMA_DDL`, byte-for-byte identical to
+  the migration per the v030 precedent):** row-level `BEFORE UPDATE OR DELETE` raises
+  unconditionally on DELETE, raises on UPDATE of any of the 11 immutable columns, allows
+  `stripe_charge_id` only NULL→value, allows `account_deleted_at` unconditionally (the app-side
+  `IS NULL` gate handles idempotency, the trigger doesn't re-check it). Statement-level `BEFORE
+  TRUNCATE` raises UNLESS `current_setting('reelballers.allow_payments_purge', true) = 'on'` —
+  the row-level DELETE guard has **NO such escape hatch** (unconditional, even for tests: the
+  test DB's own seeded payment rows can never be `DELETE`d, only wiped by the next test's
+  TRUNCATE). `tests/conftest.py`'s shared `pg_conn` fixture sets that GUC with a plain `SET`
+  (NOT `SET LOCAL` — its `setup` connection runs `autocommit = True`, so `SET LOCAL` would not
+  survive to the next statement) immediately before the shared TRUNCATE, on a connection closed
+  right after — the escape hatch can't leak into any production path.
+- **Privacy copy (4 surfaces, exact wording gated by the design's user-approval rulings):**
+  `AccountSettings.jsx`'s delete confirmation, `PrivacyPolicy.jsx` §4/§5,
+  `docs/legal/privacy-policy.md` §4/§5, `docs/legal/data-retention-policy.md`'s new "What IS
+  Retained After Deletion" subsection. All state the SAME basis — retained to meet tax/
+  accounting legal obligations, never for analytics — and never call the retained record "not
+  personal data" (pseudonymous data is still personal data under GDPR Recital 26; the corrected
+  wording is "a pseudonymous financial record with no name, email, or card details... never
+  delays or limits the erasure of your other personal data").
+- **Full design + all approved rulings (schema PK fix, wording fix, exact confirmation text,
+  reset-path stamp/actor, TRUNCATE guard scope, `account_deletions` trigger scope, reserved
+  `admin` actor):** `docs/plans/tasks/revenue-integrity/T8630-design.md`.
 
 ## Auth bypasses for automated testing (dev/staging)
 - `POST /api/auth/test-login` (auth.py:852) — empty `e2e@test.local` user; new-user flows only. In SKIP_SESSION_INIT_PATHS, so no real data loads. Requires X-Test-Mode; `ENV==production` → 404.

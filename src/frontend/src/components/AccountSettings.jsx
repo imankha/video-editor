@@ -171,7 +171,7 @@ export function AccountSettings() {
           {/* Delete confirmation */}
           {showDeleteConfirm && (
             <div className="border border-red-800 bg-red-900/20 rounded-lg p-3 space-y-3">
-              <p className="text-sm text-red-300">This will permanently delete your account and all data. This cannot be undone.</p>
+              <p className="text-sm text-red-300">This permanently deletes your account and all personal data. This cannot be undone. We keep a record of past payments (amounts and dates only, with no name, email, or card details) to meet tax and accounting obligations.</p>
               <input
                 type="text"
                 placeholder='Type "DELETE" to confirm'

@@ -173,8 +173,57 @@ def restart_fly(env_name: str) -> None:
         print(f"  WARN: {e}")
 
 
+def payment_summary(pg_conn, user_id: str) -> dict:
+    """Read-only report of a user's retained `payments` ledger rows, for the
+    --force-paid guard (T8630). Script-local: it never WRITES `payments`, so
+    it stays out of `payments_ledger.py`'s single-writer scope. Tolerant of a
+    pre-v031 destination (no ledger to protect)."""
+    if not table_present(pg_conn, "payments"):
+        return {"count": 0, "net_cents": 0, "object_ids": []}
+    cur = pg_conn.cursor()
+    cur.execute(
+        "SELECT COUNT(*) c, COALESCE(SUM(amount_cents),0) net FROM payments WHERE user_id=%s",
+        (user_id,),
+    )
+    row = cur.fetchone()
+    cur.execute(
+        "SELECT stripe_object_id FROM payments WHERE user_id=%s ORDER BY id",
+        (user_id,),
+    )
+    return {
+        "count": row["c"],
+        "net_cents": row["net"],
+        "object_ids": [r["stripe_object_id"] for r in cur.fetchall()],
+    }
+
+
+def check_payment_guard(pg_conn, rows, force_paid: bool) -> bool:
+    """T8630 AC3: refuse a run that would delete a paying account unless
+    --force-paid is passed. Runs as a SINGLE pre-pass over every target
+    BEFORE any deletion, so --all/--all-except refuse the whole run before
+    the first delete. Returns True if the run may proceed, False if it must
+    refuse (the loud block is already printed by the time this returns
+    False; the caller is responsible for exiting non-zero)."""
+    if force_paid or not table_present(pg_conn, "payments"):
+        return True
+    paid = [(r, payment_summary(pg_conn, r["user_id"])) for r in rows]
+    paid = [(r, s) for (r, s) in paid if s["count"] > 0]
+    if not paid:
+        return True
+    print("\n*** REFUSING: the following target(s) have RETAINED payment records ***")
+    for r, s in paid:
+        print(f"  {r['email']} ({r['user_id']}): {s['count']} payment(s), "
+              f"net ${s['net_cents']/100:.2f} -- ledger will be RETAINED")
+        for oid in s["object_ids"]:
+            print(f"      {oid}")
+    print("\nThe payments ledger is preserved on deletion by design (T8630). "
+          "Re-run with --force-paid to delete these account(s) anyway; "
+          "their payment records will still be RETAINED and stamped account_deleted_at.")
+    return False
+
+
 def delete_one(user_id: str, email: str, app_env: str, bucket: str,
-               s3, pg_conn, dry_run: bool) -> None:
+               s3, pg_conn, dry_run: bool, force_paid: bool = False) -> None:
     print(f"\n=== Deleting user_id={user_id} ({email}) in {app_env} ===")
 
     prefix = f"{app_env}/users/{user_id}/"
@@ -228,6 +277,26 @@ def delete_one(user_id: str, email: str, app_env: str, bucket: str,
         cur.execute("SELECT COUNT(*) as cnt FROM users WHERE user_id = %s", (user_id,))
         print(f"    would delete {cur.fetchone()['cnt']} rows from users")
     else:
+        # T8630: stamp + audit BEFORE the DELETE FROM users below, on this
+        # same pg_conn (committed once in main() at the end of the whole
+        # run) -- imports the app's single-writer helpers rather than
+        # inlining their SQL (payments_ledger.py owns `payments` writes,
+        # account_deletions.py owns the audit table).
+        if table_present(pg_conn, "payments"):
+            from app.services.payments_ledger import stamp_account_deleted
+            stamp_account_deleted(cur, user_id)
+        if table_present(pg_conn, "account_deletions"):
+            from app.services.account_deletions import (
+                DeletionActor,
+                DeletionPath,
+                record_account_deletion,
+            )
+            summary = payment_summary(pg_conn, user_id)
+            note = "forced past payment guard" if (force_paid and summary["count"] > 0) else None
+            record_account_deletion(
+                cur, user_id=user_id, actor=DeletionActor.SCRIPT,
+                path=DeletionPath.DELETE_USER_SCRIPT, note=note,
+            )
         cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
         cur.execute("UPDATE user_segments SET referrer_id = NULL WHERE referrer_id = %s", (user_id,))
         cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
@@ -247,6 +316,9 @@ def main():
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--no-restart", action="store_true")
     p.add_argument("--yes", action="store_true", help="Skip confirmation")
+    p.add_argument("--force-paid", action="store_true",
+                    help="Delete even accounts that have retained payment records "
+                         "(T8630: the ledger is preserved and stamped regardless)")
     args = p.parse_args()
 
     config = load_env(args.env)
@@ -290,13 +362,20 @@ def main():
     for r in rows:
         print(f"  - {r['email']} ({r['user_id']})")
 
+    # T8630 AC3: fail BEFORE the first deletion, not halfway through --
+    # a single pre-pass over the whole target list, ahead of the
+    # confirmation prompt.
+    if not args.dry_run and not check_payment_guard(pg_conn, rows, args.force_paid):
+        sys.exit(1)
+
     if not args.yes and not args.dry_run:
         reply = input(f"\nDelete {len(rows)} user(s) from {args.env}? Type 'yes' to confirm: ")
         if reply.strip() != "yes":
             print("Aborted."); return
 
     for r in rows:
-        delete_one(r["user_id"], r["email"], app_env, bucket, s3, pg_conn, args.dry_run)
+        delete_one(r["user_id"], r["email"], app_env, bucket, s3, pg_conn, args.dry_run,
+                   force_paid=args.force_paid)
 
     if not args.dry_run:
         pg_conn.commit()

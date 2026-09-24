@@ -157,9 +157,23 @@ def _reset_test_account(user_id: str, email: str) -> None:
 
     _purge_user_data(user_id)  # T5840: also purges credits/credit_transactions/credit_reservations
 
+    from app.services.account_deletions import (
+        DeletionActor,
+        DeletionPath,
+        record_account_deletion,
+    )
     from app.services.pg import get_pg
     with get_pg() as conn:
         cur = conn.cursor()
+        # T8630 Approved ruling 1: audit the reset (a users-row deletion
+        # genuinely occurred), but do NOT stamp payments.account_deleted_at
+        # here -- the same user_id is re-created immediately on the same
+        # login, and a persistent "deleted" stamp would misdescribe a live,
+        # re-created account. Ruling 2: actor is `self` (the reset is
+        # triggered by the user's own login).
+        record_account_deletion(
+            cur, user_id=user_id, actor=DeletionActor.SELF, path=DeletionPath.RESET_TEST_ACCOUNT,
+        )
         # Reset recipient-side share state so share links can be re-materialized
         cur.execute(
             """UPDATE share_games SET materialized_at = NULL, recipient_profile_id = NULL

@@ -11,11 +11,12 @@ insert + conditional ``bump_total_spent`` committing/rolling back together).
 
 Append-only by construction (design §3, ruling 2): the only writes issued here
 are INSERTs with ``ON CONFLICT (stripe_object_id, kind) DO NOTHING``, plus
-exactly ONE whitelisted metadata-only UPDATE (``fill_missing_charge_id`` — the
-second of the two permitted in-place writes in the whole codebase, the first
-being T8630's future ``account_deleted_at`` stamp). Nothing here ever UPDATEs
+exactly TWO whitelisted metadata-only UPDATEs: ``stamp_account_deleted``
+(T8630, the ``account_deleted_at`` stamp) and ``fill_missing_charge_id``
+(T8620). Nothing here ever UPDATEs
 ``amount_cents``/``kind``/``stripe_object_id``/``user_id``/``occurred_at``, and
-nothing DELETEs a row.
+nothing DELETEs a row. Both UPDATEs are also enforced at the DB level by the
+``trg_payments_append_only`` trigger (T8630, `pg.py` `_SCHEMA_DDL`).
 """
 
 import logging
@@ -260,6 +261,32 @@ def fill_missing_charge_id(cur, *, stripe_object_id: str, stripe_charge_id: str)
         (stripe_charge_id, stripe_object_id),
     )
     return cur.rowcount == 1
+
+
+def stamp_account_deleted(cur, user_id: str) -> int:
+    """The FIRST of the two permitted in-place writes against `payments`
+    (design §3.3/§4.1 — `fill_missing_charge_id` above is the second).
+    Marks every surviving `payments` row for `user_id` with
+    `account_deleted_at = now()`, gated on `IS NULL` so it is naturally
+    idempotent: a re-run stamps 0 rows. Never deletes anything — the row is
+    the whole point of the design (it must outlive account deletion).
+
+    Tolerates a pre-v031 environment where `payments` does not exist yet
+    (`to_regclass` guard, same pattern as `_purge_user_data`'s
+    `upload_failures` check) — the code can deploy ahead of the migration
+    that runs it.
+
+    Returns the number of rows stamped by this call.
+    """
+    cur.execute("SELECT to_regclass('public.payments') IS NOT NULL AS ok")
+    if not cur.fetchone()["ok"]:
+        return 0
+    cur.execute(
+        "UPDATE payments SET account_deleted_at = now() "
+        "WHERE user_id = %s AND account_deleted_at IS NULL",
+        (user_id,),
+    )
+    return cur.rowcount
 
 
 def fill_missing_charge_id_background(pi_id: str) -> None:

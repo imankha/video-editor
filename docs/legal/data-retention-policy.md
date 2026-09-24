@@ -58,6 +58,14 @@ Upon account deletion, the following are **permanently and immediately** removed
 - No "soft delete" or archival — deletion is permanent
 - No data is retained for analytics or research purposes
 
+### What IS Retained After Deletion
+
+- **Transaction records only, for a legal reason.** We retain the amount and date of each
+  payment, keyed to an opaque account id, with no name, email, or card details. This is kept
+  solely to meet tax and accounting legal obligations, not for analytics, research, or any
+  product purpose. It is a pseudonymous financial record with no name, email, or card
+  details, and retaining it never delays or limits the erasure of your other personal data.
+
 ### Deletion Timeline
 
 - **Immediate:** All data removed upon confirmation of deletion request

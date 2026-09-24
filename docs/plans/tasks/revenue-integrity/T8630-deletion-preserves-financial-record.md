@@ -117,23 +117,25 @@ wording with the existing T1740 privacy documents rather than inventing a second
 ## Implementation
 
 ### Steps
-1. [ ] Migration: `account_deletions` table (+ `_SCHEMA_DDL`)
-2. [ ] Stamp `payments.account_deleted_at` on both real delete paths
-3. [ ] Write the audit row on both real delete paths
-4. [ ] `--force-paid` guard in `delete_user.py`, including the bulk modes
-5. [ ] Privacy copy: policy doc + in-app confirmation
-6. [ ] Tests
+1. [x] Migration: `account_deletions` table (+ `_SCHEMA_DDL`) -- v031, `id BIGSERIAL` PK
+2. [x] Stamp `payments.account_deleted_at` on the real delete paths that should stamp
+       (privacy_endpoint, delete_user_script; reset_test_account audits but does not stamp,
+       per the design's Approved ruling 1)
+3. [x] Write the audit row on all three real delete paths
+4. [x] `--force-paid` guard in `delete_user.py`, including the bulk modes
+5. [x] Privacy copy: policy doc + in-app confirmation (4 surfaces)
+6. [x] Tests (`tests/test_t8630_deletion_audit.py`, 24 tests; proof: `qa/t8630-red-green.txt`)
 
 ## Acceptance Criteria
 
-- [ ] Deleting an account with payments leaves every `payments` row intact, stamped with
+- [x] Deleting an account with payments leaves every `payments` row intact, stamped with
       `account_deleted_at`
-- [ ] Every `users` row deletion writes exactly one `account_deletions` row naming actor
+- [x] Every `users` row deletion writes exactly one `account_deletions` row naming actor
       and path
-- [ ] `delete_user.py` refuses a paying account without `--force-paid`, and refuses a bulk
+- [x] `delete_user.py` refuses a paying account without `--force-paid`, and refuses a bulk
       run containing one before deleting anything
-- [ ] The in-app delete confirmation and the privacy policy both state that transaction
+- [x] The in-app delete confirmation and the privacy policy both state that transaction
       records are retained, with the reason
-- [ ] Re-running the 2026-09-03 investigation questions against a freshly deleted test
+- [x] Re-running the 2026-09-03 investigation questions against a freshly deleted test
       account answers all of them from tables: who deleted it, when, through which path,
       and how much money it had

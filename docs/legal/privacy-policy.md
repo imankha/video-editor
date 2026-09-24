@@ -140,8 +140,11 @@ We share your information only with service providers who assist in operating th
 | Processing artifacts (GPU intermediates) | Automatically deleted after export completes |
 | Session tokens | 30 days maximum, or until logout |
 | OTP codes | Expire after 10 minutes |
+| Transaction records (payment amounts, keyed to an opaque account id; no name, email, or card data) | Retained after account deletion to meet tax and accounting legal obligations |
 
 Upon account deletion request, all data is permanently deleted within 45 days (CCPA compliance deadline). See our [Data Retention Policy](data-retention-policy.md) for details.
+
+Transaction records are the one exception, and only because tax and accounting law requires it: we keep the payment amount keyed to an opaque account id, with no name, email, or card details. This exception does not delay or limit erasure of your personal data.
 
 ---
 
@@ -154,7 +157,7 @@ If you are a California resident (or where otherwise required by law), you have 
 You may request a copy of all personal information we hold about you. Use the "Download My Data" button in Account Settings or email us.
 
 ### Right to Delete
-You may request deletion of your personal information. Use the "Delete My Account" button in Account Settings or email us. Deletion is permanent and immediate.
+You may request deletion of your personal information. Use the "Delete My Account" button in Account Settings or email us. Deletion is permanent and immediate. We retain transaction records (payment amounts keyed to an opaque account id, with no personal details) to meet tax and accounting obligations. We never refuse your erasure request on this basis; your personal data is still erased, and only the pseudonymous financial record is kept.
 
 ### Right to Correct
 You may request correction of inaccurate personal information by contacting us.

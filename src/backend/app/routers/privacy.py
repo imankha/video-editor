@@ -230,6 +230,10 @@ async def delete_account(request: Request):
 
     Deletes: R2 objects, local files, auth DB records, sessions.
     Modeled after _reset_test_account() in auth.py.
+
+    T8630: never refuses. Payment records are retained (stamped
+    `account_deleted_at`, never deleted) to meet tax/accounting obligations,
+    and the deletion itself is recorded in `account_deletions`.
     """
     user_id = get_current_user_id()
     logger.info(f"[Privacy] Account deletion requested: user={user_id}")
@@ -257,9 +261,22 @@ async def delete_account(request: Request):
     #    _purge_user_data deletes the user's game_storage_refs rows before this runs, since
     #    that table is now the LIVE derived ref-set, not the dead pre-T2930 table it was.)
     try:
+        from app.services.account_deletions import (
+            DeletionActor,
+            DeletionPath,
+            record_account_deletion,
+        )
+        from app.services.payments_ledger import stamp_account_deleted
         from app.services.pg import get_pg
         with get_pg() as conn:
             cur = conn.cursor()
+            # T8630: the ledger stamp + audit row commit atomically with the
+            # DELETE FROM users below -- same transaction, so a rollback here
+            # leaves neither a stamp nor an audit row, never a mismatched pair.
+            stamp_account_deleted(cur, user_id)
+            record_account_deletion(
+                cur, user_id=user_id, actor=DeletionActor.SELF, path=DeletionPath.PRIVACY_ENDPOINT,
+            )
             cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
             cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
             cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
