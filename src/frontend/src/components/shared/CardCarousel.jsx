@@ -290,7 +290,15 @@ export function CardCarousel({ children, ariaLabel, className = '', fillerSlot =
         )}
       </div>
 
-      {/* Left arrow — desktop only, solid circular button half-out past the row edge */}
+      {/* Left scrim + arrow — desktop only. The peek card's own persistent action
+          buttons (Play/Share, T8540) are positioned independently of the peek gap
+          math and can land at the same vertical center as this arrow, producing a
+          visual collision where the pill and the circular control fight for the
+          same pixels. A pointer-events-none fade masks the card edge behind the
+          arrow (Netflix-row pattern) instead of leaving the raw overlap visible. */}
+      {showChevrons && (
+        <div className="absolute left-0 top-0 bottom-0 w-14 z-[15] pointer-events-none bg-gradient-to-r from-gray-900 via-gray-900/70 to-transparent rounded-l-lg" />
+      )}
       {showChevrons && (
         <button
           type="button"
@@ -308,7 +316,10 @@ export function CardCarousel({ children, ariaLabel, className = '', fillerSlot =
         </button>
       )}
 
-      {/* Right arrow — desktop only, solid circular button half-out past the row edge */}
+      {/* Right scrim + arrow — mirrors the left pair above. */}
+      {showChevrons && (
+        <div className="absolute right-0 top-0 bottom-0 w-14 z-[15] pointer-events-none bg-gradient-to-l from-gray-900 via-gray-900/70 to-transparent rounded-r-lg" />
+      )}
       {showChevrons && (
         <button
           type="button"
