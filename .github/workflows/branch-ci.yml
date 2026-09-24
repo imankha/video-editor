@@ -155,7 +155,10 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: ESLint (changed files vs master)
         run: |
-          git diff --diff-filter=ACMRT --name-only -z "$BASE_SHA...$HEAD_SHA" -- 'src/frontend/**/*.js' 'src/frontend/**/*.jsx' |
+          # T11070: pathspecs anchored with :(top); unanchored they resolved
+          # relative to src/frontend, matched nothing, and linted nothing. '*.js'
+          # (not '**/*.js') so top-level files like vite.config.js count too.
+          git diff --diff-filter=ACMRT --name-only -z "$BASE_SHA...$HEAD_SHA" -- ':(top)src/frontend/*.js' ':(top)src/frontend/*.jsx' |
             sed -z 's|^src/frontend/||' | xargs -0 -r npx eslint --no-warn-ignored
       - name: ESLint regression gate (whole src must not regrow the backlog)
         # T4790: froze the eslint backlog at 0 errors / 1019 warnings. Any new
@@ -227,9 +230,9 @@ jobs:
         # so tests run on the SAME httpx 0.28.1 as prod -- no `httpx<0.28` override.
         run: pip install -r requirements.prod.txt -r requirements.test.txt ruff
       - name: Ruff (changed files vs master)
-        run: |
-          git diff --diff-filter=ACMRT --name-only -z "$BASE_SHA...$HEAD_SHA" -- 'src/backend/**/*.py' |
-            sed -z 's|^src/backend/||' | xargs -0 -r ruff check
+        # T11070: per-file ratchet. The old inline step's pathspec was resolved
+        # relative to src/backend, matched nothing, and silently linted nothing.
+        run: bash ../../scripts/ci_ruff_changed.sh
       - name: Ruff regression gate (whole app must not regrow the backlog)
         # T4790: froze the ruff backlog at 261 errors (all remaining are
         # unsafe-autofix or manual-only rules; see the T4790 report). Fail if the
