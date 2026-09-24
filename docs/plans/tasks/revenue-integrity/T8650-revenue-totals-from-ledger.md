@@ -1,6 +1,6 @@
 # T8650: Revenue totals read the ledger, not the per-user cache
 
-**Status:** WIP
+**Status:** STAGING (merged 2026-09-24, PR #501, 79acda86; proof VERIFIED at e906d48e, Branch CI 36071081144 green)
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-03
