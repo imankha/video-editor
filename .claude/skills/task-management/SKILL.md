@@ -2,8 +2,9 @@
 name: task-management
 description: "Task creation, prioritization, and tracking. Tasks live in individual files under docs/plans/tasks/ with full context. PLAN.md contains priority ordering and status. Use gap-based IDs (T10, T20) to allow insertions."
 license: MIT
-author: video-editor
-version: 1.0.0
+metadata:
+  author: video-editor
+  version: 1.0.0
 ---
 
 # Task Management
@@ -277,7 +278,7 @@ High-level approach. What will we build?
 ## Context
 
 ### Relevant Files (REQUIRED)
-List ALL files that will be touched. The Refactor Agent uses this to check for violations before implementation.
+List expected touched files for ownership and scope. Include a Refactor Agent only for a classified, necessary prerequisite.
 - `src/backend/app/routers/exports.py` - Export endpoints
 - `src/frontend/src/hooks/useExport.js` - Export hook
 
@@ -370,7 +371,7 @@ Read: docs/plans/tasks/{task-file}.md
 {List specific stages being skipped with reasons, or "None - full workflow"}
 
 ### Report Expectations
-Worker and final reports must include a `CI verdict:` line: `green`, or `red — <job>/<step> — attributed to known-failures / fixed in <sha> / task T<id> filed`.
+The supervisor's post-push report must include a `CI verdict:` line (workers without push/CI access report `CI verdict: not run - supervisor pending`): `green`, or `red — <job>/<step> — attributed to known-failures / fixed in <sha> / task T<id> filed`.
 
 ## Workflow
 
@@ -400,6 +401,7 @@ Read: docs/plans/tasks/T70-multiclip-overlay-shows-single-clip.md
 
 ## Classification
 
+**Tier:** M
 **Stack Layers:** Frontend (+ Backend for reference only)
 **Files Affected:** ~3-4 files
 **LOC Estimate:** ~30-50 lines
@@ -408,14 +410,14 @@ Read: docs/plans/tasks/T70-multiclip-overlay-shows-single-clip.md
 ### Agent Workflow
 | Agent | Include? | Justification |
 |-------|----------|---------------|
-| Code Expert | Yes | 3+ files affected, need to trace framing->overlay transition flow |
+| Code Expert | Yes | Knowledge docs leave an unresolved framing->overlay transition; inspect that gap |
 | Architect | No | Bug fix following existing patterns, no new architecture needed |
 | Tester | Yes | Behavior change - must verify multi-clip scenarios work |
-| Reviewer | No | Architect not included |
+| Reviewer | Yes | M-tier requires one fresh-context review |
 
 ### Skipped Stages
 - Architecture: Bug fix, not introducing new patterns
-- Review: No architectural decisions to verify
+- No review skip: one M-tier reviewer verifies correctness and requirements
 
 ## Workflow
 
@@ -424,7 +426,7 @@ Read: docs/plans/tasks/T70-multiclip-overlay-shows-single-clip.md
 3. **Test First** - Write failing test for multi-clip overlay loading after framing edit
 4. **Implement** - Fix the state/filtering logic so all project clips load
 5. **Automated Testing** - Run frontend unit tests for useOverlayState + E2E for overlay workflow
-6. **Manual Testing** - Provide steps to verify with a real multi-clip project
+6. **Review and verification** - One fresh reviewer; live-drive the flow and apply Landing Policy. Request a human verdict only for human-only checks
 7. **Complete** - Tell user the task is ready (user promotes via task board)
 
 ## Key Rules

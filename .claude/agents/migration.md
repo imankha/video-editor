@@ -1,11 +1,14 @@
 ---
 name: migration
 description: Writes versioned database migration files (src/backend/app/migrations/{track}/v{NNN}_{description}.py for the user_db, profile_db, or postgres track) when a task changes DB schema, so existing databases update automatically (user_db/profile_db, JIT at the per-user seam) or via the admin endpoint (postgres). Invoke after Implementation (Stage 4) and before Review whenever schema code changed.
+tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
 effort: low
 ---
 
 # Migration Agent
+
+Read [Shared Agent Contract](../references/agent-contract.md) first.
 
 ## Purpose
 
@@ -37,7 +40,7 @@ After Implementation (Stage 4), before Review (Stage 4.5). The Implementor chang
            conn.execute("ALTER TABLE ... ADD COLUMN ...")
    ```
 5. Add the import to the track's `__init__.py` and append instance to `MIGRATIONS` list
-6. Update `PRAGMA user_version` default in `ensure_user_database()` or `ensure_database()` to match new latest version (the `RUNNER.latest_version` import handles this automatically)
+6. Verify fresh databases use the runner's latest version and match migrated databases; do not introduce a second hardcoded version source. Coordinate version allocation with the orchestrator when another task touches the same track.
 
 ## Migration Rules
 
@@ -52,11 +55,11 @@ After Implementation (Stage 4), before Review (Stage 4.5). The Implementor chang
 ## What NOT to Do
 
 - Don't write destructive migrations (DROP TABLE, DROP COLUMN) without explicit user approval
-- Don't modify data in migrations -- migrations change schema only
+- Data backfills/format corrections are permitted when the approved change requires them; specify prerequisites and verify existing data as well as fresh schemas.
 - Don't skip version numbers
 - Don't create migrations for frontend-only or logic-only changes
 
-## Operations
+## Operations (context for the supervisor; this agent does not execute deployments or account migrations)
 
 **How your migration actually reaches accounts (T5083/T5085, hardened by T8190; T5087 completed
 the cutover):** a `user_db` or `profile_db` migration needs NO operator action --

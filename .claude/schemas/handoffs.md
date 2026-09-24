@@ -95,17 +95,17 @@ handoff:
       coverage_needed: "Verify button gone"
 
   existing_tests:
-    - file: "src/frontend/tests/overlay.spec.js"
+    - file: "src/frontend/e2e/overlay.spec.js"
       status: "May need selector updates"
 
   suggested_tests:
     - name: "layer icon toggles player boxes"
       type: "E2E"
-      file: "src/frontend/tests/overlay.spec.js"
+      file: "src/frontend/e2e/overlay.spec.js"
 
     - name: "layer icon shows slash when OFF"
       type: "E2E"
-      file: "src/frontend/tests/overlay.spec.js"
+      file: "src/frontend/e2e/overlay.spec.js"
 ```
 
 ---
@@ -170,6 +170,24 @@ handoff:
 
 ---
 
+## Proof Verifier → Supervisor
+
+This is an instruction-level evidence contract, not an implemented persistent schema.
+Apply CLAUDE.md Landing Policy; a populated template cannot substitute for observed proof.
+
+```yaml
+proof:
+  verdict: "VERIFIED | MORE_PROOF_REQUIRED | HUMAN_VERIFICATION_REQUIRED"
+  base_sha: "<pre-change production revision>"
+  head_sha: "<final committed revision>"
+  test_hashes: ["<path and SHA256 of unchanged proof test>"]
+  evidence_paths: ["<raw red and green logs>"]
+  reproduction: "<exact commands, environment, observed assertion and exit codes>"
+  criteria: ["<criterion, evidence, reproduced/inspected/unverified, limits>"]
+  ci: "<run ID, head SHA, required job outcomes, or not inspected>"
+  gaps: ["<specific missing proof and next owner; empty only when none>"]
+```
+
 ## Implementor → Reviewer
 
 ```yaml
@@ -204,9 +222,9 @@ handoff:
   deviations:
     - description: "None - implemented exactly as designed"
     # OR if there were deviations:
-    # - description: "Used div instead of button for icon wrapper"
-    #   reason: "Better semantics for non-form element"
-    #   impact: "None - same functionality"
+    # - description: "Added type=button to the interactive icon button"
+    #   reason: "Preserves native keyboard semantics and prevents unintended form submission"
+    #   impact: "No change to approved click behavior"
 
   state_changes:
     - "No new state added"
@@ -241,7 +259,7 @@ handoff:
 
     failures:
       - test: "layer icon shows slash when OFF"
-        file: "src/frontend/tests/overlay.spec.js:45"
+        file: "src/frontend/e2e/overlay.spec.js:45"
         error: "Element not found: [data-testid='slash-overlay']"
         expected: "Slash overlay visible when showPlayerBoxes=false"
         actual: "Element with testid not found"

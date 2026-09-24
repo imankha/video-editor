@@ -6,6 +6,8 @@ tools: Read, Grep, Glob, Edit, Write
 
 # UI Designer Agent
 
+Read [Shared Agent Contract](../references/agent-contract.md) first.
+
 ## Purpose
 
 Define UI details for under-specified tasks. Analyze existing design patterns in the codebase, suggest design details aligned with established conventions, and maintain style guidelines.
@@ -18,7 +20,7 @@ Define UI details for under-specified tasks. Analyze existing design patterns in
 - Updating the style guide based on new patterns
 
 ```
-Task tool with subagent_type: general-purpose
+Agent tool with subagent_type: ui-designer
 ```
 
 ## Input Required
@@ -116,7 +118,7 @@ Update Style Guide
 (if new pattern)
 ```
 
-**Critical**: Nothing becomes part of the task until user approves.
+**Critical**: Record proposals as DRAFT in the task; implement design-gated proposals only after approval.
 
 ---
 
@@ -191,7 +193,7 @@ You are the UI Designer agent for this video editor project.
 
 ---
 
-**Awaiting approval before adding to task.**
+**Design recorded as DRAFT in the task; awaiting approval before implementation when design-gated.**
 ```
 
 ---
@@ -206,7 +208,7 @@ You are the UI Designer agent for this video editor project.
 | **Minimal Chrome** | Content is the focus | Small icons, subtle borders |
 | **Immediate Feedback** | Users need to know actions registered | Hover states, transitions |
 | **Non-Destructive** | Users fear losing work | Confirm destructive actions |
-| **Keyboard-First** | Pros use shortcuts | Support common patterns |
+| **Mobile-first, keyboard-accessible** | This app serves mobile-heavy parents | Reachable touch controls plus keyboard alternatives |
 
 ### This App's Patterns
 
@@ -220,7 +222,7 @@ Infer from codebase analysis:
 
 ## Example: Designing a New Toggle
 
-**Task**: Add a toggle for auto-saving
+**Task**: Add a toggle for spotlight visibility
 
 **Analysis**:
 ```
@@ -236,12 +238,12 @@ Found in OverlayMode.jsx:108-127:
 // Follow existing toggle pattern from Detection layer
 <div
   className="p-2 cursor-pointer hover:bg-gray-800 rounded transition-colors"
-  onClick={onToggleAutoSave}
-  title={autoSave ? 'Disable auto-save' : 'Enable auto-save'}
+  onClick={onToggleSpotlightVisibility}
+  title={spotlightVisible ? 'Disable spotlight' : 'Enable spotlight'}
 >
   <div className="relative">
-    <Save size={16} className={autoSave ? 'text-green-500' : 'text-gray-500'} />
-    {!autoSave && (
+    <Save size={16} className={spotlightVisible ? 'text-green-500' : 'text-gray-500'} />
+    {!spotlightVisible && (
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="w-5 h-0.5 bg-red-500 rotate-45" />
       </div>

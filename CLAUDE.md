@@ -28,7 +28,7 @@ Browser-based video editor: **Annotate** (clip extraction) → **Focus** (crop/u
 cd src/frontend && npm run dev
 cd src/backend && uvicorn app.main:app --reload
 
-# Frontend tests
+# Frontend tests (full-suite commands below only when explicitly requested; otherwise name relevant files)
 cd src/frontend && npm test           # Unit tests (Vitest)
 cd src/frontend && npm run test:e2e   # E2E (Playwright)
 
@@ -75,17 +75,17 @@ Classification starts by picking a tier. The tier sets the DEFAULT pipeline; cla
 
 | Tier | Trigger | Default pipeline |
 |------|---------|------------------|
-| **S** | <10 LOC, 1 file, no behavior-adjacent risk | Fix directly. Lint hooks + targeted test + commit. No agents. |
-| **M** | Bug fixes and small features: <~6 files, 1-2 layers, no new abstractions, no schema change | Load knowledge doc(s) -> plan briefly -> implement -> tests + lint hooks -> ONE fresh-context Reviewer on the diff -> commit. Skip Architect / Tester Phase 1 / Migration unless classification flags them. |
+| **S** | <10 LOC, 1 file, no behavior-adjacent risk | Fix directly. Targeted red-to-green proof + explicit lint + commit. No implementation agents; separate proof verifier before automatic landing. |
+| **M** | Bug fixes and small features: <~6 files, 1-2 layers, no new abstractions, no schema change | Load knowledge doc(s) -> plan briefly -> failing behavioral test -> implement -> passing tests + explicit lint -> ONE fresh-context Reviewer on the diff -> commit. Skip Architect / Tester Phase 1 / Migration unless classification flags them. |
 | **L** | Epics, schema changes, new patterns/abstractions, 6+ files or 3+ layers, design-gated tasks | Full staged workflow (Stages 0-7) including Architect design gate; Reviewer runs as a parallel fan-out (see ORCHESTRATION.md). |
 
-Deterministic gates apply to ALL tiers automatically: eslint/ruff run via PostToolUse hook on every edit (`.claude/hooks/lint-changed.cjs`) and block until clean. Test evidence (actual output, not claims) is required before a task is called complete.
+Validation applies to all tiers. The PostToolUse hook (`.claude/hooks/lint-changed.cjs`) provides best-effort lint feedback for Edit/Write calls; it can skip missing tools/timeouts and does not cover shell edits. Hook silence is not a pass. Run the relevant lint/check commands explicitly and inspect CI evidence before declaring verification complete.
 
 ### Test Scope Policy (all tiers)
 
-Local/worker test runs are the **RELEVANT SET (~10 tests), curated — never everything**. First understand the corner of the code the change lives in (changed files + their direct consumers), then name the set before running it: the tests written for this feature + the existing regression tests guarding that corner + the e2e spec for the changed flow. `npx vitest related --run <changed sources>` is a candidate finder, not a run list — curate its output. More complexity means a bigger relevant set, chosen deliberately; never a full suite, never a whole layer, never "run everything to be safe" — Branch CI is the mandatory full-sweep verdict and Master CI re-runs everything on every merge to master.
+Local/worker test runs are the **RELEVANT SET (~10 tests), curated — never everything**. First understand the corner of the code the change lives in (changed files + their direct consumers), then name the set before running it: the tests written for this feature + the existing regression tests guarding that corner + the e2e spec for the changed flow. Discover candidates from imports, existing tests, and relevant knowledge docs; execute explicitly named test files after curating the set. More complexity means a bigger relevant set, chosen deliberately; no full suite or whole layer unless explicitly requested by the user; never "run everything to be safe" — Branch CI is the mandatory full-sweep verdict and Master CI re-runs everything on every merge to master.
 
-**Branch CI is layer-scoped (T6405).** Its `changes` job diffs against master and skips the whole frontend job when no `src/frontend/**` (or `scripts/**`) file changed, and the whole backend job when no `src/backend/**` file changed; a change to `branch-ci.yml` itself runs both. **Within a job the suite still runs IN FULL** — the scoping is per LAYER, never per test file. Selecting individual test files from the diff is explicitly rejected: Python's import graph means a `storage.py` change is exercised by tests that never name storage (anything importing `app.main`), so file-name selection silently skips real regressions. Sound intra-suite selection needs coverage data (testmon), not path matching. Bias the filter toward RUNNING — shared paths trip both layers. Fix loop: a failing test gets fixed, then re-run that test + tests exercising the files the fix touched; already-passed tests whose subject code didn't change are not re-run. Details: `.claude/skills/run-tests/SKILL.md`.
+**Branch CI is layer-scoped (T6405).** Its `changes` job diffs against master and skips the whole frontend job when no `src/frontend/**` (or `scripts/**`) file changed, and the whole backend job when no `src/backend/**` file changed; a change to `branch-ci.yml` itself runs both. **Within a job the suite still runs IN FULL** — the scoping is per LAYER, never per test file. Selecting individual test files from the diff is explicitly rejected: Python's import graph means a `storage.py` change is exercised by tests that never name storage (anything importing `app.main`), so file-name selection silently skips real regressions. Sound intra-suite selection needs coverage data (testmon), not path matching. Bias the filter toward RUNNING. Current implementation gap: `scripts/` triggers frontend only, despite the intended shared-path policy; verify affected backend checks explicitly until the filter is corrected. Fix loop: a failing test gets fixed, then re-run that test + tests exercising the files the fix touched; already-passed tests whose subject code didn't change are not re-run. Details: `.claude/skills/run-tests/SKILL.md`.
 
 ### Task Status Rule
 
@@ -93,16 +93,50 @@ Statuses split into two kinds with different owners:
 
 **Factual (AI sets in PLAN.md):**
 - `WIP` — work begins or resumes (see [1-task-start.md](.claude/workflows/1-task-start.md)).
-- `WAITING ON USER` — set the MOMENT the task blocks on the user (design gate, manual-test verdict, open question, finished branch awaiting merge); say what you are waiting for. Back to `WIP` when unblocked. A task must never sit at `WIP` while AI is idle.
+- `WAITING ON USER` — set the MOMENT the task actually blocks on the user (design gate, open question, or a result that cannot be proven without human judgment); say what you are waiting for. Back to `WIP` when unblocked. A task must never sit at `WIP` while AI is idle.
 - `STAGING` — task branch lands on master (auto-deploys staging; staging IS the test phase, so there is no separate TESTING step). See [7-task-complete.md](.claude/workflows/7-task-complete.md).
 
 **DONE (user's call, exactly two gestures):** the user clicks **Resolve** on the task board, OR runs **`/deploy`** (a prod deploy auto-promotes every task whose implementation shipped in it — see [deploy skill](.claude/skills/deploy/SKILL.md)). AI never marks DONE otherwise.
 
 Lifecycle: `TODO -> WIP (AI) <-> WAITING ON USER (AI) -> STAGING (AI) -> DONE (user gesture)`. DONE rows are hidden on the board.
 
+### Landing Policy
+
+The burden is compelling evidence, not confidence or an implementor's claim. For behavioral
+changes, write the acceptance/regression test BEFORE production code, observe failure for
+the intended reason through the relevant production path, then observe it pass after the fix.
+M/S tiers may omit a dedicated test author, but never this evidence requirement.
+
+Tests written after implementation are acceptable only when the SAME test is demonstrated
+to fail against the pre-change production revision and pass against the final revision.
+Use isolated checkouts; do not revert files in a shared working tree to manufacture proof.
+Record base/head revisions, test contents/hash, commands, exit codes, expected assertion
+failure, raw logs, environment, and acceptance-criterion mapping. Syntax/import/environment
+failures, mocks replacing the behavior under test, and green-only runs do not prove a fix.
+
+Before automatic landing, a separate fresh-context [Proof Verifier](.claude/agents/proof-verifier.md)
+must inspect the evidence and independently reproduce the decisive checks where feasible.
+It returns VERIFIED, MORE_PROOF_REQUIRED, or HUMAN_VERIFICATION_REQUIRED with specific gaps.
+It does not write the implementation or its proof tests. Code review and proof verification
+are separate verdicts. Missing reproducibility stays unverified; request more evidence from
+the implementor/tester before asking the user for a genuinely human-only observation.
+
+The supervisor pushes the final revision and verifies green Branch CI for that exact SHA.
+Automatic merge requires resolved blocking/major code findings, independently VERIFIED proof,
+and green required CI for the same final revision. Any source/test/base change invalidates
+affected evidence and verdicts; refresh them and CI before landing. Use a head-SHA merge
+precondition. Missing or ambiguous evidence never counts as a pass.
+
+For documentation-only work or behavior-preserving refactors, record applicable consistency
+or characterization evidence and what it cannot prove; do not invent a failing behavior.
+This does not waive the automatic-landing proof bar: if compelling proof cannot be supplied,
+leave the branch open for the user's decision. Human-only verification uses `WAITING ON USER`
+with exact steps. The supervisor owns landing and sets `STAGING` only after merge.
+Detailed procedure: `.claude/skills/dotask/SKILL.md` step 6.
+
 **DONE rows leave PLAN.md.** The moment a row is promoted to DONE (deploy reconciliation or board Resolve), MOVE it verbatim to [PLAN-archive.md](docs/plans/PLAN-archive.md) under a `## {section} — {subsection}` heading matching its PLAN.md location (create the heading + table header if absent). PLAN.md holds only live work; if a section empties, replace its table with the archive-pointer line. The deploy skill's Step E does this as part of auto-promotion.
 
-**Branch visibility is derived, never recorded.** No branch names in PLAN.md — the board resolves each task's branch from git (branch named `feature/T{id}-slug`, or any commit subject on a branch mentioning `T{id}` — that is how tasks stay attributed after wave branches collapse). Corollary that must hold: **every task commit subject starts with the task id** (`T5683: ...`), or the task loses attribution once its own branch is deleted.
+**Branch visibility is derived, never recorded.** No branch names in PLAN.md — the board resolves each task's branch from git (branch named `feature/T{id}-slug`, or any commit subject on a branch mentioning `T{id}` — that is how tasks stay attributed after wave branches collapse). Corollary that must hold: **every tracked-task commit subject starts with the task id** (`T5683: ...`), or the task loses attribution once its own branch is deleted.
 
 ### Classification Output (Required)
 
@@ -137,14 +171,14 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 |---|-------|----------|-------|-----------|
 | 0 | Task Classification | [0-task-classification.md](.claude/workflows/0-task-classification.md) | - | - |
 | 1 | Task Start | [1-task-start.md](.claude/workflows/1-task-start.md) | Code Expert | - |
-| 1.5 | Refactor | - | Refactor | - |
+| 1.5 | Scoped prerequisite refactor (optional; design approval first if architectural) | - | Refactor | As classified |
 | 2 | Architecture | [2-architecture.md](.claude/workflows/2-architecture.md) | Architect | **Approval Required** |
 | 3 | Test First | [3-test-first.md](.claude/workflows/3-test-first.md) | Tester (Phase 1) | - |
 | 4 | Implementation | [4-implementation.md](.claude/workflows/4-implementation.md) | Implementor | - |
-| 4.75 | Migration | - | Migration | - |
-| 4.5 | Review | [reviewer.md](.claude/agents/reviewer.md) | Reviewer | Conversation (protocol in ORCHESTRATION.md) |
+| 4a | Migration | - | Migration | - |
+| 4b | Review | [reviewer.md](.claude/agents/reviewer.md) | Reviewer | Conversation (protocol in ORCHESTRATION.md) |
 | 5 | Automated Testing + Coverage | [5-automated-testing.md](.claude/workflows/5-automated-testing.md) | Tester (Phase 2) | - |
-| 6 | Test & Fix Agent Handoff | [6-manual-testing.md](.claude/workflows/6-manual-testing.md) | - | **New Conversation** |
+| 6 | Human-only verification (conditional) | [6-manual-testing.md](.claude/workflows/6-manual-testing.md) | - | User verdict; optional fresh conversation |
 | 7 | Task Complete | [7-task-complete.md](.claude/workflows/7-task-complete.md) | - | - |
 
 The TIER sets the path: S skips all stages except implement+gates+commit; M runs implement -> review; L runs the full table.
@@ -153,17 +187,17 @@ The TIER sets the path: S skips all stages except implement+gates+commit; M runs
 
 | User Says | Action |
 |-----------|--------|
-| "Implement T{id}..." / assigns task | → Stage 1 → Stage 2 |
+| "Implement T{id}..." / assigns task | → Stage 0 classification, then the tier-selected stages |
 | Reviews design doc | → Wait for "approved" or feedback |
 | "Approved" / "looks good" (design) | → Stage 3 → Stage 4 |
 | "I think this works" / code complete | → Stage 5 |
-| All tests pass | → Stage 6 handoff |
+| Relevant tests pass | → Review/verification requirements, then Landing Policy; Stage 6 only for human-only checks |
 | "Approved" / "that worked" (testing) | → Stage 7 |
 | "Ready to merge?" / "can I push?" / "ready for PR?" | → Spawn Merge Reviewer agent |
 
 ## Agents
 
-Registered subagents live in `.claude/agents/` (frontmatter = name, description, tool scoping); spawn them by `subagent_type`, never by pasting instructions into `general-purpose`. Spawning templates, handoff protocol, review-conversation flow, and the implementation fan-out are in [ORCHESTRATION.md](.claude/ORCHESTRATION.md). **Pass artifact PATHS (design doc path, diff via `git diff`), never pasted content.** Before spawning, name the task's `.claude/knowledge/` doc(s) in the prompt so the agent loads them instead of re-exploring.
+Registered subagents live in `.claude/agents/` (frontmatter = name, description, tool scoping); spawn them by `subagent_type`, never by pasting instructions into `general-purpose`. Spawning templates, handoff protocol, review-conversation flow, and the implementation fan-out are in [ORCHESTRATION.md](.claude/ORCHESTRATION.md). **Pass artifact PATHS and revision IDs, not copied documents; concise API signatures may be inline.** Every agent reads [Shared Agent Contract](.claude/references/agent-contract.md). Before spawning, name the task's `.claude/knowledge/` doc(s) in the prompt so the agent loads them instead of re-exploring.
 
 ## Knowledge Base (persistent domain expertise)
 
@@ -214,23 +248,23 @@ Full rules and examples live in [coding-standards.md](.claude/references/coding-
 
 ### Persistence: Gesture-Based, Never Reactive
 
-**The app NEVER writes to the backend as a side effect of state changing.** Every DB write must trace to a named user gesture (click, drag, keypress) — if you can't name the gesture, the write shouldn't exist. Reactive persistence creates feedback loops that corrupt data (runtime fixups get persisted, then re-fixed on every load — this caused T350's keyframe corruption; mechanism + examples in [coding-standards.md](.claude/references/coding-standards.md) § Persistence).
+**The editor NEVER persists to the backend as a side effect of state changing.** Authorized backend lifecycle operations (migrations, webhooks, background job results) follow their explicit contracts; they are not reactive editor persistence. Every editor DB write must trace to a named user gesture (click, drag, keypress) — if you can't name the gesture, the write shouldn't exist. Reactive persistence creates feedback loops that corrupt data (runtime fixups get persisted, then re-fixed on every load — this caused T350's keyframe corruption; mechanism + examples in [coding-standards.md](.claude/references/coding-standards.md) § Persistence).
 
 ```
 SURGICAL:   gesture → handler → POST /actions with ONLY the changed field
 FULL-STATE: explicit save gesture only (export button → saveCurrentClipState)
-NEVER:      useEffect watching state → write to store/backend   ← BANNED
+NEVER:      useEffect watching state → persistence write via store/backend   ← BANNED
 ```
 
 1. **Gesture → surgical call**: each handler sends ONLY the data that gesture changed
-2. **No reactive persistence**: never `useEffect` → DB/store write. No exceptions.
+2. **No reactive persistence**: never `useEffect` → persistence write through a DB/store. In-memory loading/normalization and read-only requests are allowed; trace downstream effects to ensure they cannot write back.
 3. **Runtime fixups are memory-only** (`ensurePermanentKeyframes`, origin normalization) — never persisted
 4. **Restore is read-only**: loading DB → hooks must not trigger a write-back
 5. **Single write path per data**
 6. **Full-state saves require an explicit gesture** (export click), never reactive
 7. **A write path must prove its copy is current, or fail loudly** (T4310 upload side + T4315 restore side). Read-modify-write on an unconfirmed snapshot silently clobbers newer state. Both halves required — CAS alone still serves stale reads; restore-if-newer alone still races the upload: **upload CAS** (R2 version compare-and-swap refuses a stale upload; on conflict freeze the write, log CRITICAL, surface the failed-sync/Retry UX — never auto-merge, never blind-retry) and **restore-if-newer** (a writer resolving a DB it does not already hold under the request's own session/profile context — admin grants, payment webhooks, cross-user materialization — must confirm R2 hasn't moved past its loaded-from version BEFORE mutating, or refuse; enforced structurally in the shared connection-opening path, so new call sites can't skip it). Never swap a live WAL-mode file another connection may hold — refuse instead. See [persistence-sync.md](.claude/knowledge/persistence-sync.md) § CAS / SyncResult and § T4315.
 
-Self-check: writing a `useEffect` that calls an API or updates a store? → move it into the gesture handler. Watching hook state? → name the gesture; "internal fixup" means don't persist. Sending all keyframes when one changed? → make it surgical.
+Self-check: writing a `useEffect` that persists through an API or store? → move the persistence into the gesture handler. Watching hook state? → name the gesture; "internal fixup" means don't persist. Sending all keyframes when one changed? → make it surgical.
 
 ## Refactoring Rules
 

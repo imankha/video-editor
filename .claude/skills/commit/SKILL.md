@@ -2,8 +2,9 @@
 name: commit
 description: "Create a git commit with a message that won't be rejected by Cloudflare Pages. Enforces ASCII-only commit messages (no em-dashes, no arrows, no smart quotes) because the CF Pages deploy API (wrangler pages deploy) rejects non-UTF8-compatible characters with code 8000111."
 license: MIT
-author: video-editor
-version: 1.0.0
+metadata:
+  author: video-editor
+  version: 1.0.0
 ---
 
 # Commit
@@ -39,9 +40,9 @@ The characters *are* valid UTF-8, but the CF Pages API rejects them. Recovering 
 
 3. **Verify before pushing to master.** If the commit is on a branch that will merge to master, check the commit message(s) too. Merge commit messages flow through to CF Pages the same way.
 
-4. **Always include the Claude co-author line** (per CLAUDE.md):
+4. **Include truthful agent attribution.** Use the actual contributing agent/model; do not copy a stale or invented model version. For Claude, for example:
    ```
-   Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+   Co-Authored-By: Claude <noreply@anthropic.com>
    ```
 
 5. **Message via HEREDOC** to preserve formatting, as the project commit convention requires.

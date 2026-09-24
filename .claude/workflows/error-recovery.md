@@ -1,250 +1,35 @@
-# Error Recovery Procedures
-
-What to do when things go wrong during the workflow.
-
----
-
-## Recovery by Scenario
-
-### Design Rejected After Implementation Started
-
-**Situation**: User rejects design after code has been written.
-
-**Recovery**:
-```bash
-# 1. Stash current work
-git stash save "T{id} implementation before design revision"
-
-# 2. Return to Stage 2 (Architecture)
-# Revise design based on feedback
-
-# 3. After design approved, decide:
-# Option A: Discard implementation, start fresh
-git stash drop
-
-# Option B: Apply stashed changes and modify
-git stash pop
-# Then adjust to match new design
-```
-
-**Prevention**: Ensure design is thoroughly reviewed before starting implementation.
-
----
-
-### Tests Fail Repeatedly (3+ Attempts)
-
-**Situation**: Implementation can't pass tests after multiple fix attempts.
-
-**Recovery**:
-```
-1. Stop and assess:
-   - Are tests correct?
-   - Is design flawed?
-   - Is implementation approach wrong?
-
-2. If tests are wrong:
-   - Fix tests, not implementation
-   - Update Tester about correct behavior
-
-3. If design is flawed:
-   - Return to Stage 2 (Architecture)
-   - Document what was learned
-   - Revise design with new understanding
-
-4. If implementation approach is wrong:
-   - Try alternative approach from design doc
-   - If none specified, consult Architect agent
-```
-
-**Escalation**: After 3 failed attempts, always pause and reassess design.
-
----
-
-### Implementation Deviates Significantly from Design
-
-**Situation**: Reviewer finds major deviations.
-
-**Recovery**:
-```
-1. Assess deviation:
-   - Was it necessary? (discovered issue during implementation)
-   - Was it accidental? (misread design)
-
-2. If necessary deviation:
-   - Document the reason
-   - Update design doc with actual approach
-   - Get user approval for design change
-   - Continue with review
-
-3. If accidental deviation:
-   - Revert to match design
-   - Re-review after fix
-```
-
----
-
-### Merge Conflict with Master
-
-**Situation**: Feature branch conflicts with changes merged to master.
-
-**Recovery**:
-```bash
-# 1. Update master
-git checkout master
-git pull
-
-# 2. Rebase feature branch
-git checkout feature/T{id}-*
-git rebase master
-
-# 3. Resolve conflicts
-# - Prefer master for unrelated changes
-# - Prefer feature for task-specific changes
-# - Ask user if unclear
-
-# 4. Re-run tests after rebase
-npm test
-npm run test:e2e
-
-# 5. If tests fail, may need to adjust implementation
-```
-
----
-
-### Agent Returns Unusable Output
-
-**Situation**: Agent output is incomplete, wrong, or confusing.
-
-**Recovery**:
-```
-1. Don't use bad output
-
-2. Re-run agent with:
-   - More specific prompt
-   - Additional context
-   - Clarified requirements
-
-3. If still failing:
-   - Break task into smaller pieces
-   - Handle problematic part manually
-   - Document issue for retrospective
-```
-
----
-
-### User Unavailable for Approval
-
-**Situation**: Workflow blocked at approval gate, user not responding.
-
-**Recovery**:
-```
-1. Document current state clearly
-2. Commit all work in progress
-3. Create detailed handoff notes:
-   - What was done
-   - What needs approval
-   - What's next after approval
-4. Wait for user (don't proceed without approval)
-```
-
----
-
-### Build/Lint Errors After Changes
-
-**Situation**: Code won't build or lint fails.
-
-**Recovery**:
-```bash
-# 1. Check the error
-npm run build 2>&1 | head -50
-
-# 2. Common fixes:
-# - Missing import: Add it
-# - Unused import: Remove it
-# - Type error: Fix the type
-# - Syntax error: Fix syntax
-
-# 3. After fix, verify
-npm run build
-cd src/backend && .venv/Scripts/python.exe -c "from app.main import app"
-
-# 4. If error is in unchanged code:
-# - May be pre-existing issue
-# - May be dependency issue
-# - Flag to user, don't mask with workarounds
-```
-
----
-
-### Lost Context / Conversation Reset
-
-**Situation**: New conversation, need to resume task.
-
-**Recovery**:
-```
-1. Read task file: docs/plans/tasks/T{id}-*.md
-   - Check current status
-   - Read progress log
-
-2. Read design doc (if exists): docs/plans/tasks/T{id}-design.md
-
-3. Check git status:
-   git branch  # Confirm on feature branch
-   git log --oneline -5  # See recent commits
-   git status  # See uncommitted changes
-
-4. Determine current stage from status:
-   - TODO → Stage 1
-   - WIP → Check progress log for stage
-   - WAITING ON USER → find the open gate (design approval / test verdict / merge) and re-ask it
-   - STAGING → merged; nothing to resume (user resolves after verifying)
-   - DONE → deployed; nothing to resume
-
-5. Resume from that stage
-```
-
----
-
-## Prevention Checklist
-
-### Before Implementation
-- [ ] Design thoroughly reviewed
-- [ ] All questions answered
-- [ ] Scope is clear and bounded
-
-### During Implementation
-- [ ] Commit frequently (can revert)
-- [ ] Run tests often (catch issues early)
-- [ ] Follow design exactly (minimize surprises)
-
-### Before Testing
-- [ ] All changes committed
-- [ ] Build passes
-- [ ] Lint passes
-- [ ] Quick manual smoke test
-
----
-
-## When to Abort
-
-Sometimes it's better to stop and reset:
-
-| Situation | Action |
-|-----------|--------|
-| Requirements fundamentally wrong | Stop, clarify with user |
-| Task scope grew 3x+ | Stop, split into subtasks |
-| Blocked by external dependency | Stop, create blocker task |
-| Repeated failures, no progress | Stop, reassess approach |
-
-**How to abort cleanly**:
-```bash
-# Save work
-git add -A
-git commit -m "WIP: T{id} - pausing for reassessment"
-
-# Update task status
-# Edit task file: Status: BLOCKED
-
-# Document why
-# Add to progress log: Reason for pause, what's needed
-```
+# Error Recovery
+
+Use CLAUDE.md policy and the shared agent contract. Preserve existing work and
+failure evidence; a retry must address a specific missing fact, not repeat a guess.
+
+| Failure | Recovery | Stop/escalation condition |
+|---|---|---|
+| Focused fix failed | Give the expert the observed failure, attempted fix, relevant knowledge and file paths | Consult expert before another speculative correction |
+| Design rejected or material design error discovered | Preserve assigned edits; revise design and record new approval before dependent implementation | Never assume approval survives a substantive redesign |
+| Incorrect agent output | Retain evidence, supply missing context, retry one bounded request | Unresolved issue returns to orchestrator for re-scope/expert |
+| Test failure | Distinguish implementation, test, environment, or evidenced known failure; rerun the affected set after correction | Do not weaken assertions or treat collection errors as behavioral proof |
+| Auth/quota/infrastructure failure | Use spawn-worker diagnostics and resume rules; distinguish AUTH_DEAD from BLOCKED | Do not spend further model turns probing a known unavailable service |
+| Merge conflict | Resolve on the task branch using both changes' intent; refresh affected checks and CI | No blanket preference for either side; unresolved product conflict goes to user |
+| Human gate | Record question, artifact/revision, and WAITING ON USER in tracked task files | Resume WIP when answered; no duplicate request for already granted approval |
+| Lost context | For a wave, read WAVE.md, container state, and worker status files; for inline work read task/design plus git status/log | Validate current revision and existing edits before resuming |
+| Scope growth | Reclassify, split or revise the task with the orchestrator | Do not silently bypass an L-tier design gate |
+
+## Safe checkpoints
+
+- Stage explicit assigned paths only. Never `git add -A`, reset a shared tree, or
+  drop a stash without checking its ownership and contents.
+- Intentional red test-first commits are allowed; label them. Checkpoint commits
+  do not imply verification or readiness to land.
+- Use `T{id}:` subjects for tracked tasks and truthful agent attribution.
+- Preserve test output and acceptance evidence before any cleanup. Retention
+  automation is not yet implemented; do not claim disposable checkout data is archived.
+
+## State ownership
+
+PLAN.md uses TODO, WIP, WAITING ON USER, STAGING, DONE as defined in CLAUDE.md.
+BLOCKED/AUTH_DEAD/PUSHREADY are worker protocol signals, not additional PLAN.md
+statuses. For an infrastructure stall, record the blocker in operational state;
+use WAITING ON USER only if a user action is actually required. If work is parked
+with no active worker and no user action needed, return it to TODO with a resume
+note rather than leaving an idle WIP. DONE still requires the specified user gesture.

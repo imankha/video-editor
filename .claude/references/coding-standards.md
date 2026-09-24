@@ -389,15 +389,15 @@ useEffect(() => {
 Full-state persistence (PUT with all keyframes + segments) is allowed ONLY when triggered by an explicit user gesture like export. Never reactively or on clip switch.
 
 **Rules:**
-1. **Every DB write traces to a named user gesture** — if you can't name it, don't persist
-2. **No `useEffect` that writes to store or backend** — move persistence into the gesture handler
+1. **Every editor persistence write traces to a named user gesture** — if you can't name it, don't persist. Authorized backend lifecycle operations (migrations, webhooks, background job results) follow their explicit contracts.
+2. **No `useEffect` persistence writes through a store or backend** — move persistence into the gesture handler. Read-only loading and memory-only normalization are allowed; check downstream effects cannot write back.
 3. **Runtime fixups are memory-only** — sorting, origin correction, restore normalization stay in hooks
 4. **Restore is read-only** — loading from DB must not trigger write-back
 5. **Surgical over full-state** — send only the changed field, not all hook state
 6. **Single write path per data** — each piece of data has exactly one code path that persists it
 
 **How to verify:**
-- For every `useEffect` in a Screen: does it write to a store or call an API? → Move to gesture handler
+- For every `useEffect` in a Screen: does it cause persistence through a store or API? → Move that persistence to the gesture handler. Reads and memory-only updates do not violate this rule.
 - For every API call: does the payload contain more data than the gesture changed? → Make it surgical
 - For every store update: what user gesture caused this? If "none" → don't persist
 
@@ -405,22 +405,12 @@ See [T350 design doc](../../docs/plans/tasks/T350-design.md) for the audit that 
 
 ### Minimal Branching
 
-Prefer strategy/routing over if/else sprawl:
-
-```javascript
-// BAD: Sprawling conditionals
-if (type === 'framing') { handleFraming(); }
-else if (type === 'overlay') { handleOverlay(); }
-else if (type === 'annotate') { handleAnnotate(); }
-
-// GOOD: Strategy pattern
-const handlers = {
-  framing: handleFraming,
-  overlay: handleOverlay,
-  annotate: handleAnnotate,
-};
-handlers[type]();
-```
+Prefer clear explicit branches for a small closed set of internal cases. Do not
+replace them with a dynamic registry merely to remove an `if` or `switch`.
+Follow CLAUDE.md's refactoring rules: abstractions need concrete duplication or
+an approved extension requirement. Explain any necessary departure before adding
+indirection; an existing required routing boundary is not a mandate to generalize
+unrelated internal code.
 
 ---
 
@@ -477,6 +467,6 @@ if export_mode == ExportMode.FAST:
 | Correct Data | Fix data at the source/migration, no read-time guards for internal data? |
 | DRY | No duplicate logic? |
 | Single Code Path | One way to do each thing? |
-| Gesture-Based Persistence | Every DB write traces to a user gesture? No reactive useEffect persistence? |
+| Gesture-Based Persistence | Every editor persistence write traces to a user gesture? No reactive useEffect persistence? Backend lifecycle writes follow their explicit contracts? |
 | Loose Coupling | Depends on abstractions? |
 | Tight Cohesion | Each module does one thing? |

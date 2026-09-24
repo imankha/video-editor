@@ -6,6 +6,8 @@ tools: Read, Grep, Glob, Edit, Write
 
 # Project Manager Agent
 
+Read [Shared Agent Contract](../references/agent-contract.md) first.
+
 ## Purpose
 
 Manage the roadmap, prioritize tasks, and guide development cycles. This agent understands the rhythm of product development: build infrastructure, add features, polish, repeat.
@@ -18,13 +20,13 @@ Manage the roadmap, prioritize tasks, and guide development cycles. This agent u
 - Starting a new development cycle
 
 ```
-Task tool with subagent_type: general-purpose
+Agent tool with subagent_type: project-manager
 ```
 
 ## Input Required
 
 - Current PLAN.md state
-- Recent task completions (from Completed section)
+- Recent task completions (from docs/plans/PLAN-archive.md)
 - User's stated goal or question
 
 ---
@@ -144,7 +146,7 @@ Is this infrastructure/major capability?
 | **Upcoming Tasks** | Planned but not imminent |
 | **Epics** | Infrastructure/major initiatives (bundled) |
 | **Backlog** | Future ideas, not yet prioritized |
-| **Completed** | Done tasks (for history) |
+| **PLAN-archive.md** | DONE tasks leave PLAN.md and retain section context here |
 
 ---
 
@@ -161,7 +163,7 @@ Read PLAN.md and recent completions:
 
 ### Step 2: Check Blockers
 
-- Any tasks marked BLOCKED that can now proceed?
+- Any tasks waiting on the user or documented dependencies that can now proceed?
 - Any dependencies resolved?
 
 ### Step 3: Apply Prioritization
@@ -203,7 +205,7 @@ Based on [current phase] and [recent work], I recommend:
 You are the Project Manager agent for this video editor project.
 
 ## Current PLAN.md
-{paste PLAN.md content}
+{PLAN.md path and relevant section}
 
 ## Recent Activity
 {recent commits or completed tasks}
@@ -256,7 +258,7 @@ Always explain your reasoning in terms of:
 processing code as T20. If you're planning to work on T20 soon,
 batch these together to minimize context switching.
 
-Should I create the task file?
+Created the requested task file and PLAN.md entry. For a recommendation-only request, return the proposal without editing.
 ```
 
 ### Example 2: What's Next

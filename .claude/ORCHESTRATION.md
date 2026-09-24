@@ -2,13 +2,19 @@
 
 The main conversation AI (Claude) orchestrates the workflow by spawning specialized agents and managing handoffs.
 
-**Tier gate (read first):** the full pipeline below is the **L-tier** path. S-tier tasks spawn no agents; M-tier tasks spawn at most a Tester and one fresh-context Reviewer. See CLAUDE.md § Task Tiers.
+**Tier gate (read first):** the full pipeline below is the **L-tier** path. S-tier tasks spawn no implementation agents; every automatic landing still requires a separate Proof Verifier; M-tier defaults to direct implementation and one fresh-context Reviewer, with a Tester or expert only when classification justifies it. See CLAUDE.md § Task Tiers.
 
-**Registered agents:** every file in `.claude/agents/` has frontmatter (name, description, tool scoping), so they are real subagents — spawn them with their own `subagent_type` (e.g. `code-expert`, `reviewer`) instead of pasting instructions into `general-purpose`. Tool scoping is enforced: reviewers physically cannot edit files.
+**Registered agents:** every file in `.claude/agents/` has frontmatter (name, description, tool scoping), so they are real subagents — spawn them with their own `subagent_type` (e.g. `code-expert`, `reviewer`) instead of pasting instructions into `general-purpose`. Reviewers have no Edit/Write tools but retain Bash for verification; source-read-only behavior is an instruction, not an enforced filesystem boundary.
+
+All agents first read [Shared Agent Contract](references/agent-contract.md). CLAUDE.md owns policy; role files define the assigned work.
 
 **Context loading:** before spawning anything, check `.claude/knowledge/` for the task's domain doc(s) and pass the doc path(s) in the spawn prompt. Agents read the knowledge doc first and only explore what it doesn't cover.
 
 ---
+
+## Independent proof gate
+
+After final implementation/review fixes, dispatch `subagent_type: proof-verifier` in a fresh context with acceptance criteria, base/head SHAs, test hashes, exact commands, and raw red/green evidence paths. It must not be the implementation/test author. Return missing evidence to its author and repeat; only the supervisor applies CLAUDE.md Landing Policy. A code-review APPROVED verdict is not a proof-verification verdict.
 
 ## Orchestrator Responsibilities
 
@@ -17,7 +23,7 @@ The main conversation AI (Claude) orchestrates the workflow by spawning speciali
 | **Stage Detection** | Interpret user intent, determine current stage |
 | **Agent Spawning** | Use Task tool to invoke appropriate agent |
 | **Context Passing** | Include relevant handoff data in prompts |
-| **Approval Gates** | Pause and wait for user at Stage 2 and Stage 6 |
+| **Approval Gates** | Pause at Stage 2; pause at Stage 6 only when verification requires human judgment |
 | **Error Handling** | Detect failures, apply recovery procedures |
 | **Progress Tracking** | Update task files and todo list |
 
@@ -35,7 +41,7 @@ User: "Implement T{id}"
 │  1. Classify task complexity                                │
 │         │                                                   │
 │         ▼                                                   │
-│  2. Spawn Code Expert ──────────► Returns: entry points,    │
+│  2. Code Expert if needed ──────────► Returns: entry points,    │
 │         │                         data flow, patterns       │
 │         ▼                                                   │
 │  3. Spawn Architect ────────────► Returns: design doc       │
@@ -65,9 +71,9 @@ User: "Implement T{id}"
 │         │                                                   │
 │         ▼                                                   │
 │  7. Spawn Tester (Phase 2) ─────► Returns: test results     │
-│         │                         (loop until pass)         │
+│         │                         (bounded fix loop)         │
 │         ▼                                                   │
-│  ⏸️ APPROVAL GATE ◄─────────────── User tests manually      │
+│  ⏸️ CONDITIONAL GATE ◄──────────── Human-only verification  │
 │         │                                                   │
 │         ▼                                                   │
 │  8. Finalize ───────────────────► Task complete             │
@@ -209,7 +215,7 @@ Agent tool:
   prompt: |
     Phase 1 for task T{id}: {title}.
 
-    Design doc: {content}
+    Design doc: {path and approved revision}
     Acceptance criteria: {list}
 
     Create failing tests that will pass when feature is complete.
@@ -223,11 +229,11 @@ Agent tool:
   prompt: |
     Task T{id}: {title}
 
-    Approved design: {design doc content}
+    Approved design/specification: {path and revision}
     Failing tests: {test files}
 
     Write code that:
-    1. Follows design exactly
+    1. Preserves approved behavior and contracts; flags substantive design errors
     2. Makes tests pass
     3. Follows MVC + Data Always Ready
     4. Has no state duplication
@@ -248,7 +254,7 @@ Agent tool:
 | Performance | N+1 queries, re-render storms, R2 round-trips, large-payload handling |
 | Security | Auth checks on new endpoints, injection, data exposure (only when endpoints/auth touched) |
 
-Merge findings, dedupe, then run the normal conversation protocol on the union. Diverse lenses catch failure modes a single reviewer misses; wall-clock cost is one review, not four.
+Merge findings, dedupe, then run the normal conversation protocol on the union. Diverse lenses catch failure modes a single reviewer misses; parallelism can reduce latency, but token cost and shared quota still grow with each reviewer.
 
 ```
 Agent tool:
@@ -264,14 +270,14 @@ Agent tool:
     4. .claude/agents/reviewer.md (your full instructions + severity levels)
 
     ## Approved Design
-    {design doc path or content}
+    {task path and approved design path when the tier requires one}
 
     ## Implementation Changes
-    {git diff or changed file list with paths}
+    {base/head SHAs, diff path, changed-file paths, test-evidence paths}
 
     ## Instructions
     1. Read all reference files listed above
-    2. Read the approved design document
+    2. Read task acceptance criteria and the approved design when required
     3. Read every changed file IN FULL (not just the diff)
     4. Produce findings using the format in reviewer.md
     5. Categorize each finding as BLOCKING, MAJOR, or MINOR
@@ -353,7 +359,7 @@ Agent tool:
     2. Failure details with suggested fixes
     3. Coverage assessment
 
-    Loop with Implementor until all tests pass.
+    Return evidence to the orchestrator; escalate after one failed focused correction instead of looping indefinitely.
 ```
 
 ### Migration
@@ -388,7 +394,7 @@ Agent tool:
 
 ## Implementation Fan-Out
 
-For tasks with 4+ files, the orchestrator delegates file edits to parallel subagents instead of editing everything in main context. See [4-implementation.md](workflows/4-implementation.md#subagent-delegation-context-efficiency) for the full protocol.
+For L-tier tasks with 4+ independently editable files, use scoped fan-out when it reduces work. M-tier stays direct by default; file count alone does not authorize extra agents. See [4-implementation.md](workflows/4-implementation.md#subagent-delegation-context-efficiency) for the full protocol.
 
 **Quick reference:**
 
@@ -423,16 +429,16 @@ When passing context between agents:
 
 When an agent fails or returns poor output:
 
-1. **Don't use bad output** - discard and retry
-2. **Provide more context** - add missing information
+1. **Do not act on unsupported output** - retain it as failure evidence and identify the missing fact
+2. **Provide targeted context** - correct the specific missing information before one retry
 3. **Simplify the ask** - break into smaller steps
-4. **Escalate if stuck** - consult error-recovery.md
+4. **Escalate if stuck** - use the expert after one failed focused fix; consult error-recovery.md
 
 ---
 
 ## Approval Gate Protocol
 
-At Stage 2 (Architecture) and Stage 6 (Manual Testing):
+At Stage 2 (Architecture), and at Stage 6 only when the result cannot be proven automatically:
 
 1. **Present clearly** - summarize what needs review
 2. **Wait for response** - don't proceed without approval

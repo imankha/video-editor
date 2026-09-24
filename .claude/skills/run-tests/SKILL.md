@@ -1,3 +1,8 @@
+---
+name: run-tests
+description: Run the curated feature, regression, consumer, and changed-flow tests for this project and report actual evidence. Use when asked to run or verify tests; full suites require an explicit request.
+---
+
 # Run Tests Skill
 
 Run tests for the video-editor project at the RIGHT scope. Default is **targeted**
@@ -9,16 +14,15 @@ Run tests for the video-editor project at the RIGHT scope. Default is **targeted
   code — tests written for the task, tests that import the changed modules, and the
   e2e spec(s) covering the changed flow. Never run full suites to "confirm no
   regressions" locally.
-- **Full sweep:** Branch CI runs the complete vitest + pytest suites on every push
-  (`branch-ci.yml`, ~5 min, zero tokens), and Master CI re-runs them on the merged
-  state of master (`master-ci.yml`). The mandatory `gh run watch` CI verdict after
-  push IS the no-regressions proof.
+- **Full sweep:** Branch CI runs complete unit suites for affected layers on matching branch pushes
+  (`branch-ci.yml`; runtime varies), and Master CI re-runs them on the merged
+  state of master (`master-ci.yml`). The mandatory CI verdict after push is independent unit-suite evidence, not proof that no regression exists or that E2E ran.
 - **Fix loop:** when a test fails, fix it, then re-run (a) the failing test and
   (b) tests that exercise the files the FIX touched. Tests that already passed and
   whose subject code did not change are NOT re-run — the next push's Branch CI
-  re-proves them for free.
+  rechecks them on the next CI run.
 - **Explicit full run:** only when the user asks for it ("/run-tests full", "run
-  everything") or when no CI is reachable.
+  everything"). If CI is unreachable, report the blocker; a local full run does not replace mandatory CI for automatic landing.
 
 ## Usage
 Invoke with `/run-tests` (targeted, default) or `/run-tests full`. Also when the
@@ -27,26 +31,22 @@ user asks to "run tests" / "check if tests pass" — targeted unless they say fu
 ## 1. Targeted mode (default)
 
 ### Frontend unit (Vitest)
-`vitest related` resolves which tests import the given SOURCE files — the exact
-"tests exercised by the change" set:
+Use imports and `vitest related` as candidate discovery, not a complete coverage claim. Curate and name the feature/regression/consumer set before executing it:
 ```bash
 cd src/frontend
 CHANGED=$(git diff --name-only master...HEAD -- 'src/frontend/src/**/*.js' 'src/frontend/src/**/*.jsx' | sed 's|^src/frontend/||' | grep -v '\.test\.')
-npx vitest related --run $CHANGED
-# Plus any test files the task added/changed, by path:
-npx vitest run src/components/Foo.test.jsx
+# Inspect the changed-source imports and test references, then run named tests:
+npx vitest run src/components/Foo.test.jsx <other-curated-test-files>
 ```
 
 ### Backend (pytest)
-No `related` equivalent — map changed modules to their test files by convention
-(`app/routers/clips.py` -> `tests/test_clips*.py`) and by import:
+Find candidates by module, imports, and behavior, then include tests of direct consumers. Filename matching alone misses indirect backend regressions:
 ```bash
 cd src/backend
 grep -l "changed_module" tests/test_*.py   # tests importing the changed code
 .venv/Scripts/python.exe -m pytest tests/test_clips.py tests/test_exports.py -v --tb=short --capture=sys
 ```
-**Warning:** backend tests TRUNCATE the real dev Postgres — fine in a task
-container, warn the user first in the shared checkout.
+**Database precondition:** backend fixtures can truncate data. Confirm the resolved target is an authorized disposable test database; container execution alone does not isolate a shared Postgres server. Follow CLAUDE.md Data Safety Rules if deletion scope is not already authorized.
 
 ### E2E (Playwright) — targeted only, never full
 Full e2e is hours-class and runs nowhere routinely. Run the spec(s) for the
@@ -61,10 +61,8 @@ Servers must be running (ports 8000/5173) — or use `bash scripts/dev-verify.sh
 ### Fix loop (all layers)
 1. Failing test -> diagnose -> fix.
 2. Re-run the failing test by file:line / `-k` name.
-3. Re-run tests exercising the fix's files (`vitest related` on them / the pytest
-   module map). NOT the full suite.
-4. Compare any pre-existing failure against `docs/testing/known-failures.md`
-   instead of re-proving it.
+3. Re-run the curated tests exercising the fix and its affected consumers, not the full suite.
+4. Use `docs/testing/known-failures.md` as a lead; substantiate attribution with current baseline evidence. Otherwise report it as unverified. A known failing run is still a failing run.
 5. Push; the Branch CI verdict is the full-suite confirmation.
 
 ## 2. Full mode (explicit request only)
@@ -89,6 +87,6 @@ timeout; scope e2e to named specs or defer to the staging pass.
 - Server check: `curl -s http://localhost:8000/api/health` / `curl -s http://localhost:5173`
 
 ## Success Criteria
-- Targeted mode: every test exercising the changed code passes; scope note says
+- Targeted mode: the named relevant set passes; scope note says
   which suites were intentionally NOT run (they're CI's job).
-- Full mode: suites green modulo `docs/testing/known-failures.md`.
+- Full mode: report actual pass/fail/skip counts and substantiated baseline failures separately; no "green modulo" verdict.
