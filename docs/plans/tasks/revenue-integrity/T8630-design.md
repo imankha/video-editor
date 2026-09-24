@@ -19,6 +19,54 @@ the exact shape is load-bearing. All line numbers verified against master `1ff39
 
 ---
 
+## Approved rulings 2026-09-24
+
+The user approved this design with the following rulings. They supersede the sections
+named below; the rest of the doc stands as written.
+
+**A. `account_deletions` primary key (design bug fix).** `user_id TEXT PRIMARY KEY` is
+wrong: `_reset_test_account` re-creates the same `user_id`, so a second reset of the same
+test account would hit a duplicate-key error inside the delete transaction. Fixed to
+`id BIGSERIAL PRIMARY KEY` plus an index on `(user_id, deleted_at)` — one row per deletion
+event, not one row per user. Supersedes §3.1's schema, §3.2's `ON CONFLICT (user_id) DO
+NOTHING`, §5.4's diagram text, and §8's DDL (see the corrected blocks in place below). A
+new test proves two resets of the same test account write two audit rows and both succeed
+(§11, T2 amendment).
+
+**B. Legal wording fix.** Nowhere may the copy call the retained record "not personal
+data" — pseudonymous data is still personal data under GDPR Recital 26. The
+`data-retention-policy.md` "What IS Retained" sentence (§7.4) is corrected to: "It is a
+pseudonymous financial record with no name, email, or card details, and retaining it never
+delays or limits the erasure of your other personal data." No other changed surface
+(`PrivacyPolicy.jsx`, `docs/legal/privacy-policy.md`, `AccountSettings.jsx`) makes the
+"not personal data" claim, so §7.1-7.3 stand as written.
+
+**C. In-app delete confirmation — exact text ruling.** `AccountSettings.jsx`'s confirmation
+copy is fixed verbatim (supersedes §7.1's AFTER text):
+
+> This permanently deletes your account and all personal data. This cannot be undone. We
+> keep a record of past payments (amounts and dates only, with no name, email, or card
+> details) to meet tax and accounting obligations.
+
+§7.2 (`PrivacyPolicy.jsx`) and §7.3 (`docs/legal/privacy-policy.md`) stay as proposed,
+apart from applying ruling B where it recurs.
+
+**Open Questions 1-5, resolved (§10):**
+1. `_reset_test_account`: write the audit row, do **not** stamp `payments` rows (Option A,
+   as recommended).
+2. Actor for the reset path is `self` (as recommended).
+3. Ship the TRUNCATE guard now, with the `SET LOCAL reelballers.allow_payments_purge`
+   escape hatch and the specified conftest change (as recommended).
+4. No trigger on `account_deletions` — out of scope (as recommended).
+5. Reserve the `admin` actor value; no code in this task may emit it (as recommended).
+
+**Extra (handed over from T8650, which could not touch `pg.py`):** in `src/backend/app/services/pg.py`
+`_SCHEMA_DDL`, add a comment on `user_segments.total_spent_cents` stating it is a per-user
+DISPLAY CACHE, and that `payments` is the financial record every aggregate reads (T8650).
+Comment only, no DDL change — unrelated to this task's own DDL additions in §8.
+
+---
+
 ## 1. Current state (the holes)
 
 T8620 shipped the `payments` ledger, but **nothing writes `account_deleted_at`** (the
@@ -78,11 +126,12 @@ trigger, deleting the two residue tables, automated refunds.
 
 ## 3. Section 1 — `account_deletions` schema + module home
 
-### 3.1 Schema (refined from the task draft)
+### 3.1 Schema (refined from the task draft; PK corrected by Approved ruling A)
 
 ```sql
 CREATE TABLE IF NOT EXISTS account_deletions (
-    user_id      TEXT        PRIMARY KEY,
+    id           BIGSERIAL   PRIMARY KEY,
+    user_id      TEXT        NOT NULL,
     deleted_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     actor        TEXT        NOT NULL,   -- 'self' | 'admin' | 'script'
     path         TEXT        NOT NULL,   -- 'privacy_endpoint' | 'delete_user_script' | 'reset_test_account'
@@ -90,16 +139,23 @@ CREATE TABLE IF NOT EXISTS account_deletions (
     net_cents    INTEGER     NOT NULL DEFAULT 0,  -- SUM(payments.amount_cents) at deletion
     note         TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_account_deletions_user_id
+    ON account_deletions (user_id, deleted_at);
 ```
 
-**Column verdict vs the task draft:** keep the draft exactly. It is already correct.
+**Column verdict vs the task draft:** the draft's `user_id TEXT PRIMARY KEY` is a bug, fixed
+by ruling A — `_reset_test_account` re-creates the same `user_id`, so a second reset of the
+same test account must be able to write a second row, not collide on a duplicate key. One
+row per DELETION EVENT, not one row per user.
 
-- `user_id TEXT PRIMARY KEY` — pseudonymous key, **no FK to `users`** (the users row is being
-  deleted in the same transaction; a FK would make the audit insert impossible). The PK also
-  makes the write naturally idempotent: a re-run of the same deletion path `ON CONFLICT
-  (user_id) DO NOTHING` writes at most one row per user_id. **No email column** — the table
-  answers "an account with this id was deleted, by whom, via which path, with how much money
-  attached", all without personal data, which is what keeps the audit itself erasure-safe.
+- `id BIGSERIAL PRIMARY KEY` with `user_id TEXT NOT NULL` plus an index on
+  `(user_id, deleted_at)` — pseudonymous key, **no FK to `users`** (the users row is being
+  deleted in the same transaction; a FK would make the audit insert impossible). The write
+  is a plain `INSERT` (no `ON CONFLICT`): every real deletion legitimately produces its own
+  row, including a second reset of the same test account (§11 T2 amendment covers this).
+  **No email column** — the table answers "an account with this id was deleted, by whom, via
+  which path, with how much money attached", all without personal data, which is what keeps
+  the audit itself erasure-safe.
 - `net_cents INTEGER` — `COALESCE(SUM(amount_cents), 0)` over that user's `payments` rows at
   deletion time. Signed (T8620 convention: purchases +, refunds/disputes −), so it is the true
   net revenue, not a gross count. INTEGER is safe (bounded well under 2^31).
@@ -132,7 +188,9 @@ def record_account_deletion(
 ) -> None:
     # 1) read the ledger for this user: had_payments + net_cents (guarded so a pre-v030
     #    env with no payments table records had_payments=False, net_cents=0 — see §3.3)
-    # 2) INSERT INTO account_deletions (...) VALUES (...) ON CONFLICT (user_id) DO NOTHING
+    # 2) INSERT INTO account_deletions (...) VALUES (...)  -- plain INSERT, no ON CONFLICT
+    #    (ruling A: PK is a BIGSERIAL id, so a second deletion of the same user_id, e.g. a
+    #    second test-account reset, legitimately writes a second row, not a collision)
 ```
 
 The `str, Enum` closed vocabularies (backend type-safety skill) mean a typo cannot silently
@@ -353,10 +411,14 @@ are still readable at audit time because `payments` is never touched by the purg
 ### 5.2 Path 2 — `auth.py` `_reset_test_account` (actor=self, path=reset_test_account)
 
 In its `with get_pg()` block (`auth.py:161-177`), BEFORE `DELETE FROM users`, add the audit
-write (`record_account_deletion(..., path=RESET_TEST_ACCOUNT)`). **Whether to STAMP here is an
-Open Question (§10);** see the recommendation there. The audit row is written regardless — a
-users-row deletion genuinely occurred. Actor value: recommend `self` (see §10; the reset is
-triggered by the user's own login), OR a new `reset` actor — flagged as an open question.
+write (`record_account_deletion(cur, user_id=user_id, actor=DeletionActor.SELF,
+path=DeletionPath.RESET_TEST_ACCOUNT)`). **Do NOT call `stamp_account_deleted` here**
+(Approved ruling 1): the reset deletes the `users` row but the same `user_id` is re-created
+immediately on the same login, so a persistent `account_deleted_at` stamp would misdescribe
+a live, re-created account. The audit row is written regardless — a users-row deletion
+genuinely occurred. Actor value is `self` (Approved ruling 2). Because the PK is now
+`id BIGSERIAL` (ruling A), a second reset of the same test account writes a second audit
+row without colliding.
 
 ### 5.3 Path 3 — `scripts/delete_user.py` `delete_one` (actor=script, path=delete_user_script)
 
@@ -374,7 +436,7 @@ per real delete path:
   [ _purge_user_data: R2/local/caches/credits — its own txn, commits first ]   (irreversible-first)
   BEGIN (the caller's users-deleting txn)
      stamp_account_deleted(cur, user_id)          # UPDATE payments (NULL-gated)
-     record_account_deletion(cur, ...)            # INSERT account_deletions ON CONFLICT DO NOTHING
+     record_account_deletion(cur, ...)            # plain INSERT account_deletions (id BIGSERIAL PK)
      DELETE FROM users WHERE user_id = %s          # (+ the path's other DELETEs)
   COMMIT
 ```
@@ -486,11 +548,11 @@ basis stated everywhere is LEGAL obligation, not analytics.
 ```
 This will permanently delete your account and all data. This cannot be undone.
 ```
-**AFTER:**
+**AFTER (Approved ruling C, exact text):**
 ```
-This permanently deletes your account and all personal data. This cannot be undone.
-Payment records (an opaque account id and amounts, with no name, email, or card
-details) are kept to meet tax and accounting obligations.
+This permanently deletes your account and all personal data. This cannot be undone. We
+keep a record of past payments (amounts and dates only, with no name, email, or card
+details) to meet tax and accounting obligations.
 ```
 
 ### 7.2 Privacy policy component — `PrivacyPolicy.jsx`
@@ -559,9 +621,12 @@ AFTER line 59 (after the existing three bullets), add:
 - **Transaction records only, for a legal reason.** We retain the amount and date of each
   payment, keyed to an opaque account id, with no name, email, or card details. This is kept
   solely to meet tax and accounting legal obligations, not for analytics, research, or any
-  product purpose. It is a pseudonymous financial record, not personal data, and retaining it
-  never delays or limits the erasure of your personal data.
+  product purpose. It is a pseudonymous financial record with no name, email, or card
+  details, and retaining it never delays or limits the erasure of your other personal data.
 ```
+
+(Approved ruling B: the record is pseudonymous, not "not personal data" — pseudonymous data
+is still personal data under GDPR Recital 26.)
 
 **Third-Party Data Handling table (line 77, the Stripe row):** already correct ("Stripe retains
 transaction records per financial regulations"). Change the header/first-party framing is not
@@ -582,19 +647,27 @@ lands behind those in the same operator call.
   deletion audit table + payments append-only trigger; deletion stamps account_deleted_at and
   records who/when/which-path/how-much, ledger rows preserved."`
 - `up(self, conn)`: `cur = conn.cursor()`; execute (a) `CREATE TABLE IF NOT EXISTS
-  account_deletions (...)` from §3.1; (b) the append-only function + trigger and the
-  no-truncate function + trigger from §4.3, verbatim.
+  account_deletions (...)` from §3.1 (Approved ruling A: `id BIGSERIAL PRIMARY KEY`,
+  `user_id TEXT NOT NULL` plus the `(user_id, deleted_at)` index, NOT `user_id TEXT PRIMARY
+  KEY`); (b) the append-only function + trigger and the no-truncate function + trigger from
+  §4.3, verbatim.
 
 **Register in `migrations/postgres/__init__.py`:** `from .v031_account_deletions import
 V031AccountDeletions`; append `V031AccountDeletions()` to `MIGRATIONS`. `RUNNER =
 MigrationRunner(MIGRATIONS, floor=0)` unchanged (postgres floor stays 0 forever).
 
 **Mirror into `pg.py` `_SCHEMA_DDL`** (fresh deploys): add the identical `CREATE TABLE IF NOT
-EXISTS account_deletions (...)` AND the identical trigger/function DDL, placed after the
-`payments` block (lines 388-413). **Byte-for-byte identical to the migration** (reviewer checks
-equality, per the v030 precedent comment already in the file). Add a comment naming
-`services/account_deletions.py` as the audit-table writer and `payments_ledger.stamp_account_deleted`
-as the stamp writer, pointing at `v031_account_deletions.py`.
+EXISTS account_deletions (...)` (corrected PK per ruling A) AND the identical trigger/function
+DDL, placed after the `payments` block (lines 388-413). **Byte-for-byte identical to the
+migration** (reviewer checks equality, per the v030 precedent comment already in the file).
+Add a comment naming `services/account_deletions.py` as the audit-table writer and
+`payments_ledger.stamp_account_deleted` as the stamp writer, pointing at
+`v031_account_deletions.py`.
+
+**Extra, same migration's `pg.py` edit (handed over from T8650, Approved rulings extra):**
+on `user_segments.total_spent_cents` in `_SCHEMA_DDL`, add a comment stating it is a
+per-user DISPLAY CACHE and that `payments` is the financial record every aggregate reads
+(T8650). Comment only — no DDL change to that column or table.
 
 **Operator step (completion notes):** `migrate-postgres` must run post-deploy (it applies
 v026..v031 in order). No backfill is needed for this task (the audit table starts empty; the
@@ -622,7 +695,7 @@ stamp only applies going forward).
                   WHERE user_id=%s AND account_deleted_at IS NULL           │
               record_account_deletion(cur, user_id, SELF, PRIVACY_ENDPOINT) │
                 reads payments -> had_payments, net_cents                   │
-                INSERT INTO account_deletions ... ON CONFLICT DO NOTHING    │
+                INSERT INTO account_deletions ... (id BIGSERIAL, plain INSERT) │
               DELETE FROM user_actions / user_segments / referrals          │
               DELETE FROM users WHERE user_id=%s                            │
            COMMIT  ────────────────────────────────────────────────────────┘
@@ -647,10 +720,11 @@ stamp only applies going forward).
 | **Code ships before the v031 migration runs** (prod owes v026..v031). | `to_regclass` guards (§3.4) make stamp a no-op and audit record `had_payments=False` when `payments`/`account_deletions` are absent; audit-table-absent logs CRITICAL and skips the insert rather than 500ing an erasure request. Window closes at `migrate-postgres`. |
 | **Trigger blocks a legitimate future in-place write.** | The trigger allow-list matches the T8620 grep AC exactly (both permitted writes: `account_deleted_at`, `stripe_charge_id` NULL->value). Any new legitimate in-place write is a deliberate change that must update BOTH the trigger and the grep AC in the same PR. |
 | **TRUNCATE guard breaks the test suite.** | Exact conftest change specified (§4.2): `SET LOCAL reelballers.allow_payments_purge = 'on'` before the TRUNCATE. The GUC is session-scoped and greppable; no production path sets it. |
-| **`reset_test_account` stamps a live re-created account.** | Open Question (§11) — recommendation is to write the audit row but NOT stamp (the same user_id is re-created immediately on the same login; a persistent stamp on a live account's payments would be misleading; test accounts realistically have no payments; the stamp never filters revenue so SUM stays correct regardless). |
+| **`reset_test_account` stamps a live re-created account.** | Resolved (Approved ruling 1): write the audit row, do NOT stamp (the same user_id is re-created immediately on the same login; a persistent stamp on a live account's payments would be misleading; test accounts realistically have no payments; the stamp never filters revenue so SUM stays correct regardless). |
 | **Audit insert reads `payments` after `_purge_user_data` ran.** | Safe: `_purge_user_data` never touches `payments` (it purges credits, a different ledger). `had_payments`/`net_cents` are accurate at audit time. |
 | **Script `--force-paid` used carelessly deletes a payer.** | The ledger is RETAINED and stamped even under `--force-paid` (the row survives; only the users row goes). The loud pre-pass names net revenue + every object id + that the ledger is retained; the audit row records `note="forced past payment guard"`. Intent, not prevention, is the design goal. |
-| **`account_deletions` has no append-only trigger.** | Out of scope by design (trigger scope kept to `payments`, the T8620 carry-over). `account_deletions` is append-only by convention (writers only INSERT, `ON CONFLICT DO NOTHING`). Possible follow-up (§11); not blocking. |
+| **`account_deletions` has no append-only trigger.** | Resolved out of scope (Approved ruling 4; trigger scope kept to `payments`, the T8620 carry-over). `account_deletions` is append-only by convention (writers only INSERT). Possible follow-up; not blocking. |
+| **`account_deletions` PK collides on a re-deleted user_id.** | Fixed by Approved ruling A: `id BIGSERIAL PRIMARY KEY` with `user_id` indexed, not `user_id` itself as PK — a second reset of the same test account writes a second row instead of hitting a duplicate-key error mid-transaction. |
 | **Privacy copy overclaims / contradicts existing docs.** | Copy states LEGAL obligation, never analytics; the new "What IS Retained" subsection is added alongside (not replacing) "No data is retained for analytics or research purposes". Reviewer checks no contradiction and no em dashes. |
 
 ---
@@ -664,7 +738,7 @@ failing against pre-change master for the intended reason, then passing after (L
 | # | Test | Proves / AC |
 |---|------|-------------|
 | T1 | **Ledger survives + stamped**: seed a `payments` row for a user, drive `delete_account` (or a direct call to the privacy path's step-2 logic) → the `payments` row still exists AND `account_deleted_at IS NOT NULL`; the `users` row is gone. Idempotency: a second stamp call stamps 0 rows (NULL-gated). | **AC1** ("deleting an account with payments leaves every `payments` row intact, stamped"). |
-| T2 | **Exactly one audit row per deletion**, naming actor + path, with correct `had_payments`/`net_cents`: seed purchase (+ refund) → `net_cents == SUM(amount_cents)`, `had_payments == true`; a user with no payments → row with `had_payments=false, net_cents=0`. Run twice → still one row (`ON CONFLICT`). Assert across all three paths (privacy_endpoint / reset_test_account / delete_user_script). | **AC2** ("every users-row deletion writes exactly one `account_deletions` row naming actor and path"). |
+| T2 | **Exactly one audit row per deletion**, naming actor + path, with correct `had_payments`/`net_cents`: seed purchase (+ refund) → `net_cents == SUM(amount_cents)`, `had_payments == true`; a user with no payments → row with `had_payments=false, net_cents=0`. Assert across all three paths (privacy_endpoint / reset_test_account / delete_user_script). **Ruling A amendment:** two resets of the SAME test account (same `user_id` re-created between them) write TWO `account_deletions` rows and both inserts succeed (no PK collision) — proves the `id BIGSERIAL` PK, not `user_id` PK. | **AC2** ("every users-row deletion writes exactly one `account_deletions` row naming actor and path"). |
 | T3 | **Trigger blocks the forbidden, allows the two whitelisted**: (a) `UPDATE payments SET amount_cents=...` raises; (b) `UPDATE payments SET kind=...`/`user_id`/`stripe_object_id`/`occurred_at` raises; (c) `DELETE FROM payments` raises; (d) `fill_missing_charge_id` on a NULL charge id succeeds; (e) a NULL->value on `stripe_charge_id` succeeds but value->other raises; (f) `stamp_account_deleted` (`account_deleted_at` NULL->now()) succeeds. | Append-only trigger (§4), and the T8620 grep-AC carry-over enforced structurally. |
 | T4 | **TRUNCATE guard**: `TRUNCATE payments` raises by default; `SET LOCAL reelballers.allow_payments_purge='on'; TRUNCATE payments` succeeds. (Also implicitly proven green by the whole suite running under the amended conftest.) | §4.2 TRUNCATE recommendation. |
 | T5 | **Script refuses a paying account without `--force-paid`, incl. bulk-before-first-delete**: against a throwaway DB, seed two users, one with a payment. `--all` without `--force-paid` → exits non-zero, LOUD block naming net + object ids, AND neither `users` row deleted (fail-before-first). With `--force-paid` → both deleted, both audited, the paying one's `payments` retained + stamped, `note="forced past payment guard"`. Single-`--email` on the paying user without the flag → same refusal. | **AC3** ("refuses a paying account without `--force-paid`, and refuses a bulk run containing one before deleting anything"). |
@@ -693,38 +767,24 @@ the Tester does not invent a component test where none is warranted.
 
 ---
 
-## Open Questions
+## Open Questions — all resolved by Approved rulings 2026-09-24
 
-1. **Stamp on `_reset_test_account`?** The reset deletes the `users` row but the SAME user_id
-   is re-created immediately on the same login. Stamping `account_deleted_at` there would leave
-   a persistent "deleted" stamp on a live, re-created account's `payments`.
-   - **Option A (recommended): write the audit row, do NOT stamp on reset.** Rationale: a
-     users-row deletion genuinely occurred, so the audit is honest; but the stamp is metadata
-     that would misdescribe a now-live account. Test accounts realistically have no payments;
-     the stamp never filters revenue (T8650) so SUM stays correct either way; a re-created
-     account's NEW purchases write fresh unstamped rows. Net: audit yes, stamp no, on this path.
-   - **Option B: stamp too, for symmetry.** Simpler contract ("every real delete path stamps"),
-     but leaves a misleading stamp on a live account. Rejected in the recommendation.
-   - **Decision needed from the user.**
-2. **Actor value for `reset_test_account`.** Recommendation: `self` (the reset is triggered by
-   the user's own login as a NUF reset email). Alternative: add a `reset` actor to the
-   `DeletionActor` enum for precision. Recommendation is `self` to keep the closed vocabulary at
-   the three values the task's schema comment lists (`self`/`admin`/`script`); the `path` value
-   `reset_test_account` already disambiguates. **Confirm.**
-3. **Ship the TRUNCATE guard now, or defer it?** Recommendation (§4.2): ship it, with the
-   `SET LOCAL` escape hatch and the specified conftest change. Alternative: ship only the
-   row-level DELETE/UPDATE guard and leave TRUNCATE for a follow-up (smaller diff, but the
-   whole-ledger-wipe hole stays open). **Confirm.**
-4. **`account_deletions` own trigger — confirm OUT of scope.** Recommendation: out of scope
-   (trigger scope kept to `payments` per the T8620 carry-over; `account_deletions` is
-   append-only by INSERT-only convention). Note as a possible follow-up. **Confirm.**
-5. **`admin` actor has no live path in this task.** The enum reserves `admin` (schema comment
-   lists it), but no current code path deletes a users row as an admin (impersonation does not
-   delete). Recommendation: reserve the value, write no code that emits it in T8630. **Confirm
-   the reserved-but-unused value is acceptable** (it documents intent for a future admin delete).
+1. **Stamp on `_reset_test_account`?** Resolved: Option A — write the audit row, do NOT stamp
+   on reset (Approved ruling 1).
+2. **Actor value for `reset_test_account`.** Resolved: `self` (Approved ruling 2).
+3. **Ship the TRUNCATE guard now, or defer it?** Resolved: ship it now, with the `SET LOCAL`
+   escape hatch and the specified conftest change (Approved ruling 3).
+4. **`account_deletions` own trigger — confirm OUT of scope.** Resolved: out of scope
+   (Approved ruling 4).
+5. **`admin` actor has no live path in this task.** Resolved: reserve the value, no code in
+   this task emits it (Approved ruling 5).
+
+Additionally, a design bug found at approval time is fixed: the `account_deletions` primary
+key is `id BIGSERIAL`, not `user_id` (Approved ruling A) — see §3.1.
 
 ---
 
 ## Status
 
-AWAITING APPROVAL
+APPROVED (user, 2026-09-24) — see "Approved rulings 2026-09-24" above. Proceeding to
+Tester Phase 1 -> Migration -> Implementation -> Reviewer.
