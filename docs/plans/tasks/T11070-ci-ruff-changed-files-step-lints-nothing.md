@@ -1,6 +1,6 @@
 # T11070: CI "Ruff (changed files vs master)" step lints nothing
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-24
@@ -38,6 +38,27 @@ file. The step passed and printed nothing (run 36068775763 shows the command and
    The whole-app regression gate stays as it is.
 3. Keep it greppable and simple: inline bash in the workflow, or a small script under `scripts/`
    next to the other CI helpers if the logic outgrows a step.
+
+## Also fixed: the ESLint step had the same bug
+
+The frontend job runs in `src/frontend`, and its "ESLint (changed files vs master)" step used the
+same unanchored pathspec (`'src/frontend/**/*.js'`), so it has linted nothing either. The
+frontend has 0 ESLint errors (351 warnings, and warnings do not fail the step), so anchoring the
+pathspec with `:(top)` is enough; it needs no ratchet.
+
+## Proof (2026-09-24)
+
+`qa/t11070-harness.sh` and `qa/t11070-eslint-harness.sh` build scenario commits in a scratch
+clone and run the old inline step (verbatim) and the new step:
+
+| Scenario | Old step | New step |
+|---|---|---|
+| New ruff error in a changed file (`import os` in app/pricing.py) | exit 0, no output | exit 1, names F401 |
+| Comment added to app/routers/detection.py (7 backlog findings, 0 new) | exit 0 | exit 0 (7 -> 7) |
+| New file with a ruff error | exit 0 | exit 1 |
+| New clean file | exit 0 | exit 0 |
+| ESLint `no-undef` added to a changed file | exit 0, no output | exit 123 (xargs: eslint failed) |
+| ESLint clean change | exit 0 | exit 0 |
 
 ## Acceptance Criteria
 
