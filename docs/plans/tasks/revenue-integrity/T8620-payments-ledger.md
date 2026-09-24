@@ -144,6 +144,12 @@ postgres track runs on an admin trigger anyway.
 - Blocks T8630 (deletion must preserve THIS table), T8640, T8650, T8670
 - Check unmerged sibling branches for a colliding postgres migration number before
   claiming one (see the migration-version-collision landmine)
+- **Design-gate ruling 2026-09-24 (T8620-design.md, ruling 1): live dispute webhook
+  handling (`charge.dispute.created`/`.closed`) is explicitly OUT of scope for T8620.**
+  This task ships no live dispute rows; the backfill covers only already-terminal LOST
+  disputes. A follow-up task to add the live dispute webhook + `dispute_lost`/`dispute_won`
+  write path is needed and should be filed by the supervisor (not by this task's
+  implementor).
 
 ### Technical Notes
 - Postgres track means: no JIT seam, applied by `POST /api/admin/migrate-postgres` after
