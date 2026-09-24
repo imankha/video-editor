@@ -1,6 +1,7 @@
 ---
 name: run-tests
 description: Run the curated feature, regression, consumer, and changed-flow tests for this project and report actual evidence. Use when asked to run or verify tests; full suites require an explicit request.
+user-invocable: true
 ---
 
 # Run Tests Skill

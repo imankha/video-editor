@@ -1,6 +1,8 @@
 ---
 name: drive-app-as-user
+description: Drive the application as an authenticated development user for UI reproduction and verification.
 model: sonnet
+user-invocable: false
 ---
 
 # Drive the app AS A REAL USER (Playwright + dev auth)

@@ -11,7 +11,9 @@ from ci_policy import git_paths
 def validate(root, paths):
     errors = []
     registered = sorted((root / '.claude/agents').glob('*.md'))
+    skill_files = sorted((root / '.claude/skills').rglob('*.md'))
     selected = set(registered)
+    selected.update(skill_files)
     selected.update(root / p for p in paths if '.claude' in Path(p).parts or Path(p).name in {'CLAUDE.md', 'AGENTS.md'})
     for path in sorted(selected):
         if not path.is_file() or path.suffix != '.md':
@@ -33,6 +35,8 @@ def validate(root, paths):
                         raise ValueError(f'missing/non-string {field}')
                 if is_agent and data['name'] != path.stem:
                     raise ValueError('agent name differs from filename')
+                if is_skill and data['name'] != path.parent.name:
+                    raise ValueError('skill name must match directory')
                 for field in ('user-invocable', 'disable-model-invocation'):
                     if field in data and type(data[field]) is not bool:
                         raise ValueError(f'{field} must be boolean')
