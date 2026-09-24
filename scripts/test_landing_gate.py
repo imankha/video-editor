@@ -226,7 +226,7 @@ class BoundaryTests(unittest.TestCase):
             session=command[command.index('--session-id')+1]
             report={'verdict':'VERIFIED','blocking':0,'major':0,'independently_reproduced':True,
                     'criteria_verified':['C1'],'policy_changes_approved':False,'summary':'Fixture proof'}
-            return SimpleNamespace(returncode=0,stdout=json.dumps({'session_id':session,'structured_output':report,'is_error':False}))
+            return SimpleNamespace(returncode=0,stdout=json.dumps({'session_id':session,'structured_output':report,'is_error':False}, indent=2)+'\n')
         with patch.object(gate.subprocess,'run',side_effect=cli), patch.object(gate,'controller_digest',return_value=self.controller), contextlib.redirect_stdout(io.StringIO()):
             gate.capture(args,self.e,self.store,self.controller)
         self.assertEqual(self.store.read('proof-verifier',self.e,self.controller)['verdict'],'VERIFIED')

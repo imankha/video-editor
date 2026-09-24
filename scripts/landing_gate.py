@@ -298,7 +298,7 @@ def capture(args, evidence, store, controller):
     report['session_id'] = session
     report['raw_output_sha256'] = hashlib.sha256(result.stdout.encode()).hexdigest()
     store.root.mkdir(parents=True, exist_ok=True)
-    (store.root / (session + '.json')).write_text(result.stdout, encoding='utf-8')
+    (store.root / (session + '.json')).write_bytes(result.stdout.encode('utf-8'))
     # Reject edits or changed evidence during capture rather than signing stale inputs.
     if load(args.evidence) != evidence or controller_digest() != controller:
         raise ValueError('Inputs changed during verification')
