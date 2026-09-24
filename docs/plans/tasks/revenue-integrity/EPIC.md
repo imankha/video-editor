@@ -167,7 +167,7 @@ Order is dependency order: the record must exist before anything can read it or 
 
 | ID | Task | Status |
 |----|------|--------|
-| T8620 | [Append-only payments ledger + Stripe backfill](T8620-payments-ledger.md) | WIP |
+| T8620 | [Append-only payments ledger + Stripe backfill](T8620-payments-ledger.md) | WAITING ON USER |
 | T8630 | [Deletion preserves the financial record and is auditable](T8630-deletion-preserves-financial-record.md) | TODO |
 | T8640 | [Reconciliation understands deleted accounts and stops lying about heals](T8640-reconciliation-deleted-account-cause.md) | TODO |
 | T8650 | [Revenue totals read the ledger, not the per-user cache](T8650-revenue-totals-from-ledger.md) | TODO |
