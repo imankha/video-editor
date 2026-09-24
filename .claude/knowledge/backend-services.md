@@ -1,5 +1,42 @@
 ---
 domain: backend-services
+updated: 2026-09-24 (T8620, Revenue Record Integrity epic 1/6: **new append-only `payments`
+table (Postgres, v030)** -- the first local per-payment financial record; today the only local
+revenue value is `user_segments.total_spent_cents`, a mutable counter with no history that is
+destroyed when an account is deleted while Stripe keeps the charge forever (prod incident,
+2026-09-03, see docs/plans/tasks/revenue-integrity/EPIC.md). One signed row per money event
+(`purchase`/`refund`/`dispute_lost`/`dispute_won` reserved), keyed for idempotency on UNIQUE
+`(stripe_object_id, kind)`, pseudonymous (`user_id` only, deliberately **no FK to `users`** --
+the whole point is the row outlives account deletion). Sole writer: `services/payments_ledger.py`
+(`record_purchase`/`record_refund`/`record_dispute_lost`, all cursor-taking so the insert joins
+the caller's transaction, `INSERT ... ON CONFLICT DO NOTHING`; `bump_total_spent`, the surviving
+body of the deleted `increment_total_spent`/`decrement_total_spent` free functions, cursor-taking
+and called ONLY when the insert just returned `True`; `fill_missing_charge_id`, the SOLE UPDATE
+statement against this table anywhere in the codebase). **Append-only is enforced by convention +
+review grep, not a DB trigger** -- exactly TWO in-place writes are permitted codebase-wide:
+`fill_missing_charge_id` (this task, gated `WHERE stripe_charge_id IS NULL`, fills asynchronously
+via a background task scheduled AFTER the ledger row's transaction commits, never blocks/fails the
+payment) and T8630's future `account_deleted_at` stamp (reserved column, written by nothing yet).
+**The ledger insert is deliberately NOT gated on `result["applied"]`** -- it runs on every
+observation of a succeeded/paid payment at all 4 purchase sites (`confirm_payment_intent`, webhook
+`checkout.session.completed`, webhook `payment_intent.succeeded`, `verify_session`) and the refund
+site (`charge.refunded`), because a redelivery reaches `applied=False` (the grant already
+processed) and an insert nested inside that gate could never retry a prior failed write -- the
+unique key makes repeat observations safe no-ops instead. `total_spent_cents` cache bump is
+conditioned on the insert having been NEW, closing the refund double-decrement gap as a side
+effect of the same mechanism. Webhook sites re-raise on a ledger-insert failure (Stripe
+redelivers = self-heal); the two user-facing sites swallow (payer must never see an error for a
+payment that already succeeded). Amount is always the Stripe-CAPTURED value (`amount_received`/
+`amount_total`), never `CREDIT_PACKS[...]["price_cents"]` (repricing-sensitive). One-time backfill
+`scripts/backfill_payments_ledger.py` (dry-run default, non-dev `--write` refused without
+`--i-am-the-operator`) nets a `charge_refunded`-status dispute against the charge's cumulative
+refund (mirrors `revenue_reconciliation.build_stripe_net_by_user`'s `max(lost_dispute_raw -
+refunded, 0)` -- a reviewer-caught bug: without netting, a dispute resolved by refund would
+double-subtract the same money, and since the ledger is append-only a wrong backfilled row can
+never self-correct on a re-run). Live dispute webhook handling is explicitly OUT of scope
+(no `charge.dispute.*` branch exists) -- backfill covers only already-terminal LOST disputes;
+follow-up task pending. Full design: docs/plans/tasks/revenue-integrity/T8620-design.md. See
+"Payments ledger (Postgres, T8620)" section below.)
 updated: 2026-09-17 (T10270: **`upload_failures` (Postgres, v029) is a new durable per-event
 record of every upload failure** -- a bounded operational incident record, NOT analytics state
 (fenced against the analytics-epic's "no new Postgres per-event state" rule; see § "Upload-failure
@@ -149,6 +186,146 @@ Credits were per-user SQLite (`user.sqlite`, R2-synced) — a money ledger on ev
 - **Fresh-environment footgun:** `credit_migration_state` is empty on a brand-new deploy, so `_is_ready()` is False and the gate treats credits as NOT cut over → **every** credit mutation 503s, including new-signup bonuses and dev selfgrants, until someone runs `GET /api/admin/credits/backfill-report` (which stores a report) then `POST /api/admin/credits/open-gate`. This is correct for the production cutover (fail loud until backfill is verified) but surprising on a fresh staging DB with no legacy data to migrate: the gate still must be explicitly opened before credits work at all.
 - **Landmine RESOLVED for credits (T5840):** the "live machine never re-pulls `user.sqlite` from R2, so out-of-band credit edits get clobbered" hazard no longer applies to credits. The old admin-grant path had to download the GRANTEE's `user.sqlite` from R2, read-modify-write the balance, and push it back (a read-modify-write across a network round trip on eventually-consistent storage — the exact hole that lost 400 credits on 2026-07-24). Now `credit_ledger.grant` runs a single atomic `UPDATE credits SET balance = balance + amount` inside Postgres under `UNIQUE(user_id, idempotency_key)`; there is no read of the balance in app code before the write, so a stale snapshot cannot force-push over newer state. This is why the `_refresh_target_user_db`/`_persist_target_user_db` helpers and their `TestRefreshTargetUserDb` coverage were deleted — the invariant they protected is now structurally guaranteed, and the admin grant landing correctly against real Postgres (incl. idempotent retry) is covered by `tests/test_admin_credit_idempotency.py`. **The hazard still applies to everything else in `user.sqlite`** (profiles list, quests, activity) — a live machine reads its cached copy for a machine lifetime and out-of-band edits to those tables can still be clobbered.
 
+### Payments ledger (Postgres, T8620)
+Revenue Record Integrity epic 1/6 (`docs/plans/tasks/revenue-integrity/EPIC.md`). Distinct from
+Credits above: credits is an ENTITLEMENT ledger (purged on account deletion by design, so a
+re-register starts at a true zero) — `payments` is a REVENUE ledger (must survive deletion,
+that's the whole point). Do not couple the two; `payments_ledger.py` never calls into
+`credit_ledger.py` or vice versa (EPIC decision 6).
+
+- **Schema (`v030_payments_ledger.py`, mirrored byte-for-byte in `pg.py` `_SCHEMA_DDL`):**
+  `payments(id BIGSERIAL PK, user_id TEXT NOT NULL, kind TEXT NOT NULL, amount_cents INTEGER
+  NOT NULL, currency, stripe_object_id TEXT NOT NULL, stripe_charge_id, pack, credits,
+  occurred_at TIMESTAMPTZ NOT NULL, recorded_at DEFAULT now(), source TEXT NOT NULL,
+  account_deleted_at TIMESTAMPTZ)`. `UNIQUE(stripe_object_id, kind)` is the idempotency key;
+  `(user_id, occurred_at DESC)` is the per-user revenue read index. **No FK to `users`** —
+  deliberate, this is what lets the row outlive account deletion.
+- **Idempotency key per kind:** `purchase` keys on the PaymentIntent id (`pi_...`), NOT the
+  Checkout Session id — so `verify_session`, webhook `checkout.session.completed`, and webhook
+  `payment_intent.succeeded` all converge on ONE row per PI even though 3 different sites can
+  observe the same purchase. `refund` keys on the individual Stripe Refund id (`re_...`, NOT
+  the charge id — a second partial refund on the same charge must get its own row).
+  `dispute_lost`/`dispute_won` key on the Dispute id (`dp_...`) — reserved, no live writer yet
+  (see below).
+- **Refund resolution fetches the list from Stripe — it does NOT read the webhook payload's
+  `refunds` (T8620 round-2 G3, a real correctness fix).** On current Stripe API versions a
+  `Charge` object does NOT embed `refunds` (default since API version 2022-11-15; a webhook
+  payload cannot expand it) and this codebase pins no API version, so the first-draft
+  `charge["refunds"]["data"][0]` wrote NO row, logged CRITICAL, and returned 200 (no
+  redelivery) on every real refund — worse than the pre-T8620 `amount_refunded` fallback. The
+  `charge.refunded` branch now calls `stripe.Refund.list(charge=<ch>, limit=100).auto_paging_iter()`
+  and records EACH refund whose `status == "succeeded"` (pending/failed/canceled skipped),
+  keyed on its own `re_...` id, `occurred_at = refund.created`. Partial + repeated refunds are
+  each their own row; a redelivery or a later `charge.refunded` self-heals a missed refund. A
+  `Refund.list` failure logs CRITICAL and RE-RAISES (webhook non-2xx → redeliver). The
+  `succeeded`-only rule matches the reconciler (`build_stripe_net_by_user` nets on cumulative
+  `amount_refunded`, which Stripe advances only for succeeded refunds); the backfill's
+  `_refund_rows` applies the identical rule. The old `_latest_refund`/`_latest_refund_amount`
+  helpers are DELETED.
+- **`occurred_at` is Stripe's timestamp, never `now()` (T8620 round-2 G6).** Every live site
+  sets it from the source object's own `created`: the PaymentIntent's `created` for purchases
+  (A/C), the Checkout Session's `created` for B/D, each refund's `created` for refund rows
+  (`_stripe_ts`/`_field` helpers in `routers/payments.py`). `now()` at write time drifts from
+  actual money-movement time and reorders history relative to the backfill (which already used
+  Stripe timestamps). A missing `created` logs loudly and falls back to `now()` only so a valid
+  row is not dropped. Recovery of a row missed at the two user-facing sites (which swallow on
+  failure) depends on the webhook path (C), the self-healing site.
+- **Write path is intentionally NOT gated on `credit_ledger.grant()`'s `applied` flag.** The
+  ledger insert (`payments_ledger.record_purchase`/`record_refund`) runs on EVERY observation of
+  a succeeded/paid Stripe object at all 5 write sites in `routers/payments.py`
+  (`confirm_payment_intent`, webhook `checkout.session.completed`, webhook
+  `payment_intent.succeeded`, `verify_session`, webhook `charge.refunded`) — including a
+  redelivery where the grant's own idempotency already returned `applied=False`. This is
+  load-bearing: nesting the insert inside `if result["applied"]:` (the first-draft design) would
+  make a redelivery — exactly the case where a PRIOR ledger write is most likely to have failed —
+  unable to ever retry it. The `UNIQUE(stripe_object_id, kind)` index is what makes "every
+  observation" safe: `INSERT ... ON CONFLICT DO NOTHING`, and `cur.rowcount == 1` (`True` return)
+  is the caller's signal that the row was genuinely new.
+- **`total_spent_cents` cache bump is conditioned on the ledger insert being NEW.**
+  `payments_ledger.bump_total_spent(cur, user_id, amount_cents)` — the surviving body of the
+  DELETED `increment_total_spent`/`decrement_total_spent` free functions (`analytics.py`) — is
+  called ONLY when `record_purchase`/`record_refund` just returned `True`, inside the SAME
+  `get_pg()` transaction as the insert. This closes T5760's documented refund double-decrement
+  gap as a side effect of the same mechanism, not a separate fix: a redelivered refund's
+  `record_refund` call returns `False` (already exists), so `bump_total_spent` is never reached
+  a second time. A zero-rowcount UPDATE (payer with no `user_segments` row) logs CRITICAL and
+  leaves the cache untouched — it never creates a bare segment row (would pollute
+  signup-shaped-only segmentation reads elsewhere); the `payments` row is the durable record
+  regardless.
+- **Amount is always Stripe's CAPTURED value, never the local pack-price table.** Sites with a
+  PaymentIntent/webhook payload already in hand (`confirm_payment_intent`,
+  `payment_intent.succeeded`) use `amount_received` — free, no extra Stripe call. Sites with only
+  a CheckoutSession (`checkout.session.completed`, `verify_session`) use `session.amount_total`
+  — also free (a paid session's `amount_total` IS the captured amount in this product; no partial
+  captures). `pack`/`credits` are stored as METADATA ONLY from Stripe's `metadata.pack`/
+  `metadata.credits` — never used to derive `amount_cents` (a reprice, e.g. T4940, must not
+  retroactively rewrite what a historical row says was actually charged).
+- **Failure mode is split by site type, not uniform (the design's key correctness decision).**
+  On a ledger-insert exception: the 3 webhook sites (`checkout.session.completed`,
+  `payment_intent.succeeded`, `charge.refunded`) `logger.critical` then RE-RAISE, so the webhook
+  returns non-2xx and Stripe redelivers — a REAL self-heal now that the insert isn't nested
+  inside the one-shot `applied` gate. The 2 user-facing HTTP sites (`confirm_payment_intent`,
+  `verify_session`) `logger.critical` then SWALLOW — a payer must never see an error for a
+  payment that already succeeded and was fulfilled; the backfill script is the recovery path for
+  these two. **The credit grant itself is never affected either way** — it runs first, in its
+  own transaction, fully committed before the ledger block executes; EPIC decision 6 forbids
+  coupling the two ledgers, so a ledger failure can never roll back a real grant.
+- **Append-only is enforced by convention + a review grep, not a DB trigger** (a blanket
+  `REVOKE UPDATE`/trigger was rejected in the design gate — it would need to special-case the
+  one legitimate future exception, T8630's `account_deleted_at` stamp, before that stamp's
+  contract even exists). **Exactly TWO in-place writes are permitted in the whole codebase:**
+  (1) `payments_ledger.fill_missing_charge_id(cur, stripe_object_id, stripe_charge_id)` — the
+  SOLE `UPDATE payments` statement anywhere, `WHERE stripe_object_id = %s AND kind = 'purchase'
+  AND stripe_charge_id IS NULL`, syntactically incapable of touching any other column; and (2)
+  T8630's future `account_deleted_at` stamp (reserved column, nothing writes it yet). Nothing may
+  ever `UPDATE amount_cents`/`kind`/`stripe_object_id`/`user_id`/`occurred_at`, and nothing may
+  `DELETE` a row — grep-verified in review, re-verify on any future touch to this table.
+- **`stripe_charge_id` async background fill.** Where the charge id isn't already in hand at
+  insert time (webhook `checkout.session.completed`, `verify_session`; occasionally
+  `confirm_payment_intent`), the row inserts with `stripe_charge_id = NULL` and a background task
+  is scheduled AFTER the transaction commits — FastAPI `BackgroundTasks` where the handler has
+  one in scope, else the codebase's `poster_warmer.fire_and_forget` + `run_in_context`
+  fire-and-forget idiom (webhook handler has no `BackgroundTasks` param threaded through). The
+  whole background block (`payments_ledger.fill_missing_charge_id_background`) is wrapped so any
+  exception (Stripe error, DB error) is logged and swallowed — never raises, never retries, never
+  delays or affects the payment response. The insert-that-actually-happened is the only call site
+  that schedules the fill (gated on `if inserted:` at every site) so a redelivery observing an
+  already-existing row does not fire a redundant Stripe retrieve.
+- **Backfill (`scripts/backfill_payments_ledger.py`):** one-time, idempotent (same `record_*`
+  helpers, same `ON CONFLICT DO NOTHING`), dry-run by default; `--write` against `--env
+  staging`/`prod` is refused without an explicit `--i-am-the-operator` confirmation flag (prints
+  the target DB host either way). Iterates `revenue_reconciliation.fetch_stripe_intents()`
+  (`expand=["data.latest_charge","data.latest_charge.dispute"]`). Per succeeded PI: one
+  `purchase` row (amount from `amount_received`, NOT the pack price); one `refund` row per
+  individual Stripe Refund (`stripe.Refund.list(charge=...)` — `fetch_stripe_intents` only
+  exposes the cumulative `amount_refunded`, not per-refund ids, so the backfill makes its own
+  call); one `dispute_lost` row ONLY for a terminal-LOST-status dispute, **netted against the
+  charge's cumulative `amount_refunded`** (`max(dispute_amount - refunded, 0)`, mirroring
+  `revenue_reconciliation.build_stripe_net_by_user`'s identical netting) — a dispute resolved by
+  refunding the charge (`charge_refunded` status) sets BOTH `amount_refunded` and the dispute
+  amount for the SAME money leaving us, and since the ledger is append-only a wrong backfilled
+  row can never self-correct on a re-run (a reviewer-caught bug during T8620's own review, fixed
+  before the first prod run — see `TestT9DisputeRefundNetting` in
+  `tests/test_t8620_payments_ledger.py`). **Never calls `bump_total_spent`** — every historical
+  payment it backfills is already reflected in the cache from when it first happened live (or
+  predates the cache and the ledger is now the correct source anyway). The 2026-08-24 orphan PI
+  (`pi_3U7p5aIxob3dHqK01QfOa5qu`, `user_id fb40690a-...`, no matching `users` row — the incident
+  that opened this epic) is explicitly IN SCOPE: because `payments.user_id` has no FK, it inserts
+  cleanly — that row with no matching user IS the tombstone working as designed, not an error to
+  filter out.
+- **Live dispute webhook handling is explicitly OUT of scope for T8620** — no `charge.dispute.*`
+  branch exists in `routers/payments.py`; the backfill only ever writes `dispute_lost` for
+  disputes ALREADY terminal at backfill time. `dispute_won` is never written by anything (a won
+  dispute leaves the funds with us; the original `purchase` row already reflects that money). A
+  follow-up task for the live webhook is pending (filed by the epic owner, not T8620 itself) — a
+  dispute that goes from open to lost strictly AFTER a backfill run and BEFORE that follow-up
+  ships is a real, bounded gap: the ledger `SUM` reads high vs. Stripe net by that amount until
+  either the follow-up ships or the backfill re-runs, caught by the on-demand reconciler in the
+  meantime (it already computes dispute amounts independently).
+- **Full design + the six approved rulings (dispute scope, append-only enforcement, cache-bump
+  fix shape, write-path/failure-mode split, async charge-id fill, backfill guardrail):**
+  `docs/plans/tasks/revenue-integrity/T8620-design.md`.
+
 ## Auth bypasses for automated testing (dev/staging)
 - `POST /api/auth/test-login` (auth.py:852) — empty `e2e@test.local` user; new-user flows only. In SKIP_SESSION_INIT_PATHS, so no real data loads. Requires X-Test-Mode; `ENV==production` → 404.
 - `POST /api/auth/dev-login` (auth.py:884, T3980) — FAITHFUL impersonation of a REAL user. Body `{email|user_id, profile_id?}` (email also via X-Dev-Login-Email header); user_id wins over email. Resolves via Postgres (`get_user_by_id`/`get_user_by_email`), then runs `user_session_init(user_id, hint_profile_id=profile_id)` (R2 download of user.sqlite + selected/hinted profile.sqlite) BEFORE `_issue_session_cookie`. Payload: `{email,user_id,profile_id,dev_login:true}`. Gating: `APP_ENV=="production"` → 404; non-local-dev (staging) requires X-Test-Mode; local dev {dev,development,local} exempt (back-compat for scripts/dev-verify.sh + realAuth helper). **Init at login is REQUIRED, not redundant**: the sync middleware runs `user_session_init` only when X-Profile-ID header is absent/invalid (db_sync.py:549-559); when the client sends a valid X-Profile-ID (normal case) init is SKIPPED, so the cookie alone never triggers the R2 download → empty local profile (the original 2-blank-games bug). Playwright helper: `loginAsRealUser(pageOrContext, email, profileId?)` in src/frontend/e2e/helpers/realAuth.js (always sends X-Test-Mode). Verify: `bash scripts/dev-verify.sh e2e/T3980-dev-login-real-data.spec.js`.
@@ -197,7 +374,7 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 
 | Track | DB | Version mechanism | Latest (2026-07-03) |
 |---|---|---|---|
-| `postgres` | Fly Postgres | `schema_migrations` table | v029 (v019 credits T5840; **v020 `game_link` share_type + share_games.game_date T5720**; **v021 `share_claims` T5730**; **v022 `user_usage_daily` T5770** — v020/v021 were reserved by the then-unmerged Share the Game branches, so T5770 landed at v022; all three merged together and the track is contiguous 1..22 again; **v023 `pending_teammate_shares` recipient_email->invited_email rename T7550** (sibling branch, landed on master); **v024 `daily_counters` attempt/outcome columns T7510** (`game_uploads_succeeded`/`_failed`, `clips_attempted`/`_failed`) — additive only, no new table; **v025 clear stale `game_storage_refs` T6770** — `DELETE FROM game_storage_refs` (dead pre-T2930 sediment, see the T6770 note above); paired with profile_db v047 which repopulates it as the live derived ref-set; v026 `is_test_account` flag; v027 `daily_counters.clips_uploaded` T8370; v028 `bug_reports.client_report_id` T9400; **v029 `upload_failures` table T10270** — see § "Upload-failure observability (T10270)" below. Re-verify sibling branches before numbering the NEXT postgres migration.) |
+| `postgres` | Fly Postgres | `schema_migrations` table | v030 (v019 credits T5840; **v020 `game_link` share_type + share_games.game_date T5720**; **v021 `share_claims` T5730**; **v022 `user_usage_daily` T5770** — v020/v021 were reserved by the then-unmerged Share the Game branches, so T5770 landed at v022; all three merged together and the track is contiguous 1..22 again; **v023 `pending_teammate_shares` recipient_email->invited_email rename T7550** (sibling branch, landed on master); **v024 `daily_counters` attempt/outcome columns T7510** (`game_uploads_succeeded`/`_failed`, `clips_attempted`/`_failed`) — additive only, no new table; **v025 clear stale `game_storage_refs` T6770** — `DELETE FROM game_storage_refs` (dead pre-T2930 sediment, see the T6770 note above); paired with profile_db v047 which repopulates it as the live derived ref-set; v026 `is_test_account` flag; v027 `daily_counters.clips_uploaded` T8370; v028 `bug_reports.client_report_id` T9400; **v029 `upload_failures` table T10270** — see § "Upload-failure observability (T10270)" below; **v030 `payments` append-only ledger T8620** — see § "Payments ledger (Postgres, T8620)" below. Prod is still at v25 as of T8620 and owes v026 through v030 on next `migrate-postgres` run. Re-verify sibling branches before numbering the NEXT postgres migration.) |
 | `profile_db` | profile.sqlite | `PRAGMA user_version` | v048 (**v048 delete sweep-orphan `raw_clips/` extracts T7830** — DATA-ONLY (no column), FIRST migration that calls `delete_from_r2`: reuses `app/services/orphan_raw_clips.py`'s classification logic (extracted from `scripts/cleanup_orphan_raw_clips.py`, the standalone dry-run/`--apply` script T7830 shipped first — both now import the same module rather than duplicating the reviewed reference-set-union + sweep-signature-gate logic) to delete ONLY `auto_`-prefixed unreferenced `raw_clips/` objects per profile, R2_ENABLED-guarded, idempotent, logs every delete at INFO (no dry-run step once wired as a migration, so logging is the only audit trail — see the migration's own docstring before copying this pattern); v024 poster_filename T4890; v025 slowmo_section_start/end freeze T5090 — backfills from R2 archive; v026 `games.shared_by` + backfill T5330 — see Quest system section; **v027 `working_videos.detections_data` T5600** — video-level player-detection store, backfills by hoisting the union of existing regions' embedded detections via `app/services/video_detections.hoist_video_detections`, see keyframes-framing.md § Video-level player-detection store; v028 export_jobs.stage/output_key; v029 working_clips.rotation; **v030 games source reference T5800** (cross-profile game attribution); **v031 reclassify teammate-tagged clips to Team T5725** — DATA-ONLY (no column): moves every teammate-tagged My-Athlete/NULL `raw_clips` row to `my_athlete = 0`, tags preserved, idempotent, positional tuple-row reads, numbered v031 to avoid the v030 collision with T5800, see annotate.md § Teammate tagging is Team-layer only; v032 poster_frame_time/poster_source + projects.poster_marker_time T5410; v033 heal moved-reel attribution T5830 (DATA-ONLY); v034 intro card library T5195 — CREATEs `intro_cards` (per-profile card library) + `final_videos.intro_card_id` (nullable), see § Intro card library below; v035-v043 intro-card/text-overlay follow-ups (subtitle_text, dead-field nulling, backfill, regions shape, intro_min_duration add+drop — not individually re-audited here, see each migration file's docstring); **v044 `working_clips.framing_version` T4330** — mutation counter for framing-action 409 conflict detection; **v045 canonicalize `working_clips.segments_data.boundaries` T4340** — DATA-ONLY (no column): rewrites pre-existing splits-only rows to the full-list `[0,...splits,duration]` format, duration JOINed live from `raw_clips` (no new column — one canonical duration source), reuses `highlight_transform.canonicalize_segments_data`, idempotent, skips+logs orphan rows with no derivable duration, see annotate.md § segments_data write-time-canonical; v046 `working_videos.framing_snapshot`/`highlight_carry_note` (sibling branch, landed on master, not otherwise documented here); **v047 backfill `game_storage_refs` T6770** — DATA-ONLY (no column): re-derives every profile's Postgres ref rows from its real `game_storage` rows via `insert_game_storage_ref`, idempotent, doubles as the one-time drift reconciliation the 2026-07-23 retrospective flagged) |
 | `user_db` | user.sqlite | `PRAGMA user_version` | v006 |
 

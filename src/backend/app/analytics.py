@@ -1198,55 +1198,13 @@ def close_session(user_id: str):
         logger.exception("[Analytics] Failed to close session for %s", user_id)
 
 
-def increment_total_spent(user_id: str, amount_cents: int):
-    try:
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "UPDATE user_segments SET total_spent_cents = total_spent_cents + %s WHERE user_id = %s",
-                (amount_cents, user_id),
-            )
-        logger.info("[Analytics] Incremented total_spent: user=%s amount_cents=%s", user_id, amount_cents)
-    except Exception:
-        logger.exception("[Analytics] Failed to increment total_spent for %s", user_id)
-
-
-def decrement_total_spent(user_id: str, amount_cents: int):
-    """Decrement total_spent_cents by a refund/chargeback amount (T5760).
-
-    Used by the ``charge.refunded`` webhook branch so steady-state drift from the
-    Stripe truth stays near zero. total_spent_cents is NET of refunds, so a refund
-    lowers it. Reads-then-writes (not a bare ``- %s``) so we can keep the aggregate
-    from going negative — a refund larger than the recorded spend means the local
-    cache was already wrong (e.g. a test-mode-era value); we log that loudly and
-    floor at 0 rather than persist a nonsensical negative aggregate.
-    """
-    try:
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT total_spent_cents FROM user_segments WHERE user_id = %s",
-                (user_id,),
-            )
-            row = cur.fetchone()
-            if not row:
-                logger.warning("[Analytics] decrement_total_spent: no user_segments row for %s", user_id)
-                return
-            current = row["total_spent_cents"] or 0
-            new_value = current - amount_cents
-            if new_value < 0:
-                logger.warning(
-                    "[Analytics] Refund exceeds recorded spend for %s (current=%s refund=%s) — flooring to 0",
-                    user_id, current, amount_cents,
-                )
-                new_value = 0
-            cur.execute(
-                "UPDATE user_segments SET total_spent_cents = %s WHERE user_id = %s",
-                (new_value, user_id),
-            )
-        logger.info("[Analytics] Decremented total_spent: user=%s amount_cents=%s new=%s", user_id, amount_cents, new_value)
-    except Exception:
-        logger.exception("[Analytics] Failed to decrement total_spent for %s", user_id)
+# T8620: `increment_total_spent`/`decrement_total_spent` (bare applied-gated
+# UPDATEs against `user_segments.total_spent_cents`, called directly from
+# payments.py) are REMOVED. Their UPDATE bodies survive as the sign-agnostic,
+# cursor-taking `payments_ledger.bump_total_spent(cur, user_id, amount_cents)`,
+# called ONLY when the corresponding `payments_ledger.record_*` insert just
+# returned True (a newly inserted ledger row), inside the SAME transaction as
+# that insert. See docs/plans/tasks/revenue-integrity/T8620-design.md §6.
 
 
 def set_total_spent(user_id: str, amount_cents: int):

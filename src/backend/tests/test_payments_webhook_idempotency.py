@@ -11,6 +11,8 @@ import asyncio
 
 import pytest
 
+from app.pricing import CREDIT_PACKS
+
 USER_ID = "user-a"
 
 
@@ -23,11 +25,28 @@ class _FakeRequest:
         return self._body
 
 
-def _checkout_event(session_id="cs_dup_1", credits=40, pack="starter"):
+# T8620: the ledger insert reads its amount from the captured Stripe fields
+# directly (session.amount_total / intent.amount_received), never from the
+# pack price table (design §2c) -- these fixtures set a realistic captured
+# amount so the (now-unconditional) ledger write actually fires instead of
+# logging CRITICAL and skipping (see payments.py's "no silent fallback" guard
+# on a missing amount).
+#
+# T10220 prep: derive prices from CREDIT_PACKS (the single pricing source) so
+# that when T10220 reprices a pack, BOTH the fixture's captured amount AND the
+# revenue-once assertions below (which read the same map) move together and stay
+# consistent -- never a hard-coded 699 that silently disagrees post-reprice.
+_PACK_PRICE_CENTS = {key: pack["price_cents"] for key, pack in CREDIT_PACKS.items()}
+
+
+def _checkout_event(session_id="cs_dup_1", credits=40, pack="starter", payment_intent=None):
     return {
         "type": "checkout.session.completed",
         "data": {"object": {
             "id": session_id,
+            "payment_intent": payment_intent or f"pi_for_{session_id}",
+            "amount_total": _PACK_PRICE_CENTS.get(pack, 399),
+            "currency": "usd",
             "metadata": {"user_id": USER_ID, "credits": str(credits), "pack": pack},
         }},
     }
@@ -38,6 +57,8 @@ def _pi_event(pi_id="pi_dup_1", credits=40, pack="starter"):
         "type": "payment_intent.succeeded",
         "data": {"object": {
             "id": pi_id,
+            "amount_received": _PACK_PRICE_CENTS.get(pack, 399),
+            "currency": "usd",
             "metadata": {"user_id": USER_ID, "credits": str(credits), "pack": pack},
         }},
     }
@@ -59,7 +80,11 @@ def _webhook_env(pg_conn, monkeypatch):
     from app.routers import payments as payments_mod
     monkeypatch.setattr(payments_mod, "STRIPE_WEBHOOK_SECRET", "whsec_test")
     monkeypatch.setattr(payments_mod, "record_milestone", lambda *a, **k: None)
-    monkeypatch.setattr(payments_mod, "increment_total_spent", lambda *a, **k: None)
+    # T8620: increment_total_spent no longer exists as a standalone function --
+    # its body moved into payments_ledger.bump_total_spent, called only when the
+    # ledger insert is new (see design §6). No stub needed: it runs for real
+    # against pg_conn's test Postgres and is harmless here (these tests assert
+    # on credit-grant idempotency, not on total_spent/ledger state).
 
 
 class TestCheckoutSessionWebhookDoubleDelivery:
@@ -98,17 +123,23 @@ class TestPaymentIntentWebhookDoubleDelivery:
 class TestWebhookRaceDoesNotDoubleCountRevenue:
     """MAJOR-1 regression: `has_processed_payment` is a plain UNLOCKED read, so
     two concurrent deliveries of the SAME event can both pass it (neither grant
-    has committed at read time). grant() refuses the second credit atomically,
-    but the revenue analytics (record_milestone / increment_total_spent) run
-    AFTER the read and MUST be gated on grant()'s `applied` -- otherwise
-    total_spent_cents is double-counted, which T5760 reconciliation misreads as
-    revenue_drift and 'heals' in the wrong direction. Master short-circuited
-    these paths (except sqlite3.IntegrityError) BEFORE recording analytics; Slice
-    B deleted those short-circuits, so this gate restores the property.
+    has committed at read time). grant() refuses the second credit atomically.
 
-    Deliberately does NOT stub increment_total_spent to a no-op -- that is what
-    hid the bug (test_payments_webhook_idempotency's own fixture does). Instead a
-    counting spy proves it ran EXACTLY ONCE.
+    T8620: the ledger insert (and the cache bump it drives,
+    payments_ledger.bump_total_spent) is deliberately NOT gated on grant()'s
+    `applied` anymore (design §4, ruling 4) -- it runs on every observation, so
+    a redelivery reaching a prior failed insert can retry it. The
+    double-counting protection this test guards is now enforced by the
+    `payments` table's UNIQUE(stripe_object_id, kind) index: both racing
+    deliveries key on the SAME Stripe object id, so only the first INSERT
+    succeeds (`inserted=True`) and only that one calls bump_total_spent; the
+    second is an `ON CONFLICT DO NOTHING` no-op. `record_milestone` is
+    unaffected -- it is still gated on `applied`, which grant()'s own atomic
+    idempotency key still guarantees fires at most once.
+
+    Deliberately does NOT stub bump_total_spent to a no-op -- that would hide
+    exactly what this test proves. Instead a counting spy proves it ran
+    EXACTLY ONCE.
     """
 
     def _spies(self, monkeypatch):
@@ -116,8 +147,8 @@ class TestWebhookRaceDoesNotDoubleCountRevenue:
 
         spent_calls = []
         milestone_calls = []
-        monkeypatch.setattr(payments_mod, "increment_total_spent",
-                            lambda uid, cents: spent_calls.append((uid, cents)))
+        monkeypatch.setattr(payments_mod.payments_ledger, "bump_total_spent",
+                            lambda cur, uid, cents: spent_calls.append((uid, cents)))
         monkeypatch.setattr(payments_mod, "record_milestone",
                             lambda uid, name, *a, **k: milestone_calls.append((uid, name)))
         # Force BOTH deliveries through the has_processed_payment gate: simulate
@@ -136,7 +167,7 @@ class TestWebhookRaceDoesNotDoubleCountRevenue:
         asyncio.run(payments_mod.stripe_webhook(_FakeRequest()))
 
         assert get_credit_balance(USER_ID)["balance"] == 40, "grant is atomic; balance must not double"
-        assert spent_calls == [(USER_ID, 699)], f"revenue double-counted: {spent_calls}"
+        assert spent_calls == [(USER_ID, _PACK_PRICE_CENTS["popular"])], f"revenue double-counted: {spent_calls}"
         assert [m for m in milestone_calls if m[1] == "credit_purchased"] == [(USER_ID, "credit_purchased")]
 
     def test_payment_intent_race_counts_revenue_once(self, monkeypatch):
@@ -150,7 +181,7 @@ class TestWebhookRaceDoesNotDoubleCountRevenue:
         asyncio.run(payments_mod.stripe_webhook(_FakeRequest()))
 
         assert get_credit_balance(USER_ID)["balance"] == 40, "grant is atomic; balance must not double"
-        assert spent_calls == [(USER_ID, 699)], f"revenue double-counted: {spent_calls}"
+        assert spent_calls == [(USER_ID, _PACK_PRICE_CENTS["popular"])], f"revenue double-counted: {spent_calls}"
         assert [m for m in milestone_calls if m[1] == "credit_purchased"] == [(USER_ID, "credit_purchased")]
 
 
