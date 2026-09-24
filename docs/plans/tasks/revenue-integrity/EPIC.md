@@ -171,6 +171,7 @@ Order is dependency order: the record must exist before anything can read it or 
 | T8630 | [Deletion preserves the financial record and is auditable](T8630-deletion-preserves-financial-record.md) | TODO |
 | T8640 | [Reconciliation understands deleted accounts and stops lying about heals](T8640-reconciliation-deleted-account-cause.md) | TODO |
 | T8650 | [Revenue totals read the ledger, not the per-user cache](T8650-revenue-totals-from-ledger.md) | TODO |
+| T8655 | [Remove the dead credit-amount-to-price map](T8655-remove-dead-credit-price-map.md) | TODO |
 | T8660 | [Send Stripe receipts (receipt_email on the PaymentIntent)](T8660-stripe-receipt-email.md) | STAGING |
 | T8670 | [Scheduled reconciliation with a drift alert](T8670-scheduled-reconciliation-alert.md) | TODO |
 | T8675 | [Dispute webhook writes ledger rows](T8675-dispute-webhook-ledger-rows.md) | TODO |
