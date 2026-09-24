@@ -98,13 +98,16 @@ Backend (`routers/admin.py`): two helpers by `_test_exclusion` —
 (per-user pre-aggregated subquery LEFT-JOINed into the grouped views, no fanout, GROUP BY
 user_id served by `idx_payments_user`). All four `SUM(total_spent_cents)` reads replaced.
 
-**Grand-total decision (per the task's "sum the ledger directly with no join"):** the two
-`analytics_pulse` revenue headlines are the platform net and are filter-INDEPENDENT (they do
-not vary with the origin/date/paying segment filter, only with test exclusion). This is what
-lets a deleted payer's money keep counting and satisfies "deleting a paying account does not
-change any total"; the per-origin / per-cohort split lives in the channels + cohorts grouped
-views, which now return `unattributed_revenue_cents` (attributed + unattributed == grand
-total). No existing test asserted the headline responded to a segment filter.
+**Grand-total decision (UPDATED round 2, 2026-09-24 user decision):** the pulse Revenue card
+FOLLOWS the dashboard filters. With no real segment filter it is the platform grand total
+(deleted payers included, test excluded) so "deleting a paying account changes no total"
+holds; with a real filter (origin/date/paying/...) it is `SUM(payments.amount_cents)` over the
+same segment population the Signups number uses (a deleted payer has no segment row, so it can
+never match a filter). The per-origin / per-cohort split lives in the channels + cohorts
+grouped views, which return `unattributed_revenue_cents` (attributed + unattributed == grand
+total). Round 2 also scoped the cohorts remainder to an active `origin` filter
+(`_grouped_view_grand_total`) so `/cohorts?origin=X` reconciles within origin X.
+(Round 1 had made the headline filter-INDEPENDENT; the user reversed that.)
 
 **Test-account grand-total behaviour (documented):** a test purchase is excluded WHILE the
 account's `users` row exists (anti-join) but is counted once that row is deleted — there is no

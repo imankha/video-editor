@@ -159,6 +159,31 @@ _LEDGER_REVENUE_BY_USER = (
 )
 
 
+def _grouped_view_grand_total(cur, exclude_test: bool, origin: str | None = None) -> int:
+    """Ledger grand total for a grouped view's unattributed remainder, scoped to the
+    view's SEGMENT filter (origin + test exclusion) but NOT its acquisition-date window
+    -- so `remainder = grand_total - Σ bucket` counts payers in scope who fell outside
+    the window, and (only when unfiltered) deleted payers with no segment row at all.
+
+    T8650 round 2 (item 5): when a real `origin` filter is active the grand total must
+    be scoped to THAT origin's payers, never the whole platform -- otherwise the
+    remainder would silently absorb every other origin's revenue. A filtered view joins
+    user_segments, so a deleted payer (no segment row) can never be in scope, which is
+    correct: their money only belongs in the unfiltered platform remainder."""
+    if origin and origin != "all":
+        excl = _test_exclusion(exclude_test)
+        join = " JOIN users u ON u.user_id = s.user_id" if excl else ""
+        where = "WHERE s.origin = %s" + (f" AND {excl}" if excl else "")
+        cur.execute(f"""
+            SELECT COALESCE(SUM(pay.revenue_cents), 0) AS total
+            FROM user_segments s{join}
+            LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
+            {where}
+        """, (origin,))
+        return cur.fetchone()["total"]
+    return _ledger_revenue_total(cur, exclude_test)
+
+
 # Sort key (the 16 UserTable columns) -> a FIXED ORDER BY value fragment. Hard
 # whitelist: a client `sort` not in this dict is a 422, never interpolated into
 # SQL. Every fragment is an output-column alias or a qualified table column from
@@ -1792,13 +1817,12 @@ def analytics_cohorts(
             cp = str(r["cohort_period"])
             signup_data[cp] = {"signups": r["signups"], "revenue_cents": r["revenue_cents"] or 0}
 
-        # T8650: revenue no cohort could attribute (deleted payers, or payers acquired
-        # outside this window) -> explicit remainder so attributed + unattributed ==
-        # the ledger grand total. NOTE: this grand total is whole-platform, so if a
-        # non-default `origin` filter is ever wired into the UI (today AnalyticsDashboard
-        # only calls this with origin='all'), the remainder would also absorb OTHER
-        # origins' revenue -- scope this to the origin filter before exposing that path.
-        cohort_grand_total = _ledger_revenue_total(cur, exclude_test)
+        # T8650: revenue no cohort could attribute (deleted payers when unfiltered, or
+        # payers acquired outside this window) -> explicit remainder so attributed +
+        # unattributed == the grand total. Round 2 (item 5): the grand total is scoped to
+        # the active `origin` filter, so `/cohorts?origin=X` reconciles WITHIN origin X
+        # instead of absorbing every other origin's revenue into the remainder.
+        cohort_grand_total = _grouped_view_grand_total(cur, exclude_test, origin)
 
         cur.execute(f"""
             SELECT
@@ -2190,6 +2214,12 @@ def analytics_pulse(
     start = today - timedelta(days=days - 1)
 
     filter_parts, filter_params = _build_segment_filter(origin, acquired_from, acquired_to, filter)
+    # T8650: does the admin have a REAL segment filter active (origin/date/paying/...),
+    # as opposed to only the default test-account exclusion? This decides whether the
+    # Revenue headline is the platform-wide ledger grand total (no real filter -> deleted
+    # payers included) or the ledger sum over just the filtered payer population (user
+    # decision 2026-09-24: the Revenue card follows the dashboard filters).
+    has_real_filter = bool(filter_parts)
     # T8110 (design §7B): the pre-aggregated daily_counters path (the `else`
     # branch below) has no per-user dimension, so it CANNOT exclude test accounts.
     # When exclude_test is on we force the segment/user_actions path by appending
@@ -2269,13 +2299,24 @@ def analytics_pulse(
                 """, [*filter_params, start, today])
                 active_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
 
-            # T8650: platform net revenue from the payments ledger, not the
-            # total_spent_cents cache. This headline is a GRAND TOTAL: it counts a
-            # deleted payer's ledger money (no user_segments join) and does not vary
-            # with the origin/date/paying segment filter, only with test-account
-            # exclusion. Per-origin / per-cohort revenue lives in the channels and
-            # cohorts grouped views, which surface an unattributed remainder.
-            revenue_total = _ledger_revenue_total(cur, exclude_test)
+            # T8650: revenue from the payments ledger, not the total_spent_cents cache.
+            # The card FOLLOWS the dashboard filters (user decision 2026-09-24):
+            #  - a REAL segment filter (origin/date/paying/...) -> sum the ledger over
+            #    exactly the filtered payer population, using the SAME user_segments +
+            #    seg_join + seg_where the Signups number above uses. A deleted payer has
+            #    no segment row and so can never match a filter -- correct, no remainder.
+            #  - only test-exclusion (the default view, no real filter) -> the platform
+            #    grand total, which DOES count a deleted payer's money (no segment join).
+            if has_real_filter:
+                cur.execute(f"""
+                    SELECT COALESCE(SUM(pay.revenue_cents), 0) AS total
+                    FROM user_segments s{seg_join}
+                    LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
+                    {seg_where}
+                """, filter_params)
+                revenue_total = cur.fetchone()["total"]
+            else:
+                revenue_total = _ledger_revenue_total(cur, exclude_test)
 
             cur.execute(f"""
                 SELECT a.first_at::date AS d, COUNT(DISTINCT a.user_id) AS cnt

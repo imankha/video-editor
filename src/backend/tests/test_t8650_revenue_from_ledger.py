@@ -81,6 +81,23 @@ def _mark_test_account(user_id, is_test=True):
         )
 
 
+def _set_acquired_at(user_id, dt):
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        conn.cursor().execute(
+            "UPDATE user_segments SET acquired_at = %s WHERE user_id = %s", (dt, user_id)
+        )
+
+
+def _add_export_action(user_id, count=2, platform="web"):
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        conn.cursor().execute(
+            "INSERT INTO user_actions (user_id, action, platform, count) VALUES (%s,'export_completed',%s,%s)",
+            (user_id, platform, count),
+        )
+
+
 def _delete_account(user_id):
     """Simulate what both delete paths do to the revenue-bearing rows today:
     drop the users + user_segments rows. Ledger rows are intentionally left."""
@@ -109,6 +126,10 @@ def _isolate_users(pg_conn):
         cur.execute("SELECT user_id FROM users")
         new = list({r["user_id"] for r in cur.fetchall()} - before)
         if new:
+            # Clear every table that FKs users before dropping the users rows, or the
+            # DELETE FROM users raises a foreign-key violation and the row leaks (a
+            # user_actions export row does exactly this).
+            cur.execute("DELETE FROM user_actions WHERE user_id = ANY(%s)", (new,))
             cur.execute("DELETE FROM user_segments WHERE user_id = ANY(%s)", (new,))
             cur.execute("DELETE FROM users WHERE user_id = ANY(%s)", (new,))
 
@@ -362,3 +383,137 @@ class TestPerformance:
             )
             plan = " ".join(str(r) for r in cur.fetchall())
         assert "idx_payments_user" in plan, plan
+
+
+# --------------------------------------------------------------------------- #
+# Round 2 (user decision 2026-09-24): the pulse Revenue card FOLLOWS the
+# dashboard filters. No real filter -> platform grand total (deleted payers in,
+# test out). A real filter -> SUM over just the payers matching that filter.
+# --------------------------------------------------------------------------- #
+
+class TestPulseFollowsFilters:
+    def test_revenue_follows_origin_filter(self, client):
+        # Verifier repro: pulse?origin=tiktok returned 8200 including a 7000 organic
+        # payer. It must now exclude the other origin's money.
+        create_user("u_tk", email="tk@test.com")
+        create_user_segment("u_tk", "tiktok", None, "otp")
+        _seed_payment("u_tk", "purchase", 1000, obj_id="pi_tk")
+        create_user("u_og", email="og@test.com")
+        create_user_segment("u_og", "organic", None, "otp")
+        _seed_payment("u_og", "purchase", 7000, obj_id="pi_og")
+
+        # Unfiltered (default): platform net over both.
+        assert _pulse_revenue(client) == 8000
+        # Filtered to tiktok: only tiktok's payer, never the organic 7000.
+        resp = client.get("/api/admin/analytics/pulse?origin=tiktok", headers=_auth())
+        assert resp.json()["cards"]["revenue"]["today"] == 1000
+
+    def test_unfiltered_headline_still_counts_deleted_payer(self, client):
+        create_user("u_tk", email="tk@test.com")
+        create_user_segment("u_tk", "tiktok", None, "otp")
+        _seed_payment("u_tk", "purchase", 1000, obj_id="pi_tk")
+        _seed_payment("orphan", "purchase", 399, obj_id="pi_orphan")  # no segment row
+
+        # No real filter -> platform grand total includes the segment-less orphan.
+        assert _pulse_revenue(client) == 1000 + 399
+        # A real filter joins user_segments, so the orphan can never match -> excluded.
+        resp = client.get("/api/admin/analytics/pulse?origin=tiktok", headers=_auth())
+        assert resp.json()["cards"]["revenue"]["today"] == 1000
+
+    def test_filtered_and_unfiltered_are_net_of_refunds(self, client):
+        create_user("u_tk", email="tk@test.com")
+        create_user_segment("u_tk", "tiktok", None, "otp")
+        _seed_payment("u_tk", "purchase", 1000, obj_id="pi_tk")
+        _seed_payment("u_tk", "refund", -200, obj_id="re_tk")
+        create_user("u_og", email="og@test.com")
+        create_user_segment("u_og", "organic", None, "otp")
+        _seed_payment("u_og", "purchase", 500, obj_id="pi_og")
+        _seed_payment("u_og", "refund", -100, obj_id="re_og")
+
+        # Unfiltered net: (1000-200) + (500-100) = 1200.
+        assert _pulse_revenue(client) == 1200
+        # Filtered to tiktok net: 1000 - 200 = 800.
+        resp = client.get("/api/admin/analytics/pulse?origin=tiktok", headers=_auth())
+        assert resp.json()["cards"]["revenue"]["today"] == 800
+
+
+# --------------------------------------------------------------------------- #
+# Gap 1 (no-fan-out pin): ONE user with several ledger rows must count as one
+# user with net revenue. The mutant that swaps the per-user pre-aggregation for
+# a raw `payments` join fans the user out to N rows and is caught by users == 1.
+# --------------------------------------------------------------------------- #
+
+class TestGap1NoFanoutMultiRowPerUser:
+    def test_channels_one_user_many_rows_net_no_fanout(self, client):
+        create_user("u1", email="u1@test.com")
+        create_user_segment("u1", "tiktok", None, "otp")
+        _seed_payment("u1", "purchase", 1000, obj_id="pi_a")
+        _seed_payment("u1", "purchase", 500, obj_id="pi_b")
+        _seed_payment("u1", "refund", -200, obj_id="re_a")
+        _add_export_action("u1", count=2)  # a raw payments join would also 3x exports
+
+        resp = client.get("/api/admin/analytics/channels?exclude_test=false", headers=_auth())
+        ch = next(c for c in resp.json()["channels"] if c["origin"] == "tiktok")
+        assert ch["users"] == 1                          # not 3 (raw join fans out)
+        assert ch["revenue_cents"] == 1000 + 500 - 200   # net, each row once
+        assert ch["exported"] == 1                       # not inflated by the payments rows
+
+    def test_cohorts_one_user_many_rows_net_no_fanout(self, client):
+        create_user("u1", email="u1@test.com")
+        create_user_segment("u1", "tiktok", None, "otp")
+        _seed_payment("u1", "purchase", 1000, obj_id="pi_a")
+        _seed_payment("u1", "purchase", 500, obj_id="pi_b")
+        _seed_payment("u1", "refund", -200, obj_id="re_a")
+
+        data = client.get("/api/admin/analytics/cohorts?exclude_test=false", headers=_auth()).json()
+        assert sum(c["signups"] for c in data["cohorts"]) == 1                 # not 3
+        assert sum(c["revenue_cents"] for c in data["cohorts"]) == 1000 + 500 - 200
+
+
+# --------------------------------------------------------------------------- #
+# Gap 4: /cohorts?origin=X computes its remainder WITHIN the filter scope
+# (payers matching the filter who cannot be attributed to a cohort), never
+# against the platform total.
+# --------------------------------------------------------------------------- #
+
+class TestGap4CohortsOriginScopedRemainder:
+    def test_origin_filter_remainder_does_not_absorb_other_origins(self, client):
+        create_user("u_tk", email="tk@test.com")
+        create_user_segment("u_tk", "tiktok", None, "otp")
+        _seed_payment("u_tk", "purchase", 1000, obj_id="pi_tk")
+        create_user("u_og", email="og@test.com")
+        create_user_segment("u_og", "organic", None, "otp")
+        _seed_payment("u_og", "purchase", 7000, obj_id="pi_og")
+
+        data = client.get(
+            "/api/admin/analytics/cohorts?origin=tiktok&exclude_test=false", headers=_auth()
+        ).json()
+        attributed = sum(c.get("revenue_cents", 0) for c in data["cohorts"])
+        assert attributed == 1000
+        # The 7000 organic payer is out of the tiktok scope entirely, NOT an
+        # unattributed remainder (round-1 code reported 7000 here).
+        assert data["unattributed_revenue_cents"] == 0
+
+    def test_origin_filter_remainder_is_the_in_scope_out_of_window_money(self, client):
+        # An in-scope (tiktok) payer acquired before the default 365d window can't land
+        # in a returned cohort -> it IS the remainder, and it stays scoped to tiktok.
+        create_user("u_recent", email="r@test.com")
+        create_user_segment("u_recent", "tiktok", None, "otp")
+        _seed_payment("u_recent", "purchase", 1000, obj_id="pi_recent")
+
+        create_user("u_old", email="o@test.com")
+        create_user_segment("u_old", "tiktok", None, "otp")
+        _set_acquired_at("u_old", datetime.now(UTC) - timedelta(days=800))
+        _seed_payment("u_old", "purchase", 300, obj_id="pi_old")
+
+        # Also an organic payer that must NOT leak into the tiktok remainder.
+        create_user("u_og", email="og@test.com")
+        create_user_segment("u_og", "organic", None, "otp")
+        _seed_payment("u_og", "purchase", 7000, obj_id="pi_og")
+
+        data = client.get(
+            "/api/admin/analytics/cohorts?origin=tiktok&exclude_test=false", headers=_auth()
+        ).json()
+        attributed = sum(c.get("revenue_cents", 0) for c in data["cohorts"])
+        assert attributed == 1000                          # only the in-window tiktok payer
+        assert data["unattributed_revenue_cents"] == 300   # the out-of-window tiktok payer, not 7000
