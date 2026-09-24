@@ -750,14 +750,6 @@ export function AnnotateFullscreenOverlay({
             )}
           </div>
 
-          {/* T9630: Unsaved/Saving/Saved — own row so it never widens the
-              flex-wrap controls row above. */}
-          {displayStatus && (
-            <div className="px-4 pb-2 -mt-2">
-              <SaveStatusBadge status={displayStatus} />
-            </div>
-          )}
-
           {/* Details panel — desktop expand-in-place. T8960 item 6: no inner
               scroll (the panel grows to fit Rating + Tags + Notes); dismissal is
               the toggle button itself, no separate Done/X. T9830: rating + the
