@@ -9,6 +9,11 @@ import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
 // control autosaves on its own gesture (SAVE_STATUS_COPY.unsaved is deleted
 // from the component). Replaces .explicitOutcomes.test.jsx's save-status
 // coverage per design doc § E row 3.
+//
+// The strip layout (desktop under-canvas editor) dropped the SaveStatusBadge
+// row entirely — every control there already autosaves on its own gesture,
+// so a lingering "Saved" confirmation was redundant. The formBody
+// (overlay/inline) layouts keep the badge.
 
 function mockViewport(matches) {
   window.matchMedia = (query) => ({
@@ -36,27 +41,38 @@ const baseProps = {
 };
 
 describe('AnnotateFullscreenOverlay — SaveStatusBadge driven by the writeStatus prop (T10610 § C.5)', () => {
-  it('idle (default) renders no status badge', () => {
+  it('the strip layout never renders a status badge, for any writeStatus', () => {
     mockViewport(false);
-    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
+    for (const writeStatus of ['idle', 'saving', 'saved', 'error']) {
+      const { unmount } = render(
+        <AnnotateFullscreenOverlay {...baseProps} layout="strip" writeStatus={writeStatus} />
+      );
+      expect(screen.queryByTestId('save-status')).toBeNull();
+      unmount();
+    }
+  });
+
+  it('idle (default) renders no status badge on the formBody (overlay) layout', () => {
+    mockViewport(false);
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="overlay" />);
     expect(screen.queryByTestId('save-status')).toBeNull();
   });
 
-  it('saving renders "Saving..."', () => {
+  it('saving renders "Saving..." on the formBody (overlay) layout', () => {
     mockViewport(false);
-    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" writeStatus="saving" />);
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="overlay" writeStatus="saving" />);
     expect(screen.getByTestId('save-status').textContent).toBe('Saving...');
   });
 
-  it('saved renders "Saved"', () => {
+  it('saved renders "Saved" on the formBody (overlay) layout', () => {
     mockViewport(false);
-    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" writeStatus="saved" />);
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="overlay" writeStatus="saved" />);
     expect(screen.getByTestId('save-status').textContent).toBe('Saved');
   });
 
-  it('error renders the failure copy', () => {
+  it('error renders the failure copy on the formBody (overlay) layout', () => {
     mockViewport(false);
-    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" writeStatus="error" />);
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="overlay" writeStatus="error" />);
     expect(screen.getByTestId('save-status').textContent).toMatch(/couldn't save/i);
   });
 
@@ -64,16 +80,10 @@ describe('AnnotateFullscreenOverlay — SaveStatusBadge driven by the writeStatu
     mockViewport(false);
     for (const writeStatus of ['idle', 'saving', 'saved', 'error']) {
       const { unmount } = render(
-        <AnnotateFullscreenOverlay {...baseProps} layout="strip" writeStatus={writeStatus} />
+        <AnnotateFullscreenOverlay {...baseProps} layout="overlay" writeStatus={writeStatus} />
       );
       expect(screen.queryByText('Unsaved changes')).toBeNull();
       unmount();
     }
-  });
-
-  it('the formBody (overlay) layout also reflects writeStatus', () => {
-    mockViewport(false);
-    render(<AnnotateFullscreenOverlay {...baseProps} layout="overlay" writeStatus="error" />);
-    expect(screen.getByTestId('save-status').textContent).toMatch(/couldn't save/i);
   });
 });
