@@ -440,31 +440,53 @@ class TestPulseFollowsFilters:
 # Gap 1 (no-fan-out pin): ONE user with several ledger rows must count as one
 # user with net revenue. The mutant that swaps the per-user pre-aggregation for
 # a raw `payments` join fans the user out to N rows and is caught by users == 1.
+#
+# Both queries below aggregate over EVERY user_segments row in the active
+# origin/date scope, with no per-test isolation (pg_conn only TRUNCATEs/DROPs
+# shared tables at fixture setup, not around each request). Run this file
+# concurrently with the rest of the suite (pytest-xdist) and another test's
+# "tiktok"/default-window segment row lands in the same query and inflates
+# users/signups -- observed in CI as `assert 14 == 1` on the cohorts variant.
+# Pin these two to a origin literal and acquired_at window no other test in
+# the suite uses so the query can only ever see u1's own row.
 # --------------------------------------------------------------------------- #
+
+_GAP1_WINDOW = {"from": "2016-01-01", "to": "2016-12-31"}
+_GAP1_ACQUIRED_AT = datetime(2016, 3, 10, tzinfo=UTC)
+
 
 class TestGap1NoFanoutMultiRowPerUser:
     def test_channels_one_user_many_rows_net_no_fanout(self, client):
         create_user("u1", email="u1@test.com")
-        create_user_segment("u1", "tiktok", None, "otp")
+        create_user_segment("u1", "t8650-gap1-channels-fanout", None, "otp")
+        _set_acquired_at("u1", _GAP1_ACQUIRED_AT)
         _seed_payment("u1", "purchase", 1000, obj_id="pi_a")
         _seed_payment("u1", "purchase", 500, obj_id="pi_b")
         _seed_payment("u1", "refund", -200, obj_id="re_a")
         _add_export_action("u1", count=2)  # a raw payments join would also 3x exports
 
-        resp = client.get("/api/admin/analytics/channels?exclude_test=false", headers=_auth())
-        ch = next(c for c in resp.json()["channels"] if c["origin"] == "tiktok")
+        resp = client.get(
+            "/api/admin/analytics/channels", params={"exclude_test": "false", **_GAP1_WINDOW},
+            headers=_auth(),
+        )
+        ch = next(c for c in resp.json()["channels"] if c["origin"] == "t8650-gap1-channels-fanout")
         assert ch["users"] == 1                          # not 3 (raw join fans out)
         assert ch["revenue_cents"] == 1000 + 500 - 200   # net, each row once
         assert ch["exported"] == 1                       # not inflated by the payments rows
 
     def test_cohorts_one_user_many_rows_net_no_fanout(self, client):
         create_user("u1", email="u1@test.com")
-        create_user_segment("u1", "tiktok", None, "otp")
+        create_user_segment("u1", "t8650-gap1-cohorts-fanout", None, "otp")
+        _set_acquired_at("u1", _GAP1_ACQUIRED_AT)
         _seed_payment("u1", "purchase", 1000, obj_id="pi_a")
         _seed_payment("u1", "purchase", 500, obj_id="pi_b")
         _seed_payment("u1", "refund", -200, obj_id="re_a")
 
-        data = client.get("/api/admin/analytics/cohorts?exclude_test=false", headers=_auth()).json()
+        data = client.get(
+            "/api/admin/analytics/cohorts",
+            params={"exclude_test": "false", "origin": "t8650-gap1-cohorts-fanout", **_GAP1_WINDOW},
+            headers=_auth(),
+        ).json()
         assert sum(c["signups"] for c in data["cohorts"]) == 1                 # not 3
         assert sum(c["revenue_cents"] for c in data["cohorts"]) == 1000 + 500 - 200
 
