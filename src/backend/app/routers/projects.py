@@ -202,20 +202,6 @@ class ProjectFromClipsCreate(BaseModel):
     clip_ids: list[int] | None = None  # If provided, use these specific clips instead of filters
 
 
-class ClipsPreviewRequest(BaseModel):
-    """Request body for previewing clips that would be included in a project."""
-    game_ids: list[int] = []
-    min_rating: int = 1
-    tags: list[str] = []
-
-
-class ClipsPreviewResponse(BaseModel):
-    """Preview of clips matching the filter criteria."""
-    clip_count: int
-    total_duration: float  # In seconds
-    clips: list[dict]  # Brief clip info for display
-
-
 class ProjectResponse(BaseModel):
     id: int
     name: str
@@ -751,49 +737,6 @@ def _build_clips_filter_query(game_ids: list[int], min_rating: int, tags: list[s
 
     query += " ORDER BY created_at DESC"
     return query, params
-
-
-@router.post("/preview-clips", response_model=ClipsPreviewResponse)
-async def preview_clips(request: ClipsPreviewRequest):
-    """
-    Preview clips that would be included in a project based on filter criteria.
-
-    Returns clip count, total duration, and brief clip info for display.
-    """
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        query, params = _build_clips_filter_query(
-            request.game_ids, request.min_rating, request.tags
-        )
-        cursor.execute(query, params)
-        clips = cursor.fetchall()
-
-        total_duration = 0.0
-        clips_info = []
-
-        for clip in clips:
-            start = clip['start_time'] or 0
-            end = clip['end_time'] or 0
-            duration = max(0, end - start)
-            total_duration += duration
-
-            tags = decode_data(clip['tags']) or []
-            clip_name = derive_clip_name(clip['name'], clip['rating'], tags, clip['notes'] or '') or f"Clip {clip['id']}"
-            clips_info.append({
-                'id': clip['id'],
-                'name': clip_name,
-                'rating': clip['rating'],
-                'tags': tags,
-                'duration': duration,
-                'game_id': clip['game_id']
-            })
-
-        return ClipsPreviewResponse(
-            clip_count=len(clips),
-            total_duration=total_duration,
-            clips=clips_info
-        )
 
 
 @router.post("/from-clips", response_model=ProjectResponse)

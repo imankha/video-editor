@@ -498,7 +498,6 @@ export function ProjectManager({
   error, // Projects fetch error
   onSelectProject,
   onSelectProjectWithMode, // (projectId, options) => void - options: { mode: 'framing'|'overlay', clipIndex?: number }
-  onCreateProject,
   onRefreshProjects,
   onDeleteProject,
   onAnnotateWithFile, // (file: File) => void - Navigate to annotate mode with file

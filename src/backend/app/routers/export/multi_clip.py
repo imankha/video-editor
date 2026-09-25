@@ -3,14 +3,11 @@ Multi-clip export endpoints.
 
 This module handles exports involving multiple video clips:
 - /multi-clip - Export multiple clips with transitions
-- /chapters - Extract chapter markers from video
-- /concat-for-overlay - Concatenate clips for overlay mode
 
 Uses the transition strategy pattern for different transition types.
 """
 
 import asyncio
-import base64
 import json
 import logging
 import math
@@ -24,9 +21,8 @@ from pathlib import Path
 from typing import Any
 
 import ffmpeg
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
-from starlette.background import BackgroundTask
+from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
 
 try:
     import torch
@@ -2525,202 +2521,3 @@ async def _run_multi_clip_background(
         # Background tasks run outside the request middleware, so DB writes
         # (working_videos, export_jobs, refunds) must be synced explicitly.
         await asyncio.to_thread(sync_export_db_to_r2, user_id, profile_id)
-
-
-@router.post("/chapters")
-async def extract_chapters(
-    video: UploadFile = File(...)
-):
-    """
-    Extract chapter markers from a video file.
-
-    Returns chapter data that can be used to auto-generate highlight regions
-    in Overlay mode.
-    """
-    temp_dir = tempfile.mkdtemp()
-    temp_file = os.path.join(temp_dir, "input.mp4")
-
-    try:
-        # Save uploaded file
-        with open(temp_file, "wb") as f:
-            content = await video.read()
-            f.write(content)
-
-        # Use ffprobe to extract chapter data
-        probe = ffmpeg.probe(temp_file, show_chapters=None)
-
-        chapters = []
-        for chapter in probe.get('chapters', []):
-            start_time = float(chapter.get('start_time', 0))
-            end_time = float(chapter.get('end_time', 0))
-
-            tags = chapter.get('tags', {})
-            title = tags.get('title', f"Chapter {len(chapters) + 1}")
-
-            chapters.append({
-                "title": title,
-                "start_time": start_time,
-                "end_time": end_time
-            })
-
-        logger.info(f"[Chapters] Extracted {len(chapters)} chapters from video")
-
-        return {"chapters": chapters}
-
-    except Exception as e:
-        logger.error(f"[Chapters] Failed to extract chapters: {e}")
-        return {"chapters": []}
-
-    finally:
-        import time
-        time.sleep(0.3)
-        try:
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir, ignore_errors=True)
-        except Exception:
-            pass
-
-
-@router.post("/concat-for-overlay")
-async def concat_for_overlay(
-    request: Request,
-):
-    """
-    Concatenate multiple video clips without any framing/cropping.
-
-    This endpoint is used when the user wants to skip Framing mode and go
-    directly to Overlay mode with pre-edited clips.
-    """
-    logger.info("[Concat for Overlay] Starting...")
-
-    # Parse form data to get video files
-    form = await request.form()
-
-    # Extract video files (video_0, video_1, etc.)
-    video_files: dict[int, UploadFile] = {}
-    for key, value in form.items():
-        if key.startswith('video_'):
-            try:
-                index = int(key.split('_')[1])
-                video_files[index] = value
-                logger.info(f"[Concat for Overlay] Found video file: {key}")
-            except (ValueError, IndexError):
-                continue
-
-    if not video_files:
-        raise HTTPException(status_code=400, detail="No video files provided")
-
-    # Create temp directory
-    temp_dir = tempfile.mkdtemp()
-    input_paths = []
-
-    try:
-        # Save all uploaded files to temp directory
-        sorted_indices = sorted(video_files.keys())
-        clip_info = []
-
-        for idx in sorted_indices:
-            video_file = video_files[idx]
-            file_ext = Path(video_file.filename).suffix or ".mp4"
-            input_path = os.path.join(temp_dir, f"input_{idx}{file_ext}")
-
-            with open(input_path, 'wb') as f:
-                content = await video_file.read()
-                f.write(content)
-
-            input_paths.append(input_path)
-
-            # Get video duration for clip info
-            duration = get_video_duration(input_path)
-            clip_info.append({
-                'fileName': video_file.filename,
-                'index': idx,
-                'duration': duration
-            })
-
-            logger.info(f"[Concat for Overlay] Saved clip {idx}: {video_file.filename} ({duration:.2f}s)")
-
-        # Single clip - just return it directly with metadata
-        if len(input_paths) == 1:
-            clip_metadata = {
-                'source_clips': [{
-                    'index': 0,
-                    'name': clip_info[0]['fileName'],
-                    'fileName': clip_info[0]['fileName'],
-                    'start_time': 0,
-                    'end_time': clip_info[0]['duration'],
-                    'duration': clip_info[0]['duration']
-                }]
-            }
-
-            metadata_json = json.dumps(clip_metadata)
-            metadata_b64 = base64.b64encode(metadata_json.encode()).decode()
-
-            return FileResponse(
-                input_paths[0],
-                media_type='video/mp4',
-                filename=clip_info[0]['fileName'],
-                headers={'X-Clip-Metadata': metadata_b64},
-                background=BackgroundTask(lambda: shutil.rmtree(temp_dir) if os.path.exists(temp_dir) else None)
-            )
-
-        # Multiple clips - concatenate with chapter markers
-        final_output = os.path.join(temp_dir, f"concat_{uuid.uuid4().hex}.mp4")
-
-        # Use cut transition (simple concatenation)
-        concatenate_clips_with_transition(
-            clip_paths=input_paths,
-            output_path=final_output,
-            transition={'type': 'cut', 'duration': 0},
-            include_audio=True,
-            clip_info=clip_info
-        )
-
-        # Calculate clip timestamps in concatenated video
-        source_clips = []
-        current_time = 0.0
-        for i, info in enumerate(clip_info):
-            source_clips.append({
-                'index': i,
-                'name': info['fileName'],
-                'fileName': info['fileName'],
-                'start_time': current_time,
-                'end_time': current_time + info['duration'],
-                'duration': info['duration']
-            })
-            current_time += info['duration']
-
-        clip_metadata = {'source_clips': source_clips}
-
-        logger.info(f"[Concat for Overlay] Created concatenated video with {len(source_clips)} clips")
-
-        metadata_json = json.dumps(clip_metadata)
-        metadata_b64 = base64.b64encode(metadata_json.encode()).decode()
-
-        return FileResponse(
-            final_output,
-            media_type='video/mp4',
-            filename=f"concat_{len(source_clips)}_clips.mp4",
-            headers={'X-Clip-Metadata': metadata_b64},
-            background=BackgroundTask(lambda: shutil.rmtree(temp_dir) if os.path.exists(temp_dir) else None)
-        )
-
-    except HTTPException:
-        import time
-        time.sleep(0.5)
-        try:
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir, ignore_errors=True)
-        except Exception:
-            pass
-        raise
-    except Exception as e:
-        logger.error(f"[Concat for Overlay] Failed: {e!s}", exc_info=True)
-        import time
-        time.sleep(0.5)
-        try:
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir, ignore_errors=True)
-        except Exception:
-            pass
-        raise HTTPException(status_code=500, detail=f"Concatenation failed: {e!s}") from e

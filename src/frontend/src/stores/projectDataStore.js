@@ -349,28 +349,6 @@ export const useProjectDataStore = create((set, get) => ({
     }
   },
 
-  reorderClipsOnServer: async (projectId, clipIds) => {
-    if (!projectId) return false;
-
-    try {
-      const response = await apiFetch(
-        `${API_BASE_URL}/clips/projects/${projectId}/clips/reorder`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(clipIds)
-        }
-      );
-      if (!response.ok) throw new Error('Failed to reorder clips');
-
-      await get().fetchClips(projectId);
-      return true;
-    } catch (err) {
-      console.error('[projectDataStore] reorderClipsOnServer error:', err);
-      return false;
-    }
-  },
-
   getClipFileUrl: (clipId, projectId) => {
     const clip = get().clips.find(c => c.id === clipId);
     if (clip?.file_url) return clip.file_url;
