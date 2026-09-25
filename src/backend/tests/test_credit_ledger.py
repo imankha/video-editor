@@ -198,7 +198,6 @@ class TestStatsForAdmin:
         stats = stats_for_admin(["no-such-user"])
         assert stats["no-such-user"]["credits_balance"] == 0
         assert stats["no-such-user"]["credits_spent"] == 0
-        assert stats["no-such-user"]["purchase_credit_amounts"] == []
 
     def test_aggregates_spend_and_purchases(self, pg_conn):
         grant(USER, 100, "stripe_purchase", credit_key("stripe_purchase", "pi_1"))
@@ -209,7 +208,6 @@ class TestStatsForAdmin:
         assert stats["credits_purchased"] == 100
         assert stats["credits_spent"] == 30
         assert stats["credits_balance"] == 200
-        assert stats["purchase_credit_amounts"] == [100]
 
     def test_empty_user_ids_returns_empty(self, pg_conn):
         assert stats_for_admin([]) == {}

@@ -181,6 +181,14 @@ def record_dispute_lost(
 def bump_total_spent(cur, user_id: str, amount_cents: int) -> None:
     """Cursor-taking `total_spent_cents` cache bump (design §6).
 
+    T8650: `total_spent_cents` is now ONLY a per-user DISPLAY CACHE (cheap to read
+    on a page of users without a per-user ledger aggregate). It is NOT the source
+    for any aggregate revenue figure — every admin revenue total/breakdown reads
+    the `payments` ledger directly (`routers/admin.py` `_ledger_revenue_total` +
+    the per-user `_LEDGER_REVENUE_BY_USER` join). Deletion zeroes this cache by
+    dropping the segment row, and a segment-less payer can never write it (below),
+    which is exactly why aggregates must not depend on it.
+
     The surviving body of the old `increment_total_spent`/`decrement_total_spent`
     free functions, unified into one sign-agnostic helper that joins the
     caller's open transaction. MUST be called ONLY when the caller's

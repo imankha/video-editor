@@ -16,7 +16,9 @@ function cellColor(pct) {
 }
 
 export function CohortGrid({ data, onRowClick, selectedPeriod }) {
-  if (!data?.cohorts?.length) {
+  // T8650: still render the table when there are no cohort rows but there IS an
+  // unattributed remainder, so the money is surfaced instead of hidden.
+  if (!data?.cohorts?.length && !data?.unattributed_revenue_cents) {
     return <p className="text-gray-500 text-sm">No cohort data available.</p>;
   }
 
@@ -36,7 +38,7 @@ export function CohortGrid({ data, onRowClick, selectedPeriod }) {
           </tr>
         </thead>
         <tbody>
-          {data.cohorts.map(row => (
+          {(data.cohorts || []).map(row => (
             <tr key={row.cohort_period} className={`border-b border-white/5 cursor-pointer hover:bg-white/5 ${selectedPeriod === row.cohort_period ? 'bg-purple-500/15 border-l-2 border-l-purple-500' : ''}`} onClick={() => onRowClick && onRowClick(row.cohort_period)}>
               <td className="px-3 py-2 text-gray-300 text-xs whitespace-nowrap">
                 {row.cohort_period}
@@ -60,6 +62,19 @@ export function CohortGrid({ data, onRowClick, selectedPeriod }) {
               </td>
             </tr>
           ))}
+          {/* T8650: revenue no cohort could attribute (deleted or out-of-window payers),
+              shown so cohort revenue reconciles to the platform total. */}
+          {data.unattributed_revenue_cents ? (
+            <tr className="border-t border-white/10">
+              <td className="px-3 py-2 text-gray-400 text-xs italic" colSpan={7}>
+                Unattributed <span className="text-gray-500">(deleted or out-of-window payers)</span>
+              </td>
+              <td className="px-3 py-2 text-right text-green-400 text-xs">
+                {`$${(data.unattributed_revenue_cents / 100).toFixed(0)}`}
+              </td>
+              <td className="px-3 py-2" colSpan={2} />
+            </tr>
+          ) : null}
         </tbody>
       </table>
     </div>

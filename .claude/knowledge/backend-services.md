@@ -325,6 +325,35 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
 - **Full design + the six approved rulings (dispute scope, append-only enforcement, cache-bump
   fix shape, write-path/failure-mode split, async charge-id fill, backfill guardrail):**
   `docs/plans/tasks/revenue-integrity/T8620-design.md`.
+- **T8650 (epic 4/6): admin revenue AGGREGATES read the ledger, `total_spent_cents` is a display
+  cache only.** All four `SUM(user_segments.total_spent_cents)` reads in `routers/admin.py`
+  (channels per-origin, cohorts per-period, and BOTH `analytics_pulse` revenue totals) now source
+  from `payments`. Two helpers next to `_test_exclusion`: `_ledger_revenue_total(cur, exclude_test)`
+  = grand total `SUM(amount_cents)` with **NO `user_segments` join** (so a deleted payer's money is
+  still counted), test accounts removed via a `users` ANTI-join (`NOT EXISTS ... is_test_account`);
+  and `_LEDGER_REVENUE_BY_USER` = a per-user pre-aggregated subquery LEFT-JOINed into the grouped
+  views so it doesn't fan out the export/purchase subqueries (GROUP BY user_id served by
+  `idx_payments_user`). **`account_deleted_at` is NEVER a revenue filter.** **Pulse Revenue card
+  FOLLOWS the dashboard filters (user decision 2026-09-24, round 2):** with NO real segment filter
+  (`has_real_filter` = the `_build_segment_filter` parts before appending `excl`) the headline is
+  the platform grand total (`_ledger_revenue_total`, deleted payers included, test excluded); with
+  a real filter (origin/date/paying/...) it is `SUM(pay.revenue_cents)` over the SAME
+  `user_segments{seg_join}{seg_where}` population the Signups number uses — a deleted payer has no
+  segment row so can never match a filter (correct, no remainder in pulse). **Grouped views expose
+  an unattributed remainder**: channels + cohorts responses carry `unattributed_revenue_cents =
+  scoped grand total - Σ bucket revenue`, so attributed + unattributed == grand total (deleted or
+  out-of-window payers surfaced, never dropped). The grand total is scoped by
+  `_grouped_view_grand_total(cur, exclude_test, origin)`: whole-platform when unfiltered, but scoped
+  to a non-default `origin` filter so `/cohorts?origin=X` reconciles WITHIN origin X instead of
+  absorbing every other origin's revenue (channels takes no origin filter, so it stays whole-platform).
+  Frontend `ChannelsTable`/`CohortGrid` render an "Unattributed" row when it's nonzero, INCLUDING
+  when the grouped list itself is empty (only deleted payers) so the money is never hidden behind
+  "No data".
+  **Documented edge:** a test purchase is excludable while its `users` row exists but is counted
+  again once that row is deleted (no row left to recognise it by — a reason not to delete internal
+  test accounts). `total_spent_cents` survives ONLY as the per-user display cache
+  (`bump_total_spent`, `list_users`). Tests: `tests/test_t8650_revenue_from_ledger.py`. The pg.py
+  `_SCHEMA_DDL` column comment for `total_spent_cents` is deferred (T8630 owns that file).
 
 ## Auth bypasses for automated testing (dev/staging)
 - `POST /api/auth/test-login` (auth.py:852) — empty `e2e@test.local` user; new-user flows only. In SKIP_SESSION_INIT_PATHS, so no real data loads. Requires X-Test-Mode; `ENV==production` → 404.
@@ -793,6 +822,19 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   `components/admin/RevenueReconciliation.jsx` (drifted-only table + per-user/all "Adopt
   Stripe value" heal, collapsed section — Stripe pass runs only on explicit click). Tests:
   `test_revenue_reconciliation.py`. No schema change / no new table (computed on demand).
+- **Ladder repriced 12.99/22.99/32.99 (T10220, 2026-09-24, reading B).** `pricing.json` is now
+  **starter 340/$12.99 (3.82c/credit), popular 690/$22.99 (3.33c), best_value 1,120/$32.99 (2.95c)** -
+  a one-file data edit; every derived surface followed (config endpoint, buy modal, storage formula,
+  landing cards/worked example, invariant tests) with NO literal edits to production code. **Landmine:
+  `CREDIT_VALUE` dropped 0.05 -> 0.04** (worst-case rate is Starter's 3.82c ceil'd to 4c), so uploads
+  and extensions now cost ~25% MORE credits (6GB/30d upload 3->4 cr) while each credit is cheaper;
+  by design and derived on both sides. Retired T4940 sizes **80/160 were added to
+  `analytics._RETIRED_CREDIT_AMOUNT_TO_CENTS`** (399/699) so historical purchase rows still map to a
+  price (340 stayed live at 1299c). Two pre-existing test bugs surfaced only because credits now
+  cross 999 / changed the first rung and were fixed to DERIVE, not to pin the old ladder:
+  `BuyCreditsModal.test.jsx` used a hardcoded `'80 credits'` load sentinel and a `creditsText` helper
+  that ignored `.toLocaleString()` (1,120 renders with a comma). Deploy landing + app together (the
+  landing auto-deploys on a master push touching `pricing.json`).
 - **Pricing has ONE source: `app/pricing.json` (T10210, 2026-09-17).** `app/pricing.py` loads it and
   derives `CREDIT_PACKS` (Stripe-facing name composed there) and `CREDIT_VALUE` (worst-case per-credit
   rate, ceil to a cent); `payments.py` and `storage_credits.py` import from it. The frontend twin

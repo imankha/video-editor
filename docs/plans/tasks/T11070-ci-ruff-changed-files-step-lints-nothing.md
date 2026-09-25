@@ -1,6 +1,6 @@
 # T11070: CI "Ruff (changed files vs master)" step lints nothing
 
-**Status:** TODO
+**Status:** STAGING (merged 2026-09-24, PR #502; proof VERIFIED at cdec21af, Branch CI 36072038232 green)
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-24
@@ -38,6 +38,39 @@ file. The step passed and printed nothing (run 36068775763 shows the command and
    The whole-app regression gate stays as it is.
 3. Keep it greppable and simple: inline bash in the workflow, or a small script under `scripts/`
    next to the other CI helpers if the logic outgrows a step.
+
+## Also fixed: the ESLint step had the same bug
+
+The frontend job runs in `src/frontend`, and its "ESLint (changed files vs master)" step used the
+same unanchored pathspec (`'src/frontend/**/*.js'`), so it has linted nothing either. The
+frontend has 0 ESLint errors (351 warnings, and warnings do not fail the step), so anchoring the
+pathspec with `:(top)` is enough; it needs no ratchet.
+
+## Proof (2026-09-24)
+
+`qa/t11070-harness.sh` and `qa/t11070-eslint-harness.sh` build scenario commits in a scratch
+clone and run the old inline step (verbatim) and the new step:
+
+| Scenario | Old step | New step |
+|---|---|---|
+| New ruff error in a changed file (`import os` in app/pricing.py) | exit 0, no output | exit 1, names F401 |
+| Comment added to app/routers/detection.py (7 backlog findings, 0 new) | exit 0 | exit 0 (7 -> 7) |
+| New file with a ruff error | exit 0 | exit 1 |
+| New clean file | exit 0 | exit 0 |
+| ESLint `no-undef` added to a changed file | exit 0, no output | exit 123 (xargs: eslint failed) |
+| ESLint clean change | exit 0 | exit 0 |
+| Pure `git mv` of a backlog file (7 findings) | exit 0 | exit 0 (compared against the old path, 7 -> 7) |
+| Rename plus small edit | exit 0 | exit 0 |
+| New file whose path contains a space, with F401 | exit 0 | exit 1 |
+| New top-level backend file with F401 | exit 0 | exit 1 |
+| ruff crashes (exit 2) | exit 0 | exit 1, names the crash |
+
+Round 2, after the proof verifier's findings: renames and copies are compared against their
+old path, a ruff exit of 2 or more fails the step, the finding regex accepts paths with spaces,
+and both pathspecs use `*.py` / `*.js` so top-level files are included. The widened ESLint
+pathspec reaches `e2e/`; the one ESLint error in scope there (`no-empty-pattern` in
+`e2e/T8110-admin-test-filter-sort.qa.spec.js`, an unused `({}, testInfo)` hook argument) is
+fixed. The 14 remaining e2e errors are in `.mjs` scratch scripts the pathspec does not match.
 
 ## Acceptance Criteria
 

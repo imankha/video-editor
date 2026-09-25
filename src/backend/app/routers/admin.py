@@ -69,23 +69,6 @@ def _require_admin():
 # 503 instead of the old `synced: false` best-effort report.
 # ---------------------------------------------------------------------------
 
-def _compute_money_spent_cents(purchase_credit_amounts: list[int]) -> int:
-    """Map individual Stripe purchase credit amounts to total dollars spent (in cents)."""
-    from ..analytics import CREDIT_AMOUNT_TO_CENTS
-    total = 0
-    for amount in purchase_credit_amounts:
-        cents = CREDIT_AMOUNT_TO_CENTS.get(amount)
-        if cents is None:
-            # Not a silent 0: an amount no ladder ever sold means the map is stale.
-            logger.warning(
-                "[admin] No price known for a %d-credit purchase; money-spent is understated",
-                amount,
-            )
-            continue
-        total += cents
-    return total
-
-
 def _compute_last_step(actions: set[str]) -> str:
     from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
     for step in reversed(FUNNEL_STEPS):
@@ -108,6 +91,80 @@ def _test_exclusion(exclude_test: bool) -> str:
     paying users. Every consumer must have (or JOIN) a `users u` alias.
     """
     return "NOT u.is_test_account" if exclude_test else ""
+
+
+# ---------------------------------------------------------------------------
+# T8650: revenue AGGREGATES read the append-only `payments` ledger, never the
+# `user_segments.total_spent_cents` cache. The cache is zeroed by account
+# deletion (the row is dropped) and can be left un-writable for a segment-less
+# payer, so basing a business revenue figure on it can only ever drift downward
+# from the truth, permanently and invisibly (this epic exists because prod is
+# $3.99 light from a deleted payer). `payments` has NO FK to `users`, so a
+# deleted payer's money survives; these helpers are the single source for the
+# grand-total and the grouped-view unattributed remainder. `total_spent_cents`
+# remains ONLY a per-user display cache (see services/payments_ledger.py
+# bump_total_spent and backend-services.md "Payments ledger").
+# ---------------------------------------------------------------------------
+
+def _ledger_revenue_total(cur, exclude_test: bool) -> int:
+    """Grand-total net revenue straight from the ledger. `amount_cents` is signed
+    (refunds and lost disputes are negative), so the SUM is already net.
+
+    NO `user_segments` join: a deleted payer has no segment row, and this number
+    must still count their money (the whole point of the ledger). Test accounts
+    are excluded via a `users` ANTI-join, so a test purchase is dropped WHILE its
+    users row exists but is counted again once that row is deleted -- there is no
+    users row left to recognise it by (documented reason not to delete internal
+    test accounts). `account_deleted_at` is NEVER a filter here."""
+    if exclude_test:
+        cur.execute(
+            """
+            SELECT COALESCE(SUM(p.amount_cents), 0) AS total
+            FROM payments p
+            WHERE NOT EXISTS (
+                SELECT 1 FROM users u
+                WHERE u.user_id = p.user_id AND u.is_test_account
+            )
+            """
+        )
+    else:
+        cur.execute("SELECT COALESCE(SUM(amount_cents), 0) AS total FROM payments")
+    return cur.fetchone()["total"]
+
+
+# Per-user ledger revenue, pre-aggregated to ONE row per user so it LEFT JOINs a
+# grouped segment query without fanning out the other per-user subqueries (the
+# same one-row-per-user discipline the exports/purchases subqueries already use;
+# see the T7980 cartesian-fanout note in analytics_channels). GROUP BY user_id is
+# served by idx_payments_user (user_id is its leading column).
+_LEDGER_REVENUE_BY_USER = (
+    "(SELECT user_id, SUM(amount_cents) AS revenue_cents FROM payments GROUP BY user_id)"
+)
+
+
+def _grouped_view_grand_total(cur, exclude_test: bool, origin: str | None = None) -> int:
+    """Ledger grand total for a grouped view's unattributed remainder, scoped to the
+    view's SEGMENT filter (origin + test exclusion) but NOT its acquisition-date window
+    -- so `remainder = grand_total - Σ bucket` counts payers in scope who fell outside
+    the window, and (only when unfiltered) deleted payers with no segment row at all.
+
+    T8650 round 2 (item 5): when a real `origin` filter is active the grand total must
+    be scoped to THAT origin's payers, never the whole platform -- otherwise the
+    remainder would silently absorb every other origin's revenue. A filtered view joins
+    user_segments, so a deleted payer (no segment row) can never be in scope, which is
+    correct: their money only belongs in the unfiltered platform remainder."""
+    if origin and origin != "all":
+        excl = _test_exclusion(exclude_test)
+        join = " JOIN users u ON u.user_id = s.user_id" if excl else ""
+        where = "WHERE s.origin = %s" + (f" AND {excl}" if excl else "")
+        cur.execute(f"""
+            SELECT COALESCE(SUM(pay.revenue_cents), 0) AS total
+            FROM user_segments s{join}
+            LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
+            {where}
+        """, (origin,))
+        return cur.fetchone()["total"]
+    return _ledger_revenue_total(cur, exclude_test)
 
 
 # Sort key (the 16 UserTable columns) -> a FIXED ORDER BY value fragment. Hard
@@ -457,6 +514,8 @@ def list_users(
             "credits": user_credit["credits_balance"] if user_credit else None,
             "credits_spent": user_credit["credits_spent"] if user_credit else 0,
             "credits_purchased": user_credit["credits_purchased"] if user_credit else 0,
+            # T8650: per-user DISPLAY CACHE only (fast per-page read). NOT a revenue
+            # source -- aggregates read the payments ledger (see _ledger_revenue_total).
             "total_spent_cents": row["total_spent_cents"] or 0,
             "last_active_at": row["last_active_at"].isoformat() if row["last_active_at"] else None,
             "session_count": row["session_count"],
@@ -1546,7 +1605,12 @@ def analytics_channels(
                 COUNT(*) FILTER (WHERE exp.export_count > 0) AS exported,
                 COUNT(pur.user_id) AS purchased,
                 COALESCE(SUM(exp.export_count), 0) AS total_exports,
-                COALESCE(SUM(s.total_spent_cents), 0) AS revenue_cents
+                -- T8650: per-origin revenue from the payments ledger (pre-aggregated
+                -- per user, so it doesn't fan out exp/pur). A deleted payer has no
+                -- segment row and so lands in no origin bucket -- correct for this
+                -- grouped view; the money it drops is surfaced as the unattributed
+                -- remainder below, never silently lost.
+                COALESCE(SUM(pay.revenue_cents), 0) AS revenue_cents
             FROM user_segments s
             LEFT JOIN (
                 SELECT user_id, SUM(count) AS export_count
@@ -1559,12 +1623,19 @@ def analytics_channels(
                 FROM user_actions
                 WHERE action = 'credit_purchased'
             ) pur ON pur.user_id = s.user_id
+            LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
             {excl_join}
             WHERE s.acquired_at BETWEEN %s AND %s{excl_and}
             GROUP BY s.origin
             ORDER BY revenue_cents DESC NULLS LAST
         """, (d_from, d_to))
         rows = cur.fetchall()
+
+        # T8650: revenue the origin buckets could not attribute (deleted payers with
+        # no segment row, or payers acquired outside this window) shown as an explicit
+        # remainder so attributed + unattributed == the ledger grand total -- the
+        # project rule that a number must not hide what it excluded.
+        grand_total = _ledger_revenue_total(cur, exclude_test)
 
     channels = []
     for r in rows:
@@ -1587,7 +1658,13 @@ def analytics_channels(
             "revenue_cents": revenue,
         })
 
-    return {"channels": channels}
+    attributed = sum(c["revenue_cents"] for c in channels)
+    return {
+        "channels": channels,
+        # attributed + unattributed == grand_total (T8650). Positive when deleted or
+        # out-of-window payers hold money no origin bucket can claim.
+        "unattributed_revenue_cents": grand_total - attributed,
+    }
 
 
 @router.get("/analytics/share-funnel")
@@ -1707,8 +1784,12 @@ def analytics_cohorts(
             SELECT
                 date_trunc(%s, s.acquired_at)::date AS cohort_period,
                 COUNT(*) AS signups,
-                COALESCE(SUM(s.total_spent_cents), 0) AS revenue_cents
+                -- T8650: cohort revenue from the payments ledger (pre-aggregated per
+                -- user). A deleted payer has no segment row -> no cohort; that money
+                -- is surfaced as the unattributed remainder below, not dropped.
+                COALESCE(SUM(pay.revenue_cents), 0) AS revenue_cents
             FROM user_segments s
+            LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
             {excl_join}
             {where_clause}
             GROUP BY cohort_period
@@ -1718,6 +1799,13 @@ def analytics_cohorts(
         for r in cur.fetchall():
             cp = str(r["cohort_period"])
             signup_data[cp] = {"signups": r["signups"], "revenue_cents": r["revenue_cents"] or 0}
+
+        # T8650: revenue no cohort could attribute (deleted payers when unfiltered, or
+        # payers acquired outside this window) -> explicit remainder so attributed +
+        # unattributed == the grand total. Round 2 (item 5): the grand total is scoped to
+        # the active `origin` filter, so `/cohorts?origin=X` reconciles WITHIN origin X
+        # instead of absorbing every other origin's revenue into the remainder.
+        cohort_grand_total = _grouped_view_grand_total(cur, exclude_test, origin)
 
         cur.execute(f"""
             SELECT
@@ -1791,7 +1879,12 @@ def analytics_cohorts(
         row["return_7d_pct"] = round(returned / s * 100) if s else 0
         cohorts.append(row)
 
-    return {"cohorts": cohorts, "granularity": granularity}
+    attributed = sum(c.get("revenue_cents", 0) for c in cohorts)
+    return {
+        "cohorts": cohorts,
+        "granularity": granularity,
+        "unattributed_revenue_cents": cohort_grand_total - attributed,
+    }
 
 
 # T7510 frustration-signal tier 5 (partial — retry-burst only; repeat-visit and
@@ -2063,7 +2156,19 @@ def _build_segment_filter(origin, acquired_from, acquired_to, user_filter):
         where_parts.append("s.acquired_at <= %s")
         params.append(date.fromisoformat(acquired_to))
     if user_filter == "paying":
-        where_parts.append("s.total_spent_cents > 0")
+        # T8657: "paying" is decided by the LEDGER (net revenue > 0), not the
+        # `total_spent_cents` cache. The cache is zeroed by account deletion, left
+        # un-writable for a segment-less payer, and overwritten by the reconciliation
+        # heal, so a cache-based selector both DROPS backfill-only payers (cache never
+        # moved) and KEEPS refunded-to-zero ones -- diverging from the ledger totals
+        # every other admin revenue figure reads since T8650. Reuse the shared
+        # per-user pre-aggregate rather than adding a third copy of the SUM. A deleted
+        # payer has no `user_segments` row, so this predicate on `s.user_id` can never
+        # select them -- their money lives only in the unfiltered grand total.
+        where_parts.append(
+            f"s.user_id IN (SELECT user_id FROM {_LEDGER_REVENUE_BY_USER} pay "
+            "WHERE pay.revenue_cents > 0)"
+        )
     elif user_filter == "active_7d":
         where_parts.append("s.last_active_at > now() - INTERVAL '7 days'")
     elif user_filter == "has_exports":
@@ -2104,6 +2209,12 @@ def analytics_pulse(
     start = today - timedelta(days=days - 1)
 
     filter_parts, filter_params = _build_segment_filter(origin, acquired_from, acquired_to, filter)
+    # T8650: does the admin have a REAL segment filter active (origin/date/paying/...),
+    # as opposed to only the default test-account exclusion? This decides whether the
+    # Revenue headline is the platform-wide ledger grand total (no real filter -> deleted
+    # payers included) or the ledger sum over just the filtered payer population (user
+    # decision 2026-09-24: the Revenue card follows the dashboard filters).
+    has_real_filter = bool(filter_parts)
     # T8110 (design §7B): the pre-aggregated daily_counters path (the `else`
     # branch below) has no per-user dimension, so it CANNOT exclude test accounts.
     # When exclude_test is on we force the segment/user_actions path by appending
@@ -2183,12 +2294,24 @@ def analytics_pulse(
                 """, [*filter_params, start, today])
                 active_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
 
-            cur.execute(f"""
-                SELECT COALESCE(SUM(s.total_spent_cents), 0) AS total
-                FROM user_segments s{seg_join}
-                {seg_where}
-            """, filter_params)
-            revenue_total = cur.fetchone()["total"]
+            # T8650: revenue from the payments ledger, not the total_spent_cents cache.
+            # The card FOLLOWS the dashboard filters (user decision 2026-09-24):
+            #  - a REAL segment filter (origin/date/paying/...) -> sum the ledger over
+            #    exactly the filtered payer population, using the SAME user_segments +
+            #    seg_join + seg_where the Signups number above uses. A deleted payer has
+            #    no segment row and so can never match a filter -- correct, no remainder.
+            #  - only test-exclusion (the default view, no real filter) -> the platform
+            #    grand total, which DOES count a deleted payer's money (no segment join).
+            if has_real_filter:
+                cur.execute(f"""
+                    SELECT COALESCE(SUM(pay.revenue_cents), 0) AS total
+                    FROM user_segments s{seg_join}
+                    LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
+                    {seg_where}
+                """, filter_params)
+                revenue_total = cur.fetchone()["total"]
+            else:
+                revenue_total = _ledger_revenue_total(cur, exclude_test)
 
             cur.execute(f"""
                 SELECT a.first_at::date AS d, COUNT(DISTINCT a.user_id) AS cnt
@@ -2222,8 +2345,10 @@ def analytics_pulse(
 
             active_by_date = {d: _cv(d, "sessions_started") for d in [(start + timedelta(days=i)) for i in range(days)] if _cv(d, "sessions_started")}
 
-            cur.execute("SELECT COALESCE(SUM(total_spent_cents), 0) AS total FROM user_segments")
-            revenue_total = cur.fetchone()["total"]
+            # T8650: platform net revenue from the payments ledger (grand total). This
+            # else branch runs only when exclude_test is off and no filter is set, so
+            # no test exclusion applies -- a straight SUM over the ledger.
+            revenue_total = _ledger_revenue_total(cur, exclude_test)
 
             date_range_tmp = [(start + timedelta(days=i)) for i in range(days)]
             revenue_by_date = {d: _cv(d, "credit_purchases") for d in date_range_tmp if _cv(d, "credit_purchases")}

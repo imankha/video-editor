@@ -179,6 +179,20 @@ pricing source for backend, app and landing site; `CREDIT_VALUE` is now derived 
 ceil to a cent) instead of being a hand-synced constant. The economics above are unchanged. See
 `docs/plans/tasks/T10210-pricing-single-source.md`.
 
+**2026-09-24 (T10220)**: ladder repriced to 12.99/22.99/32.99 (reading B, user ruling 2026-09-17:
+"continue to incentivize bigger packs"). The T4940 ladder (80/$3.99, 160/$6.99, 340/$12.99) is
+retired; the new ladder keeps the 340-credit = $12.99 rung as the Starter and extends the discount
+curve downward: Starter 340/$12.99 (3.82c/credit), Popular 690/$22.99 (3.33c), Best Value
+1,120/$32.99 (2.95c). Still a strictly decreasing value ladder; overall power-law fit k=0.218
+(in the 0.15-0.25 band). **Consequence — storage costs more credits:** because the derived
+`CREDIT_VALUE` anchor is the worst-case (highest) per-credit rate ceil'd to a cent, it dropped from
+$0.05 (399c/80) to $0.04 (1299c/340). Upload/extension charges therefore cost ~25% more credits
+(e.g. a 6 GB / 30-day upload went 3 -> 4 credits) while each credit is cheaper for the user. This is
+by design and fully derived from `pricing.json` on both backend and frontend. Retired T4940 pack
+sizes 80 and 160 were added to `analytics._RETIRED_CREDIT_AMOUNT_TO_CENTS` so historical purchase
+rows still map to a price (340 stayed on the live ladder at the same 1299c). See
+`docs/plans/tasks/T10220-reprice-credit-packs.md`.
+
 ## Acceptance Criteria
 
 - [ ] **Prod Stripe is in LIVE mode:** test card declined on prod, real charge appears in Stripe live dashboard, prod bundle ships `pk_live_`, live webhook secret verifies live events

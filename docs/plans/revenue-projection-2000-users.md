@@ -3,6 +3,14 @@
 **Date:** 2026-08-17
 **Status:** Model / estimate, not a forecast backed by real conversion data (see caveat below).
 
+> **Repriced by T10220 (2026-09-24, reading B):** the ladder below is the pre-T10220 T4940
+> ladder (80/$3.99, 160/$6.99, 340/$12.99). The live ladder is now Starter 340/$12.99,
+> Popular 690/$22.99, Best Value 1,120/$32.99, with per-credit rates 3.82c / 3.33c / 2.95c.
+> The storage anchor `CREDIT_VALUE` dropped from $0.05 to $0.04, so per-credit revenue is
+> lower and storage charges cost ~25% more credits. Treat every dollar figure below as the
+> old ladder; the qualitative levers (usage mix, Best-Value storage margin) still hold, but
+> the per-credit and margin numbers need recomputing before reuse.
+
 ## TL;DR
 
 At current pack pricing, a highly-engaged user (modeled on the most active real account,
