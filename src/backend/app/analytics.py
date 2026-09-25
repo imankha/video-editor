@@ -7,7 +7,6 @@ from collections import defaultdict
 from datetime import UTC, datetime
 
 from app.migrations import MigrationBlocked
-from app.pricing import CREDIT_PACKS
 from app.services.pg import get_pg
 from app.user_context import (
     get_current_impersonator_id,
@@ -396,25 +395,6 @@ FUNNEL_STEPS = [
     "share_viewed",
     "credit_purchased",
 ]
-
-# Credit amounts we have EVER sold, mapped to what they cost. The current ladder derives
-# from pricing.json (T10210); the frozen rows are retired ladders (pre-T4940) that still
-# appear in historical purchase rows. A retired amount reused by a future ladder takes the
-# current price (acceptable: the admin money-spent figure is an estimate, see admin.py).
-_RETIRED_CREDIT_AMOUNT_TO_CENTS = {
-    120: 499,
-    400: 1299,
-    1000: 2499,
-    # T4940 ladder, retired by T10220 (12.99/22.99/32.99 reprice). 340 stayed on the
-    # current ladder at the same 1299c, so it is still covered by the live spread below.
-    80: 399,
-    160: 699,
-}
-CREDIT_AMOUNT_TO_CENTS = {
-    **_RETIRED_CREDIT_AMOUNT_TO_CENTS,
-    **{p["credits"]: p["price_cents"] for p in CREDIT_PACKS.values()},
-}
-
 
 def _get_user_origin(user_id: str) -> str:
     with get_pg() as conn:

@@ -69,23 +69,6 @@ def _require_admin():
 # 503 instead of the old `synced: false` best-effort report.
 # ---------------------------------------------------------------------------
 
-def _compute_money_spent_cents(purchase_credit_amounts: list[int]) -> int:
-    """Map individual Stripe purchase credit amounts to total dollars spent (in cents)."""
-    from ..analytics import CREDIT_AMOUNT_TO_CENTS
-    total = 0
-    for amount in purchase_credit_amounts:
-        cents = CREDIT_AMOUNT_TO_CENTS.get(amount)
-        if cents is None:
-            # Not a silent 0: an amount no ladder ever sold means the map is stale.
-            logger.warning(
-                "[admin] No price known for a %d-credit purchase; money-spent is understated",
-                amount,
-            )
-            continue
-        total += cents
-    return total
-
-
 def _compute_last_step(actions: set[str]) -> str:
     from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
     for step in reversed(FUNNEL_STEPS):
