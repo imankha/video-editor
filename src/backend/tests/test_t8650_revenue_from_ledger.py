@@ -442,13 +442,16 @@ class TestPulseFollowsFilters:
 # a raw `payments` join fans the user out to N rows and is caught by users == 1.
 #
 # Both queries below aggregate over EVERY user_segments row in the active
-# origin/date scope, with no per-test isolation (pg_conn only TRUNCATEs/DROPs
-# shared tables at fixture setup, not around each request). Run this file
-# concurrently with the rest of the suite (pytest-xdist) and another test's
-# "tiktok"/default-window segment row lands in the same query and inflates
-# users/signups -- observed in CI as `assert 14 == 1` on the cohorts variant.
-# Pin these two to a origin literal and acquired_at window no other test in
-# the suite uses so the query can only ever see u1's own row.
+# origin/date scope. The contamination is NOT pytest-xdist concurrency (CI runs
+# pytest serially): it is leftover `users` rows from other test files. Each
+# pg_conn setup DROPs user_segments and replays migrations, and migration v009
+# then backfills a DEFAULT segment row (origin 'organic', acquired_at CURRENT_DATE)
+# for EVERY row still in `users`. pg_conn only deletes the fixture's own
+# _TEST_USER_IDS afterward, so any user another file left behind survives, gets
+# one of those default 'organic'/today segment rows, and lands in the default
+# cohort's origin+window -- observed in CI as `assert 14 == 1` on the cohorts
+# variant. Pin these two to an origin literal and acquired_at window no other test
+# in the suite uses so the query can only ever see u1's own row.
 # --------------------------------------------------------------------------- #
 
 _GAP1_WINDOW = {"from": "2016-01-01", "to": "2016-12-31"}
