@@ -283,6 +283,13 @@ Process rules for structural refactors (catalog: [code-smells.md](.claude/refere
 4. **Keep reviewable units < ~200 lines of meaningful diff**; split larger refactors into sequenced tasks
 5. **Update CLAUDE.md/skills in the same PR as the refactor**
 6. **Greppability beats elegance** — explicit names, no dynamic dispatch/registries for internal code, string literals near use or in `constants/`, never computed
+7. **"Zero callers" claims must grep `e2e/` and `scripts/` too, not just `src/`** — Branch CI never
+   runs Playwright specs (`src/frontend/e2e/**`) or shell scripts (`scripts/**/*.sh`, `test_api.sh`),
+   so a route or symbol can look dead across the CI-covered tree while a live caller sits in one of
+   those. T11210 (2026-09-25) shipped a "zero callers, grep-proven" deletion of a bare `POST
+   /api/projects` route that four e2e specs and `test_api.sh` still called; CI stayed green and the
+   gap surfaced only in independent review. A dead-code deletion's grep evidence must cover `src/`,
+   `e2e/`, and `scripts/` before the PR claims zero callers.
 
 ## Migration System
 

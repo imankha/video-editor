@@ -111,6 +111,53 @@ reduces but cannot eliminate a simultaneous base-update race. Strict protected-b
 checks or a merge queue are needed for that stronger guarantee; both remain explicit
 later rollout decisions. Direct UI/CLI merges can still bypass this local command.
 
+## Known issue: reviewer captures sometimes use the wrong verdict word
+
+`REPORT_SCHEMA`'s `verdict` enum lists both roles' vocabularies together
+(`VERIFIED, MORE_PROOF_REQUIRED, HUMAN_VERIFICATION_REQUIRED, APPROVED, NEEDS_REVISION`),
+and the `capture()` prompt does not spell out which words belong to which role. A
+`capture --role reviewer` session has been observed to return `verdict: "VERIFIED"`
+(the proof-verifier's word) instead of the schema-correct `APPROVED`/`NEEDS_REVISION`,
+even when the review content itself is clean (0 blocking, 0 major) — `check` then
+refuses with `Code review has not approved` on a vocabulary technicality, not a real
+finding. Observed 2026-09-25 landing T11210 and T11170: 4 consecutive mis-worded
+reviewer captures on one PR before a correctly-worded one landed.
+
+**Do not hand-edit a receipt to fix this.** Recapture — a fresh session, same
+evidence — until the verdict word matches the role; each attempt is independent, so
+retrying costs a session but never compromises the gate. If the evidence file's
+content changes for any reason (for example fixing a criteria-coverage gap), every
+prior capture for it is void regardless of its verdict word: the receipt store keys
+by the evidence file's content hash, so a changed evidence file needs fresh captures
+under both roles, not just the one that changed. See T11310 for the real fix
+(split the schema per role or state the literal required word in the prompt) — this
+touches the trusted controller, so route it through independent policy review rather
+than hotfixing mid-landing.
+
+## Proof for Postgres-backed tests
+
+A task whose red/green tests use the `pg_conn` fixture (real Postgres) cannot be
+proven with an unreachable placeholder `DATABASE_URL` — `pg_conn` needs a live
+connection, so an unreachable DSN produces a connection error, not the target
+assertion failure. It also refuses staging/prod DSNs by keyword, but does **not**
+refuse the shared local dev instance (`reel-ballers-postgres-dev`, port 5432) —
+pointing an isolated base/head proof comparison at it risks dropping or mutating
+real dev data via the fixture's own `DROP TABLE ... CASCADE` and cleanup.
+
+Use a disposable, throwaway Postgres container instead, mirroring CI's own `ci_test`
+setup:
+
+```bash
+docker run -d --name <slug>-proof-pg -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=ci_test -p <free-port>:5432 postgres:16-alpine
+# wait for pg_isready, then point both isolated checkouts' test runs at
+# DATABASE_URL=postgresql://postgres:postgres@localhost:<free-port>/ci_test
+docker rm -f <slug>-proof-pg   # once the proof is captured or the task lands
+```
+
+Never reuse a proof container's data across a different task's proof run without
+confirming the schema is clean; a fresh container per proof session is simplest.
+
 ## Validation
 
 Run `python scripts/test_ci_policy.py` and `python scripts/test_landing_gate.py`.

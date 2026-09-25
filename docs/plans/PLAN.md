@@ -4,6 +4,16 @@
 
 ## Current Focus
 
+**2026-09-25 addition, unplaced — [T11310](tasks/T11310-landing-gate-reviewer-verdict-vocabulary.md):
+The landing gate's reviewer captures sometimes return the wrong verdict word.** Found live while
+landing T11210/T11170: `REPORT_SCHEMA`'s `verdict` enum is shared across both independent-capture
+roles, so `capture --role reviewer` can return `VERIFIED` (the proof-verifier's word) instead of
+the schema-correct `APPROVED`, even on a clean review — happened 4 times in a row on one PR before
+a correctly-worded capture landed. Impact 5 / Complexity 2. Touches the trusted controller
+(`scripts/landing_gate.py`), so needs independent policy review before it can land, per CLAUDE.md's
+Landing Policy. Workaround documented in `docs/plans/landing-gate-usage.md` (recapture, never
+hand-edit a receipt) until this is fixed.
+
 **2026-09-24 addition, unplaced — [T11050](tasks/T11050-annotate-clip-lane-click-seek.md):
 Annotate's clips-lane click didn't move the playhead.** Reported live by imankh@gmail.com.
 The thin video scrub row seeks correctly; the clips lane background (My Athlete/Team tracks,
