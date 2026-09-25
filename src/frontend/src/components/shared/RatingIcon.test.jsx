@@ -43,12 +43,13 @@ describe('RatingIcon', () => {
   it('T11110: draws the notation glyph in a dark color on the gold 5-star face (never white on gold)', () => {
     const { container } = render(<RatingIcon rating={5} size={24} />);
     const svg = container.querySelector('svg');
-    // The notation glyph group is filled with the per-rating glyph color; on
-    // gold that must be the dark tone, never #ffffff.
     const fills = [...svg.querySelectorAll('g')].map((g) => g.getAttribute('fill'));
+    // Behavioral: whatever color the glyph is drawn in, it must never be
+    // #ffffff on the gold face (illegible white-on-gold).
+    expect(fills).not.toContain('#ffffff');
+    // The notation glyph group is filled with the per-rating glyph color.
     expect(fills).toContain(RATING_GLYPH_COLORS[5]);
     expect(RATING_GLYPH_COLORS[5]).toBe('#1a1300');
-    expect(fills).not.toContain('#ffffff');
   });
 });
 

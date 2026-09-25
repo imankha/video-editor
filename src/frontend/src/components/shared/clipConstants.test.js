@@ -1,5 +1,8 @@
+import { createElement } from 'react';
+import { render } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { getRatingCaption, getEditRatingCaption, getRatingLabel, getRatingDisplay, RATING_BADGE_COLORS, RATING_BACKGROUND_COLORS, RATING_GLYPH_COLORS } from './clipConstants';
+import { RatingIcon } from './RatingIcon';
 
 // T9520 N35: the ONE documented star-to-descriptor mapping ("4 stars · Good"),
 // used for the rating title/aria across the play list, the play editor and the
@@ -40,6 +43,11 @@ describe('rating palette P2 (T11110)', () => {
   });
 
   it('glyph color on the badge face is dark on gold, white elsewhere', () => {
+    // Behavioral: render the actual rating-5 icon and check what color its
+    // notation glyph is drawn in — must never be #ffffff on the gold face.
+    const { container } = render(createElement(RatingIcon, { rating: 5, size: 24 }));
+    const fills = [...container.querySelectorAll('svg g')].map((g) => g.getAttribute('fill'));
+    expect(fills).not.toContain('#ffffff');
     expect(RATING_GLYPH_COLORS[5]).toBe('#1a1300');
     for (const r of [1, 2, 3, 4]) {
       expect(RATING_GLYPH_COLORS[r]).toBe('#ffffff');
