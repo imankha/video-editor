@@ -1,11 +1,12 @@
-"""T11210 removal proof: dead endpoints deleted, surviving endpoint intact.
+"""T11210 removal proof: dead endpoints deleted, surviving endpoints intact.
 
-Regression test (not a characterization golden): pins that the four dead
+Regression test (not a characterization golden): pins that the two dead
 routes identified in T11210 (POST /api/export/chapters, POST
-/api/export/concat-for-overlay, POST /api/projects (bare create), POST
-/api/projects/preview-clips) no longer resolve, while POST
-/api/projects/from-clips -- still used by the single-clip export flow --
-keeps resolving. On unchanged master these dead routes are still registered,
+/api/export/concat-for-overlay) no longer resolve, while POST /api/projects
+(bare create) and POST /api/projects/from-clips -- both still used, the
+former by e2e/test_api.sh fixture seeding, the latter by the single-clip
+export flow -- keep resolving. POST /api/projects/preview-clips is gone too
+(no callers). On unchanged master these dead routes are still registered,
 so this test fails by assertion there (status 200/other, not 404/405) and
 passes on the branch after the T11210 deletion commit.
 """
@@ -43,11 +44,14 @@ def test_export_concat_for_overlay_route_removed():
     )
 
 
-def test_projects_bare_create_route_removed():
-    response = client.post("/api/projects", json={"name": "T11210 dead route"})
-    assert response.status_code in _ROUTE_NOT_FOUND, (
-        f"POST /api/projects (bare create) should be gone (T11210) but "
-        f"responded {response.status_code}: {response.text}"
+def test_projects_bare_create_route_still_exists():
+    response = client.post(
+        "/api/projects", json={"name": "T11210 e2e fixture seed", "aspect_ratio": "16:9"}
+    )
+    assert response.status_code not in _ROUTE_NOT_FOUND, (
+        "POST /api/projects (bare create) must keep resolving (used by "
+        "e2e/T9285-recovery-preview.qa.spec.js, e2e/full-workflow.spec.js, "
+        f"and test_api.sh) but responded {response.status_code}: {response.text}"
     )
 
 

@@ -177,6 +177,11 @@ def _generate_group_key(game_names: list[str], game_dates: list[str]) -> str | N
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
+class ProjectCreate(BaseModel):
+    name: str
+    aspect_ratio: str  # "16:9" or "9:16"
+
+
 class ProjectRename(BaseModel):
     """PUT /projects/{id} payload. Rename ONLY -- aspect_ratio is deliberately not
     accepted here. It has exactly one writer, POST /clips/projects/{id}/aspect-ratio
@@ -660,6 +665,37 @@ async def list_projects():
             logger.info(f"[ListWarm] draft warming task creation failed: {e}")
 
     return result
+
+
+@router.post("", response_model=ProjectResponse)
+async def create_project(project: ProjectCreate):
+    """Create a new empty project."""
+    # Validate aspect ratio
+    if project.aspect_ratio not in ['16:9', '9:16', '4:3', '1:1']:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid aspect ratio: {project.aspect_ratio}"
+        )
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO projects (name, aspect_ratio)
+            VALUES (?, ?)
+        """, (project.name, project.aspect_ratio))
+        conn.commit()
+
+        project_id = cursor.lastrowid
+        logger.info(f"Created project: {project_id} - {project.name}")
+
+        return ProjectResponse(
+            id=project_id,
+            name=project.name,
+            aspect_ratio=project.aspect_ratio,
+            working_video_id=None,
+            final_video_id=None,
+            created_at=datetime.now().isoformat()
+        )
 
 
 def _build_clips_filter_query(game_ids: list[int], min_rating: int, tags: list[str]):
