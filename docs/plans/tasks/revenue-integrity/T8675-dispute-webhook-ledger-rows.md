@@ -1,6 +1,6 @@
 # T8675: Dispute webhook writes ledger rows
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-24

@@ -1,6 +1,6 @@
 # T8640: Reconciliation understands deleted accounts and stops lying about heals
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-03
