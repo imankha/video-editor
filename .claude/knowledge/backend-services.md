@@ -244,10 +244,11 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
   row is not dropped. Recovery of a row missed at the two user-facing sites (which swallow on
   failure) depends on the webhook path (C), the self-healing site.
 - **Write path is intentionally NOT gated on `credit_ledger.grant()`'s `applied` flag.** The
-  ledger insert (`payments_ledger.record_purchase`/`record_refund`) runs on EVERY observation of
-  a succeeded/paid Stripe object at all 5 write sites in `routers/payments.py`
+  ledger insert (`payments_ledger.record_purchase`/`record_refund`/`record_dispute_lost`) runs on
+  EVERY observation of a succeeded/paid Stripe object at all 7 write sites in `routers/payments.py`
   (`confirm_payment_intent`, webhook `checkout.session.completed`, webhook
-  `payment_intent.succeeded`, `verify_session`, webhook `charge.refunded`) — including a
+  `payment_intent.succeeded`, `verify_session`, webhook `charge.refunded`, and — added by T8675 —
+  webhook `charge.dispute.closed` and webhook `charge.refund.updated`/`refund.updated`) — including a
   redelivery where the grant's own idempotency already returned `applied=False`. This is
   load-bearing: nesting the insert inside `if result["applied"]:` (the first-draft design) would
   make a redelivery — exactly the case where a PRIOR ledger write is most likely to have failed —
@@ -330,15 +331,36 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
   that opened this epic) is explicitly IN SCOPE: because `payments.user_id` has no FK, it inserts
   cleanly — that row with no matching user IS the tombstone working as designed, not an error to
   filter out.
-- **Live dispute webhook handling is explicitly OUT of scope for T8620** — no `charge.dispute.*`
-  branch exists in `routers/payments.py`; the backfill only ever writes `dispute_lost` for
-  disputes ALREADY terminal at backfill time. `dispute_won` is never written by anything (a won
-  dispute leaves the funds with us; the original `purchase` row already reflects that money). A
-  follow-up task for the live webhook is pending (filed by the epic owner, not T8620 itself) — a
-  dispute that goes from open to lost strictly AFTER a backfill run and BEFORE that follow-up
-  ships is a real, bounded gap: the ledger `SUM` reads high vs. Stripe net by that amount until
-  either the follow-up ships or the backfill re-runs, caught by the on-demand reconciler in the
-  meantime (it already computes dispute amounts independently).
+- **Live dispute + late-settling refund webhooks (T8675 — the follow-up T8620 deferred).**
+  `routers/payments.py` now has two more webhook branches, both idempotent through the same
+  `(stripe_object_id, kind)` key and both webhook-site failure mode (CRITICAL + re-raise so Stripe
+  redelivers):
+  - **`charge.dispute.closed`** → `record_dispute_lost` (T8675 is its first LIVE caller; T8620
+    shipped it for backfill only). Acts ONLY on `status == "lost"`, keyed on the `dp_...` id,
+    `amount_cents = -dispute.amount`, `occurred_at = dispute.created`, cache decremented only on a
+    NEW row (a lost dispute pulls money out like a refund). `won`/`warning_closed` write no row (the
+    `purchase` row already reflects those funds — `dispute_won` is never a row, design §2b).
+    `charge_refunded`-status disputes are deliberately NOT written here — that money is recorded by
+    the `charge.refunded` refund-row path, and the reconciler nets `max(lost_dispute - refunded, 0)`;
+    a dispute row here too would double-count in the append-only ledger. A genuine lost dispute has
+    `refunded == 0`, so the full `-amount` matches the reconciler's full-subtract branch (so per-user
+    `SUM(amount_cents)` == reconciler net after a lost dispute). Chose `closed` over
+    `funds_withdrawn`/`funds_reinstated`: only `closed` is terminal, so one append-only row needs no
+    later reversal. **User_id resolution** for a dispute (and a late-refund) goes through the object's
+    `payment_intent` → PI `metadata.user_id` (`_user_id_via_payment_intent`), since we set metadata on
+    the PI, not on disputes/refunds.
+  - **`charge.refund.updated` / `refund.updated`** → `record_refund`, the same idempotent path as
+    `charge.refunded`, for a refund that was still `pending` when `charge.refunded` fired and settles
+    later (delayed-settlement methods). Records only `status == "succeeded"`, keyed on the `re_...` id,
+    so it converges with (never dups) any row `charge.refunded` already wrote. BOTH event types are
+    handled because the codebase pins no Stripe API version (Stripe sends `charge.refund.updated` on
+    most/legacy versions, `refund.updated` on newer ones); the shared `re_` key makes handling both a
+    no-op if both fire. Card refunds settle immediately (recorded by `charge.refunded`), so this is a
+    small-exposure completeness path.
+  - **Operator step:** the live-mode webhook endpoint must subscribe to `charge.dispute.closed`,
+    `charge.refund.updated`, and `refund.updated` (per-endpoint/per-mode, like `charge.refunded`).
+    Tests: `tests/test_t8675_dispute_refund_webhook.py`. Task:
+    `docs/plans/tasks/revenue-integrity/T8675-dispute-webhook-ledger-rows.md`.
 - **Full design + the six approved rulings (dispute scope, append-only enforcement, cache-bump
   fix shape, write-path/failure-mode split, async charge-id fill, backfill guardrail):**
   `docs/plans/tasks/revenue-integrity/T8620-design.md`.
