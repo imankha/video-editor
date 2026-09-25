@@ -138,7 +138,8 @@ export function PrivacyPolicy() {
             <li>Sessions: 30 days max, or until logout</li>
             <li>OTP codes: expire after 10 minutes</li>
           </ul>
-          <p className="mt-3">Upon deletion request, all data is permanently removed immediately (within 45 days if via email).</p>
+          <p className="mt-3">Upon deletion request, your personal data is permanently removed immediately (within 45 days if via email), apart from the limited records described next.</p>
+          <p className="mt-3">Transaction records (payment amounts keyed to an opaque account id, with no name, email, or card details) are retained after account deletion to meet our tax and accounting obligations. We also keep a record that the account was deleted, including when and through which path, to evidence that the erasure happened, and, where support staff accessed the account, the security log of that access to protect the account and our systems. We also keep the text of any bug reports you submitted, with your email, device details, and attachments removed, to help us fix the problems you reported, and usage and activity statistics in de-identified form (no name, email, or contact details) keyed to an opaque account id to understand how the product is used. Retaining these records does not delay or limit erasure of your personal data.</p>
         </Section>
 
         {/* Section 5 */}
@@ -146,7 +147,7 @@ export function PrivacyPolicy() {
           <p className="mb-3">California residents (and others where required by law) have the following rights:</p>
           <ul className="list-disc pl-5 space-y-2 mb-4">
             <li><strong className="text-white">Right to Know/Access:</strong> Request a copy of your data via &ldquo;Download My Data&rdquo; in Account Settings</li>
-            <li><strong className="text-white">Right to Delete:</strong> Delete your account via &ldquo;Delete My Account&rdquo; in Account Settings. Deletion is permanent and immediate.</li>
+            <li><strong className="text-white">Right to Delete:</strong> Delete your account via &ldquo;Delete My Account&rdquo; in Account Settings. Deletion is permanent and immediate. A limited set of records survives deletion (transaction records, the record that the account was deleted, security logs of any staff access, de-identified bug reports, and de-identified usage and activity statistics), each described in the Data Retention section above; retaining them never delays or limits erasure of your personal data.</li>
             <li><strong className="text-white">Right to Correct:</strong> Contact us to correct inaccurate information</li>
             <li><strong className="text-white">Right to Opt-Out of Sale/Sharing:</strong> We do not sell or share your data. This right is automatically honored.</li>
             <li><strong className="text-white">Right to Limit Sensitive PI:</strong> Video content is used only as you direct</li>

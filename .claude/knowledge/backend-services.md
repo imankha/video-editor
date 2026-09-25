@@ -1,5 +1,15 @@
 ---
 domain: backend-services
+updated: 2026-09-24 (T8630, Revenue Record Integrity epic 2/6: **account deletion now preserves
+and audits the revenue record.** New `account_deletions` table (Postgres, v031, `id BIGSERIAL`
+PK per a design-gate PK-bug catch, NOT `user_id` PK) records who/when/which-path/had-money for
+every real `users`-row deletion; `payments_ledger.stamp_account_deleted` marks surviving
+`payments` rows `account_deleted_at` (NULL-gated, never filters revenue); a new DB trigger
+(`trg_payments_append_only`/`trg_payments_no_truncate`) enforces the T8620 append-only
+invariant structurally, not just by grep. `scripts/delete_user.py` gained `--force-paid`
+(fail-before-first-delete across `--all`/`--all-except`). 4 privacy-copy surfaces updated with
+user-approved exact wording. Full design: docs/plans/tasks/revenue-integrity/T8630-design.md.
+See "Account deletion contract (T8630)" section below.)
 updated: 2026-09-24 (T8620, Revenue Record Integrity epic 1/6: **new append-only `payments`
 table (Postgres, v030)** -- the first local per-payment financial record; today the only local
 revenue value is `user_segments.total_spent_cents`, a mutable counter with no history that is
@@ -16,7 +26,9 @@ statement against this table anywhere in the codebase). **Append-only is enforce
 review grep, not a DB trigger** -- exactly TWO in-place writes are permitted codebase-wide:
 `fill_missing_charge_id` (this task, gated `WHERE stripe_charge_id IS NULL`, fills asynchronously
 via a background task scheduled AFTER the ledger row's transaction commits, never blocks/fails the
-payment) and T8630's future `account_deleted_at` stamp (reserved column, written by nothing yet).
+payment) and T8630's `account_deleted_at` stamp (`payments_ledger.stamp_account_deleted`, NULL-gated).
+**T8630 (2026-09-24) added a DB-level trigger enforcing the same invariant structurally, in
+addition to the grep** -- see "Account deletion contract (T8630)" below.
 **The ledger insert is deliberately NOT gated on `result["applied"]`** -- it runs on every
 observation of a succeeded/paid payment at all 4 purchase sites (`confirm_payment_intent`, webhook
 `checkout.session.completed`, webhook `payment_intent.succeeded`, `verify_session`) and the refund
@@ -271,16 +283,20 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
   these two. **The credit grant itself is never affected either way** — it runs first, in its
   own transaction, fully committed before the ledger block executes; EPIC decision 6 forbids
   coupling the two ledgers, so a ledger failure can never roll back a real grant.
-- **Append-only is enforced by convention + a review grep, not a DB trigger** (a blanket
-  `REVOKE UPDATE`/trigger was rejected in the design gate — it would need to special-case the
-  one legitimate future exception, T8630's `account_deleted_at` stamp, before that stamp's
-  contract even exists). **Exactly TWO in-place writes are permitted in the whole codebase:**
-  (1) `payments_ledger.fill_missing_charge_id(cur, stripe_object_id, stripe_charge_id)` — the
-  SOLE `UPDATE payments` statement anywhere, `WHERE stripe_object_id = %s AND kind = 'purchase'
-  AND stripe_charge_id IS NULL`, syntactically incapable of touching any other column; and (2)
-  T8630's future `account_deleted_at` stamp (reserved column, nothing writes it yet). Nothing may
-  ever `UPDATE amount_cents`/`kind`/`stripe_object_id`/`user_id`/`occurred_at`, and nothing may
-  `DELETE` a row — grep-verified in review, re-verify on any future touch to this table.
+- **Append-only is enforced by a review grep AND (as of T8630) a DB-level trigger.** At T8620
+  time a blanket `REVOKE UPDATE`/trigger was rejected in the design gate pending the one
+  legitimate future exception (T8630's `account_deleted_at` stamp); T8630 then shipped that
+  trigger once the stamp's contract existed. **Exactly TWO in-place writes are permitted in
+  the whole codebase:** (1) `payments_ledger.fill_missing_charge_id(cur, stripe_object_id,
+  stripe_charge_id)` — `WHERE stripe_object_id = %s AND kind = 'purchase' AND stripe_charge_id
+  IS NULL`, syntactically incapable of touching any other column; and (2)
+  `payments_ledger.stamp_account_deleted(cur, user_id)` — `WHERE user_id = %s AND
+  account_deleted_at IS NULL`. Nothing may ever `UPDATE amount_cents`/`kind`/`stripe_object_id`/
+  `user_id`/`occurred_at`/`currency`/`pack`/`credits`/`recorded_at`/`source`, and nothing may
+  `DELETE` or `TRUNCATE` a row — grep-verified in review (`tests/test_t8620_payments_ledger.py`
+  `TestT11AppendOnlyGrep`, allowlist widened by T8630 to both writers) AND enforced structurally
+  by `trg_payments_append_only`/`trg_payments_no_truncate` (see "Account deletion contract
+  (T8630)" below) — re-verify both on any future touch to this table.
 - **`stripe_charge_id` async background fill.** Where the charge id isn't already in hand at
   insert time (webhook `checkout.session.completed`, `verify_session`; occasionally
   `confirm_payment_intent`), the row inserts with `stripe_charge_id = NULL` and a background task
@@ -330,8 +346,11 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
   cache only.** All four `SUM(user_segments.total_spent_cents)` reads in `routers/admin.py`
   (channels per-origin, cohorts per-period, and BOTH `analytics_pulse` revenue totals) now source
   from `payments`. Two helpers next to `_test_exclusion`: `_ledger_revenue_total(cur, exclude_test)`
-  = grand total `SUM(amount_cents)` with **NO `user_segments` join** (so a deleted payer's money is
-  still counted), test accounts removed via a `users` ANTI-join (`NOT EXISTS ... is_test_account`);
+  = grand total `SUM(amount_cents)` (a deleted payer's money is still counted); **as of T8630 round 5
+  its exclude branch LEFT JOINs both `users` and `user_segments` and filters with the SAME predicate
+  the grouped buckets use, `NOT COALESCE(u.is_test_account, s.was_test_account, false)`, so a deleted
+  TEST payer is excluded here too** (before r5 it used a `users` ANTI-join that silently re-counted a
+  deleted test purchase once the `users` row was gone);
   and `_LEDGER_REVENUE_BY_USER` = a per-user pre-aggregated subquery LEFT-JOINed into the grouped
   views so it doesn't fan out the export/purchase subqueries (GROUP BY user_id served by
   `idx_payments_user`). **`account_deleted_at` is NEVER a revenue filter.** **Pulse Revenue card
@@ -350,11 +369,172 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
   Frontend `ChannelsTable`/`CohortGrid` render an "Unattributed" row when it's nonzero, INCLUDING
   when the grouped list itself is empty (only deleted payers) so the money is never hidden behind
   "No data".
-  **Documented edge:** a test purchase is excludable while its `users` row exists but is counted
-  again once that row is deleted (no row left to recognise it by — a reason not to delete internal
-  test accounts). `total_spent_cents` survives ONLY as the per-user display cache
+  **Test-exclusion + deleted accounts (T8630 round 5):** the default admin view (`exclude_test` on)
+  now keeps a deleted payer attributed. Every exclude_test site (channels/cohorts/funnel/pulse/
+  platforms/`_grouped_view_grand_total`/`_ledger_revenue_total`) uses `LEFT JOIN users u` +
+  `NOT COALESCE(u.is_test_account, s.was_test_account, false)` — prefer the live flag, else the
+  `user_segments.was_test_account` snapshot taken at deletion (v033), else treat as not-test. So a
+  deleted REAL payer stays in its real channel/cohort and a deleted TEST payer is still excluded
+  (its old "counted again once the users row is deleted" leak is gone). `platforms` (anchored on
+  `user_actions`) LEFT JOINs `user_segments s` to reach the snapshot; the users-anchored admin user
+  list is unchanged (u always present -> COALESCE never falls back). `total_spent_cents` survives ONLY as the per-user display cache
   (`bump_total_spent`, `list_users`). Tests: `tests/test_t8650_revenue_from_ledger.py`. The pg.py
   `_SCHEMA_DDL` column comment for `total_spent_cents` is deferred (T8630 owns that file).
+
+### Account deletion contract (T8630)
+Revenue Record Integrity epic 2/6. Fixes the two 2026-09-03 incident holes: deletion used to
+silently destroy the revenue record, and left no trace that a deletion happened at all.
+
+- **`account_deletions` (Postgres, v031):** `id BIGSERIAL PRIMARY KEY` (NOT `user_id` — a
+  design-gate bug catch: `_reset_test_account` re-creates the same `user_id`, so a second reset
+  of the same test account must write a SECOND row, not collide on a duplicate key), `user_id
+  TEXT NOT NULL` + index `(user_id, deleted_at)`, `deleted_at`, `actor TEXT` (`self`|`admin`|
+  `script` — `admin` reserved, no code path emits it yet), `path TEXT` (`privacy_endpoint`|
+  `delete_user_script`|`reset_test_account`|`reset_test_user_script`|`copy_user_between_envs` —
+  the last two added in T8630 round 2), `had_payments BOOLEAN`, `net_cents INTEGER`
+  (signed `SUM(payments.amount_cents)` at deletion time), `note TEXT`. One row per DELETION
+  EVENT. No email column, no FK to `users` — answers who/when/which-path/how-much without
+  personal data. Sole writer: `services/account_deletions.py`'s `record_account_deletion(cur,
+  *, user_id, actor: DeletionActor, path: DeletionPath, note=None)` — plain `INSERT`, no
+  `account_deletions` trigger (out of scope by design, append-only by INSERT-only convention).
+- **The `payments.account_deleted_at` stamp** is a write to `payments`, so it lives in
+  `payments_ledger.py` (the ledger's sole writer), not in `account_deletions.py`:
+  `stamp_account_deleted(cur, user_id)` — `UPDATE ... WHERE user_id = %s AND account_deleted_at
+  IS NULL`, NULL-gated for idempotency, `to_regclass`-guarded for a pre-v031 environment.
+  Never filters any revenue query (T8650) — it is account metadata, not a money fact.
+- **Five real delete paths, each in ONE transaction with its own `DELETE FROM users`** (stamp
+  + audit BEFORE the delete, so a rollback leaves neither and a commit leaves both):
+  `privacy.delete_account` (actor=`self`, path=`privacy_endpoint`, stamps + audits — the CCPA
+  self-serve path NEVER refuses); `auth._reset_test_account` (actor=`self`,
+  path=`reset_test_account`, audits but does NOT stamp — the same `user_id` is re-created
+  immediately on the same login, so a persistent "deleted" stamp would misdescribe a live
+  account); `scripts/delete_user.py::delete_one` (actor=`script`, path=`delete_user_script`,
+  stamps + audits, `note="forced past payment guard"` when `--force-paid` overrode a refusal);
+  `scripts/reset-test-user.py::reset_user_postgres` (actor=`script`, path=`reset_test_user_script`,
+  audits but does NOT stamp — a reset, same rationale as `_reset_test_account`); and
+  `scripts/copy_user_between_envs.py::delete_destination_user` (actor=`script`,
+  path=`copy_user_between_envs`, stamps + audits — a destination account really removed on that
+  env before the copy is seeded). `_purge_user_data` and `DELETE /api/auth/user` deliberately
+  get NEITHER — neither deletes the `users` row (the former is a shared helper with a 4th caller
+  that keeps the account alive; the latter is test cleanup only).
+- **T8630 round 2 — script `sys.path` + ordering:** the three standalone operator scripts run
+  as `cd src/backend && python ../../scripts/<name>.py`; running a script FILE puts `scripts/`
+  on `sys.path`, not `src/backend`, so each script now does `sys.path.insert(0, PROJECT_ROOT /
+  "src" / "backend")` and imports the app write helpers AT MODULE TOP (like
+  `backfill_payments_ledger.py`). Pre-fix, `delete_user.py` imported them INSIDE `delete_one`,
+  AFTER the irreversible R2 prefix purge + local `rmtree`, so a real run crashed
+  `ModuleNotFoundError: No module named 'app'` and half-deleted the account (storage gone, users
+  row alive, no audit row). `delete_one` also reordered so a user's Postgres work happens BEFORE
+  its irreversible storage purge — a Postgres failure (import, FK, trigger) for that user now
+  aborts before its R2/local storage is touched. The import crash — which hit EVERY run — is
+  fully gone.
+- **T8630 round 3 — per-user commit before storage purge (bulk half-delete fix):** the round-2
+  caveat (single commit at the end of `main()`, so a LATER target's failure rolled back an
+  EARLIER target whose storage was already purged) is now fixed. `delete_one` is split into
+  `delete_one_postgres` (all PG work, no commit, returns the bug-attachment R2 keys) and
+  `purge_user_storage` (R2 prefix + bug attachments + local rmtree); `main()` commits EACH
+  user's Postgres transaction BEFORE that user's storage purge, so a committed target is durable
+  regardless of any other target. `delete_one` (combined, no commit) is kept for the dry-run path
+  and unit tests that supply their own connection. **Failure policy:** a per-user Postgres failure
+  rolls back only that target (left fully intact) and continues; a storage-purge failure AFTER a
+  target's commit logs loudly, records the target, and continues (the DB is already consistent —
+  row gone, audit written — and leftover storage can be re-purged); either kind makes the run
+  exit non-zero with a summary. The `--force-paid` pre-pass still refuses before any deletion.
+- **T8630 round 3 — bug_reports anonymized on real deletions** (`app/services/bug_reports.py`,
+  sole helper `anonymize_bug_reports(cur, email)`): a REAL deletion keeps the report TEXT
+  (`description` + `build`/`status`/`duplicate_of`/`admin_notes`/`client_report_id`/timestamps)
+  and clears every identifying/device/attachment column (`reporter_email`, `page_url`,
+  `user_agent`, `editor_context`, `actions`, `console_logs`, `screenshot_r2_key`,
+  `logs_r2_key`). `bug_reports` has NO `user_id` column — rows are keyed by `reporter_email`, so
+  the helper matches on the email and there is no user_id link to keep/null. The referenced R2
+  screenshot/console-log objects use GLOBAL keys (`{env}/bugs/{id}/...`, see
+  `generate_presigned_url_global`), NOT the user prefix, so they are deleted explicitly AFTER the
+  per-user commit (the helper returns their keys; `_purge_user_data`'s user-prefix walk never
+  touches them). Wired into the three REAL delete paths (`privacy.delete_account`,
+  `delete_user.py::delete_one_postgres`, `copy_user_between_envs.py::delete_destination_user`);
+  the two NUF test-reset paths deliberately do NOT anonymize (the same email logs straight back
+  in). Real deletions also purge the user's `otp_codes` (by email) and `share_claims` rows
+  (`claimer_user_id` is `NOT NULL`, so the row is DELETED, not nulled).
+- **T8630 round 4 — keep DE-IDENTIFIED analytics on real deletion (REVERSES round 2/3's analytics
+  purge; migration v032):** a real deletion now KEEPS `user_segments` (identity stripped),
+  `user_actions`, `user_usage_daily`, and `referrals` under the SAME opaque `user_id` so the
+  `payments` ledger's channel/cohort revenue still attributes the deleted payer (not dropped).
+  The strip is one helper, `app.analytics.deidentify_user_segments(cur, user_id)` (sole definition
+  of what identity is cleared: `utm_source/medium/campaign/content/term`, `click_source`,
+  `current_session_start` -> NULL; `origin`/`acquired_at`/`referrer_id`/`signup_method`/
+  `total_spent_cents`/`last_active_at`/`total_usage_seconds` KEPT). `user_actions`/
+  `user_usage_daily`/`referrals` have no identifying column, so they are kept AS-IS (just no
+  longer deleted). For the rows to survive `DELETE FROM users`, **v032 drops every analytics->users
+  FK**, looked up from `pg_constraint` and dropped by ACTUAL name (name-agnostic), NOT a guessed
+  `<table>_<col>_fkey`. **Landmine it fixes:** `user_actions` was created in v007 as
+  `user_flow_events` and renamed in v009, and Postgres keeps a renamed table's FK under its ORIGINAL
+  name -- so on any real upgraded (staging/prod) DB the live constraint is
+  `user_flow_events_user_id_fkey`, not `user_actions_user_id_fkey`. A hardcoded drop would silently
+  no-op there (conftest recreates the table directly so the test DB has the "fresh" name and would go
+  green while prod breaks). v032 is mirrored in `_SCHEMA_DDL` (fresh DBs have no FKs) -- same "no FK
+  so it outlives deletion" model as the `payments` ledger. Deploy ordering: v032 must be applied with
+  the deploy (admin `migrate-postgres`), like v031; the new deletion code assumes the FKs are gone.
+  The two
+  TEST-RESET paths STILL purge analytics: `create_user_segment` INSERTs
+  `ON CONFLICT (user_id) DO NOTHING`, so a retained row would silently keep STALE analytics on the
+  immediate re-signup. Revenue readers (`admin.py` revenue-by-channel/cohort) anchor `FROM
+  user_segments` and count the retained row -> attribution works; the user-list/impersonation/
+  referral-detail readers anchor/INNER-JOIN `users`, so a deleted user naturally drops out. No job
+  scans `referrals` to grant credits (referral credit is event-driven at signup), so a retained
+  referrals row grants nothing. Full column table + readers audit: the T8630 task file "Round-4"
+  section.
+- **T8630 round 5 — a deleted payer stays attributed in the DEFAULT (exclude_test) view (migration
+  v033):** round 4 kept the segment row, but the admin test-exclusion join was an INNER
+  `JOIN users u ON u.user_id = s.user_id` + `NOT u.is_test_account`, so once `DELETE FROM users`
+  removed the row the deleted payer fell out of every `exclude_test` view (the dashboard DEFAULT)
+  and their money leaked into Unattributed. Fix: **v033 adds `user_segments.was_test_account
+  BOOLEAN`** (nullable/NULL for live rows, mirrored in `_SCHEMA_DDL`); `deidentify_user_segments(cur,
+  user_id, was_test_account=None)` SNAPSHOTS the flag (read from `users` BEFORE `DELETE FROM users`)
+  in all three real deletion paths; the reset paths never set it (they fully purge the row).
+  `_test_exclusion(exclude_test, seg="s")` now returns `NOT COALESCE(u.is_test_account,
+  s.was_test_account, false)` and every exclude_test site is `LEFT JOIN users u` (channels/cohorts/
+  funnel/pulse/`_grouped_view_grand_total`/`_ledger_revenue_total`; `platforms` also LEFT JOINs
+  `user_segments s` to reach the snapshot). So a deleted REAL payer keeps its channel/cohort and a
+  deleted TEST payer stays excluded, in both the buckets AND the grand total. Tests through the REAL
+  endpoints: `tests/test_t8630_round5.py` (round 4's private `_channel_revenue` re-implementation,
+  which masked this, was removed).
+- **`user_usage_daily` (analytics-only) is purged on every real deletion** (privacy endpoint,
+  `_reset_test_account`, and all three scripts), `to_regclass`-guarded in the scripts. It is NOT
+  a retained forensic record; `account_deletions` + `impersonation_audit` are.
+- **`scripts/delete_user.py --force-paid` guard:** `check_payment_guard(pg_conn, rows,
+  force_paid)` runs as ONE pre-pass over every target in `main()`, BEFORE the deletion loop —
+  so `--all`/`--all-except` refuse the whole run before the first delete, not halfway through.
+  Skipped when `--dry-run` (nothing is deleted in dry-run, so nothing needs refusing; a
+  deliberate scope call flagged at review, not a gap in AC3 — a future task could extend the
+  preview to also print the refusal block if that matters more than the extra branch).
+  `payment_summary(pg_conn, user_id)` is script-local read-only reporting (never imports into
+  `payments_ledger.py` — it doesn't write). The write helpers (`stamp_account_deleted`,
+  `record_account_deletion`) ARE imported from the app, so the script and the app share one
+  SQL definition of "what a deletion writes" — never duplicated inline.
+- **DB-level append-only trigger on `payments` (`trg_payments_append_only` +
+  `trg_payments_no_truncate`, both in v031 + `pg.py` `_SCHEMA_DDL`, byte-for-byte identical to
+  the migration per the v030 precedent):** row-level `BEFORE UPDATE OR DELETE` raises
+  unconditionally on DELETE, raises on UPDATE of any of the 11 immutable columns, allows
+  `stripe_charge_id` only NULL→value, allows `account_deleted_at` unconditionally (the app-side
+  `IS NULL` gate handles idempotency, the trigger doesn't re-check it). Statement-level `BEFORE
+  TRUNCATE` raises UNLESS `current_setting('reelballers.allow_payments_purge', true) = 'on'` —
+  the row-level DELETE guard has **NO such escape hatch** (unconditional, even for tests: the
+  test DB's own seeded payment rows can never be `DELETE`d, only wiped by the next test's
+  TRUNCATE). `tests/conftest.py`'s shared `pg_conn` fixture sets that GUC with a plain `SET`
+  (NOT `SET LOCAL` — its `setup` connection runs `autocommit = True`, so `SET LOCAL` would not
+  survive to the next statement) immediately before the shared TRUNCATE, on a connection closed
+  right after — the escape hatch can't leak into any production path.
+- **Privacy copy (4 surfaces, exact wording gated by the design's user-approval rulings):**
+  `AccountSettings.jsx`'s delete confirmation, `PrivacyPolicy.jsx` §4/§5,
+  `docs/legal/privacy-policy.md` §4/§5, `docs/legal/data-retention-policy.md`'s new "What IS
+  Retained After Deletion" subsection. All state the SAME basis — retained to meet tax/
+  accounting legal obligations, never for analytics — and never call the retained record "not
+  personal data" (pseudonymous data is still personal data under GDPR Recital 26; the corrected
+  wording is "a pseudonymous financial record with no name, email, or card details... never
+  delays or limits the erasure of your other personal data").
+- **Full design + all approved rulings (schema PK fix, wording fix, exact confirmation text,
+  reset-path stamp/actor, TRUNCATE guard scope, `account_deletions` trigger scope, reserved
+  `admin` actor):** `docs/plans/tasks/revenue-integrity/T8630-design.md`.
 
 ## Auth bypasses for automated testing (dev/staging)
 - `POST /api/auth/test-login` (auth.py:852) — empty `e2e@test.local` user; new-user flows only. In SKIP_SESSION_INIT_PATHS, so no real data loads. Requires X-Test-Mode; `ENV==production` → 404.
@@ -404,7 +584,7 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 
 | Track | DB | Version mechanism | Latest (2026-07-03) |
 |---|---|---|---|
-| `postgres` | Fly Postgres | `schema_migrations` table | v030 (v019 credits T5840; **v020 `game_link` share_type + share_games.game_date T5720**; **v021 `share_claims` T5730**; **v022 `user_usage_daily` T5770** — v020/v021 were reserved by the then-unmerged Share the Game branches, so T5770 landed at v022; all three merged together and the track is contiguous 1..22 again; **v023 `pending_teammate_shares` recipient_email->invited_email rename T7550** (sibling branch, landed on master); **v024 `daily_counters` attempt/outcome columns T7510** (`game_uploads_succeeded`/`_failed`, `clips_attempted`/`_failed`) — additive only, no new table; **v025 clear stale `game_storage_refs` T6770** — `DELETE FROM game_storage_refs` (dead pre-T2930 sediment, see the T6770 note above); paired with profile_db v047 which repopulates it as the live derived ref-set; v026 `is_test_account` flag; v027 `daily_counters.clips_uploaded` T8370; v028 `bug_reports.client_report_id` T9400; **v029 `upload_failures` table T10270** — see § "Upload-failure observability (T10270)" below; **v030 `payments` append-only ledger T8620** — see § "Payments ledger (Postgres, T8620)" below. Prod is still at v25 as of T8620 and owes v026 through v030 on next `migrate-postgres` run. Re-verify sibling branches before numbering the NEXT postgres migration.) |
+| `postgres` | Fly Postgres | `schema_migrations` table | v032 (v019 credits T5840; **v020 `game_link` share_type + share_games.game_date T5720**; **v021 `share_claims` T5730**; **v022 `user_usage_daily` T5770** — v020/v021 were reserved by the then-unmerged Share the Game branches, so T5770 landed at v022; all three merged together and the track is contiguous 1..22 again; **v023 `pending_teammate_shares` recipient_email->invited_email rename T7550** (sibling branch, landed on master); **v024 `daily_counters` attempt/outcome columns T7510** (`game_uploads_succeeded`/`_failed`, `clips_attempted`/`_failed`) — additive only, no new table; **v025 clear stale `game_storage_refs` T6770** — `DELETE FROM game_storage_refs` (dead pre-T2930 sediment, see the T6770 note above); paired with profile_db v047 which repopulates it as the live derived ref-set; v026 `is_test_account` flag; v027 `daily_counters.clips_uploaded` T8370; v028 `bug_reports.client_report_id` T9400; **v029 `upload_failures` table T10270** — see § "Upload-failure observability (T10270)" below; **v030 `payments` append-only ledger T8620** — see § "Payments ledger (Postgres, T8620)" below; **v031 `account_deletions` table + payments append-only/no-truncate triggers T8630** — see § "Account deletion contract (T8630)"; **v032 drop analytics->users FKs T8630 r4** (user_segments/user_actions/referrals now outlive account deletion, de-identified — see the T8630 r4 note in that section). Prod is still at v25 as of T8620 and owes v026 through v032 on next `migrate-postgres` run. Re-verify sibling branches before numbering the NEXT postgres migration (next free = v033).) |
 | `profile_db` | profile.sqlite | `PRAGMA user_version` | v055 (v049-v054 not individually re-audited here, see each file's docstring; **v055 port "Brilliant"->"Highlight" derived names T11110** — DATA-ONLY (no column): rewrites `projects.name`/`final_videos.name` from the old rating-5 adjective to the new one, ONLY for provably-auto-derived rows (`projects`: `is_auto_created=1`, linked `raw_clips.name` empty/NULL, `name == "Brilliant " + tag_part` via `queries.py:56-59`'s exact join logic; `final_videos`: same test through `source_clip_id`, `source_type='brilliant_clip'`, `name` equal to the old derived name); freezes the OLD adjective as a local literal inside the migration file rather than importing the live (now "Highlight") constant; idempotent (re-run = no-op once renamed); leaves `raw_clips.name`, collection names and Postgres `share_videos.video_name` snapshots alone (owner ruling — origin not provable / can't re-derive from Postgres). See annotate.md § T11110 for the label+palette side (frontend-only, no migration). **v048 delete sweep-orphan `raw_clips/` extracts T7830** — DATA-ONLY (no column), FIRST migration that calls `delete_from_r2`: reuses `app/services/orphan_raw_clips.py`'s classification logic (extracted from `scripts/cleanup_orphan_raw_clips.py`, the standalone dry-run/`--apply` script T7830 shipped first — both now import the same module rather than duplicating the reviewed reference-set-union + sweep-signature-gate logic) to delete ONLY `auto_`-prefixed unreferenced `raw_clips/` objects per profile, R2_ENABLED-guarded, idempotent, logs every delete at INFO (no dry-run step once wired as a migration, so logging is the only audit trail — see the migration's own docstring before copying this pattern); v024 poster_filename T4890; v025 slowmo_section_start/end freeze T5090 — backfills from R2 archive; v026 `games.shared_by` + backfill T5330 — see Quest system section; **v027 `working_videos.detections_data` T5600** — video-level player-detection store, backfills by hoisting the union of existing regions' embedded detections via `app/services/video_detections.hoist_video_detections`, see keyframes-framing.md § Video-level player-detection store; v028 export_jobs.stage/output_key; v029 working_clips.rotation; **v030 games source reference T5800** (cross-profile game attribution); **v031 reclassify teammate-tagged clips to Team T5725** — DATA-ONLY (no column): moves every teammate-tagged My-Athlete/NULL `raw_clips` row to `my_athlete = 0`, tags preserved, idempotent, positional tuple-row reads, numbered v031 to avoid the v030 collision with T5800, see annotate.md § Teammate tagging is Team-layer only; v032 poster_frame_time/poster_source + projects.poster_marker_time T5410; v033 heal moved-reel attribution T5830 (DATA-ONLY); v034 intro card library T5195 — CREATEs `intro_cards` (per-profile card library) + `final_videos.intro_card_id` (nullable), see § Intro card library below; v035-v043 intro-card/text-overlay follow-ups (subtitle_text, dead-field nulling, backfill, regions shape, intro_min_duration add+drop — not individually re-audited here, see each migration file's docstring); **v044 `working_clips.framing_version` T4330** — mutation counter for framing-action 409 conflict detection; **v045 canonicalize `working_clips.segments_data.boundaries` T4340** — DATA-ONLY (no column): rewrites pre-existing splits-only rows to the full-list `[0,...splits,duration]` format, duration JOINed live from `raw_clips` (no new column — one canonical duration source), reuses `highlight_transform.canonicalize_segments_data`, idempotent, skips+logs orphan rows with no derivable duration, see annotate.md § segments_data write-time-canonical; v046 `working_videos.framing_snapshot`/`highlight_carry_note` (sibling branch, landed on master, not otherwise documented here); **v047 backfill `game_storage_refs` T6770** — DATA-ONLY (no column): re-derives every profile's Postgres ref rows from its real `game_storage` rows via `insert_game_storage_ref`, idempotent, doubles as the one-time drift reconciliation the 2026-07-23 retrospective flagged) |
 | `user_db` | user.sqlite | `PRAGMA user_version` | v006 |
 

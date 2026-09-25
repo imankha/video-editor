@@ -218,10 +218,14 @@ ON pending_teammate_shares(invited_email) WHERE resolved_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_shares_sharer_active
 ON shares(sharer_user_id) WHERE revoked_at IS NULL;
 
+-- T8630 r4 (v032): no FK to users. Like the payments ledger, referral rows are
+-- KEPT (de-identified) when an account is deleted so channel/cohort attribution
+-- survives; referrer_id/referred_id stay as opaque ids that may point at a
+-- deleted (analytics-retained) user.
 CREATE TABLE IF NOT EXISTS referrals (
     id SERIAL PRIMARY KEY,
-    referrer_id TEXT NOT NULL REFERENCES users(user_id),
-    referred_id TEXT NOT NULL REFERENCES users(user_id) UNIQUE,
+    referrer_id TEXT NOT NULL,
+    referred_id TEXT NOT NULL UNIQUE,
     channel VARCHAR(20) NOT NULL,
     source_id TEXT,
     inherited_sport TEXT,
@@ -230,12 +234,18 @@ CREATE TABLE IF NOT EXISTS referrals (
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
 CREATE INDEX IF NOT EXISTS idx_referrals_channel ON referrals(channel);
 
+-- T8630 r4 (v032): no FK to users (see referrals note above). A real account
+-- deletion KEEPS this row, stripped of identity (utm_*, click_source,
+-- current_session_start -> NULL), under the same opaque user_id so the payments
+-- ledger's channel/cohort revenue still attributes.
 CREATE TABLE IF NOT EXISTS user_segments (
-    user_id TEXT PRIMARY KEY REFERENCES users(user_id),
+    user_id TEXT PRIMARY KEY,
     acquired_at DATE NOT NULL DEFAULT CURRENT_DATE,
     origin TEXT NOT NULL DEFAULT 'organic',
-    referrer_id TEXT REFERENCES users(user_id),
+    referrer_id TEXT,
     signup_method TEXT CHECK (signup_method IN ('google', 'otp')),
+    -- T8650: DISPLAY CACHE only, per-user. `payments` is the financial record
+    -- every revenue aggregate reads; this column is not the source of truth.
     total_spent_cents INTEGER NOT NULL DEFAULT 0,
     last_active_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     total_usage_seconds INTEGER NOT NULL DEFAULT 0,
@@ -246,6 +256,13 @@ CREATE TABLE IF NOT EXISTS user_segments (
     utm_content TEXT,
     utm_term TEXT,
     click_source TEXT,
+    -- T8630 r5 (v033): snapshot of users.is_test_account taken at deletion time,
+    -- so an admin test-exclusion view can still tell a deleted account was a test
+    -- account after its `users` row is gone. NULL on live rows (they read
+    -- users.is_test_account directly); set by the deletion paths right before
+    -- DELETE FROM users. Read only via NOT COALESCE(u.is_test_account,
+    -- s.was_test_account, false).
+    was_test_account BOOLEAN,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_segments_acquired ON user_segments(acquired_at);
@@ -265,8 +282,11 @@ CREATE TABLE IF NOT EXISTS user_usage_daily (
     PRIMARY KEY (user_id, day)
 );
 
+-- T8630 r4 (v032): no FK to users (see referrals note above). Event rows are
+-- KEPT as-is on account deletion (every column is a non-identifying event
+-- name/count/timestamp), under the same opaque user_id.
 CREATE TABLE IF NOT EXISTS user_actions (
-    user_id TEXT NOT NULL REFERENCES users(user_id),
+    user_id TEXT NOT NULL,
     action TEXT NOT NULL,
     platform TEXT NOT NULL DEFAULT 'unknown',
     first_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -388,8 +408,8 @@ CREATE INDEX IF NOT EXISTS idx_upload_failures_kind     ON upload_failures(kind,
 -- T8620: append-only payments ledger -- one row per money event
 -- (purchase/refund/dispute), never updated or deleted; Stripe-captured
 -- amounts, not the local pricing table; pseudonymous (user_id only, no FK
--- to users so the row outlives account deletion). Sole writer will be
--- services/payments_ledger.py (not yet added -- see T8620 implementation).
+-- to users so the row outlives account deletion). Sole writer is
+-- services/payments_ledger.py.
 -- Mirrored in migrations/postgres/v030_payments_ledger.py; the two texts
 -- must match.
 CREATE TABLE IF NOT EXISTS payments (
@@ -411,6 +431,74 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_object_kind
     ON payments(stripe_object_id, kind);
 CREATE INDEX IF NOT EXISTS idx_payments_user
     ON payments(user_id, occurred_at DESC);
+
+-- T8630: account deletion audit table -- one row per users-row deletion event
+-- (not one row per user; id BIGSERIAL PK so a re-deleted user_id, e.g. a
+-- second test-account reset, writes a second row instead of colliding).
+-- Sole writer: services/account_deletions.py. The payments.account_deleted_at
+-- stamp is written by services/payments_ledger.py's stamp_account_deleted.
+-- Mirrored in migrations/postgres/v031_account_deletions.py; the two texts
+-- must match.
+CREATE TABLE IF NOT EXISTS account_deletions (
+    id           BIGSERIAL   PRIMARY KEY,
+    user_id      TEXT        NOT NULL,
+    deleted_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    actor        TEXT        NOT NULL,   -- 'self' | 'admin' | 'script'
+    -- 'privacy_endpoint' | 'delete_user_script' | 'reset_test_account'
+    -- | 'reset_test_user_script' | 'copy_user_between_envs'
+    path         TEXT        NOT NULL,
+    had_payments BOOLEAN     NOT NULL,
+    net_cents    INTEGER     NOT NULL DEFAULT 0,  -- SUM(payments.amount_cents) at deletion
+    note         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_account_deletions_user_id
+    ON account_deletions (user_id, deleted_at);
+
+CREATE OR REPLACE FUNCTION payments_append_only() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'payments is append-only: DELETE is forbidden';
+  END IF;
+  -- UPDATE: raise if any immutable column changed
+  IF NEW.id IS DISTINCT FROM OLD.id
+     OR NEW.user_id IS DISTINCT FROM OLD.user_id
+     OR NEW.kind IS DISTINCT FROM OLD.kind
+     OR NEW.amount_cents IS DISTINCT FROM OLD.amount_cents
+     OR NEW.currency IS DISTINCT FROM OLD.currency
+     OR NEW.stripe_object_id IS DISTINCT FROM OLD.stripe_object_id
+     OR NEW.pack IS DISTINCT FROM OLD.pack
+     OR NEW.credits IS DISTINCT FROM OLD.credits
+     OR NEW.occurred_at IS DISTINCT FROM OLD.occurred_at
+     OR NEW.recorded_at IS DISTINCT FROM OLD.recorded_at
+     OR NEW.source IS DISTINCT FROM OLD.source THEN
+    RAISE EXCEPTION 'payments is append-only: immutable column changed';
+  END IF;
+  IF NEW.stripe_charge_id IS DISTINCT FROM OLD.stripe_charge_id
+     AND OLD.stripe_charge_id IS NOT NULL THEN
+    RAISE EXCEPTION 'payments.stripe_charge_id is write-once (NULL->value only)';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_payments_append_only ON payments;
+CREATE TRIGGER trg_payments_append_only
+  BEFORE UPDATE OR DELETE ON payments
+  FOR EACH ROW EXECUTE FUNCTION payments_append_only();
+
+CREATE OR REPLACE FUNCTION payments_no_truncate() RETURNS trigger AS $$
+BEGIN
+  IF current_setting('reelballers.allow_payments_purge', true) = 'on' THEN
+    RETURN NULL;
+  END IF;
+  RAISE EXCEPTION 'payments is append-only: TRUNCATE is forbidden';
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_payments_no_truncate ON payments;
+CREATE TRIGGER trg_payments_no_truncate
+  BEFORE TRUNCATE ON payments
+  FOR EACH STATEMENT EXECUTE FUNCTION payments_no_truncate();
 
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY,

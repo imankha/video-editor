@@ -56,11 +56,30 @@ Upon account deletion, the following are **permanently and immediately** removed
 
 - No backups are kept (R2 is the sole storage layer; we do not maintain separate backups)
 - No "soft delete" or archival — deletion is permanent
-- No data is retained for analytics or research purposes
+- No name, email, card details, or other data that could identify you is retained for analytics
+  or research purposes
+
+### What IS Retained After Deletion
+
+A small set of records is kept after deletion, each keyed to an opaque account id with no name,
+email, or contact details, and each kept for a specific legal, security, or product-improvement
+reason. Keeping them never delays or limits the erasure of your other personal data.
+
+1. **Transaction records.** The amount and date of each payment, keyed to an opaque account id,
+   with no name, email, or card details. Kept solely to meet tax and accounting legal
+   obligations. It is a pseudonymous financial record with no name, email, or card details.
+2. **A record that the account was deleted.** When the deletion happened and through which path,
+   kept to evidence that the erasure was carried out. It holds no name, email, or card details.
+3. **Security logs of staff access.** Where support staff accessed the account, the access log is
+   kept to protect the account and our systems.
+4. **Bug reports you submitted.** The text of a bug report you sent us is kept to help us fix the
+   problem, with your email, device details, and attachments removed.
+5. **Usage and activity statistics.** Kept in de-identified form (no name, email, or contact
+   details), keyed to an opaque account id, to understand how the product is used.
 
 ### Deletion Timeline
 
-- **Immediate:** All data removed upon confirmation of deletion request
+- **Immediate:** Your personal data is removed upon confirmation of the deletion request; only the limited records listed under "What IS Retained After Deletion" are kept, for the legal, security, and product-improvement reasons stated there
 - **Maximum 45 days:** If submitted via email, we fulfill within the CCPA-mandated 45-day window
 
 ---
