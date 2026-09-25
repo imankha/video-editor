@@ -290,14 +290,16 @@ async def delete_account(request: Request):
             # this transaction. The returned R2 object keys (screenshots +
             # console logs) are deleted AFTER commit, with the other storage.
             bug_r2_keys = anonymize_bug_reports(cur, email)
-            cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
-            cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
-            # T8630 round 2: the per-user per-day analytics buckets are pure
-            # analytics (no legal/security reason to keep), so a real erasure
-            # purges them too -- the retained forensic trail is
-            # account_deletions + impersonation_audit, never this.
-            cur.execute("DELETE FROM user_usage_daily WHERE user_id = %s", (user_id,))
-            cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
+            # T8630 round 4 (REVERSES round 2's analytics purge for real
+            # deletions): keep the user's analytics rows -- user_segments (identity
+            # stripped, see deidentify_user_segments), user_actions and
+            # user_usage_daily (kept as-is; every column is a non-identifying
+            # event/count/day), and referrals (opaque ids) -- under the same
+            # opaque user_id so the payments ledger's channel/cohort revenue still
+            # attributes. The FKs to `users` are dropped in v032 so these rows
+            # survive the DELETE FROM users below.
+            from app.analytics import deidentify_user_segments
+            deidentify_user_segments(cur, user_id)
             # T8630 round 3: short-lived login OTPs (keyed by email) and the
             # user's own share-claim links (opaque claimer_user_id, not needed
             # once the account is gone) are personal data purged on a real

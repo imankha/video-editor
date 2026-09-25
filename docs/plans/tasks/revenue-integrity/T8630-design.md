@@ -788,3 +788,35 @@ key is `id BIGSERIAL`, not `user_id` (Approved ruling A) — see §3.1.
 
 APPROVED (user, 2026-09-24) — see "Approved rulings 2026-09-24" above. Proceeding to
 Tester Phase 1 -> Migration -> Implementation -> Reviewer.
+
+---
+
+## Round-4 ruling (2026-09-25): keep de-identified analytics on real deletion
+
+New user decision, REVERSING round 2/3's analytics purge for the three REAL deletion paths
+(privacy endpoint, `delete_user.py`, `copy_user_between_envs.py`). A real deletion now KEEPS the
+user's analytics under the SAME opaque `user_id`, identity stripped, so the `payments` ledger's
+channel/cohort revenue still attributes the deleted payer (paying or not) instead of dropping
+them. The two TEST-RESET paths keep purging analytics (the same `user_id` re-signs-in immediately;
+`create_user_segment` INSERTs `ON CONFLICT (user_id) DO NOTHING`, so a retained row would silently
+keep stale analytics on the re-created account).
+
+Rulings:
+- Keep id, strip identity: analytics rows stay under the same opaque `user_id`; every identifying
+  field removed. Applies to EVERY real deletion, paying or not.
+- Kept vs stripped columns, the readers audit, and the deploy-ordering note live in the task file
+  (`T8630-deletion-preserves-financial-record.md`, "Round-4" section) so there is one source of
+  truth; not duplicated here.
+
+Schema: migration **v032** drops every analytics->users FK, looked up from `pg_constraint` and
+dropped by ACTUAL name (name-agnostic) rather than a guessed `<table>_<col>_fkey`. Load-bearing:
+`user_actions` was `user_flow_events` in v007 and renamed in v009, so its FK keeps the original name
+`user_flow_events_user_id_fkey` on upgraded DBs -- a hardcoded name would no-op and break real
+deletions. Mirrored in `pg.py` `_SCHEMA_DDL`, so the rows outlive `DELETE FROM users` exactly as the
+`payments` ledger does (T8620, no FK by design). The strip is
+one helper, `app.analytics.deidentify_user_segments`, called by all three real paths.
+
+Copy: a fifth retained category (usage/activity statistics, de-identified, keyed to an opaque
+account id, for product improvement) is added to `privacy-policy.md`, `data-retention-policy.md`,
+and `PrivacyPolicy.jsx`; the now-false "no data retained for analytics" / "none for analytics or
+product purposes" claims are corrected. `AccountSettings.jsx` stays exactly as ruling C.

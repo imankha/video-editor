@@ -45,6 +45,7 @@ USER_DATA = PROJECT_ROOT / "user_data"
 # landed AFTER storage was already purged.
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "backend"))
 
+from app.analytics import deidentify_user_segments
 from app.services.account_deletions import (
     DeletionActor,
     DeletionPath,
@@ -290,14 +291,16 @@ def delete_one_postgres(pg_conn, user_id: str, email: str, dry_run: bool,
         print(f"    would delete {cur.fetchone()['cnt']} rows from otp_codes")
         cur.execute("SELECT COUNT(*) as cnt FROM share_claims WHERE claimer_user_id = %s", (user_id,))
         print(f"    would delete {cur.fetchone()['cnt']} rows from share_claims")
-        cur.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
-        print(f"    would delete {cur.fetchone()['cnt']} rows from referrals")
-        cur.execute("SELECT COUNT(*) as cnt FROM user_segments WHERE referrer_id = %s", (user_id,))
-        print(f"    would null referrer_id on {cur.fetchone()['cnt']} other user_segments rows")
-        cur.execute("SELECT COUNT(*) as cnt FROM user_actions WHERE user_id = %s", (user_id,))
-        print(f"    would delete {cur.fetchone()['cnt']} rows from user_actions")
+        # T8630 round 4: analytics are KEPT (de-identified), no longer deleted.
         cur.execute("SELECT COUNT(*) as cnt FROM user_segments WHERE user_id = %s", (user_id,))
-        print(f"    would delete {cur.fetchone()['cnt']} rows from user_segments")
+        print(f"    would KEEP {cur.fetchone()['cnt']} user_segments row (strip utm/click_source/current_session_start)")
+        cur.execute("SELECT COUNT(*) as cnt FROM user_actions WHERE user_id = %s", (user_id,))
+        print(f"    would KEEP {cur.fetchone()['cnt']} user_actions rows as-is")
+        cur.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
+        print(f"    would KEEP {cur.fetchone()['cnt']} referrals rows as-is")
+        if table_present(pg_conn, "user_usage_daily"):
+            cur.execute("SELECT COUNT(*) as cnt FROM user_usage_daily WHERE user_id = %s", (user_id,))
+            print(f"    would KEEP {cur.fetchone()['cnt']} user_usage_daily rows as-is")
         cur.execute("SELECT COUNT(*) as cnt FROM users WHERE user_id = %s", (user_id,))
         print(f"    would delete {cur.fetchone()['cnt']} rows from users")
         return []
@@ -323,14 +326,13 @@ def delete_one_postgres(pg_conn, user_id: str, email: str, dry_run: bool,
     # claimer_user_id is NOT NULL, so the row is deleted rather than nulled.
     cur.execute("DELETE FROM otp_codes WHERE email = %s", (email,))
     cur.execute("DELETE FROM share_claims WHERE claimer_user_id = %s", (user_id,))
-    cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
-    cur.execute("UPDATE user_segments SET referrer_id = NULL WHERE referrer_id = %s", (user_id,))
-    cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
-    cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
-    # T8630 round 2: analytics-only per-day usage buckets, purged with the
-    # user (to_regclass-tolerant for a pre-v022 destination).
-    if table_present(pg_conn, "user_usage_daily"):
-        cur.execute("DELETE FROM user_usage_daily WHERE user_id = %s", (user_id,))
+    # T8630 round 4 (REVERSES round 2/3 analytics purge for real deletions): KEEP
+    # user_segments (identity stripped), user_actions, user_usage_daily and
+    # referrals under the same opaque user_id so channel/cohort revenue still
+    # attributes. Their FKs to `users` are dropped in v032, so these rows survive
+    # the DELETE FROM users below. referrer_id is NOT nulled -- kept as an opaque
+    # id (may point at another deleted-but-retained user); the viral edge stays.
+    deidentify_user_segments(cur, user_id)
     cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
     return bug_r2_keys
 

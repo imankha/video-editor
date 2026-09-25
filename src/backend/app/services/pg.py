@@ -218,10 +218,14 @@ ON pending_teammate_shares(invited_email) WHERE resolved_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_shares_sharer_active
 ON shares(sharer_user_id) WHERE revoked_at IS NULL;
 
+-- T8630 r4 (v032): no FK to users. Like the payments ledger, referral rows are
+-- KEPT (de-identified) when an account is deleted so channel/cohort attribution
+-- survives; referrer_id/referred_id stay as opaque ids that may point at a
+-- deleted (analytics-retained) user.
 CREATE TABLE IF NOT EXISTS referrals (
     id SERIAL PRIMARY KEY,
-    referrer_id TEXT NOT NULL REFERENCES users(user_id),
-    referred_id TEXT NOT NULL REFERENCES users(user_id) UNIQUE,
+    referrer_id TEXT NOT NULL,
+    referred_id TEXT NOT NULL UNIQUE,
     channel VARCHAR(20) NOT NULL,
     source_id TEXT,
     inherited_sport TEXT,
@@ -230,11 +234,15 @@ CREATE TABLE IF NOT EXISTS referrals (
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
 CREATE INDEX IF NOT EXISTS idx_referrals_channel ON referrals(channel);
 
+-- T8630 r4 (v032): no FK to users (see referrals note above). A real account
+-- deletion KEEPS this row, stripped of identity (utm_*, click_source,
+-- current_session_start -> NULL), under the same opaque user_id so the payments
+-- ledger's channel/cohort revenue still attributes.
 CREATE TABLE IF NOT EXISTS user_segments (
-    user_id TEXT PRIMARY KEY REFERENCES users(user_id),
+    user_id TEXT PRIMARY KEY,
     acquired_at DATE NOT NULL DEFAULT CURRENT_DATE,
     origin TEXT NOT NULL DEFAULT 'organic',
-    referrer_id TEXT REFERENCES users(user_id),
+    referrer_id TEXT,
     signup_method TEXT CHECK (signup_method IN ('google', 'otp')),
     -- T8650: DISPLAY CACHE only, per-user. `payments` is the financial record
     -- every revenue aggregate reads; this column is not the source of truth.
@@ -267,8 +275,11 @@ CREATE TABLE IF NOT EXISTS user_usage_daily (
     PRIMARY KEY (user_id, day)
 );
 
+-- T8630 r4 (v032): no FK to users (see referrals note above). Event rows are
+-- KEPT as-is on account deletion (every column is a non-identifying event
+-- name/count/timestamp), under the same opaque user_id.
 CREATE TABLE IF NOT EXISTS user_actions (
-    user_id TEXT NOT NULL REFERENCES users(user_id),
+    user_id TEXT NOT NULL,
     action TEXT NOT NULL,
     platform TEXT NOT NULL DEFAULT 'unknown',
     first_at TIMESTAMPTZ NOT NULL DEFAULT now(),

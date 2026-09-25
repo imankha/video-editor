@@ -36,6 +36,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # at module load so a broken import aborts before any deletion.
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "backend"))
 
+from app.analytics import deidentify_user_segments
 from app.services.account_deletions import (
     DeletionActor,
     DeletionPath,
@@ -137,17 +138,19 @@ def delete_destination_user(dst_cur, old_id: str, dst_email: str) -> list[str]:
         path=DeletionPath.COPY_USER_BETWEEN_ENVS,
     )
     bug_r2_keys = anonymize_bug_reports(dst_cur, dst_email)
-    for table in ("game_storage_refs", "sessions", "user_segments", "user_actions",
+    for table in ("game_storage_refs", "sessions",
                   "credit_transactions", "credit_reservations", "credits"):
         dst_cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (old_id,))
-    if _table_present(dst_cur, "user_usage_daily"):
-        dst_cur.execute("DELETE FROM user_usage_daily WHERE user_id = %s", (old_id,))
     dst_cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (old_id,))
     dst_cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (old_id,))
-    dst_cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (old_id, old_id))
     # share_claims.claimer_user_id is NOT NULL -> delete the row (T8630 round 3).
     dst_cur.execute("DELETE FROM share_claims WHERE claimer_user_id = %s", (old_id,))
     dst_cur.execute("DELETE FROM otp_codes WHERE email = %s", (dst_email,))
+    # T8630 round 4 (REVERSES round 2/3 analytics purge): KEEP user_segments
+    # (identity stripped), user_actions, user_usage_daily and referrals under the
+    # same opaque old_id so channel/cohort revenue still attributes. Their FKs to
+    # `users` are dropped in v032, so these rows survive the DELETE FROM users.
+    deidentify_user_segments(dst_cur, old_id)
     dst_cur.execute("DELETE FROM users WHERE user_id = %s", (old_id,))
     return bug_r2_keys
 

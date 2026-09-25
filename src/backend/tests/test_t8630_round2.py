@@ -14,7 +14,9 @@
    closed-vocabulary paths `reset_test_user_script` / `copy_user_between_envs`);
    copy also stamps `payments.account_deleted_at`, reset does not.
 
-3. `user_usage_daily` (analytics-only) purged on a real deletion.
+3. `user_usage_daily` on a real deletion. NOTE: round 2 purged it; T8630 round 4
+   REVERSED that -- it is now KEPT (de-identified analytics). The test below is
+   updated in place to assert the round-4 behavior.
 
 Every pg_conn test runs against the dedicated throwaway DB (t8630_test2); see
 the kickoff. The subprocess harness stubs R2 with a no-op fake and points
@@ -311,16 +313,22 @@ class TestCopyBetweenEnvsAudit:
         # copy DOES stamp -- the account is really gone on this env.
         pay = _payments(raw_pg_conn, old_id)
         assert len(pay) == 1 and pay[0]["account_deleted_at"] is not None, "copy must stamp the ledger"
-        assert _usage_rows(raw_pg_conn, old_id) == 0
+        # T8630 round 4 REVERSED round 2 here: user_usage_daily is now KEPT
+        # (de-identified analytics) on a real deletion, not purged.
+        assert _usage_rows(raw_pg_conn, old_id) == 1, "round 4: usage_daily is KEPT on a real deletion"
 
 
 # --------------------------------------------------------------------------
-# 4. user_usage_daily purged on a real deletion (privacy endpoint).
+# 4. user_usage_daily on a real deletion (privacy endpoint).
+#    T8630 round 4 REVERSED round 2: it is now KEPT (de-identified analytics),
+#    not purged. Full de-identified-analytics coverage is in test_t8630_round4.py;
+#    this test is updated in place so it documents the reversal at the round-2
+#    site rather than asserting the old (now wrong) purge behavior.
 # --------------------------------------------------------------------------
 
 
-class TestUsageDailyPurged:
-    def test_privacy_deletion_purges_user_usage_daily(self, raw_pg_conn, monkeypatch):
+class TestUsageDailyKeptOnRealDeletion:
+    def test_privacy_deletion_keeps_user_usage_daily(self, raw_pg_conn, monkeypatch):
         from app.routers import privacy as privacy_mod
 
         user_id = "t8630r2_usage"
@@ -343,4 +351,6 @@ class TestUsageDailyPurged:
         asyncio.run(privacy_mod.delete_account(_FakeRequest()))
 
         assert not _user_exists(raw_pg_conn, user_id)
-        assert _usage_rows(raw_pg_conn, user_id) == 0, "user_usage_daily rows must be purged on a real deletion"
+        assert _usage_rows(raw_pg_conn, user_id) == 2, (
+            "round 4: user_usage_daily rows are KEPT (de-identified analytics) on a real deletion"
+        )

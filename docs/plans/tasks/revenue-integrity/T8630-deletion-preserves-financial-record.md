@@ -151,6 +151,93 @@ wording with the existing T1740 privacy documents rather than inventing a second
        attachments removed. The three existing categories are unchanged; `AccountSettings.jsx`
        stays exactly as ruling C.
 
+### Round-4 ruling (2026-09-25): keep de-identified analytics on real deletion
+
+New user decision, REVERSING round 2/3's analytics purge for the three REAL deletion paths
+(privacy endpoint, `delete_user.py`, `copy_user_between_envs.py`): a real deletion now KEEPS the
+user's analytics rows under the SAME opaque `user_id`, with every identifying field stripped, so
+the `payments` ledger's channel/cohort revenue still attributes the deleted payer (paying or not)
+to their real channel instead of dropping them. The two TEST-RESET paths (`_reset_test_account`,
+`reset-test-user.py`) KEEP purging analytics: `create_user_segment` INSERTs
+`ON CONFLICT (user_id) DO NOTHING`, so a retained row would silently persist on the immediate
+re-signup and attach STALE analytics to the re-created account (verified by reading
+`analytics.py::create_user_segment`). So resets must delete.
+
+**FK change (migration v032).** For these rows to survive `DELETE FROM users`, the analytics
+tables must stop referencing `users` -- exactly like the `payments` ledger (no FK, T8620). v032
+drops every FK from these three tables to `users(user_id)`, looked up from `pg_constraint` and
+dropped by ACTUAL name -- NOT by a guessed `<table>_<col>_fkey`. This is load-bearing: `user_actions`
+was created in v007 as `user_flow_events` and renamed in v009, and Postgres keeps a renamed table's
+FK under its ORIGINAL name, so on any real upgraded DB the live constraint is
+`user_flow_events_user_id_fkey`, not `user_actions_user_id_fkey` -- a hardcoded drop would silently
+no-op and break every real deletion. (`user_segments`/`referrals` were created directly under their
+final names, so their FKs -- `user_segments_user_id_fkey`, `user_segments_referrer_id_fkey`,
+`referrals_referrer_id_fkey`, `referrals_referred_id_fkey` -- are as named.) Mirrored in `pg.py`
+`_SCHEMA_DDL`; `user_usage_daily` never had one. PKs and the `referrals.referred_id` UNIQUE are untouched. Deploy ordering: like v031, v032
+must be applied (admin `migrate-postgres`) with the deploy; the new deletion code assumes the FKs
+are gone.
+
+**Column classification (strip = set NULL; keep = unchanged). Single strip helper:
+`app.analytics.deidentify_user_segments`.**
+
+| Table | Column | Keep/Strip | Why |
+|---|---|---|---|
+| user_segments | user_id | keep | opaque id; the join key revenue attributes on |
+| user_segments | acquired_at | keep | cohort date |
+| user_segments | origin | keep | channel category (revenue GROUP BY) |
+| user_segments | referrer_id | keep | opaque user id; viral attribution (direct/viral split); FK dropped so it may point at a deleted-but-retained user |
+| user_segments | signup_method | keep | coarse category (google/otp) |
+| user_segments | total_spent_cents | keep | display cache the revenue views sum |
+| user_segments | last_active_at | keep | activity timestamp |
+| user_segments | total_usage_seconds | keep | usage count |
+| user_segments | created_at | keep | timestamp |
+| user_segments | current_session_start | **strip** | models a LIVE session, impossible for a deleted account |
+| user_segments | utm_source/medium/campaign/content/term | **strip** | marketing attribution detail; `origin` (derived from these at signup) already carries the channel, so stripping does not affect attribution |
+| user_segments | click_source | **strip** | same as utm |
+| user_actions | user_id, action, platform, first_at, count | keep | all non-identifying (event name / coarse platform / timestamp / count); nothing to strip |
+| user_usage_daily | user_id, day, seconds | keep | carries no identity |
+| referrals | id, referrer_id, referred_id, channel, source_id, inherited_sport, created_at | keep | ids opaque; channel/sport coarse; `source_id` is an opaque invite-code/share-id (checked the three `record_referral` call sites: invite code or `str(share_id)`, never a URL/name/email); nothing to strip |
+
+### Round-4 readers audit (every reader of the four tables)
+
+Behavior once a real deletion leaves an orphaned (no `users` row) analytics row:
+- **Admin user list / user detail (`admin.py` ~253/324/351):** anchored `FROM users u LEFT JOIN
+  user_segments s`. The deleted user's `users` row is gone, so it never appears -- a retained
+  segment row does NOT resurrect it. (Test: TestAdminUserListExcludesDeleted.)
+- **Impersonation (`admin.py`):** starts a session for a `users` row that no longer exists ->
+  cannot target a deleted user. Safe.
+- **Revenue by channel/cohort + grand total (`admin.py` 1540/1706/2225):** `FROM user_segments s`
+  (no `users` join by default), GROUP BY `origin` / `acquired_at`, SUM `total_spent_cents`. The
+  retained row IS counted -> the deleted payer attributes to their real channel/cohort, and the
+  grand total (same source) stays consistent. THIS IS THE GOAL. Caveat: with `exclude_test=on`
+  the query adds `JOIN users u` (to read `is_test_account`), which drops orphaned rows -- a
+  deleted payer's revenue is excluded ONLY under that optional test-exclusion view, because there
+  is no `users` row left to prove non-test. Documented, not fixed (would need snapshotting
+  is_test_account into user_segments; out of scope; payments + account_deletions still hold the
+  money and the event).
+- **Pulse/funnel (`admin.py` 370/1475/1728/2136-2196):** `JOIN user_segments s ON a.user_id`.
+  A deleted user's kept segment + actions now count in cohort funnels (they were a real signup);
+  correct, not a ghost. `exclude_test` path adds `JOIN users` and drops them (same caveat).
+- **Referral admin views (`admin.py` 2352 leaderboard, 2385 user detail):** INNER `JOIN users`
+  on referrer/referred -> a kept referrals row whose referrer/referred user is deleted drops out
+  (no email to show). Acceptable. `by-channel` (2369) and `tree` (2403) read `FROM referrals`
+  only -> orphaned rows counted (a referral event that really happened). Acceptable.
+- **Referral CREDIT logic:** there is NO code that scans the `referrals` table to grant credits
+  (grepped `referr*` x credit/grant/reward/bonus -> none); referral attribution is event-driven
+  at signup via `record_referral` (INSERT ... ON CONFLICT DO NOTHING). So a retained referrals
+  row grants nothing to or from a deleted user. Requirement satisfied by construction.
+- **`analytics.py` writers/readers (origin, last_active_at, current_session_start, session
+  timing):** all run inside a LIVE user's request (`record_activity` etc.). A deleted user makes
+  no requests, so these never touch its orphaned row. `create_user_segment` ON CONFLICT DO
+  NOTHING only matters on re-signup under the same user_id, which happens only on a reset (which
+  purges) -- real deletions never reuse a user_id.
+- **Win-back / outreach / re-engagement email jobs:** none exist (no emailer selects users by
+  inactivity / last_active_at). Nothing targets a deleted user; no email remains anyway.
+- **Sweep / background jobs:** none read these four tables to email or delete based on them; the
+  session-timing sweeps are request-driven (above). Safe.
+- **`revenue_reconciliation.py`:** compares Stripe (source of truth) to local per-user payments /
+  `total_spent_cents`; keyed on user ids from payments, tolerant of missing `users`. Safe.
+
 ## Implementation
 
 ### Steps
@@ -184,3 +271,7 @@ wording with the existing T1740 privacy documents rather than inventing a second
 - [x] (Round 3) A real account deletion anonymizes the user's `bug_reports` rows (keeps the
       text, clears every identifying/device/attachment column) and deletes the referenced R2
       screenshot/log objects; the user's `otp_codes` and `share_claims` rows are purged
+- [x] (Round 4) A real account deletion KEEPS the user's `user_segments` (identity stripped),
+      `user_actions`, `user_usage_daily`, and `referrals` rows under the same opaque `user_id`;
+      channel/cohort revenue still attributes the deleted payer (not dropped); the users-anchored
+      admin list does not show the deleted user; a test reset STILL purges analytics
