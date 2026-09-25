@@ -96,9 +96,13 @@ def phase_to_status(phase: str) -> ExportStatus:
         return ExportStatus.PROCESSING
 
 # Rating adjectives for clip name generation (1-5 stars)
-# Used to generate names like "Brilliant Goal and Dribble"
+# Used to generate names like "Highlight Goal and Dribble"
+# T11110: the 5-star rating is the gesture that makes a highlight, so its
+# adjective is "Highlight" (was "Brilliant"). Persisted identifiers that still
+# read "brilliant" (SourceType value, quest ids, API fields) are deliberately
+# unchanged; only the shown word moved.
 RATING_ADJECTIVES: dict[int, str] = {
-    5: 'Brilliant',
+    5: 'Highlight',
     4: 'Good',
     3: 'Interesting',
     2: 'Technical Lapse',
@@ -112,17 +116,21 @@ RATING_NOTATION: dict[int, str] = {
     2: '?',    # Mistake
     3: '!?',   # Interesting
     4: '!',    # Good
-    5: '!!'    # Brilliant
+    5: '!!'    # Highlight
 }
 
-# Rating colors (color-blind safe palette) for FFmpeg overlays
+# Rating colors (color-blind safe palette) for FFmpeg overlays.
+# T11110 note: this is the SEPARATE FFmpeg overlay palette, NOT the UI badge
+# palette (that lives in the frontend clipConstants.js RATING_BADGE_COLORS, which
+# moved to gold for rating 5). Only the stale "Brilliant" adjective label is
+# refreshed here; the overlay color VALUES are intentionally unchanged.
 # Format: 0xRRGGBB for FFmpeg compatibility
 RATING_COLORS_HEX: dict[int, str] = {
     1: '0xC62828',  # Brick Red - Blunder
     2: '0xF9A825',  # Amber Yellow - Mistake
     3: '0x1565C0',  # Strong Blue - Interesting
     4: '0x2E7D32',  # Teal-Green - Good
-    5: '0x66BB6A',  # Light Green - Brilliant
+    5: '0x66BB6A',  # Light Green - Highlight
 }
 
 # Rating colors as CSS hex (without 0x prefix) for frontend consistency
@@ -131,7 +139,7 @@ RATING_COLORS_CSS: dict[int, str] = {
     2: '#F9A825',  # Amber Yellow - Mistake
     3: '#1565C0',  # Strong Blue - Interesting
     4: '#2E7D32',  # Teal-Green - Good
-    5: '#66BB6A',  # Light Green - Brilliant
+    5: '#66BB6A',  # Light Green - Highlight
 }
 
 # Version for overlay style - increment to invalidate cache when style changes
@@ -220,7 +228,9 @@ class SourceType(str, Enum):
     Source type for final video exports.
 
     Indicates where the export originated from:
-    - BRILLIANT_CLIP: Auto-generated from a brilliant-rated clip
+    - BRILLIANT_CLIP: Auto-generated from a Highlight-rated (5-star) clip. The
+      enum VALUE stays "brilliant_clip" (persisted identifier, T11110); only the
+      display_label follows the "Highlight" rename.
     - CUSTOM_PROJECT: User-created project with custom clip selection
     - ANNOTATED_GAME: Full game export from annotate mode
     """
@@ -232,7 +242,7 @@ class SourceType(str, Enum):
     def display_label(self) -> str:
         """Human-readable label for UI display."""
         labels = {
-            SourceType.BRILLIANT_CLIP: "Brilliant Clip",
+            SourceType.BRILLIANT_CLIP: "Highlight Clip",
             SourceType.CUSTOM_PROJECT: "Custom Project",
             SourceType.ANNOTATED_GAME: "Annotated Game",
         }

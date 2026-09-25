@@ -22,7 +22,21 @@ from app.constants import (
     get_rating_color_hex,
     get_rating_color_css,
     is_valid_rating,
+    SourceType,
 )
+
+
+class TestSourceTypeLabels:
+    """T11110: the 5-star adjective became 'Highlight'; the BRILLIANT_CLIP
+    source type's DISPLAY label follows it, while its persisted value stays
+    'brilliant_clip' (renaming the identifier buys nothing and needs a
+    migration)."""
+
+    def test_brilliant_clip_display_label_reads_highlight(self):
+        assert SourceType.BRILLIANT_CLIP.display_label == 'Highlight Clip'
+
+    def test_brilliant_clip_persisted_value_unchanged(self):
+        assert SourceType.BRILLIANT_CLIP.value == 'brilliant_clip'
 
 
 class TestRatingAdjectives:
@@ -37,7 +51,7 @@ class TestRatingAdjectives:
 
     def test_expected_values(self):
         """RATING_ADJECTIVES should have the expected values."""
-        assert RATING_ADJECTIVES[5] == 'Brilliant'
+        assert RATING_ADJECTIVES[5] == 'Highlight'
         assert RATING_ADJECTIVES[4] == 'Good'
         assert RATING_ADJECTIVES[3] == 'Interesting'
         assert RATING_ADJECTIVES[2] == 'Technical Lapse'
@@ -45,7 +59,7 @@ class TestRatingAdjectives:
 
     def test_get_rating_adjective_valid(self):
         """get_rating_adjective returns correct values for valid ratings."""
-        assert get_rating_adjective(5) == 'Brilliant'
+        assert get_rating_adjective(5) == 'Highlight'
         assert get_rating_adjective(1) == 'Mental Lapse'
 
     def test_get_rating_adjective_invalid(self):

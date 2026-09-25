@@ -101,8 +101,8 @@ describe('ClipDetailsEditor — rating caption (T8490 / T9820)', () => {
   // rating-gated, so 4 stars must read off hasReel, never demand another star.
   it('rating 4 + no clip yet points at the Clip control below, never "one more star"', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, rating: 4, my_athlete: true, autoProjectId: null }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.getByText('Good play (!) - create a clip below.')).toBeTruthy();
-    expect(screen.queryByText(/one more star|another star/)).toBeNull();
+    expect(screen.getByText('Good play (!).')).toBeTruthy();
+    expect(screen.queryByText(/one more star|another star|create a clip below/)).toBeNull();
   });
 
   it('rating 4 + clip already exists says so, does not demand another star', () => {
@@ -110,7 +110,7 @@ describe('ClipDetailsEditor — rating caption (T8490 / T9820)', () => {
     expect(screen.getByText('Good play (!) - clip already created from play.')).toBeTruthy();
   });
 
-  it('rating 5 + My Athlete + no clip yet points at the Clip control below, never "will be created"', () => {
+  it('rating 5 + My Athlete + no clip yet shows the Highlight label, never "will be created"', () => {
     render(
       <ClipDetailsEditor
         region={{ ...baseRegion, rating: 5, my_athlete: true, autoProjectId: null }}
@@ -118,7 +118,7 @@ describe('ClipDetailsEditor — rating caption (T8490 / T9820)', () => {
         onDelete={() => {}}
       />
     );
-    expect(screen.getByText('Brilliant play (!!) - create a clip below.')).toBeTruthy();
+    expect(screen.getByText('Highlight play (!!).')).toBeTruthy();
   });
 
   it('rating 5 + My Athlete + clip already exists says so, does not re-offer creation', () => {
@@ -129,10 +129,10 @@ describe('ClipDetailsEditor — rating caption (T8490 / T9820)', () => {
         onDelete={() => {}}
       />
     );
-    expect(screen.getByText('Brilliant play (!!) - clip already created from play.')).toBeTruthy();
+    expect(screen.getByText('Highlight play (!!) - clip already created from play.')).toBeTruthy();
   });
 
-  it('rating 5 + Team shows the team-plays-dont-create-clips caption', () => {
+  it('rating 5 + Team shows the Highlight team caption', () => {
     render(
       <ClipDetailsEditor
         region={{ ...baseRegion, rating: 5, my_athlete: false, autoProjectId: null }}
@@ -140,6 +140,6 @@ describe('ClipDetailsEditor — rating caption (T8490 / T9820)', () => {
         onDelete={() => {}}
       />
     );
-    expect(screen.getByText("Brilliant team play (!!) - team plays don't create clips.")).toBeTruthy();
+    expect(screen.getByText('Highlight team play (!!).')).toBeTruthy();
   });
 });
