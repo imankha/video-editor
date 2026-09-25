@@ -1,6 +1,6 @@
 # T8655: Remove the dead credit-amount-to-price map
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 2
 **Complexity:** 1
 **Created:** 2026-09-24
