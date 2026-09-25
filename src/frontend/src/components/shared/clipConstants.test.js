@@ -180,9 +180,13 @@ describe('getEditRatingCaption (edit mode)', () => {
     expect(getEditRatingCaption(5, true, true)).toBe('Highlight play (!!) - clip already created from play.');
   });
 
-  it('rating 5 + Team -> Highlight team label, no removed-control claim, regardless of hasReel', () => {
+  // T11110: team plays CAN become highlights (H13), so the "clip already created"
+  // clause applies to the Team label the same as the My Athlete label.
+  it('rating 5 + Team -> Highlight team label, reflects hasReel like My Athlete does', () => {
     expect(getEditRatingCaption(5, false, false)).toBe('Highlight team play (!!).');
-    expect(getEditRatingCaption(5, false, true)).toBe('Highlight team play (!!).');
+    expect(getEditRatingCaption(5, false, true)).toBe(
+      'Highlight team play (!!) - clip already created from play.'
+    );
   });
 
   it('no create-clip claim ever depends on a star count (all ratings x hasReel)', () => {

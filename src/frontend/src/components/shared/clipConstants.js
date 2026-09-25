@@ -110,7 +110,8 @@ export function getRatingCaption(rating, mine, createIntent) {
 // T11110: "Brilliant" -> "Highlight". The old "create a clip below" / "team plays
 // don't create clips" clauses named a control that no longer exists, so they are
 // dropped (the full caption rewrite is T11150/T11160); the true "clip already
-// created" clause stays.
+// created" clause stays, and applies to team plays too (per H13, team plays CAN
+// become highlights).
 export function getEditRatingCaption(rating, mine, hasReel) {
   if (!rating) return 'How good was this play? Rate it 1 to 5.';
   if (rating === 1) return `Mental lapse (${RATING_NOTATION[1]}) - a play to learn from.`;
@@ -121,10 +122,10 @@ export function getEditRatingCaption(rating, mine, hasReel) {
       ? `Good play (${RATING_NOTATION[4]}) - clip already created from play.`
       : `Good play (${RATING_NOTATION[4]}).`;
   }
-  if (!mine) return `Highlight team play (${RATING_NOTATION[5]}).`;
+  const label = mine ? 'Highlight play' : 'Highlight team play';
   return hasReel
-    ? `Highlight play (${RATING_NOTATION[5]}) - clip already created from play.`
-    : `Highlight play (${RATING_NOTATION[5]}).`;
+    ? `${label} (${RATING_NOTATION[5]}) - clip already created from play.`
+    : `${label} (${RATING_NOTATION[5]}).`;
 }
 
 // T9520 N35: the ONE documented star-to-descriptor mapping, e.g. "4 stars · Good".
