@@ -1,6 +1,6 @@
 # T11200: Read-only census of multi-clip drafts and reels (all envs)
 
-**Status:** WIP
+**Status:** STAGING (merged PR #509, 7b6b2c60; script done, staging/prod runs still owed)
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-24
