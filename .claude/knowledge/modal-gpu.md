@@ -1,6 +1,10 @@
 ---
 domain: modal-gpu
-updated: 2026-09-03 (T8270: staging + prod are now SEPARATE Modal apps -- app name resolved from
+updated: 2026-09-25 (T11210: corrected Entry-points caller lines -- `call_modal_framing_ai` is at
+modal_client.py:632, caller export_helpers.py:232, and is NOT the single-clip `/render` path;
+single-clip `/render` uses `call_modal_clips_ai` (multi_clip.py:1479) via `_export_clips`, now pinned
+by tests/test_export_golden_single_clip_modal.py);
+        2026-09-03 (T8270: staging + prod are now SEPARATE Modal apps -- app name resolved from
 APP_ENV via resolve_modal_app_name, deploy is per-environment, default rollout is staging-verify-then-prod
 - see Entry points / Invariant 3 below); 2026-09-02 (T8280: process_clips_ai read loop now SKIPS enhance()+imwrite() for source
 frames off the target-fps grid when down-sampling, ~40% fewer GPU-upscale calls on a 50fps source
@@ -18,8 +22,8 @@ since ~forever - see Recovery section); 2026-07-11 (T4240 recovery bugs fixed; T
 
 ## Entry points
 Always call the **unified interface** in `modal_client.py` (backend CLAUDE.md rule) — it routes Modal vs local internally:
-- `call_modal_framing_ai` (`modal_client.py:489`) — single-clip framing+upscale. Caller: `export_helpers.py:227`.
-- `call_modal_clips_ai` (`:784`) — multi-clip. Caller: `multi_clip.py:1316`. NO local fallback — raises if Modal disabled (local branch lives in `multi_clip.py:1463+` instead).
+- `call_modal_framing_ai` (`modal_client.py:632`) — framing+upscale of ONE already-known R2 key. Caller: `export_helpers.py:232` (the recovery/finalize seam). **NOT the single-clip `/render` path** — `POST /api/export/render` (`framing.py`) refuses >1 clip then calls `multi_clip._export_clips` with a one-element list, so single-clip export goes through `call_modal_clips_ai` just like multi-clip (concat is a no-op for one clip, `video_processing.py:3252`). That single-clip Modal path is characterized by `tests/test_export_golden_single_clip_modal.py` (T11210).
+- `call_modal_clips_ai` (`:925`) — the export pipeline for 1..N clips. Caller: `multi_clip.py:1479`. NO local fallback — raises if Modal disabled (local branch lives in `multi_clip.py:1463+` instead).
 - `call_modal_overlay` (`:986`) / `call_modal_overlay_auto` (`:1200`, always sequential — parallel was 3-4x costlier, experiment E7). Callers: `export_worker.py:387`, `overlay.py:1867`.
 - `call_modal_detect_players` (`:1252`) / `_batch` (`:1299`) — YOLO. Caller: `routers/detection.py`.
 

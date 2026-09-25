@@ -13,7 +13,6 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { useQuestStore } from './questStore';
 import { PROFILING_ENABLED } from '../utils/profiling';
 
 const API_BASE_URL = `${API_BASE}/api`;
@@ -132,31 +131,6 @@ export const useProjectsStore = create((set, get) => ({
     const project = await get().fetchProject(projectId);
     set({ selectedProject: project });
     return project;
-  },
-
-  /**
-   * Create a new project
-   */
-  createProject: async (name, aspectRatio) => {
-    set({ loading: true, error: null });
-    try {
-      const response = await apiFetch(`${API_BASE_URL}/projects`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, aspect_ratio: aspectRatio }),
-      });
-      if (!response.ok) throw new Error('Failed to create project');
-      const project = await response.json();
-
-      await get().fetchProjects();
-      // T540: Refresh quest progress after project creation
-      useQuestStore.getState().fetchProgress({ force: true });
-      return project;
-    } catch (err) {
-      set({ error: err.message, loading: false });
-      console.error('[projectsStore] createProject error:', err);
-      return null;
-    }
   },
 
   /**
