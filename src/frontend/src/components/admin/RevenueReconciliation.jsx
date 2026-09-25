@@ -14,6 +14,7 @@ const CAUSE_STYLES = {
   refund: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
   dispute: 'bg-red-500/20 text-red-300 border-red-500/40',
   test_mode_era: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+  account_deleted: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
   unknown: 'bg-gray-500/20 text-gray-300 border-gray-500/40',
   aligned: 'bg-green-500/20 text-green-300 border-green-500/40',
 };
@@ -22,6 +23,7 @@ const CAUSE_LABELS = {
   refund: 'Refund',
   dispute: 'Dispute',
   test_mode_era: 'Test-mode era',
+  account_deleted: 'Account deleted',
   unknown: 'Unknown',
   aligned: 'Aligned',
 };
@@ -30,6 +32,7 @@ export function RevenueReconciliation() {
   const data = useAdminStore(s => s.reconciliationData);
   const loading = useAdminStore(s => s.reconciliationLoading);
   const error = useAdminStore(s => s.reconciliationError);
+  const healResults = useAdminStore(s => s.reconciliationHealResults);
   const fetchReconciliation = useAdminStore(s => s.fetchReconciliation);
   const healReconciliation = useAdminStore(s => s.healReconciliation);
 
@@ -128,14 +131,29 @@ export function RevenueReconciliation() {
                     </tr>
                   </thead>
                   <tbody>
-                    {drifted.map(row => (
+                    {drifted.map(row => {
+                      const heal = healResults?.[row.user_id];
+                      const healFailed = heal && heal.healed === false;
+                      return (
                       <tr key={row.user_id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                         <td className="px-3 py-2.5 text-gray-200 text-xs">
                           {row.email || <span className="text-gray-500">{row.user_id}</span>}
+                          {!row.email && (
+                            // T8640 Decision D: explain an id-only row instead of a bare UUID.
+                            <div className="text-gray-500 text-[10px] mt-0.5">
+                              {row.deleted_at ? `account deleted ${row.deleted_at}` : 'no local account'}
+                            </div>
+                          )}
                           {row.has_pending_dispute && (
                             <span className="ml-2 inline-flex items-center gap-1 text-orange-400" title="Has an open dispute">
                               <AlertTriangle size={11} /> dispute
                             </span>
+                          )}
+                          {healFailed && (
+                            // T8640: a heal that did not succeed must be visible on the row.
+                            <div className="mt-0.5 inline-flex items-center gap-1 text-red-400 text-[10px]" title={heal.skipped || 'Heal did not succeed'}>
+                              <AlertTriangle size={11} /> Heal failed{heal.skipped ? `: ${heal.skipped}` : ''}
+                            </div>
                           )}
                         </td>
                         <td className="px-3 py-2.5 text-right text-gray-300 text-xs">{fmtMoney(row.local_cents)}</td>
@@ -157,7 +175,8 @@ export function RevenueReconciliation() {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

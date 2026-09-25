@@ -380,6 +380,40 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
   list is unchanged (u always present -> COALESCE never falls back). `total_spent_cents` survives ONLY as the per-user display cache
   (`bump_total_spent`, `list_users`). Tests: `tests/test_t8650_revenue_from_ledger.py`. The pg.py
   `_SCHEMA_DDL` column comment for `total_spent_cents` is deferred (T8630 owns that file).
+- **T8640 (epic 3/6): the on-demand reconciliation panel understands deleted accounts and stops
+  lying about heals.** Lives in `routers/admin.py` `_compute_reconciliation(exclude_test)` +
+  `services/revenue_reconciliation.py`. Three invariants:
+  1. **Local truth by account state.** For a LIVE account the reconciler still compares
+     `user_segments.total_spent_cents` (this panel AUDITS that cache — it's the ONLY revenue
+     surface that still reads the cache on purpose; aggregates moved to the ledger in T8650). For a
+     DELETED payer (no `users` row) there is no cache to audit, so local truth is
+     `SUM(payments.amount_cents)` (`_ledger_sum_for`); the T8620 backfill made that == Stripe net,
+     so the row is ALIGNED by construction (option 1) and drops off the drift view — the incident's
+     bigajosue row reconciles with no acknowledge gesture and no schema change.
+  2. **`DriftCause.ACCOUNT_DELETED`** (priority: aligned ▸ test_mode_era ▸ account_deleted ▸ dispute
+     ▸ refund ▸ unknown). `_classify_cause` stays PURE — the new fact arrives as
+     `local_account_exists: bool` (default True), computed by the caller from the Postgres read,
+     never a DB reach inside the classifier. It only fires for the residual case where a deleted
+     account's ledger still disagrees with Stripe net. Heal SKIPS an `account_deleted` row
+     (`set_total_spent` is never attempted for it) → `healed: false` with an explicit skip reason.
+  3. **Symmetric test-account filter (the imankh incident guard).** The endpoints take
+     `exclude_test: bool = True` (same default as `list_users`). The excluded id set is resolved
+     ONCE (`_excluded_test_user_ids`, faithful to the `_test_exclusion` COALESCE) and removed from
+     BOTH the local map AND the Stripe aggregate before `classify_users`. Before T8640
+     `_load_local_spent_positive` hardcoded `_test_exclusion(True)` on the LOCAL side only, so a
+     flagged account with live Stripe history (imankh, `pi_3TwPFMIxob3dHqK044Ye5tgk`, 399) was
+     dropped from local, re-entered via the stripe-only backfill at `local 0`, and showed as a
+     phantom `unknown` drift whose "Adopt Stripe value" wrote 399, returned `healed: true`, yet
+     drifted again next run — a heal that reported success and changed nothing. Now: filter ON →
+     absent from both sides; filter OFF → aligned across both. **NEVER re-introduce a one-sided
+     filter here.** Decision D: id-only rows carry `deleted_at` from `account_deletions`
+     (`_deletions_for`) so the UI renders "account deleted 2026-08-24" / "no local account" instead
+     of a bare UUID. Frontend: `adminStore.fetchReconciliation`/`healReconciliation` thread
+     `excludeTest` and store per-row `reconciliationHealResults` so a failed heal is visible on its
+     row. Design: `docs/plans/tasks/revenue-integrity/T8640-design.md`. Tests:
+     `tests/test_revenue_reconciliation.py` (`TestAccountDeletedClassifier`,
+     `TestDeletedPayerEndpoint`, `TestFilterSymmetryImankhRegression` — the imankh regression goes
+     through the REAL TestClient endpoint, both filter states).
 
 ### Account deletion contract (T8630)
 Revenue Record Integrity epic 2/6. Fixes the two 2026-09-03 incident holes: deletion used to

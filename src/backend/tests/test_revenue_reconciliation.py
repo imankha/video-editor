@@ -386,3 +386,224 @@ class TestChargeRefundedWebhook:
         resp = self._post_refund(client, event)
         assert resp.status_code == 200
         assert _total_spent("user-b") == 0
+
+
+# ===========================================================================
+# T8640: deleted-account cause + filter symmetry + honest heals.
+#
+# Pure classifier cases use string literals ("account_deleted") rather than the
+# enum member so a pre-change run fails BEHAVIORALLY (got "unknown", expected
+# "account_deleted"), not with an AttributeError on a missing enum member.
+# ===========================================================================
+
+class TestAccountDeletedClassifier:
+    """Pure classifier: a payer with no local account + live Stripe history."""
+
+    def test_deleted_account_with_drift_classifies_account_deleted(self):
+        # Ledger truth 399 (local), Stripe net 199 after a refund not mirrored to
+        # the ledger -> genuine residual drift on a DELETED account.
+        agg = build_stripe_net_by_user([make_pi("gone", 399, refunded=200)])
+        rows = classify_users(
+            {"gone": {"email": None, "local_cents": 399, "account_exists": False}}, agg)
+        r = _row_for(rows, "gone")
+        assert r["cause"] == "account_deleted"        # NOT "refund", NOT "unknown"
+        assert r["drifted"] is True
+
+    def test_account_deleted_wins_over_refund(self):
+        agg = build_stripe_net_by_user([make_pi("gone", 699, refunded=300)])
+        rows = classify_users(
+            {"gone": {"email": None, "local_cents": 699, "account_exists": False}}, agg)
+        assert _row_for(rows, "gone")["cause"] == "account_deleted"
+
+    def test_account_deleted_wins_over_dispute(self):
+        # Deleted payer that ALSO has a lost dispute -> account_deleted wins.
+        agg = build_stripe_net_by_user(
+            [make_pi("gone", 399, dispute={"status": "lost", "amount": 399})])
+        rows = classify_users(
+            {"gone": {"email": None, "local_cents": 399, "account_exists": False}}, agg)
+        assert _row_for(rows, "gone")["cause"] == "account_deleted"
+
+    def test_existing_account_stays_unknown_not_account_deleted(self):
+        # account_exists True -> live drift stays "unknown" (regression).
+        agg = build_stripe_net_by_user([make_pi("live", 399)])
+        rows = classify_users(
+            {"live": {"email": None, "local_cents": 699, "account_exists": True}}, agg)
+        assert _row_for(rows, "live")["cause"] == "unknown"
+
+    def test_account_exists_defaults_true_backcompat(self):
+        # A local entry WITHOUT the account_exists key must behave as before
+        # (exists) so the pre-T8640 pure tests and call sites stay valid.
+        agg = build_stripe_net_by_user([make_pi("live", 399)])
+        rows = classify_users({"live": {"email": None, "local_cents": 699}}, agg)
+        assert _row_for(rows, "live")["cause"] == "unknown"
+
+    def test_row_carries_account_exists(self):
+        agg = build_stripe_net_by_user([make_pi("gone", 399, refunded=200)])
+        rows = classify_users(
+            {"gone": {"email": None, "local_cents": 399, "account_exists": False}}, agg)
+        assert _row_for(rows, "gone")["account_exists"] is False
+
+
+# --------------------------------------------------------------------------- #
+# Endpoint-level (real TestClient) seeding helpers for the T8640 cases.
+# --------------------------------------------------------------------------- #
+
+def _seed_segment(user_id, cents):
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        conn.cursor().execute(
+            "INSERT INTO user_segments (user_id, total_spent_cents) VALUES (%s, %s) "
+            "ON CONFLICT (user_id) DO UPDATE SET total_spent_cents = EXCLUDED.total_spent_cents",
+            (user_id, cents),
+        )
+
+
+def _mark_test_account(user_id, is_test=True):
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        conn.cursor().execute(
+            "UPDATE users SET is_test_account = %s WHERE user_id = %s", (is_test, user_id)
+        )
+
+
+def _seed_ledger_purchase(user_id, cents, *, obj_id):
+    from datetime import UTC, datetime
+
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        conn.cursor().execute(
+            """INSERT INTO payments (user_id, kind, amount_cents, currency, stripe_object_id,
+                                     occurred_at, source)
+               VALUES (%s, 'purchase', %s, 'usd', %s, %s, 'backfill')""",
+            (user_id, cents, obj_id, datetime.now(UTC)),
+        )
+
+
+def _seed_deletion(user_id, *, net_cents):
+    """One account_deletions row (cleaned by the recon_client fixture teardown)."""
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        conn.cursor().execute(
+            """INSERT INTO account_deletions (user_id, actor, path, had_payments, net_cents)
+               VALUES (%s, 'self', 'privacy_endpoint', true, %s)""",
+            (user_id, net_cents),
+        )
+
+
+@pytest.fixture()
+def recon_client(pg_conn, tmp_path, monkeypatch):
+    """Admin-only client for T8640 endpoint tests; each test seeds its own data.
+
+    Cleans up the account_deletions rows it creates (that table is intentionally
+    NOT truncated by pg_conn -- it outlives account deletion)."""
+    from app.services.auth_db import create_user
+    from app.services.pg import get_pg
+    create_user("admin-user", email="test-admin@test.local")
+    with get_pg() as conn:
+        conn.cursor().execute(
+            "INSERT INTO admin_users (email) VALUES ('test-admin@test.local') ON CONFLICT DO NOTHING")
+    monkeypatch.setattr("stripe.api_key", "sk_test_dummy")
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
+         patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
+         patch("app.services.user_db._initialized_user_dbs", set()):
+        from app.main import app
+        yield TestClient(app, raise_server_exceptions=True)
+    with get_pg() as conn:
+        conn.cursor().execute(
+            "DELETE FROM account_deletions WHERE user_id IN "
+            "('deleted-aligned', 'deleted-drift', 'user-a')")
+
+
+def _rows_by_uid(resp):
+    return {r["user_id"]: r for r in resp.json()["rows"]}
+
+
+class TestDeletedPayerEndpoint:
+    def test_deleted_payer_aligned_by_ledger_not_drifted(self, recon_client):
+        # bigajosue shape: a backfilled ledger row, NO users/user_segments row.
+        # Ledger 399 == Stripe net 399 -> aligned by construction (option 1),
+        # so it drops off the drift view instead of showing "unknown".
+        _seed_ledger_purchase("deleted-aligned", 399, obj_id="pi_del_aligned")
+        _seed_deletion("deleted-aligned", net_cents=399)
+        fixture = [make_pi("deleted-aligned", 399, pi_id="pi_del_aligned")]
+        with patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture):
+            resp = recon_client.get("/api/admin/revenue-reconciliation", headers=_admin())
+        assert resp.status_code == 200
+        row = _rows_by_uid(resp)["deleted-aligned"]
+        assert row["drifted"] is False
+        assert row["local_cents"] == 399   # from the ledger, not 0
+
+    def test_deleted_payer_residual_drift_is_account_deleted_with_deletion_info(self, recon_client):
+        # Ledger 399 but Stripe net 199 (a refund reached Stripe, not the ledger)
+        # -> residual drift, classified account_deleted, with deletion metadata.
+        _seed_ledger_purchase("deleted-drift", 399, obj_id="pi_del_drift")
+        _seed_deletion("deleted-drift", net_cents=399)
+        fixture = [make_pi("deleted-drift", 399, refunded=200, pi_id="pi_del_drift")]
+        with patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture):
+            resp = recon_client.get("/api/admin/revenue-reconciliation", headers=_admin())
+        assert resp.status_code == 200
+        row = _rows_by_uid(resp)["deleted-drift"]
+        assert row["cause"] == "account_deleted"
+        assert row["drifted"] is True
+        assert row["account_exists"] is False
+        assert row["deleted_at"] is not None   # Decision D: id-only row explained
+
+    def test_heal_account_deleted_row_does_not_lie(self, recon_client):
+        # Healing a deleted-payer row must NOT report healed:true; there is no
+        # cache to write (set_total_spent must never be attempted).
+        _seed_ledger_purchase("deleted-drift", 399, obj_id="pi_del_drift")
+        _seed_deletion("deleted-drift", net_cents=399)
+        fixture = [make_pi("deleted-drift", 399, refunded=200, pi_id="pi_del_drift")]
+        with patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture):
+            resp = recon_client.post(
+                "/api/admin/revenue-reconciliation/heal",
+                json={"user_ids": ["deleted-drift"]}, headers=_admin())
+        assert resp.status_code == 200
+        result = resp.json()["results"][0]
+        assert result["healed"] is False
+        assert resp.json()["healed"] == 0
+
+
+class TestFilterSymmetryImankhRegression:
+    """The imankh incident: a flagged account with live Stripe history must be
+    absent from BOTH sides when the filter is on, and ALIGNED (never drifted)
+    when it is off -- never dropped from one side while surviving on the other."""
+
+    def _seed_imankh(self):
+        # "user-a" plays imankh: real account, flagged test, correct local cache,
+        # matching live Stripe history (399).
+        from app.services.auth_db import create_user
+        create_user("user-a", email="imankh@test.local")
+        _seed_segment("user-a", 399)
+        _mark_test_account("user-a", True)
+
+    def test_filter_on_absent_from_both_sides(self, recon_client):
+        self._seed_imankh()
+        fixture = [make_pi("user-a", 399, pi_id="pi_imankh")]
+        with patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture):
+            resp = recon_client.get(
+                "/api/admin/revenue-reconciliation?exclude_test=true", headers=_admin())
+        assert resp.status_code == 200
+        assert "user-a" not in _rows_by_uid(resp)   # gone from BOTH sides
+
+    def test_filter_off_aligned_not_drifted(self, recon_client):
+        self._seed_imankh()
+        fixture = [make_pi("user-a", 399, pi_id="pi_imankh")]
+        with patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture):
+            resp = recon_client.get(
+                "/api/admin/revenue-reconciliation?exclude_test=false", headers=_admin())
+        assert resp.status_code == 200
+        row = _rows_by_uid(resp)["user-a"]
+        assert row["local_cents"] == 399
+        assert row["stripe_net_cents"] == 399
+        assert row["delta_cents"] == 0
+        assert row["drifted"] is False              # aligned, NOT a phantom drift
+
+    def test_default_hides_test_account(self, recon_client):
+        # Default (no param) hides test accounts, matching list_users.
+        self._seed_imankh()
+        fixture = [make_pi("user-a", 399, pi_id="pi_imankh")]
+        with patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture):
+            resp = recon_client.get("/api/admin/revenue-reconciliation", headers=_admin())
+        assert resp.status_code == 200
+        assert "user-a" not in _rows_by_uid(resp)

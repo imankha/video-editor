@@ -27,6 +27,7 @@ describe('RevenueReconciliation panel (T5760)', () => {
   beforeEach(() => {
     useAdminStore.setState({
       reconciliationData: null, reconciliationLoading: false, reconciliationError: null,
+      reconciliationHealResults: {},
       fetchReconciliation: vi.fn(), healReconciliation: vi.fn().mockResolvedValue({}),
     });
     vi.restoreAllMocks();
@@ -81,6 +82,48 @@ describe('RevenueReconciliation panel (T5760)', () => {
 
     fireEvent.click(screen.getAllByText('Adopt Stripe value')[0]);
     expect(heal).not.toHaveBeenCalled();
+  });
+
+  it('renders the account_deleted cause and an id-only deletion line (T8640)', () => {
+    useAdminStore.setState({ reconciliationData: {
+      rows: [
+        { user_id: 'fb40690a-edcf-4504-a51f-f9df6f84ac4f', email: null, local_cents: 399,
+          stripe_net_cents: 199, delta_cents: 200, cause: 'account_deleted', pi_count: 1,
+          has_pending_dispute: false, account_exists: false, deleted_at: '2026-08-24', drifted: true },
+      ],
+      summary: { total_users: 1, drifted_users: 1, aligned_users: 0,
+                 total_local_cents: 399, total_stripe_net_cents: 199, total_delta_cents: 200 },
+      go_live_date: '2026-07-22',
+    } });
+    render(<RevenueReconciliation />);
+    expect(screen.getByText('Account deleted')).toBeTruthy();
+    expect(screen.getByText('account deleted 2026-08-24')).toBeTruthy();
+  });
+
+  it('renders "no local account" when a deleted-payer row has no deletion record (T8640)', () => {
+    useAdminStore.setState({ reconciliationData: {
+      rows: [
+        { user_id: 'orphan-id', email: null, local_cents: 399, stripe_net_cents: 199,
+          delta_cents: 200, cause: 'account_deleted', pi_count: 1, has_pending_dispute: false,
+          account_exists: false, deleted_at: null, drifted: true },
+      ],
+      summary: { total_users: 1, drifted_users: 1, aligned_users: 0,
+                 total_local_cents: 399, total_stripe_net_cents: 199, total_delta_cents: 200 },
+      go_live_date: '2026-07-22',
+    } });
+    render(<RevenueReconciliation />);
+    expect(screen.getByText('no local account')).toBeTruthy();
+  });
+
+  it('surfaces a failed heal on the row it failed for (T8640)', () => {
+    useAdminStore.setState({
+      reconciliationData: REPORT,
+      reconciliationHealResults: {
+        'user-a': { user_id: 'user-a', healed: false, skipped: 'account deleted; reconciled from ledger' },
+      },
+    });
+    render(<RevenueReconciliation />);
+    expect(screen.getByText(/Heal failed/)).toBeTruthy();
   });
 
   it('renders the all-reconciled state when nothing drifts', () => {
