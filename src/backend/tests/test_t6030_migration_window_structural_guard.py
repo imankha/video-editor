@@ -202,7 +202,7 @@ POST_V023_COLUMNS = {
     #   (migrations/__init__.py run_profile_seam) runs pending migrations to head
     #   SYNCHRONOUSLY before any query touches the profile DB, so no request ever
     #   observes rating as still NOT NULL post-deploy.
-HEAD_VERSION_AUDITED = 54  # v054 (T10700): raw_clips.rating nullable, no column added
+HEAD_VERSION_AUDITED = 55  # v055 (T11110): port "Brilliant ..."->"Highlight ..." names, DATA-ONLY, no column added
 
 
 def _cleanup(user_id: str) -> None:

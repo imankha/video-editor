@@ -1,6 +1,6 @@
 # Highlight-First Annotate Flow
 
-**Status:** TODO (WAITING ON USER: decision artifact + badge/flow mockups, round 2)
+**Status:** TODO (design decided 2026-09-24)
 **Started:** 2026-09-24
 **Impact:** 9 **Complexity:** 6 **Priority:** 1.5
 **Sibling epic:** [Single-Clip Editor, Reels removed](../single-clip-editor/EPIC.md) (ships in the same version)
@@ -51,6 +51,19 @@ recommendations":
 - **No more quests** (H11): remove the whole quest system, keep only what a future opt-in
   Guided mode needs. Task T11170.
 - **Any unsupported link goes Home** (R6), not just old Reels links (T11230).
+
+### Owner rulings (2026-09-24, round 4)
+
+- **Popup presentation B3**: the editor swaps in place to a gold choice card.
+- **Back to Editing closes the editor** and returns to marking plays (M2); toast "Highlight
+  moved to Clips so you can edit it later" confirms (M3, follows from M2).
+- **"Clips" capitalized** in the owner-written strings (M4).
+- **Escape is the only no-save exit** from the choice card (M5, ui-designer's call as delegated).
+- **Final (owner: "use recommendations for all answers")**: rate modal's exit "Keep editing"
+  (M6); mobile locked tab shows a toast (D2); other "Brilliant" names and share titles left
+  (QB1-QB2); team highlights: not in game-card stars, out of the athlete ranking, no intro card
+  on download, recap split by layer, expiry fallback per layer (T1-T5). **All questions answered;
+  design gate closed.**
 
 ## Vocabulary conflict (confirmed by the owner's round-2 wording, see H1)
 

@@ -7,7 +7,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { RatingIcon } from './RatingIcon';
-import { RATING_BADGE_COLORS, RATING_NOTATION } from './clipConstants';
+import { RATING_BADGE_COLORS, RATING_NOTATION, RATING_GLYPH_COLORS } from './clipConstants';
 import { NotesOverlay } from '../../modes/annotate/components/NotesOverlay';
 import { ClipListItem } from '../../modes/annotate/components/ClipListItem';
 
@@ -35,9 +35,21 @@ describe('RatingIcon', () => {
     expect(icon.textContent).toMatch(/not rated/i);
   });
 
-  it('Brilliant is teal, distinct from the 4-star green', () => {
-    expect(RATING_BADGE_COLORS[5]).toBe('#17B3A3');
+  it('T11110: Highlight (5) is gold, distinct from the 4-star green', () => {
+    expect(RATING_BADGE_COLORS[5]).toBe('#F5B700');
     expect(RATING_BADGE_COLORS[5]).not.toBe(RATING_BADGE_COLORS[4]);
+  });
+
+  it('T11110: draws the notation glyph in a dark color on the gold 5-star face (never white on gold)', () => {
+    const { container } = render(<RatingIcon rating={5} size={24} />);
+    const svg = container.querySelector('svg');
+    const fills = [...svg.querySelectorAll('g')].map((g) => g.getAttribute('fill'));
+    // Behavioral: whatever color the glyph is drawn in, it must never be
+    // #ffffff on the gold face (illegible white-on-gold).
+    expect(fills).not.toContain('#ffffff');
+    // The notation glyph group is filled with the per-rating glyph color.
+    expect(fills).toContain(RATING_GLYPH_COLORS[5]);
+    expect(RATING_GLYPH_COLORS[5]).toBe('#1a1300');
   });
 });
 
@@ -47,7 +59,7 @@ describe('NotesOverlay rating notation', () => {
       <NotesOverlay name="Great goal" notes="" rating={5} isVisible />
     );
     expect(screen.getByTestId('rating-icon').dataset.rating).toBe('5');
-    expect(screen.getByLabelText('5 stars · Brilliant').textContent).toBe('!!');
+    expect(screen.getByLabelText('5 stars · Highlight').textContent).toBe('!!');
 
     rerender(<NotesOverlay name="Nice pass" notes="" rating={4} isVisible />);
     expect(screen.getByTestId('rating-icon').dataset.rating).toBe('4');

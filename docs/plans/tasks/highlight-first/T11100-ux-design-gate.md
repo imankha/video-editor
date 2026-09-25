@@ -1,6 +1,6 @@
 # T11100: UX design gate - badges, Done popup, rating gate, mode bar
 
-**Status:** WAITING ON USER
+**Status:** DECIDED
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-09-24
@@ -62,6 +62,15 @@ ui-designer recommends P2, A2, C as shown, B2, D solid gold. Decision artifact v
 height-starved); it needs the rate modal and Highlight popup too, likely as centered modals,
 and the implementing task must design it against the live layout. 393 px no-scroll is by
 construction only; not yet browser-checked.
+
+**2026-09-24 (round 3/4)**: Owner picked P2, A2, rate modal C (Highlight meaning "Brilliant
+Play! Everyone should see it."), popup **B3** (Back to Editing closes the editor; toast
+confirms; "Clips" capitalized; Escape-only cancel). Mockups v3 at the same URL.
+
+**2026-09-24 (final)**: Owner: "use recommendations for all answers." M6 = the rate modal's
+no-save exit is renamed **"Keep editing"**; M7 = **D2** (mobile tap on a locked tab shows a
+transient toast with the tooltip sentence, existing `toast.info(..., {dedupKey:
+'mode-locked'})`, T8480). Every question on the decision artifact is answered. Gate closed.
 
 ## Acceptance Criteria
 

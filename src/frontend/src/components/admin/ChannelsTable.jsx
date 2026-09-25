@@ -12,7 +12,9 @@ function formatRevenue(cents) {
 }
 
 export function ChannelsTable({ data, onRowClick, selectedOrigin }) {
-  if (!data?.channels?.length) {
+  // T8650: still render the table when there are no campaign rows but there IS an
+  // unattributed remainder (e.g. only deleted payers), so the money is never hidden.
+  if (!data?.channels?.length && !data?.unattributed_revenue_cents) {
     return <p className="text-gray-500 text-sm">No campaign data available.</p>;
   }
 
@@ -32,7 +34,7 @@ export function ChannelsTable({ data, onRowClick, selectedOrigin }) {
           </tr>
         </thead>
         <tbody>
-          {data.channels.map((ch, i) => (
+          {(data.channels || []).map((ch, i) => (
             <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer ${selectedOrigin === ch.origin ? 'bg-purple-500/15 border-l-2 border-l-purple-500' : ''}`} onClick={() => onRowClick && onRowClick(ch.origin)}>
               <td className="px-3 py-2.5 text-gray-200 text-xs">
                 {ch.origin}
@@ -50,6 +52,17 @@ export function ChannelsTable({ data, onRowClick, selectedOrigin }) {
               <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{ch.avg_exports}</td>
             </tr>
           ))}
+          {/* T8650: revenue no origin could attribute (deleted or out-of-window payers).
+              Shown so the campaign revenue reconciles to the platform total. */}
+          {data.unattributed_revenue_cents ? (
+            <tr className="border-t border-white/10">
+              <td className="px-3 py-2.5 text-gray-400 text-xs italic" colSpan={6}>
+                Unattributed <span className="text-gray-500">(deleted or out-of-window payers)</span>
+              </td>
+              <td className="px-3 py-2.5 text-right text-green-400 text-xs">{formatRevenue(data.unattributed_revenue_cents)}</td>
+              <td className="px-3 py-2.5" />
+            </tr>
+          ) : null}
         </tbody>
       </table>
     </div>

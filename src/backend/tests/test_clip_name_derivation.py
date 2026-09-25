@@ -40,7 +40,7 @@ class TestDeriveClipName:
 
     def test_notes_fallback_not_used_when_tags_exist(self):
         """Notes should not affect name when tags are present."""
-        assert derive_clip_name(None, 5, ['Goal'], 'some notes') == 'Brilliant Goal'
+        assert derive_clip_name(None, 5, ['Goal'], 'some notes') == 'Highlight Goal'
 
     def test_notes_fallback_not_used_when_custom_name_exists(self):
         """Custom name takes priority over notes."""
@@ -53,7 +53,7 @@ class TestDeriveClipName:
 
     def test_single_tag_format(self):
         """Single tag should produce 'Adjective Tag' format."""
-        assert derive_clip_name(None, 5, ['Goal']) == 'Brilliant Goal'
+        assert derive_clip_name(None, 5, ['Goal']) == 'Highlight Goal'
         assert derive_clip_name(None, 4, ['Dribble']) == 'Good Dribble'
         assert derive_clip_name(None, 3, ['Pass']) == 'Interesting Pass'
         assert derive_clip_name(None, 2, ['Tackle']) == 'Technical Lapse Tackle'
@@ -61,17 +61,17 @@ class TestDeriveClipName:
 
     def test_two_tags_format(self):
         """Two tags should produce 'Adjective Tag1 and Tag2' format."""
-        assert derive_clip_name(None, 5, ['Goal', 'Assist']) == 'Brilliant Goal and Assist'
+        assert derive_clip_name(None, 5, ['Goal', 'Assist']) == 'Highlight Goal and Assist'
         assert derive_clip_name(None, 4, ['Dribble', 'Pass']) == 'Good Dribble and Pass'
 
     def test_multiple_tags_format(self):
         """Multiple tags should produce 'Adjective Tag1, Tag2 and Tag3' format."""
-        assert derive_clip_name(None, 5, ['Goal', 'Assist', 'Dribble']) == 'Brilliant Goal, Assist and Dribble'
+        assert derive_clip_name(None, 5, ['Goal', 'Assist', 'Dribble']) == 'Highlight Goal, Assist and Dribble'
         assert derive_clip_name(None, 3, ['Pass', 'Movement', 'Tackle', 'Save']) == 'Interesting Pass, Movement, Tackle and Save'
 
     def test_empty_string_treated_as_no_name(self):
         """Empty string should be treated as no custom name."""
-        assert derive_clip_name('', 5, ['Goal']) == 'Brilliant Goal'
+        assert derive_clip_name('', 5, ['Goal']) == 'Highlight Goal'
 
     def test_invalid_rating_uses_default(self):
         """Invalid ratings should use default adjective (Interesting)."""
@@ -82,7 +82,7 @@ class TestDeriveClipName:
     def test_rating_adjective_mapping(self):
         """Each rating should map to correct adjective."""
         tag = ['Goal']
-        assert 'Brilliant' in derive_clip_name(None, 5, tag)
+        assert 'Highlight' in derive_clip_name(None, 5, tag)
         assert 'Good' in derive_clip_name(None, 4, tag)
         assert 'Interesting' in derive_clip_name(None, 3, tag)
         assert 'Technical Lapse' in derive_clip_name(None, 2, tag)
@@ -99,16 +99,16 @@ class TestDeriveClipNameEdgeCases:
 
     def test_tags_with_special_characters(self):
         """Tags with special characters should be joined correctly."""
-        assert derive_clip_name(None, 5, ['1v1 Defense']) == 'Brilliant 1v1 Defense'
-        assert derive_clip_name(None, 5, ['Build-Up']) == 'Brilliant Build-Up'
+        assert derive_clip_name(None, 5, ['1v1 Defense']) == 'Highlight 1v1 Defense'
+        assert derive_clip_name(None, 5, ['Build-Up']) == 'Highlight Build-Up'
 
     def test_tags_order_preserved(self):
         """Tag order should be preserved in output."""
         result = derive_clip_name(None, 5, ['A', 'B', 'C'])
-        assert result == 'Brilliant A, B and C'
+        assert result == 'Highlight A, B and C'
 
         result = derive_clip_name(None, 5, ['C', 'A', 'B'])
-        assert result == 'Brilliant C, A and B'
+        assert result == 'Highlight C, A and B'
 
 
 class TestDeriveClipNameFrontendConsistency:
@@ -120,10 +120,10 @@ class TestDeriveClipNameFrontendConsistency:
     """
 
     def test_frontend_parity_brilliant_goal(self):
-        """Match frontend: generateClipName(5, ['Goals']) -> 'Brilliant Goal'"""
+        """Match frontend: generateClipName(5, ['Goals']) -> 'Highlight Goal'"""
         # Note: Frontend uses tag names like 'Goals', but shortName 'Goal' is used
         # Backend receives shortNames directly
-        assert derive_clip_name(None, 5, ['Goal']) == 'Brilliant Goal'
+        assert derive_clip_name(None, 5, ['Goal']) == 'Highlight Goal'
 
     def test_frontend_parity_good_dribble_and_pass(self):
         """Match frontend: generateClipName(4, ['Dribbling', 'Passing Range'])"""

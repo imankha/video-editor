@@ -29,15 +29,16 @@ import uuid
 import pytest
 from fastapi import HTTPException
 
-from app.quest_config import QUEST_CHAIN_CREDIT_TOTAL
-from app.services.storage_credits import NEW_ACCOUNT_CREDITS
+# T11170: the welcome grant is decoupled from the quest system -- its amount is
+# storage_credits.WELCOME_CREDITS, no longer quest_config.QUEST_CHAIN_CREDIT_TOTAL.
+from app.services.storage_credits import NEW_ACCOUNT_CREDITS, WELCOME_CREDITS
 
 # T8120: a fresh signup now receives BOTH the base new-account bonus AND the full
 # quest-chain total upfront (the per-quest drip is retired). session_init grants
 # the quest-chain remainder on every first-of-process init — for a brand-new user
 # that is the whole total; for an existing account it is whatever they haven't
 # been granted yet.
-FRESH_SIGNUP_BALANCE = NEW_ACCOUNT_CREDITS + QUEST_CHAIN_CREDIT_TOTAL
+FRESH_SIGNUP_BALANCE = NEW_ACCOUNT_CREDITS + WELCOME_CREDITS
 
 
 def _uid(prefix: str) -> str:
@@ -91,14 +92,14 @@ def hermetic(tmp_path, monkeypatch, pg_conn):
 
 def _make_account(uid: str, pid: str):
     """Create an existing account: user.sqlite with a selected profile + a fresh profile.sqlite."""
-    from app.user_context import set_current_user_id
+    from app.database import ensure_database
     from app.profile_context import set_current_profile_id
     from app.services.user_db import (
-        ensure_user_database,
         create_profile,
+        ensure_user_database,
         set_selected_profile_id,
     )
-    from app.database import ensure_database
+    from app.user_context import set_current_user_id
 
     set_current_user_id(uid)
     set_current_profile_id(pid)
@@ -119,9 +120,9 @@ def test_progress_and_claim_agree_for_user_scoped_completed_quest(hermetic):
     Pre-fix RED: claim-reward re-derives steps and raises 400
     'Quest not complete: step 'watch_annotate_tutorial' is incomplete'.
     """
+    from app.routers.quests import claim_reward, get_progress
     from app.services.credit_ledger import grant_credits
     from app.services.user_db import mark_quest_completed
-    from app.routers.quests import get_progress, claim_reward
 
     uid = _uid("zombie")
     pid = "aaaa1111"
@@ -169,10 +170,10 @@ def test_claim_still_blocked_for_unearned_quest(hermetic):
 def test_reregister_after_purge_is_new_user_and_seeded(hermetic):
     """A returning account is not seeded; after a complete purge, reregister is is_new_user
     with NEW_ACCOUNT_CREDITS and a clean quest slate."""
-    from app.session_init import user_session_init, _init_cache
+    from app.routers.auth import _purge_user_data
     from app.services.credit_ledger import get_credit_balance, set_balance
     from app.services.user_db import get_completed_quest_ids
-    from app.routers.auth import _purge_user_data
+    from app.session_init import _init_cache, user_session_init
 
     uid = _uid("delreg")
     old_pid = "cccc3333"
@@ -185,7 +186,7 @@ def test_reregister_after_purge_is_new_user_and_seeded(hermetic):
     _init_cache.pop(uid, None)
     before = user_session_init(uid)
     assert before["is_new_user"] is False
-    assert get_credit_balance(uid)["balance"] == QUEST_CHAIN_CREDIT_TOTAL
+    assert get_credit_balance(uid)["balance"] == WELCOME_CREDITS
 
     # Complete deletion.
     _purge_user_data(uid)
@@ -209,9 +210,9 @@ def test_purge_then_reregister_re_grants_signup_bonus_under_same_key(hermetic):
     real, unlike the sibling test above which starts from a synthetic
     `set_balance`), then purges and reregisters under the SAME user_id.
     """
-    from app.session_init import user_session_init, _init_cache
-    from app.services.credit_ledger import get_credit_balance, has_key
     from app.routers.auth import _purge_user_data
+    from app.services.credit_ledger import get_credit_balance, has_key
+    from app.session_init import _init_cache, user_session_init
 
     uid = _uid("resignup")
 
@@ -245,8 +246,8 @@ def test_returning_user_not_reseeded(hermetic):
     SIGNUP bonus. T8120: the returning user does receive the one-time upfront
     quest-chain total on this login (never claimed a quest -> full total), and a
     repeat login does not grant it again (idempotent)."""
-    from app.session_init import user_session_init, _init_cache
     from app.services.credit_ledger import get_credit_balance, set_balance
+    from app.session_init import _init_cache, user_session_init
 
     uid = _uid("returning")
     pid = "dddd4444"
@@ -257,21 +258,21 @@ def test_returning_user_not_reseeded(hermetic):
     result = user_session_init(uid)
     assert result["is_new_user"] is False
     # Base bonus untouched (not re-granted) + one-time upfront quest total.
-    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS + QUEST_CHAIN_CREDIT_TOTAL
+    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS + WELCOME_CREDITS
 
     # A second login must NOT double-grant the upfront quest credits.
     _init_cache.pop(uid, None)
     user_session_init(uid)
-    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS + QUEST_CHAIN_CREDIT_TOTAL
+    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS + WELCOME_CREDITS
 
 
 def test_returning_user_keeps_quest_progress(hermetic):
     """Regression: a normal returning user (no delete) keeps their completed/claimed quest
     state across a session re-init — the fix must not reset anyone's progress."""
-    from app.session_init import user_session_init, _init_cache
-    from app.services.credit_ledger import grant_credits
-    from app.services.user_db import mark_quest_completed, get_completed_and_claimed_quest_ids
     from app.routers.quests import get_progress
+    from app.services.credit_ledger import grant_credits
+    from app.services.user_db import get_completed_and_claimed_quest_ids, mark_quest_completed
+    from app.session_init import _init_cache, user_session_init
 
     uid = _uid("progressed")
     pid = "cdef1234"
@@ -297,8 +298,8 @@ def test_reregister_with_different_email_is_an_independent_fresh_account(hermeti
     """Edge case: reregistering with a DIFFERENT email after a delete is unaffected by the
     deleted account's state — _find_or_create_user mints a brand-new user_id for a new
     email, so it never touches the deleted user's (purged) caches/storage at all."""
-    from app.session_init import user_session_init, _init_cache
     from app.services.credit_ledger import get_credit_balance
+    from app.session_init import _init_cache, user_session_init
 
     old_uid = _uid("olddeleted")
     old_pid = "11112222"
@@ -325,9 +326,9 @@ def test_reregister_with_different_email_is_an_independent_fresh_account(hermeti
 
 def _seed_caches(uid: str, pid: str, base):
     """Create a local user folder and populate every in-process cache for the user."""
-    from app.session_init import _init_cache
-    from app.services import user_db as user_db_mod
     from app import database as db_mod
+    from app.services import user_db as user_db_mod
+    from app.session_init import _init_cache
 
     (base / uid).mkdir(parents=True, exist_ok=True)
     (base / uid / "user.sqlite").write_bytes(b"stub")
@@ -339,9 +340,9 @@ def _seed_caches(uid: str, pid: str, base):
 
 
 def _assert_caches_cleared(uid: str, pid: str, base):
-    from app.session_init import _init_cache
-    from app.services import user_db as user_db_mod
     from app import database as db_mod
+    from app.services import user_db as user_db_mod
+    from app.session_init import _init_cache
 
     assert not (base / uid).exists(), "local user folder should be deleted"
     assert uid not in _init_cache

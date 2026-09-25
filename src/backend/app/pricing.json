@@ -1,8 +1,8 @@
 {
   "_doc": "THE single source of truth for credit-pack pricing (T10210). Consumed by app/pricing.py (billing + storage-cost anchor), src/frontend/src/config/pricing.js (app + landing site via the @editor alias). Packs must be listed in ascending price order with a strictly decreasing per-credit rate (the value ladder); tests enforce both. Stripe prices are created inline from price_cents, so a reprice here needs no Stripe dashboard work. Grants read pack metadata off the Stripe session/PI, not this file, so in-flight payments and historical rows are unaffected by a reprice.",
   "credit_packs": [
-    { "key": "starter", "name": "Starter", "credits": 80, "price_cents": 399 },
-    { "key": "popular", "name": "Popular", "credits": 160, "price_cents": 699 },
-    { "key": "best_value", "name": "Best Value", "credits": 340, "price_cents": 1299 }
+    { "key": "starter", "name": "Starter", "credits": 340, "price_cents": 1299 },
+    { "key": "popular", "name": "Popular", "credits": 690, "price_cents": 2299 },
+    { "key": "best_value", "name": "Best Value", "credits": 1120, "price_cents": 3299 }
   ]
 }

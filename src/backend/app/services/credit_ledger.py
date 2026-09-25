@@ -78,6 +78,11 @@ KEY_PREFIX = {
     # T8120: upfront quest-chain grant. Distinct key space from new_account_bonus
     # (signup:) and per-quest quest_reward (quest:) so all three coexist without
     # colliding idempotency keys.
+    # FROZEN STRINGS (T11170): the source `quest_upfront` and its key prefix
+    # `questbank` are read back to compute the remainder already paid (see
+    # _granted_quest_chain_credits and storage_credits.grant_welcome_credits).
+    # Renaming either makes every existing account look like it has 0 granted and
+    # pays the 80 welcome credits again. Never rename.
     "quest_upfront": "questbank",
     "new_account_bonus": "signup",
     "admin_grant": "admin",
@@ -363,8 +368,7 @@ def stats_for_admin(user_ids: list[str] | None = None) -> dict:
     reads across up to `page_size` other users' SQLite files, T4870 -> gone).
 
     Returns dict keyed by user_id: credits_spent, credits_purchased,
-    credits_balance (a real int -- absent row = 0, never null/unavailable),
-    purchase_credit_amounts.
+    credits_balance (a real int -- absent row = 0, never null/unavailable).
     """
     if user_ids is not None and not user_ids:
         return {}
@@ -377,8 +381,7 @@ def stats_for_admin(user_ids: list[str] | None = None) -> dict:
                 SELECT
                     user_id,
                     COALESCE(SUM(CASE WHEN amount < 0 AND source != 'admin_set' THEN -amount ELSE 0 END), 0) AS credits_spent,
-                    COALESCE(SUM(CASE WHEN source = 'stripe_purchase' AND amount > 0 THEN amount ELSE 0 END), 0) AS credits_purchased,
-                    ARRAY_AGG(amount ORDER BY created_at, id) FILTER (WHERE source = 'stripe_purchase' AND amount > 0) AS purchase_credit_amounts
+                    COALESCE(SUM(CASE WHEN source = 'stripe_purchase' AND amount > 0 THEN amount ELSE 0 END), 0) AS credits_purchased
                 FROM credit_transactions
                 WHERE user_id = ANY(%s)
                 GROUP BY user_id
@@ -391,8 +394,7 @@ def stats_for_admin(user_ids: list[str] | None = None) -> dict:
                 SELECT
                     user_id,
                     COALESCE(SUM(CASE WHEN amount < 0 AND source != 'admin_set' THEN -amount ELSE 0 END), 0) AS credits_spent,
-                    COALESCE(SUM(CASE WHEN source = 'stripe_purchase' AND amount > 0 THEN amount ELSE 0 END), 0) AS credits_purchased,
-                    ARRAY_AGG(amount ORDER BY created_at, id) FILTER (WHERE source = 'stripe_purchase' AND amount > 0) AS purchase_credit_amounts
+                    COALESCE(SUM(CASE WHEN source = 'stripe_purchase' AND amount > 0 THEN amount ELSE 0 END), 0) AS credits_purchased
                 FROM credit_transactions
                 GROUP BY user_id
                 """
@@ -416,7 +418,6 @@ def stats_for_admin(user_ids: list[str] | None = None) -> dict:
             "credits_spent": int(a["credits_spent"]) if a else 0,
             "credits_purchased": int(a["credits_purchased"]) if a else 0,
             "credits_balance": balance_by_user.get(uid, 0),
-            "purchase_credit_amounts": list(a["purchase_credit_amounts"]) if a and a["purchase_credit_amounts"] else [],
         }
     return stats
 
@@ -727,24 +728,22 @@ def get_credit_stats_for_admin(user_ids: list[str] | None = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# T8120: upfront quest-chain credit grant. Retires the per-quest drip — the
-# whole chain total is granted at signup (new users) or as the ungranted
-# remainder on next login (existing mid-quest users), through this ONE write
-# site. Idempotent two ways: a fixed per-user idempotency key
-# (questbank:{user_id}) makes grant() itself refuse a second application, AND
-# the remainder is computed from what the user has already been granted toward
-# the chain (prior quest_reward claims + a prior upfront grant), so a repeat
-# call computes 0 and does nothing. Never double-grants, even under a race:
-# concurrent calls both compute the same remainder but only ONE grant() applies
-# (UNIQUE(user_id, idempotency_key)); the loser reports applied=False.
-# Deliberately a separate section at the file's end (not folded into the reads
-# block) to minimize merge friction with the sibling T8110 stats_for_admin work.
+# Welcome-credit remainder reader. The upfront grant itself moved to
+# storage_credits.grant_welcome_credits (T11170) so it no longer depends on the
+# quest system; this helper stays here because it reads the FROZEN ledger source
+# strings and is the choke point that guarantees the remainder tally.
 # ---------------------------------------------------------------------------
 
 def _granted_quest_chain_credits(cur, user_id: str) -> int:
-    """Sum of positive credits already granted toward the quest chain for this
+    """Sum of positive credits already granted toward the welcome total for this
     user: legacy per-quest claims (source='quest_reward') plus any prior upfront
-    grant (source='quest_upfront'). Drives the ungranted-remainder computation."""
+    grant (source='quest_upfront'). Drives the ungranted-remainder computation in
+    storage_credits.grant_welcome_credits.
+
+    FROZEN STRINGS (T11170): the source set ('quest_reward', 'quest_upfront') is
+    read back to compute the remainder already paid. Renaming either makes this
+    sum see 0 granted, so grant_welcome_credits pays the 80 again to every
+    existing account. Never rename them (kept byte-for-byte since T8120)."""
     cur.execute(
         """
         SELECT COALESCE(SUM(amount), 0) AS granted
@@ -756,106 +755,3 @@ def _granted_quest_chain_credits(cur, user_id: str) -> int:
     )
     row = cur.fetchone()
     return int(row["granted"]) if row else 0
-
-
-def grant_quest_chain_credits(user_id: str) -> dict:
-    """Grant the ungranted remainder of the quest-chain credit total upfront.
-
-    Returns {applied, granted, balance}. applied=False (granted=0) when the user
-    has already received the full chain total: a brand-new signup gets the whole
-    QUEST_CHAIN_CREDIT_TOTAL; a mid-quest user who already claimed some quests
-    (legacy quest_reward rows) gets only what's left; a fully-granted user gets
-    nothing. Safe to call on every login — steady state is one indexed SELECT.
-    """
-    from ..quest_config import QUEST_CHAIN_CREDIT_TOTAL
-    _require_ready()
-    with get_pg() as conn:
-        cur = conn.cursor()
-        already = _granted_quest_chain_credits(cur, user_id)
-    remainder = QUEST_CHAIN_CREDIT_TOTAL - already
-    if remainder <= 0:
-        logger.info(
-            f"[CreditLedger] quest-chain upfront no-op user={user_id} "
-            f"(already granted {already}/{QUEST_CHAIN_CREDIT_TOTAL})"
-        )
-        return {"applied": False, "granted": 0, "balance": get_balance(user_id)}
-    result = grant(
-        user_id, remainder, "quest_upfront",
-        credit_key("quest_upfront", user_id),
-        reference_id=user_id,
-    )
-    granted = remainder if result["applied"] else 0
-    logger.info(
-        f"[CreditLedger] quest-chain upfront user={user_id} remainder={remainder} "
-        f"applied={result['applied']} balance={result['balance']}"
-    )
-    return {"applied": result["applied"], "granted": granted, "balance": result["balance"]}
-
-
-def backfill_quest_upfront_credits(limit: int = 1000, dry_run: bool = True) -> dict:
-    """Admin-triggered one-off (T9760): top up every existing user to the current
-    QUEST_CHAIN_CREDIT_TOTAL, for accounts that signed up while production was
-    still running the pre-T8120 code (which never wrote a `quest_upfront` grant).
-
-    This does NOT reimplement the grant logic — it just calls the SAME
-    `grant_quest_chain_credits(user_id)` every login already calls (JIT), for
-    every existing user right away instead of waiting for their next login.
-    That matters because an idle/churned account would otherwise sit under-
-    credited indefinitely (CLAUDE.md's JIT "long-tail property" is a deliberate
-    design for schema migrations, but a wrong DOLLAR-VALUE credit balance is a
-    real user-facing harm, not a shape-of-data non-issue, so this task proactively
-    backfills instead of waiting).
-
-    Idempotent and safe to re-run: `grant_quest_chain_credits` no-ops for any
-    user who already has the full total (a fresh signup post-deploy, or a user
-    already topped up by a prior backfill call). `dry_run=True` (the default)
-    only PEEKS the remainder per user via a read-only query — it issues zero
-    writes and zero credit_transactions rows.
-    """
-    from ..quest_config import QUEST_CHAIN_CREDIT_TOTAL
-    from .auth_db import get_all_users_for_admin
-
-    result = {
-        "limit": limit,
-        "dry_run": dry_run,
-        "scanned": 0,
-        "topped_up": [],
-        "already_full": 0,
-        "failed": [],
-        "partial": False,
-    }
-    budget = limit
-
-    for user in get_all_users_for_admin():
-        if budget <= 0:
-            result["partial"] = True
-            break
-        user_id = user["user_id"]
-        result["scanned"] += 1
-        try:
-            if dry_run:
-                with get_pg() as conn:
-                    cur = conn.cursor()
-                    already = _granted_quest_chain_credits(cur, user_id)
-                remainder = QUEST_CHAIN_CREDIT_TOTAL - already
-                if remainder > 0:
-                    result["topped_up"].append({"user_id": user_id, "would_grant": remainder})
-                    budget -= 1
-                else:
-                    result["already_full"] += 1
-            else:
-                grant_result = grant_quest_chain_credits(user_id)
-                if grant_result["applied"]:
-                    result["topped_up"].append({
-                        "user_id": user_id,
-                        "granted": grant_result["granted"],
-                        "balance": grant_result["balance"],
-                    })
-                    budget -= 1
-                else:
-                    result["already_full"] += 1
-        except Exception as exc:
-            logger.exception(f"[CreditLedger] quest-chain backfill failed user={user_id}")
-            result["failed"].append({"user_id": user_id, "error": str(exc)})
-
-    return result

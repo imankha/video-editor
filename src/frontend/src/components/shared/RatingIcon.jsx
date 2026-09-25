@@ -1,4 +1,4 @@
-import { RATING_BADGE_COLORS, RATING_NOTATION, UNRATED_BADGE_COLOR } from './clipConstants';
+import { RATING_BADGE_COLORS, RATING_NOTATION, RATING_GLYPH_COLORS, UNRATED_BADGE_COLOR } from './clipConstants';
 
 /**
  * RatingIcon - the rating badge as a drawn disc icon (T10430).
@@ -6,8 +6,10 @@ import { RATING_BADGE_COLORS, RATING_NOTATION, UNRATED_BADGE_COLOR } from './cli
  * Every rating renders as a solid disc in its palette color with its chess-style
  * notation drawn as SVG shapes (tapered bars, hooks, rounded dots), a darker
  * bottom rim and a glyph drop shadow, so the badge reads at 18px as well as at
- * 160px. Ratings 1-5 map to ??, ?, !?, !, !! (`RATING_NOTATION`). Brilliant (5)
- * is teal; the others keep their existing colors.
+ * 160px. Ratings 1-5 map to ??, ?, !?, !, !! (`RATING_NOTATION`). T11110:
+ * Highlight (5) is gold; its notation glyph is drawn dark (`RATING_GLYPH_COLORS`)
+ * for contrast, since white on gold is illegible. The other faces keep a white
+ * glyph.
  *
  * Accessibility: the SVG is decorative (`aria-hidden`); a visually hidden copy
  * of the notation keeps it in `textContent` for screen readers and for tests
@@ -86,6 +88,7 @@ export function RatingIcon({ rating, size = 20, className = '' }) {
 
   const face = RATING_BADGE_COLORS[rating];
   const rim = darken(face);
+  const glyph = RATING_GLYPH_COLORS[rating];
   const Glyph = GLYPHS[rating];
   return (
     // `relative`: the sr-only label below is position:absolute; without a
@@ -112,8 +115,8 @@ export function RatingIcon({ rating, size = 20, className = '' }) {
         <g fill={rim} stroke={rim} strokeWidth="3" strokeLinejoin="round" transform="translate(0 2.5)">
           <Glyph />
         </g>
-        {/* The notation itself */}
-        <g fill="#ffffff" stroke="#ffffff" strokeWidth="3" strokeLinejoin="round">
+        {/* The notation itself (dark on gold, white elsewhere — RATING_GLYPH_COLORS) */}
+        <g fill={glyph} stroke={glyph} strokeWidth="3" strokeLinejoin="round">
           <Glyph />
         </g>
       </svg>

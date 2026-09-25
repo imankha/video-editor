@@ -1,6 +1,6 @@
 # T11210: Characterization - single-clip Modal golden + delete dead endpoints
 
-**Status:** TODO
+**Status:** STAGING (merged PR #506, cbf791a2)
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-24
@@ -20,7 +20,10 @@ endpoints and helpers are already dead and can go first with zero behavior chang
    deletion in T11250.
 2. **Delete dead code** (no callers, verify with grep at implementation time):
    - `POST /api/export/chapters`, `POST /api/export/concat-for-overlay` (`routers/export/multi_clip.py:2530-2726`)
-   - `POST /api/projects` (`projects.py:684`) + `projectsStore.createProject` (`projectsStore.js:140`)
+   - ~~`POST /api/projects` (`projects.py:684`)~~ **KEPT** (gate review 2026-09-25): it is not
+     dead, e2e fixtures seed projects through it (`T9285-recovery-preview.qa.spec.js:38-48`,
+     `full-workflow.spec.js:354,415`, `test_api.sh`), and Branch CI doesn't run Playwright. Only
+     the frontend `projectsStore.createProject` chain (`projectsStore.js:140`) is deleted.
    - `POST /api/projects/preview-clips` (`projects.py:756`)
    - `ProjectCreationSettings.jsx` (no importers)
    - `projectDataStore.reorderClipsOnServer` stub (`:352`, no callers)

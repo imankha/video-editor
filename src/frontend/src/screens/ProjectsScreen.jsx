@@ -111,7 +111,6 @@ export function ProjectsScreen({
   const projectsError = useProjectsStore(state => state.error);
   const fetchProjects = useProjectsStore(state => state.fetchProjects);
   const selectProject = useProjectsStore(state => state.selectProject);
-  const createProject = useProjectsStore(state => state.createProject);
   const deleteProject = useProjectsStore(state => state.deleteProject);
 
   // Games management — Zustand store (ready-only: pending uploads excluded)
@@ -437,7 +436,6 @@ export function ProjectsScreen({
           loadingProjectId={loadingProjectId}
           onSelectProject={handleSelectProject}
           onSelectProjectWithMode={handleSelectProjectWithMode}
-          onCreateProject={createProject}
           onRefreshProjects={fetchProjects}
           onDeleteProject={deleteProject}
           onAnnotateWithFile={handleAnnotateWithFile}

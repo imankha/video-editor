@@ -89,7 +89,6 @@ function renderManager(props = {}) {
         games={GAMES}
         gamesLoading={false}
         onSelectProject={vi.fn()}
-        onCreateProject={vi.fn()}
         onRefreshProjects={vi.fn()}
         onDeleteProject={vi.fn()}
         onAnnotateWithFile={vi.fn()}

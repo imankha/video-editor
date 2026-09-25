@@ -1,6 +1,6 @@
 # Single-Clip Editor: remove Reels and multi-clip editing
 
-**Status:** TODO (WAITING ON USER: decision artifact R1-R12)
+**Status:** TODO (all questions answered 2026-09-24)
 **Started:** 2026-09-24
 **Impact:** 8 **Complexity:** 7 **Priority:** 1.1
 **Sibling epic:** [Highlight-First Annotate Flow](../highlight-first/EPIC.md) (ships in the same version)

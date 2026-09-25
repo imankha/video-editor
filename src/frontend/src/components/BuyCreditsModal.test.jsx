@@ -31,7 +31,8 @@ const CONFIG = {
 };
 const [FIRST_PACK, ...OTHER_PACKS] = CREDIT_PACKS;
 const priceText = (p) => `$${(p.price_cents / 100).toFixed(2)}`;
-const creditsText = (p) => `${p.credits} credits`;
+// Mirror the modal's `pack.credits.toLocaleString()` rendering (thousands separator at >=1000).
+const creditsText = (p) => `${p.credits.toLocaleString()} credits`;
 // Mirrors the modal's secondsToClock (1 credit = 1 second of exported video).
 const clockText = (credits) => {
   const m = Math.floor(credits / 60);
@@ -71,7 +72,7 @@ describe('BuyCreditsModal (T4940)', () => {
 
   it('states the per-second rule WITH the rounding rule (T9750)', async () => {
     render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
-    await waitFor(() => expect(screen.getByText('80 credits')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
     // Was a flat "1 credit = 1 second"; now states rounding explicitly.
     expect(screen.getAllByText(/1 credit per second/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/rounded to the nearest second/).length).toBeGreaterThan(0);
@@ -91,7 +92,7 @@ describe('BuyCreditsModal (T4940)', () => {
         insufficientCredits={{ required: 6, available: 2, videoSeconds: 6.027 }}
       />,
     );
-    await waitFor(() => expect(screen.getByText('80 credits')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
     expect(screen.getByText(/6 credits/)).toBeTruthy();
     expect(screen.getByText(/6\.0s of video/)).toBeTruthy();
     expect(screen.getAllByText(new RegExp(CREDITS.PER_SECOND_RULE)).length).toBeGreaterThan(0);
@@ -108,7 +109,7 @@ describe('BuyCreditsModal (T4940)', () => {
 
   it('explainer lists what is free', async () => {
     render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
-    await waitFor(() => expect(screen.getByText('80 credits')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
     fireEvent.click(screen.getByText('How credits work'));
     expect(screen.getByText(/Always free/)).toBeTruthy();
     expect(screen.getByText(/Spotlight/)).toBeTruthy();

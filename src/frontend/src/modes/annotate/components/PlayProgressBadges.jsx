@@ -148,7 +148,7 @@ const RATING_VALUES = [5, 4, 3, 2, 1];
  * button, in every state (unlike the other three badges) — a rating is a
  * value you may want to revisit, not a one-time checkbox, so it never
  * becomes an inert span. Clicking it opens a roomy popup box anchored below
- * the badge: five rows, one per rating (5/"Brilliant" on top, best-first,
+ * the badge: five rows, one per rating (5/"Highlight" on top, best-first,
  * down to 1/"Mental Lapse"), each a real touch target
  * (`coarse-pointer:min-h-[44px]`) with its star count and adjective label —
  * round 2's bare inline star column tested cramped and hard to hit on

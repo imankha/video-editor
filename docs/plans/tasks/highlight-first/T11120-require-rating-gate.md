@@ -25,7 +25,8 @@ Lapse / 1 Mental Lapse, each with stars, adjective and a one-line meaning. Appro
 (2026-09-24): Highlight "Brilliant Play! Everyone should see it." (owner's exact words), Good
 "A solid play worth remembering.", Interesting "Worth a second look.", Technical Lapse "A touch
 or skill to work on.", Mental Lapse "A decision or focus moment to learn from."; title "Rate
-this play". The editor's rating pill (A2) opens the SAME list, so it is one component. **The
+this play", subtitle "Pick one to finish.", the only no-save exit is **"Keep editing"** (M6;
+Escape does the same). On mobile it is a bottom sheet with the same rows. The editor's rating pill (A2) opens the SAME list, so it is one component. **The
 modal only appears when the play was not rated during the edit** (owner ruling); a rated play
 leaves normally. Picking a row is the rating gesture: it persists the rating
 through the normal path, closes the modal and CONTINUES the original exit (Done on a Highlight

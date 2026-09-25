@@ -184,11 +184,11 @@ test.describe('T8490: rating caption — desktop strip', () => {
     expect(put2.postDataJSON()).toEqual({ rating: 2 });
     await saveEvidence(page, 'T8490-strip-rating2');
 
-    // Rating 5 ("Brilliant") + My athlete (default layer).
+    // Rating 5 ("Highlight") + My athlete (default layer).
     await strip.getByTestId('badge-rated').click();
     const [put5] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
-      page.getByTestId('rating-picker').getByRole('radio', { name: /^5 stars - Brilliant/ }).click(),
+      page.getByTestId('rating-picker').getByRole('radio', { name: /^5 stars - Highlight/ }).click(),
     ]);
     expect(put5.postDataJSON()).toEqual({ rating: 5 });
     await saveEvidence(page, 'T8490-strip-rating5-mine');
@@ -254,7 +254,7 @@ test.describe('T8490: rating caption — mobile bottom sheet', () => {
     await sheet.getByTestId('badge-rated').click();
     const [put5] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
-      page.getByTestId('rating-picker').getByRole('radio', { name: /^5 stars - Brilliant/ }).click(),
+      page.getByTestId('rating-picker').getByRole('radio', { name: /^5 stars - Highlight/ }).click(),
     ]);
     expect(put5.postDataJSON()).toEqual({ rating: 5 });
     await saveEvidence(page, 'T8490-mobile-320-rating5-mine');

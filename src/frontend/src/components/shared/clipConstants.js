@@ -5,9 +5,12 @@
  * to ensure consistent visual styling across modes.
  */
 
-// Rating adjectives for clip name generation (e.g. "Brilliant Goal")
+// Rating adjectives for clip name generation (e.g. "Highlight Goal")
+// T11110: the 5-star rating is the gesture that makes a highlight, so its
+// adjective is "Highlight" (was "Brilliant"). Persisted identifiers that still
+// read "brilliant" (source_type, quest ids, API fields) are unchanged.
 export const RATING_ADJECTIVES = {
-  5: 'Brilliant',
+  5: 'Highlight',
   4: 'Good',
   3: 'Interesting',
   2: 'Technical Lapse',
@@ -23,28 +26,36 @@ export const RATING_NOTATION = {
   5: '!!',   // Excellent
 };
 
-// T10430: the one rating that creates a clip. It gets its own drawn badge
-// (components/shared/BrilliantIcon.jsx) instead of notation text on a rectangle.
-export const BRILLIANT_RATING = 5;
-
-// Rating badge colors (color-blind safe palette)
-// T10430: Brilliant moved from light green (#66BB6A, near-indistinguishable
-// from Good's green at badge size) to a saturated teal so it pops.
+// Rating badge colors (color-blind safe palette P2, owner ruling H15 2026-09-24)
+// T11110: Highlight (5) is gold (#F5B700). Gold clashes with the old amber
+// 2-star, so the whole set was re-picked to stay color-blind distinguishable:
+// 1 vermillion, 2 berry, 3 blue (unchanged), 4 bluish-green, 5 gold.
 export const RATING_BADGE_COLORS = {
-  1: '#C62828', // Brick Red - Blunder
-  2: '#F9A825', // Amber Yellow - Weak
+  1: '#D55E00', // Vermillion - Mental Lapse
+  2: '#AD1457', // Berry - Technical Lapse
   3: '#1565C0', // Strong Blue - Interesting
-  4: '#2E7D32', // Green - Good
-  5: '#17B3A3', // Teal - Brilliant
+  4: '#009E73', // Bluish-Green - Good
+  5: '#F5B700', // Gold - Highlight
 };
 
-// Background tint colors for selected items (derived from badge colors)
+// Background tint colors for selected items (same hue as the badge at 0.15 alpha)
 export const RATING_BACKGROUND_COLORS = {
-  1: 'rgba(198, 40, 40, 0.15)',   // Brick Red
-  2: 'rgba(249, 168, 37, 0.15)',  // Amber Yellow
+  1: 'rgba(213, 94, 0, 0.15)',    // Vermillion
+  2: 'rgba(173, 20, 87, 0.15)',   // Berry
   3: 'rgba(21, 101, 192, 0.15)',  // Strong Blue
-  4: 'rgba(46, 125, 50, 0.15)',   // Green
-  5: 'rgba(23, 179, 163, 0.15)',  // Teal
+  4: 'rgba(0, 158, 115, 0.15)',   // Bluish-Green
+  5: 'rgba(245, 183, 0, 0.15)',   // Gold
+};
+
+// T11110: color for the notation glyph drawn ON the solid badge face
+// (RatingIcon). White reads on every dark face, but rating 5's gold (#F5B700)
+// needs a dark glyph for legible contrast - never white on gold.
+export const RATING_GLYPH_COLORS = {
+  1: '#ffffff',
+  2: '#ffffff',
+  3: '#ffffff',
+  4: '#ffffff',
+  5: '#1a1300', // dark, for contrast on gold
 };
 
 // T10690: neutral color for an unrated clip (rating === null) — deliberately
@@ -85,7 +96,7 @@ export function getRatingCaption(rating, mine, createIntent) {
   if (rating === 2) return `Technical lapse (${RATING_NOTATION[2]}) - a play to learn from.`;
   if (rating === 3) return `Interesting play (${RATING_NOTATION[3]}) - worth a second look.`;
   if (rating === 4) return `Good play (${RATING_NOTATION[4]}) - ${outcome}`;
-  const label = mine ? 'Brilliant play' : 'Brilliant team play';
+  const label = mine ? 'Highlight play' : 'Highlight team play';
   return `${label} (${RATING_NOTATION[5]}) - ${outcome}`;
 }
 
@@ -96,6 +107,11 @@ export function getRatingCaption(rating, mine, createIntent) {
 // creates a clip" threshold; it now mirrors the 5-star branch's hasReel wording.
 // T10690: `!rating` covers null AND undefined — same reachable-unrated-state note
 // as getRatingCaption above.
+// T11110: "Brilliant" -> "Highlight". The old "create a clip below" / "team plays
+// don't create clips" clauses named a control that no longer exists, so they are
+// dropped (the full caption rewrite is T11150/T11160); the true "clip already
+// created" clause stays, and applies to team plays too (per H13, team plays CAN
+// become highlights).
 export function getEditRatingCaption(rating, mine, hasReel) {
   if (!rating) return 'How good was this play? Rate it 1 to 5.';
   if (rating === 1) return `Mental lapse (${RATING_NOTATION[1]}) - a play to learn from.`;
@@ -104,12 +120,12 @@ export function getEditRatingCaption(rating, mine, hasReel) {
   if (rating === 4) {
     return hasReel
       ? `Good play (${RATING_NOTATION[4]}) - clip already created from play.`
-      : `Good play (${RATING_NOTATION[4]}) - create a clip below.`;
+      : `Good play (${RATING_NOTATION[4]}).`;
   }
-  if (!mine) return `Brilliant team play (${RATING_NOTATION[5]}) - team plays don't create clips.`;
+  const label = mine ? 'Highlight play' : 'Highlight team play';
   return hasReel
-    ? `Brilliant play (${RATING_NOTATION[5]}) - clip already created from play.`
-    : `Brilliant play (${RATING_NOTATION[5]}) - create a clip below.`;
+    ? `${label} (${RATING_NOTATION[5]}) - clip already created from play.`
+    : `${label} (${RATING_NOTATION[5]}).`;
 }
 
 // T9520 N35: the ONE documented star-to-descriptor mapping, e.g. "4 stars · Good".

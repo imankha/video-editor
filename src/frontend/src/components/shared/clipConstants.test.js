@@ -1,5 +1,8 @@
+import { createElement } from 'react';
+import { render } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
-import { getRatingCaption, getEditRatingCaption, getRatingLabel, getRatingDisplay, RATING_BADGE_COLORS, RATING_BACKGROUND_COLORS } from './clipConstants';
+import { getRatingCaption, getEditRatingCaption, getRatingLabel, getRatingDisplay, RATING_BADGE_COLORS, RATING_BACKGROUND_COLORS, RATING_GLYPH_COLORS } from './clipConstants';
+import { RatingIcon } from './RatingIcon';
 
 // T9520 N35: the ONE documented star-to-descriptor mapping ("4 stars · Good"),
 // used for the rating title/aria across the play list, the play editor and the
@@ -10,9 +13,46 @@ describe('getRatingLabel (N35 star-to-descriptor mapping)', () => {
     expect(getRatingLabel(2)).toBe('2 stars · Technical Lapse');
     expect(getRatingLabel(3)).toBe('3 stars · Interesting');
     expect(getRatingLabel(4)).toBe('4 stars · Good');
-    expect(getRatingLabel(5)).toBe('5 stars · Brilliant');
+    expect(getRatingLabel(5)).toBe('5 stars · Highlight');
   });
 
+});
+
+// T11110: the 5-star rating is the gesture that makes a highlight, so its
+// adjective is "Highlight" and its color is gold. Palette P2 (owner ruling
+// 2026-09-24) also recolors 1/2/4 to keep the set color-blind distinguishable
+// and the backgrounds are the same hue at 0.15 alpha. These maps are the single
+// source; every consumer (timeline, play list, recap, share) reads them.
+describe('rating palette P2 (T11110)', () => {
+  it('badge colors: gold at 5, no clash with the recolored 1/2/4', () => {
+    expect(RATING_BADGE_COLORS[1]).toBe('#D55E00');
+    expect(RATING_BADGE_COLORS[2]).toBe('#AD1457');
+    expect(RATING_BADGE_COLORS[3]).toBe('#1565C0');
+    expect(RATING_BADGE_COLORS[4]).toBe('#009E73');
+    expect(RATING_BADGE_COLORS[5]).toBe('#F5B700');
+    // all five distinct
+    expect(new Set(Object.values(RATING_BADGE_COLORS)).size).toBe(5);
+  });
+
+  it('background tints are the same hue at 0.15 alpha', () => {
+    expect(RATING_BACKGROUND_COLORS[1]).toBe('rgba(213, 94, 0, 0.15)');
+    expect(RATING_BACKGROUND_COLORS[2]).toBe('rgba(173, 20, 87, 0.15)');
+    expect(RATING_BACKGROUND_COLORS[3]).toBe('rgba(21, 101, 192, 0.15)');
+    expect(RATING_BACKGROUND_COLORS[4]).toBe('rgba(0, 158, 115, 0.15)');
+    expect(RATING_BACKGROUND_COLORS[5]).toBe('rgba(245, 183, 0, 0.15)');
+  });
+
+  it('glyph color on the badge face is dark on gold, white elsewhere', () => {
+    // Behavioral: render the actual rating-5 icon and check what color its
+    // notation glyph is drawn in — must never be #ffffff on the gold face.
+    const { container } = render(createElement(RatingIcon, { rating: 5, size: 24 }));
+    const fills = [...container.querySelectorAll('svg g')].map((g) => g.getAttribute('fill'));
+    expect(fills).not.toContain('#ffffff');
+    expect(RATING_GLYPH_COLORS[5]).toBe('#1a1300');
+    for (const r of [1, 2, 3, 4]) {
+      expect(RATING_GLYPH_COLORS[r]).toBe('#ffffff');
+    }
+  });
 });
 
 // T10690/T10710: raw_clips.rating is nullable now — a play can genuinely have
@@ -82,19 +122,19 @@ describe('getRatingCaption (create mode)', () => {
 
   it('rating 5 + My Athlete -> outcome follows the toggle, not the star count', () => {
     expect(getRatingCaption(5, true, true)).toBe(
-      'Brilliant play (!!) - this play will also become an editable clip.'
+      'Highlight play (!!) - this play will also become an editable clip.'
     );
     expect(getRatingCaption(5, true, false)).toBe(
-      'Brilliant play (!!) - this saves the play without creating a clip.'
+      'Highlight play (!!) - this saves the play without creating a clip.'
     );
   });
 
-  it('rating 5 + Team -> "Brilliant team play" label, outcome still follows the toggle', () => {
+  it('rating 5 + Team -> "Highlight team play" label, outcome still follows the toggle', () => {
     expect(getRatingCaption(5, false, true)).toBe(
-      'Brilliant team play (!!) - this play will also become an editable clip.'
+      'Highlight team play (!!) - this play will also become an editable clip.'
     );
     expect(getRatingCaption(5, false, false)).toBe(
-      'Brilliant team play (!!) - this saves the play without creating a clip.'
+      'Highlight team play (!!) - this saves the play without creating a clip.'
     );
   });
 
@@ -122,28 +162,30 @@ describe('getEditRatingCaption (edit mode)', () => {
 
   // E47 in edit mode: creation is a manual control, never rating-gated - the
   // rating===4 branch must read off hasReel, never demand another star.
+  // T11110: the "create a clip below" control no longer exists, so that false
+  // clause is dropped (the caption rewrite proper is T11150/T11160).
   it('rating 4 -> reads off hasReel, never demands another star', () => {
-    expect(getEditRatingCaption(4, true, false)).toBe('Good play (!) - create a clip below.');
+    expect(getEditRatingCaption(4, true, false)).toBe('Good play (!).');
     expect(getEditRatingCaption(4, true, true)).toBe('Good play (!) - clip already created from play.');
-    expect(getEditRatingCaption(4, true, false)).not.toMatch(/one more star|another star/);
+    expect(getEditRatingCaption(4, true, false)).not.toMatch(/one more star|another star|create a clip below/);
   });
 
-  it('rating 5 + My Athlete + no clip yet -> points at the Clip control, never promises "will be created"', () => {
+  it('rating 5 + My Athlete + no clip yet -> Highlight label, no removed-control claim', () => {
     const caption = getEditRatingCaption(5, true, false);
-    expect(caption).toBe('Brilliant play (!!) - create a clip below.');
-    expect(caption).not.toMatch(/will be created/);
+    expect(caption).toBe('Highlight play (!!).');
+    expect(caption).not.toMatch(/will be created|create a clip below/);
   });
 
   it('rating 5 + My Athlete + clip already exists -> says so, does not re-offer creation', () => {
-    expect(getEditRatingCaption(5, true, true)).toBe('Brilliant play (!!) - clip already created from play.');
+    expect(getEditRatingCaption(5, true, true)).toBe('Highlight play (!!) - clip already created from play.');
   });
 
-  it('rating 5 + Team -> team plays do not create clips, regardless of hasReel', () => {
-    expect(getEditRatingCaption(5, false, false)).toBe(
-      "Brilliant team play (!!) - team plays don't create clips."
-    );
+  // T11110: team plays CAN become highlights (H13), so the "clip already created"
+  // clause applies to the Team label the same as the My Athlete label.
+  it('rating 5 + Team -> Highlight team label, reflects hasReel like My Athlete does', () => {
+    expect(getEditRatingCaption(5, false, false)).toBe('Highlight team play (!!).');
     expect(getEditRatingCaption(5, false, true)).toBe(
-      "Brilliant team play (!!) - team plays don't create clips."
+      'Highlight team play (!!) - clip already created from play.'
     );
   });
 
