@@ -60,15 +60,21 @@ Upon account deletion, the following are **permanently and immediately** removed
 
 ### What IS Retained After Deletion
 
-- **Transaction records only, for a legal reason.** We retain the amount and date of each
-  payment, keyed to an opaque account id, with no name, email, or card details. This is kept
-  solely to meet tax and accounting legal obligations, not for analytics, research, or any
-  product purpose. It is a pseudonymous financial record with no name, email, or card
-  details, and retaining it never delays or limits the erasure of your other personal data.
+A small set of records is kept after deletion, each for a specific legal or security reason
+and none for analytics, research, or any product purpose. Keeping them never delays or limits
+the erasure of your other personal data.
+
+1. **Transaction records.** The amount and date of each payment, keyed to an opaque account id,
+   with no name, email, or card details. Kept solely to meet tax and accounting legal
+   obligations. It is a pseudonymous financial record with no name, email, or card details.
+2. **A record that the account was deleted.** When the deletion happened and through which path,
+   kept to evidence that the erasure was carried out. It holds no name, email, or card details.
+3. **Security logs of staff access.** Where support staff accessed the account, the access log is
+   kept to protect the account and our systems.
 
 ### Deletion Timeline
 
-- **Immediate:** All data removed upon confirmation of deletion request
+- **Immediate:** Your personal data is removed upon confirmation of the deletion request; only the limited records listed under "What IS Retained After Deletion" are kept, for the legal and security reasons stated there
 - **Maximum 45 days:** If submitted via email, we fulfill within the CCPA-mandated 45-day window
 
 ---

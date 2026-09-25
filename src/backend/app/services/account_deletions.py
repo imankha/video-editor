@@ -37,11 +37,23 @@ class DeletionActor(str, Enum):
 
 
 class DeletionPath(str, Enum):
-    """Closed vocabulary for `account_deletions.path` (design §3.2)."""
+    """Closed vocabulary for `account_deletions.path` (design §3.2).
+
+    The five real users-row-deleting paths, each writing exactly one audit row:
+      - PRIVACY_ENDPOINT      privacy.delete_account (user's own erasure request)
+      - DELETE_USER_SCRIPT    scripts/delete_user.py::delete_one (hard delete)
+      - RESET_TEST_ACCOUNT    auth._reset_test_account (login-time NUF reset)
+      - RESET_TEST_USER_SCRIPT scripts/reset-test-user.py (operator NUF reset)
+      - COPY_USER_BETWEEN_ENVS scripts/copy_user_between_envs.py, when it removes
+                              a destination account (same email, different
+                              user_id) before seeding the copied one.
+    """
 
     PRIVACY_ENDPOINT = "privacy_endpoint"
     DELETE_USER_SCRIPT = "delete_user_script"
     RESET_TEST_ACCOUNT = "reset_test_account"
+    RESET_TEST_USER_SCRIPT = "reset_test_user_script"
+    COPY_USER_BETWEEN_ENVS = "copy_user_between_envs"
 
 
 def record_account_deletion(

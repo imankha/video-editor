@@ -17,7 +17,9 @@ class V031AccountDeletions(BaseMigration):
                 user_id      TEXT        NOT NULL,
                 deleted_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
                 actor        TEXT        NOT NULL,   -- 'self' | 'admin' | 'script'
-                path         TEXT        NOT NULL,   -- 'privacy_endpoint' | 'delete_user_script' | 'reset_test_account'
+                -- 'privacy_endpoint' | 'delete_user_script' | 'reset_test_account'
+                -- | 'reset_test_user_script' | 'copy_user_between_envs'
+                path         TEXT        NOT NULL,
                 had_payments BOOLEAN     NOT NULL,
                 net_cents    INTEGER     NOT NULL DEFAULT 0,  -- SUM(payments.amount_cents) at deletion
                 note         TEXT

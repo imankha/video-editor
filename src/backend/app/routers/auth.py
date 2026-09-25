@@ -187,6 +187,9 @@ def _reset_test_account(user_id: str, email: str) -> None:
         )
         cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
+        # T8630 round 2: analytics-only buckets, purged like the real delete
+        # paths (privacy.delete_account) so a reset leaves no stale usage rows.
+        cur.execute("DELETE FROM user_usage_daily WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
         cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
     logger.info(f"[Auth] Cleared auth DB records for {user_id}")

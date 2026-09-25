@@ -279,6 +279,11 @@ async def delete_account(request: Request):
             )
             cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
             cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
+            # T8630 round 2: the per-user per-day analytics buckets are pure
+            # analytics (no legal/security reason to keep), so a real erasure
+            # purges them too -- the retained forensic trail is
+            # account_deletions + impersonation_audit, never this.
+            cur.execute("DELETE FROM user_usage_daily WHERE user_id = %s", (user_id,))
             cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
             # T5840: credits/credit_transactions/credit_reservations are purged
             # by _purge_user_data above (shared with DELETE /api/auth/user) --

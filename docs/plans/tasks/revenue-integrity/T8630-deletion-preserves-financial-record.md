@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS account_deletions (
     user_id        TEXT PRIMARY KEY,
     deleted_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     actor          TEXT NOT NULL,   -- 'self' | 'admin' | 'script'
-    path           TEXT NOT NULL,   -- 'privacy_endpoint' | 'delete_user_script' | 'reset_test_account'
+    path           TEXT NOT NULL,   -- 'privacy_endpoint' | 'delete_user_script' | 'reset_test_account' | 'reset_test_user_script' | 'copy_user_between_envs'
     had_payments   BOOLEAN NOT NULL,
     net_cents      INTEGER NOT NULL DEFAULT 0,  -- SUM(payments.amount_cents) at deletion time
     note           TEXT
@@ -110,9 +110,10 @@ wording with the existing T1740 privacy documents rather than inventing a second
 - `_purge_user_data` is shared by three callers. Put the ledger stamp and audit write in
   the two callers that actually delete the `users` row, not in `_purge_user_data` itself,
   which is also used by the test-cleanup endpoint that leaves the account alive.
-- Deliberately NOT in scope: deleting the two residue tables (`user_usage_daily`,
-  `impersonation_audit`). Once `account_deletions` exists, cleaning them is a separate
-  decision, and today they are the only forensic trail we have.
+- Round 2 (2026-09-25): `user_usage_daily` is analytics-only, so every real delete path now
+  purges it (`privacy.delete_account`, `_reset_test_account`, `scripts/delete_user.py`,
+  `scripts/reset-test-user.py`, `scripts/copy_user_between_envs.py`). `impersonation_audit`
+  is a security log and is RETAINED, alongside `account_deletions`, as the forensic trail.
 
 ## Implementation
 
@@ -131,7 +132,8 @@ wording with the existing T1740 privacy documents rather than inventing a second
 - [x] Deleting an account with payments leaves every `payments` row intact, stamped with
       `account_deleted_at`
 - [x] Every `users` row deletion writes exactly one `account_deletions` row naming actor
-      and path
+      and path, across all five real delete paths: `privacy_endpoint`, `delete_user_script`,
+      `reset_test_account`, `reset_test_user_script`, and `copy_user_between_envs`
 - [x] `delete_user.py` refuses a paying account without `--force-paid`, and refuses a bulk
       run containing one before deleting anything
 - [x] The in-app delete confirmation and the privacy policy both state that transaction

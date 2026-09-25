@@ -351,7 +351,8 @@ silently destroy the revenue record, and left no trace that a deletion happened 
   of the same test account must write a SECOND row, not collide on a duplicate key), `user_id
   TEXT NOT NULL` + index `(user_id, deleted_at)`, `deleted_at`, `actor TEXT` (`self`|`admin`|
   `script` — `admin` reserved, no code path emits it yet), `path TEXT` (`privacy_endpoint`|
-  `delete_user_script`|`reset_test_account`), `had_payments BOOLEAN`, `net_cents INTEGER`
+  `delete_user_script`|`reset_test_account`|`reset_test_user_script`|`copy_user_between_envs` —
+  the last two added in T8630 round 2), `had_payments BOOLEAN`, `net_cents INTEGER`
   (signed `SUM(payments.amount_cents)` at deletion time), `note TEXT`. One row per DELETION
   EVENT. No email column, no FK to `users` — answers who/when/which-path/how-much without
   personal data. Sole writer: `services/account_deletions.py`'s `record_account_deletion(cur,
@@ -362,17 +363,37 @@ silently destroy the revenue record, and left no trace that a deletion happened 
   `stamp_account_deleted(cur, user_id)` — `UPDATE ... WHERE user_id = %s AND account_deleted_at
   IS NULL`, NULL-gated for idempotency, `to_regclass`-guarded for a pre-v031 environment.
   Never filters any revenue query (T8650) — it is account metadata, not a money fact.
-- **Three real delete paths, each in ONE transaction with its own `DELETE FROM users`** (stamp
+- **Five real delete paths, each in ONE transaction with its own `DELETE FROM users`** (stamp
   + audit BEFORE the delete, so a rollback leaves neither and a commit leaves both):
   `privacy.delete_account` (actor=`self`, path=`privacy_endpoint`, stamps + audits — the CCPA
   self-serve path NEVER refuses); `auth._reset_test_account` (actor=`self`,
   path=`reset_test_account`, audits but does NOT stamp — the same `user_id` is re-created
   immediately on the same login, so a persistent "deleted" stamp would misdescribe a live
   account); `scripts/delete_user.py::delete_one` (actor=`script`, path=`delete_user_script`,
-  stamps + audits, `note="forced past payment guard"` when `--force-paid` overrode a refusal).
-  `_purge_user_data` and `DELETE /api/auth/user` deliberately get NEITHER — neither deletes the
-  `users` row (the former is a shared helper with a 4th caller that keeps the account alive;
-  the latter is test cleanup only).
+  stamps + audits, `note="forced past payment guard"` when `--force-paid` overrode a refusal);
+  `scripts/reset-test-user.py::reset_user_postgres` (actor=`script`, path=`reset_test_user_script`,
+  audits but does NOT stamp — a reset, same rationale as `_reset_test_account`); and
+  `scripts/copy_user_between_envs.py::delete_destination_user` (actor=`script`,
+  path=`copy_user_between_envs`, stamps + audits — a destination account really removed on that
+  env before the copy is seeded). `_purge_user_data` and `DELETE /api/auth/user` deliberately
+  get NEITHER — neither deletes the `users` row (the former is a shared helper with a 4th caller
+  that keeps the account alive; the latter is test cleanup only).
+- **T8630 round 2 — script `sys.path` + ordering:** the three standalone operator scripts run
+  as `cd src/backend && python ../../scripts/<name>.py`; running a script FILE puts `scripts/`
+  on `sys.path`, not `src/backend`, so each script now does `sys.path.insert(0, PROJECT_ROOT /
+  "src" / "backend")` and imports the app write helpers AT MODULE TOP (like
+  `backfill_payments_ledger.py`). Pre-fix, `delete_user.py` imported them INSIDE `delete_one`,
+  AFTER the irreversible R2 prefix purge + local `rmtree`, so a real run crashed
+  `ModuleNotFoundError: No module named 'app'` and half-deleted the account (storage gone, users
+  row alive, no audit row). `delete_one` also reordered so a user's Postgres work happens BEFORE
+  its irreversible storage purge — a Postgres failure (import, FK, trigger) for that user now
+  aborts before its R2/local storage is touched. Caveat (pre-existing, non-transactional
+  storage): in a multi-target `--all` run the single commit is at the end of `main()`, so an
+  earlier target whose storage was already purged is not un-purged if a LATER target's Postgres
+  step fails and rolls the batch back. The import crash — which hit EVERY run — is fully gone.
+- **`user_usage_daily` (analytics-only) is purged on every real deletion** (privacy endpoint,
+  `_reset_test_account`, and all three scripts), `to_regclass`-guarded in the scripts. It is NOT
+  a retained forensic record; `account_deletions` + `impersonation_audit` are.
 - **`scripts/delete_user.py --force-paid` guard:** `check_payment_guard(pg_conn, rows,
   force_paid)` runs as ONE pre-pass over every target in `main()`, BEFORE the deletion loop —
   so `--all`/`--all-except` refuse the whole run before the first delete, not halfway through.

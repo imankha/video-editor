@@ -390,8 +390,8 @@ CREATE INDEX IF NOT EXISTS idx_upload_failures_kind     ON upload_failures(kind,
 -- T8620: append-only payments ledger -- one row per money event
 -- (purchase/refund/dispute), never updated or deleted; Stripe-captured
 -- amounts, not the local pricing table; pseudonymous (user_id only, no FK
--- to users so the row outlives account deletion). Sole writer will be
--- services/payments_ledger.py (not yet added -- see T8620 implementation).
+-- to users so the row outlives account deletion). Sole writer is
+-- services/payments_ledger.py.
 -- Mirrored in migrations/postgres/v030_payments_ledger.py; the two texts
 -- must match.
 CREATE TABLE IF NOT EXISTS payments (
@@ -417,9 +417,8 @@ CREATE INDEX IF NOT EXISTS idx_payments_user
 -- T8630: account deletion audit table -- one row per users-row deletion event
 -- (not one row per user; id BIGSERIAL PK so a re-deleted user_id, e.g. a
 -- second test-account reset, writes a second row instead of colliding).
--- Sole writer: services/account_deletions.py (not yet added -- see T8630
--- implementation). The payments.account_deleted_at stamp is written by
--- services/payments_ledger.py's stamp_account_deleted (not yet added).
+-- Sole writer: services/account_deletions.py. The payments.account_deleted_at
+-- stamp is written by services/payments_ledger.py's stamp_account_deleted.
 -- Mirrored in migrations/postgres/v031_account_deletions.py; the two texts
 -- must match.
 CREATE TABLE IF NOT EXISTS account_deletions (
@@ -427,7 +426,9 @@ CREATE TABLE IF NOT EXISTS account_deletions (
     user_id      TEXT        NOT NULL,
     deleted_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     actor        TEXT        NOT NULL,   -- 'self' | 'admin' | 'script'
-    path         TEXT        NOT NULL,   -- 'privacy_endpoint' | 'delete_user_script' | 'reset_test_account'
+    -- 'privacy_endpoint' | 'delete_user_script' | 'reset_test_account'
+    -- | 'reset_test_user_script' | 'copy_user_between_envs'
+    path         TEXT        NOT NULL,
     had_payments BOOLEAN     NOT NULL,
     net_cents    INTEGER     NOT NULL DEFAULT 0,  -- SUM(payments.amount_cents) at deletion
     note         TEXT

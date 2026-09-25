@@ -30,8 +30,27 @@ from pathlib import Path
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-PROJECT_ROOT = Path(__file__).parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 USER_DATA = PROJECT_ROOT / "user_data"
+
+# T8630 round 2: this operator script is run as `cd src/backend && python
+# ../../scripts/delete_user.py`. Running a script FILE puts the script's own
+# directory (scripts/) on sys.path, NOT the cwd, so `import app` fails unless
+# we add src/backend ourselves -- exactly as scripts/backfill_payments_ledger.py
+# already does. Do it at MODULE LOAD, before any work, and import the app's
+# single-writer helpers here too: a missing/broken import then aborts the whole
+# run at startup, before the irreversible R2 prefix purge and local rmtree in
+# delete_one -- never a half-deleted account (storage gone, users row alive, no
+# audit row). The pre-fix bug imported these INSIDE delete_one, so the crash
+# landed AFTER storage was already purged.
+sys.path.insert(0, str(PROJECT_ROOT / "src" / "backend"))
+
+from app.services.account_deletions import (
+    DeletionActor,
+    DeletionPath,
+    record_account_deletion,
+)
+from app.services.payments_ledger import stamp_account_deleted
 
 FLY_APPS = {
     "staging": "reel-ballers-api-staging",
@@ -226,17 +245,13 @@ def delete_one(user_id: str, email: str, app_env: str, bucket: str,
                s3, pg_conn, dry_run: bool, force_paid: bool = False) -> None:
     print(f"\n=== Deleting user_id={user_id} ({email}) in {app_env} ===")
 
-    prefix = f"{app_env}/users/{user_id}/"
-    print(f"  R2 purge: {prefix}")
-    count = purge_r2_prefix(s3, bucket, prefix, dry_run)
-    print(f"    {'would delete' if dry_run else 'deleted'} {count} R2 objects")
-
-    local_dir = USER_DATA / user_id
-    if local_dir.exists():
-        print(f"  local purge: {local_dir}")
-        if not dry_run:
-            shutil.rmtree(local_dir, ignore_errors=True)
-
+    # T8630 round 2: do all Postgres work FIRST, then the irreversible storage
+    # purge. If any Postgres step raises (an app import that can't load, an FK
+    # violation, the append-only trigger), the whole transaction rolls back in
+    # main() and NO R2 object or local file has been touched yet -- the account
+    # is left fully intact, never half-deleted. The pre-fix order purged storage
+    # first and only then hit the (crashing) `import app`, which left storage
+    # gone, the users row alive, and no audit row.
     cur = pg_conn.cursor()
     if dry_run:
         cur.execute("SELECT COUNT(*) as cnt FROM pending_teammate_shares WHERE sharer_user_id = %s", (user_id,))
@@ -279,29 +294,39 @@ def delete_one(user_id: str, email: str, app_env: str, bucket: str,
     else:
         # T8630: stamp + audit BEFORE the DELETE FROM users below, on this
         # same pg_conn (committed once in main() at the end of the whole
-        # run) -- imports the app's single-writer helpers rather than
-        # inlining their SQL (payments_ledger.py owns `payments` writes,
-        # account_deletions.py owns the audit table).
+        # run) -- uses the app's single-writer helpers (imported at module
+        # top so a broken import aborts the run before any storage purge)
+        # rather than inlining their SQL (payments_ledger.py owns `payments`
+        # writes, account_deletions.py owns the audit table).
         if table_present(pg_conn, "payments"):
-            from app.services.payments_ledger import stamp_account_deleted
             stamp_account_deleted(cur, user_id)
-        if table_present(pg_conn, "account_deletions"):
-            from app.services.account_deletions import (
-                DeletionActor,
-                DeletionPath,
-                record_account_deletion,
-            )
-            summary = payment_summary(pg_conn, user_id)
-            note = "forced past payment guard" if (force_paid and summary["count"] > 0) else None
-            record_account_deletion(
-                cur, user_id=user_id, actor=DeletionActor.SCRIPT,
-                path=DeletionPath.DELETE_USER_SCRIPT, note=note,
-            )
+        summary = payment_summary(pg_conn, user_id)
+        note = "forced past payment guard" if (force_paid and summary["count"] > 0) else None
+        record_account_deletion(
+            cur, user_id=user_id, actor=DeletionActor.SCRIPT,
+            path=DeletionPath.DELETE_USER_SCRIPT, note=note,
+        )
         cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
         cur.execute("UPDATE user_segments SET referrer_id = NULL WHERE referrer_id = %s", (user_id,))
         cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
+        # T8630 round 2: analytics-only per-day usage buckets, purged with the
+        # user (to_regclass-tolerant for a pre-v022 destination).
+        if table_present(pg_conn, "user_usage_daily"):
+            cur.execute("DELETE FROM user_usage_daily WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
+
+    # --- Irreversible storage purge LAST (after all Postgres work) ---
+    prefix = f"{app_env}/users/{user_id}/"
+    print(f"  R2 purge: {prefix}")
+    count = purge_r2_prefix(s3, bucket, prefix, dry_run)
+    print(f"    {'would delete' if dry_run else 'deleted'} {count} R2 objects")
+
+    local_dir = USER_DATA / user_id
+    if local_dir.exists():
+        print(f"  local purge: {local_dir}")
+        if not dry_run:
+            shutil.rmtree(local_dir, ignore_errors=True)
 
 
 def main():

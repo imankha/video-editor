@@ -28,7 +28,20 @@ from pathlib import Path
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-PROJECT_ROOT = Path(__file__).parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# T8630 round 2: run as `cd src/backend && python ../../scripts/copy_user_between_envs.py`;
+# a script FILE puts scripts/ on sys.path, not cwd, so add src/backend ourselves
+# (like scripts/backfill_payments_ledger.py) and import the audit/stamp helpers
+# at module load so a broken import aborts before any deletion.
+sys.path.insert(0, str(PROJECT_ROOT / "src" / "backend"))
+
+from app.services.account_deletions import (
+    DeletionActor,
+    DeletionPath,
+    record_account_deletion,
+)
+from app.services.payments_ledger import stamp_account_deleted
 
 logging.basicConfig(
     level=logging.INFO,
@@ -90,6 +103,45 @@ def alias_user_id(src_user_id: str, dst_email: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"rb-alias:{src_user_id}:{dst_email}"))
 
 
+def _table_present(cur, table_name: str) -> bool:
+    """to_regclass tolerance so a pre-migration destination doesn't crash on an
+    UndefinedTable (same pattern as delete_user.py)."""
+    cur.execute("SELECT to_regclass(%s) IS NOT NULL AS ok", (f"public.{table_name}",))
+    return cur.fetchone()["ok"]
+
+
+def delete_destination_user(dst_cur, old_id: str, dst_email: str) -> None:
+    """Remove a pre-existing destination account (same email, different user_id)
+    before seeding the copied one, in the caller's transaction.
+
+    T8630 round 2: this genuinely deletes a `users` row on the destination env,
+    so -- unlike a NUF reset -- the account is REALLY gone there. Write an
+    `account_deletions` audit row (actor 'script', path 'copy_user_between_envs')
+    AND stamp that user_id's `payments.account_deleted_at`, since the account
+    does not come back on this env. Analytics-only `user_usage_daily` buckets are
+    purged with the user. All in the same transaction as the DELETE FROM users.
+    """
+    # Stamp + audit BEFORE the deletes below, same transaction. The stamp uses
+    # the app's single-writer helper; the audit reads `payments` for
+    # had_payments/net_cents (payments are never deleted).
+    if _table_present(dst_cur, "payments"):
+        stamp_account_deleted(dst_cur, old_id)
+    record_account_deletion(
+        dst_cur, user_id=old_id, actor=DeletionActor.SCRIPT,
+        path=DeletionPath.COPY_USER_BETWEEN_ENVS,
+    )
+    for table in ("game_storage_refs", "sessions", "user_segments", "user_actions",
+                  "credit_transactions", "credit_reservations", "credits"):
+        dst_cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (old_id,))
+    if _table_present(dst_cur, "user_usage_daily"):
+        dst_cur.execute("DELETE FROM user_usage_daily WHERE user_id = %s", (old_id,))
+    dst_cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (old_id,))
+    dst_cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (old_id,))
+    dst_cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (old_id, old_id))
+    dst_cur.execute("DELETE FROM otp_codes WHERE email = %s", (dst_email,))
+    dst_cur.execute("DELETE FROM users WHERE user_id = %s", (old_id,))
+
+
 def copy_postgres_rows(
     src_config: dict, dst_config: dict, email: str, dry_run: bool, dst_email: str | None = None
 ) -> tuple[str, str]:
@@ -132,14 +184,7 @@ def copy_postgres_rows(
             if existing and existing["user_id"] != dst_user_id:
                 old_id = existing["user_id"]
                 log.info(f"Removing existing dev user {old_id} (same email, different user_id)")
-                for table in ("game_storage_refs", "sessions", "user_segments", "user_actions",
-                              "credit_transactions", "credit_reservations", "credits"):
-                    dst_cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (old_id,))
-                dst_cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (old_id,))
-                dst_cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (old_id,))
-                dst_cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (old_id, old_id))
-                dst_cur.execute("DELETE FROM otp_codes WHERE email = %s", (dst_email,))
-                dst_cur.execute("DELETE FROM users WHERE user_id = %s", (old_id,))
+                delete_destination_user(dst_cur, old_id, dst_email)
 
             # Upsert user row (identity rewritten for an alias clone).
             # GLOBALLY-UNIQUE columns must not collide with the straight copy of the

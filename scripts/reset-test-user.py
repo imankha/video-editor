@@ -29,8 +29,20 @@ from pathlib import Path
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-PROJECT_ROOT = Path(__file__).parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 USER_DATA = PROJECT_ROOT / "user_data"
+
+# T8630 round 2: run as `cd src/backend && python ../../scripts/reset-test-user.py`;
+# running a script FILE puts scripts/ on sys.path, not cwd, so add src/backend
+# ourselves (like scripts/backfill_payments_ledger.py) and import the audit
+# helper at module load so a broken import aborts before any deletion.
+sys.path.insert(0, str(PROJECT_ROOT / "src" / "backend"))
+
+from app.services.account_deletions import (
+    DeletionActor,
+    DeletionPath,
+    record_account_deletion,
+)
 
 TABLES_TO_CLEAR = [
     "raw_clips",
@@ -196,6 +208,55 @@ def restart_fly_machines(env_name, config):
         print(f"  WARNING: Could not restart machines: {e}")
 
 
+def _table_present(cur, table_name: str) -> bool:
+    """to_regclass tolerance so a pre-migration destination doesn't crash the
+    reset on an UndefinedTable (same pattern as delete_user.py)."""
+    cur.execute("SELECT to_regclass(%s) IS NOT NULL AS ok", (f"public.{table_name}",))
+    return cur.fetchone()["ok"]
+
+
+def reset_user_postgres(pg_conn, user_id: str, email: str) -> None:
+    """Delete the Postgres identity rows for a NUF reset, in ONE transaction
+    (the caller commits).
+
+    T8630 round 2: a reset genuinely deletes the `users` row, so it writes an
+    `account_deletions` audit row (actor 'script', path 'reset_test_user_script').
+    It does NOT stamp `payments.account_deleted_at` -- like `_reset_test_account`
+    (design Approved ruling 1), the same user_id logs back in immediately, so a
+    persistent "deleted" stamp would misdescribe a live, re-created account.
+    Analytics-only `user_usage_daily` buckets are purged with the user.
+    """
+    cur = pg_conn.cursor()
+    # Reset recipient-side share state so share links can be re-materialized
+    cur.execute(
+        """UPDATE share_games SET materialized_at = NULL, recipient_profile_id = NULL
+           WHERE share_id IN (SELECT id FROM shares WHERE recipient_email = %s)""",
+        (email,),
+    )
+    cur.execute(
+        """UPDATE pending_teammate_shares SET resolved_at = NULL
+           WHERE share_id IN (SELECT id FROM shares WHERE recipient_email = %s)""",
+        (email,),
+    )
+    # T8630 round 2: audit the reset (a users-row deletion) before DELETE FROM
+    # users, same transaction -- no stamp (ruling 1).
+    record_account_deletion(
+        cur, user_id=user_id, actor=DeletionActor.SCRIPT,
+        path=DeletionPath.RESET_TEST_USER_SCRIPT,
+    )
+    cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
+    cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
+    if _table_present(cur, "user_usage_daily"):
+        cur.execute("DELETE FROM user_usage_daily WHERE user_id = %s", (user_id,))
+    cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
+    cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (user_id,))
+    cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (user_id,))
+    # T5840: credits live in Postgres now, not user.sqlite -- clear the ledger too.
+    for table in ("game_storage_refs", "sessions", "credit_transactions", "credit_reservations", "credits"):
+        cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (user_id,))
+    cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
+
+
 def main():
     parser = argparse.ArgumentParser(description="Reset a user for NUF testing")
     parser.add_argument("email", help="User email (e.g., imankh@gmail.com)")
@@ -319,26 +380,7 @@ def main():
 
     # Delete user from Postgres
     print("\n--- Deleting user from Postgres ---")
-    # Reset recipient-side share state so share links can be re-materialized
-    cur.execute(
-        """UPDATE share_games SET materialized_at = NULL, recipient_profile_id = NULL
-           WHERE share_id IN (SELECT id FROM shares WHERE recipient_email = %s)""",
-        (args.email,),
-    )
-    cur.execute(
-        """UPDATE pending_teammate_shares SET resolved_at = NULL
-           WHERE share_id IN (SELECT id FROM shares WHERE recipient_email = %s)""",
-        (args.email,),
-    )
-    cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
-    cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
-    cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
-    cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (user_id,))
-    cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (user_id,))
-    # T5840: credits live in Postgres now, not user.sqlite -- clear the ledger too.
-    for table in ("game_storage_refs", "sessions", "credit_transactions", "credit_reservations", "credits"):
-        cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (user_id,))
-    cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
+    reset_user_postgres(pg_conn, user_id, args.email)
     pg_conn.commit()
     pg_conn.close()
     print(f"  Deleted: user record + sessions + refs for '{user_id}'")
