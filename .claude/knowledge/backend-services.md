@@ -387,10 +387,35 @@ silently destroy the revenue record, and left no trace that a deletion happened 
   `ModuleNotFoundError: No module named 'app'` and half-deleted the account (storage gone, users
   row alive, no audit row). `delete_one` also reordered so a user's Postgres work happens BEFORE
   its irreversible storage purge — a Postgres failure (import, FK, trigger) for that user now
-  aborts before its R2/local storage is touched. Caveat (pre-existing, non-transactional
-  storage): in a multi-target `--all` run the single commit is at the end of `main()`, so an
-  earlier target whose storage was already purged is not un-purged if a LATER target's Postgres
-  step fails and rolls the batch back. The import crash — which hit EVERY run — is fully gone.
+  aborts before its R2/local storage is touched. The import crash — which hit EVERY run — is
+  fully gone.
+- **T8630 round 3 — per-user commit before storage purge (bulk half-delete fix):** the round-2
+  caveat (single commit at the end of `main()`, so a LATER target's failure rolled back an
+  EARLIER target whose storage was already purged) is now fixed. `delete_one` is split into
+  `delete_one_postgres` (all PG work, no commit, returns the bug-attachment R2 keys) and
+  `purge_user_storage` (R2 prefix + bug attachments + local rmtree); `main()` commits EACH
+  user's Postgres transaction BEFORE that user's storage purge, so a committed target is durable
+  regardless of any other target. `delete_one` (combined, no commit) is kept for the dry-run path
+  and unit tests that supply their own connection. **Failure policy:** a per-user Postgres failure
+  rolls back only that target (left fully intact) and continues; a storage-purge failure AFTER a
+  target's commit logs loudly, records the target, and continues (the DB is already consistent —
+  row gone, audit written — and leftover storage can be re-purged); either kind makes the run
+  exit non-zero with a summary. The `--force-paid` pre-pass still refuses before any deletion.
+- **T8630 round 3 — bug_reports anonymized on real deletions** (`app/services/bug_reports.py`,
+  sole helper `anonymize_bug_reports(cur, email)`): a REAL deletion keeps the report TEXT
+  (`description` + `build`/`status`/`duplicate_of`/`admin_notes`/`client_report_id`/timestamps)
+  and clears every identifying/device/attachment column (`reporter_email`, `page_url`,
+  `user_agent`, `editor_context`, `actions`, `console_logs`, `screenshot_r2_key`,
+  `logs_r2_key`). `bug_reports` has NO `user_id` column — rows are keyed by `reporter_email`, so
+  the helper matches on the email and there is no user_id link to keep/null. The referenced R2
+  screenshot/console-log objects use GLOBAL keys (`{env}/bugs/{id}/...`, see
+  `generate_presigned_url_global`), NOT the user prefix, so they are deleted explicitly AFTER the
+  per-user commit (the helper returns their keys; `_purge_user_data`'s user-prefix walk never
+  touches them). Wired into the three REAL delete paths (`privacy.delete_account`,
+  `delete_user.py::delete_one_postgres`, `copy_user_between_envs.py::delete_destination_user`);
+  the two NUF test-reset paths deliberately do NOT anonymize (the same email logs straight back
+  in). Real deletions also purge the user's `otp_codes` (by email) and `share_claims` rows
+  (`claimer_user_id` is `NOT NULL`, so the row is DELETED, not nulled).
 - **`user_usage_daily` (analytics-only) is purged on every real deletion** (privacy endpoint,
   `_reset_test_account`, and all three scripts), `to_regclass`-guarded in the scripts. It is NOT
   a retained forensic record; `account_deletions` + `impersonation_audit` are.

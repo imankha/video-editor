@@ -71,6 +71,8 @@ the erasure of your other personal data.
    kept to evidence that the erasure was carried out. It holds no name, email, or card details.
 3. **Security logs of staff access.** Where support staff accessed the account, the access log is
    kept to protect the account and our systems.
+4. **Bug reports you submitted.** The text of a bug report you sent us is kept to help us fix the
+   problem, with your email, device details, and attachments removed.
 
 ### Deletion Timeline
 

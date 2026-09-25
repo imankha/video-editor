@@ -50,6 +50,7 @@ from app.services.account_deletions import (
     DeletionPath,
     record_account_deletion,
 )
+from app.services.bug_reports import anonymize_bug_reports
 from app.services.payments_ledger import stamp_account_deleted
 
 FLY_APPS = {
@@ -241,17 +242,18 @@ def check_payment_guard(pg_conn, rows, force_paid: bool) -> bool:
     return False
 
 
-def delete_one(user_id: str, email: str, app_env: str, bucket: str,
-               s3, pg_conn, dry_run: bool, force_paid: bool = False) -> None:
-    print(f"\n=== Deleting user_id={user_id} ({email}) in {app_env} ===")
+def delete_one_postgres(pg_conn, user_id: str, email: str, dry_run: bool,
+                        force_paid: bool = False) -> list[str]:
+    """Do ALL of a single user's Postgres work (guard side already ran in the
+    caller's pre-pass): stamp + audit + anonymize + row deletes, in the caller's
+    open transaction. NEVER commits and NEVER touches storage -- the caller
+    commits this per user BEFORE the irreversible storage purge (T8630 round 3),
+    so a later target's failure can never roll back an already-storage-purged
+    earlier target.
 
-    # T8630 round 2: do all Postgres work FIRST, then the irreversible storage
-    # purge. If any Postgres step raises (an app import that can't load, an FK
-    # violation, the append-only trigger), the whole transaction rolls back in
-    # main() and NO R2 object or local file has been touched yet -- the account
-    # is left fully intact, never half-deleted. The pre-fix order purged storage
-    # first and only then hit the (crashing) `import app`, which left storage
-    # gone, the users row alive, and no audit row.
+    Returns the bug-report R2 object keys (screenshots + console logs) the caller
+    must delete after the commit. Returns [] on a dry run.
+    """
     cur = pg_conn.cursor()
     if dry_run:
         cur.execute("SELECT COUNT(*) as cnt FROM pending_teammate_shares WHERE sharer_user_id = %s", (user_id,))
@@ -281,6 +283,13 @@ def delete_one(user_id: str, email: str, app_env: str, bucket: str,
             cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (user_id,))
 
     if dry_run:
+        if table_present(pg_conn, "bug_reports"):
+            cur.execute("SELECT COUNT(*) as cnt FROM bug_reports WHERE reporter_email = %s", (email,))
+            print(f"    would anonymize {cur.fetchone()['cnt']} bug_reports rows (keep text, clear PII + delete attachments)")
+        cur.execute("SELECT COUNT(*) as cnt FROM otp_codes WHERE email = %s", (email,))
+        print(f"    would delete {cur.fetchone()['cnt']} rows from otp_codes")
+        cur.execute("SELECT COUNT(*) as cnt FROM share_claims WHERE claimer_user_id = %s", (user_id,))
+        print(f"    would delete {cur.fetchone()['cnt']} rows from share_claims")
         cur.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
         print(f"    would delete {cur.fetchone()['cnt']} rows from referrals")
         cur.execute("SELECT COUNT(*) as cnt FROM user_segments WHERE referrer_id = %s", (user_id,))
@@ -291,42 +300,82 @@ def delete_one(user_id: str, email: str, app_env: str, bucket: str,
         print(f"    would delete {cur.fetchone()['cnt']} rows from user_segments")
         cur.execute("SELECT COUNT(*) as cnt FROM users WHERE user_id = %s", (user_id,))
         print(f"    would delete {cur.fetchone()['cnt']} rows from users")
-    else:
-        # T8630: stamp + audit BEFORE the DELETE FROM users below, on this
-        # same pg_conn (committed once in main() at the end of the whole
-        # run) -- uses the app's single-writer helpers (imported at module
-        # top so a broken import aborts the run before any storage purge)
-        # rather than inlining their SQL (payments_ledger.py owns `payments`
-        # writes, account_deletions.py owns the audit table).
-        if table_present(pg_conn, "payments"):
-            stamp_account_deleted(cur, user_id)
-        summary = payment_summary(pg_conn, user_id)
-        note = "forced past payment guard" if (force_paid and summary["count"] > 0) else None
-        record_account_deletion(
-            cur, user_id=user_id, actor=DeletionActor.SCRIPT,
-            path=DeletionPath.DELETE_USER_SCRIPT, note=note,
-        )
-        cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
-        cur.execute("UPDATE user_segments SET referrer_id = NULL WHERE referrer_id = %s", (user_id,))
-        cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
-        cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
-        # T8630 round 2: analytics-only per-day usage buckets, purged with the
-        # user (to_regclass-tolerant for a pre-v022 destination).
-        if table_present(pg_conn, "user_usage_daily"):
-            cur.execute("DELETE FROM user_usage_daily WHERE user_id = %s", (user_id,))
-        cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
+        return []
 
-    # --- Irreversible storage purge LAST (after all Postgres work) ---
+    # T8630: stamp + audit BEFORE the DELETE FROM users below -- uses the app's
+    # single-writer helpers (imported at module top so a broken import aborts the
+    # run before any storage purge) rather than inlining their SQL
+    # (payments_ledger.py owns `payments` writes, account_deletions.py owns the
+    # audit table).
+    if table_present(pg_conn, "payments"):
+        stamp_account_deleted(cur, user_id)
+    summary = payment_summary(pg_conn, user_id)
+    note = "forced past payment guard" if (force_paid and summary["count"] > 0) else None
+    record_account_deletion(
+        cur, user_id=user_id, actor=DeletionActor.SCRIPT,
+        path=DeletionPath.DELETE_USER_SCRIPT, note=note,
+    )
+    # T8630 round 3: keep bug-report TEXT, clear PII columns; the returned R2
+    # keys are purged after this transaction commits (in the storage phase).
+    bug_r2_keys = anonymize_bug_reports(cur, email)
+    # T8630 round 3: short-lived login OTPs (by email) and the user's own
+    # opaque share-claim links, purged on a real deletion. share_claims.
+    # claimer_user_id is NOT NULL, so the row is deleted rather than nulled.
+    cur.execute("DELETE FROM otp_codes WHERE email = %s", (email,))
+    cur.execute("DELETE FROM share_claims WHERE claimer_user_id = %s", (user_id,))
+    cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
+    cur.execute("UPDATE user_segments SET referrer_id = NULL WHERE referrer_id = %s", (user_id,))
+    cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
+    cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
+    # T8630 round 2: analytics-only per-day usage buckets, purged with the
+    # user (to_regclass-tolerant for a pre-v022 destination).
+    if table_present(pg_conn, "user_usage_daily"):
+        cur.execute("DELETE FROM user_usage_daily WHERE user_id = %s", (user_id,))
+    cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
+    return bug_r2_keys
+
+
+def purge_user_storage(s3, bucket: str, app_env: str, user_id: str,
+                       bug_r2_keys: list[str], dry_run: bool) -> int:
+    """The irreversible storage purge for one user, run AFTER that user's
+    Postgres transaction has committed (T8630 round 3). Purges the R2 user
+    prefix, the anonymized bug reports' global attachment objects, and the local
+    user_data folder. Returns the R2 object count for the user prefix."""
     prefix = f"{app_env}/users/{user_id}/"
     print(f"  R2 purge: {prefix}")
     count = purge_r2_prefix(s3, bucket, prefix, dry_run)
     print(f"    {'would delete' if dry_run else 'deleted'} {count} R2 objects")
+
+    # T8630 round 3: bug-report attachments live under global keys
+    # ({app_env}/bugs/{id}/...), NOT the user prefix above, so purge them here
+    # explicitly. Best-effort: a failure is surfaced by the caller's per-user
+    # try/except, never a silent skip.
+    for key in bug_r2_keys:
+        if dry_run:
+            print(f"    would delete bug attachment: {key}")
+        else:
+            s3.delete_object(Bucket=bucket, Key=key)
+            print(f"    deleted bug attachment: {key}")
 
     local_dir = USER_DATA / user_id
     if local_dir.exists():
         print(f"  local purge: {local_dir}")
         if not dry_run:
             shutil.rmtree(local_dir, ignore_errors=True)
+    return count
+
+
+def delete_one(user_id: str, email: str, app_env: str, bucket: str,
+               s3, pg_conn, dry_run: bool, force_paid: bool = False) -> None:
+    """Single-user delete used by the DRY-RUN path and by unit tests that supply
+    their own connection and commit themselves. It runs the Postgres phase then
+    the storage phase back-to-back on the caller's connection WITHOUT committing.
+    The real (non-dry) bulk/single run in main() does NOT call this -- it commits
+    each user's Postgres phase BEFORE its storage phase so a later failure can
+    never undo an earlier, already-storage-purged deletion (T8630 round 3)."""
+    print(f"\n=== Deleting user_id={user_id} ({email}) in {app_env} ===")
+    bug_r2_keys = delete_one_postgres(pg_conn, user_id, email, dry_run, force_paid)
+    purge_user_storage(s3, bucket, app_env, user_id, bug_r2_keys, dry_run)
 
 
 def main():
@@ -398,18 +447,61 @@ def main():
         if reply.strip() != "yes":
             print("Aborted."); return
 
-    for r in rows:
-        delete_one(r["user_id"], r["email"], app_env, bucket, s3, pg_conn, args.dry_run,
-                   force_paid=args.force_paid)
+    if args.dry_run:
+        for r in rows:
+            delete_one(r["user_id"], r["email"], app_env, bucket, s3, pg_conn, dry_run=True,
+                       force_paid=args.force_paid)
+        pg_conn.close()
+        print(f"\n=== Dry run complete. Would delete {len(rows)} user(s) from {args.env}. ===")
+        return
 
-    if not args.dry_run:
-        pg_conn.commit()
+    # T8630 round 3: commit EACH user's Postgres work (guard already passed in
+    # the pre-pass, then stamp/delete/audit/anonymize) in its own transaction
+    # BEFORE that user's irreversible storage purge. The pre-fix code committed
+    # once after the whole loop, so a later target failing in Postgres (or a
+    # transient R2 error) rolled back every earlier target's DELETE -- after its
+    # storage was already gone -- leaving half-deleted accounts. Now each commit
+    # is durable the instant it lands, independent of every other target.
+    db_deleted = 0
+    failures: list[tuple[str, str, str]] = []
+    for r in rows:
+        uid, email = r["user_id"], r["email"]
+        try:
+            print(f"\n=== Deleting user_id={uid} ({email}) in {app_env} ===")
+            bug_r2_keys = delete_one_postgres(pg_conn, uid, email, dry_run=False,
+                                              force_paid=args.force_paid)
+            pg_conn.commit()
+            db_deleted += 1
+        except Exception as e:  # noqa: BLE001 - one target's failure must never abort the batch
+            pg_conn.rollback()
+            print(f"  ERROR: Postgres deletion FAILED for {email} ({uid}): {e}")
+            print("         This account is left FULLY INTACT (nothing committed, no storage touched). Continuing.")
+            failures.append((email, uid, f"postgres: {e}"))
+            continue
+        # DB side is committed and durable now. The storage purge is
+        # irreversible but safe to retry -- if it fails AFTER the commit, the DB
+        # is already consistent (row gone, audit written) and the leftover
+        # storage can be re-purged. Log loudly, record, and continue.
+        try:
+            purge_user_storage(s3, bucket, app_env, uid, bug_r2_keys, dry_run=False)
+        except Exception as e:  # noqa: BLE001 - storage is post-commit; DB is already consistent
+            print(f"  ERROR: storage purge FAILED for {email} ({uid}) AFTER its Postgres commit: {e}")
+            print("         DB is consistent (row gone, audit written); re-run to re-purge leftover storage. Continuing.")
+            failures.append((email, uid, f"storage: {e}"))
+
     pg_conn.close()
 
-    if args.env in ("staging", "prod") and not args.no_restart and not args.dry_run:
+    # Restart only when at least one deletion actually landed -- a run where every
+    # target failed in Postgres changed nothing, so a restart would be pointless.
+    if args.env in ("staging", "prod") and not args.no_restart and db_deleted > 0:
         restart_fly(args.env)
 
-    print(f"\n=== Done. Deleted {len(rows)} user(s) from {args.env}. ===")
+    print(f"\n=== Done. Deleted {db_deleted}/{len(rows)} user(s) from {args.env}. ===")
+    if failures:
+        print(f"\n*** {len(failures)} failure(s) -- see above; DB is consistent for every committed target ***")
+        for email, uid, reason in failures:
+            print(f"  {email} ({uid}): {reason}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -114,6 +114,42 @@ wording with the existing T1740 privacy documents rather than inventing a second
   purges it (`privacy.delete_account`, `_reset_test_account`, `scripts/delete_user.py`,
   `scripts/reset-test-user.py`, `scripts/copy_user_between_envs.py`). `impersonation_audit`
   is a security log and is RETAINED, alongside `account_deletions`, as the forensic trail.
+- Round 3 (2026-09-25): two fixes after the proof verifier returned MORE_PROOF_REQUIRED at
+  e15a9ce8.
+  1. **Bulk delete half-delete.** `scripts/delete_user.py::main` committed ONCE after the
+     whole loop, so a later target failing in Postgres (or a transient R2 error) rolled back
+     every earlier target's `DELETE` AFTER its irreversible storage purge had already run,
+     leaving half-deleted accounts. Fix: `delete_one` is split into `delete_one_postgres`
+     (all PG work, no commit, returns bug-attachment R2 keys) and `purge_user_storage`
+     (R2 prefix + bug attachments + local rmtree); `main` commits EACH user's Postgres work
+     in its own transaction BEFORE that user's storage purge. The `--force-paid` pre-pass
+     still refuses before any deletion. **Decision (storage-purge failure after a user's
+     commit):** log loudly, record the target, continue to the next, and exit non-zero at the
+     end. The DB side is already consistent (row gone, audit written) and leftover storage can
+     be re-purged by re-running. A per-user Postgres failure rolls back only that target
+     (left fully intact) and likewise continues to the next target.
+  2. **Bug reports anonymized on real deletions.** `app/services/bug_reports.py::
+     anonymize_bug_reports` keeps the report TEXT (`description`) plus `build`/`status`/
+     `duplicate_of`/`admin_notes`/`client_report_id`/timestamps, and CLEARS the identifying/
+     device/attachment columns: `reporter_email`, `page_url`, `user_agent`, `editor_context`,
+     `actions`, `console_logs`, `screenshot_r2_key`, `logs_r2_key`. `bug_reports` has NO
+     `user_id` column (rows are keyed by `reporter_email`), so there is no user_id link to
+     keep or null. The referenced R2 screenshot/console-log objects (global keys
+     `{env}/bugs/{id}/...`, not under the user prefix) are deleted AFTER the per-user commit.
+     Applied to the three REAL delete paths (`privacy.delete_account`, `delete_user.py`,
+     `copy_user_between_envs.py`); **NOT** the two NUF test-reset paths (`_reset_test_account`,
+     `reset-test-user.py`) -- the same email logs straight back in and its own historical
+     reports stay intact.
+     - Also purged on real deletions: the user's `otp_codes` rows (short-lived login codes,
+       keyed by email) and the user's `share_claims` rows. **Decision (share_claims):**
+       `claimer_user_id` is `NOT NULL`, so the row is DELETED rather than nulled -- a deleted
+       user's claim link serves no purpose and removing it drops the pseudonymous link
+       entirely. (`copy_user_between_envs.py` already purged `otp_codes`.)
+     - Copy: the retained-data lists in `docs/legal/privacy-policy.md`,
+       `docs/legal/data-retention-policy.md`, and `PrivacyPolicy.jsx` gain one line stating the
+       text of submitted bug reports is kept to fix problems, with email/device details/
+       attachments removed. The three existing categories are unchanged; `AccountSettings.jsx`
+       stays exactly as ruling C.
 
 ## Implementation
 
@@ -141,3 +177,10 @@ wording with the existing T1740 privacy documents rather than inventing a second
 - [x] Re-running the 2026-09-03 investigation questions against a freshly deleted test
       account answers all of them from tables: who deleted it, when, through which path,
       and how much money it had
+- [x] (Round 3) A bulk `delete_user.py` run where one target fails in Postgres leaves every
+      earlier COMMITTED target fully deleted (row gone, audit row, ledger stamped if paying,
+      storage purged), leaves the failing target fully intact (row, storage, no audit), and
+      continues to later targets, exiting non-zero
+- [x] (Round 3) A real account deletion anonymizes the user's `bug_reports` rows (keeps the
+      text, clears every identifying/device/attachment column) and deletes the referenced R2
+      screenshot/log objects; the user's `otp_codes` and `share_claims` rows are purged

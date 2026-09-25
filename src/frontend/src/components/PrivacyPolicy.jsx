@@ -139,7 +139,7 @@ export function PrivacyPolicy() {
             <li>OTP codes: expire after 10 minutes</li>
           </ul>
           <p className="mt-3">Upon deletion request, your personal data is permanently removed immediately (within 45 days if via email), apart from the limited records described next.</p>
-          <p className="mt-3">Transaction records (payment amounts keyed to an opaque account id, with no name, email, or card details) are retained after account deletion to meet our tax and accounting obligations. We also keep a record that the account was deleted, including when and through which path, to evidence that the erasure happened, and, where support staff accessed the account, the security log of that access to protect the account and our systems. Retaining these records does not delay or limit erasure of your personal data.</p>
+          <p className="mt-3">Transaction records (payment amounts keyed to an opaque account id, with no name, email, or card details) are retained after account deletion to meet our tax and accounting obligations. We also keep a record that the account was deleted, including when and through which path, to evidence that the erasure happened, and, where support staff accessed the account, the security log of that access to protect the account and our systems. We also keep the text of any bug reports you submitted, with your email, device details, and attachments removed, to help us fix the problems you reported. Retaining these records does not delay or limit erasure of your personal data.</p>
         </Section>
 
         {/* Section 5 */}

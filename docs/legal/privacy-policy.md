@@ -144,7 +144,7 @@ We share your information only with service providers who assist in operating th
 
 Upon account deletion request, your personal data is permanently deleted within 45 days (CCPA compliance deadline). A small set of records is kept, for the legal and security reasons described below. See our [Data Retention Policy](data-retention-policy.md) for details.
 
-After deletion we keep a small set of records, each for a specific legal or security reason and none for analytics or product purposes: transaction records (payment amounts and dates keyed to an opaque account id, with no name, email, or card details) to meet tax and accounting obligations; a record that the account was deleted, including when and through which path, to evidence that the erasure happened; and, where support staff accessed the account, the security log of that access to protect the account and our systems. Keeping these records does not delay or limit erasure of your personal data.
+After deletion we keep a small set of records, each for a specific legal or security reason and none for analytics or product purposes: transaction records (payment amounts and dates keyed to an opaque account id, with no name, email, or card details) to meet tax and accounting obligations; a record that the account was deleted, including when and through which path, to evidence that the erasure happened; and, where support staff accessed the account, the security log of that access to protect the account and our systems. We also keep the text of any bug reports you submitted, with your email, device details, and attachments removed, to help us fix the problems you reported. Keeping these records does not delay or limit erasure of your personal data.
 
 ---
 
@@ -157,7 +157,7 @@ If you are a California resident (or where otherwise required by law), you have 
 You may request a copy of all personal information we hold about you. Use the "Download My Data" button in Account Settings or email us.
 
 ### Right to Delete
-You may request deletion of your personal information. Use the "Delete My Account" button in Account Settings or email us. Deletion is permanent and immediate. We keep transaction records (payment amounts keyed to an opaque account id, with no personal details) to meet tax and accounting obligations, a record that the account was deleted to evidence the erasure, and any security log of staff access to the account. We never refuse your erasure request on this basis; your personal data is still erased.
+You may request deletion of your personal information. Use the "Delete My Account" button in Account Settings or email us. Deletion is permanent and immediate. We keep transaction records (payment amounts keyed to an opaque account id, with no personal details) to meet tax and accounting obligations, a record that the account was deleted to evidence the erasure, and any security log of staff access to the account, and the text of any bug reports you submitted (with your email, device details, and attachments removed) to help us fix the problems you reported. We never refuse your erasure request on this basis; your personal data is still erased.
 
 ### Right to Correct
 You may request correction of inaccurate personal information by contacting us.

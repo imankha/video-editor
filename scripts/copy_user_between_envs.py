@@ -41,6 +41,7 @@ from app.services.account_deletions import (
     DeletionPath,
     record_account_deletion,
 )
+from app.services.bug_reports import anonymize_bug_reports
 from app.services.payments_ledger import stamp_account_deleted
 
 logging.basicConfig(
@@ -110,7 +111,7 @@ def _table_present(cur, table_name: str) -> bool:
     return cur.fetchone()["ok"]
 
 
-def delete_destination_user(dst_cur, old_id: str, dst_email: str) -> None:
+def delete_destination_user(dst_cur, old_id: str, dst_email: str) -> list[str]:
     """Remove a pre-existing destination account (same email, different user_id)
     before seeding the copied one, in the caller's transaction.
 
@@ -120,6 +121,11 @@ def delete_destination_user(dst_cur, old_id: str, dst_email: str) -> None:
     AND stamp that user_id's `payments.account_deleted_at`, since the account
     does not come back on this env. Analytics-only `user_usage_daily` buckets are
     purged with the user. All in the same transaction as the DELETE FROM users.
+
+    T8630 round 3: also anonymize the destination account's `bug_reports` (keep
+    the text, clear PII) and delete its own `share_claims` links. Returns the
+    bug-report R2 attachment keys the caller must delete AFTER committing this
+    transaction (R2 deletion is not transactional).
     """
     # Stamp + audit BEFORE the deletes below, same transaction. The stamp uses
     # the app's single-writer helper; the audit reads `payments` for
@@ -130,6 +136,7 @@ def delete_destination_user(dst_cur, old_id: str, dst_email: str) -> None:
         dst_cur, user_id=old_id, actor=DeletionActor.SCRIPT,
         path=DeletionPath.COPY_USER_BETWEEN_ENVS,
     )
+    bug_r2_keys = anonymize_bug_reports(dst_cur, dst_email)
     for table in ("game_storage_refs", "sessions", "user_segments", "user_actions",
                   "credit_transactions", "credit_reservations", "credits"):
         dst_cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (old_id,))
@@ -138,8 +145,11 @@ def delete_destination_user(dst_cur, old_id: str, dst_email: str) -> None:
     dst_cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (old_id,))
     dst_cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (old_id,))
     dst_cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (old_id, old_id))
+    # share_claims.claimer_user_id is NOT NULL -> delete the row (T8630 round 3).
+    dst_cur.execute("DELETE FROM share_claims WHERE claimer_user_id = %s", (old_id,))
     dst_cur.execute("DELETE FROM otp_codes WHERE email = %s", (dst_email,))
     dst_cur.execute("DELETE FROM users WHERE user_id = %s", (old_id,))
+    return bug_r2_keys
 
 
 def copy_postgres_rows(
@@ -173,6 +183,7 @@ def copy_postgres_rows(
         dst_user_id = alias_user_id(user_id, dst_email) if is_alias else user_id
         log.info(f"Found user_id: {user_id}" + (f" -> alias {dst_user_id} ({dst_email})" if is_alias else ""))
 
+        deleted_bug_r2_keys: list[str] = []
         if dry_run:
             log.info(f"[DRY RUN] Would copy users row for {user_id} as {dst_user_id}")
         else:
@@ -184,7 +195,7 @@ def copy_postgres_rows(
             if existing and existing["user_id"] != dst_user_id:
                 old_id = existing["user_id"]
                 log.info(f"Removing existing dev user {old_id} (same email, different user_id)")
-                delete_destination_user(dst_cur, old_id, dst_email)
+                deleted_bug_r2_keys = delete_destination_user(dst_cur, old_id, dst_email)
 
             # Upsert user row (identity rewritten for an alias clone).
             # GLOBALLY-UNIQUE columns must not collide with the straight copy of the
@@ -324,6 +335,20 @@ def copy_postgres_rows(
                 log.info(f"Copied {len(tx_rows)} credit_transactions rows, re-derived balance")
 
             dst_conn.commit()
+
+            # T8630 round 3: the deleted destination account's bug-report R2
+            # attachments (global keys, not under a user prefix) are purged AFTER
+            # the commit -- R2 deletion is not transactional and the rows are
+            # already anonymized. Best-effort: a failure is logged, never fatal.
+            if deleted_bug_r2_keys:
+                r2 = get_r2_client(dst_config)
+                bucket = dst_config["R2_BUCKET"]
+                for key in deleted_bug_r2_keys:
+                    try:
+                        r2.delete_object(Bucket=bucket, Key=key)
+                        log.info(f"Deleted destination bug attachment: {key}")
+                    except Exception as e:  # noqa: BLE001 - best-effort post-commit purge, never fatal
+                        log.warning(f"Bug attachment purge failed for {key}: {e}")
 
         return user_id, dst_user_id
 
