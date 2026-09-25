@@ -154,6 +154,6 @@ describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unc
     expect(onUpdateClip).toHaveBeenCalledWith('c1', { rating: 5 });
     // Visual state also reflects it.
     fireEvent.click(screen.getByTestId('badge-rated'));
-    expect(screen.getByRole('radio', { name: '5 stars - Brilliant' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: '5 stars - Highlight' }).getAttribute('aria-checked')).toBe('true');
   });
 });

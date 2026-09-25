@@ -256,7 +256,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
    *
    * Priority:
    * 1. Single game → "Game Name - Date" or just "Game Name"
-   * 2. 5-star only → "Brilliants" (or "Game Name Brilliants")
+   * 2. 5-star only → "Highlights" (or "Game Name Highlights")
    * 3. Same season games → "Fall 2024" or "Spring 2025"
    * 4. Tags selected → Include tag names
    * 5. Fallback → "Highlight Reel"
@@ -269,8 +269,8 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
       ? games.filter(g => selectedGameIds.includes(g.id))
       : gamesWithCounts;
 
-    // Check if this is a "Brilliants" collection (5-star only)
-    const isBrilliants = minRating === 5;
+    // Check if this is a "Highlights" collection (5-star only)
+    const isHighlights = minRating === 5;
 
     // === SINGLE GAME ===
     if (activeGames.length === 1) {
@@ -299,15 +299,15 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
         // Two games: combine names
         parts.push(`${activeGames[0].name} & ${activeGames[1].name}`);
       }
-      // else: no specific pattern, will use Brilliants or tags or fallback
+      // else: no specific pattern, will use Highlights or tags or fallback
     }
 
-    // === ADD BRILLIANTS LABEL ===
-    if (isBrilliants) {
+    // === ADD HIGHLIGHTS LABEL ===
+    if (isHighlights) {
       if (parts.length === 0) {
-        parts.push('Brilliants');
+        parts.push('Highlights');
       } else {
-        parts.push('Brilliants');
+        parts.push('Highlights');
       }
     }
 
@@ -330,7 +330,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
     if (parts.length === 0) {
       // Check rating for descriptive name
       if (minRating === 4) {
-        parts.push('Good To Brilliant');
+        parts.push('Good To Highlight');
       } else if (minRating === 3) {
         parts.push('Highlights');
       } else {

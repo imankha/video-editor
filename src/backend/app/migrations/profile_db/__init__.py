@@ -51,6 +51,7 @@ from .v051_game_video_placement import V051GameVideoPlacement
 from .v052_game_video_original_filename import V052GameVideoOriginalFilename
 from .v053_raw_clips_source import V053RawClipsSource
 from .v054_raw_clips_rating_nullable import V054RawClipsRatingNullable
+from .v055_port_brilliant_names_to_highlight import V055PortBrilliantNamesToHighlight
 
 MIGRATIONS = [
     V001Baseline(),
@@ -105,6 +106,7 @@ MIGRATIONS = [
     V052GameVideoOriginalFilename(),
     V053RawClipsSource(),
     V054RawClipsRatingNullable(),
+    V055PortBrilliantNamesToHighlight(),
 ]
 
 # T5089: floor=0 is INERT (gate never fires). When the cross-env floor sweep

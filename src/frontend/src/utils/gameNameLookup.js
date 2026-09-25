@@ -23,7 +23,7 @@ export function createGameLookup(games) {
  *
  * @example
  * const lookup = createGameLookup([{ id: 1, name: "Finals 2024" }]);
- * formatClipDisplayName("Brilliant Goal", 1, lookup) // "Finals 2024 > Brilliant Goal"
+ * formatClipDisplayName("Highlight Goal", 1, lookup) // "Finals 2024 > Highlight Goal"
  * formatClipDisplayName("My Upload", null, lookup) // "My Upload"
  */
 export function formatClipDisplayName(clipName, gameId, gameLookup) {

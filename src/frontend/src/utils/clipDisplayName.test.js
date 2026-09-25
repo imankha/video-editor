@@ -17,7 +17,7 @@ describe('generateClipName — unrated play (T10710)', () => {
 
   it('never prepends "Interesting" or any other rating adjective', () => {
     const name = generateClipName(null, ['Goal']);
-    expect(name).not.toMatch(/Interesting|Brilliant|Good|Technical Lapse|Mental Lapse/);
+    expect(name).not.toMatch(/Interesting|Highlight|Good|Technical Lapse|Mental Lapse/);
   });
 
   it('still returns empty string when there are no tags and no notes (unchanged)', () => {

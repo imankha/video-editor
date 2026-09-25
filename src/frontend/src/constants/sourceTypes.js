@@ -13,7 +13,7 @@ export const SourceType = Object.freeze({
  * Human-readable labels for source types.
  */
 export const SOURCE_TYPE_LABELS = Object.freeze({
-  [SourceType.BRILLIANT_CLIP]: 'Brilliant Clip',
+  [SourceType.BRILLIANT_CLIP]: 'Highlight Clip',
   [SourceType.CUSTOM_PROJECT]: 'Custom Reel',
 });
 

@@ -83,7 +83,7 @@ describe('strip header badges — states', () => {
   it('rating a play 5 stars wakes the clip badge into the "Create clip" nudge', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
     fireEvent.click(badge('badge-rated'));
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' }));
     expect(badge('badge-rated').dataset.state).toBe('done');
     expect(badge('badge-clip').dataset.state).toBe('nudge');
     expect(screen.getByText('Create clip')).toBeTruthy();
@@ -163,7 +163,7 @@ describe('strip header badges — clicks jump to the control', () => {
     // Scoped to the group -- the Layer segmented control also uses role="radio".
     const options = within(group).getAllByRole('radio');
     expect(options.map((o) => o.getAttribute('aria-label'))).toEqual([
-      '5 stars - Brilliant', '4 stars - Good', '3 stars - Interesting',
+      '5 stars - Highlight', '4 stars - Good', '3 stars - Interesting',
       '2 stars - Technical Lapse', '1 star - Mental Lapse',
     ]);
   });
@@ -171,7 +171,7 @@ describe('strip header badges — clicks jump to the control', () => {
   it('picking a star sets the rating and closes the popup', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
     fireEvent.click(badge('badge-rated'));
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' }));
     expect(badge('badge-rated').dataset.state).toBe('done');
     expect(screen.queryByRole('radiogroup', { name: "Rate your athlete's play" })).toBeNull();
     // The clip nudge wakes at 5 stars.
@@ -185,7 +185,7 @@ describe('strip header badges — clicks jump to the control', () => {
     fireEvent.click(screen.getByRole('radio', { name: '3 stars - Interesting' }));
     expect(badge('badge-rated').textContent).toBe('!?');
     fireEvent.click(badge('badge-rated'));
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' }));
     expect(badge('badge-rated').textContent).toBe('!!');
   });
 
@@ -195,7 +195,7 @@ describe('strip header badges — clicks jump to the control', () => {
     const group = screen.getByRole('radiogroup', { name: "Rate your athlete's play" });
     const rows = within(group).getAllByRole('radio');
     expect(rows.map((r) => r.textContent)).toEqual([
-      'Brilliant!!', 'Good!', 'Interesting!?', 'Technical Lapse?', 'Mental Lapse??',
+      'Highlight!!', 'Good!', 'Interesting!?', 'Technical Lapse?', 'Mental Lapse??',
     ]);
   });
 
@@ -203,7 +203,7 @@ describe('strip header badges — clicks jump to the control', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, my_athlete: true }} />);
     fireEvent.click(badge('badge-rated'));
     expect(screen.getByRole('radiogroup', { name: "Rate your athlete's play" })).toBeTruthy();
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' })); // picking a row closes the popup
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' })); // picking a row closes the popup
 
     fireEvent.click(screen.getByRole('radio', { name: 'Team' })); // flip the layer toggle
     fireEvent.click(badge('badge-rated'));
@@ -335,7 +335,7 @@ describe('formBody layouts', () => {
     const onUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 9 });
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" existingClip={bareClip} onUpdateClip={onUpdateClip} />);
     fireEvent.click(badge('badge-rated'));
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' }));
     expect(badge('badge-clip').dataset.state).toBe('nudge');
     fireEvent.click(badge('badge-clip'));
     await waitFor(() => expect(onUpdateClip).toHaveBeenCalledWith('c1', { createProject: true }));
@@ -350,7 +350,7 @@ describe('same-play identity churn keeps unsaved edits (Reviewer BLOCKING #2)', 
   it('re-rendering with a new object for the same clip id preserves the 5-star edit and typed name', () => {
     const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
     fireEvent.click(badge('badge-rated'));
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' }));
     fireEvent.click(badge('badge-named'));
     fireEvent.change(screen.getByLabelText('Clip name'), { target: { value: 'Banger' } });
     expect(badge('badge-clip').dataset.state).toBe('nudge');
@@ -361,13 +361,13 @@ describe('same-play identity churn keeps unsaved edits (Reviewer BLOCKING #2)', 
     expect(badge('badge-rated').dataset.state).toBe('done');
     expect(screen.getByLabelText('Clip name').value).toBe('Banger');
     fireEvent.click(badge('badge-rated'));
-    expect(screen.getByRole('radio', { name: '5 stars - Brilliant' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: '5 stars - Highlight' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('a DIFFERENT clip id still resets the form', () => {
     const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
     fireEvent.click(badge('badge-rated'));
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' }));
     rerender(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, id: 'c2', rating: 3 }} />);
     fireEvent.click(badge('badge-rated'));
     expect(screen.getByRole('radio', { name: '3 stars - Interesting' }).getAttribute('aria-checked')).toBe('true');
