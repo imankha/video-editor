@@ -366,8 +366,5 @@ async def test_normal_export_dispatches_unaffected(monkeypatch):
 
     # Guard did NOT reject -> dispatch was reached exactly once.
     assert len(spy.calls) == 1
-    # And it was NOT a budget rejection (that would be a 413 export_too_large).
-    from fastapi import HTTPException
-    if isinstance(ei.value, HTTPException):
-        detail = ei.value.detail
-        assert not (isinstance(detail, dict) and detail.get("code") == "export_too_large")
+    # Sanity: the failure is the dispatch sentinel, NOT a budget rejection.
+    assert not isinstance(ei.value, ExportBudgetExceeded)
