@@ -1,6 +1,6 @@
 # T11110: Rating 5 becomes "Highlight", in gold
 
-**Status:** WIP
+**Status:** STAGING (merged PR #503, 739ff784)
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-09-24
