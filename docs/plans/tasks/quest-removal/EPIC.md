@@ -51,7 +51,7 @@ guided and gets a guided experience to progress them to the next step)."
 
 | ID | Task | Tier | Status |
 |----|------|------|--------|
-| T11170 | [Welcome credits no longer depend on quests](T11170-welcome-credits-decouple.md) | M | TODO |
+| T11170 | [Welcome credits no longer depend on quests](T11170-welcome-credits-decouple.md) | M | STAGING (merged PR #508, proof VERIFIED, CI green) |
 | T11175 | [Reroute funnel analytics off the quest achievements endpoint](T11175-funnel-analytics-reroute.md) | M | TODO |
 | T11180 | [Delete the quest system, frontend](T11180-delete-quests-frontend.md) | M | TODO |
 | T11185 | [Delete the quest system, backend (+ optional table drops)](T11185-delete-quests-backend.md) | M | TODO |

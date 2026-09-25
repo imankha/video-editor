@@ -59,8 +59,8 @@ may exceed). **Order is dependency order.**
 
 | ID | Task | Tier | Status |
 |----|------|------|--------|
-| T11200 | [Read-only census of multi-clip drafts and reels (all envs)](T11200-multiclip-data-census.md) | M | TODO |
-| T11210 | [Characterization: single-clip Modal golden + delete dead endpoints](T11210-characterize-and-delete-dead-endpoints.md) | M | TODO |
+| T11200 | [Read-only census of multi-clip drafts and reels (all envs)](T11200-multiclip-data-census.md) | M | STAGING (merged PR #509, reviewer APPROVED, CI green; landed on supervisor evidence, not the automatic gate — see T11310) |
+| T11210 | [Characterization: single-clip Modal golden + delete dead endpoints](T11210-characterize-and-delete-dead-endpoints.md) | M | STAGING (merged PR #506, proof VERIFIED, CI green) |
 | T11220 | [Legacy multi-clip data: keep drafts reachable, block re-edit/restore of multi-clip reels](T11220-legacy-multiclip-data-handling.md) | M/L | TODO |
 | T11230 | [Remove Reels building surfaces (Reels tab, Create reel, from-clips)](T11230-remove-reels-building-surfaces.md) | M | TODO |
 | T11240 | [Remove multi-clip UI from Framing and Spotlight](T11240-remove-multiclip-editor-ui.md) | L | TODO |
@@ -82,7 +82,7 @@ Recorded in the decision artifact's `answers` collection.
 |---|---|
 | R1 | Placement: both epics ship in the NEXT version (Deploy Candidate), before the Tutorial Redesign core (T7620/T7630/T7640), the T10320 reshoot and the T9720 gate, since guided mode anchors to final screens. [yes] |
 | R2 | Published-output noun once Reels is gone: "highlight" everywhere (Published tab items, share emails, ReelTile, admin, legal, pricing), "Reel" reserved for T11300. Brand "ReelBallers" unchanged. [yes] |
-| R3 | In-progress multi-clip drafts: A) keep reachable in Clips, Spotlight + publish still work, re-framing refused with a clear message; B) split into single-clip drafts via migration (loses rendered state); C) hide. [A, confirm after T11200 counts] |
+| R3 | In-progress multi-clip drafts: A) keep reachable in Clips, Spotlight + publish still work, re-framing refused with a clear message; B) split into single-clip drafts via migration (loses rendered state); C) hide. [A, CONFIRMED 2026-09-25 by T11200's staging+prod census: prod has 17 published multi-clip finals (4 users) + 11 live Postgres shares + 8 framing-only drafts (5 users) — real live data that rules out hide (C) and is too small/valuable to justify a lossy split migration (B). 5 prod profiles (2 users) were unreadable — schema gap, not a change to this verdict; see T11200's Progress Log.] |
 | R4 | Published multi-clip reels: stay viewable / downloadable / shareable under Published "Mixes & compilations"; Re-edit and archive restore hidden for them. [yes] |
 | R5 | Collections (play-as-one, stitched download, collection share, Top Plays, ranking): keep live, or hide until Reels v2? They are single-clip-member features and the seed of T11300. [keep live] |
 | R6 | ~~Old `/home/reels-in-progress` deep links: redirect to Clips.~~ RULED 2026-09-24: any unsupported link goes Home (catch-all). |

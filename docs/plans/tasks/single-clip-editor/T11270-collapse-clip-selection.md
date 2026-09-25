@@ -25,6 +25,10 @@ Optional, separate and risky, NOT in this task: collapsing `latest_working_clips
 
 ## Related Tasks
 - Depends on: T11240, T11250, T11260
+- **Preserve (T10190, merged PR #492):** the `gameId`/`onBackToGame` backlink plumbing T11240/
+  T11260 were told to keep in `FocusScreen.jsx`/`OverlayScreen.jsx` reads project/clip data but is
+  not part of the selection model itself — a mechanical rename pass should leave it untouched, not
+  fold it into the new "the project's clip" accessor.
 
 ## Acceptance Criteria
 

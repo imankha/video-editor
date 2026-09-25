@@ -49,6 +49,13 @@ e2e `T5790`, `T8510-export-guard`.
 - Depends on: T11220
 - Blocks: T11250 (frontend stops calling before endpoints go), T11270
 - Downstream: the focus-landscape cockpit (T10840 D13 "Multi-clip filmstrip: sheet only") loses its Clips sheet
+- **Preserve (T10190, merged PR #492, do not delete):** `FocusScreen.jsx`'s completion-preview
+  payload shaper (currently ~1384-1389 comment + ~1613-1623, feeds `gameName`/`gameStartTime`/
+  `gameId` to `CollectionPlayer` and gates the "Back to game plays" backlink via `onBackToGame`).
+  It's a different concern (result-surface title/backlink, not clip selection) living in the same
+  file this task guts — line numbers will drift as this task deletes ~1,700 LOC around it; grep
+  `T10190` in `FocusScreen.jsx` before finishing to confirm the block still compiles and still
+  fires on a single-clip completion.
 
 ## Acceptance Criteria
 

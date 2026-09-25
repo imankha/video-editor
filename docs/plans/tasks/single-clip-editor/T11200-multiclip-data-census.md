@@ -1,6 +1,6 @@
 # T11200: Read-only census of multi-clip drafts and reels (all envs)
 
-**Status:** STAGING (merged PR #509, 7b6b2c60; script done, staging/prod runs still owed)
+**Status:** STAGING (merged PR #509, 7b6b2c60; staging + prod census runs complete 2026-09-25, all ACs met)
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-24
@@ -51,6 +51,43 @@ Output aggregates plus per-user counts (user id, not email) so affected users ca
 
 ## Acceptance Criteria
 
-- [ ] Script runs read-only on dev, staging and prod; prod run results posted to the user
-- [ ] Verified read-only: no R2 PUT, all SQLite opened `mode=ro`
-- [ ] Results recorded in this file's Progress Log and summarized in the R3 decision
+- [x] Script runs read-only on dev, staging and prod; prod run results posted to the user
+- [x] Verified read-only: no R2 PUT, all SQLite opened `mode=ro`
+- [x] Results recorded in this file's Progress Log and summarized in the R3 decision
+
+## Progress Log
+
+**2026-09-25**: Staging and prod runs completed (dev run was already done pre-merge). Reports at
+repo root (gitignored): `census_multiclip_staging_2026-09-25.json`, `census_multiclip_prod_2026-09-25.json`.
+
+**Staging** — 73/73 profiles read, 0 errors, 225 archives scanned:
+- 4 framing-only multi-clip drafts (2 users); everything else (published, rendered-not-published,
+  archived, published multi-clip finals, Postgres shares) is 0.
+
+**Prod** — 193 profiles found, **188 read, 5 errored**, 197 archives scanned:
+- 8 framing-only multi-clip drafts (5 users)
+- 1 `is_auto_created=0` project with exactly 1 clip (a "reel" that never got a 2nd clip)
+- **17 published multi-clip finals (4 users)** — real, live, currently-served output
+- 2 archived multi-clip projects, R2-archive-only (1 user)
+- **11 Postgres video shares pointing at those 17 multi-clip finals**; 0 collection shares
+  (advisory) by the affected sharer profiles
+
+**Known gap — 5 unreadable profiles (2 users, both flagged in the raw log):**
+`OperationalError: no such column: fv.clip_count`. These 5 profile DBs are on a `final_videos`
+schema version older than the migration that added `clip_count`, and (per CLAUDE.md's Migration
+System long-tail property) never came online long enough for JIT to touch them. Per the script's
+own contract this is NOT a false all-clear — their rows are **absent from every bucket above**,
+not counted as zero. Whatever those 2 users hold (multi-clip or not) is currently unknown. Options
+before R3 fully closes: (a) accept the gap as acceptably small (2/193 users) and proceed, since
+T11220's "keep reachable" design doesn't depend on knowing the count in advance, or (b) re-run
+after those 2 accounts migrate (their next login) or after extending `census_profile_db` to
+degrade gracefully on a pre-`clip_count` schema (catch the column error, run buckets 1/2/4 without
+bucket 3, and flag the profile as "partial" rather than fully skipped) — not done here since it
+changes tested script behavior; flagging as a follow-up rather than doing it under this task.
+
+**R3 verdict, now with real numbers:** counts support **option A (keep reachable)** as scoped —
+17 live published multi-clip reels and 11 live shares in prod make "hide" or a lossy split
+migration clearly wrong; the volume (17 finals / 4 users, 8 drafts / 5 users, out of 193 total
+prod users) is small enough that option A's per-item handling (T11220) is proportionate, not
+over-engineering. The 5-profile gap above does not change this verdict — it bounds unknown users,
+not a reason to distrust the known ones.
