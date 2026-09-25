@@ -177,11 +177,6 @@ def _generate_group_key(game_names: list[str], game_dates: list[str]) -> str | N
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
-class ProjectCreate(BaseModel):
-    name: str
-    aspect_ratio: str  # "16:9" or "9:16"
-
-
 class ProjectRename(BaseModel):
     """PUT /projects/{id} payload. Rename ONLY -- aspect_ratio is deliberately not
     accepted here. It has exactly one writer, POST /clips/projects/{id}/aspect-ratio
@@ -200,20 +195,6 @@ class ProjectFromClipsCreate(BaseModel):
     min_rating: int = 1
     tags: list[str] = []  # Empty = all tags
     clip_ids: list[int] | None = None  # If provided, use these specific clips instead of filters
-
-
-class ClipsPreviewRequest(BaseModel):
-    """Request body for previewing clips that would be included in a project."""
-    game_ids: list[int] = []
-    min_rating: int = 1
-    tags: list[str] = []
-
-
-class ClipsPreviewResponse(BaseModel):
-    """Preview of clips matching the filter criteria."""
-    clip_count: int
-    total_duration: float  # In seconds
-    clips: list[dict]  # Brief clip info for display
 
 
 class ProjectResponse(BaseModel):
@@ -681,37 +662,6 @@ async def list_projects():
     return result
 
 
-@router.post("", response_model=ProjectResponse)
-async def create_project(project: ProjectCreate):
-    """Create a new empty project."""
-    # Validate aspect ratio
-    if project.aspect_ratio not in ['16:9', '9:16', '4:3', '1:1']:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid aspect ratio: {project.aspect_ratio}"
-        )
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO projects (name, aspect_ratio)
-            VALUES (?, ?)
-        """, (project.name, project.aspect_ratio))
-        conn.commit()
-
-        project_id = cursor.lastrowid
-        logger.info(f"Created project: {project_id} - {project.name}")
-
-        return ProjectResponse(
-            id=project_id,
-            name=project.name,
-            aspect_ratio=project.aspect_ratio,
-            working_video_id=None,
-            final_video_id=None,
-            created_at=datetime.now().isoformat()
-        )
-
-
 def _build_clips_filter_query(game_ids: list[int], min_rating: int, tags: list[str]):
     """Build SQL query and params for filtering raw clips."""
     # T10690: 1 is the minimum real star, so "1+" has never excluded a RATED
@@ -751,49 +701,6 @@ def _build_clips_filter_query(game_ids: list[int], min_rating: int, tags: list[s
 
     query += " ORDER BY created_at DESC"
     return query, params
-
-
-@router.post("/preview-clips", response_model=ClipsPreviewResponse)
-async def preview_clips(request: ClipsPreviewRequest):
-    """
-    Preview clips that would be included in a project based on filter criteria.
-
-    Returns clip count, total duration, and brief clip info for display.
-    """
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        query, params = _build_clips_filter_query(
-            request.game_ids, request.min_rating, request.tags
-        )
-        cursor.execute(query, params)
-        clips = cursor.fetchall()
-
-        total_duration = 0.0
-        clips_info = []
-
-        for clip in clips:
-            start = clip['start_time'] or 0
-            end = clip['end_time'] or 0
-            duration = max(0, end - start)
-            total_duration += duration
-
-            tags = decode_data(clip['tags']) or []
-            clip_name = derive_clip_name(clip['name'], clip['rating'], tags, clip['notes'] or '') or f"Clip {clip['id']}"
-            clips_info.append({
-                'id': clip['id'],
-                'name': clip_name,
-                'rating': clip['rating'],
-                'tags': tags,
-                'duration': duration,
-                'game_id': clip['game_id']
-            })
-
-        return ClipsPreviewResponse(
-            clip_count=len(clips),
-            total_duration=total_duration,
-            clips=clips_info
-        )
 
 
 @router.post("/from-clips", response_model=ProjectResponse)

@@ -120,7 +120,6 @@ function renderOnClipsTab(props = {}) {
         games={[]}
         gamesLoading={false}
         onSelectProject={vi.fn()}
-        onCreateProject={vi.fn()}
         onRefreshProjects={vi.fn()}
         onDeleteProject={vi.fn()}
         onAnnotateWithFile={vi.fn()}
