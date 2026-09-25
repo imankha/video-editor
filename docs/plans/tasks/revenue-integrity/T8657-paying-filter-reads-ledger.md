@@ -1,6 +1,6 @@
 # T8657: Admin "paying" filter selects users from the ledger, not the cache
 
-**Status:** WIP
+**Status:** STAGING (merged 2026-09-25, PR #505; proof VERIFIED at c858428a, Branch CI 36086424991 green)
 **Impact:** 3
 **Complexity:** 1
 **Created:** 2026-09-24
