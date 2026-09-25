@@ -3,7 +3,8 @@ Tests for TF-IDF keyword extraction for auto-generating clip titles.
 """
 
 import pytest
-from app.tfidf_titles import extract_keywords_tfidf, _extract_keywords_simple, MIN_CORPUS_SIZE
+
+from app.tfidf_titles import MIN_CORPUS_SIZE, _extract_keywords_simple, extract_keywords_tfidf
 
 
 class TestExtractKeywordsSimple:
@@ -140,7 +141,8 @@ class TestDeriveClipNameWithTfidf:
     def test_tags_override_generated_title(self):
         from app.queries import derive_clip_name
         result = derive_clip_name(None, 5, ['Goal'], 'some notes', 'Covering Close Man')
-        assert result == 'Brilliant Goal'
+        # T11110: 5-star adjective is "Highlight" (was "Brilliant").
+        assert result == 'Highlight Goal'
 
     def test_empty_generated_title_falls_back_to_notes_truncation(self):
         from app.queries import derive_clip_name

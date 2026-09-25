@@ -15,8 +15,6 @@ These tests seed real rows (the empty-DB-only gap that shipped v017 broken).
 
 import sqlite3
 
-import pytest
-
 from app.migrations.profile_db.v019_heal_sweep_reel_metadata import (
     V019HealSweepReelMetadata,
 )
@@ -92,7 +90,9 @@ def test_heals_fallback_named_sweep_row(tmp_path):
     expected = derive_clip_name("", 5, tags, "")
     assert name == expected
     assert name and name != "Clip 5"
-    assert name == "Brilliant Dribble, Control and Goal"
+    # T11110: v019 imports the LIVE derive_clip_name, so accounts still below
+    # v019 now get "Highlight" names directly on heal, not the old adjective.
+    assert name == "Highlight Dribble, Control and Goal"
 
 
 def test_user_renamed_sweep_row_keeps_name_but_flips_ar(tmp_path):
@@ -207,7 +207,9 @@ def test_idempotent_rerun_is_noop(tmp_path):
 
     assert after_first == after_second
     assert after_second[1] == "16:9"
-    assert after_second[0] == "Brilliant Dribble, Control and Goal"
+    # T11110: v019 imports the LIVE derive_clip_name, so accounts still below
+    # v019 now get "Highlight" names directly on heal, not the old adjective.
+    assert after_second[0] == "Highlight Dribble, Control and Goal"
 
 
 def test_noop_on_empty_db(tmp_path):
