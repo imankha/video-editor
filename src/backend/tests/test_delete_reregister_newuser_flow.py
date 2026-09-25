@@ -29,15 +29,16 @@ import uuid
 import pytest
 from fastapi import HTTPException
 
-from app.quest_config import QUEST_CHAIN_CREDIT_TOTAL
-from app.services.storage_credits import NEW_ACCOUNT_CREDITS
+# T11170: the welcome grant is decoupled from the quest system -- its amount is
+# storage_credits.WELCOME_CREDITS, no longer quest_config.QUEST_CHAIN_CREDIT_TOTAL.
+from app.services.storage_credits import NEW_ACCOUNT_CREDITS, WELCOME_CREDITS
 
 # T8120: a fresh signup now receives BOTH the base new-account bonus AND the full
 # quest-chain total upfront (the per-quest drip is retired). session_init grants
 # the quest-chain remainder on every first-of-process init — for a brand-new user
 # that is the whole total; for an existing account it is whatever they haven't
 # been granted yet.
-FRESH_SIGNUP_BALANCE = NEW_ACCOUNT_CREDITS + QUEST_CHAIN_CREDIT_TOTAL
+FRESH_SIGNUP_BALANCE = NEW_ACCOUNT_CREDITS + WELCOME_CREDITS
 
 
 def _uid(prefix: str) -> str:
@@ -185,7 +186,7 @@ def test_reregister_after_purge_is_new_user_and_seeded(hermetic):
     _init_cache.pop(uid, None)
     before = user_session_init(uid)
     assert before["is_new_user"] is False
-    assert get_credit_balance(uid)["balance"] == QUEST_CHAIN_CREDIT_TOTAL
+    assert get_credit_balance(uid)["balance"] == WELCOME_CREDITS
 
     # Complete deletion.
     _purge_user_data(uid)
@@ -257,12 +258,12 @@ def test_returning_user_not_reseeded(hermetic):
     result = user_session_init(uid)
     assert result["is_new_user"] is False
     # Base bonus untouched (not re-granted) + one-time upfront quest total.
-    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS + QUEST_CHAIN_CREDIT_TOTAL
+    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS + WELCOME_CREDITS
 
     # A second login must NOT double-grant the upfront quest credits.
     _init_cache.pop(uid, None)
     user_session_init(uid)
-    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS + QUEST_CHAIN_CREDIT_TOTAL
+    assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS + WELCOME_CREDITS
 
 
 def test_returning_user_keeps_quest_progress(hermetic):
