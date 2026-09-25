@@ -4,6 +4,21 @@
 
 ## Current Focus
 
+**TOP PRIORITY (user-flagged, 2026-09-25) — [Modal Export Safety & Capacity epic](tasks/modal-export-safety/EPIC.md)
+(T11320-T11350), plus standalone [T11360](tasks/T11360-admin-credits-spent-stat-not-net-of-refunds.md).**
+Filed from investigating Bug 58p (prod): a user's 16:9, full-frame (uncropped) 14-clip export hit
+Modal's hard 3600s timeout 4 times in a row with zero feedback on why or what to change — root
+cause is the full-1080p crop paying for a full 4x GAN enhance it doesn't need (the skip gate for
+this exact case, T10160, ships inert) on a single-GPU path with no chunking. Epic order:
+**T11320** (preflight guard — reject before dispatch instead of after an hour) → **T11330**
+(explanatory popup naming concrete levers: crop in, split into batches) — ship this pair first, it
+directly prevents a repeat. **T11340** (parallelize multi-clip export across GPUs, raises the real
+ceiling, L-tier/design-gated) and **T11350** (enable the GAN-skip gate for near-1:1 crops after the
+calibration run `modal-gpu.md` already calls for) are independent of each other, should land after
+the guard/popup pair. User was emailed + credited 50 bonus credits (already done); this section is
+the follow-up engineering work only. T11360 (admin `credits_spent` stat not net of refunds) is a
+minor, unrelated-domain ticket found incidentally during the same investigation.
+
 **2026-09-25 addition, unplaced — [T11310](tasks/T11310-landing-gate-reviewer-verdict-vocabulary.md):
 The landing gate's reviewer captures sometimes return the wrong verdict word.** Found live while
 landing T11210/T11170: `REPORT_SCHEMA`'s `verdict` enum is shared across both independent-capture
