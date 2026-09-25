@@ -1,6 +1,6 @@
 # T11170: Welcome credits no longer depend on quests
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-09-24
