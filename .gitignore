@@ -29,6 +29,9 @@ Thumbs.db
 *.temp
 .cache/
 
+# Census / audit script output (T11200) — may contain per-user ids, never commit
+census_multiclip_*.json
+
 # Video files (for testing)
 *.mp4
 *.mov
