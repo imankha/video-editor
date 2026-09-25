@@ -69,23 +69,6 @@ def _require_admin():
 # 503 instead of the old `synced: false` best-effort report.
 # ---------------------------------------------------------------------------
 
-def _compute_money_spent_cents(purchase_credit_amounts: list[int]) -> int:
-    """Map individual Stripe purchase credit amounts to total dollars spent (in cents)."""
-    from ..analytics import CREDIT_AMOUNT_TO_CENTS
-    total = 0
-    for amount in purchase_credit_amounts:
-        cents = CREDIT_AMOUNT_TO_CENTS.get(amount)
-        if cents is None:
-            # Not a silent 0: an amount no ladder ever sold means the map is stale.
-            logger.warning(
-                "[admin] No price known for a %d-credit purchase; money-spent is understated",
-                amount,
-            )
-            continue
-        total += cents
-    return total
-
-
 def _compute_last_step(actions: set[str]) -> str:
     from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
     for step in reversed(FUNNEL_STEPS):
@@ -2173,7 +2156,19 @@ def _build_segment_filter(origin, acquired_from, acquired_to, user_filter):
         where_parts.append("s.acquired_at <= %s")
         params.append(date.fromisoformat(acquired_to))
     if user_filter == "paying":
-        where_parts.append("s.total_spent_cents > 0")
+        # T8657: "paying" is decided by the LEDGER (net revenue > 0), not the
+        # `total_spent_cents` cache. The cache is zeroed by account deletion, left
+        # un-writable for a segment-less payer, and overwritten by the reconciliation
+        # heal, so a cache-based selector both DROPS backfill-only payers (cache never
+        # moved) and KEEPS refunded-to-zero ones -- diverging from the ledger totals
+        # every other admin revenue figure reads since T8650. Reuse the shared
+        # per-user pre-aggregate rather than adding a third copy of the SUM. A deleted
+        # payer has no `user_segments` row, so this predicate on `s.user_id` can never
+        # select them -- their money lives only in the unfiltered grand total.
+        where_parts.append(
+            f"s.user_id IN (SELECT user_id FROM {_LEDGER_REVENUE_BY_USER} pay "
+            "WHERE pay.revenue_cents > 0)"
+        )
     elif user_filter == "active_7d":
         where_parts.append("s.last_active_at > now() - INTERVAL '7 days'")
     elif user_filter == "has_exports":

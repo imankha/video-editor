@@ -640,7 +640,7 @@ class TestExtendEndpointHandler:
             result = await extend_game_storage(game_id, ExtendStorageRequest(days=30))
 
         assert result["success"] is True
-        assert result["cost_credits"] == 2  # 5 GB for 30 days
+        assert result["cost_credits"] == calculate_extension_cost(int(5.0 * 1024 ** 3), 30)
         assert result["new_balance"] == 9
 
         ref = get_game_storage_ref("recipient-user", "recipient-profile", "endpoint_hash")

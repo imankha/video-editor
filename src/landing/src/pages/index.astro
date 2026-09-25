@@ -35,6 +35,9 @@ const exampleExportCredits = 3 * EXAMPLE_HIGHLIGHT_SECONDS * FACTS.creditsPerExp
 const exampleTotalCredits = exampleUploadCredits + exampleExportCredits
 const exampleTotalUsd = costAtBestRateUsd(exampleTotalCredits).toFixed(2)
 const lowestRateDisplay = LOWEST_RATE_CENTS.toFixed(1)
+// Mirror BuyCreditsModal.jsx's `pack.credits.toLocaleString()` (thousands separator at
+// >=1000 credits). Pinned to en-US so the static build is locale-independent.
+const formatCredits = (credits: number) => credits.toLocaleString('en-US')
 
 const faqs: FaqItem[] = [
   {
@@ -380,7 +383,7 @@ const steps = [
             )}
             <div class="text-gray-400 text-sm font-medium mb-2">{pack.name}</div>
             <div class="text-3xl font-bold text-white">${packPriceUsd(pack).toFixed(2)}</div>
-            <div class="text-gray-400 text-sm mt-1">{pack.credits} credits</div>
+            <div class="text-gray-400 text-sm mt-1">{formatCredits(pack.credits)} credits</div>
           </div>
         ))
       }
