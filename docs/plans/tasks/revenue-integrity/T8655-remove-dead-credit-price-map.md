@@ -1,6 +1,6 @@
 # T8655: Remove the dead credit-amount-to-price map
 
-**Status:** WIP
+**Status:** STAGING (merged 2026-09-25, PR #507; proof VERIFIED at 422d6a34, Branch CI 36088469665 green)
 **Impact:** 2
 **Complexity:** 1
 **Created:** 2026-09-24
