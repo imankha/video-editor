@@ -302,28 +302,31 @@ def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
 
     set_current_profile_id(profile_id)
 
-    # T8120: grant the quest-chain credit total upfront, retiring the per-quest
-    # drip. This runs for EVERY user on the first init of a process/session (the
-    # slow path is cached per user), not just new signups — an existing mid-quest
-    # account gets its ungranted remainder here on next login (same JIT-on-next-
-    # touch shape as migrations; no bulk sweep). Idempotent (fixed key + remainder
-    # computed from prior grants), so repeat inits are a cheap no-op. Same
-    # gate-tolerant handling as the new-account bonus above: a closed credits_ready
-    # gate must not hard-fail login; log loudly (idempotency key questbank:{user_id}
-    # is safe to retry once the gate opens).
+    # T8120/T11170: grant the welcome credit total upfront (the 80 that, with the
+    # 8-credit signup bonus above, makes the advertised 88). This runs for EVERY
+    # user on the first init of a process/session (the slow path is cached per
+    # user), not just new signups — an existing account gets its ungranted
+    # remainder here on next login (same JIT-on-next-touch shape as migrations; no
+    # bulk sweep). Idempotent (fixed key + remainder computed from prior grants),
+    # so repeat inits are a cheap no-op. T11170 moved the grant off the quest
+    # system (was credit_ledger.grant_quest_chain_credits) to
+    # storage_credits.grant_welcome_credits. Same gate-tolerant handling as the
+    # new-account bonus above: a closed credits_ready gate must not hard-fail
+    # login; log loudly (idempotency key questbank:{user_id} is safe to retry once
+    # the gate opens).
     try:
         from .services.credit_ledger import (
             CreditsUnavailable as _CU,
         )
-        from .services.credit_ledger import (
-            grant_quest_chain_credits,
+        from .services.storage_credits import (
+            grant_welcome_credits,
         )
-        r = grant_quest_chain_credits(user_id)
+        r = grant_welcome_credits(user_id)
         if r["granted"]:
-            logger.info(f"Granted {r['granted']} upfront quest-chain credits to {user_id}")
+            logger.info(f"Granted {r['granted']} upfront welcome credits to {user_id}")
     except _CU:
         logger.error(
-            f"[SessionInit] Upfront quest-chain credits NOT granted for {user_id} -- "
+            f"[SessionInit] Upfront welcome credits NOT granted for {user_id} -- "
             f"credits_ready gate is closed. Safe to retry (key questbank:{user_id}) "
             f"once the gate opens."
         )

@@ -394,8 +394,8 @@ async def get_progress():
 async def claim_reward(quest_id: str):
     """
     Mark a completed quest as claimed to advance the panel to the next quest.
-    T8120: credits are no longer granted per-quest here — the whole chain total
-    is granted upfront at signup/next login (credit_ledger.grant_quest_chain_credits).
+    T8120: credits are no longer granted per-quest here — the whole welcome total
+    is granted upfront at signup/next login (T11170: storage_credits.grant_welcome_credits).
     Idempotent — returns current balance (unchanged by this call) if already claimed.
     """
     user_id = get_current_user_id()
@@ -442,9 +442,9 @@ async def claim_reward(quest_id: str):
                 },
             )
 
-    # T8120: per-quest credit rewards are RETIRED — the whole chain total is
-    # granted upfront (credit_ledger.grant_quest_chain_credits, at signup / next
-    # login), so "claiming" a quest now only marks it complete for progression
+    # T8120: per-quest credit rewards are RETIRED — the whole welcome total is
+    # granted upfront (T11170: storage_credits.grant_welcome_credits, at signup /
+    # next login), so "claiming" a quest now only marks it complete for progression
     # (advances the panel to the next quest) and grants nothing. `reward` is 0 on
     # every quest; do NOT call credit_ledger.grant here (it rejects amount<=0).
     # Kept as an idempotent no-op grant path so the frontend claim gesture and the

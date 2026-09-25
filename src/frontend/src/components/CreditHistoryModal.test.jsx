@@ -29,7 +29,9 @@ describe('CreditHistoryModal (T4940)', () => {
     render(<CreditHistoryModal onClose={vi.fn()} />);
     await waitFor(() => expect(screen.getByText('Credit purchase')).toBeTruthy());
     expect(screen.getByText('Video export')).toBeTruthy();
-    expect(screen.getByText('Quest reward')).toBeTruthy();
+    // T11170: legacy quest_reward rows now read "Welcome credits" (same label as
+    // the quest_upfront lump grant), decoupling the copy from the quest system.
+    expect(screen.getByText('Welcome credits')).toBeTruthy();
   });
 
   it('shows signed amounts', async () => {
