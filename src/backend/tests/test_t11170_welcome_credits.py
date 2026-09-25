@@ -81,8 +81,8 @@ class TestFreshSignupDecoupledFromQuests:
         # Remove the quest-system credit constant the OLD grant path depended on.
         monkeypatch.delattr(qc, "QUEST_CHAIN_CREDIT_TOTAL", raising=False)
 
-        from app.session_init import user_session_init, _init_cache
         from app.services.credit_ledger import get_credit_balance
+        from app.session_init import _init_cache, user_session_init
         from app.user_context import set_current_user_id
 
         uid = _uid("t11170")
@@ -95,8 +95,8 @@ class TestFreshSignupDecoupledFromQuests:
 
     def test_second_session_init_grants_no_more(self, hermetic):
         """Idempotency at the seam: re-initialising the same user grants 0 more."""
-        from app.session_init import user_session_init, _init_cache
         from app.services.credit_ledger import get_credit_balance
+        from app.session_init import _init_cache, user_session_init
         from app.user_context import set_current_user_id
 
         uid = _uid("t11170idem")
@@ -118,8 +118,8 @@ class TestFreshSignupDecoupledFromQuests:
 
 class TestGrantWelcomeCredits:
     def test_new_user_gets_full_welcome_total(self, pg_conn):
-        from app.services.storage_credits import WELCOME_CREDITS, grant_welcome_credits
         from app.services.credit_ledger import credit_key, get_balance, has_key
+        from app.services.storage_credits import WELCOME_CREDITS, grant_welcome_credits
 
         uid = "user-a"
         result = grant_welcome_credits(uid)
@@ -129,8 +129,8 @@ class TestGrantWelcomeCredits:
         assert has_key(uid, credit_key("quest_upfront", uid))
 
     def test_repeat_call_is_a_noop(self, pg_conn):
-        from app.services.storage_credits import WELCOME_CREDITS, grant_welcome_credits
         from app.services.credit_ledger import get_balance
+        from app.services.storage_credits import WELCOME_CREDITS, grant_welcome_credits
 
         uid = "user-a"
         grant_welcome_credits(uid)
@@ -143,8 +143,8 @@ class TestGrantWelcomeCredits:
         """An account that already received legacy per-quest rewards (source
         `quest_reward`) summing to 30 gets only the remaining 50 -- the exact
         remainder logic moved from grant_quest_chain_credits."""
-        from app.services.storage_credits import WELCOME_CREDITS, grant_welcome_credits
         from app.services.credit_ledger import credit_key, get_balance, grant
+        from app.services.storage_credits import WELCOME_CREDITS, grant_welcome_credits
 
         uid = "user-a"
         grant(uid, 30, "quest_reward", credit_key("quest_reward", "legacy"), reference_id="legacy")
