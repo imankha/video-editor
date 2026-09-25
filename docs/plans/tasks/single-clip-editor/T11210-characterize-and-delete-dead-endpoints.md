@@ -1,6 +1,6 @@
 # T11210: Characterization - single-clip Modal golden + delete dead endpoints
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-24
