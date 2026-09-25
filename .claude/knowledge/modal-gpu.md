@@ -1,6 +1,8 @@
 ---
 domain: modal-gpu
-updated: 2026-09-25 (T11210: corrected Entry-points caller lines -- `call_modal_framing_ai` is at
+updated: 2026-09-25 (T11320: preflight export-size guard -- see "Preflight cost guard" under
+Testing seams / cost anchors and the T11320 entry under Active/upcoming work);
+        2026-09-25 (T11210: corrected Entry-points caller lines -- `call_modal_framing_ai` is at
 modal_client.py:632, caller export_helpers.py:232, and is NOT the single-clip `/render` path;
 single-clip `/render` uses `call_modal_clips_ai` (multi_clip.py:1479) via `_export_clips`, now pinned
 by tests/test_export_golden_single_clip_modal.py);
@@ -156,6 +158,41 @@ graph LR
 - `call_modal_framing_ai(test_mode=True)` → `local_processors.local_framing_mock` (`modal_client.py:541`, `local_processors.py:737`) — no GPU, no Modal, no render.
 - `MODAL_ENABLED=false` + no CUDA → `MockVideoUpscaler` end-to-end pipeline verification (T4120 recipe); /dotask containers have Modal off by default and optional token provisioning (T4180).
 - Cost/perf anchors (E6 benchmark): T4 ≈ 681 ms/frame; 10s clip @30fps ≈ 204 GPU-s ≈ $0.03; Modal jobs can run 40+ min (hence the 60-min stale threshold in `cleanup_stale_exports`). Framing cost anchor ≈ 0.3c/exported-second still stands (T4940 sanity check).
+- **Preflight cost guard (T11320, `app/services/export_cost_guard.py`).** Estimates GPU-seconds
+  BEFORE dispatch and REJECTS an export that can't finish inside `process_clips_ai`'s hard
+  `timeout=3600`, instead of letting it run the full hour then die (Bug 58p: 14 full-1080p clips,
+  4×). GAN cost scales with the crop's **INPUT** pixel count (`_upscale_crop` docstring,
+  `video_processing.py:~1328`), so:
+  `per_frame_cost(w,h) = ANCHOR_SECONDS_PER_FRAME * (w*h) / ANCHOR_CROP_PIXELS`, where
+  `ANCHOR_SECONDS_PER_FRAME = 0.681` and `ANCHOR_CROP_PIXELS = 540*960 = 518400` — **the crop the
+  681ms was actually measured at**, per `experiments/e6_l4_benchmark.py:56-58` (crop
+  `width:540, height:960`) + `experiments/e6_l4_benchmark_results.json` (`results.t4`: 180 frames
+  in 122.67s = 1.4674 fps = 0.681 s/frame). ⚠️ This is NOT `DEFAULT_CROP_SIZES["9:16"]` — the
+  T9970 note below mentions a 205×365 *default crop*, which is a product default, unrelated to the
+  E6 *performance* benchmark's 540×960 crop. T11320's kickoff restated the anchor as 205×365; the
+  benchmark files say 540×960, and per the kickoff's own instruction ("use the documented value,
+  not the restated one") the code uses 540×960. (Using 74825 instead over-estimates every export
+  ~6.9× and would falsely reject legitimate medium exports.) Total = `Σ frame_count *
+  per_frame_cost` (pure `estimate_total_gpu_seconds`); per clip uses the ceil'd emitted-frame
+  count (`duration*target_fps`, T8280 grid) and the **largest** crop box across its keyframes —
+  both conservative (a false reject just says "crop in / split"; a false accept repeats Bug 58p).
+  **GAP:** a clip with NO crop keyframes (Modal smart-center-crops it from source dims,
+  `video_processing.py:~3034`) is *skipped with a loud WARNING*, not bounded — sizing it needs a
+  source-dims probe the guard deliberately doesn't add (keyframes-only scope). So a full-frame
+  *no-crop* batch is NOT caught; Bug 58p itself had explicit full-1080p crop boxes, so it is. A
+  present-but-broken keyframe (missing width/height) still fails loudly (No Silent Fallbacks).
+  Budget = **80% of 3600 = 2880 GPU-s** (`GPU_SECONDS_BUDGET`). Guard is `enforce_export_budget`,
+  wired at the TOP of the Modal branch in `multi_clip._export_clips` (before the R2 upload loop /
+  `call_modal_clips_ai`), so it covers BOTH multi-clip AND single-clip `/render` (which reaches
+  `_export_clips` with a one-element list — no separate `framing.py` call needed). Over budget →
+  raises `ExportBudgetExceeded`; `_export_clips`' generic handler surfaces
+  `estimate.to_error_detail()` as a **structured HTTP 413 + WS error** — `{code:"export_too_large",
+  estimated_gpu_seconds, budget_seconds, modal_timeout_seconds, budget_fraction,
+  biggest_contributors:[{clip_index,clip_name,frame_count,crop_width,crop_height,
+  estimated_gpu_seconds}]}` (the T11330 popup contract). T11340 raises the real ceiling this
+  estimates against; T11350 flips `GAN_MIN_ENLARGE` — only `per_frame_cost` needs a per-clip
+  skip flag then, callers/budget-check unchanged. Tests: `tests/test_t11320_export_preflight_guard.py`.
+  **Estimate accuracy vs. real billed GPU-s is a staging gate (Modal off in-container, T4180).**
 - **Quality benchmark (T9970, 2026-09-15):** `scripts/quality_benchmark.py` is a standalone,
   product-code-free instrument that runs the geometric half of framing (source → crop rect →
   Lanczos enlarge → libx264 crf23) over an authorized fixture and captures matched-timestamp
@@ -211,6 +248,11 @@ graph LR
 - **T4430** (TODO, depends on T4370): named encode profiles + single ffprobe.
 - **Upscale Quality epic** (`docs/plans/tasks/upscale-quality/EPIC.md`, strict order): T4700 SR testbed (`src/backend/experiments/sr_testbed/`, prime directive: no quality change ships without a testbed run) → T4710 encode/denoise quick wins (crf, bt709, `dni_weight`) → T4720 GAN A/B → T4730 temporal VSR prototype (FlashVSR/SeedVR2, L40S) → T4740 prod integration with crop-size routing → T4750 fine-tune.
 - **T7090** (impl 2026-08-16, download-compose to Modal): `compose_serve_time_modal` (CPU, bare-image+app-tree) dispatched by `modal_client.call_modal_compose` / `_get_compose_fn` (mirrors `call_modal_stitch_members`), routed through the `serve_time_video.compose_serve_time_dispatched` seam (Modal-on -> R2-scratch round-trip; ANY Modal error incl. undeployed -> local `compose_serve_time` fallback; Modal-off local is the only in-container path per T4180). The intro-card ffmpeg graph is built by the PURE `app/services/card_compose_plan.build_intro_card_cmd`, shared by the local `_build_card` and the Modal burn (no drift). **Requires `modal deploy app/modal_functions/video_processing.py` before the Modal path works** (else `from_name` raises -> non-fatal local fallback). Live cost/latency/OOM-avoidance + the `/root/app` sys.path/font resolution are a staging-verification gap (unexercisable in-container).
+- **T11320** (impl 2026-09-25, Modal Export Safety epic — Bug 58p): preflight export-size guard.
+  See "Preflight cost guard" under Testing seams / cost anchors for the formula, anchor, budget,
+  wiring, and structured-rejection shape. Pure-function + before-dispatch regression tests, no
+  Modal needed. Blocks T11330 (popup reads the structured reason). Estimate-vs-real-billed-GPU-s
+  calibration is a post-merge staging gate (Modal off in /dotask, T4180).
 - **T2650** (TODO): move sweep auto-export compute from Fly to Modal.
 - Historical: T2480 shipped Catmull-Rom spline crop interpolation on the Modal side (matching frontend curves) — the origin of today's duplicated spline copies; T50/T51 were the original Modal cost/parallelization analyses (parallel overlay rejected as 3-4x costlier, E7).
 - Related DONE infra: T1200 (Modal job-id logging + retry), T1520 (disconnect/retry UX reconciling with Modal job state), T2450-T2470 (auto-export reliability: presigned URLs to FFmpeg, pending-status recovery, sweep keepalive).

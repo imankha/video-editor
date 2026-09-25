@@ -36,6 +36,7 @@ from ...queries import latest_working_clips_subquery
 from ...services import export_job_repository
 from ...services.clip_cache import get_clip_cache
 from ...services.clip_pipeline import process_clip_with_pipeline
+from ...services.export_cost_guard import ExportBudgetExceeded, enforce_export_budget
 from ...services.ffmpeg_service import get_video_duration
 from ...services.modal_client import call_modal_clips_ai, call_modal_detect_players_batch, modal_enabled
 from ...services.transitions import apply_transition
@@ -1394,6 +1395,15 @@ async def _export_clips(
         if modal_enabled():
             logger.info(f"[Multi-Clip Export] Using Modal GPU for {len(clips_data)} clips")
 
+            # T11320: preflight GPU-cost guard. process_clips_ai runs on a single T4 with a
+            # hard timeout=3600 and no chunking; an export whose estimated GPU-seconds exceed
+            # 80% of that cannot finish, so reject it BEFORE dispatch (Bug 58p: 14 full-1080p
+            # clips ran the full hour four times with zero feedback). Also covers the
+            # single-clip /render path, which reaches _export_clips with a one-element list.
+            # Raises ExportBudgetExceeded -> the generic handler below turns it into a
+            # structured HTTP 413 + WS error (T11330 popup contract).
+            enforce_export_budget(clips_data, target_fps)
+
             # Upload all source videos to R2 temp folder
             source_keys = []
             for clip_data in sorted(clips_data, key=lambda x: x.get('clipIndex', 0)):
@@ -1984,7 +1994,14 @@ async def _export_clips(
         logger.error(f"[Multi-Clip Export] Full traceback:\n{full_traceback}")
 
         error_str = str(e)
-        if isinstance(e, socket.gaierror) or "getaddrinfo failed" in error_str:
+        # T11320: a preflight budget rejection carries a structured reason (estimated
+        # seconds, budget, biggest-contributing clips) that T11330's popup renders. Surface
+        # those fields on the WS payload and as an HTTP 413, instead of a free-text string.
+        budget_detail = e.estimate.to_error_detail() if isinstance(e, ExportBudgetExceeded) else None
+        if budget_detail:
+            user_error = budget_detail["message"]
+            is_recoverable = False
+        elif isinstance(e, socket.gaierror) or "getaddrinfo failed" in error_str:
             user_error = "Internet connection lost. Your export may still complete - check 'In Progress' exports to see if it finished."
             is_recoverable = True
         elif "connection" in error_str.lower() or "network" in error_str.lower():
@@ -2001,6 +2018,8 @@ async def _export_clips(
             "status": "error",
             "recoverable": is_recoverable,
         }
+        if budget_detail:
+            error_data.update(budget_detail)
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
 
@@ -2022,6 +2041,8 @@ async def _export_clips(
                 shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception as cleanup_error:
             logger.warning(f"[Multi-Clip Export] Cleanup failed: {cleanup_error}")
+        if budget_detail:
+            raise HTTPException(status_code=413, detail=budget_detail) from e
         raise HTTPException(status_code=500, detail=user_error) from e
 
 
