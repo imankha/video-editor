@@ -1988,16 +1988,21 @@ async def _export_clips(
             refund_credits(user_id, credits_deducted, export_id, total_video_seconds)
             logger.info(f"[Multi-Clip Export] Refunded {credits_deducted} credits to {user_id}")
         import socket
-        import traceback
-        full_traceback = traceback.format_exc()
-        logger.error(f"[Multi-Clip Export] Failed: {e!s}")
-        logger.error(f"[Multi-Clip Export] Full traceback:\n{full_traceback}")
 
         error_str = str(e)
-        # T11320: a preflight budget rejection carries a structured reason (estimated
-        # seconds, budget, biggest-contributing clips) that T11330's popup renders. Surface
-        # those fields on the WS payload and as an HTTP 413, instead of a free-text string.
+        # T11320: a preflight budget rejection carries a structured reason (estimated seconds,
+        # budget, biggest-contributing clips). The REAL channel a client sees is the WS /
+        # export_progress payload below (this runs in a background task, so the exception this
+        # re-raises never reaches an HTTP client -- see modal-gpu.md). T11330's popup reads that.
         budget_detail = e.estimate.to_error_detail() if isinstance(e, ExportBudgetExceeded) else None
+        if budget_detail:
+            # Expected rejection, already logged by enforce_export_budget -- WARNING, no traceback.
+            logger.warning(f"[Multi-Clip Export] Rejected over-budget export {export_id}: {error_str}")
+        else:
+            import traceback
+            logger.error(f"[Multi-Clip Export] Failed: {e!s}")
+            logger.error(f"[Multi-Clip Export] Full traceback:\n{traceback.format_exc()}")
+
         if budget_detail:
             user_error = budget_detail["message"]
             is_recoverable = False
@@ -2042,7 +2047,10 @@ async def _export_clips(
         except Exception as cleanup_error:
             logger.warning(f"[Multi-Clip Export] Cleanup failed: {cleanup_error}")
         if budget_detail:
-            raise HTTPException(status_code=413, detail=budget_detail) from e
+            # Re-raise the ExportBudgetExceeded itself: its str() is the plain human message,
+            # so the outer background runner's fail_export_job(str(e)) stores readable text
+            # (not a truncated dict repr). The structured detail already went out over WS above.
+            raise
         raise HTTPException(status_code=500, detail=user_error) from e
 
 
@@ -2507,7 +2515,13 @@ async def _run_multi_clip_background(
             from ...services.credit_ledger import refund_credits
             refund_credits(user_id, credits_deducted, export_id, total_video_seconds)
             logger.info(f"[Multi-Clip Export] Refunded {credits_deducted} credits (pre-pipeline failure)")
-        logger.error(f"[Multi-Clip Export] Background export failed: {e}", exc_info=True)
+        # T11320: a preflight budget rejection is expected and already fully handled by
+        # _export_clips (structured WS payload + readable job-fail message) and logged there;
+        # log it once at WARNING here, not a duplicate ERROR + traceback.
+        if isinstance(e, ExportBudgetExceeded):
+            logger.warning(f"[Multi-Clip Export] Export {export_id} rejected by preflight guard: {e}")
+        else:
+            logger.error(f"[Multi-Clip Export] Background export failed: {e}", exc_info=True)
 
         # T4010: a failed export must leave the project exactly as before the job.
         # Restore the pointers in case the pipeline advanced working_video_id or

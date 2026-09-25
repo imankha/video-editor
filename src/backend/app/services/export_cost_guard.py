@@ -20,13 +20,15 @@ split; a false acceptance repeats Bug 58p):
   ``experiments/e6_l4_benchmark.py:56-58`` for the crop dims + ``experiments/
   e6_l4_benchmark_results.json`` ``results.t4`` for the timing). This is where
   ``.claude/knowledge/modal-gpu.md``'s ``T4 ~= 681 ms/frame`` figure comes from. Because GAN
-  cost scales with the crop's INPUT pixel count, that pins a per-pixel rate. NOTE: do NOT
-  confuse this benchmark crop with the *default-crop constant* ``DEFAULT_CROP_SIZES["9:16"]``
-  (historically ``(205,365)`` in the T9970 quality-benchmark note, enlarged to ``(410,730)`` by
-  T10150) -- the default crop is a product default, unrelated to what the 681ms was timed at.
-  The kickoff restated the anchor as 205x365; the codebase's own benchmark files say 540x960,
-  so we use the documented value (per the kickoff's own instruction to do so).
+  cost scales with the crop's INPUT pixel count, that pins the per-pixel rate. This is the E6
+  *performance* benchmark crop -- NOT ``DEFAULT_CROP_SIZES["9:16"]`` (a product default,
+  unrelated to what the 681ms was timed at).
 - ``per_frame_cost(w, h) = ANCHOR_SECONDS_PER_FRAME * (w*h) / ANCHOR_CROP_PIXELS``.
+- Frame count per clip = the TRIMMED source seconds * target_fps. Modal's ``process_clips_ai``
+  runs the GAN only over the trim range (``video_processing.py`` ~:2984-2990, start/end frame
+  from the trim range); slow-mo/speed segments are applied AFTER the GAN via ``setpts`` and add
+  NO GAN frames -- so we count trimmed SOURCE length (``get_trim_range``), never the raw clip
+  length and never ``get_output_duration`` (which counts speed expansion that costs no GAN).
 
 The structured rejection shape (``ExportBudgetExceeded.estimate.to_error_detail()``) is a stable
 contract T11330's popup builds on -- see that method's docstring for the field list.
@@ -131,10 +133,9 @@ class ExportBudgetExceeded(Exception):
 
     def __init__(self, estimate: ExportCostEstimate):
         self.estimate = estimate
-        super().__init__(
-            f"Export estimated at {estimate.estimated_gpu_seconds:.0f} GPU-seconds "
-            f"exceeds the {estimate.budget_seconds:.0f}s budget"
-        )
+        # str() is the plain human message (not a dict repr), so a background runner that
+        # writes str(e) into export_jobs.error stores something readable (M3).
+        super().__init__(estimate.to_error_detail()["message"])
 
 
 def per_frame_cost(crop_width: int, crop_height: int) -> float:
@@ -164,15 +165,30 @@ def estimate_total_gpu_seconds(clip_specs: list[tuple[int, int, int]]) -> float:
     )
 
 
-def _clip_frame_count(duration: float, target_fps: int) -> int:
-    """Conservative emitted-frame count for a clip. Rounds UP (ceil) -- an over-estimate here
-    only tightens the guard. GAN cost tracks EMITTED frames (T8280: enhance() runs on the
-    target-fps grid, not every decoded source frame), so target_fps is the right multiplier."""
-    if duration is None or duration < 0:
-        raise ValueError(f"clip duration must be a non-negative number, got {duration!r}")
+def _trimmed_source_seconds(segments: dict | None, raw_duration: float) -> float:
+    """Source-time seconds the GAN actually processes: the TRIMMED range, clamped to the raw
+    clip length. Modal upscales only ``[trim_start, trim_end]`` of the source; speed segments
+    are applied downstream via ``setpts`` and add no GAN frames, so speed expansion is
+    deliberately excluded (that is ``get_output_duration``'s job, for progress, not cost).
+
+    An unbounded (``inf``) trim end means "to the end of the clip" -> clamp to ``raw_duration``.
+    """
+    from app.highlight_transform import get_trim_range
+
+    trim_start, trim_end = get_trim_range(segments)
+    end = raw_duration if trim_end == float("inf") else min(trim_end, raw_duration)
+    start = min(max(0.0, trim_start), raw_duration)
+    return max(0.0, end - start)
+
+
+def _clip_frame_count(effective_seconds: float, target_fps: int) -> int:
+    """Conservative emitted-frame count for the TRIMMED source span. Rounds UP (ceil) -- an
+    over-estimate here only tightens the guard. GAN cost tracks EMITTED frames (T8280:
+    enhance() runs on the target-fps grid, not every decoded source frame), so target_fps is
+    the right multiplier."""
     if not target_fps or target_fps <= 0:
         raise ValueError(f"target_fps must be positive, got {target_fps!r}")
-    return max(1, math.ceil(duration * target_fps))
+    return max(1, math.ceil(effective_seconds * target_fps))
 
 
 def _max_crop_dims(crop_keyframes: list[dict[str, Any]]) -> tuple[int, int] | None:
@@ -227,7 +243,16 @@ def estimate_export_cost(clips: list[dict[str, Any]], target_fps: int) -> Export
             )
             continue
         crop_w, crop_h = dims
-        frame_count = _clip_frame_count(clip.get("duration"), target_fps)
+        # Fail loud on a missing/zero/negative raw duration -- a real clip has positive length;
+        # silently treating it as 1 frame would under-estimate (No Silent Fallbacks).
+        raw_duration = clip.get("duration")
+        if raw_duration is None or raw_duration <= 0:
+            raise ValueError(
+                f"clip {clip_index} has invalid duration {raw_duration!r}; "
+                f"a real clip must carry a positive length by dispatch time"
+            )
+        effective_seconds = _trimmed_source_seconds(clip.get("segments"), raw_duration)
+        frame_count = _clip_frame_count(effective_seconds, target_fps)
         # Round each clip UP to whole GPU-seconds -- conservative, tidy reporting.
         clip_seconds = math.ceil(frame_count * per_frame_cost(crop_w, crop_h))
         per_clip.append(

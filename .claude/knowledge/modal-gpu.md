@@ -164,34 +164,37 @@ graph LR
   4×). GAN cost scales with the crop's **INPUT** pixel count (`_upscale_crop` docstring,
   `video_processing.py:~1328`), so:
   `per_frame_cost(w,h) = ANCHOR_SECONDS_PER_FRAME * (w*h) / ANCHOR_CROP_PIXELS`, where
-  `ANCHOR_SECONDS_PER_FRAME = 0.681` and `ANCHOR_CROP_PIXELS = 540*960 = 518400` — **the crop the
-  681ms was actually measured at**, per `experiments/e6_l4_benchmark.py:56-58` (crop
-  `width:540, height:960`) + `experiments/e6_l4_benchmark_results.json` (`results.t4`: 180 frames
-  in 122.67s = 1.4674 fps = 0.681 s/frame). ⚠️ This is NOT `DEFAULT_CROP_SIZES["9:16"]` — the
-  T9970 note below mentions a 205×365 *default crop*, which is a product default, unrelated to the
-  E6 *performance* benchmark's 540×960 crop. T11320's kickoff restated the anchor as 205×365; the
-  benchmark files say 540×960, and per the kickoff's own instruction ("use the documented value,
-  not the restated one") the code uses 540×960. (Using 74825 instead over-estimates every export
-  ~6.9× and would falsely reject legitimate medium exports.) Total = `Σ frame_count *
-  per_frame_cost` (pure `estimate_total_gpu_seconds`); per clip uses the ceil'd emitted-frame
-  count (`duration*target_fps`, T8280 grid) and the **largest** crop box across its keyframes —
-  both conservative (a false reject just says "crop in / split"; a false accept repeats Bug 58p).
-  **GAP:** a clip with NO crop keyframes (Modal smart-center-crops it from source dims,
-  `video_processing.py:~3034`) is *skipped with a loud WARNING*, not bounded — sizing it needs a
-  source-dims probe the guard deliberately doesn't add (keyframes-only scope). So a full-frame
-  *no-crop* batch is NOT caught; Bug 58p itself had explicit full-1080p crop boxes, so it is. A
-  present-but-broken keyframe (missing width/height) still fails loudly (No Silent Fallbacks).
-  Budget = **80% of 3600 = 2880 GPU-s** (`GPU_SECONDS_BUDGET`). Guard is `enforce_export_budget`,
-  wired at the TOP of the Modal branch in `multi_clip._export_clips` (before the R2 upload loop /
-  `call_modal_clips_ai`), so it covers BOTH multi-clip AND single-clip `/render` (which reaches
-  `_export_clips` with a one-element list — no separate `framing.py` call needed). Over budget →
-  raises `ExportBudgetExceeded`; `_export_clips`' generic handler surfaces
-  `estimate.to_error_detail()` as a **structured HTTP 413 + WS error** — `{code:"export_too_large",
-  estimated_gpu_seconds, budget_seconds, modal_timeout_seconds, budget_fraction,
-  biggest_contributors:[{clip_index,clip_name,frame_count,crop_width,crop_height,
-  estimated_gpu_seconds}]}` (the T11330 popup contract). T11340 raises the real ceiling this
-  estimates against; T11350 flips `GAN_MIN_ENLARGE` — only `per_frame_cost` needs a per-clip
-  skip flag then, callers/budget-check unchanged. Tests: `tests/test_t11320_export_preflight_guard.py`.
+  `ANCHOR_SECONDS_PER_FRAME = 0.681` and `ANCHOR_CROP_PIXELS = 540*960 = 518400` — the crop the
+  681ms was measured at, per `experiments/e6_l4_benchmark.py:56-58` (crop `width:540, height:960`)
+  + `experiments/e6_l4_benchmark_results.json` (`results.t4`: 180 frames in 122.67s = 1.4674 fps =
+  0.681 s/frame). This is the E6 *performance* benchmark crop, NOT `DEFAULT_CROP_SIZES["9:16"]` (a
+  product default, unrelated). Total = `Σ frame_count * per_frame_cost` (pure
+  `estimate_total_gpu_seconds`); **frame count per clip = the TRIMMED source seconds × target_fps**
+  (`get_trim_range`, clamped to raw length) — NOT raw `duration` and NOT `get_output_duration`
+  (Modal upscales only the trim range, `video_processing.py:~2984-2990`; slow-mo/speed segments
+  apply AFTER the GAN via `setpts` and add no GAN frames). Uses the **largest** crop box across a
+  clip's keyframes and ceil'd frames — both conservative (a false reject just says "crop in /
+  split"; a false accept repeats Bug 58p). A zero/missing raw duration fails loud (no 1-frame
+  under-count). **GAP:** a clip with NO crop keyframes (Modal smart-center-crops it from source
+  dims, `video_processing.py:~3034`) is *skipped with a loud WARNING*, not bounded — sizing it
+  needs a source-dims probe the guard deliberately doesn't add (keyframes-only scope). So a
+  full-frame *no-crop* batch is NOT caught; Bug 58p itself had explicit full-1080p crop boxes, so
+  it is. A present-but-broken keyframe (missing width/height) still fails loudly (No Silent
+  Fallbacks). Budget = **80% of 3600 = 2880 GPU-s** (`GPU_SECONDS_BUDGET`). Guard is
+  `enforce_export_budget`, wired at the TOP of the Modal branch in `multi_clip._export_clips`
+  (before the R2 upload loop / `call_modal_clips_ai`), so it covers BOTH multi-clip AND single-clip
+  `/render` (which reaches `_export_clips` with a one-element list — no separate `framing.py`
+  call). Over budget → raises `ExportBudgetExceeded`. **The rejection reaches the client over the
+  WS / `export_progress[export_id]` payload** (both export routes run `_export_clips` in a
+  background task after returning 202, so the raised exception never reaches an HTTP client — it
+  only drives the abort/refund/job-fail path). That WS payload is `estimate.to_error_detail()`
+  merged into the error frame: `{code:"export_too_large", message, estimated_gpu_seconds,
+  budget_seconds, modal_timeout_seconds, budget_fraction, biggest_contributors:[{clip_index,
+  clip_name,frame_count,crop_width,crop_height,estimated_gpu_seconds}]}` — the channel T11330's
+  popup consumes. `export_jobs.error` gets the exception's readable `str()` (a plain message, not
+  a dict repr). T11340 raises the real ceiling this estimates against; T11350 flips
+  `GAN_MIN_ENLARGE` — only `per_frame_cost` needs a per-clip skip flag then, callers/budget-check
+  unchanged. Tests: `tests/test_t11320_export_preflight_guard.py`.
   **Estimate accuracy vs. real billed GPU-s is a staging gate (Modal off in-container, T4180).**
 - **Quality benchmark (T9970, 2026-09-15):** `scripts/quality_benchmark.py` is a standalone,
   product-code-free instrument that runs the geometric half of framing (source → crop rect →

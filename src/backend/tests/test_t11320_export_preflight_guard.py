@@ -175,6 +175,64 @@ def test_clip_frame_count_rounds_up():
     assert est.per_clip[0].frame_count == math.ceil((79.0 / 14) * 30)
 
 
+def _trimmed_clip(clip_index, raw_duration, trim_start, trim_end, w=410, h=730):
+    return {
+        "clipIndex": clip_index,
+        "clipName": f"Clip {clip_index}",
+        "duration": raw_duration,
+        "segments": {"trimRange": {"start": trim_start, "end": trim_end}},
+        "cropKeyframes": [
+            {"frame": 0, "x": 0, "y": 0, "width": w, "height": h},
+            {"frame": 1, "x": 0, "y": 0, "width": w, "height": h},
+        ],
+    }
+
+
+def test_estimate_uses_trimmed_not_raw_duration():
+    # A 12s raw clip trimmed to [2,6] (4s): the GAN only processes the 4s trim range, not the
+    # full 12s. Frame count must reflect the TRIMMED length. (M1 regression.)
+    est = estimate_export_cost([_trimmed_clip(0, raw_duration=12.0, trim_start=2.0, trim_end=6.0)], 30)
+    assert est.per_clip[0].frame_count == math.ceil(4.0 * 30)  # 120, from 4s not 12s
+    # And NOT the raw-length count that the bug produced.
+    assert est.per_clip[0].frame_count != math.ceil(12.0 * 30)
+
+
+def test_trimmed_batch_not_falsely_rejected():
+    # Reviewer's concrete case: 25 clips of 12s raw, each trimmed to 4s (100s effective reel,
+    # default 9:16 crop). Real GAN work is the trimmed length -> within budget. Counting the raw
+    # 12s (the M1 bug) would push the same normal export over budget and wrongly reject it.
+    trimmed = [_trimmed_clip(i, raw_duration=12.0, trim_start=0.0, trim_end=4.0) for i in range(25)]
+    assert estimate_export_cost(trimmed, 30).over_budget is False
+    raw_counted = [
+        {"clipIndex": i, "duration": 12.0,
+         "cropKeyframes": [{"width": 410, "height": 730}]}
+        for i in range(25)
+    ]
+    assert estimate_export_cost(raw_counted, 30).over_budget is True  # the bug's behavior
+
+
+def test_no_segments_uses_full_raw_length():
+    # No trim data -> GAN processes the whole clip; use the full raw length.
+    est = estimate_export_cost(
+        [{"clipIndex": 0, "duration": 10.0, "segments": None,
+          "cropKeyframes": [{"width": 410, "height": 730}]}],
+        30,
+    )
+    assert est.per_clip[0].frame_count == math.ceil(10.0 * 30)
+
+
+def test_zero_or_missing_duration_fails_loud():
+    # A zero/missing/negative raw duration is an internal-data bug -- fail loud, do NOT silently
+    # under-count as 1 frame (M1 minor).
+    for bad in (0, 0.0, -1.0, None):
+        with pytest.raises(ValueError):
+            estimate_export_cost(
+                [{"clipIndex": 0, "duration": bad,
+                  "cropKeyframes": [{"width": 410, "height": 730}]}],
+                30,
+            )
+
+
 # ----------------------------------------------------------------------------
 # Integration: guard fires inside _export_clips BEFORE dispatch
 # ----------------------------------------------------------------------------
@@ -229,11 +287,12 @@ async def test_bug58p_rejected_before_dispatch(monkeypatch):
     monkeypatch.setattr(mc, "call_modal_clips_ai", spy)
     monkeypatch.setattr(mc, "upload_bytes_to_r2", lambda user_id, key, content: True)
 
+    export_id = "exp-t11320-bug58p"
     clips = [_clip_export(mc, i, duration=79.0 / 14, w=1920, h=1080) for i in range(14)]
 
-    with pytest.raises(Exception) as ei:
+    with pytest.raises(ExportBudgetExceeded) as ei:
         await mc._export_clips(
-            export_id="exp-t11320-bug58p",
+            export_id=export_id,
             clips=clips,
             aspect_ratio="16:9",
             transition={"type": "cut", "duration": 0.0},
@@ -251,13 +310,23 @@ async def test_bug58p_rejected_before_dispatch(monkeypatch):
 
     # DECISIVE: dispatch must never have happened for this fixture.
     assert spy.calls == [], "call_modal_clips_ai was dispatched for an over-budget export"
-    # And the raised failure is the structured budget rejection (converted to HTTP 413).
-    from fastapi import HTTPException
-    assert isinstance(ei.value, HTTPException)
-    assert ei.value.status_code == 413
-    assert ei.value.detail["code"] == "export_too_large"
-    assert ei.value.detail["estimated_gpu_seconds"] > ei.value.detail["budget_seconds"]
-    assert ei.value.detail["biggest_contributors"]
+
+    # The REAL channel a client sees is the WS / export_progress payload (this runs in a
+    # background task; the raised exception never reaches an HTTP client). Assert the structured
+    # fields landed there -- this is what T11330's popup consumes. (Deleting the
+    # error_data.update(budget_detail) line in _export_clips MUST fail this test.)
+    payload = mc.export_progress[export_id]
+    assert payload["status"] == "error"
+    assert payload["code"] == "export_too_large"
+    assert payload["estimated_gpu_seconds"] > payload["budget_seconds"]
+    assert payload["biggest_contributors"]
+    assert payload["biggest_contributors"][0]["crop_width"] == 1920
+
+    # The re-raised exception carries the estimate and a readable (non-dict) message, so a
+    # background runner writing str(e) into export_jobs.error stores something human-readable.
+    assert isinstance(ei.value, ExportBudgetExceeded)
+    assert ei.value.estimate.over_budget is True
+    assert "GPU time" in str(ei.value) and "{" not in str(ei.value)
 
 
 @pytest.mark.asyncio
