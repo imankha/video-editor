@@ -1,6 +1,6 @@
 # T8630: Deletion preserves the financial record and is auditable
 
-**Status:** WIP (design approved 2026-09-24 with supervisor fixes: surrogate key on account_deletions, no "not personal data" claim, shorter confirmation copy)
+**Status:** STAGING (merged 2026-09-25, PR #510, 820c106e; proof VERIFIED at 71e9b9a2 across 5 fix rounds, Branch CI green. Operator after prod deploy: migrate-postgres v026-v033, then backfill dry-run -> --write staging then prod)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-03
