@@ -1,6 +1,6 @@
 # T10220: Rebalance monetization: 12.99 / 22.99 / 32.99 ladder
 
-**Status:** WIP (started 2026-09-24 via /dotask; user's /dotask call taken as the go-ahead past the Deploy Candidate deferral. Merge held: a master push of pricing.json auto-deploys the prod landing)
+**Status:** STAGING (merged 2026-09-25 on user instruction, PR #504, d69270ca; proof VERIFIED at 968351a5 except AC3; Branch CI 36086391118 green. Landing auto-deployed on merge; app follows at next /deploy. AC3 owed: Stripe test purchase on staging after deploy)
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-09-17
