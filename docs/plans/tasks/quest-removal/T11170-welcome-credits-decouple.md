@@ -1,6 +1,6 @@
 # T11170: Welcome credits no longer depend on quests
 
-**Status:** WIP
+**Status:** STAGING (merged PR #508, 9cd37f5b)
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-09-24
