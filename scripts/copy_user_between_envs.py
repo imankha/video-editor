@@ -146,11 +146,17 @@ def delete_destination_user(dst_cur, old_id: str, dst_email: str) -> list[str]:
     # share_claims.claimer_user_id is NOT NULL -> delete the row (T8630 round 3).
     dst_cur.execute("DELETE FROM share_claims WHERE claimer_user_id = %s", (old_id,))
     dst_cur.execute("DELETE FROM otp_codes WHERE email = %s", (dst_email,))
+    # T8630 round 5: snapshot is_test_account onto the kept segment row (read
+    # BEFORE the DELETE FROM users below) so the admin test-exclusion views still
+    # know this deleted destination account was a test one.
+    dst_cur.execute("SELECT is_test_account FROM users WHERE user_id = %s", (old_id,))
+    _u = dst_cur.fetchone()
+    was_test_account = bool(_u["is_test_account"]) if _u else None
     # T8630 round 4 (REVERSES round 2/3 analytics purge): KEEP user_segments
     # (identity stripped), user_actions, user_usage_daily and referrals under the
     # same opaque old_id so channel/cohort revenue still attributes. Their FKs to
     # `users` are dropped in v032, so these rows survive the DELETE FROM users.
-    deidentify_user_segments(dst_cur, old_id)
+    deidentify_user_segments(dst_cur, old_id, was_test_account=was_test_account)
     dst_cur.execute("DELETE FROM users WHERE user_id = %s", (old_id,))
     return bug_r2_keys
 

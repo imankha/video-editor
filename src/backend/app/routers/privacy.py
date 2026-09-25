@@ -275,9 +275,14 @@ async def delete_account(request: Request):
             # bug_reports has no user_id column -- it is keyed by reporter_email
             # (pg.py _SCHEMA_DDL), so read the email BEFORE the DELETE FROM users
             # below to anonymize the user's reports in this same transaction.
-            cur.execute("SELECT email FROM users WHERE user_id = %s", (user_id,))
+            # T8630 r5: read is_test_account here too (BEFORE the DELETE FROM
+            # users below) so deidentify_user_segments can snapshot it onto the
+            # kept segment row -- the admin test-exclusion views need it once the
+            # `users` row is gone.
+            cur.execute("SELECT email, is_test_account FROM users WHERE user_id = %s", (user_id,))
             _row = cur.fetchone()
             email = _row["email"] if _row else None
+            was_test_account = bool(_row["is_test_account"]) if _row else None
             # T8630: the ledger stamp + audit row commit atomically with the
             # DELETE FROM users below -- same transaction, so a rollback here
             # leaves neither a stamp nor an audit row, never a mismatched pair.
@@ -299,7 +304,7 @@ async def delete_account(request: Request):
             # attributes. The FKs to `users` are dropped in v032 so these rows
             # survive the DELETE FROM users below.
             from app.analytics import deidentify_user_segments
-            deidentify_user_segments(cur, user_id)
+            deidentify_user_segments(cur, user_id, was_test_account=was_test_account)
             # T8630 round 3: short-lived login OTPs (keyed by email) and the
             # user's own share-claim links (opaque claimer_user_id, not needed
             # once the account is gone) are personal data purged on a real

@@ -256,6 +256,13 @@ CREATE TABLE IF NOT EXISTS user_segments (
     utm_content TEXT,
     utm_term TEXT,
     click_source TEXT,
+    -- T8630 r5 (v033): snapshot of users.is_test_account taken at deletion time,
+    -- so an admin test-exclusion view can still tell a deleted account was a test
+    -- account after its `users` row is gone. NULL on live rows (they read
+    -- users.is_test_account directly); set by the deletion paths right before
+    -- DELETE FROM users. Read only via NOT COALESCE(u.is_test_account,
+    -- s.was_test_account, false).
+    was_test_account BOOLEAN,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_segments_acquired ON user_segments(acquired_at);

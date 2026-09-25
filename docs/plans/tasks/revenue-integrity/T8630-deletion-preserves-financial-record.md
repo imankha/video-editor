@@ -209,15 +209,15 @@ Behavior once a real deletion leaves an orphaned (no `users` row) analytics row:
 - **Revenue by channel/cohort + grand total (`admin.py` 1540/1706/2225):** `FROM user_segments s`
   (no `users` join by default), GROUP BY `origin` / `acquired_at`, SUM `total_spent_cents`. The
   retained row IS counted -> the deleted payer attributes to their real channel/cohort, and the
-  grand total (same source) stays consistent. THIS IS THE GOAL. Caveat: with `exclude_test=on`
-  the query adds `JOIN users u` (to read `is_test_account`), which drops orphaned rows -- a
-  deleted payer's revenue is excluded ONLY under that optional test-exclusion view, because there
-  is no `users` row left to prove non-test. Documented, not fixed (would need snapshotting
-  is_test_account into user_segments; out of scope; payments + account_deletions still hold the
-  money and the event).
+  grand total (same source) stays consistent. THIS IS THE GOAL. Caveat (FIXED in Round 5): with
+  `exclude_test=on` the query used to add an INNER `JOIN users u` to read `is_test_account`, which
+  dropped orphaned rows -- a deleted payer's revenue leaked into Unattributed under the DEFAULT
+  view. Round 5 snapshots `is_test_account` into `user_segments.was_test_account` at deletion and
+  makes the exclusion a `LEFT JOIN users u` + `NOT COALESCE(u.is_test_account, s.was_test_account,
+  false)`, so a deleted payer keeps the exact exclusion status it had while live.
 - **Pulse/funnel (`admin.py` 370/1475/1728/2136-2196):** `JOIN user_segments s ON a.user_id`.
   A deleted user's kept segment + actions now count in cohort funnels (they were a real signup);
-  correct, not a ghost. `exclude_test` path adds `JOIN users` and drops them (same caveat).
+  correct, not a ghost. `exclude_test` path uses the same Round-5 LEFT-JOIN + COALESCE fix.
 - **Referral admin views (`admin.py` 2352 leaderboard, 2385 user detail):** INNER `JOIN users`
   on referrer/referred -> a kept referrals row whose referrer/referred user is deleted drops out
   (no email to show). Acceptable. `by-channel` (2369) and `tree` (2403) read `FROM referrals`
@@ -238,9 +238,49 @@ Behavior once a real deletion leaves an orphaned (no `users` row) analytics row:
 - **`revenue_reconciliation.py`:** compares Stripe (source of truth) to local per-user payments /
   `total_spent_cents`; keyed on user ids from payments, tolerant of missing `users`. Safe.
 
+### Round-5 ruling (2026-09-25): keep a deleted payer attributed in the DEFAULT (exclude_test) view
+
+The proof verifier reproduced a blocking bug at `cffafbaa`: the default admin view
+(`exclude_test` unset/true) dropped a deleted payer's revenue into Unattributed instead of keeping
+it with their real channel/cohort. Root cause: the test-exclusion join
+(`JOIN users u ON u.user_id = s.user_id` + `NOT u.is_test_account`, in
+channels/cohorts/funnel/pulse/platforms) was an INNER join, so a deleted account -- whose
+de-identified `user_segments` row is KEPT (Round 4) but whose `users` row is gone -- fell out of
+every `exclude_test` view. This is exactly the caveat Round 4 documented as out of scope.
+
+**User decision: snapshot `is_test_account` at deletion time** (the alternative, "treat a missing
+users row as not-test", was rejected -- it would wrongly re-include deleted TEST accounts).
+
+- **Migration v033** (`user_segments.was_test_account BOOLEAN`, nullable, default NULL; mirrored in
+  `_SCHEMA_DDL`). Live rows stay NULL (they join `users.is_test_account` directly and never read
+  this column); the deletion paths set it.
+- **`deidentify_user_segments(cur, user_id, was_test_account=None)`** now also snapshots the flag in
+  the same UPDATE. All three real deletion paths (privacy endpoint, `delete_user.py`,
+  `copy_user_between_envs.py`) read `is_test_account` from `users` BEFORE `DELETE FROM users` and
+  pass it. The two reset paths never touch it (they fully purge `user_segments`, so there is no row
+  to read it from).
+- **`_test_exclusion(exclude_test, seg="s")`** now returns
+  `NOT COALESCE(u.is_test_account, s.was_test_account, false)` -- prefer the live users flag, else
+  the snapshot, else treat as not-test. Every exclude_test site changed from INNER to
+  `LEFT JOIN users u` (channels, cohorts, funnel, pulse, `_grouped_view_grand_total`); `platforms`
+  (anchored on `user_actions`) also gains a `LEFT JOIN user_segments s` to reach the snapshot. The
+  grand total (`_ledger_revenue_total`, exclude branch) uses the SAME predicate so a deleted TEST
+  payer is excluded there too (before, its money re-appeared once its `users` row was gone and
+  leaked into the real Unattributed remainder). The admin user list (users-anchored) is unchanged
+  in behavior: `u` is always present there, so COALESCE never falls back and a deleted user still
+  never lists.
+- **Legal copy:** the "Right to Delete" bullets (`PrivacyPolicy.jsx`, `docs/legal/privacy-policy.md`)
+  now list all retained categories and point to the Data Retention section, instead of naming only
+  transaction records. The "de-identified" category-5 wording is kept (user decision). No em dashes;
+  no "not personal data" claims. `AccountSettings.jsx` unchanged (ruling C).
+- **Tests:** `tests/test_t8630_round5.py` goes through the REAL `/api/admin/analytics/channels`
+  endpoint and the REAL `privacy.delete_account` write path (Round 4's private `_channel_revenue`
+  re-implementation, which never exercised the endpoint's INNER-join bug, was removed).
+
 ## Implementation
 
 ### Steps
+0. [x] (Round 5) Migration v033 `user_segments.was_test_account` + snapshot on deletion + LEFT-JOIN/COALESCE test-exclusion sitewide
 1. [x] Migration: `account_deletions` table (+ `_SCHEMA_DDL`) -- v031, `id BIGSERIAL` PK
 2. [x] Stamp `payments.account_deleted_at` on the real delete paths that should stamp
        (privacy_endpoint, delete_user_script; reset_test_account audits but does not stamp,

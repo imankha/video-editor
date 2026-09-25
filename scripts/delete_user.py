@@ -326,13 +326,19 @@ def delete_one_postgres(pg_conn, user_id: str, email: str, dry_run: bool,
     # claimer_user_id is NOT NULL, so the row is deleted rather than nulled.
     cur.execute("DELETE FROM otp_codes WHERE email = %s", (email,))
     cur.execute("DELETE FROM share_claims WHERE claimer_user_id = %s", (user_id,))
+    # T8630 round 5: snapshot is_test_account onto the kept segment row so the
+    # admin test-exclusion views still know this deleted account was a test one.
+    # Read BEFORE the DELETE FROM users below.
+    cur.execute("SELECT is_test_account FROM users WHERE user_id = %s", (user_id,))
+    _u = cur.fetchone()
+    was_test_account = bool(_u["is_test_account"]) if _u else None
     # T8630 round 4 (REVERSES round 2/3 analytics purge for real deletions): KEEP
     # user_segments (identity stripped), user_actions, user_usage_daily and
     # referrals under the same opaque user_id so channel/cohort revenue still
     # attributes. Their FKs to `users` are dropped in v032, so these rows survive
     # the DELETE FROM users below. referrer_id is NOT nulled -- kept as an opaque
     # id (may point at another deleted-but-retained user); the viral edge stays.
-    deidentify_user_segments(cur, user_id)
+    deidentify_user_segments(cur, user_id, was_test_account=was_test_account)
     cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
     return bug_r2_keys
 

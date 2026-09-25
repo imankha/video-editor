@@ -820,3 +820,35 @@ Copy: a fifth retained category (usage/activity statistics, de-identified, keyed
 account id, for product improvement) is added to `privacy-policy.md`, `data-retention-policy.md`,
 and `PrivacyPolicy.jsx`; the now-false "no data retained for analytics" / "none for analytics or
 product purposes" claims are corrected. `AccountSettings.jsx` stays exactly as ruling C.
+
+## Round-5 ruling (2026-09-25): keep a deleted payer attributed in the DEFAULT (exclude_test) view
+
+Blocking bug (proof verifier, reproduced against the real endpoints at `cffafbaa`): the default
+admin view (`exclude_test` unset/true) dropped a deleted payer's revenue into Unattributed. The
+test-exclusion join (`JOIN users u ON u.user_id = s.user_id` + `NOT u.is_test_account`, in
+channels/cohorts/funnel/pulse/platforms) was an INNER join, so a deleted account -- whose
+de-identified `user_segments` row is KEPT (Round 4) but whose `users` row is gone -- fell out of
+every exclude_test view. This is the caveat Round 4 documented as out of scope.
+
+User decision: snapshot `is_test_account` at deletion time (rejected the alternative "treat a
+missing users row as not-test", which would wrongly re-include deleted TEST accounts).
+
+- Migration **v033** adds `user_segments.was_test_account BOOLEAN` (nullable, default NULL; mirrored
+  in `_SCHEMA_DDL`). Live rows stay NULL (joined to `users.is_test_account` directly); the deletion
+  paths set it.
+- `deidentify_user_segments(cur, user_id, was_test_account=None)` snapshots the flag in the same
+  UPDATE. All three real deletion paths read `is_test_account` from `users` BEFORE `DELETE FROM
+  users` and pass it. The two reset paths never set it (they fully purge `user_segments`).
+- `_test_exclusion(exclude_test, seg="s")` returns `NOT COALESCE(u.is_test_account,
+  s.was_test_account, false)`. Every exclude_test site becomes `LEFT JOIN users u`
+  (channels/cohorts/funnel/pulse/`_grouped_view_grand_total`); `platforms` (anchored on
+  `user_actions`) also LEFT JOINs `user_segments s` to reach the snapshot. `_ledger_revenue_total`'s
+  exclude branch uses the SAME predicate, so a deleted TEST payer no longer leaks into the real
+  grand total once its `users` row is gone. The users-anchored admin user list is behaviorally
+  unchanged (u always present -> COALESCE never falls back -> a deleted user still never lists).
+- Copy: the "Right to Delete" bullets (`PrivacyPolicy.jsx`, `docs/legal/privacy-policy.md`) now list
+  every retained category and point to the Data Retention section. The "de-identified" wording is
+  KEPT (user decision). `AccountSettings.jsx` unchanged (ruling C). No em dashes; no "not personal
+  data" claims.
+- Tests: `tests/test_t8630_round5.py` asserts through the REAL admin endpoints + real deletion path;
+  Round 4's private `_channel_revenue` re-implementation was removed.

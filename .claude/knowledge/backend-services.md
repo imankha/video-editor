@@ -346,8 +346,11 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
   cache only.** All four `SUM(user_segments.total_spent_cents)` reads in `routers/admin.py`
   (channels per-origin, cohorts per-period, and BOTH `analytics_pulse` revenue totals) now source
   from `payments`. Two helpers next to `_test_exclusion`: `_ledger_revenue_total(cur, exclude_test)`
-  = grand total `SUM(amount_cents)` with **NO `user_segments` join** (so a deleted payer's money is
-  still counted), test accounts removed via a `users` ANTI-join (`NOT EXISTS ... is_test_account`);
+  = grand total `SUM(amount_cents)` (a deleted payer's money is still counted); **as of T8630 round 5
+  its exclude branch LEFT JOINs both `users` and `user_segments` and filters with the SAME predicate
+  the grouped buckets use, `NOT COALESCE(u.is_test_account, s.was_test_account, false)`, so a deleted
+  TEST payer is excluded here too** (before r5 it used a `users` ANTI-join that silently re-counted a
+  deleted test purchase once the `users` row was gone);
   and `_LEDGER_REVENUE_BY_USER` = a per-user pre-aggregated subquery LEFT-JOINed into the grouped
   views so it doesn't fan out the export/purchase subqueries (GROUP BY user_id served by
   `idx_payments_user`). **`account_deleted_at` is NEVER a revenue filter.** **Pulse Revenue card
@@ -366,9 +369,15 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
   Frontend `ChannelsTable`/`CohortGrid` render an "Unattributed" row when it's nonzero, INCLUDING
   when the grouped list itself is empty (only deleted payers) so the money is never hidden behind
   "No data".
-  **Documented edge:** a test purchase is excludable while its `users` row exists but is counted
-  again once that row is deleted (no row left to recognise it by — a reason not to delete internal
-  test accounts). `total_spent_cents` survives ONLY as the per-user display cache
+  **Test-exclusion + deleted accounts (T8630 round 5):** the default admin view (`exclude_test` on)
+  now keeps a deleted payer attributed. Every exclude_test site (channels/cohorts/funnel/pulse/
+  platforms/`_grouped_view_grand_total`/`_ledger_revenue_total`) uses `LEFT JOIN users u` +
+  `NOT COALESCE(u.is_test_account, s.was_test_account, false)` — prefer the live flag, else the
+  `user_segments.was_test_account` snapshot taken at deletion (v033), else treat as not-test. So a
+  deleted REAL payer stays in its real channel/cohort and a deleted TEST payer is still excluded
+  (its old "counted again once the users row is deleted" leak is gone). `platforms` (anchored on
+  `user_actions`) LEFT JOINs `user_segments s` to reach the snapshot; the users-anchored admin user
+  list is unchanged (u always present -> COALESCE never falls back). `total_spent_cents` survives ONLY as the per-user display cache
   (`bump_total_spent`, `list_users`). Tests: `tests/test_t8650_revenue_from_ledger.py`. The pg.py
   `_SCHEMA_DDL` column comment for `total_spent_cents` is deferred (T8630 owns that file).
 
@@ -474,6 +483,21 @@ silently destroy the revenue record, and left no trace that a deletion happened 
   scans `referrals` to grant credits (referral credit is event-driven at signup), so a retained
   referrals row grants nothing. Full column table + readers audit: the T8630 task file "Round-4"
   section.
+- **T8630 round 5 — a deleted payer stays attributed in the DEFAULT (exclude_test) view (migration
+  v033):** round 4 kept the segment row, but the admin test-exclusion join was an INNER
+  `JOIN users u ON u.user_id = s.user_id` + `NOT u.is_test_account`, so once `DELETE FROM users`
+  removed the row the deleted payer fell out of every `exclude_test` view (the dashboard DEFAULT)
+  and their money leaked into Unattributed. Fix: **v033 adds `user_segments.was_test_account
+  BOOLEAN`** (nullable/NULL for live rows, mirrored in `_SCHEMA_DDL`); `deidentify_user_segments(cur,
+  user_id, was_test_account=None)` SNAPSHOTS the flag (read from `users` BEFORE `DELETE FROM users`)
+  in all three real deletion paths; the reset paths never set it (they fully purge the row).
+  `_test_exclusion(exclude_test, seg="s")` now returns `NOT COALESCE(u.is_test_account,
+  s.was_test_account, false)` and every exclude_test site is `LEFT JOIN users u` (channels/cohorts/
+  funnel/pulse/`_grouped_view_grand_total`/`_ledger_revenue_total`; `platforms` also LEFT JOINs
+  `user_segments s` to reach the snapshot). So a deleted REAL payer keeps its channel/cohort and a
+  deleted TEST payer stays excluded, in both the buckets AND the grand total. Tests through the REAL
+  endpoints: `tests/test_t8630_round5.py` (round 4's private `_channel_revenue` re-implementation,
+  which masked this, was removed).
 - **`user_usage_daily` (analytics-only) is purged on every real deletion** (privacy endpoint,
   `_reset_test_account`, and all three scripts), `to_regclass`-guarded in the scripts. It is NOT
   a retained forensic record; `account_deletions` + `impersonation_audit` are.

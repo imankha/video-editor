@@ -151,14 +151,6 @@ def _user_exists(conn, user_id):
     return cur.fetchone()["c"] > 0
 
 
-def _channel_revenue(conn, origin):
-    """Mirror admin.py's revenue-by-channel aggregate (FROM user_segments GROUP BY
-    origin, SUM total_spent_cents) for one origin."""
-    cur = conn.cursor()
-    cur.execute("SELECT COALESCE(SUM(total_spent_cents), 0) AS rev FROM user_segments WHERE origin = %s", (origin,))
-    return cur.fetchone()["rev"]
-
-
 def _seed_full_analytics(conn, user_id, *, spent):
     _seed_user(conn, _REFERRER)
     _seed_user(conn, user_id)
@@ -193,7 +185,6 @@ class TestPrivacyKeepsDeidentifiedAnalytics:
         from app.routers import privacy as privacy_mod
 
         _seed_full_analytics(raw_pg_conn, _MAIN, spent=500)
-        assert _channel_revenue(raw_pg_conn, _ORIGIN) == 500
 
         monkeypatch.setattr(privacy_mod, "get_current_user_id", lambda: _MAIN)
         monkeypatch.setattr("app.routers.auth._purge_user_data",
@@ -208,12 +199,16 @@ class TestPrivacyKeepsDeidentifiedAnalytics:
 
         assert not _user_exists(raw_pg_conn, _MAIN), "users row must be gone (identity erased)"
         _assert_analytics_kept(raw_pg_conn, _MAIN)
-        # The deleted payer's money still attributes to their channel, not dropped.
+        # The deleted payer's segment (channel + spend) survives so revenue still
+        # attributes. The AUTHORITATIVE proof that the money stays attributed in the
+        # admin revenue view -- through the REAL /api/admin/analytics endpoints, not
+        # a private re-implementation of the aggregate -- lives in
+        # tests/test_t8630_round5.py (round 4's private _channel_revenue helper
+        # summed total_spent_cents and so never exercised the endpoint's INNER-join
+        # bug that round 5 fixes).
         seg = _seg(raw_pg_conn, _MAIN)
         assert seg["total_spent_cents"] == 500, "total_spent_cents cache must be KEPT for attribution"
-        assert _channel_revenue(raw_pg_conn, _ORIGIN) == 500, (
-            "channel revenue must still include the deleted payer (attributed, not Unattributed)"
-        )
+        assert seg["origin"] == _ORIGIN, "channel (origin) must be KEPT so revenue attributes"
 
 
 # ==========================================================================

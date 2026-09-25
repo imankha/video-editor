@@ -586,16 +586,25 @@ _DEIDENTIFY_SEGMENT_COLUMNS = (
 )
 
 
-def deidentify_user_segments(cur, user_id: str) -> int:
+def deidentify_user_segments(cur, user_id: str, was_test_account: bool | None = None) -> int:
     """Strip the identifying columns from a user's user_segments row, KEEPING the
     row (and its opaque user_id) so revenue attribution still resolves. Runs in
     the caller's open transaction (cursor passed in), same contract as
     payments_ledger.stamp_account_deleted / account_deletions.record_account_deletion.
-    Returns the number of rows updated (0 if the user had no segment)."""
+    Returns the number of rows updated (0 if the user had no segment).
+
+    T8630 round 5: also SNAPSHOTS the account's is_test_account flag into
+    was_test_account (read by the caller BEFORE it deletes the `users` row). The
+    admin test-exclusion views prefer the live users.is_test_account and fall back
+    to this snapshot for a deleted account (NOT COALESCE(u.is_test_account,
+    s.was_test_account, false)), so a deleted payer keeps the exact exclusion
+    status it had while live instead of leaking into Unattributed revenue. All
+    three real deletion paths pass the flag; None leaves the snapshot NULL (read
+    as not-a-test-account)."""
     set_clause = ", ".join(f"{col} = NULL" for col in _DEIDENTIFY_SEGMENT_COLUMNS)
     cur.execute(
-        f"UPDATE user_segments SET {set_clause} WHERE user_id = %s",
-        (user_id,),
+        f"UPDATE user_segments SET {set_clause}, was_test_account = %s WHERE user_id = %s",
+        (was_test_account, user_id),
     )
     return cur.rowcount
 

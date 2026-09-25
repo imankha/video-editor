@@ -147,7 +147,7 @@ export function PrivacyPolicy() {
           <p className="mb-3">California residents (and others where required by law) have the following rights:</p>
           <ul className="list-disc pl-5 space-y-2 mb-4">
             <li><strong className="text-white">Right to Know/Access:</strong> Request a copy of your data via &ldquo;Download My Data&rdquo; in Account Settings</li>
-            <li><strong className="text-white">Right to Delete:</strong> Delete your account via &ldquo;Delete My Account&rdquo; in Account Settings. Deletion is permanent and immediate. We retain transaction records (payment amounts keyed to an opaque account id, with no personal details) to meet tax and accounting obligations; this does not delay erasure of your personal data.</li>
+            <li><strong className="text-white">Right to Delete:</strong> Delete your account via &ldquo;Delete My Account&rdquo; in Account Settings. Deletion is permanent and immediate. A limited set of records survives deletion (transaction records, the record that the account was deleted, security logs of any staff access, de-identified bug reports, and de-identified usage and activity statistics), each described in the Data Retention section above; retaining them never delays or limits erasure of your personal data.</li>
             <li><strong className="text-white">Right to Correct:</strong> Contact us to correct inaccurate information</li>
             <li><strong className="text-white">Right to Opt-Out of Sale/Sharing:</strong> We do not sell or share your data. This right is automatically honored.</li>
             <li><strong className="text-white">Right to Limit Sensitive PI:</strong> Video content is used only as you direct</li>
