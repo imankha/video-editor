@@ -1400,6 +1400,23 @@ imported), `NotesOverlay.jsx` — all now import the single canonical
 `ClipSelectorSidebar.jsx` already did, via `getRatingDisplay`). Every glyph render site now carries
 a `title`/`aria-label` built from `RATING_ADJECTIVES[rating]`. New invariant: **do not reintroduce a
 local `RATING_NOTATION`/`RATING_ADJECTIVES` copy** — import from `clipConstants.js`.
+**T11110 (2026-09-25): rating vocabulary is now Mental Lapse(1) / Technical Lapse(2) / Interesting(3)
+/ Good(4) / Highlight(5)** — 5's adjective was "Brilliant" pre-T11110; the persisted identifiers
+(`source_type='brilliant_clip'`, quest step `annotate_brilliant`, API field `brilliant_count`,
+`auto_export._export_brilliant_clip`) were deliberately left unchanged (renaming them buys nothing
+visible and needs its own migration). `RATING_BADGE_COLORS`/`RATING_BACKGROUND_COLORS[5]` is gold
+`#F5B700` (was teal); rating 2 was recolored to magenta `#AD1457` in the same change because Amber
+Yellow was indistinguishable from gold at badge size. `RatingIcon.jsx` (`components/shared/`, the
+single drawn-disc component behind the picker row, rated badge, play-list icon and timeline marker —
+one definition, no per-surface copies) now draws the notation glyph in `RATING_GLYPH_COLORS[rating]`
+instead of a hardcoded white: rating 5 gets a dark glyph (`#1a1300`, AA contrast 10.25 on gold; white
+would be 1.80, a fail), every other rating keeps white. **Invariant: any new rating-color consumer
+must read `RATING_GLYPH_COLORS`, never hardcode white** — gold is bright enough that white text/glyph
+on it fails contrast. A profile_db migration (`v055`) ported previously-persisted derived
+`projects.name`/`final_videos.name` values from "Brilliant ..." to "Highlight ..." for
+provably-auto-derived rows only (see backend-services.md); user-typed names, notes-derived names, and
+`GameClipSelectorModal`'s "Brilliants"/"Good To Brilliant" collection-name copy were left alone
+(owner ruling, QB1) and still say "Brilliant".
 `clipConstants.js` also gained `getRatingCaption(rating, mine, createIntent)` (create mode) and
 `getEditRatingCaption(rating, mine, hasReel)` (edit mode) — pure functions, no new store state,
 implementing the one-line "what will Save do" caption. **T9820: the creation clause is driven by the
