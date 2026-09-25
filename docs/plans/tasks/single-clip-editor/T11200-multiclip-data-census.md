@@ -1,6 +1,6 @@
 # T11200: Read-only census of multi-clip drafts and reels (all envs)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-24
