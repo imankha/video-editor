@@ -1,6 +1,6 @@
 # T11020: Spotlight custom color spectrum + eyedropper
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-22
@@ -91,9 +91,12 @@ production, where the real default is `'#FFFFFF'`.
       into a single write, `{"highlight_color":"#1A9C4B"}`) -- not simulated with mocks,
       driven through the real running app.
 
+**2026-09-23**: User reviewed and merged (PR #493, merge commit `d2213d64`) into master --
+Branch CI green first. Staging auto-deploys from master; status -> STAGING. The branch also
+picked up an unrelated same-session fix, T11030 (zoomed-timeline scrollbar now shows on
+desktop, not just mobile), committed on top before the merge.
+
 ## Not done this session
-- Not merged to master / not on staging. Left on
-  `feature/T11020-spotlight-custom-color-eyedropper` for the user to review and merge.
 - Real-device eyedropper click (opens an OS-native picker, not something Playwright can
   drive) was not exercised live -- only its DOM wiring (`new window.EyeDropper()`,
   feature detection, error handling) is covered by unit tests + code review.

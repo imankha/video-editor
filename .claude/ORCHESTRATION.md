@@ -83,85 +83,28 @@ User: "Implement T{id}"
 
 ---
 
-## Agent-Skill Matrix
+## Agent-Skill and Knowledge Matrix
 
-Which skills are relevant to each agent:
+Only resources that exist in this repository may be named in a handoff. The domain
+knowledge documents are the expertise layer; skills are executable procedures.
 
-### Code Expert
-| Skill | Relevance | Load When |
-|-------|-----------|-----------|
-| task-management | HIGH | Understanding task context |
-| mvc-pattern | MEDIUM | Mapping component structure |
-| state-management | MEDIUM | Finding state locations |
-| database-schema | MEDIUM | If backend changes needed |
+| Agent | Required references | Load when |
+|---|---|---|
+| `code-expert` | `.claude/knowledge/README.md`, the matching domain document, `.claude/references/coding-standards.md` | Before exploring a material code/data-flow question |
+| `architect` | Matching knowledge document, `.claude/references/coding-standards.md`, `.claude/references/design-patterns.md` | Every L-tier or explicitly design-gated task |
+| `tester` | `.claude/skills/run-tests/SKILL.md`, `.claude/references/testing-matrix.md`, matching knowledge document | Test authorship or acceptance verification |
+| `implementor` | Approved design, matching knowledge document, `.claude/references/coding-standards.md` | Implementing an approved specification |
+| `reviewer` | `.claude/references/coding-standards.md`, `.claude/references/code-smells.md`, `.claude/references/design-patterns.md`, matching knowledge document | Every M/L review |
+| `migration` | `.claude/knowledge/backend-services.md`, `.claude/knowledge/persistence-sync.md` | Schema or persisted-format changes |
+| `proof-verifier` | `.claude/agents/proof-verifier.md`, evidence paths, test hashes, matching knowledge document | Before every automatic landing |
+| `merge-reviewer` | `.claude/references/coding-standards.md`, `.claude/references/code-smells.md`, matching knowledge document | Branch readiness questions |
+| `ui-designer` | `.claude/references/ui-style-guide.md`, matching screen knowledge document | UI decisions are underspecified |
+| `ux-investigator` | `.claude/knowledge/README.md`, matching screen knowledge document, `drive-app-as-user` skill | Funnel or behavioral evidence is needed |
 
-### Architect
-| Skill | Relevance | Load When |
-|-------|-----------|-----------|
-| mvc-pattern | CRITICAL | Designing component structure |
-| state-management | CRITICAL | Deciding state locations |
-| data-always-ready | CRITICAL | Ensuring proper data flow |
-| type-safety | HIGH | Designing interfaces |
-| gesture-based-sync | HIGH | If API changes needed |
-| persistence-model | MEDIUM | If storage changes needed |
-
-**References**:
-- code-smells.md - Always consult
-- design-patterns.md - Always consult
-
-### Tester
-| Skill | Relevance | Load When |
-|-------|-----------|-----------|
-| lint | HIGH | Running build checks |
-| bug-reproduction | HIGH | Diagnosing test failures |
-
-**References**:
-- testing-matrix.md - Always consult
-
-### Implementor
-| Skill | Relevance | Load When |
-|-------|-----------|-----------|
-| data-always-ready | CRITICAL | Writing components |
-| mvc-pattern | CRITICAL | Component structure |
-| state-management | CRITICAL | Managing state |
-| type-safety | HIGH | Writing type-safe code |
-| keyframe-data-model | HIGH | If keyframes involved |
-| ui-style-guide | MEDIUM | If UI changes |
-| api-guidelines | HIGH | If backend changes |
-| lint | HIGH | Validating code |
-
-### Reviewer
-| Skill | Relevance | Load When |
-|-------|-----------|-----------|
-| mvc-pattern | CRITICAL | Verifying structure |
-| data-always-ready | CRITICAL | Checking data guards |
-| state-management | CRITICAL | Verifying state approach |
-| gesture-based-sync | CRITICAL | Checking persistence rules |
-| type-safety | HIGH | Verifying type safety |
-
-**References** (reviewer MUST read before reviewing):
-- coding-standards.md - All implementation rules (CRITICAL)
-- code-smells.md - Fowler's refactoring catalog (CRITICAL)
-- design-patterns.md - Expected patterns (HIGH)
-
-### Migration
-| Skill | Relevance | Load When |
-|-------|-----------|-----------|
-| database-schema | CRITICAL | Understanding current schema |
-| persistence-model | HIGH | Understanding R2 sync impact |
-| api-guidelines | MEDIUM | If migration affects API responses |
-
-### Merge Reviewer
-| Skill | Relevance | Load When |
-|-------|-----------|-----------|
-| state-management | CRITICAL | Checking sync strategy, store ownership |
-| mvc-pattern | HIGH | Verifying architecture compliance |
-| data-always-ready | HIGH | Checking data guards |
-| keyframe-data-model | MEDIUM | If keyframe code changed |
-
-**References**:
-- coding-standards.md - Always consult (persistence rules)
-- code-smells.md - Always consult
+Use the executable `run-tests`, `dotask`, `spawn-worker`, `drive-app-as-user`,
+`task-management`, and `visualize` skills only when their documented trigger applies.
+Do not describe missing procedures as skills, and do not substitute a prose reference
+for a knowledge document that an agent was required to read.
 
 ---
 
@@ -235,10 +178,12 @@ Agent tool:
     Write code that:
     1. Preserves approved behavior and contracts; flags substantive design errors
     2. Makes tests pass
-    3. Follows MVC + Data Always Ready
+    3. Follows the approved design, `.claude/references/coding-standards.md`, and the
+       matching `.claude/knowledge/` domain document
     4. Has no state duplication
 
-    Use skills: data-always-ready, mvc-pattern, state-management, type-safety
+    Use `.claude/skills/run-tests/SKILL.md` for test scope and only the domain procedures
+    named by the canonical `/dotask` expert-selection matrix.
 ```
 
 ### Reviewer (Phase 1: Solo Review)

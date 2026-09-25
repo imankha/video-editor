@@ -235,7 +235,13 @@ def pg_conn(monkeypatch):
     # T10270: upload_failures is diagnostic/operational state, not real user
     # data tests must preserve across runs -- full wipe each test, same
     # treatment as daily_counters.
-    cur.execute("TRUNCATE otp_codes, r2_grace_deletions, impersonation_audit, pending_teammate_shares, game_ref_counts, daily_counters, upload_failures")
+    # T8620: payments is an append-only financial ledger with NO FK to users
+    # (that's the point -- it outlives account deletion), so the per-test-user
+    # DELETE above can never clean it up. Full wipe each test, same treatment
+    # as daily_counters/upload_failures (test-created rows only; real revenue
+    # never runs through this fixture's DSN, which is refused above if it
+    # points at staging/prod).
+    cur.execute("TRUNCATE otp_codes, r2_grace_deletions, impersonation_audit, pending_teammate_shares, game_ref_counts, daily_counters, upload_failures, payments")
     cur.execute(_SEED_SQL)
     # T5840: open the credits_ready gate by default so the general test suite
     # (which predates the gate) doesn't 503 on every grant/debit. Tests that
@@ -271,6 +277,7 @@ def pg_conn(monkeypatch):
     monkeypatch.setattr("app.services.credit_ledger.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.credit_backfill.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.upload_failures.get_pg", mock_get_pg)
+    monkeypatch.setattr("app.routers.payments.get_pg", mock_get_pg)
 
     yield dsn
 

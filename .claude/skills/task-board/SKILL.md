@@ -4,7 +4,7 @@ description: "Launch a browser-based task board for drag-and-drop reordering, de
 license: MIT
 author: video-editor
 version: 1.0.0
-user_invocable: true
+user-invocable: true
 ---
 
 # Task Board

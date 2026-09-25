@@ -4,7 +4,7 @@ description: "Launch browser-based visualization for diagrams, charts, and seque
 license: MIT
 author: video-editor
 version: 1.0.0
-user_invocable: true
+user-invocable: true
 ---
 
 # Visualize

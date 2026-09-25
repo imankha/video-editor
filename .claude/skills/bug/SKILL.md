@@ -4,7 +4,7 @@ description: "Load a bug report's full context for investigation. Usage: /bug {i
 license: MIT
 author: video-editor
 version: 1.3.0
-user_invocable: true
+user-invocable: true
 ---
 
 # Bug Investigation

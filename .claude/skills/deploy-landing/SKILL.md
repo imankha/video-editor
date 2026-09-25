@@ -1,6 +1,7 @@
 ---
 name: deploy-landing
 description: "Deploy the marketing landing site (reelballers.com) to production"
+user-invocable: true
 ---
 
 # Deploy the Landing Site

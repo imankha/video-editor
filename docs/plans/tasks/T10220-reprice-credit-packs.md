@@ -1,6 +1,6 @@
 # T10220: Rebalance monetization: 12.99 / 22.99 / 32.99 ladder
 
-**Status:** TODO (deferred until AFTER the Deploy Candidate ships, user ruling 2026-09-17)
+**Status:** WIP (started 2026-09-24 via /dotask; user's /dotask call taken as the go-ahead past the Deploy Candidate deferral. Merge held: a master push of pricing.json auto-deploys the prod landing)
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-09-17
@@ -111,4 +111,13 @@ New ladder (derived from `pricing.json`, verified via `app.pricing`):
   storage extension costs ~25% more credits from the moment this ships. Existing balances and
   in-flight/historical Stripe payments are unaffected (grants read pack metadata off the Stripe
   object, not this file), but new uploads are charged at the new anchor immediately.
-- Stripe prices are created inline from `price_cents`; **no Stripe dashboard work** is required.
+- In-flight revenue (corrected 2026-09-24, T10220 proof verification): before T8620, revenue was
+  booked at `CREDIT_PACKS[pack]["price_cents"]` when the webhook arrived, so an old-price checkout
+  completing after the deploy would have been booked at the new price. T8620 (merged first) records
+  the amount Stripe actually captured in the `payments` ledger and bumps `total_spent_cents` by that
+  same amount, so revenue is correct across the switchover too.
+- Stripe prices and products are created inline on each purchase (`price_data`/`product_data` in
+  Checkout, `amount` on the PaymentIntent, all from `pricing.json`); there are no Stripe Price or
+  Product IDs. **No Stripe dashboard work** is required for the new ladder (user asked 2026-09-24).
+- Merged 2026-09-24 on the user's instruction ahead of the prod app deploy: the landing site goes
+  live with the new ladder on merge; the app follows at the next `/deploy`.

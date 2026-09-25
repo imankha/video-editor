@@ -301,10 +301,33 @@ class TestUserTablePerfIsolation:
         assert len(query_counter.selects) < 50
 
 
+class _FakeRefundList:
+    """Mimics stripe.Refund.list's return: an object with .auto_paging_iter()."""
+    def __init__(self, items):
+        self._items = items
+
+    def auto_paging_iter(self):
+        return iter(self._items)
+
+
 class TestChargeRefundedWebhook:
-    def _post_refund(self, client, event):
+    def _post_refund(self, client, event, refunds=None):
+        # T8620 G3: the refund webhook branch no longer reads charge["refunds"]
+        # from the payload (current Stripe API versions omit it); it fetches the
+        # authoritative list via stripe.Refund.list. Mirror that here -- derive the
+        # succeeded refunds to return from the event's legacy `refunds.data` unless
+        # the caller passes an explicit list.
+        charge = event["data"]["object"]
+        if refunds is None:
+            data = (charge.get("refunds") or {}).get("data") or []
+            refunds = [
+                {"id": r["id"], "amount": r["amount"], "status": "succeeded",
+                 "created": 1690000000, "currency": "usd"}
+                for r in data
+            ]
         with patch("app.routers.payments.STRIPE_WEBHOOK_SECRET", "whsec_dummy"), \
-             patch("stripe.Webhook.construct_event", return_value=event):
+             patch("stripe.Webhook.construct_event", return_value=event), \
+             patch("stripe.Refund.list", return_value=_FakeRefundList(refunds)):
             return client.post(
                 "/api/payments/webhook",
                 content=b"{}",
@@ -320,7 +343,7 @@ class TestChargeRefundedWebhook:
                 "payment_intent": "pi_a",
                 "metadata": {"user_id": "user-a"},
                 "amount_refunded": 300,
-                "refunds": {"data": [{"amount": 300}]},
+                "refunds": {"data": [{"id": "re_1", "amount": 300}]},
             }},
         }
         resp = self._post_refund(client, event)
@@ -338,7 +361,7 @@ class TestChargeRefundedWebhook:
                 "payment_intent": "pi_b",
                 "metadata": {},
                 "amount_refunded": 399,
-                "refunds": {"data": [{"amount": 399}]},
+                "refunds": {"data": [{"id": "re_2", "amount": 399}]},
             }},
         }
         pi = {"metadata": {"user_id": "user-b"}}
@@ -357,7 +380,7 @@ class TestChargeRefundedWebhook:
                 "payment_intent": "pi_b",
                 "metadata": {"user_id": "user-b"},
                 "amount_refunded": 5000,
-                "refunds": {"data": [{"amount": 5000}]},
+                "refunds": {"data": [{"id": "re_3", "amount": 5000}]},
             }},
         }
         resp = self._post_refund(client, event)

@@ -5,6 +5,7 @@ license: MIT
 metadata:
   author: video-editor
   version: 5.0.0
+user-invocable: true
 ---
 
 # /dotask
@@ -49,6 +50,32 @@ burn into merges.
 2. **Read context per task:** task file in full + `CLAUDE.md` (+ `EPIC.md` if referenced) +
    the task's `.claude/knowledge/` domain doc(s). Verify any prerequisite/"Follows:" task is
    merged. Run Stage-0 classification (tier!) per task.
+
+   **Canonical expert-selection matrix:** classify the task's primary domain before spawning
+   agents. Always record the selected expert(s), record the reason and evidence for the selection, and any
+   deliberately skipped specialist in the kickoff and `WAVE.md`; **Do not spawn every expert.**
+   Select one primary expert for the dominant uncertainty, then add only specialists whose
+   output is required by the acceptance criteria:
+
+   | Signal or changed domain | Primary specialist | Add when the task also requires |
+   |---|---|---|
+   | Unknown entry point, stale knowledge, or a knowledge gap in cross-domain data flow | `code-expert` | A concrete unresolved mechanism after one focused read |
+   | Non-obvious bug, architecture tradeoff, async, persistence, concurrency, performance, or one failed fix | `expert` | Never for purely mechanical edits |
+   | `backend-services.md`, API, Postgres/SQLite, or schema/persisted format | `expert` | `migration` for schema/format changes |
+   | `persistence-sync.md`, R2 sync, versioning, restore, or deletion | `expert` | `migration` if stored schema changes; `reviewer` for every M/L task |
+   | `modal-gpu.md` or `export-pipeline.md`, FFmpeg, Modal, GPU, or export durability | `expert` | `reviewer` and the relevant knowledge document |
+   | `annotate.md` or `keyframes-framing.md`, timeline, clips, keyframes, or crop behavior | `code-expert` | `ui-designer` for an under-specified UI; `expert` for timing/state/performance uncertainty |
+   | UI behavior with missing interaction or visual decisions | `ui-designer` | `ux-investigator` only when behavioral/funnel evidence is needed |
+   | Funnel drop-off, analytics, or suspected user confusion | `ux-investigator` | `ui-designer` after the evidence-backed design decision |
+   | Explicitly scoped behavior-preserving prerequisite refactor | `refactor` | `expert` only if the refactor exposes a non-obvious design tradeoff |
+
+   `architect` is required for every L-tier or explicitly design-gated task. `tester` is
+   included when separate test authorship adds value and by default for L-tier work.
+   `implementor` executes the approved specification. `reviewer` is required for M/L,
+   `proof-verifier` is required before every automatic landing, and `merge-reviewer` is
+   required when the user asks whether a branch is ready to merge. Never substitute a
+   general-purpose worker for a named specialist, and never treat a specialist's prose as
+   proof of expertise without the relevant tests or evidence.
 
 3. **Queue plan (multi-task only).** Before spawning anything, build a file-ownership map:
    the primary files each task touches (from task files + knowledge docs). RULES:

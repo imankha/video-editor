@@ -15,7 +15,7 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 const ADMIN_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 
 test.describe('T8110 admin test-account filter + global sort', () => {
-  test.beforeEach(({}, testInfo) => {
+  test.beforeEach(() => {
     skipOnDeployedTarget(test, 'requires admin rights + a live dev Postgres read in the target env');
   });
 
