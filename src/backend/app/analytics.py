@@ -405,6 +405,10 @@ _RETIRED_CREDIT_AMOUNT_TO_CENTS = {
     120: 499,
     400: 1299,
     1000: 2499,
+    # T4940 ladder, retired by T10220 (12.99/22.99/32.99 reprice). 340 stayed on the
+    # current ladder at the same 1299c, so it is still covered by the live spread below.
+    80: 399,
+    160: 699,
 }
 CREDIT_AMOUNT_TO_CENTS = {
     **_RETIRED_CREDIT_AMOUNT_TO_CENTS,

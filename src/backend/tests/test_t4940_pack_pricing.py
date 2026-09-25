@@ -51,6 +51,28 @@ class TestSingleSource:
         assert pack_display_name("Starter", 80) == "Starter — 80 Credits"
 
 
+class TestRetiredLadderPricesStayMapped:
+    """T10220: repricing the ladder must not erase historical purchase prices.
+
+    A purchase row only ever stores the credit AMOUNT, not the price paid. When a
+    reprice removes a credit amount from the live ladder (T4940's 80/160, retired by
+    T10220), admin money-spent must still resolve that amount's HISTORICAL price via
+    ``_RETIRED_CREDIT_AMOUNT_TO_CENTS`` — silently falling through to "unknown" would
+    understate real revenue for every pre-T10220 purchase, forever.
+    """
+
+    def test_retired_t4940_amounts_still_map_to_their_original_price(self):
+        from app.analytics import CREDIT_AMOUNT_TO_CENTS
+        assert CREDIT_AMOUNT_TO_CENTS[80] == 399
+        assert CREDIT_AMOUNT_TO_CENTS[160] == 699
+
+    def test_admin_money_spent_covers_a_mixed_retired_and_live_purchase_history(self):
+        from app.routers.admin import _compute_money_spent_cents
+        # 80 and 160 are retired T4940 amounts; 340 is still on the live ladder (at the
+        # same 1299c it always was). A real account's history can mix all three eras.
+        assert _compute_money_spent_cents([80, 160, 340]) == 399 + 699 + 1299
+
+
 class TestLadderInvariants:
     def test_at_least_two_packs_with_positive_integers(self):
         packs = _ladder()

@@ -8,7 +8,8 @@ Everything price-shaped derives from that file:
   only the bare pack name.
 - ``CREDIT_VALUE``: the storage-cost anchor ($/credit) used by ``storage_credits``. It is
   the WORST-CASE (highest) per-credit rate on the ladder, rounded UP to a whole cent, so
-  storage charges stay cost-recovering at every pack size. 399c/80 = 4.9875c -> 0.05.
+  storage charges stay cost-recovering at every pack size. 1299c/340 = 3.8206c -> 0.04
+  (T10220 reprice; was 399c/80 = 4.9875c -> 0.05 under the T4940 ladder).
 
 The frontend mirror is ``src/frontend/src/config/pricing.js`` (same file, same rules);
 the app's purchase UI still reads packs at runtime from ``GET /api/payments/config``.
