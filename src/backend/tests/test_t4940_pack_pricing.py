@@ -39,38 +39,10 @@ class TestSingleSource:
         assert payments.CREDIT_PACKS is CREDIT_PACKS
         assert storage_credits.CREDIT_VALUE == CREDIT_VALUE
 
-    def test_analytics_amount_map_covers_the_current_ladder(self):
-        # admin money-spent maps purchase credit amounts to cents; a stale map reports $0.
-        from app.analytics import CREDIT_AMOUNT_TO_CENTS
-        for p in CREDIT_PACKS.values():
-            assert CREDIT_AMOUNT_TO_CENTS[p["credits"]] == p["price_cents"]
-
     def test_display_name_format_is_stripe_frozen(self):
         # The em dash is DELIBERATE: it is the live Stripe product-name format (T4940).
         # Do not "ASCII-clean" it; that renames every product in Stripe reporting.
         assert pack_display_name("Starter", 80) == "Starter — 80 Credits"
-
-
-class TestRetiredLadderPricesStayMapped:
-    """T10220: repricing the ladder must not erase historical purchase prices.
-
-    A purchase row only ever stores the credit AMOUNT, not the price paid. When a
-    reprice removes a credit amount from the live ladder (T4940's 80/160, retired by
-    T10220), admin money-spent must still resolve that amount's HISTORICAL price via
-    ``_RETIRED_CREDIT_AMOUNT_TO_CENTS`` — silently falling through to "unknown" would
-    understate real revenue for every pre-T10220 purchase, forever.
-    """
-
-    def test_retired_t4940_amounts_still_map_to_their_original_price(self):
-        from app.analytics import CREDIT_AMOUNT_TO_CENTS
-        assert CREDIT_AMOUNT_TO_CENTS[80] == 399
-        assert CREDIT_AMOUNT_TO_CENTS[160] == 699
-
-    def test_admin_money_spent_covers_a_mixed_retired_and_live_purchase_history(self):
-        from app.routers.admin import _compute_money_spent_cents
-        # 80 and 160 are retired T4940 amounts; 340 is still on the live ladder (at the
-        # same 1299c it always was). A real account's history can mix all three eras.
-        assert _compute_money_spent_cents([80, 160, 340]) == 399 + 699 + 1299
 
 
 class TestLadderInvariants:

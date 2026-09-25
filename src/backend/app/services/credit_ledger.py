@@ -363,8 +363,7 @@ def stats_for_admin(user_ids: list[str] | None = None) -> dict:
     reads across up to `page_size` other users' SQLite files, T4870 -> gone).
 
     Returns dict keyed by user_id: credits_spent, credits_purchased,
-    credits_balance (a real int -- absent row = 0, never null/unavailable),
-    purchase_credit_amounts.
+    credits_balance (a real int -- absent row = 0, never null/unavailable).
     """
     if user_ids is not None and not user_ids:
         return {}
@@ -377,8 +376,7 @@ def stats_for_admin(user_ids: list[str] | None = None) -> dict:
                 SELECT
                     user_id,
                     COALESCE(SUM(CASE WHEN amount < 0 AND source != 'admin_set' THEN -amount ELSE 0 END), 0) AS credits_spent,
-                    COALESCE(SUM(CASE WHEN source = 'stripe_purchase' AND amount > 0 THEN amount ELSE 0 END), 0) AS credits_purchased,
-                    ARRAY_AGG(amount ORDER BY created_at, id) FILTER (WHERE source = 'stripe_purchase' AND amount > 0) AS purchase_credit_amounts
+                    COALESCE(SUM(CASE WHEN source = 'stripe_purchase' AND amount > 0 THEN amount ELSE 0 END), 0) AS credits_purchased
                 FROM credit_transactions
                 WHERE user_id = ANY(%s)
                 GROUP BY user_id
@@ -391,8 +389,7 @@ def stats_for_admin(user_ids: list[str] | None = None) -> dict:
                 SELECT
                     user_id,
                     COALESCE(SUM(CASE WHEN amount < 0 AND source != 'admin_set' THEN -amount ELSE 0 END), 0) AS credits_spent,
-                    COALESCE(SUM(CASE WHEN source = 'stripe_purchase' AND amount > 0 THEN amount ELSE 0 END), 0) AS credits_purchased,
-                    ARRAY_AGG(amount ORDER BY created_at, id) FILTER (WHERE source = 'stripe_purchase' AND amount > 0) AS purchase_credit_amounts
+                    COALESCE(SUM(CASE WHEN source = 'stripe_purchase' AND amount > 0 THEN amount ELSE 0 END), 0) AS credits_purchased
                 FROM credit_transactions
                 GROUP BY user_id
                 """
@@ -416,7 +413,6 @@ def stats_for_admin(user_ids: list[str] | None = None) -> dict:
             "credits_spent": int(a["credits_spent"]) if a else 0,
             "credits_purchased": int(a["credits_purchased"]) if a else 0,
             "credits_balance": balance_by_user.get(uid, 0),
-            "purchase_credit_amounts": list(a["purchase_credit_amounts"]) if a and a["purchase_credit_amounts"] else [],
         }
     return stats
 
