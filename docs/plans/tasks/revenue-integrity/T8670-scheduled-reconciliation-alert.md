@@ -67,10 +67,26 @@ alerts only on drift it cannot explain.
 
 ## Acceptance Criteria
 
-- [ ] A scheduled pass runs without a human, at a documented interval, once per deploy and
+- [x] A scheduled pass runs without a human, at a documented interval, once per deploy and
       not once per machine
-- [ ] It alerts only on `unknown` drift and pending disputes, and is silent when every row
+- [x] It alerts only on `unknown` drift and pending disputes, and is silent when every row
       is explained
-- [ ] It reuses the existing classifier with no duplicated logic
-- [ ] A synthetic unexplained drift produces the alert in a test
-- [ ] Running it changes no data (read-only pass; healing stays an explicit admin gesture)
+- [x] It reuses the existing classifier with no duplicated logic
+- [x] A synthetic unexplained drift produces the alert in a test
+- [x] Running it changes no data (read-only pass; healing stays an explicit admin gesture)
+
+## Implementation (2026-09-26)
+
+`services/reconciliation_alert.py`  -  a thin background caller around the panel's
+`_compute_reconciliation`. Weekly loop (`WEEKLY_INTERVAL_SECONDS`) wired into `main.py`
+lifespan (`start_reconciliation_alert_loop`/`stop_reconciliation_alert_loop`), mirroring
+`sweep_scheduler`/`cleanup`. Single-machine coordination via a Postgres session-level
+advisory lock `pg_try_advisory_lock(RECONCILIATION_ALERT_LOCK_ID=8670)` held for the whole
+pass and released explicitly with `pg_advisory_unlock` in a `finally` (pooled connections
+never disconnect, so auto-release is not relied on). Alerts (CRITICAL log always + admin
+email additionally) only on `unknown` rows and pending disputes; silent otherwise;
+read-only. Tests: `tests/test_t8670_reconciliation_alert.py`. Knowledge doc updated:
+`.claude/knowledge/backend-services.md` (reconciliation section).
+
+**This is the LAST task in the Revenue Record Integrity epic  -  see EPIC.md, now marked
+COMPLETE (6/6).**

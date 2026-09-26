@@ -179,18 +179,24 @@ Order is dependency order: the record must exist before anything can read it or 
 
 ## Completion Criteria
 
-- [ ] Every succeeded live PaymentIntent has a matching `payments` row, including the
-      2026-08-24 orphan, proven by a reconciliation run reporting 0 unexplained drift
-- [ ] Deleting an account (both paths) leaves the `payments` rows intact, stamps the
-      deletion, and writes an audit row naming the actor and path
-- [ ] The reconciliation panel classifies a deleted-payer row as `account_deleted` and
-      offers a terminal acknowledge action instead of a heal that cannot work
-- [ ] Admin revenue totals are computed from `payments` and do not change when an account
-      is deleted
-- [ ] A new live purchase produces a Stripe receipt to the customer's email
-- [ ] Drift is detected without a human clicking anything
-- [ ] Knowledge docs updated: `backend-services.md` (new table, deletion contract) and
+- [x] Every succeeded live PaymentIntent has a matching `payments` row, including the
+      2026-08-24 orphan, proven by a reconciliation run reporting 0 unexplained drift (T8620)
+- [x] Deleting an account (both paths) leaves the `payments` rows intact, stamps the
+      deletion, and writes an audit row naming the actor and path (T8630)
+- [x] The reconciliation panel classifies a deleted-payer row as `account_deleted` and
+      offers a terminal acknowledge action instead of a heal that cannot work (T8640)
+- [x] Admin revenue totals are computed from `payments` and do not change when an account
+      is deleted (T8650)
+- [x] A new live purchase produces a Stripe receipt to the customer's email (T8660)
+- [x] Drift is detected without a human clicking anything (T8670)
+- [x] Knowledge docs updated: `backend-services.md` (new table, deletion contract) and
       `persistence-sync.md` if the deletion contract touches the sync seam
+
+**Epic COMPLETE (2026-09-26, T8670).** All 6/6 sequenced tasks implemented; the final task
+(T8670) adds the scheduled weekly reconciliation drift alert, closing incident hole 8
+("drift is only ever seen if a human clicks the button"). Money records are now append-only,
+outlive account deletion, are auditable, drive the admin aggregates, and are reconciled
+against Stripe on a schedule that alerts on unexplained drift and pending disputes.
 
 ## Operational note (not a task in this epic)
 

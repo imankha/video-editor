@@ -436,6 +436,32 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
      `tests/test_revenue_reconciliation.py` (`TestAccountDeletedClassifier`,
      `TestDeletedPayerEndpoint`, `TestFilterSymmetryImankhRegression` — the imankh regression goes
      through the REAL TestClient endpoint, both filter states).
+- **T8670 (epic 6/6, epic COMPLETE): scheduled reconciliation with a drift alert.** Drift is now
+  detected without a human clicking the panel (incident hole 8). `services/reconciliation_alert.py`
+  is a THIN background caller — it does NOT reimplement the query or the classifier. It runs the
+  SAME `routers/admin.py` `_compute_reconciliation(exclude_test=True)` (lazy-imported inside
+  `_compute_rows`, off the event loop via `asyncio.to_thread`), then `_build_alert` (pure) flags the
+  two conditions worth surfacing: any row `cause == unknown`, and any row `has_pending_dispute`
+  (every other cause — aligned/test_mode_era/account_deleted/dispute/refund — is explained and
+  silent). Alert channel: ALWAYS a CRITICAL `[ReconAlert] DRIFT DETECTED` log line naming user_ids /
+  causes / amounts (greppable zero-dependency floor), and additionally an email to every
+  `get_admin_emails()` address via the existing `send_admin_update_email` (`body_text_to_html` shell)
+  — never a "nothing to report" email, and a failed send is logged and swallowed so it can never kill
+  the loop. **READ-ONLY**: the pass never heals / never calls `set_total_spent` / never writes
+  (proven by a before==after snapshot of `user_segments`/`payments`/`account_deletions` across a
+  drifted run). **Single-machine coordination on multi-machine Fly = a Postgres SESSION-level
+  advisory lock** `pg_try_advisory_lock(RECONCILIATION_ALERT_LOCK_ID=8670)` held on ONE connection
+  for the whole pass and released EXPLICITLY with `pg_advisory_unlock` in a `finally` (the pooled
+  connection is returned alive, never disconnected, so auto-release-on-disconnect is NOT relied on);
+  if not acquired → log INFO + skip, no busy-retry. This is the first advisory-lock user in the
+  codebase (8640-adjacent id chosen greppable). Scheduling reuses the `sweep_scheduler`/`cleanup`
+  background-loop pattern: `start_reconciliation_alert_loop`/`stop_reconciliation_alert_loop` wired
+  into `main.py` lifespan startup/shutdown; fixed WEEKLY interval (`WEEKLY_INTERVAL_SECONDS`, a named
+  constant — weekly is enough at current volume). One `PaymentIntent.list` pagination per run
+  (inside `_compute_reconciliation`), same bounded Stripe read the panel makes; NEVER on a
+  user-facing path. If Stripe is unconfigured (local dev) the pass logs INFO and skips. Tests:
+  `tests/test_t8670_reconciliation_alert.py` (run against an ISOLATED `t8670_test` DB, Stripe mocked).
+  If T1702 (monetization alerts) is later picked up, it must REUSE this loop, not add a second.
 
 ### Account deletion contract (T8630)
 Revenue Record Integrity epic 2/6. Fixes the two 2026-09-03 incident holes: deletion used to

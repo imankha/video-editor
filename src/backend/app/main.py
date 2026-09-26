@@ -569,6 +569,11 @@ async def _startup_event():
     from app.services.cleanup import start_cleanup_loop
     await start_cleanup_loop()
 
+    # T8670: Weekly scheduled revenue reconciliation with a drift alert (once per
+    # deploy, not once per machine -- guarded by a Postgres advisory lock).
+    from app.services.reconciliation_alert import start_reconciliation_alert_loop
+    await start_reconciliation_alert_loop()
+
 
 async def _shutdown_event():
     from app.services.sweep_scheduler import stop_sweep_loop
@@ -576,6 +581,9 @@ async def _shutdown_event():
 
     from app.services.cleanup import stop_cleanup_loop
     await stop_cleanup_loop()
+
+    from app.services.reconciliation_alert import stop_reconciliation_alert_loop
+    await stop_reconciliation_alert_loop()
 
     from app.services.pg import close_pg_pool
     close_pg_pool()
