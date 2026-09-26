@@ -1,10 +1,10 @@
 # T11360: Admin `credits_spent` Stat Doesn't Net Out Refunds
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-09-25
-**Updated:** 2026-09-25
+**Updated:** 2026-09-26
 
 ## Problem
 
