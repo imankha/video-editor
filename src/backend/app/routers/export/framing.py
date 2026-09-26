@@ -556,7 +556,13 @@ async def _run_render_background(
             from ...services.credit_ledger import refund_credits
             refund_credits(user_id, credits_deducted, export_id, video_seconds)
             logger.info(f"[Render] Refunded {credits_deducted} credits (pre-pipeline failure)")
-        logger.error(f"[Render] Background render failed: {e}", exc_info=True)
+        # T11320: a preflight budget rejection is expected and already fully handled + logged by
+        # _export_clips (structured WS payload + readable job-fail message); WARNING, no traceback.
+        from ...services.export_cost_guard import ExportBudgetExceeded
+        if isinstance(e, ExportBudgetExceeded):
+            logger.warning(f"[Render] Export {export_id} rejected by preflight guard: {e}")
+        else:
+            logger.error(f"[Render] Background render failed: {e}", exc_info=True)
 
         # T4990: a confirmed missing/expired source records a typed, actionable
         # failure (SOURCE_UNAVAILABLE + "unavailable/expired" wording) that the
