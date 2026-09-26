@@ -1,7 +1,7 @@
 # Modal Export Safety & Capacity
 
-**Status:** TODO
-**Started:** -
+**Status:** Core safety work STAGING; T11340/T11350 deferred as backlog (see below)
+**Started:** 2026-09-25
 **Completed:** -
 
 ## Goal
@@ -36,7 +36,7 @@ See [modal-gpu.md](../../../../.claude/knowledge/modal-gpu.md) for `process_clip
 | T11320 | [Preflight export-size guard](T11320-modal-export-preflight-guard.md) | STAGING |
 | T11330 | [Explanatory rejection popup](T11330-modal-export-rejection-popup.md) | STAGING |
 | T11340 | [Parallelize multi-clip export across GPUs](T11340-modal-multiclip-parallel-chunking.md) | ICE (deferred) |
-| T11350 | [Enable GAN-skip gate for near-1:1 crops](T11350-modal-gan-skip-gate-enable.md) | TODO |
+| T11350 | [Enable GAN-skip gate for near-1:1 crops](T11350-modal-gan-skip-gate-enable.md) | ICE (deferred) |
 | T11370 | [Calibrate T11320's export-cost-guard constant](T11370-export-cost-guard-calibration.md) | TODO |
 
 Order: T11320 -> T11330 (the popup needs the guard's structured rejection reason to exist first).
@@ -53,7 +53,19 @@ single clips succeed instead of being rejected) not worth the complexity it turn
 Full design preserved at
 [T11340-design-DEFERRED.md](T11340-design-DEFERRED.md) if revisited.
 
+**T11350 deferred 2026-09-26** — same underlying reasoning as T11340: it's a cost/false-rejection
+optimization (skip a wasted GAN pass on near-1:1 crops), not a fix for a failure mode, since
+T11320 already turns that case into a fast informative rejection instead of a silent timeout.
+Unlike T11340, it is NOT rendered moot by multi-clip removal (near-1:1 crops happen on single
+clips too), so it stays a valid backlog item — just not worth the calibration effort + staged
+prod deploy right now, against current top priorities (single-clip-editor, highlight-first).
+No design work was started (only Modal staging connectivity was confirmed reachable).
+
 ## Completion Criteria
+
+The epic's core safety goal — a user can no longer submit an export Modal cannot finish, and a
+rejected export tells them exactly what to change — is met by T11320+T11330. T11340/T11350 are
+capacity/cost optimizations, deliberately deferred rather than required to close this epic.
 
 - [x] A user cannot dispatch a multi-clip export whose estimated GPU-seconds exceeds Modal's
       timeout budget (T11320)
@@ -61,5 +73,5 @@ Full design preserved at
       split into batches (T11330)
 - [ ] ~~Multi-clip export (`process_clips_ai`) can use more than 1 GPU for large jobs~~ — dropped;
       T11340 deferred, not required to close this epic
-- [ ] Near-1:1-enlargement crops (like this user's full-frame 16:9 case) skip the GAN pass instead
-      of paying for enhance-then-shrink (T11350)
+- [ ] ~~Near-1:1-enlargement crops skip the GAN pass instead of paying for enhance-then-shrink~~ —
+      dropped; T11350 deferred, not required to close this epic

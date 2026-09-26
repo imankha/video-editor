@@ -1,10 +1,10 @@
 # T11350: Enable the GAN-Skip Gate for Near-1:1-Enlargement Crops
 
-**Status:** TODO
+**Status:** ICE (deferred, user decision 2026-09-26)
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-09-25
-**Updated:** 2026-09-25
+**Updated:** 2026-09-26
 
 ## Problem
 
@@ -72,6 +72,19 @@ prerequisite, not optional prep work.
 
 **2026-09-25**: Filed from Bug 58p investigation. Not started. User flagged this epic as top
 priority (2026-09-25).
+
+**2026-09-26 (deferred)**: No work started beyond confirming Modal staging connectivity from the
+supervisor session (`modal.Function.from_name('reel-ballers-video-v2-staging', 'process_clips_ai')`
+resolves — credentials and reachability are fine whenever this is picked back up). User reasoning:
+T11320 (merged) already prevents the actual failure mode (Bug 58p's silent hour-long timeout) —
+a near-1:1-crop export now gets a fast, informative rejection instead. This task would only let
+some of those rejected exports succeed more cheaply (skip the wasted GAN pass) rather than fixing
+a bug. Given the real cost of doing it right (a GAN-inclusive multi-fixture calibration run, a
+threshold decision, a staged prod deploy) against current top priorities (single-clip-editor,
+highlight-first), not worth pursuing now. Unlike T11340, this task is NOT rendered moot by
+multi-clip removal — near-1:1 crops happen on single clips too (e.g. an uncropped raw upload) —
+so it stays a valid, revisit-able backlog item, not obsolete. **Revisit if false-rejections on
+legitimately large single-clip exports turn out to be common in practice.**
 
 ## Acceptance Criteria
 
