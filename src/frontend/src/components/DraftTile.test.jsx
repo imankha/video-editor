@@ -27,6 +27,12 @@ beforeEach(() => {
 // CALL, not a player implementation this component no longer owns.
 vi.mock('../utils/finishedReelNav', () => ({ openFinishedReel: vi.fn() }));
 
+// T11220: spy on the toast surface so the legacy-multi-clip re-frame refusal is
+// assertable. DraftTile only uses `toast`; the other exports are unused here.
+vi.mock('./shared/Toast', () => ({
+  toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() },
+}));
+
 // DraftTile reads several stores; stub the minimal surface it touches.
 vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
 vi.mock('../stores/projectsStore', () => {
@@ -77,6 +83,8 @@ vi.mock('../hooks/useDownloads', () => ({
 import { DraftTile } from './DraftTile';
 import { useProjectsStore } from '../stores/projectsStore';
 import { openFinishedReel } from '../utils/finishedReelNav';
+import { toast } from './shared/Toast';
+import { LEGACY_MULTICLIP_REFRAME_MESSAGE } from '../utils/reelReEditable';
 
 const baseProject = {
   id: 7,
@@ -509,6 +517,49 @@ describe('DraftTile (T5672)', () => {
     fireEvent.click(container.querySelector('[data-testid="project-card"]'));
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelectWithMode).not.toHaveBeenCalled();
+  });
+
+  // T11220: a legacy multi-clip draft (clip_count > 1) cannot be re-framed. Every
+  // Framing entry point must refuse with the clear message instead of opening
+  // Framing (where /render 400s a >1-clip project generically). Spotlight (overlay,
+  // when a working video exists) still works.
+  describe('T11220 legacy multi-clip re-frame refusal', () => {
+    beforeEach(() => { toast.info.mockClear(); });
+
+    it('card click on a multi-clip draft WITHOUT a working video refuses re-frame (toast, no Framing)', () => {
+      const onSelect = vi.fn();
+      const onSelectWithMode = vi.fn();
+      const { container } = renderTile(
+        { clip_count: 3, has_working_video: false, clips_in_progress: 1 },
+        { onSelect, onSelectWithMode }
+      );
+      fireEvent.click(container.querySelector('[data-testid="project-card"]'));
+      expect(onSelectWithMode).not.toHaveBeenCalled();
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(toast.info).toHaveBeenCalledWith(LEGACY_MULTICLIP_REFRAME_MESSAGE);
+    });
+
+    it('a multi-clip draft WITH a working video still opens Spotlight (overlay) on click', () => {
+      const onSelectWithMode = vi.fn();
+      const { container } = renderTile(
+        { clip_count: 3, has_working_video: true },
+        { onSelectWithMode }
+      );
+      fireEvent.click(container.querySelector('[data-testid="project-card"]'));
+      expect(onSelectWithMode).toHaveBeenCalledWith({ mode: 'overlay' });
+      expect(toast.info).not.toHaveBeenCalled();
+    });
+
+    it('a SINGLE-clip draft (clip_count === 1) still routes into Framing (no refusal)', () => {
+      const onSelectWithMode = vi.fn();
+      const { container } = renderTile(
+        { clip_count: 1, has_working_video: false, clips_in_progress: 1 },
+        { onSelectWithMode }
+      );
+      fireEvent.click(container.querySelector('[data-testid="project-card"]'));
+      expect(onSelectWithMode).toHaveBeenCalledWith({ mode: 'framing', clipIndex: 0 });
+      expect(toast.info).not.toHaveBeenCalled();
+    });
   });
 
   // T5910 — the reveal MECHANISM is gated on POINTER TYPE, not viewport width.

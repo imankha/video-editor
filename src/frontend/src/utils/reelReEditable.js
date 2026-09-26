@@ -25,4 +25,13 @@ export function canReEditReel(reel) {
   return true;
 }
 
-export default canReEditReel;
+/**
+ * The clear, specific message shown when a user tries to RE-FRAME a legacy
+ * multi-clip DRAFT (T11220) — DraftTile intercepts the Focus/Framing gesture and
+ * shows this instead of dropping into Framing (where /render 400s generically).
+ * Mirrors the published-reel Re-edit refusal copy in useReEditReel but names the
+ * affordances a draft actually still has (Spotlight + publish + download).
+ */
+export const LEGACY_MULTICLIP_REFRAME_MESSAGE =
+  'This reel was made from multiple clips and can no longer be re-edited in Focus. ' +
+  'You can still add a Spotlight, publish, and download it.';
