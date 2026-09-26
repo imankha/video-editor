@@ -40,6 +40,13 @@ class DriftCause(str, Enum):
     REFUND = "refund"            # merchant refund lowered Stripe net below local
     DISPUTE = "dispute"          # a lost dispute/chargeback lowered Stripe net
     TEST_MODE_ERA = "test_mode_era"  # local > 0 but zero live history (pre-go-live)
+    # T8640: the payer's local account is gone (no `users` row) but Stripe still
+    # holds live history. Deletion is the explanation regardless of refund/dispute,
+    # so this ranks ABOVE both. With the T8620 ledger, a deleted payer's local
+    # truth is SUM(payments.amount_cents) (backfilled == Stripe net), so the row is
+    # usually ALIGNED and never reaches here; this cause covers only the residual
+    # case where the ledger and Stripe net still disagree for a deleted account.
+    ACCOUNT_DELETED = "account_deleted"
     UNKNOWN = "unknown"          # drift with no refund/dispute/zero-history explanation
 
 
@@ -127,18 +134,27 @@ def build_stripe_net_by_user(intents: list) -> dict:
 
 
 def _classify_cause(delta_cents: int, local_cents: int, pi_count: int,
-                    refunded_cents: int, disputed_lost_cents: int) -> DriftCause:
+                    refunded_cents: int, disputed_lost_cents: int,
+                    local_account_exists: bool = True) -> DriftCause:
     """Classify why local drifts from Stripe net. Pure over aggregated numbers.
 
-    Priority: aligned -> test_mode_era (zero live history) -> dispute -> refund ->
-    unknown. test_mode_era wins over refund/dispute because zero live history means
-    the local value can only be pre-go-live test-mode noise regardless of anything
-    else.
+    Priority: aligned -> test_mode_era (zero live history) -> account_deleted ->
+    dispute -> refund -> unknown. test_mode_era wins over everything because zero
+    live history means the local value can only be pre-go-live test-mode noise.
+    account_deleted (T8640) ranks above dispute/refund: if the payer has no local
+    account but still has live Stripe history, the deletion is the explanation for
+    the drift regardless of what refund/dispute figures also exist.
+
+    ``local_account_exists`` is passed in by the caller (computed from the Postgres
+    read), never reached for from inside this pure function — keeping it unit-testable
+    with mocked data (default True preserves every pre-T8640 call site/test).
     """
     if delta_cents == 0:
         return DriftCause.ALIGNED
     if pi_count == 0 and local_cents > 0:
         return DriftCause.TEST_MODE_ERA
+    if not local_account_exists and pi_count > 0:
+        return DriftCause.ACCOUNT_DELETED
     if disputed_lost_cents > 0:
         return DriftCause.DISPUTE
     if refunded_cents > 0:
@@ -149,7 +165,8 @@ def _classify_cause(delta_cents: int, local_cents: int, pi_count: int,
 def classify_users(local_by_user: dict, stripe_agg: dict) -> list[dict]:
     """Build per-user reconciliation rows. Pure over fetched data.
 
-    ``local_by_user``: ``{user_id: {"email": str|None, "local_cents": int}}``.
+    ``local_by_user``: ``{user_id: {"email": str|None, "local_cents": int,
+    "account_exists": bool}}`` (``account_exists`` defaults True when absent).
     ``stripe_agg``: output of :func:`build_stripe_net_by_user`.
     Covers the union of both key sets; ``delta = local - stripe_net`` (positive = the
     local cache is too high, the common case).
@@ -158,13 +175,17 @@ def classify_users(local_by_user: dict, stripe_agg: dict) -> list[dict]:
     for uid in set(local_by_user) | set(stripe_agg):
         local = local_by_user.get(uid, {})
         local_cents = local.get("local_cents", 0)
+        # T8640: a user in stripe_agg but absent from local_by_user has no local
+        # account (deleted payer); default True only for entries we DO have.
+        account_exists = local.get("account_exists", True)
         s = stripe_agg.get(uid, {})
         stripe_net = s.get("net_cents", 0)
         pi_count = s.get("pi_count", 0)
         refunded = s.get("refunded_cents", 0)
         disputed_lost = s.get("disputed_lost_cents", 0)
         delta = local_cents - stripe_net
-        cause = _classify_cause(delta, local_cents, pi_count, refunded, disputed_lost)
+        cause = _classify_cause(delta, local_cents, pi_count, refunded, disputed_lost,
+                                local_account_exists=account_exists)
         rows.append({
             "user_id": uid,
             "email": local.get("email"),
@@ -177,6 +198,7 @@ def classify_users(local_by_user: dict, stripe_agg: dict) -> list[dict]:
             "cause": cause.value,
             "pi_count": pi_count,
             "has_pending_dispute": s.get("has_pending_dispute", False),
+            "account_exists": account_exists,
             "drifted": delta != 0,
         })
     # Drifted first, largest absolute drift on top; aligned rows after.
