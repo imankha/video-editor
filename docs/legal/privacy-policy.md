@@ -140,8 +140,11 @@ We share your information only with service providers who assist in operating th
 | Processing artifacts (GPU intermediates) | Automatically deleted after export completes |
 | Session tokens | 30 days maximum, or until logout |
 | OTP codes | Expire after 10 minutes |
+| Transaction records (payment amounts, keyed to an opaque account id; no name, email, or card data) | Retained after account deletion to meet tax and accounting legal obligations |
 
-Upon account deletion request, all data is permanently deleted within 45 days (CCPA compliance deadline). See our [Data Retention Policy](data-retention-policy.md) for details.
+Upon account deletion request, your personal data is permanently deleted within 45 days (CCPA compliance deadline). A small set of records is kept, for the legal and security reasons described below. See our [Data Retention Policy](data-retention-policy.md) for details.
+
+After deletion we keep a small set of records, each keyed to an opaque account id with no name, email, or contact details: transaction records (payment amounts and dates) to meet tax and accounting obligations; a record that the account was deleted, including when and through which path, to evidence that the erasure happened; and, where support staff accessed the account, the security log of that access to protect the account and our systems. We also keep the text of any bug reports you submitted, with your email, device details, and attachments removed, to help us fix the problems you reported, and usage and activity statistics in de-identified form to understand how the product is used. Keeping these records does not delay or limit erasure of your personal data.
 
 ---
 
@@ -154,7 +157,7 @@ If you are a California resident (or where otherwise required by law), you have 
 You may request a copy of all personal information we hold about you. Use the "Download My Data" button in Account Settings or email us.
 
 ### Right to Delete
-You may request deletion of your personal information. Use the "Delete My Account" button in Account Settings or email us. Deletion is permanent and immediate.
+You may request deletion of your personal information. Use the "Delete My Account" button in Account Settings or email us. Deletion is permanent and immediate. A limited set of records survives deletion, each keyed to an opaque account id with no name, email, or contact details: transaction records (payment amounts and dates) to meet tax and accounting obligations, a record that the account was deleted to evidence the erasure, any security log of staff access to the account, the text of any bug reports you submitted (with your email, device details, and attachments removed) to help us fix the problems you reported, and usage and activity statistics in de-identified form. These records are described in full in Section 4 (Data Retention) above and in our [Data Retention Policy](data-retention-policy.md). We never refuse your erasure request on this basis; your personal data is still erased.
 
 ### Right to Correct
 You may request correction of inaccurate personal information by contacting us.

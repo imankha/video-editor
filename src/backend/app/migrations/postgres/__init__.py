@@ -31,6 +31,9 @@ from .v027_daily_counters_clips_uploaded import V027DailyCountersClipsUploaded
 from .v028_bug_reports_client_id import V028BugReportsClientId
 from .v029_upload_failures import V029UploadFailures
 from .v030_payments_ledger import V030PaymentsLedger
+from .v031_account_deletions import V031AccountDeletions
+from .v032_analytics_survive_deletion import V032AnalyticsSurviveDeletion
+from .v033_user_segments_was_test_account import V033UserSegmentsWasTestAccount
 
 MIGRATIONS = [
     V001Baseline(),
@@ -63,6 +66,9 @@ MIGRATIONS = [
     V028BugReportsClientId(),
     V029UploadFailures(),
     V030PaymentsLedger(),
+    V031AccountDeletions(),
+    V032AnalyticsSurviveDeletion(),
+    V033UserSegmentsWasTestAccount(),
 ]
 
 # T5089: postgres stays floor=0 FOREVER. A fresh postgres DB runs _SCHEMA_DDL

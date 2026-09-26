@@ -460,12 +460,18 @@ def test_nuf_reset_still_purges_storage_and_caches(hermetic, monkeypatch):
     pid = "99990000"
     _seed_caches(uid, pid, hermetic)
 
-    # Stub Postgres so the share/identity cleanup is a harmless no-op.
+    # Stub Postgres so the share/identity cleanup is a harmless no-op. T8630:
+    # _reset_test_account now also calls record_account_deletion, which reads
+    # `to_regclass(...)` results before doing anything else -- report both
+    # `payments` and `account_deletions` as absent so it takes the
+    # table-absent no-op branches (no COUNT/SUM/INSERT against a mock).
     import contextlib
 
     @contextlib.contextmanager
     def _stub_pg():
-        yield MagicMock()
+        conn = MagicMock()
+        conn.cursor.return_value.fetchone.return_value = {"ok": False}
+        yield conn
 
     monkeypatch.setattr("app.services.pg.get_pg", _stub_pg)
     auth._reset_test_account(uid, "nuf@test.local")

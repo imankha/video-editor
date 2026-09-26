@@ -74,5 +74,5 @@ transient toast with the tooltip sentence, existing `toast.info(..., {dedupKey:
 
 ## Acceptance Criteria
 
-- [ ] User has picked A and B, approved C, D and the palette (or given a redirect)
-- [ ] Picks recorded in this file and copied into T11110 / T11150 / T11120 / T11130 / T11140
+- [x] User has picked A and B, approved C, D and the palette (or given a redirect)
+- [x] Picks recorded in this file and copied into T11110 / T11150 / T11120 / T11130 / T11140

@@ -230,6 +230,10 @@ async def delete_account(request: Request):
 
     Deletes: R2 objects, local files, auth DB records, sessions.
     Modeled after _reset_test_account() in auth.py.
+
+    T8630: never refuses. Payment records are retained (stamped
+    `account_deleted_at`, never deleted) to meet tax/accounting obligations,
+    and the deletion itself is recorded in `account_deletions`.
     """
     user_id = get_current_user_id()
     logger.info(f"[Privacy] Account deletion requested: user={user_id}")
@@ -256,13 +260,59 @@ async def delete_account(request: Request):
     #    of the users row. (T6770: the matching `game_storage_refs` FK is now covered --
     #    _purge_user_data deletes the user's game_storage_refs rows before this runs, since
     #    that table is now the LIVE derived ref-set, not the dead pre-T2930 table it was.)
+    bug_r2_keys: list[str] = []
     try:
+        from app.services.account_deletions import (
+            DeletionActor,
+            DeletionPath,
+            record_account_deletion,
+        )
+        from app.services.bug_reports import anonymize_bug_reports
+        from app.services.payments_ledger import stamp_account_deleted
         from app.services.pg import get_pg
         with get_pg() as conn:
             cur = conn.cursor()
-            cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
-            cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
-            cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
+            # bug_reports has no user_id column -- it is keyed by reporter_email
+            # (pg.py _SCHEMA_DDL), so read the email BEFORE the DELETE FROM users
+            # below to anonymize the user's reports in this same transaction.
+            # T8630 r5: read is_test_account here too (BEFORE the DELETE FROM
+            # users below) so deidentify_user_segments can snapshot it onto the
+            # kept segment row -- the admin test-exclusion views need it once the
+            # `users` row is gone.
+            cur.execute("SELECT email, is_test_account FROM users WHERE user_id = %s", (user_id,))
+            _row = cur.fetchone()
+            email = _row["email"] if _row else None
+            was_test_account = bool(_row["is_test_account"]) if _row else None
+            # T8630: the ledger stamp + audit row commit atomically with the
+            # DELETE FROM users below -- same transaction, so a rollback here
+            # leaves neither a stamp nor an audit row, never a mismatched pair.
+            stamp_account_deleted(cur, user_id)
+            record_account_deletion(
+                cur, user_id=user_id, actor=DeletionActor.SELF, path=DeletionPath.PRIVACY_ENDPOINT,
+            )
+            # T8630 round 3: keep the TEXT of the user's bug reports (to fix
+            # problems) but clear every identifying/device/attachment column, in
+            # this transaction. The returned R2 object keys (screenshots +
+            # console logs) are deleted AFTER commit, with the other storage.
+            bug_r2_keys = anonymize_bug_reports(cur, email)
+            # T8630 round 4 (REVERSES round 2's analytics purge for real
+            # deletions): keep the user's analytics rows -- user_segments (identity
+            # stripped, see deidentify_user_segments), user_actions and
+            # user_usage_daily (kept as-is; every column is a non-identifying
+            # event/count/day), and referrals (opaque ids) -- under the same
+            # opaque user_id so the payments ledger's channel/cohort revenue still
+            # attributes. The FKs to `users` are dropped in v032 so these rows
+            # survive the DELETE FROM users below.
+            from app.analytics import deidentify_user_segments
+            deidentify_user_segments(cur, user_id, was_test_account=was_test_account)
+            # T8630 round 3: short-lived login OTPs (keyed by email) and the
+            # user's own share-claim links (opaque claimer_user_id, not needed
+            # once the account is gone) are personal data purged on a real
+            # erasure. share_claims.claimer_user_id is NOT NULL, so the row is
+            # deleted rather than nulled.
+            if email:
+                cur.execute("DELETE FROM otp_codes WHERE email = %s", (email,))
+            cur.execute("DELETE FROM share_claims WHERE claimer_user_id = %s", (user_id,))
             # T5840: credits/credit_transactions/credit_reservations are purged
             # by _purge_user_data above (shared with DELETE /api/auth/user) --
             # do not duplicate the deletes here.
@@ -271,6 +321,19 @@ async def delete_account(request: Request):
     except Exception as e:
         logger.error(f"[Privacy] Auth DB cleanup failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete account records") from e
+
+    # 2b. Delete the bug-report R2 attachments (global keys, NOT under the
+    #     user prefix _purge_user_data walked). Post-commit: R2 deletion is not
+    #     transactional, and the DB row is already anonymized regardless. A
+    #     failure here is logged, never fatal -- the identifying columns are gone
+    #     and a leftover object can be re-purged.
+    if bug_r2_keys:
+        from app.storage import r2_delete_object_global
+        for key in bug_r2_keys:
+            try:
+                r2_delete_object_global(key)
+            except Exception as e:
+                logger.warning(f"[Privacy] Bug attachment purge failed for {key}: {e}")
 
     # 3. Clear session cookie
     response = JSONResponse(content={"deleted": True, "user_id": user_id})

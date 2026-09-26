@@ -36,6 +36,11 @@ Delete `test_t4355_multiclip_carry.py`, most of `test_t5225_clip_boundaries.py`;
 
 ### Related Tasks
 - Depends on: T11220, T11250
+- **Preserve (T10190, merged PR #492, do not delete):** `OverlayScreen.jsx`'s completion-preview
+  payload shaper (currently ~177-179 comment + ~1874-1882, feeds already-derived `gameName` and
+  RAW `gameStartTime`/`gameId` to `CollectionPlayer`, gating the "Back to game plays" backlink).
+  Distinct from the `hasMultipleClips` gates this task removes, but in the same file — grep
+  `T10190` in `OverlayScreen.jsx` before finishing to confirm it still compiles and fires.
 
 ## Acceptance Criteria
 

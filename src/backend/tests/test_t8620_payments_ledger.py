@@ -1231,9 +1231,13 @@ class TestG2BackgroundFillRealPath:
 
 
 class TestT11AppendOnlyGrep:
-    """Design §10 T11 / ruling 2 (amended): no `UPDATE payments` outside
-    `fill_missing_charge_id`'s own definition, and no `DELETE FROM payments`
-    anywhere in app/ or scripts/.
+    """Design §10 T11 / ruling 2 (amended), widened by T8630 design §4.4: no
+    `UPDATE payments` outside the two whitelisted in-place writes
+    (`fill_missing_charge_id`'s `stripe_charge_id` fill, and T8630's
+    `stamp_account_deleted`'s `account_deleted_at` stamp), and no `DELETE
+    FROM payments` anywhere in app/ or scripts/. T8630 also adds a DB-level
+    trigger (`trg_payments_append_only`) enforcing the same invariant
+    structurally, in addition to this grep.
 
     NOTE: this test does not need to start red -- there is nothing to grep yet
     (no payments_ledger.py, no backfill script, no payments.py writes against a
@@ -1259,10 +1263,11 @@ class TestT11AppendOnlyGrep:
         return violations
 
     def _is_whitelisted_update(self, file_path: Path, line: str):
-        # The one permitted UPDATE: fill_missing_charge_id's own statement.
-        return (
-            file_path.name == "payments_ledger.py"
-            and "stripe_charge_id" in line
+        # The two permitted UPDATEs, both in payments_ledger.py (the sole
+        # writer of `payments`): fill_missing_charge_id's stripe_charge_id
+        # fill, and T8630's stamp_account_deleted account_deleted_at stamp.
+        return file_path.name == "payments_ledger.py" and (
+            "stripe_charge_id" in line or "account_deleted_at" in line
         )
 
     def test_no_disallowed_update_or_delete_against_payments(self):

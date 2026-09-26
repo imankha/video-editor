@@ -139,6 +139,56 @@ def _record_refund_ledger(
         return False
 
 
+def _record_dispute_lost_ledger(
+    *, user_id, stripe_object_id, amount_cents, currency, stripe_charge_id,
+    occurred_at, source, reraise: bool,
+):
+    """Dispute counterpart to `_record_purchase_ledger` (design §4; T8675 is the
+    first LIVE caller of `record_dispute_lost`, which T8620 shipped for backfill).
+    A lost dispute pulls money out of our account like a refund, so the cache is
+    decremented (negative `amount_cents`) only when a NEW row is inserted."""
+    try:
+        with get_pg() as conn:
+            cur = conn.cursor()
+            inserted = payments_ledger.record_dispute_lost(
+                cur, user_id=user_id, stripe_object_id=stripe_object_id,
+                amount_cents=amount_cents, currency=currency,
+                stripe_charge_id=stripe_charge_id, occurred_at=occurred_at,
+                source=source,
+            )
+            if inserted:
+                payments_ledger.bump_total_spent(cur, user_id, amount_cents)
+        return inserted
+    except Exception:
+        logger.critical(
+            "[Payments] Ledger insert failed for dispute dp=%s user=%s amount_cents=%s "
+            "source=%s", stripe_object_id, user_id, amount_cents, source, exc_info=True,
+        )
+        if reraise:
+            raise
+        return False
+
+
+def _user_id_via_payment_intent(obj) -> str | None:
+    """Resolve our user_id for a Stripe Refund or Dispute. We set metadata.user_id
+    on the PaymentIntent (not on refunds/disputes), so resolve through the object's
+    `payment_intent` reference and read the PI's metadata -- the same PI-retrieve
+    fallback `_user_id_for_charge` already uses for the `charge.refunded` path."""
+    meta = _field(obj, "metadata") or {}
+    if meta.get("user_id"):
+        return meta["user_id"]
+    pi_id = _field(obj, "payment_intent")
+    if isinstance(pi_id, dict):
+        pi_id = pi_id.get("id")
+    if pi_id:
+        try:
+            pi = stripe.PaymentIntent.retrieve(pi_id)
+            return (pi.get("metadata") or {}).get("user_id")
+        except stripe.StripeError as e:
+            logger.error(f"[Payments] Failed to retrieve PI {pi_id} to resolve user_id: {e}")
+    return None
+
+
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 # ---------------------------------------------------------------------------
@@ -691,6 +741,115 @@ async def stripe_webhook(request: Request):
             f"succeeded_cents={total_cents}, new_rows={recorded}"
         )
         return {"status": "refund_recorded", "user_id": user_id, "cents": total_cents, "new_rows": recorded}
+
+    # Handle a LOST dispute (T8675 -- first LIVE caller of record_dispute_lost).
+    #
+    # EVENT CHOICE: `charge.dispute.closed` gated on `status == "lost"`, NOT
+    # `funds_withdrawn`/`funds_reinstated`. Stripe withdraws funds when a dispute is
+    # CREATED and reinstates them if it is later WON, so `funds_withdrawn` is not a
+    # terminal signal -- writing a `dispute_lost` row there would need a compensating
+    # positive row on a later win, but the ledger is append-only and deliberately
+    # never records `dispute_won` as money (design §2b). `charge.dispute.closed`
+    # fires exactly once at terminal resolution with a definitive `status`, so a
+    # single row with no reversal is possible -- matching the append-only model and
+    # the reconciler's LOST_DISPUTE_STATUSES.
+    #
+    # We record ONLY `status == "lost"`. `won`/`warning_closed` leave the funds with
+    # us (the purchase row already reflects them). `charge_refunded` (a dispute
+    # resolved by refunding the charge) is deliberately NOT recorded here: that money
+    # is captured by the charge.refunded -> refund-row path above, and the reconciler
+    # nets `max(lost_dispute - refunded, 0)`; a dispute_lost row here too would
+    # double-count in the append-only ledger. A genuine lost dispute has no refund,
+    # so the full `-amount` matches the reconciler's full-subtract branch.
+    #
+    # OPERATOR STEP: like charge.refunded, this only fires once `charge.dispute.closed`
+    # is subscribed on the LIVE-mode webhook endpoint in the Stripe dashboard.
+    if event["type"] == "charge.dispute.closed":
+        dispute = event["data"]["object"]
+        dp_id = _field(dispute, "id")
+        status = _field(dispute, "status")
+        if status != "lost":
+            logger.info(f"[Payments] charge.dispute.closed non-lost status={status} dp={dp_id}, no row")
+            return {"status": "ignored", "type": "charge.dispute.closed", "dispute_status": status}
+
+        charge_id = _field(dispute, "charge")
+        user_id = _user_id_via_payment_intent(dispute)
+        if not user_id:
+            logger.error(f"[Payments] charge.dispute.closed without resolvable user_id: dp={dp_id}")
+            return {"status": "error", "message": "No user_id"}
+
+        amount = _field(dispute, "amount") or 0
+        if amount <= 0:
+            logger.critical(
+                "[Payments] charge.dispute.closed lost dispute %s has no amount -- "
+                "internal inconsistency, not inserting a ledger row", dp_id,
+            )
+            return {"status": "ignored", "type": "charge.dispute.closed", "dispute_status": status}
+
+        # Webhook site: ledger failure logs CRITICAL and RE-RAISES so Stripe
+        # redelivers (design §5, ruling 4c). Idempotent on (dp_..., dispute_lost);
+        # cache decremented only when a NEW row is inserted.
+        inserted = _record_dispute_lost_ledger(
+            user_id=user_id, stripe_object_id=dp_id, amount_cents=-amount,
+            currency=_field(dispute, "currency") or "usd", stripe_charge_id=charge_id,
+            occurred_at=_stripe_ts(_field(dispute, "created")),
+            source=payments_ledger.PaymentSource.WEBHOOK.value,
+            reraise=True,
+        )
+        logger.info(
+            f"[Payments] Lost dispute {'recorded' if inserted else 'already recorded'}: "
+            f"user={user_id}, dp={dp_id}, charge={charge_id}, cents={amount}"
+        )
+        return {"status": "dispute_recorded" if inserted else "already_recorded",
+                "user_id": user_id, "dispute": dp_id, "cents": amount}
+
+    # Handle a refund that SETTLES LATER (T8675). charge.refunded (above) records
+    # only refunds already `succeeded` at that moment; a refund still `pending` then
+    # is skipped and never re-observed by that event. Stripe fires a refund-update
+    # event when the refund transitions (e.g. pending -> succeeded) on
+    # delayed-settlement methods. Both `charge.refund.updated` (sent on most/legacy
+    # API versions) and `refund.updated` (the newer top-level event) carry a Refund
+    # object; this codebase pins no API version, so handle BOTH -- the shared
+    # (re_..., refund) unique key makes it a no-op if both fire, and converges with
+    # any row the charge.refunded path already wrote.
+    if event["type"] in ("charge.refund.updated", "refund.updated"):
+        refund = event["data"]["object"]
+        re_id = _field(refund, "id")
+        # Same status rule as charge.refunded: only `succeeded` refunds moved money
+        # (matches the reconciler netting on cumulative amount_refunded). A refund
+        # that later fails/cancels is simply never recorded.
+        if _field(refund, "status") != "succeeded":
+            logger.info(f"[Payments] {event['type']} non-succeeded status for re={re_id}, no row")
+            return {"status": "ignored", "type": event["type"]}
+
+        amount = _field(refund, "amount") or 0
+        if amount <= 0 or not re_id:
+            logger.info(f"[Payments] {event['type']} with no amount/id (re={re_id}), no row")
+            return {"status": "ignored", "type": event["type"]}
+
+        user_id = _user_id_via_payment_intent(refund)
+        if not user_id:
+            logger.error(f"[Payments] {event['type']} without resolvable user_id: re={re_id}")
+            return {"status": "error", "message": "No user_id"}
+
+        # Webhook site: ledger failure logs CRITICAL and RE-RAISES (design §5,
+        # ruling 4c). Idempotent on (re_..., refund) so a redelivery, the newer
+        # refund.updated firing alongside charge.refund.updated, or an already-
+        # recorded refund from charge.refunded is all a safe no-op.
+        inserted = _record_refund_ledger(
+            user_id=user_id, stripe_object_id=re_id, amount_cents=-amount,
+            currency=_field(refund, "currency") or "usd",
+            stripe_charge_id=_field(refund, "charge"),
+            occurred_at=_stripe_ts(_field(refund, "created")),
+            source=payments_ledger.PaymentSource.WEBHOOK.value,
+            reraise=True,
+        )
+        logger.info(
+            f"[Payments] Late-settled refund {'recorded' if inserted else 'already recorded'}: "
+            f"user={user_id}, re={re_id}, cents={amount}"
+        )
+        return {"status": "refund_recorded", "user_id": user_id, "cents": amount,
+                "new_rows": 1 if inserted else 0}
 
     # Return 200 for all other event types (Stripe expects it)
     return {"status": "ignored", "type": event["type"]}

@@ -81,16 +81,25 @@ def _compute_last_step(actions: set[str]) -> str:
 # T8110: test-account exclusion + whitelisted global sort for list_users
 # ---------------------------------------------------------------------------
 
-def _test_exclusion(exclude_test: bool) -> str:
+def _test_exclusion(exclude_test: bool, seg: str = "s") -> str:
     """WHERE fragment excluding internal/test accounts, or '' when off.
 
-    The SINGLE place the literal `NOT u.is_test_account` lives (DRY). Returns a
-    static, param-free string so it composes into any where_parts list by append.
-    It is INDEPENDENT of _build_segment_filter's single-value userFilter -- the
-    "Real" pill never joins the exclusive segment set, so Real + Paying = real
-    paying users. Every consumer must have (or JOIN) a `users u` alias.
+    The SINGLE place the test-exclusion predicate lives (DRY). Returns a static,
+    param-free string so it composes into any where_parts list by append. It is
+    INDEPENDENT of _build_segment_filter's single-value userFilter -- the "Real"
+    pill never joins the exclusive segment set, so Real + Paying = real paying
+    users.
+
+    T8630 r5: prefer the LIVE `users.is_test_account`, but fall back to the
+    per-row `{seg}.was_test_account` snapshot for a DELETED account (whose `users`
+    row is gone but whose de-identified `user_segments` row is kept for revenue
+    attribution), else treat as not-test. So a deleted payer keeps the exact
+    exclusion status it had while live instead of dropping out of every
+    `exclude_test=true` view and leaking into Unattributed revenue. Every consumer
+    must LEFT JOIN `users u` (so a deleted account's segment row survives the join)
+    AND expose the `{seg}` (user_segments) alias that carries was_test_account.
     """
-    return "NOT u.is_test_account" if exclude_test else ""
+    return f"NOT COALESCE(u.is_test_account, {seg}.was_test_account, false)" if exclude_test else ""
 
 
 # ---------------------------------------------------------------------------
@@ -110,21 +119,24 @@ def _ledger_revenue_total(cur, exclude_test: bool) -> int:
     """Grand-total net revenue straight from the ledger. `amount_cents` is signed
     (refunds and lost disputes are negative), so the SUM is already net.
 
-    NO `user_segments` join: a deleted payer has no segment row, and this number
-    must still count their money (the whole point of the ledger). Test accounts
-    are excluded via a `users` ANTI-join, so a test purchase is dropped WHILE its
-    users row exists but is counted again once that row is deleted -- there is no
-    users row left to recognise it by (documented reason not to delete internal
-    test accounts). `account_deleted_at` is NEVER a filter here."""
+    A deleted REAL payer must still count (the whole point of the ledger); a
+    deleted TEST payer must NOT (or its money leaks into the real Unattributed
+    remainder). T8630 r5: LEFT JOIN both `users` (live flag) and `user_segments`
+    (the was_test_account snapshot kept on a deleted account) and exclude with the
+    SAME predicate the grouped bucket views use -- NOT COALESCE(u.is_test_account,
+    s.was_test_account, false) -- so this grand total and the buckets agree on
+    exactly which payers are test accounts, whether alive or deleted. (Before r5
+    a deleted test purchase was silently re-counted here: its `users` row was gone
+    so the anti-join no longer recognised it.) `account_deleted_at` is NEVER a
+    filter here."""
     if exclude_test:
         cur.execute(
-            """
+            f"""
             SELECT COALESCE(SUM(p.amount_cents), 0) AS total
             FROM payments p
-            WHERE NOT EXISTS (
-                SELECT 1 FROM users u
-                WHERE u.user_id = p.user_id AND u.is_test_account
-            )
+            LEFT JOIN users u ON u.user_id = p.user_id
+            LEFT JOIN user_segments s ON s.user_id = p.user_id
+            WHERE {_test_exclusion(True)}
             """
         )
     else:
@@ -150,12 +162,16 @@ def _grouped_view_grand_total(cur, exclude_test: bool, origin: str | None = None
 
     T8650 round 2 (item 5): when a real `origin` filter is active the grand total must
     be scoped to THAT origin's payers, never the whole platform -- otherwise the
-    remainder would silently absorb every other origin's revenue. A filtered view joins
-    user_segments, so a deleted payer (no segment row) can never be in scope, which is
-    correct: their money only belongs in the unfiltered platform remainder."""
+    remainder would silently absorb every other origin's revenue.
+
+    T8630 r5: a deleted payer KEEPS its (de-identified) segment row now, so it IS in
+    scope of an origin filter -- the users join is LEFT so the deleted row survives,
+    and test exclusion falls back to the was_test_account snapshot (see
+    _test_exclusion). Its money belongs in its real origin, matching the grouped
+    bucket query, so attributed + remainder still reconciles within the origin."""
     if origin and origin != "all":
         excl = _test_exclusion(exclude_test)
-        join = " JOIN users u ON u.user_id = s.user_id" if excl else ""
+        join = " LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
         where = "WHERE s.origin = %s" + (f" AND {excl}" if excl else "")
         cur.execute(f"""
             SELECT COALESCE(SUM(pay.revenue_cents), 0) AS total
@@ -426,6 +442,15 @@ def list_users(
         if seg_parts:
             funnel_joins += " JOIN user_segments s ON a.user_id = s.user_id"
         if excl:
+            # T8630 r5: the shared exclusion predicate now falls back to
+            # s.was_test_account, so user_segments must be in scope. A segment
+            # filter already INNER-joins it above; otherwise LEFT JOIN it just for
+            # the flag. `users` stays an INNER join here, so this per-page funnel
+            # count keeps excluding deleted accounts exactly as before -- u is
+            # always present on a surviving row, so the was_test_account fallback
+            # is inert and exists only so the shared predicate resolves.
+            if not seg_parts:
+                funnel_joins += " LEFT JOIN user_segments s ON a.user_id = s.user_id"
             funnel_joins += " JOIN users u ON a.user_id = u.user_id"
         funnel_where_parts = [*seg_parts]
         if excl:
@@ -1487,8 +1512,10 @@ def analytics_funnel(
 
     # T8110: exclude internal accounts from the population funnel. These queries
     # key on user_segments s, so join users u to reach the flag.
+    # T8630 r5: LEFT JOIN so a deleted account's kept segment row survives the
+    # join; the predicate falls back to s.was_test_account (see _test_exclusion).
     excl = _test_exclusion(exclude_test)
-    excl_join = " JOIN users u ON u.user_id = s.user_id" if excl else ""
+    excl_join = " LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
     excl_and = f" AND {excl}" if excl else ""
 
     with get_pg() as conn:
@@ -1565,8 +1592,10 @@ def analytics_channels(
     d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
 
     # T8110: exclude internal accounts from this population channel breakdown.
+    # T8630 r5: LEFT JOIN so a deleted account's kept segment row survives the
+    # join; the predicate falls back to s.was_test_account (see _test_exclusion).
     excl = _test_exclusion(exclude_test)
-    excl_join = " JOIN users u ON u.user_id = s.user_id" if excl else ""
+    excl_join = " LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
     excl_and = f" AND {excl}" if excl else ""
 
     with get_pg() as conn:
@@ -1589,10 +1618,11 @@ def analytics_channels(
                 COUNT(pur.user_id) AS purchased,
                 COALESCE(SUM(exp.export_count), 0) AS total_exports,
                 -- T8650: per-origin revenue from the payments ledger (pre-aggregated
-                -- per user, so it doesn't fan out exp/pur). A deleted payer has no
-                -- segment row and so lands in no origin bucket -- correct for this
-                -- grouped view; the money it drops is surfaced as the unattributed
-                -- remainder below, never silently lost.
+                -- per user, so it doesn't fan out exp/pur). T8630 r5: a deleted payer
+                -- KEEPS its (de-identified) segment row and the users join is LEFT, so
+                -- its money now lands in its REAL origin bucket instead of dropping to
+                -- the unattributed remainder. Only payers with no segment row at all,
+                -- or acquired outside the window, remain in the remainder below.
                 COALESCE(SUM(pay.revenue_cents), 0) AS revenue_cents
             FROM user_segments s
             LEFT JOIN (
@@ -1614,10 +1644,12 @@ def analytics_channels(
         """, (d_from, d_to))
         rows = cur.fetchall()
 
-        # T8650: revenue the origin buckets could not attribute (deleted payers with
-        # no segment row, or payers acquired outside this window) shown as an explicit
-        # remainder so attributed + unattributed == the ledger grand total -- the
-        # project rule that a number must not hide what it excluded.
+        # T8650: revenue the origin buckets could not attribute (payers with no
+        # segment row at all, or payers acquired outside this window) shown as an
+        # explicit remainder so attributed + unattributed == the ledger grand total --
+        # the project rule that a number must not hide what it excluded. T8630 r5:
+        # deleted payers no longer fall here -- they keep a segment row and attribute
+        # to their real origin.
         grand_total = _ledger_revenue_total(cur, exclude_test)
 
     channels = []
@@ -1754,8 +1786,10 @@ def analytics_cohorts(
     # T8110: exclude internal accounts from all four cohort aggregations. The
     # predicate rides the shared where_clause; each query's FROM adds the users u
     # join (excl_join) so `u` resolves.
+    # T8630 r5: LEFT JOIN so a deleted account's kept segment row survives the
+    # join; the predicate falls back to s.was_test_account (see _test_exclusion).
     excl = _test_exclusion(exclude_test)
-    excl_join = " JOIN users u ON u.user_id = s.user_id" if excl else ""
+    excl_join = " LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
     if excl:
         where_parts.append(excl)
     where_clause = "WHERE " + " AND ".join(where_parts)
@@ -1768,8 +1802,9 @@ def analytics_cohorts(
                 date_trunc(%s, s.acquired_at)::date AS cohort_period,
                 COUNT(*) AS signups,
                 -- T8650: cohort revenue from the payments ledger (pre-aggregated per
-                -- user). A deleted payer has no segment row -> no cohort; that money
-                -- is surfaced as the unattributed remainder below, not dropped.
+                -- user). T8630 r5: a deleted payer KEEPS its segment row and the users
+                -- join is LEFT, so it stays in its real acquisition cohort instead of
+                -- dropping to the unattributed remainder below.
                 COALESCE(SUM(pay.revenue_cents), 0) AS revenue_cents
             FROM user_segments s
             LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
@@ -1783,11 +1818,13 @@ def analytics_cohorts(
             cp = str(r["cohort_period"])
             signup_data[cp] = {"signups": r["signups"], "revenue_cents": r["revenue_cents"] or 0}
 
-        # T8650: revenue no cohort could attribute (deleted payers when unfiltered, or
-        # payers acquired outside this window) -> explicit remainder so attributed +
+        # T8650: revenue no cohort could attribute (payers with no segment row at all,
+        # or payers acquired outside this window) -> explicit remainder so attributed +
         # unattributed == the grand total. Round 2 (item 5): the grand total is scoped to
         # the active `origin` filter, so `/cohorts?origin=X` reconciles WITHIN origin X
-        # instead of absorbing every other origin's revenue into the remainder.
+        # instead of absorbing every other origin's revenue into the remainder. T8630 r5:
+        # deleted payers keep a segment row and attribute to their real cohort, so they
+        # no longer fall into this remainder.
         cohort_grand_total = _grouped_view_grand_total(cur, exclude_test, origin)
 
         cur.execute(f"""
@@ -2204,10 +2241,12 @@ def analytics_pulse(
     # the exclusion predicate to filter_parts (making has_filter true) and joining
     # users u into each segment query. This is the accepted default cost of a
     # test-account-free pulse (user decision 2026-09-01).
+    # T8630 r5: LEFT JOIN so a deleted account's kept segment row survives the
+    # join; the predicate falls back to s.was_test_account (see _test_exclusion).
     excl = _test_exclusion(exclude_test)
     if excl:
         filter_parts = [*filter_parts, excl]
-    seg_join = " JOIN users u ON u.user_id = s.user_id" if excl else ""
+    seg_join = " LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
     has_filter = bool(filter_parts)
 
     with get_pg() as conn:
@@ -2539,8 +2578,16 @@ def analytics_platforms(
     # T8110: this is a real population aggregate ("% of users/actions on
     # mobile/desktop/pwa") and the heavy test accounts skew it. user_actions has
     # no user join today, so alias it `ua` and join users u to reach the flag.
+    # T8630 r5: LEFT JOIN so a deleted account's kept user_actions rows survive,
+    # and also LEFT JOIN user_segments s so the predicate can fall back to the
+    # was_test_account snapshot once the `users` row is gone (see _test_exclusion).
+    # Both joins are keyed on ua.user_id and neither fans out (user_segments PK is
+    # user_id, users PK is user_id), so the per-user/action counts are unchanged.
     excl = _test_exclusion(exclude_test)
-    excl_join = " JOIN users u ON u.user_id = ua.user_id" if excl else ""
+    excl_join = (
+        " LEFT JOIN user_segments s ON s.user_id = ua.user_id"
+        " LEFT JOIN users u ON u.user_id = ua.user_id"
+    ) if excl else ""
 
     with get_pg() as conn:
         cur = conn.cursor()

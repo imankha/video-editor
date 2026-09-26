@@ -82,8 +82,8 @@ T11120 -> T11130 are strict (same files: `AnnotateFullscreenOverlay.jsx`, `Detai
 
 | ID | Task | Tier | Status |
 |----|------|------|--------|
-| T11100 | [UX design gate: editor layout, rating modal, Highlight popup, mode bar](T11100-ux-design-gate.md) | design | WAITING ON USER |
-| T11110 | [Rating 5 becomes "Highlight", in gold](T11110-brilliant-to-highlight-rename.md) | M | TODO |
+| T11100 | [UX design gate: editor layout, rating modal, Highlight popup, mode bar](T11100-ux-design-gate.md) | design | DECIDED |
+| T11110 | [Rating 5 becomes "Highlight", in gold](T11110-brilliant-to-highlight-rename.md) | M | STAGING (merged PR #503, proof VERIFIED, CI green) |
 | T11150 | [Play editor hierarchy (time, name + rating, details) and no "clip" wording in Annotate](T11150-play-editor-hierarchy-no-clip-word.md) | M | TODO |
 | T11120 | [Unrated Done opens the "Rate this play" modal](T11120-require-rating-gate.md) | M | TODO |
 | T11130 | [Highlight popup: Make Highlight Now / Highlight Later; remove Create clip + Frame CTAs](T11130-done-popup-highlight-choice.md) | L | TODO |

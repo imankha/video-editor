@@ -1,6 +1,6 @@
 # T8675: Dispute webhook writes ledger rows
 
-**Status:** TODO
+**Status:** STAGING (merged 2026-09-25, PR #512, a5ea6fbb; proof VERIFIED at ecf340ca, Branch CI green. Operator: subscribe live webhook to charge.dispute.closed, charge.refund.updated, refund.updated)
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-24
@@ -47,6 +47,19 @@ T8620 records only `succeeded` refunds when `charge.refunded` fires. A refund th
 the ledger only on another refund event for the same charge or a backfill re-run. Card refunds
 normally succeed immediately, so the exposure is small. Handle `charge.refund.updated` (or
 `refund.updated`) through the same idempotent `record_refund` path.
+
+## Operator note (webhook subscriptions)
+
+The live-mode webhook endpoint in the Stripe dashboard must subscribe to the events this task
+handles, alongside the existing `charge.refunded` subscription from T8620 (webhook events are
+per-endpoint and per-mode, so a code branch does nothing until its event is subscribed):
+
+- `charge.dispute.closed` (chosen over `charge.dispute.funds_withdrawn`/`funds_reinstated`: only
+  `closed` is terminal, so a single append-only `dispute_lost` row on `status == "lost"` needs no
+  later reversal; funds_withdrawn fires at dispute creation and can still be reinstated on a win).
+- `charge.refund.updated` (sent for a refund status transition on most/legacy API versions) AND
+  `refund.updated` (the newer top-level equivalent). We pin no Stripe API version, so subscribe to
+  both; the shared `(re_..., refund)` idempotency key makes handling both a safe no-op if both fire.
 
 ## Acceptance Criteria
 

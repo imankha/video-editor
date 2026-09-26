@@ -168,14 +168,14 @@ Order is dependency order: the record must exist before anything can read it or 
 | ID | Task | Status |
 |----|------|--------|
 | T8620 | [Append-only payments ledger + Stripe backfill](T8620-payments-ledger.md) | STAGING |
-| T8630 | [Deletion preserves the financial record and is auditable](T8630-deletion-preserves-financial-record.md) | WIP |
-| T8640 | [Reconciliation understands deleted accounts and stops lying about heals](T8640-reconciliation-deleted-account-cause.md) | TODO |
+| T8630 | [Deletion preserves the financial record and is auditable](T8630-deletion-preserves-financial-record.md) | STAGING |
+| T8640 | [Reconciliation understands deleted accounts and stops lying about heals](T8640-reconciliation-deleted-account-cause.md) | WIP |
 | T8650 | [Revenue totals read the ledger, not the per-user cache](T8650-revenue-totals-from-ledger.md) | STAGING |
 | T8655 | [Remove the dead credit-amount-to-price map](T8655-remove-dead-credit-price-map.md) | STAGING |
 | T8657 | [Admin "paying" filter selects users from the ledger](T8657-paying-filter-reads-ledger.md) | STAGING |
 | T8660 | [Send Stripe receipts (receipt_email on the PaymentIntent)](T8660-stripe-receipt-email.md) | STAGING |
 | T8670 | [Scheduled reconciliation with a drift alert](T8670-scheduled-reconciliation-alert.md) | TODO |
-| T8675 | [Dispute webhook writes ledger rows](T8675-dispute-webhook-ledger-rows.md) | TODO |
+| T8675 | [Dispute webhook writes ledger rows](T8675-dispute-webhook-ledger-rows.md) | STAGING |
 
 ## Completion Criteria
 

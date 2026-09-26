@@ -241,6 +241,14 @@ def pg_conn(monkeypatch):
     # as daily_counters/upload_failures (test-created rows only; real revenue
     # never runs through this fixture's DSN, which is refused above if it
     # points at staging/prod).
+    # T8630: `payments` now has a BEFORE TRUNCATE trigger (append-only guard)
+    # that raises unless `reelballers.allow_payments_purge` is set. `setup`
+    # is autocommit=True (each statement its own transaction), so `SET
+    # LOCAL` would not survive to the next statement -- use plain `SET` on
+    # this throwaway connection instead, which is closed immediately after
+    # (below) and never reused, so the escape hatch cannot leak into any
+    # production code path.
+    cur.execute("SET reelballers.allow_payments_purge = 'on'")
     cur.execute("TRUNCATE otp_codes, r2_grace_deletions, impersonation_audit, pending_teammate_shares, game_ref_counts, daily_counters, upload_failures, payments")
     cur.execute(_SEED_SQL)
     # T5840: open the credits_ready gate by default so the general test suite

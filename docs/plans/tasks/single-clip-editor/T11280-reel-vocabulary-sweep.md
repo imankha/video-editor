@@ -38,6 +38,12 @@ Landing ships via the separate landing deploy (`/deploy-landing`).
 ## Related Tasks
 - Depends on: R2, R7, R11; coordinate with T11130's vocabulary (highlight-first epic)
 - Downstream: T10320 reshoot, T7630 copy re-derivation
+- **Already compliant, leave alone (T10190, merged PR #492):** `displayNames.js`'s
+  `RESULT_SURFACE` block ("Watch finished highlight", "Watch marked plays", "Back to game plays",
+  etc.) and the `gameId`/`onBackToGame` backlink block in `DraftReelPreview.jsx` (~lines 99-130,
+  just above the `:184` "Highlight Reel" share text this sweep is already targeting) contain no
+  "reel" or "clip" wording — no edit needed there, don't let a blanket grep-and-replace pass touch
+  them.
 
 ## Acceptance Criteria
 
