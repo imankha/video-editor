@@ -212,6 +212,54 @@ class TestStatsForAdmin:
     def test_empty_user_ids_returns_empty(self, pg_conn):
         assert stats_for_admin([]) == {}
 
+    def test_credits_spent_nets_out_full_refund(self, pg_conn):
+        """T11360 / Bug 58p: a deduct-then-refund pair must net to ZERO spend,
+        not show the gross deduction. This is the exact incident: 4 failed
+        exports each fully refunded read as burned credits under the old
+        gross-sum query, nearly causing a wrong 'how much do we owe back' call."""
+        # A game upload (real, un-refunded spend) plus a failed export that was
+        # deducted then fully auto-refunded. Fund the balance first so the
+        # debits actually land (an underfunded debit is refused and writes no
+        # ledger row -- that would make this pass for the wrong reason).
+        grant(USER, 100, "stripe_purchase", credit_key("stripe_purchase", "pi_1"))
+        debit(USER, 9, "game_upload", credit_key("game_upload", "game_1"))
+        debit(USER, 50, "framing_usage", credit_key("framing_usage", "export_1"))
+        credit_ledger.refund_credits(USER, 50, "export_1")  # framing_refund +50
+
+        stats = stats_for_admin([USER])[USER]
+        # Net spend is the 9-credit game upload only; the export nets to 0.
+        # (Gross sum would report 59 -- the bug this task fixes.)
+        assert stats["credits_spent"] == 9
+
+    def test_credits_spent_nets_clip_upload_refund(self, pg_conn):
+        """The clip_upload / clip_upload_refund pair (T8370) must also net out."""
+        grant(USER, 100, "stripe_purchase", credit_key("stripe_purchase", "pi_1"))
+        debit(USER, 40, "clip_upload", credit_key("clip_upload", "batch_1"))
+        grant(
+            USER, 40, "clip_upload_refund",
+            credit_key("clip_upload_refund", "batch_1"), reference_id="batch_1",
+        )
+        stats = stats_for_admin([USER])[USER]
+        assert stats["credits_spent"] == 0
+
+    def test_credits_spent_nets_partial_refund(self, pg_conn):
+        """A partial refund (refund amount < original deduction) nets to the
+        remainder, guarding against a formulation that only handles full pairs."""
+        grant(USER, 100, "stripe_purchase", credit_key("stripe_purchase", "pi_1"))
+        debit(USER, 50, "framing_usage", credit_key("framing_usage", "export_2"))
+        credit_ledger.refund_credits(USER, 20, "export_2")  # partial +20
+        stats = stats_for_admin([USER])[USER]
+        assert stats["credits_spent"] == 30
+
+    def test_credits_spent_unaffected_without_refunds(self, pg_conn):
+        """Regression guard: a user with only plain deductions (no refund rows)
+        must be unchanged by the netting logic."""
+        grant(USER, 100, "stripe_purchase", credit_key("stripe_purchase", "pi_1"))
+        debit(USER, 30, "framing_usage", credit_key("framing_usage", "export_3"))
+        debit(USER, 9, "game_upload", credit_key("game_upload", "game_2"))
+        stats = stats_for_admin([USER])[USER]
+        assert stats["credits_spent"] == 39
+
 
 class TestBackwardCompatShims:
     """These preserve the old user_db.py call signatures so most of the 16

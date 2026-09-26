@@ -363,6 +363,38 @@ def list_transactions(user_id: str, limit: int = 50) -> list[dict]:
         return [dict(r) for r in cur.fetchall()]
 
 
+# ---------------------------------------------------------------------------
+# Admin credits_spent must be NET of refunds (T11360 / Bug 58p).
+#
+# A "deduction" is any negative-amount transaction except admin_set (an admin
+# balance correction, not a user spend). A "refund" reverses a prior deduction
+# but is recorded as its OWN positive-amount row with a distinct *_refund
+# source -- NOT as an edit to the original debit row -- so a gross negative-sum
+# alone reports a fully-refunded export as if the credits were still spent
+# (the Bug 58p incident: a user with 4 deducted-then-refunded failed exports
+# read as having burned the full gross amount). We net refunds back out below.
+#
+# REFUND SOURCES ARE ENUMERATED BY NAME. Any *_refund source in KEY_PREFIX that
+# reverses a spend MUST be listed here; a new refund source added to KEY_PREFIX
+# but not here would be silently counted as un-refunded spend again. When you
+# register a refund source in KEY_PREFIX above, add it here too.
+_REFUND_SOURCES = ("framing_refund", "clip_upload_refund")
+
+# credits_spent, single CASE / single pass:
+#   - a refund row (positive amount) subtracts via -amount  -> reduces net spend
+#   - a debit row  (negative amount) adds via -amount        -> becomes positive spend
+#   - admin_set and all grants                               -> ignored
+# The refund clause is FIRST so a refund source is never also caught by the
+# generic "amount < 0" debit clause (it never would be -- refunds are positive
+# -- but ordering keeps the intent explicit). Sources are hardcoded constants,
+# never user input, so rendering them straight into SQL is injection-safe.
+_REFUND_SOURCES_SQL = ", ".join(f"'{s}'" for s in _REFUND_SOURCES)
+_CREDITS_SPENT_EXPR = f"""COALESCE(SUM(CASE
+                        WHEN source IN ({_REFUND_SOURCES_SQL}) THEN -amount
+                        WHEN amount < 0 AND source != 'admin_set' THEN -amount
+                        ELSE 0 END), 0) AS credits_spent"""
+
+
 def stats_for_admin(user_ids: list[str] | None = None) -> dict:
     """One grouped Postgres query for the admin panel (replaces per-file R2/local
     reads across up to `page_size` other users' SQLite files, T4870 -> gone).
@@ -377,10 +409,10 @@ def stats_for_admin(user_ids: list[str] | None = None) -> dict:
         cur = conn.cursor()
         if user_ids is not None:
             cur.execute(
-                """
+                f"""
                 SELECT
                     user_id,
-                    COALESCE(SUM(CASE WHEN amount < 0 AND source != 'admin_set' THEN -amount ELSE 0 END), 0) AS credits_spent,
+                    {_CREDITS_SPENT_EXPR},
                     COALESCE(SUM(CASE WHEN source = 'stripe_purchase' AND amount > 0 THEN amount ELSE 0 END), 0) AS credits_purchased
                 FROM credit_transactions
                 WHERE user_id = ANY(%s)
@@ -390,10 +422,10 @@ def stats_for_admin(user_ids: list[str] | None = None) -> dict:
             )
         else:
             cur.execute(
-                """
+                f"""
                 SELECT
                     user_id,
-                    COALESCE(SUM(CASE WHEN amount < 0 AND source != 'admin_set' THEN -amount ELSE 0 END), 0) AS credits_spent,
+                    {_CREDITS_SPENT_EXPR},
                     COALESCE(SUM(CASE WHEN source = 'stripe_purchase' AND amount > 0 THEN amount ELSE 0 END), 0) AS credits_purchased
                 FROM credit_transactions
                 GROUP BY user_id
