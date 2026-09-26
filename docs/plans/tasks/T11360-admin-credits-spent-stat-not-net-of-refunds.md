@@ -1,10 +1,10 @@
 # T11360: Admin `credits_spent` Stat Doesn't Net Out Refunds
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-09-25
-**Updated:** 2026-09-25
+**Updated:** 2026-09-26
 
 ## Problem
 
@@ -52,8 +52,18 @@ about the user's actual spend at a glance.
 
 **2026-09-25**: Filed from Bug 58p investigation. Not started.
 
+**2026-09-26 (landed)**: Merged via PR #515 (merge commit `287d8662`), full executable landing
+gate (VERIFIED proof, reviewer receipt, green Branch CI, head-pinned merge). Fix location had
+moved since filing: the revenue-integrity epic (T8620-T8670, merged same day) relocated this
+computation from `admin.py` into `credit_ledger.stats_for_admin()` (off per-file SQLite reads,
+T4870) without fixing the underlying gross-vs-net bug. Netted in place — confirmed `credits_spent`
+has zero current UI consumers (the admin table shows `total_spent_cents`, a dollar figure from
+that same epic, instead), so no second field was needed. Added a drift-guard test asserting the
+refund-source list stays in sync with `KEY_PREFIX`, so a future refund source can't silently
+reintroduce this exact bug.
+
 ## Acceptance Criteria
 
-- [ ] A user with fully-refunded failed exports shows an accurate net spend figure in the admin
+- [x] A user with fully-refunded failed exports shows an accurate net spend figure in the admin
       users list
-- [ ] Test covers a deduct+refund pair netting to the correct displayed value
+- [x] Test covers a deduct+refund pair netting to the correct displayed value

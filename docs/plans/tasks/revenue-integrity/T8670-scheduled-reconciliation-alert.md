@@ -1,6 +1,6 @@
 # T8670: Scheduled reconciliation with a drift alert
 
-**Status:** WIP
+**Status:** STAGING (merged 2026-09-26, PR #514, 996302e8; proof VERIFIED at 10bd7fe5 across 3 fix rounds -- real mid-pass connection kills proved the marker survives -- Branch CI green)
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-03
@@ -67,10 +67,59 @@ alerts only on drift it cannot explain.
 
 ## Acceptance Criteria
 
-- [ ] A scheduled pass runs without a human, at a documented interval, once per deploy and
+- [x] A scheduled pass runs without a human, at a documented interval, once per deploy and
       not once per machine
-- [ ] It alerts only on `unknown` drift and pending disputes, and is silent when every row
+- [x] It alerts only on `unknown` drift and pending disputes, and is silent when every row
       is explained
-- [ ] It reuses the existing classifier with no duplicated logic
-- [ ] A synthetic unexplained drift produces the alert in a test
-- [ ] Running it changes no data (read-only pass; healing stays an explicit admin gesture)
+- [x] It reuses the existing classifier with no duplicated logic
+- [x] A synthetic unexplained drift produces the alert in a test
+- [x] Running it changes no data (read-only pass; healing stays an explicit admin gesture)
+
+## Implementation (2026-09-26)
+
+`services/reconciliation_alert.py`  -  a thin background caller around the panel's
+`_compute_reconciliation`. Weekly loop (`WEEKLY_INTERVAL_SECONDS`) wired into `main.py`
+lifespan (`start_reconciliation_alert_loop`/`stop_reconciliation_alert_loop`), mirroring
+`sweep_scheduler`/`cleanup`. Single-machine coordination via a Postgres session-level
+advisory lock `pg_try_advisory_lock(RECONCILIATION_ALERT_LOCK_ID=8670)` held for the whole
+pass and released explicitly with `pg_advisory_unlock` in a `finally` (pooled connections
+never disconnect, so auto-release is not relied on). Alerts (CRITICAL log always + admin
+email additionally) only on `unknown` rows and pending disputes; silent otherwise;
+read-only. Tests: `tests/test_t8670_reconciliation_alert.py`. Knowledge doc updated:
+`.claude/knowledge/backend-services.md` (reconciliation section).
+
+### Round 2 (2026-09-26): at-most-once-per-interval, not once-per-machine
+
+The advisory lock alone only excludes passes that overlap IN TIME. Two Fly machines (or one
+restarted machine) each start their own startup-delay-then-weekly timer, so two
+non-overlapping passes each acquire the lock in turn and each alert. Fix: a PERSISTED
+single-row marker `reconciliation_alert_runs (id=1, last_run_at)` (postgres v034, mirrored in
+`_SCHEMA_DDL`). Inside the same lock-held section the pass reads `last_run_at`; younger than
+one interval → `skipped_recent` (no compute/alert/write beyond the lock); else it runs and
+upserts `last_run_at=now()` before releasing the lock. The cleanup tail (`_finish_pass`:
+upsert marker FIRST, then unlock) is best-effort and never propagates: `get_pg` RE-RAISES a
+dead-connection error on its exit-commit, so a post-alert connection death no longer bubbles
+out to make the outer loop retry-and-re-send. Because the marker is stamped before the
+unlock, a death on the unlock step still leaves it persisted, so the retry skips. The pass
+also runs ~60s after every boot/deploy (`STARTUP_DELAY_SECONDS`), not on a fixed wall clock.
+
+### Round 3 (2026-09-26): fresh-connection marker write closes the mid-pass death gap
+
+Round 2 wrote the marker through the lock connection's OWN cursor. If that connection died at
+any point mid-pass (not just on the final unlock statement) the marker upsert never ran, the
+alert had already gone out, and the next pass re-sent it. Round 2's test only faked the final
+unlock statement raising on an otherwise-live connection, so it never exercised this path. Fix:
+`_finish_pass` now upserts `last_run_at` on a FRESH, SEPARATE `get_pg()` connection (not the
+lock connection) BEFORE releasing the lock, so a lock-connection death at ANY point up to and
+including the unlock still leaves the marker persisted. New test
+`TestFreshConnectionMarkerSurvivesLockConnDeath` kills the REAL lock backend mid-pass (via
+`pg_terminate_backend` AND `idle_in_transaction_session_timeout`) after the alert is sent and
+asserts the immediately-following pass returns `skipped_recent` with zero emails. The only
+residual double-alert path is the fresh marker connection ITSELF failing (a rare loud duplicate,
+never a silent stall). Separately, the loop now sleeps only the time REMAINING until due on a
+`skipped_recent` boot (`next_run_in_seconds`, floored at `MIN_RESLEEP_SECONDS`) instead of a
+fresh full interval, removing the up-to-~2x spacing slop.
+
+**This is the LAST task in the Revenue Record Integrity epic  -  see EPIC.md. The epic is
+NOT marked COMPLETE: DONE is the user's gesture, and one completion criterion (0 unexplained
+drift on a real prod reconciliation run) awaits prod migrate-postgres + backfill.**

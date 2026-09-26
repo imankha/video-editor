@@ -1,6 +1,6 @@
 # T11340: Parallelize Multi-Clip Export Across GPUs
 
-**Status:** WIP
+**Status:** ICE (deferred, user decision 2026-09-26)
 **Impact:** 7
 **Complexity:** 8
 **Created:** 2026-09-25
@@ -60,6 +60,30 @@ one from scratch. Key differences to work through:
 - `video_processing_optimized.py` has 8 T4/L4 benchmark variants already explored for a related
   problem (never wired to production, T4420 will delete it) — check whether any of that
   experimentation is relevant before designing from scratch.
+
+## Deferred (2026-09-26)
+
+Design work went through two revisions before implementation started:
+- **Revision 1** (bin-pack N clips across K GPU workers) was discarded mid-design once cross-checked
+  against [single-clip-editor/EPIC.md](../single-clip-editor/EPIC.md): that epic's T11250 deletes
+  the multi-clip export N>1 branches entirely ("one project = one clip = one highlight"), so
+  Revision 1 targeted code scheduled for deletion.
+- **Revision 2** (time-chunk ONE long clip across K GPU workers, targeting the surviving single-clip
+  path) was completed as a full design — chunking mechanics, the T8280 cadence-grid-continuity risk
+  (identified as the central correctness risk), speed-segment handling, a chunk-aware guard ceiling,
+  and a staging cost-measurement plan. User confirmed 8 workers/2880s budget per clip and the
+  SSIM≈1.0 relaxed byte-identity bar.
+
+**Then deferred before implementation**, user reasoning: T11320 (preflight guard, merged) already
+closes Bug 58p's actual problem — a fast, informative rejection instead of an hour of silence then
+a timeout. Without T11340, the only remaining cost is that a genuinely oversized SINGLE clip gets
+*rejected* (with guidance: crop tighter) instead of *parallelized to succeed*. Given the real
+complexity Revision 2 surfaced (frame-cadence continuity across chunk seams, speed-segment
+restrictions, a new Modal function pair + its own deploy), that tradeoff wasn't judged worth it
+right now. **Revisit if oversized-single-clip rejections turn out to be common in practice** —
+the full Revision 2 design is preserved at
+[T11340-design-DEFERRED.md](T11340-design-DEFERRED.md) (includes superseded Revision 1 for the
+historical record) and can be picked up directly without re-deriving it.
 
 ## Implementation
 

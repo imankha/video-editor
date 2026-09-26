@@ -34,6 +34,7 @@ from .v030_payments_ledger import V030PaymentsLedger
 from .v031_account_deletions import V031AccountDeletions
 from .v032_analytics_survive_deletion import V032AnalyticsSurviveDeletion
 from .v033_user_segments_was_test_account import V033UserSegmentsWasTestAccount
+from .v034_reconciliation_alert_runs import V034ReconciliationAlertRuns
 
 MIGRATIONS = [
     V001Baseline(),
@@ -69,6 +70,7 @@ MIGRATIONS = [
     V031AccountDeletions(),
     V032AnalyticsSurviveDeletion(),
     V033UserSegmentsWasTestAccount(),
+    V034ReconciliationAlertRuns(),
 ]
 
 # T5089: postgres stays floor=0 FOREVER. A fresh postgres DB runs _SCHEMA_DDL

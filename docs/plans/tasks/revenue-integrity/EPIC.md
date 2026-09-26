@@ -1,6 +1,6 @@
 # Revenue Record Integrity
 
-**Status:** TODO (sequenced AFTER the Tutorial Redesign group, user order 2026-09-03)
+**Status:** STAGING (all 6 tasks merged 2026-09-26; DONE is the user's call. Still owed: prod migrate-postgres v026-v034 + payments backfill, then the completion criteria above can be checked)
 **Started:** (not started)
 **Impact:** 7
 **Complexity:** 4
@@ -174,23 +174,42 @@ Order is dependency order: the record must exist before anything can read it or 
 | T8655 | [Remove the dead credit-amount-to-price map](T8655-remove-dead-credit-price-map.md) | STAGING |
 | T8657 | [Admin "paying" filter selects users from the ledger](T8657-paying-filter-reads-ledger.md) | STAGING |
 | T8660 | [Send Stripe receipts (receipt_email on the PaymentIntent)](T8660-stripe-receipt-email.md) | STAGING |
-| T8670 | [Scheduled reconciliation with a drift alert](T8670-scheduled-reconciliation-alert.md) | WIP |
+| T8670 | [Scheduled reconciliation with a drift alert](T8670-scheduled-reconciliation-alert.md) | STAGING |
 | T8675 | [Dispute webhook writes ledger rows](T8675-dispute-webhook-ledger-rows.md) | STAGING |
 
 ## Completion Criteria
 
 - [ ] Every succeeded live PaymentIntent has a matching `payments` row, including the
-      2026-08-24 orphan, proven by a reconciliation run reporting 0 unexplained drift
-- [ ] Deleting an account (both paths) leaves the `payments` rows intact, stamps the
-      deletion, and writes an audit row naming the actor and path
-- [ ] The reconciliation panel classifies a deleted-payer row as `account_deleted` and
-      offers a terminal acknowledge action instead of a heal that cannot work
-- [ ] Admin revenue totals are computed from `payments` and do not change when an account
-      is deleted
-- [ ] A new live purchase produces a Stripe receipt to the customer's email
-- [ ] Drift is detected without a human clicking anything
-- [ ] Knowledge docs updated: `backend-services.md` (new table, deletion contract) and
+      2026-08-24 orphan, proven by a reconciliation run reporting 0 unexplained drift (T8620)
+      -- awaiting prod migrate-postgres + backfill; check this once a real prod
+      reconciliation run reports 0 unexplained drift (prod still owes v026 onward, per the
+      operational note below, so this cannot be verified yet)
+- [x] Deleting an account (both paths) leaves the `payments` rows intact, stamps the
+      deletion, and writes an audit row naming the actor and path (T8630)
+- [x] The reconciliation panel classifies a deleted-payer row as `account_deleted` and
+      offers a terminal acknowledge action instead of a heal that cannot work (T8640)
+- [x] Admin revenue totals are computed from `payments` and do not change when an account
+      is deleted (T8650)
+- [ ] A new live purchase produces a Stripe receipt to the customer's email (T8660)
+      -- awaiting a live-mode Stripe purchase to confirm receipt delivery; see T8660's
+      task file (the code ships receipt_email, but the delivery has not been observed in
+      live mode yet)
+- [x] Drift is detected without a human clicking anything (T8670)
+- [x] Knowledge docs updated: `backend-services.md` (new table, deletion contract) and
       `persistence-sync.md` if the deletion contract touches the sync seam
+
+**All 6 sequenced tasks are IMPLEMENTED (code + tests).** The final task (T8670) adds the
+scheduled weekly reconciliation drift alert, closing incident hole 8 ("drift is only ever
+seen if a human clicks the button"). Money records are now append-only, outlive account
+deletion, are auditable, drive the admin aggregates, and are reconciled against Stripe on a
+schedule that alerts on unexplained drift and pending disputes.
+
+The epic is deliberately NOT marked COMPLETE here: DONE is the user's gesture (board Resolve
+or `/deploy`), not something a task sets, and one completion criterion above (every live
+PaymentIntent matched, proven by a prod reconciliation run reporting 0 unexplained drift)
+requires live prod evidence that does not exist yet -- prod still owes `migrate-postgres`
+(v026 onward) and the backfill, so no prod reconciliation run can be taken as proof until
+those land.
 
 ## Operational note (not a task in this epic)
 
