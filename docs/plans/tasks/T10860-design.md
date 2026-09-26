@@ -8,6 +8,22 @@ downgrade of test/review rigor)
 **Author:** Architect (Stage 2)
 **Date:** 2026-09-26 (amended 2026-09-26 post-approval: Q1 folded staleness detection into the
 existing `GET /api/projects` read instead of a dedicated endpoint — see §3)
+**Amendment 2026-09-26 (post-ship, independent reviewer finding — BLOCKING, fixed same day):**
+`final_videos.id` is a PER-PROFILE SQLite autoincrement, so the same id (e.g. 1) exists
+independently in every profile of one user — the original implementation scoped both the
+staleness query (§3.2) and the repoint endpoint (§2.2) on `sharer_user_id` alone, never
+`sharer_profile_id`. Concretely: profile A's final_video id=1 (`a1.mp4`, shared) and profile B's
+final_video id=1 (`b1.mp4`, unrelated) collide; viewing profile B surfaced profile A's share as
+`stale_share`, and repointing it SUCCEEDED, rewriting profile A's share row onto profile B's video
+while `sharer_profile_id` stayed profile A — breaking profile A's already-distributed link for
+everyone holding it. Fixed: (1) the §3.2 Postgres query now filters `AND s.sharer_profile_id =
+get_current_profile_id()`; (2) the endpoint refuses 403 if `share["sharer_profile_id"] !=
+get_current_profile_id()`; (3) the endpoint additionally refuses 409 `share_project_mismatch` if
+the share's current `video_id` does not resolve to the SAME `project_id` as the path `video_id`
+(closes a caller-supplied-token cross-project retarget, even within one profile). Regression:
+`TestCrossProfileShareIsolation` in `test_t10860_repoint_share_token.py` (3 tests, confirmed RED
+against the pre-fix code — genuine 200-success-and-corrupt outcomes, not incidental refusals — then
+GREEN after the fix).
 **Sources:** Task file `T10860-update-shared-version-repoint-token.md`; T10180-design §5 (the split-out rationale — EXTENDED here, not re-litigated); Code Expert Stage-1 findings (file:line map below); `persistence-sync.md` (CAS / Invariant 1 & 6 / `update_share_visibility`); `export-pipeline.md` (`publish_final_video` versioning + `keep_prior`).
 
 ---

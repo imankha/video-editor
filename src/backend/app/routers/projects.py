@@ -434,6 +434,7 @@ def _read_projects_list():
                 if fv_row['id'] == current_final_video_id.get(fv_row['project_id']):
                     project_current_filename[fv_row['project_id']] = fv_row['filename']
 
+            from app.profile_context import get_current_profile_id
             from app.services.pg import get_pg
             with get_pg() as pg_conn:
                 pg_cur = pg_conn.cursor()
@@ -441,10 +442,10 @@ def _read_projects_list():
                     """SELECT sv.video_id, s.share_token, sv.video_filename
                          FROM shares s
                          JOIN share_videos sv ON sv.share_id = s.id
-                        WHERE s.sharer_user_id = %s AND s.share_type = 'video'
-                          AND s.revoked_at IS NULL
+                        WHERE s.sharer_user_id = %s AND s.sharer_profile_id = %s
+                          AND s.share_type = 'video' AND s.revoked_at IS NULL
                         ORDER BY s.shared_at DESC""",
-                    (get_current_user_id(),),
+                    (get_current_user_id(), get_current_profile_id()),
                 )
                 seen_projects: set[int] = set()
                 for share_row in pg_cur.fetchall():

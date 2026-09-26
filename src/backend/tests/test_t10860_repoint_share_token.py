@@ -409,3 +409,183 @@ class TestRepointEndpoint:
             headers=_auth_headers(SHARER_ID),
         )
         assert resp.status_code == 410
+
+
+# ---------------------------------------------------------------------------
+# Cross-profile isolation (post-ship reviewer finding): final_videos.id is a
+# PER-PROFILE SQLite autoincrement, so the SAME id (e.g. 1) exists
+# independently in every profile of one user. Concrete repro: profile A's
+# final_video id=1 is "a1.mp4" (shared publicly); profile B's final_video
+# id=1 is an UNRELATED "b1.mp4". Before the fix:
+#   (1) projects.py's staleness query filtered ONLY on sharer_user_id, so
+#       viewing profile B's project list surfaced profile A's share as
+#       stale_share (matched by the colliding id=1, ignoring profile).
+#   (2) POST /api/gallery/1/share/repoint (called while profile B is
+#       current) had no sharer_profile_id check, so it happily rewrote
+#       profile A's share row to point at profile B's video -- while
+#       sharer_profile_id stayed "profile A". Playback then looks up
+#       users/{uid}/profiles/A/final_videos/b1.mp4, which never existed
+#       there -- profile A's already-distributed link breaks for everyone
+#       holding it.
+#   (3) Separately, even within ONE profile, a share_token for project X
+#       could be used to repoint an unrelated project Y's video (no check
+#       that the share's video and the path video_id share a project).
+# ---------------------------------------------------------------------------
+
+class TestCrossProfileShareIsolation:
+    PROFILE_A = "aaaaaaaa"
+    PROFILE_B = "bbbbbbbb"
+
+    def _seed_two_colliding_profiles(self):
+        """Seeds a project+final_video in EACH of two profiles of the SAME
+        user, independently, so each profile's own SQLite autoincrement lands
+        both final_videos rows on id=1 -- reproducing the collision. Shares
+        profile A's video publicly; profile B's video is never shared.
+        Returns (project_a_id, project_b_id, token_a)."""
+        from app.database import get_db_connection
+        from app.profile_context import set_current_profile_id
+        from app.user_context import set_current_user_id
+
+        set_current_user_id(SHARER_ID)
+        set_current_profile_id(self.PROFILE_A)
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO projects (name, aspect_ratio) VALUES (?, '9:16')",
+                ("ProfA Project",),
+            )
+            project_a_id = cursor.lastrowid
+            cursor.execute(
+                """INSERT INTO final_videos
+                   (project_id, filename, name, duration, version, published_at)
+                   VALUES (?, ?, ?, ?, 1, ?)""",
+                (project_a_id, "a1.mp4", "ProfA Video", 10.0, "2026-09-26T00:00:00"),
+            )
+            final_video_a_id = cursor.lastrowid
+            cursor.execute(
+                "UPDATE projects SET final_video_id = ? WHERE id = ?",
+                (final_video_a_id, project_a_id),
+            )
+            conn.commit()
+
+        set_current_profile_id(self.PROFILE_B)
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO projects (name, aspect_ratio) VALUES (?, '9:16')",
+                ("ProfB Project",),
+            )
+            project_b_id = cursor.lastrowid
+            cursor.execute(
+                """INSERT INTO final_videos
+                   (project_id, filename, name, duration, version, published_at)
+                   VALUES (?, ?, ?, ?, 1, ?)""",
+                (project_b_id, "b1.mp4", "ProfB Video", 8.0, "2026-09-26T00:05:00"),
+            )
+            final_video_b_id = cursor.lastrowid
+            cursor.execute(
+                "UPDATE projects SET final_video_id = ? WHERE id = ?",
+                (final_video_b_id, project_b_id),
+            )
+            conn.commit()
+
+        # Write the actual local file so the target-existence check (an
+        # UNRELATED guard) does not accidentally mask the profile check under
+        # test with its own 409 target_missing -- this test must isolate the
+        # profile-ownership guard specifically, reproducing a genuine
+        # 200-success-and-corrupt outcome pre-fix, not an incidental refusal.
+        from app.database import get_final_videos_path
+        final_videos_dir = get_final_videos_path()
+        final_videos_dir.mkdir(parents=True, exist_ok=True)
+        (final_videos_dir / "b1.mp4").write_bytes(b"fake mp4 bytes - profile B")
+
+        assert final_video_a_id == final_video_b_id == 1, (
+            "test setup requires colliding final_video ids across profiles "
+            "to reproduce the cross-profile bug -- got "
+            f"a={final_video_a_id} b={final_video_b_id}"
+        )
+
+        from app.services.sharing_db import create_shares
+        shares = create_shares(
+            video_id=final_video_a_id, sharer_user_id=SHARER_ID,
+            sharer_profile_id=self.PROFILE_A, video_filename="a1.mp4",
+            video_name="ProfA Video", video_duration=10.0,
+            recipient_emails=[SHARER_EMAIL], is_public=True,
+        )
+        token_a = shares[0]["share_token"]
+        return project_a_id, project_b_id, token_a
+
+    def test_stale_share_not_leaked_across_profiles(self, client):
+        """FIX 1: viewing profile B's project list must NOT surface profile
+        A's share as stale_share just because the final_video ids collide."""
+        from app.session_init import _init_cache
+
+        _project_a_id, project_b_id, _token_a = self._seed_two_colliding_profiles()
+
+        _init_cache[SHARER_ID] = {"profile_id": self.PROFILE_B, "is_new_user": False}
+        resp = client.get("/api/projects", headers=_auth_headers(SHARER_ID))
+        assert resp.status_code == 200
+        project_b = next(p for p in resp.json() if p["id"] == project_b_id)
+        assert project_b["stale_share"] is None
+
+    def test_repoint_refuses_cross_profile_collision(self, client):
+        """FIX 2: repointing profile A's share while profile B is the current
+        session profile (video_id=1 resolves to profile B's OWN video) must
+        be REFUSED -- never silently rewritten onto profile B's video while
+        sharer_profile_id stays profile A (the exact corruption the reviewer
+        reproduced)."""
+        from app.session_init import _init_cache
+
+        _project_a_id, _project_b_id, token_a = self._seed_two_colliding_profiles()
+
+        _init_cache[SHARER_ID] = {"profile_id": self.PROFILE_B, "is_new_user": False}
+        resp = client.post(
+            "/api/gallery/1/share/repoint",
+            json={"share_token": token_a},
+            headers=_auth_headers(SHARER_ID),
+        )
+        assert resp.status_code == 403
+
+        # Confirm profile A's share row is UNTOUCHED -- still points at its
+        # own a1.mp4 under its own profile, never at profile B's b1.mp4.
+        from app.services.sharing_db import get_share_by_token
+        share = get_share_by_token(token_a)
+        assert share["video_filename"] == "a1.mp4"
+        assert share["sharer_profile_id"] == self.PROFILE_A
+
+    def test_repoint_refuses_share_from_different_project_same_profile(self, client):
+        """FIX 3: a share_token minted for project X cannot be used to
+        repoint an UNRELATED project Y's video, even within the SAME
+        profile."""
+        _project_x_id, final_video_x_id = _seed_project_with_final_video(filename="x1.mp4")
+        from app.services.sharing_db import create_shares
+        shares = create_shares(
+            video_id=final_video_x_id, sharer_user_id=SHARER_ID,
+            sharer_profile_id="testdefault", video_filename="x1.mp4",
+            video_name="X Video", video_duration=5.0,
+            recipient_emails=[SHARER_EMAIL], is_public=True,
+        )
+        token_x = shares[0]["share_token"]
+
+        _project_y_id, final_video_y_id = _seed_project_with_final_video(
+            filename="y1.mp4", name="Y Video",
+        )
+        # Write the actual local file so target-existence (an UNRELATED
+        # guard) does not mask the project-mismatch check under test.
+        from app.database import get_final_videos_path
+        final_videos_dir = get_final_videos_path()
+        final_videos_dir.mkdir(parents=True, exist_ok=True)
+        (final_videos_dir / "y1.mp4").write_bytes(b"fake mp4 bytes - project Y")
+
+        resp = client.post(
+            f"/api/gallery/{final_video_y_id}/share/repoint",
+            json={"share_token": token_x},
+            headers=_auth_headers(SHARER_ID),
+        )
+        assert resp.status_code == 409
+        assert resp.json().get("code") == "share_project_mismatch"
+
+        from app.services.sharing_db import get_share_by_token
+        share = get_share_by_token(token_x)
+        assert share["video_filename"] == "x1.mp4"
+        assert share["video_id"] == final_video_x_id

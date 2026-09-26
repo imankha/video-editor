@@ -599,6 +599,7 @@ async def repoint_share(video_id: int, body: ShareRepointRequest):
     old one. This explicit gesture re-points the SAME token (URL never changes).
     See docs/plans/tasks/T10860-design.md §2.2 for the step-by-step contract."""
     user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
 
     share = get_share_by_token(body.share_token)
     if not share:
@@ -607,6 +608,16 @@ async def repoint_share(video_id: int, body: ShareRepointRequest):
         raise HTTPException(410, "This share has been revoked")
     if share["sharer_user_id"] != user_id:
         raise HTTPException(403, "Only the sharer can update this share")
+    # T10860 cross-profile fix: final_videos ids are per-profile SQLite
+    # autoincrements, so the SAME id (e.g. 1) exists independently in every
+    # profile of this user -- sharer_user_id alone does not scope to the
+    # profile that actually owns this share. Without this check, viewing a
+    # DIFFERENT profile whose final_videos happens to collide on id could
+    # repoint THIS share (still owned by its original profile) onto that
+    # other profile's video, breaking playback (profile mismatch between the
+    # share row and the R2/SQLite path the video actually lives under).
+    if share["sharer_profile_id"] != profile_id:
+        raise HTTPException(403, "This share does not belong to the current profile")
     if share["share_type"] != "video":
         raise HTTPException(400, "Not a single-video share")
 
@@ -614,7 +625,7 @@ async def repoint_share(video_id: int, body: ShareRepointRequest):
         cursor = conn.cursor()
         cursor.execute(
             """SELECT fv.id, fv.filename, COALESCE(fv.name, p.name) as name,
-                      fv.duration, p.final_video_id
+                      fv.duration, fv.project_id, p.final_video_id
                FROM final_videos fv
                JOIN projects p ON fv.project_id = p.id
                WHERE fv.id = ?""",
@@ -623,6 +634,23 @@ async def repoint_share(video_id: int, body: ShareRepointRequest):
         row = cursor.fetchone()
         if not row:
             raise HTTPException(404, "Video not found")
+
+        # T10860: the share's CURRENT video_id (now confirmed to live in THIS
+        # profile's SQLite, per the sharer_profile_id check above) must belong
+        # to the SAME project as the path video_id -- a caller-supplied
+        # share_token/video_id pair from unrelated projects must never be
+        # allowed to retarget a share onto a video it never pointed at.
+        cursor.execute(
+            "SELECT project_id FROM final_videos WHERE id = ?",
+            (share["video_id"],),
+        )
+        share_video_row = cursor.fetchone()
+
+    if share_video_row is None or share_video_row["project_id"] != row["project_id"]:
+        return JSONResponse(status_code=409, content={
+            "code": "share_project_mismatch",
+            "detail": "This share does not belong to this project.",
+        })
 
     if row["final_video_id"] != video_id:
         return JSONResponse(status_code=409, content={

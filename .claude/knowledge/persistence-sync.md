@@ -1,5 +1,27 @@
 ---
 domain: persistence-sync
+updated: 2026-09-26 (T10860 follow-up, same day, independent reviewer finding — BLOCKING data
+corruption, fixed: **`final_videos.id` collides ACROSS PROFILES of the same user** — it is a
+PER-PROFILE SQLite autoincrement (each profile has its own `profile.sqlite`), so profile A's
+final_video id=1 and profile B's final_video id=1 are two UNRELATED videos. The T10860 repoint
+mechanism (below) originally scoped its Postgres CAS write and staleness read on `sharer_user_id`
+alone — never `sharer_profile_id` — so viewing profile B could surface profile A's share as stale
+and successfully repoint it onto profile B's video (same user_id, colliding id, wrong profile),
+silently corrupting profile A's already-distributed link. **General lesson: any Postgres query or
+CAS write keyed on a per-profile SQLite autoincrement id (here `final_videos.id` via
+`share_videos.video_id`) MUST also filter/verify the owning `profile_id` — `sharer_user_id`/
+`user_id` alone is NOT sufficient scope once a user has more than one profile.** This is a distinct
+hazard from the T7520 cross-tenant guard above (that guards a DIFFERENT user attaching to a profile
+via a client-supplied header; this guards the SAME user's OWN two profiles colliding on an
+internal autoincrement id neither client nor server treats as profile-qualified). Fix: (1) the
+staleness query added `AND s.sharer_profile_id = get_current_profile_id()`; (2) the repoint
+endpoint added a `share["sharer_profile_id"] != get_current_profile_id()` 403 refusal; (3) also
+added a same-project check (`share`'s resolved `video_id` must belong to the SAME `project_id` as
+the path `video_id`) since a caller-supplied `share_token` could otherwise retarget an unrelated
+project's video even within one profile. Regression: `TestCrossProfileShareIsolation`
+(`test_t10860_repoint_share_token.py`) reproduces the exact collision with two profiles seeded
+independently (each lands final_video id=1 in its own SQLite) — confirmed RED (genuine
+200-success-and-corrupt, not a masked refusal) before the fix, GREEN after.)
 updated: 2026-09-26 (T10860: a share-token re-point ("Update shared version") is a POSTGRES CAS
 write, not a SQLite/R2 one — the R2 sync/version machinery this doc otherwise covers does NOT apply.
 `sharing_db.repoint_share_video` mirrors the existing `update_share_visibility` shape: ONE conditional
