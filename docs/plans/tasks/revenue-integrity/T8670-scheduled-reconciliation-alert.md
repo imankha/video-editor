@@ -1,6 +1,6 @@
 # T8670: Scheduled reconciliation with a drift alert
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-03

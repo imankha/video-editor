@@ -39,7 +39,11 @@ export const useAdminStore = create((set, get) => ({
   userDetailData: null, userDetailLoading: false, userDetailUserId: null,
 
   // T5760: Stripe revenue reconciliation (on-demand — never auto-fetched, Stripe latency)
+  // T8640: reconciliationHealResults maps user_id -> the last heal outcome for that
+  // row ({ healed, skipped }), so the panel can surface a heal that did NOT succeed
+  // instead of silently refreshing.
   reconciliationData: null, reconciliationLoading: false, reconciliationError: null,
+  reconciliationHealResults: {},
 
   // T10270: upload-failures drill-down (on-demand — deliberately NOT part of
   // fetchDashboard's combined mount request; AdminScreen.test.jsx asserts
@@ -398,9 +402,12 @@ export const useAdminStore = create((set, get) => ({
   // against per-user Stripe NET revenue). Explicit gesture — this hits Stripe, so it
   // is never fired on the main user-table load path.
   fetchReconciliation: async () => {
-    set({ reconciliationLoading: true, reconciliationError: null });
+    // T8640: honour the same test-account filter the rest of the admin panel uses
+    // (the "Real" pill). Clear any prior heal outcomes on a fresh run.
+    set({ reconciliationLoading: true, reconciliationError: null, reconciliationHealResults: {} });
     try {
-      const res = await apiFetch(`${API_BASE}/api/admin/revenue-reconciliation`);
+      const params = new URLSearchParams({ exclude_test: get().excludeTest });
+      const res = await apiFetch(`${API_BASE}/api/admin/revenue-reconciliation?${params}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || `HTTP ${res.status}`);
@@ -413,20 +420,26 @@ export const useAdminStore = create((set, get) => ({
 
   // T5760: adopt the Stripe net figure into total_spent_cents. Explicit admin
   // gesture (per-user or all-drifted); re-runs the report afterward so drift clears.
+  // T8640: capture per-row outcomes BEFORE the refresh so a heal that returned
+  // healed:false (e.g. an account_deleted row reconciled from the ledger) is visible
+  // on the row instead of silently vanishing.
   healReconciliation: async ({ userIds = null, allDrifted = false } = {}) => {
     set({ reconciliationLoading: true, reconciliationError: null });
     try {
       const res = await apiFetch(`${API_BASE}/api/admin/revenue-reconciliation/heal`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_ids: userIds, all_drifted: allDrifted }),
+        body: JSON.stringify({ user_ids: userIds, all_drifted: allDrifted, exclude_test: get().excludeTest }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
       const data = await res.json();
-      await get().fetchReconciliation();
+      const healResults = {};
+      for (const r of data.results || []) healResults[r.user_id] = r;
+      await get().fetchReconciliation();   // clears reconciliationHealResults
+      set({ reconciliationHealResults: healResults });
       return data;
     } catch (err) {
       set({ reconciliationLoading: false, reconciliationError: err.message });

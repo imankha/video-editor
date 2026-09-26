@@ -1,6 +1,6 @@
 # T8640: Reconciliation understands deleted accounts and stops lying about heals
 
-**Status:** WIP
+**Status:** STAGING (merged 2026-09-26, PR #513, 48161c4a; proof VERIFIED at f371de17 across 2 fix rounds, Branch CI green)
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-03
