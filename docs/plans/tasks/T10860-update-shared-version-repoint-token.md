@@ -1,10 +1,10 @@
 # T10860: Update shared version - re-point share token to moved final_video_id after private re-export
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 6
 **Created:** 2026-09-21
-**Updated:** 2026-09-21
+**Updated:** 2026-09-26
 
 ## Problem
 
