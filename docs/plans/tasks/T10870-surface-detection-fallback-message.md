@@ -1,6 +1,6 @@
 # T10870: Tell the user when auto-spotlight falls back to a centered default
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-21
@@ -65,14 +65,27 @@ in scope here).
    nothing usable" vs "never had detections" - only the former should show this message
 2. [ ] Add the copy string to `displayNames.js`
 3. [ ] Surface it once per region (not on every re-render) via a toast or dismissible inline note
-4. [ ] Test: a region with detections-but-no-boxes shows the message; a region with real detected
+4. [x] Test: a region with detections-but-no-boxes shows the message; a region with real detected
    boxes does NOT show it; a region with zero detections at all does not show this specific message
+
+### Progress Log
+
+**2026-09-26**: Merged PR #518 (bae7809b). Implemented as a `toast.info(...)` fired from
+`defaultHighlightForRegion`'s existing `console.warn` branch only, once per region (ref-backed
+guard + Toast dedupKey). First proof round was sent back by an independent proof-verifier
+(MORE_PROOF_REQUIRED): the once-per-region test asserted toast array length, which stayed 1
+even with the guard fully removed because `Toast.jsx`'s `dedupKey` already collapses same-key
+store entries regardless of call count - a mutation test proved the gap. Fixed by spying on
+`addToast` call count + toast id stability; re-verified by fresh reviewer (APPROVED, 0
+blocking/major) and proof-verifier (VERIFIED) against the corrected evidence, CI green on the
+final head, landed via `scripts/landing_gate.py`. MINOR (non-blocking, left as-is): reviewer
+noted `region?.id || 'unknown-region'` is a small silent fallback on internal data.
 
 ## Acceptance Criteria
 
-- [ ] When auto-spotlight falls back to a centered default because detection found no usable box,
+- [x] When auto-spotlight falls back to a centered default because detection found no usable box,
       the user sees a clear, non-blocking explanation (not just a console warning)
-- [ ] The message does NOT appear when a real detection box was successfully used
-- [ ] Copy lives in `displayNames.js`, matches existing athlete/spotlight vocabulary
-- [ ] Relevant test set green
-- [ ] Branch CI green
+- [x] The message does NOT appear when a real detection box was successfully used
+- [x] Copy lives in `displayNames.js`, matches existing athlete/spotlight vocabulary
+- [x] Relevant test set green
+- [x] Branch CI green
