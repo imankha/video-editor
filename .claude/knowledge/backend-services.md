@@ -436,6 +436,62 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
      `tests/test_revenue_reconciliation.py` (`TestAccountDeletedClassifier`,
      `TestDeletedPayerEndpoint`, `TestFilterSymmetryImankhRegression` — the imankh regression goes
      through the REAL TestClient endpoint, both filter states).
+- **T8670 (epic 6/6, all tasks implemented; epic not user-marked DONE): scheduled reconciliation with a drift alert.** Drift is now
+  detected without a human clicking the panel (incident hole 8). `services/reconciliation_alert.py`
+  is a THIN background caller — it does NOT reimplement the query or the classifier. It runs the
+  SAME `routers/admin.py` `_compute_reconciliation(exclude_test=True)` (lazy-imported inside
+  `_compute_rows`, off the event loop via `asyncio.to_thread`), then `_build_alert` (pure) flags the
+  two conditions worth surfacing: any row `cause == unknown`, and any row `has_pending_dispute`
+  (every other cause — aligned/test_mode_era/account_deleted/dispute/refund — is explained and
+  silent). Alert channel: ALWAYS a CRITICAL `[ReconAlert] DRIFT DETECTED` log line naming user_ids /
+  causes / amounts (greppable zero-dependency floor), and additionally an email to every
+  `get_admin_emails()` address via the existing `send_admin_update_email` (`body_text_to_html` shell)
+  — never a "nothing to report" email, and a failed send is logged and swallowed so it can never kill
+  the loop. **READ-ONLY**: the pass never heals / never calls `set_total_spent` / never writes
+  (proven by a before==after snapshot of `user_segments`/`payments`/`account_deletions`/`users`
+  across a drifted run; the ONE allowed write is the `reconciliation_alert_runs` marker below).
+  **At-most-once-per-interval across multi-machine Fly = TWO Postgres mechanisms, because neither
+  alone suffices** (round 2, T8670): (1) a SESSION-level advisory lock
+  `pg_try_advisory_lock(RECONCILIATION_ALERT_LOCK_ID=8670)` gives MUTUAL EXCLUSION between passes
+  that overlap IN TIME — held on ONE connection for the whole pass, released EXPLICITLY with
+  `pg_advisory_unlock` (the pooled connection is returned alive, never disconnected, so
+  auto-release-on-disconnect is NOT relied on); if not acquired → log INFO + skip, no busy-retry;
+  and (2) a PERSISTED single-row marker `reconciliation_alert_runs (id=1, last_run_at)` (postgres
+  v034, mirrored in `_SCHEMA_DDL`) gives DE-DUPLICATION across NON-overlapping passes. The lock
+  alone is NOT enough: each Fly machine (and each restart) starts its own startup-delay-then-weekly
+  timer, so two passes seconds/hours apart never contend for the lock yet would each see the same
+  drift and alert. Inside the same lock-held section the pass reads `last_run_at`; younger than one
+  interval → `skipped_recent` (no compute, no alert, no write beyond the lock); else it runs and,
+  once the outcome is fixed, upserts `last_run_at=now()` on a FRESH, SEPARATE `get_pg()` connection
+  (NOT the lock connection), then releases the lock. Lock id is literally 8670 (the task id),
+  chosen greppable; this is the first advisory-lock user in the codebase. **The pass also runs ~60s
+  after every boot/deploy** (`STARTUP_DELAY_SECONDS`), NOT on a fixed wall-clock weekly schedule —
+  the marker is exactly what stops those extra boot-time passes from re-alerting within an interval.
+  **A mid-pass connection death no longer duplicates the alert** (round 3, closing round 2 fix #2's
+  residual gap): the cleanup tail `_finish_pass` upserts `last_run_at` on a FRESH `get_pg()`
+  connection FIRST, then unlocks on the original lock connection -- both best-effort, neither
+  propagates. Writing the marker OFF the lock connection is the round-3 fix: round 2 wrote it through
+  the lock connection's own cursor, so ANY death of that connection during the pass (not just on the
+  unlock statement) skipped the marker entirely and the next pass re-sent the alert. `get_pg`
+  RE-RAISES a dead-connection error on its exit-commit (it does NOT swallow it, contrary to the
+  pre-round-2 comment), so `run_reconciliation_alert_pass` catches that re-raise once an outcome
+  exists and returns without letting the outer loop retry-and-re-send. Because the marker is written
+  on an independent connection, a lock-connection death at ANY point up to and including the unlock
+  still leaves the marker persisted -> the next pass sees a recent run and skips (proven by
+  `TestFreshConnectionMarkerSurvivesLockConnDeath`, which kills the real lock backend mid-pass with
+  both `pg_terminate_backend` and `idle_in_transaction_session_timeout`). The ONLY residual
+  double-alert path now is the marker upsert on its own fresh connection ITSELF failing -- a rare LOUD
+  duplicate alert on the next pass is the accepted trade (documented in `_finish_pass`), never a
+  silent stall. Scheduling reuses the `sweep_scheduler`/`cleanup` background-loop pattern:
+  `start_reconciliation_alert_loop`/`stop_reconciliation_alert_loop` wired into `main.py` lifespan;
+  fixed WEEKLY interval (`WEEKLY_INTERVAL_SECONDS`, a named constant). On a `skipped_recent` boot-time
+  pass the loop sleeps only the time REMAINING until the run is due (`next_run_in_seconds`, floored at
+  `MIN_RESLEEP_SECONDS`), not a fresh full interval, so a machine that boots just after another ran
+  does not stretch effective spacing toward ~2x the nominal interval. One `PaymentIntent.list`
+  pagination per run (inside `_compute_reconciliation`), same bounded Stripe read the panel makes;
+  NEVER on a user-facing path. If Stripe is unconfigured (local dev) the pass logs INFO and skips.
+  Tests: `tests/test_t8670_reconciliation_alert.py` (run against an ISOLATED test DB, Stripe mocked).
+  If T1702 (monetization alerts) is later picked up, it must REUSE this loop, not add a second.
 
 ### Account deletion contract (T8630)
 Revenue Record Integrity epic 2/6. Fixes the two 2026-09-03 incident holes: deletion used to

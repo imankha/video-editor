@@ -506,6 +506,18 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- T8670 r2: single-row marker for when the scheduled reconciliation drift-alert
+-- pass last completed. De-duplicates the alert across NON-overlapping passes
+-- (two Fly machines booting at different times) that the advisory lock alone
+-- cannot -- the lock only excludes passes that overlap in time. Bookkeeping
+-- about the alert JOB, not revenue data; sole writer is
+-- services/reconciliation_alert.py. Mirrored in
+-- migrations/postgres/v034_reconciliation_alert_runs.py; the two texts must match.
+CREATE TABLE IF NOT EXISTS reconciliation_alert_runs (
+    id          SMALLINT    PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    last_run_at TIMESTAMPTZ NOT NULL
+);
+
 -- T5840: credits move out of the per-user SQLite last-write-wins blob.
 -- No FK to users(user_id) -- X-User-ID/e2e users legitimately have no Postgres
 -- users row and still get the signup bonus (session_init.py).
