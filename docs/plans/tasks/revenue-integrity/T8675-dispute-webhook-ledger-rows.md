@@ -1,6 +1,6 @@
 # T8675: Dispute webhook writes ledger rows
 
-**Status:** WIP
+**Status:** STAGING (merged 2026-09-25, PR #512, a5ea6fbb; proof VERIFIED at ecf340ca, Branch CI green. Operator: subscribe live webhook to charge.dispute.closed, charge.refund.updated, refund.updated)
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-24
