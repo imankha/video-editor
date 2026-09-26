@@ -1,10 +1,10 @@
 # T10870: Tell the user when auto-spotlight falls back to a centered default
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-21
-**Updated:** 2026-09-21
+**Updated:** 2026-09-26
 
 ## Problem
 
