@@ -1,5 +1,26 @@
 ---
 domain: keyframes-framing
+updated: 2026-09-26 (T10870 — Overlay auto-spotlight now SURFACES its detection fallback to the user.
+`useHighlightRegions.defaultHighlightForRegion` already degraded to the neutral centered default
+(never a fabricated box) when a region HAD detections but `pickPrimaryDetectionBox` returned falsy
+(e.g. a dim/dusk clip = detection ran, zero usable boxes) — but that was dev-`console.warn`-only, so
+the plain centered highlight looked identical to a real auto-pick. Now that exact branch (inside
+`if (detections.length && vw && vh)` AND `primary` falsy — NOT the zero-detections path, which stays
+silent as before) fires `toast.info(SPOTLIGHT_DETECTION_FALLBACK_TOAST)` ("Couldn't auto-detect your
+athlete" / "Drag the highlight to reposition it in this clip.", copy single-sourced in
+`config/displayNames.js`, "athlete" per T9860). ONCE per region: a per-hook-instance
+`useRef(new Set())` of already-notified region ids (`notifiedDetectionFallbackRef`) — the toast
+`dedupKey` alone only prevents STACKING, not repeat pop-ins across the 4 call sites (restoreRegions,
+addRegion, getHighlightAtTime, getRegionsForExport). The two synthetic call sites (restore/add) now
+thread the region `id` into the object passed to `defaultHighlightForRegion` so the guard key is
+stable. Render-safety: `getRegionsForExport`/`getHighlightAtTime` run during render and `toast.info`
+is a cross-component zustand set, but the fire is unreachable from a render path in practice —
+restore/add always seed keyframes THROUGH the fallback first, so a failed region is already in the
+guard Set before any render read, and real regions never drop below 2 keyframes. Memory-only UI
+signal, no persistence/useEffect. Coverage:
+`modes/overlay/hooks/useHighlightRegions.detectionFallback.test.js` (4: fires on no-usable-box, silent
+on real box, silent on zero detections, once-per-region across repeat paths) — exercises the REAL hook
++ real toast store, red-to-green proven against the pre-fix hook.)
 updated: 2026-09-21 (T10840 — Focus on a landscape phone gets a distinct COCKPIT layout, not the
 scrolling portrait/tablet column. Entry is a PURE derivation `useIsCockpit() = useIsMobile() &&
 useIsLandscape()` (`hooks/useIsMobile.js`) — no state, no effect, no store field; jsdom's matchMedia
