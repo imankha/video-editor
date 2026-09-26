@@ -251,6 +251,15 @@ class TestStatsForAdmin:
         stats = stats_for_admin([USER])[USER]
         assert stats["credits_spent"] == 30
 
+    def test_refund_sources_list_matches_key_prefix_registry(self):
+        """Guard against drift (reviewer MINOR-1): if a new '*_refund' source is
+        ever registered in KEY_PREFIX without also adding it to
+        _REFUND_SOURCES, the netting fix silently misses it and the exact
+        gross-not-net bug this task fixes reappears for that source. No DB
+        needed -- this only checks the two Python registries agree."""
+        registered_refund_sources = {s for s in credit_ledger.KEY_PREFIX if s.endswith("_refund")}
+        assert registered_refund_sources == set(credit_ledger._REFUND_SOURCES)
+
     def test_credits_spent_unaffected_without_refunds(self, pg_conn):
         """Regression guard: a user with only plain deductions (no refund rows)
         must be unchanged by the netting logic."""
