@@ -50,9 +50,9 @@ from ..storage import (
     R2_ENABLED,
     download_from_r2_global,
     generate_presigned_url_global,
+    r2_head_object,
     r2_head_object_global,
 )
-from ..storage import r2_head_object
 from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)

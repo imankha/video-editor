@@ -47,6 +47,7 @@ def isolated_auth_db(pg_conn):
 @pytest.fixture()
 def client(isolated_auth_db, tmp_path):
     from unittest.mock import AsyncMock
+
     from app.session_init import _init_cache
     _init_cache[SHARER_ID] = {"profile_id": "testdefault", "is_new_user": False}
     _init_cache[RECIPIENT_ID] = {"profile_id": "testdefault", "is_new_user": False}
@@ -54,8 +55,9 @@ def client(isolated_auth_db, tmp_path):
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db._initialized_user_dbs", set()), \
          patch("app.services.email.send_share_email", new_callable=AsyncMock, return_value=True):
-        from app.main import app
         from fastapi.testclient import TestClient
+
+        from app.main import app
         yield TestClient(app, raise_server_exceptions=True)
 
 
@@ -70,8 +72,8 @@ def _seed_project_with_final_video(
     """Insert a project + one final_videos row into the sharer's SQLite,
     return (project_id, final_video_id)."""
     from app.database import get_db_connection
-    from app.user_context import set_current_user_id
     from app.profile_context import set_current_profile_id
+    from app.user_context import set_current_user_id
 
     set_current_user_id(user_id)
     set_current_profile_id("testdefault")
@@ -150,7 +152,7 @@ class TestRepointShareVideoDb:
         assert share["video_duration"] == 25.0
 
     def test_repoint_refuses_on_revoked_share(self, isolated_auth_db):
-        from app.services.sharing_db import create_shares, revoke_share, repoint_share_video
+        from app.services.sharing_db import create_shares, repoint_share_video, revoke_share
 
         shares = create_shares(
             video_id=1, sharer_user_id=SHARER_ID, sharer_profile_id="testdefault",
@@ -292,7 +294,7 @@ class TestRepointEndpoint:
         R2_ENABLED=True patched: the endpoint only HEADs R2 when R2 is enabled
         (local dev with R2 disabled checks local disk instead, see
         test_target_missing_refused_409_local_disk below)."""
-        project_id, final_video_id, token = self._publish_and_share(client)
+        project_id, _final_video_id, token = self._publish_and_share(client)
         new_final_video_id = _reexport(project_id, new_filename="v2.mp4")
 
         with patch("app.routers.shares.r2_head_object", return_value=None), \
@@ -315,7 +317,7 @@ class TestRepointEndpoint:
         refuse EVERY re-point in local/no-R2 dev). No local file was ever
         written for the re-exported filename here, so this refuses exactly
         like the R2-enabled case above."""
-        project_id, final_video_id, token = self._publish_and_share(client)
+        project_id, _final_video_id, token = self._publish_and_share(client)
         new_final_video_id = _reexport(project_id, new_filename="v2.mp4")
 
         resp = client.post(
@@ -328,7 +330,7 @@ class TestRepointEndpoint:
 
     def test_idempotent_noop_when_already_current(self, client):
         """Share already points at the current video+filename -> 200 no-op."""
-        project_id, final_video_id, token = self._publish_and_share(client)
+        _project_id, final_video_id, token = self._publish_and_share(client)
 
         with patch("app.routers.shares.r2_head_object", return_value={"ETag": "x"}):
             resp = client.post(
@@ -340,7 +342,7 @@ class TestRepointEndpoint:
         assert resp.json()["ok"] is True
 
     def test_success_returns_unchanged_share_url(self, client):
-        project_id, final_video_id, token = self._publish_and_share(client)
+        project_id, _final_video_id, token = self._publish_and_share(client)
         new_final_video_id = _reexport(project_id, new_filename="v2.mp4")
 
         with patch("app.routers.shares.r2_head_object", return_value={"ETag": "x"}), \
@@ -364,12 +366,12 @@ class TestRepointEndpoint:
         """R2_ENABLED=False (this container's actual posture) + the re-exported
         file genuinely present on local disk -> 200 success, proving the local-
         disk existence branch's happy path (not just its refusal path above)."""
-        project_id, final_video_id, token = self._publish_and_share(client)
+        project_id, _final_video_id, token = self._publish_and_share(client)
         new_final_video_id = _reexport(project_id, new_filename="v2.mp4")
 
         from app.database import get_final_videos_path
-        from app.user_context import set_current_user_id
         from app.profile_context import set_current_profile_id
+        from app.user_context import set_current_user_id
         set_current_user_id(SHARER_ID)
         set_current_profile_id("testdefault")
         final_videos_dir = get_final_videos_path()
@@ -385,7 +387,7 @@ class TestRepointEndpoint:
         assert resp.json()["ok"] is True
 
     def test_non_sharer_forbidden_403(self, client):
-        project_id, final_video_id, token = self._publish_and_share(client)
+        project_id, _final_video_id, token = self._publish_and_share(client)
         new_final_video_id = _reexport(project_id, new_filename="v2.mp4")
 
         resp = client.post(
@@ -396,7 +398,7 @@ class TestRepointEndpoint:
         assert resp.status_code == 403
 
     def test_revoked_share_returns_410(self, client):
-        project_id, final_video_id, token = self._publish_and_share(client)
+        project_id, _final_video_id, token = self._publish_and_share(client)
         new_final_video_id = _reexport(project_id, new_filename="v2.mp4")
 
         client.delete(f"/api/shared/{token}", headers=_auth_headers(SHARER_ID))
