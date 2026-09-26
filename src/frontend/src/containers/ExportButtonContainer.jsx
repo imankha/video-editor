@@ -326,17 +326,19 @@ export function ExportButtonContainer({
         await fireExportComplete({ projectId, mode: editorMode });
       },
       onError: (serverError, meta = {}) => {
-        // Server reported a terminal error — show it. T4110: a retryable
-        // sync_failed (render OK but durable R2 sync failed) is NOT a successful
-        // export, so we stay on the error path (no "complete", no Move-to-My-Reels)
-        // and prompt the user to try Export again.
+        // T4110: a retryable sync_failed (render OK but durable R2 sync failed) is NOT a
+        // successful export, so we stay on the error path (no "complete", no Move-to-My-Reels).
+        // T11330: the terminal failure is written to the export store EXACTLY ONCE, by
+        // ExportWebSocketManager (the single write path for terminal WS errors) — it already
+        // ran store.failExport(...) with the message + the structured budgetRejection BEFORE
+        // calling this callback. We must NOT re-fail the store here: a second write dropped
+        // budgetRejection back to null and the "export too large" popup never rendered
+        // (Bug 58p's original experience). React with LOCAL UI only.
         setDisconnected(false);
-        const fallback = meta.retryable
-          ? "Render finished but couldn't save to the cloud. Please try Export again."
-          : 'Export failed on server';
-        setError(serverError || fallback);
-        if (exportIdRef.current) {
-          failExportInStore(exportIdRef.current, serverError || fallback, { retryable: !!meta.retryable });
+        // T11330: an over-budget rejection is surfaced by ExportTooLargeModal (store-driven),
+        // so don't also show the raw guard text in the inline export-panel banner.
+        if (meta.code !== 'export_too_large') {
+          setError(serverError || 'Export failed on server');
         }
         setIsExporting(false);
         handleExportEnd();

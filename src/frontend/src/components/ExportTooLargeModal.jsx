@@ -23,9 +23,16 @@ const MAX_CONTRIBUTORS_SHOWN = 3;
 export function ExportTooLargeModal({ isOpen, rejection, projectName, onDismiss }) {
   if (!isOpen || !rejection) return null;
 
-  const contributors = Array.isArray(rejection.biggest_contributors)
-    ? rejection.biggest_contributors.slice(0, MAX_CONTRIBUTORS_SHOWN)
+  // `biggest_contributors` is a backend-guaranteed list, but this is a UI boundary consuming a
+  // WS frame: a malformed/absent list should degrade the popup, not crash the render, so we
+  // tolerate it here rather than fail loud (the guard/tests enforce the shape upstream).
+  const allContributors = Array.isArray(rejection.biggest_contributors)
+    ? rejection.biggest_contributors
     : [];
+  const contributors = allContributors.slice(0, MAX_CONTRIBUTORS_SHOWN);
+  // The split suggestion only helps when more than one clip contributed cost; the single-clip
+  // /render path hits this same guard, where "export fewer clips" isn't actionable (minor 2).
+  const isMultiClip = allContributors.length > 1;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -62,10 +69,12 @@ export function ExportTooLargeModal({ isOpen, rejection, projectName, onDismiss 
                 <Scissors size={16} className="text-blue-400 shrink-0 mt-0.5" />
                 <span>{EXPORT_TOO_LARGE.SUGGESTION_CROP}</span>
               </li>
-              <li className="flex items-start gap-2">
-                <Layers size={16} className="text-blue-400 shrink-0 mt-0.5" />
-                <span>{EXPORT_TOO_LARGE.SUGGESTION_SPLIT}</span>
-              </li>
+              {isMultiClip && (
+                <li className="flex items-start gap-2" data-testid="export-too-large-split">
+                  <Layers size={16} className="text-blue-400 shrink-0 mt-0.5" />
+                  <span>{EXPORT_TOO_LARGE.SUGGESTION_SPLIT}</span>
+                </li>
+              )}
             </ul>
           </div>
 

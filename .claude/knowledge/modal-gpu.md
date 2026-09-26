@@ -262,9 +262,15 @@ graph LR
   HTTP carries it — dispatch returns 202, guard fires in the background task). Frontend hook point
   is `ExportWebSocketManager._handleMessage`'s ERROR branch: when `code === 'export_too_large'` it
   passes the raw frame to `exportStore.failExport(..., {budgetRejection})`, stored on the export
-  entry. `GlobalExportIndicator` (globally mounted) renders `ExportTooLargeModal` for the most
-  recent errored export carrying a `budgetRejection` and SUPPRESSES the generic error toast for it;
-  the modal has NO backdrop-close (project convention). Copy is single-sourced in
+  entry. **INVARIANT (single write path for terminal WS errors):** the manager is the ONLY writer
+  that fails the store on a WS error, and it resolves the retryable-aware terminal message there.
+  `ExportButtonContainer.connectWebSocket`'s `onError` reacts with LOCAL UI only and must NEVER call
+  `failExport` again — a second write dropped `budgetRejection` back to null and the popup never
+  rendered (review BLOCKING, caught post-first-commit; regression-locked by the real two-writer-seam
+  test `ExportButtonContainer.budgetRejection.test.jsx`). `GlobalExportIndicator` (globally mounted)
+  renders `ExportTooLargeModal` for the most recent errored export carrying a `budgetRejection` and
+  SUPPRESSES the generic error toast for it; the modal has NO backdrop-close (project convention) and
+  hides the "split the batch" lever for a single-clip (`/render`) rejection. Copy is single-sourced in
   `config/displayNames.js` `EXPORT_TOO_LARGE` (+ `formatApproxMinutes`). **Step 4 (credit ordering)
   decision (a): a rejection is a DEDUCT-then-REFUND that nets to zero** — credits are reserved +
   confirmed in the request handler before the background task; the guard rejection refunds them in

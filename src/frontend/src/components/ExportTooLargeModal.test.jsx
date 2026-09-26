@@ -38,7 +38,8 @@ describe('ExportTooLargeModal (T11330)', () => {
     expect(screen.getByText(EXPORT_TOO_LARGE.TITLE)).toBeTruthy();
     expect(screen.getByTestId('export-too-large-why').textContent).toBe(EXPORT_TOO_LARGE.WHY);
     expect(screen.getByText(EXPORT_TOO_LARGE.SUGGESTION_CROP)).toBeTruthy();
-    expect(screen.getByText(EXPORT_TOO_LARGE.SUGGESTION_SPLIT)).toBeTruthy();
+    // Two contributors -> the split suggestion is actionable and shown.
+    expect(screen.getByTestId('export-too-large-split')).toBeTruthy();
     // Credit outcome is stated (Step 4 decision a: net zero, reserved credits refunded).
     expect(screen.getByTestId('export-too-large-credit-note').textContent).toBe(EXPORT_TOO_LARGE.CREDIT_NOTE);
     expect(screen.getByText('My Reel')).toBeTruthy();
@@ -58,6 +59,14 @@ describe('ExportTooLargeModal (T11330)', () => {
     render(<ExportTooLargeModal isOpen rejection={noName} onDismiss={() => {}} />);
     // clip_index 4 -> "Clip 5" (1-based for humans).
     expect(screen.getByTestId('export-too-large-contributors').textContent).toContain('Clip 5');
+  });
+
+  it('hides the "split the batch" suggestion for a single-clip rejection (not actionable)', () => {
+    const single = { ...rejection, biggest_contributors: [rejection.biggest_contributors[0]] };
+    render(<ExportTooLargeModal isOpen rejection={single} onDismiss={() => {}} />);
+    // Cropping is still offered; splitting one clip is not.
+    expect(screen.getByText(EXPORT_TOO_LARGE.SUGGESTION_CROP)).toBeTruthy();
+    expect(screen.queryByTestId('export-too-large-split')).toBeNull();
   });
 
   it('dismisses via the Got it button', () => {
