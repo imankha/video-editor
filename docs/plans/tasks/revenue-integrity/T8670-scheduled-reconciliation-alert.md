@@ -88,5 +88,21 @@ email additionally) only on `unknown` rows and pending disputes; silent otherwis
 read-only. Tests: `tests/test_t8670_reconciliation_alert.py`. Knowledge doc updated:
 `.claude/knowledge/backend-services.md` (reconciliation section).
 
-**This is the LAST task in the Revenue Record Integrity epic  -  see EPIC.md, now marked
-COMPLETE (6/6).**
+### Round 2 (2026-09-26): at-most-once-per-interval, not once-per-machine
+
+The advisory lock alone only excludes passes that overlap IN TIME. Two Fly machines (or one
+restarted machine) each start their own startup-delay-then-weekly timer, so two
+non-overlapping passes each acquire the lock in turn and each alert. Fix: a PERSISTED
+single-row marker `reconciliation_alert_runs (id=1, last_run_at)` (postgres v034, mirrored in
+`_SCHEMA_DDL`). Inside the same lock-held section the pass reads `last_run_at`; younger than
+one interval → `skipped_recent` (no compute/alert/write beyond the lock); else it runs and
+upserts `last_run_at=now()` before releasing the lock. The cleanup tail (`_finish_pass`:
+upsert marker FIRST, then unlock) is best-effort and never propagates: `get_pg` RE-RAISES a
+dead-connection error on its exit-commit, so a post-alert connection death no longer bubbles
+out to make the outer loop retry-and-re-send. Because the marker is stamped before the
+unlock, a death on the unlock step still leaves it persisted, so the retry skips. The pass
+also runs ~60s after every boot/deploy (`STARTUP_DELAY_SECONDS`), not on a fixed wall clock.
+
+**This is the LAST task in the Revenue Record Integrity epic  -  see EPIC.md. The epic is
+NOT marked COMPLETE: DONE is the user's gesture, and one completion criterion (0 unexplained
+drift on a real prod reconciliation run) awaits prod migrate-postgres + backfill.**

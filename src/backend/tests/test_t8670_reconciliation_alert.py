@@ -4,10 +4,18 @@ Proves the weekly background pass:
 - alerts (CRITICAL log + admin email attempt) on `unknown` drift,
 - alerts on a pending dispute even with no `unknown` rows,
 - stays SILENT when every row is explained,
-- is guarded by a single Postgres advisory lock so two concurrent passes alert
-  exactly once, not once per machine,
-- writes NOTHING (read-only): user_segments / payments / account_deletions are
-  byte-for-byte unchanged across a run against a genuinely drifted fixture.
+- is guarded by a single Postgres advisory lock so two CONCURRENT passes alert
+  exactly once, not once per machine (mutual exclusion),
+- is de-duplicated across NON-overlapping passes by a persisted last-run marker
+  (round 2): a second sequential pass seconds later returns `skipped_recent` with
+  zero emails and zero CRITICAL logs, but a pass a full interval later proceeds,
+- survives a dead connection during cleanup: the failed unlock does not escape the
+  pass, and (because the marker is stamped BEFORE the unlock) the immediately
+  following retry sees a recent run and does NOT re-alert,
+- writes NOTHING to revenue state (read-only): user_segments / payments /
+  account_deletions / users are byte-for-byte unchanged across a run against a
+  genuinely drifted fixture. The ONE allowed write is the reconciliation_alert_runs
+  bookkeeping marker.
 
 Stripe is fully mocked (fetch_stripe_intents patched); no live key, no network.
 Runs against an ISOLATED test database (t8670_test), never the shared dev DB.
@@ -38,7 +46,11 @@ def _seed_segment(user_id, cents):
 
 
 def _table_snapshot(dsn):
-    """Row counts + full contents of the three tables the pass must never write."""
+    """Full contents of the revenue tables the pass must NEVER write.
+
+    reconciliation_alert_runs is deliberately excluded: it is the one table the
+    pass legitimately writes (the last-run bookkeeping marker), so it is asserted
+    separately (it CHANGES) rather than here (must not change)."""
     conn = psycopg2.connect(dsn)
     try:
         cur = conn.cursor()
@@ -49,7 +61,38 @@ def _table_snapshot(dsn):
         snap["payments"] = cur.fetchall()
         cur.execute("SELECT user_id, actor, path FROM account_deletions ORDER BY id")
         snap["account_deletions"] = cur.fetchall()
+        cur.execute("SELECT user_id, email FROM users ORDER BY user_id")
+        snap["users"] = cur.fetchall()
         return snap
+    finally:
+        conn.close()
+
+
+def _marker_row(dsn):
+    """The single reconciliation_alert_runs row (or None if unwritten)."""
+    from psycopg2.extras import RealDictCursor
+    conn = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, last_run_at FROM reconciliation_alert_runs WHERE id = 1")
+        return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def _set_marker_age(dsn, seconds_ago):
+    """Force the last-run marker to a given age (used to simulate a full interval
+    having elapsed without waiting)."""
+    conn = psycopg2.connect(dsn)
+    conn.autocommit = True
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO reconciliation_alert_runs (id, last_run_at) "
+            "VALUES (1, now() - make_interval(secs => %s)) "
+            "ON CONFLICT (id) DO UPDATE SET last_run_at = EXCLUDED.last_run_at",
+            (seconds_ago,),
+        )
     finally:
         conn.close()
 
@@ -70,6 +113,11 @@ def recon_alert_env(pg_conn, monkeypatch):
         cur = conn.cursor()
         cur.execute("DELETE FROM admin_users")
         cur.execute("INSERT INTO admin_users (email) VALUES ('test-admin@test.local')")
+        # The last-run marker is NOT keyed by user, so pg_conn's per-test-user
+        # cleanup never clears it. Wipe it so each test starts with no recent run
+        # (otherwise a marker left by a prior test would make this one
+        # skipped_recent).
+        cur.execute("DELETE FROM reconciliation_alert_runs")
     monkeypatch.setattr("stripe.api_key", "sk_test_dummy")
     yield pg_conn  # pg_conn yields the dsn string
 
@@ -213,7 +261,12 @@ class TestLockReleasePath:
     def _keepalive_get_pg(self, dsn, open_conns):
         """A get_pg that yields a real connection and returns it to the caller's
         list ALIVE (never closed) -- mimics the pool handing a connection back
-        without disconnecting it."""
+        without disconnecting it.
+
+        FAITHFUL to real pg.py: a connection error on the exit-time commit is
+        RE-RAISED (real get_pg does NOT swallow it -- it logs and re-raises). The
+        earlier version of this helper swallowed it, which hid the exact
+        propagation the round-2 fix has to defend against."""
         from contextlib import contextmanager
 
         from psycopg2.extras import RealDictCursor
@@ -230,6 +283,7 @@ class TestLockReleasePath:
                     conn.rollback()
                 except Exception:
                     pass  # discarded like the pool would
+                raise  # real pg.py re-raises the connection error
             except Exception:
                 conn.rollback()
                 raise
@@ -338,6 +392,7 @@ class TestLockReleasePath:
                     wrapped.rollback()
                 except Exception:
                     pass
+                raise  # FAITHFUL: real pg.py re-raises the connection error
             except Exception:
                 wrapped.rollback()
                 raise
@@ -377,6 +432,151 @@ class TestLockReleasePath:
                 except Exception:
                     pass
 
+    def test_dead_conn_on_cleanup_does_not_escape_and_next_pass_does_not_resend(
+        self, recon_alert_env, caplog
+    ):
+        # Round-2 fix #2: the lock connection dies on the unlock step AFTER the
+        # alert has already been sent. Two guarantees:
+        #   (a) no exception escapes run_reconciliation_alert_pass (get_pg
+        #       re-raises the exit-commit failure; the pass swallows it because an
+        #       outcome was already produced), and
+        #   (b) the immediately-following pass (simulating the outer loop's 1h
+        #       retry) sees the last_run_at marker -- stamped BEFORE the failing
+        #       unlock -- and returns skipped_recent with ZERO new emails.
+        dsn = recon_alert_env
+        from contextlib import contextmanager
+
+        from psycopg2.extras import RealDictCursor
+
+        from app.services import reconciliation_alert
+        from app.services.auth_db import create_user
+        create_user("user-a", email="a@test.local")
+        _seed_segment("user-a", 699)
+        fixture = [make_pi("user-a", 399, pi_id="pi_unknown")]
+
+        class _UnlockRaisesCursor:
+            def __init__(self, real):
+                self._real = real
+            def execute(self, sql, params=None):
+                if "pg_advisory_unlock" in sql:
+                    raise psycopg2.OperationalError("simulated dead socket on unlock")
+                return self._real.execute(sql, params)
+            def fetchone(self):
+                return self._real.fetchone()
+
+        class _UnlockRaisesConn:
+            def __init__(self, real):
+                self._real = real
+            def cursor(self, *a, **k):
+                return _UnlockRaisesCursor(self._real.cursor(*a, **k))
+            def commit(self):
+                return self._real.commit()
+            def rollback(self):
+                return self._real.rollback()
+            def close(self):
+                return self._real.close()
+
+        @contextmanager
+        def lock_get_pg():
+            real = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+            wrapped = _UnlockRaisesConn(real)
+            try:
+                yield wrapped
+                wrapped.commit()  # on a force-closed conn this raises...
+            except (psycopg2.OperationalError, psycopg2.InterfaceError):
+                try:
+                    wrapped.rollback()
+                except Exception:
+                    pass
+                raise  # ...and real pg.py RE-RAISES it (the bug path being fixed)
+            except Exception:
+                wrapped.rollback()
+                raise
+
+        open_conns = []
+        compute_cm = self._keepalive_get_pg(dsn, open_conns)
+
+        # Pass 1: alert sent, then unlock fails. Must return alerted WITHOUT raising.
+        send_mock1 = AsyncMock(return_value=True)
+        try:
+            with patch("app.services.pg.get_pg", lock_get_pg), \
+                 patch("app.routers.admin.get_pg", compute_cm), \
+                 patch("app.services.auth_db.get_pg", compute_cm), \
+                 patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture), \
+                 patch.object(reconciliation_alert, "send_admin_update_email", send_mock1):
+                result1 = asyncio.run(reconciliation_alert.run_reconciliation_alert_pass())
+            # (a) No exception escaped; the alert went out exactly once.
+            assert result1["status"] == "alerted"
+            assert send_mock1.await_count == 1
+            # The marker was persisted before the unlock failed.
+            assert _marker_row(dsn) is not None
+
+            # Pass 2: the retry, run immediately after with a healthy get_pg.
+            # It must de-dup on the recent marker and NOT re-send.
+            caplog.clear()  # drop pass 1's DRIFT log so we assert only pass 2's
+            send_mock2 = AsyncMock(return_value=True)
+            with caplog.at_level(logging.CRITICAL, logger="app.services.reconciliation_alert"):
+                result2 = _run_pass(fixture, send_mock2)
+            assert result2["status"] == "skipped_recent"
+            assert send_mock2.await_count == 0
+            assert [r for r in caplog.records if r.levelno == logging.CRITICAL
+                    and "DRIFT" in r.getMessage()] == []
+        finally:
+            for c in open_conns:
+                try:
+                    c.close()
+                except Exception:
+                    pass
+
+
+# ---------------------------------------------------------------------------
+# De-duplication across NON-overlapping passes (persisted last-run marker)
+# ---------------------------------------------------------------------------
+
+class TestDedup:
+    def test_two_sequential_passes_second_is_skipped_recent(self, recon_alert_env, caplog):
+        # The verifier's exact counterexample: two SEQUENTIAL (non-overlapping)
+        # passes seconds apart, both seeing the same unexplained drift. The first
+        # alerts and stamps last_run_at; the second sees a recent run and returns
+        # skipped_recent with ZERO emails and ZERO CRITICAL drift logs.
+        from app.services.auth_db import create_user
+        create_user("user-a", email="a@test.local")
+        _seed_segment("user-a", 699)
+        fixture = [make_pi("user-a", 399, pi_id="pi_unknown")]
+
+        # Pass 1 -> alerts.
+        send1 = AsyncMock(return_value=True)
+        result1 = _run_pass(fixture, send1)
+        assert result1["status"] == "alerted"
+        assert send1.await_count == 1
+
+        # Pass 2, run right after (seconds), same drift -> de-duplicated.
+        caplog.clear()  # drop pass 1's DRIFT log so we assert only pass 2's
+        send2 = AsyncMock(return_value=True)
+        with caplog.at_level(logging.CRITICAL, logger="app.services.reconciliation_alert"):
+            result2 = _run_pass(fixture, send2)
+        assert result2["status"] == "skipped_recent"
+        assert send2.await_count == 0
+        assert [r for r in caplog.records if r.levelno == logging.CRITICAL
+                and "DRIFT" in r.getMessage()] == []
+
+    def test_pass_a_full_interval_later_proceeds(self, recon_alert_env):
+        # A marker older than one interval must NOT permanently wedge the pass:
+        # a run a full interval after the last recorded one proceeds normally.
+        from app.services.auth_db import create_user
+        from app.services.reconciliation_alert import WEEKLY_INTERVAL_SECONDS
+        create_user("user-a", email="a@test.local")
+        _seed_segment("user-a", 699)
+        fixture = [make_pi("user-a", 399, pi_id="pi_unknown")]
+
+        # Last run was just over a full interval ago.
+        _set_marker_age(recon_alert_env, WEEKLY_INTERVAL_SECONDS + 60)
+
+        send = AsyncMock(return_value=True)
+        result = _run_pass(fixture, send)
+        assert result["status"] == "alerted"
+        assert send.await_count == 1
+
 
 # ---------------------------------------------------------------------------
 # Read-only guarantee
@@ -398,5 +598,10 @@ class TestReadOnly:
         # It DID detect drift (so this proves read-only on a real-write scenario,
         # not a trivially empty one)...
         assert result["status"] == "alerted"
-        # ...yet changed no financial state whatsoever.
+        # ...yet changed no revenue/user state whatsoever
+        # (payments / user_segments / account_deletions / users byte-identical).
         assert before == after
+        # The ONE allowed exception: the pass stamped its own bookkeeping marker.
+        # That is job state about the alert loop, not revenue data.
+        marker = _marker_row(dsn)
+        assert marker is not None and marker["last_run_at"] is not None

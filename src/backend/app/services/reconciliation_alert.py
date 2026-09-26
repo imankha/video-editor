@@ -19,14 +19,34 @@ It does not reimplement the query or the classifier:
 READ-ONLY: this pass never heals, never calls ``set_total_spent``, never writes.
 Healing stays an explicit admin gesture.
 
-Single-machine coordination on a multi-machine Fly deploy: a Postgres SESSION-level
-advisory lock (``pg_try_advisory_lock``) taken on one connection that is HELD for
-the whole pass and released EXPLICITLY with ``pg_advisory_unlock`` in a ``finally``.
-We do NOT rely on "the connection closes" auto-release, because the connection
-comes from a pool and is returned to it alive, never disconnected. If the lock is
-already held, another machine is running (or just ran) this cycle -> log at INFO
-and skip; do not busy-retry. Postgres is the one resource every machine shares, so
-this makes "once per deploy" true without adding leader-election infrastructure.
+At-most-once-per-interval across a multi-machine Fly deploy is enforced by TWO
+distinct Postgres mechanisms, because either one alone is insufficient:
+
+1. A SESSION-level advisory lock (``pg_try_advisory_lock``) gives MUTUAL EXCLUSION
+   between passes that overlap IN TIME. It is taken on one connection held for the
+   whole pass and released EXPLICITLY with ``pg_advisory_unlock``. We do NOT rely
+   on "the connection closes" auto-release, because the connection comes from a
+   pool and is returned to it alive, never disconnected. If the lock is already
+   held, another machine is running RIGHT NOW -> log at INFO and skip.
+
+2. A PERSISTED last-run marker (``reconciliation_alert_runs``, one row) gives
+   DE-DUPLICATION across passes that do NOT overlap in time. Each Fly machine (and
+   each restart) starts its own startup-delay-then-weekly timer, so two passes can
+   run seconds or hours apart, never contending for the lock, and each would
+   otherwise see the same drift and alert. Inside the SAME lock-held section the
+   pass reads ``last_run_at``; if it is younger than one interval it skips
+   (``skipped_recent``) without computing or alerting; otherwise it runs and
+   upserts ``last_run_at = now()`` before releasing the lock. A persisted marker
+   is used rather than holding a lock connection open for the process lifetime --
+   that would permanently consume one of only 10 pool connections for a weekly job.
+
+Together the lock (concurrent passes) and the marker (non-overlapping passes) make
+"at most once per interval, once per deploy not once per machine" hold regardless
+of machine topology, without adding leader-election infrastructure.
+
+The pass also runs ~60s after every boot/deploy (STARTUP_DELAY_SECONDS), not on a
+fixed wall-clock weekly schedule; the marker is what stops those extra boot-time
+passes from re-alerting within the same interval.
 
 Scheduling reuses the existing background-loop pattern (see ``sweep_scheduler`` /
 ``cleanup``): start on app startup, stop on shutdown. Weekly is enough at current
@@ -107,7 +127,11 @@ async def run_reconciliation_alert_pass() -> dict:
 
     ``status`` is one of:
     - ``skipped_not_configured`` -- Stripe key absent (local dev); nothing to do.
-    - ``skipped_locked`` -- another machine holds the lock this cycle.
+    - ``skipped_locked`` -- another machine holds the lock RIGHT NOW (concurrent
+      pass); the advisory lock refused.
+    - ``skipped_recent`` -- a pass already completed less than one interval ago
+      (a non-overlapping earlier machine/boot); de-duplicated via the persisted
+      ``last_run_at`` marker. No compute, no alert, no write.
     - ``silent`` -- every row explained, no pending dispute; no alert emitted.
     - ``alerted`` -- unexplained drift and/or a pending dispute; alert emitted.
     """
@@ -117,70 +141,158 @@ async def run_reconciliation_alert_pass() -> dict:
         logger.info("[ReconAlert] Stripe not configured -- skipping reconciliation pass")
         return {"status": "skipped_not_configured", "user_ids": []}
 
+    import psycopg2
+
     from .pg import get_pg
+
+    # The outcome is fixed the moment we decide skip/silent/alerted (and, for
+    # alerted, once the email has been attempted). Once set, NOTHING in the cleanup
+    # tail may turn into an exception that ESCAPES this function: a propagated error
+    # makes the outer loop treat the whole pass as failed and retry in 1h, which
+    # would RE-SEND an alert that already went out (round-2 fix #2).
+    outcome: dict | None = None
 
     # Hold ONE connection for the entire pass so the session-level advisory lock
     # stays held across the compute and the email send, then release it
     # explicitly. The pass's own DB reads inside _compute_reconciliation use
     # SEPARATE pooled connections (different sessions), so they never collide
     # with this lock -- it exists purely to coordinate across machines/processes.
-    with get_pg() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT pg_try_advisory_lock(%s) AS acquired", (RECONCILIATION_ALERT_LOCK_ID,)
-        )
-        if not cur.fetchone()["acquired"]:
-            logger.info(
-                "[ReconAlert] advisory lock %s held by another machine -- skipping this cycle",
-                RECONCILIATION_ALERT_LOCK_ID,
+    try:
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT pg_try_advisory_lock(%s) AS acquired", (RECONCILIATION_ALERT_LOCK_ID,)
             )
-            return {"status": "skipped_locked", "user_ids": []}
-
-        try:
-            # Reuse the panel's exact computation (no second query, no second
-            # classifier). Run it off the event loop -- it does synchronous
-            # Stripe pagination + Postgres reads. Default filter: test accounts
-            # excluded, matching the panel's default.
-            rows = await asyncio.to_thread(_compute_rows)
-            alert = _build_alert(rows)
-            if alert is None:
-                logger.info("[ReconAlert] reconciliation clean -- no unexplained drift, no pending dispute")
-                return {"status": "silent", "user_ids": []}
-
-            # Zero-dependency floor: a CRITICAL log line always, before the email.
-            logger.critical(alert["log_line"])
-
-            await _send_admin_alert(alert)
-            return {"status": "alerted", "user_ids": alert["user_ids"]}
-        finally:
-            try:
-                cur.execute(
-                    "SELECT pg_advisory_unlock(%s) AS released", (RECONCILIATION_ALERT_LOCK_ID,)
-                )
-            except Exception:
-                # The unlock statement itself failed -- almost always because the
-                # connection died during the (potentially long) pass (Stripe
-                # pagination + N admin emails; Fly closes idle client sockets,
-                # which is why get_pg pre-pings). A SESSION-level advisory lock
-                # would otherwise ride this connection back into the pool ALIVE
-                # and make every future weekly pass return skipped_locked forever
-                # -- and skipped_locked is the ONE status that emits no CRITICAL
-                # and no email, so the alerting system would fail SILENTLY. Force
-                # the connection closed so its server session ends and Postgres
-                # releases the lock unconditionally, and log loudly. (The
-                # subsequent get_pg commit on the now-closed conn raises an
-                # InterfaceError that get_pg swallows into a pool discard, and the
-                # loop logs + retries in an hour -- loud and self-correcting, never
-                # silent.)
-                logger.critical(
-                    "[ReconAlert] pg_advisory_unlock(%s) FAILED -- forcing connection close "
-                    "so the lock cannot leak onto a pooled connection and stall every future pass",
+            if not cur.fetchone()["acquired"]:
+                logger.info(
+                    "[ReconAlert] advisory lock %s held by another machine -- skipping this cycle",
                     RECONCILIATION_ALERT_LOCK_ID,
                 )
-                try:
-                    conn.close()
-                except Exception:
-                    pass
+                return {"status": "skipped_locked", "user_ids": []}
+
+            try:
+                # De-duplicate across NON-overlapping passes (see module docstring
+                # mechanism 2): if a pass completed less than one interval ago,
+                # skip WITHOUT computing or alerting, and write nothing beyond the
+                # lock itself. The comparison is done in Postgres (now() vs the
+                # stored TIMESTAMPTZ) to avoid any client-clock/timezone skew.
+                cur.execute(
+                    "SELECT last_run_at, "
+                    "       (now() - last_run_at) < make_interval(secs => %s) AS recent "
+                    "FROM reconciliation_alert_runs WHERE id = 1",
+                    (WEEKLY_INTERVAL_SECONDS,),
+                )
+                marker = cur.fetchone()
+                if marker is not None and marker["recent"]:
+                    logger.info(
+                        "[ReconAlert] a pass already ran within the last interval "
+                        "(last_run_at=%s) -- skipping (skipped_recent)",
+                        marker["last_run_at"],
+                    )
+                    outcome = {"status": "skipped_recent", "user_ids": []}
+                    return outcome
+
+                # Reuse the panel's exact computation (no second query, no second
+                # classifier). Run it off the event loop -- it does synchronous
+                # Stripe pagination + Postgres reads. Default filter: test accounts
+                # excluded, matching the panel's default.
+                rows = await asyncio.to_thread(_compute_rows)
+                alert = _build_alert(rows)
+                if alert is None:
+                    logger.info("[ReconAlert] reconciliation clean -- no unexplained drift, no pending dispute")
+                    outcome = {"status": "silent", "user_ids": []}
+                else:
+                    # Zero-dependency floor: a CRITICAL log line always, before the email.
+                    logger.critical(alert["log_line"])
+                    await _send_admin_alert(alert)
+                    outcome = {"status": "alerted", "user_ids": alert["user_ids"]}
+                return outcome
+            finally:
+                # The pass RAN (not skipped_recent) iff we produced a silent/alerted
+                # outcome -- only then do we stamp the marker.
+                ran = outcome is not None and outcome["status"] in ("silent", "alerted")
+                _finish_pass(conn, cur, ran)
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        # get_pg RE-RAISES a connection error from its exit-time commit (it does
+        # NOT swallow it). If we already produced an outcome -- including a
+        # delivered alert -- the pass SUCCEEDED and only the cleanup connection
+        # died; swallow so the outer loop does not retry-and-duplicate. With no
+        # outcome yet the failure is real (we never got as far as computing), so
+        # let it propagate to the loop's normal 1h back-off.
+        if outcome is not None:
+            logger.critical(
+                "[ReconAlert] connection error after the pass completed (outcome=%s) -- "
+                "swallowed so the alert is not re-sent on retry",
+                outcome["status"],
+            )
+            return outcome
+        raise
+
+
+def _finish_pass(conn, cur, ran: bool) -> None:
+    """Best-effort cleanup tail: stamp the last-run marker, then release the lock.
+
+    Runs in the pass's ``finally``, so it fires whether the pass alerted, was
+    silent, or was skipped_recent. NEITHER step may propagate an exception: the
+    alert (if any) has already gone out, and an escaped cleanup error would make
+    the outer loop retry the whole pass and re-send it.
+
+    Order is deliberate: the marker upsert comes BEFORE the unlock so that a dead
+    connection is caught the same way in both steps, AND so that a connection that
+    dies specifically on the unlock still leaves the marker persisted -> the next
+    pass sees a recent run and does NOT re-alert.
+    """
+    # 1) Stamp the marker -- ONLY when the pass actually ran. A skipped_recent
+    #    pass writes nothing beyond the lock (round-2 fix #1).
+    if ran:
+        try:
+            cur.execute(
+                "INSERT INTO reconciliation_alert_runs (id, last_run_at) VALUES (1, now()) "
+                "ON CONFLICT (id) DO UPDATE SET last_run_at = now()"
+            )
+            # Commit the marker now (not at get_pg exit) so it is durable before we
+            # touch the lock; the advisory lock is session-level and unaffected by
+            # commit/rollback, so this does not release it early.
+            conn.commit()
+        except Exception:
+            # If the marker write itself fails, last_run_at stays stale and the
+            # NEXT pass may re-alert for the same drift. That trade is DELIBERATE:
+            # a rare, LOUD (CRITICAL below) duplicate alert is strictly better than
+            # the alternative -- swallowing the failure in a way that could wedge
+            # the marker and leave the alarm permanently silent. We optimize for
+            # never going silent; a double alarm is merely noise.
+            logger.critical(
+                "[ReconAlert] failed to persist last_run_at marker -- the next pass "
+                "may re-alert for the same drift (accepted: a rare loud duplicate "
+                "beats a silent stall)"
+            )
+
+    # 2) Release the advisory lock.
+    try:
+        cur.execute(
+            "SELECT pg_advisory_unlock(%s) AS released", (RECONCILIATION_ALERT_LOCK_ID,)
+        )
+    except Exception:
+        # The unlock statement itself failed -- almost always because the
+        # connection died during the (potentially long) pass (Stripe pagination +
+        # N admin emails; Fly closes idle client sockets, which is why get_pg
+        # pre-pings). A SESSION-level advisory lock would otherwise ride this
+        # connection back into the pool ALIVE and make every future weekly pass
+        # return skipped_locked forever -- and skipped_locked emits no CRITICAL and
+        # no email, so the alerting system would fail SILENTLY. Force the connection
+        # closed so its server session ends and Postgres releases the lock
+        # unconditionally, and log loudly. The subsequent get_pg exit-commit on the
+        # now-closed conn raises, which get_pg re-raises; the caller catches it
+        # above (outcome already set) and returns without re-alerting.
+        logger.critical(
+            "[ReconAlert] pg_advisory_unlock(%s) FAILED -- forcing connection close "
+            "so the lock cannot leak onto a pooled connection and stall every future pass",
+            RECONCILIATION_ALERT_LOCK_ID,
+        )
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def _compute_rows() -> list:

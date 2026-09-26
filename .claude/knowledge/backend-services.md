@@ -436,7 +436,7 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
      `tests/test_revenue_reconciliation.py` (`TestAccountDeletedClassifier`,
      `TestDeletedPayerEndpoint`, `TestFilterSymmetryImankhRegression` — the imankh regression goes
      through the REAL TestClient endpoint, both filter states).
-- **T8670 (epic 6/6, epic COMPLETE): scheduled reconciliation with a drift alert.** Drift is now
+- **T8670 (epic 6/6, all tasks implemented; epic not user-marked DONE): scheduled reconciliation with a drift alert.** Drift is now
   detected without a human clicking the panel (incident hole 8). `services/reconciliation_alert.py`
   is a THIN background caller — it does NOT reimplement the query or the classifier. It runs the
   SAME `routers/admin.py` `_compute_reconciliation(exclude_test=True)` (lazy-imported inside
@@ -448,19 +448,39 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
   `get_admin_emails()` address via the existing `send_admin_update_email` (`body_text_to_html` shell)
   — never a "nothing to report" email, and a failed send is logged and swallowed so it can never kill
   the loop. **READ-ONLY**: the pass never heals / never calls `set_total_spent` / never writes
-  (proven by a before==after snapshot of `user_segments`/`payments`/`account_deletions` across a
-  drifted run). **Single-machine coordination on multi-machine Fly = a Postgres SESSION-level
-  advisory lock** `pg_try_advisory_lock(RECONCILIATION_ALERT_LOCK_ID=8670)` held on ONE connection
-  for the whole pass and released EXPLICITLY with `pg_advisory_unlock` in a `finally` (the pooled
-  connection is returned alive, never disconnected, so auto-release-on-disconnect is NOT relied on);
-  if not acquired → log INFO + skip, no busy-retry. This is the first advisory-lock user in the
-  codebase (8640-adjacent id chosen greppable). Scheduling reuses the `sweep_scheduler`/`cleanup`
-  background-loop pattern: `start_reconciliation_alert_loop`/`stop_reconciliation_alert_loop` wired
-  into `main.py` lifespan startup/shutdown; fixed WEEKLY interval (`WEEKLY_INTERVAL_SECONDS`, a named
-  constant — weekly is enough at current volume). One `PaymentIntent.list` pagination per run
-  (inside `_compute_reconciliation`), same bounded Stripe read the panel makes; NEVER on a
-  user-facing path. If Stripe is unconfigured (local dev) the pass logs INFO and skips. Tests:
-  `tests/test_t8670_reconciliation_alert.py` (run against an ISOLATED `t8670_test` DB, Stripe mocked).
+  (proven by a before==after snapshot of `user_segments`/`payments`/`account_deletions`/`users`
+  across a drifted run; the ONE allowed write is the `reconciliation_alert_runs` marker below).
+  **At-most-once-per-interval across multi-machine Fly = TWO Postgres mechanisms, because neither
+  alone suffices** (round 2, T8670): (1) a SESSION-level advisory lock
+  `pg_try_advisory_lock(RECONCILIATION_ALERT_LOCK_ID=8670)` gives MUTUAL EXCLUSION between passes
+  that overlap IN TIME — held on ONE connection for the whole pass, released EXPLICITLY with
+  `pg_advisory_unlock` (the pooled connection is returned alive, never disconnected, so
+  auto-release-on-disconnect is NOT relied on); if not acquired → log INFO + skip, no busy-retry;
+  and (2) a PERSISTED single-row marker `reconciliation_alert_runs (id=1, last_run_at)` (postgres
+  v034, mirrored in `_SCHEMA_DDL`) gives DE-DUPLICATION across NON-overlapping passes. The lock
+  alone is NOT enough: each Fly machine (and each restart) starts its own startup-delay-then-weekly
+  timer, so two passes seconds/hours apart never contend for the lock yet would each see the same
+  drift and alert. Inside the same lock-held section the pass reads `last_run_at`; younger than one
+  interval → `skipped_recent` (no compute, no alert, no write beyond the lock); else it runs and
+  upserts `last_run_at=now()` BEFORE releasing the lock. Lock id is literally 8670 (the task id),
+  chosen greppable; this is the first advisory-lock user in the codebase. **The pass also runs ~60s
+  after every boot/deploy** (`STARTUP_DELAY_SECONDS`), NOT on a fixed wall-clock weekly schedule —
+  the marker is exactly what stops those extra boot-time passes from re-alerting within an interval.
+  **A mid-cleanup connection death no longer duplicates the alert** (round 2 fix #2): the cleanup
+  tail (`_finish_pass`: upsert `last_run_at` FIRST, then unlock) is best-effort — a failure is
+  logged CRITICAL but never propagates, and `get_pg` RE-RAISES a dead-connection error on its
+  exit-commit (it does NOT swallow it, contrary to the pre-round-2 comment), so
+  `run_reconciliation_alert_pass` catches that re-raise once an outcome exists and returns without
+  letting the outer loop retry-and-re-send. Because the marker is stamped before the unlock, a death
+  on the unlock step still leaves the marker persisted → the immediate 1h-retry pass sees a recent
+  run and skips. If the marker upsert ITSELF fails, a rare LOUD duplicate alert on the next pass is
+  the accepted trade (documented in `_finish_pass`) — never a silent stall. Scheduling reuses the
+  `sweep_scheduler`/`cleanup` background-loop pattern:
+  `start_reconciliation_alert_loop`/`stop_reconciliation_alert_loop` wired into `main.py` lifespan;
+  fixed WEEKLY interval (`WEEKLY_INTERVAL_SECONDS`, a named constant). One `PaymentIntent.list`
+  pagination per run (inside `_compute_reconciliation`), same bounded Stripe read the panel makes;
+  NEVER on a user-facing path. If Stripe is unconfigured (local dev) the pass logs INFO and skips.
+  Tests: `tests/test_t8670_reconciliation_alert.py` (run against an ISOLATED test DB, Stripe mocked).
   If T1702 (monetization alerts) is later picked up, it must REUSE this loop, not add a second.
 
 ### Account deletion contract (T8630)
