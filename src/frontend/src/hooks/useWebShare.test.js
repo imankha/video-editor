@@ -161,3 +161,65 @@ describe('useWebShare.createShareLink (T10180 additive create-that-returns-URL)'
     );
   });
 });
+
+// T10860 (design §2.3): repointShareLink({ downloadId, shareToken }) POSTs the
+// new /share/repoint endpoint and returns the (unchanged) share_url string on
+// success; on failure it throws an Error carrying `.code` from the response
+// body (video_not_current | target_missing | repoint_conflict), for the caller
+// to map to a toast.
+describe('useWebShare.repointShareLink (T10860)', () => {
+  const originalMatchMedia = window.matchMedia;
+  const originalClipboard = navigator.clipboard;
+
+  beforeEach(() => {
+    navigator.clipboard = { writeText: vi.fn().mockResolvedValue() };
+    mockPointer({ coarse: false });
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+    navigator.clipboard = originalClipboard;
+  });
+
+  it('POSTs /api/gallery/{downloadId}/share/repoint with the share_token body and returns share_url', async () => {
+    globalThis.apiFetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true, share_url: 'https://reelballers.com/shared/stale-tok' }),
+    }));
+    const { result } = renderHook(() => useWebShare());
+
+    let url;
+    await act(async () => {
+      url = await result.current.repointShareLink({ downloadId: 99, shareToken: 'stale-tok' });
+    });
+
+    expect(url).toBe('https://reelballers.com/shared/stale-tok');
+    expect(globalThis.apiFetchImpl).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/gallery\/99\/share\/repoint$/),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ share_token: 'stale-tok' }),
+      }),
+    );
+  });
+
+  it('throws an Error carrying the response `code` on failure (e.g. target_missing)', async () => {
+    globalThis.apiFetchImpl = vi.fn(async () => ({
+      ok: false,
+      json: async () => ({ code: 'target_missing', detail: 'The re-exported video is not ready yet.' }),
+    }));
+    const { result } = renderHook(() => useWebShare());
+
+    let caught;
+    await act(async () => {
+      try {
+        await result.current.repointShareLink({ downloadId: 99, shareToken: 'stale-tok' });
+      } catch (err) {
+        caught = err;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.code).toBe('target_missing');
+  });
+});

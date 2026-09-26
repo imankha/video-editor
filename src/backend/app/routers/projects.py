@@ -262,6 +262,11 @@ class ProjectListItem(BaseModel):
     final_video_created_at: str | None = None
     final_video_id: int | None = None
     is_published: bool  # True if latest final video has been published to My Reels
+    # T10860: non-None when a non-revoked single-video share still snapshots an
+    # OLDER final_videos filename than this project's CURRENT one (i.e. a private
+    # re-export happened after the share was minted). {share_token, old_filename}.
+    # Computed read-only in _read_projects_list; never written back.
+    stale_share: dict | None = None
     is_auto_created: bool  # True if project was auto-created for a 5-star clip
     created_at: str
     current_mode: str | None = 'framing'
@@ -400,6 +405,59 @@ def _read_projects_list():
         """)
 
         rows = cursor.fetchall()
+
+        # T10860: staleness detection (design §3.2) -- ONE additional Postgres
+        # query for the whole page, not one per project. A stale share's
+        # share_videos.video_id is an OLDER final_videos.id than the project's
+        # CURRENT one (a private re-export moved projects.final_video_id away
+        # from it), so the lookup must key on EVERY final_videos id a published
+        # project has ever had, not just the current id (see design §1.9).
+        published_project_ids = [
+            row['id'] for row in rows if row['is_published'] and row['final_video_id']
+        ]
+        project_current_filename: dict[int, str] = {}
+        final_video_id_to_project: dict[int, int] = {}
+        stale_share_by_project: dict[int, dict] = {}
+        if published_project_ids:
+            placeholders = ','.join('?' for _ in published_project_ids)
+            cursor.execute(
+                f"""SELECT id, project_id, filename
+                      FROM final_videos
+                     WHERE project_id IN ({placeholders})""",
+                published_project_ids,
+            )
+            current_final_video_id = {
+                row['id']: row['final_video_id'] for row in rows if row['final_video_id']
+            }
+            for fv_row in cursor.fetchall():
+                final_video_id_to_project[fv_row['id']] = fv_row['project_id']
+                if fv_row['id'] == current_final_video_id.get(fv_row['project_id']):
+                    project_current_filename[fv_row['project_id']] = fv_row['filename']
+
+            from app.services.pg import get_pg
+            with get_pg() as pg_conn:
+                pg_cur = pg_conn.cursor()
+                pg_cur.execute(
+                    """SELECT sv.video_id, s.share_token, sv.video_filename
+                         FROM shares s
+                         JOIN share_videos sv ON sv.share_id = s.id
+                        WHERE s.sharer_user_id = %s AND s.share_type = 'video'
+                          AND s.revoked_at IS NULL
+                        ORDER BY s.shared_at DESC""",
+                    (get_current_user_id(),),
+                )
+                seen_projects: set[int] = set()
+                for share_row in pg_cur.fetchall():
+                    project_id = final_video_id_to_project.get(share_row['video_id'])
+                    if project_id is None or project_id in seen_projects:
+                        continue
+                    seen_projects.add(project_id)
+                    current_filename = project_current_filename.get(project_id)
+                    if current_filename is not None and share_row['video_filename'] != current_filename:
+                        stale_share_by_project[project_id] = {
+                            'share_token': share_row['share_token'],
+                            'old_filename': share_row['video_filename'],
+                        }
 
         # Fetch game info for all projects in one query
         # This traces: project -> working_clips -> raw_clips -> games
@@ -592,6 +650,7 @@ def _read_projects_list():
                 final_video_created_at=row['final_video_created_at'],
                 final_video_id=row['final_video_id'],
                 is_published=bool(row['is_published']),
+                stale_share=stale_share_by_project.get(row['id']),
                 is_auto_created=bool(row['is_auto_created']),
                 created_at=row['created_at'],
                 current_mode=row['current_mode'] or 'framing',

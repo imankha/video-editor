@@ -1,5 +1,33 @@
 ---
 domain: persistence-sync
+updated: 2026-09-26 (T10860: a share-token re-point ("Update shared version") is a POSTGRES CAS
+write, not a SQLite/R2 one — the R2 sync/version machinery this doc otherwise covers does NOT apply.
+`sharing_db.repoint_share_video` mirrors the existing `update_share_visibility` shape: ONE conditional
+`UPDATE share_videos ... FROM shares WHERE share_token=... AND sharer_user_id=... AND
+share_type='video' AND revoked_at IS NULL`, `cursor.rowcount > 0` IS the CAS verdict (0 => the row the
+caller saw is not the row on the server — refuse, never blind-overwrite). "Prove current or fail
+loudly" here has TWO halves for a Postgres write: (a) the path `final_video_id` must still equal
+`projects.final_video_id` (refuse `video_not_current` if another re-export raced since the caller's
+snapshot), and (b) the NEW object must actually exist before pointing at it. **LANDMINE hit and fixed
+mid-task:** half (b) was initially implemented as an unconditional `r2_head_object(...) is None` check
+— but `r2_head_object` (storage.py) unconditionally returns `None` whenever `R2_ENABLED=false` (its
+`get_r2_client()` short-circuits before ever calling R2), so an R2-only existence check REFUSES EVERY
+re-point in a local/no-R2 dev posture, indistinguishable from a genuinely missing object. Fixed to
+mirror the codebase's own established `R2_ENABLED`-gated existence convention (`downloads.py`'s
+composed-download branch: R2 HEAD/presigned path when `R2_ENABLED`, a plain `get_final_videos_path()
+/ filename` local `.exists()` check otherwise) — checked ONLY at endpoint-call time via
+`app.routers.shares.R2_ENABLED`, not baked into `r2_head_object` itself (that function's contract —
+"None if absent/R2-disabled" — is correct and unchanged for its OTHER callers; the bug was this ONE
+caller trusting it to mean "does not exist" when it can also mean "R2 is off"). **General lesson for
+any FUTURE existence-before-write check:** `r2_head_object`/`r2_head_object_global` returning `None`
+is NOT proof of absence — it is also the R2-disabled return value. Gate on `R2_ENABLED` explicitly,
+or check local disk first, exactly like every other existence check in `downloads.py`/`storage.py`
+already does; do not add a new caller that assumes R2-only. Live-verified against this container's
+actual `R2_ENABLED=true` posture (real Cloudflare credentials via `/workspace/.env`, loaded through
+`app.main`'s dotenv boot — NOT visible to a bare `python3 -c` import that skips `app.main`) — a real
+uploaded object, a real `r2_head_object` HEAD round-trip, and the local-disk branch's happy/refuse
+paths are both regression-tested (`tests/test_t10860_repoint_share_token.py`). See export-pipeline.md
+T10860 entry for the staleness-detection half (batched, non-N+1, folded into `GET /api/projects`).)
 updated: 2026-09-19 (T10610: Annotate's play editor gained its own per-region FIFO write queue,
 `regionWriteQueue.js` — modelled on this doc's T4330 `actionClient.js` FIFO idea but deliberately
 WITHOUT version threading/409 handling (`raw_clips` has no version counter, EPIC non-goal). Zero

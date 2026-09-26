@@ -1,5 +1,40 @@
 ---
 domain: export-pipeline
+updated: 2026-09-26 (T10860 — SHIPPED the item-4 follow-up T10180 split out: "Update shared version"
+re-points an EXISTING single-video share token to a moved `final_video_id` after a private
+re-export, instead of a re-export silently leaving the shared link on the OLD video forever. New
+`sharing_db.repoint_share_video(token, sharer_user_id, new_video_id, new_video_filename,
+new_video_name, new_video_duration)` mirrors the existing `update_share_visibility` CAS shape — ONE
+conditional Postgres `UPDATE share_videos ... FROM shares WHERE share_token=... AND
+sharer_user_id=... AND share_type='video' AND revoked_at IS NULL`, `rowcount>0` is the CAS verdict.
+Moves `video_id`+`video_filename`+`video_name`+`video_duration` TOGETHER in one statement — playback
+resolves from the snapshotted `video_filename` (`shares.py` `_build_video_r2_key`), intro/metadata
+from `video_id`, so moving a subset would split-brain the share. New endpoint `POST
+/api/gallery/{final_video_id}/share/repoint` (`shares.py`, co-located with `create_share`, NOT an
+extension of the public `patch_shared_video` route — needs the sharer's own SQLite `final_videos`/
+`projects` read + target-existence check, which the public `/api/shared` router's `X-User-ID`-header
+auth is the wrong context for). Refuse-on-conflict, never blind-overwrite: 409 `video_not_current`
+(path id isn't `projects.final_video_id` anymore — another re-export raced), 409 `target_missing`
+(the re-exported object isn't actually present yet), 409 `repoint_conflict` (rowcount 0 — revoked/
+mutated between read and write), 200 idempotent no-op when already current, 403/410/400 for
+ownership/revoked/wrong-share-type. **Target-existence check is `R2_ENABLED`-gated (landmine fixed
+mid-task, see persistence-sync.md's T10860 entry for the mechanism)** — an R2-only HEAD would
+silently refuse EVERY re-point in a local/no-R2 dev posture. **Staleness detection (the subtle
+half):** a stale token's `share_videos.video_id` is the OLD `final_videos.id`, not the project's
+CURRENT one, so a naive `WHERE video_id = <current id>` lookup MISSES it. Folded into the EXISTING
+`GET /api/projects` read (`ProjectListItem.stale_share`, `projects.py` `_read_projects_list`) as a
+NEW field — ONE additional batched Postgres query for the whole page (never N+1): collect every
+`final_videos.id` a published project has EVER had (not just current) into an id→project map, one
+Postgres query for all of this sharer's non-revoked `share_type='video'` shares, then in Python match
+each share's `video_id` against the map and compare `video_filename` to the project's CURRENT
+filename. `DraftReelPreview`'s `openFinishedReel` (`finishedReelNav.js`) snapshots `stale_share` into
+`payload.staleShare` — a plain field riding the ALREADY-FETCHED project row, zero new fetch/effect on
+preview-open (Invariant 1 intact). The re-point write fires only inside the "Update shared version"
+button's onClick chain. Live-verified against a REAL running uvicorn process + real Postgres + real
+Cloudflare R2 (this container's actual `APP_ENV=dev`/`R2_ENABLED=true` posture, not a stub): minted a
+token for V1, confirmed the ORIGINAL BUG reproduces (link still serves V1 after a simulated
+re-export moved `projects.final_video_id` to V2), then confirmed the SAME token/URL resolves to V2
+after the repoint gesture, with `stale_share` clearing to null. See `T10860-design.md`.)
 updated: 2026-09-25 (T11210 — single-clip-editor epic prep. (1) DELETED two long-dead export
 endpoints, `POST /api/export/chapters` + `POST /api/export/concat-for-overlay` (were
 `multi_clip.py` ~2530-2726, zero callers), plus the now-unused base64/File/FileResponse/
@@ -31,8 +66,9 @@ private draft already streams that same id, so Download was wired straight onto 
 `onDownload` -> `CollectionPlayer`'s existing prop, plus a new `DraftTile` kebab item), both via
 `useDownloads().downloadFile(project.final_video_id)`. **Item 4 ("Update shared version" — re-point an
 existing share token to a moved `final_video_id` after a private re-export) was deliberately SPLIT
-OUT to a follow-up task (T10860)** — it is the only backend piece and needs its own CAS/durable-sync
-+ live-verification story; nothing in this task touches it. Persistence: every new write (`publish()`,
+OUT to a follow-up task (T10860, SHIPPED 2026-09-26 — see the entry above)** — it was the only
+backend piece and needed its own CAS/durable-sync + live-verification story; nothing in THIS task
+touched it. Persistence: every new write (`publish()`,
 `createShareLink()`) fires only inside a button's onClick chain, never a reactive effect — verified
 by both a unit test and code review. See `T10180-design.md` for the full state machine.)
 updated: 2026-09-19 (T10670 — post-export completion footer redesigned as V2 "celebration tiles"

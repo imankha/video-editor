@@ -173,8 +173,8 @@ export const STAGE_REASONS = {
 // T10180 (design doc §3.1): the private-result-surface publish -> visibility-
 // review -> link-ready vocabulary, single source. Policy-checked against the
 // T9670 audience contract: publishing alone grants no audience; a link is
-// CREATED, never sent/emailed/watched. "Update shared version" (item 4) is
-// deliberately absent -- split to its own follow-up task (T10860).
+// CREATED, never sent/emailed/watched. "Update shared version" (item 4) ships
+// in T10860 (design doc §9 Q2 accepted the strings below as proposed).
 export const RESULT_PUBLISH = {
   // Idle primary action -- starts the review flow, does NOT publish yet.
   PUBLISH_GET_LINK: 'Publish and get link',
@@ -189,6 +189,10 @@ export const RESULT_PUBLISH = {
   LINK_READY: 'Link ready',
   COPY_LINK: 'Copy link',
   SHARE_LINK: 'Share link...',   // coarse-pointer native share entry
+  // T10860: re-point an already-distributed share token to a moved final_video
+  // after a private re-export. Shown only when payload.staleShare is non-null.
+  UPDATE_SHARED: 'Update shared version',
+  UPDATE_SHARED_HINT: 'Your link still shows the old export. Update it to point at the latest.',
 };
 
 export const SECTION_NAMES = {

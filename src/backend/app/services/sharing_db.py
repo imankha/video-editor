@@ -161,6 +161,34 @@ def update_share_visibility(token: str, is_public: bool, sharer_user_id: str) ->
         return cur.rowcount > 0
 
 
+def repoint_share_video(
+    token: str, sharer_user_id: str, new_video_id: int,
+    new_video_filename: str, new_video_name: str | None, new_video_duration: float | None,
+) -> bool:
+    """Re-point a single-video share's snapshot to a moved final_video (T10860).
+
+    Moves video_id + video_filename (+ name/duration) TOGETHER in one conditional
+    statement. Ownership + not-revoked gate mirrors update_share_visibility; the
+    rowcount is the CAS verdict (0 => refuse, the row the user saw is not the row
+    on the server)."""
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """UPDATE share_videos
+                  SET video_id = %s, video_filename = %s,
+                      video_name = %s, video_duration = %s
+                 FROM shares
+                WHERE share_videos.share_id = shares.id
+                  AND shares.share_token = %s
+                  AND shares.sharer_user_id = %s
+                  AND shares.share_type = 'video'
+                  AND shares.revoked_at IS NULL""",
+            (new_video_id, new_video_filename, new_video_name, new_video_duration,
+             token, sharer_user_id),
+        )
+        return cur.rowcount > 0
+
+
 def list_contacts_for_user(sharer_user_id: str) -> list[str]:
     with get_sharing_db() as conn:
         cur = conn.cursor()
