@@ -139,8 +139,8 @@ class TestRepointShareVideoDb:
         token = shares[0]["share_token"]
 
         ok = repoint_share_video(
-            token=token, sharer_user_id=SHARER_ID, new_video_id=2,
-            new_video_filename="new.mp4", new_video_name="New Name",
+            token=token, sharer_user_id=SHARER_ID, sharer_profile_id="testdefault",
+            new_video_id=2, new_video_filename="new.mp4", new_video_name="New Name",
             new_video_duration=25.0,
         )
         assert ok is True
@@ -163,8 +163,9 @@ class TestRepointShareVideoDb:
         assert revoke_share(token, SHARER_ID) is True
 
         ok = repoint_share_video(
-            token=token, sharer_user_id=SHARER_ID, new_video_id=2,
-            new_video_filename="new.mp4", new_video_name="New", new_video_duration=25.0,
+            token=token, sharer_user_id=SHARER_ID, sharer_profile_id="testdefault",
+            new_video_id=2, new_video_filename="new.mp4", new_video_name="New",
+            new_video_duration=25.0,
         )
         assert ok is False
 
@@ -179,8 +180,31 @@ class TestRepointShareVideoDb:
         token = shares[0]["share_token"]
 
         ok = repoint_share_video(
-            token=token, sharer_user_id=RECIPIENT_ID, new_video_id=2,
-            new_video_filename="new.mp4", new_video_name="New", new_video_duration=25.0,
+            token=token, sharer_user_id=RECIPIENT_ID, sharer_profile_id="testdefault",
+            new_video_id=2, new_video_filename="new.mp4", new_video_name="New",
+            new_video_duration=25.0,
+        )
+        assert ok is False
+
+    def test_repoint_refuses_on_wrong_profile(self, isolated_auth_db):
+        """T10860 cross-profile fix (defense-in-depth): the DB-level CAS write
+        itself refuses on a sharer_profile_id mismatch, not just the router's
+        own check -- final_videos.id collisions across profiles mean this
+        predicate must hold even if a future caller forgets the router-level
+        guard."""
+        from app.services.sharing_db import create_shares, repoint_share_video
+
+        shares = create_shares(
+            video_id=1, sharer_user_id=SHARER_ID, sharer_profile_id="testdefault",
+            video_filename="old.mp4", video_name="Old", video_duration=10.0,
+            recipient_emails=[SHARER_EMAIL], is_public=True,
+        )
+        token = shares[0]["share_token"]
+
+        ok = repoint_share_video(
+            token=token, sharer_user_id=SHARER_ID, sharer_profile_id="some-other-profile",
+            new_video_id=2, new_video_filename="new.mp4", new_video_name="New",
+            new_video_duration=25.0,
         )
         assert ok is False
 
@@ -197,8 +221,9 @@ class TestRepointShareVideoDb:
         )
 
         ok = repoint_share_video(
-            token=token, sharer_user_id=SHARER_ID, new_video_id=2,
-            new_video_filename="new.mp4", new_video_name="New", new_video_duration=25.0,
+            token=token, sharer_user_id=SHARER_ID, sharer_profile_id="testdefault",
+            new_video_id=2, new_video_filename="new.mp4", new_video_name="New",
+            new_video_duration=25.0,
         )
         assert ok is False
 
@@ -256,6 +281,63 @@ class TestProjectsListStaleShare:
         assert resp.status_code == 200
         project = next(p for p in resp.json() if p["id"] == project_id)
         assert project["stale_share"] is None
+
+    def test_stale_share_found_even_when_masked_by_a_newer_current_share(self, client):
+        """A project can carry TWO active shares at once: an OLDER one whose
+        snapshot went stale after a re-export, and a NEWER one minted by
+        "Get link"/"Copy link" AFTER the re-export (already current). The
+        staleness scan orders shares by shared_at DESC and must NOT stop at
+        the first row per project just because it happens to be current --
+        it must keep scanning and surface the OLDER stale share. This is the
+        exact multi-share masking bug design §3.3 ("order-independent and
+        convergent") requires NOT to happen."""
+        from app.services.pg import get_pg
+        from app.services.sharing_db import create_shares
+
+        project_id, final_video_id = _seed_project_with_final_video(filename="v1.mp4")
+        old_shares = create_shares(
+            video_id=final_video_id, sharer_user_id=SHARER_ID, sharer_profile_id="testdefault",
+            video_filename="v1.mp4", video_name="Test Video", video_duration=12.5,
+            recipient_emails=[SHARER_EMAIL], is_public=True,
+        )
+        old_token = old_shares[0]["share_token"]
+
+        new_final_video_id = _reexport(project_id, new_filename="v2.mp4")
+
+        # Simulate clicking "Get link"/"Copy link" again AFTER the re-export:
+        # mints a FRESH, already-current share for the SAME project. The old
+        # (stale) share is still active too -- both exist simultaneously.
+        new_shares = create_shares(
+            video_id=new_final_video_id, sharer_user_id=SHARER_ID, sharer_profile_id="testdefault",
+            video_filename="v2.mp4", video_name="Test Video V2", video_duration=20.0,
+            recipient_emails=[RECIPIENT_EMAIL], is_public=True,
+        )
+        new_token = new_shares[0]["share_token"]
+
+        # Force deterministic ordering (new share sorts FIRST in shared_at
+        # DESC) regardless of real wall-clock timing -- this is the exact
+        # ordering the masking bug depends on.
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE shares SET shared_at = now() - interval '1 hour' WHERE share_token = %s",
+                (old_token,),
+            )
+            cur.execute(
+                "UPDATE shares SET shared_at = now() WHERE share_token = %s",
+                (new_token,),
+            )
+
+        resp = client.get("/api/projects", headers=_auth_headers(SHARER_ID))
+        assert resp.status_code == 200
+        project = next(p for p in resp.json() if p["id"] == project_id)
+
+        assert project["stale_share"] is not None, (
+            "the OLDER stale share must still surface even though a NEWER "
+            "already-current share exists for the same project"
+        )
+        assert project["stale_share"]["share_token"] == old_token
+        assert project["stale_share"]["old_filename"] == "v1.mp4"
 
 
 # ---------------------------------------------------------------------------

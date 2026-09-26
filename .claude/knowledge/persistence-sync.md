@@ -1,5 +1,19 @@
 ---
 domain: persistence-sync
+updated: 2026-09-26 (T10860 follow-up #2, same day, independent reviewer finding — MAJOR, fixed:
+**a "mark seen on first row" scan over a project's MULTIPLE active shares can mask a real signal
+behind an irrelevant one.** The T10860 staleness scan (`projects.py`, ordered by `shared_at DESC`)
+stopped looking at a project the moment it saw ANY share for it — including an already-current one
+— so an older STALE share sitting behind a newer CURRENT share (a real scenario: re-share via "Get
+link" after a re-export mints a fresh current token while the ORIGINAL stale token is still live)
+was silently never examined. **General lesson: when a per-entity scan needs to find "does ANY row
+satisfy condition X", the seen/skip set must be keyed on "X was satisfied", not "a row for this
+entity was seen" — order-by-recency + first-match is only safe if the FIRST row is guaranteed to be
+the one that matters, which a multi-row-per-entity shape rarely guarantees.** Fixed by keying the
+skip check on `project_id in stale_share_by_project` (only true once a stale one was actually
+found) instead of a separate `seen_projects` set (true on any row). Zero new queries — same single
+batched Postgres read, corrected Python-side fold. See the T10860 entry below for the mechanism this
+scan belongs to.)
 updated: 2026-09-26 (T10860 follow-up, same day, independent reviewer finding — BLOCKING data
 corruption, fixed: **`final_videos.id` collides ACROSS PROFILES of the same user** — it is a
 PER-PROFILE SQLite autoincrement (each profile has its own `profile.sqlite`), so profile A's

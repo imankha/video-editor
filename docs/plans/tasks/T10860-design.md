@@ -24,6 +24,21 @@ the share's current `video_id` does not resolve to the SAME `project_id` as the 
 `TestCrossProfileShareIsolation` in `test_t10860_repoint_share_token.py` (3 tests, confirmed RED
 against the pre-fix code — genuine 200-success-and-corrupt outcomes, not incidental refusals — then
 GREEN after the fix).
+**Amendment 2026-09-26 #2 (post-ship, independent reviewer finding — MAJOR, fixed same day):** the
+§3.2 staleness scan ordered a project's shares by `shared_at DESC` and marked the project "seen"
+(stop looking) on the FIRST row encountered, regardless of whether that first (most recent) share
+was already current. So a project with an OLDER stale share PLUS a NEWER current share (e.g. the
+user re-shared via "Get link"/"Copy link" after the re-export, minting a fresh token) had its older
+stale share silently masked forever — `stale_share` came back `null` even though the original token
+was still stale. Directly violated §3.3's "order-independent and convergent" requirement, and is a
+real multi-share scenario, not hypothetical. **Fix:** only mark a project "resolved" (stop scanning)
+once an ACTUALLY-STALE share has been recorded for it (`project_id in stale_share_by_project`, not a
+separate `seen_projects` set that any row — stale or not — added to). Stays a single batched
+Postgres query + one Python pass, per Q1's approved decision — no new query. Regression:
+`test_stale_share_found_even_when_masked_by_a_newer_current_share` (confirmed RED — reproduced the
+exact masking — then GREEN). Also addressed the same day (MINOR, defense-in-depth):
+`repoint_share_video`'s UPDATE now carries `sharer_profile_id` as an explicit WHERE-clause CAS
+predicate, not solely the router's own pre-check.
 **Sources:** Task file `T10860-update-shared-version-repoint-token.md`; T10180-design §5 (the split-out rationale — EXTENDED here, not re-litigated); Code Expert Stage-1 findings (file:line map below); `persistence-sync.md` (CAS / Invariant 1 & 6 / `update_share_visibility`); `export-pipeline.md` (`publish_final_video` versioning + `keep_prior`).
 
 ---

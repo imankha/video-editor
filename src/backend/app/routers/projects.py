@@ -447,12 +447,20 @@ def _read_projects_list():
                         ORDER BY s.shared_at DESC""",
                     (get_current_user_id(), get_current_profile_id()),
                 )
-                seen_projects: set[int] = set()
+                # A project can carry MULTIPLE active shares at once (e.g. an
+                # older stale one plus a fresh one minted by "Get link" after
+                # a re-export). Only skip a project once a STALE share has
+                # actually been recorded for it -- marking it "seen" on the
+                # first row regardless of staleness would let a newer
+                # already-current share mask an older stale one further down
+                # this shared_at-DESC scan (found live via reproduction: a
+                # fresh share after re-export made stale_share silently
+                # revert to null forever, even though the original token was
+                # still stale).
                 for share_row in pg_cur.fetchall():
                     project_id = final_video_id_to_project.get(share_row['video_id'])
-                    if project_id is None or project_id in seen_projects:
+                    if project_id is None or project_id in stale_share_by_project:
                         continue
-                    seen_projects.add(project_id)
                     current_filename = project_current_filename.get(project_id)
                     if current_filename is not None and share_row['video_filename'] != current_filename:
                         stale_share_by_project[project_id] = {

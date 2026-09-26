@@ -681,9 +681,9 @@ async def repoint_share(video_id: int, body: ShareRepointRequest):
         })
 
     ok = repoint_share_video(
-        token=body.share_token, sharer_user_id=user_id, new_video_id=row["id"],
-        new_video_filename=row["filename"], new_video_name=row["name"],
-        new_video_duration=row["duration"],
+        token=body.share_token, sharer_user_id=user_id, sharer_profile_id=profile_id,
+        new_video_id=row["id"], new_video_filename=row["filename"],
+        new_video_name=row["name"], new_video_duration=row["duration"],
     )
     if not ok:
         return JSONResponse(status_code=409, content={
