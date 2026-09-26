@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ModeSwitcher } from './ModeSwitcher';
 import { AppStateProvider } from '../../contexts';
 import { useToastStore } from './Toast';
+import { LEGACY_MULTICLIP_REFRAME_MESSAGE } from '../../utils/reelReEditable';
 
 // T8480: a locked tab tap must explain itself visibly (toast), because the
 // native title tooltip is hover-only and unreachable on touch devices.
@@ -83,6 +84,42 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
     fireEvent.click(screen.getByTestId('mode-framing'));
 
     expect(onModeChange).not.toHaveBeenCalled();
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+  });
+});
+
+// T11220: the header Focus tab is an AVAILABLE (unlocked) tab for any open
+// project, so without a guard it would switch a legacy multi-clip project into
+// Focus/Framing — which the single-clip editor can't do (it 400s on re-export and
+// burns credits). The header switch must refuse it with the shared clear toast.
+describe('T11220: header Focus tab refuses a legacy multi-clip project', () => {
+  beforeEach(() => {
+    useToastStore.setState({ toasts: [] });
+  });
+
+  it('tapping Focus for a clip_count > 1 project does NOT switch modes and shows the re-frame refusal toast', () => {
+    const onModeChange = vi.fn();
+    renderSwitcher(
+      { onModeChange, mode: 'overlay', hasProject: true, hasWorkingVideo: true },
+      { selectedProject: { id: 1, clip_count: 2, working_video_id: 5 } },
+    );
+
+    fireEvent.click(screen.getByTestId('mode-framing'));
+
+    expect(onModeChange).not.toHaveBeenCalled();
+    expect(toastTitles()).toEqual([LEGACY_MULTICLIP_REFRAME_MESSAGE]);
+  });
+
+  it('tapping Focus for a single-clip project (clip_count === 1) still switches, no toast', () => {
+    const onModeChange = vi.fn();
+    renderSwitcher(
+      { onModeChange, mode: 'overlay', hasProject: true, hasWorkingVideo: true },
+      { selectedProject: { id: 1, clip_count: 1, working_video_id: 5 } },
+    );
+
+    fireEvent.click(screen.getByTestId('mode-framing'));
+
+    expect(onModeChange).toHaveBeenCalledWith('framing');
     expect(useToastStore.getState().toasts).toHaveLength(0);
   });
 });

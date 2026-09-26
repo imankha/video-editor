@@ -28,7 +28,7 @@ import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
 import { rendersSourceAspect, getDraftStatus } from '../utils/draftStage';
 import { staleClipCount } from '../utils/reelStaleness';
-import { LEGACY_MULTICLIP_REFRAME_MESSAGE } from '../utils/reelReEditable';
+import { allowEnterFraming } from '../utils/reelReEditable';
 
 /**
  * DraftTile - a draft (single-clip or multi-clip) as a poster tile (T5672). Shell aspect follows the
@@ -276,16 +276,17 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
 
   // T11220: a legacy multi-clip draft (clip_count > 1) can no longer be re-framed
   // — the single-clip Focus editor can't represent it and /render 400s a >1-clip
-  // project generically. Every Framing entry point on this tile refuses with a
-  // clear, specific message instead of dropping the user into Framing. Spotlight
-  // (overlay, when a working video exists), publish and download stay available
-  // (R3 option A). clip_count 0/1/undefined open normally.
+  // project generically. Every Framing entry point on this tile passes through the
+  // shared allowEnterFraming guard (same one the header ModeSwitcher, App's mode
+  // switch and OverlayScreen's Reapply tiles use), which refuses with a clear
+  // toast. Spotlight (overlay, when a working video exists), publish and download
+  // stay available (R3 option A). `isLegacyMultiClip` also hides the explicit
+  // Framing affordances below. clip_count 0/1/undefined open normally.
   const isLegacyMultiClip = project.clip_count > 1;
-  const refuseReframe = () => toast.info(LEGACY_MULTICLIP_REFRAME_MESSAGE);
 
   const handleClipClick = (clipIndex) => {
     if (!canOpen) return; // Block if no clips extracted
-    if (isLegacyMultiClip) { refuseReframe(); return; }
+    if (!allowEnterFraming(project)) return; // refused (toast shown by the guard)
     if (onSelectWithMode) {
       onSelectWithMode({ mode: 'framing', clipIndex });
     }
@@ -327,10 +328,9 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
     //   else the earliest applicable stage -> default open (Framing, clip 0)
     if (project.has_working_video) {
       onSelectWithMode({ mode: 'overlay' }); // Spotlight still works (T11220 / R3 option A)
-    } else if (isLegacyMultiClip) {
+    } else if (!allowEnterFraming(project)) {
       // T11220: no working video yet -> the only open target would be Framing,
-      // which a multi-clip draft cannot use. Refuse with the clear message.
-      refuseReframe();
+      // which a multi-clip draft cannot use. The guard shows the clear message.
     } else if (project.clips_in_progress > 0 || project.clips_exported > 0) {
       onSelectWithMode({ mode: 'framing', clipIndex: 0 });
     } else {

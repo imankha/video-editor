@@ -3,6 +3,7 @@ import { useAppState } from '../../contexts';
 import { GAME, REEL } from '../../config/themeColors';
 import { SCREENS } from '../../stores/editorStore';
 import { toast } from './Toast';
+import { allowEnterFraming } from '../../utils/reelReEditable';
 import { ANNOTATE } from '../../config/displayNames';
 
 /**
@@ -111,6 +112,12 @@ export function ModeSwitcher({
             toast.info(titleText, { dedupKey: 'mode-locked' });
             return;
           }
+          // T11220: a legacy multi-clip project (clip_count > 1) cannot enter
+          // Focus/Framing — the shared guard refuses with a clear toast rather
+          // than switching modes (which would burn credits on a re-export that
+          // then 400s). ONE guard shared with OverlayScreen's Reapply tiles,
+          // App's mode switch, and DraftTile.
+          if (modeOption.id === 'framing' && !allowEnterFraming(selectedProject)) return;
           onModeChange(modeOption.id);
         }}
         disabled={disabled}
