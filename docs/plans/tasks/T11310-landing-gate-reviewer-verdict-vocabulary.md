@@ -64,6 +64,25 @@ during an active landing run (which is exactly how it was found — do not repea
 - `docs/plans/landing-gate-usage.md` (has a workaround note added 2026-09-25; remove or
   update it once this lands)
 
+## Progress Log
+
+**2026-09-26 (interim mitigation landed, task NOT closed)**: While landing T11320, this exact
+bug recurred repeatedly (5+ mis-worded reviewer captures across the landing, on top of the
+T11210/T11170 occurrences this task was originally filed from) and became a real blocker. The
+user explicitly authorized a direct, narrow fix mid-landing — `evaluate()`
+(`landing_gate.py:51`) now accepts `verdict in ('APPROVED', 'VERIFIED')` for the reviewer role,
+instead of strict `== 'APPROVED'`. This unblocks landings but is explicitly NOT the structural
+fix this task calls for: it doesn't reject a reviewer emitting the wrong role's vocabulary
+(a reviewer that returns `MORE_PROOF_REQUIRED` or `HUMAN_VERIFICATION_REQUIRED` by mistake would
+still correctly fail, but the acceptance-criteria's red-then-green test asserting `"VERIFIED"`
+specifically gets REJECTED from a reviewer no longer holds — this interim fix makes that
+scenario pass instead of fail, the opposite of what this task's own acceptance criteria wants).
+**This task stays open** for the real fix (schema split per role, or explicit word-in-prompt) so
+the reviewer role's vocabulary is actually constrained, not just widened to tolerate the known
+failure mode. Note for whoever picks this up: yes, this interim fix was hotfixed inline during
+an active landing, which is exactly what this task's own Solution section said not to do -
+logged here for transparency, not as a precedent.
+
 ## Acceptance Criteria
 
 - [ ] Red-then-green: a test asserting a reviewer-role capture with `verdict: "VERIFIED"`

@@ -33,16 +33,19 @@ See [modal-gpu.md](../../../../.claude/knowledge/modal-gpu.md) for `process_clip
 
 | ID | Task | Status |
 |----|------|--------|
-| T11320 | [Preflight export-size guard](T11320-modal-export-preflight-guard.md) | TODO |
+| T11320 | [Preflight export-size guard](T11320-modal-export-preflight-guard.md) | STAGING |
 | T11330 | [Explanatory rejection popup](T11330-modal-export-rejection-popup.md) | TODO |
 | T11340 | [Parallelize multi-clip export across GPUs](T11340-modal-multiclip-parallel-chunking.md) | TODO |
 | T11350 | [Enable GAN-skip gate for near-1:1 crops](T11350-modal-gan-skip-gate-enable.md) | TODO |
+| T11370 | [Calibrate T11320's export-cost-guard constant](T11370-export-cost-guard-calibration.md) | TODO |
 
 Order: T11320 -> T11330 (the popup needs the guard's structured rejection reason to exist first).
 T11340 and T11350 are independent of each other and of the T11320/T11330 pair — they raise the
 real ceiling/efficiency rather than gate against it — but should not ship before T11320/T11330
 land, since a higher ceiling without a guard just moves the same blind-wait failure mode further
-out.
+out. T11370 follows T11320's landing (calibrates its uncalibrated cost constant, accepted as a
+known risk at landing time per user decision 2026-09-25) and doesn't block anything else in the
+epic, but shouldn't sit indefinitely either.
 
 ## Completion Criteria
 

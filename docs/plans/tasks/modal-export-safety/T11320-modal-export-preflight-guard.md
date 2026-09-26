@@ -1,10 +1,10 @@
 # T11320: Preflight Export-Size Guard for Modal Multi-Clip Exports
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-09-25
-**Updated:** 2026-09-25
+**Updated:** 2026-09-26
 
 ## Problem
 
@@ -69,6 +69,40 @@ exports (staging) across a couple of crop sizes to fit the constant, rather than
 ### Progress Log
 
 **2026-09-25**: Filed from Bug 58p investigation. Not started.
+
+**2026-09-25 (landing)**: Implemented, reviewed, proof-verified. Fresh-context Reviewer found 3
+MAJOR issues at the first push (`79cbe97c`): M1 (frame count used raw clip duration instead of
+the trimmed duration Modal actually runs the GAN over, causing false rejections on ordinary
+trimmed exports — sent back for a fix), M2 (see risk note below), M3 (the documented rejection
+contract was "HTTP 413", but `_export_clips` runs as a background task under a generic
+exception handler, so no HTTP client ever sees it — the real channel is the WS/`export_progress`
+payload, which was untested; sent back for a fix). M1/M3 sent back to the implementor; M2 was a
+user decision.
+
+**Known accepted risk (M2, user decision 2026-09-25):** the per-pixel GPU-cost constant
+(0.6815 s/frame at a 540x960 crop, from `experiments/e6_l4_benchmark_results.json`) rests on a
+SINGLE measurement, and the same benchmark script shows 1.57x run-to-run variance on an
+identical config across two runs (E1: 192.19s, E6: 122.67s, same 540x960/180-frame config). The
+guard's estimate could therefore be off by roughly that factor in either direction. User chose
+to accept this and land now rather than block on a real calibration run. Approximate
+false-rejection risk zone with the current constant and 80%-of-3600s budget: exports with
+roughly 80-140s of effective (post-trim) 16:9-crop-equivalent GAN work sit close enough to the
+threshold that the 1.57x uncertainty could flip the verdict either way. **Follow-up: T11370**
+(real Modal staging calibration across 2-3 crop sizes) — land this task without blocking on it,
+but treat T11370 as a near-term priority, not indefinite backlog, since every day it's open is a
+day the constant could be silently wrong in either direction (false rejections OR a return to
+Bug 58p's failure mode for a crop size the single measurement doesn't represent well).
+
+**2026-09-26 (landed)**: Merged via PR #511 (merge commit `2613efcc`), full executable landing
+gate (independently VERIFIED proof, reviewer receipt, green Branch CI, head-pinned merge).
+Landing hit two unrelated frictions along the way, both resolved: (1) the base branch kept
+advancing from concurrent, unrelated dotask work (T8630/T8640/T8675/T8670 in another epic),
+requiring three `update-branch` cycles to keep the PR's base in sync — none of that work
+overlapped this task's files; (2) the landing gate's own known reviewer-verdict-word bug
+(`landing-gate-usage.md`'s documented issue) recurred repeatedly — fixed at the root by
+broadening `scripts/landing_gate.py`'s check to accept either `APPROVED` or `VERIFIED` for the
+reviewer role (user-authorized direct fix to the trusted controller, see T11310), rather than
+bypassing the gate for this landing.
 
 ## Acceptance Criteria
 

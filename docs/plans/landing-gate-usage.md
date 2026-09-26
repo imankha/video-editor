@@ -134,6 +134,19 @@ under both roles, not just the one that changed. See T11310 for the real fix
 touches the trusted controller, so route it through independent policy review rather
 than hotfixing mid-landing.
 
+**2026-09-26 interim mitigation (landing T11320):** the bug recurred 5+ times in one
+landing on top of the earlier T11210/T11170 occurrences, and the user explicitly
+authorized a narrow direct fix mid-landing rather than more retries: `evaluate()`
+now accepts `verdict in ('APPROVED', 'VERIFIED')` for the reviewer role. Recapturing
+is no longer strictly necessary purely for the wrong word — `check()` accepts either
+spelling now. **This is explicitly not T11310's real fix** — it widens the reviewer's
+accepted vocabulary rather than constraining it, so a reviewer session that drifts
+into the proof-verifier's whole mental model (not just its one word) would now also
+pass. T11310 stays open for the structural fix (schema split per role). Recapturing
+is still the right move if a review comes back with a genuinely wrong verdict
+(`NEEDS_REVISION`, `MORE_PROOF_REQUIRED`, etc., or nonzero blocking/major) — this
+mitigation only affects the specific `APPROVED` vs `VERIFIED` spelling ambiguity.
+
 ## Proof for Postgres-backed tests
 
 A task whose red/green tests use the `pg_conn` fixture (real Postgres) cannot be
