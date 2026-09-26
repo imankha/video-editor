@@ -35,17 +35,23 @@ See [modal-gpu.md](../../../../.claude/knowledge/modal-gpu.md) for `process_clip
 |----|------|--------|
 | T11320 | [Preflight export-size guard](T11320-modal-export-preflight-guard.md) | STAGING |
 | T11330 | [Explanatory rejection popup](T11330-modal-export-rejection-popup.md) | WIP |
-| T11340 | [Parallelize multi-clip export across GPUs](T11340-modal-multiclip-parallel-chunking.md) | WIP |
+| T11340 | [Parallelize multi-clip export across GPUs](T11340-modal-multiclip-parallel-chunking.md) | ICE (deferred) |
 | T11350 | [Enable GAN-skip gate for near-1:1 crops](T11350-modal-gan-skip-gate-enable.md) | TODO |
 | T11370 | [Calibrate T11320's export-cost-guard constant](T11370-export-cost-guard-calibration.md) | TODO |
 
 Order: T11320 -> T11330 (the popup needs the guard's structured rejection reason to exist first).
-T11340 and T11350 are independent of each other and of the T11320/T11330 pair — they raise the
-real ceiling/efficiency rather than gate against it — but should not ship before T11320/T11330
-land, since a higher ceiling without a guard just moves the same blind-wait failure mode further
-out. T11370 follows T11320's landing (calibrates its uncalibrated cost constant, accepted as a
-known risk at landing time per user decision 2026-09-25) and doesn't block anything else in the
-epic, but shouldn't sit indefinitely either.
+T11370 follows T11320's landing (calibrates its uncalibrated cost constant, accepted as a known
+risk at landing time per user decision 2026-09-25) and doesn't block anything else in the epic,
+but shouldn't sit indefinitely either.
+
+**T11340 deferred 2026-09-26** — the single-clip-editor epic (priority 1.1, underway) is removing
+multi-clip export entirely, which cut T11340's design down to "parallelize ONE long clip via
+time-chunking." With T11320's guard already turning Bug 58p's silent hour-long failure into a
+fast, informative rejection, the user judged that remaining scope (letting a few oversized
+single clips succeed instead of being rejected) not worth the complexity it turned out to need
+(frame-cadence continuity across chunk seams, speed-segment restrictions, a new Modal deploy).
+Full design preserved at
+[T11340-design-DEFERRED.md](T11340-design-DEFERRED.md) if revisited.
 
 ## Completion Criteria
 
@@ -53,6 +59,7 @@ epic, but shouldn't sit indefinitely either.
       timeout budget (T11320)
 - [ ] A rejected export shows a popup naming concrete levers: crop in tighter, reduce clip count /
       split into batches (T11330)
-- [ ] Multi-clip export (`process_clips_ai`) can use more than 1 GPU for large jobs (T11340)
+- [ ] ~~Multi-clip export (`process_clips_ai`) can use more than 1 GPU for large jobs~~ — dropped;
+      T11340 deferred, not required to close this epic
 - [ ] Near-1:1-enlargement crops (like this user's full-frame 16:9 case) skip the GAN pass instead
       of paying for enhance-then-shrink (T11350)
