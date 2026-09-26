@@ -28,6 +28,7 @@ import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
 import { rendersSourceAspect, getDraftStatus } from '../utils/draftStage';
 import { staleClipCount } from '../utils/reelStaleness';
+import { LEGACY_MULTICLIP_REFRAME_MESSAGE } from '../utils/reelReEditable';
 
 /**
  * DraftTile - a draft (single-clip or multi-clip) as a poster tile (T5672). Shell aspect follows the
@@ -273,8 +274,18 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
     }
   };
 
+  // T11220: a legacy multi-clip draft (clip_count > 1) can no longer be re-framed
+  // — the single-clip Focus editor can't represent it and /render 400s a >1-clip
+  // project generically. Every Framing entry point on this tile refuses with a
+  // clear, specific message instead of dropping the user into Framing. Spotlight
+  // (overlay, when a working video exists), publish and download stay available
+  // (R3 option A). clip_count 0/1/undefined open normally.
+  const isLegacyMultiClip = project.clip_count > 1;
+  const refuseReframe = () => toast.info(LEGACY_MULTICLIP_REFRAME_MESSAGE);
+
   const handleClipClick = (clipIndex) => {
     if (!canOpen) return; // Block if no clips extracted
+    if (isLegacyMultiClip) { refuseReframe(); return; }
     if (onSelectWithMode) {
       onSelectWithMode({ mode: 'framing', clipIndex });
     }
@@ -315,7 +326,11 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
     //   else framing started (any clip framed/exported) -> Framing (first clip)
     //   else the earliest applicable stage -> default open (Framing, clip 0)
     if (project.has_working_video) {
-      onSelectWithMode({ mode: 'overlay' });
+      onSelectWithMode({ mode: 'overlay' }); // Spotlight still works (T11220 / R3 option A)
+    } else if (isLegacyMultiClip) {
+      // T11220: no working video yet -> the only open target would be Framing,
+      // which a multi-clip draft cannot use. Refuse with the clear message.
+      refuseReframe();
     } else if (project.clips_in_progress > 0 || project.clips_exported > 0) {
       onSelectWithMode({ mode: 'framing', clipIndex: 0 });
     } else {
@@ -483,7 +498,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         <Pencil size={18} className="text-gray-300 flex-shrink-0" />
         <span className="text-gray-200">Rename</span>
       </button>
-      {isComplete && (
+      {isComplete && !isLegacyMultiClip && (
         <button onClick={(e) => { e.stopPropagation(); handleClipClick(0); setMenuOpen(false); }} className={`${menuItemClass} hover:bg-gray-600`}>
           <Crop size={18} className="text-gray-300 flex-shrink-0" />
           <span className="text-gray-200">Open in {MODE_NAMES.FRAMING}</span>
@@ -757,7 +772,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           )}
           {/* T6890: the rename pencil moved OUT of this rail to sit beside the name
               in the bottom scrim (above). It is no longer stacked here. */}
-          {isComplete && (
+          {isComplete && !isLegacyMultiClip && (
             <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title={`Open in ${MODE_NAMES.FRAMING}`} className={actionBtnClass} />
           )}
           {isComplete && (

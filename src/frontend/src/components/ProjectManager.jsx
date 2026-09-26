@@ -1216,7 +1216,10 @@ export function ProjectManager({
     if (tabFromPath(window.location.pathname)) {
       if (tabFromPath(window.location.pathname) === 'projects' && !hasSetInitialTab.current) {
         if (loading) return; // wait for the real clipDrafts count before deciding
-        if (clipDrafts.length === 0) setActiveTab('games');
+        // T11220: a legacy-only account (multi-clip reel drafts, no clip drafts)
+        // must not be bounced off a /home/reels (Clips) landing/refresh — those
+        // drafts live in the Legacy reels group on this tab.
+        if (clipDrafts.length === 0 && highlightDrafts.length === 0) setActiveTab('games');
       }
       hasSetInitialTab.current = true;
       return;
@@ -1953,13 +1956,16 @@ export function ProjectManager({
                 : error}
             </p>
           </div>
-        ) : clipDrafts.length === 0 ? (
+        ) : (clipDrafts.length === 0 && highlightDrafts.length === 0) ? (
           /* T8980: shared EmptyTabGuide replaces the T8380 two-path dead end. It
              keeps both clip-creation paths (Add Video is still primary and still
              carries the clips-add-video tutorial target; the game path branches
              on whether the account has games yet) and adds the flow strip +
              next-tab hint. The Add Video button here and the non-empty action row
-             above stay mutually exclusive, so the tutorial anchor is unique. */
+             above stay mutually exclusive, so the tutorial anchor is unique.
+             T11220: only when there are NO clip drafts AND no legacy reel drafts —
+             an account with only legacy multi-clip drafts must fall through to the
+             gallery below so those drafts stay reachable from Clips. */
           <EmptyTabGuide
             tab="clips"
             gamesCount={games.length}
@@ -1973,6 +1979,11 @@ export function ProjectManager({
              GAMES_GRID_CONTAINER_CLASS width for its poster grid. T9660: single-sourced
              to that constant so the Clips gallery can never drift narrow on its own. */
           <div className={GAMES_GRID_CONTAINER_CLASS} data-testid="clips-gallery">
+            {/* T11220: the single-clip drafts UI (filters + phase/game grouping)
+                renders only when clip drafts exist. When an account has ONLY
+                legacy multi-clip reel drafts, this whole block is skipped and the
+                Legacy reels section below is what keeps them reachable. */}
+            {clipDrafts.length > 0 && (<>
             {/* Filters - only show when useful. Groups sit inline (gap-x) when they fit,
                 and wrap onto their own line when they don't. */}
             {showFilters && (
@@ -2200,6 +2211,46 @@ export function ProjectManager({
                 </>
               )}
             </div>
+            </>)}
+            {/* T11220: legacy multi-clip reel drafts (is_auto_created === false)
+                are surfaced here in a clearly-labelled group so they stay
+                reachable from Clips once the Reels tab is removed (T11230) — the
+                reachability fix must not depend on that tab existing. They can
+                still be published, downloaded and shared (and spotlighted if they
+                have a working video), but can no longer be re-framed in the
+                single-clip editor; the caption says so up front (R3 option A). */}
+            {highlightDrafts.length > 0 && (
+              <section
+                data-testid="legacy-reel-drafts"
+                className="mt-6 rounded-lg border border-gray-700/50 bg-gray-900/20 pt-2 pb-3"
+              >
+                <div className="px-3 py-2">
+                  <div className="flex items-center gap-2 min-h-11">
+                    <span className="text-sm font-medium text-gray-200 flex-1">Legacy reels</span>
+                    <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
+                      {highlightDrafts.length}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Made with the old multi-clip reel builder. You can still publish,
+                    download and share these, but they can no longer be re-edited in Focus.
+                  </p>
+                </div>
+                <CardCarousel ariaLabel="Legacy reels">
+                  {highlightDrafts.map((project) => (
+                    <DraftTile
+                      key={project.id}
+                      project={project}
+                      onSelect={() => onSelectProject?.(project.id)}
+                      onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
+                      onDelete={() => onDeleteProject?.(project.id)}
+                      exportingProject={exportingProject}
+                      pendingGameIds={pendingGameIds}
+                    />
+                  ))}
+                </CardCarousel>
+              </section>
+            )}
           </div>
         )
       ) : activeTab === 'inProgressReels' ? (

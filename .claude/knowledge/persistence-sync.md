@@ -1,5 +1,18 @@
 ---
 domain: persistence-sync
+updated: 2026-09-26 (T11220: **`restore-project` now REFUSES a legacy multi-clip published reel
+loudly instead of restoring it into an editor that can't represent it.** The single-clip-editor
+epic collapses `one project = one clip`; a `final_videos.clip_count > 1` reel can no longer be
+re-edited. `restore_project_from_archive` (`routers/downloads.py`) selects `clip_count` alongside
+`project_id`/`name` and, when `clip_count > 1`, raises HTTP 400 with a user-ready message BEFORE
+the `UPDATE final_videos SET published_at = NULL` — so a refused reel stays published/reachable
+(no silent fallback, no partial unpublish; CLAUDE.md "fail loudly" case). `clip_count` NULL
+(unknown / possible legacy single-clip) and 1 stay editable, mirroring the frontend gate. Frontend
+`utils/reelReEditable.js#canReEditReel(reel)` is the single predicate hiding every Re-edit
+affordance for these (CollectionPlayer in-player button, PublishedReelsPanel card folder button,
+useReEditReel action guard incl. the ranker replay). Reachability half lives in annotate.md
+(ProjectManager Clips "Legacy reels" group). NO CAS/sync-machinery change. Tests:
+`tests/test_t11220_multiclip_restore_refusal.py`, `src/frontend/src/utils/reelReEditable.test.js`.)
 updated: 2026-09-19 (T10610: Annotate's play editor gained its own per-region FIFO write queue,
 `regionWriteQueue.js` — modelled on this doc's T4330 `actionClient.js` FIFO idea but deliberately
 WITHOUT version threading/409 handling (`raw_clips` has no version counter, EPIC non-goal). Zero

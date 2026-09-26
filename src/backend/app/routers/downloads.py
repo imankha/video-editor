@@ -2265,7 +2265,7 @@ async def restore_project_from_archive(
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT project_id, name FROM final_videos WHERE id = ?
+            SELECT project_id, name, clip_count FROM final_videos WHERE id = ?
         """, (download_id,))
         row = cursor.fetchone()
 
@@ -2274,6 +2274,26 @@ async def restore_project_from_archive(
 
         project_id = row['project_id']
         fv_name = row['name']
+
+        # T11220: a legacy multi-clip reel (clip_count > 1) can no longer be
+        # re-edited — the single-clip editor cannot represent a multi-clip
+        # project, so restoring one would drop it into an editor that can't edit
+        # it. Refuse LOUDLY here, BEFORE the unpublish UPDATE below, so the reel
+        # stays published/reachable (no silent fallback, no partial state). The
+        # frontend hides Re-edit for these; this is the backstop for any direct
+        # or stale call. clip_count NULL (unknown, a possible legacy single-clip)
+        # and 1 are left editable, mirroring the frontend gate.
+        if row['clip_count'] is not None and row['clip_count'] > 1:
+            logger.warning(
+                f"[Restore] REFUSED multi-clip reel download_id={download_id} "
+                f"project_id={project_id} clip_count={row['clip_count']} "
+                f"user={user_id} — multi-clip reels are no longer editable"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail="This reel was made from multiple clips and can no longer "
+                       "be re-edited. You can still view, download, and share it.",
+            )
 
         # Unpublish: moving back to draft removes from My Reels
         cursor.execute(
