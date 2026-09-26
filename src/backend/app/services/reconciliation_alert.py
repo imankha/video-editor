@@ -35,10 +35,16 @@ distinct Postgres mechanisms, because either one alone is insufficient:
    run seconds or hours apart, never contending for the lock, and each would
    otherwise see the same drift and alert. Inside the SAME lock-held section the
    pass reads ``last_run_at``; if it is younger than one interval it skips
-   (``skipped_recent``) without computing or alerting; otherwise it runs and
-   upserts ``last_run_at = now()`` before releasing the lock. A persisted marker
-   is used rather than holding a lock connection open for the process lifetime --
-   that would permanently consume one of only 10 pool connections for a weekly job.
+   (``skipped_recent``) without computing or alerting; otherwise it runs and, once
+   the outcome is fixed, upserts ``last_run_at = now()`` on a FRESH, SEPARATE
+   pooled connection -- NOT the lock-holding connection -- and only THEN releases
+   the lock. Writing the marker off the lock connection is deliberate (round 3): a
+   death of the lock connection at ANY point during the pass (mid-compute,
+   mid-send, or on the unlock itself) can no longer prevent the marker from being
+   recorded, so a mid-pass connection death after an alert has gone out cannot
+   re-alert on the next pass. A persisted marker is used rather than holding a lock
+   connection open for the process lifetime -- that would permanently consume one
+   of only 10 pool connections for a weekly job.
 
 Together the lock (concurrent passes) and the marker (non-overlapping passes) make
 "at most once per interval, once per deploy not once per machine" hold regardless
@@ -85,6 +91,11 @@ STARTUP_DELAY_SECONDS = 60
 # Back-off after an unexpected error so a transient failure doesn't hot-loop.
 ERROR_RETRY_SECONDS = 3600
 
+# Floor on the loop's re-sleep after a skipped_recent pass, so that reading the
+# marker's own "time until next due" can never collapse into a busy-loop when a
+# pass is skipped a hair before it becomes due.
+MIN_RESLEEP_SECONDS = 60
+
 
 async def start_reconciliation_alert_loop():
     """Start the reconciliation-alert loop as a background task. Called at startup."""
@@ -107,13 +118,22 @@ async def stop_reconciliation_alert_loop():
 
 
 async def _run_reconciliation_alert_loop():
-    """Fixed weekly cadence: sleep, run one pass, sleep again."""
+    """Weekly cadence: sleep, run one pass, sleep again.
+
+    A boot-time pass that finds a recent marker returns ``skipped_recent`` with the
+    time REMAINING until the run is actually due (``next_run_in_seconds``). We sleep
+    only that remainder rather than a full ``WEEKLY_INTERVAL_SECONDS``, so a machine
+    that boots just after another already ran does not stretch the effective spacing
+    toward ~2x the nominal interval; it re-checks right when the run comes due.
+    Every other outcome sleeps a full interval.
+    """
     await asyncio.sleep(STARTUP_DELAY_SECONDS)
 
     while True:
         try:
-            await run_reconciliation_alert_pass()
-            await asyncio.sleep(WEEKLY_INTERVAL_SECONDS)
+            result = await run_reconciliation_alert_pass()
+            sleep_for = result.get("next_run_in_seconds") or WEEKLY_INTERVAL_SECONDS
+            await asyncio.sleep(sleep_for)
         except asyncio.CancelledError:
             logger.info("[ReconAlert] Shutdown")
             break
@@ -178,18 +198,32 @@ async def run_reconciliation_alert_pass() -> dict:
                 # stored TIMESTAMPTZ) to avoid any client-clock/timezone skew.
                 cur.execute(
                     "SELECT last_run_at, "
-                    "       (now() - last_run_at) < make_interval(secs => %s) AS recent "
+                    "       (now() - last_run_at) < make_interval(secs => %s) AS recent, "
+                    "       EXTRACT(EPOCH FROM "
+                    "         (last_run_at + make_interval(secs => %s) - now())) AS remaining_secs "
                     "FROM reconciliation_alert_runs WHERE id = 1",
-                    (WEEKLY_INTERVAL_SECONDS,),
+                    (WEEKLY_INTERVAL_SECONDS, WEEKLY_INTERVAL_SECONDS),
                 )
                 marker = cur.fetchone()
                 if marker is not None and marker["recent"]:
+                    # Tell the loop how long is actually LEFT until this run is due,
+                    # floored so it never busy-loops, so it re-checks right on time
+                    # instead of sleeping another full interval (the ~2x-spacing
+                    # slop the round-3 verifier flagged).
+                    remaining = max(
+                        MIN_RESLEEP_SECONDS, int(marker["remaining_secs"] or 0)
+                    )
                     logger.info(
                         "[ReconAlert] a pass already ran within the last interval "
-                        "(last_run_at=%s) -- skipping (skipped_recent)",
+                        "(last_run_at=%s) -- skipping (skipped_recent), next due in %ss",
                         marker["last_run_at"],
+                        remaining,
                     )
-                    outcome = {"status": "skipped_recent", "user_ids": []}
+                    outcome = {
+                        "status": "skipped_recent",
+                        "user_ids": [],
+                        "next_run_in_seconds": remaining,
+                    }
                     return outcome
 
                 # Reuse the panel's exact computation (no second query, no second
@@ -237,37 +271,45 @@ def _finish_pass(conn, cur, ran: bool) -> None:
     alert (if any) has already gone out, and an escaped cleanup error would make
     the outer loop retry the whole pass and re-send it.
 
-    Order is deliberate: the marker upsert comes BEFORE the unlock so that a dead
-    connection is caught the same way in both steps, AND so that a connection that
-    dies specifically on the unlock still leaves the marker persisted -> the next
-    pass sees a recent run and does NOT re-alert.
+    The marker is stamped on a FRESH, SEPARATE pooled connection -- NOT ``conn``,
+    the lock-holding connection (round-3 fix). The earlier version wrote it through
+    the lock connection's own cursor, so ANY death of that connection during the
+    pass (not just a death on the unlock statement) skipped the marker entirely:
+    the alert had already gone out, but the next pass, seeing no recent marker,
+    re-sent it. Writing on an independent connection means a lock-connection death
+    at any point up to and including the unlock still leaves the marker persisted,
+    so the next pass sees a recent run and does NOT re-alert. The marker write is
+    done BEFORE the unlock so the lock is released only after the marker is durable.
     """
     # 1) Stamp the marker -- ONLY when the pass actually ran. A skipped_recent
-    #    pass writes nothing beyond the lock (round-2 fix #1).
+    #    pass writes nothing beyond the lock (round-2 fix #1). Use a fresh get_pg()
+    #    connection so this write does not depend on the lock connection surviving.
     if ran:
         try:
-            cur.execute(
-                "INSERT INTO reconciliation_alert_runs (id, last_run_at) VALUES (1, now()) "
-                "ON CONFLICT (id) DO UPDATE SET last_run_at = now()"
-            )
-            # Commit the marker now (not at get_pg exit) so it is durable before we
-            # touch the lock; the advisory lock is session-level and unaffected by
-            # commit/rollback, so this does not release it early.
-            conn.commit()
+            from .pg import get_pg
+            with get_pg() as marker_conn:
+                marker_conn.cursor().execute(
+                    "INSERT INTO reconciliation_alert_runs (id, last_run_at) VALUES (1, now()) "
+                    "ON CONFLICT (id) DO UPDATE SET last_run_at = now()"
+                )
         except Exception:
-            # If the marker write itself fails, last_run_at stays stale and the
-            # NEXT pass may re-alert for the same drift. That trade is DELIBERATE:
-            # a rare, LOUD (CRITICAL below) duplicate alert is strictly better than
-            # the alternative -- swallowing the failure in a way that could wedge
-            # the marker and leave the alarm permanently silent. We optimize for
-            # never going silent; a double alarm is merely noise.
+            # If the marker write itself fails -- on its OWN fresh connection, so
+            # this is a genuine Postgres/pool failure, not a side effect of the lock
+            # connection dying -- last_run_at stays stale and the NEXT pass may
+            # re-alert for the same drift. That trade is DELIBERATE: a rare, LOUD
+            # (CRITICAL below) duplicate alert is strictly better than the
+            # alternative -- swallowing the failure in a way that could wedge the
+            # marker and leave the alarm permanently silent. We optimize for never
+            # going silent; a double alarm is merely noise. (This is now the ONLY
+            # residual double-alert path; the mid-pass lock-connection death that
+            # round-2's fix left open is closed by writing on this fresh connection.)
             logger.critical(
-                "[ReconAlert] failed to persist last_run_at marker -- the next pass "
-                "may re-alert for the same drift (accepted: a rare loud duplicate "
-                "beats a silent stall)"
+                "[ReconAlert] failed to persist last_run_at marker on a fresh "
+                "connection -- the next pass may re-alert for the same drift "
+                "(accepted: a rare loud duplicate beats a silent stall)"
             )
 
-    # 2) Release the advisory lock.
+    # 2) Release the advisory lock on the ORIGINAL lock connection.
     try:
         cur.execute(
             "SELECT pg_advisory_unlock(%s) AS released", (RECONCILIATION_ALERT_LOCK_ID,)

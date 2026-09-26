@@ -530,6 +530,199 @@ class TestLockReleasePath:
 
 
 # ---------------------------------------------------------------------------
+# Fresh-connection marker write (round 3): a REAL mid-pass death of the
+# lock-holding connection -- not a faked unlock statement -- must not prevent the
+# last-run marker from being recorded, so the next pass does NOT re-alert.
+#
+# Round 2's cleanup test only made the FINAL unlock statement raise on an
+# otherwise-live connection; it never exercised the marker write dying with the
+# connection, because round-2 code wrote the marker on that SAME connection just
+# before the unlock. These tests kill the actual backend mid-pass (after the alert
+# was sent, before the marker write) via pg_terminate_backend and via
+# idle_in_transaction_session_timeout, and prove the marker still lands because it
+# is now written on a fresh, separate connection.
+# ---------------------------------------------------------------------------
+
+class TestFreshConnectionMarkerSurvivesLockConnDeath:
+    def _healthy_keepalive_get_pg(self, dsn, open_conns):
+        """A faithful pooled get_pg for the compute/email seams: yields a real
+        connection, re-raises connection errors on exit-commit, never closes."""
+        from contextlib import contextmanager
+
+        from psycopg2.extras import RealDictCursor
+
+        @contextmanager
+        def _cm():
+            conn = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+            open_conns.append(conn)
+            try:
+                yield conn
+                conn.commit()
+            except (psycopg2.OperationalError, psycopg2.InterfaceError):
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                raise
+            except Exception:
+                conn.rollback()
+                raise
+        return _cm
+
+    def _lock_get_pg(self, dsn, lock_conns, lock_pid, setup_first=None):
+        """get_pg for the pass's OWN connection seam (app.services.pg.get_pg).
+
+        The FIRST connection it hands out is the lock-holding connection; its
+        backend PID is captured (so a test can kill it) and an optional
+        ``setup_first(conn)`` hook can configure that session (e.g. a short
+        idle_in_transaction_session_timeout). Every later connection -- notably the
+        fresh one _finish_pass opens for the marker write -- is a plain healthy
+        connection. Faithful to real pg.py: connection errors on exit-commit are
+        RE-RAISED, and the connection is never closed (returned to the pool alive).
+        """
+        from contextlib import contextmanager
+
+        from psycopg2.extras import RealDictCursor
+
+        @contextmanager
+        def _cm():
+            conn = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+            first = len(lock_conns) == 0
+            lock_conns.append(conn)
+            if first:
+                cur = conn.cursor()
+                cur.execute("SELECT pg_backend_pid() AS pid")
+                lock_pid.append(cur.fetchone()["pid"])
+                conn.commit()  # close the implicit txn opened by the pid query
+                if setup_first is not None:
+                    setup_first(conn)
+            try:
+                yield conn
+                conn.commit()
+            except (psycopg2.OperationalError, psycopg2.InterfaceError):
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                raise
+            except Exception:
+                conn.rollback()
+                raise
+        return _cm
+
+    def _drive_kill_pass(self, dsn, kill_side_effect, setup_first=None):
+        """Run one pass whose email-send side effect kills the lock connection's
+        backend mid-pass, then run a second (healthy) pass. Returns
+        (result1, send1_await_count, result2, send2_await_count, marker_after_pass1,
+        critical_records_from_pass2)."""
+        from app.services import reconciliation_alert
+
+        lock_conns, lock_pid, open_conns = [], [], []
+        lock_cm = self._lock_get_pg(dsn, lock_conns, lock_pid, setup_first=setup_first)
+        compute_cm = self._healthy_keepalive_get_pg(dsn, open_conns)
+
+        async def send_and_kill(*a, **k):
+            await kill_side_effect(lock_pid[0])
+            return True
+
+        send1 = AsyncMock(side_effect=send_and_kill)
+        fixture = [make_pi("user-a", 399, pi_id="pi_unknown")]
+        try:
+            with patch("app.services.pg.get_pg", lock_cm), \
+                 patch("app.routers.admin.get_pg", compute_cm), \
+                 patch("app.services.auth_db.get_pg", compute_cm), \
+                 patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture), \
+                 patch.object(reconciliation_alert, "send_admin_update_email", send1):
+                result1 = asyncio.run(reconciliation_alert.run_reconciliation_alert_pass())
+            marker_after = _marker_row(dsn)
+        finally:
+            for c in open_conns + lock_conns:
+                try:
+                    c.close()
+                except Exception:
+                    pass
+        return result1, send1.await_count, marker_after
+
+    def test_pg_terminate_backend_midpass_does_not_lose_marker(self, recon_alert_env, caplog):
+        # Kill the lock-holding backend with pg_terminate_backend right after the
+        # alert email is sent (the send side effect terminates it), i.e. BEFORE the
+        # old code would have written the marker on that same, now-dead connection.
+        dsn = recon_alert_env
+        from app.services.auth_db import create_user
+        create_user("user-a", email="a@test.local")
+        _seed_segment("user-a", 699)
+
+        async def terminate(pid):
+            killer = psycopg2.connect(dsn)
+            killer.autocommit = True
+            try:
+                killer.cursor().execute("SELECT pg_terminate_backend(%s)", (pid,))
+            finally:
+                killer.close()
+
+        with caplog.at_level(logging.CRITICAL, logger="app.services.reconciliation_alert"):
+            result1, sent1, marker_after = self._drive_kill_pass(dsn, terminate)
+
+        # The pass alerted exactly once and did NOT raise despite the mid-pass death.
+        assert result1["status"] == "alerted"
+        assert sent1 == 1
+        # A CRITICAL DRIFT line fired, and the failed unlock was surfaced loudly.
+        assert any(r.levelno == logging.CRITICAL and "DRIFT" in r.getMessage()
+                   for r in caplog.records)
+        # THE POINT: the marker was persisted despite the lock connection dying,
+        # because it is written on a fresh connection now (old code lost it here).
+        assert marker_after is not None and marker_after["last_run_at"] is not None
+
+        # A pass run immediately afterward de-dups on that marker: skipped_recent,
+        # zero emails, zero CRITICAL drift logs.
+        caplog.clear()
+        send2 = AsyncMock(return_value=True)
+        with caplog.at_level(logging.CRITICAL, logger="app.services.reconciliation_alert"):
+            result2 = _run_pass([make_pi("user-a", 399, pi_id="pi_unknown")], send2)
+        assert result2["status"] == "skipped_recent"
+        assert send2.await_count == 0
+        assert [r for r in caplog.records if r.levelno == logging.CRITICAL
+                and "DRIFT" in r.getMessage()] == []
+
+    def test_idle_in_transaction_timeout_midpass_does_not_lose_marker(self, recon_alert_env, caplog):
+        # Same guarantee via the OTHER real kill mechanism the verifier used: let
+        # Postgres terminate the lock connection because it sat idle-in-transaction
+        # past a short timeout while the pass was sending the alert.
+        dsn = recon_alert_env
+        from app.services.auth_db import create_user
+        create_user("user-a", email="a@test.local")
+        _seed_segment("user-a", 699)
+
+        def arm_idle_timeout(conn):
+            conn.autocommit = True
+            conn.cursor().execute("SET idle_in_transaction_session_timeout = '200ms'")
+            conn.autocommit = False
+
+        async def wait_out_idle_timeout(_pid):
+            # The lock connection is idle inside its advisory-lock transaction for
+            # the whole of this sleep; 200ms < 0.6s so Postgres FATALs it.
+            await asyncio.sleep(0.6)
+
+        with caplog.at_level(logging.CRITICAL, logger="app.services.reconciliation_alert"):
+            result1, sent1, marker_after = self._drive_kill_pass(
+                dsn, wait_out_idle_timeout, setup_first=arm_idle_timeout
+            )
+
+        assert result1["status"] == "alerted"
+        assert sent1 == 1
+        assert marker_after is not None and marker_after["last_run_at"] is not None
+
+        caplog.clear()
+        send2 = AsyncMock(return_value=True)
+        with caplog.at_level(logging.CRITICAL, logger="app.services.reconciliation_alert"):
+            result2 = _run_pass([make_pi("user-a", 399, pi_id="pi_unknown")], send2)
+        assert result2["status"] == "skipped_recent"
+        assert send2.await_count == 0
+        assert [r for r in caplog.records if r.levelno == logging.CRITICAL
+                and "DRIFT" in r.getMessage()] == []
+
+
+# ---------------------------------------------------------------------------
 # De-duplication across NON-overlapping passes (persisted last-run marker)
 # ---------------------------------------------------------------------------
 
@@ -559,6 +752,33 @@ class TestDedup:
         assert send2.await_count == 0
         assert [r for r in caplog.records if r.levelno == logging.CRITICAL
                 and "DRIFT" in r.getMessage()] == []
+
+    def test_skipped_recent_reports_only_the_remaining_time(self, recon_alert_env):
+        # Round-3 slop fix: a skipped_recent pass tells the loop how long is LEFT
+        # until the run is due (next_run_in_seconds), NOT a full fresh interval, so
+        # a boot-time skip cannot stretch spacing toward ~2x the nominal interval.
+        from app.services.auth_db import create_user
+        from app.services.reconciliation_alert import (
+            MIN_RESLEEP_SECONDS,
+            WEEKLY_INTERVAL_SECONDS,
+        )
+        create_user("user-a", email="a@test.local")
+        _seed_segment("user-a", 699)
+        fixture = [make_pi("user-a", 399, pi_id="pi_unknown")]
+
+        # Last run was 1 day ago -> ~6 days remaining, well under a full interval
+        # and well above the busy-loop floor.
+        one_day = 24 * 60 * 60
+        _set_marker_age(recon_alert_env, one_day)
+
+        send = AsyncMock(return_value=True)
+        result = _run_pass(fixture, send)
+        assert result["status"] == "skipped_recent"
+        assert send.await_count == 0
+        remaining = result["next_run_in_seconds"]
+        assert MIN_RESLEEP_SECONDS <= remaining < WEEKLY_INTERVAL_SECONDS
+        # ~6 days left (allow generous slack for clock/exec time).
+        assert abs(remaining - (WEEKLY_INTERVAL_SECONDS - one_day)) < 3600
 
     def test_pass_a_full_interval_later_proceeds(self, recon_alert_env):
         # A marker older than one interval must NOT permanently wedge the pass:

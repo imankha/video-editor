@@ -103,6 +103,23 @@ out to make the outer loop retry-and-re-send. Because the marker is stamped befo
 unlock, a death on the unlock step still leaves it persisted, so the retry skips. The pass
 also runs ~60s after every boot/deploy (`STARTUP_DELAY_SECONDS`), not on a fixed wall clock.
 
+### Round 3 (2026-09-26): fresh-connection marker write closes the mid-pass death gap
+
+Round 2 wrote the marker through the lock connection's OWN cursor. If that connection died at
+any point mid-pass (not just on the final unlock statement) the marker upsert never ran, the
+alert had already gone out, and the next pass re-sent it. Round 2's test only faked the final
+unlock statement raising on an otherwise-live connection, so it never exercised this path. Fix:
+`_finish_pass` now upserts `last_run_at` on a FRESH, SEPARATE `get_pg()` connection (not the
+lock connection) BEFORE releasing the lock, so a lock-connection death at ANY point up to and
+including the unlock still leaves the marker persisted. New test
+`TestFreshConnectionMarkerSurvivesLockConnDeath` kills the REAL lock backend mid-pass (via
+`pg_terminate_backend` AND `idle_in_transaction_session_timeout`) after the alert is sent and
+asserts the immediately-following pass returns `skipped_recent` with zero emails. The only
+residual double-alert path is the fresh marker connection ITSELF failing (a rare loud duplicate,
+never a silent stall). Separately, the loop now sleeps only the time REMAINING until due on a
+`skipped_recent` boot (`next_run_in_seconds`, floored at `MIN_RESLEEP_SECONDS`) instead of a
+fresh full interval, removing the up-to-~2x spacing slop.
+
 **This is the LAST task in the Revenue Record Integrity epic  -  see EPIC.md. The epic is
 NOT marked COMPLETE: DONE is the user's gesture, and one completion criterion (0 unexplained
 drift on a real prod reconciliation run) awaits prod migrate-postgres + backfill.**

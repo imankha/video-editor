@@ -190,7 +190,10 @@ Order is dependency order: the record must exist before anything can read it or 
       offers a terminal acknowledge action instead of a heal that cannot work (T8640)
 - [x] Admin revenue totals are computed from `payments` and do not change when an account
       is deleted (T8650)
-- [x] A new live purchase produces a Stripe receipt to the customer's email (T8660)
+- [ ] A new live purchase produces a Stripe receipt to the customer's email (T8660)
+      -- awaiting a live-mode Stripe purchase to confirm receipt delivery; see T8660's
+      task file (the code ships receipt_email, but the delivery has not been observed in
+      live mode yet)
 - [x] Drift is detected without a human clicking anything (T8670)
 - [x] Knowledge docs updated: `backend-services.md` (new table, deletion contract) and
       `persistence-sync.md` if the deletion contract touches the sync seam

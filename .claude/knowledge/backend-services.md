@@ -461,23 +461,33 @@ that's the whole point). Do not couple the two; `payments_ledger.py` never calls
   alone is NOT enough: each Fly machine (and each restart) starts its own startup-delay-then-weekly
   timer, so two passes seconds/hours apart never contend for the lock yet would each see the same
   drift and alert. Inside the same lock-held section the pass reads `last_run_at`; younger than one
-  interval → `skipped_recent` (no compute, no alert, no write beyond the lock); else it runs and
-  upserts `last_run_at=now()` BEFORE releasing the lock. Lock id is literally 8670 (the task id),
+  interval → `skipped_recent` (no compute, no alert, no write beyond the lock); else it runs and,
+  once the outcome is fixed, upserts `last_run_at=now()` on a FRESH, SEPARATE `get_pg()` connection
+  (NOT the lock connection), then releases the lock. Lock id is literally 8670 (the task id),
   chosen greppable; this is the first advisory-lock user in the codebase. **The pass also runs ~60s
   after every boot/deploy** (`STARTUP_DELAY_SECONDS`), NOT on a fixed wall-clock weekly schedule —
   the marker is exactly what stops those extra boot-time passes from re-alerting within an interval.
-  **A mid-cleanup connection death no longer duplicates the alert** (round 2 fix #2): the cleanup
-  tail (`_finish_pass`: upsert `last_run_at` FIRST, then unlock) is best-effort — a failure is
-  logged CRITICAL but never propagates, and `get_pg` RE-RAISES a dead-connection error on its
-  exit-commit (it does NOT swallow it, contrary to the pre-round-2 comment), so
-  `run_reconciliation_alert_pass` catches that re-raise once an outcome exists and returns without
-  letting the outer loop retry-and-re-send. Because the marker is stamped before the unlock, a death
-  on the unlock step still leaves the marker persisted → the immediate 1h-retry pass sees a recent
-  run and skips. If the marker upsert ITSELF fails, a rare LOUD duplicate alert on the next pass is
-  the accepted trade (documented in `_finish_pass`) — never a silent stall. Scheduling reuses the
-  `sweep_scheduler`/`cleanup` background-loop pattern:
+  **A mid-pass connection death no longer duplicates the alert** (round 3, closing round 2 fix #2's
+  residual gap): the cleanup tail `_finish_pass` upserts `last_run_at` on a FRESH `get_pg()`
+  connection FIRST, then unlocks on the original lock connection -- both best-effort, neither
+  propagates. Writing the marker OFF the lock connection is the round-3 fix: round 2 wrote it through
+  the lock connection's own cursor, so ANY death of that connection during the pass (not just on the
+  unlock statement) skipped the marker entirely and the next pass re-sent the alert. `get_pg`
+  RE-RAISES a dead-connection error on its exit-commit (it does NOT swallow it, contrary to the
+  pre-round-2 comment), so `run_reconciliation_alert_pass` catches that re-raise once an outcome
+  exists and returns without letting the outer loop retry-and-re-send. Because the marker is written
+  on an independent connection, a lock-connection death at ANY point up to and including the unlock
+  still leaves the marker persisted -> the next pass sees a recent run and skips (proven by
+  `TestFreshConnectionMarkerSurvivesLockConnDeath`, which kills the real lock backend mid-pass with
+  both `pg_terminate_backend` and `idle_in_transaction_session_timeout`). The ONLY residual
+  double-alert path now is the marker upsert on its own fresh connection ITSELF failing -- a rare LOUD
+  duplicate alert on the next pass is the accepted trade (documented in `_finish_pass`), never a
+  silent stall. Scheduling reuses the `sweep_scheduler`/`cleanup` background-loop pattern:
   `start_reconciliation_alert_loop`/`stop_reconciliation_alert_loop` wired into `main.py` lifespan;
-  fixed WEEKLY interval (`WEEKLY_INTERVAL_SECONDS`, a named constant). One `PaymentIntent.list`
+  fixed WEEKLY interval (`WEEKLY_INTERVAL_SECONDS`, a named constant). On a `skipped_recent` boot-time
+  pass the loop sleeps only the time REMAINING until the run is due (`next_run_in_seconds`, floored at
+  `MIN_RESLEEP_SECONDS`), not a fresh full interval, so a machine that boots just after another ran
+  does not stretch effective spacing toward ~2x the nominal interval. One `PaymentIntent.list`
   pagination per run (inside `_compute_reconciliation`), same bounded Stripe read the panel makes;
   NEVER on a user-facing path. If Stripe is unconfigured (local dev) the pass logs INFO and skips.
   Tests: `tests/test_t8670_reconciliation_alert.py` (run against an ISOLATED test DB, Stripe mocked).
