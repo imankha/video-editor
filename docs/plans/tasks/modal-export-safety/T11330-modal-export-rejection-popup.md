@@ -58,9 +58,22 @@ popup (not a toast that can be missed) explaining:
 
 **2026-09-25**: Filed from Bug 58p investigation, alongside T11320. Not started.
 
+## Step 4 decision (credit ordering) — option (a), net-zero
+
+T11320 reserves + confirms (deducts) credits synchronously in the request handler BEFORE the
+background `_export_clips` task starts; the guard rejection fires inside that background task and
+the same handler refunds the deducted credits (`multi_clip.py` `except Exception` -> `refund_credits`).
+So a rejected export is a DEDUCT-then-REFUND that nets to zero — it is NOT literally "never
+deducted". Chosen option (a): leave the deduct+refund pattern as-is (matches Bug 58p's own
+auto-refund precedent; option (b), computing the estimate before the 202 to skip the ledger
+entirely, would duplicate the clip-assembly that lives inside `_export_clips` and was judged not a
+clean/contained change). The acceptance criterion below is reworded to the net-zero contract and a
+backend test (`tests/test_t11330_rejection_credit_refund.py`) pins it.
+
 ## Acceptance Criteria
 
-- [ ] Triggering T11320's guard shows a popup with the "why" and concrete next steps, not a bare
-      error
-- [ ] No credits are deducted for a rejected export
-- [ ] Frontend test covering the rejection -> popup path
+- [x] Triggering T11320's guard shows a popup with the "why" and concrete next steps, not a bare
+      error (`ExportTooLargeModal`, rendered from `GlobalExportIndicator`)
+- [x] Credits net to zero for a rejected export (deduct-then-refund; `test_t11330_rejection_credit_refund.py`)
+- [x] Frontend test covering the rejection -> popup path via the real WS channel
+      (`ExportWebSocketManager.test.js`, `ExportTooLargeModal.test.jsx`, `GlobalExportIndicator.test.jsx`)

@@ -280,6 +280,12 @@ export const useExportStore = create((set, get) => ({
 
   /**
    * Mark export as failed - called by WebSocket handler
+   *
+   * T11330: `opts.budgetRejection` carries the T11320 preflight guard's structured detail
+   * (code === 'export_too_large': estimated_gpu_seconds, budget_seconds, biggest_contributors,
+   * ...) when the failure is an over-budget rejection. It is stored raw on the export entry so
+   * the explanatory popup (ExportTooLargeModal, rendered from GlobalExportIndicator) can name
+   * the worst-offending clips and the concrete levers instead of a bare "Export failed" toast.
    */
   failExport: (exportId, error, opts = {}) => {
     set((state) => {
@@ -295,6 +301,8 @@ export const useExportStore = create((set, get) => ({
             error: typeof error === 'string' ? error : error?.message || 'Export failed',
             // T4110: render-OK-but-sync-failed is retryable; the UI prompts Retry.
             retryable: opts.retryable === true,
+            // T11330: raw guard payload for the explanatory popup (null for ordinary failures).
+            budgetRejection: opts.budgetRejection || null,
             completedAt: new Date().toISOString(),
           },
         },

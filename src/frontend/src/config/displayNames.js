@@ -414,6 +414,46 @@ export const EXPORT_PROGRESS = {
   ETA_VARIES: 'Time remaining varies.',
 };
 
+// T11330: the explanatory popup shown when the T11320 preflight cost guard rejects an
+// export as too large (WS error frame, code === 'export_too_large'). Bug 58p's user
+// retried the identical over-budget export four times over 13 hours with no idea what to
+// change; a bare "Export failed" toast is not enough — this names the WHY and the concrete
+// levers (crop in on the worst clips, split the batch) plus the honest credit outcome.
+// Numbers are DERIVED from the guard payload (estimated_gpu_seconds / biggest_contributors);
+// there are no magic thresholds here. Credit copy matches T11330 Step 4 decision (a): the
+// guard rejects inside the background task AFTER credits were reserved+confirmed at dispatch,
+// so the same handler refunds them — the net cost is zero, stated honestly as "refunded".
+export const EXPORT_TOO_LARGE = {
+  TITLE: 'This export is too big to finish in time',
+  WHY:
+    'Every frame is upscaled on our video processor, and this batch needs more GPU time '
+    + 'than one job can finish before it times out. Rather than run for the full limit and '
+    + 'then fail, we stopped it now so you can trim it down.',
+  WHAT_TO_DO_HEADING: 'To get it through, try one of these:',
+  SUGGESTION_CROP: 'Crop in tighter on the clip(s) below, a smaller crop is much faster to process.',
+  // Shown only for a multi-clip rejection (>1 contributing clip); it isn't actionable for a
+  // single clip (the /render path also hits this guard with a one-element list, T11330 minor 2).
+  SUGGESTION_SPLIT: 'Export fewer clips at once, or split this batch into two smaller exports.',
+  CONTRIBUTORS_HEADING: 'Biggest contributors',
+  // A single worst-offender row: "Clip 3, 1920x1080 crop, about 6 min".
+  contributorLine: (c) => {
+    const label = c.clip_name || `Clip ${(c.clip_index ?? 0) + 1}`;
+    const crop = c.crop_width && c.crop_height ? `${c.crop_width}x${c.crop_height} crop, ` : '';
+    return `${label}, ${crop}${formatApproxMinutes(c.estimated_gpu_seconds)}`;
+  },
+  CREDIT_NOTE: 'Credits reserved for this export have been refunded. This attempt cost you nothing.',
+  DISMISS: 'Got it',
+};
+
+// Human "about N minutes" from a GPU-seconds estimate (guard payload). Never a bare second
+// count — the user thinks in minutes of waiting. Under a minute reads "under a minute".
+export function formatApproxMinutes(gpuSeconds) {
+  if (!gpuSeconds || gpuSeconds <= 0) return 'unknown time';
+  if (gpuSeconds < 60) return 'under a minute';
+  const minutes = Math.round(gpuSeconds / 60);
+  return minutes === 1 ? 'about 1 min' : `about ${minutes} min`;
+}
+
 // T8390 / re-hierarchized T9590 / T10670 celebration tiles: Focus's post-export
 // completion action bar (FocusPublishActionBar). T9590 (2026-09-10) established the
 // three-level hierarchy + a quiet exit; T10670 (2026-09-19, approved V2 design)

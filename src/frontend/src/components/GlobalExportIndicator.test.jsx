@@ -189,3 +189,59 @@ describe('GlobalExportIndicator — rendered labels and stale-ETA switch (T8510)
     expect(document.body.textContent).toContain('Enhancing video');
   });
 });
+
+describe('GlobalExportIndicator — over-budget rejection popup (T11330)', () => {
+  /** An ERRORED framing export carrying the T11320 guard's structured rejection. */
+  function makeBudgetRejectedExport({ exportId = 'export_big', projectName = 'Brilliant Goal' } = {}) {
+    return {
+      exportId,
+      projectId: 7,
+      projectName,
+      type: 'framing',
+      status: 'error',
+      progress: { current: 0, total: 100, percent: 0, message: '' },
+      startedAt: new Date(NOW - 5000).toISOString(),
+      completedAt: new Date(NOW).toISOString(),
+      error: 'This export needs an estimated 4200s of GPU time, over the 2880s safe limit.',
+      retryable: false,
+      budgetRejection: {
+        code: 'export_too_large',
+        estimated_gpu_seconds: 4200.0,
+        budget_seconds: 2880.0,
+        biggest_contributors: [
+          { clip_index: 3, clip_name: 'Big Dunk', crop_width: 1920, crop_height: 1080, estimated_gpu_seconds: 600.0 },
+        ],
+      },
+      outputVideoId: null,
+      outputFilename: null,
+      gameId: null,
+      gameName: null,
+    };
+  }
+
+  it('shows the explanatory popup even though the rejected export is not "processing"', () => {
+    // The whole point: no processing exports, yet the popup for the errored one must appear.
+    useExportStore.setState({ activeExports: { export_big: makeBudgetRejectedExport() } });
+    render(<GlobalExportIndicator />);
+    expect(screen.getByTestId('export-too-large-modal')).toBeTruthy();
+    expect(document.body.textContent).toContain('Big Dunk');
+    expect(document.body.textContent).toContain('1920x1080 crop');
+  });
+
+  it('dismisses the popup on "Got it" and does not resurrect it', () => {
+    useExportStore.setState({ activeExports: { export_big: makeBudgetRejectedExport() } });
+    render(<GlobalExportIndicator />);
+    act(() => {
+      screen.getByTestId('export-too-large-dismiss').click();
+    });
+    expect(screen.queryByTestId('export-too-large-modal')).toBeNull();
+  });
+
+  it('does not show the popup for an ordinary (non-guard) export failure', () => {
+    const plain = makeBudgetRejectedExport({ exportId: 'export_plain' });
+    plain.budgetRejection = null;
+    useExportStore.setState({ activeExports: { export_plain: plain } });
+    render(<GlobalExportIndicator />);
+    expect(screen.queryByTestId('export-too-large-modal')).toBeNull();
+  });
+});

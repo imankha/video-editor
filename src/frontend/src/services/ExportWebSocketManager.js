@@ -225,12 +225,26 @@ class ExportWebSocketManager {
         // failed export (never "complete", never Move-to-My-Reels) but surface that
         // it is retryable so the UI prompts Retry instead of a hard failure.
         const retryable = message.retryable === true || message.code === 'sync_failed';
-        store.failExport(exportId, message.error || 'Export failed', { retryable });
+        // T11330: a preflight cost-guard rejection (T11320) arrives as a terminal ERROR whose
+        // frame carries the structured `export_too_large` detail merged in at the top level
+        // (code, estimated_gpu_seconds, budget_seconds, biggest_contributors, ...). Hand that
+        // raw detail to the store so the explanatory popup can render the why + the levers.
+        // Never retryable — the same export will always exceed budget until the user trims it.
+        const budgetRejection = message.code === 'export_too_large' ? message : null;
+        // T11330: this is the SINGLE write path for a terminal WS error. Callers must react
+        // with local UI only and never re-fail the same store entry, or the budgetRejection
+        // above is clobbered (the Bug 58p popup regression). Because it's the only writer, the
+        // best-available message is resolved HERE (retryable-aware) so the store — and every
+        // consumer of the onError callback — gets it, not a bare fallback in one place only.
+        const terminalError = message.error || (retryable
+          ? "Render finished but couldn't save to the cloud. Please try Export again."
+          : 'Export failed');
+        store.failExport(exportId, terminalError, { retryable, budgetRejection });
 
         // Notify callback (wrap in try-catch - callback may reference unmounted component)
         if (callbacks.onError) {
           try {
-            callbacks.onError(message.error, { retryable, code: message.code });
+            callbacks.onError(terminalError, { retryable, code: message.code });
           } catch (e) {
             console.warn(`[ExportWSManager] onError callback error (continuing):`, e);
           }

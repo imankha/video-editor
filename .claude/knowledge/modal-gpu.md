@@ -256,6 +256,30 @@ graph LR
   wiring, and structured-rejection shape. Pure-function + before-dispatch regression tests, no
   Modal needed. Blocks T11330 (popup reads the structured reason). Estimate-vs-real-billed-GPU-s
   calibration is a post-merge staging gate (Modal off in /dotask, T4180).
+- **T11330** (impl 2026-09-26, Modal Export Safety epic — Bug 58p): explanatory popup for the
+  T11320 rejection. The rejection arrives ONLY over the export progress WS as a terminal ERROR
+  frame with `code:"export_too_large"` + `to_error_detail()` fields merged at the top level (no
+  HTTP carries it — dispatch returns 202, guard fires in the background task). Frontend hook point
+  is `ExportWebSocketManager._handleMessage`'s ERROR branch: when `code === 'export_too_large'` it
+  passes the raw frame to `exportStore.failExport(..., {budgetRejection})`, stored on the export
+  entry. **INVARIANT (single write path for terminal WS errors):** the manager is the ONLY writer
+  that fails the store on a WS error, and it resolves the retryable-aware terminal message there.
+  `ExportButtonContainer.connectWebSocket`'s `onError` reacts with LOCAL UI only and must NEVER call
+  `failExport` again — a second write dropped `budgetRejection` back to null and the popup never
+  rendered (review BLOCKING, caught post-first-commit; regression-locked by the real two-writer-seam
+  test `ExportButtonContainer.budgetRejection.test.jsx`). `GlobalExportIndicator` (globally mounted)
+  renders `ExportTooLargeModal` for the most recent errored export carrying a `budgetRejection` and
+  SUPPRESSES the generic error toast for it; the modal has NO backdrop-close (project convention) and
+  hides the "split the batch" lever for a single-clip (`/render`) rejection. Copy is single-sourced in
+  `config/displayNames.js` `EXPORT_TOO_LARGE` (+ `formatApproxMinutes`). **Step 4 (credit ordering)
+  decision (a): a rejection is a DEDUCT-then-REFUND that nets to zero** — credits are reserved +
+  confirmed in the request handler before the background task; the guard rejection refunds them in
+  `_export_clips`'s `except` handler (matches Bug 58p's auto-refund precedent). NOT literally
+  "never deducted". Tests: `ExportTooLargeModal.test.jsx`, `ExportWebSocketManager.test.js`,
+  `GlobalExportIndicator.test.jsx` (T11330 block), `tests/test_t11330_rejection_credit_refund.py`.
+  Live-drive in a Modal-off /dotask container CANNOT reach the guard (it only runs inside the
+  `if modal_enabled():` branch) — proven instead by the WS-frame contract test mirroring the
+  backend's real `export_progress` payload.
 - **T2650** (TODO): move sweep auto-export compute from Fly to Modal.
 - Historical: T2480 shipped Catmull-Rom spline crop interpolation on the Modal side (matching frontend curves) — the origin of today's duplicated spline copies; T50/T51 were the original Modal cost/parallelization analyses (parallel overlay rejected as 3-4x costlier, E7).
 - Related DONE infra: T1200 (Modal job-id logging + retry), T1520 (disconnect/retry UX reconciling with Modal job state), T2450-T2470 (auto-export reliability: presigned URLs to FFmpeg, pending-status recovery, sweep keepalive).
