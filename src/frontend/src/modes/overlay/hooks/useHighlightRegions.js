@@ -1,9 +1,11 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { timeToFrame, frameToTime } from '../../../utils/videoUtils';
 import { interpolateHighlightSpline } from '../../../utils/splineInterpolation';
 import { useOverlayHighlightColor } from '../../../stores/overlayStore';
 import { HighlightColor } from '../../../constants/highlightColors';
 import { track } from '../../../utils/analytics';
+import { toast } from '../../../components/shared/Toast';
+import { SPOTLIGHT_DETECTION_FALLBACK_TOAST } from '../../../config/displayNames';
 import {
   pickPrimaryDetectionBox,
   detectionBoxesNearestTime,
@@ -76,6 +78,12 @@ export default function useHighlightRegions(videoMetadata) {
 
   // Get highlight color from store for new highlights
   const highlightColor = useOverlayHighlightColor();
+
+  // T10870: region ids we've already told the user auto-detection fell back for.
+  // The notice must show ONCE per region, not on every re-render / export read
+  // (dedupKey alone only prevents stacking, not repeat pop-ins). Memory-only,
+  // per-hook-instance — a fresh Overlay mount legitimately re-notifies.
+  const notifiedDetectionFallbackRef = useRef(new Set());
 
   /**
    * Derived: All boundaries from regions (for compatibility with RegionLayer)
@@ -187,7 +195,21 @@ export default function useHighlightRegions(videoMetadata) {
           color,
         };
       }
-      console.warn('[useHighlightRegions] region has detections but no usable box for auto-select; using centered default');
+      // T10870: detection RAN for this region but produced no usable box (e.g. a
+      // dim/dusk clip). We degrade to the neutral centered default rather than
+      // fabricate a box -- but that box looks identical to a real auto-pick, so
+      // tell the user ONCE per region that they should reposition it. This is the
+      // "we tried and failed" branch only; a region that never had detections
+      // (below) falls straight through with no notice, as before.
+      const regionKey = region?.id || 'unknown-region';
+      if (!notifiedDetectionFallbackRef.current.has(regionKey)) {
+        notifiedDetectionFallbackRef.current.add(regionKey);
+        console.warn('[useHighlightRegions] region has detections but no usable box for auto-select; using centered default');
+        toast.info(SPOTLIGHT_DETECTION_FALLBACK_TOAST.title, {
+          message: SPOTLIGHT_DETECTION_FALLBACK_TOAST.message,
+          dedupKey: `spotlight-detection-fallback-${regionKey}`,
+        });
+      }
     }
 
     return calculateDefaultHighlight(vw, vh);
@@ -287,6 +309,7 @@ export default function useHighlightRegions(videoMetadata) {
       // instead of always the geometric frame center.
       if (restoredKeyframes.length === 0) {
         const defaultHighlight = defaultHighlightForRegion({
+          id: saved.id,  // T10870: key the fallback notice to this region
           detections: saved.detections || [],
           videoWidth: saved.videoWidth || videoMetadata?.width,
           videoHeight: saved.videoHeight || videoMetadata?.height,
@@ -411,6 +434,7 @@ export default function useHighlightRegions(videoMetadata) {
     // from those detections (falls back to the centered default only when no
     // usable detection exists) instead of always the geometric frame center.
     const defaultHighlight = defaultHighlightForRegion({
+      id: regionId,  // T10870: key the fallback notice to this region
       detections: regionDetections,
       videoWidth: videoDetections?.videoWidth || videoMetadata?.width,
       videoHeight: videoDetections?.videoHeight || videoMetadata?.height,
