@@ -623,6 +623,18 @@ export const OVERLAY_REAPPLY_FOCUS_TOAST = {
   message: `Reframe your clip in ${MODE_NAMES.FRAMING}, then export again, your spotlight carries over to the new reel.`,
 };
 
+// T10870: auto-spotlight tried the clip's player detections but found no usable
+// bounding box (e.g. a dim/dusk clip), so it fell back to a neutral centered
+// highlight instead of fabricating a box (the "no silent fallbacks for internal
+// data" rule). The dev-console warning alone left the user with an unexplained
+// centered box that looked identical to a real auto-pick -- this surfaces it,
+// once per region, so they know to reposition it. "athlete" per T9860 vocabulary
+// (possessive/singular = athlete); hyphen, never an em dash, per shipped-copy rule.
+export const SPOTLIGHT_DETECTION_FALLBACK_TOAST = {
+  title: "Couldn't auto-detect your athlete",
+  message: 'Drag the highlight to reposition it in this clip.',
+};
+
 // T9550 (Shared Vocabulary epic, N16-N32): the editor-stage IN-PANEL vocabulary,
 // single source. These name the CONTROLS you tune once inside Framing / Spotlight
 // -- the focus point, the styling sliders, the cover image. Deliberately NOT here:
