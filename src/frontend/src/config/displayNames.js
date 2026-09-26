@@ -430,18 +430,18 @@ export const EXPORT_TOO_LARGE = {
     + 'than one job can finish before it times out. Rather than run for the full limit and '
     + 'then fail, we stopped it now so you can trim it down.',
   WHAT_TO_DO_HEADING: 'To get it through, try one of these:',
-  SUGGESTION_CROP: 'Crop in tighter on the clip(s) below — a smaller crop is much faster to process.',
+  SUGGESTION_CROP: 'Crop in tighter on the clip(s) below, a smaller crop is much faster to process.',
   // Shown only for a multi-clip rejection (>1 contributing clip); it isn't actionable for a
-  // single clip (the /render path also hits this guard with a one-element list — T11330 minor 2).
+  // single clip (the /render path also hits this guard with a one-element list, T11330 minor 2).
   SUGGESTION_SPLIT: 'Export fewer clips at once, or split this batch into two smaller exports.',
   CONTRIBUTORS_HEADING: 'Biggest contributors',
-  // A single worst-offender row: "Clip 3 — 1920x1080 crop, about 6 min".
+  // A single worst-offender row: "Clip 3, 1920x1080 crop, about 6 min".
   contributorLine: (c) => {
     const label = c.clip_name || `Clip ${(c.clip_index ?? 0) + 1}`;
     const crop = c.crop_width && c.crop_height ? `${c.crop_width}x${c.crop_height} crop, ` : '';
-    return `${label} — ${crop}${formatApproxMinutes(c.estimated_gpu_seconds)}`;
+    return `${label}, ${crop}${formatApproxMinutes(c.estimated_gpu_seconds)}`;
   },
-  CREDIT_NOTE: 'Credits reserved for this export have been refunded — this attempt cost you nothing.',
+  CREDIT_NOTE: 'Credits reserved for this export have been refunded. This attempt cost you nothing.',
   DISMISS: 'Got it',
 };
 

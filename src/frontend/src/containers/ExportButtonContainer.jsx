@@ -337,8 +337,10 @@ export function ExportButtonContainer({
         setDisconnected(false);
         // T11330: an over-budget rejection is surfaced by ExportTooLargeModal (store-driven),
         // so don't also show the raw guard text in the inline export-panel banner.
+        // serverError is always populated here: the manager resolves a fallback (retryable-aware
+        // or 'Export failed') before invoking this callback, so there is nothing left to default.
         if (meta.code !== 'export_too_large') {
-          setError(serverError || 'Export failed on server');
+          setError(serverError);
         }
         setIsExporting(false);
         handleExportEnd();
