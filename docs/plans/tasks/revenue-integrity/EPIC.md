@@ -174,7 +174,7 @@ Order is dependency order: the record must exist before anything can read it or 
 | T8655 | [Remove the dead credit-amount-to-price map](T8655-remove-dead-credit-price-map.md) | STAGING |
 | T8657 | [Admin "paying" filter selects users from the ledger](T8657-paying-filter-reads-ledger.md) | STAGING |
 | T8660 | [Send Stripe receipts (receipt_email on the PaymentIntent)](T8660-stripe-receipt-email.md) | STAGING |
-| T8670 | [Scheduled reconciliation with a drift alert](T8670-scheduled-reconciliation-alert.md) | TODO |
+| T8670 | [Scheduled reconciliation with a drift alert](T8670-scheduled-reconciliation-alert.md) | WIP |
 | T8675 | [Dispute webhook writes ledger rows](T8675-dispute-webhook-ledger-rows.md) | STAGING |
 
 ## Completion Criteria
