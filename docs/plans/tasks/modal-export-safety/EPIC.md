@@ -34,7 +34,7 @@ See [modal-gpu.md](../../../../.claude/knowledge/modal-gpu.md) for `process_clip
 | ID | Task | Status |
 |----|------|--------|
 | T11320 | [Preflight export-size guard](T11320-modal-export-preflight-guard.md) | STAGING |
-| T11330 | [Explanatory rejection popup](T11330-modal-export-rejection-popup.md) | WIP |
+| T11330 | [Explanatory rejection popup](T11330-modal-export-rejection-popup.md) | STAGING |
 | T11340 | [Parallelize multi-clip export across GPUs](T11340-modal-multiclip-parallel-chunking.md) | ICE (deferred) |
 | T11350 | [Enable GAN-skip gate for near-1:1 crops](T11350-modal-gan-skip-gate-enable.md) | TODO |
 | T11370 | [Calibrate T11320's export-cost-guard constant](T11370-export-cost-guard-calibration.md) | TODO |
@@ -55,9 +55,9 @@ Full design preserved at
 
 ## Completion Criteria
 
-- [ ] A user cannot dispatch a multi-clip export whose estimated GPU-seconds exceeds Modal's
+- [x] A user cannot dispatch a multi-clip export whose estimated GPU-seconds exceeds Modal's
       timeout budget (T11320)
-- [ ] A rejected export shows a popup naming concrete levers: crop in tighter, reduce clip count /
+- [x] A rejected export shows a popup naming concrete levers: crop in tighter, reduce clip count /
       split into batches (T11330)
 - [ ] ~~Multi-clip export (`process_clips_ai`) can use more than 1 GPU for large jobs~~ — dropped;
       T11340 deferred, not required to close this epic

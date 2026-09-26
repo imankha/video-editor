@@ -1,6 +1,6 @@
 # T11330: Explanatory Popup When an Export Is Rejected as Too Large
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-09-25
@@ -77,3 +77,20 @@ backend test (`tests/test_t11330_rejection_credit_refund.py`) pins it.
 - [x] Credits net to zero for a rejected export (deduct-then-refund; `test_t11330_rejection_credit_refund.py`)
 - [x] Frontend test covering the rejection -> popup path via the real WS channel
       (`ExportWebSocketManager.test.js`, `ExportTooLargeModal.test.jsx`, `GlobalExportIndicator.test.jsx`)
+
+## Landed (2026-09-26)
+
+Merged via PR #516 (merge commit `38104e53`), full executable landing gate. Two fresh-context
+reviews caught real issues before landing:
+- **BLOCKING** (round 1): the popup never rendered in production — `ExportButtonContainer`'s WS
+  `onError` callback wrote to the export store a second time after `ExportWebSocketManager`
+  already set `budgetRejection` correctly, clobbering it back to `null`. Fixed via a single-write-
+  path correction (the WS manager is now the sole writer for terminal WS errors), with a real
+  integration regression test (`ExportButtonContainer.budgetRejection.test.jsx`) proven red-to-
+  green.
+- **Human decision required** (final landing-gate round): a fresh reviewer traced that the Step 4
+  net-zero decision (above) deviated from this task's own written acceptance criterion ("no
+  credits deducted") without recorded user sign-off. Escalated; user decision recorded 2026-09-26
+  via `landing_gate.py record-human-decision`: accept net-zero, land as-is.
+Also normalized 3 pre-existing CRLF files to LF (mechanical, zero content change, fixed a CI
+whitespace-check failure) and removed em-dashes from shipped copy per project convention.
