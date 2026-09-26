@@ -1,6 +1,6 @@
 # T8670: Scheduled reconciliation with a drift alert
 
-**Status:** WIP
+**Status:** STAGING (merged 2026-09-26, PR #514, 996302e8; proof VERIFIED at 10bd7fe5 across 3 fix rounds -- real mid-pass connection kills proved the marker survives -- Branch CI green)
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-03
