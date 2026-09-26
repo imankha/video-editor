@@ -607,3 +607,76 @@ class TestFilterSymmetryImankhRegression:
             resp = recon_client.get("/api/admin/revenue-reconciliation", headers=_admin())
         assert resp.status_code == 200
         assert "user-a" not in _rows_by_uid(resp)
+
+
+class TestHealSkipsAlreadyAlignedRow:
+    """Proof-verifier round 2: a heal on a row that is NOT drifted must not write
+    and must not report healed: true, even if the write happens to land on the
+    same value. Otherwise the SAME code path silently overwrites a cache that
+    moved since the report was generated (another tab, a webhook, T8675's
+    dispute/refund handlers)."""
+
+    def _seed_imankh_aligned(self):
+        # Exact imankh shape: flagged account, real segment row holding the
+        # CORRECT cached total, live Stripe history that nets to that total.
+        from app.services.auth_db import create_user
+        create_user("user-a", email="imankh@test.local")
+        _seed_segment("user-a", 399)
+        _mark_test_account("user-a", True)
+
+    def test_heal_by_id_on_aligned_row_does_not_write_or_report_healed(self, recon_client):
+        self._seed_imankh_aligned()
+        fixture = [make_pi("user-a", 399, pi_id="pi_imankh")]
+        before = _total_spent("user-a")
+        assert before == 399
+        with patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture):
+            resp = recon_client.post(
+                "/api/admin/revenue-reconciliation/heal",
+                json={"user_ids": ["user-a"], "exclude_test": False}, headers=_admin())
+        assert resp.status_code == 200
+        body = resp.json()
+        result = body["results"][0]
+        assert result["healed"] is False
+        assert result["skipped"] == "already aligned"
+        assert body["healed"] == 0
+        # Byte-for-byte unchanged, not just "still correct" -- proves the write
+        # was never attempted, so a concurrent bump can't be masked by a
+        # heal that happens to write back the same number it read.
+        assert _total_spent("user-a") == before
+
+    def test_all_drifted_cannot_reach_an_aligned_row(self, recon_client):
+        # `all_drifted` derives its target list from the SAME freshly computed
+        # `rows` the report returns (admin.py's heal endpoint calls
+        # `_compute_reconciliation` once and filters `r["drifted"]` from that
+        # single result) -- there is no caller-supplied or cached report it
+        # could go stale against, so an aligned row can never appear in
+        # `targets` via this path. This test pins that invariant: healing
+        # "all_drifted" while user-a is aligned must not touch it at all.
+        self._seed_imankh_aligned()
+        fixture = [make_pi("user-a", 399, pi_id="pi_imankh")]
+        before = _total_spent("user-a")
+        with patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture):
+            resp = recon_client.post(
+                "/api/admin/revenue-reconciliation/heal",
+                json={"all_drifted": True, "exclude_test": False}, headers=_admin())
+        assert resp.status_code == 200
+        assert all(r["user_id"] != "user-a" for r in resp.json()["results"])
+        assert _total_spent("user-a") == before
+
+    def test_heal_still_writes_a_genuinely_drifted_row(self, recon_client):
+        # Guard against the new skip becoming a blanket no-op: a row that IS
+        # drifted must still heal and report healed: true.
+        from app.services.auth_db import create_user
+        create_user("user-a", email="a@test.local")
+        _seed_segment("user-a", 699)
+        fixture = [make_pi("user-a", 699, refunded=300, pi_id="pi_drift")]
+        with patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture):
+            resp = recon_client.post(
+                "/api/admin/revenue-reconciliation/heal",
+                json={"user_ids": ["user-a"]}, headers=_admin())
+        assert resp.status_code == 200
+        result = resp.json()["results"][0]
+        assert result["healed"] is True
+        assert result["old_cents"] == 699
+        assert result["new_cents"] == 399
+        assert _total_spent("user-a") == 399

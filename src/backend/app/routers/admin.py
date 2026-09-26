@@ -1020,6 +1020,13 @@ async def heal_revenue_reconciliation(request: RevenueHealRequest):
     would either return None (permanent-red) or write a de-identified deleted
     account's cache pointlessly. Such a row is skipped with an explicit reason and
     ``healed: False`` so the panel never reports a success that changed nothing.
+
+    A row that is not ``drifted`` (never drifted, or another writer already caught
+    it up since this report was generated) is skipped too, for the same reason:
+    writing a freshly-fetched Stripe net back over an already-correct cache can
+    silently clobber a newer value the row doesn't yet reflect, and reporting
+    ``healed: True`` for a write that changed nothing is exactly the lie this
+    endpoint exists to stop telling.
     """
     _require_admin()
     _require_stripe_configured()
@@ -1050,6 +1057,15 @@ async def heal_revenue_reconciliation(request: RevenueHealRequest):
                 "user_id": uid,
                 "skipped": "account deleted; reconciled from ledger",
                 "healed": False,
+            })
+            continue
+        if not row_by_uid[uid]["drifted"]:
+            results.append({
+                "user_id": uid,
+                "skipped": "already aligned",
+                "healed": False,
+                "old_cents": row_by_uid[uid]["local_cents"],
+                "new_cents": row_by_uid[uid]["stripe_net_cents"],
             })
             continue
         net_cents = stripe_agg.get(uid, {}).get("net_cents", 0)
