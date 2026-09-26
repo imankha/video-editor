@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import useHighlightRegions from './useHighlightRegions';
 import { useToastStore } from '../../../components/shared/Toast';
@@ -118,7 +118,18 @@ describe('useHighlightRegions detection fallback notice (T10870)', () => {
     expect(fallbackToasts()).toHaveLength(0);
   });
 
-  it('shows the notice only once per region across repeated code paths', () => {
+  it('does not re-fire (or reset the dismiss timer of) an already-shown notice on repeat hits', () => {
+    // dedupKey alone only prevents STACKING (array length), not a repeat POP-IN:
+    // Toast.jsx's addToast replaces same-dedupKey toasts in place, so array
+    // length would read 1 either way -- that assertion alone can't tell "the
+    // guard fired zero extra times" from "the guard fired N times and each one
+    // just overwrote the last". A real repeat fire is observable as (a) a second
+    // addToast CALL (which restarts the 5s auto-dismiss timer, silently
+    // resurrecting a toast the user already dismissed) and (b) a NEW toast id.
+    // Spy on addToast + track id stability to actually distinguish "guarded" from
+    // "unguarded but coincidentally deduped".
+    const addToastSpy = vi.spyOn(useToastStore.getState(), 'addToast');
+
     const { result } = renderHook(() => useHighlightRegions(videoMetadata));
 
     const savedRegion = {
@@ -135,14 +146,21 @@ describe('useHighlightRegions detection fallback notice (T10870)', () => {
     act(() => {
       result.current.restoreRegions([savedRegion], 10);
     });
-    expect(fallbackToasts()).toHaveLength(1);
+    expect(addToastSpy).toHaveBeenCalledTimes(1);
+    const firstToastId = fallbackToasts()[0].id;
 
-    // Re-hit the fallback branch for the SAME region id (a second restore + an
-    // export read). The guard must keep it at a single toast, not spam pop-ins.
+    // Re-hit the fallback branch for the SAME region id via a second restore
+    // AND an export read. addToast must NOT be called again, and the toast's id
+    // must be unchanged (a second call would replace it with a new id/timer via
+    // the dedupKey path, even though array length would still read 1).
     act(() => {
       result.current.restoreRegions([savedRegion], 10);
       result.current.getRegionsForExport();
     });
+    expect(addToastSpy).toHaveBeenCalledTimes(1);
     expect(fallbackToasts()).toHaveLength(1);
+    expect(fallbackToasts()[0].id).toBe(firstToastId);
+
+    addToastSpy.mockRestore();
   });
 });
