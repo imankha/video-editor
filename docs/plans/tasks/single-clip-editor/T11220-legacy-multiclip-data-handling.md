@@ -1,6 +1,6 @@
 # T11220: Legacy multi-clip data - keep drafts reachable, block re-edit/restore of multi-clip reels
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-09-24
