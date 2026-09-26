@@ -7,6 +7,7 @@ import { useWebShare } from '../hooks/useWebShare';
 import { track } from '../utils/analytics';
 import { EXPORT_JOBS, EXPORT_PROGRESS } from '../config/displayNames';
 import { exportProgressLabel } from '../utils/exportProgressPresentation';
+import { ExportTooLargeModal } from './ExportTooLargeModal';
 
 /**
  * T9540: resolve the stage vocabulary for an export by its `type` ('framing' | 'overlay').
@@ -156,6 +157,8 @@ const toastedExports = new Set();
 
 export function GlobalExportIndicator() {
   const [isExpanded, setIsExpanded] = useState(false);
+  // T11330: exportIds whose over-budget popup the user has dismissed (local, session-scoped).
+  const [dismissedBudgetIds, setDismissedBudgetIds] = useState(() => new Set());
   const { isMobile, share, copyLink } = useWebShare();
 
   // Get export state from store (updated via WebSocket)
@@ -258,6 +261,9 @@ export function GlobalExportIndicator() {
           duration: 8000,
         });
       } else if (exp.status === ExportStatus.ERROR) {
+        // T11330: an over-budget preflight rejection is surfaced by the explanatory
+        // ExportTooLargeModal (below), not a toast that scrolls away — skip the generic toast.
+        if (exp.budgetRejection) return;
         toast.error('Export failed', {
           message: `${projectLabel} - ${exp.error || 'An error occurred during export'}`,
           duration: 8000,
@@ -289,9 +295,32 @@ export function GlobalExportIndicator() {
     return resolveEtaDisplay(primaryExport, nowTick, etaDeadlinesRef.current, percentChangeRef.current);
   }, [primaryExport, nowTick]);
 
-  // Don't render if no active exports
+  // T11330: the most recent over-budget-rejected export still awaiting its explanatory
+  // popup. The rejected export is ERRORED (not processing), so this must be resolved and
+  // rendered BEFORE the "no processing exports" early-return below, or the popup that Bug 58p
+  // needs would never appear. Dismissal is tracked locally (the errored row stays in the store
+  // so the indicator list still shows the failure) to keep the popup from reappearing.
+  const budgetRejectedExport = useMemo(() => {
+    const rejected = Object.values(activeExports).filter(
+      (exp) => exp.status === ExportStatus.ERROR && exp.budgetRejection && !dismissedBudgetIds.has(exp.exportId)
+    );
+    if (rejected.length === 0) return null;
+    return rejected.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))[0];
+  }, [activeExports, dismissedBudgetIds]);
+
+  const budgetModal = budgetRejectedExport ? (
+    <ExportTooLargeModal
+      isOpen
+      rejection={budgetRejectedExport.budgetRejection}
+      projectName={getExportLabel(budgetRejectedExport)}
+      onDismiss={() => setDismissedBudgetIds((prev) => new Set(prev).add(budgetRejectedExport.exportId))}
+    />
+  ) : null;
+
+  // Don't render the indicator card if no active exports — but still surface a pending
+  // budget-rejection popup (the rejected export is errored, never "processing").
   if (processingExports.length === 0) {
-    return null;
+    return budgetModal;
   }
 
   const handleDismiss = (exportId) => {
@@ -321,7 +350,9 @@ export function GlobalExportIndicator() {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
+    <>
+      {budgetModal}
+      <div className="fixed bottom-4 right-4 z-50">
       {/* Main indicator card */}
       <div
         className={`bg-gray-800 border border-gray-600 rounded-lg shadow-xl overflow-hidden transition-all duration-200 max-w-[calc(100vw-2rem)] ${
@@ -461,7 +492,8 @@ export function GlobalExportIndicator() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

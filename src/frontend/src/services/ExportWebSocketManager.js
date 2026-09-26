@@ -225,7 +225,13 @@ class ExportWebSocketManager {
         // failed export (never "complete", never Move-to-My-Reels) but surface that
         // it is retryable so the UI prompts Retry instead of a hard failure.
         const retryable = message.retryable === true || message.code === 'sync_failed';
-        store.failExport(exportId, message.error || 'Export failed', { retryable });
+        // T11330: a preflight cost-guard rejection (T11320) arrives as a terminal ERROR whose
+        // frame carries the structured `export_too_large` detail merged in at the top level
+        // (code, estimated_gpu_seconds, budget_seconds, biggest_contributors, ...). Hand that
+        // raw detail to the store so the explanatory popup can render the why + the levers.
+        // Never retryable — the same export will always exceed budget until the user trims it.
+        const budgetRejection = message.code === 'export_too_large' ? message : null;
+        store.failExport(exportId, message.error || 'Export failed', { retryable, budgetRejection });
 
         // Notify callback (wrap in try-catch - callback may reference unmounted component)
         if (callbacks.onError) {
