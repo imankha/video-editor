@@ -1602,11 +1602,14 @@ export function OverlayScreen({
   const handleSwitchToFraming = useCallback(() => {
     // T11220: a legacy multi-clip project cannot re-enter Focus/Framing — the
     // shared guard refuses with a clear toast (same one used by the header
-    // ModeSwitcher, App's mode switch and DraftTile) instead of switching.
-    if (!allowEnterFraming(projectListItem)) return;
+    // ModeSwitcher, App's mode switch and DraftTile) instead of switching. Guard
+    // on the detail `project` (useProject) — reliably loaded whenever this screen
+    // is mounted and carries clip_count (ProjectDetailResponse), unlike
+    // projectListItem which can be absent before the projects LIST loads.
+    if (!allowEnterFraming(project)) return;
     // NOTE: Safety blob save removed - gesture-based actions sync immediately to backend.
     setEditorMode(EDITOR_MODES.FRAMING);
-  }, [setEditorMode, projectListItem]);
+  }, [setEditorMode, project]);
 
   const handleBackToProjects = useCallback(() => {
     setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
@@ -1675,11 +1678,12 @@ export function OverlayScreen({
     // T11220: refuse re-framing a legacy multi-clip project via the completion
     // screen's "Reapply Framing" tile too (the entry point that slipped past the
     // first pass and burned credits on a real multi-clip re-export during QA).
-    if (!allowEnterFraming(projectListItem)) return;
+    // Guard on the detail `project` (reliably present here + carries clip_count).
+    if (!allowEnterFraming(project)) return;
     setShowExportCompletePreview(false);
     toast.success(OVERLAY_REAPPLY_FOCUS_TOAST.title, { message: OVERLAY_REAPPLY_FOCUS_TOAST.message });
     setEditorMode(EDITOR_MODES.FRAMING);
-  }, [setEditorMode, projectListItem]);
+  }, [setEditorMode, project]);
 
   // Publish Later — defer; land on the drafts surface with the same explainer
   // toast Focus's "Add Spotlight Later" uses, routed by is_auto_created (T8360's

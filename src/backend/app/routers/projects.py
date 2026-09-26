@@ -305,6 +305,13 @@ class ProjectDetailResponse(BaseModel):
     clips: list[WorkingClipResponse]
     created_at: str
     is_auto_created: bool = False  # True if auto-created from 5-star clips
+    # T11220: number of constituent clips (== len(clips), the latest-version
+    # working clips this same response returns). The frontend re-frame guard
+    # (allowEnterFraming) reads this off selectedProject to refuse re-framing a
+    # legacy multi-clip project (clip_count > 1); the list endpoint already
+    # exposes the equivalent field, and deriving it from `clips` here means it
+    # can never diverge from what this response actually contains.
+    clip_count: int = 0
 
 
 def _read_projects_list():
@@ -918,7 +925,8 @@ async def get_project(project_id: int):
             final_video_created_at=project['final_video_created_at'],
             clips=clips,
             created_at=project['created_at'],
-            is_auto_created=bool(project['is_auto_created'])
+            is_auto_created=bool(project['is_auto_created']),
+            clip_count=len(clips)  # T11220: constituent clip count (drives the re-frame guard)
         )
 
 
