@@ -29,8 +29,8 @@ PROFILE_ID = "testdefault"
 
 @pytest.fixture()
 def db_path(tmp_path):
-    from app.user_context import set_current_user_id
     from app.profile_context import set_current_profile_id
+    from app.user_context import set_current_user_id
 
     set_current_user_id(USER_ID)
     set_current_profile_id(PROFILE_ID)
