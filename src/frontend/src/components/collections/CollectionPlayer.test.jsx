@@ -165,6 +165,23 @@ describe('CollectionPlayer Re-edit button gating (T3940)', () => {
     renderPlayer({ onReEdit: vi.fn(), reEditLoadingId: 99 });
     expect(screen.getByTitle(RE_EDIT).disabled).toBe(true);
   });
+
+  // T11220: a legacy multi-clip reel (clip_count > 1) can no longer be re-edited
+  // in the single-clip editor, so the Re-edit button is hidden for it even though
+  // it has an editable project_id. A single-clip / unknown-count reel is unaffected.
+  it('hides the button for a legacy multi-clip reel (clip_count > 1)', () => {
+    render(<CollectionPlayer
+      reels={[{ id: 99, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null, project_id: 7, clip_count: 3 }]}
+      title="T" onClose={vi.fn()} onReEdit={vi.fn()} />);
+    expect(screen.queryByTitle(RE_EDIT)).toBeNull();
+  });
+
+  it('still shows the button for a single-clip reel (clip_count === 1)', () => {
+    render(<CollectionPlayer
+      reels={[{ id: 99, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null, project_id: 7, clip_count: 1 }]}
+      title="T" onClose={vi.fn()} onReEdit={vi.fn()} />);
+    expect(screen.getByTitle(RE_EDIT)).toBeTruthy();
+  });
 });
 
 const RE_RANK = 'Re-rank this reel';
