@@ -1,10 +1,10 @@
 # T11330: Explanatory Popup When an Export Is Rejected as Too Large
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-09-25
-**Updated:** 2026-09-25
+**Updated:** 2026-09-26
 
 ## Problem
 

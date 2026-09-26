@@ -34,8 +34,8 @@ See [modal-gpu.md](../../../../.claude/knowledge/modal-gpu.md) for `process_clip
 | ID | Task | Status |
 |----|------|--------|
 | T11320 | [Preflight export-size guard](T11320-modal-export-preflight-guard.md) | STAGING |
-| T11330 | [Explanatory rejection popup](T11330-modal-export-rejection-popup.md) | TODO |
-| T11340 | [Parallelize multi-clip export across GPUs](T11340-modal-multiclip-parallel-chunking.md) | TODO |
+| T11330 | [Explanatory rejection popup](T11330-modal-export-rejection-popup.md) | WIP |
+| T11340 | [Parallelize multi-clip export across GPUs](T11340-modal-multiclip-parallel-chunking.md) | WIP |
 | T11350 | [Enable GAN-skip gate for near-1:1 crops](T11350-modal-gan-skip-gate-enable.md) | TODO |
 | T11370 | [Calibrate T11320's export-cost-guard constant](T11370-export-cost-guard-calibration.md) | TODO |
 

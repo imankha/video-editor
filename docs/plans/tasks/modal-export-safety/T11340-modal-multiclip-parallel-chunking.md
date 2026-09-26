@@ -1,10 +1,10 @@
 # T11340: Parallelize Multi-Clip Export Across GPUs
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 8
 **Created:** 2026-09-25
-**Updated:** 2026-09-25
+**Updated:** 2026-09-26
 
 ## Problem
 
