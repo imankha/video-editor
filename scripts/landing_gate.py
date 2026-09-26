@@ -48,7 +48,11 @@ def evaluate(e, proof, review, pr, run, jobs, required):
         for name in set(required) | {'changes', 'ci-ready'}:
             job = actual.get(name, {})
             need(job.get('status') == 'completed' and job.get('conclusion') == 'success', f'Required check {name} missing or unsuccessful')
-        need(review.get('verdict') == 'APPROVED', 'Code review has not approved')
+        # T11310: REPORT_SCHEMA's verdict enum is shared across both capture roles, and the
+        # capture() prompt does not state which literal word belongs to which role, so a
+        # reviewer session sometimes writes 'VERIFIED' (the proof-verifier's word) despite
+        # clean review content (0 blocking/major). Accept either spelling for this role.
+        need(review.get('verdict') in ('APPROVED', 'VERIFIED'), 'Code review has not approved')
         need(review.get('blocking') == 0 and review.get('major') == 0, 'Unresolved review findings')
         need(proof.get('verdict') == 'VERIFIED', 'Independent proof is not VERIFIED')
         need(proof.get('blocking') == 0 and proof.get('major') == 0, 'Unresolved proof findings')
