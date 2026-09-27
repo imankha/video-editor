@@ -28,31 +28,31 @@ function untouchedClip() {
 describe('FramingHeaderStatus (T11240 R9)', () => {
   it('renders nothing outside FRAMING mode', () => {
     const { container } = render(<FramingHeaderStatus editorMode={OVERLAY} clip={croppedClip()} />);
-    expect(container).toBeEmptyDOMElement();
+    expect(container.childElementCount).toBe(0);
   });
 
   it('renders nothing with no clip', () => {
     const { container } = render(<FramingHeaderStatus editorMode={FRAMING} clip={null} />);
-    expect(container).toBeEmptyDOMElement();
+    expect(container.childElementCount).toBe(0);
   });
 
   it('is DONE for a clip with crop keyframes', () => {
     render(<FramingHeaderStatus editorMode={FRAMING} clip={croppedClip()} />);
-    expect(screen.getByTestId('clip-framing-badge')).toHaveAttribute('data-state', 'done');
+    expect(screen.getByTestId('clip-framing-badge').getAttribute('data-state')).toBe('done');
   });
 
   it('is DONE for a trim-only clip', () => {
     render(<FramingHeaderStatus editorMode={FRAMING} clip={trimOnlyClip()} />);
-    expect(screen.getByTestId('clip-framing-badge')).toHaveAttribute('data-state', 'done');
+    expect(screen.getByTestId('clip-framing-badge').getAttribute('data-state')).toBe('done');
   });
 
   it('is DONE for a speed-only clip', () => {
     render(<FramingHeaderStatus editorMode={FRAMING} clip={speedOnlyClip()} />);
-    expect(screen.getByTestId('clip-framing-badge')).toHaveAttribute('data-state', 'done');
+    expect(screen.getByTestId('clip-framing-badge').getAttribute('data-state')).toBe('done');
   });
 
   it('is UNDONE for an untouched clip', () => {
     render(<FramingHeaderStatus editorMode={FRAMING} clip={untouchedClip()} />);
-    expect(screen.getByTestId('clip-framing-badge')).toHaveAttribute('data-state', 'undone');
+    expect(screen.getByTestId('clip-framing-badge').getAttribute('data-state')).toBe('undone');
   });
 });

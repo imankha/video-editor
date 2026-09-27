@@ -10,7 +10,7 @@ import apiFetch from '../utils/apiFetch';
 import { SECTION_NAMES, EXPORT_PROGRESS } from '../config/displayNames';
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
-import { clipCropKeyframes } from '../utils/clipSelectors';
+import { clipIsFramed } from '../utils/clipSelectors';
 import { useQuestStore } from '../stores/questStore';
 import { useOverlayActionStore } from '../stores/overlayActionStore';
 import { calculateEffectiveDuration, sumEffectiveDurations, buildClipMetadata } from '../utils/effectiveDuration';
@@ -1117,17 +1117,7 @@ export function ExportButtonContainer({
 
   // Check if any clips haven't been worked on (no crop or meaningful segment edits)
   const isMultiClipMode = clips && clips.length > 0;
-  const clipsNotFramed = (clips || []).filter(c => {
-    const hasCrop = (c.cropKeyframes?.length > 0) || (clipCropKeyframes(c)?.length > 0);
-    if (hasCrop) return false;
-    // Check for real segment edits (speed, trim, splits) — not just default state
-    const s = c.segments || c.segments_data;
-    if (!s) return true;
-    const hasSpeed = Object.keys(s.segmentSpeeds || {}).length > 0;
-    const hasTrim = !!s.trimRange;
-    const hasSplits = (s.userSplits?.length || 0) > 0;
-    return !hasSpeed && !hasTrim && !hasSplits;
-  });
+  const clipsNotFramed = (clips || []).filter(c => !clipIsFramed(c));
 
   const hasUnframedClips = isMultiClipMode
     ? clipsNotFramed.length > 0

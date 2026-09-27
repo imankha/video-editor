@@ -25,6 +25,7 @@ import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useExportRecovery } from './hooks/useExportRecovery';
 import { useSessionHeartbeat } from './hooks/useSessionHeartbeat';
 import { ConfirmationDialog, toast, UnifiedHeader } from './components/shared';
+import { FramingHeaderStatus } from './components/FramingHeaderStatus';
 import { getProjectDisplayName } from './utils/clipDisplayName';
 import { clipGameClock } from './utils/timeFormat';
 import { SECTION_NAMES, MODE_NAMES } from './config/displayNames';
@@ -1022,6 +1023,7 @@ function App() {
             framingOutOfSync={framingChangedSinceExport && hasOverlayVideo}
             hasAnnotateVideo={canEditInAnnotate}
             isLoadingWorkingVideo={isLoadingWorkingVideo}
+            extraControls={<FramingHeaderStatus editorMode={editorMode} clip={selectedClipForAnnotate} />}
           />
 
           {/* Mode-specific views */}
