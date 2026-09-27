@@ -30,8 +30,8 @@ export const useGamesDataStore = create((set, get) => ({
   games: [],
   // Derived: games with status != 'pending' (cached to avoid infinite re-renders).
   // T7490: this deliberately INCLUDES status='upload_failed' games so their Games-tab
-  // card (Retry/Discard) renders — they are not framable, so the reel builder
-  // (GameClipSelectorModal) filters them back out at its own boundary.
+  // card (Retry/Discard) renders — they are not framable. (The reel builder that
+  // used to filter them back out, GameClipSelectorModal, was removed by T11230.)
   readyGames: [],
   pendingGameIds: new Set(),
   selectedGame: null,

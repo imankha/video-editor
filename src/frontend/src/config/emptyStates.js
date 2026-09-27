@@ -62,18 +62,8 @@ export const EMPTY_TAB_GUIDE = {
     // prerequisite here, instead of tempting them into a foreign-tab create flow.
     noGameCaption: 'No game needed.',
   },
-  reels: {
-    headline: 'Build a highlight reel.',
-    body: 'You can also combine clips together to make a full highlight reel.',
-    // Build New Reel is gated by hasClips at the TAB BAR now (Decision 3), so the
-    // empty Reels guide only renders when a clip exists -- the button is always
-    // enabled here and the old "no clips" branch was deleted as dead code.
-    // clipCount is clipDrafts-only (the In Progress Clips badge number); it can be
-    // 0 while hasClips is true (an account with only game clips), so drop the
-    // number in that case rather than print a contradictory "0 clips".
-    hasClipsCaption: (n) =>
-      n > 0 ? `You have ${n} clip${n === 1 ? '' : 's'} ready to use.` : 'You have clips ready to use.',
-  },
+  // T11230 removed the `reels` empty-tab copy with the In Progress Reels tab and
+  // the Create-reel builder.
   published: {
     headline: 'View your completed work.',
     body:
@@ -104,11 +94,9 @@ export const PARTIAL_TAB_GUIDE = {
   },
   clips: {
     headline: 'Give each clip a Framing pass',
-    body: 'Add an optional Spotlight, then publish it alone or into a reel.',
-  },
-  reels: {
-    headline: 'Finish and export',
-    body: 'Put your plays in order and export once to publish.',
+    // T11230: reworded off "publish it alone or into a reel" -- the Reels building
+    // surfaces (Create reel / assemble clips) are gone; a clip publishes on its own.
+    body: 'Add an optional Spotlight, then publish it whenever you are ready.',
   },
   published: {
     // Headline must READ as guidance, never as a control label (T8990 review): the

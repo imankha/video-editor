@@ -16,11 +16,11 @@ import '../index.css'; // Tailwind — CollectionPlayer's fixed/inset classes ne
  * synthetic parts are only the premise ("an overlay export just finished", no
  * real Modal/FFmpeg render ran) and the video source (a data: URI).
  *
- * Diag params (via location.hash): `#isAutoCreated=1` selects the single-clip
- * "Publish Later" toast copy branch; omitted/0 selects multi-clip.
+ * Diag params (via location.hash): `#projectId=<n>` sets the project id. (T11230
+ * removed the multi-clip toast branch, so the old `#isAutoCreated` param no longer
+ * selects anything -- the "Publish Later" toast is one copy now.)
  */
 const params = new URLSearchParams((window.__T9110_DIAG_HASH__ || location.hash || '').replace(/^#/, ''));
-const isAutoCreated = params.get('isAutoCreated') === '1';
 const PROJECT_ID = Number(params.get('projectId') || 424242);
 
 function OverlayPublishExitDiagHarness() {
@@ -51,11 +51,11 @@ function OverlayPublishExitDiagHarness() {
     setLastAction('reapply-focus');
   }, []);
 
-  // Mirrors OverlayScreen.handlePublishLater (verbatim, incl. the
-  // is_auto_created-routed toast).
+  // Mirrors OverlayScreen.handlePublishLater (verbatim; T11230 collapsed the
+  // toast to the single SINGLE_CLIP copy).
   const handlePublishLater = useCallback(() => {
     setOpen(false);
-    const copy = isAutoCreated ? FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP : FOCUS_PUBLISH_LATER_TOAST.MULTI_CLIP;
+    const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
     toast.success(copy.title, { message: copy.message, duration: 10000 });
     setLastAction('publish-later');
   }, []);

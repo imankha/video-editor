@@ -5,34 +5,27 @@ import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 
 /**
  * EmptyTabGuide (T8980, revised T9390, T10280) - the shared empty state rendered
- * by all four home tabs (Games / In Progress Clips / In Progress Reels / Published)
- * when they have nothing in them: the shared TabGuideHeader (centered headline +
- * body), an action block, and (Games only) a footer hint.
+ * by the home tabs (Games / In Progress Clips / Published) when they have nothing
+ * in them: the shared TabGuideHeader (centered headline + body), an action block,
+ * and (Games only) a footer hint. (T11230 removed the Reels tab + its 'reels'
+ * variant with the Reels building surfaces.)
  *
- * T10280 (2026-09-17): the flow strip (Games . Clips . Reels . Published diagram)
- * was DELETED -- the user found it redundant with the tab bar directly above. The
+ * T10280 (2026-09-17): the flow strip (Games . Clips . Published diagram) was
+ * DELETED -- the user found it redundant with the tab bar directly above. The
  * headline/body now come from the same TabGuideHeader the POPULATED Games/Clips
- * tabs render above their CTA, so all four tabs share one guidance structure.
+ * tabs render above their CTA, so all tabs share one guidance structure.
  *
  * T9390 (Decision 3): Clips at zero games shows Add Video ALONE (no cross-tab Add
- * Game). Reels and Published were gated at the tab bar (ProjectManager) on
- * hasClips, so the Reels empty guide's Build New Reel was always enabled here and
- * the old "no clips" branch was dropped; Published's zero-everything branch was
- * dropped too. T10310 (2026-09-18 user request) removed that tab-bar gate --
- * these two branches can now render at genuine zero clips (not just zero
- * *everything*) -- but their copy already holds up at that count, so neither was
- * restored.
+ * Game). Published's zero-everything branch was dropped. T10310 (2026-09-18 user
+ * request) removed the tab-bar gate -- these branches can now render at genuine
+ * zero clips (not just zero *everything*) -- but their copy already holds up at
+ * that count, so neither was restored.
  *
- * @param {'games'|'clips'|'reels'|'published'} tab - which empty state to render
+ * @param {'games'|'clips'|'published'} tab - which empty state to render
  * @param {number} gamesCount - the account's game count (branches Clips)
- * @param {number} clipCount  - single-clip drafts in progress; drives ONLY the
- *                              Reels "N ready" caption now (T10280 dropped
- *                              Published's "N in progress" line). Same clipDrafts
- *                              count the In Progress Clips badge uses.
  * @param {(navId: string) => void} onNavigate - setActiveTab (frozen tab ids)
  * @param {() => void} onAddGame  - open the Add Game flow (Games tab only)
  * @param {() => void} onAddVideo - open the direct clip-upload (Add Video) flow
- * @param {() => void} onBuildReel - open the Build New Reel assembly modal
  * @param {'empty'|'partial'} variant - 'empty' (default) is the full-panel state
  *                              rendered when a tab is completely empty; 'partial'
  *                              (T8990) is the compact, tile-shaped state kept until
@@ -48,11 +41,9 @@ import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 export function EmptyTabGuide({
   tab,
   gamesCount = 0,
-  clipCount = 0,
   onNavigate,
   onAddGame,
   onAddVideo,
-  onBuildReel,
   variant = 'empty',
   className = '',
   onAction,
@@ -73,7 +64,6 @@ export function EmptyTabGuide({
         {tab === 'clips' && (
           <ClipsActions gamesCount={gamesCount} onNavigate={onNavigate} onAddVideo={onAddVideo} />
         )}
-        {tab === 'reels' && <ReelsActions clipCount={clipCount} onBuildReel={onBuildReel} />}
       </div>
 
       <Footer tab={tab} onNavigate={onNavigate} />
@@ -107,7 +97,6 @@ export function TabGuideHeader({ tab }) {
 const STEP_ACCENT_BORDER = {
   games: 'border-t-green-600',
   clips: 'border-t-cyan-600',
-  reels: 'border-t-violet-600',
   published: 'border-t-amber-600',
 };
 
@@ -181,29 +170,8 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
   );
 }
 
-// T9390 (Decision 3) / T10310: Build New Reel has no disabled state here even
-// though the Reels tab is now reachable at zero clips -- clicking it just opens
-// GameClipSelectorModal with nothing to pick, same as any other empty picker.
-function ReelsActions({ clipCount, onBuildReel }) {
-  const c = EMPTY_TAB_GUIDE.reels;
-  return (
-    <div className="flex flex-col items-center gap-2 w-full">
-      <Button
-        variant="cyan"
-        size="lg"
-        icon={Plus}
-        onClick={onBuildReel}
-        className="w-full max-w-xs"
-      >
-        {LIBRARY_ACTIONS.CREATE_REEL}
-      </Button>
-      <p className="text-xs text-gray-500">{c.hasClipsCaption(clipCount)}</p>
-    </div>
-  );
-}
-
 // T9390 (Decision 2): footer kept ONLY on Games (the "a game is not a hard
-// prerequisite either" hint); Clips/Reels/Published dropped theirs.
+// prerequisite either" hint); Clips/Published dropped theirs.
 function Footer({ tab, onNavigate }) {
   if (tab !== 'games') return null;
   const copy = EMPTY_TAB_GUIDE.games;

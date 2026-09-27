@@ -379,15 +379,14 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   const isComplete = project.has_final_video;
   const isReadyToPublish = isComplete && !project.is_published;
 
-  // T9530 (N12/N14/N15): every per-card action names its OWN object. A single-
-  // clip auto-draft (is_auto_created === true, lives on the Clips tab) is a Clip;
-  // an assembled multi-clip draft (is_auto_created === false, on the Reels tab)
-  // is a Reel. Default to the CLIP labels when the flag is absent so a Clips-tab
-  // item never reads "Delete reel"/"Rename reel" -- the exact bug N14 leads with.
-  const isReel = project.is_auto_created === false;
-  const deleteLabel = isReel ? LIBRARY_ACTIONS.DELETE_REEL : LIBRARY_ACTIONS.DELETE_CLIP;
-  const renameLabel = isReel ? LIBRARY_ACTIONS.RENAME_REEL : LIBRARY_ACTIONS.RENAME_CLIP;
-  const publishLabel = isReel ? LIBRARY_ACTIONS.PUBLISH_REEL : LIBRARY_ACTIONS.PUBLISH_CLIP;
+  // T11230: one project = one clip. The Reels-building surfaces are gone and every
+  // DraftTile (including a legacy multi-clip draft in the Clips tab's Legacy reels
+  // group) now names its actions as a CLIP. The old isReel branch that read
+  // "Delete reel"/"Rename reel"/"Publish reel" for is_auto_created === false drafts
+  // was removed with the Reels tab; T11280's vocabulary sweep owns any further copy.
+  const deleteLabel = LIBRARY_ACTIONS.DELETE_CLIP;
+  const renameLabel = LIBRARY_ACTIONS.RENAME_CLIP;
+  const publishLabel = LIBRARY_ACTIONS.PUBLISH_CLIP;
 
   // T8350: multi-clip staleness cue -- badge-only carrier for the produced/ready
   // states, where the strip below is collapsed or suppressed (see reelStaleness.js).
