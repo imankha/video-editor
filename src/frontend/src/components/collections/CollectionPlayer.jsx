@@ -6,6 +6,7 @@ import { RATIO } from '../../constants/aspectRatios';
 import { LIBRARY_ACTIONS, RESULT_SURFACE } from '../../config/displayNames';
 import { useStoryPlayback } from './useStoryPlayback';
 import { formatGameClock } from '../../utils/timeFormat';
+import { canReEditReel } from '../../utils/reelReEditable';
 import { PlayheadHandle } from '../shared/PlayheadHandle';
 import { CompositeScrubber } from '../introcards/CompositeScrubber';
 
@@ -562,8 +563,10 @@ export function CollectionPlayer({
           {/* T3940: jump straight into THIS reel's editor (acts on the active reel).
               Gated on the prop (public viewer omits it) AND an editable project
               (project_id null/0 -> non-editable export, button hidden). T8540:
-              demoted to the toolbar's tertiary/icon-only end, behind Share+Download. */}
-          {onReEdit && activeReel.project_id ? (
+              demoted to the toolbar's tertiary/icon-only end, behind Share+Download.
+              T11220: canReEditReel also hides it for a legacy multi-clip reel
+              (clip_count > 1) — the single-clip editor can't edit those. */}
+          {onReEdit && canReEditReel(activeReel) ? (
             <Button
               variant="ghost"
               size="sm"

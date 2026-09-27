@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { resumeFocusCompletion } from './resumeFocusCompletion';
+import { allowEnterFraming } from './reelReEditable';
 
 // T9285 — resumeFocusCompletion carries a recovered Focus completion into the
 // SAME preview-first screen the live path shows (design §2.3c). All
@@ -27,6 +28,9 @@ function makeDeps(overrides = {}) {
     recordAchievement: vi.fn(),
     toastError: vi.fn(),
     EDITOR_MODES,
+    // T11220: real re-frame guard injected (production wiring); a project with
+    // no clip_count (the default here) is allowed, so existing cases are unchanged.
+    allowEnterFraming,
     ...overrides,
   };
   return { deps, calls, project };
@@ -56,6 +60,25 @@ describe('resumeFocusCompletion (T9285)', () => {
     expect(deps.recordAchievement).toHaveBeenCalledWith('overlay_offered');
     expect(deps.acknowledgeJob).toHaveBeenCalledWith('job-1');
     expect(result).toEqual({ opened: true, navigated: true });
+  });
+
+  // T11220: resuming a Focus completion is a Framing entry point too. A legacy
+  // multi-clip project (clip_count > 1 in the detail response selectProject
+  // returns) must be refused BEFORE setEditorMode(FRAMING)/openPreview fire — the
+  // real allowEnterFraming guard (injected) returns false for it.
+  it('REFUSES a legacy multi-clip project: no setEditorMode(framing), no preview, returns not-opened', async () => {
+    const multiClip = { id: 42, name: 'Legacy Reel', clip_count: 2 };
+    const { deps } = makeDeps({ selectProject: vi.fn(async () => multiClip) });
+
+    const result = await resumeFocusCompletion({ jobId: 'job-1', projectId: 42 }, deps);
+
+    // Bailed right after the guard: none of the Framing-entry steps ran.
+    expect(deps.selectProject).toHaveBeenCalledWith(42);
+    expect(deps.setEditorMode).not.toHaveBeenCalled();
+    expect(deps.loadProject).not.toHaveBeenCalled();
+    expect(deps.openPreview).not.toHaveBeenCalled();
+    expect(deps.acknowledgeJob).not.toHaveBeenCalled(); // job left for a retry, not consumed
+    expect(result).toEqual({ opened: false, navigated: false });
   });
 
   it('null preview URL: no openPreview, one console.error, one toast, no navigation, no acknowledge', async () => {

@@ -15,6 +15,7 @@ import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { DraftReelPreview } from './components/DraftReelPreview';
 import { FocusCompletionRecovery } from './components/FocusCompletionRecovery';
 import { openFinishedReel } from './utils/finishedReelNav';
+import { allowEnterFraming } from './utils/reelReEditable';
 import { usePublishIntentStore } from './stores/publishIntentStore';
 import { startOverlayPublishRender } from './utils/startOverlayPublishRender';
 import { handleOverlayExportCompletion } from './utils/handleOverlayExportCompletion';
@@ -697,6 +698,13 @@ function App() {
   const handleModeChange = useCallback((newMode) => {
     if (newMode === editorMode) return;
 
+    // T11220: a legacy multi-clip project cannot enter Focus/Framing. Guard here,
+    // the programmatic commit point every onModeChange caller reaches (header
+    // ModeSwitcher, annotate transitions, breadcrumbs), BEFORE the uncommitted-
+    // changes dialog can open for a framing switch. Shares ONE guard with
+    // OverlayScreen's Reapply tiles and DraftTile so no entry point can bypass it.
+    if (newMode === EDITOR_MODES.FRAMING && !allowEnterFraming(selectedProject)) return;
+
     console.log(`[App] Switching from ${editorMode} to ${newMode} mode`);
 
     // Check if leaving framing with uncommitted changes
@@ -768,7 +776,7 @@ function App() {
         method: 'PATCH'
       }).catch(e => console.error('[App] Failed to persist mode:', e));
     }
-  }, [editorMode, hasOverlayVideo, framingChangedSinceExport, overlayChangedSinceExport, selectedProject?.has_final_video, openModeSwitchDialog, setEditorMode, redirectToMode, clearSelection, fetchProjects, handleEditInAnnotate, selectedProjectId]);
+  }, [editorMode, hasOverlayVideo, framingChangedSinceExport, overlayChangedSinceExport, selectedProject, openModeSwitchDialog, setEditorMode, redirectToMode, clearSelection, fetchProjects, handleEditInAnnotate, selectedProjectId]);
 
   // Mode switch dialog handlers
   const handleModeSwitchCancel = useCallback(() => {

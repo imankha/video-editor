@@ -27,6 +27,7 @@ import { track } from '../utils/analytics';
 import { recordFunnelEvent, FUNNEL_EVENTS, viewedThresholdSeconds } from '../utils/funnelEvents';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { canReEditReel } from '../utils/reelReEditable';
 import { formatGameClock, formatLength, PRECISION } from '../utils/timeFormat';
 import { sportEmoji } from '../modes/annotate/constants/tagRegistry';
 
@@ -563,12 +564,11 @@ export function PublishedReelsPanel({
     if (onOpenProject) openReelAsProject(download);
   };
 
-  // Check if folder button should be shown for a download
+  // Check if folder button should be shown for a download. T11220: canReEditReel
+  // also hides it for a legacy multi-clip reel (clip_count > 1) — those can no
+  // longer be re-edited in the single-clip editor.
   const canOpenSource = (download) => {
-    if (download.project_id && download.project_id !== 0 && onOpenProject) {
-      return true;
-    }
-    return false;
+    return !!onOpenProject && canReEditReel(download);
   };
 
   const handleBeforeAfter = async (e, download) => {

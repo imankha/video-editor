@@ -1,6 +1,6 @@
 # T11230: Remove Reels building surfaces (Reels tab, Create reel, from-clips)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-24

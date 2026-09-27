@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { canReEditReel } from '../utils/reelReEditable';
 
 /**
  * useReEditReel - single restore-then-navigate path for "Re-edit this reel" (T3940).
@@ -25,7 +26,12 @@ export function useReEditReel(navigateToProject) {
   const openReelAsProject = useCallback(async (reel) => {
     // Gated by the button (only shown when the reel has an editable project), but
     // mirror the card's guard so a programmatic call can't fire a bad restore.
-    if (!reel?.project_id || reel.project_id === 0) return;
+    // T11220: also refuse a legacy multi-clip reel (clip_count > 1) — the button
+    // is hidden for these; this mirror-guard keeps a programmatic call from firing
+    // a doomed restore. If a clip_count > 1 reel somehow reaches here, the backend
+    // restore-project 400 is surfaced by the existing error path below — no
+    // separate hardcoded copy needed (T11220 review).
+    if (!canReEditReel(reel)) return;
     setRestoringId(reel.id);
     try {
       const response = await apiFetch(`${API_BASE}/api/downloads/${reel.id}/restore-project`, {

@@ -315,6 +315,13 @@ class ProjectDetailResponse(BaseModel):
     # endpoint, not the list, so it needs the same signal to show the
     # "Update shared version" affordance.
     stale_share: dict | None = None
+    # T11220: number of constituent clips (== len(clips), the latest-version
+    # working clips this same response returns). The frontend re-frame guard
+    # (allowEnterFraming) reads this off selectedProject to refuse re-framing a
+    # legacy multi-clip project (clip_count > 1); the list endpoint already
+    # exposes the equivalent field, and deriving it from `clips` here means it
+    # can never diverge from what this response actually contains.
+    clip_count: int = 0
 
 
 def _compute_stale_shares(cursor, projects: list[tuple[int, int]]) -> dict[int, dict]:
@@ -1037,6 +1044,7 @@ async def get_project(project_id: int):
             created_at=project['created_at'],
             is_auto_created=bool(project['is_auto_created']),
             stale_share=stale_share,
+            clip_count=len(clips),  # T11220: constituent clip count (drives the re-frame guard)
         )
 
 
