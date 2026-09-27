@@ -1,10 +1,10 @@
 # T11240: Remove multi-clip UI from Framing and Spotlight
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-09-24
-**Updated:** 2026-09-24
+**Updated:** 2026-09-27
 **Epic:** [Single-Clip Editor](EPIC.md)
 
 ## Problem
