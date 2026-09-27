@@ -3,24 +3,23 @@ import { describe, it, expect, vi } from 'vitest';
 import { EmptyTabGuide, TabGuideHeader } from './EmptyTabGuide';
 import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 
-// T8980/T9390/T10280: the shared empty state rendered by all four home tabs. Copy
-// is binding; these tests assert the exact copy + the count-driven branching. T10280
+// T8980/T9390/T10280: the shared empty state rendered by the home tabs. Copy is
+// binding; these tests assert the exact copy + the count-driven branching. T10280
 // deleted the flow strip and consolidated every tab onto the one TabGuideHeader
 // structure (a centered headline + body), used by the empty state AND the populated
-// Games/Clips tabs.
+// Games/Clips tabs. T11230 removed the 'reels' tab/variant with the Reels building
+// surfaces.
 
 describe('EmptyTabGuide shared guidance structure (T10280)', () => {
   it('renders the same centered headline + body for every tab, and NO flow strip', () => {
-    for (const tab of ['games', 'clips', 'reels', 'published']) {
+    for (const tab of ['games', 'clips', 'published']) {
       const { container, unmount } = render(
         <EmptyTabGuide
           tab={tab}
           gamesCount={0}
-          clipCount={0}
           onNavigate={vi.fn()}
           onAddGame={vi.fn()}
           onAddVideo={vi.fn()}
-          onBuildReel={vi.fn()}
         />,
       );
       const c = EMPTY_TAB_GUIDE[tab];
@@ -101,32 +100,14 @@ describe('EmptyTabGuide - Clips tab (T9390: no cross-tab Add Game)', () => {
   });
 });
 
-describe('EmptyTabGuide - Reels tab (T9390: tab is gated, so Build New Reel is always enabled)', () => {
-  it('has clips but clipCount 0 (game-clips-only account): enabled button, no contradictory "0 clips"', () => {
-    render(
-      <EmptyTabGuide tab="reels" clipCount={0} onNavigate={vi.fn()} onBuildReel={vi.fn()} />,
+describe('EmptyTabGuide - Reels tab removed (T11230)', () => {
+  it('renders nothing for the retired reels tab (no copy entry, no Create reel button)', () => {
+    const { container } = render(
+      <EmptyTabGuide tab="reels" onNavigate={vi.fn()} />,
     );
-    expect(screen.getByRole('button', { name: 'Create reel' }).disabled).toBe(false);
-    expect(screen.getByText('You have clips ready to use.')).toBeTruthy();
-    expect(screen.queryByText(/0 clip/)).toBeNull();
-  });
-
-  it('Build New Reel is enabled with the "N clips ready" caption (pluralized) and fires', () => {
-    const onBuildReel = vi.fn();
-    render(
-      <EmptyTabGuide tab="reels" clipCount={3} onNavigate={vi.fn()} onBuildReel={onBuildReel} />,
-    );
-    const build = screen.getByRole('button', { name: 'Create reel' });
-    expect(build.disabled).toBe(false);
-    expect(screen.getByText('You have 3 clips ready to use.')).toBeTruthy();
-    fireEvent.click(build);
-    expect(onBuildReel).toHaveBeenCalledTimes(1);
-  });
-
-  it('no longer renders the deleted "no clips" dead-end branch', () => {
-    render(<EmptyTabGuide tab="reels" clipCount={1} onNavigate={vi.fn()} onBuildReel={vi.fn()} />);
-    expect(screen.queryByText(/You need at least one clip first/i)).toBeNull();
-    expect(screen.queryByRole('button', { name: /Cut a clip from a game/i })).toBeNull();
+    // EMPTY_TAB_GUIDE.reels is gone, so EmptyTabGuide returns null for this tab.
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByRole('button', { name: /Create reel/i })).toBeNull();
   });
 });
 
@@ -176,7 +157,7 @@ describe('EmptyTabGuide copy hygiene', () => {
     // T10280 reversed T9390's one-line density cut -- the user asked for the fuller
     // header + description Reels/Published already had, so bodies may now be several
     // sentences. Assert presence, not a single-sentence cap.
-    for (const tab of ['games', 'clips', 'reels', 'published']) {
+    for (const tab of ['games', 'clips', 'published']) {
       const { headline, body } = EMPTY_TAB_GUIDE[tab];
       expect(headline.trim().length).toBeGreaterThan(0);
       expect(body.trim().length).toBeGreaterThan(0);
@@ -188,7 +169,7 @@ describe('EmptyTabGuide copy hygiene', () => {
 // fills. T9390 dropped the strip + footer, added a decorative top accent border.
 describe('EmptyTabGuide - partial variant', () => {
   it('renders the locked headline and body for every tab, and NO footer line', () => {
-    for (const tab of ['games', 'clips', 'reels', 'published']) {
+    for (const tab of ['games', 'clips', 'published']) {
       const { unmount } = render(<EmptyTabGuide tab={tab} variant="partial" />);
       const c = PARTIAL_TAB_GUIDE[tab];
       expect(screen.getByText(c.headline)).toBeTruthy();
@@ -206,7 +187,7 @@ describe('EmptyTabGuide - partial variant', () => {
   });
 
   it('drops the flow strip entirely (no numbered dots, no "Step N of M")', () => {
-    const { container } = render(<EmptyTabGuide tab="reels" variant="partial" />);
+    const { container } = render(<EmptyTabGuide tab="clips" variant="partial" />);
     expect(screen.queryByText(/Step \d+ of \d+/)).toBeNull();
     // No ordered-list strip remains in the partial card.
     expect(container.querySelector('ol')).toBeNull();
@@ -236,12 +217,9 @@ describe('EmptyTabGuide - partial variant', () => {
     expect(container.querySelector('button')).toBeNull();
   });
 
-  it('Reels and Published partials carry no CTA button (action lives above the row)', () => {
-    for (const tab of ['reels', 'published']) {
-      const { container, unmount } = render(<EmptyTabGuide tab={tab} variant="partial" />);
-      expect(container.querySelector('button')).toBeNull();
-      unmount();
-    }
+  it('Published partial carries no CTA button (action lives above the row)', () => {
+    const { container } = render(<EmptyTabGuide tab="published" variant="partial" />);
+    expect(container.querySelector('button')).toBeNull();
   });
 
   it('applies the caller-provided sizing className to the outer aside', () => {

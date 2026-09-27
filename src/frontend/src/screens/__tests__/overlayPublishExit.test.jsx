@@ -64,10 +64,12 @@ function OverlayPublishExitHarness({
 
   const handlePublishLater = useCallback(() => {
     setShowExportCompletePreview(false);
-    const copy = project?.is_auto_created ? FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP : FOCUS_PUBLISH_LATER_TOAST.MULTI_CLIP;
+    // T11230: collapsed to the single SINGLE_CLIP copy (MULTI_CLIP variant removed
+    // with the Reels building surfaces).
+    const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
     toastSuccess(copy.title, { message: copy.message, duration: 10000 });
     goToProjectManager();
-  }, [project?.is_auto_created, goToProjectManager, toastSuccess]);
+  }, [goToProjectManager, toastSuccess]);
 
   return (
     <>
@@ -203,14 +205,16 @@ describe('T9110 Overlay post-export completion preview + publish-exit action bar
     expect(deps.goToProjectManager).not.toHaveBeenCalled();
   });
 
-  it('"Save draft" shows the MULTI-CLIP toast and navigates home; no publish, no re-export', () => {
+  it('"Save draft" shows the single "Saved to Clips" toast and navigates home; no publish, no re-export', () => {
     const deps = makeDeps();
-    render(<OverlayPublishExitHarness deps={deps} startOpen isAutoCreated={false} />);
+    render(<OverlayPublishExitHarness deps={deps} startOpen />);
 
     fireEvent.click(screen.getByRole('button', { name: OVERLAY_PUBLISH.SAVE_DRAFT_LABEL }));
 
+    // T11230: the is_auto_created-routed MULTI_CLIP "Saved to Reels" variant is
+    // gone; every draft now shows this one SINGLE_CLIP copy.
     expect(deps.toastSuccess).toHaveBeenCalledWith(
-      'Saved to Reels',
+      'Saved to Clips',
       expect.objectContaining({ duration: 10000 }),
     );
     expect(deps.goToProjectManager).toHaveBeenCalledTimes(1);
@@ -218,9 +222,9 @@ describe('T9110 Overlay post-export completion preview + publish-exit action bar
     expect(deps.setEditorMode).not.toHaveBeenCalled();
   });
 
-  it('"Save draft" shows the SINGLE-CLIP toast when is_auto_created', () => {
+  it('"Save draft" shows the same "Saved to Clips" toast for a legacy multi-clip draft too', () => {
     const deps = makeDeps();
-    render(<OverlayPublishExitHarness deps={deps} startOpen isAutoCreated />);
+    render(<OverlayPublishExitHarness deps={deps} startOpen isAutoCreated={false} />);
 
     fireEvent.click(screen.getByRole('button', { name: OVERLAY_PUBLISH.SAVE_DRAFT_LABEL }));
 

@@ -22,8 +22,9 @@ import '../index.css'; // Tailwind — CollectionPlayer's fixed/inset classes ne
  * a Playwright spec asserting the achievement POST / flag state is asserting
  * the real gesture-handler code path, not a mock.
  *
- * Diag params (via location.hash): `#isAutoCreated=1` selects the single-clip
- * "Add Spotlight Later" toast copy branch; omitted/0 selects multi-clip.
+ * Diag params (via location.hash): `#projectId=<n>` sets the staked project id.
+ * (T11230 removed the multi-clip toast branch, so the old `#isAutoCreated` param
+ * no longer selects anything -- the "Add Spotlight Later" toast is one copy now.)
  *
  * What's synthetic: the premise "an export just finished" (no real Focus
  * render ran) and the video source (a data: URI, no real stream). What's
@@ -36,7 +37,6 @@ import '../index.css'; // Tailwind — CollectionPlayer's fixed/inset classes ne
 // fired editorStore's module-scope URL canonicalization and stripped it
 // (see t8520diag.html's inline script comment for the full mechanism).
 const params = new URLSearchParams((window.__T8390_DIAG_HASH__ || location.hash || '').replace(/^#/, ''));
-const isAutoCreated = params.get('isAutoCreated') === '1';
 const PROJECT_ID = Number(params.get('projectId') || 424242);
 
 function FocusPublishExitDiagHarness() {
@@ -49,12 +49,12 @@ function FocusPublishExitDiagHarness() {
     setLastAction('add-spotlight');
   }, []);
 
-  // Mirrors FocusScreen.jsx handleAddSpotlightLater (verbatim, incl. the
-  // is_auto_created-routed toast).
+  // Mirrors FocusScreen.jsx handleAddSpotlightLater (verbatim; T11230 collapsed
+  // the toast to the single SINGLE_CLIP copy).
   const handleAddSpotlightLater = useCallback(() => {
     setOpen(false);
     useQuestStore.getState().recordAchievement('overlay_deferred');
-    const copy = isAutoCreated ? FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP : FOCUS_PUBLISH_LATER_TOAST.MULTI_CLIP;
+    const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
     toast.success(copy.title, { message: copy.message, duration: 10000 });
     setLastAction('add-spotlight-later');
   }, []);

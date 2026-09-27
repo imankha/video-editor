@@ -217,30 +217,8 @@ for (const vp of CTA_VIEWPORTS) {
       await saveEvidence(page, `cta-reel-player-share_${vp.name}`);
     });
 
-    // --- Surface 7: In Progress Reels tab (Build New Reel) -------------------
-    // NEW FINDING T8790-F4 (discovered live during T8790's full-suite re-run, NOT
-    // one of the original F1-F3): on an account with NO in-progress reels, the tab
-    // shows the tall EmptyTabGuide (T8980: flow strip + headline + body + action
-    // block) beneath the whole home shell (app header + "1 game expiring" banner +
-    // "Continue where you left off" cards + four-tab bar), which pushes Build New
-    // Reel to y+h=629 > 568 at 320x568 ONLY (passes at 375/390/428, and passes at
-    // every width on a POPULATED account where the reel list renders the CTA near
-    // the top). This is the SAME "primary CTA below the home shell scroll"
-    // structural case that Surface 8 below is a documented skip for - it needs the
-    // home-shell/empty-guide layout reworked (pin the CTA, or shorten the shell),
-    // which is OUT OF T8790's 3-finding scope. Tracked here as a fixme (repo
-    // convention: known below-fold CTA recorded so Branch CI stays green while the
-    // debt is tracked) pending its own follow-up. See T8790 Progress Log 2026-09-09.
-    test.fixme('In Progress Reels tab: Build New Reel CTA above the fold', async ({ page }) => {
-      await reachHome(page);
-      await openTab(page, /^Reels/); // T8980: sub-`sm` short tab label
-      await page.getByTestId('in-progress-reels-tab-panel')
-        .waitFor({ state: 'visible', timeout: 15000 });
-      const build = page.getByRole('button', { name: 'Create reel' }).first();
-      await build.waitFor({ state: 'visible', timeout: 15000 });
-      await assertCtaInViewport(page, build);
-      await saveEvidence(page, `cta-in-progress-reels_${vp.name}`);
-    });
+    // T11230/R12: removed Surface 7 (the "In Progress Reels" tab's Build New Reel
+    // CTA) — that tab and the Create reel builder no longer exist.
 
     // --- Surface 8: Published tab (no distinct pinned CTA — see surface 6) ----
     // The Published tab is a SCROLLABLE reel GALLERY nested below the whole home

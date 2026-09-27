@@ -34,7 +34,7 @@ const PUBLISH_INTENT_TIMEOUT_MS = 5 * 60 * 1000;
  * injects the same store actions FocusScreen calls through getState(), so we
  * can spy on them.
  */
-function FocusPublishExitHarness({ deps, startOpen = false, isAutoCreated = false, projectId = 42 }) {
+function FocusPublishExitHarness({ deps, startOpen = false, projectId = 42 }) {
   const { setEditorMode, recordAchievement, goToProjectManager, toastSuccess, onPublishWithoutSpotlight } = deps;
   const [showExportCompletePreview, setShowExportCompletePreview] = useState(startOpen);
   // T10660: the Publish card's loading state is derived from the stake (as in
@@ -58,10 +58,12 @@ function FocusPublishExitHarness({ deps, startOpen = false, isAutoCreated = fals
     setShowExportCompletePreview(false);
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     recordAchievement('overlay_deferred');
-    const copy = isAutoCreated ? FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP : FOCUS_PUBLISH_LATER_TOAST.MULTI_CLIP;
+    // T11230: collapsed to the single SINGLE_CLIP copy (MULTI_CLIP variant removed
+    // with the Reels building surfaces).
+    const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
     toastSuccess(copy.title, { message: copy.message, duration: 10000 });
     goToProjectManager();
-  }, [recordAchievement, goToProjectManager, toastSuccess, isAutoCreated, projectId]);
+  }, [recordAchievement, goToProjectManager, toastSuccess, projectId]);
 
   // T10660: no setEditorMode, no closePreview, no poll — stake + delegate.
   const handlePublish = useCallback(() => {
@@ -164,33 +166,23 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     );
   });
 
-  it('"Save draft" records overlay_deferred, shows the MULTI-CLIP toast, and navigates home; no render', () => {
+  it('"Save draft" records overlay_deferred, shows the single "Saved to Clips" toast, and navigates home; no render', () => {
     const deps = makeDeps();
-    render(<FocusPublishExitHarness deps={deps} startOpen isAutoCreated={false} />);
+    render(<FocusPublishExitHarness deps={deps} startOpen />);
 
     fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.SAVE_DRAFT_LABEL }));
 
     expect(deps.recordAchievement).toHaveBeenCalledTimes(1);
     expect(deps.recordAchievement).toHaveBeenCalledWith('overlay_deferred');
+    // T11230: the is_auto_created-routed MULTI_CLIP "Saved to Reels" variant is
+    // gone; every draft now shows this one SINGLE_CLIP copy.
     expect(deps.toastSuccess).toHaveBeenCalledWith(
-      'Saved to Reels',
+      'Saved to Clips',
       expect.objectContaining({ duration: 10000 }),
     );
     expect(deps.goToProjectManager).toHaveBeenCalledTimes(1);
     expect(deps.setEditorMode).not.toHaveBeenCalled();
     expect(deps.onPublishWithoutSpotlight).not.toHaveBeenCalled();
-  });
-
-  it('"Save draft" shows the SINGLE-CLIP toast when is_auto_created', () => {
-    const deps = makeDeps();
-    render(<FocusPublishExitHarness deps={deps} startOpen isAutoCreated />);
-
-    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.SAVE_DRAFT_LABEL }));
-
-    expect(deps.toastSuccess).toHaveBeenCalledWith(
-      'Saved to Clips',
-      expect.objectContaining({ duration: 10000 }),
-    );
   });
 
   it('Edit framing (and the X/onClose it also drives) just closes the preview — no achievement/toast/navigation', () => {

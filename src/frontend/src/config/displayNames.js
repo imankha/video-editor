@@ -201,12 +201,13 @@ export const SECTION_NAMES = {
   CLIPS: 'Clips',
   CLIPS_LOWER: 'clips',
 
-  // Multi-clip assemblies (T8360). T8555 promoted this to its own top-level tab;
-  // T9530 (N11) dropped the "In Progress" prefix so the label is now "Reels"
-  // (was "In Progress Reels" T8555, "Highlights" before). In-progress-drafts
-  // surface only -- published reels live under PUBLISHED.
-  // T9860: key renamed to REELS to match its own value (was HIGHLIGHTS, which
-  // grepped as a lie -- the value has said "Reels" since T9530).
+  // T11230 removed the In Progress Reels TAB and its Create-reel builder, but this
+  // "Reels" noun survives here because the KEEP collections surface still uses it:
+  // LockedReasonModal's "reopen Reels to ..." copy. Rewording that collections
+  // vocabulary is T11280's Reel-vocabulary-sweep job (depends on R2), not this
+  // mechanical removal task. (Prior: T8360 multi-clip assemblies; T8555 top-level
+  // tab; T9530 N11 dropped the "In Progress" prefix; T9860 key renamed HIGHLIGHTS
+  // -> REELS to match its value.)
   REELS: 'Reels',
 
   // Published reels tab (T8555) -- every published reel regardless of single-
@@ -227,14 +228,13 @@ export const LIBRARY_ACTIONS = {
   UPLOAD_GAME: 'Upload game',              // N01 — was "Add Game"/"Add New Game"
   UPLOADING_GAME: 'Uploading game...',     // N01 — submit busy state
   ADD_FOOTAGE: 'Add footage to game',      // N03 — was "Add footage"/"Add footage to this game"
-  CREATE_REEL: 'Create reel',              // N13 — was "Build New Reel"/"Create Reel from Clips"
-  // N13 — assembly submit, shows the selected count; button is disabled at zero.
-  CREATE_REEL_WITH_COUNT: (n) => `Create reel (${n} clip${n === 1 ? '' : 's'})`,
   DELETE_CLIP: ANNOTATE.DELETE_CLIP,       // N14 — 'Delete clip'
-  DELETE_REEL: 'Delete reel',              // N14
   RENAME_CLIP: ANNOTATE.RENAME_CLIP,       // N15 — 'Rename clip'
-  RENAME_REEL: 'Rename reel',              // N15
   PUBLISH_CLIP: 'Publish clip',            // N12
+  // PUBLISH_REEL survives the T11230 Reels-building removal: it is still the
+  // publish label on the KEEP CollectionPlayer/published surface. The reel-DRAFT
+  // action labels (CREATE_REEL/CREATE_REEL_WITH_COUNT/DELETE_REEL/RENAME_REEL)
+  // were deleted with the Reels tab + Create-reel builder + DraftTile isReel branch.
   PUBLISH_REEL: 'Publish reel',            // N12
 };
 
@@ -249,7 +249,8 @@ export const LIBRARY_ACTIONS = {
 export const SECTION_NAMES_SHORT = {
   GAMES: 'Games',
   CLIPS: 'Clips',
-  REELS: 'Reels',
+  // REELS removed by T11230 with the In Progress Reels tab (this constant's only
+  // consumer was that tab button + EmptyTabGuide's reels partial variant, both gone).
   PUBLISHED: 'Published',
 };
 
@@ -545,16 +546,15 @@ export const FOCUS_HINTS = {
   COCKPIT_INTRO_CONFIRM: 'Got it',
 };
 
-// T8390: "Add Spotlight Later" toast copy, routed by is_auto_created (T8360 split).
+// T8390: "Add Spotlight Later" toast copy. Was routed by is_auto_created (T8360
+// split) to a SINGLE_CLIP vs MULTI_CLIP variant; T11230 removed the MULTI_CLIP
+// variant with the Reels building surfaces, so every draft (including legacy
+// multi-clip drafts, which now live in the Clips tab's Legacy reels group) uses
+// this one copy. Callers reference SINGLE_CLIP directly, no branch.
 export const FOCUS_PUBLISH_LATER_TOAST = {
   SINGLE_CLIP: {
     title: 'Saved to Clips',
     message: 'Clips are single plays. A highlight reel joins several clips into one video. '
-      + 'Yours is still a draft, so add a spotlight or publish it from here whenever you want.',
-  },
-  MULTI_CLIP: {
-    title: `Saved to ${SECTION_NAMES.REELS}`,
-    message: 'A highlight reel joins several clips into one video. Single plays stay in Clips. '
       + 'Yours is still a draft, so add a spotlight or publish it from here whenever you want.',
   },
 };

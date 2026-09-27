@@ -517,32 +517,19 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
 }
 
 async function navigateToProjectManager(page) {
-  // T8545: "Create Highlight Reel" no longer lives on the Clips Home tab -- it
-  // moved to the In Progress Reels tab (was a top-right icon button opening a drawer;
-  // now a peer tab alongside Games/Clips). Switch to it to reach it, instead
-  // of the Reel Drafts/Clips tab.
-  const newProjectButton = page.locator('button:has-text("Create reel")');
-  if (await newProjectButton.isVisible().catch(() => false)) {
-    return; // Already on the In Progress Reels tab
-  }
-
-  // Look for Home button (exists in both annotate and framing/overlay modes)
+  // T11230: the "In Progress Reels" tab and the "Create reel" builder were removed.
+  // These regression tests only need to reach Home (where existing project cards
+  // render) so they can re-open a project — no reel creation. Land on Home directly.
   const backButton = page.locator('button[title="Home"]');
   if (await backButton.isVisible().catch(() => false)) {
     await backButton.click();
     await page.waitForTimeout(500);
+  } else {
+    await page.goto('/home');
+    await page.waitForLoadState('domcontentloaded');
   }
-
-  // Switch to the In Progress Reels tab, which now hosts the Create button.
-  const inProgressReelsTab = page.getByRole('button', { name: /^Reels/ }).first();
-  if (await inProgressReelsTab.isVisible().catch(() => false)) {
-    await inProgressReelsTab.click();
-    await page.waitForTimeout(500);
-  }
-
-  // Wait for New Project button to appear
-  await expect(newProjectButton).toBeVisible({ timeout: 10000 });
-  console.log('[Test] Navigated to project manager (In Progress Reels tab)');
+  await page.waitForTimeout(500);
+  console.log('[Test] Navigated to project manager (Home)');
 }
 
 /**
@@ -909,60 +896,13 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   await waitForUploadComplete(page);
   console.log('[Test] Clips created and auto-saved to library');
 
-  // Switch to the In Progress Reels tab and create project from clips.
-  // T8545: "Create Highlight Reel" moved off the Clips Home tab onto the
-  // In Progress Reels tab (was a top-right icon button opening a drawer), so switch
-  // to that tab instead.
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(2000);
-  await page.getByRole('button', { name: /^Reels/ }).first().click();
-  await page.waitForTimeout(500);
-
-  // Click New Project to open the modal
-  await page.locator('button:has-text("Create reel")').click();
-  await page.waitForTimeout(500);
-
-  // Wait for clips to load in the modal (should show clip buttons or "No plays" message)
-  // The modal starts with "Loading plays..." and then shows actual clips
-  // All clips are selected by default - just need to verify they loaded and click Create
-
-  // Wait for "Loading plays..." to disappear
-  const loadingText = page.locator('text="Loading plays..."');
-  await expect(loadingText).toBeHidden({ timeout: 15000 });
-  await page.waitForTimeout(1000); // Extra wait for clips to render
-
-  // Check if clips are shown - they appear as buttons in a scrollable list
-  // Each clip button has a checkbox indicator (bg-blue-600 for selected)
-  const clipButtons = page.locator('button').filter({
-    has: page.locator('.bg-blue-600, .bg-gray-600').filter({
-      has: page.locator('svg, [class*="Check"]')
-    })
-  });
-  let clipCount = await clipButtons.count();
-
-  // Fallback: look for "selected" text which shows count
-  if (clipCount === 0) {
-    const selectedText = await page.locator('text=/\\d+ of \\d+ selected/i').textContent().catch(() => '');
-    const match = selectedText?.match(/(\d+) of (\d+)/);
-    if (match) {
-      clipCount = parseInt(match[2], 10);
-    }
-  }
-
-  console.log(`[Test] Found ${clipCount} clips in modal (all selected by default)`);
-
-  // All clips are included by default, so we just click Create
-  const createButton = page.locator('button:has-text("Create with")').first();
-  await expect(createButton).toBeEnabled({ timeout: 10000 });
-  await createButton.click();
-
-  // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
-  await expect(page.locator('text="Create reel"')).not.toBeVisible({ timeout: 30000 });
-
-  // Navigate to the project in Framing mode
+  // T11230: the "Create reel" multi-clip builder + In Progress Reels tab were
+  // removed. Extracting clips now auto-creates a single-clip draft project, so we
+  // no longer assemble a reel — the auto-draft already exists in the Clips tab and
+  // is reachable/re-framable directly. Open it in Framing mode.
   await navigateToFocusAndWaitForVideo(page);
   // Video check already handled by navigateToFocusAndWaitForVideo
-  console.log('[Test] Project created from clips - now in Framing mode');
+  console.log('[Test] Auto-draft project exists from clips - now in Framing mode');
 
   // Return the created projects
   const newProjects = await page.evaluate(async () => {
@@ -1250,29 +1190,9 @@ test.describe('Smoke Tests @smoke', () => {
     // First ensure we have clips in the library by creating a game
     await ensureAnnotateModeWithClips(page);
 
-    // Navigate back to project manager
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-
-    // Switch to the In Progress Reels tab (T8545: Create Highlight Reel moved here
-    // from the Clips Home tab, was a top-right icon button opening a drawer).
-    await page.getByRole('button', { name: /^Reels/ }).first().click();
-    await page.waitForTimeout(500);
-
-    // Create project from clips
-    await page.locator('button:has-text("Create reel")').click();
-    await page.waitForTimeout(500);
-
-    // The "Create Project from Clips" modal should now show clips
-    // Select all clips and create
-    const createButton = page.locator('button:has-text("Create with")').first();
-    await expect(createButton).toBeEnabled({ timeout: 10000 });
-    await createButton.click();
-
-    // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
-    await expect(page.locator('text="Create reel"')).not.toBeVisible({ timeout: 30000 });
-
-    // Navigate to framing and wait for video to load
+    // T11230: extracting clips auto-creates a single-clip draft project (the
+    // "Create reel" multi-clip builder + In Progress Reels tab were removed), so we
+    // open that auto-draft into Framing directly instead of assembling a reel.
     await navigateToFocusAndWaitForVideo(page, { videoTimeout: 60000 });
 
     // Verify video element is visible and has content
@@ -1306,28 +1226,9 @@ test.describe('Smoke Tests @smoke', () => {
     // First ensure we have clips in the library by creating a game
     await ensureAnnotateModeWithClips(page);
 
-    // Navigate back to project manager
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-
-    // Switch to the In Progress Reels tab (T8545: Create Highlight Reel moved here
-    // from the Clips Home tab, was a top-right icon button opening a drawer).
-    await page.getByRole('button', { name: /^Reels/ }).first().click();
-    await page.waitForTimeout(500);
-
-    // Create project from clips
-    await page.locator('button:has-text("Create reel")').click();
-    await page.waitForTimeout(500);
-
-    // The "Create Project from Clips" modal should now show clips
-    const createButton = page.locator('button:has-text("Create with")').first();
-    await expect(createButton).toBeEnabled({ timeout: 10000 });
-    await createButton.click();
-
-    // Wait for modal to close - now stays on Projects page
-    await expect(page.locator('text="Create reel"')).not.toBeVisible({ timeout: 30000 });
-
-    // Navigate to framing and wait for video
+    // T11230: extracting clips auto-creates a single-clip draft project (the
+    // "Create reel" multi-clip builder + In Progress Reels tab were removed), so we
+    // open that auto-draft into Framing directly instead of assembling a reel.
     await navigateToFocusAndWaitForVideo(page, { waitForVideo: true, videoTimeout: 60000 });
 
     // Wait a bit to ensure any infinite loops would trigger
@@ -1351,28 +1252,9 @@ test.describe('Smoke Tests @smoke', () => {
     // First ensure we have clips in the library by creating a game
     await ensureAnnotateModeWithClips(page);
 
-    // Navigate back to project manager
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-
-    // Switch to the In Progress Reels tab (T8545: Create Highlight Reel moved here
-    // from the Clips Home tab, was a top-right icon button opening a drawer).
-    await page.getByRole('button', { name: /^Reels/ }).first().click();
-    await page.waitForTimeout(500);
-
-    // Create project from clips
-    await page.locator('button:has-text("Create reel")').click();
-    await page.waitForTimeout(500);
-
-    // The "Create Project from Clips" modal should now show clips
-    const createButton = page.locator('button:has-text("Create with")').first();
-    await expect(createButton).toBeEnabled({ timeout: 10000 });
-    await createButton.click();
-
-    // Wait for modal to close - now stays on Projects page
-    await expect(page.locator('text="Create reel"')).not.toBeVisible({ timeout: 30000 });
-
-    // Navigate to framing and wait for video
+    // T11230: extracting clips auto-creates a single-clip draft project (the
+    // "Create reel" multi-clip builder + In Progress Reels tab were removed), so we
+    // open that auto-draft into Framing directly instead of assembling a reel.
     await navigateToFocusAndWaitForVideo(page, { waitForVideo: true, videoTimeout: 60000 });
 
     const video = page.locator('video');
@@ -1443,103 +1325,16 @@ test.describe('Full Coverage Tests @full', () => {
     await cleanupTestData(request);
   });
 
-  test('Create project from library clips @full', async ({ page }) => {
-    test.slow();
-
-    // STEP 1: Create clips via Add Game modal (clips auto-save to library)
-    console.log('[Full] Step 1: Creating clips via Add Game...');
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-
-    // Click Games tab and Add Game to open modal
-    await page.locator('button:has-text("Games")').click();
-    await page.waitForTimeout(500);
-    await page.locator('button:has-text("Upload game")').click();
-    await page.waitForTimeout(500);
-
-    // Fill in the Add Game modal form
-    await openGameDetailsDisclosure(page);
-    await page.getByPlaceholder('e.g., Carlsbad SC').fill('Library Test Team');
-    const today = new Date().toISOString().split('T')[0];
-    const dateInput = page.locator('input[type="date"]');
-    await dateInput.fill(today);
-    await page.getByRole('button', { name: 'Home' }).click();
-
-    // Upload video via modal (inside the form)
-    const videoInput = page.locator('form input[type="file"][accept*="video"]');
-    await videoInput.setInputFiles(TEST_VIDEO);
-    await page.waitForTimeout(1000);
-
-    // Click Create Game
-    const createButton = page.locator('form button:has-text("Upload game")');
-    await expect(createButton).toBeEnabled({ timeout: 5000 });
-    await createButton.click();
-
-    // Wait for annotate mode to load with video
-    await waitForVideoFirstFrame(page);
-
-    // IMPORTANT: Wait for video upload to complete BEFORE importing TSV
-    // The clips/raw/save endpoint requires the video file to exist for extraction
-    console.log('[Full] Waiting for video upload to complete...');
-    const uploadSuccess = await waitForUploadComplete(page);
-    if (!uploadSuccess) {
-      throw new Error('[Full] Video upload failed - clips cannot be saved to library');
-    }
-    console.log('[Full] Video upload complete');
-
-    // Import TSV (clips auto-save to library) - ensure input is attached
-    const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
-    await expect(tsvInput).toBeAttached({ timeout: 10000 });
-    await tsvInput.setInputFiles(TEST_TSV);
-    await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 10000 });
-    console.log('[Full] Clips created and auto-saved to library');
-
-    // STEP 2: Switch to the In Progress Reels tab and create project from clips
-    // (T8545: Create Highlight Reel moved here from the Clips Home tab, was a
-    // top-right icon button opening a drawer).
-    console.log('[Full] Step 2: Creating project from library clips...');
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^Reels/ }).first().click();
-    await page.waitForTimeout(500);
-
-    // Click New Project to open the Create Project from Clips modal
-    await page.locator('button:has-text("Create reel")').click();
-    await page.waitForTimeout(500);
-
-    // Modal should show clips from library
-    const createProjectButton = page.locator('button:has-text("Create with")').first();
-    await expect(createProjectButton).toBeEnabled({ timeout: 10000 });
-    await createProjectButton.click();
-
-    // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
-    await expect(page.locator('text="Create reel"')).not.toBeVisible({ timeout: 30000 });
-
-    // Verify project was created via API
-    const projects = await page.evaluate(async () => {
-      const res = await fetch('/api/projects');
-      return res.json();
-    });
-    console.log(`[Full] Created ${projects.length} projects`);
-    expect(projects.length).toBeGreaterThan(0);
-
-    // Navigate to the project in Framing mode
-    await navigateToFocusAndWaitForVideo(page);
-
-    // Check for Framing tab button or Frame Video button
-    const framingVisible = await Promise.race([
-      page.getByTestId('mode-framing').waitFor({ state: 'visible', timeout: 30000 }).then(() => true),
-      page.locator('button:has-text("Frame Video")').waitFor({ state: 'visible', timeout: 30000 }).then(() => true),
-    ]).catch(() => false);
-
-    if (framingVisible) {
-      // navigateToFocusAndWaitForVideo already confirmed the video element is present
-      // (with CORS fallback if needed), so skip the redundant waitForVideoFirstFrame call
-      console.log('[Full] Project created from library clips - now in Framing mode');
-    } else {
-      // Framing mode may not load if clips aren't extracted yet — verify project exists at minimum
-      console.log('[Full] Project created from library clips - framing mode not yet ready (extraction pending)');
-    }
+  // T11230/R12: this test's whole purpose was assembling a MULTI-CLIP project from
+  // library clips via the "Create reel" builder + POST /api/projects/from-clips —
+  // all removed. Single-clip auto-drafts (covered by the other @full tests via
+  // ensureProjectsExist/ensureFocusMode) are the surviving project-creation path,
+  // so there is no standalone "create project from clips" flow left to exercise.
+  test.skip('Create project from library clips @full', async () => {
+    // Body intentionally left as a no-op: the multi-clip "create project from
+    // library clips" flow it exercised (Create reel builder + from-clips endpoint)
+    // was removed by T11230. Kept as a skipped placeholder so the removal is
+    // visible in the suite; delete in the T11280 vocabulary sweep if still unused.
   });
 
   test('Framing: export creates working video @full', async ({ page }) => {
@@ -1665,8 +1460,8 @@ test.describe('Full Coverage Tests @full', () => {
     await navigateToProjectManager(page);
     await page.waitForTimeout(1000);
 
-    // Verify we're at project manager
-    await expect(page.locator('button:has-text("Create reel")')).toBeVisible({ timeout: 5000 });
+    // T11230: "Create reel" button removed; assert Home rendered via the Clips tab instead.
+    await expect(page.getByRole('button', { name: /^Clips/ }).first()).toBeVisible({ timeout: 5000 });
 
     // Re-open the same project
     const projectCard = page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ clip/i') }).first();
@@ -1957,8 +1752,8 @@ test.describe('Full Coverage Tests @full', () => {
     await navigateToProjectManager(page);
     await page.waitForTimeout(1000);
 
-    // Verify we're at project manager
-    await expect(page.locator('button:has-text("Create reel")')).toBeVisible({ timeout: 5000 });
+    // T11230: "Create reel" button removed; assert Home rendered via the Clips tab instead.
+    await expect(page.getByRole('button', { name: /^Clips/ }).first()).toBeVisible({ timeout: 5000 });
 
     // STEP 5: Reload the same project
     console.log('[Full] Step 5: Reloading project...');
@@ -2166,28 +1961,11 @@ test.describe('Full Coverage Tests @full', () => {
       console.log('[Full Pipeline] WARNING: No clips saved to library after 2 minutes');
     }
 
-    // STEP 3: Create project from library clips via New Project modal
-    // (T8545: Create Highlight Reel moved to the In Progress Reels tab).
-    console.log('[Full Pipeline] Step 3: Creating project from library clips...');
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^Reels/ }).first().click();
-    await page.waitForTimeout(500);
-
-    // Click New Project to open the Create Project from Clips modal
-    await page.locator('button:has-text("Create reel")').click();
-    await page.waitForTimeout(500);
-
-    // Modal should show clips from library - create project
-    const createProjectButton = page.locator('button:has-text("Create with")').first();
-    await expect(createProjectButton).toBeEnabled({ timeout: 10000 });
-    await createProjectButton.click();
-
-    // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
-    await expect(page.locator('text="Create reel"')).not.toBeVisible({ timeout: 30000 });
-
-    // Navigate to the project in Framing mode
-    console.log('[Full Pipeline] Navigating to framing mode...');
+    // STEP 3: Open the auto-created single-clip draft in Framing mode.
+    // T11230: extracting clips auto-creates a single-clip draft project (the
+    // "Create reel" multi-clip builder + In Progress Reels tab were removed), so
+    // there is no reel to assemble — open the existing auto-draft directly.
+    console.log('[Full Pipeline] Step 3: Opening auto-draft in framing mode...');
     await navigateToFocusAndWaitForVideo(page);
 
     // Verify clips are loaded in sidebar

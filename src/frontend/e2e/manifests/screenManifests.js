@@ -65,7 +65,7 @@ export const SCREENS = [
     actions: [
       { label: 'Games tab', locator: (p) => p.locator('button:has-text("Games")').first() },
       { label: 'Clips tab', locator: (p) => p.getByRole('button', { name: /^Clips/ }).first() },
-      { label: 'Reels tab', locator: (p) => p.getByRole('button', { name: /^Reels/ }).first() },
+      // T11230 removed the In Progress Reels home tab (Games / Clips / Published now).
       { label: 'Published tab', locator: (p) => p.getByRole('button', { name: /^Published/ }).first() },
     ],
   },

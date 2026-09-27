@@ -2,27 +2,19 @@ import { render, screen, waitFor, within, fireEvent } from '@testing-library/rea
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppStateProvider } from '../contexts';
 
-// T8555: locks in the FOUR-tab IA (Games / In Progress Clips / In Progress
-// Reels / Published) that replaces T8545's three-tab bar (Games / Clips /
-// Highlights). Written PRE-IMPLEMENTATION (Stage 3) against the approved
-// design (T8555-design.md) + ui-spec (T8555-ui-spec.md) -- these tests are
-// expected to FAIL until the implementation:
-//   - adds `inProgressReels` (`/home/reels-in-progress`) and `published`
-//     (`/home/published`) entries to TAB_PATHS
-//   - renames SECTION_NAMES.CLIPS -> "In Progress Clips", HIGHLIGHTS ->
-//     "In Progress Reels", adds PUBLISHED -> "Published"
-//   - moves the in-progress `highlightDrafts` block out of DownloadsPanel
-//     into an inline ProjectManager branch on the new `inProgressReels` tab
-//   - renames DownloadsPanel -> PublishedReelsPanel, gated on
-//     activeTab === 'published', testid `published-tab-panel`
-//   - relocates the `unseenReelsCount` badge from the old Highlights tab to
-//     the new Published tab; wires `highlightDrafts.length` to the new
-//     In Progress Reels tab badge
+// T11230 (was ProjectManager.fourTabIA.test.jsx): the home IA is now THREE peer
+// tabs -- Games / Clips / Published. The In Progress Reels tab (`inProgressReels`,
+// /home/reels-in-progress) and its Create-reel builder were removed with the Reels
+// building surfaces (single-clip-editor epic). Legacy multi-clip drafts stay
+// reachable in the Clips tab's "Legacy reels" group (T11220), NOT under a Reels tab.
 //
-// This file does NOT replace ProjectManager.homeTabDefaults.test.jsx's
-// existing three-way-tab describe block -- that rewrite (plus the 46-file
-// e2e sweep) is Implementation's job per T8555-design.md Sec 4. This is a
-// focused, additive unit suite scoped to the new tab-bar contract.
+// Red-then-green anchors (fail on pre-T11230 ProjectManager, pass after):
+//   - no button whose accessible name starts with "Reels" renders (tab is gone)
+//   - a deep link to the retired /home/reels-in-progress lands on Home (R6: any
+//     unsupported link goes Home via tabFromPath -> null -> default), never on a
+//     reels panel
+//   - legacy multi-clip drafts (is_auto_created === false) still render, in the
+//     Clips tab's legacy-reel-drafts group
 
 // jsdom lacks IntersectionObserver (used by the games-grid cache-warming effect).
 class MockIntersectionObserver {
@@ -75,16 +67,11 @@ vi.mock('./SignInButton', () => ({ SignInButton: () => <div />, default: () => <
 vi.mock('./ProfileSportButton', () => ({ ProfileSportButton: () => <div />, default: () => <div /> }));
 vi.mock('./ProfileDropdown', () => ({ ProfileDropdown: () => <div /> }));
 vi.mock('./GameTile', () => ({ GameTile: () => <div data-testid="game-tile" /> }));
-// T8990: the uploading rail renders these; stub so the "hidden during upload"
-// case doesn't drag in the tile's own store/hook deps.
 vi.mock('./UploadingGameTile', () => ({ UploadingGameTile: () => <div data-testid="uploading-tile" /> }));
-// A lone is_reference game renders ReferenceGameCard (cross-profile link), not a
-// GameTile; stub it so the "no partial guide for a reference-only account" case
-// doesn't drag in its store deps.
 vi.mock('./ReferenceGameCard', () => ({ ReferenceGameCard: () => <div data-testid="reference-card" /> }));
-// DraftTile is used both by the (frozen) Clips tab AND the new inline
-// In Progress Reels branch -- echo the project id/name so tests can assert
-// WHICH drafts rendered where.
+// DraftTile echoes the project id/name so tests can assert WHICH drafts rendered
+// (single-clip drafts in the Clips gallery, legacy multi-clip drafts in the
+// Legacy reels group).
 vi.mock('./DraftTile', () => ({
   DraftTile: (props) => (
     <div data-testid="draft-tile" data-project-id={props.project?.id}>
@@ -93,8 +80,6 @@ vi.mock('./DraftTile', () => ({
   ),
   default: () => <div />,
 }));
-// PublishedReelsPanel (was DownloadsPanel) is the always-mounted Published tab
-// body -- stub it so its heavy hook/store deps don't leak into this tab-bar test.
 vi.mock('./PublishedReelsPanel', () => ({
   PublishedReelsPanel: (props) => (
     <div data-testid="published-tab-panel" data-active={String(!!props.active)} />
@@ -130,12 +115,11 @@ function renderManager(props = {}, path = '/home') {
 }
 
 // Label-first accessible-name lookups (DOM-order landmine: name reads
-// "{label}{count}", never digit-first). Anchor on the label prefix per the
-// ui-spec's own locator guidance (Sec 4).
+// "{label}{count}", never digit-first).
 const gamesTab = () => screen.getByRole('button', { name: /^Games/i });
 const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
-const inProgressReelsTab = () => screen.getByRole('button', { name: /^Reels/i });
 const publishedTab = () => screen.getByRole('button', { name: /^Published/i });
+const queryReelsTab = () => screen.queryByRole('button', { name: /^Reels/i });
 
 const multiclipDraft = (id, name = `Highlight Draft ${id}`) => ({
   id,
@@ -150,89 +134,87 @@ const singleclipDraft = (id, name = `Clip Draft ${id}`) => ({
   is_auto_created: true,
 });
 
-describe('T8555: four peer tabs render with exact labels', () => {
+describe('T11230: three peer tabs render, no Reels tab', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/home');
     useGalleryStore.setState({ isOpen: false });
   });
 
-  it('renders Games, Clips, Reels, and Published as four peer tabs', () => {
+  it('renders Games, Clips, and Published as the three peer tabs', () => {
     renderManager();
 
     expect(gamesTab()).toBeTruthy();
     expect(clipsTab()).toBeTruthy();
-    expect(inProgressReelsTab()).toBeTruthy();
     expect(publishedTab()).toBeTruthy();
   });
 
-  it('the retired "Highlights" label no longer appears as a tab', () => {
-    renderManager();
+  it('no In Progress Reels tab exists (removed with the Reels building surfaces)', () => {
+    renderManager({ projects: [multiclipDraft(1)] });
 
-    // Old T8545 label must be gone -- greppability AC ("zero remaining
-    // references to a Highlights *tab*"). A loose /^Highlights/ match would
-    // wrongly pass once renamed to "Reels" (different prefix), so
-    // this assertion is meaningful evidence, not a tautology.
+    // A button whose accessible name starts with "Reels" was the tab. It must be
+    // gone -- this fails on pre-T11230 code (the tab still renders) and is the
+    // core red-then-green anchor for the deletion.
+    expect(queryReelsTab()).toBeNull();
+  });
+
+  it('the retired "Highlights" label also does not appear as a tab', () => {
+    renderManager();
     expect(screen.queryByRole('button', { name: /^Highlights/i })).toBeNull();
   });
 });
 
-describe('T8555: In Progress Reels tab shows ONLY unpublished multiclip drafts', () => {
+describe('T11230: retired /home/reels-in-progress deep link lands on Home', () => {
+  beforeEach(() => {
+    useGalleryStore.setState({ isOpen: false });
+  });
+
+  it('a deep link to the retired Reels tab renders Home, not a reels panel', () => {
+    // R6: any unsupported link goes Home. tabFromPath('/home/reels-in-progress')
+    // is now null, so the account with clip drafts settles on the Clips gallery
+    // (the bare-/home default), never an in-progress-reels panel.
+    renderManager({ projects: [singleclipDraft(2, 'Landed Clip')] }, '/home/reels-in-progress');
+
+    // No reels tab, and no retired reels panel testid.
+    expect(queryReelsTab()).toBeNull();
+    expect(screen.queryByTestId('in-progress-reels-tab-panel')).toBeNull();
+    // Home is reachable: the three tabs render and the clip draft is shown (it
+    // appears both in the resume rail and the Clips gallery, hence getAllByText).
+    expect(gamesTab()).toBeTruthy();
+    expect(clipsTab()).toBeTruthy();
+    expect(publishedTab()).toBeTruthy();
+    expect(screen.getAllByText('Landed Clip').length).toBeGreaterThan(0);
+  });
+
+  it('a legacy-only account (only multi-clip drafts) at the retired link lands on Home too', () => {
+    renderManager({ projects: [multiclipDraft(1)] }, '/home/reels-in-progress');
+    expect(queryReelsTab()).toBeNull();
+    expect(gamesTab()).toBeTruthy();
+    expect(publishedTab()).toBeTruthy();
+  });
+});
+
+describe('T11230: legacy multi-clip drafts stay reachable in the Clips tab', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/home');
     useGalleryStore.setState({ isOpen: false });
   });
 
-  it('shows highlightDrafts (is_auto_created === false) and the Create reel button, no published content', () => {
+  it('renders multi-clip drafts in the Legacy reels group, not under a Reels tab', () => {
     renderManager({
       projects: [multiclipDraft(1, 'My Multiclip Draft'), singleclipDraft(2, 'My Single Clip')],
     });
 
-    fireEvent.click(inProgressReelsTab());
+    fireEvent.click(clipsTab());
 
-    // Only the multiclip draft renders here -- the single-clip draft belongs
-    // to the (frozen) In Progress Clips tab, not this one.
-    const tile = screen.getByTestId('draft-tile');
-    expect(tile.dataset.projectId).toBe('1');
-    expect(screen.queryByText('My Single Clip')).toBeNull();
-
-    // The assembly button lives inline on this tab now (moved out of
-    // DownloadsPanel per the design's mechanical-move decision). T9530 (N13)
-    // renamed it "Build New Reel" -> "Create reel" (LIBRARY_ACTIONS.CREATE_REEL).
-    expect(screen.getByRole('button', { name: 'Create reel' })).toBeTruthy();
-
-    // Regression (found live on staging 2026-09-18): T10280 added the shared
-    // headline/body guidance to the POPULATED Games/Clips tabs but missed
-    // Reels, which only had it on the empty branch -- the populated tab shown
-    // here rendered no guidance text at all. Must render on both branches now.
-    expect(screen.getByText(EMPTY_TAB_GUIDE.reels.headline)).toBeTruthy();
-
-    // No published-gallery content (ConfidenceBanner / CollectionsTab /
-    // published-tab-panel testid) leaks into this tab's body. (dataset.active,
-    // matching this file's convention -- jest-dom's toHaveAttribute is not
-    // imported here.)
-    expect(screen.queryByTestId('published-tab-panel')?.dataset.active).not.toBe('true');
-  });
-
-  it('empty state shows the EmptyTabGuide reels headline + Create reel, button below the message', () => {
-    renderManager({ projects: [singleclipDraft(2)] });
-
-    fireEvent.click(inProgressReelsTab());
-
-    // T8980: the shared EmptyTabGuide replaces the old "No reels in progress"
-    // dead end. Headline resolves into the Create reel CTA below it (T8780
-    // order preserved). The lone single-clip draft makes hasClips true, so the
-    // button is enabled with the "1 clip ready to use" caption.
-    const message = screen.getByText(EMPTY_TAB_GUIDE.reels.headline);
-    const button = screen.getByRole('button', { name: /Create reel/i });
-    expect(message).toBeTruthy();
-    expect(button.disabled).toBe(false);
-    expect(screen.getByText(/1 clip ready to use/i)).toBeTruthy();
-    expect(message.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.queryByTestId('draft-tile')).toBeNull();
+    // The legacy group (T11220) is the reachability path now the Reels tab is gone.
+    const legacyGroup = screen.getByTestId('legacy-reel-drafts');
+    expect(within(legacyGroup).getByText('My Multiclip Draft')).toBeTruthy();
+    // The single-clip draft renders too (in the main clip gallery).
+    expect(screen.getByText('My Single Clip')).toBeTruthy();
   });
 });
 
-describe('T8555: Published tab renders the published gallery panel', () => {
+describe('T11230: Published tab renders the published gallery panel', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/home');
     useGalleryStore.setState({ isOpen: false });
@@ -253,7 +235,7 @@ describe('T8555: Published tab renders the published gallery panel', () => {
     expect(screen.getByTestId('published-tab-panel').dataset.active).toBe('true');
   });
 
-  it('publish-landing effect (galleryStore.isOpen) retargets to Published, not the retired Highlights id', async () => {
+  it('publish-landing effect (galleryStore.isOpen) retargets to Published', async () => {
     renderManager();
     expect(screen.getByTestId('published-tab-panel').dataset.active).toBe('false');
 
@@ -262,12 +244,12 @@ describe('T8555: Published tab renders the published gallery panel', () => {
     await waitFor(() => {
       expect(screen.getByTestId('published-tab-panel').dataset.active).toBe('true');
     });
-    // Fire-once signal consumed, same T8400/T8470 contract as before.
     expect(useGalleryStore.getState().isOpen).toBe(false);
   });
 });
 
-// T8990: the lone-game coaching cell + the Clips tutorial-target invariant.
+// T8990: the lone-game coaching cell + the Clips tutorial-target invariant
+// (unaffected by the Reels removal -- kept verbatim from the four-tab suite).
 const oneGame = (id = 'g1') => ({
   id,
   name: `Game ${id}`,
@@ -287,7 +269,6 @@ describe('T8990: Games partial-guide cell', () => {
     renderManager({ games: [oneGame()] }, '/home/games');
     expect(screen.getByText(partialHeadline)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Open game' })).toBeTruthy();
-    // The lone game tile still renders -- the guide sits in the second cell.
     expect(screen.getByTestId('game-tile')).toBeTruthy();
   });
 
@@ -301,7 +282,6 @@ describe('T8990: Games partial-guide cell', () => {
   it('does NOT render at zero games (the empty variant shows instead)', () => {
     renderManager({ games: [] }, '/home/games');
     expect(screen.queryByText(partialHeadline)).toBeNull();
-    // The full empty guide is what renders at zero.
     expect(screen.getByText(EMPTY_TAB_GUIDE.games.headline)).toBeTruthy();
   });
 
@@ -327,14 +307,8 @@ describe('T8990: Games partial-guide cell', () => {
     expect(screen.queryByText(partialHeadline)).toBeNull();
   });
 
-  // T9440: the "cut your first play" coaching is derived from PERSISTED progress
-  // (the game's saved-play count), not the game COUNT. A lone game that already
-  // has saved plays (clip_count > 0 -- Andrew's two rated/tagged plays) has done
-  // this step, so re-offering "Now cut your first play" contradicts the game
-  // card's "2 annotations" and the quest panel. It must not render.
   it('does NOT render for a lone game that already has saved plays (clip_count > 0)', () => {
     renderManager({ games: [{ ...oneGame('gDone'), clip_count: 2 }] }, '/home/games');
-    // The game tile still renders; only the first-play coaching is gone.
     expect(screen.getByTestId('game-tile')).toBeTruthy();
     expect(screen.queryByText(partialHeadline)).toBeNull();
   });
@@ -360,76 +334,33 @@ describe('T8990: clips-add-video tutorial target stays unique (T8380 invariant)'
   });
 
   it('non-empty Clips state: exactly one target (the action row), partial filler adds none', () => {
-    // jsdom measures no layout, so the carousel filler never mounts here -- which
-    // is itself the guarantee that the partial guide (which carries NO Add Video
-    // button anyway) can never introduce a second target.
     renderManager({ projects: [singleclipDraft(2)] }, '/home/reels');
     fireEvent.click(clipsTab());
     expect(targets().length).toBe(1);
   });
 });
 
-describe('T8555: badge counts', () => {
+describe('T11230: badge counts + always-reachable tabs', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/home');
     useGalleryStore.setState({ isOpen: false });
   });
 
-  it('In Progress Reels badge shows highlightDrafts.length, not the published unseen count', () => {
-    renderManager({
-      projects: [multiclipDraft(1), multiclipDraft(2), singleclipDraft(3)],
-      unseenReelsCount: 9,
-    });
-
-    // Two multiclip drafts -> badge count 2 (single-clip draft excluded).
-    expect(within(inProgressReelsTab()).getAllByText('2').length).toBeGreaterThan(0);
-    // The unseen-published count must NOT leak onto this tab's badge.
-    expect(within(inProgressReelsTab()).queryAllByText('9').length).toBe(0);
-  });
-
-  it('Published badge shows unseenReelsCount (relocated from the old Highlights badge)', () => {
+  it('Published badge shows unseenReelsCount', () => {
     renderManager({ unseenReelsCount: 5 });
-
     expect(within(publishedTab()).getAllByText('5').length).toBeGreaterThan(0);
   });
-});
 
-// T9390 (Decision 3) was: Reels and Published disabled until the account has a
-// clip. T10310 (2026-09-18 user request) removed that gate -- both tabs are now
-// ALWAYS reachable so a curious user can click in and read what they say,
-// regardless of clip count. `hasClips` still gates the genuinely-impossible
-// CREATE actions inside those tabs (e.g. the populated Reels tab's own "Create
-// reel" button), just not tab-bar ACCESS.
-describe('T10310: Reels + Published tabs are always reachable (supersedes T9390 Decision 3 gating)', () => {
-  const OLD_CAPTION = 'Reels and Published unlock once you have a clip. Cut one from a game, or use Upload clip on Clips.';
-
-  beforeEach(() => {
-    window.history.replaceState(null, '', '/home');
-    useGalleryStore.setState({ isOpen: false });
+  it('Clips badge shows the single-clip draft count (multi-clip drafts excluded)', () => {
+    renderManager({ projects: [singleclipDraft(1), singleclipDraft(2), multiclipDraft(3)] });
+    // Two single-clip drafts -> badge 2; the multi-clip draft is not counted here.
+    expect(within(clipsTab()).getAllByText('2').length).toBeGreaterThan(0);
   });
 
-  it('no clips at all: Reels and Published are still enabled, same as Games and Clips', () => {
+  it('no clips at all: Games, Clips and Published are all enabled', () => {
     renderManager({ projects: [], games: [] });
-
-    expect(inProgressReelsTab().disabled).toBe(false);
-    expect(publishedTab().disabled).toBe(false);
     expect(gamesTab().disabled).toBe(false);
     expect(clipsTab().disabled).toBe(false);
-    // The old gate's explanatory caption is gone along with the gate itself.
-    expect(screen.queryByText(OLD_CAPTION)).toBeNull();
-  });
-
-  it('a single-clip draft (Add Video path) still leaves both tabs enabled', () => {
-    renderManager({ projects: [singleclipDraft(1)], games: [] });
-
-    expect(inProgressReelsTab().disabled).toBe(false);
-    expect(publishedTab().disabled).toBe(false);
-  });
-
-  it('a game with zero cut clips still leaves both tabs enabled (nothing gates tab-bar access anymore)', () => {
-    renderManager({ projects: [], games: [{ ...oneGame('g0'), clip_count: 0 }] });
-
-    expect(inProgressReelsTab().disabled).toBe(false);
     expect(publishedTab().disabled).toBe(false);
   });
 });
