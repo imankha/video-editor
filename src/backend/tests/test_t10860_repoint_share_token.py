@@ -613,16 +613,54 @@ class TestCrossProfileShareIsolation:
 
     def test_stale_share_not_leaked_across_profiles(self, client):
         """FIX 1: viewing profile B's project list must NOT surface profile
-        A's share as stale_share just because the final_video ids collide."""
+        A's share as stale_share just because the final_video ids collide.
+
+        Round-6 proof-verifier finding: profile B must have its OWN
+        non-current final_videos version (a private re-export of its own,
+        b1.mp4 -> b2.mp4) for this test to be discriminating. Without it,
+        Fix A's `has_non_current_version` early-return in
+        `_compute_stale_shares` short-circuits BEFORE the profile-scoped
+        Postgres query (`AND s.sharer_profile_id = %s`) ever runs -- so this
+        test would keep passing even if that predicate were later deleted by
+        accident, silently defeating the round-1 BLOCKING cross-profile-leak
+        fix it exists to guard. Giving profile B its own non-current version
+        forces `_compute_stale_shares` to actually reach the Postgres query
+        for profile B, making the profile predicate load-bearing here."""
+        from app.database import get_db_connection
+        from app.profile_context import set_current_profile_id
         from app.session_init import _init_cache
+        from app.user_context import set_current_user_id
 
         _project_a_id, project_b_id, _token_a = self._seed_two_colliding_profiles()
+
+        set_current_user_id(SHARER_ID)
+        set_current_profile_id(self.PROFILE_B)
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """INSERT INTO final_videos
+                   (project_id, filename, name, duration, version, published_at)
+                   VALUES (?, ?, ?, ?, 2, ?)""",
+                (project_b_id, "b2.mp4", "ProfB Video V2", 9.0, "2026-09-26T00:10:00"),
+            )
+            final_video_b2_id = cursor.lastrowid
+            cursor.execute(
+                "UPDATE projects SET final_video_id = ? WHERE id = ?",
+                (final_video_b2_id, project_b_id),
+            )
+            conn.commit()
 
         _init_cache[SHARER_ID] = {"profile_id": self.PROFILE_B, "is_new_user": False}
         resp = client.get("/api/projects", headers=_auth_headers(SHARER_ID))
         assert resp.status_code == 200
         project_b = next(p for p in resp.json() if p["id"] == project_b_id)
         assert project_b["stale_share"] is None
+
+        detail_resp = client.get(
+            f"/api/projects/{project_b_id}", headers=_auth_headers(SHARER_ID),
+        )
+        assert detail_resp.status_code == 200
+        assert detail_resp.json()["stale_share"] is None
 
     def test_repoint_refuses_cross_profile_collision(self, client):
         """FIX 2: repointing profile A's share while profile B is the current
