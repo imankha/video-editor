@@ -200,4 +200,3 @@ test('AC2: SECONDARY segment ring + tooltip on exactly the drifted clip, pre-pro
 
   await saveEvidence(page, 'T8350-AC2-secondary-segment-ring-pre-produce');
 });
-
