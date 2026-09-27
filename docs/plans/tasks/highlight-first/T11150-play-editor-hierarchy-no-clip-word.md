@@ -1,10 +1,10 @@
 # T11150: Play editor hierarchy (time, name + rating, details) and no "clip" wording in Annotate
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-24
-**Updated:** 2026-09-24
+**Updated:** 2026-09-27
 **Epic:** [Highlight-First Annotate Flow](EPIC.md)
 
 ## Problem
