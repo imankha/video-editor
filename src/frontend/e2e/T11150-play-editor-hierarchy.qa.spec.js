@@ -100,6 +100,22 @@ test.describe('T11150 — play editor hierarchy + no clip wording: live QA', () 
     await saveEvidence(page, 'T11150-portrait-editor');
   });
 
+  // AnnotateScreen's mobile plays-drawer header button (useMobileClipPanel) must
+  // use Highlight-flow vocabulary — was title="Show clips". Loaded in a real
+  // mobile-portrait context (hasTouch/isMobile via test.use) so the mobile layout
+  // mounts from the start. Red on base 48605465, green on the fix.
+  test.describe('mobile plays-drawer header toggle (393 portrait)', () => {
+    test.use({ hasTouch: true, isMobile: true, viewport: { width: 393, height: 852 } });
+    test('toggle uses "Show plays", no "clip" in title/aria-label', async ({ page }) => {
+      const toggle = page.getByTitle('Show plays');
+      await expect(toggle, 'mobile plays-drawer toggle uses "Show plays"').toBeVisible({ timeout: 10000 });
+      const title = (await toggle.getAttribute('title')) || '';
+      const aria = (await toggle.getAttribute('aria-label')) || '';
+      expect(`${title} | ${aria}`, 'plays-drawer toggle has no "clip" wording').not.toMatch(/clip/i);
+      await saveEvidence(page, 'T11150-mobile-plays-toggle');
+    });
+  });
+
   test('landscape phone: editor renders, no clip wording', async ({ page }) => {
     await page.setViewportSize({ width: 844, height: 390 });
     await openEditor(page);

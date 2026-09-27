@@ -722,7 +722,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
                 <button
                   onClick={() => setShowMobileSidebar(true)}
                   className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300"
-                  title="Show clips"
+                  title="Show plays"
                 >
                   <List size={16} />
                   <span className="text-xs font-medium">{clipCountDisplay}</span>

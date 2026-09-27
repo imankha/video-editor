@@ -5,7 +5,7 @@
  * from 640px up) while every JS decision in the app treats up to 1023px as mobile
  * (`useIsMobile()` = `max-width: 1023px`). That 640-1023px gap left a permanent,
  * undismissable 352px panel that squeezed the canvas to ~250px at 699px, with the
- * ONLY dismiss toggle ("Show clips") gated `flex sm:hidden` — i.e. it only existed
+ * ONLY dismiss toggle ("Show plays") gated `flex sm:hidden` — i.e. it only existed
  * BELOW 640px. The fix moves the panel onto `useMobileClipPanel = isMobile &&
  * !isLandscape`: a dismissable off-canvas drawer across the whole 640-1023px range,
  * while landscape phones (T4933) keep the in-flow desktop panel.
@@ -24,7 +24,17 @@ const AUDIT_PROFILE = process.env.E2E_PROFILE_ID || '9fa7378c';
 const GAME_ID = Number(process.env.E2E_GAME_ID || 6);
 
 const desktopPanel = (page) => page.locator('[data-sidebar="clips"]');
-const showClipsToggle = (page) => page.getByTitle('Show clips');
+const showPlaysToggle = (page) => page.getByTitle('Show plays');
+// T11150: the drawer toggle must use Highlight-flow vocabulary — no "clip" in
+// its title or aria-label (was title="Show clips"). Red on base 48605465, green
+// after the AnnotateScreen fix.
+async function assertToggleHasNoClipWording(page) {
+  const toggle = showPlaysToggle(page);
+  await expect(toggle).toBeVisible();
+  const title = (await toggle.getAttribute('title')) || '';
+  const aria = (await toggle.getAttribute('aria-label')) || '';
+  expect(`${title} | ${aria}`, 'plays-drawer toggle has no "clip" wording').not.toMatch(/clip/i);
+}
 
 async function openGame(page) {
   await openGameInAnnotate(page, GAME_ID);
@@ -41,7 +51,7 @@ test.describe('T9920 Annotate narrow-width plays panel', () => {
 
   // Narrow desktop/tablet (FINE pointer, so useIsMobile keys purely on max-width:
   // 1023px). 699 + 768 are the dead-zone widths; the in-flow 352px panel must be
-  // GONE and the "Show clips" drawer toggle present, with no horizontal overflow.
+  // GONE and the "Show plays" drawer toggle present, with no horizontal overflow.
   for (const width of [699, 768, 1023]) {
     test(`@ ${width}px (narrow desktop): plays panel collapses to a dismissable drawer`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
@@ -52,14 +62,16 @@ test.describe('T9920 Annotate narrow-width plays panel', () => {
         `@ ${width}px: the in-flow 352px panel must NOT be permanently mounted`
       ).toHaveCount(0);
       await expect(
-        showClipsToggle(page),
-        `@ ${width}px: a "Show clips" toggle must exist to open the plays drawer`
+        showPlaysToggle(page),
+        `@ ${width}px: a "Show plays" toggle must exist to open the plays drawer`
       ).toBeVisible();
+      // T11150: the toggle must carry no "clip" wording (was title="Show clips").
+      await assertToggleHasNoClipWording(page);
 
       await assertNoHorizontalOverflow(page);
 
       // The toggle opens the off-canvas drawer, which mounts the panel on demand.
-      await showClipsToggle(page).click();
+      await showPlaysToggle(page).click();
       await expect(
         desktopPanel(page),
         `@ ${width}px: the drawer mounts the plays panel when opened`
@@ -73,7 +85,7 @@ test.describe('T9920 Annotate narrow-width plays panel', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openGame(page);
     await expect(desktopPanel(page), '@ 1440px: in-flow panel present').toBeVisible();
-    await expect(showClipsToggle(page), '@ 1440px: no mobile drawer toggle').toHaveCount(0);
+    await expect(showPlaysToggle(page), '@ 1440px: no mobile drawer toggle').toHaveCount(0);
     await assertNoHorizontalOverflow(page);
     await saveEvidence(page, 't9920-bugB_desktop-1440');
   });
@@ -99,7 +111,7 @@ test.describe('T9920 landscape-phone keeps the desktop panel (T4933)', () => {
       '844x390 landscape phone must keep the in-flow desktop ClipsSidePanel (T4933)'
     ).toBeVisible();
     await expect(
-      showClipsToggle(page),
+      showPlaysToggle(page),
       '844x390 landscape phone must NOT show the off-canvas drawer toggle'
     ).toHaveCount(0);
     await saveEvidence(page, 't9920-t4933-landscape-phone');
