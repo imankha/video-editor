@@ -1,5 +1,5 @@
 import { forwardRef, useState, useMemo, useCallback } from 'react';
-import { Minimize, Maximize, Crop, Sliders, Film, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -11,7 +11,6 @@ import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS } from '../containers/Ex
 import { Button } from '../components/shared';
 import SettingsRail from '../components/settings/SettingsRail';
 import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
-import FocusClipsPanel from '../components/settings/FocusClipsPanel';
 import { CropOverlay } from './focus';
 import { FocusTimelineBlock } from './focus/FocusTimelineBlock';
 import RotateNudge from './focus/RotateNudge';
@@ -199,9 +198,6 @@ export function FocusModeView({
   isFullscreen,
   onToggleFullscreen,
 
-  // File handling
-  onFileSelect,
-
   // Playback controls
   togglePlay,
   stepForward,
@@ -303,7 +299,6 @@ export function FocusModeView({
   // T10840: landscape cockpit — the derivation is computed once in FocusScreen
   // (useIsCockpit) and passed down so there is a single source of truth.
   cockpit = false,
-  clipSidebarProps,
   onExitToHome,
 }) {
   const [dimOpacity, setDimOpacity] = useState(0.2);
@@ -409,14 +404,15 @@ export function FocusModeView({
     return ratioW > 0 && ratioH > 0 ? `${ratioW} / ${ratioH}` : null;
   }, [previewActive, globalAspectRatio]);
 
-  // T9270: the Focus settings-rail tabs (Clips | Settings) and their bodies. The
-  // Settings tab re-homes the old above-video toolbar (aspect, audio, straighten,
+  // T9270: the Focus settings-rail tab (Settings) and its body. The Settings
+  // tab re-homes the old above-video toolbar (aspect, audio, straighten,
   // background dim) into Reel / This clip / View-only groups. `desktopOnly` keeps
   // dim + the straighten line-drag tool out of the mobile drawer (Step 4), exactly
   // as the old toolbar gated them. T10395: zoom moved out of this rail entirely,
   // onto the video's own Controls transport bar (matching Annotate, T10390).
+  // T11240: the Clips tab (multi-clip UI) is gone — exactly one clip now, so
+  // Settings is the only tab.
   const focusRailTabs = [
-    { id: 'clips', label: 'Clips', icon: Film },
     { id: 'settings', label: 'Settings', icon: Sliders },
   ];
   const renderFocusSettings = (desktopOnly) => (
@@ -432,9 +428,7 @@ export function FocusModeView({
       desktopOnly={desktopOnly}
     />
   );
-  const focusRailBody = (desktopOnly) => (railTab === 'clips'
-    ? <FocusClipsPanel clips={hasClips ? clipsWithCurrentState : null} />
-    : renderFocusSettings(desktopOnly));
+  const focusRailBody = (desktopOnly) => renderFocusSettings(desktopOnly);
 
   // T9270: the mobile entry row's live-summary second line. DERIVED from the same
   // state the rows bind to — never a second stored copy. Straighten reads "Level"
@@ -566,7 +560,6 @@ export function FocusModeView({
         includeAudio={includeAudio}
         onIncludeAudioChange={onIncludeAudioChange}
         onAspectRatioChange={onAspectRatioChange}
-        clipSidebarProps={clipSidebarProps}
         focusTimelineBlock={focusTimelineBlock}
         videoFile={videoFile}
         getFilteredKeyframesForExport={getFilteredKeyframesForExport}
@@ -680,7 +673,6 @@ export function FocusModeView({
               handlers={handlers}
               clipRange={clipRange}
               muted={!includeAudio}
-              onFileSelect={(isFullscreen || mobileFs) ? undefined : onFileSelect}
               allowUpload={false}
               panEnabled={!mobileFs || touchMode === 'view'}
               fitToAspect={!!previewStageAspect}

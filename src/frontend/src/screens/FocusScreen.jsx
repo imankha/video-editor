@@ -1,5 +1,4 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
-import { List, X } from 'lucide-react';
 import { FocusModeView } from '../modes';
 import { FocusContainer } from '../containers';
 import { useCrop, useSegments } from '../modes/focus';
@@ -11,8 +10,6 @@ import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { useIsCockpit } from '../hooks/useIsMobile';
 import { useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
-import { ClipSelectorSidebar } from '../components/ClipSelectorSidebar';
-import { FileUpload } from '../components/FileUpload';
 import { toast } from '../components/shared';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
@@ -81,11 +78,8 @@ export function FocusScreen({
   const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
   const setOverlayClipMetadata = useProjectDataStore(state => state.setClipMetadata);
   const fetchClips = useProjectDataStore(state => state.fetchClips);
-  const addClipFromLibraryAction = useProjectDataStore(state => state.addClipFromLibrary);
-  const uploadClipWithMetadataAction = useProjectDataStore(state => state.uploadClipWithMetadata);
   const saveFramingEdits = useProjectDataStore(state => state.saveFramingEdits);
   const updateClipMetadata = useProjectDataStore(state => state.updateClipMetadata);
-  const removeClipFromServer = useProjectDataStore(state => state.removeClip);
   const changeAspectRatioAction = useProjectDataStore(state => state.changeAspectRatio);
 
   // Framing persistent state
@@ -108,8 +102,6 @@ export function FocusScreen({
   const [videoFile, setVideoFile] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // T740: outdated clips dialog and state removed — framing always uses latest boundaries
-  // Mobile sidebar toggle
-  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   // T10650: spinner while resolveWorkingVideoPreviewUrl resolves the "Back to
   // Preview" URL. Ephemeral gesture state, never persisted.
   const [backToPreviewLoading, setBackToPreviewLoading] = useState(false);
@@ -455,7 +447,6 @@ export function FocusScreen({
     handleSegmentSpeedChange: framingHandleSegmentSpeedChange,
     handleSetRotation: framingHandleSetRotation,
     handleUndoFraming: framingHandleUndoFraming,
-    clearFramingHistory,
     saveCurrentClipState: framingSaveCurrentClipState,
   } = framing;
 
@@ -1017,19 +1008,6 @@ export function FocusScreen({
   // as DraftReelPreview), which can actually observe the user navigating away
   // (e.g. the mobile back button) and clear the payload before it resurrects.
 
-  // Handle file selection (local upload - not from library)
-  const handleFileSelect = async (file) => {
-    try {
-      const videoMetadata = await extractVideoMetadata(file);
-      // Upload to backend
-      if (projectId) {
-        await uploadClipWithMetadataAction(projectId, { file, name: file.name });
-      }
-    } catch (err) {
-      console.error('[FocusScreen] Failed to add clip:', err);
-    }
-  };
-
   // Handle proceed to overlay
   // T9790: `exportJobId` (the completed framing job's id, === the client-
   // generated export_id ExportButtonContainer sent as this render's job key) is
@@ -1332,51 +1310,6 @@ export function FocusScreen({
     return game?.name || null;
   }, [selectedClipWithMeta?.game_id, games]);
 
-  // Handle clip selection from sidebar
-  // T9950 Slice 2: clear the framing Undo stack HERE, at the clip-selection
-  // gesture itself (never a useEffect keyed on selectedClipId) — an inverse
-  // thunk closes over a specific clip's keyframes and must not survive a switch.
-  const handleSelectClip = useCallback((clipId) => {
-    if (clipId !== selectedClipId) {
-      clearFramingHistory();
-      selectClip(clipId);
-    }
-  }, [selectedClipId, selectClip, clearFramingHistory]);
-
-  // Handle clip deletion from sidebar — persists to backend
-  const handleDeleteClip = useCallback((clipId) => {
-    if (projectId) {
-      removeClipFromServer(projectId, clipId);
-    }
-  }, [projectId, removeClipFromServer]);
-
-  // Handle adding clip from sidebar
-  const handleAddClipFromSidebar = useCallback((file) => {
-    handleFileSelect(file);
-  }, [handleFileSelect]);
-
-  // Handle upload with metadata from sidebar
-  const handleUploadWithMetadata = useCallback(async (uploadData) => {
-    try {
-      if (projectId) {
-        await uploadClipWithMetadataAction(projectId, uploadData);
-      }
-    } catch (err) {
-      console.error('[FocusScreen] Failed to upload clip with metadata:', err);
-    }
-  }, [projectId, uploadClipWithMetadataAction]);
-
-  // Handle adding clip from library
-  const handleAddFromLibrary = useCallback(async (rawClipId) => {
-    try {
-      if (projectId) {
-        await addClipFromLibraryAction(projectId, rawClipId);
-      }
-    } catch (err) {
-      console.error('[FocusScreen] Failed to add clip from library:', err);
-    }
-  }, [projectId, addClipFromLibraryAction]);
-
   const isLoadingProjectData = isProjectLoading;
 
   // T10190 §3.2 Shaper 3: game context for the completion-preview header, same
@@ -1385,8 +1318,6 @@ export function FocusScreen({
   // internally via formatGameClock. gameId is gated to exactly one source game
   // (the backlink's unambiguous target requirement); 0 or >1 games -> null, so
   // no gameName/onBackToGame is fed and the header falls back to `title`.
-  // Declared before the FileUpload early return below (rules-of-hooks: every
-  // hook must run on every render).
   const focusCompletionProjectListItem = useProjectsStore((state) => state.projects.find((p) => p.id === projectId));
   const focusCompletionGameName = focusCompletionProjectListItem?.game_names?.[0] || null;
   const focusCompletionGameStartTime = focusCompletionProjectListItem?.clip_game_start_time ?? null;
@@ -1404,86 +1335,10 @@ export function FocusScreen({
     useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
   }, [focusCompletionGameId, focusCompletionGameStartTime, selectedClip]);
 
-  // Only show FileUpload when truly empty
-  if (!hasClips && !videoUrl && !isLoadingProjectData && !projectId) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <FileUpload onGameVideoSelect={handleFileSelect} />
-      </div>
-    );
-  }
-
-  const sidebarProps = {
-    clips,
-    selectedClipId,
-    onSelectClip: handleSelectClip,
-    onAddClip: handleAddClipFromSidebar,
-    onDeleteClip: handleDeleteClip,
-    onReorderClips: reorderClips,
-    globalTransition,
-    onTransitionChange: setGlobalTransition,
-    onUploadWithMetadata: handleUploadWithMetadata,
-    onAddFromLibrary: handleAddFromLibrary,
-    existingRawClipIds: clips.map(c => c.raw_clip_id).filter(Boolean),
-    games,
-  };
-
   return (
     <div className="flex h-full">
-      {/* Sidebar - hidden on mobile, visible on sm+. T10840 (D3): gated off in the
-          landscape cockpit, where clips live in the Clips sheet instead — otherwise
-          the 224px rail would eat the cockpit's width exactly as it does today. */}
-      {!cockpit && ((hasClips && clips.length > 0) ? (
-        <div className="hidden sm:flex">
-          <ClipSelectorSidebar {...sidebarProps} />
-        </div>
-      ) : isLoadingProjectData && (
-        <div className="hidden sm:block w-64 border-r border-gray-700 bg-gray-800/50 p-4">
-          <div className="animate-pulse space-y-3">
-            <div className="h-4 bg-gray-700 rounded w-20"></div>
-            <div className="space-y-2">
-              <div className="h-16 bg-gray-700 rounded"></div>
-              <div className="h-16 bg-gray-700 rounded"></div>
-            </div>
-          </div>
-        </div>
-      ))}
-
-      {/* Mobile sidebar overlay */}
-      {showMobileSidebar && hasClips && clips.length > 0 && (
-        <div className="fixed inset-0 z-50 flex sm:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileSidebar(false)} />
-          <div className="relative w-[85vw] max-w-[352px] h-full">
-            <ClipSelectorSidebar
-              {...sidebarProps}
-              onSelectClip={(id) => { handleSelectClip(id); setShowMobileSidebar(false); }}
-            />
-            <button
-              onClick={() => setShowMobileSidebar(false)}
-              className="absolute top-3 right-3 p-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Main content */}
       <div className="flex-1 min-w-0">
-        {/* Mobile clips toggle. T10840 (D3): gated off in the cockpit — the Clips
-            rail button opens the Clips sheet instead. */}
-        {!cockpit && hasClips && clips.length > 0 && (
-          <div className="flex sm:hidden px-3 pt-2">
-            <button
-              onClick={() => setShowMobileSidebar(true)}
-              className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300"
-              title="Show clips"
-            >
-              <List size={16} />
-              <span className="text-xs font-medium">{clips.length} clips</span>
-            </button>
-          </div>
-        )}
         <FocusModeView
       videoRef={videoRef}
       videoUrl={videoUrl}
@@ -1512,7 +1367,6 @@ export function FocusScreen({
       fullscreenContainerRef={fullscreenContainerRef}
       isFullscreen={isFullscreen}
       onToggleFullscreen={fullscreenWorthwhile ? handleToggleFullscreen : undefined}
-      onFileSelect={handleFileSelect}
       togglePlay={togglePlay}
       stepForward={stepForward}
       stepBackward={stepBackward}
@@ -1588,7 +1442,6 @@ export function FocusScreen({
       backToPreviewLoading={backToPreviewLoading}
       cropContextValue={cropContextValue}
       cockpit={cockpit}
-      clipSidebarProps={sidebarProps}
       onExitToHome={onExitToHome}
     />
       </div>

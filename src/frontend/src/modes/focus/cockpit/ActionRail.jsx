@@ -1,4 +1,4 @@
-import { Film, Sliders, Undo2, Eye, Download, Loader } from 'lucide-react';
+import { Sliders, Undo2, Eye, Download, Loader } from 'lucide-react';
 import PrimaryCta from '../../../components/PrimaryCta';
 import { FOCUS_COCKPIT } from '../../../config/displayNames';
 
@@ -27,9 +27,10 @@ function RailButton({ icon: Icon, label, onClick, active = false, disabled = fal
 }
 
 /**
- * ActionRail (T10840, Zone D) — the 72px right edge rail. Four rail buttons
- * (Clips / Setup / Undo / Preview) top, then the `~N cr` estimate and the
- * compact primary CTA in the bottom-right corner (the best-reachable point, §7).
+ * ActionRail (T10840, Zone D) — the 72px right edge rail. Three rail buttons
+ * (Setup / Undo / Preview — T11240 removed Clips) top, then the `~N cr`
+ * estimate and the compact primary CTA in the bottom-right corner (the
+ * best-reachable point, §7).
  *
  * The rail sits above the sheet scrim's z-index (`relative z-50`) so the CTA is
  * never dimmed while a sheet is open — matching the existing ActionBand contract
@@ -38,7 +39,6 @@ function RailButton({ icon: Icon, label, onClick, active = false, disabled = fal
  */
 export default function ActionRail({
   activeSheet,
-  onOpenClips,
   onOpenSetup,
   canUndo,
   onUndo,
@@ -92,13 +92,6 @@ export default function ActionRail({
       className="relative z-50 flex w-[72px] flex-none flex-col items-center justify-between border-l border-gray-700 bg-[#0f172a] px-1 py-1.5"
     >
       <div className="flex flex-col items-center gap-1.5">
-        <RailButton
-          testId="cockpit-clips-btn"
-          icon={Film}
-          label={FOCUS_COCKPIT.CLIPS}
-          onClick={onOpenClips}
-          active={activeSheet === 'clips'}
-        />
         <RailButton
           testId="cockpit-setup-btn"
           icon={Sliders}

@@ -45,7 +45,6 @@ vi.mock('../../containers', () => ({
     handleSegmentSpeedChange: vi.fn(),
     handleSetRotation: vi.fn(),
     handleUndoFraming: vi.fn(),
-    clearFramingHistory: vi.fn(),
     saveCurrentClipState: vi.fn().mockResolvedValue(),
   }),
 }));
@@ -101,8 +100,6 @@ vi.mock('../../hooks/useClipManager', () => ({
 vi.mock('../../hooks/useFullscreenWorthwhile', () => ({ useFullscreenWorthwhile: () => false }));
 vi.mock('../../stores/gamesDataStore', () => ({ useReadyGames: () => [] }));
 vi.mock('../../hooks/useKeyboardShortcuts', () => ({ useKeyboardShortcuts: () => {} }));
-vi.mock('../../components/ClipSelectorSidebar', () => ({ ClipSelectorSidebar: () => null }));
-vi.mock('../../components/FileUpload', () => ({ FileUpload: () => null }));
 vi.mock('../../components/shared', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 // The prop-capturing spy under test.

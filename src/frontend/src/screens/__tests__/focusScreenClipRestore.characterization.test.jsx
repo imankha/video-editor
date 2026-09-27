@@ -56,7 +56,6 @@ vi.mock('../../containers', () => ({
     handleSegmentSpeedChange: vi.fn(),
     handleSetRotation: vi.fn(),
     handleUndoFraming: vi.fn(),
-    clearFramingHistory: vi.fn(),
     saveCurrentClipState: vi.fn().mockResolvedValue(),
   }),
 }));
@@ -192,7 +191,6 @@ vi.mock('../../hooks/useClipManager', () => ({
 vi.mock('../../hooks/useFullscreenWorthwhile', () => ({ useFullscreenWorthwhile: () => false }));
 vi.mock('../../stores/gamesDataStore', () => ({ useReadyGames: () => [] }));
 vi.mock('../../hooks/useKeyboardShortcuts', () => ({ useKeyboardShortcuts: () => {} }));
-vi.mock('../../components/ClipSelectorSidebar', () => ({ ClipSelectorSidebar: () => null }));
 vi.mock('../../components/FileUpload', () => ({ FileUpload: () => null }));
 vi.mock('../../components/shared', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../../components/collections/CollectionPlayer', () => ({ CollectionPlayer: () => null }));
@@ -255,11 +253,8 @@ vi.mock('../../stores', () => {
     setWorkingVideo: vi.fn(),
     setClipMetadata: vi.fn(),
     fetchClips: vi.fn().mockResolvedValue([]),
-    addClipFromLibrary: vi.fn(),
-    uploadClipWithMetadata: vi.fn(),
     saveFramingEdits: vi.fn(),
     updateClipMetadata: vi.fn(),
-    removeClip: vi.fn(),
     changeAspectRatio: vi.fn(),
   };
   const useProjectDataStore = (selector) => selector(projectDataState);

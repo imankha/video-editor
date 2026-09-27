@@ -511,7 +511,6 @@ export const FOCUS_PREVIEW = {
 export const FOCUS_COCKPIT = {
   // Zone A / D rail button labels (10px, under a Lucide icon).
   BACK: 'Back',
-  CLIPS: 'Clips',
   SETUP: 'Setup',
   UNDO: 'Undo',
   PREVIEW: 'Preview',
@@ -521,7 +520,6 @@ export const FOCUS_COCKPIT = {
   BACK_TO_PREVIEW_LINE_1: 'Back to',
   BACK_TO_PREVIEW_LINE_2: 'Preview',
   // Zone E sheet titles.
-  SHEET_CLIPS: 'Clips',
   SHEET_SETUP: 'Setup',
   SHEET_TRIM: 'Trim and slo-mo',
   CLOSE_SHEET: 'Close',

@@ -4,7 +4,6 @@ import ActionRail from '../ActionRail';
 function renderRail(overrides = {}) {
   const props = {
     activeSheet: null,
-    onOpenClips: vi.fn(),
     onOpenSetup: vi.fn(),
     canUndo: true,
     onUndo: vi.fn(),
@@ -23,9 +22,8 @@ function renderRail(overrides = {}) {
 }
 
 describe('ActionRail (T10840 Zone D)', () => {
-  it('renders the four rail buttons and the primary CTA', () => {
+  it('renders the three rail buttons and the primary CTA', () => {
     renderRail();
-    expect(screen.getByTestId('cockpit-clips-btn')).toBeTruthy();
     expect(screen.getByTestId('cockpit-setup-btn')).toBeTruthy();
     expect(screen.getByTestId('cockpit-undo-btn')).toBeTruthy();
     expect(screen.getByTestId('cockpit-preview-btn')).toBeTruthy();
@@ -40,7 +38,7 @@ describe('ActionRail (T10840 Zone D)', () => {
   });
 
   it('sits above the scrim (z-50) so the CTA is never dimmed while a sheet is open', () => {
-    renderRail({ activeSheet: 'clips' });
+    renderRail({ activeSheet: 'setup' });
     expect(screen.getByTestId('cockpit-actions').className).toContain('z-50');
     // The CTA itself is still enabled + interactive with a sheet open.
     expect(screen.getByTestId('primary-cta').disabled).toBe(false);
