@@ -102,15 +102,24 @@ def _seed_project_with_final_video(
 def _reexport(project_id, new_filename="v2.mp4", new_name="Test Video V2", new_duration=20.0):
     """Simulate a private re-export: INSERT a new final_videos row for the
     SAME project and repoint projects.final_video_id -- mirrors
-    publish_final_video.py:284-296. Returns the new final_video_id."""
+    publish_final_video.py:284-296. Returns the new final_video_id.
+
+    published_at is intentionally NULL (never set here) -- the REAL writer
+    (publish_final_video, called by export_final/_finalize_overlay_export)
+    NEVER sets published_at on a re-export's INSERT; only an explicit publish
+    gesture does. A private re-export always leaves is_published false (Expert
+    root-cause, T10860 follow-up): staleness detection must not be gated on
+    publish state (see the gate comment in projects.py _read_projects_list),
+    and this fixture must not silently make re-exported rows look published
+    when the real code path never does."""
     from app.database import get_db_connection
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """INSERT INTO final_videos
                (project_id, filename, name, duration, version, published_at)
-               VALUES (?, ?, ?, ?, 2, ?)""",
-            (project_id, new_filename, new_name, new_duration, "2026-09-26T00:10:00"),
+               VALUES (?, ?, ?, ?, 2, NULL)""",
+            (project_id, new_filename, new_name, new_duration),
         )
         new_final_video_id = cursor.lastrowid
         cursor.execute(
@@ -676,3 +685,124 @@ class TestCrossProfileShareIsolation:
         share = get_share_by_token(token_x)
         assert share["video_filename"] == "x1.mp4"
         assert share["video_id"] == final_video_x_id
+
+
+# ---------------------------------------------------------------------------
+# Real-lifecycle regression (Expert root-cause, post-ship): staleness
+# detection was gated on is_published, but sharing has NOTHING to do with
+# publish state -- shares.py never reads published_at. The realistic
+# archive -> restore-project -> re-export lifecycle always leaves
+# is_published=false (restore-project unpublishes; a private re-export never
+# publishes), so the old is_published gate meant staleness NEVER fired for
+# that lifecycle. This stayed hidden because the OTHER tests' fixtures
+# (_seed_project_with_final_video default published=True, and the old
+# _reexport hand-inserting published_at) don't match what the real writers
+# actually do. This test drives the REAL endpoints/writer instead of the
+# fixtures, to guard against that class of fixture-vs-reality drift.
+# ---------------------------------------------------------------------------
+
+class TestRealLifecycleStaleness:
+    def test_stale_share_surfaces_after_real_restore_and_reexport(self, client):
+        """1. Seed v1 published, project not archived. Mint a share on v1.
+        2. REAL POST /api/downloads/{v1_id}/restore-project (unpublishes).
+        3. REAL publish_final_video() writer creates v2 (never sets
+           published_at -- matches the actual re-export code path).
+        4. GET /api/projects must surface stale_share for the v1 token, even
+        though the project is now genuinely unpublished."""
+        project_id, v1_id = _seed_project_with_final_video(
+            filename="real_v1.mp4", published=True,
+        )
+
+        share_resp = client.post(
+            f"/api/gallery/{v1_id}/share",
+            json={"recipient_emails": [], "is_public": True},
+            headers=_auth_headers(SHARER_ID),
+        )
+        assert share_resp.status_code == 200
+        token = share_resp.json()["shares"][0]["share_token"]
+
+        restore_resp = client.post(
+            f"/api/downloads/{v1_id}/restore-project",
+            headers=_auth_headers(SHARER_ID),
+        )
+        assert restore_resp.status_code == 200
+        assert restore_resp.json()["project_id"] == project_id
+
+        from app.database import get_db_connection
+        from app.profile_context import set_current_profile_id
+        from app.services.publish_final_video import publish_final_video
+        from app.user_context import set_current_user_id
+        set_current_user_id(SHARER_ID)
+        set_current_profile_id("testdefault")
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            result = publish_final_video(
+                cursor, project_id=project_id, output_filename="real_v2.mp4",
+                aspect_ratio="9:16",
+            )
+            conn.commit()
+        v2_id = result["final_video_id"]
+        assert v2_id != v1_id
+
+        proj_resp = client.get("/api/projects", headers=_auth_headers(SHARER_ID))
+        assert proj_resp.status_code == 200
+        project = next(p for p in proj_resp.json() if p["id"] == project_id)
+
+        # Sanity check: confirms this test actually reproduces the realistic
+        # unpublished state the Expert's root-cause named -- if this ever
+        # flips to True, the test below would pass for the wrong reason.
+        assert project["is_published"] is False
+
+        assert project["stale_share"] is not None
+        assert project["stale_share"]["share_token"] == token
+        assert project["stale_share"]["old_filename"] == "real_v1.mp4"
+
+    def test_get_project_detail_also_surfaces_stale_share(self, client):
+        """Fix C: GET /api/projects/{id} (ProjectDetailResponse, the "Publish
+        Now" flow's snapshot source -- OverlayScreen.handlePublishNow) must
+        surface the SAME stale_share signal as the list endpoint, via the
+        same shared _compute_stale_shares. Same real lifecycle as the sibling
+        test above, checked against the single-project detail endpoint
+        instead of the list."""
+        project_id, v1_id = _seed_project_with_final_video(
+            filename="detail_v1.mp4", published=True,
+        )
+
+        share_resp = client.post(
+            f"/api/gallery/{v1_id}/share",
+            json={"recipient_emails": [], "is_public": True},
+            headers=_auth_headers(SHARER_ID),
+        )
+        assert share_resp.status_code == 200
+        token = share_resp.json()["shares"][0]["share_token"]
+
+        restore_resp = client.post(
+            f"/api/downloads/{v1_id}/restore-project",
+            headers=_auth_headers(SHARER_ID),
+        )
+        assert restore_resp.status_code == 200
+
+        from app.database import get_db_connection
+        from app.profile_context import set_current_profile_id
+        from app.services.publish_final_video import publish_final_video
+        from app.user_context import set_current_user_id
+        set_current_user_id(SHARER_ID)
+        set_current_profile_id("testdefault")
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            result = publish_final_video(
+                cursor, project_id=project_id, output_filename="detail_v2.mp4",
+                aspect_ratio="9:16",
+            )
+            conn.commit()
+        assert result["final_video_id"] != v1_id
+
+        detail_resp = client.get(
+            f"/api/projects/{project_id}", headers=_auth_headers(SHARER_ID),
+        )
+        assert detail_resp.status_code == 200
+        detail = detail_resp.json()
+
+        assert detail["stale_share"] is not None
+        assert detail["stale_share"]["share_token"] == token
+        assert detail["stale_share"]["old_filename"] == "detail_v1.mp4"

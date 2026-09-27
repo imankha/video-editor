@@ -58,6 +58,31 @@ HTTPException refusals — 404/403/400/410 — carry NO machine-readable `code`,
 410, refetch-then-retry-with-fresh-token on 409, "up to date" copy on the idempotent branch,
 specific copy per 404/403/400/share_project_mismatch). Live-drive re-run against the FINAL code
 (this fix + the two prior fixes) — transcript: `qa/t10860-live-drive-final.md`.
+**Amendment 2026-09-26 #4 (post-ship, Expert Opus root-cause analysis — BLOCKING, fixed same day):**
+staleness detection was gated on `is_published`, but sharing has NOTHING to do with publish state —
+`shares.py` never reads `published_at`. The realistic archive → restore-project → re-export
+lifecycle always leaves `is_published=false` (`restore-project` unconditionally unpublishes; a
+private re-export via `publish_final_video` never sets `published_at`), so staleness NEVER fired for
+that lifecycle — a product-defeating bug, not theoretical. This stayed hidden because the test
+fixtures (`_seed_project_with_final_video` default `published=True`, `_reexport` hand-inserting
+`published_at` on the re-export row) didn't match what the real writers actually do. **Fix A:**
+§3.2's gate is corrected below (was: "only published projects can have a share" — false; now: any
+project with a `final_video_id`, with the Postgres round-trip skipped unless a non-current version
+actually exists). **Fix B:** `_reexport` no longer sets `published_at`; new
+`TestRealLifecycleStaleness` drives the REAL `POST /api/downloads/{id}/restore-project` endpoint and
+the REAL `publish_final_video()` writer (not hand-seeded SQL) — confirmed RED against the pre-Fix-A
+code (via `git stash` of just the gate change), GREEN after. **Fix C:** the "Publish Now" flow
+(`OverlayScreen.handlePublishNow`) snapshots from `GET /api/projects/{id}`
+(`ProjectDetailResponse`/`get_project`), which had NO `stale_share` field at all — so that path never
+showed the affordance even after Fix A. Extracted the staleness computation into
+`_compute_stale_shares(cursor, projects)`, shared by `_read_projects_list` AND `get_project`; added
+`stale_share: dict | None = None` to `ProjectDetailResponse`. Filed as follow-ups, NOT fixed here
+(separately scoped, need a product decision / future task): (a) `delete_project` hard-deletes a
+still-shared prior `final_videos` row on a restored draft — a related but distinct pre-existing bug;
+(b) there is currently no UI surface (gallery/My Reels) that re-detects a stale share once a
+previously-stale project gets re-published — a scope gap for future work, not a defect in T10860
+itself. See §3.2 for the corrected gate and `_compute_stale_shares`' docstring for the full
+rationale.
 **Sources:** Task file `T10860-update-shared-version-repoint-token.md`; T10180-design §5 (the split-out rationale — EXTENDED here, not re-litigated); Code Expert Stage-1 findings (file:line map below); `persistence-sync.md` (CAS / Invariant 1 & 6 / `update_share_visibility`); `export-pipeline.md` (`publish_final_video` versioning + `keep_prior`).
 
 ---
@@ -320,8 +345,24 @@ stale_share: dict | None = None
 
 **Batched computation (NOT N+1):** `_read_projects_list()` (`projects.py:310`) already does one
 SQLite pass for all projects on the request. After that pass, collect the `(project_id,
-final_video_id, current_filename)` triples for projects where `is_published` is true (only published
-projects can have a share), then issue **ONE additional Postgres query** for all of them together:
+final_video_id, current_filename)` triples for projects that HAVE a `final_video_id` at all, then
+issue **ONE additional Postgres query** for all of them together:
+
+**AMENDMENT (post-ship, Expert root-cause, fixed): the gate is NOT `is_published`.** The original
+text below said "only published projects can have a share" — this is FALSE. Sharing has nothing to
+do with publish state; `shares.py` never reads `published_at`. The realistic
+archive → restore-project → re-export lifecycle always leaves `is_published=false`
+(`POST /api/downloads/{id}/restore-project` unconditionally unpublishes; a private re-export via
+`publish_final_video` never sets `published_at`), so gating on `is_published` meant staleness never
+fired for that exact lifecycle — a real, reachable bug, not a hypothetical. The correct gate is
+simply **"this project has a `final_video_id` at all"** (any project with a final video is a
+candidate; the actual filter that matters is computed cheaply during the SQLite pass — only run the
+Postgres round-trip when at least one project has a NON-current `final_videos` version, since that's
+the only way a stale share could exist). See `_compute_stale_shares` (`projects.py`) for the
+implementation — extracted as a shared function so `GET /api/projects/{id}`
+(`ProjectDetailResponse`, `get_project`) can surface the SAME `stale_share` signal the list does; the
+"Publish Now" flow (`OverlayScreen.handlePublishNow`) snapshots from that single-project endpoint,
+not the list, so it needed the identical computation, not a copy.
 
 ```sql
 SELECT DISTINCT ON (sv.video_id) sv.video_id, s.share_token, sv.video_filename
