@@ -100,7 +100,7 @@ export default function ClipRegionLayer({
   onSelectRegion,
   onDeleteRegion,
   edgePadding = 20,
-  emptyMessage = 'No clips yet',
+  emptyMessage = 'No plays yet',
   // T8890: Set of source sequences that are ANGLES (non-backbone). A region whose
   // videoSequence is in this set gets the violet accent + camera glyph. Absent /
   // empty for angle-free games -> zero visual change (byte-identical common case).

@@ -278,7 +278,7 @@ export function AnnotateTimeline({
           key={`ext-${ext.virtualStart}`}
           data-testid="angle-extension-hatch"
           className="absolute top-0 bottom-0 pointer-events-none"
-          title="Only your sideline play covers this part"
+          title="Only your sideline video covers this part"
           style={{
             left: leftCalc(ext.virtualStart),
             width: widthCalc(ext.virtualStart, ext.virtualEnd),
