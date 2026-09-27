@@ -44,12 +44,13 @@ export const LEGACY_PATH_REDIRECTS = {
 // Home tab deep-link sub-routes. The active tab is URL state (never persisted);
 // ProjectManager reads the path on mount to pick its tab. These must survive the
 // cold-load URL canonicalization below — collapsing them to /home would drop the
-// deep link before ProjectManager can read it. T8555: added the two new home
-// tabs (/home/reels-in-progress = In Progress Reels, /home/published = Published)
-// -- MUST stay in lockstep with ProjectManager's TAB_PATHS or a cold-load deep
-// link to either bounces back to the default tab. (/home/reels stays the frozen
-// In Progress Clips URL; the old /home/highlights tab was removed by T8555.)
-export const HOME_TAB_PATHS = ['/home/games', '/home/reels', '/home/reels-in-progress', '/home/published'];
+// deep link before ProjectManager can read it. T8555 added /home/published; T11230
+// removed the /home/reels-in-progress (In Progress Reels) tab with the Reels
+// building surfaces, so an old deep link to it now names no tab and falls through
+// to the bare-/home default (Home) via ProjectManager's tabFromPath -> null (R6:
+// any unsupported link goes Home, no special redirect). MUST stay in lockstep with
+// ProjectManager's TAB_PATHS. (/home/reels stays the frozen In Progress Clips URL.)
+export const HOME_TAB_PATHS = ['/home/games', '/home/reels', '/home/published'];
 
 /**
  * Resolve the editor mode a URL path maps to, or null when the path names no

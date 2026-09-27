@@ -180,9 +180,10 @@ describe('DraftTile (T5672)', () => {
   // READY label so a private draft was never labelled as already shared; T9860
   // (D4) replaced that with getDraftStatus(project), whose label for a completed,
   // unpublished project is "Private") is a NON-interactive status badge, and a
-  // DISTINCT emphasized primary button names the verb. T9530 (N12) made that verb
-  // name its own object: a reel (is_auto_created === false, baseProject) publishes
-  // as "Publish reel" (was the old destination-noun phrasing, D1); a clip as "Publish clip".
+  // DISTINCT emphasized primary button names the verb. T11230 removed the isReel
+  // label branch with the Reels building surfaces, so every DraftTile (including a
+  // legacy multi-clip draft like baseProject, is_auto_created === false) now names
+  // its actions as a CLIP ("Publish clip"/"Delete clip"/"Rename clip").
   it('makes the "Private" status a non-interactive badge and a distinct primary button the publish verb (T6180)', () => {
     renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
     // "Private" is a status, not a control — no button carries that accessible name.
@@ -190,7 +191,7 @@ describe('DraftTile (T5672)', () => {
     expect(screen.getByText('Private')).toBeTruthy();
     // The primary action's accessible name names the object, but its visible label
     // is shortened to "Publish" (matches CollectionPlayer's button).
-    const primary = screen.getByRole('button', { name: 'Publish reel' });
+    const primary = screen.getByRole('button', { name: 'Publish clip' });
     expect(primary).toBeTruthy();
     expect(primary.textContent).toMatch(/^publish$/i);
   });
@@ -205,7 +206,7 @@ describe('DraftTile (T5672)', () => {
     const { useQuestStore } = await import('../stores/questStore');
     renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Publish reel' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Publish clip' }));
     });
     expect(apiFetch).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/downloads\/publish\/7$/),
@@ -214,9 +215,9 @@ describe('DraftTile (T5672)', () => {
     expect(useQuestStore.getState().recordAchievement).toHaveBeenCalledWith('moved_to_my_reels');
   });
 
-  it('has no primary "Publish reel" action once the reel is published', () => {
+  it('has no primary "Publish clip" action once the draft is published', () => {
     renderTile({ has_final_video: true, final_video_id: 99, is_published: true });
-    expect(screen.queryByRole('button', { name: /publish reel/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /publish clip/i })).toBeNull();
   });
 
   // T6180 — the five secondary actions collapse behind a kebab in the ready state,
@@ -239,7 +240,7 @@ describe('DraftTile (T5672)', () => {
     expect(screen.getByRole('button', { name: /open in framing/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /open in spotlight/i })).toBeTruthy();
     // First delete click ARMS the confirm without deleting or closing the menu.
-    const del = screen.getByRole('button', { name: /delete reel/i });
+    const del = screen.getByRole('button', { name: /delete clip/i });
     fireEvent.click(del);
     expect(onDelete).not.toHaveBeenCalled();
     const confirm = screen.getByRole('button', { name: /click again to confirm/i });
@@ -254,7 +255,7 @@ describe('DraftTile (T5672)', () => {
   // (no hover / no kebab open needed) and starts the existing inline rename.
   it('T6890: renders the rename pencil beside the name and starts inline rename', () => {
     const { container } = renderTile();
-    const renameBtn = screen.getByRole('button', { name: 'Rename reel' });
+    const renameBtn = screen.getByRole('button', { name: 'Rename clip' });
     // It lives in the bottom scrim next to the name, NOT inside the hover action rail.
     const rail = container.querySelector('[data-testid="tile-actions"]');
     expect(rail.contains(renameBtn)).toBe(false);
@@ -266,7 +267,7 @@ describe('DraftTile (T5672)', () => {
   it('T6890: the hover action rail no longer carries a rename button', () => {
     const { container } = renderTile();
     const rail = container.querySelector('[data-testid="tile-actions"]');
-    const railRenameBtn = within(rail).queryByRole('button', { name: 'Rename reel' });
+    const railRenameBtn = within(rail).queryByRole('button', { name: 'Rename clip' });
     expect(railRenameBtn).toBeNull();
   });
 
@@ -694,12 +695,13 @@ describe('DraftTile (T5672)', () => {
   });
 });
 
-// T9530 (N12/N14/N15): every per-card action names its OWN object. A single-clip
-// auto-draft (is_auto_created === true, lives on the Clips tab) is a Clip; an
-// assembled multi-clip draft (is_auto_created === false) is a Reel. This is the
-// exact "Delete reel in a Clips menu" object-model mismatch the naming report
-// leads with.
-describe('DraftTile names its own object (T9530 N12/N14/N15)', () => {
+// T11230 (was T9530 N12/N14/N15): the Reels building surfaces are gone and one
+// project = one clip, so the isReel label branch was removed. EVERY DraftTile now
+// names its actions as a CLIP -- a single-clip auto-draft (is_auto_created === true)
+// AND a legacy multi-clip draft (is_auto_created === false, which now lives only in
+// the Clips tab's Legacy reels group). No DraftTile action reads "reel" anymore;
+// T11280's vocabulary sweep owns any further copy on the Legacy reels group itself.
+describe('DraftTile names every draft action as a CLIP (T11230)', () => {
   const renderReady = (overrides) => render(
     <DraftTile
       project={{ ...baseProject, has_final_video: true, final_video_id: 99, is_published: false, ...overrides }}
@@ -722,7 +724,7 @@ describe('DraftTile names its own object (T9530 N12/N14/N15)', () => {
     expect(screen.queryByRole('button', { name: 'Rename reel' })).toBeNull();
   });
 
-  it('a clip in the ready state deletes + publishes as a CLIP (never "reel")', () => {
+  it('a single-clip auto-draft in the ready state deletes + publishes as a CLIP', () => {
     renderReady({ is_auto_created: true });
     expect(screen.getByRole('button', { name: 'Publish clip' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Publish reel' })).toBeNull();
@@ -731,12 +733,13 @@ describe('DraftTile names its own object (T9530 N12/N14/N15)', () => {
     expect(screen.queryByRole('button', { name: /delete reel/i })).toBeNull();
   });
 
-  it('a multi-clip draft (is_auto_created: false) keeps the reel wording', () => {
+  it('a legacy multi-clip draft (is_auto_created: false) ALSO uses clip wording, never reel', () => {
     renderReady({ is_auto_created: false });
-    expect(screen.getByRole('button', { name: 'Publish reel' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Publish clip' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Publish reel' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
-    expect(screen.getByRole('button', { name: /delete reel/i })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /delete clip/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /delete clip/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /delete reel/i })).toBeNull();
   });
 });
 

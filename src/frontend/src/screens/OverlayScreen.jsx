@@ -1686,18 +1686,17 @@ export function OverlayScreen({
   }, [setEditorMode, project]);
 
   // Publish Later — defer; land on the drafts surface with the same explainer
-  // toast Focus's "Add Spotlight Later" uses, routed by is_auto_created (T8360's
-  // Clips-vs-Highlight-Reels split — that's where the draft actually landed).
+  // toast Focus's "Add Spotlight Later" uses. T11230 removed the is_auto_created
+  // MULTI_CLIP variant with the Reels building surfaces, so every draft uses the
+  // one SINGLE_CLIP copy.
   const handlePublishLater = useCallback(() => {
     setShowExportCompletePreview(false);
     // T10010 activation funnel: "Save draft"/defer from Overlay is a real gesture.
     recordFunnelEvent(FUNNEL_EVENTS.DRAFT_SAVED, { project_id: projectId });
-    const copy = project?.is_auto_created
-      ? FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP
-      : FOCUS_PUBLISH_LATER_TOAST.MULTI_CLIP;
+    const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
     toast.success(copy.title, { message: copy.message, duration: 10000 });
     useEditorStore.getState().goToProjectManager();
-  }, [project?.is_auto_created, projectId]);
+  }, [projectId]);
 
   // =========================================
   // RENDER

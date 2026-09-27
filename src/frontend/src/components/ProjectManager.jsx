@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, CheckCircle, Gamepad2, Scissors, Clapperboard, Send, Filter, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Trophy } from 'lucide-react';
+import { FolderOpen, Plus, CheckCircle, Gamepad2, Scissors, Send, Filter, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Trophy } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { useAppState } from '../contexts';
 import { useSettingsStore } from '../stores/settingsStore';
-import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
 import { PublishedReelsPanel } from './PublishedReelsPanel';
 import { AttachVideoModal } from './AttachVideoModal';
@@ -24,7 +23,7 @@ import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
 import { useClipUpload, CLIP_UPLOAD_CREATING_PCT } from '../hooks/useClipUpload';
 import { useConfigStore } from '../stores/configStore';
-import { GAME, REEL, HIGHLIGHT, PUBLISHED } from '../config/themeColors';
+import { GAME, REEL, PUBLISHED } from '../config/themeColors';
 import { ExpirationBadge } from './ExpirationBadge';
 import { StorageExtensionModal } from './StorageExtensionModal';
 import { RecapPlayerModal } from './RecapPlayerModal';
@@ -93,10 +92,9 @@ const GAMES_GROUP_HEADER_CLASS = 'mb-2 lg:mb-0 lg:sticky lg:top-2 lg:self-start 
 // (T8380). h-full so the guide fills the carousel's self-stretch filler wrapper.
 // Constant nodes because they take no per-render props -- greppable, no closures.
 const CLIPS_PARTIAL_FILLER = <EmptyTabGuide tab="clips" variant="partial" className="h-full" />;
-const REELS_PARTIAL_FILLER = <EmptyTabGuide tab="reels" variant="partial" className="h-full" />;
 
 // T6810: the stage-labeled carousel rows for one draft list (a game group or
-// "Other reels"). Each stage row = a label chip (legend-tinted stage name +
+// "Other clips"). Each stage row = a label chip (legend-tinted stage name +
 // count) then one carousel per aspect present within that stage; the aspect
 // chip only appears when a stage actually mixes aspects.
 function DraftStageRows({
@@ -404,17 +402,19 @@ export function gamesGridColumns(groups) {
 // for the third tab, T8555 for the four-tab split.)
 //   games            -> /home/games            Games
 //   projects         -> /home/reels            In Progress Clips (id + URL FROZEN for deep-link compat)
-//   inProgressReels  -> /home/reels-in-progress In Progress Reels (was `highlights`, renamed T8555)
 //   published        -> /home/published         Published (new top-level tab T8555)
+// T11230 removed the `inProgressReels` (/home/reels-in-progress) tab with the
+// Reels building surfaces. An old deep link to it now names no tab, so tabFromPath
+// returns null and the caller falls back to the bare-/home default = Home (R6: any
+// unsupported link goes Home, no special redirect).
 const TAB_PATHS = {
   games: '/home/games',
   projects: '/home/reels',
-  inProgressReels: '/home/reels-in-progress',
   published: '/home/published',
 };
 
-// Map a pathname to its tab, or null when the URL names no tab (bare /home) so
-// callers can fall back to a default.
+// Map a pathname to its tab, or null when the URL names no tab (bare /home, or a
+// retired path like /home/reels-in-progress) so callers can fall back to a default.
 function tabFromPath(pathname) {
   return Object.keys(TAB_PATHS).find((tab) => TAB_PATHS[tab] === pathname) ?? null;
 }
@@ -498,7 +498,6 @@ export function ProjectManager({
   error, // Projects fetch error
   onSelectProject,
   onSelectProjectWithMode, // (projectId, options) => void - options: { mode: 'framing'|'overlay', clipIndex?: number }
-  onRefreshProjects,
   onDeleteProject,
   onAnnotateWithFile, // (file: File) => void - Navigate to annotate mode with file
   // Games props
@@ -529,13 +528,11 @@ export function ProjectManager({
   // Use props if provided, otherwise fall back to context
   const unseenReelsCount = unseenReelsCountProp ?? contextUnseenReelsCount ?? 0;
   const exportingProject = exportingProjectProp ?? contextExportingProject;
-  // T8980: `hasClips` is derived just below, after `clipDrafts` is defined (a
-  // reel can be built from clips cut from a game OR clips added via "Add Video").
-  // T8780: drives whether "Add Game" renders above the list (has content) or
-  // below the "No games yet" message (empty) -- same empty-state-resolves-
-  // into-its-own-action order as the Reels/Published tabs, single source of
-  // truth shared by the button-visibility check and the empty branch below.
-  // Gated on !gamesLoading/!gamesError too so the button doesn't disappear
+  // T8780: `gamesEmpty` drives whether "Add Game" renders above the list (has
+  // content) or below the "No games yet" message (empty) -- same
+  // empty-state-resolves-into-its-own-action order the Published tab uses, single
+  // source of truth shared by the button-visibility check and the empty branch
+  // below. Gated on !gamesLoading/!gamesError too so the button doesn't disappear
   // mid-fetch or on a fetch error -- it only moves once emptiness is CONFIRMED,
   // matching the ternary below (loading/error render before this branch is
   // ever reached there).
@@ -562,18 +559,10 @@ export function ProjectManager({
   // is_auto_created (the raw_clips.auto_project_id link) is the routing key, not
   // clip_count -- see T8360-design.md "The signal we can trust".
   const clipDrafts = useMemo(() => projects.filter(p => p.is_auto_created), [projects]);
-  // T8980: a reel can be built from ANY clip the account has -- clips cut from a
-  // game (games[].clip_count) OR clips added directly via "Add Video" (T8370),
-  // which have game_id = NULL so they never bump a game's clip_count but DO
-  // create a single-clip auto-draft (clipDrafts). The old games-only form left
-  // Build New Reel disabled, with no visible reason, for an Add-Video-only
-  // account. Single source of truth (no second flag): both terms derive from
-  // data already held (games list + the clipDrafts memo above).
-  const hasClips = clipDrafts.length > 0 || games.some(g => g.clip_count > 0);
-  // T8555: multi-clip in-progress drafts (is_auto_created === false) populate
-  // the In Progress Reels tab (was DownloadsPanel's `highlightDrafts`, now
-  // owned here so this tab's badge count lives next to clipDrafts, single
-  // source = the projects prop). Published reels are NOT here (Published tab).
+  // T8555: multi-clip in-progress drafts (is_auto_created === false). T11230 removed
+  // the In Progress Reels tab these used to populate; they now surface only in the
+  // Clips tab's Legacy reels group (T11220) so existing users' drafts stay reachable.
+  // Single source = the projects prop. Published reels are NOT here (Published tab).
   const highlightDrafts = useMemo(() => projects.filter(p => !p.is_auto_created), [projects]);
   // T8380: the In Progress Clips tab is NO LONGER a dead end. Before this task it
   // disabled itself for a zero-content account (no clip drafts AND no extractable
@@ -604,11 +593,6 @@ export function ProjectManager({
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   const isMountedRef = useRef(true);
   useEffect(() => () => { isMountedRef.current = false; }, []);
-  // T8555: the "Build New Reel" assembly button lives on the In Progress
-  // Reels tab body (rendered inline in this component's content ternary), so
-  // the assembly modal's open state (and the GameClipSelectorModal it drives)
-  // both live in this component -- no lifting to a common parent needed.
-  const [showAssemblyModal, setShowAssemblyModal] = useState(false);
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
   const [attachVideoGame, setAttachVideoGame] = useState(null); // T8700: game to attach a video to
   const [extensionGame, setExtensionGame] = useState(null);
@@ -924,7 +908,7 @@ export function ProjectManager({
   // groupedProjects' own game ordering verbatim (sortedKeys, already
   // "incomplete first, then most recent game date") so the two views can
   // never disagree on the RELATIVE order of two real games -- only which
-  // axis is outermost. "Other reels" is appended last here (By Game renders
+  // axis is outermost. "Other clips" is appended last here (By Game renders
   // it first, above sortedKeys); that's a deliberate per-view placement
   // choice, not an ordering disagreement about games themselves.
   const groupedByPhase = useMemo(() => {
@@ -932,7 +916,7 @@ export function ProjectManager({
       key, label: key, projects: groupedProjects.groups[key].projects,
     }));
     if (groupedProjects.ungrouped.length > 0) {
-      orderedGameGroups.push({ key: '__ungrouped__', label: 'Other reels', projects: groupedProjects.ungrouped });
+      orderedGameGroups.push({ key: '__ungrouped__', label: 'Other clips', projects: groupedProjects.ungrouped });
     }
     return phaseRowsFor(orderedGameGroups);
   }, [groupedProjects]);
@@ -1246,13 +1230,6 @@ export function ProjectManager({
     }
   }, [galleryOpenRequested, setActiveTab]);
 
-  // Refetch games when opening "new project" modal (needs fresh game list)
-  useEffect(() => {
-    if (showAssemblyModal && onFetchGames) {
-      onFetchGames();
-    }
-  }, [showAssemblyModal, onFetchGames]);
-
   // T5730: post-claim landing = the claimed game's recap (watching first), with a
   // one-time "tag your athlete's plays" nudge toward Annotate. Consumed once the
   // games list has loaded so the freshly-imported game is present; the breadcrumb
@@ -1347,19 +1324,6 @@ export function ProjectManager({
   }, [games, gamesLoading, currentProfileId, setActiveTab]);
 
   // Handle project creation from the new modal
-  const handleProjectCreated = useCallback(async (project) => {
-    // Close modal first
-    setShowAssemblyModal(false);
-
-    // Refresh projects list to show the new project
-    // The modal already created the project via API
-    // Don't navigate into the project - let user click on it from the projects page
-    // This ensures extraction status is checked before entering Framing mode
-    if (onRefreshProjects) {
-      await onRefreshProjects();
-    }
-  }, [onRefreshProjects]);
-
   return (
     <div className="flex-1 flex flex-col items-center p-4 sm:p-8 bg-gray-900">
       {/* Hidden file input for game video selection */}
@@ -1553,26 +1517,10 @@ export function ProjectManager({
           activeBg={REEL.bg}
           activeBgDark={REEL.bgDark}
         />
-        {/* T10310 (2026-09-18 user request): Reels + Published are ALWAYS
-            reachable now, even at zero clips, so a curious user can click in and
-            read what each tab says -- supersedes T9390 Decision 3's hasClips gate
-            (removed below, along with its VISIBLE-reason caption). Reels' own
-            EmptyTabGuide content (ReelsActions) already renders sensibly with zero
-            clips: Build New Reel works regardless of count. Published's empty
-            guide is headline/body only now (no fallback action to gate).
-            `hasClips` still gates the actual CREATE actions that are genuinely
-            impossible without a clip (e.g. the populated Reels tab's own "Create
-            reel" button below) -- only the tab-bar ACCESS gate is gone. */}
-        <SegmentedTabButton
-          active={activeTab === 'inProgressReels'}
-          onClick={() => setActiveTab('inProgressReels')}
-          Icon={Clapperboard}
-          label={SECTION_NAMES.REELS}
-          shortLabel={SECTION_NAMES_SHORT.REELS}
-          count={highlightDrafts.length}
-          activeBg={HIGHLIGHT.bg}
-          activeBgDark={HIGHLIGHT.bgDark}
-        />
+        {/* T10310 (2026-09-18 user request): Published is ALWAYS reachable now,
+            even at zero clips, so a curious user can click in and read what the
+            tab says. T11230 removed the In Progress Reels tab that used to sit
+            between Clips and Published, with the Reels building surfaces. */}
         <SegmentedTabButton
           active={activeTab === 'published'}
           onClick={() => setActiveTab('published')}
@@ -2145,28 +2093,28 @@ export function ProjectManager({
                 </>
               ) : (
                 <>
-                  {/* By Game — Ungrouped drafts (no game) -> one "Other reels"
+                  {/* By Game — Ungrouped drafts (no game) -> one "Other clips"
                       section (bordered card, matches each game's card below);
                       one labeled carousel row per pipeline stage present, each
                       stage aspect-split so row heights stay consistent (T6810) */}
                   {groupedProjects.ungrouped.length > 0 && (
                     <div className="mb-4 rounded-lg border border-gray-700/50 bg-gray-900/20 pt-2 pb-3">
                       <div className="flex items-center gap-2 px-3 py-2 min-h-11">
-                        <span className="text-sm font-medium text-gray-200 flex-1">Other reels</span>
+                        <span className="text-sm font-medium text-gray-200 flex-1">Other clips</span>
                         <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
                           {groupedProjects.ungrouped.length}
                         </span>
                       </div>
                       <DraftStageRows
                         byStage={groupedProjects.ungroupedByStage}
-                        ariaPrefix="Other reels"
+                        ariaPrefix="Other clips"
                         onSelectProject={onSelectProject}
                         onSelectProjectWithMode={onSelectProjectWithMode}
                         onDeleteProject={onDeleteProject}
                         exportingProject={exportingProject}
                         pendingGameIds={pendingGameIds}
                         gamesById={gamesById}
-                        // T8990: "Other reels" is the tab's first row when present.
+                        // T8990: "Other clips" is the tab's first row when present.
                         fillerSlot={CLIPS_PARTIAL_FILLER}
                       />
                     </div>
@@ -2179,7 +2127,7 @@ export function ProjectManager({
                     const group = groupedProjects.groups[groupKey];
                     const hasIncomplete = group.statusCounts.done < group.statusCounts.total;
                     const hasUnpublished = group.projects.some(p => p.has_final_video && !p.is_published);
-                    // T8990: when there is no "Other reels" section, the first game
+                    // T8990: when there is no "Other clips" section, the first game
                     // group carries the tab's first row (and its filler).
                     const isFirstRow = groupedProjects.ungrouped.length === 0 && groupIdx === 0;
                     return (
@@ -2253,68 +2201,6 @@ export function ProjectManager({
             )}
           </div>
         )
-      ) : activeTab === 'inProgressReels' ? (
-        /* T8555: In Progress Reels tab -- unpublished multiclip drafts ONLY
-           (is_auto_created === false) + the "Build New Reel" assembly button.
-           Rendered inline (not a separate always-mounted component) because it
-           holds no state that must survive a tab switch: the assembly modal is
-           ProjectManager-owned and the DraftTile carousel is stateless. Moved
-           out of the old DownloadsPanel body (now PublishedReelsPanel) so
-           published reels no longer share this surface -- the T8555 bug fix.
-           T8780: renamed from "New Highlight Reel" -- displayNames.js reserves
-           "Highlight Reel" for PUBLISHED reels, so the old label misdescribed
-           the draft this button actually creates. Button also moves below the
-           empty message (matching Published's empty state) when there are no
-           drafts yet; once drafts exist it stays pinned above the carousel. */
-        <div className="w-full max-w-md lg:max-w-2xl xl:max-w-3xl" data-testid="in-progress-reels-tab-panel">
-          {highlightDrafts.length === 0 ? (
-            /* T8980: shared EmptyTabGuide. Build New Reel stays the primary CTA
-               (cyan); when the account has no clips it is disabled with a VISIBLE
-               reason (never the old hover-only title) plus a working cross-tab
-               button to cut a clip. hasClips now counts Add-Video clips too, so
-               an Add-Video-only account can build a reel. */
-            <EmptyTabGuide
-              tab="reels"
-              clipCount={clipDrafts.length}
-              gamesCount={games.length}
-              onNavigate={setActiveTab}
-              onBuildReel={() => setShowAssemblyModal(true)}
-            />
-          ) : (
-            <>
-            {/* T10280 fix: the populated Reels tab was missing the shared
-                headline/body guidance entirely (only its empty state had it) --
-                found live on staging 2026-09-18. Matches the Games/Clips pattern. */}
-            <TabGuideHeader tab="reels" />
-            <div className="mb-4 mt-4">
-              <Button
-                variant="cyan"
-                size="lg"
-                icon={Plus}
-                disabled={!hasClips}
-                title={!hasClips ? 'Mark a play in a game first' : undefined}
-                onClick={() => setShowAssemblyModal(true)}
-                className="w-full"
-              >
-                {LIBRARY_ACTIONS.CREATE_REEL}
-              </Button>
-            </div>
-            <CardCarousel ariaLabel={`${SECTION_NAMES.REELS} in progress`} fillerSlot={REELS_PARTIAL_FILLER}>
-              {highlightDrafts.map((project) => (
-                <DraftTile
-                  key={project.id}
-                  project={project}
-                  onSelect={() => onSelectProject?.(project.id)}
-                  onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
-                  onDelete={() => onDeleteProject?.(project.id)}
-                  exportingProject={exportingProject}
-                  pendingGameIds={pendingGameIds}
-                />
-              ))}
-            </CardCarousel>
-            </>
-          )}
-        </div>
       ) : null}
 
       {/* T8555: Published reels surface — renders inline as the Published tab's
@@ -2331,16 +2217,6 @@ export function ProjectManager({
         accountGamesCount={games.length}
         onNavigateTab={setActiveTab}
         onAddGame={handleAddGameClick}
-      />
-
-      {/* Build New Reel Modal - Game/Clip selector (opened from the
-          In Progress Reels tab; see setShowAssemblyModal/showAssemblyModal) */}
-      <GameClipSelectorModal
-        isOpen={showAssemblyModal}
-        onClose={() => setShowAssemblyModal(false)}
-        onCreate={handleProjectCreated}
-        games={games}
-        existingProjectNames={projects?.map(p => p.name) || []}
       />
 
       {/* Game Details Modal - for creating a new game. T10250: initialFiles

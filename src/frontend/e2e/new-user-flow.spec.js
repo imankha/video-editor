@@ -852,168 +852,30 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     expect(q4s2).toBeTruthy();
     console.log('[Q4.2] annotate_game_2 verified');
 
-    // --- Q4 Step 3: Create a Custom Multi-Game Project ---
-    console.log('[Q4.3] Create custom project');
-
-    // T8545: "Create Highlight Reel" moved off the Clips Home tab onto the
-    // In Progress Reels tab (was a top-right icon button opening a drawer) -- switch
-    // to that tab instead.
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^Reels/ }).first().click();
-    await page.waitForTimeout(1000);
-
-    const newProjectBtn = page.locator('button:has-text("Create reel")');
-    await expect(newProjectBtn).toBeVisible();
-    await newProjectBtn.click();
-    await page.waitForTimeout(1500);
-
-    // Select clips from both games — check all available checkboxes
-    const gameCheckboxes = page.locator('[data-testid="game-checkbox"], input[type="checkbox"]');
-    const cbCount = await gameCheckboxes.count();
-    for (let i = 0; i < cbCount && i < 10; i++) {
-      const cb = gameCheckboxes.nth(i);
-      if (await cb.isVisible().catch(() => false)) {
-        await cb.click({ force: true });
-        await page.waitForTimeout(300);
-      }
-    }
-
-    // Create the project
-    const createProjectBtn = page.locator('button:has-text("Create Reel"), button:has-text("Create")').last();
-    if (await createProjectBtn.isVisible().catch(() => false)) {
-      await createProjectBtn.click();
-      await page.waitForTimeout(3000);
-    }
-
-    const q4s3 = await waitForQuestStep(page, 'create_reel', 15000);
-    expect(q4s3).toBeTruthy();
-    console.log('[Q4.3] create_reel verified');
-
-    // --- Q4 Step 4-5: Frame + Export the Reel ---
-    console.log('[Q4.4-5] Frame and export reel');
-
-    // Frame clips in the custom project via API
-    const latestProjects = await getProjects(page);
-    const customProject = latestProjects.find(p => !p.is_auto_created);
-    expect(customProject).toBeTruthy();
-
-    const reelFramed = await frameAllClipsInProject(page, customProject.id);
-    console.log(`[Q4.4] Framed ${reelFramed} clip(s) in custom project`);
-
-    // Navigate to the custom (multi-clip) project and click Frame Video. T8360:
-    // multi-clip "Highlights" drafts (is_auto_created===false) no longer render on
-    // the Clips Home tab -- they live in the In Progress Reels tab's in-progress
-    // section (T8545: that tab, was a drawer).
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^Reels/ }).first().click();
-    await page.waitForTimeout(1000);
-
-    const reelCards = page.locator('.bg-gray-800.rounded-lg h3.text-white');
-    const reelCount = await reelCards.count();
-    if (reelCount > 0) {
-      // Custom project is usually the most recent — click last
-      await reelCards.last().click();
-      await page.waitForTimeout(3000);
-    }
-
-    const fvBtn3 = page.locator('button:has-text("Frame Video"):not([disabled])');
-    if (await fvBtn3.first().isVisible().catch(() => false)) {
-      await fvBtn3.first().click();
-      await page.waitForTimeout(2000);
-    }
-
-    // Wait for reel export (multi-clip exports can be slow or stall in E2E)
-    const q4s5 = await waitWithProgress(page,
-      async () => await waitForQuestStep(page, 'wait_for_reel', 5000),
-      { label: 'Q4.5-reel-export', stallTimeout: 60000 }
-    );
-    const reelExportDone = !!q4s5;
-    console.log(`[Q4.5] Reel framing export: ${reelExportDone ? 'complete' : 'stalled (E2E env limitation)'}`);
-
-    // --- Q4 Step 6: Overlay on Reel ---
-    let overlayReelDone = false;
-    if (reelExportDone) {
-      console.log('[Q4.6] Overlay on reel');
-
-      const overlayBtn3 = page.locator('button:has-text("Spotlight"):not([disabled])');
-      if (await overlayBtn3.first().isVisible().catch(() => false)) {
-        await overlayBtn3.first().click();
-        await page.waitForTimeout(3000);
-
-        const addOverlay3 = page.locator('button:has-text("Export clip with effects")');
-        if (await addOverlay3.first().isVisible().catch(() => false)) {
-          await addOverlay3.first().click();
-          await page.waitForTimeout(2000);
-
-          const q4overlay = await waitWithProgress(page,
-            async () => await waitForQuestStep(page, 'overlay_reel', 5000),
-            { label: 'Q4.6-overlay-reel', stallTimeout: 60000 }
-          );
-          overlayReelDone = !!q4overlay;
-        }
-      }
-      console.log(`[Q4.6] Overlay reel: ${overlayReelDone ? 'verified' : 'not available'}`);
-    } else {
-      console.log('[Q4.6] SKIP: Reel export stalled, skipping overlay');
-    }
-
-    // --- Q4 Step 7: Watch Your Reel ---
-    console.log('[Q4.7] Watch reel in gallery');
-
-    await recordAchievement(page, 'viewed_custom_project_video');
-    const q4s7 = await waitForQuestStep(page, 'watch_reel');
-    expect(q4s7).toBeTruthy();
-    console.log('[Q4.7] watch_reel verified');
+    // T11230/R12: the former Q4.3-Q4.7 steps (create a custom MULTI-CLIP reel via
+    // the "Create reel" builder, frame it, export it, overlay it, watch it) are
+    // DROPPED — the "In Progress Reels" tab and the Create reel multi-clip builder
+    // were removed, and R12 rules the "optional multi-clip reel still assembles"
+    // flow out of scope. The single-clip flow above (Q4.1 add game 2, Q4.2 annotate)
+    // is preserved. Quest 4's reward is claimed via the API bypass below, since the
+    // reel-dependent UI-claim path no longer has a reel to produce.
 
     // =========================================================================
-    // CLAIM QUEST 4 — via UI if all exports completed, via API bypass if not
+    // CLAIM QUEST 4 — via API bypass (multi-clip reel export removed, T11230/R12)
     // =========================================================================
 
-    if (overlayReelDone) {
-      console.log('\n=== CLAIMING QUEST 4 VIA UI -- expecting Vamos! dialog ===');
+    console.log('\n=== QUEST 4: claim reward via API bypass (reel flow removed) ===');
+    await grantCreditsViaAPI(page, 45, 'e2e_bypass', 'quest_4');
+    console.log('[Final] Quest 4 credits granted via bypass');
 
-      await page.goto('/');
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(2000);
-
-      await page.evaluate(async () => {
-        const { useQuestStore } = await import('/src/stores/questStore.js');
-        await useQuestStore.getState().fetchProgress({ force: true });
-      });
-      await page.waitForTimeout(2000);
-
-      const claimButton = page.locator('button:has-text("Claim 45 Credits")');
-      await expect(claimButton).toBeVisible({ timeout: 15000 });
-      console.log('[Final] Claim button visible');
-
-      await claimButton.click();
-      await page.waitForTimeout(2000);
-
-      const congratsHeading = page.locator('text=Congratulations!');
-      await expect(congratsHeading).toBeVisible({ timeout: 10000 });
-
-      const vamosButton = page.locator('button:has-text("Vamos!")');
-      await expect(vamosButton).toBeVisible({ timeout: 5000 });
-      console.log('[Final] Vamos! dialog is visible');
-
-      const rewardText = page.locator('text=+45 credits earned');
-      await expect(rewardText).toBeVisible();
-    } else {
-      console.log('\n=== QUEST 4: SKIP UI claim (export unavailable in E2E) ===');
-      await grantCreditsViaAPI(page, 45, 'e2e_bypass', 'quest_4');
-      console.log('[Final] Quest 4 credits granted via bypass');
-
-      // Verify total credits accumulated
-      const balance = await page.evaluate(async () => {
-        const res = await fetch('/api/credits', { credentials: 'include' });
-        const data = await res.json();
-        return data.balance;
-      });
-      console.log(`[Final] Total credit balance: ${balance}`);
-      expect(balance).toBeGreaterThan(0);
-    }
+    // Verify total credits accumulated
+    const balance = await page.evaluate(async () => {
+      const res = await fetch('/api/credits', { credentials: 'include' });
+      const data = await res.json();
+      return data.balance;
+    });
+    console.log(`[Final] Total credit balance: ${balance}`);
+    expect(balance).toBeGreaterThan(0);
 
     // Final verification depends on whether we used the full UI flow or bypass
     const finalProgress = await getQuestProgress(page);

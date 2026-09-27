@@ -1221,18 +1221,16 @@ export function FocusScreen({
     useQuestStore.getState().recordAchievement('overlay_deferred');
     // T10010 activation funnel: "Save draft"/defer is a real user gesture. IDs only.
     recordFunnelEvent(FUNNEL_EVENTS.DRAFT_SAVED, { project_id: projectId });
-    // T8390: explainer toast — routed by is_auto_created (T8360's already-approved
-    // split), since that's also where the draft actually landed (single-clip auto
-    // drafts -> Clips tab; multi-clip drafts -> Highlights). Copy is verbatim from
-    // the approved design; centralized in displayNames.js, not inlined here.
-    const copy = project?.is_auto_created
-      ? FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP
-      : FOCUS_PUBLISH_LATER_TOAST.MULTI_CLIP;
+    // T8390: explainer toast. T11230 removed the is_auto_created-routed MULTI_CLIP
+    // variant with the Reels building surfaces, so every draft (including a legacy
+    // multi-clip draft, which lands in the Clips tab's Legacy reels group) uses the
+    // one SINGLE_CLIP copy. Centralized in displayNames.js, not inlined here.
+    const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
     toast.success(copy.title, { message: copy.message, duration: 10000 });
     // Navigation only — lands on the drafts surface. Persists NOTHING; the draft
     // stays at its current stage and the Overlay tab remains enabled.
     useEditorStore.getState().goToProjectManager();
-  }, [project?.is_auto_created, projectId, closePreview, acknowledgeCompletionJob]);
+  }, [projectId, closePreview, acknowledgeCompletionJob]);
 
   // T8390: Publish — renamed from "Finish Now" now that the user has actually
   // watched the preview before deciding. ONE tap, TRUE publish: this fires the

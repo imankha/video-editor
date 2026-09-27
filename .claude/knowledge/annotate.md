@@ -1,11 +1,34 @@
 ---
 domain: annotate
+updated: 2026-09-27 (T11230 — the **In Progress Reels tab is GONE** (`inProgressReels` /
+`/home/reels-in-progress`), with all the Reels-BUILDING surfaces. Home is now THREE tabs:
+Games / Clips / Published (`ProjectManager.jsx` `TAB_PATHS`; `editorStore.js` `HOME_TAB_PATHS`
+dropped `/home/reels-in-progress`). An old deep link to the retired path names no tab
+(`tabFromPath` → null) and falls through to the bare-`/home` default = Home (R6: no special
+redirect). DELETED: the `GameClipSelectorModal` "Create reel" clip-assembly picker + its
+`showAssemblyModal`/`handleProjectCreated` wiring, the backend `POST /api/projects/from-clips`
+route + `ProjectFromClipsCreate` model + `_build_clips_filter_query` helper (its ONLY caller was
+that modal — the T11210 test comment claiming the single-clip export flow used it was stale),
+`EmptyTabGuide`'s `reels` variant + `ReelsActions` + `onBuildReel`, `EMPTY_TAB_GUIDE.reels` /
+`PARTIAL_TAB_GUIDE.reels`, `LIBRARY_ACTIONS.CREATE_REEL`/`CREATE_REEL_WITH_COUNT`/`DELETE_REEL`/
+`RENAME_REEL`, `SECTION_NAMES_SHORT.REELS`, `FOCUS_PUBLISH_LATER_TOAST.MULTI_CLIP`, and
+`DraftTile`'s `isReel` label branch. **Every `DraftTile` now names its actions as a CLIP**
+(Delete/Rename/Publish clip) regardless of `is_auto_created` — a legacy multi-clip draft in the
+Clips-tab Legacy reels group reads "clip" too; the full reel→highlight vocabulary sweep is T11280.
+KEPT (live KEEP surfaces, do NOT delete): `LIBRARY_ACTIONS.PUBLISH_REEL` (CollectionPlayer) and
+`SECTION_NAMES.REELS` = 'Reels' (LockedReasonModal "reopen Reels" collections copy — T11280 rewords).
+The Focus/Overlay "publish later" toast collapsed to the single `FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP`
+("Saved to Clips") for every draft. The Clips ungrouped-drafts section relabelled "Other reels" →
+"Other clips". Legacy multi-clip drafts stay reachable ONLY via the Clips-tab **Legacy reels** group
+(`data-testid="legacy-reel-drafts"`, T11220 below) + Published tab. Tab-IA test renamed
+`ProjectManager.fourTabIA.test.jsx` → `.threeTabIA.test.jsx`. NOTE: many entries BELOW that describe
+a four-tab bar / "Reels" tab / "Create reel" are pre-T11230 HISTORY — the live IA is three tabs.)
 updated: 2026-09-26 (T11220 — the In Progress Clips tab (`ProjectManager.jsx`, `activeTab ===
 'projects'`) now renders a clearly-labelled **"Legacy reels"** group (`data-testid=
 "legacy-reel-drafts"`) of the multi-clip reel drafts (`is_auto_created === false`, i.e. the
 `highlightDrafts` set) beneath the single-clip `clipDrafts` gallery, so those drafts stay
-reachable from Clips once T11230 removes the In Progress Reels tab — the reachability fix must
-NOT depend on that tab existing. The Clips empty-guide now gates on
+reachable from Clips now that T11230 has removed the In Progress Reels tab — the reachability fix
+must NOT depend on that tab existing. The Clips empty-guide now gates on
 `clipDrafts.length === 0 && highlightDrafts.length === 0`, and the one-time initial-settle
 redirect (a `/home/reels` landing with zero clip drafts → Games) also checks
 `highlightDrafts.length === 0`, so a legacy-only account is not bounced off Clips. The group's
