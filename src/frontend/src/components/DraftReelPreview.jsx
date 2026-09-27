@@ -263,6 +263,14 @@ function DraftReelPreviewInner({ payload }) {
         { dedupKey: 'update-shared' },
       );
       setStaleShare(null);
+      // Refresh the projects store so its cached row is corrected immediately
+      // -- not just this component's local state. Without this, closing and
+      // reopening the SAME DraftTile before any unrelated projects refetch
+      // happens reads the stale cached row (still showing the OLD
+      // stale_share) and the affordance/hint reappear even though the share
+      // is already current. Mirrors the 409 video_not_current branch below,
+      // which already does this for the failure case.
+      useProjectsStore.getState().fetchProjects({ force: true });
     } catch (err) {
       if (err.status === 410) {
         setStaleShare(null);

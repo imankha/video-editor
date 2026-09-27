@@ -390,6 +390,39 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
     expect(screen.queryByRole('button', { name: /update shared version/i })).toBeNull();
   });
 
+  it('refreshes the projects store on a successful repoint, so closing and reopening the SAME tile does not resurrect the stale affordance', async () => {
+    // Round-8 reviewer finding: the success branch used to only clear local
+    // state (setStaleShare(null)), leaving the projects STORE's cached row
+    // stale. Reopening the same DraftTile before any unrelated refetch read
+    // that stale cached row and the affordance reappeared even though the
+    // share was already current. Mirrors the 409 video_not_current branch,
+    // which already force-refetches.
+    fetchProjectsMock.mockResolvedValueOnce([
+      { id: snapshot.projectId, stale_share: null },
+    ]);
+
+    render(<DraftReelPreview />);
+    act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+    });
+
+    expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
+
+    // Simulate the close -> reopen from the SAME DraftTile: the tile now
+    // renders from the store's REFRESHED row (stale_share: null, per the
+    // mock above) rather than the pre-repoint snapshot.
+    act(() => useReelPreviewStore.getState().close());
+    const refreshedProjects = await fetchProjectsMock.mock.results[0].value;
+    const refreshedProject = refreshedProjects.find((p) => p.id === snapshot.projectId);
+    act(() => {
+      useReelPreviewStore.getState().open({ ...snapshot, staleShare: refreshedProject.stale_share });
+    });
+
+    expect(screen.queryByRole('button', { name: /update shared version/i })).toBeNull();
+  });
+
   it('shows the "up to date" confirmation (not "updated") on the idempotent no-op, per design §5', async () => {
     repointShareLinkMock.mockResolvedValueOnce({
       shareUrl: 'https://reelballers.com/shared/stale-tok-1', changed: false,
