@@ -19,8 +19,8 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 
-// Crafted reels (is_auto_created: false -> the "Reels" tab). One per stage whose
-// label this task touches.
+// Crafted reels (is_auto_created: false -> T11230: now the Clips tab's Legacy
+// reels group). One per stage whose label this task touches.
 const MOCK_PROJECTS = [
   {
     // Published final -> the recent-project row must read terminal "Published"
@@ -87,9 +87,12 @@ test('T9600: reel-status surfaces use draftStage vocabulary, never "Ready to sha
   await expect(recentRow).not.toContainText('Private');
   await page.screenshot({ path: '/workspace/qa/T9600-landing-view.png', fullPage: true });
 
-  // Open the Reels tab (In Progress Reels), where the crafted reels render.
-  await page.getByRole('button', { name: /^Reels/ }).click();
-  await expect(page.getByText('QA Ready To Publish Reel').first()).toBeVisible({ timeout: 15000 });
+  // T11230: crafted reels (is_auto_created:false) now render in the Clips tab's
+  // Legacy reels group, not a standalone Reels tab. Open the Clips tab and scope
+  // the crafted-reel assertions below to the `legacy-reel-drafts` section.
+  await page.getByRole('button', { name: /^Clips/ }).click();
+  const legacyGroup = page.getByTestId('legacy-reel-drafts');
+  await expect(legacyGroup.getByText('QA Ready To Publish Reel').first()).toBeVisible({ timeout: 15000 });
 
   // Criterion #3 again on the reels view.
   await expect(page.getByText('Ready to share', { exact: false })).toHaveCount(0);
@@ -97,13 +100,13 @@ test('T9600: reel-status surfaces use draftStage vocabulary, never "Ready to sha
 
   // --- Site 1: the ready tile's badge is exactly the canonical getDraftStatus
   //     READY-not-published label (T9860 D4: "Private"). ---
-  const readyCard = page.locator('[data-testid="project-card"]', { hasText: 'QA Ready To Publish Reel' }).first();
+  const readyCard = legacyGroup.locator('[data-testid="project-card"]', { hasText: 'QA Ready To Publish Reel' }).first();
   await expect(readyCard.getByText('Private').first()).toBeVisible();
   await readyCard.screenshot({ path: '/workspace/qa/T9600-ready-badge.png' });
 
   // --- Site 2: the in-overlay reel's Spotlight segment tooltip reads the
   //     canonical IN_OVERLAY word, not "Ready to share". ---
-  const overlayCard = page.locator('[data-testid="project-card"]', { hasText: 'QA In Spotlight Reel' }).first();
+  const overlayCard = legacyGroup.locator('[data-testid="project-card"]', { hasText: 'QA In Spotlight Reel' }).first();
   const spotlightSeg = overlayCard.locator('[title^="Spotlight:"]').first();
   await expect(spotlightSeg).toHaveCount(1);
   const tip = await spotlightSeg.getAttribute('title');

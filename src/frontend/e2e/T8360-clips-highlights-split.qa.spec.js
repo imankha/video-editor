@@ -10,14 +10,13 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
  * needing to fabricate fixtures.
  *
  * Acceptance-criterion map (T8360-design.md, T8545 supersedes the entry-point +
- * naming ACs below; T8555 split the old combined "Highlights" tab into "In
- * Progress Reels" (in-progress multiclip drafts) and "Published" (published reels)):
- *   AC1 In Progress Clips tab (Home) shows ONLY is_auto_created===true projects,
- *       never a multi-clip "N clips" badge, no Build New Reel button here
- *   AC2 In Progress Reels tab shows ONLY is_auto_created===false projects
- *       (in-progress multiclip drafts); Published tab shows the published reels
- *   AC3 Build New Reel button lives on the In Progress Reels tab, not on the
- *       In Progress Clips tab
+ * naming ACs below). NOTE: T11230 REMOVED the "In Progress Reels" tab and the
+ * Create reel multi-clip builder entirely — there is no separate Reels tab now.
+ * Legacy multi-clip (is_auto_created===false) drafts still exist but surface in
+ * the Clips tab's `legacy-reel-drafts` group, not a dedicated tab. The AC2/AC3
+ * test that asserted the removed Reels tab + Create reel button has been dropped.
+ *   AC1 Clips tab (Home) shows ONLY is_auto_created===true projects among the
+ *       auto-draft cards, never a multi-clip "N clips" badge, no Create reel button
  *   AC4 no surface renders stale "Reel Drafts" terminology
  *   AC5 responsive (375px mobile + desktop) — no horizontal overflow on either surface
  *
@@ -86,38 +85,9 @@ test('AC1/AC3/AC4: In Progress Clips tab shows only single-clip auto-drafts, no 
   await responsiveSweep(page);
 });
 
-test('AC2/AC3/AC4: In Progress Reels tab shows in-progress multiclip drafts, with the Build New Reel button', async ({ page }) => {
-  await page.goto('/home/reels-in-progress');
-  await waitForAppReady(page, { ready: page.getByTestId('in-progress-reels-tab-panel') });
-
-  const projects = await page.evaluate(async () => {
-    const r = await fetch('/api/projects', { credentials: 'include' });
-    return r.ok ? r.json() : [];
-  });
-  const autoDrafts = projects.filter((p) => p.is_auto_created);
-
-  const panel = page.getByTestId('in-progress-reels-tab-panel');
-  await expect(panel).toBeVisible({ timeout: 10000 });
-
-  // AC3: the relocated Build New Reel button lives on the In Progress Reels tab.
-  await expect(page.getByRole('button', { name: 'Create reel' })).toBeVisible();
-  // AC4: no stale "Reel Drafts" copy on this surface either.
-  await expect(panel).not.toContainText('Reel Drafts');
-
-  // AC1 cross-check: no single-clip auto-draft id renders inside the In Progress Reels tab.
-  const cardIds = await panel.locator('[data-testid="project-card"] img').evaluateAll(
-    (els) => els.map((el) => el.src.match(/\/projects\/(\d+)\/poster\.jpg/)?.[1]).filter(Boolean)
-  );
-  if (cardIds.length > 0) {
-    const autoIds = new Set(autoDrafts.map((p) => String(p.id)));
-    for (const id of cardIds) {
-      expect(autoIds.has(id), `In Progress Reels tab must not render single-clip project ${id}`).toBe(false);
-    }
-  }
-
-  await saveEvidence(page, 'T8360-AC2-AC3-AC4-in-progress-reels-tab-desktop');
-  await responsiveSweep(page);
-});
+// T11230/R12: dropped the "AC2/AC3/AC4: In Progress Reels tab ..." test — that tab
+// and the Create reel button no longer exist. Legacy multi-clip drafts now live in
+// the Clips tab's `legacy-reel-drafts` group (covered by T8350/T9600 specs).
 
 test('AC2: Published tab shows the published reels', async ({ page }) => {
   await page.goto('/home/published');

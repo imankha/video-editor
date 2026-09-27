@@ -15,6 +15,10 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
  * component tree renders the cue exactly as isClipStale computes it, without
  * needing a real produced reel + real boundary edit round-trip.
  *
+ * T11230: the injected multi-clip reel draft (is_auto_created:false) now surfaces
+ * in the Clips tab's Legacy reels group (`legacy-reel-drafts`); the standalone
+ * "In Progress Reels" tab was removed.
+ *
  * Acceptance-criterion map (T8350-design.md Sec 13):
  *   AC1 ui-designer spec approved -- covered by the design-gate approval, not by this spec.
  *   AC2 a multi-clip reel with one drifted clip shows the cue on exactly that clip
@@ -108,11 +112,17 @@ async function injectProject(page, projectOverrides) {
   });
 }
 
-async function openInProgressReelsPanel(page) {
-  await page.goto('/home');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Reels/ }) });
-  await page.getByRole('button', { name: /^Reels/ }).first().click();
-  await expect(page.getByTestId('in-progress-reels-tab-panel')).toBeVisible({ timeout: 10000 });
+// T11230: the injected multi-clip reel draft (is_auto_created:false) now surfaces
+// in the Clips tab's Legacy reels group (`legacy-reel-drafts`), not a dedicated
+// Reels tab (that tab was removed). Land on the Clips tab and wait for the group.
+async function openLegacyReelPanel(page) {
+  await page.goto('/home/reels');
+  const clipsTab = page.getByRole('button', { name: /^Clips/ });
+  await waitForAppReady(page, { ready: clipsTab });
+  if (await clipsTab.getAttribute('aria-selected') !== 'true') {
+    await clipsTab.first().click();
+  }
+  await expect(page.getByTestId('legacy-reel-drafts')).toBeVisible({ timeout: 10000 });
 }
 
 function staleTile(page) {
@@ -128,7 +138,7 @@ test('AC2: PRIMARY badge shows "1 outdated" on a produced multi-clip reel with o
     has_final_video: true, is_published: false, final_video_id: 555555,
     has_working_video: true, clips_exported: 2,
   });
-  await openInProgressReelsPanel(page);
+  await openLegacyReelPanel(page);
 
   const tile = staleTile(page);
   await expect(tile).toBeVisible();
@@ -152,7 +162,7 @@ test('AC3: badge clears when the drifted clip is reverted to the exact producing
     has_working_video: true, clips_exported: 2,
     clips: REVERTED_CLIPS,
   });
-  await openInProgressReelsPanel(page);
+  await openLegacyReelPanel(page);
 
   const tile = staleTile(page);
   await expect(tile).toBeVisible();
@@ -166,7 +176,7 @@ test('AC2: SECONDARY segment ring + tooltip on exactly the drifted clip, pre-pro
     has_final_video: false, has_working_video: false, is_published: false,
     clips_in_progress: 1,
   });
-  await openInProgressReelsPanel(page);
+  await openLegacyReelPanel(page);
 
   const tile = staleTile(page);
   await expect(tile).toBeVisible();
