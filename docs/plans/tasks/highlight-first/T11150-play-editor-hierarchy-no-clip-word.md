@@ -67,3 +67,19 @@ T11280.
 - [ ] No "Required" text and no user-visible "clip" in Annotate (grep of rendered strings + live)
 - [ ] No persistence change: every field still writes on its own gesture (T10610 autosave model)
 - [ ] Live-driven desktop, 393 px portrait, landscape phone
+
+### Deferred "clip" strings (explicitly T11130's scope, not a gap in this task)
+
+Two independent proof-verifier passes (2026-09-27) flagged remaining "clip" strings on the
+Annotate MAIN screen (not the editor this task rewrote). All are already named in T11130's own
+task file as things it removes/rewrites, so leaving them for T11130 is correct, not a miss:
+- `AnnotateModeView.jsx` main-screen stage CTA title `` `Open the clip: ${label}` `` and the
+  T10450 Frame Now/Later row (:1211-1235) it sits on - T11130 §2 removes this row "once the popup
+  owns them" (conditional on H8 for the stage CTA specifically).
+- `ANNOTATE.FRAME_LATER_HINT` ("...editable clip...") - T11130 §2 lists it explicitly for removal.
+- `announceReelCreated`'s "...is now in Clips" toast - T11130 §1 replaces it with the exact
+  "Highlight moved to Clips so you can edit it later" text.
+- `clipStage.js` `CREATE_CLIP` / dead `createActions` (:66-74) - T11130 §2 removes it directly.
+- `questDefinitions.jsx:174,180` quest copy pointing at the removed controls - T11130 §4.
+
+If T11130 ships without closing one of these, that's a T11130 gap, not a T11150 regression.
