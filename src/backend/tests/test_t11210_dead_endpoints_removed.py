@@ -1,14 +1,18 @@
-"""T11210 removal proof: dead endpoints deleted, surviving endpoints intact.
+"""T11210/T11230 removal proof: dead endpoints deleted, surviving endpoints intact.
 
-Regression test (not a characterization golden): pins that the two dead
-routes identified in T11210 (POST /api/export/chapters, POST
-/api/export/concat-for-overlay) no longer resolve, while POST /api/projects
-(bare create) and POST /api/projects/from-clips -- both still used, the
-former by e2e/test_api.sh fixture seeding, the latter by the single-clip
-export flow -- keep resolving. POST /api/projects/preview-clips is gone too
-(no callers). On unchanged master these dead routes are still registered,
-so this test fails by assertion there (status 200/other, not 404/405) and
-passes on the branch after the T11210 deletion commit.
+Regression test (not a characterization golden): pins that the dead routes
+identified in T11210 (POST /api/export/chapters, POST
+/api/export/concat-for-overlay, POST /api/projects/preview-clips) no longer
+resolve, while POST /api/projects (bare create, still used by e2e/test_api.sh
+fixture seeding) keeps resolving.
+
+T11230 (2026-09-27): POST /api/projects/from-clips was the multi-clip "Create
+reel" builder (its only caller was the deleted GameClipSelectorModal). The
+single-clip-editor epic removes the Reels building surfaces, so this route is
+now GONE too -- `test_projects_from_clips_route_removed` pins that. On unchanged
+master from-clips is still registered, so that test fails by assertion there
+(status 200/other, not 404/405) and passes on the branch after the deletion
+commit.
 """
 
 import uuid
@@ -63,10 +67,10 @@ def test_projects_preview_clips_route_removed():
     )
 
 
-def test_projects_from_clips_route_still_exists():
+def test_projects_from_clips_route_removed():
     response = client.post("/api/projects/from-clips", json={})
-    assert response.status_code not in _ROUTE_NOT_FOUND, (
-        "POST /api/projects/from-clips must keep resolving (still used by "
-        f"the single-clip export flow) but responded {response.status_code}: "
-        f"{response.text}"
+    assert response.status_code in _ROUTE_NOT_FOUND, (
+        "POST /api/projects/from-clips should be gone (T11230 removed the "
+        "multi-clip reel builder) but responded "
+        f"{response.status_code}: {response.text}"
     )
