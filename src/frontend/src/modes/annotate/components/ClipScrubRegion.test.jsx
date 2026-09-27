@@ -121,7 +121,7 @@ describe('ClipScrubRegion playhead (T8720)', () => {
     // single playback control there.
     const controller = makeController(100);
     render(<ClipScrubRegion {...baseProps(controller)} clipEditorActive existingClip={{ id: 1, startTime: 98, endTime: 104 }} />);
-    expect(screen.queryByTitle('Preview clip')).toBeNull();
+    expect(screen.queryByTitle('Preview play')).toBeNull();
     expect(screen.queryByTitle('Stop preview')).toBeNull();
   });
 
@@ -131,7 +131,7 @@ describe('ClipScrubRegion playhead (T8720)', () => {
     // keeps its own Preview control to play back just this clip's span.
     const controller = makeController(100);
     render(<ClipScrubRegion {...baseProps(controller)} />);
-    expect(screen.getByTitle('Preview clip')).toBeTruthy();
+    expect(screen.getByTitle('Preview play')).toBeTruthy();
   });
 
   it('keeps the playhead visible after playback stops (symptom 1)', () => {

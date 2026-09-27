@@ -1904,7 +1904,14 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   opens the same best-first meanings list; NEUTRAL slate when unrated — no amber-dashed "to-do", no
   "Required"; gold `#F5B700` at rating 5 reusing T11110; NO chess `RATING_NOTATION` on pill or rows).
   The `RatingPill key={existingClip.id}` at each render site keeps the T10590 clip-switch-closes-popup
-  + same-play-churn-preserves behavior. Escape still `stopPropagation`s (T10590 landmine). Category +
+  + same-play-churn-preserves behavior. Escape still `stopPropagation`s (T10590 landmine).
+  **landscape-inline was redesigned here** (T11100 left it unmocked, "design against the live layout"):
+  it no longer keeps the bespoke inline `StarRating` + inline `TagSelector` row — it now follows the
+  same hierarchy (time → name input + `RatingPill` + chip on one compact row → a Details button opening
+  the full-screen `AddDetailsPopup` for category/teammates/tags/notes), so the "EVERY layout" claim is
+  literally true and the older notes about landscape keeping its own `StarRating`/inline tags are
+  SUPERSEDED. `StarRating`/`TagSelector`/`NoSportTagWarning` are no longer imported by
+  `AnnotateFullscreenOverlay.jsx`. Category +
   teammates moved OFF the strip/formBody top level INTO the Details disclosure (desktop expand-in-place
   panel renders category→teammates→`DetailsFields`; mobile `inline` layout's `AddDetailsPopup` now
   carries category/teammates too, matching portrait-strip — Delete stays in the pinned footer there, so
@@ -1917,7 +1924,17 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   "clip"/"Required" renders in the editor** (name→"Play name", rename→"Rename play", delete→always
   "Delete play", notes placeholder + `NoSportTagWarning` → "...play", `ClipListItem` fallback→"Play N",
   `ClipDetailsEditor` heading→"Play details", `getEditRatingCaption`→"highlight already made", stageCta
-  hover→"Open: {stage}"). DELIBERATELY LEFT (documented, out of scope): the `announceReelCreated` toast
+  hover→"Open: {stage}"). **The sweep covers title/aria-label/placeholder ATTRIBUTES too** (not just
+  text nodes — the T11150 no-clip test asserts all three attribute kinds across all 5 layouts incl.
+  landscape): layer `disabledReason` "imported clips"→"imported plays", `ClipScrubRegion` "Preview
+  clip"→"Preview play", `AnnotateTimeline` "select clips layer / navigate clips"→"...plays..." and
+  "sideline clip"→"sideline play", `ClipRegionLayer` marker aria "Clip N"→"Play N" and "angle
+  clip"→"angle play", `NotesOverlay` "Clip created…"→"Highlight made, not published yet" +
+  "Published clip"→"Published highlight", `videoDisplayName` angle-source fallback "Extra clip
+  N"→"Extra video N" (footage sense, not "play"), `AddFootageButton` "a clip you got later"→"footage
+  you got later". **Chess `RATING_NOTATION` also dropped from `getRatingCaption`/`getEditRatingCaption`**
+  (was still interpolated `(!)`/`(!!)`; `RATING_NOTATION` stays exported for `getRatingDisplay`).
+  DELIBERATELY LEFT (documented, out of scope): the `announceReelCreated` toast
   "... is now in Clips" ("Clips" = H18-allowed PLACE name), main-screen Frame clip/Create clip CTAs
   (T11130), and library `LIBRARY_ACTIONS.DELETE_CLIP`/`RENAME_CLIP`/`ANNOTATE.CLIP_NAME` values (frozen
   for DraftTile, T11280) — Annotate consumers repoint to new `ANNOTATE.PLAY_NAME`/`RENAME_PLAY`/

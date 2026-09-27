@@ -611,7 +611,7 @@ export function ClipScrubRegion({
             <button
               onClick={handlePreviewPlay}
               className="p-1.5 rounded-lg hover:bg-gray-700 transition-colors"
-              title={isPreviewing ? 'Stop preview' : 'Preview clip'}
+              title={isPreviewing ? 'Stop preview' : 'Preview play'}
             >
               {isPreviewing ? (
                 <Square size={16} className="text-red-400" />

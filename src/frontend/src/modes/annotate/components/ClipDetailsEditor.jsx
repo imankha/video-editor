@@ -330,7 +330,7 @@ export function ClipDetailsEditor({
             size="sm"
             value={region.my_athlete ?? true}
             disabled={!!region.shared_by}
-            disabledReason={region.shared_by ? `Shared by ${region.shared_by} — imported clips stay on the Team layer` : ''}
+            disabledReason={region.shared_by ? `Shared by ${region.shared_by} — imported plays stay on the Team layer` : ''}
             onChange={(mine) => onUpdate(
               // T5725: switching TO My Athlete clears teammate tags in the SAME
               // gesture — teammates are Team-layer-only, so a My Athlete clip

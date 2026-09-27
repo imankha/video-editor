@@ -268,21 +268,46 @@ describe('DOM order — time precedes name+rating precedes Details (per layout)'
     const { container } = render(<AnnotateFullscreenOverlay {...baseProps} layout="overlay" existingClip={bareClip} />);
     order(container, ['trim-field-start', 'rating-pill', 'add-details-button']);
   });
+
+  it('landscape-inline: time -> name field -> rating pill -> Details; tags/notes absent while Details closed', () => {
+    window.matchMedia = (query) => ({
+      matches: true, media: query, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {},
+      addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+    });
+    const { container } = render(<AnnotateFullscreenOverlay {...baseProps} layout="landscape-inline" existingClip={bareClip} />);
+    // The name input (aria-label "Play name") sits on the name+rating tier,
+    // after time and before the rating pill / Details button.
+    order(container, ['trim-field-start', 'Play name', 'rating-pill', 'add-details-button']);
+    // Tags and Notes live ONLY behind Details — nothing rendered while closed.
+    expect(screen.queryByText('Notes (optional)')).toBeNull();
+    expect(screen.queryByText('Tags')).toBeNull();
+    expect(screen.queryByPlaceholderText('Add a note about this play...')).toBeNull();
+  });
 });
 
 describe('no user-visible "clip" wording remains in the editor (T11150)', () => {
   const assertNoClipWord = (container) => {
-    // Ignore internal-only attributes (data-testid, className, etc.) — only
-    // check what a screen reader / eyeball would actually see: text nodes.
+    // Check what a screen reader / eyeball would actually see: visible text
+    // nodes AND the user-facing attributes (title tooltips, aria-labels,
+    // placeholders). Internal-only attributes (data-testid, class, id/htmlFor
+    // like `clip-notes`, data-add-clip-form) are NOT user-visible, so they are
+    // deliberately excluded — only title/aria-label/placeholder are read.
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-    const texts = [];
+    const seen = [];
     let node = walker.nextNode();
     while (node) {
-      if (node.textContent.trim()) texts.push(node.textContent);
+      if (node.textContent.trim()) seen.push(node.textContent);
       node = walker.nextNode();
     }
-    const joined = texts.join(' ');
-    expect(joined).not.toMatch(/clip/i);
+    const scope = container === document.body ? container : container;
+    scope.querySelectorAll('[title], [aria-label], [placeholder]').forEach((el) => {
+      for (const attr of ['title', 'aria-label', 'placeholder']) {
+        const v = el.getAttribute(attr);
+        if (v) seen.push(v);
+      }
+    });
+    expect(seen.join(' | ')).not.toMatch(/clip/i);
   };
 
   it('strip layout (Details open)', () => {
@@ -322,6 +347,18 @@ describe('no user-visible "clip" wording remains in the editor (T11150)', () => 
     );
     fireEvent.click(screen.getByTestId('add-details-button'));
     assertNoClipWord(container);
+  });
+
+  it('landscape-inline layout (Details open) — text AND title/aria-label/placeholder', () => {
+    window.matchMedia = (query) => ({
+      matches: true, media: query, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {},
+      addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+    });
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="landscape-inline" existingClip={{ ...bareClip, autoProjectId: 42 }} />);
+    fireEvent.click(screen.getByTestId('add-details-button'));
+    // AddDetailsPopup is portaled to document.body.
+    assertNoClipWord(document.body);
   });
 });
 

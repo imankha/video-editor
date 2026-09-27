@@ -145,7 +145,7 @@ export function AnnotateTimeline({
         <div
           className={clipsLayerLabelClass('mt-0.5 lg:mt-1 rounded-bl-lg')}
           onClick={() => onLayerSelect?.('clips')}
-          title="Click to select clips layer (arrow keys navigate clips)"
+          title="Click to select plays layer (arrow keys navigate plays)"
         >
           <div className="flex items-center gap-1 px-2 text-green-400">
             <Scissors size={16} />
@@ -159,7 +159,7 @@ export function AnnotateTimeline({
             data-testid="clip-lane-label-mine"
             className={clipsLayerLabelClass('mt-0.5 lg:mt-1')}
             onClick={() => onLayerSelect?.('clips')}
-            title="Click to select clips layer (arrow keys navigate clips)"
+            title="Click to select plays layer (arrow keys navigate plays)"
           >
             <div className="flex items-center gap-1 px-2 text-cyan-400">
               <Scissors size={16} />
@@ -170,7 +170,7 @@ export function AnnotateTimeline({
             data-testid="clip-lane-label-team"
             className={clipsLayerLabelClass('mt-0.5 lg:mt-1 rounded-bl-lg')}
             onClick={() => onLayerSelect?.('clips')}
-            title="Click to select clips layer (arrow keys navigate clips)"
+            title="Click to select plays layer (arrow keys navigate plays)"
           >
             <div className="flex items-center gap-1 px-2 text-amber-400">
               <Scissors size={16} />
@@ -278,7 +278,7 @@ export function AnnotateTimeline({
           key={`ext-${ext.virtualStart}`}
           data-testid="angle-extension-hatch"
           className="absolute top-0 bottom-0 pointer-events-none"
-          title="Only your sideline clip covers this part"
+          title="Only your sideline play covers this part"
           style={{
             left: leftCalc(ext.virtualStart),
             width: widthCalc(ext.virtualStart, ext.virtualEnd),

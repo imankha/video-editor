@@ -3,15 +3,12 @@ import { X, Pencil, Crop, Sparkles, ChevronDown, ChevronUp, Video, Clapperboard 
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
-import { TagSelector } from '../../../components/shared/TagSelector';
-import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile, useProfileStore, useProjectsList } from '../../../stores';
 import { getClipStage, CLIP_STAGE } from '../clipStage';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
-import { StarRating } from '../../../components/shared/StarRating';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
 import { DetailsFields } from './DetailsFields';
@@ -465,7 +462,7 @@ export function AnnotateFullscreenOverlay({
                 size={isMobile ? 'md' : 'sm'}
                 value={myAthlete}
                 disabled={!!existingClip.shared_by}
-                disabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
+                disabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported plays stay on the Team layer` : ''}
                 onChange={(mine) => {
                   setMyAthlete(mine);
                   // T5725: switching TO My Athlete clears teammate tags in the
@@ -690,7 +687,7 @@ export function AnnotateFullscreenOverlay({
                     onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
                   }}
                   disabled={!!existingClip.shared_by}
-                  disabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
+                  disabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported plays stay on the Team layer` : ''}
                   className="w-full"
                 />
               </div>
@@ -770,27 +767,37 @@ export function AnnotateFullscreenOverlay({
           clipEditorActive
           compact
         />
+        {/* Name + rating tier (T11150: Play editor hierarchy). Landscape phone
+            was never mocked (T11100 gate), so it is designed here against the
+            live layout: one compact row — name absorbs the width (flex-1),
+            RatingPill + highlight chip + the Details disclosure + Delete + close
+            never shrink. Tags/notes/category live BEHIND Details (the
+            full-screen AddDetailsPopup), NOT inline, matching the other four
+            layouts' time -> name+rating -> Details hierarchy. */}
         <div className="flex items-center gap-2 mt-1.5">
-          {/* T9630 N35: the standalone notation span that used to sit here was
-              a straight duplicate of the label StarRating already renders —
-              two rating indicators for one value on the tightest layout. */}
-          <StarRating rating={rating} onRatingChange={handleRatingChange} size={20} showLabel />
-          <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
-          <div className="flex-1 overflow-x-auto scrollbar-hide">
-            {tagSet ? (
-              <TagSelector
-                positions={getPositions(sport)}
-                tagsByPosition={tagSet.tags}
-                selectedTags={selectedTags}
-                onTagToggle={handleTagToggle}
-                size="sm"
-                flat
-              />
-            ) : sport === NO_SPORT ? (
-              <NoSportTagWarning compact />
-            ) : null}
-          </div>
-          <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
+          <input
+            ref={nameInputRef}
+            type="text"
+            value={clipName}
+            onChange={handleNameChange}
+            onBlur={commitName}
+            onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
+            aria-label={ANNOTATE.PLAY_NAME}
+            placeholder="Name this play"
+            className="flex-1 min-w-0 px-3 py-1.5 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
+          />
+          <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
+          <HighlightMadeChip show={highlightMade} />
+          <button
+            type="button"
+            onClick={() => setDetailsOpen(o => !o)}
+            aria-expanded={detailsOpen}
+            data-testid="add-details-button"
+            className="flex-none whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 coarse-pointer:min-h-[44px] bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+          >
+            <ChevronDown size={14} />
+            {detailsLabel}
+          </button>
           <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} variant="icon" />
           <button
             onClick={closeWithCommit}
@@ -806,6 +813,35 @@ export function AnnotateFullscreenOverlay({
             on the height-starved landscape layout. */}
         {displayStatus && (
           <p className="mt-1"><SaveStatusBadge status={displayStatus} /></p>
+        )}
+        {/* Details -> full-screen AddDetailsPopup (category first per H16, then
+            teammates, tags, notes). Delete stays inline above, so onDelete is
+            NOT passed here (no double-render). */}
+        {detailsOpen && (
+          <AddDetailsPopup
+            tagSet={tagSet}
+            sport={sport}
+            positions={getPositions(sport)}
+            selectedTags={selectedTags}
+            onTagToggle={handleTagToggle}
+            onSetSport={handleSetSport}
+            notes={notes}
+            onNotesChange={(e) => setNotes(e.target.value)}
+            onNotesCommit={commitNotes}
+            storedNotes={existingClip.notes}
+            onDone={() => setDetailsOpen(false)}
+            myAthlete={myAthlete}
+            onLayerChange={(mine) => {
+              setMyAthlete(mine);
+              if (mine) setTaggedTeammates([]);
+              onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
+            }}
+            layerDisabled={!!existingClip.shared_by}
+            layerDisabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported plays stay on the Team layer` : ''}
+            taggedTeammates={taggedTeammates}
+            onTeammatesChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
+            teammateSuggestions={teammateSuggestions}
+          />
         )}
       </div>
     );
@@ -932,7 +968,7 @@ export function AnnotateFullscreenOverlay({
               onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
             }}
             layerDisabled={!!existingClip.shared_by}
-            layerDisabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
+            layerDisabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported plays stay on the Team layer` : ''}
             taggedTeammates={taggedTeammates}
             onTeammatesChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
             teammateSuggestions={teammateSuggestions}
@@ -1002,7 +1038,7 @@ export function AnnotateFullscreenOverlay({
               onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
             }}
             layerDisabled={!!existingClip.shared_by}
-            layerDisabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
+            layerDisabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported plays stay on the Team layer` : ''}
             taggedTeammates={taggedTeammates}
             onTeammatesChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
             teammateSuggestions={teammateSuggestions}

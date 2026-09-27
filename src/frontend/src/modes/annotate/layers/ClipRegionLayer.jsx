@@ -256,7 +256,7 @@ export default function ClipRegionLayer({
                 if (el) markerRefs.current.set(region.id, el);
                 else markerRefs.current.delete(region.id);
               }}
-              aria-label={`${displayName || `Clip ${region.index + 1}`} - ${layerName}`}
+              aria-label={`${displayName || `Play ${region.index + 1}`} - ${layerName}`}
               className="clip-marker absolute top-1/2 cursor-pointer transition-all duration-150"
               style={{
                 left: `${left}%`,
@@ -279,7 +279,7 @@ export default function ClipRegionLayer({
                 `}
                 style={isAngle ? { border: `2px solid ${ANGLE_ACCENT}` } : undefined}
                 title={isAngle ? `${getRatingLabel(rating)} — from an angle` : getRatingLabel(rating)}
-                aria-label={isAngle ? `${getRatingLabel(rating)} — angle clip` : getRatingLabel(rating)}
+                aria-label={isAngle ? `${getRatingLabel(rating)} — angle play` : getRatingLabel(rating)}
               >
                 <RatingIcon rating={rating} size={isSelected ? 30 : 24} />
                 {isAngle && (
