@@ -92,3 +92,36 @@ describe('openFinishedReel gameId gating (T10190)', () => {
     );
   });
 });
+
+// T10860 §3.3: snapshot project.stale_share into staleShare on the store
+// payload, mechanical -- same pattern as alreadyPublished/gameId. No network
+// call here; this is a pure read of the already-fetched `project` object.
+describe('openFinishedReel staleShare snapshot (T10860)', () => {
+  beforeEach(() => {
+    openMock.mockClear();
+    goHomeMock.mockClear();
+  });
+
+  it('snapshots project.stale_share into staleShare when present', () => {
+    const staleShare = { share_token: 'stale-tok', old_filename: 'v1.mp4' };
+    openFinishedReel({ ...project, stale_share: staleShare });
+    expect(openMock).toHaveBeenCalledWith(
+      expect.objectContaining({ staleShare }),
+    );
+  });
+
+  it('snapshots staleShare: null when project.stale_share is null', () => {
+    openFinishedReel({ ...project, stale_share: null });
+    expect(openMock).toHaveBeenCalledWith(
+      expect.objectContaining({ staleShare: null }),
+    );
+  });
+
+  it('snapshots staleShare: null when project.stale_share is absent entirely', () => {
+    const { stale_share: _stale_share, ...projectNoStale } = { ...project, stale_share: undefined };
+    openFinishedReel(projectNoStale);
+    expect(openMock).toHaveBeenCalledWith(
+      expect.objectContaining({ staleShare: null }),
+    );
+  });
+});

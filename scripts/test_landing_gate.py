@@ -88,6 +88,16 @@ class DecisionTests(unittest.TestCase):
         self.e['human_checks'] = ['Visual correctness']
         self.assertTrue(self.check())
 
+    def test_human_verification_required_word_accepted_only_with_recorded_decision(self):
+        self.e['human_checks'] = ['Live-browser click-through']
+        self.review['verdict'] = 'HUMAN_VERIFICATION_REQUIRED'
+        self.proof['verdict'] = 'HUMAN_VERIFICATION_REQUIRED'
+        self.assertTrue(self.check())
+        self.e['_human_approved'] = True
+        self.assertEqual(self.check(), [])
+        self.review['blocking'] = 1
+        self.assertTrue(self.check())
+
     def test_wrong_repository_and_draft_block(self):
         self.pr['head']['repo']['full_name'] = 'someone/else'
         self.assertTrue(self.check())

@@ -19,11 +19,11 @@ from datetime import datetime
 from typing import Union
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from ..analytics import record_milestone
-from ..database import get_db_connection
+from ..database import get_db_connection, get_final_videos_path
 from ..migrations import MigrationBlocked
 from ..profile_context import get_current_profile_id
 from ..services.auth_db import (
@@ -41,13 +41,16 @@ from ..services.sharing_db import (
     get_share_by_token,
     list_contacts_for_user,
     list_shares_for_video,
+    repoint_share_video,
     revoke_share,
     update_share_visibility,
 )
 from ..storage import (
     APP_ENV,
+    R2_ENABLED,
     download_from_r2_global,
     generate_presigned_url_global,
+    r2_head_object,
     r2_head_object_global,
 )
 from ..user_context import get_current_user_id
@@ -76,6 +79,20 @@ class ShareCreateRecipient(BaseModel):
 
 class ShareCreateResponse(BaseModel):
     shares: list[ShareCreateRecipient]
+
+
+class ShareRepointRequest(BaseModel):
+    share_token: str
+
+
+class ShareRepointResponse(BaseModel):
+    ok: bool
+    share_url: str
+    # T10860: distinguishes an idempotent no-op (already current -- design §5
+    # "Shared version is up to date") from a real re-point (design §5 default
+    # success copy). Both branches return the SAME ok/share_url shape
+    # otherwise, so the frontend needs this to pick the right toast.
+    changed: bool
 
 
 class ShareDetailResponse(BaseModel):
@@ -577,6 +594,109 @@ async def create_share(video_id: int, body: ShareCreateRequest, background_tasks
             for s in shares
         ]
     )
+
+
+@gallery_shares_router.post("/{video_id}/share/repoint", response_model=ShareRepointResponse)
+async def repoint_share(video_id: int, body: ShareRepointRequest):
+    """Re-point an existing single-video share's snapshot to a moved final_video
+    (T10860): after a private re-export, projects.final_video_id moves to a new
+    final_videos row but an already-distributed share token still resolves to the
+    old one. This explicit gesture re-points the SAME token (URL never changes).
+    See docs/plans/tasks/T10860-design.md §2.2 for the step-by-step contract."""
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+
+    share = get_share_by_token(body.share_token)
+    if not share:
+        raise HTTPException(404, "Share not found")
+    if share["revoked_at"]:
+        raise HTTPException(410, "This share has been revoked")
+    if share["sharer_user_id"] != user_id:
+        raise HTTPException(403, "Only the sharer can update this share")
+    # T10860 cross-profile fix: final_videos ids are per-profile SQLite
+    # autoincrements, so the SAME id (e.g. 1) exists independently in every
+    # profile of this user -- sharer_user_id alone does not scope to the
+    # profile that actually owns this share. Without this check, viewing a
+    # DIFFERENT profile whose final_videos happens to collide on id could
+    # repoint THIS share (still owned by its original profile) onto that
+    # other profile's video, breaking playback (profile mismatch between the
+    # share row and the R2/SQLite path the video actually lives under).
+    if share["sharer_profile_id"] != profile_id:
+        raise HTTPException(403, "This share does not belong to the current profile")
+    if share["share_type"] != "video":
+        raise HTTPException(400, "Not a single-video share")
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT fv.id, fv.filename, COALESCE(fv.name, p.name) as name,
+                      fv.duration, fv.project_id, p.final_video_id
+               FROM final_videos fv
+               JOIN projects p ON fv.project_id = p.id
+               WHERE fv.id = ?""",
+            (video_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(404, "Video not found")
+
+        # T10860: the share's CURRENT video_id (now confirmed to live in THIS
+        # profile's SQLite, per the sharer_profile_id check above) must belong
+        # to the SAME project as the path video_id -- a caller-supplied
+        # share_token/video_id pair from unrelated projects must never be
+        # allowed to retarget a share onto a video it never pointed at.
+        cursor.execute(
+            "SELECT project_id FROM final_videos WHERE id = ?",
+            (share["video_id"],),
+        )
+        share_video_row = cursor.fetchone()
+
+    if share_video_row is None or share_video_row["project_id"] != row["project_id"]:
+        return JSONResponse(status_code=409, content={
+            "code": "share_project_mismatch",
+            "detail": "This share does not belong to this project.",
+        })
+
+    if row["final_video_id"] != video_id:
+        return JSONResponse(status_code=409, content={
+            "code": "video_not_current",
+            "detail": "This draft was re-exported again; reopen it and try Update shared version.",
+        })
+
+    share_url = f"/shared/{body.share_token}"
+
+    if share["video_id"] == video_id and share["video_filename"] == row["filename"]:
+        return ShareRepointResponse(ok=True, share_url=share_url, changed=False)
+
+    # T10860: existence check mirrors the codebase's own R2_ENABLED-gated
+    # convention for "is this final_video actually servable" (downloads.py's
+    # composed-stream branch: R2 presigned path when enabled, local disk
+    # .exists() otherwise) -- an R2-only HEAD unconditionally returns None
+    # when R2 is disabled (storage.py:949 `if not client: return None`),
+    # which would refuse every re-point with a false target_missing in local/
+    # no-R2 dev.
+    if R2_ENABLED:
+        target_exists = r2_head_object(user_id, f"final_videos/{row['filename']}") is not None
+    else:
+        target_exists = (get_final_videos_path() / row["filename"]).exists()
+    if not target_exists:
+        return JSONResponse(status_code=409, content={
+            "code": "target_missing",
+            "detail": "The re-exported video isn't available yet. Try again in a moment.",
+        })
+
+    ok = repoint_share_video(
+        token=body.share_token, sharer_user_id=user_id, sharer_profile_id=profile_id,
+        new_video_id=row["id"], new_video_filename=row["filename"],
+        new_video_name=row["name"], new_video_duration=row["duration"],
+    )
+    if not ok:
+        return JSONResponse(status_code=409, content={
+            "code": "repoint_conflict",
+            "detail": "This share was changed or revoked; refresh and retry.",
+        })
+
+    return ShareRepointResponse(ok=True, share_url=share_url, changed=True)
 
 
 @gallery_shares_router.get("/{video_id}/shares", response_model=list[ShareListItem])

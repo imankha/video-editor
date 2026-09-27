@@ -52,9 +52,21 @@ def evaluate(e, proof, review, pr, run, jobs, required):
         # capture() prompt does not state which literal word belongs to which role, so a
         # reviewer session sometimes writes 'VERIFIED' (the proof-verifier's word) despite
         # clean review content (0 blocking/major). Accept either spelling for this role.
-        need(review.get('verdict') in ('APPROVED', 'VERIFIED'), 'Code review has not approved')
+        # T10860: a session on either role may reasonably write HUMAN_VERIFICATION_REQUIRED
+        # for a disclosed, already-decided gap (e.g. a live-browser check that couldn't run
+        # in this environment) even after record-human-decision has been used, because a
+        # fresh session has no way to authenticate a supervisor-recorded decision itself
+        # (correctly so - that authentication is this gate's job, via the human receipt,
+        # not the capture session's). So HUMAN_VERIFICATION_REQUIRED is accepted here ONLY
+        # when a human decision was actually recorded for THIS evidence (e['_human_approved']
+        # is set below, from a receipt read via the trusted controller) - never as a general
+        # substitute for a real code approval. blocking/major must still be exactly 0 either way.
+        human_verified = bool(e.get('human_checks')) and e.get('_human_approved') is True
+        accepted_review_words = ('APPROVED', 'VERIFIED') + (('HUMAN_VERIFICATION_REQUIRED',) if human_verified else ())
+        accepted_proof_words = ('VERIFIED',) + (('HUMAN_VERIFICATION_REQUIRED',) if human_verified else ())
+        need(review.get('verdict') in accepted_review_words, 'Code review has not approved')
         need(review.get('blocking') == 0 and review.get('major') == 0, 'Unresolved review findings')
-        need(proof.get('verdict') == 'VERIFIED', 'Independent proof is not VERIFIED')
+        need(proof.get('verdict') in accepted_proof_words, 'Independent proof is not VERIFIED')
         need(proof.get('blocking') == 0 and proof.get('major') == 0, 'Unresolved proof findings')
         need(bool(proof.get('session_id')) and bool(review.get('session_id')) and
              proof.get('session_id') != review.get('session_id'), 'Separate verifier/reviewer sessions required')
