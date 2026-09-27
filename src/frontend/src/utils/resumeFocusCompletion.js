@@ -55,6 +55,9 @@
  * @param {(id:string) => void} deps.recordAchievement
  * @param {(title:string, opts:Object) => void} deps.toastError
  * @param {Object} deps.EDITOR_MODES
+ * @param {(project:Object) => boolean} deps.allowEnterFraming T11220 re-frame guard
+ *   (injected, not imported, to keep this module store/React-free); returns false
+ *   and toasts for a legacy multi-clip project.
  * @returns {Promise<{opened:boolean, navigated:boolean}>}
  */
 export async function resumeFocusCompletion({ jobId, projectId }, {
@@ -70,6 +73,7 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
   recordAchievement,
   toastError,
   EDITOR_MODES,
+  allowEnterFraming,
 }) {
   try {
     const alreadyInFocus = getEditorMode() === EDITOR_MODES.FRAMING && getSelectedProjectId() === projectId;
@@ -101,6 +105,15 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
     if (!project) {
       console.error('[ResumeFocus] failed to select project', projectId);
       toastError("Couldn't open this draft", { message: 'The connection dropped. Check your network and try again.' });
+      return { opened: false, navigated: false };
+    }
+
+    // T11220: resuming a Focus completion re-enters Framing — refuse it for a
+    // legacy multi-clip project (clip_count > 1) like every other Framing entry
+    // point. This site pre-sets the mode + opens the preview, so the loadProject
+    // guard alone can't stop it; guard here BEFORE setEditorMode/openPreview.
+    // allowEnterFraming surfaces the shared clear message.
+    if (!allowEnterFraming(project)) {
       return { opened: false, navigated: false };
     }
 

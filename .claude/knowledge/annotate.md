@@ -1,5 +1,17 @@
 ---
 domain: annotate
+updated: 2026-09-26 (T11220 — the In Progress Clips tab (`ProjectManager.jsx`, `activeTab ===
+'projects'`) now renders a clearly-labelled **"Legacy reels"** group (`data-testid=
+"legacy-reel-drafts"`) of the multi-clip reel drafts (`is_auto_created === false`, i.e. the
+`highlightDrafts` set) beneath the single-clip `clipDrafts` gallery, so those drafts stay
+reachable from Clips once T11230 removes the In Progress Reels tab — the reachability fix must
+NOT depend on that tab existing. The Clips empty-guide now gates on
+`clipDrafts.length === 0 && highlightDrafts.length === 0`, and the one-time initial-settle
+redirect (a `/home/reels` landing with zero clip drafts → Games) also checks
+`highlightDrafts.length === 0`, so a legacy-only account is not bounced off Clips. The group's
+caption states these can still be published/downloaded/shared but no longer re-framed in Focus
+(R3 option A). Re-edit/restore refusal for PUBLISHED multi-clip reels is the paired half — see
+persistence-sync.md T11220. Tests: `ProjectManager.legacyReachability.test.jsx`.)
 updated: 2026-09-22 (T11030 — the zoomed-timeline scrollbar (`MobileScrollbar`,
 `components/timeline/TimelineBase.jsx`) now renders at EVERY viewport width, not just
 below `lg`. It used to hide on `lg:hidden` and hand off to the OS-native horizontal

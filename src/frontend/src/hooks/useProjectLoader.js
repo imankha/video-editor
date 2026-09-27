@@ -10,6 +10,8 @@ import { getClipDisplayName } from '../utils/clipDisplayName';
 import { clipSourceDuration } from '../utils/clipSelectors';
 import { extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
 import { seedClipVersion } from '../api/focusActions';
+import { EDITOR_MODES } from '../stores/editorStore';
+import { allowEnterFraming } from '../utils/reelReEditable';
 
 /**
  * Helper to calculate effective duration for a clip (accounting for speed changes)
@@ -117,6 +119,22 @@ export function useProjectLoader() {
         project.working_video_created_at > project.final_video_created_at;
       const needsOverlay = project.working_video_id && (!project.has_final_video || framingNewerThanFinal);
       const targetMode = mode || (needsOverlay ? 'overlay' : 'framing');
+
+      // T11220: project-OPEN default-mode guard — a SEPARATE entry point from the
+      // mode-switch guards (header ModeSwitcher / App.handleModeChange /
+      // OverlayScreen). A framing-only legacy multi-clip draft (clip_count > 1, no
+      // working video) opened with no explicit mode (e.g. Home "continue
+      // finishing", which calls onSelectProject) resolves targetMode='framing' and
+      // would drop straight into Focus, bypassing every mode-switch guard. Refuse
+      // here too: surface the same clear message and land back on the project
+      // manager instead of Framing. clip_count comes from ProjectDetailResponse
+      // (the detail this project was fetched from now carries it). An 'overlay'
+      // target (has a working video) is unaffected — Spotlight still works.
+      if (targetMode === 'framing' && !allowEnterFraming(project)) {
+        setLoading(false);
+        return { project, clips: [], selectedClipIndex: 0, workingVideo: null,
+                 mode: EDITOR_MODES.PROJECT_MANAGER, clipMetadata: {}, refused: true };
+      }
 
       // Update last_opened_at and persist current_mode (non-blocking). T6020: this
       // is project-OPEN bookkeeping, not a user gesture -- unlike App.jsx's

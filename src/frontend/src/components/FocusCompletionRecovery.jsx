@@ -7,6 +7,7 @@ import { resumeFocusCompletion } from '../utils/resumeFocusCompletion';
 import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
 import { toast } from './shared';
 import { EXPORT_JOBS } from '../config/displayNames';
+import { allowEnterFraming } from '../utils/reelReEditable';
 
 /**
  * FocusCompletionRecovery (T9285) — the App-level surface for a Focus export
@@ -85,6 +86,7 @@ export function FocusCompletionRecovery() {
           recordAchievement: (id) => useQuestStore.getState().recordAchievement(id),
           toastError: (title, opts) => toast.error(title, opts),
           EDITOR_MODES,
+          allowEnterFraming,
         },
       );
       // Only clear the card on a SUCCESSFUL resume. resumeFocusCompletion
