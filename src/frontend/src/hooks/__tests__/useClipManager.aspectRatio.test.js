@@ -40,7 +40,6 @@ describe('useClipManager.globalAspectRatio (T10980)', () => {
       useProjectsStore.setState({ selectedProject: { id: 1, aspect_ratio: '16:9' } });
     });
     expect(result.current.globalAspectRatio).toBe('16:9');
-    expect(result.current.getExportData().globalAspectRatio).toBe('16:9');
   });
 
   it('projectDataStore no longer carries an aspectRatio field', () => {

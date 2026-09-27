@@ -143,13 +143,7 @@ export function FocusScreen({
     selectedClip,
     hasClips,
     globalAspectRatio,
-    globalTransition,
-    deleteClip,
-    selectClip,
-    reorderClips,
     updateClipData,
-    setGlobalTransition,
-    getExportData: getClipExportData,
   } = useClipManager();
 
   // Reel-level aspect-ratio change (T3910): a single gesture that re-fits every clip's crop

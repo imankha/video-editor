@@ -181,14 +181,7 @@ vi.mock('../../hooks/useClipManager', () => ({
     selectedClip: testState.selectedClip,
     hasClips: testState.clips.length > 0,
     globalAspectRatio: '9:16',
-    globalTransition: null,
-    deleteClip: vi.fn(),
-    selectClip: vi.fn(),
-    reorderClips: vi.fn(),
     updateClipData: vi.fn(),
-    setGlobalAspectRatio: vi.fn(),
-    setGlobalTransition: vi.fn(),
-    getExportData: vi.fn(),
   }),
 }));
 
