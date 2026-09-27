@@ -121,4 +121,12 @@ describe('FocusCockpit (T10840 shell)', () => {
     renderCockpit();
     expect(screen.getByTestId('focus-cockpit').className).toContain('overflow-hidden');
   });
+
+  // T11240 C1/C3: a project is exactly one clip now, so the cockpit's Clips
+  // sheet + rail button are dead multi-clip UI. RED here (button still renders
+  // on master); C3 deletes it.
+  it('renders no Clips rail button (T11240 — multi-clip UI removed)', () => {
+    renderCockpit();
+    expect(screen.queryByTestId('cockpit-clips-btn')).toBeNull();
+  });
 });
