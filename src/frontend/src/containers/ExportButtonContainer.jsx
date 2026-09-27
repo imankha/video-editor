@@ -13,7 +13,7 @@ import { HighlightEffect } from '../constants/highlightEffects';
 import { clipIsFramed } from '../utils/clipSelectors';
 import { useQuestStore } from '../stores/questStore';
 import { useOverlayActionStore } from '../stores/overlayActionStore';
-import { calculateEffectiveDuration, sumEffectiveDurations, buildClipMetadata } from '../utils/effectiveDuration';
+import { calculateEffectiveDuration, knownEffectiveDuration, buildClipMetadata } from '../utils/effectiveDuration';
 import { describeHighlightCarryNote } from '../utils/highlightCarryNote';
 import { HIGH_FPS_THRESHOLD } from '../constants/exportFps';
 
@@ -27,7 +27,7 @@ export { calculateEffectiveDuration, buildClipMetadata };
  * T5790: estimated credit cost of a Framing export.
  *
  * Uses the SAME calculator + rounding the click-time credit check uses
- * (`handleExport` below → `sumEffectiveDurations` → `creditStore.getRequiredCredits`,
+ * (`handleExport` below → `calculateEffectiveDuration` → `creditStore.getRequiredCredits`,
  * i.e. round-half-up of output seconds per T9750), so the number shown on the button never
  * disagrees with the insufficient-credits modal or the backend charge (EPIC.md:
  * "one cost calculator").
@@ -36,12 +36,12 @@ export { calculateEffectiveDuration, buildClipMetadata };
  * output duration is unknown / NaN / non-positive, so the UI HIDES the estimate
  * rather than showing a guess that would be short of the real charge.
  *
- * @param {Array} clips - Clips carrying live (selected) or saved segment state
+ * @param {Object} clip - The clip carrying live (selected) or saved segment state
  * @returns {number|null} required credits, or null when duration is unknown
  */
-export function estimateExportCredits(clips) {
-  const totalVideoSeconds = sumEffectiveDurations(clips);
-  if (totalVideoSeconds == null || Number.isNaN(totalVideoSeconds) || totalVideoSeconds <= 0) {
+export function estimateExportCredits(clip) {
+  const totalVideoSeconds = knownEffectiveDuration(clip);
+  if (totalVideoSeconds == null) {
     return null;
   }
   return useCreditStore.getState().getRequiredCredits(totalVideoSeconds);
@@ -91,8 +91,6 @@ export function ExportButtonContainer({
   editorMode: editorModeProp,
   onProceedToOverlay,
   clips = null,
-  globalAspectRatio = '9:16',
-  globalTransition = null,
   projectId: projectIdProp,
   projectName: projectNameProp,
   onExportComplete = null,
@@ -520,13 +518,7 @@ export function ExportButtonContainer({
       // Refresh balance first to avoid stale-balance false positives
       await useCreditStore.getState().fetchCredits();
       const { canAffordExport, getRequiredCredits, balance } = useCreditStore.getState();
-      const isMultiClip = clips && clips.length > 1;
-      let totalVideoSeconds = 0;
-      if (isMultiClip) {
-        totalVideoSeconds = clips.reduce((sum, c) => sum + (calculateEffectiveDuration(c) || 0), 0);
-      } else if (clips && clips.length === 1) {
-        totalVideoSeconds = calculateEffectiveDuration(clips[0]);
-      }
+      let totalVideoSeconds = clips?.[0] ? calculateEffectiveDuration(clips[0]) : 0;
       // Fail-closed: if duration is NaN/undefined, fall back to clip.duration or metadata
       if (!totalVideoSeconds || isNaN(totalVideoSeconds)) {
         const fallbackDuration = clips?.[0]?.duration || 0;
@@ -626,113 +618,72 @@ export function ExportButtonContainer({
       let endpoint;
 
       if (editorMode === EDITOR_MODES.FRAMING) {
-        const isMultiClip = clips && clips.length > 1;
+        // A clips.length > 1 array reaching Framing is an internal bug (T11220
+        // guards every entry). No defensive branch here: /api/export/render
+        // refuses more than one clip loudly (fail-visible per coding standards).
+        if (!projectId) {
+          throw new Error('Cannot export: No project selected. Please save your project first.');
+        }
+        if (!saveCurrentClipState) {
+          throw new Error('Cannot export: Clip state manager not available. Please reload the page and try again.');
+        }
 
-        if (isMultiClip) {
-          endpoint = `${API_BASE}/api/export/multi-clip`;
+        console.log('[ExportButtonContainer] Using backend-authoritative render');
+        setProgressMessage(EXPORT_PROGRESS.PREPARING);
 
-          // T810: Don't download/upload clip files — backend resolves video sources from DB
-          // This supports game-video clips that have no standalone files
-          const multiClipData = {
-            clips: clips.map((clip, index) => ({
-              clipIndex: index,
-              workingClipId: clip.id,
-              fileName: clip.fileName,
-              duration: clip.duration,
-              sourceWidth: clip.sourceWidth,
-              sourceHeight: clip.sourceHeight,
-              segments: clip.segments,
-              cropKeyframes: clip.cropKeyframes,
-              trimRange: clip.trimRange
-            })),
-            globalAspectRatio: globalAspectRatio,
-            transition: globalTransition || { type: 'cut', duration: 0.5 }
-          };
+        try {
+          await saveCurrentClipState();
+          console.log('[ExportButtonContainer] Clip state saved, requesting render');
+        } catch (saveErr) {
+          console.error('[ExportButtonContainer] Failed to save clip state:', saveErr);
+          throw new Error('Failed to save clip edits before export. Please try again.');
+        }
 
-          console.log('=== MULTI-CLIP EXPORT: Sending clip data to backend ===');
-          multiClipData.clips.forEach((c, i) => {
-            console.log(`Clip ${i}: segments=${JSON.stringify(c.segments)}, trimRange=${JSON.stringify(c.trimRange)}, duration=${c.duration}`);
-          });
-          console.log('Full data:', JSON.stringify(multiClipData, null, 2));
-          console.log('=======================================================');
+        endpoint = `${API_BASE}/api/export/render`;
 
-          formData.append('multi_clip_data_json', JSON.stringify(multiClipData));
-          formData.append('include_audio', includeAudio ? 'true' : 'false');
-          formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
-          formData.append('export_mode', EXPORT_CONFIG.exportMode);
-          if (projectId) {
-            formData.append('project_id', String(projectId));
-          }
-          if (projectName) {
-            formData.append('project_name', projectName);
-          }
+        setProgressMessage(EXPORT_PROGRESS.PREPARING);
+        await connectWebSocket(exportId);
 
-        } else {
-          // Single clip export: Backend-authoritative render
-          if (!projectId) {
-            throw new Error('Cannot export: No project selected. Please save your project first.');
-          }
-          if (!saveCurrentClipState) {
-            throw new Error('Cannot export: Clip state manager not available. Please reload the page and try again.');
-          }
+        setProgressMessage(EXPORT_PROGRESS.RENDERING);
+        const renderResponse = await axios.post(endpoint, {
+          project_id: projectId,
+          export_id: exportId,
+          export_mode: EXPORT_CONFIG.exportMode,
+          target_fps: EXPORT_CONFIG.targetFps,
+          include_audio: includeAudio
+        });
+        renderRequestAccepted = true;
 
-          console.log('[ExportButtonContainer] Using backend-authoritative render');
-          setProgressMessage(EXPORT_PROGRESS.PREPARING);
+        // Refresh quest progress now that export job exists in DB
+        useQuestStore.getState().fetchProgress({ force: true });
 
-          try {
-            await saveCurrentClipState();
-            console.log('[ExportButtonContainer] Clip state saved, requesting render');
-          } catch (saveErr) {
-            console.error('[ExportButtonContainer] Failed to save clip state:', saveErr);
-            throw new Error('Failed to save clip edits before export. Please try again.');
-          }
-
-          endpoint = `${API_BASE}/api/export/render`;
-
-          setProgressMessage(EXPORT_PROGRESS.PREPARING);
-          await connectWebSocket(exportId);
-
+        // T760: 202 = background processing, completion comes via WebSocket
+        if (renderResponse.status === 202) {
+          console.log('[ExportButtonContainer] Render accepted (202), waiting for WebSocket completion');
+          backgroundExportRef.current = true;
           setProgressMessage(EXPORT_PROGRESS.RENDERING);
-          const renderResponse = await axios.post(endpoint, {
-            project_id: projectId,
-            export_id: exportId,
-            export_mode: EXPORT_CONFIG.exportMode,
-            target_fps: EXPORT_CONFIG.targetFps,
-            include_audio: includeAudio
-          });
-          renderRequestAccepted = true;
-
-          // Refresh quest progress now that export job exists in DB
-          useQuestStore.getState().fetchProgress({ force: true });
-
-          // T760: 202 = background processing, completion comes via WebSocket
-          if (renderResponse.status === 202) {
-            console.log('[ExportButtonContainer] Render accepted (202), waiting for WebSocket completion');
-            backgroundExportRef.current = true;
-            setProgressMessage(EXPORT_PROGRESS.RENDERING);
-            return;
-          }
-
-          console.log('[ExportButtonContainer] Backend render complete:', renderResponse.data);
-
-          handleExportEnd();
-          setLocalProgress(100);
-          setProgressMessage('Export complete!');
-          completeExportInStore(exportId, {
-            status: 'complete',
-            workingVideoId: renderResponse.data.working_video_id,
-            filename: renderResponse.data.filename
-          });
-
-          if (onProceedToOverlay && !overlayTransitionFiredRef.current) {
-            overlayTransitionFiredRef.current = true;
-            onProceedToOverlay(null, buildClipMetadata(clips), projectId, exportId);
-          }
-          fireExportComplete({ projectId, mode: editorMode });
-
-          setIsExporting(false);
           return;
         }
+
+        console.log('[ExportButtonContainer] Backend render complete:', renderResponse.data);
+
+        handleExportEnd();
+        setLocalProgress(100);
+        setProgressMessage('Export complete!');
+        completeExportInStore(exportId, {
+          status: 'complete',
+          workingVideoId: renderResponse.data.working_video_id,
+          filename: renderResponse.data.filename
+        });
+
+        if (onProceedToOverlay && !overlayTransitionFiredRef.current) {
+          overlayTransitionFiredRef.current = true;
+          onProceedToOverlay(null, buildClipMetadata(clips), projectId, exportId);
+        }
+        fireExportComplete({ projectId, mode: editorMode });
+
+        setIsExporting(false);
+        return;
       } else {
         // Overlay mode
         if (projectId) {
@@ -797,7 +748,10 @@ export function ExportButtonContainer({
           headers: {
             'Content-Type': 'multipart/form-data',
           },
-          responseType: editorMode === EDITOR_MODES.FRAMING ? 'json' : 'blob',
+          // T11240: Framing always returns early above (its own axios.post,
+          // responseType 'json' inline) — this shared tail is reached only by
+          // Overlay's legacy no-projectId blob path now.
+          responseType: 'blob',
           onUploadProgress: (progressEvent) => {
             if (!uploadCompleteRef.current) {
               const uploadPercent = Math.round(
@@ -817,97 +771,50 @@ export function ExportButtonContainer({
       // Refresh quest progress now that export job exists in DB
       useQuestStore.getState().fetchProgress({ force: true });
 
-      if (editorMode === EDITOR_MODES.FRAMING) {
-        renderRequestAccepted = true;
+      // Overlay's legacy no-projectId path — backend returns a blob for download.
+      // (Framing always returns early above; this tail no longer runs for it.)
+      const blob = new Blob([response.data], { type: 'video/mp4' });
 
-        // T760: 202 = background processing, completion comes via WebSocket
-        if (response.status === 202) {
-          console.log('[ExportButtonContainer] Multi-clip export accepted (202), waiting for WebSocket completion');
-          backgroundExportRef.current = true;
-          setProgressMessage(EXPORT_PROGRESS.RENDERING);
-          return;
-        }
+      setLocalProgress(95);
+      setProgressMessage(`Saving to ${SECTION_NAMES.PUBLISHED}...`);
 
+      if (projectId) {
         try {
-          const result = response.data;
-          console.log('[ExportButtonContainer] Framing export complete:', result);
+          const saveFormData = new FormData();
+          saveFormData.append('project_id', String(projectId));
+          saveFormData.append('video', blob, 'final_video.mp4');
+          saveFormData.append('overlay_data', JSON.stringify({
+            highlightRegions: highlightRegions || [],
+            effectType: highlightEffectType
+          }));
+
+          const saveResponse = await axios.post(
+            `${API_BASE}/api/export/final`,
+            saveFormData,
+            { headers: { 'Content-Type': 'multipart/form-data' } }
+          );
+
+          console.log('[ExportButtonContainer] Saved final video to DB:', saveResponse.data);
 
           fireExportComplete({ projectId, mode: editorMode });
-
-          setLocalProgress(100);
-          setProgressMessage('Loading into Spotlight mode...');
-
-          if (exportIdRef.current) {
-            completeExportInStore(exportIdRef.current);
-          }
-
-          const clipMetadata = clips && clips.length > 0 ? buildClipMetadata(clips) : null;
-
-          if (clipMetadata) {
-            console.log('[ExportButtonContainer] Built clip metadata for overlay:', clipMetadata);
-          }
-
-          if (onProceedToOverlay && !overlayTransitionFiredRef.current) {
-            overlayTransitionFiredRef.current = true;
-            await onProceedToOverlay(null, clipMetadata, projectId, exportId);
-          }
-
-          setIsExporting(false);
-          handleExportEnd();
-          setLocalProgress(0);
-          setProgressMessage('');
-        } catch (err) {
-          console.error('Failed to transition to overlay mode:', err);
-          setError(err.message || 'Failed to transition to overlay mode');
-          setIsExporting(false);
-          handleExportEnd();
-          setProgressMessage('Export complete, but overlay transition failed');
+        } catch (saveErr) {
+          console.error('[ExportButtonContainer] Failed to save final video to DB:', saveErr);
         }
-      } else {
-        // Overlay mode - backend returns blob for download
-        const blob = new Blob([response.data], { type: 'video/mp4' });
-
-        setLocalProgress(95);
-        setProgressMessage(`Saving to ${SECTION_NAMES.PUBLISHED}...`);
-
-        if (projectId) {
-          try {
-            const saveFormData = new FormData();
-            saveFormData.append('project_id', String(projectId));
-            saveFormData.append('video', blob, 'final_video.mp4');
-            saveFormData.append('overlay_data', JSON.stringify({
-              highlightRegions: highlightRegions || [],
-              effectType: highlightEffectType
-            }));
-
-            const saveResponse = await axios.post(
-              `${API_BASE}/api/export/final`,
-              saveFormData,
-              { headers: { 'Content-Type': 'multipart/form-data' } }
-            );
-
-            console.log('[ExportButtonContainer] Saved final video to DB:', saveResponse.data);
-
-            fireExportComplete({ projectId, mode: editorMode });
-          } catch (saveErr) {
-            console.error('[ExportButtonContainer] Failed to save final video to DB:', saveErr);
-          }
-        }
-
-        setLocalProgress(100);
-        setProgressMessage('Export complete!');
-
-        if (exportIdRef.current) {
-          completeExportInStore(exportIdRef.current);
-        }
-
-        setTimeout(() => {
-          setIsExporting(false);
-          handleExportEnd();
-          setLocalProgress(0);
-          setProgressMessage('');
-        }, 2000);
       }
+
+      setLocalProgress(100);
+      setProgressMessage('Export complete!');
+
+      if (exportIdRef.current) {
+        completeExportInStore(exportIdRef.current);
+      }
+
+      setTimeout(() => {
+        setIsExporting(false);
+        handleExportEnd();
+        setLocalProgress(0);
+        setProgressMessage('');
+      }, 2000);
 
     } catch (err) {
       console.error('[ExportButtonContainer] Export failed:', err);
@@ -1079,20 +986,19 @@ export function ExportButtonContainer({
   // once per relevant change, mirroring the click-time fail-closed warning in handleExport.
   const estimatedCredits = useMemo(() => {
     if (!isFramingMode) return null;
-    const credits = estimateExportCredits(clips);
-    if (credits == null && clips && clips.length > 0) {
+    const credits = estimateExportCredits(clips?.[0]);
+    if (credits == null && clips?.[0]) {
       console.warn('[ExportButtonContainer] Credit estimate hidden: effective output duration unknown (missing clip metadata) — showing no number');
     }
     return credits;
   }, [isFramingMode, clips]);
 
   // T9480: the EXACT seconds behind estimatedCredits (same calculator, same
-  // clips) -- needed by the View to decide whether rounding actually changed
+  // clip) -- needed by the View to decide whether rounding actually changed
   // the number (AC3 disclosure), not just to display the integer.
   const estimatedSeconds = useMemo(() => {
     if (!isFramingMode) return null;
-    const seconds = sumEffectiveDurations(clips);
-    return (seconds == null || Number.isNaN(seconds) || seconds <= 0) ? null : seconds;
+    return knownEffectiveDuration(clips?.[0]);
   }, [isFramingMode, clips]);
 
   // Optimistic warning: estimate exceeds the (already-in-container) balance. Informational
@@ -1101,29 +1007,20 @@ export function ExportButtonContainer({
 
   // T8280 (Option B-simple): surface the source fps so the View can show a
   // static "recorded at Xfps, exported at 30fps" note for high-fps sources.
-  // Pure render-time derivation from the SAME `clips` list the credit estimate
-  // already reads (Focus is single-clip-at-a-time for the export panel, but a
-  // multi-clip project should surface the note if ANY clip is high-fps, so we
-  // take the max). No store write, no fetch — never null-coalesced to 30 (a
-  // clip with unknown fps must not trigger the note).
-  const sourceFps = useMemo(() => {
-    if (!clips || clips.length === 0) return null;
-    const fpsValues = clips.map(c => c.fps).filter(v => v != null && !Number.isNaN(v));
-    if (fpsValues.length === 0) return null;
-    return Math.max(...fpsValues);
-  }, [clips]);
+  // Pure render-time derivation from the ONE clip (T11240: a project is
+  // exactly one clip). No store write, no fetch — never null-coalesced to 30
+  // (a clip with unknown fps must not trigger the note).
+  const sourceFps = clips?.[0]?.fps ?? null;
 
   // T740: Extraction check removed — framing reads game video directly
 
-  // Check if any clips haven't been worked on (no crop or meaningful segment edits)
-  const isMultiClipMode = clips && clips.length > 0;
-  const clipsNotFramed = (clips || []).filter(c => !clipIsFramed(c));
-
-  const hasUnframedClips = isMultiClipMode
-    ? clipsNotFramed.length > 0
+  // Check whether the one clip has been worked on (no crop or meaningful
+  // segment edits). T11240 naming trap: the old `isMultiClipMode` was true for
+  // every single clip too — `!clipIsFramed(clips[0])` is the REAL single-clip
+  // unframed gate (T8510), preserved verbatim here.
+  const hasUnframedClips = clips?.length > 0
+    ? !clipIsFramed(clips[0])
     : (!cropKeyframes || cropKeyframes.length === 0);
-  const unframedCount = isMultiClipMode ? clipsNotFramed.length : (hasUnframedClips ? 1 : 0);
-  const totalClips = isMultiClipMode ? (clips?.length || 1) : 1;
 
   // Button disabled state
   // T8510: reverses T3700 P0, Option A (any unframed clip blocks). The 2026-09-02
@@ -1140,9 +1037,7 @@ export function ExportButtonContainer({
   const buttonTitle = (!isFramingMode && hasUnsavedOverlayFailures)
     ? "Some edits haven't saved — retry saving before exporting"
     : (isFramingMode && hasUnframedClips
-      ? (totalClips > 1
-        ? 'Set at least one focus point on every clip to export'
-        : 'Set at least one focus point to export')
+      ? 'Set at least one focus point to export'
       : undefined);
 
   return {
@@ -1161,9 +1056,6 @@ export function ExportButtonContainer({
 
     // Clip status
     hasUnframedClips,
-    unframedCount,
-    totalExtractedClips: totalClips,
-    isMultiClipMode,
 
     // Button state
     isButtonDisabled,

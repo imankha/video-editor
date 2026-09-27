@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   calculateEffectiveDuration,
   sumEffectiveDurations,
+  knownEffectiveDuration,
   buildClipMetadata,
 } from './effectiveDuration';
 
@@ -117,6 +118,32 @@ describe('effectiveDuration', () => {
       ];
       expect(sumEffectiveDurations(clips)).toBeNull();
       warn.mockRestore();
+    });
+  });
+
+  // T11240: a project is exactly one clip, so the Framing credit estimate and
+  // pre-flight check move off `sumEffectiveDurations` (still used by
+  // FocusContainer's `projectEffectiveDuration` until T11240 C6) onto this
+  // single-clip calculator.
+  describe('knownEffectiveDuration', () => {
+    it('null for a missing/null clip', () => {
+      expect(knownEffectiveDuration(null)).toBeNull();
+      expect(knownEffectiveDuration(undefined)).toBeNull();
+    });
+
+    it('returns the clip effective duration', () => {
+      const clip = { id: 1, duration: 6, segments: { boundaries: [0, 3, 6], segmentSpeeds: { '0': 0.5 } } };
+      expect(knownEffectiveDuration(clip)).toBe(9);
+    });
+
+    it('fail-closed: returns null when the duration is unknown (NaN)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(knownEffectiveDuration({ id: 2 })).toBeNull();
+      warn.mockRestore();
+    });
+
+    it('fail-closed: returns null for a non-positive duration', () => {
+      expect(knownEffectiveDuration({ id: 3, duration: 0 })).toBeNull();
     });
   });
 

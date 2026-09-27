@@ -43,9 +43,6 @@ const ExportButtonView = forwardRef(function ExportButtonView({
 
   // Clip status
   hasUnframedClips,
-  unframedCount,
-  totalExtractedClips,
-  isMultiClipMode,
 
   // T10650: Focus "Back to Preview" — when the current framing is already
   // rendered, the primary CTA reopens that render instead of paying to
@@ -106,13 +103,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // names the same object+stage as the job list, toast and completion message.
   const job = EXPORT_JOBS[isFramingMode ? 'framing' : 'overlay'];
 
-  const ctaLabel = isCurrentlyExporting
-    ? job.inProgress
-    : isFramingMode
-      ? (hasUnframedClips && isMultiClipMode && totalExtractedClips > 1
-        ? `${job.action} (${totalExtractedClips - unframedCount}/${totalExtractedClips})`
-        : job.action)
-      : job.action;
+  const ctaLabel = isCurrentlyExporting ? job.inProgress : job.action;
 
   // T10650: the primary CTA becomes "Back to Preview" (D2 — fully replaces the
   // render CTA, no way to force a re-render) only in framing mode, when the
@@ -162,11 +153,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           className="flex items-center gap-1.5 text-xs text-amber-400"
         >
           <AlertCircle size={12} className="shrink-0" />
-          <span>
-            {(isMultiClipMode && totalExtractedClips > 1
-              ? 'Set at least one focus point on every clip to export'
-              : 'Set at least one focus point to export')}
-          </span>
+          <span>Set at least one focus point to export</span>
         </div>
       )}
 

@@ -67,7 +67,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   onProceedToOverlay,
   clips,
   globalAspectRatio,
-  globalTransition,
   onExportComplete,
   saveCurrentClipState,
   // T10650: Focus "Back to Preview" — derived + owned by FocusScreen, threaded
@@ -92,7 +91,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
     onProceedToOverlay,
     clips,
     globalAspectRatio,
-    globalTransition,
     onExportComplete,
     saveCurrentClipState,
   });
@@ -116,9 +114,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         isFramingMode={container.isFramingMode}
         isDarkOverlay={container.isDarkOverlay}
         hasUnframedClips={container.hasUnframedClips}
-        unframedCount={container.unframedCount}
-        totalExtractedClips={container.totalExtractedClips}
-        isMultiClipMode={container.isMultiClipMode}
         framingCtaMode={framingCtaMode}
         showBackToPreview={showBackToPreview}
         onBackToPreview={onBackToPreview}
@@ -274,7 +269,6 @@ export function FocusModeView({
   projectEffectiveDuration = null,
   globalAspectRatio,
   onAspectRatioChange,
-  globalTransition,
 
   // Export
   exportButtonRef,
@@ -566,7 +560,6 @@ export function FocusModeView({
         getSegmentExportData={getSegmentExportData}
         hasClips={hasClips}
         clipsWithCurrentState={clipsWithCurrentState}
-        globalTransition={globalTransition}
         onProceedToOverlay={onProceedToOverlay}
         onExportComplete={onExportComplete}
         saveCurrentClipState={saveCurrentClipState}
@@ -1042,7 +1035,6 @@ export function FocusModeView({
             onProceedToOverlay={onProceedToOverlay}
             clips={hasClips ? clipsWithCurrentState : null}
             globalAspectRatio={globalAspectRatio}
-            globalTransition={globalTransition}
             onExportComplete={onExportComplete}
             saveCurrentClipState={saveCurrentClipState}
             framingCtaMode={framingCtaMode}

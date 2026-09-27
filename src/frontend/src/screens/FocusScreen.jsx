@@ -1359,7 +1359,6 @@ export function FocusScreen({
       onUndoFraming={framingHandleUndoFraming}
       globalAspectRatio={globalAspectRatio}
       onAspectRatioChange={handleAspectRatioChange}
-      globalTransition={globalTransition}
       exportButtonRef={exportButtonRef}
       getFilteredKeyframesForExport={getFilteredKeyframesForExport}
       getSegmentExportData={getSegmentExportData}

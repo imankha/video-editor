@@ -57,7 +57,7 @@ export default function FocusCockpit({
   focusTimelineBlock,
   // Export machinery
   videoFile, getFilteredKeyframesForExport, getSegmentExportData,
-  hasClips, clipsWithCurrentState, globalTransition, onProceedToOverlay,
+  hasClips, clipsWithCurrentState, onProceedToOverlay,
   onExportComplete, saveCurrentClipState, exportButtonRef,
 }) {
   const [activeSheet, setActiveSheet] = useState(null); // 'setup' | 'trim' | null
@@ -88,7 +88,6 @@ export default function FocusCockpit({
     onProceedToOverlay,
     clips: hasClips ? clipsWithCurrentState : null,
     globalAspectRatio,
-    globalTransition,
     onExportComplete,
     saveCurrentClipState,
   });
