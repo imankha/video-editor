@@ -266,7 +266,6 @@ export function FocusModeView({
   hasClips,
   clipsWithCurrentState,
   selectedClipEffectiveDuration = null,
-  projectEffectiveDuration = null,
   globalAspectRatio,
   onAspectRatioChange,
 
@@ -436,8 +435,6 @@ export function FocusModeView({
   const sourceLength = duration || clipDuration || 0;
   const outputDiffersFromSource = selectedClipEffectiveDuration != null &&
     Math.abs(selectedClipEffectiveDuration - sourceLength) > 0.05;
-  // Project total is redundant with the per-clip chip when there's a single clip.
-  const isMultiClip = hasClips && (clipsWithCurrentState?.length || 0) > 1;
 
   // T10830: the framing timeline block, built once and rendered by whichever of
   // the two mutually-exclusive layouts is active (ordinary vs mobile-fullscreen).
@@ -848,7 +845,6 @@ export function FocusModeView({
             onUndo={onUndoFraming}
             previewing={previewing}
             onTogglePreview={() => setPreviewing((v) => !v)}
-            isMultiClip={isMultiClip}
           />
         )}
 
@@ -917,21 +913,6 @@ export function FocusModeView({
             </>
           )}
         </div>
-
-        {/* T5780: live project output total (multi-clip) — the billable output length
-            T5790 turns into a credit estimate. Hidden for a single clip (redundant with
-            the per-clip chip) and when unknown (fail-closed, no fabricated number). */}
-        {videoUrl && !isFullscreen && !mobileFs && isMultiClip && projectEffectiveDuration != null && (
-          <div className="mt-4 sm:mt-6 -mb-2 flex items-center justify-end gap-2 text-sm text-gray-300">
-            <span className="text-gray-400">Total output</span>
-            <OutputLengthChip
-              seconds={projectEffectiveDuration}
-              emphasized
-              label="Total"
-              testId="project-output-length-chip"
-            />
-          </div>
-        )}
         </div>
         {/* T9270: the unified settings rail — desktop (fine pointer) only, beside the
             editor column. Focus tabs = Clips | Settings; collapses to a 64px icon

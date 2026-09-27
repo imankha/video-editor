@@ -9,7 +9,7 @@ import { toast } from '../components/shared';
 import { track } from '../utils/analytics';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useQuestStore } from '../stores/questStore';
-import { calculateEffectiveDuration, sumEffectiveDurations } from '../utils/effectiveDuration';
+import { calculateEffectiveDuration } from '../utils/effectiveDuration';
 import useFramingHistory from '../hooks/useFramingHistory';
 
 /**
@@ -112,14 +112,7 @@ export function FocusContainer({
   selectedClip,
   hasClips,
   globalAspectRatio,
-  globalTransition,
-  addClip,
-  deleteClip,
-  selectClip,
-  reorderClips,
   updateClipData,
-  setGlobalTransition,
-  getClipExportData,
 
   // Video metadata cache (keyed by clip ID)
   clipMetadataCache = {},
@@ -290,18 +283,6 @@ export function FocusContainer({
     });
     return (eff == null || Number.isNaN(eff)) ? null : eff;
   }, [duration, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange]);
-
-  /**
-   * DERIVED (T5780): live project total = summed effective duration of every clip —
-   * live for the selected clip (clipsWithCurrentState merges its hook state) and saved
-   * segments_data for the rest. This is the billable output length T5790 turns into a
-   * credit estimate. Fail-closed: null if any clip's duration is unknown, so the total
-   * hides rather than under-reporting the real charge.
-   */
-  const projectEffectiveDuration = useMemo(() => {
-    if (!hasClips || !clipsWithCurrentState || clipsWithCurrentState.length === 0) return null;
-    return sumEffectiveDurations(clipsWithCurrentState);
-  }, [hasClips, clipsWithCurrentState]);
 
   /**
    * Save current clip's framing state to backend
@@ -1164,9 +1145,8 @@ export function FocusContainer({
     clipsWithCurrentState,
     getFilteredKeyframesForExport,
 
-    // T5780: live output-length indicators (derived at render, never persisted)
+    // T5780: live output-length indicator (derived at render, never persisted)
     selectedClipEffectiveDuration,
-    projectEffectiveDuration,
 
     // T9950 Slice 2: session-scoped Undo state.
     canUndoFraming: framingHistory.canUndo,

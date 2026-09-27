@@ -409,13 +409,7 @@ export function FocusScreen({
     selectedClip: selectedClipWithMeta,
     hasClips,
     globalAspectRatio,
-    globalTransition,
-    deleteClip,
-    selectClip,
-    reorderClips,
     updateClipData,
-    setGlobalTransition,
-    getClipExportData,
     saveFramingEdits: boundSaveFramingEdits,
     onCropChange: setDragCrop,
     setFramingChangedSinceExport,
@@ -425,7 +419,6 @@ export function FocusScreen({
   const {
     clipsWithCurrentState: framingClipsWithCurrentState,
     selectedClipEffectiveDuration,
-    projectEffectiveDuration,
     canUndoFraming,
     handleCropChange: framingHandleCropChange,
     handleCropComplete: framingHandleCropComplete,
@@ -1354,7 +1347,6 @@ export function FocusScreen({
       hasClips={hasClips}
       clipsWithCurrentState={framingClipsWithCurrentState}
       selectedClipEffectiveDuration={selectedClipEffectiveDuration}
-      projectEffectiveDuration={projectEffectiveDuration}
       canUndoFraming={canUndoFraming}
       onUndoFraming={framingHandleUndoFraming}
       globalAspectRatio={globalAspectRatio}

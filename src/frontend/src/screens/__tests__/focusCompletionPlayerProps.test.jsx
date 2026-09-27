@@ -29,7 +29,6 @@ vi.mock('../../containers', () => ({
   FocusContainer: () => ({
     clipsWithCurrentState: [],
     selectedClipEffectiveDuration: 0,
-    projectEffectiveDuration: 0,
     canUndoFraming: false,
     handleCropChange: vi.fn(),
     handleCropComplete: vi.fn(),

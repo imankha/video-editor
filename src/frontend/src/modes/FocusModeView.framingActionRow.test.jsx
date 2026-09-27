@@ -93,10 +93,4 @@ describe('FocusModeView FramingActionRow wiring (T9950 Slice 2)', () => {
     expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/back to framing/i);
     expect(screen.getByTestId('preview-disclosure')).not.toBeNull();
   });
-
-  it('shows the multi-clip disclosure line only when previewing a multi-clip project', () => {
-    renderView({ clipsWithCurrentState: [{ id: 'a' }, { id: 'b' }], hasClips: true });
-    fireEvent.click(screen.getByTestId('framing-preview-toggle'));
-    expect(screen.getByTestId('preview-disclosure').textContent).toMatch(/your clips are joined at export/i);
-  });
 });

@@ -707,12 +707,11 @@ export const EDITOR_PANELS = {
   UNDO: 'Undo',
   UNDO_NOTHING: 'Nothing to undo',
   // T9950 Slice 3 -- preview approximation disclosure (design doc §4). Exact for
-  // crop/timing/format/audio; approximate for image quality and multi-clip
-  // concatenation. Never a sharpness claim in either direction.
+  // crop/timing/format/audio; approximate for image quality. Never a
+  // sharpness claim in either direction.
   PREVIEW_HIGHLIGHT: 'Preview highlight',
   PREVIEW_BACK_TO_FRAMING: 'Back to framing',
   PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced at export.',
-  PREVIEW_MULTI_CLIP_DISCLOSURE: 'Previewing this clip. Your clips are joined at export.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
   // same shape as TRIM_AND_SLOWMO above (user request 2026-09-21).
   TEXT_LANE: 'Text',

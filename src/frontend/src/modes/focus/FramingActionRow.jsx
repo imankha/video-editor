@@ -16,7 +16,6 @@ export default function FramingActionRow({
   onUndo,
   previewing = false,
   onTogglePreview,
-  isMultiClip = false,
 }) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -52,12 +51,11 @@ export default function FramingActionRow({
       )}
 
       {/* T9950 Slice 3 -- approximation disclosure (design doc §4, AC2). Exact
-          for crop/timing/format/audio, approximate for image quality and
-          multi-clip concatenation; shown only while the preview is active. */}
+          for crop/timing/format/audio, approximate for image quality; shown
+          only while the preview is active. */}
       {previewing && (
         <span className="w-full text-xs text-gray-500" data-testid="preview-disclosure">
           {EDITOR_PANELS.PREVIEW_DISCLOSURE}
-          {isMultiClip && ` ${EDITOR_PANELS.PREVIEW_MULTI_CLIP_DISCLOSURE}`}
         </span>
       )}
     </div>
