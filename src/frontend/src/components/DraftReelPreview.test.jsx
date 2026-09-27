@@ -341,8 +341,11 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
 
   beforeEach(() => {
     repointShareLinkMock.mockReset();
-    repointShareLinkMock.mockResolvedValue('https://reelballers.com/shared/stale-tok-1');
+    repointShareLinkMock.mockResolvedValue({
+      shareUrl: 'https://reelballers.com/shared/stale-tok-1', changed: true,
+    });
     apiFetchMock.mockReset();
+    fetchProjectsMock.mockReset();
     toastSuccessMock.mockReset();
     toastErrorMock.mockReset();
     act(() => useReelPreviewStore.getState().close());
@@ -372,7 +375,7 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
     expect(repointShareLinkMock).not.toHaveBeenCalled();
   });
 
-  it('clicking "Update shared version" calls repointShareLink with the stale token, shows a confirmation, and hides the affordance on success', async () => {
+  it('clicking "Update shared version" calls repointShareLink with the stale token, shows the "updated" confirmation for a real change, and hides the affordance on success', async () => {
     render(<DraftReelPreview />);
     act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
 
@@ -383,17 +386,40 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
     expect(repointShareLinkMock).toHaveBeenCalledWith(
       expect.objectContaining({ downloadId: snapshot.finalVideoId, shareToken: staleShare.share_token }),
     );
-    expect(toastSuccessMock).toHaveBeenCalled();
+    expect(toastSuccessMock).toHaveBeenCalledWith('Shared version updated', expect.anything());
     expect(screen.queryByRole('button', { name: /update shared version/i })).toBeNull();
   });
 
+  it('shows the "up to date" confirmation (not "updated") on the idempotent no-op, per design §5', async () => {
+    repointShareLinkMock.mockResolvedValueOnce({
+      shareUrl: 'https://reelballers.com/shared/stale-tok-1', changed: false,
+    });
+
+    render(<DraftReelPreview />);
+    act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+    });
+
+    expect(toastSuccessMock).toHaveBeenCalledWith('Shared version is up to date', expect.anything());
+    expect(screen.queryByRole('button', { name: /update shared version/i })).toBeNull();
+  });
+
+  // design §5: these refusals leave the affordance visible (still stale,
+  // retry is available) and show their exact mapped copy -- no fallthrough
+  // to the raw backend `detail` text.
   it.each([
-    ['video_not_current', /reopen it and try/i],
-    ['target_missing', /isn.t ready yet|try again shortly/i],
-    ['repoint_conflict', /changed.*refresh|refresh.*retry/i],
-  ])('maps repointShareLink error code %s to the corresponding toast', async (code, expectedMessage) => {
-    const err = new Error('failed');
+    ['target_missing', undefined, /isn.t ready yet|try again shortly/i],
+    ['repoint_conflict', undefined, /changed.*refresh|refresh.*retry/i],
+    ['share_project_mismatch', undefined, /does not belong to this project/i],
+    [undefined, 404, /no longer exists/i],
+    [undefined, 403, /only the sharer/i],
+    [undefined, 400, /can.t be updated this way/i],
+  ])('maps code=%s/status=%s to the corresponding toast and keeps the affordance visible', async (code, status, expectedMessage) => {
+    const err = new Error('raw backend detail text, should not appear verbatim');
     err.code = code;
+    err.status = status;
     repointShareLinkMock.mockRejectedValueOnce(err);
 
     render(<DraftReelPreview />);
@@ -406,7 +432,78 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
     expect(toastErrorMock).toHaveBeenCalled();
     const [, options] = toastErrorMock.mock.calls[toastErrorMock.mock.calls.length - 1];
     expect(options?.message ?? '').toMatch(expectedMessage);
-    // Affordance stays visible on error (still stale, retry is available).
     expect(screen.getByRole('button', { name: /update shared version/i })).toBeTruthy();
+  });
+
+  it('HIDES the affordance on a 410 (revoked) response, per design §5 -- retrying a dead token can never succeed', async () => {
+    const err = new Error('This share has been revoked');
+    err.status = 410;
+    repointShareLinkMock.mockRejectedValueOnce(err);
+
+    render(<DraftReelPreview />);
+    act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+    });
+
+    expect(toastErrorMock).toHaveBeenCalled();
+    const [, options] = toastErrorMock.mock.calls[toastErrorMock.mock.calls.length - 1];
+    expect(options?.message ?? '').toMatch(/revoked/i);
+    expect(screen.queryByRole('button', { name: /update shared version/i })).toBeNull();
+  });
+
+  describe('409 video_not_current -- re-reads staleness per design §5', () => {
+    it('refetches the projects list and keeps the affordance visible with the REFRESHED stale token when still stale', async () => {
+      const err = new Error('video_not_current');
+      err.code = 'video_not_current';
+      repointShareLinkMock.mockRejectedValueOnce(err);
+      const freshStaleShare = { share_token: 'fresh-tok-2', old_filename: 'v2.mp4' };
+      fetchProjectsMock.mockResolvedValueOnce([
+        { id: snapshot.projectId, stale_share: freshStaleShare },
+      ]);
+
+      render(<DraftReelPreview />);
+      act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+      });
+
+      expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
+      expect(toastErrorMock).toHaveBeenCalled();
+      const [, options] = toastErrorMock.mock.calls[toastErrorMock.mock.calls.length - 1];
+      expect(options?.message ?? '').toMatch(/reopen it and try/i);
+      expect(screen.getByRole('button', { name: /update shared version/i })).toBeTruthy();
+
+      // A follow-up click must use the FRESH token from the refetch, not the
+      // original (now-superseded) staleShare.share_token.
+      repointShareLinkMock.mockResolvedValueOnce({ shareUrl: 'x', changed: true });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+      });
+      expect(repointShareLinkMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ shareToken: 'fresh-tok-2' }),
+      );
+    });
+
+    it('hides the affordance when the refetch shows the project is no longer stale', async () => {
+      const err = new Error('video_not_current');
+      err.code = 'video_not_current';
+      repointShareLinkMock.mockRejectedValueOnce(err);
+      fetchProjectsMock.mockResolvedValueOnce([
+        { id: snapshot.projectId, stale_share: null },
+      ]);
+
+      render(<DraftReelPreview />);
+      act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+      });
+
+      expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
+      expect(screen.queryByRole('button', { name: /update shared version/i })).toBeNull();
+    });
   });
 });

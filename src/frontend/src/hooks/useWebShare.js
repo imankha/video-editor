@@ -103,10 +103,16 @@ export function useWebShare() {
       const data = await resp.json().catch(() => ({}));
       const err = new Error(data.detail || 'Failed to update shared version');
       err.code = data.code;
+      // T10860 (design §5): 404/403/400/410 are plain HTTPExceptions with no
+      // machine-readable `code` field -- the caller needs the HTTP status to
+      // pick the right copy for those.
+      err.status = resp.status;
       throw err;
     }
     const data = await resp.json();
-    return data.share_url;
+    // changed: false on the idempotent no-op (already current) vs true on a
+    // real re-point -- design §5 shows distinct success copy for each.
+    return { shareUrl: data.share_url, changed: data.changed };
   }, []);
 
   const webShare = useCallback(async ({ downloadId, title, text, filename }) => {

@@ -88,6 +88,11 @@ class ShareRepointRequest(BaseModel):
 class ShareRepointResponse(BaseModel):
     ok: bool
     share_url: str
+    # T10860: distinguishes an idempotent no-op (already current -- design §5
+    # "Shared version is up to date") from a real re-point (design §5 default
+    # success copy). Both branches return the SAME ok/share_url shape
+    # otherwise, so the frontend needs this to pick the right toast.
+    changed: bool
 
 
 class ShareDetailResponse(BaseModel):
@@ -661,7 +666,7 @@ async def repoint_share(video_id: int, body: ShareRepointRequest):
     share_url = f"/shared/{body.share_token}"
 
     if share["video_id"] == video_id and share["video_filename"] == row["filename"]:
-        return ShareRepointResponse(ok=True, share_url=share_url)
+        return ShareRepointResponse(ok=True, share_url=share_url, changed=False)
 
     # T10860: existence check mirrors the codebase's own R2_ENABLED-gated
     # convention for "is this final_video actually servable" (downloads.py's
@@ -691,7 +696,7 @@ async def repoint_share(video_id: int, body: ShareRepointRequest):
             "detail": "This share was changed or revoked; refresh and retry.",
         })
 
-    return ShareRepointResponse(ok=True, share_url=share_url)
+    return ShareRepointResponse(ok=True, share_url=share_url, changed=True)
 
 
 @gallery_shares_router.get("/{video_id}/shares", response_model=list[ShareListItem])

@@ -4,6 +4,7 @@ import { API_BASE } from '../config';
 import { CollectionPlayer } from './collections/CollectionPlayer';
 import { PublishLinkFlow } from './PublishLinkFlow';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
+import { useProjectsStore } from '../stores/projectsStore';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useQuestStore } from '../stores/questStore';
 import { usePublishProject } from '../hooks/usePublishProject';
@@ -14,13 +15,30 @@ import { setPendingGame } from '../utils/pendingNavigation';
 import { RESULT_PUBLISH } from '../config/displayNames';
 
 // T10860 (design §5): maps a repointShareLink failure `code` to the exact
-// refuse-on-conflict copy from the design doc. Falls back to the raw error
-// message for an unmapped code rather than swallowing it.
+// refuse-on-conflict copy from the design doc. These carry a machine-readable
+// `code` in the response body (409-family + the cross-profile-fix addition
+// share_project_mismatch, which the design predates but follows the same
+// specific-copy-per-code intent).
 const REPOINT_ERROR_MESSAGES = {
   video_not_current: 'This draft changed; reopen it and try Update shared version.',
   target_missing: "The re-exported video isn't ready yet; try again shortly.",
   repoint_conflict: 'This share changed; refresh and retry.',
+  share_project_mismatch: 'This share does not belong to this project.',
 };
+
+// T10860 (design §5): the remaining refusals are plain HTTPExceptions with
+// NO `code` field in the body -- only an HTTP status -- so they're mapped by
+// status instead of falling through to the raw backend detail text.
+const REPOINT_STATUS_MESSAGES = {
+  404: 'That share no longer exists.',
+  410: 'This share was revoked.',
+  403: 'Only the sharer can update this share.',
+  400: "This share can't be updated this way.",
+};
+
+function resolveRepointErrorMessage(err) {
+  return REPOINT_ERROR_MESSAGES[err.code] ?? REPOINT_STATUS_MESSAGES[err.status] ?? err.message;
+}
 
 /**
  * DraftReelPreview (T8530) — the thin, store-aware wrapper that turns an
@@ -222,18 +240,40 @@ function DraftReelPreviewInner({ payload }) {
   // "Update shared version" click — the single re-point write gesture, inside
   // this onClick chain (never reactive). On success the token is unchanged
   // (same distributed URL) so there is nothing new to show/copy, just a
-  // confirmation; the affordance hides since the share is no longer stale. On
-  // refusal the affordance STAYS (still stale, retry is available).
+  // confirmation; the affordance hides since the share is no longer stale.
+  // `changed` (design §5) distinguishes a real re-point from the idempotent
+  // no-op (already current) so the success copy matches which happened.
+  //
+  // Refusals (design §5 table) mostly leave the affordance as-is (still
+  // stale, retry is available) EXCEPT:
+  //   - 410 revoked: nothing left to update -- hide the affordance.
+  //   - 409 video_not_current: another re-export raced since this payload's
+  //     snapshot. Re-read staleness (refetch the projects list, the single
+  //     source `stale_share` rides per Q1) so the affordance reflects the
+  //     CURRENT server truth instead of retrying against stale client data —
+  //     it may now be resolved (hide) or stale again with a NEW token.
   const handleUpdateShared = useCallback(async () => {
     if (!staleShare) return;
     try {
-      await repointShareLink({ downloadId: payload.finalVideoId, shareToken: staleShare.share_token });
-      toast.success('Shared version updated', { dedupKey: 'update-shared' });
+      const { changed } = await repointShareLink({
+        downloadId: payload.finalVideoId, shareToken: staleShare.share_token,
+      });
+      toast.success(
+        changed ? 'Shared version updated' : 'Shared version is up to date',
+        { dedupKey: 'update-shared' },
+      );
       setStaleShare(null);
     } catch (err) {
-      toast.error('Update failed', { message: REPOINT_ERROR_MESSAGES[err.code] ?? err.message });
+      if (err.status === 410) {
+        setStaleShare(null);
+      } else if (err.code === 'video_not_current') {
+        const projects = await useProjectsStore.getState().fetchProjects({ force: true });
+        const refreshed = projects.find((p) => p.id === payload.projectId);
+        setStaleShare(refreshed?.stale_share ?? null);
+      }
+      toast.error('Update failed', { message: resolveRepointErrorMessage(err) });
     }
-  }, [staleShare, repointShareLink, payload.finalVideoId]);
+  }, [staleShare, repointShareLink, payload.finalVideoId, payload.projectId]);
 
   // Status banner: cyan draft strip (idle/publishing) -> amber retry surface on
   // failure -> nothing once a link exists or capability is already published

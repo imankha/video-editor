@@ -421,7 +421,9 @@ class TestRepointEndpoint:
                 headers=_auth_headers(SHARER_ID),
             )
         assert resp.status_code == 200
-        assert resp.json()["ok"] is True
+        data = resp.json()
+        assert data["ok"] is True
+        assert data["changed"] is False
 
     def test_success_returns_unchanged_share_url(self, client):
         project_id, _final_video_id, token = self._publish_and_share(client)
@@ -437,6 +439,7 @@ class TestRepointEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["ok"] is True
+        assert data["changed"] is True
         assert data["share_url"].endswith(f"/shared/{token}")
 
         from app.services.sharing_db import get_share_by_token
@@ -466,7 +469,9 @@ class TestRepointEndpoint:
             headers=_auth_headers(SHARER_ID),
         )
         assert resp.status_code == 200
-        assert resp.json()["ok"] is True
+        data = resp.json()
+        assert data["ok"] is True
+        assert data["changed"] is True
 
     def test_non_sharer_forbidden_403(self, client):
         project_id, _final_video_id, token = self._publish_and_share(client)

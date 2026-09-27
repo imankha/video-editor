@@ -39,6 +39,25 @@ Postgres query + one Python pass, per Q1's approved decision — no new query. R
 exact masking — then GREEN). Also addressed the same day (MINOR, defense-in-depth):
 `repoint_share_video`'s UPDATE now carries `sharer_profile_id` as an explicit WHERE-clause CAS
 predicate, not solely the router's own pre-check.
+**Amendment 2026-09-26 #3 (post-ship, independent reviewer finding — MAJOR, fixed same day):** the
+frontend `handleUpdateShared`/`REPOINT_ERROR_MESSAGES` deviated from §5's table in four ways: (1)
+410 kept the affordance visible instead of hiding it (a dead token can never succeed on retry); (2)
+409 `video_not_current` never re-read staleness (no refetch — the design's own "Button re-reads
+staleness" cell was unimplemented); (3) the idempotent no-op showed the same "Shared version
+updated" copy as a real change, instead of §5's "Shared version is up to date" — the backend
+response had NO field distinguishing the two (both returned identical `{ok, share_url}`); (4)
+404/403/400 and the cross-profile fix's `share_project_mismatch` fell through to the raw backend
+`detail` text instead of §5's specific copy. Fixed: (a) `ShareRepointResponse` gained `changed: bool`
+(false on the idempotent branch, true on a real re-point) so the frontend can tell them apart; (b)
+`repointShareLink` now returns `{shareUrl, changed}` and attaches `err.status` (the plain-
+HTTPException refusals — 404/403/400/410 — carry NO machine-readable `code`, only an HTTP status);
+(c) `handleUpdateShared` now hides on `err.status === 410`, refetches
+`useProjectsStore.getState().fetchProjects({force:true})` and re-derives local `staleShare` on
+`err.code === 'video_not_current'`, and maps every code/status to its exact §5 copy via
+`REPOINT_ERROR_MESSAGES`/`REPOINT_STATUS_MESSAGES`. New/updated tests cover each behavior (hide on
+410, refetch-then-retry-with-fresh-token on 409, "up to date" copy on the idempotent branch,
+specific copy per 404/403/400/share_project_mismatch). Live-drive re-run against the FINAL code
+(this fix + the two prior fixes) — transcript: `qa/t10860-live-drive-final.md`.
 **Sources:** Task file `T10860-update-shared-version-repoint-token.md`; T10180-design §5 (the split-out rationale — EXTENDED here, not re-litigated); Code Expert Stage-1 findings (file:line map below); `persistence-sync.md` (CAS / Invariant 1 & 6 / `update_share_visibility`); `export-pipeline.md` (`publish_final_video` versioning + `keep_prior`).
 
 ---
