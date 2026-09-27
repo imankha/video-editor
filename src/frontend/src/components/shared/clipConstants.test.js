@@ -166,7 +166,8 @@ describe('getEditRatingCaption (edit mode)', () => {
   // clause is dropped (the caption rewrite proper is T11150/T11160).
   it('rating 4 -> reads off hasReel, never demands another star', () => {
     expect(getEditRatingCaption(4, true, false)).toBe('Good play (!).');
-    expect(getEditRatingCaption(4, true, true)).toBe('Good play (!) - clip already created from play.');
+    // T11150: "clip already created from play" -> "highlight already made."
+    expect(getEditRatingCaption(4, true, true)).toBe('Good play (!) - highlight already made.');
     expect(getEditRatingCaption(4, true, false)).not.toMatch(/one more star|another star|create a clip below/);
   });
 
@@ -177,15 +178,15 @@ describe('getEditRatingCaption (edit mode)', () => {
   });
 
   it('rating 5 + My Athlete + clip already exists -> says so, does not re-offer creation', () => {
-    expect(getEditRatingCaption(5, true, true)).toBe('Highlight play (!!) - clip already created from play.');
+    expect(getEditRatingCaption(5, true, true)).toBe('Highlight play (!!) - highlight already made.');
   });
 
-  // T11110: team plays CAN become highlights (H13), so the "clip already created"
-  // clause applies to the Team label the same as the My Athlete label.
+  // T11110: team plays CAN become highlights (H13), so the "highlight already
+  // made" clause applies to the Team label the same as the My Athlete label.
   it('rating 5 + Team -> Highlight team label, reflects hasReel like My Athlete does', () => {
     expect(getEditRatingCaption(5, false, false)).toBe('Highlight team play (!!).');
     expect(getEditRatingCaption(5, false, true)).toBe(
-      'Highlight team play (!!) - clip already created from play.'
+      'Highlight team play (!!) - highlight already made.'
     );
   });
 

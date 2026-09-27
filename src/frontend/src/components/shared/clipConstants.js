@@ -119,12 +119,12 @@ export function getEditRatingCaption(rating, mine, hasReel) {
   if (rating === 3) return `Interesting play (${RATING_NOTATION[3]}) - worth a second look.`;
   if (rating === 4) {
     return hasReel
-      ? `Good play (${RATING_NOTATION[4]}) - clip already created from play.`
+      ? `Good play (${RATING_NOTATION[4]}) - highlight already made.`
       : `Good play (${RATING_NOTATION[4]}).`;
   }
   const label = mine ? 'Highlight play' : 'Highlight team play';
   return hasReel
-    ? `${label} (${RATING_NOTATION[5]}) - clip already created from play.`
+    ? `${label} (${RATING_NOTATION[5]}) - highlight already made.`
     : `${label} (${RATING_NOTATION[5]}).`;
 }
 

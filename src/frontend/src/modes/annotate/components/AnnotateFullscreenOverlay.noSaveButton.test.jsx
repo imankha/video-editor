@@ -118,8 +118,10 @@ describe('AnnotateFullscreenOverlay — per-gesture writes (T10600-design.md § 
   });
 
   it('layer toggle to Team sends exactly {my_athlete: false}', () => {
+    // T11150: the Layer/category control moved into the "Details" disclosure.
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip })} layout="overlay" />);
+    fireEvent.click(screen.getByTestId('add-details-button'));
     fireEvent.click(screen.getByRole('radio', { name: /Team/i }));
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip).toHaveBeenCalledWith('clip-1', { my_athlete: false });
@@ -129,6 +131,7 @@ describe('AnnotateFullscreenOverlay — per-gesture writes (T10600-design.md § 
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     const clip = { ...baseClip, my_athlete: false, tagged_teammates: ['Sam'] };
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip, existingClip: clip })} layout="overlay" />);
+    fireEvent.click(screen.getByTestId('add-details-button'));
     fireEvent.click(screen.getByRole('radio', { name: /My athlete/i }));
     expect(onUpdateClip).toHaveBeenCalledWith('clip-1', { my_athlete: true, tagged_teammates: [] });
   });
@@ -202,8 +205,8 @@ describe('AnnotateFullscreenOverlay — the ONE Escape rule (v2 finding 6)', () 
   it('strip layout: Escape in the inline name editor reverts and does not write (regression: nested blur must not see the stale pre-revert value)', () => {
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip })} layout="strip" />);
-    fireEvent.click(screen.getByTitle('Rename clip'));
-    const input = screen.getByLabelText('Clip name');
+    fireEvent.click(screen.getByTitle('Rename play'));
+    const input = screen.getByLabelText('Play name');
     input.focus();
     fireEvent.change(input, { target: { value: 'Junk' } });
     fireEvent.keyDown(input, { key: 'Escape' });

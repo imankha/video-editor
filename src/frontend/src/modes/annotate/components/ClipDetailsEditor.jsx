@@ -219,7 +219,7 @@ export function ClipDetailsEditor({
       <div className="p-3 space-y-3">
         {/* Header */}
         <div className="text-gray-400 text-xs uppercase tracking-wider">
-          Clip Details
+          Play details
         </div>
 
         {region.shared_by && (
@@ -292,7 +292,7 @@ export function ClipDetailsEditor({
             onBlur={commitName}
             onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setNameDraft, storedValue: region.name, allowEnterCommit: true })}
             className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-            placeholder={displayName || ANNOTATE.CLIP_NAME}
+            placeholder={displayName || ANNOTATE.PLAY_NAME}
           />
         </div>
 
@@ -364,7 +364,7 @@ export function ClipDetailsEditor({
             strip under the video (AnnotateFullscreenOverlay via getClipStage),
             and the NO_PROJECT create affordance was already gone. */}
         {/* Delete Button — T10610 § D.1: shared with every overlay layout */}
-        <DeletePlayButton hasProject={!!region.autoProjectId} onDelete={onDelete} />
+        <DeletePlayButton onDelete={onDelete} />
       </div>
     </div>
   );

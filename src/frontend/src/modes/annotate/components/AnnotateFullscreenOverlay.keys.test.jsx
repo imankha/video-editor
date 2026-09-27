@@ -104,7 +104,7 @@ describe('AnnotateFullscreenOverlay — Esc layering (T8600)', () => {
   it('Esc closes the rating picker only -- it does not also discard the editor', () => {
     const onClose = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps({ onClose })} layout="strip" />);
-    fireEvent.click(screen.getByTestId('badge-rated'));
+    fireEvent.click(screen.getByTestId('rating-pill'));
     expect(screen.getByRole('radiogroup', { name: "Rate your athlete's play" })).toBeTruthy();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('radiogroup', { name: "Rate your athlete's play" })).toBeNull();
@@ -116,13 +116,13 @@ describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unc
   it('typing "1" in the clip name field does not change the rating', () => {
     render(<AnnotateFullscreenOverlay {...baseProps()} layout="strip" />);
     // T8960: the name is a pencil button until clicked; open the inline input.
-    fireEvent.click(screen.getByTitle('Rename clip'));
-    const nameInput = screen.getByLabelText('Clip name');
+    fireEvent.click(screen.getByTitle('Rename play'));
+    const nameInput = screen.getByLabelText('Play name');
     fireEvent.keyDown(nameInput, { key: '1' });
-    // T10520: rating now lives in the rated badge's popup picker — open it
-    // and confirm the default (4 stars · Good) is still checked, unaffected
-    // by the keypress typed into the name field.
-    fireEvent.click(screen.getByTestId('badge-rated'));
+    // T11150: rating now lives in the RatingPill's popup picker — open it and
+    // confirm the default (4 stars · Good) is still checked, unaffected by
+    // the keypress typed into the name field.
+    fireEvent.click(screen.getByTestId('rating-pill'));
     expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
   });
 
@@ -138,8 +138,8 @@ describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unc
   it('Enter INSIDE the name input commits the name via the shared blur-routing (one {name} write)', () => {
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip })} layout="strip" />);
-    fireEvent.click(screen.getByTitle('Rename clip'));
-    const nameInput = screen.getByLabelText('Clip name');
+    fireEvent.click(screen.getByTitle('Rename play'));
+    const nameInput = screen.getByLabelText('Play name');
     fireEvent.change(nameInput, { target: { value: 'Great tackle' } });
     fireEvent.keyDown(nameInput, { key: 'Enter' });
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
@@ -153,7 +153,7 @@ describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unc
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip).toHaveBeenCalledWith('c1', { rating: 5 });
     // Visual state also reflects it.
-    fireEvent.click(screen.getByTestId('badge-rated'));
+    fireEvent.click(screen.getByTestId('rating-pill'));
     expect(screen.getByRole('radio', { name: '5 stars - Highlight' }).getAttribute('aria-checked')).toBe('true');
   });
 });

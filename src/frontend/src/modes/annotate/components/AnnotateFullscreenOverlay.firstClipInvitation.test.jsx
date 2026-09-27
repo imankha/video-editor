@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
 import { useProjectsStore } from '../../../stores/projectsStore';
 
@@ -80,29 +80,14 @@ describe('AnnotateFullscreenOverlay — first-clip invitation (T9580 / N41)', ()
     expect(onSeek).not.toHaveBeenCalled();
   });
 
-  it('while the 5-star nudge create call is in flight (clipCreating), the clip badge shows pending and the invitation is not shown yet (no autoProjectId)', async () => {
-    let resolveCreate;
-    const createPromise = new Promise((res) => { resolveCreate = res; });
-    const onUpdateClip = vi.fn(() => createPromise);
-    render(
-      <AnnotateFullscreenOverlay
-        {...baseProps({ onUpdateClip })}
-        layout="strip"
-        existingClip={{ ...editClip, rating: 5, autoProjectId: null }}
-      />
-    );
-    // The clip badge is the 5-star nudge — click it to fire the create call.
-    fireEvent.click(screen.getByTestId('badge-clip'));
-    expect(onUpdateClip).toHaveBeenCalledWith('c1', { createProject: true });
-    // In flight: clipCreating is true, PlayProgressBadges reflects it as pending.
-    expect(screen.getByTestId('badge-clip').dataset.state).toBe('pending');
-    // No project id has landed yet, so the FOCUS-stage invitation is not shown.
-    expect(screen.queryByRole('button', { name: 'Frame' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Keep marking plays' })).toBeNull();
-
-    resolveCreate({ saveOk: true, projectId: 42 });
-    await waitFor(() => expect(screen.getByTestId('badge-clip').dataset.state).not.toBe('pending'));
-  });
+  // T11150 (Play editor hierarchy): the T10410 clip badge's 5-star create-clip
+  // nudge/pending flow is retired along with the whole progress-badges row —
+  // clip creation now lives entirely on the main Annotate screen (T11130
+  // scope). The invitation-not-shown-until-autoProjectId-lands behavior it
+  // pinned is still covered structurally: no autoProjectId -> no stage CTA
+  // (see "renders NO stage CTA for a project-less play" in
+  // AnnotateFullscreenOverlay.portraitStrip.test.jsx and the stripLayout
+  // suite's project-required assertions).
 
   it('a later stage (Spotlight) shows NO "Keep marking plays" — the single stage CTA suffices', () => {
     useProjectsStore.setState({ projects: [{ id: 42, has_working_video: true, has_final_video: false, is_published: false }] });

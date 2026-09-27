@@ -14,10 +14,13 @@ import { ANNOTATE } from '../../../config/displayNames';
  * space-constrained landscape-inline bar — same confirm/cancel semantics,
  * compact markup.
  */
-export function DeletePlayButton({ hasProject, onDelete, variant = 'full' }) {
+export function DeletePlayButton({ onDelete, variant = 'full' }) {
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const label = hasProject ? ANNOTATE.DELETE_CLIP : ANNOTATE.DELETE_PLAY;
+  // T11150 (Play editor hierarchy): always "Delete play" now — the old
+  // hasProject-gated "Delete clip" label named the object being deleted
+  // ("clip"), which this task removes from the editor entirely.
+  const label = ANNOTATE.DELETE_PLAY;
 
   const handleDeleteClick = () => setShowConfirm(true);
   const handleConfirmDelete = () => {
@@ -85,8 +88,6 @@ export function DeletePlayButton({ hasProject, onDelete, variant = 'full' }) {
       data-testid="delete-play-button"
     >
       <Trash2 className="w-4 h-4" />
-      {/* T9520 N14: a play that produced a clip deletes a "clip"; a bare
-          marked play deletes a "play". */}
       <span>{label}</span>
     </button>
   );
