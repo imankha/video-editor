@@ -1,5 +1,69 @@
 ---
 domain: persistence-sync
+updated: 2026-09-26 (T10860 follow-up #2, same day, independent reviewer finding — MAJOR, fixed:
+**a "mark seen on first row" scan over a project's MULTIPLE active shares can mask a real signal
+behind an irrelevant one.** The T10860 staleness scan (`projects.py`, ordered by `shared_at DESC`)
+stopped looking at a project the moment it saw ANY share for it — including an already-current one
+— so an older STALE share sitting behind a newer CURRENT share (a real scenario: re-share via "Get
+link" after a re-export mints a fresh current token while the ORIGINAL stale token is still live)
+was silently never examined. **General lesson: when a per-entity scan needs to find "does ANY row
+satisfy condition X", the seen/skip set must be keyed on "X was satisfied", not "a row for this
+entity was seen" — order-by-recency + first-match is only safe if the FIRST row is guaranteed to be
+the one that matters, which a multi-row-per-entity shape rarely guarantees.** Fixed by keying the
+skip check on `project_id in stale_share_by_project` (only true once a stale one was actually
+found) instead of a separate `seen_projects` set (true on any row). Zero new queries — same single
+batched Postgres read, corrected Python-side fold. See the T10860 entry below for the mechanism this
+scan belongs to.)
+updated: 2026-09-26 (T10860 follow-up, same day, independent reviewer finding — BLOCKING data
+corruption, fixed: **`final_videos.id` collides ACROSS PROFILES of the same user** — it is a
+PER-PROFILE SQLite autoincrement (each profile has its own `profile.sqlite`), so profile A's
+final_video id=1 and profile B's final_video id=1 are two UNRELATED videos. The T10860 repoint
+mechanism (below) originally scoped its Postgres CAS write and staleness read on `sharer_user_id`
+alone — never `sharer_profile_id` — so viewing profile B could surface profile A's share as stale
+and successfully repoint it onto profile B's video (same user_id, colliding id, wrong profile),
+silently corrupting profile A's already-distributed link. **General lesson: any Postgres query or
+CAS write keyed on a per-profile SQLite autoincrement id (here `final_videos.id` via
+`share_videos.video_id`) MUST also filter/verify the owning `profile_id` — `sharer_user_id`/
+`user_id` alone is NOT sufficient scope once a user has more than one profile.** This is a distinct
+hazard from the T7520 cross-tenant guard above (that guards a DIFFERENT user attaching to a profile
+via a client-supplied header; this guards the SAME user's OWN two profiles colliding on an
+internal autoincrement id neither client nor server treats as profile-qualified). Fix: (1) the
+staleness query added `AND s.sharer_profile_id = get_current_profile_id()`; (2) the repoint
+endpoint added a `share["sharer_profile_id"] != get_current_profile_id()` 403 refusal; (3) also
+added a same-project check (`share`'s resolved `video_id` must belong to the SAME `project_id` as
+the path `video_id`) since a caller-supplied `share_token` could otherwise retarget an unrelated
+project's video even within one profile. Regression: `TestCrossProfileShareIsolation`
+(`test_t10860_repoint_share_token.py`) reproduces the exact collision with two profiles seeded
+independently (each lands final_video id=1 in its own SQLite) — confirmed RED (genuine
+200-success-and-corrupt, not a masked refusal) before the fix, GREEN after.)
+updated: 2026-09-26 (T10860: a share-token re-point ("Update shared version") is a POSTGRES CAS
+write, not a SQLite/R2 one — the R2 sync/version machinery this doc otherwise covers does NOT apply.
+`sharing_db.repoint_share_video` mirrors the existing `update_share_visibility` shape: ONE conditional
+`UPDATE share_videos ... FROM shares WHERE share_token=... AND sharer_user_id=... AND
+share_type='video' AND revoked_at IS NULL`, `cursor.rowcount > 0` IS the CAS verdict (0 => the row the
+caller saw is not the row on the server — refuse, never blind-overwrite). "Prove current or fail
+loudly" here has TWO halves for a Postgres write: (a) the path `final_video_id` must still equal
+`projects.final_video_id` (refuse `video_not_current` if another re-export raced since the caller's
+snapshot), and (b) the NEW object must actually exist before pointing at it. **LANDMINE hit and fixed
+mid-task:** half (b) was initially implemented as an unconditional `r2_head_object(...) is None` check
+— but `r2_head_object` (storage.py) unconditionally returns `None` whenever `R2_ENABLED=false` (its
+`get_r2_client()` short-circuits before ever calling R2), so an R2-only existence check REFUSES EVERY
+re-point in a local/no-R2 dev posture, indistinguishable from a genuinely missing object. Fixed to
+mirror the codebase's own established `R2_ENABLED`-gated existence convention (`downloads.py`'s
+composed-download branch: R2 HEAD/presigned path when `R2_ENABLED`, a plain `get_final_videos_path()
+/ filename` local `.exists()` check otherwise) — checked ONLY at endpoint-call time via
+`app.routers.shares.R2_ENABLED`, not baked into `r2_head_object` itself (that function's contract —
+"None if absent/R2-disabled" — is correct and unchanged for its OTHER callers; the bug was this ONE
+caller trusting it to mean "does not exist" when it can also mean "R2 is off"). **General lesson for
+any FUTURE existence-before-write check:** `r2_head_object`/`r2_head_object_global` returning `None`
+is NOT proof of absence — it is also the R2-disabled return value. Gate on `R2_ENABLED` explicitly,
+or check local disk first, exactly like every other existence check in `downloads.py`/`storage.py`
+already does; do not add a new caller that assumes R2-only. Live-verified against this container's
+actual `R2_ENABLED=true` posture (real Cloudflare credentials via `/workspace/.env`, loaded through
+`app.main`'s dotenv boot — NOT visible to a bare `python3 -c` import that skips `app.main`) — a real
+uploaded object, a real `r2_head_object` HEAD round-trip, and the local-disk branch's happy/refuse
+paths are both regression-tested (`tests/test_t10860_repoint_share_token.py`). See export-pipeline.md
+T10860 entry for the staleness-detection half (batched, non-N+1, folded into `GET /api/projects`).)
 updated: 2026-09-26 (T11220: **`restore-project` now REFUSES a legacy multi-clip published reel
 loudly instead of restoring it into an editor that can't represent it.** The single-clip-editor
 epic collapses `one project = one clip`; a `final_videos.clip_count > 1` reel can no longer be

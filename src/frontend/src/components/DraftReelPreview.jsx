@@ -4,6 +4,7 @@ import { API_BASE } from '../config';
 import { CollectionPlayer } from './collections/CollectionPlayer';
 import { PublishLinkFlow } from './PublishLinkFlow';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
+import { useProjectsStore } from '../stores/projectsStore';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useQuestStore } from '../stores/questStore';
 import { usePublishProject } from '../hooks/usePublishProject';
@@ -11,6 +12,33 @@ import { useWebShare } from '../hooks/useWebShare';
 import { useDownloads } from '../hooks/useDownloads';
 import { toast } from './shared/Toast';
 import { setPendingGame } from '../utils/pendingNavigation';
+import { RESULT_PUBLISH } from '../config/displayNames';
+
+// T10860 (design §5): maps a repointShareLink failure `code` to the exact
+// refuse-on-conflict copy from the design doc. These carry a machine-readable
+// `code` in the response body (409-family + the cross-profile-fix addition
+// share_project_mismatch, which the design predates but follows the same
+// specific-copy-per-code intent).
+const REPOINT_ERROR_MESSAGES = {
+  video_not_current: 'This draft changed; reopen it and try Update shared version.',
+  target_missing: "The re-exported video isn't ready yet; try again shortly.",
+  repoint_conflict: 'This share changed; refresh and retry.',
+  share_project_mismatch: 'This share does not belong to this project.',
+};
+
+// T10860 (design §5): the remaining refusals are plain HTTPExceptions with
+// NO `code` field in the body -- only an HTTP status -- so they're mapped by
+// status instead of falling through to the raw backend detail text.
+const REPOINT_STATUS_MESSAGES = {
+  404: 'That share no longer exists.',
+  410: 'This share was revoked.',
+  403: 'Only the sharer can update this share.',
+  400: "This share can't be updated this way.",
+};
+
+function resolveRepointErrorMessage(err) {
+  return REPOINT_ERROR_MESSAGES[err.code] ?? REPOINT_STATUS_MESSAGES[err.status] ?? err.message;
+}
 
 /**
  * DraftReelPreview (T8530) — the thin, store-aware wrapper that turns an
@@ -65,8 +93,15 @@ export function DraftReelPreview() {
 function DraftReelPreviewInner({ payload }) {
   const close = useReelPreviewStore((s) => s.close);
   const { publish, isPublishing } = usePublishProject({ id: payload.projectId });
-  const { copyLink, webShare, createShareLink, isMobile } = useWebShare();
+  const { copyLink, webShare, createShareLink, repointShareLink, isMobile } = useWebShare();
   const { downloadFile, downloadingId } = useDownloads();
+
+  // T10860 (design §3.3): a pre-existing share token whose snapshot is stale
+  // (points at a filename older than this project's current final video).
+  // Rides payload.staleShare -- a plain field on the already-fetched project
+  // row (GET /api/projects), NOT a fresh fetch/effect. Local state so a
+  // successful re-point can clear the affordance without re-fetching.
+  const [staleShare, setStaleShare] = useState(payload.staleShare ?? null);
 
   // Phase state machine (design §2.2/§3.3): idle -> review -> publishing ->
   // ready | failed. T8390: seeds 'idle' with link-ready CAPABILITY when the
@@ -202,6 +237,52 @@ function DraftReelPreviewInner({ payload }) {
     }
   }, [downloadFile]);
 
+  // "Update shared version" click — the single re-point write gesture, inside
+  // this onClick chain (never reactive). On success the token is unchanged
+  // (same distributed URL) so there is nothing new to show/copy, just a
+  // confirmation; the affordance hides since the share is no longer stale.
+  // `changed` (design §5) distinguishes a real re-point from the idempotent
+  // no-op (already current) so the success copy matches which happened.
+  //
+  // Refusals (design §5 table) mostly leave the affordance as-is (still
+  // stale, retry is available) EXCEPT:
+  //   - 410 revoked: nothing left to update -- hide the affordance.
+  //   - 409 video_not_current: another re-export raced since this payload's
+  //     snapshot. Re-read staleness (refetch the projects list, the single
+  //     source `stale_share` rides per Q1) so the affordance reflects the
+  //     CURRENT server truth instead of retrying against stale client data —
+  //     it may now be resolved (hide) or stale again with a NEW token.
+  const handleUpdateShared = useCallback(async () => {
+    if (!staleShare) return;
+    try {
+      const { changed } = await repointShareLink({
+        downloadId: payload.finalVideoId, shareToken: staleShare.share_token,
+      });
+      toast.success(
+        changed ? 'Shared version updated' : 'Shared version is up to date',
+        { dedupKey: 'update-shared' },
+      );
+      setStaleShare(null);
+      // Refresh the projects store so its cached row is corrected immediately
+      // -- not just this component's local state. Without this, closing and
+      // reopening the SAME DraftTile before any unrelated projects refetch
+      // happens reads the stale cached row (still showing the OLD
+      // stale_share) and the affordance/hint reappear even though the share
+      // is already current. Mirrors the 409 video_not_current branch below,
+      // which already does this for the failure case.
+      useProjectsStore.getState().fetchProjects({ force: true });
+    } catch (err) {
+      if (err.status === 410) {
+        setStaleShare(null);
+      } else if (err.code === 'video_not_current') {
+        const projects = await useProjectsStore.getState().fetchProjects({ force: true });
+        const refreshed = projects.find((p) => p.id === payload.projectId);
+        setStaleShare(refreshed?.stale_share ?? null);
+      }
+      toast.error('Update failed', { message: resolveRepointErrorMessage(err) });
+    }
+  }, [staleShare, repointShareLink, payload.finalVideoId, payload.projectId]);
+
   // Status banner: cyan draft strip (idle/publishing) -> amber retry surface on
   // failure -> nothing once a link exists or capability is already published
   // (§4.4/§4.6). Copy on the amber strip matches DraftTile's retry card exactly
@@ -250,19 +331,33 @@ function DraftReelPreviewInner({ payload }) {
   // gesture is that click, never a mount effect (R5).
   const flowPhase = phase === 'ready-capable' ? 'ready' : phase;
   const actionBar = (
-    <PublishLinkFlow
-      phase={flowPhase}
-      reelName={payload.name}
-      shareUrl={phase === 'ready-capable' ? null : shareUrl}
-      isMobile={isMobile}
-      copied={copied}
-      onPublishClick={handlePublishClick}
-      onCancel={handleCancelReview}
-      onConfirm={handleConfirmPublish}
-      onCopy={handleCopy}
-      onNativeShare={phase === 'ready-capable' ? handleGetLinkCapable : handleNativeShare}
-      onGetLink={handleGetLinkCapable}
-    />
+    <>
+      <PublishLinkFlow
+        phase={flowPhase}
+        reelName={payload.name}
+        shareUrl={phase === 'ready-capable' ? null : shareUrl}
+        isMobile={isMobile}
+        copied={copied}
+        onPublishClick={handlePublishClick}
+        onCancel={handleCancelReview}
+        onConfirm={handleConfirmPublish}
+        onCopy={handleCopy}
+        onNativeShare={phase === 'ready-capable' ? handleGetLinkCapable : handleNativeShare}
+        onGetLink={handleGetLinkCapable}
+      />
+      {staleShare && (
+        <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300">
+          <span className="min-w-0">{RESULT_PUBLISH.UPDATE_SHARED_HINT}</span>
+          <button
+            type="button"
+            onClick={handleUpdateShared}
+            className="ml-auto shrink-0 px-3 py-1 rounded-md text-[11px] font-medium border border-cyan-500 text-cyan-300 hover:bg-cyan-900/30"
+          >
+            {RESULT_PUBLISH.UPDATE_SHARED}
+          </button>
+        </div>
+      )}
+    </>
   );
 
   return (

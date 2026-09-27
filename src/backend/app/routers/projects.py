@@ -252,6 +252,11 @@ class ProjectListItem(BaseModel):
     final_video_created_at: str | None = None
     final_video_id: int | None = None
     is_published: bool  # True if latest final video has been published to My Reels
+    # T10860: non-None when a non-revoked single-video share still snapshots an
+    # OLDER final_videos filename than this project's CURRENT one (i.e. a private
+    # re-export happened after the share was minted). {share_token, old_filename}.
+    # Computed read-only in _read_projects_list; never written back.
+    stale_share: dict | None = None
     is_auto_created: bool  # True if project was auto-created for a 5-star clip
     created_at: str
     current_mode: str | None = 'framing'
@@ -295,6 +300,11 @@ class ProjectDetailResponse(BaseModel):
     clips: list[WorkingClipResponse]
     created_at: str
     is_auto_created: bool = False  # True if auto-created from 5-star clips
+    # T10860 Fix C: same shape/semantics as ProjectListItem.stale_share (see
+    # _compute_stale_shares) -- the "Publish Now" flow snapshots from THIS
+    # endpoint, not the list, so it needs the same signal to show the
+    # "Update shared version" affordance.
+    stale_share: dict | None = None
     # T11220: number of constituent clips (== len(clips), the latest-version
     # working clips this same response returns). The frontend re-frame guard
     # (allowEnterFraming) reads this off selectedProject to refuse re-framing a
@@ -302,6 +312,97 @@ class ProjectDetailResponse(BaseModel):
     # exposes the equivalent field, and deriving it from `clips` here means it
     # can never diverge from what this response actually contains.
     clip_count: int = 0
+
+
+def _compute_stale_shares(cursor, projects: list[tuple[int, int]]) -> dict[int, dict]:
+    """Batched staleness detection (design §3.2). For each (project_id,
+    current_final_video_id) pair, detects whether a non-revoked single-video
+    share still snapshots an OLDER final_videos.filename than the project's
+    CURRENT one. Returns {project_id: {"share_token":..., "old_filename":...}}
+    for stale projects only (absent key == not stale). Shared by
+    `_read_projects_list` (many projects at once) and `get_project` (a single
+    project) -- Fix C (Expert root-cause, T10860 follow-up): the "Publish Now"
+    flow (`OverlayScreen.handlePublishNow`) snapshots from
+    `GET /api/projects/{id}` (`ProjectDetailResponse`), which had NO
+    `stale_share` field at all, so that path never showed the affordance even
+    after the `is_published` gate below was fixed.
+
+    GATE: NOT gated on publish state -- sharing never reads `published_at`
+    (`shares.py`). The realistic archive -> restore-project -> re-export
+    lifecycle always leaves `is_published=false` (restore-project unpublishes;
+    a private re-export never publishes), so an `is_published` gate here would
+    make staleness never fire for that lifecycle -- the exact path a
+    stale-share bug shows up on in practice. The real gate is simply "this
+    project has a final_video at all"; a private re-export's prior
+    `final_videos` row survives specifically because `keep_prior`/
+    `filename_has_active_share` (`publish_final_video.py`) refuses to delete a
+    version an active share still points at -- THAT is what keeps a
+    non-current version alive to go stale, independent of publish state.
+    """
+    candidate_project_ids = [
+        project_id for project_id, final_video_id in projects if final_video_id
+    ]
+    stale_share_by_project: dict[int, dict] = {}
+    if not candidate_project_ids:
+        return stale_share_by_project
+
+    current_final_video_id = {
+        project_id: final_video_id for project_id, final_video_id in projects if final_video_id
+    }
+    placeholders = ','.join('?' for _ in candidate_project_ids)
+    cursor.execute(
+        f"""SELECT id, project_id, filename
+              FROM final_videos
+             WHERE project_id IN ({placeholders})""",
+        candidate_project_ids,
+    )
+    project_current_filename: dict[int, str] = {}
+    final_video_id_to_project: dict[int, int] = {}
+    # Only a project with a NON-current final_videos version (an older row
+    # still on disk/R2 thanks to keep_prior) can possibly have a stale share
+    # -- skip the Postgres round-trip entirely on the common case (every
+    # project's only version is its current one).
+    has_non_current_version = False
+    for fv_row in cursor.fetchall():
+        final_video_id_to_project[fv_row['id']] = fv_row['project_id']
+        if fv_row['id'] == current_final_video_id.get(fv_row['project_id']):
+            project_current_filename[fv_row['project_id']] = fv_row['filename']
+        else:
+            has_non_current_version = True
+
+    if not has_non_current_version:
+        return stale_share_by_project
+
+    from app.profile_context import get_current_profile_id
+    from app.services.pg import get_pg
+    with get_pg() as pg_conn:
+        pg_cur = pg_conn.cursor()
+        pg_cur.execute(
+            """SELECT sv.video_id, s.share_token, sv.video_filename
+                 FROM shares s
+                 JOIN share_videos sv ON sv.share_id = s.id
+                WHERE s.sharer_user_id = %s AND s.sharer_profile_id = %s
+                  AND s.share_type = 'video' AND s.revoked_at IS NULL
+                ORDER BY s.shared_at DESC""",
+            (get_current_user_id(), get_current_profile_id()),
+        )
+        # A project can carry MULTIPLE active shares at once (e.g. an older
+        # stale one plus a fresh one minted by "Get link" after a re-export).
+        # Only skip a project once a STALE share has actually been recorded
+        # for it -- marking it "seen" on the first row regardless of
+        # staleness would let a newer already-current share mask an older
+        # stale one further down this shared_at-DESC scan.
+        for share_row in pg_cur.fetchall():
+            project_id = final_video_id_to_project.get(share_row['video_id'])
+            if project_id is None or project_id in stale_share_by_project:
+                continue
+            current_filename = project_current_filename.get(project_id)
+            if current_filename is not None and share_row['video_filename'] != current_filename:
+                stale_share_by_project[project_id] = {
+                    'share_token': share_row['share_token'],
+                    'old_filename': share_row['video_filename'],
+                }
+    return stale_share_by_project
 
 
 def _read_projects_list():
@@ -397,6 +498,14 @@ def _read_projects_list():
         """)
 
         rows = cursor.fetchall()
+
+        # T10860: staleness detection (design §3.2), extracted into
+        # _compute_stale_shares (Fix C) so GET /api/projects/{id} (get_project)
+        # can surface the SAME signal -- see that function's docstring for the
+        # gate rationale (NOT is_published) and the batching/masking details.
+        stale_share_by_project = _compute_stale_shares(
+            cursor, [(row['id'], row['final_video_id']) for row in rows],
+        )
 
         # Fetch game info for all projects in one query
         # This traces: project -> working_clips -> raw_clips -> games
@@ -589,6 +698,7 @@ def _read_projects_list():
                 final_video_created_at=row['final_video_created_at'],
                 final_video_id=row['final_video_id'],
                 is_published=bool(row['is_published']),
+                stale_share=stale_share_by_project.get(row['id']),
                 is_auto_created=bool(row['is_auto_created']),
                 created_at=row['created_at'],
                 current_mode=row['current_mode'] or 'framing',
@@ -765,6 +875,13 @@ async def get_project(project_id: int):
         if project['working_video_filename']:
             working_video_url = get_working_video_url(project_id, project['working_video_filename'])
 
+        # T10860 Fix C: same shared computation the projects LIST uses, so the
+        # "Publish Now" flow (which snapshots from THIS endpoint) also sees
+        # stale_share.
+        stale_share = _compute_stale_shares(
+            cursor, [(project_id, project['final_video_id'])],
+        ).get(project_id)
+
         return ProjectDetailResponse(
             id=project['id'],
             name=project['name'],
@@ -778,7 +895,8 @@ async def get_project(project_id: int):
             clips=clips,
             created_at=project['created_at'],
             is_auto_created=bool(project['is_auto_created']),
-            clip_count=len(clips)  # T11220: constituent clip count (drives the re-frame guard)
+            stale_share=stale_share,
+            clip_count=len(clips),  # T11220: constituent clip count (drives the re-frame guard)
         )
 
 

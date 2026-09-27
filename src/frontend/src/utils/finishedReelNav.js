@@ -49,5 +49,10 @@ export function openFinishedReel(project, { alreadyPublished = false } = {}) {
     gameId: project.game_ids?.length === 1 ? project.game_ids[0] : null,
     alreadyPublished,
     openMode,
+    // T10860: snapshot of a pre-existing share token whose snapshot is stale
+    // (points at a filename older than this project's current final video).
+    // Rides the already-fetched project row -- see GET /api/projects
+    // stale_share (projects.py ProjectListItem) -- no separate fetch here.
+    staleShare: project.stale_share ?? null,
   });
 }

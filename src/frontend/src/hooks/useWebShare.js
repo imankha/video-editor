@@ -89,6 +89,32 @@ export function useWebShare() {
     return createShareUrl(downloadId);
   }, []);
 
+  // T10860: re-point an EXISTING share token to a moved final_video_id after a
+  // private re-export (the "Update shared version" gesture). Distinct from
+  // createShareLink/copyLink, which mint or reuse a token for the CURRENT
+  // video -- this preserves the already-distributed URL in place.
+  const repointShareLink = useCallback(async ({ downloadId, shareToken }) => {
+    const resp = await apiFetch(`${API_BASE}/api/gallery/${downloadId}/share/repoint`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ share_token: shareToken }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      const err = new Error(data.detail || 'Failed to update shared version');
+      err.code = data.code;
+      // T10860 (design §5): 404/403/400/410 are plain HTTPExceptions with no
+      // machine-readable `code` field -- the caller needs the HTTP status to
+      // pick the right copy for those.
+      err.status = resp.status;
+      throw err;
+    }
+    const data = await resp.json();
+    // changed: false on the idempotent no-op (already current) vs true on a
+    // real re-point -- design §5 shows distinct success copy for each.
+    return { shareUrl: data.share_url, changed: data.changed };
+  }, []);
+
   const webShare = useCallback(async ({ downloadId, title, text, filename }) => {
     if (capability === ShareCapability.FULL) {
       const resp = await apiFetch(`${API_BASE}/api/downloads/${downloadId}/file`);
@@ -123,5 +149,5 @@ export function useWebShare() {
     return copyLink(opts);
   }, [capability, webShare, copyLink]);
 
-  return { capability, isMobile, share, copyLink, webShare, createShareLink };
+  return { capability, isMobile, share, copyLink, webShare, createShareLink, repointShareLink };
 }
