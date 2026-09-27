@@ -498,14 +498,14 @@ describe('DraftTile (T5672)', () => {
     expect(onSelectWithMode).toHaveBeenCalledWith({ mode: 'overlay' });
   });
 
-  it('routes a framing-started draft (no working video) to Framing clip 0 on click (item 6)', () => {
+  it('routes a framing-started draft (no working video) to Framing on click (item 6)', () => {
     const onSelectWithMode = vi.fn();
     const { container } = renderTile(
       { has_working_video: false, clips_in_progress: 1 },
       { onSelectWithMode }
     );
     fireEvent.click(container.querySelector('[data-testid="project-card"]'));
-    expect(onSelectWithMode).toHaveBeenCalledWith({ mode: 'framing', clipIndex: 0 });
+    expect(onSelectWithMode).toHaveBeenCalledWith({ mode: 'framing' });
   });
 
   it('routes a not-yet-started draft to the default open (earliest stage) on click (item 6)', () => {
@@ -558,7 +558,7 @@ describe('DraftTile (T5672)', () => {
         { onSelectWithMode }
       );
       fireEvent.click(container.querySelector('[data-testid="project-card"]'));
-      expect(onSelectWithMode).toHaveBeenCalledWith({ mode: 'framing', clipIndex: 0 });
+      expect(onSelectWithMode).toHaveBeenCalledWith({ mode: 'framing' });
       expect(toast.info).not.toHaveBeenCalled();
     });
   });

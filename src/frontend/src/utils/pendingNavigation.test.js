@@ -65,19 +65,14 @@ describe('pendingNavigation', () => {
   });
 
   describe('pending project', () => {
-    it('round-trips project id, mode, and clip index', () => {
-      setPendingProject(99, { mode: 'overlay', clipIndex: 2 });
-      expect(consumePendingProject()).toEqual({ projectId: 99, mode: 'overlay', clipIndex: 2 });
+    it('round-trips project id and mode', () => {
+      setPendingProject(99, { mode: 'overlay' });
+      expect(consumePendingProject()).toEqual({ projectId: 99, mode: 'overlay' });
     });
 
     it('supports id-only breadcrumbs (mode decided at load time)', () => {
       setPendingProject(99);
-      expect(consumePendingProject()).toEqual({ projectId: 99, mode: null, clipIndex: null });
-    });
-
-    it('clipIndex 0 survives the round-trip', () => {
-      setPendingProject(99, { mode: 'framing', clipIndex: 0 });
-      expect(consumePendingProject()).toEqual({ projectId: 99, mode: 'framing', clipIndex: 0 });
+      expect(consumePendingProject()).toEqual({ projectId: 99, mode: null });
     });
 
     it('consume clears the breadcrumb', () => {
@@ -87,22 +82,22 @@ describe('pendingNavigation', () => {
     });
 
     it('clearPendingProject removes all keys', () => {
-      setPendingProject(99, { mode: 'overlay', clipIndex: 1 });
+      setPendingProject(99, { mode: 'overlay' });
       clearPendingProject();
       expect(consumePendingProject()).toBeNull();
     });
 
     it('a new selection overwrites a previous breadcrumb completely', () => {
-      setPendingProject(99, { mode: 'overlay', clipIndex: 1 });
+      setPendingProject(99, { mode: 'overlay' });
       clearPendingProject();
       setPendingProject(100);
-      expect(consumePendingProject()).toEqual({ projectId: 100, mode: null, clipIndex: null });
+      expect(consumePendingProject()).toEqual({ projectId: 100, mode: null });
     });
 
     it('game and project breadcrumbs are independent', () => {
       setPendingGame(1);
       setPendingProject(2, { mode: 'overlay' });
-      expect(consumePendingProject()).toEqual({ projectId: 2, mode: 'overlay', clipIndex: null });
+      expect(consumePendingProject()).toEqual({ projectId: 2, mode: 'overlay' });
       expect(hasPendingGame()).toBe(true);
     });
   });

@@ -96,8 +96,6 @@ export function useProjectLoader() {
   const loadProject = useCallback(async (project, options = {}) => {
     const {
       mode = null,
-      clipIndex = 0,
-      onClipsLoaded = null,
       onWorkingVideoLoaded = null,
       onProgress = () => {},
     } = options;
@@ -132,7 +130,7 @@ export function useProjectLoader() {
       // target (has a working video) is unaffected — Spotlight still works.
       if (targetMode === 'framing' && !allowEnterFraming(project)) {
         setLoading(false);
-        return { project, clips: [], selectedClipIndex: 0, workingVideo: null,
+        return { project, clips: [], workingVideo: null,
                  mode: EDITOR_MODES.PROJECT_MANAGER, clipMetadata: {}, refused: true };
       }
 
@@ -220,18 +218,6 @@ export function useProjectLoader() {
       // direct-to-Overlay now fall to Effect B (the plain-load owner) alone.
       const overlayClipMetadata = buildClipMetadata(clipsWithDuration);
 
-      // Notify App.jsx about loaded clips (for legacy integration)
-      if (onClipsLoaded && clipsData.length > 0) {
-        const targetClipData = clipsData[Math.min(clipIndex, clipsData.length - 1)];
-        await onClipsLoaded({
-          clips: clipsData,
-          clipsData,
-          projectId,
-          targetClipIndex: clipIndex,
-          targetClip: targetClipData,
-        });
-      }
-
       // Load working video in background if it exists
       let workingVideo = null;
       if (project.working_video_id && project.working_video_url) {
@@ -274,7 +260,6 @@ export function useProjectLoader() {
       return {
         project,
         clips: clipsData,
-        selectedClipIndex: Math.min(clipIndex, clipsData.length - 1),
         workingVideo,
         mode: targetMode,
         clipMetadata: overlayClipMetadata,
