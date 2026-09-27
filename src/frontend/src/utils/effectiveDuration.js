@@ -90,31 +90,6 @@ export function calculateEffectiveDuration(clip) {
 }
 
 /**
- * Sum effective (post-trim, post-speed) durations across a list of clips — the live
- * project output length (T5780), and the basis for T5790's credit estimate.
- *
- * Fail-closed (EPIC.md "No fabricated numbers"): if ANY clip's effective duration is
- * unknown (NaN — e.g. a clip whose duration never made it into the metadata cache),
- * returns null so the caller HIDES the total rather than showing a guess that would be
- * short of the real (backend-authoritative) charge.
- *
- * @param {Array} clips - Clip objects (selected clip carries live `segments`, the rest
- *   carry saved `segments_data`)
- * @returns {number|null} Total effective seconds, or null if unknown/empty
- */
-export function sumEffectiveDurations(clips) {
-  if (!clips || clips.length === 0) return null;
-
-  let total = 0;
-  for (const clip of clips) {
-    const eff = calculateEffectiveDuration(clip);
-    if (eff == null || Number.isNaN(eff)) return null;
-    total += eff;
-  }
-  return total;
-}
-
-/**
  * The one clip's effective (post-trim, post-speed) duration (T11240) — a project
  * is now exactly one clip, so this replaces `sumEffectiveDurations` as the basis
  * for the Framing credit estimate and pre-flight check. A "sum" over a

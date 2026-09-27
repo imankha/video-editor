@@ -7,7 +7,8 @@
  *
  *  1. No vertical scroll (`scrollHeight <= clientHeight`).
  *  2. The crop reticule and the timeline strip are BOTH in the viewport at once.
- *  3. The 224px clip sidebar is absent; the Clips rail button opens a sheet.
+ *  3. The 224px clip sidebar is absent; the Setup rail button opens a sheet
+ *     (T11240 removed the Clips sheet/rail button — exactly one clip now).
  *  4. Every interactive rail/cap element has a >= 44px hit box.
  *  5. Rotating back to 393 x 852 restores the scrolling layout (cockpit gone),
  *     with no console error.
@@ -69,16 +70,18 @@ for (const vp of COCKPIT_VIEWPORTS) {
       await expect(page.getByTestId('cockpit-stage')).toBeVisible();
       await expect(page.getByTestId('cockpit-timeline')).toBeVisible();
 
-      // Criterion 3 — the 224px clip sidebar is absent; Clips rail button opens a sheet.
-      const clipsSheet = page.getByRole('dialog', { name: 'Clips' });
+      // Criterion 3 — the 224px clip sidebar is absent (T11240: no Clips sheet/
+      // rail button); the Setup rail button still opens a sheet.
+      expect(await page.getByTestId('cockpit-clips-btn').count()).toBe(0);
+      const setupSheet = page.getByRole('dialog', { name: 'Setup' });
       // closed to start (translated off-canvas / hidden)
-      await page.getByTestId('cockpit-clips-btn').click();
-      await expect(clipsSheet).toBeVisible();
-      await saveEvidence(page, `T10840-${vp.label}-clips-sheet`);
+      await page.getByTestId('cockpit-setup-btn').click();
+      await expect(setupSheet).toBeVisible();
+      await saveEvidence(page, `T10840-${vp.label}-setup-sheet`);
       await page.getByTestId('cockpit-sheet-close').first().click();
 
       // Criterion 4 — 44px minimum on the transport play + rail buttons + caps.
-      for (const testId of ['cockpit-play', 'cockpit-clips-btn', 'cockpit-add-focus-point', 'cockpit-open-trim', 'primary-cta']) {
+      for (const testId of ['cockpit-play', 'cockpit-setup-btn', 'cockpit-add-focus-point', 'cockpit-open-trim', 'primary-cta']) {
         const box = await page.getByTestId(testId).first().boundingBox();
         expect(box, `${testId} present`).not.toBeNull();
         expect(box.width, `${testId} width`).toBeGreaterThanOrEqual(44);

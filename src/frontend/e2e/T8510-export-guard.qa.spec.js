@@ -8,8 +8,8 @@
  *     (the 2026-09-02 walkthrough showed the old amber banner scrolled far above the
  *     button on tall panels). Feeds T8550's mobile-CTA assertion set.
  *
- * The disabled/caption matrix (framed -> enabled, multi-clip partial, Overlay-mode
- * unaffected) is proven deterministically in ExportButtonView.test.jsx; the label +
+ * The disabled/caption matrix (framed -> enabled, Overlay-mode unaffected) is
+ * proven deterministically in ExportButtonView.test.jsx; the label +
  * honest-ETA rules in GlobalExportIndicator.test.jsx. This spec proves the WIRING
  * on a real account's real unframed draft.
  *

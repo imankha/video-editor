@@ -1,5 +1,34 @@
 ---
 domain: keyframes-framing
+updated: 2026-09-27 (T11240 — Removed Framing's multi-clip editor UI: a project is now exactly one
+clip. Deleted `ClipSelectorSidebar`/`ClipLibraryModal`/`UploadClipModal`/`FocusClipsPanel`, the
+cockpit Clips sheet + rail button, the project Total output chip, `isMultiClip`/`isMultiClipMode`,
+the multi-clip export branch (`/api/export/multi-clip` — Framing now ALWAYS posts
+`/api/export/render`), and the multi-clip surface off `projectDataStore`/`useClipManager`
+(`addClip`/`deleteClip`/`reorderClips`/`addClipFromLibrary`/`uploadClipWithMetadata`/`removeClip`/
+`getSelectedClipIndex`/`globalTransition`). **R9: the per-clip framing badge moved from the deleted
+sidebar into the header** — new `FramingHeaderStatus` (mounted via `UnifiedHeader.extraControls` in
+App.jsx, FRAMING only) driven by a new single-source predicate `utils/clipSelectors.clipIsFramed(clip)`
+(crop keyframes OR real segment edits) — the SAME predicate now backs both the badge and the export
+"unframed" gate, so they can never disagree. **The clip-switch restore effect
+(`FocusScreen.jsx`, formerly ~719-791) is DELETED** — characterized first
+(`focusScreenClipRestore.characterization.test.jsx`, CH1-CH5), then removed; the mount-time init
+effect is now the only restore path. Deleting it bare would have regressed an expired-source clip's
+restore (CH5: the init effect only restored AFTER its `getClipVideoConfig` await resolved a URL, but
+the deleted effect restored BEFORE resolving one) — so the init effect's restore step was HOISTED
+above that await and RE-KEYED from URL-path to clip-id (`stateRestoredForClipIdRef`, was
+`stateRedoredForUrlRef`), with the T10740 foreign-clip check re-added explicitly at that hoisted
+point (see the invariant below). Accepted tradeoff of the hoist (documented, not a bug): an export
+version bump's NEW clip id, in the rare case it is already metadata-cached, re-restores (harmless —
+identical data) instead of no-op; the real production shape (new id NOT yet cached) still gets a
+clean no-reset/no-reload. Naming-trap note for future readers: `ExportButtonContainer`'s old
+`isMultiClipMode` (`clips.length > 0`) was true for every single clip too — the single-clip
+"unframed" export gate is `!clipIsFramed(clips[0])`, unrelated to that flag, which is now deleted.
+`utils/effectiveDuration.sumEffectiveDurations` (the multi-clip sum) is also deleted — zero callers
+once `FocusContainer.projectEffectiveDuration` went; `knownEffectiveDuration(clip)` is the one-clip
+replacement backing the credit estimate. See docs/plans/tasks/T11240-design.md for the full design.
+Legacy multi-clip drafts (`clip_count > 1`) are UNCHANGED and out of scope here — T11220 already
+refuses their Framing entry; Spotlight/publish for them is T11260 territory.)
 updated: 2026-09-26 (T10870 — Overlay auto-spotlight now SURFACES its detection fallback to the user.
 `useHighlightRegions.defaultHighlightForRegion` already degraded to the neutral centered default
 (never a fabricated box) when a region HAD detections but `pickPrimaryDetectionBox` returned falsy
@@ -42,8 +71,9 @@ long-press+drag=jog÷4, tap-diamond=seek+select→Copy/Delete popover, drag-diam
 timeline zoom; markers use the shared `calc(EDGE_PADDING=20px + (100% - 40px) * pct)` formula
 mirrored from `TimelineBase.jsx:114`, never a bare `%`; 13px diamonds carry a 44px `-inset-4` hit
 box), CockpitSheet (Zone E: `absolute` inside the shell — NEVER `fixed`, D6 — slides from the right,
-scrim `pointer-events-none`/no-backdrop-tap-close, X-only). Sheets reuse `ClipSelectorSidebar` +
-`FocusSettingsPanel` + the extracted `FocusTimelineBlock` (Trim) verbatim. New surgical handler
+scrim `pointer-events-none`/no-backdrop-tap-close, X-only). Sheets reuse (T11240: reused, past
+tense — the Clips sheet + its `ClipSelectorSidebar` are DELETED, one clip now) `FocusSettingsPanel` +
+the extracted `FocusTimelineBlock` (Trim) verbatim. New surgical handler
 `FocusContainer.handleKeyframeTimeMove` routes the diamond-drag through the EXISTING
 `focusActions.moveCropKeyframe` action (single write path, optimistic remove+re-add with rollback —
 NOT a new persistence path). `CropOverlay` now treats `pointercancel` as ABANDON (D12): a rotate
@@ -171,7 +201,7 @@ binds the poll to `overlayExportButtonRef` specifically + an `onAbandon` callbac
 poll gives up before firing -> loud error + recovery toast, no more silent stranding). This was PR
 #417's regression (the 500ms->poll fix fixed the null-ref race but introduced the wrong-ref fire). See
 Invariants below + docs/plans/tasks/T9740-publish-without-spotlight-not-one-tap.md § "Resolution — Fix v2".)
-updated: 2026-09-11 (T9550 Shared-Vocabulary epic, editor-stage IN-PANEL copy only -- NO store/spline/component-file/route/prop rename: canonical PARENT-FACING noun set is now single-sourced in `config/displayNames.js` `EDITOR_PANELS`. The crop primitive is a **"Focus point"** and its track the **"Framing timeline"** (FocusTimeline title, ClipSelectorSidebar "Needs focus -- set a focus point"); "keyframe" is DEMOTED, not banned -- it survives ONLY in advanced-help tooltips (FocusTimeline title parenthetical, KeyframeMarker "Copy/Delete keyframe"), never as a primary label. Spotlight styling (`OverlaySpotlightPanel`): "Highlight Color"->**"Spotlight color"**, shape Body/Ground->**"Around player"/"Under player"**, "Stroke Width"->**"Outline thickness"**, "Fill"->**"Spotlight fill"**, "Outside Dim"->**"Dim background"** (live px/% readouts kept; OverlayModeView mobile summary + these labels both read from `EDITOR_PANELS`). Cover image (`ThumbnailPanel`/`PosterMarkerLayer`, Overlay 3rd settings tab): "Thumbnail"->**"Cover image"**, "Thumbnail marker"->**"Choose cover frame"**, helper "the still people see before playing" -- but the tab `id='thumbnail'`, `settings-panel-thumbnail` testid, `poster_*` model cols, `isThumbnailTabActive` prop, and the component FILENAMES are UNCHANGED (internal). Aspect ratio (N32): `aspectRatios.ratioWithName(r)` -> **"Portrait (9:16)"/"Landscape (16:9)"** (word ALONGSIDE the number) used by FocusSettingsPanel row + FocusModeView mobile summary + AspectRatioSelector button. Mode NAMES held (epic override): editorStore `SCREENS.FRAMING.label='AI Focus'`, `SCREENS.OVERLAY.label='Spotlight'` untouched; ModeSwitcher descriptions retitled 'Crop, trim & speed'->'Reframe, trim & speed' and 'Highlights & effects'->'Spotlight, text & cover'. "athlete" NOT touched here (FOCUS_PUBLISH.SPOTLIGHT_CAPTION still says it -- T9590 territory). Coverage: `OverlaySpotlightPanel.test.jsx`, `ThumbnailPanel.test.jsx`, `PosterMarkerLayer.test.jsx`(/cover/i), `e2e/T9550-editor-stage-strings.qa.spec.js` (Focus verified live; Overlay honest-skips when no overlay-openable draft)); 2026-08-23 (T4355: closes T4350's multi-clip gap -- the SAME single-clip raw<->working transform pair (`transform_all_regions_to_raw`/`_to_working`, both UNCHANGED, still single-clip/concat-offset-unaware) is now composed PER-CLIP by `highlight_carry._transform_multi_clip`: attribute each concatenated-timeline region to its OLD clip via a half-open offset bucket (`_attribute_clip_index`, boundary-exact -> the later clip) -> shift into that clip's local OLD timeline (straddling regions clamp to the clip's OLD span end, same clamp-not-guess spirit as the transform's own partial-trim clamp) -> run the transform pair against `clips[i]` -> re-offset into the clip's NEW position. Clip identity is POSITIONAL ONLY (no stable id in the snapshot) so a reorder safely drops+flags rather than risking a wrong-clip landing. New `concat_offsets` helper (`routers/export/multi_clip.py`) computes the per-clip cumulative offsets (dissolve-aware); a landmine caught in review before merge: the "can't derive OLD offsets" fallback must gate on the CURRENT export's own transition, not the old snapshot's key-presence alone, or every legacy multi-clip project resets on its next cut re-export. See export-pipeline.md § Highlight carry-forward for the full decision matrix); 2026-08-23 (T4350: the raw<->working highlight transforms (`highlight_transform.transform_all_regions_to_raw`/`_to_working`) gained a SECOND production consumer besides overlay.py's read path -- `services/highlight_carry.resolve_carried_highlights` composes them OLD-working->raw->NEW-working to CARRY a user's overlay-edited highlights across a framing re-export (was silently discarded). Feeds the transform FRAME-based crop (from the stored `crop_data`, NOT the render's time-based form -- `interpolate_crop_at_frame` keys on `kf['frame']`) + canonicalized segments (T4340 gotcha) + per-side `video_dims`, framerate=30.0. Split: framing unchanged -> verbatim fast-path; single-clip change -> transform+drop-out-of-range (`dropped:N`); multi-clip change -> loud `multiclip_reset` (no per-clip attribution yet, follow-up T4355); no old framing snapshot -> verbatim + `legacy_uncertain`. Unmappable-region signal surfaces as an export-complete toast + a persistent Overlay banner (`highlight_carry_note`). Full detail in export-pipeline.md § Highlight carry-forward); 2026-08-17 (T7180 / prod bug 44p: overlay region key-format mismatch — update_region wrote camelCase startTime/endTime and never removed a pre-existing snake_case pair, so a lever drag on an auto-generated region silently never reached the render path, which prefers snake_case when present; fix canonicalizes all region writers on snake_case; see Overlay render read path §); 2026-07-30 (T6190 Focus does NOT fetch games/clips on mount — bootstrap-hydrated games + one-clip-fetch-owner-per-entry-gesture invariant, invalidateClips on leave-annotate + downloads re-edit, dead clipsLoadedAt removed, ConnectionStatus hoisted above the home/editor split; see Invariants §; 2026-07-28 T6170 rotation dead-zone ROTATION_EPSILON=1e-6: a denormal rotation defeated the `!thetaDeg` clamp zero-check and pinned the crop box — read guard + write-side snap-to-0 in clampRotation + backend twin mirrored; see Rotation/horizon straighten §; 2026-07-27 T6140 FIXED the removeBoundaryDuplicates first-keyframe self-drop + reported the cosmetic-dedupe-reaches-persistence hazard; T6050 re-pinned keyframe-integrity.spec.js to the flat-list model + surfaced the self-drop landmine; T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6110 real-account video readiness contract: waitForRealVideoReady verdict + openLoadableOverlayDraft dangling-ref probe, helpers/overlayDraft.js, folds onto T6060; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
+updated: 2026-09-11 (T9550 Shared-Vocabulary epic, editor-stage IN-PANEL copy only -- NO store/spline/component-file/route/prop rename: canonical PARENT-FACING noun set is now single-sourced in `config/displayNames.js` `EDITOR_PANELS`. The crop primitive is a **"Focus point"** and its track the **"Framing timeline"** (FocusTimeline title; the per-clip sidebar that also said "Needs focus -- set a focus point" was ClipSelectorSidebar, deleted in T11240); "keyframe" is DEMOTED, not banned -- it survives ONLY in advanced-help tooltips (FocusTimeline title parenthetical, KeyframeMarker "Copy/Delete keyframe"), never as a primary label. Spotlight styling (`OverlaySpotlightPanel`): "Highlight Color"->**"Spotlight color"**, shape Body/Ground->**"Around player"/"Under player"**, "Stroke Width"->**"Outline thickness"**, "Fill"->**"Spotlight fill"**, "Outside Dim"->**"Dim background"** (live px/% readouts kept; OverlayModeView mobile summary + these labels both read from `EDITOR_PANELS`). Cover image (`ThumbnailPanel`/`PosterMarkerLayer`, Overlay 3rd settings tab): "Thumbnail"->**"Cover image"**, "Thumbnail marker"->**"Choose cover frame"**, helper "the still people see before playing" -- but the tab `id='thumbnail'`, `settings-panel-thumbnail` testid, `poster_*` model cols, `isThumbnailTabActive` prop, and the component FILENAMES are UNCHANGED (internal). Aspect ratio (N32): `aspectRatios.ratioWithName(r)` -> **"Portrait (9:16)"/"Landscape (16:9)"** (word ALONGSIDE the number) used by FocusSettingsPanel row + FocusModeView mobile summary + AspectRatioSelector button. Mode NAMES held (epic override): editorStore `SCREENS.FRAMING.label='AI Focus'`, `SCREENS.OVERLAY.label='Spotlight'` untouched; ModeSwitcher descriptions retitled 'Crop, trim & speed'->'Reframe, trim & speed' and 'Highlights & effects'->'Spotlight, text & cover'. "athlete" NOT touched here (FOCUS_PUBLISH.SPOTLIGHT_CAPTION still says it -- T9590 territory). Coverage: `OverlaySpotlightPanel.test.jsx`, `ThumbnailPanel.test.jsx`, `PosterMarkerLayer.test.jsx`(/cover/i), `e2e/T9550-editor-stage-strings.qa.spec.js` (Focus verified live; Overlay honest-skips when no overlay-openable draft)); 2026-08-23 (T4355: closes T4350's multi-clip gap -- the SAME single-clip raw<->working transform pair (`transform_all_regions_to_raw`/`_to_working`, both UNCHANGED, still single-clip/concat-offset-unaware) is now composed PER-CLIP by `highlight_carry._transform_multi_clip`: attribute each concatenated-timeline region to its OLD clip via a half-open offset bucket (`_attribute_clip_index`, boundary-exact -> the later clip) -> shift into that clip's local OLD timeline (straddling regions clamp to the clip's OLD span end, same clamp-not-guess spirit as the transform's own partial-trim clamp) -> run the transform pair against `clips[i]` -> re-offset into the clip's NEW position. Clip identity is POSITIONAL ONLY (no stable id in the snapshot) so a reorder safely drops+flags rather than risking a wrong-clip landing. New `concat_offsets` helper (`routers/export/multi_clip.py`) computes the per-clip cumulative offsets (dissolve-aware); a landmine caught in review before merge: the "can't derive OLD offsets" fallback must gate on the CURRENT export's own transition, not the old snapshot's key-presence alone, or every legacy multi-clip project resets on its next cut re-export. See export-pipeline.md § Highlight carry-forward for the full decision matrix); 2026-08-23 (T4350: the raw<->working highlight transforms (`highlight_transform.transform_all_regions_to_raw`/`_to_working`) gained a SECOND production consumer besides overlay.py's read path -- `services/highlight_carry.resolve_carried_highlights` composes them OLD-working->raw->NEW-working to CARRY a user's overlay-edited highlights across a framing re-export (was silently discarded). Feeds the transform FRAME-based crop (from the stored `crop_data`, NOT the render's time-based form -- `interpolate_crop_at_frame` keys on `kf['frame']`) + canonicalized segments (T4340 gotcha) + per-side `video_dims`, framerate=30.0. Split: framing unchanged -> verbatim fast-path; single-clip change -> transform+drop-out-of-range (`dropped:N`); multi-clip change -> loud `multiclip_reset` (no per-clip attribution yet, follow-up T4355); no old framing snapshot -> verbatim + `legacy_uncertain`. Unmappable-region signal surfaces as an export-complete toast + a persistent Overlay banner (`highlight_carry_note`). Full detail in export-pipeline.md § Highlight carry-forward); 2026-08-17 (T7180 / prod bug 44p: overlay region key-format mismatch — update_region wrote camelCase startTime/endTime and never removed a pre-existing snake_case pair, so a lever drag on an auto-generated region silently never reached the render path, which prefers snake_case when present; fix canonicalizes all region writers on snake_case; see Overlay render read path §); 2026-07-30 (T6190 Focus does NOT fetch games/clips on mount — bootstrap-hydrated games + one-clip-fetch-owner-per-entry-gesture invariant, invalidateClips on leave-annotate + downloads re-edit, dead clipsLoadedAt removed, ConnectionStatus hoisted above the home/editor split; see Invariants §; 2026-07-28 T6170 rotation dead-zone ROTATION_EPSILON=1e-6: a denormal rotation defeated the `!thetaDeg` clamp zero-check and pinned the crop box — read guard + write-side snap-to-0 in clampRotation + backend twin mirrored; see Rotation/horizon straighten §; 2026-07-27 T6140 FIXED the removeBoundaryDuplicates first-keyframe self-drop + reported the cosmetic-dedupe-reaches-persistence hazard; T6050 re-pinned keyframe-integrity.spec.js to the flat-list model + surfaced the self-drop landmine; T6060 overlay dev-harness video-playback readiness contract: /tmp + Range-aware page.route + readyState>=3 ready-signal, helpers/videoRoute.js; T6110 real-account video readiness contract: waitForRealVideoReady verdict + openLoadableOverlayDraft dangling-ref probe, helpers/overlayDraft.js, folds onto T6060; T6100 video-stage hydration measured on staging: T4550/T5676 are test-placeholder races + staging dangling-ref data, NOT a product defect; T5790 export-button credit-cost estimate)
 ---
 # Keyframes & Focus — Domain Knowledge
 
@@ -245,11 +275,13 @@ gesture (drag/resize/delete) in FocusContainer
 `src/frontend/src/utils/effectiveDuration.js` (extracted from `ExportButtonContainer.jsx`
 in commit d702efcd) is the SINGLE calculator for post-trim/post-speed output length.
 `calculateEffectiveDuration(clip)` = Σ over segments of `(end-start)/speed`, clipped to
-`trimRange` (0.5x doubles that segment's output); `sumEffectiveDurations(clips)` sums it
-across clips and **fails closed** (returns `null` if ANY clip's duration is NaN, so the UI
-HIDES rather than showing a guess — same no-fabricated-numbers rule as the poster). Consumed
-by `ExportButtonContainer`, `useProjectLoader`, and the Focus indicator; T5790 will turn the
-project total into a credit estimate, and the backend charge must use the same model.
+`trimRange` (0.5x doubles that segment's output). T11240: a project is exactly one clip, so
+the Framing credit estimate and pre-flight check read `knownEffectiveDuration(clip)` — the
+one-clip form, **fails closed** (returns `null` if the duration is NaN/non-positive, so the UI
+HIDES rather than showing a guess — same no-fabricated-numbers rule as the poster).
+`sumEffectiveDurations(clips)` (the multi-clip sum) still exists but is otherwise DEAD — no
+production caller remains; do not add one back. Consumed by `ExportButtonContainer` and
+`useProjectLoader`.
 
 - **Data-format tolerance:** reads `clip.segments` (frontend live `{boundaries, segmentSpeeds,
   trimRange}`) OR `clip.segments_data` (saved blob, same frontend shape — see Data flow) OR the
@@ -272,15 +304,16 @@ project total into a credit estimate, and the backend charge must use the same m
   segment state restores; it self-corrects — do not "fix" it with a guard.)
 - **View (`FocusModeView.OutputLengthChip`):** presentational chip near the duration readout;
   emphasized (blue) only when output differs from source length (slow-mo present), else subtle gray.
-  A `Total` chip renders near the export area only for multi-clip projects (redundant for one clip).
-  The playback timer is deliberately UNCHANGED — it shows source-timeline position; only the chip
-  reflects output length. Reuses `formatLength(s, PRECISION.SECOND, {style:'clock'})` from
-  `utils/timeFormat` (T9480 -- it's a LENGTH, so it rounds half-up, matching `roundCreditsHalfUp`
-  exactly. It used to reuse `formatInstant` and silently floor here -- the one billing-adjacent
-  surface where that was live in production as the walkthrough's original 6-vs-7-credit complaint;
-  fixed during T9480's review, not left as a documented exception).
-- Coverage: Vitest `src/utils/effectiveDuration.test.js` (15: 6s+3s@0.5x→9s, trim, multi-clip
-  sum→23, live-over-saved precedence, DB-array format, fail-closed NaN) + real-browser
+  T11240 removed the project `Total` chip (it only ever rendered for multi-clip projects, which no
+  longer exist — do not re-add it). The playback timer is deliberately UNCHANGED — it shows
+  source-timeline position; only the chip reflects output length. Reuses
+  `formatLength(s, PRECISION.SECOND, {style:'clock'})` from `utils/timeFormat` (T9480 -- it's a
+  LENGTH, so it rounds half-up, matching `roundCreditsHalfUp` exactly. It used to reuse
+  `formatInstant` and silently floor here -- the one billing-adjacent surface where that was live in
+  production as the walkthrough's original 6-vs-7-credit complaint; fixed during T9480's review, not
+  left as a documented exception).
+- Coverage: Vitest `src/utils/effectiveDuration.test.js` (6s+3s@0.5x→9s, trim, live-over-saved
+  precedence, DB-array format, fail-closed NaN) + real-browser
   `e2e/T5780-framing-effective-duration.qa.spec.js` (live speed tick, trim drop, source-timeline
   readout unchanged, responsive 375/desktop; asserts the chip against the segment track's OWN
   reported visual durations, so it's clip-duration-agnostic).
@@ -289,14 +322,15 @@ project total into a credit estimate, and the backend charge must use the same m
 
 The Focus Export button shows a live credit-cost estimate under it (`~9 credits · balance 42`,
 `ExportButtonView` `data-testid="export-credit-estimate"`). Derived at render — NO new state
-(no-redundant-state / T350). `estimateExportCredits(clips)` (exported from `ExportButtonContainer.jsx`)
-= `sumEffectiveDurations(clips)` → `creditStore.getRequiredCredits` → `roundCreditsHalfUp`
+(no-redundant-state / T350). T11240: `estimateExportCredits(clip)` (exported from
+`ExportButtonContainer.jsx`) takes the ONE clip directly (`clips?.[0]`, not the array) =
+`knownEffectiveDuration(clip)` → `creditStore.getRequiredCredits` → `roundCreditsHalfUp`
 (**round-HALF-UP with a 1-credit floor, NOT `Math.ceil`** — T9750 changed the rule;
 `creditStore.js:17,73`) — the SAME calculator + rounding the click-time credit check in `handleExport`
 uses, so the button number NEVER disagrees with the insufficient-credits modal or the backend charge
 (EPIC.md "one cost calculator"; backend twin `round_credits_half_up`, `highlight_transform.py:176`).
-The container's `clips` prop is `clipsWithCurrentState` (live selected-clip segments + saved others),
-so the estimate ticks the instant a speed/trim/split/clip-count gesture lands — no save/export.
+The container's `clips` prop is `clipsWithCurrentState` (live selected-clip segments), so the
+estimate ticks the instant a speed/trim/split gesture lands — no save/export.
 - **Focus ONLY.** Gated on `isFramingMode` in both container (returns null otherwise) and view
   (line hidden). Overlay export runs no per-second credit check → button byte-identical.
 - **Fail-closed (no fabricated number):** unknown/NaN/≤0 effective duration → `estimateExportCredits`
@@ -316,7 +350,7 @@ so the estimate ticks the instant a speed/trim/split/clip-count gesture lands �
   one time-format rule (`utils/timeFormat.js` `formatInstant`/`formatLength`) this button and every
   other time display in the app now share.
 - Coverage: Vitest `src/containers/ExportButtonContainer.test.js` (`estimateExportCredits`: 6s+3s@0.5x
-  →9 == modal required, trim reduces, round-half-up, multi-clip sum→23, fail-closed null, empty/null) +
+  →9 == modal required, trim reduces, round-half-up, fail-closed null, empty/null clip) +
   `src/components/ExportButtonView.test.jsx` (line shown/singularized/amber-warning/hidden-when-null/
   hidden-while-exporting/absent-in-Overlay) + `ExportButtonView.billableDisclosure.test.jsx` (T9480:
   disclosure shown/hidden per the numeric-rounding check) + real-browser
@@ -337,9 +371,10 @@ so the estimate ticks the instant a speed/trim/split/clip-count gesture lands �
   "source storage may have expired" (a real 410 renders the T8310 panel and never mounts a player —
   that asymmetry is how you tell the two apart in a bug report). The guard lives at the
   `getClipVideoConfig` choke point **before the config cache** (so a bad pair can't occupy a cache
-  slot) AND as an explicit early bail in the clip-switch effect, which restores crop/segment state
-  into the hooks BEFORE it resolves a URL — the choke-point guard is too late there, and a foreign
-  clip's keyframes reaching the hooks is state an export can persist. **Compare ids as STRINGS:**
+  slot) AND as an explicit early bail inside the init effect's restore block (`FocusScreen.jsx`),
+  which — since T11240's §3.1 fold fallback (see below) — restores crop/segment state into the
+  hooks BEFORE it resolves a URL; the choke-point guard is too late there, and a foreign clip's
+  keyframes reaching the hooks is state an export can persist. **Compare ids as STRINGS:**
   `selectedProjectId` is a string on the auth-return and payment-return paths (both stash it in
   `sessionStorage`; `projectsStore.selectProject` stores the argument verbatim) while clip rows
   carry a numeric `project_id`, so a strict `!==` would call EVERY clip foreign and leave Focus

@@ -17,8 +17,8 @@
  *     is UNCHANGED by output edits — the output indicators are the ONLY things that
  *     move (Framing playback stays on the source timeline).
  *
- * The pure math (6s + 3s@0.5x -> 9 credits / 0:09 chip, trim reduces it, multi-clip
- * sum, fail-closed hide, Math.ceil/floor) is proven deterministically in
+ * The pure math (6s + 3s@0.5x -> 9 credits / 0:09 chip, trim reduces it,
+ * fail-closed hide, Math.ceil/floor) is proven deterministically in
  * src/containers/ExportButtonContainer.test.js, src/components/ExportButtonView.test.jsx,
  * and src/utils/effectiveDuration.test.js. This spec proves the WIRING in the real
  * app against the account's real clip, asserting both indicators against the segment
@@ -35,11 +35,10 @@
  */
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth.js';
-import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './helpers/qa.js';
+import { saveEvidence, responsiveSweep } from './helpers/qa.js';
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const CHIP = '[data-testid="output-length-chip"]';
-const PROJ_CHIP = '[data-testid="project-output-length-chip"]';
 const ESTIMATE = '[data-testid="export-credit-estimate"]';
 
 /** "~9 credits · balance 42" -> 9 (the estimated credit count). */
@@ -254,47 +253,4 @@ test('T5790: estimate line is present and non-overflowing on mobile + desktop (c
     await line.scrollIntoViewIfNeeded().catch(() => {});
     await expect(line, 'credit estimate visible at this viewport').toBeVisible({ timeout: 10000 });
   });
-});
-
-// T7770: folded from T5780 (multi-clip criterion 4). The PROJECT total output-length
-// chip is a distinct indicator (hidden for single-clip projects — redundant with the
-// per-clip chip); its summed-total wiring is not exercised by the single-clip drive above.
-test('T5790/T5780: multi-clip project shows a correct live output total (criterion 4)', async ({ context, page }) => {
-  await loginAsRealUser(context, 'imankh@gmail.com', '9fa7378c');
-  await page.goto('/');
-  await page.waitForTimeout(1500);
-
-  // Find a framing draft that has >= 2 clips (the Total chip is intentionally
-  // hidden for single-clip projects — redundant with the per-clip chip).
-  const cards = page.locator('[data-testid="project-card"]', { hasText: 'Not started' });
-  const n = await cards.count();
-  let found = false;
-
-  for (let i = 0; i < n; i++) {
-    await cards.nth(i).click();
-    await page.waitForSelector(CHIP, { timeout: 30000 }).catch(() => {});
-    await page.waitForTimeout(1500);
-    const clipCount = await page.locator('[data-testid="clip-item"]').count();
-
-    if (clipCount >= 2) {
-      found = true;
-      const projChip = page.locator(PROJ_CHIP);
-      await expect(projChip, 'project total chip visible for multi-clip').toBeVisible({ timeout: 15000 });
-      const total = parseChipSeconds(await projChip.textContent());
-      const perClip = parseChipSeconds(await page.locator(CHIP).first().textContent());
-      expect(total, 'project total >= selected clip output').toBeGreaterThanOrEqual(perClip);
-      await assertNoHorizontalOverflow(page);
-      await saveEvidence(page, 'criterion-4-multiclip-total');
-      break;
-    }
-    await page.goto('/');
-    await page.waitForTimeout(1200);
-  }
-
-  if (!found) {
-    // No multi-clip framing draft in this account: the summed-total math is proven
-    // by effectiveDuration.test.js ('multi-clip sum ... -> 23'); log so the QA
-    // evidence is honest about what was live-driven vs unit-covered.
-    console.log('[qa] criterion-4: no >=2-clip framing draft in account; multi-clip SUM covered by unit test.');
-  }
 });
