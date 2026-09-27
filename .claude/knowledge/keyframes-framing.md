@@ -279,9 +279,9 @@ in commit d702efcd) is the SINGLE calculator for post-trim/post-speed output len
 the Framing credit estimate and pre-flight check read `knownEffectiveDuration(clip)` — the
 one-clip form, **fails closed** (returns `null` if the duration is NaN/non-positive, so the UI
 HIDES rather than showing a guess — same no-fabricated-numbers rule as the poster).
-`sumEffectiveDurations(clips)` (the multi-clip sum) still exists but is otherwise DEAD — no
-production caller remains; do not add one back. Consumed by `ExportButtonContainer` and
-`useProjectLoader`.
+`sumEffectiveDurations(clips)` (the multi-clip sum) was deleted in T11240 — zero callers remained
+once the multi-clip export/credit paths were removed; do not add one back. `knownEffectiveDuration`
+is consumed by `ExportButtonContainer` and `useProjectLoader`.
 
 - **Data-format tolerance:** reads `clip.segments` (frontend live `{boundaries, segmentSpeeds,
   trimRange}`) OR `clip.segments_data` (saved blob, same frontend shape — see Data flow) OR the
