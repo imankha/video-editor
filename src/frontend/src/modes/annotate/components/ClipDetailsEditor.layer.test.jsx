@@ -94,20 +94,20 @@ describe('ClipDetailsEditor — Layer control (T5700)', () => {
 describe('ClipDetailsEditor — rating caption (T8490 / T9820)', () => {
   it('rating 2 shows the "Technical lapse" learn-from caption', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, rating: 2, my_athlete: true }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.getByText('Technical lapse (?) - a play to learn from.')).toBeTruthy();
+    expect(screen.getByText('Technical lapse - a play to learn from.')).toBeTruthy();
   });
 
   // T9820 / E47 regression: edit-mode creation is a manual control, never
   // rating-gated, so 4 stars must read off hasReel, never demand another star.
   it('rating 4 + no clip yet points at the Clip control below, never "one more star"', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, rating: 4, my_athlete: true, autoProjectId: null }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.getByText('Good play (!).')).toBeTruthy();
+    expect(screen.getByText('Good play.')).toBeTruthy();
     expect(screen.queryByText(/one more star|another star|create a clip below/)).toBeNull();
   });
 
   it('rating 4 + clip already exists says so, does not demand another star', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, rating: 4, my_athlete: true, autoProjectId: 'p1' }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.getByText('Good play (!) - clip already created from play.')).toBeTruthy();
+    expect(screen.getByText('Good play - highlight already made.')).toBeTruthy();
   });
 
   it('rating 5 + My Athlete + no clip yet shows the Highlight label, never "will be created"', () => {
@@ -118,7 +118,7 @@ describe('ClipDetailsEditor — rating caption (T8490 / T9820)', () => {
         onDelete={() => {}}
       />
     );
-    expect(screen.getByText('Highlight play (!!).')).toBeTruthy();
+    expect(screen.getByText('Highlight play.')).toBeTruthy();
   });
 
   it('rating 5 + My Athlete + clip already exists says so, does not re-offer creation', () => {
@@ -129,7 +129,7 @@ describe('ClipDetailsEditor — rating caption (T8490 / T9820)', () => {
         onDelete={() => {}}
       />
     );
-    expect(screen.getByText('Highlight play (!!) - clip already created from play.')).toBeTruthy();
+    expect(screen.getByText('Highlight play - highlight already made.')).toBeTruthy();
   });
 
   it('rating 5 + Team shows the Highlight team caption', () => {
@@ -140,6 +140,6 @@ describe('ClipDetailsEditor — rating caption (T8490 / T9820)', () => {
         onDelete={() => {}}
       />
     );
-    expect(screen.getByText('Highlight team play (!!).')).toBeTruthy();
+    expect(screen.getByText('Highlight team play.')).toBeTruthy();
   });
 });

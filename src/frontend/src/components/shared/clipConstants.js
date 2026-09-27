@@ -92,12 +92,12 @@ export function getRatingCaption(rating, mine, createIntent) {
     ? 'this play will also become an editable clip.'
     : 'this saves the play without creating a clip.';
   if (!rating) return `How good was this play? Rate it 1 to 5 - ${outcome}`;
-  if (rating === 1) return `Mental lapse (${RATING_NOTATION[1]}) - a play to learn from.`;
-  if (rating === 2) return `Technical lapse (${RATING_NOTATION[2]}) - a play to learn from.`;
-  if (rating === 3) return `Interesting play (${RATING_NOTATION[3]}) - worth a second look.`;
-  if (rating === 4) return `Good play (${RATING_NOTATION[4]}) - ${outcome}`;
+  if (rating === 1) return `Mental lapse - a play to learn from.`;
+  if (rating === 2) return `Technical lapse - a play to learn from.`;
+  if (rating === 3) return `Interesting play - worth a second look.`;
+  if (rating === 4) return `Good play - ${outcome}`;
   const label = mine ? 'Highlight play' : 'Highlight team play';
-  return `${label} (${RATING_NOTATION[5]}) - ${outcome}`;
+  return `${label} - ${outcome}`;
 }
 
 // T8490 / T9820: edit-mode variant for ClipDetailsEditor — clip creation here is a
@@ -114,18 +114,18 @@ export function getRatingCaption(rating, mine, createIntent) {
 // become highlights).
 export function getEditRatingCaption(rating, mine, hasReel) {
   if (!rating) return 'How good was this play? Rate it 1 to 5.';
-  if (rating === 1) return `Mental lapse (${RATING_NOTATION[1]}) - a play to learn from.`;
-  if (rating === 2) return `Technical lapse (${RATING_NOTATION[2]}) - a play to learn from.`;
-  if (rating === 3) return `Interesting play (${RATING_NOTATION[3]}) - worth a second look.`;
+  if (rating === 1) return `Mental lapse - a play to learn from.`;
+  if (rating === 2) return `Technical lapse - a play to learn from.`;
+  if (rating === 3) return `Interesting play - worth a second look.`;
   if (rating === 4) {
     return hasReel
-      ? `Good play (${RATING_NOTATION[4]}) - highlight already made.`
-      : `Good play (${RATING_NOTATION[4]}).`;
+      ? `Good play - highlight already made.`
+      : `Good play.`;
   }
   const label = mine ? 'Highlight play' : 'Highlight team play';
   return hasReel
-    ? `${label} (${RATING_NOTATION[5]}) - highlight already made.`
-    : `${label} (${RATING_NOTATION[5]}).`;
+    ? `${label} - highlight already made.`
+    : `${label}.`;
 }
 
 // T9520 N35: the ONE documented star-to-descriptor mapping, e.g. "4 stars · Good".
