@@ -61,9 +61,9 @@ may exceed). **Order is dependency order.**
 |----|------|------|--------|
 | T11200 | [Read-only census of multi-clip drafts and reels (all envs)](T11200-multiclip-data-census.md) | M | STAGING (merged PR #509, reviewer APPROVED, CI green; landed on supervisor evidence, not the automatic gate — see T11310) |
 | T11210 | [Characterization: single-clip Modal golden + delete dead endpoints](T11210-characterize-and-delete-dead-endpoints.md) | M | STAGING (merged PR #506, proof VERIFIED, CI green) |
-| T11220 | [Legacy multi-clip data: keep drafts reachable, block re-edit/restore of multi-clip reels](T11220-legacy-multiclip-data-handling.md) | M/L | TODO |
-| T11230 | [Remove Reels building surfaces (Reels tab, Create reel, from-clips)](T11230-remove-reels-building-surfaces.md) | M | TODO |
-| T11240 | [Remove multi-clip UI from Framing and Spotlight](T11240-remove-multiclip-editor-ui.md) | L | TODO |
+| T11220 | [Legacy multi-clip data: keep drafts reachable, block re-edit/restore of multi-clip reels](T11220-legacy-multiclip-data-handling.md) | M/L | STAGING (merged PR #517) |
+| T11230 | [Remove Reels building surfaces (Reels tab, Create reel, from-clips)](T11230-remove-reels-building-surfaces.md) | M | STAGING (merged PR #520) |
+| T11240 | [Remove multi-clip UI from Framing and Spotlight](T11240-remove-multiclip-editor-ui.md) | L | STAGING (merged PR #521) |
 | T11250 | [Remove multi-clip backend: clip-management endpoints + export N>1 branches](T11250-remove-multiclip-backend-export.md) | L | TODO |
 | T11260 | [Remove multi-clip highlight carry, clip boundaries, Spotlight gates](T11260-remove-multiclip-highlight-carry.md) | M | TODO |
 | T11270 | [Collapse clip selection to "the clip" (mechanical)](T11270-collapse-clip-selection.md) | M | TODO |

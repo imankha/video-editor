@@ -1,6 +1,6 @@
 # T11240: Remove multi-clip UI from Framing and Spotlight
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-09-24
@@ -59,7 +59,13 @@ e2e `T5790`, `T8510-export-guard`.
 
 ## Acceptance Criteria
 
-- [ ] Red-then-green: Framing on a single-clip project renders no clip list and exports via `/render`
-- [ ] Credit estimate equals the single clip's cost (test)
-- [ ] Legacy multi-clip draft opens, re-framing refused with the T11220 message
-- [ ] Live-driven desktop, 393 px portrait and the landscape cockpit
+- [x] Red-then-green: Framing on a single-clip project renders no clip list and exports via `/render`
+- [x] Credit estimate equals the single clip's cost (test)
+- [x] Legacy multi-clip draft opens, re-framing refused with the T11220 message
+- [x] Live-driven desktop, 393 px portrait and the landscape cockpit
+
+## Landed
+
+Merged PR #521 (b8886eca), 2026-09-27. See `docs/plans/tasks/T11240-design.md` for the approved
+design and `docs/plans/PLAN.md`'s row for the landing summary (independent reviewer + proof-verifier
+verdicts, both VERIFIED with 0 blocking/0 major).
