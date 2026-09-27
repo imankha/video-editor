@@ -129,11 +129,8 @@ export function FocusScreen({
   // T9100: FocusScreen no longer READS the shared workingVideo record (the
   // post-export preview now uses the completion store); it still WRITES it via
   // setWorkingVideo. So the reactive selector is gone, but the store action stays.
-  const clipHasUserEditsRef = useRef(false);
   const localExportButtonRef = useRef(null);
   const initialLoadDoneRef = useRef(false);
-  const previousClipIdRef = useRef(null);
-  const isRestoringClipStateRef = useRef(false);
   const fullscreenContainerRef = useRef(null);
   // T740: outdatedClipsCheckedRef removed — no outdated check in framing
 
@@ -238,7 +235,6 @@ export function FocusScreen({
     isVideoElementLoading,
     loadingProgress,
     loadingElapsedSeconds,
-    loadVideo,
     loadVideoFromUrl,
     loadVideoFromStreamingUrl,
     togglePlay,
@@ -422,7 +418,6 @@ export function FocusScreen({
     getClipExportData,
     saveFramingEdits: boundSaveFramingEdits,
     onCropChange: setDragCrop,
-    onUserEdit: () => { clipHasUserEditsRef.current = true; },
     setFramingChangedSinceExport,
     clipMetadataCache,
   });
@@ -460,7 +455,14 @@ export function FocusScreen({
 
   // Track the last loaded URL to detect when clip changes
   const lastLoadedUrlRef = useRef(null);
-  const stateRestoredForUrlRef = useRef(null); // Guard against infinite restore loops
+  // T11240 (design doc §3.1 fold fallback): re-keyed from URL path to clip id
+  // and hoisted above the video-URL resolution (see the init effect below) so
+  // a clip whose source is expired (playback-url 410) still restores its
+  // saved crop/segment state — the guard used to be unreachable when
+  // `getClipVideoConfig` returned no url, a real regression the deleted
+  // clip-switch effect's CH5 characterization caught. Guard against infinite
+  // restore loops, same as before.
+  const stateRestoredForClipIdRef = useRef(null);
 
   // Dedupe playback-url fetches: the mount effects (useLayoutEffect + the
   // clips/metadata-keyed effect) each call getClipVideoConfig before the
@@ -633,6 +635,36 @@ export function FocusScreen({
 
     const firstClip = clips[0];
     const controller = new AbortController();
+    const firstClipWithMeta = getClipWithMeta(firstClip);
+
+    // Restore framing state (crop keyframes, segments) from clip data if not already done.
+    // T11240 (design doc §3.1 fold fallback): hoisted ABOVE video-URL resolution and
+    // re-keyed on clip id (not URL path, which isn't known yet here) so a clip whose
+    // source is expired (playback-url 410) still restores its saved crop/segments —
+    // the CH5 characterization caught this regressing when restore lived only after
+    // the URL resolved. Guard with ref to prevent infinite loops (restore updates
+    // state → re-render → effect re-fires). T10740: explicitly re-checked here (not
+    // just inside getClipVideoConfig below) because restore now runs BEFORE that
+    // call's own foreign-clip guard — a leftover clip from another project must
+    // never push its keyframes into this project's editor.
+    const clipDuration = firstClipWithMeta?.duration;
+    if (!isClipFromAnotherProject(firstClip, projectId) &&
+        stateRestoredForClipIdRef.current !== firstClip.id && clipDuration) {
+      stateRestoredForClipIdRef.current = firstClip.id;
+      const parsedSegments = clipSegments(firstClip, clipDuration);
+      const parsedCropKfs = clipCropKeyframes(firstClip);
+
+      if (parsedSegments) {
+        restoreSegmentState(parsedSegments, clipDuration);
+      }
+
+      if (parsedCropKfs && parsedCropKfs.length > 0) {
+        const endFrame = Math.round(clipDuration * (firstClipWithMeta?.framerate || 30));
+        if (endFrame > 0) {
+          restoreCropState(parsedCropKfs, endFrame);
+        }
+      }
+    }
 
     (async () => {
       const cfg = await getClipVideoConfig(firstClip);
@@ -641,38 +673,9 @@ export function FocusScreen({
       if (!clipUrl) return;
       if (controller.signal.aborted) return;
 
-      const firstClipWithMeta = getClipWithMeta(firstClip);
-
-      // Restore framing state (crop keyframes, segments) from clip data if not already done.
-      // The useLayoutEffect above may have already loaded the video (for overlay→framing
-      // transitions), but state restoration still needs to happen. Guard with ref to
-      // prevent infinite loops (restore updates state → re-render → effect re-fires).
-      // Guard on URL path (without query) because R2 signatures regenerate per render.
-      const clipUrlKey = clipUrl.split('?')[0];
-      const clipDuration = firstClipWithMeta?.duration;
-      if (stateRestoredForUrlRef.current !== clipUrlKey && clipDuration) {
-        stateRestoredForUrlRef.current = clipUrlKey;
-        const parsedSegments = clipSegments(firstClip, clipDuration);
-        const parsedCropKfs = clipCropKeyframes(firstClip);
-
-        if (parsedSegments) {
-          restoreSegmentState(parsedSegments, clipDuration);
-        }
-
-        if (parsedCropKfs && parsedCropKfs.length > 0) {
-          const endFrame = Math.round(clipDuration * (firstClipWithMeta?.framerate || 30));
-          if (endFrame > 0) {
-            restoreCropState(parsedCropKfs, endFrame);
-          }
-        }
-
-        if (firstClip.id) {
-          previousClipIdRef.current = firstClip.id;
-        }
-      }
-
       // Skip video loading if already loaded (e.g., by useLayoutEffect on mount)
       // Compare path-without-query since signed R2 URLs regenerate per render.
+      const clipUrlKey = clipUrl.split('?')[0];
       if (lastLoadedUrlRef.current === clipUrlKey) return;
       if (controller.signal.aborted) return;
 
@@ -704,82 +707,12 @@ export function FocusScreen({
 
 
 
-  // Handle clip switching - restore new clip's state from store
-  // T280: Previous clip's state is already in the store (sync effects keep it current).
-  // We only need to restore the NEW clip's state into hooks.
-  useEffect(() => {
-    if (!selectedClipId) return;
-    if (selectedClipId === previousClipIdRef.current) return;
-
-    const newClip = clips.find(c => c.id === selectedClipId);
-    if (!newClip) {
-      console.warn('[FocusScreen] Selected clip not found:', selectedClipId);
-      return;
-    }
-    // T10740: this effect restores crop/segment state into the hooks BEFORE it
-    // resolves a video URL, so the guard inside getClipVideoConfig is too late
-    // here — a leftover clip from the previous project would push ITS keyframes
-    // into this project's editor. Bail before touching any hook state; the fresh
-    // clips list re-fires this effect moments later with the right clip.
-    if (isClipFromAnotherProject(newClip, projectId)) return;
-
-    // Set restoring flag synchronously BEFORE async work.
-    // This prevents the sync effects (declared after this effect) from writing
-    // stale hook state to the new clip's store slot during this render cycle.
-    isRestoringClipStateRef.current = true;
-    previousClipIdRef.current = selectedClipId;
-
-    const newClipWithMeta = getClipWithMeta(newClip);
-    const newClipDuration = newClipWithMeta?.duration;
-    const newParsedSegments = newClipDuration ? clipSegments(newClip, newClipDuration) : null;
-    const newParsedCropKfs = clipCropKeyframes(newClip);
-
-    const switchClip = async () => {
-      try {
-        // 1. Restore new clip's segments state
-        if (newParsedSegments && newClipDuration) {
-          restoreSegmentState(newParsedSegments, newClipDuration);
-        } else {
-          resetSegments();
-          if (newClipDuration) {
-            initializeSegments(newClipDuration);
-          }
-        }
-
-        // 2. Restore new clip's crop keyframes BEFORE loading video
-        if (newParsedCropKfs && newParsedCropKfs.length > 0 && newClipDuration) {
-          const endFrame = Math.round(newClipDuration * (newClipWithMeta?.framerate || 30));
-          if (endFrame > 0) {
-            restoreCropState(newParsedCropKfs, endFrame);
-          }
-        } else {
-          resetCrop();
-        }
-
-        // 3. Load new clip's video (or just seek if same video URL)
-        const newCfg = await getClipVideoConfig(newClip);
-        const { url: newClipUrl, gameUrl: newGameUrl, clipRange: newClipRange } = newCfg;
-        applySourceExpiry(newCfg);
-        if (newClipUrl) {
-          if (!newClipUrl.startsWith('blob:')) {
-            warmVideoCache(newClipUrl);
-            loadVideoFromStreamingUrl(newClipUrl, newClipWithMeta?.metadata || null, newClipRange, { gameUrl: newGameUrl });
-          } else {
-            const file = await loadVideoFromUrl(newClipUrl, newClip.filename || 'clip.mp4');
-            if (file) {
-              setVideoFile(file);
-            }
-          }
-        }
-
-        clipHasUserEditsRef.current = false;
-      } finally {
-        isRestoringClipStateRef.current = false;
-      }
-    };
-
-    switchClip();
-  }, [selectedClipId, clips, projectId, clipMetadataCache, loadVideoFromUrl, loadVideoFromStreamingUrl, loadVideo, restoreSegmentState, resetSegments, initializeSegments, restoreCropState, resetCrop, getClipWithMeta]);
+  // T11240: the clip-switch restore effect (previously here) is deleted — with
+  // exactly one clip there is no other clip to switch to; the init effect above
+  // is the only restore path (mount, and the T10740 foreign-clip guard lives at
+  // its getClipVideoConfig choke point). An export version bump still changes
+  // selectedClipId, but the new version's persisted data equals what was just
+  // saved, so re-restoring would be a no-op at best — see design doc §3.1.
 
   // T350: Reactive sync effect REMOVED. See docs/plans/tasks/T350-design.md.
   // Persistence is now gesture-based: each user action in FocusContainer fires

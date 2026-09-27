@@ -13,10 +13,12 @@ import { render, waitFor, cleanup } from '@testing-library/react';
 // (isClipFromAnotherProject / shouldRetryClipVideoViaProxy) in isolation, but
 // as the reviewer noted, that suite would still pass if BOTH call sites were
 // deleted from FocusScreen.jsx. The riskiest part of the fix is an ORDERING
-// claim inside FocusScreen's "Handle clip switching" effect: the foreign-clip
-// bail must run BEFORE restoreCropState/restoreSegmentState and BEFORE
-// previousClipIdRef.current is stamped -- so this suite renders the REAL
-// FocusScreen and asserts on the wiring, not a reimplementation of it.
+// claim: the foreign-clip bail must run BEFORE restoreCropState/
+// restoreSegmentState -- so this suite renders the REAL FocusScreen and
+// asserts on the wiring, not a reimplementation of it. (T11240, 2026-09-27:
+// the separate "Handle clip switching" effect this comment used to describe
+// is deleted -- restore happens only once, in the init effect, after the
+// choke-point guard below has already run.)
 //
 // Mocking approach follows focusBackToPreview.test.jsx / focusCompletionPreview.test.jsx
 // (stub every heavy hook/store FocusScreen pulls in) but goes one step further:
@@ -361,8 +363,8 @@ describe('T10740 FocusScreen stale-clip guard (render-level)', () => {
 
     render(<FocusScreen />);
 
-    // Let mount effects (useLayoutEffect + the clips-keyed effect + the
-    // clip-switching effect) run their microtasks/macrotasks to completion.
+    // Let mount effects (useLayoutEffect + the clips-keyed init effect) run
+    // their microtasks/macrotasks to completion.
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(spies.restoreCropState).not.toHaveBeenCalled();
