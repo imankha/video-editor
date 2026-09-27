@@ -9,7 +9,7 @@ import { toast } from '../components/shared';
 import { track } from '../utils/analytics';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useQuestStore } from '../stores/questStore';
-import { calculateEffectiveDuration, sumEffectiveDurations } from '../utils/effectiveDuration';
+import { calculateEffectiveDuration } from '../utils/effectiveDuration';
 import useFramingHistory from '../hooks/useFramingHistory';
 
 /**
@@ -112,14 +112,7 @@ export function FocusContainer({
   selectedClip,
   hasClips,
   globalAspectRatio,
-  globalTransition,
-  addClip,
-  deleteClip,
-  selectClip,
-  reorderClips,
   updateClipData,
-  setGlobalTransition,
-  getClipExportData,
 
   // Video metadata cache (keyed by clip ID)
   clipMetadataCache = {},
@@ -142,8 +135,10 @@ export function FocusContainer({
   const latestSelectedClipIdRef = useRef(selectedClipId);
   latestSelectedClipIdRef.current = selectedClipId;
 
-  // T9950 Slice 2: session-scoped Undo for framing edits. Memory only, cleared
-  // by the caller on the clip-selection gesture (see clearFramingHistory below).
+  // T9950 Slice 2: session-scoped Undo for framing edits. Memory only. Used to
+  // be cleared on the (now-deleted, T11240) clip-selection gesture; with
+  // exactly one clip there is no other clip's history to leak into, so it is
+  // simply session-scoped for the mounted clip's lifetime.
   const framingHistory = useFramingHistory();
 
   // DERIVED STATE: Current crop state at playhead
@@ -290,18 +285,6 @@ export function FocusContainer({
   }, [duration, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange]);
 
   /**
-   * DERIVED (T5780): live project total = summed effective duration of every clip —
-   * live for the selected clip (clipsWithCurrentState merges its hook state) and saved
-   * segments_data for the rest. This is the billable output length T5790 turns into a
-   * credit estimate. Fail-closed: null if any clip's duration is unknown, so the total
-   * hides rather than under-reporting the real charge.
-   */
-  const projectEffectiveDuration = useMemo(() => {
-    if (!hasClips || !clipsWithCurrentState || clipsWithCurrentState.length === 0) return null;
-    return sumEffectiveDurations(clipsWithCurrentState);
-  }, [hasClips, clipsWithCurrentState]);
-
-  /**
    * Save current clip's framing state to backend
    */
   const saveCurrentClipState = useCallback(async () => {
@@ -357,8 +340,10 @@ export function FocusContainer({
    * not exist before this edit" -> the inverse deletes it.
    */
   const applyInverseKeyframeState = useCallback(async (frame, data, origin, clipIdAtPush) => {
-    // Defensive only: clearFramingHistory already empties the stack on clip
-    // switch (the gesture handler), so this should never see a stale clip.
+    // T11240: with exactly one clip there is no more user-driven clip switch to
+    // clear the stack on, but an export version bump still changes
+    // selectedClipId — this guard keeps a pre-bump inverse thunk (closed over
+    // the OLD id's keyframes) from ever replaying against the new id.
     if (latestSelectedClipIdRef.current !== clipIdAtPush) return;
     const time = frame / framerate;
     if (data) {
@@ -393,16 +378,6 @@ export function FocusContainer({
    */
   const handleUndoFraming = useCallback(async () => {
     await framingHistory.undo();
-  }, [framingHistory]);
-
-  /**
-   * T9950 Slice 2 -- clears the Undo stack. Called from the existing
-   * clip-selection GESTURE (FocusScreen.handleSelectClip), never from a
-   * useEffect keyed on selectedClipId: an inverse thunk closes over a specific
-   * clip's keyframes, so it must not survive a clip switch.
-   */
-  const clearFramingHistory = useCallback(() => {
-    framingHistory.clear();
   }, [framingHistory]);
 
   /**
@@ -1170,9 +1145,8 @@ export function FocusContainer({
     clipsWithCurrentState,
     getFilteredKeyframesForExport,
 
-    // T5780: live output-length indicators (derived at render, never persisted)
+    // T5780: live output-length indicator (derived at render, never persisted)
     selectedClipEffectiveDuration,
-    projectEffectiveDuration,
 
     // T9950 Slice 2: session-scoped Undo state.
     canUndoFraming: framingHistory.canUndo,
@@ -1193,7 +1167,6 @@ export function FocusContainer({
     handleSegmentSpeedChange,
     handleSetRotation,
     handleUndoFraming,
-    clearFramingHistory,
 
     // Persistence
     saveCurrentClipState,

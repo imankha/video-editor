@@ -1,5 +1,4 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
-import { List, X } from 'lucide-react';
 import { FocusModeView } from '../modes';
 import { FocusContainer } from '../containers';
 import { useCrop, useSegments } from '../modes/focus';
@@ -11,8 +10,6 @@ import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { useIsCockpit } from '../hooks/useIsMobile';
 import { useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
-import { ClipSelectorSidebar } from '../components/ClipSelectorSidebar';
-import { FileUpload } from '../components/FileUpload';
 import { toast } from '../components/shared';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
@@ -81,11 +78,8 @@ export function FocusScreen({
   const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
   const setOverlayClipMetadata = useProjectDataStore(state => state.setClipMetadata);
   const fetchClips = useProjectDataStore(state => state.fetchClips);
-  const addClipFromLibraryAction = useProjectDataStore(state => state.addClipFromLibrary);
-  const uploadClipWithMetadataAction = useProjectDataStore(state => state.uploadClipWithMetadata);
   const saveFramingEdits = useProjectDataStore(state => state.saveFramingEdits);
   const updateClipMetadata = useProjectDataStore(state => state.updateClipMetadata);
-  const removeClipFromServer = useProjectDataStore(state => state.removeClip);
   const changeAspectRatioAction = useProjectDataStore(state => state.changeAspectRatio);
 
   // Framing persistent state
@@ -108,8 +102,6 @@ export function FocusScreen({
   const [videoFile, setVideoFile] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // T740: outdated clips dialog and state removed — framing always uses latest boundaries
-  // Mobile sidebar toggle
-  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   // T10650: spinner while resolveWorkingVideoPreviewUrl resolves the "Back to
   // Preview" URL. Ephemeral gesture state, never persisted.
   const [backToPreviewLoading, setBackToPreviewLoading] = useState(false);
@@ -137,11 +129,8 @@ export function FocusScreen({
   // T9100: FocusScreen no longer READS the shared workingVideo record (the
   // post-export preview now uses the completion store); it still WRITES it via
   // setWorkingVideo. So the reactive selector is gone, but the store action stays.
-  const clipHasUserEditsRef = useRef(false);
   const localExportButtonRef = useRef(null);
   const initialLoadDoneRef = useRef(false);
-  const previousClipIdRef = useRef(null);
-  const isRestoringClipStateRef = useRef(false);
   const fullscreenContainerRef = useRef(null);
   // T740: outdatedClipsCheckedRef removed — no outdated check in framing
 
@@ -154,13 +143,7 @@ export function FocusScreen({
     selectedClip,
     hasClips,
     globalAspectRatio,
-    globalTransition,
-    deleteClip,
-    selectClip,
-    reorderClips,
     updateClipData,
-    setGlobalTransition,
-    getExportData: getClipExportData,
   } = useClipManager();
 
   // Reel-level aspect-ratio change (T3910): a single gesture that re-fits every clip's crop
@@ -246,7 +229,6 @@ export function FocusScreen({
     isVideoElementLoading,
     loadingProgress,
     loadingElapsedSeconds,
-    loadVideo,
     loadVideoFromUrl,
     loadVideoFromStreamingUrl,
     togglePlay,
@@ -421,16 +403,9 @@ export function FocusScreen({
     selectedClip: selectedClipWithMeta,
     hasClips,
     globalAspectRatio,
-    globalTransition,
-    deleteClip,
-    selectClip,
-    reorderClips,
     updateClipData,
-    setGlobalTransition,
-    getClipExportData,
     saveFramingEdits: boundSaveFramingEdits,
     onCropChange: setDragCrop,
-    onUserEdit: () => { clipHasUserEditsRef.current = true; },
     setFramingChangedSinceExport,
     clipMetadataCache,
   });
@@ -438,7 +413,6 @@ export function FocusScreen({
   const {
     clipsWithCurrentState: framingClipsWithCurrentState,
     selectedClipEffectiveDuration,
-    projectEffectiveDuration,
     canUndoFraming,
     handleCropChange: framingHandleCropChange,
     handleCropComplete: framingHandleCropComplete,
@@ -455,7 +429,6 @@ export function FocusScreen({
     handleSegmentSpeedChange: framingHandleSegmentSpeedChange,
     handleSetRotation: framingHandleSetRotation,
     handleUndoFraming: framingHandleUndoFraming,
-    clearFramingHistory,
     saveCurrentClipState: framingSaveCurrentClipState,
   } = framing;
 
@@ -469,7 +442,14 @@ export function FocusScreen({
 
   // Track the last loaded URL to detect when clip changes
   const lastLoadedUrlRef = useRef(null);
-  const stateRestoredForUrlRef = useRef(null); // Guard against infinite restore loops
+  // T11240 (design doc §3.1 fold fallback): re-keyed from URL path to clip id
+  // and hoisted above the video-URL resolution (see the init effect below) so
+  // a clip whose source is expired (playback-url 410) still restores its
+  // saved crop/segment state — the guard used to be unreachable when
+  // `getClipVideoConfig` returned no url, a real regression the deleted
+  // clip-switch effect's CH5 characterization caught. Guard against infinite
+  // restore loops, same as before.
+  const stateRestoredForClipIdRef = useRef(null);
 
   // Dedupe playback-url fetches: the mount effects (useLayoutEffect + the
   // clips/metadata-keyed effect) each call getClipVideoConfig before the
@@ -642,6 +622,36 @@ export function FocusScreen({
 
     const firstClip = clips[0];
     const controller = new AbortController();
+    const firstClipWithMeta = getClipWithMeta(firstClip);
+
+    // Restore framing state (crop keyframes, segments) from clip data if not already done.
+    // T11240 (design doc §3.1 fold fallback): hoisted ABOVE video-URL resolution and
+    // re-keyed on clip id (not URL path, which isn't known yet here) so a clip whose
+    // source is expired (playback-url 410) still restores its saved crop/segments —
+    // the CH5 characterization caught this regressing when restore lived only after
+    // the URL resolved. Guard with ref to prevent infinite loops (restore updates
+    // state → re-render → effect re-fires). T10740: explicitly re-checked here (not
+    // just inside getClipVideoConfig below) because restore now runs BEFORE that
+    // call's own foreign-clip guard — a leftover clip from another project must
+    // never push its keyframes into this project's editor.
+    const clipDuration = firstClipWithMeta?.duration;
+    if (!isClipFromAnotherProject(firstClip, projectId) &&
+        stateRestoredForClipIdRef.current !== firstClip.id && clipDuration) {
+      stateRestoredForClipIdRef.current = firstClip.id;
+      const parsedSegments = clipSegments(firstClip, clipDuration);
+      const parsedCropKfs = clipCropKeyframes(firstClip);
+
+      if (parsedSegments) {
+        restoreSegmentState(parsedSegments, clipDuration);
+      }
+
+      if (parsedCropKfs && parsedCropKfs.length > 0) {
+        const endFrame = Math.round(clipDuration * (firstClipWithMeta?.framerate || 30));
+        if (endFrame > 0) {
+          restoreCropState(parsedCropKfs, endFrame);
+        }
+      }
+    }
 
     (async () => {
       const cfg = await getClipVideoConfig(firstClip);
@@ -650,38 +660,9 @@ export function FocusScreen({
       if (!clipUrl) return;
       if (controller.signal.aborted) return;
 
-      const firstClipWithMeta = getClipWithMeta(firstClip);
-
-      // Restore framing state (crop keyframes, segments) from clip data if not already done.
-      // The useLayoutEffect above may have already loaded the video (for overlay→framing
-      // transitions), but state restoration still needs to happen. Guard with ref to
-      // prevent infinite loops (restore updates state → re-render → effect re-fires).
-      // Guard on URL path (without query) because R2 signatures regenerate per render.
-      const clipUrlKey = clipUrl.split('?')[0];
-      const clipDuration = firstClipWithMeta?.duration;
-      if (stateRestoredForUrlRef.current !== clipUrlKey && clipDuration) {
-        stateRestoredForUrlRef.current = clipUrlKey;
-        const parsedSegments = clipSegments(firstClip, clipDuration);
-        const parsedCropKfs = clipCropKeyframes(firstClip);
-
-        if (parsedSegments) {
-          restoreSegmentState(parsedSegments, clipDuration);
-        }
-
-        if (parsedCropKfs && parsedCropKfs.length > 0) {
-          const endFrame = Math.round(clipDuration * (firstClipWithMeta?.framerate || 30));
-          if (endFrame > 0) {
-            restoreCropState(parsedCropKfs, endFrame);
-          }
-        }
-
-        if (firstClip.id) {
-          previousClipIdRef.current = firstClip.id;
-        }
-      }
-
       // Skip video loading if already loaded (e.g., by useLayoutEffect on mount)
       // Compare path-without-query since signed R2 URLs regenerate per render.
+      const clipUrlKey = clipUrl.split('?')[0];
       if (lastLoadedUrlRef.current === clipUrlKey) return;
       if (controller.signal.aborted) return;
 
@@ -713,82 +694,12 @@ export function FocusScreen({
 
 
 
-  // Handle clip switching - restore new clip's state from store
-  // T280: Previous clip's state is already in the store (sync effects keep it current).
-  // We only need to restore the NEW clip's state into hooks.
-  useEffect(() => {
-    if (!selectedClipId) return;
-    if (selectedClipId === previousClipIdRef.current) return;
-
-    const newClip = clips.find(c => c.id === selectedClipId);
-    if (!newClip) {
-      console.warn('[FocusScreen] Selected clip not found:', selectedClipId);
-      return;
-    }
-    // T10740: this effect restores crop/segment state into the hooks BEFORE it
-    // resolves a video URL, so the guard inside getClipVideoConfig is too late
-    // here — a leftover clip from the previous project would push ITS keyframes
-    // into this project's editor. Bail before touching any hook state; the fresh
-    // clips list re-fires this effect moments later with the right clip.
-    if (isClipFromAnotherProject(newClip, projectId)) return;
-
-    // Set restoring flag synchronously BEFORE async work.
-    // This prevents the sync effects (declared after this effect) from writing
-    // stale hook state to the new clip's store slot during this render cycle.
-    isRestoringClipStateRef.current = true;
-    previousClipIdRef.current = selectedClipId;
-
-    const newClipWithMeta = getClipWithMeta(newClip);
-    const newClipDuration = newClipWithMeta?.duration;
-    const newParsedSegments = newClipDuration ? clipSegments(newClip, newClipDuration) : null;
-    const newParsedCropKfs = clipCropKeyframes(newClip);
-
-    const switchClip = async () => {
-      try {
-        // 1. Restore new clip's segments state
-        if (newParsedSegments && newClipDuration) {
-          restoreSegmentState(newParsedSegments, newClipDuration);
-        } else {
-          resetSegments();
-          if (newClipDuration) {
-            initializeSegments(newClipDuration);
-          }
-        }
-
-        // 2. Restore new clip's crop keyframes BEFORE loading video
-        if (newParsedCropKfs && newParsedCropKfs.length > 0 && newClipDuration) {
-          const endFrame = Math.round(newClipDuration * (newClipWithMeta?.framerate || 30));
-          if (endFrame > 0) {
-            restoreCropState(newParsedCropKfs, endFrame);
-          }
-        } else {
-          resetCrop();
-        }
-
-        // 3. Load new clip's video (or just seek if same video URL)
-        const newCfg = await getClipVideoConfig(newClip);
-        const { url: newClipUrl, gameUrl: newGameUrl, clipRange: newClipRange } = newCfg;
-        applySourceExpiry(newCfg);
-        if (newClipUrl) {
-          if (!newClipUrl.startsWith('blob:')) {
-            warmVideoCache(newClipUrl);
-            loadVideoFromStreamingUrl(newClipUrl, newClipWithMeta?.metadata || null, newClipRange, { gameUrl: newGameUrl });
-          } else {
-            const file = await loadVideoFromUrl(newClipUrl, newClip.filename || 'clip.mp4');
-            if (file) {
-              setVideoFile(file);
-            }
-          }
-        }
-
-        clipHasUserEditsRef.current = false;
-      } finally {
-        isRestoringClipStateRef.current = false;
-      }
-    };
-
-    switchClip();
-  }, [selectedClipId, clips, projectId, clipMetadataCache, loadVideoFromUrl, loadVideoFromStreamingUrl, loadVideo, restoreSegmentState, resetSegments, initializeSegments, restoreCropState, resetCrop, getClipWithMeta]);
+  // T11240: the clip-switch restore effect (previously here) is deleted — with
+  // exactly one clip there is no other clip to switch to; the init effect above
+  // is the only restore path (mount, and the T10740 foreign-clip guard lives at
+  // its getClipVideoConfig choke point). An export version bump still changes
+  // selectedClipId, but the new version's persisted data equals what was just
+  // saved, so re-restoring would be a no-op at best — see design doc §3.1.
 
   // T350: Reactive sync effect REMOVED. See docs/plans/tasks/T350-design.md.
   // Persistence is now gesture-based: each user action in FocusContainer fires
@@ -1016,19 +927,6 @@ export function FocusScreen({
   // the always-mounted `FocusCompletionRecovery` (same App-level double-mount
   // as DraftReelPreview), which can actually observe the user navigating away
   // (e.g. the mobile back button) and clear the payload before it resurrects.
-
-  // Handle file selection (local upload - not from library)
-  const handleFileSelect = async (file) => {
-    try {
-      const videoMetadata = await extractVideoMetadata(file);
-      // Upload to backend
-      if (projectId) {
-        await uploadClipWithMetadataAction(projectId, { file, name: file.name });
-      }
-    } catch (err) {
-      console.error('[FocusScreen] Failed to add clip:', err);
-    }
-  };
 
   // Handle proceed to overlay
   // T9790: `exportJobId` (the completed framing job's id, === the client-
@@ -1332,51 +1230,6 @@ export function FocusScreen({
     return game?.name || null;
   }, [selectedClipWithMeta?.game_id, games]);
 
-  // Handle clip selection from sidebar
-  // T9950 Slice 2: clear the framing Undo stack HERE, at the clip-selection
-  // gesture itself (never a useEffect keyed on selectedClipId) — an inverse
-  // thunk closes over a specific clip's keyframes and must not survive a switch.
-  const handleSelectClip = useCallback((clipId) => {
-    if (clipId !== selectedClipId) {
-      clearFramingHistory();
-      selectClip(clipId);
-    }
-  }, [selectedClipId, selectClip, clearFramingHistory]);
-
-  // Handle clip deletion from sidebar — persists to backend
-  const handleDeleteClip = useCallback((clipId) => {
-    if (projectId) {
-      removeClipFromServer(projectId, clipId);
-    }
-  }, [projectId, removeClipFromServer]);
-
-  // Handle adding clip from sidebar
-  const handleAddClipFromSidebar = useCallback((file) => {
-    handleFileSelect(file);
-  }, [handleFileSelect]);
-
-  // Handle upload with metadata from sidebar
-  const handleUploadWithMetadata = useCallback(async (uploadData) => {
-    try {
-      if (projectId) {
-        await uploadClipWithMetadataAction(projectId, uploadData);
-      }
-    } catch (err) {
-      console.error('[FocusScreen] Failed to upload clip with metadata:', err);
-    }
-  }, [projectId, uploadClipWithMetadataAction]);
-
-  // Handle adding clip from library
-  const handleAddFromLibrary = useCallback(async (rawClipId) => {
-    try {
-      if (projectId) {
-        await addClipFromLibraryAction(projectId, rawClipId);
-      }
-    } catch (err) {
-      console.error('[FocusScreen] Failed to add clip from library:', err);
-    }
-  }, [projectId, addClipFromLibraryAction]);
-
   const isLoadingProjectData = isProjectLoading;
 
   // T10190 §3.2 Shaper 3: game context for the completion-preview header, same
@@ -1385,8 +1238,6 @@ export function FocusScreen({
   // internally via formatGameClock. gameId is gated to exactly one source game
   // (the backlink's unambiguous target requirement); 0 or >1 games -> null, so
   // no gameName/onBackToGame is fed and the header falls back to `title`.
-  // Declared before the FileUpload early return below (rules-of-hooks: every
-  // hook must run on every render).
   const focusCompletionProjectListItem = useProjectsStore((state) => state.projects.find((p) => p.id === projectId));
   const focusCompletionGameName = focusCompletionProjectListItem?.game_names?.[0] || null;
   const focusCompletionGameStartTime = focusCompletionProjectListItem?.clip_game_start_time ?? null;
@@ -1404,86 +1255,10 @@ export function FocusScreen({
     useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
   }, [focusCompletionGameId, focusCompletionGameStartTime, selectedClip]);
 
-  // Only show FileUpload when truly empty
-  if (!hasClips && !videoUrl && !isLoadingProjectData && !projectId) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <FileUpload onGameVideoSelect={handleFileSelect} />
-      </div>
-    );
-  }
-
-  const sidebarProps = {
-    clips,
-    selectedClipId,
-    onSelectClip: handleSelectClip,
-    onAddClip: handleAddClipFromSidebar,
-    onDeleteClip: handleDeleteClip,
-    onReorderClips: reorderClips,
-    globalTransition,
-    onTransitionChange: setGlobalTransition,
-    onUploadWithMetadata: handleUploadWithMetadata,
-    onAddFromLibrary: handleAddFromLibrary,
-    existingRawClipIds: clips.map(c => c.raw_clip_id).filter(Boolean),
-    games,
-  };
-
   return (
     <div className="flex h-full">
-      {/* Sidebar - hidden on mobile, visible on sm+. T10840 (D3): gated off in the
-          landscape cockpit, where clips live in the Clips sheet instead — otherwise
-          the 224px rail would eat the cockpit's width exactly as it does today. */}
-      {!cockpit && ((hasClips && clips.length > 0) ? (
-        <div className="hidden sm:flex">
-          <ClipSelectorSidebar {...sidebarProps} />
-        </div>
-      ) : isLoadingProjectData && (
-        <div className="hidden sm:block w-64 border-r border-gray-700 bg-gray-800/50 p-4">
-          <div className="animate-pulse space-y-3">
-            <div className="h-4 bg-gray-700 rounded w-20"></div>
-            <div className="space-y-2">
-              <div className="h-16 bg-gray-700 rounded"></div>
-              <div className="h-16 bg-gray-700 rounded"></div>
-            </div>
-          </div>
-        </div>
-      ))}
-
-      {/* Mobile sidebar overlay */}
-      {showMobileSidebar && hasClips && clips.length > 0 && (
-        <div className="fixed inset-0 z-50 flex sm:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileSidebar(false)} />
-          <div className="relative w-[85vw] max-w-[352px] h-full">
-            <ClipSelectorSidebar
-              {...sidebarProps}
-              onSelectClip={(id) => { handleSelectClip(id); setShowMobileSidebar(false); }}
-            />
-            <button
-              onClick={() => setShowMobileSidebar(false)}
-              className="absolute top-3 right-3 p-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Main content */}
       <div className="flex-1 min-w-0">
-        {/* Mobile clips toggle. T10840 (D3): gated off in the cockpit — the Clips
-            rail button opens the Clips sheet instead. */}
-        {!cockpit && hasClips && clips.length > 0 && (
-          <div className="flex sm:hidden px-3 pt-2">
-            <button
-              onClick={() => setShowMobileSidebar(true)}
-              className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300"
-              title="Show clips"
-            >
-              <List size={16} />
-              <span className="text-xs font-medium">{clips.length} clips</span>
-            </button>
-          </div>
-        )}
         <FocusModeView
       videoRef={videoRef}
       videoUrl={videoUrl}
@@ -1512,7 +1287,6 @@ export function FocusScreen({
       fullscreenContainerRef={fullscreenContainerRef}
       isFullscreen={isFullscreen}
       onToggleFullscreen={fullscreenWorthwhile ? handleToggleFullscreen : undefined}
-      onFileSelect={handleFileSelect}
       togglePlay={togglePlay}
       stepForward={stepForward}
       stepBackward={stepBackward}
@@ -1567,12 +1341,10 @@ export function FocusScreen({
       hasClips={hasClips}
       clipsWithCurrentState={framingClipsWithCurrentState}
       selectedClipEffectiveDuration={selectedClipEffectiveDuration}
-      projectEffectiveDuration={projectEffectiveDuration}
       canUndoFraming={canUndoFraming}
       onUndoFraming={framingHandleUndoFraming}
       globalAspectRatio={globalAspectRatio}
       onAspectRatioChange={handleAspectRatioChange}
-      globalTransition={globalTransition}
       exportButtonRef={exportButtonRef}
       getFilteredKeyframesForExport={getFilteredKeyframesForExport}
       getSegmentExportData={getSegmentExportData}
@@ -1588,7 +1360,6 @@ export function FocusScreen({
       backToPreviewLoading={backToPreviewLoading}
       cropContextValue={cropContextValue}
       cockpit={cockpit}
-      clipSidebarProps={sidebarProps}
       onExitToHome={onExitToHome}
     />
       </div>

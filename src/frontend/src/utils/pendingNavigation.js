@@ -22,7 +22,6 @@ const GAME_SOURCE_CLIP_KEY = 'pendingSourceClipId';
 
 const PROJECT_ID_KEY = 'pendingProjectId';
 const PROJECT_MODE_KEY = 'pendingProjectMode';
-const PROJECT_CLIP_KEY = 'pendingProjectClipIndex';
 
 // --- Games (consumed by AnnotateScreen) ---
 
@@ -146,31 +145,25 @@ export function consumePendingGameReference() {
 
 // --- Projects/reels (consumed by ProjectsScreen restore effect) ---
 
-export function setPendingProject(projectId, { mode = null, clipIndex = null } = {}) {
+export function setPendingProject(projectId, { mode = null } = {}) {
   sessionStorage.setItem(PROJECT_ID_KEY, projectId.toString());
   if (mode) {
     sessionStorage.setItem(PROJECT_MODE_KEY, mode);
-  }
-  if (clipIndex != null) {
-    sessionStorage.setItem(PROJECT_CLIP_KEY, clipIndex.toString());
   }
 }
 
 export function clearPendingProject() {
   sessionStorage.removeItem(PROJECT_ID_KEY);
   sessionStorage.removeItem(PROJECT_MODE_KEY);
-  sessionStorage.removeItem(PROJECT_CLIP_KEY);
 }
 
 export function consumePendingProject() {
   const projectId = sessionStorage.getItem(PROJECT_ID_KEY);
   if (projectId == null) return null;
   const mode = sessionStorage.getItem(PROJECT_MODE_KEY);
-  const clipIndex = sessionStorage.getItem(PROJECT_CLIP_KEY);
   clearPendingProject();
   return {
     projectId: parseInt(projectId),
     mode: mode || null,
-    clipIndex: clipIndex != null ? parseInt(clipIndex) : null,
   };
 }

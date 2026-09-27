@@ -78,3 +78,18 @@ export const clipTrimRange = (clip) => {
  * derived/duplicated flag; the store holds the raw value.
  */
 export const clipRotation = (clip) => Number(clip?.rotation) || 0;
+
+/**
+ * Whether a clip has any user framing edits — a crop keyframe, OR a real segment
+ * edit (speed change, trim, or split). One predicate for both the export
+ * "unframed" gate (ExportButtonContainer) and the Focus header badge
+ * (FramingHeaderStatus), so they can never disagree (T11240 R9, moved verbatim
+ * from the deleted ClipSelectorSidebar's hasCrop/hasUserSegmentEdits pair).
+ */
+export const clipIsFramed = (clip) => {
+  const hasCrop = (clip.cropKeyframes?.length > 0) || (clipCropKeyframes(clip)?.length > 0);
+  if (hasCrop) return true;
+  const s = clip.segments || clip.segments_data;
+  if (!s) return false;
+  return Object.keys(s.segmentSpeeds || {}).length > 0 || !!s.trimRange || (s.userSplits?.length || 0) > 0;
+};

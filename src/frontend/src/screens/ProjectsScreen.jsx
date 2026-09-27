@@ -285,7 +285,6 @@ export function ProjectsScreen({
       // Load project with all associated data
       const result = await loadProject(project, {
         mode: options.mode,
-        clipIndex: options.clipIndex,
       });
 
       // Sync with editorStore for legacy compatibility
@@ -315,7 +314,6 @@ export function ProjectsScreen({
     if (pending.mode) {
       handleSelectProjectWithMode(pending.projectId, {
         mode: pending.mode,
-        clipIndex: pending.clipIndex ?? undefined,
       });
     } else {
       handleSelectProject(pending.projectId);

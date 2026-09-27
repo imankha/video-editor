@@ -146,6 +146,8 @@ describe('ExportButtonContainer', () => {
   });
 
   // T5790: pre-flight credit-cost estimate on the Framing export button.
+  // T11240: a project is exactly one clip, so estimateExportCredits(clip)
+  // takes the one clip directly (no more sum-across-a-list).
   describe('estimateExportCredits', () => {
     // A 6s clip whose first 3s play at 0.5x: 3s/0.5 (=6s) + 3s (=3s) = 9s output.
     const clip6sPlus3sSlowMo = {
@@ -158,14 +160,13 @@ describe('ExportButtonContainer', () => {
     };
 
     it('6s clip + 3s @0.5x -> 9 credits (matches the insufficient-credits modal number)', () => {
-      const clips = [clip6sPlus3sSlowMo];
-      expect(estimateExportCredits(clips)).toBe(9);
+      expect(estimateExportCredits(clip6sPlus3sSlowMo)).toBe(9);
       // The estimate MUST equal what the click-time credit check computes for the same
       // data (same util + same Math.ceil), so the button and the modal never disagree.
       const modalRequired = useCreditStore
         .getState()
         .getRequiredCredits(calculateEffectiveDuration(clip6sPlus3sSlowMo));
-      expect(estimateExportCredits(clips)).toBe(modalRequired);
+      expect(estimateExportCredits(clip6sPlus3sSlowMo)).toBe(modalRequired);
     });
 
     it('trim reduces the estimate', () => {
@@ -174,36 +175,25 @@ describe('ExportButtonContainer', () => {
         ...clip6sPlus3sSlowMo,
         segments: { ...clip6sPlus3sSlowMo.segments, trimRange: { start: 0, end: 3 } },
       };
-      expect(estimateExportCredits([trimmed])).toBe(6);
-      expect(estimateExportCredits([trimmed])).toBeLessThan(estimateExportCredits([clip6sPlus3sSlowMo]));
+      expect(estimateExportCredits(trimmed)).toBe(6);
+      expect(estimateExportCredits(trimmed)).toBeLessThan(estimateExportCredits(clip6sPlus3sSlowMo));
     });
 
     it('rounds fractional output seconds to nearest (T9750 round-half-up)', () => {
       // 5.1s clip -> 5.1s output -> 5 credits (below .5, rounds down; was 6 under ceil).
-      expect(estimateExportCredits([{ id: 'c1', duration: 5.1 }])).toBe(5);
+      expect(estimateExportCredits({ id: 'c1', duration: 5.1 })).toBe(5);
       // 5.5s -> exactly half rounds UP to 6.
-      expect(estimateExportCredits([{ id: 'c2', duration: 5.5 }])).toBe(6);
+      expect(estimateExportCredits({ id: 'c2', duration: 5.5 })).toBe(6);
     });
 
-    it('sums across a multi-clip project', () => {
-      const clips = [
-        { id: 'a', duration: 10 },
-        clip6sPlus3sSlowMo, // 9s
-        { id: 'c', duration: 4 },
-      ];
-      // 10 + 9 + 4 = 23s -> 23 credits.
-      expect(estimateExportCredits(clips)).toBe(23);
+    it('returns null (hidden, no fabricated number) when the clip duration is unknown', () => {
+      // knownEffectiveDuration fails closed to null when the clip's duration is NaN.
+      expect(estimateExportCredits({ id: 'a', duration: undefined })).toBeNull();
     });
 
-    it('returns null (hidden, no fabricated number) when a clip duration is unknown', () => {
-      const clips = [{ id: 'a', duration: 10 }, { id: 'b', duration: undefined }];
-      // sumEffectiveDurations fails closed to null when any clip is NaN.
-      expect(estimateExportCredits(clips)).toBeNull();
-    });
-
-    it('returns null for empty / null clip lists', () => {
-      expect(estimateExportCredits([])).toBeNull();
+    it('returns null for an empty / null clip', () => {
       expect(estimateExportCredits(null)).toBeNull();
+      expect(estimateExportCredits(undefined)).toBeNull();
     });
   });
 });

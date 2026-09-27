@@ -1,12 +1,12 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
-/**
- * T9950 Slice 2: FocusModeView threads Undo state/handlers to FramingActionRow,
- * rendered under the timeline (above the Advanced editing disclosure, design
- * doc §5). T10310 (2026-09-18 user request): the wider-frame wiring this file
- * used to also cover was removed along with the button itself.
- */
+// T11240 C1/C3: a single-clip Focus project must render no multi-clip editing UI:
+// no Clips settings-rail tab, no "N clips in this reel" copy, no project Total
+// chip. RED on master for the Clips tab / copy (FocusClipsPanel + its tab are
+// still mounted regardless of clip count); the Total chip assertion is already
+// true on master for a single clip (isMultiClip requires length > 1) and stays
+// true — a characterization, not a red-to-green flip.
 
 vi.mock('../components/AspectRatioSelector', () => ({ default: () => <div /> }));
 vi.mock('../components/VideoPlayer', () => ({ VideoPlayer: () => <div /> }));
@@ -40,6 +40,7 @@ vi.mock('../hooks/useFullscreenControls', () => ({
 import { FocusModeView } from './FocusModeView';
 
 function renderView(overrides = {}) {
+  const clip = { id: 1, cropKeyframes: [], segments: {} };
   const props = {
     videoRef: { current: null },
     videoUrl: 'blob:video',
@@ -50,7 +51,9 @@ function renderView(overrides = {}) {
     globalAspectRatio: '9:16',
     onAspectRatioChange: vi.fn(),
     keyframes: [{ frame: 10, x: 0, y: 0, width: 205, height: 365, origin: 'user' }],
-    clipsWithCurrentState: [],
+    hasClips: true,
+    clipsWithCurrentState: [clip],
+    selectedClipEffectiveDuration: 5,
     getTimelineScale: () => 1,
     getSegmentExportData: () => ({}),
     getFilteredKeyframesForExport: () => [],
@@ -59,38 +62,19 @@ function renderView(overrides = {}) {
   return render(<FocusModeView {...props} />);
 }
 
-describe('FocusModeView FramingActionRow wiring (T9950 Slice 2)', () => {
-  it('passes canUndoFraming through to disable/enable the Undo button', () => {
-    renderView({ canUndoFraming: false });
-    expect(screen.getByTestId('framing-undo').disabled).toBe(true);
-  });
-
-  it('calls onUndoFraming when Undo is clicked', () => {
-    const onUndoFraming = vi.fn();
-    renderView({ canUndoFraming: true, onUndoFraming });
-    screen.getByTestId('framing-undo').click();
-    expect(onUndoFraming).toHaveBeenCalledTimes(1);
-  });
-
-  it('never renders a widen-frame control', () => {
+describe('FocusModeView single-clip UI (T11240)', () => {
+  it('renders no Clips settings-rail tab', () => {
     renderView();
-    expect(screen.queryByTestId('framing-widen')).toBeNull();
+    expect(screen.queryByTestId('settings-tab-clips')).toBeNull();
   });
 
-  it('does not render the action row without a video', () => {
-    renderView({ videoUrl: '' });
-    expect(screen.queryByTestId('framing-undo')).toBeNull();
-  });
-
-  it('toggling Preview highlight flips its label and shows the approximation disclosure (T9950 Slice 3)', () => {
+  it('renders no "clips in this reel" copy anywhere', () => {
     renderView();
-    const previewBtn = screen.getByTestId('framing-preview-toggle');
-    expect(previewBtn.textContent).toMatch(/preview highlight/i);
-    expect(screen.queryByTestId('preview-disclosure')).toBeNull();
+    expect(screen.queryByText(/clips? in this reel/i)).toBeNull();
+  });
 
-    fireEvent.click(previewBtn);
-
-    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/back to framing/i);
-    expect(screen.getByTestId('preview-disclosure')).not.toBeNull();
+  it('renders no project Total output chip for a single clip', () => {
+    renderView();
+    expect(screen.queryByTestId('project-output-length-chip')).toBeNull();
   });
 });

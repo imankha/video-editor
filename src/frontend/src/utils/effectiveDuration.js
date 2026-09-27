@@ -90,28 +90,23 @@ export function calculateEffectiveDuration(clip) {
 }
 
 /**
- * Sum effective (post-trim, post-speed) durations across a list of clips — the live
- * project output length (T5780), and the basis for T5790's credit estimate.
+ * The one clip's effective (post-trim, post-speed) duration (T11240) — a project
+ * is now exactly one clip, so this replaces `sumEffectiveDurations` as the basis
+ * for the Framing credit estimate and pre-flight check. A "sum" over a
+ * single-element list was the misleading-name problem this task removes.
  *
- * Fail-closed (EPIC.md "No fabricated numbers"): if ANY clip's effective duration is
- * unknown (NaN — e.g. a clip whose duration never made it into the metadata cache),
- * returns null so the caller HIDES the total rather than showing a guess that would be
- * short of the real (backend-authoritative) charge.
+ * Fail-closed (EPIC.md "No fabricated numbers"): returns `null` when the clip's
+ * effective duration is unknown/NaN/non-positive, so the caller HIDES the
+ * estimate rather than showing a guess.
  *
- * @param {Array} clips - Clip objects (selected clip carries live `segments`, the rest
- *   carry saved `segments_data`)
- * @returns {number|null} Total effective seconds, or null if unknown/empty
+ * @param {Object} clip - The clip (selected clip carries live `segments`)
+ * @returns {number|null} Effective seconds, or null if unknown/non-positive
  */
-export function sumEffectiveDurations(clips) {
-  if (!clips || clips.length === 0) return null;
-
-  let total = 0;
-  for (const clip of clips) {
-    const eff = calculateEffectiveDuration(clip);
-    if (eff == null || Number.isNaN(eff)) return null;
-    total += eff;
-  }
-  return total;
+export function knownEffectiveDuration(clip) {
+  if (!clip) return null;
+  const eff = calculateEffectiveDuration(clip);
+  if (eff == null || Number.isNaN(eff) || eff <= 0) return null;
+  return eff;
 }
 
 /**

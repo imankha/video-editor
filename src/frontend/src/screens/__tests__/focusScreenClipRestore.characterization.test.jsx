@@ -1,31 +1,32 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, waitFor, cleanup } from '@testing-library/react';
 
-// T10740: FocusScreen showed a FALSE "video no longer available" panel when
-// Annotate "Frame Later" -> "Frame" opened Focus while projectDataStore.clips
-// still held the PREVIOUS project's rows (App.handleModeChange fires
-// invalidateClips fire-and-forget and switches mode immediately; fetchClips
-// only writes on response, never clears first). FocusScreen then paired the
-// OLD clip id with the NEW project id -- a pair the backend can only 404 for
-// (`WHERE wc.id = ? AND wc.project_id = ?`).
+// T11240 C1/C4 characterization (design doc §3.1/§4.3): pins FocusScreen's
+// mount, no-cache, and version-bump behavior BEFORE the clip-switch restore
+// effect (FocusScreen.jsx ~719-791) is deleted in C4, so the deletion's
+// red-to-green proof lives in one file.
 //
-// clipVideoResolution.test.js already pins the two pure predicates
-// (isClipFromAnotherProject / shouldRetryClipVideoViaProxy) in isolation, but
-// as the reviewer noted, that suite would still pass if BOTH call sites were
-// deleted from FocusScreen.jsx. The riskiest part of the fix is an ORDERING
-// claim: the foreign-clip bail must run BEFORE restoreCropState/
-// restoreSegmentState -- so this suite renders the REAL FocusScreen and
-// asserts on the wiring, not a reimplementation of it. (T11240, 2026-09-27:
-// the separate "Handle clip switching" effect this comment used to describe
-// is deleted -- restore happens only once, in the init effect, after the
-// choke-point guard below has already run.)
+// CH1 stays green, UNCHANGED, before and after C4 (the init effect already
+// covers this exact ground). CH3 asserts the TARGET post-C4 behavior (no
+// reset, no extra reload on a version bump) and is RED on this (C1) revision —
+// master's clip-switch effect still resets/reloads on every id change.
 //
-// Mocking approach follows focusBackToPreview.test.jsx / focusCompletionPreview.test.jsx
-// (stub every heavy hook/store FocusScreen pulls in) but goes one step further:
-// those two files never actually render FocusScreen (they replay its handlers in
-// a local harness). This file mounts the real `../FocusScreen` component, and
-// deliberately leaves `../clipVideoResolution` (the guard under test) and
-// `../../utils/clipSelectors` (pure parsing) UNMOCKED.
+// CH5 (POST-C4 UPDATE, 2026-09-27): pinned today's expired-source behavior
+// (restore happens despite an unresolved URL) and, as the design doc predicted,
+// deleting the clip-switch effect DID regress it — restoring only lived after
+// the URL resolved in the init effect. C4 applied the pre-specified §3.1 fold
+// fallback (hoist the restore above the URL await, re-keyed on clip id) rather
+// than accept the regression, so CH5 stays green across C4 with IDENTICAL
+// assertions. The fold has one documented cost, acknowledged in §3.1: it
+// re-introduces a version-bump re-restore for a clip id that is (unlike
+// production) already present in the metadata cache. CH2 and CH4 below are
+// updated accordingly (CH2 drops an over-specified implementation-detail
+// assertion; CH4 is repointed from a target to a characterization of the
+// accepted fold tradeoff) — see each test's comment.
+//
+// Mocking approach copied verbatim from focusScreenStaleClipGuard.test.jsx —
+// same harness, reused per the design doc instruction, with clip-switch-effect
+// -relevant spies added (resetSegments/resetCrop/loadVideoFromStreamingUrl).
 
 const testState = vi.hoisted(() => ({
   clips: [],
@@ -37,6 +38,10 @@ const testState = vi.hoisted(() => ({
 const spies = vi.hoisted(() => ({
   restoreCropState: vi.fn(),
   restoreSegmentState: vi.fn(),
+  resetCrop: vi.fn(),
+  resetSegments: vi.fn(),
+  initializeSegments: vi.fn(),
+  loadVideoFromStreamingUrl: vi.fn(),
 }));
 
 vi.mock('../../modes', () => ({ FocusModeView: () => null }));
@@ -86,7 +91,7 @@ vi.mock('../../modes/focus', () => ({
     hasKeyframeAt: () => false,
     getCropDataAtTime: () => null,
     getKeyframesForExport: () => [],
-    reset: vi.fn(),
+    reset: spies.resetCrop,
     restoreState: spies.restoreCropState,
   }),
   useSegments: () => ({
@@ -100,8 +105,8 @@ vi.mock('../../modes/focus', () => ({
     trimRange: null,
     trimHistory: [],
     segmentSpeeds: {},
-    initializeWithDuration: vi.fn(),
-    reset: vi.fn(),
+    initializeWithDuration: spies.initializeSegments,
+    reset: spies.resetSegments,
     restoreState: spies.restoreSegmentState,
     addBoundary: vi.fn(),
     removeBoundary: vi.fn(),
@@ -160,7 +165,7 @@ vi.mock('../../hooks/useVideo', () => ({
     loadingElapsedSeconds: 0,
     loadVideo: vi.fn(),
     loadVideoFromUrl: vi.fn().mockResolvedValue(null),
-    loadVideoFromStreamingUrl: vi.fn(),
+    loadVideoFromStreamingUrl: spies.loadVideoFromStreamingUrl,
     togglePlay: vi.fn(),
     seek: vi.fn(),
     stepForward: vi.fn(),
@@ -263,9 +268,6 @@ vi.mock('../../stores', () => {
   const useQuestStore = { getState: () => questState };
 
   const projectsState = { selectedProjectId: 42, projects: [] };
-  // T10190: FocusScreen now also reads useProjectsStore as a selector-hook
-  // (mirroring OverlayScreen's existing projectListItem derivation), so the
-  // mock must be callable, not just a `.getState()` bag.
   function useProjectsStore(selector) {
     return selector(projectsState);
   }
@@ -291,13 +293,11 @@ vi.mock('../../stores', () => {
   };
 });
 
-// Real: '../clipVideoResolution' (the guard under test) and
-// '../../utils/clipSelectors' (pure parsing of crop_data/segments_data).
 import { FocusScreen } from '../FocusScreen';
 
-const PROJECT_ID = 42; // must match the ProjectContext mock above
+const PROJECT_ID = 42;
 
-function makeClip({ id, projectId }) {
+function makeClip({ id, projectId = PROJECT_ID }) {
   return {
     id,
     project_id: projectId,
@@ -313,27 +313,27 @@ function makeClip({ id, projectId }) {
   };
 }
 
-function setClips(clips, selectedClipId) {
+// Unlike the T10740 harness's setClips, this does NOT unconditionally cache
+// every clip: `cachedIds` controls which ids get a clipMetadataCache entry so
+// CH2/CH3 can produce the "id absent from cache" production shape.
+function setClips(clips, selectedClipId, cachedIds = clips.map((c) => c.id)) {
   testState.clips = clips;
   testState.selectedClipId = selectedClipId;
   testState.selectedClip = clips.find((c) => c.id === selectedClipId) || null;
   testState.clipMetadataCache = Object.fromEntries(
-    clips.map((c) => [c.id, { duration: 10, width: 1080, height: 1920, framerate: 30 }])
+    clips.filter((c) => cachedIds.includes(c.id))
+      .map((c) => [c.id, { duration: 10, width: 1080, height: 1920, framerate: 30 }])
   );
 }
 
-function playbackUrlCalls() {
-  return global.fetch.mock.calls.filter(([url]) => String(url).includes('/playback-url'));
-}
-function streamCalls() {
-  return global.fetch.mock.calls.filter(([url]) => String(url).includes('/stream'));
+function clearSpies() {
+  Object.values(spies).forEach((s) => s.mockClear());
 }
 
-describe('T10740 FocusScreen stale-clip guard (render-level)', () => {
+describe('T11240 clip-switch restore effect characterization (design doc §3.1/§4.3)', () => {
   beforeEach(() => {
     setClips([], null);
-    spies.restoreCropState.mockClear();
-    spies.restoreSegmentState.mockClear();
+    clearSpies();
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -349,25 +349,89 @@ describe('T10740 FocusScreen stale-clip guard (render-level)', () => {
     vi.restoreAllMocks();
   });
 
-  it('a clip left over from a DIFFERENT project never restores crop/segment state and never fetches its playback-url', async () => {
-    const staleClip = makeClip({ id: 1, projectId: 999 }); // foreign: NOT this screen's project (42)
-    setClips([staleClip], 1);
+  it('CH1: mount, own project, metadata cached -> restores crop+segments with the clip\'s parsed data and loads the clip URL', async () => {
+    const clip = makeClip({ id: 1 });
+    setClips([clip], 1);
 
     render(<FocusScreen />);
 
-    // Let mount effects (useLayoutEffect + the clips-keyed init effect) run
-    // their microtasks/macrotasks to completion.
+    await waitFor(() => {
+      expect(spies.restoreCropState).toHaveBeenCalled();
+      expect(spies.restoreSegmentState).toHaveBeenCalled();
+    });
+
+    const [cropArgs] = spies.restoreCropState.mock.calls[0];
+    expect(cropArgs).toEqual(clip.crop_data);
+    const [segmentArgs] = spies.restoreSegmentState.mock.calls[0];
+    expect(segmentArgs).toEqual(clip.segments_data);
+
+    await waitFor(() => {
+      expect(spies.loadVideoFromStreamingUrl).toHaveBeenCalled();
+    });
+  });
+
+  it('CH2: mount, own project, NO metadata-cache entry -> no restore (unknown duration blocks it, both before and after C4)', async () => {
+    const clip = makeClip({ id: 1 });
+    setClips([clip], 1, []); // id 1 absent from the cache
+
+    render(<FocusScreen />);
+
+    // Give any pending microtasks a chance to run before asserting the negative.
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(spies.restoreCropState).not.toHaveBeenCalled();
     expect(spies.restoreSegmentState).not.toHaveBeenCalled();
-    expect(playbackUrlCalls()).toHaveLength(0);
-    expect(streamCalls()).toHaveLength(0);
   });
 
-  it('a matching clip DOES restore state and DOES fetch its playback-url (negative control -- proves the guard is not just eating every render)', async () => {
-    const goodClip = makeClip({ id: 1, projectId: PROJECT_ID });
-    setClips([goodClip], 1);
+  it('CH3 (RED at C1, GREEN at C4): version bump to a NEW id absent from the cache, same URL -> today resets + reloads; the target is NEITHER', async () => {
+    const oldClip = makeClip({ id: 1 });
+    setClips([oldClip], 1);
+    const { rerender } = render(<FocusScreen />);
+
+    await waitFor(() => expect(spies.restoreCropState).toHaveBeenCalled());
+    clearSpies();
+
+    const newClip = makeClip({ id: 2 }); // same game_video_url -> same resolved URL
+    setClips([newClip], 2, []); // id 2 absent from the cache (production shape)
+    rerender(<FocusScreen />);
+
+    await waitFor(() => expect(spies.resetSegments).not.toHaveBeenCalled());
+    expect(spies.resetCrop).not.toHaveBeenCalled();
+    expect(spies.loadVideoFromStreamingUrl).not.toHaveBeenCalled();
+  });
+
+  it('CH4 (accepted §3.1 fold tradeoff, non-production shape): version bump to a NEW id PRESENT in the cache -> still re-restores (identical data), but does NOT reload the video', async () => {
+    const oldClip = makeClip({ id: 1 });
+    setClips([oldClip], 1);
+    const { rerender } = render(<FocusScreen />);
+
+    await waitFor(() => expect(spies.restoreCropState).toHaveBeenCalled());
+    clearSpies();
+
+    const newClip = makeClip({ id: 2 });
+    setClips([newClip], 2); // id 2 present in the cache this time (not the real production shape -- see CH3)
+    rerender(<FocusScreen />);
+
+    // The CH5 fold fallback re-keys the restore guard on clip id, so a new id
+    // that happens to already be cached restores again (identical data --
+    // harmless, but not a no-op call-wise). This is the documented cost of the
+    // fold (design doc §3.1): CH3's production shape (new id NOT cached) still
+    // gets the full no-reset/no-reload target below.
+    await waitFor(() => {
+      expect(spies.restoreCropState).toHaveBeenCalled();
+      expect(spies.restoreSegmentState).toHaveBeenCalled();
+    });
+    expect(spies.loadVideoFromStreamingUrl).not.toHaveBeenCalled();
+  });
+
+  it('CH5: source URL unresolvable (playback-url 410 source_expired), metadata cached -> crop/segment state still restores today (before the URL ever resolves)', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 410,
+      json: async () => ({ detail: { code: 'source_expired', can_extend: true } }),
+    });
+    const clip = makeClip({ id: 1 });
+    setClips([clip], 1);
 
     render(<FocusScreen />);
 
@@ -375,35 +439,7 @@ describe('T10740 FocusScreen stale-clip guard (render-level)', () => {
       expect(spies.restoreCropState).toHaveBeenCalled();
       expect(spies.restoreSegmentState).toHaveBeenCalled();
     });
-
-    await waitFor(() => {
-      const calls = global.fetch.mock.calls.filter(([url]) =>
-        String(url).includes(`/projects/${PROJECT_ID}/clips/1/playback-url`)
-      );
-      expect(calls.length).toBeGreaterThan(0);
-    });
-  });
-
-  it('replacing the stale list with the fresh matching list loads the correct clip (the guard defers work, it does not permanently suppress it)', async () => {
-    const staleClip = makeClip({ id: 1, projectId: 999 });
-    setClips([staleClip], 1);
-    const { rerender } = render(<FocusScreen />);
-
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(spies.restoreCropState).not.toHaveBeenCalled();
-    expect(playbackUrlCalls()).toHaveLength(0);
-
-    // The fresh clips list lands (App's invalidateClips/fetchClips resolving).
-    const freshClip = makeClip({ id: 1, projectId: PROJECT_ID });
-    setClips([freshClip], 1);
-    rerender(<FocusScreen />);
-
-    await waitFor(() => {
-      expect(spies.restoreCropState).toHaveBeenCalled();
-      expect(spies.restoreSegmentState).toHaveBeenCalled();
-    });
-    await waitFor(() => {
-      expect(playbackUrlCalls().length).toBeGreaterThan(0);
-    });
+    // The source never resolved -> no video load call for this clip.
+    expect(spies.loadVideoFromStreamingUrl).not.toHaveBeenCalled();
   });
 });

@@ -497,7 +497,7 @@ export function ProjectManager({
   loading,
   error, // Projects fetch error
   onSelectProject,
-  onSelectProjectWithMode, // (projectId, options) => void - options: { mode: 'framing'|'overlay', clipIndex?: number }
+  onSelectProjectWithMode, // (projectId, options) => void - options: { mode: 'framing'|'overlay' }
   onDeleteProject,
   onAnnotateWithFile, // (file: File) => void - Navigate to annotate mode with file
   // Games props

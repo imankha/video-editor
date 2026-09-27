@@ -8,9 +8,6 @@ vi.mock('../../../../components/VideoPlayer', () => ({
   VideoPlayer: () => <div data-testid="mock-videoplayer" />,
 }));
 vi.mock('../../overlays/CropOverlay', () => ({ default: () => <div data-testid="mock-cropoverlay" /> }));
-vi.mock('../../../../components/ClipSelectorSidebar', () => ({
-  ClipSelectorSidebar: () => <div data-testid="mock-clip-sidebar" />,
-}));
 vi.mock('../../../../components/settings/FocusSettingsPanel', () => ({ default: () => <div data-testid="mock-settings" /> }));
 vi.mock('../../../../hooks/useVideoDisplayRect', () => ({ default: () => ({ rect: null }) }));
 vi.mock('../../../../containers/ExportButtonContainer', () => ({
@@ -48,7 +45,6 @@ function renderCockpit(overrides = {}) {
     seek: vi.fn(),
     onExitToHome: vi.fn(),
     clipTitle: 'Play 23',
-    clipSidebarProps: { onSelectClip: vi.fn() },
     exportButtonRef: createRef(),
     ...overrides,
   };
@@ -100,25 +96,32 @@ describe('FocusCockpit (T10840 shell)', () => {
   it('mounts the sheets as absolute (never fixed) inside the shell (D6)', () => {
     renderCockpit();
     const sheets = screen.getAllByTestId('cockpit-sheet');
-    expect(sheets.length).toBe(3); // Clips / Setup / Trim
+    expect(sheets.length).toBe(2); // Setup / Trim (T11240 removed the Clips sheet)
     sheets.forEach((s) => {
       expect(s.className).toContain('absolute');
       expect(s.className).not.toContain('fixed');
     });
   });
 
-  it('the Clips rail button opens the Clips sheet (slides in from the right)', () => {
+  it('the Setup rail button opens the Setup sheet (slides in from the right)', () => {
     renderCockpit();
-    const clipsSheet = screen
+    const setupSheet = screen
       .getAllByTestId('cockpit-sheet')
-      .find((s) => s.getAttribute('aria-label') === 'Clips');
-    expect(clipsSheet.getAttribute('style')).toContain('translateX(100%)'); // closed
-    fireEvent.click(screen.getByTestId('cockpit-clips-btn'));
-    expect(clipsSheet.getAttribute('style')).toContain('translateX(0)'); // open
+      .find((s) => s.getAttribute('aria-label') === 'Setup');
+    expect(setupSheet.getAttribute('style')).toContain('translateX(100%)'); // closed
+    fireEvent.click(screen.getByTestId('cockpit-setup-btn'));
+    expect(setupSheet.getAttribute('style')).toContain('translateX(0)'); // open
   });
 
   it('has no scroll container in the shell itself (no vertical scroll — overflow hidden)', () => {
     renderCockpit();
     expect(screen.getByTestId('focus-cockpit').className).toContain('overflow-hidden');
+  });
+
+  // T11240: a project is exactly one clip now, so the cockpit's Clips sheet +
+  // rail button (dead multi-clip UI) are gone.
+  it('renders no Clips rail button', () => {
+    renderCockpit();
+    expect(screen.queryByTestId('cockpit-clips-btn')).toBeNull();
   });
 });

@@ -284,11 +284,11 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // Framing affordances below. clip_count 0/1/undefined open normally.
   const isLegacyMultiClip = project.clip_count > 1;
 
-  const handleClipClick = (clipIndex) => {
+  const handleClipClick = () => {
     if (!canOpen) return; // Block if no clips extracted
     if (!allowEnterFraming(project)) return; // refused (toast shown by the guard)
     if (onSelectWithMode) {
-      onSelectWithMode({ mode: 'framing', clipIndex });
+      onSelectWithMode({ mode: 'framing' });
     }
   };
 
@@ -324,15 +324,15 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
     if (!canOpen) return;
     // Item 6 — open the FURTHEST stage the draft has reached:
     //   overlay started (a working video exists) -> Overlay
-    //   else framing started (any clip framed/exported) -> Framing (first clip)
-    //   else the earliest applicable stage -> default open (Framing, clip 0)
+    //   else framing started (the clip framed/exported) -> Framing
+    //   else the earliest applicable stage -> default open (Framing)
     if (project.has_working_video) {
       onSelectWithMode({ mode: 'overlay' }); // Spotlight still works (T11220 / R3 option A)
     } else if (!allowEnterFraming(project)) {
       // T11220: no working video yet -> the only open target would be Framing,
       // which a multi-clip draft cannot use. The guard shows the clear message.
     } else if (project.clips_in_progress > 0 || project.clips_exported > 0) {
-      onSelectWithMode({ mode: 'framing', clipIndex: 0 });
+      onSelectWithMode({ mode: 'framing' });
     } else {
       onSelect();
     }

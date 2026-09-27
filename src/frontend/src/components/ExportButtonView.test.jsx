@@ -17,9 +17,6 @@ const baseProps = {
   retrying: false,
   isFramingMode: true,
   hasUnframedClips: false,
-  unframedCount: 0,
-  totalExtractedClips: 1,
-  isMultiClipMode: false,
   isButtonDisabled: false,
   buttonTitle: undefined,
   includeAudio: true,
@@ -81,7 +78,7 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
 describe('ExportButtonView — T8510 unframed-clip export guard (Option A, reverses T3700 P0)', () => {
   it('(a) Focus + zero keyframes: button disabled and reason caption rendered under it', () => {
     render(<ExportButtonView {...baseProps}
-      hasUnframedClips={true} unframedCount={1} isButtonDisabled={true}
+      hasUnframedClips={true} isButtonDisabled={true}
       estimatedCredits={12} creditBalance={42} />);
     const btn = screen.getByRole('button', { name: /Generate Framing/ });
     expect(btn.disabled).toBe(true);
@@ -102,16 +99,6 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
   });
 
-  it('(c) multi-clip partial (Option A: ANY unframed clip blocks): disabled + every-clip wording', () => {
-    render(<ExportButtonView {...baseProps}
-      isMultiClipMode={true} totalExtractedClips={3} unframedCount={1}
-      hasUnframedClips={true} isButtonDisabled={true}
-      estimatedCredits={20} creditBalance={42} />);
-    const btn = screen.getByRole('button', { name: /Generate Framing \(2\/3\)/ });
-    expect(btn.disabled).toBe(true);
-    expect(screen.getByTestId('export-unframed-caption').textContent)
-      .toContain('Set at least one focus point on every clip to export');
-  });
 
   it('(d) Overlay mode unaffected: no caption, button stays enabled', () => {
     render(<ExportButtonView {...baseProps}
@@ -210,20 +197,6 @@ describe('ExportButtonView — T9540 render/job vocabulary (supersedes T7580)', 
   it('Focus primary CTA reads "Generate Framing" (N19)', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={true} />);
     expect(screen.getByRole('button', { name: 'Generate Framing' })).toBeTruthy();
-  });
-
-  it('Focus CTA keeps the framed-count suffix on the "Generate Framing" label', () => {
-    render(
-      <ExportButtonView
-        {...baseProps}
-        isFramingMode={true}
-        hasUnframedClips={true}
-        isMultiClipMode={true}
-        totalExtractedClips={3}
-        unframedCount={1}
-      />
-    );
-    expect(screen.getByRole('button', { name: 'Generate Framing (2/3)' })).toBeTruthy();
   });
 
   it('Overlay primary CTA is "Apply Overlay" (the render action, not "Add")', () => {

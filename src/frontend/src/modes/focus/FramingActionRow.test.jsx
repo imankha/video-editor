@@ -57,11 +57,4 @@ describe('FramingActionRow (T9950 Slice 2, T10310)', () => {
     );
     expect(screen.getByTestId('preview-disclosure').textContent).toMatch(/final image quality is produced at export/i);
   });
-
-  it('adds the multi-clip disclosure line when previewing a multi-clip project', () => {
-    render(
-      <FramingActionRow canUndo={false} onUndo={vi.fn()} previewing onTogglePreview={vi.fn()} isMultiClip />
-    );
-    expect(screen.getByTestId('preview-disclosure').textContent).toMatch(/your clips are joined at export/i);
-  });
 });

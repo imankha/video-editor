@@ -693,7 +693,8 @@ zero-length save. Copy: `displayNames.js` `ANNOTATE.MARK_PLAY_HELPER = 'Captures
 2 after'` (was "Captures the previous 12 seconds" — the exact stale-copy defect this task fixed);
 comment at `AnnotateModeView.jsx:1062` updated too. **Billable duration (T9480 coordination):** no
 code change needed — `ExportButtonContainer`'s `estimatedSeconds`/`estimatedCredits` derive from the
-clip's actual start/end via `sumEffectiveDurations`/`estimateExportCredits(clips)`, so they follow the
+clip's actual start/end via `estimateExportCredits(clip)` (T11240: single-clip, was
+`sumEffectiveDurations`/`estimateExportCredits(clips)` over a list), so they follow the
 new window automatically; there was never a separately hardcoded 12. Prior:)
 updated: 2026-09-14 (T9810 — repaired the game-invitation entry points + documented the
 two-share-features split. **THE LANDMINE (this is the thing a future task trips over):** the
@@ -1255,7 +1256,9 @@ T8380 also REMOVED the T6830 `clipsTabDisabled` dead-end guard (+ its /home/reel
 effect + the T8780 disabled caption): the In Progress Clips tab is now always reachable so a
 zero-content account can start by uploading; Games stays the default LANDING tab via `initialTab`.
 The per-file metadata modal `UploadClipModal.jsx` is deliberately NOT used by this batch path (it
-stays in Annotate's `ClipSelectorSidebar`); Add Video auto-names clips from filename, editable
+stays in Annotate's `ClipListItem`/`ClipDetailsEditor` -- this doc's prior reference to "Annotate's
+ClipSelectorSidebar" was already stale before T11240: `ClipSelectorSidebar` was Focus-only, and
+T11240 deleted it); Add Video auto-names clips from filename, editable
 later. Failed-to-reach-R2 files get a Retry rail; backend rejections surface a toast. Prior:)
 updated: 2026-09-04 (T8760 single play control + clip-scoped looping playhead in the clip editor:
 the per-editor Preview button in `ClipScrubRegion.jsx` is DELETED — the main transport bar

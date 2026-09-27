@@ -4,7 +4,6 @@ import CropOverlay from '../overlays/CropOverlay';
 import { ExportButtonContainer } from '../../../containers/ExportButtonContainer';
 import useVideoDisplayRect from '../../../hooks/useVideoDisplayRect';
 import { computeOutputPreviewTransform } from '../../../utils/outputPreviewTransform';
-import { ClipSelectorSidebar } from '../../../components/ClipSelectorSidebar';
 import FocusSettingsPanel from '../../../components/settings/FocusSettingsPanel';
 import { formatLength, PRECISION } from '../../../utils/timeFormat';
 import { FOCUS_COCKPIT } from '../../../config/displayNames';
@@ -24,8 +23,9 @@ const ZERO_PAN = { x: 0, y: 0 };
  * FocusCockpit (T10840) — the landscape-phone cockpit shell. Rendered by
  * FocusModeView's early return (above the backdrop-blur card, D3) when
  * `useIsCockpit()` is true. Full-bleed stage, a 56px transport rail left, a 72px
- * action rail right, one 56px timeline strip, and side sheets for Clips / Setup /
- * Trim. No scroll anywhere (`h-dvh`, `overflow-hidden`).
+ * action rail right, one 56px timeline strip, and side sheets for Setup / Trim
+ * (T11240 removed the Clips sheet — exactly one clip now). No scroll anywhere
+ * (`h-dvh`, `overflow-hidden`).
  *
  * `env(safe-area-inset-*)` is load-bearing (D7): on iOS rotate-left the notch owns
  * the left 44px, so without the inset the play button hides behind it. Both sides
@@ -53,16 +53,14 @@ export default function FocusCockpit({
   framingCtaMode, onBackToPreview, backToPreviewLoading,
   // Settings sheet
   includeAudio, onIncludeAudioChange, onAspectRatioChange,
-  // Clips sheet
-  clipSidebarProps,
   // Trim sheet (the extracted framing timeline block)
   focusTimelineBlock,
   // Export machinery
   videoFile, getFilteredKeyframesForExport, getSegmentExportData,
-  hasClips, clipsWithCurrentState, globalTransition, onProceedToOverlay,
+  hasClips, clipsWithCurrentState, onProceedToOverlay,
   onExportComplete, saveCurrentClipState, exportButtonRef,
 }) {
-  const [activeSheet, setActiveSheet] = useState(null); // 'clips' | 'setup' | 'trim' | null
+  const [activeSheet, setActiveSheet] = useState(null); // 'setup' | 'trim' | null
   const [previewing, setPreviewing] = useState(false);
   const [straightenVisible, setStraightenVisible] = useState(false);
   const [dimOpacity, setDimOpacity] = useState(0.2);
@@ -90,7 +88,6 @@ export default function FocusCockpit({
     onProceedToOverlay,
     clips: hasClips ? clipsWithCurrentState : null,
     globalAspectRatio,
-    globalTransition,
     onExportComplete,
     saveCurrentClipState,
   });
@@ -259,7 +256,6 @@ export default function FocusCockpit({
 
       <ActionRail
         activeSheet={activeSheet}
-        onOpenClips={() => setActiveSheet(activeSheet === 'clips' ? null : 'clips')}
         onOpenSetup={() => setActiveSheet(activeSheet === 'setup' ? null : 'setup')}
         canUndo={canUndoFraming}
         onUndo={onUndoFraming}
@@ -275,17 +271,8 @@ export default function FocusCockpit({
         ring={!introSeen}
       />
 
-      {/* Zone E — side sheets. Clips + Setup reuse the existing panels verbatim;
-          Trim hosts the extracted framing timeline block (segment/speed/trim). */}
-      <CockpitSheet open={activeSheet === 'clips'} title={FOCUS_COCKPIT.SHEET_CLIPS} onClose={closeSheet}>
-        {clipSidebarProps && (
-          <ClipSelectorSidebar
-            {...clipSidebarProps}
-            onSelectClip={(id) => { clipSidebarProps.onSelectClip?.(id); closeSheet(); }}
-          />
-        )}
-      </CockpitSheet>
-
+      {/* Zone E — side sheets. Setup reuses the existing panel verbatim; Trim
+          hosts the extracted framing timeline block (segment/speed/trim). */}
       <CockpitSheet open={activeSheet === 'setup'} title={FOCUS_COCKPIT.SHEET_SETUP} onClose={closeSheet}>
         <div className="p-2">
           <FocusSettingsPanel

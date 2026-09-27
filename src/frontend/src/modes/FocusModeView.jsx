@@ -1,5 +1,5 @@
 import { forwardRef, useState, useMemo, useCallback } from 'react';
-import { Minimize, Maximize, Crop, Sliders, Film, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -11,7 +11,6 @@ import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS } from '../containers/Ex
 import { Button } from '../components/shared';
 import SettingsRail from '../components/settings/SettingsRail';
 import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
-import FocusClipsPanel from '../components/settings/FocusClipsPanel';
 import { CropOverlay } from './focus';
 import { FocusTimelineBlock } from './focus/FocusTimelineBlock';
 import RotateNudge from './focus/RotateNudge';
@@ -68,7 +67,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   onProceedToOverlay,
   clips,
   globalAspectRatio,
-  globalTransition,
   onExportComplete,
   saveCurrentClipState,
   // T10650: Focus "Back to Preview" — derived + owned by FocusScreen, threaded
@@ -93,7 +91,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
     onProceedToOverlay,
     clips,
     globalAspectRatio,
-    globalTransition,
     onExportComplete,
     saveCurrentClipState,
   });
@@ -117,9 +114,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         isFramingMode={container.isFramingMode}
         isDarkOverlay={container.isDarkOverlay}
         hasUnframedClips={container.hasUnframedClips}
-        unframedCount={container.unframedCount}
-        totalExtractedClips={container.totalExtractedClips}
-        isMultiClipMode={container.isMultiClipMode}
         framingCtaMode={framingCtaMode}
         showBackToPreview={showBackToPreview}
         onBackToPreview={onBackToPreview}
@@ -199,9 +193,6 @@ export function FocusModeView({
   isFullscreen,
   onToggleFullscreen,
 
-  // File handling
-  onFileSelect,
-
   // Playback controls
   togglePlay,
   stepForward,
@@ -275,10 +266,8 @@ export function FocusModeView({
   hasClips,
   clipsWithCurrentState,
   selectedClipEffectiveDuration = null,
-  projectEffectiveDuration = null,
   globalAspectRatio,
   onAspectRatioChange,
-  globalTransition,
 
   // Export
   exportButtonRef,
@@ -303,7 +292,6 @@ export function FocusModeView({
   // T10840: landscape cockpit — the derivation is computed once in FocusScreen
   // (useIsCockpit) and passed down so there is a single source of truth.
   cockpit = false,
-  clipSidebarProps,
   onExitToHome,
 }) {
   const [dimOpacity, setDimOpacity] = useState(0.2);
@@ -409,14 +397,15 @@ export function FocusModeView({
     return ratioW > 0 && ratioH > 0 ? `${ratioW} / ${ratioH}` : null;
   }, [previewActive, globalAspectRatio]);
 
-  // T9270: the Focus settings-rail tabs (Clips | Settings) and their bodies. The
-  // Settings tab re-homes the old above-video toolbar (aspect, audio, straighten,
+  // T9270: the Focus settings-rail tab (Settings) and its body. The Settings
+  // tab re-homes the old above-video toolbar (aspect, audio, straighten,
   // background dim) into Reel / This clip / View-only groups. `desktopOnly` keeps
   // dim + the straighten line-drag tool out of the mobile drawer (Step 4), exactly
   // as the old toolbar gated them. T10395: zoom moved out of this rail entirely,
   // onto the video's own Controls transport bar (matching Annotate, T10390).
+  // T11240: the Clips tab (multi-clip UI) is gone — exactly one clip now, so
+  // Settings is the only tab.
   const focusRailTabs = [
-    { id: 'clips', label: 'Clips', icon: Film },
     { id: 'settings', label: 'Settings', icon: Sliders },
   ];
   const renderFocusSettings = (desktopOnly) => (
@@ -432,9 +421,7 @@ export function FocusModeView({
       desktopOnly={desktopOnly}
     />
   );
-  const focusRailBody = (desktopOnly) => (railTab === 'clips'
-    ? <FocusClipsPanel clips={hasClips ? clipsWithCurrentState : null} />
-    : renderFocusSettings(desktopOnly));
+  const focusRailBody = (desktopOnly) => renderFocusSettings(desktopOnly);
 
   // T9270: the mobile entry row's live-summary second line. DERIVED from the same
   // state the rows bind to — never a second stored copy. Straighten reads "Level"
@@ -448,8 +435,6 @@ export function FocusModeView({
   const sourceLength = duration || clipDuration || 0;
   const outputDiffersFromSource = selectedClipEffectiveDuration != null &&
     Math.abs(selectedClipEffectiveDuration - sourceLength) > 0.05;
-  // Project total is redundant with the per-clip chip when there's a single clip.
-  const isMultiClip = hasClips && (clipsWithCurrentState?.length || 0) > 1;
 
   // T10830: the framing timeline block, built once and rendered by whichever of
   // the two mutually-exclusive layouts is active (ordinary vs mobile-fullscreen).
@@ -566,14 +551,12 @@ export function FocusModeView({
         includeAudio={includeAudio}
         onIncludeAudioChange={onIncludeAudioChange}
         onAspectRatioChange={onAspectRatioChange}
-        clipSidebarProps={clipSidebarProps}
         focusTimelineBlock={focusTimelineBlock}
         videoFile={videoFile}
         getFilteredKeyframesForExport={getFilteredKeyframesForExport}
         getSegmentExportData={getSegmentExportData}
         hasClips={hasClips}
         clipsWithCurrentState={clipsWithCurrentState}
-        globalTransition={globalTransition}
         onProceedToOverlay={onProceedToOverlay}
         onExportComplete={onExportComplete}
         saveCurrentClipState={saveCurrentClipState}
@@ -680,7 +663,6 @@ export function FocusModeView({
               handlers={handlers}
               clipRange={clipRange}
               muted={!includeAudio}
-              onFileSelect={(isFullscreen || mobileFs) ? undefined : onFileSelect}
               allowUpload={false}
               panEnabled={!mobileFs || touchMode === 'view'}
               fitToAspect={!!previewStageAspect}
@@ -863,7 +845,6 @@ export function FocusModeView({
             onUndo={onUndoFraming}
             previewing={previewing}
             onTogglePreview={() => setPreviewing((v) => !v)}
-            isMultiClip={isMultiClip}
           />
         )}
 
@@ -932,21 +913,6 @@ export function FocusModeView({
             </>
           )}
         </div>
-
-        {/* T5780: live project output total (multi-clip) — the billable output length
-            T5790 turns into a credit estimate. Hidden for a single clip (redundant with
-            the per-clip chip) and when unknown (fail-closed, no fabricated number). */}
-        {videoUrl && !isFullscreen && !mobileFs && isMultiClip && projectEffectiveDuration != null && (
-          <div className="mt-4 sm:mt-6 -mb-2 flex items-center justify-end gap-2 text-sm text-gray-300">
-            <span className="text-gray-400">Total output</span>
-            <OutputLengthChip
-              seconds={projectEffectiveDuration}
-              emphasized
-              label="Total"
-              testId="project-output-length-chip"
-            />
-          </div>
-        )}
         </div>
         {/* T9270: the unified settings rail — desktop (fine pointer) only, beside the
             editor column. Focus tabs = Clips | Settings; collapses to a 64px icon
@@ -1050,7 +1016,6 @@ export function FocusModeView({
             onProceedToOverlay={onProceedToOverlay}
             clips={hasClips ? clipsWithCurrentState : null}
             globalAspectRatio={globalAspectRatio}
-            globalTransition={globalTransition}
             onExportComplete={onExportComplete}
             saveCurrentClipState={saveCurrentClipState}
             framingCtaMode={framingCtaMode}

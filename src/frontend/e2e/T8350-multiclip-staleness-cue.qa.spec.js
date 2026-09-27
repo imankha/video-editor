@@ -11,19 +11,21 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
  * clip boundaries or exports a reel. It route-injects `reel_source_*` /
  * `start_time` / `end_time` onto the REAL GET /api/projects and
  * GET /api/clips/projects/{id}/clips responses in the browser only (no backend
- * write), so the real DraftTile / SegmentedProgressStrip / ClipSelectorSidebar
- * component tree renders the cue exactly as isClipStale computes it, without
- * needing a real produced reel + real boundary edit round-trip.
+ * write), so the real DraftTile / SegmentedProgressStrip component tree renders
+ * the cue exactly as isClipStale computes it, without needing a real produced
+ * reel + real boundary edit round-trip.
  *
  * T11230: the injected multi-clip reel draft (is_auto_created:false) now surfaces
  * in the Clips tab's Legacy reels group (`legacy-reel-drafts`); the standalone
  * "In Progress Reels" tab was removed.
  *
+ * T11240: the TERTIARY Focus-list dot (ClipSelectorSidebar) is gone -- that
+ * editing UI was deleted; only the Drafts-tile PRIMARY/SECONDARY cues remain.
+ *
  * Acceptance-criterion map (T8350-design.md Sec 13):
  *   AC1 ui-designer spec approved -- covered by the design-gate approval, not by this spec.
  *   AC2 a multi-clip reel with one drifted clip shows the cue on exactly that clip
- *       (PRIMARY badge in the produced state; SECONDARY segment ring pre-produce;
- *       TERTIARY Focus-list dot).
+ *       (PRIMARY badge in the produced state; SECONDARY segment ring pre-produce).
  *   AC3 reverting that clip's boundaries to the exact producing values clears the cue.
  *
  * Run (from a /dotask container):
@@ -197,47 +199,4 @@ test('AC2: SECONDARY segment ring + tooltip on exactly the drifted clip, pre-pro
   await expect(await stable.getAttribute('title')).not.toMatch(/clip edited since this reel was made/);
 
   await saveEvidence(page, 'T8350-AC2-secondary-segment-ring-pre-produce');
-});
-
-test('AC2: TERTIARY Focus clip-list dot on exactly the drifted clip', async ({ page }) => {
-  // Open ANY real project into Focus (the Focus dot only needs a valid backend
-  // project id to load; the drifted values are route-injected onto its clips
-  // response, same non-destructive pattern as the tile tests above).
-  await page.goto('/home/reels');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Clips/ }) });
-
-  const projects = await page.evaluate(async () => {
-    const r = await fetch('/api/projects', { credentials: 'include' });
-    return r.ok ? r.json() : [];
-  });
-  test.skip(projects.length === 0, 'account has no drafts to open into Focus');
-  const targetId = projects[0].id;
-
-  await page.route(`**/api/clips/projects/${targetId}/clips`, async (route) => {
-    const resp = await route.fetch();
-    let clips;
-    try { clips = await resp.json(); } catch { return route.fulfill({ response: resp }); }
-    if (Array.isArray(clips) && clips.length > 0) {
-      clips = clips.map((c, i) => (
-        i === 0
-          ? { ...c, start_time: 11.5, end_time: 20, reel_source_start_time: 10, reel_source_end_time: 20 }
-          : { ...c, reel_source_start_time: null, reel_source_end_time: null }
-      ));
-    }
-    await route.fulfill({ response: resp, json: clips });
-  });
-
-  const chip = page.getByTitle(/^(?!Overlay:).*\(click to open\)/).first();
-  await chip.waitFor({ timeout: 30000 });
-  await chip.click();
-
-  const rows = page.getByTestId('clip-item');
-  await expect(rows.first()).toBeVisible({ timeout: 30000 });
-
-  const dots = page.getByLabel('Edited since this reel was made');
-  await expect(dots).toHaveCount(1);
-  await expect(rows.first().getByLabel('Edited since this reel was made')).toBeVisible();
-
-  await saveEvidence(page, 'T8350-AC2-tertiary-focus-dot');
-  await responsiveSweep(page);
 });

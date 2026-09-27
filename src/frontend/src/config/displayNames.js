@@ -515,7 +515,6 @@ export const FOCUS_PREVIEW = {
 export const FOCUS_COCKPIT = {
   // Zone A / D rail button labels (10px, under a Lucide icon).
   BACK: 'Back',
-  CLIPS: 'Clips',
   SETUP: 'Setup',
   UNDO: 'Undo',
   PREVIEW: 'Preview',
@@ -525,7 +524,6 @@ export const FOCUS_COCKPIT = {
   BACK_TO_PREVIEW_LINE_1: 'Back to',
   BACK_TO_PREVIEW_LINE_2: 'Preview',
   // Zone E sheet titles.
-  SHEET_CLIPS: 'Clips',
   SHEET_SETUP: 'Setup',
   SHEET_TRIM: 'Trim and slo-mo',
   CLOSE_SHEET: 'Close',
@@ -713,12 +711,11 @@ export const EDITOR_PANELS = {
   UNDO: 'Undo',
   UNDO_NOTHING: 'Nothing to undo',
   // T9950 Slice 3 -- preview approximation disclosure (design doc §4). Exact for
-  // crop/timing/format/audio; approximate for image quality and multi-clip
-  // concatenation. Never a sharpness claim in either direction.
+  // crop/timing/format/audio; approximate for image quality. Never a
+  // sharpness claim in either direction.
   PREVIEW_HIGHLIGHT: 'Preview highlight',
   PREVIEW_BACK_TO_FRAMING: 'Back to framing',
   PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced at export.',
-  PREVIEW_MULTI_CLIP_DISCLOSURE: 'Previewing this clip. Your clips are joined at export.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
   // same shape as TRIM_AND_SLOWMO above (user request 2026-09-21).
   TEXT_LANE: 'Text',

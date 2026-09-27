@@ -48,12 +48,6 @@ export const useProjectDataStore = create((set, get) => ({
   // written on the Drafts open path, so Focus entered from Annotate showed the
   // previous project's ratio in the selector while the crop box drew the real one.
 
-  // Global transition settings between clips
-  globalTransition: {
-    type: 'cut',
-    duration: 0.5,
-  },
-
   // Clip metadata for overlay mode (calculated from clips with segments)
   clipMetadata: null,
 
@@ -70,8 +64,6 @@ export const useProjectDataStore = create((set, get) => ({
 
   setSelectedClipId: (selectedClipId) => set({ selectedClipId }),
 
-  setGlobalTransition: (globalTransition) => set({ globalTransition }),
-
   setClipMetadataCache: (clipMetadataCache) => set({ clipMetadataCache }),
 
   updateClipMetadata: (clipId, metadata) => set((state) => ({
@@ -80,33 +72,11 @@ export const useProjectDataStore = create((set, get) => ({
 
   // ========== Clip CRUD Operations ==========
 
-  addClip: (clip) => set((state) => ({
-    clips: [...state.clips, clip],
-  })),
-
-  deleteClip: (clipId) => set((state) => {
-    const newClips = state.clips.filter((clip) => clip.id !== clipId);
-    let newSelectedClipId = state.selectedClipId;
-
-    if (state.selectedClipId === clipId) {
-      newSelectedClipId = newClips.length > 0 ? newClips[0].id : null;
-    }
-
-    return { clips: newClips, selectedClipId: newSelectedClipId };
-  }),
-
   updateClip: (clipId, data) => set((state) => ({
     clips: state.clips.map((clip) =>
       clip.id === clipId ? { ...clip, ...data } : clip
     ),
   })),
-
-  reorderClips: (fromIndex, toIndex) => set((state) => {
-    const newClips = [...state.clips];
-    const [removed] = newClips.splice(fromIndex, 1);
-    newClips.splice(toIndex, 0, removed);
-    return { clips: newClips };
-  }),
 
   clearClips: () => set({
     clips: [],
@@ -276,79 +246,6 @@ export const useProjectDataStore = create((set, get) => ({
     }
   },
 
-  addClipFromLibrary: async (projectId, rawClipId) => {
-    if (!projectId) return null;
-
-    try {
-      const formData = new FormData();
-      formData.append('raw_clip_id', rawClipId.toString());
-
-      const response = await apiFetch(`${API_BASE_URL}/clips/projects/${projectId}/clips`, {
-        method: 'POST',
-        body: formData
-      });
-      if (!response.ok) throw new Error('Failed to add clip');
-      const clip = await response.json();
-
-      await get().fetchClips(projectId);
-      return clip;
-    } catch (err) {
-      console.error('[projectDataStore] addClipFromLibrary error:', err);
-      return null;
-    }
-  },
-
-  uploadClipWithMetadata: async (projectId, uploadData) => {
-    if (!projectId) return null;
-
-    const { file, name, rating, tags, notes } = uploadData;
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('name', name || '');
-      formData.append('rating', (rating || 3).toString());
-      formData.append('tags', JSON.stringify(tags || []));
-      formData.append('notes', notes || '');
-
-      const response = await apiFetch(
-        `${API_BASE_URL}/clips/projects/${projectId}/clips/upload-with-metadata`,
-        { method: 'POST', body: formData }
-      );
-      if (!response.ok) throw new Error('Failed to upload clip');
-      const clip = await response.json();
-
-      await get().fetchClips(projectId);
-      return clip;
-    } catch (err) {
-      console.error('[projectDataStore] uploadClipWithMetadata error:', err);
-      return null;
-    }
-  },
-
-  removeClip: async (projectId, clipId) => {
-    if (!projectId) return false;
-
-    // Optimistically remove from local state (updates selectedClipId too)
-    get().deleteClip(clipId);
-
-    try {
-      const response = await apiFetch(
-        `${API_BASE_URL}/clips/projects/${projectId}/clips/${clipId}`,
-        { method: 'DELETE' }
-      );
-      if (!response.ok) throw new Error('Failed to remove clip');
-
-      await get().fetchClips(projectId);
-      return true;
-    } catch (err) {
-      console.error('[projectDataStore] removeClip error:', err);
-      // Re-fetch to restore state on failure
-      await get().fetchClips(projectId);
-      return false;
-    }
-  },
-
   getClipFileUrl: (clipId, projectId) => {
     const clip = get().clips.find(c => c.id === clipId);
     if (clip?.file_url) return clip.file_url;
@@ -372,12 +269,6 @@ export const useProjectDataStore = create((set, get) => ({
     const { clips, selectedClipId } = get();
     if (!selectedClipId) return null;
     return clips.find((clip) => clip.id === selectedClipId) || null;
-  },
-
-  getSelectedClipIndex: () => {
-    const { clips, selectedClipId } = get();
-    if (!selectedClipId) return -1;
-    return clips.findIndex((clip) => clip.id === selectedClipId);
   },
 
   getClipById: (clipId) => {
@@ -411,7 +302,6 @@ export const useProjectDataStore = create((set, get) => ({
     clipsFetching: false,
     clipsError: null,
     workingVideo: null,
-    globalTransition: { type: 'cut', duration: 0.5 },
     clipMetadata: null,
     isLoading: false,
     loadingStage: null,
@@ -422,4 +312,3 @@ export const useProjectDataStore = create((set, get) => ({
 export const useProjectClips = () => useProjectDataStore(state => state.clips);
 export const useSelectedClipId = () => useProjectDataStore(state => state.selectedClipId);
 export const useWorkingVideo = () => useProjectDataStore(state => state.workingVideo);
-export const useGlobalTransition = () => useProjectDataStore(state => state.globalTransition);
