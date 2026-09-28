@@ -1,6 +1,6 @@
 # T11120: Unrated Done opens the "Rate this play" modal
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-09-24
