@@ -1,10 +1,10 @@
 # T11120: Unrated Done opens the "Rate this play" modal
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-09-24
-**Updated:** 2026-09-24
+**Updated:** 2026-09-28
 **Epic:** [Highlight-First Annotate Flow](EPIC.md)
 
 ## Problem
