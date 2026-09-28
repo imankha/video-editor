@@ -49,7 +49,7 @@ describe('AnnotateFullscreenOverlay — each text field commits surgically (T106
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip })} layout="strip" />);
     // T10580: the details panel (where Notes lives) defaults CLOSED — open it first.
     fireEvent.click(screen.getByTestId('add-details-button'));
-    const notesField = screen.getByPlaceholderText('Add a note about this clip...');
+    const notesField = screen.getByPlaceholderText('Add a note about this play...');
     fireEvent.change(notesField, { target: { value: 'Great run down the wing' } });
     fireEvent.blur(notesField);
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
@@ -60,7 +60,7 @@ describe('AnnotateFullscreenOverlay — each text field commits surgically (T106
     mockViewport(false);
     render(<AnnotateFullscreenOverlay {...baseProps()} layout="strip" />);
     fireEvent.click(screen.getByTestId('add-details-button'));
-    fireEvent.change(screen.getByPlaceholderText('Add a note about this clip...'), {
+    fireEvent.change(screen.getByPlaceholderText('Add a note about this play...'), {
       target: { value: 'Great run down the wing' },
     });
     expect(screen.getByText('My banger')).toBeTruthy();

@@ -11,12 +11,12 @@ import { onTextFieldKeyDown } from '../textFieldCommit';
  *   2. the desktop formBody's expand-in-place panel,
  *   3. the mobile full-screen AddDetailsPopup.
  *
- * T10520: Rating moved OUT of here — the `PlayProgressBadges` rated badge is
- * now the ONLY way to set a rating (a popup star picker anchored to the
- * badge itself), replacing the duplicate horizontal star row this component
- * used to carry. The one exception is the landscape-inline layout, which has
- * no badges at all (height-starved) and keeps its own bespoke `StarRating`
- * row — that one lives directly in `AnnotateFullscreenOverlay.jsx`, not here.
+ * Rating does NOT live here. T11150: it is the `RatingPill` on the Name +
+ * Rating tier (a labeled pill that opens the meanings-list picker), replacing
+ * the T10410 rated badge (which itself replaced the duplicate star row this
+ * component once carried). EVERY layout (incl. landscape-inline, redesigned in
+ * T11150) now uses that RatingPill — there is no bespoke `StarRating` row left
+ * in `AnnotateFullscreenOverlay.jsx`.
  *
  * The no_sport prompt is the DE-AMBERED NoSportTagWarning (a neutral
  * "pick your sport for tags" nudge, not a warning). Notes uses the stable
@@ -72,7 +72,7 @@ export function DetailsFields({
             storedValue: storedNotes,
             allowEnterCommit: false,
           })}
-          placeholder="Add a note about this clip..."
+          placeholder="Add a note about this play..."
           className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500 resize-none"
           rows={notesRows}
         />

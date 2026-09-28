@@ -10,10 +10,12 @@ import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
 // Layer control always hydrates from existingClip.my_athlete. Every toggle
 // now persists on its own gesture via onUpdateClip (design doc § 2.2), not a
 // Save-button submit — see AnnotateFullscreenOverlay.noSaveButton.test.jsx's
-// two layer tests for the current expected call shape. The old "one Save
-// outcome, independent of rating/layer" and "rating is an optional detail"
-// describe blocks were entirely about the retired SAVE_AND_FRAME/handleSave
-// machinery (dead now that every field is per-gesture) and are removed.
+// two layer tests for the current expected call shape.
+//
+// T11150 (Play editor hierarchy, H16): the Layer/category control moved OFF
+// the always-visible header row and INTO the "Details" disclosure (category
+// first, then teammates) — every test here opens Details first before
+// looking for the radio group.
 
 beforeEach(() => {
   window.matchMedia = (query) => ({
@@ -48,20 +50,25 @@ function baseProps(overrides = {}) {
   };
 }
 
-describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
+const openDetails = () => fireEvent.click(screen.getByTestId('add-details-button'));
+
+describe('AnnotateFullscreenOverlay — Layer control (T5700/T11150)', () => {
   it('hydrates the Layer control from the existing clip (My athlete)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps({ existingClip: { ...baseClip, my_athlete: true } })} />);
+    openDetails();
     expect(screen.getByRole('radio', { name: 'My athlete' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('hydrates the Layer control from the existing clip (Team)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps({ existingClip: { ...baseClip, my_athlete: false } })} />);
+    openDetails();
     expect(screen.getByRole('radio', { name: 'Team' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('toggling to Team persists {my_athlete: false} on its own gesture', () => {
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip, existingClip: { ...baseClip, my_athlete: true } })} />);
+    openDetails();
     fireEvent.click(screen.getByRole('radio', { name: 'Team' }));
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip).toHaveBeenCalledWith('c1', { my_athlete: false });
@@ -71,6 +78,7 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     const clip = { ...baseClip, my_athlete: false, tagged_teammates: ['Sam'] };
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip, existingClip: clip })} />);
+    openDetails();
     fireEvent.click(screen.getByRole('radio', { name: 'My athlete' }));
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip).toHaveBeenCalledWith('c1', { my_athlete: true, tagged_teammates: [] });
@@ -83,6 +91,7 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
           {...baseProps({ existingClip: { ...baseClip, my_athlete: false, shared_by: 'Dana Smith' } })}
         />
       );
+      openDetails();
       const mine = screen.getByRole('radio', { name: /^My athlete/ });
       const team = screen.getByRole('radio', { name: /^Team/ });
       expect(mine.disabled).toBe(true);
@@ -96,18 +105,20 @@ describe('AnnotateFullscreenOverlay — Layer control (T5700)', () => {
           {...baseProps({ onUpdateClip, existingClip: { ...baseClip, my_athlete: false, shared_by: 'Dana Smith' } })}
         />
       );
+      openDetails();
       fireEvent.click(screen.getByRole('radio', { name: /^My athlete/ }));
       expect(onUpdateClip).not.toHaveBeenCalled();
     });
   });
 });
 
-// T8600: the desktop strip (layout="strip") renders the Layer control as a
-// sibling row OUTSIDE the tinted card, separate markup from formBody (used by
-// the overlay/inline layouts above) — needs its own strip-scoped coverage.
-describe('AnnotateFullscreenOverlay — Layer control in the desktop strip (T8600)', () => {
-  it('the strip button row shows the Layer control, hydrated from the existing clip', () => {
+// T8600/T11150: the desktop strip (layout="strip") renders its Details panel
+// as separate markup from formBody (used by the overlay/inline layouts
+// above) — needs its own strip-scoped coverage.
+describe('AnnotateFullscreenOverlay — Layer control in the desktop strip (T8600/T11150)', () => {
+  it('the strip Details panel shows the Layer control, hydrated from the existing clip', () => {
     render(<AnnotateFullscreenOverlay {...baseProps({ existingClip: { ...baseClip, my_athlete: false } })} layout="strip" />);
+    openDetails();
     expect(screen.getByRole('radio', { name: 'Team' }).getAttribute('aria-checked')).toBe('true');
   });
 
@@ -118,6 +129,7 @@ describe('AnnotateFullscreenOverlay — Layer control in the desktop strip (T860
         layout="strip"
       />
     );
+    openDetails();
     expect(screen.getByRole('radio', { name: /^My athlete/ }).disabled).toBe(true);
     expect(screen.getByRole('radio', { name: /^Team/ }).disabled).toBe(true);
   });
@@ -125,31 +137,32 @@ describe('AnnotateFullscreenOverlay — Layer control in the desktop strip (T860
   it('toggling the strip layer control persists on its own gesture', () => {
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip, existingClip: { ...baseClip, my_athlete: true } })} layout="strip" />);
+    openDetails();
     fireEvent.click(screen.getByRole('radio', { name: 'Team' }));
     expect(onUpdateClip).toHaveBeenCalledWith('c1', { my_athlete: false });
   });
 });
 
-// T10520/T10580: rating lives in the rated badge's popup picker regardless of
-// the "Optional details" disclosure state.
-describe('AnnotateFullscreenOverlay — rating reachable via the badge regardless of details state', () => {
-  it('formBody: the badge works both while details is closed and after opening it', () => {
+// T11150: rating lives in the RatingPill regardless of the "Details"
+// disclosure state (they are two independent controls now).
+describe('AnnotateFullscreenOverlay — rating reachable via the pill regardless of details state', () => {
+  it('formBody: the pill works both while details is closed and after opening it', () => {
     render(<AnnotateFullscreenOverlay {...baseProps()} />);
-    fireEvent.click(screen.getByTestId('badge-rated'));
+    fireEvent.click(screen.getByTestId('rating-pill'));
     expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
     fireEvent.keyDown(document, { key: 'Escape' }); // close the picker without opening details
-    fireEvent.click(screen.getByTestId('add-details-button')); // now open details too
-    fireEvent.click(screen.getByTestId('badge-rated'));
+    openDetails(); // now open details too
+    fireEvent.click(screen.getByTestId('rating-pill'));
     expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('same on the strip layout', () => {
     render(<AnnotateFullscreenOverlay {...baseProps()} layout="strip" />);
-    fireEvent.click(screen.getByTestId('badge-rated'));
+    fireEvent.click(screen.getByTestId('rating-pill'));
     expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
     fireEvent.keyDown(document, { key: 'Escape' });
-    fireEvent.click(screen.getByTestId('add-details-button'));
-    fireEvent.click(screen.getByTestId('badge-rated'));
+    openDetails();
+    fireEvent.click(screen.getByTestId('rating-pill'));
     expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
   });
 });

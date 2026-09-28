@@ -1894,7 +1894,54 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   that pass NO `clampToVisibleRange` (Annotate, Overlay) — that is the branch where the fallback
   bites; Focus supplies its own clamp fn and is deliberately unaffected. Pinned by
   `useVideo.seekRefusesWithoutDuration.test.js`.
-- **Play-progress badges are a PURE READ of editor state (T10410, 2026-09-18; rewritten through
+- **Play editor hierarchy + no "clip" wording (T11150, 2026-09-27, epic Highlight-First; presentation
+  only, no persistence change).** The Edit play editor now reads, top→bottom, in EVERY layout:
+  **(1) time/trim (`ClipScrubRegion`, which carries the start/end `TrimTimeField` readouts — it is
+  the "time" control, no separate widget), (2) Name + a `RatingPill` on ONE tier (+ a gold
+  "Highlight made" chip when `existingClip.autoProjectId` is set), (3) a "Details" disclosure holding
+  Play-category (My athlete/Team, FIRST row per H16) → teammates → tags → notes.** The old four-badge
+  row (named/rated/noted/clip, T10410) is GONE. Rating is now `RatingPill.jsx` (a labeled pill that
+  opens the same best-first meanings list; NEUTRAL slate when unrated — no amber-dashed "to-do", no
+  "Required"; gold `#F5B700` at rating 5 reusing T11110; NO chess `RATING_NOTATION` on pill or rows).
+  The `RatingPill key={existingClip.id}` at each render site keeps the T10590 clip-switch-closes-popup
+  + same-play-churn-preserves behavior. Escape still `stopPropagation`s (T10590 landmine).
+  **landscape-inline was redesigned here** (T11100 left it unmocked, "design against the live layout"):
+  it no longer keeps the bespoke inline `StarRating` + inline `TagSelector` row — it now follows the
+  same hierarchy (time → name input + `RatingPill` + chip on one compact row → a Details button opening
+  the full-screen `AddDetailsPopup` for category/teammates/tags/notes), so the "EVERY layout" claim is
+  literally true and the older notes about landscape keeping its own `StarRating`/inline tags are
+  SUPERSEDED. `StarRating`/`TagSelector`/`NoSportTagWarning` are no longer imported by
+  `AnnotateFullscreenOverlay.jsx`. Category +
+  teammates moved OFF the strip/formBody top level INTO the Details disclosure (desktop expand-in-place
+  panel renders category→teammates→`DetailsFields`; mobile `inline` layout's `AddDetailsPopup` now
+  carries category/teammates too, matching portrait-strip — Delete stays in the pinned footer there, so
+  it is NOT double-passed). Edit-strip tint is neutral gray (`bg-gray-800/40 border-gray-700`), not the
+  old T8600 yellow (H19); stars stay amber `#fbbf24` (H20). **`PlayProgressBadges.jsx` is trimmed to
+  ONLY its `Disc` export** (still imported by `FramingHeaderStatus.jsx`); `playProgress.js`/`getPlayProgress`/
+  `CLIP_BADGE` are no longer consumed by the editor (kept for now; `BADGE_STATE` stays for Framing).
+  The in-editor 5-star "Create clip" nudge (`handleCreateClipFromBadge`, `createProject`) is REMOVED —
+  clip creation remains only on the main screen (T10310) until T11130 reworks it. **No user-visible
+  "clip"/"Required" renders in the editor** (name→"Play name", rename→"Rename play", delete→always
+  "Delete play", notes placeholder + `NoSportTagWarning` → "...play", `ClipListItem` fallback→"Play N",
+  `ClipDetailsEditor` heading→"Play details", `getEditRatingCaption`→"highlight already made", stageCta
+  hover→"Open: {stage}"). **The sweep covers title/aria-label/placeholder ATTRIBUTES too** (not just
+  text nodes — the T11150 no-clip test asserts all three attribute kinds across all 5 layouts incl.
+  landscape): layer `disabledReason` "imported clips"→"imported plays", `ClipScrubRegion` "Preview
+  clip"→"Preview play", `AnnotateTimeline` "select clips layer / navigate clips"→"...plays..." and
+  "sideline clip"→"sideline video" (footage sense, matching Extra-video), `ClipRegionLayer` marker aria "Clip N"→"Play N" and "angle
+  clip"→"angle play", `NotesOverlay` "Clip created…"→"Highlight made, not published yet" +
+  "Published clip"→"Published highlight", `videoDisplayName` angle-source fallback "Extra clip
+  N"→"Extra video N" (footage sense, not "play"), `AddFootageButton` "a clip you got later"→"footage
+  you got later". **Chess `RATING_NOTATION` also dropped from `getRatingCaption`/`getEditRatingCaption`**
+  (was still interpolated `(!)`/`(!!)`; `RATING_NOTATION` stays exported for `getRatingDisplay`).
+  DELIBERATELY LEFT (documented, out of scope): the `announceReelCreated` toast
+  "... is now in Clips" ("Clips" = H18-allowed PLACE name), main-screen Frame clip/Create clip CTAs
+  (T11130), and library `LIBRARY_ACTIONS.DELETE_CLIP`/`RENAME_CLIP`/`ANNOTATE.CLIP_NAME` values (frozen
+  for DraftTile, T11280) — Annotate consumers repoint to new `ANNOTATE.PLAY_NAME`/`RENAME_PLAY`/
+  `RATE_PLAY`/`HIGHLIGHT_MADE`. Tests: `AnnotateFullscreenOverlay.progressBadges.test.jsx` (rewritten
+  to the new contract), `RatingPill`-driven picker tests, `clipConstants.test.js`,
+  `e2e/T11150-play-editor-hierarchy.qa.spec.js`.
+- **[SUPERSEDED by T11150 above — badges removed; kept for history] Play-progress badges are a PURE READ of editor state (T10410, 2026-09-18; rewritten through
   T10590, 2026-09-19 — five follow-up rounds the SAME day, all user-driven live-testing corrections).**
   The Edit play editor shows four badges — **named / rated / noted / clip** (T10460 reordered named
   first, next to the name it completes; was rated-first) — via `playProgress.getPlayProgress` +

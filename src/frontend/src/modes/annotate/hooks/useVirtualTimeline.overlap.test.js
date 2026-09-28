@@ -51,7 +51,7 @@ describe('buildGameTimeline — T8890 playback + source surface', () => {
       { sequence: 2, duration: 300, offset_seconds: 600, url: 'games/cafef00d02.mp4', original_filename: null },
     ];
     const t = buildGameTimeline(noName);
-    expect(t.angles[0].name).toBe('Extra clip 1'); // 1-based lane order among angles
+    expect(t.angles[0].name).toBe('Extra video 1'); // 1-based lane order among angles
     expect(t.angles[0].name).not.toMatch(/[0-9a-f]{8}/i);
   });
 

@@ -913,7 +913,7 @@ describe('buildGameTimeline', () => {
         { sequence: 2, duration: 120, offset_seconds: 100, url: 'https://cdn/hash2.mp4', original_filename: null },
       ]);
       const angle = gt.angles.find((a) => a.sequence === 2);
-      expect(angle.name).toBe('Extra clip 1');
+      expect(angle.name).toBe('Extra video 1');
     });
   });
 });

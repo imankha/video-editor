@@ -93,7 +93,7 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
   }, [isSelected]);
 
   // Derive display name from stored name or auto-generate from rating+tags
-  const displayName = region.name || generateClipName(rating, region.tags || [], region.notes || '') || `Clip ${index + 1}`;
+  const displayName = region.name || generateClipName(rating, region.tags || [], region.notes || '') || `Play ${index + 1}`;
 
   // Tooltip shows end timestamp before clip name
   const tooltipText = `${formatTime(region.endTime)} | ${displayName}`;
@@ -202,7 +202,7 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
             <button
               onClick={onJumpToClip}
               className="p-2 rounded-lg bg-green-700 hover:bg-green-600 text-white transition-colors"
-              title="Jump to clip"
+              title="Jump to play"
             >
               <Play size={16} />
             </button>

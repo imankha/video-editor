@@ -88,18 +88,25 @@ describe('AnnotateFullscreenOverlay — no Save/Update/Cancel button anywhere (T
 
 describe('AnnotateFullscreenOverlay — per-gesture writes (T10600-design.md § 2.2)', () => {
   it('rating tap sends exactly {rating}', () => {
+    // T11150: landscape-inline now uses the RatingPill (was a bespoke
+    // StarRating row) — open the pill's picker, pick a rating. Same per-gesture
+    // write contract: exactly { rating }.
     mockViewport(true);
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip })} layout="landscape-inline" />);
-    fireEvent.click(screen.getByTitle('5 stars'));
+    fireEvent.click(screen.getByTestId('rating-pill'));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' }));
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip).toHaveBeenCalledWith('clip-1', { rating: 5 });
   });
 
   it('tag chip tap sends exactly {tags}', () => {
+    // T11150: tags moved behind the Details disclosure (AddDetailsPopup) on
+    // landscape-inline — open Details, then tap the tag. Same contract: {tags}.
     mockViewport(true);
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip })} layout="landscape-inline" />);
+    fireEvent.click(screen.getByTestId('add-details-button'));
     fireEvent.click(screen.getByRole('button', { name: 'Goal' }));
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip).toHaveBeenCalledWith('clip-1', { tags: ['Goal'] });
@@ -118,8 +125,10 @@ describe('AnnotateFullscreenOverlay — per-gesture writes (T10600-design.md § 
   });
 
   it('layer toggle to Team sends exactly {my_athlete: false}', () => {
+    // T11150: the Layer/category control moved into the "Details" disclosure.
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip })} layout="overlay" />);
+    fireEvent.click(screen.getByTestId('add-details-button'));
     fireEvent.click(screen.getByRole('radio', { name: /Team/i }));
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip).toHaveBeenCalledWith('clip-1', { my_athlete: false });
@@ -129,6 +138,7 @@ describe('AnnotateFullscreenOverlay — per-gesture writes (T10600-design.md § 
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     const clip = { ...baseClip, my_athlete: false, tagged_teammates: ['Sam'] };
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip, existingClip: clip })} layout="overlay" />);
+    fireEvent.click(screen.getByTestId('add-details-button'));
     fireEvent.click(screen.getByRole('radio', { name: /My athlete/i }));
     expect(onUpdateClip).toHaveBeenCalledWith('clip-1', { my_athlete: true, tagged_teammates: [] });
   });
@@ -202,8 +212,8 @@ describe('AnnotateFullscreenOverlay — the ONE Escape rule (v2 finding 6)', () 
   it('strip layout: Escape in the inline name editor reverts and does not write (regression: nested blur must not see the stale pre-revert value)', () => {
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip })} layout="strip" />);
-    fireEvent.click(screen.getByTitle('Rename clip'));
-    const input = screen.getByLabelText('Clip name');
+    fireEvent.click(screen.getByTitle('Rename play'));
+    const input = screen.getByLabelText('Play name');
     input.focus();
     fireEvent.change(input, { target: { value: 'Junk' } });
     fireEvent.keyDown(input, { key: 'Escape' });

@@ -1,23 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Pencil, Crop, Sparkles, ChevronDown, ChevronUp, Video } from 'lucide-react';
+import { X, Pencil, Crop, Sparkles, ChevronDown, ChevronUp, Video, Clapperboard } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
-import { TagSelector } from '../../../components/shared/TagSelector';
-import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile, useProfileStore, useProjectsList } from '../../../stores';
 import { getClipStage, CLIP_STAGE } from '../clipStage';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
-import { StarRating } from '../../../components/shared/StarRating';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
 import { DetailsFields } from './DetailsFields';
-import { PlayProgressBadges } from './PlayProgressBadges';
+import { RatingPill } from './RatingPill';
 import { DeletePlayButton } from './DeletePlayButton';
-import { getPlayProgress, CLIP_BADGE } from '../playProgress';
 import { onTextFieldKeyDown } from '../textFieldCommit';
 import { ANNOTATE } from '../../../config/displayNames';
 
@@ -68,6 +64,26 @@ function CutFromAngleChip({ name }) {
       </span>
       <p className="text-xs text-violet-300/80">This play will be cut from {name}.</p>
     </div>
+  );
+}
+
+/**
+ * HighlightMadeChip (T11150) — shown once a play has produced a clip
+ * (`existingClip.autoProjectId` truthy), replacing the old T10410 progress
+ * badges' clip indicator. Gold (T11110 RATING_BADGE_COLORS[5] tint), no
+ * spinner and no nudge — the create-project flow itself is untouched by this
+ * task, this chip only reflects the resulting state.
+ */
+function HighlightMadeChip({ show }) {
+  if (!show) return null;
+  return (
+    <span
+      data-testid="highlight-made-chip"
+      className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-[#F5B700]/50 bg-[#F5B700]/15 text-[#F5B700] text-xs font-medium"
+    >
+      <Clapperboard size={12} />
+      {ANNOTATE.HIGHLIGHT_MADE}
+    </span>
   );
 }
 
@@ -177,16 +193,9 @@ export function AnnotateFullscreenOverlay({
   // edit affordance — clicking the pencil turns it into an inline input. This
   // replaces the standalone name field the button row used to duplicate (item 3).
   const [isEditingName, setIsEditingName] = useState(false);
-  // T10410: the formBody layouts' name input, so the "Name this play" badge can
-  // focus it (the strip has no input until the pencil opens one — there the
-  // badge opens the inline editor instead).
+  // T11150: the formBody/portrait-strip layouts' name input (the strip has no
+  // input until the pencil opens one).
   const nameInputRef = useRef(null);
-  // T10410: true while the clip badge's create call is in flight (the same
-  // partial `{ createProject: true }` update the main screen's Frame clip
-  // button sends). Memory-only view state driven by that one gesture; it clears
-  // when the call settles, and the badge flips to done when the parent re-renders
-  // with the landed autoProjectId.
-  const [clipCreating, setClipCreating] = useState(false);
   // T10410: the clip id the reset effect last seeded the form from. `undefined`
   // = never seeded, so the first run always seeds.
   const seededClipIdRef = useRef(undefined);
@@ -297,6 +306,24 @@ export function AnnotateFullscreenOverlay({
     maybeRecordRatedAndTagged(rating, newTags);
   };
 
+  // T11150: ONE shared category(layer)/teammates write path, mirroring
+  // handleRatingChange — the 5 render sites (strip, formBody, landscape-inline,
+  // portrait-strip, inline) call these instead of inlining the logic (was pasted
+  // 5x). T5725: switching TO My Athlete clears teammate tags in the SAME gesture
+  // (teammates are Team-layer-only). layerDisabledReason is likewise single-sourced.
+  const handleLayerChange = (mine) => {
+    setMyAthlete(mine);
+    if (mine) setTaggedTeammates([]);
+    onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
+  };
+  const handleTeammatesChange = (next) => {
+    setTaggedTeammates(next);
+    onUpdateClip(existingClip.id, { tagged_teammates: next });
+  };
+  const layerDisabledReason = existingClip.shared_by
+    ? `Shared by ${existingClip.shared_by} — imported plays stay on the Team layer`
+    : '';
+
   const handleNameChange = (e) => {
     setClipName(e.target.value); // local echo only — commitName below writes
   };
@@ -349,70 +376,13 @@ export function AnnotateFullscreenOverlay({
   // T8600: shared disclosure label.
   const detailsLabel = ANNOTATE.DETAILS;
 
-  // T10410: the four play-progress badges (rated / named / note / clip) — a pure
-  // read of the form state above plus the loaded clip. Rendered beside the name
-  // on the desktop strip's header line and above the footer buttons on the
-  // formBody layouts (decision artifact Option C, 2026-09-18). Replaces the
-  // loose "Clip created" text the strip's action row used to carry.
-  const progress = getPlayProgress({
-    rating,
-    clipName,
-    loadedName: existingClip.name || '',
-    loadedHasCustomName: !!existingClip.hasCustomName,
-    notes,
-    hasProject: !!existingClip.autoProjectId,
-    creating: clipCreating,
-  });
-  // Each undone badge jumps to the control that completes it. T10520: the
-  // rated badge is the exception — it opens its own popup rating picker
-  // (RatingBadge) rather than jumping to the disclosure, so it takes
-  // `rating`/`handleRatingChange` directly instead of a jump callback. It is
-  // also the only badge that stays clickable once DONE, since a rating is a
-  // value you may want to change again, not a one-time checkbox.
-  const jumpToName = () => {
-    if (layout === 'strip') setIsEditingName(true);
-    else nameInputRef.current?.focus();
-  };
-  const jumpToNote = () => {
-    setDetailsOpen(true);
-    // The notes field lives inside the disclosure (desktop panel / mobile
-    // popup), which mounts on this same gesture — focus it once it exists.
-    requestAnimationFrame(() => document.getElementById('clip-notes')?.focus());
-  };
-  // The 5-star nudge: the same partial `{ createProject: true }` update the
-  // main screen's Frame clip button sends — the editor stays open and the
-  // badge flips to "Clip created" in place.
-  const handleCreateClipFromBadge = async () => {
-    if (clipCreating || existingClip.autoProjectId) return;
-    setClipCreating(true);
-    try {
-      await onUpdateClip(existingClip.id, { createProject: true });
-    } finally {
-      setClipCreating(false);
-    }
-  };
-  const renderProgressBadges = (size, className = '') => (
-    <PlayProgressBadges
-      // T10590 (Reviewer finding): keyed on clip identity so the rated
-      // badge's open popup resets on a REAL clip switch, but — like the
-      // existingClip object itself — stays mounted (and open) across the
-      // same-play identity churn a surgical update causes (updateClipRegion
-      // spreads the region on every write), matching the reset effect's own
-      // samePlay rule just above.
-      key={existingClip.id}
-      progress={progress}
-      size={size}
-      className={className}
-      rating={rating}
-      onRatingChange={handleRatingChange}
-      myAthlete={myAthlete}
-      isMobile={isMobile}
-      onName={jumpToName}
-      onNote={jumpToNote}
-      onCreateClip={progress.clip === CLIP_BADGE.NUDGE ? handleCreateClipFromBadge : undefined}
-      createClipTitle={ANNOTATE.CREATE_CLIP_NUDGE_HINT}
-    />
-  );
+  // T11150: RatingPill is keyed on clip identity (below, at each render site)
+  // so its open popup resets on a REAL clip switch, but — like the
+  // existingClip object itself — stays mounted (and open) across the
+  // same-play identity churn a surgical update causes (updateClipRegion
+  // spreads the region on every write), matching the reset effect's own
+  // samePlay rule above.
+  const highlightMade = !!existingClip.autoProjectId;
 
   const formBody = (
     <>
@@ -455,67 +425,37 @@ export function AnnotateFullscreenOverlay({
           clipEditorActive
         />
 
-        {/* Clip Name — T10610 § B.1/B.2: local-echo draft, commit on blur/Enter only. */}
+        {/* Name + rating tier (T11150: Play editor hierarchy) — the play's
+            name and its rating sit on ONE tier, right after the time control,
+            with the highlight-made chip alongside once a clip exists. */}
         <div className="mb-4">
-          <label className="block text-gray-400 text-sm mb-2">{ANNOTATE.CLIP_NAME}</label>
-          <input
-            ref={nameInputRef}
-            type="text"
-            value={clipName}
-            onChange={handleNameChange}
-            onBlur={commitName}
-            onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
-            placeholder="Enter clip name..."
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
-          />
-        </div>
-
-        {/* Layer — replaces the old My Athlete on/off toggle. Shown on mobile
-            too: this overlay IS the mobile add/edit surface. Locked to Team,
-            read-only, for imported clips (shared_by set) — they can never be
-            promoted onto the My Athlete layer (T5700, epic decision 2). */}
-        <div className="mb-4">
-          <label className="block text-gray-400 text-sm mb-2">{ANNOTATE.LAYER_LABEL}</label>
-          <LayerSegmentedControl
-            size={isMobile ? 'md' : 'sm'}
-            value={myAthlete}
-            disabled={!!existingClip.shared_by}
-            disabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
-            onChange={(mine) => {
-              setMyAthlete(mine);
-              // T5725: switching TO My Athlete clears teammate tags in the SAME
-              // gesture — teammates are Team-layer-only, so a My Athlete clip
-              // must never carry them.
-              if (mine) setTaggedTeammates([]);
-              onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
-            }}
-            className="w-full"
-          />
-        </div>
-
-        {/* Teammates — Team-layer only (T5725). Dropped the old !isMobile gate:
-            teammate tagging reveals on the Team layer for BOTH desktop and
-            mobile, and is hidden entirely when the clip is on My Athlete. */}
-        {!myAthlete && (
-          <div className="mb-4">
-            <label className="block text-gray-400 text-sm mb-2">Teammates</label>
-            <TeammateTagInput
-              teammates={taggedTeammates}
-              onChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
-              suggestions={teammateSuggestions}
+          <label className="block text-gray-400 text-sm mb-2">{ANNOTATE.PLAY_NAME}</label>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              ref={nameInputRef}
+              type="text"
+              value={clipName}
+              onChange={handleNameChange}
+              onBlur={commitName}
+              onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
+              placeholder="Enter play name..."
+              className="flex-1 min-w-0 px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
             />
+            <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
+            <HighlightMadeChip show={highlightMade} />
           </div>
-        )}
+        </div>
 
         {/* T10310 (2026-09-18 user request): the "Create clip" affordance moved
             out of the editor entirely -- onto the main Annotate screen's split
             [Edit Play]/[Frame Clip] row (AnnotateModeView), which both creates
             the project AND opens Framing in one gesture. */}
 
-        {/* T9830: "Optional details" disclosure — rating, sport, tags and notes.
-            One button, two presentations: desktop expands the shared DetailsFields
-            in place (below); mobile opens the full-screen AddDetailsPopup (rendered
-            by the inline layout wrapper). */}
+        {/* T9830/T11150: "Details" disclosure — category, teammates, sport,
+            tags and notes. One button, two presentations: desktop expands
+            the fields in place (below, category-first per H16); mobile opens
+            the full-screen AddDetailsPopup (rendered by the inline layout
+            wrapper). */}
         <div className="mb-4">
           <button
             type="button"
@@ -529,9 +469,32 @@ export function AnnotateFullscreenOverlay({
           </button>
         </div>
 
-        {/* Desktop expand-in-place details panel (mobile uses AddDetailsPopup). */}
+        {/* Desktop expand-in-place details panel (mobile uses AddDetailsPopup).
+            T11150 (H16): category (My athlete/Team) leads, then teammates
+            (Team layer only), then the shared tags/notes fields. */}
         {!isMobile && detailsOpen && (
           <div className="mb-4 border-t border-gray-700 pt-4">
+            <div className="mb-4">
+              <label className="block text-gray-400 text-sm mb-2">{ANNOTATE.LAYER_LABEL}</label>
+              <LayerSegmentedControl
+                size={isMobile ? 'md' : 'sm'}
+                value={myAthlete}
+                disabled={!!existingClip.shared_by}
+                disabledReason={layerDisabledReason}
+                onChange={handleLayerChange}
+                className="w-full"
+              />
+            </div>
+            {!myAthlete && (
+              <div className="mb-4">
+                <label className="block text-gray-400 text-sm mb-2">Teammates</label>
+                <TeammateTagInput
+                  teammates={taggedTeammates}
+                  onChange={handleTeammatesChange}
+                  suggestions={teammateSuggestions}
+                />
+              </div>
+            )}
             <DetailsFields
               tagSet={tagSet}
               sport={sport}
@@ -554,13 +517,10 @@ export function AnnotateFullscreenOverlay({
   // Save/Update (closeWithCommit commits any dirty text field first).
   const actionsFooter = (
     <div>
-      {/* T10410: play-progress badges above the buttons (the formBody layouts'
-          equivalent of the strip's header-line placement). */}
-      {renderProgressBadges('sm', 'mb-2 justify-center')}
       {displayStatus && (
         <div className="mb-1.5"><SaveStatusBadge status={displayStatus} /></div>
       )}
-      <DeletePlayButton hasProject={!!existingClip.autoProjectId} onDelete={() => onDeleteClip(existingClip.id)} />
+      <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
       <button
         onClick={closeWithCommit}
         className="w-full mt-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
@@ -584,7 +544,7 @@ export function AnnotateFullscreenOverlay({
       // 2026-09-18 (user request): the FOCUS-stage CTA gets a rollover explaining
       // what Framing does (already-approved copy); other stages keep the
       // generic "open the clip" hint.
-      title={clipStage.stage === CLIP_STAGE.FOCUS ? ANNOTATE.FRAME_THIS_CLIP_HINT : `Open the clip: ${clipStage.label}`}
+      title={clipStage.stage === CLIP_STAGE.FOCUS ? ANNOTATE.FRAME_THIS_CLIP_HINT : `Open: ${clipStage.label}`}
       className="w-full coarse-pointer:min-h-[44px]"
       onClick={async () => {
         const ok = onAwaitWrites ? await onAwaitWrites(existingClip.id) : true;
@@ -632,70 +592,12 @@ export function AnnotateFullscreenOverlay({
     // sibling (this component owns myAthlete state, so the button row lives
     // here rather than being lifted to a state-less parent).
     // T10610: always the EDIT header now — there is no create mode left.
-    const headerName = existingClip.name || generateClipName(existingClip.rating, existingClip.tags, existingClip.notes) || 'this play';
     return (
       <>
         <div
           data-testid="annotate-editor-strip"
-          className="rounded-lg border bg-yellow-950/20 border-yellow-800/40"
+          className="rounded-lg border bg-gray-800/40 border-gray-700"
         >
-          {/* Header row 1 — T8960 items 2+5: the name is the FIRST control in
-              BOTH modes (create shows the default/auto name until renamed; the
-              pencil opens an inline input — the SAME affordance edit mode uses),
-              the My Athlete | Team layer control sits on this top line. There
-              is no separate name field in the controls row. No header X here:
-              it was a duplicate of the Done button below (both routed through
-              closeWithCommit with identical behavior). */}
-          <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-yellow-800/30">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              {isEditingName ? (
-                <>
-                  <Pencil size={16} className="shrink-0 text-yellow-400" />
-                  <input
-                    type="text"
-                    value={clipName}
-                    onChange={handleNameChange}
-                    onBlur={(e) => { commitName(e); setIsEditingName(false); }}
-                    onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
-                    aria-label="Clip name"
-                    placeholder="Clip name"
-                    autoFocus
-                    className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm
-                               text-white placeholder-gray-500 focus:border-green-500 focus:outline-none"
-                  />
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setIsEditingName(true)}
-                  title={ANNOTATE.RENAME_CLIP}
-                  className="flex items-center gap-2 min-w-0 group"
-                >
-                  <Pencil size={16} className="shrink-0 text-yellow-400 group-hover:text-yellow-300" />
-                  <span className="text-sm font-semibold text-white truncate group-hover:underline">
-                    {headerName}
-                  </span>
-                </button>
-              )}
-              {/* T10410 (Option C): progress badges on the identity line, right
-                  after the name. */}
-              {renderProgressBadges('md', 'ml-2')}
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <LayerSegmentedControl
-                size="sm"
-                value={myAthlete}
-                onChange={(mine) => {
-                  setMyAthlete(mine);
-                  if (mine) setTaggedTeammates([]);
-                  onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
-                }}
-                disabled={!!existingClip.shared_by}
-                disabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
-              />
-            </div>
-          </div>
-
           {/* T8892: which camera this play is cut from (angle-active only). */}
           {activeSourceName && (
             <div className="px-4 pt-2">
@@ -703,7 +605,8 @@ export function AnnotateFullscreenOverlay({
             </div>
           )}
 
-          {/* Scrub row — non-compact, full strip width */}
+          {/* Scrub row — T11150: time is the FIRST control, full strip width,
+              at the top of the card (Play editor hierarchy). */}
           <div className="px-4 pt-3">
             <ClipScrubRegion
               currentTime={currentTime}
@@ -722,11 +625,50 @@ export function AnnotateFullscreenOverlay({
             />
           </div>
 
-          {/* Controls row — T10610: rating + sport live in the details
-              disclosure below. Delete play + Done now render AFTER that
-              disclosure (see below) so they always follow the expanded
-              content instead of sitting above it. */}
-          <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
+          {/* Name + rating tier — T11150: the second tier, right after time.
+              Inline-pencil rename (unchanged affordance) plus the RatingPill
+              and (once a clip exists) the highlight-made chip. */}
+          <div className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-700">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              {isEditingName ? (
+                <>
+                  <Pencil size={16} className="shrink-0 text-gray-400" />
+                  <input
+                    type="text"
+                    value={clipName}
+                    onChange={handleNameChange}
+                    onBlur={(e) => { commitName(e); setIsEditingName(false); }}
+                    onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
+                    aria-label="Play name"
+                    placeholder="Play name"
+                    autoFocus
+                    className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm
+                               text-white placeholder-gray-500 focus:border-green-500 focus:outline-none"
+                  />
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingName(true)}
+                  title={ANNOTATE.RENAME_PLAY}
+                  className="flex items-center gap-2 min-w-0 group"
+                >
+                  <Pencil size={16} className="shrink-0 text-gray-400 group-hover:text-gray-200" />
+                  <span className="text-sm font-semibold text-white truncate group-hover:underline">
+                    {existingClip.name || generateClipName(existingClip.rating, existingClip.tags, existingClip.notes) || 'this play'}
+                  </span>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
+              <HighlightMadeChip show={highlightMade} />
+            </div>
+          </div>
+
+          {/* Controls row — T11150: category/Layer moved into the Details
+              disclosure below (H16). */}
+          <div className="px-4 pb-3 pt-3 flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => setDetailsOpen(o => !o)}
@@ -738,24 +680,34 @@ export function AnnotateFullscreenOverlay({
               {detailsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               {detailsLabel}
             </button>
-
-            {!myAthlete && (
-              <div className="min-w-[180px] max-w-xs flex-1">
-                <TeammateTagInput
-                  teammates={taggedTeammates}
-                  onChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
-                  suggestions={teammateSuggestions}
-                />
-              </div>
-            )}
           </div>
 
-          {/* Details panel — desktop expand-in-place. T8960 item 6: no inner
-              scroll (the panel grows to fit Rating + Tags + Notes); dismissal is
-              the toggle button itself, no separate Done/X. T9830: rating + the
-              (de-ambered) sport prompt now live here, via the shared DetailsFields. */}
+          {/* Details panel — desktop expand-in-place. T11150 (H16): category
+              (My athlete/Team) leads, then teammates (Team layer only), then
+              the shared tags/notes fields via DetailsFields. */}
           {detailsOpen && (
-            <div className="border-t px-4 py-3 border-yellow-800/30">
+            <div className="border-t px-4 py-3 border-gray-700">
+              <div className="mb-4">
+                <label className="block text-gray-400 text-sm mb-2">{ANNOTATE.LAYER_LABEL}</label>
+                <LayerSegmentedControl
+                  size="sm"
+                  value={myAthlete}
+                  onChange={handleLayerChange}
+                  disabled={!!existingClip.shared_by}
+                  disabledReason={layerDisabledReason}
+                  className="w-full"
+                />
+              </div>
+              {!myAthlete && (
+                <div className="mb-4">
+                  <label className="block text-gray-400 text-sm mb-2">Teammates</label>
+                  <TeammateTagInput
+                    teammates={taggedTeammates}
+                    onChange={handleTeammatesChange}
+                    suggestions={teammateSuggestions}
+                  />
+                </div>
+              )}
               <DetailsFields
                 tagSet={tagSet}
                 sport={sport}
@@ -775,14 +727,12 @@ export function AnnotateFullscreenOverlay({
               closed) so toggling "Details" reveals content ABOVE these
               buttons rather than pushing them down past already-visible
               controls. */}
-          <div className={`px-4 pb-3 flex items-center justify-end gap-2 ${detailsOpen ? 'pt-2 border-t border-yellow-800/30' : ''}`}>
+          <div className={`px-4 pb-3 flex items-center justify-end gap-2 ${detailsOpen ? 'pt-2 border-t border-gray-700' : ''}`}>
             {/* T10900: min-width, not a fixed w-32 -- the confirm state is TWO
                 buttons ("Confirm Delete" + "Cancel") that overflowed a 128px
                 slot and overlapped Done. */}
             <div className="min-w-[8rem] shrink-0">
-              {/* T10410: the "Clip created" text that sat here is now the clip
-                  badge on the header line (renderProgressBadges). */}
-              <DeletePlayButton hasProject={!!existingClip.autoProjectId} onDelete={() => onDeleteClip(existingClip.id)} />
+              <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
             </div>
             <button
               onClick={closeWithCommit}
@@ -824,28 +774,38 @@ export function AnnotateFullscreenOverlay({
           clipEditorActive
           compact
         />
+        {/* Name + rating tier (T11150: Play editor hierarchy). Landscape phone
+            was never mocked (T11100 gate), so it is designed here against the
+            live layout: one compact row — name absorbs the width (flex-1),
+            RatingPill + highlight chip + the Details disclosure + Delete + close
+            never shrink. Tags/notes/category live BEHIND Details (the
+            full-screen AddDetailsPopup), NOT inline, matching the other four
+            layouts' time -> name+rating -> Details hierarchy. */}
         <div className="flex items-center gap-2 mt-1.5">
-          {/* T9630 N35: the standalone notation span that used to sit here was
-              a straight duplicate of the label StarRating already renders —
-              two rating indicators for one value on the tightest layout. */}
-          <StarRating rating={rating} onRatingChange={handleRatingChange} size={20} showLabel />
-          <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
-          <div className="flex-1 overflow-x-auto scrollbar-hide">
-            {tagSet ? (
-              <TagSelector
-                positions={getPositions(sport)}
-                tagsByPosition={tagSet.tags}
-                selectedTags={selectedTags}
-                onTagToggle={handleTagToggle}
-                size="sm"
-                flat
-              />
-            ) : sport === NO_SPORT ? (
-              <NoSportTagWarning compact />
-            ) : null}
-          </div>
-          <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
-          <DeletePlayButton hasProject={!!existingClip.autoProjectId} onDelete={() => onDeleteClip(existingClip.id)} variant="icon" />
+          <input
+            ref={nameInputRef}
+            type="text"
+            value={clipName}
+            onChange={handleNameChange}
+            onBlur={commitName}
+            onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
+            aria-label={ANNOTATE.PLAY_NAME}
+            placeholder="Name this play"
+            className="flex-1 min-w-0 px-3 py-1.5 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
+          />
+          <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
+          <HighlightMadeChip show={highlightMade} />
+          <button
+            type="button"
+            onClick={() => setDetailsOpen(o => !o)}
+            aria-expanded={detailsOpen}
+            data-testid="add-details-button"
+            className="flex-none whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 coarse-pointer:min-h-[44px] bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+          >
+            <ChevronDown size={14} />
+            {detailsLabel}
+          </button>
+          <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} variant="icon" />
           <button
             onClick={closeWithCommit}
             className="p-1 hover:bg-gray-700 rounded transition-colors flex-shrink-0"
@@ -860,6 +820,31 @@ export function AnnotateFullscreenOverlay({
             on the height-starved landscape layout. */}
         {displayStatus && (
           <p className="mt-1"><SaveStatusBadge status={displayStatus} /></p>
+        )}
+        {/* Details -> full-screen AddDetailsPopup (category first per H16, then
+            teammates, tags, notes). Delete stays inline above, so onDelete is
+            NOT passed here (no double-render). */}
+        {detailsOpen && (
+          <AddDetailsPopup
+            tagSet={tagSet}
+            sport={sport}
+            positions={getPositions(sport)}
+            selectedTags={selectedTags}
+            onTagToggle={handleTagToggle}
+            onSetSport={handleSetSport}
+            notes={notes}
+            onNotesChange={(e) => setNotes(e.target.value)}
+            onNotesCommit={commitNotes}
+            storedNotes={existingClip.notes}
+            onDone={() => setDetailsOpen(false)}
+            myAthlete={myAthlete}
+            onLayerChange={handleLayerChange}
+            layerDisabled={!!existingClip.shared_by}
+            layerDisabledReason={layerDisabledReason}
+            taggedTeammates={taggedTeammates}
+            onTeammatesChange={handleTeammatesChange}
+            teammateSuggestions={teammateSuggestions}
+          />
         )}
       </div>
     );
@@ -876,27 +861,26 @@ export function AnnotateFullscreenOverlay({
     // bites `fixed`/`absolute` descendants).
     //
     // Deliberately its OWN branch, not a generalised landscape-inline: the two
-    // differ substantially (landscape is height-starved — rating+tags inline,
-    // NO disclosure, NO name input; portrait has room for a name input + a
-    // details disclosure). Keeping them separate leaves landscape-inline
-    // byte-identical (Reviewer checklist) while every PERSISTENCE handler and
-    // shared building block (ClipScrubRegion compact, the progress badges incl.
-    // the rating popup, stageCta, AddDetailsPopup, DeletePlayButton) is reused
-    // from the component scope above — no copied write logic.
+    // still differ in spacing/rows (landscape packs name+rating+Details onto one
+    // compact row for its height-starved viewport, portrait uses two rows). But
+    // both now follow the SAME hierarchy (time → name+rating → Details) after the
+    // T11150 landscape redesign, and BOTH reuse the component-scope write handlers
+    // (handleRatingChange, handleLayerChange, handleTeammatesChange) + shared
+    // building blocks (ClipScrubRegion compact, RatingPill's own popup, stageCta,
+    // AddDetailsPopup, DeletePlayButton) — no copied write logic in any layout.
     //
     // Layout decision (360px, the narrowest supported width): category
     // (My athlete / Team), teammates and Delete play live BEHIND the disclosure,
     // not on strip row 2 — a segmented control on row 2 would crush the name
     // input below a usable width at 360px, and none of those fields are needed
-    // while trimming. Rating is NOT duplicated into the disclosure: the rated
-    // progress badge's popup is the single source for setting a rating on every
-    // layout (T10520), so it stays on the badges row only.
+    // while trimming.
     return (
       <div data-add-clip-form data-testid="annotate-portrait-strip" className="border-t border-gray-700 px-3 py-2">
         {/* T8892: which camera this play is cut from (angle-active only). */}
         <CutFromAngleChip name={activeSourceName} />
 
-        {/* Strip row 1: compact trim bar + the T9480 typed-entry readouts. */}
+        {/* Strip row 1: compact trim bar + the T9480 typed-entry readouts —
+            time is the FIRST control (T11150 Play editor hierarchy). */}
         <ClipScrubRegion
           currentTime={currentTime}
           videoDuration={videoDuration}
@@ -914,16 +898,10 @@ export function AnnotateFullscreenOverlay({
           compact
         />
 
-        {/* Row 1b: play-progress badges on their OWN row — they don't fit beside
-            the full-width scrub bar at 360px. The rated badge's popup is the one
-            way to set a rating on this surface (single-source, T10520). */}
-        {renderProgressBadges('sm', 'mt-1.5 flex-wrap')}
-
-        {/* Strip row 2: name input absorbs the squeeze (flex-1 min-w-0,
-            truncates); the disclosure + Done buttons NEVER shrink (flex-none,
-            whitespace-nowrap). This is the artifact mockup's clipped-button
-            regression — pinned by AnnotateFullscreenOverlay.portraitStrip.test. */}
-        <div className="flex items-center gap-2 mt-1.5">
+        {/* Row 1b: name + rating tier (T11150) — the second tier, right after
+            time; name absorbs the squeeze (flex-1 min-w-0), the pill/chip never
+            shrink. */}
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
           <input
             ref={nameInputRef}
             type="text"
@@ -931,10 +909,18 @@ export function AnnotateFullscreenOverlay({
             onChange={handleNameChange}
             onBlur={commitName}
             onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
-            aria-label={ANNOTATE.CLIP_NAME}
+            aria-label={ANNOTATE.PLAY_NAME}
             placeholder="Name this play"
             className="flex-1 min-w-0 px-3 py-2 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
+          <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
+          <HighlightMadeChip show={highlightMade} />
+        </div>
+
+        {/* Strip row 2: the disclosure + Done buttons NEVER shrink (flex-none,
+            whitespace-nowrap). This is the artifact mockup's clipped-button
+            regression — pinned by AnnotateFullscreenOverlay.portraitStrip.test. */}
+        <div className="flex items-center gap-2 mt-1.5">
           <button
             type="button"
             onClick={() => setDetailsOpen(o => !o)}
@@ -977,19 +963,12 @@ export function AnnotateFullscreenOverlay({
             storedNotes={existingClip.notes}
             onDone={() => setDetailsOpen(false)}
             myAthlete={myAthlete}
-            onLayerChange={(mine) => {
-              setMyAthlete(mine);
-              // T5725: switching TO My Athlete clears teammate tags in the SAME
-              // gesture (teammates are Team-layer-only).
-              if (mine) setTaggedTeammates([]);
-              onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
-            }}
+            onLayerChange={handleLayerChange}
             layerDisabled={!!existingClip.shared_by}
-            layerDisabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported clips stay on the Team layer` : ''}
+            layerDisabledReason={layerDisabledReason}
             taggedTeammates={taggedTeammates}
-            onTeammatesChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
+            onTeammatesChange={handleTeammatesChange}
             teammateSuggestions={teammateSuggestions}
-            hasProject={!!existingClip.autoProjectId}
             onDelete={() => onDeleteClip(existingClip.id)}
           />
         )}
@@ -1030,7 +1009,12 @@ export function AnnotateFullscreenOverlay({
         <div className="p-3 [@media(max-height:700px)]:pb-9 border-t border-gray-700 bg-gray-900/95 flex-shrink-0">{actionsFooter}</div>
         {/* T8600: mobile-only full-screen "Add details" popup — the bottom
             sheet (T8140) and the mobile fullscreen portrait sheet both use
-            this layout, so both inherit it. */}
+            this layout, so both inherit it. T11150: formBody no longer
+            renders category/teammates inline (moved into the Details
+            disclosure, H16), so this popup now ALSO carries them — mirroring
+            the portrait-strip AddDetailsPopup call. Delete stays in the
+            pinned footer for this layout (actionsFooter above), so it is
+            NOT passed here (no double-render). */}
         {isMobile && detailsOpen && (
           <AddDetailsPopup
             tagSet={tagSet}
@@ -1044,6 +1028,13 @@ export function AnnotateFullscreenOverlay({
             onNotesCommit={commitNotes}
             storedNotes={existingClip.notes}
             onDone={() => setDetailsOpen(false)}
+            myAthlete={myAthlete}
+            onLayerChange={handleLayerChange}
+            layerDisabled={!!existingClip.shared_by}
+            layerDisabledReason={layerDisabledReason}
+            taggedTeammates={taggedTeammates}
+            onTeammatesChange={handleTeammatesChange}
+            teammateSuggestions={teammateSuggestions}
           />
         )}
       </div>

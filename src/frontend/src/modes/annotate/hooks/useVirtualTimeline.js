@@ -329,7 +329,7 @@ function subtractIntervals(cover, holes) {
  * T8892: fed the video's `original_filename` ("sideline.mp4" -> "sideline"), NOT
  * its R2 `url` -- the url is content-addressed (`games/{blake3}.mp4`), so a stem
  * off it is a hash, never a human name. A NULL/empty filename yields '' so the
- * caller falls back to "Extra clip {n}". (Path-splitting is retained but inert
+ * caller falls back to "Extra video {n}". (Path-splitting is retained but inert
  * for a bare filename; harmless.)
  */
 function filenameStem(name) {
@@ -354,11 +354,11 @@ function middleEllipsis(s, maxLen) {
  * (T8892). Single source of truth for the label shown on every angle surface
  * AND T8910's landing feedback (which needs a name for backbone/non-angle
  * videos too, where there is no `angle.name`). Absent filename -> the honest
- * "Extra clip {n}" fallback (n = 1-based), never the content-addressed hash.
+ * "Extra video {n}" fallback (n = 1-based), never the content-addressed hash.
  */
 export function videoDisplayName(originalFilename, fallbackIndex = 0) {
   const stem = filenameStem(originalFilename);
-  return stem ? middleEllipsis(stem, 14) : `Extra clip ${fallbackIndex + 1}`;
+  return stem ? middleEllipsis(stem, 14) : `Extra video ${fallbackIndex + 1}`;
 }
 
 /**
@@ -607,7 +607,7 @@ export function buildGameTimeline(gameVideos) {
 
   const angles = angleVideos.map((v, idx) => {
     // T8892: name from the user's original_filename (NOT the content-addressed
-    // url). Absent -> "Extra clip {n}", n = 1-based lane order among angles
+    // url). Absent -> "Extra video {n}", n = 1-based lane order among angles
     // (angleVideos is offset-sorted). Legacy rows (no filename ever stored) get
     // the honest fallback, never a hash.
     return {

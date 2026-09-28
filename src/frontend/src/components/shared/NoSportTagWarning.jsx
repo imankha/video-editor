@@ -41,9 +41,9 @@ export function NoSportTagWarning({ compact = false, onChange }) {
     <div className="flex items-start gap-2 text-sm text-gray-300 bg-gray-800 border border-gray-700 rounded p-2">
       <Tag size={16} className="flex-shrink-0 mt-0.5 text-gray-400" />
       <div className="min-w-0">
-        <p className="font-medium">Pick your sport to tag this clip</p>
+        <p className="font-medium">Pick your sport to tag this play</p>
         <p className="text-gray-400 text-xs mt-0.5 mb-2">
-          Choose your sport to unlock its tags — you can keep editing this clip.
+          Choose your sport to unlock its tags — you can keep editing this play.
         </p>
         <InlineSportSelect sport={NO_SPORT} onChange={onChange} />
       </div>

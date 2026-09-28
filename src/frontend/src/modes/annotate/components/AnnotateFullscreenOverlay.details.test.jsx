@@ -97,7 +97,7 @@ describe('AnnotateFullscreenOverlay — mobile full-screen popup (layout="inline
     fireEvent.click(screen.getByText('Details'));
     const dialog = screen.getByRole('dialog', { name: 'Details' });
     expect(dialog).toBeTruthy();
-    expect(screen.getByPlaceholderText('Add a note about this clip...')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Add a note about this play...')).toBeTruthy();
   });
 
   it('the X button closes the popup without an extra write beyond a clean notes commit', () => {
@@ -117,6 +117,6 @@ describe('AnnotateFullscreenOverlay — mobile full-screen popup (layout="inline
   it('Notes is newly available on mobile via the popup (was desktop-only)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" />);
     fireEvent.click(screen.getByText('Details'));
-    expect(screen.getByPlaceholderText('Add a note about this clip...')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Add a note about this play...')).toBeTruthy();
   });
 });

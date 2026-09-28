@@ -27,7 +27,7 @@ const COPY = {
   title: 'Add footage to game',
   modalHeading: 'Add footage',
   intro:
-    "Add another half, a sideline angle, or a clip you got later. It's placed by when it was filmed and appends to this game — your existing plays stay put.",
+    "Add another half, a sideline angle, or footage you got later. It's placed by when it was filmed and appends to this game — your existing plays stay put.",
   primary: 'Add to this game',
   primaryBusy: 'Adding…',
   dropTarget: "Drop your footage here. We'll place it by when it was filmed.",

@@ -24,37 +24,30 @@ export const ANNOTATE = {
   JUST_SAVE_PLAY: 'Just save this play',
   SAVE_PLAY_AND_CLIP: 'Save play and create clip', // N08 — save + produce a clip
   CREATE_CLIP: 'Create clip',              // N09 — manual create-clip action
-  CLIP_CREATED: 'Clip created',            // N09 — created indicator (T10410: the clip badge's done label)
-  // T10410 (2026-09-18 user request, Option C of the decision artifact): the
-  // four play-progress badges beside the play name. Done/undone pairs share one
-  // noun each so the badge reads the same either way ("Play rated" / "Rate this
-  // play"). "Note" (not "description") is the field's existing label, kept for
-  // consistency per the user's ruling.
-  PLAY_RATED: 'Play rated',
-  // T10690: the rated badge's unset copy — reuses BADGE_STATE.UNDONE's amber
-  // dashed treatment (no new badge state; see PlayProgressBadges.RatingBadge).
-  // Replaces the old generic RATE_PLAY prompt now that "no rating yet" is a
-  // real, persisted state rather than a create-form transient.
-  PLAY_NOT_RATED: 'Not rated yet',
   // T10550: the rating popup's own visible heading (+ its accessible name, so
   // they match) — layer-aware like `getRatingCaption`'s existing `mine` split,
   // so a Team play never claims to be "your athlete's".
   RATE_ATHLETES_PLAY: "Rate your athlete's play",
   RATE_TEAMS_PLAY: "Rate your team's play",
-  PLAY_NAMED: 'Play named',
-  NAME_PLAY: 'Name this play',
-  NOTE_ADDED: 'Note added',
-  ADD_NOTE: 'Add a note',
-  // The clip badge's 5-star nudge (edit mode: creates the clip in place; create
-  // mode: saves the play and creates the clip in one gesture) and its dormant
-  // hover copy below 5 stars.
-  CREATE_CLIP_NUDGE_HINT: '5 stars! Create a clip',
-  SAVE_AND_CREATE_CLIP_NUDGE_HINT: '5 stars! Save the play and create a clip',
-  CLIP_BADGE_DORMANT_HINT: 'Rate the play 5 stars to create a clip',
   DELETE_CLIP: 'Delete clip',              // N14 — delete a play that has a clip
   DELETE_PLAY: 'Delete play',              // N14 — delete a bare play marker
-  RENAME_CLIP: 'Rename clip',              // N15 — rename action
-  CLIP_NAME: 'Clip name',                  // N15 — name field
+  RENAME_CLIP: 'Rename clip',              // N15 — rename action (library/DraftTile, T11280 scope)
+  CLIP_NAME: 'Clip name',                  // N15 — name field (library/DraftTile, T11280 scope)
+  // T11150 (Play editor hierarchy): the Annotate editor's own name/rename/rate
+  // vocabulary, split off CLIP_NAME/RENAME_CLIP/DELETE_CLIP above — those stay
+  // frozen (LIBRARY_ACTIONS re-exports them for the library/DraftTile surface,
+  // T11280 scope) while the editor itself drops "clip" wording entirely.
+  PLAY_NAME: 'Play name',
+  RENAME_PLAY: 'Rename play',
+  RATE_PLAY: 'Rate this play',
+  // T11150: shown when a play has produced a clip (existingClip.autoProjectId),
+  // replacing the old T10410 progress-badges row's clip indicator.
+  HIGHLIGHT_MADE: 'Highlight made',
+  // T11150: error-path toasts (AnnotateContainer) — single-sourced so the
+  // "no clip wording in Annotate" sweep is greppable/testable, not buried inline.
+  GHOST_GAME_SAVE_MESSAGE: "Your play couldn't be saved because this game was removed. Your work is still on screen — head back to your games to continue.",
+  IMPORT_FAILED_TITLE: 'Plays not saved',
+  IMPORT_FAILED_MESSAGE: "Your imported plays couldn't be saved because the game isn't ready. Please try importing again.",
   // T10610: the play editor's sole close affordance now that there is no
   // Save/Update button — commits any dirty text field first (closeWithCommit),
   // then closes. Nothing is ever discarded.

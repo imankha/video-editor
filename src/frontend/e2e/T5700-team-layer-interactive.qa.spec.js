@@ -341,7 +341,7 @@ test.describe('T5700 — mobile (390px): create on both layers', () => {
 
     // The clip-list chip lives in the mobile sidebar drawer, which is closed
     // right now (closed above to reach "Add Clip") — reopen it to see the row.
-    await page.locator('button[title="Show clips"]').click();
+    await page.locator('button[title="Show plays"]').click();
     // The CSS-hidden desktop sidebar (`hidden sm:flex`) stays mounted and
     // renders its own chip too — scope to the :visible one.
     await expect(page.locator('[data-testid="clip-row"] [aria-label="Team"]:visible').first()).toBeVisible({ timeout: 5000 });
@@ -410,7 +410,7 @@ test.describe('T5700 — clip-list row: layer chip + Shared-by coexistence (long
 
   test('mobile (390px viewport): chip stays visible, name truncates, "Shared by" drops to a readable second line', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 });
-    await page.locator('button[title="Show clips"]').click();
+    await page.locator('button[title="Show plays"]').click();
 
     const chip = page.locator('[data-testid="clip-row"] [aria-label="Team"]:visible').first();
     await expect(chip).toBeVisible();

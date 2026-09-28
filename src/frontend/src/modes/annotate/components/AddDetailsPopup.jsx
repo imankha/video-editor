@@ -26,10 +26,9 @@ import { ANNOTATE } from '../../../config/displayNames';
  * T9830: carries the (de-ambered) Sport prompt alongside Tags + Notes via the
  * shared DetailsFields. The old T8140 "mobile stays clean, no in-form sport
  * picker" rule is superseded: the picker is de-ambered and one tap behind the
- * disclosure, not an amber wall on the first-clip path. T10520: Rating no
- * longer lives here — it moved to the `PlayProgressBadges` rated badge in the
- * pinned footer underneath this popup (close this popup, or the strip header,
- * to reach it — the badge is the one place rating is set now, on every layout).
+ * disclosure, not an amber wall on the first-clip path. T11150: Rating does
+ * not live here — it is the `RatingPill` on the Name + Rating tier above this
+ * disclosure (close this popup, or look at the strip's name row, to reach it).
  */
 export function AddDetailsPopup({
   tagSet,
@@ -55,7 +54,6 @@ export function AddDetailsPopup({
   taggedTeammates = [],
   onTeammatesChange,
   teammateSuggestions = [],
-  hasProject = false,
   onDelete,
 }) {
   // T10610 § B.2: the textarea unmounts without blurring when this popup
@@ -75,8 +73,9 @@ export function AddDetailsPopup({
       aria-modal="true"
       aria-label={ANNOTATE.DETAILS}
     >
-      {/* T10610: always the edit-mode accent now — there is no create mode. */}
-      <div className="h-0.5 shrink-0 bg-yellow-500" />
+      {/* T11150 (H19): neutral-gray accent, was yellow — the play editor's
+          amber "to-do" treatment is retired everywhere. */}
+      <div className="h-0.5 shrink-0 bg-gray-600" />
 
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 shrink-0">
         <h2 className="text-base font-semibold text-white">{ANNOTATE.DETAILS}</h2>
@@ -129,7 +128,7 @@ export function AddDetailsPopup({
         {/* T10620 (portrait strip only): Delete play, moved off the strip. */}
         {onDelete && (
           <div className="mt-4 border-t border-gray-700 pt-4">
-            <DeletePlayButton hasProject={hasProject} onDelete={onDelete} />
+            <DeletePlayButton onDelete={onDelete} />
           </div>
         )}
       </div>

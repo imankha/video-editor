@@ -95,46 +95,46 @@ describe('getRatingCaption (create mode)', () => {
   });
 
   it('rating 1 -> "Mental lapse" learn-from caption, regardless of layer or intent', () => {
-    expect(getRatingCaption(1, true, false)).toBe('Mental lapse (??) - a play to learn from.');
-    expect(getRatingCaption(1, false, true)).toBe('Mental lapse (??) - a play to learn from.');
+    expect(getRatingCaption(1, true, false)).toBe('Mental lapse - a play to learn from.');
+    expect(getRatingCaption(1, false, true)).toBe('Mental lapse - a play to learn from.');
   });
 
   it('rating 2 -> "Technical lapse" learn-from caption, regardless of layer or intent', () => {
-    expect(getRatingCaption(2, true, false)).toBe('Technical lapse (?) - a play to learn from.');
-    expect(getRatingCaption(2, false, true)).toBe('Technical lapse (?) - a play to learn from.');
+    expect(getRatingCaption(2, true, false)).toBe('Technical lapse - a play to learn from.');
+    expect(getRatingCaption(2, false, true)).toBe('Technical lapse - a play to learn from.');
   });
 
   it('rating 3 -> "Interesting play" second-look caption, regardless of intent', () => {
-    expect(getRatingCaption(3, true, false)).toBe('Interesting play (!?) - worth a second look.');
-    expect(getRatingCaption(3, true, true)).toBe('Interesting play (!?) - worth a second look.');
+    expect(getRatingCaption(3, true, false)).toBe('Interesting play - worth a second look.');
+    expect(getRatingCaption(3, true, true)).toBe('Interesting play - worth a second look.');
   });
 
   // E47 regression pin: 4 stars with creation toggled ON must NOT ask for another star.
   it('rating 4 -> outcome follows the toggle, never demands another star', () => {
     expect(getRatingCaption(4, true, true)).toBe(
-      'Good play (!) - this play will also become an editable clip.'
+      'Good play - this play will also become an editable clip.'
     );
     expect(getRatingCaption(4, true, false)).toBe(
-      'Good play (!) - this saves the play without creating a clip.'
+      'Good play - this saves the play without creating a clip.'
     );
     expect(getRatingCaption(4, true, true)).not.toMatch(/one more star|another star/);
   });
 
   it('rating 5 + My Athlete -> outcome follows the toggle, not the star count', () => {
     expect(getRatingCaption(5, true, true)).toBe(
-      'Highlight play (!!) - this play will also become an editable clip.'
+      'Highlight play - this play will also become an editable clip.'
     );
     expect(getRatingCaption(5, true, false)).toBe(
-      'Highlight play (!!) - this saves the play without creating a clip.'
+      'Highlight play - this saves the play without creating a clip.'
     );
   });
 
   it('rating 5 + Team -> "Highlight team play" label, outcome still follows the toggle', () => {
     expect(getRatingCaption(5, false, true)).toBe(
-      'Highlight team play (!!) - this play will also become an editable clip.'
+      'Highlight team play - this play will also become an editable clip.'
     );
     expect(getRatingCaption(5, false, false)).toBe(
-      'Highlight team play (!!) - this saves the play without creating a clip.'
+      'Highlight team play - this saves the play without creating a clip.'
     );
   });
 
@@ -157,7 +157,7 @@ describe('getEditRatingCaption (edit mode)', () => {
   });
 
   it('rating 2 -> "Technical lapse" learn-from caption', () => {
-    expect(getEditRatingCaption(2, true, false)).toBe('Technical lapse (?) - a play to learn from.');
+    expect(getEditRatingCaption(2, true, false)).toBe('Technical lapse - a play to learn from.');
   });
 
   // E47 in edit mode: creation is a manual control, never rating-gated - the
@@ -165,27 +165,28 @@ describe('getEditRatingCaption (edit mode)', () => {
   // T11110: the "create a clip below" control no longer exists, so that false
   // clause is dropped (the caption rewrite proper is T11150/T11160).
   it('rating 4 -> reads off hasReel, never demands another star', () => {
-    expect(getEditRatingCaption(4, true, false)).toBe('Good play (!).');
-    expect(getEditRatingCaption(4, true, true)).toBe('Good play (!) - clip already created from play.');
+    expect(getEditRatingCaption(4, true, false)).toBe('Good play.');
+    // T11150: "clip already created from play" -> "highlight already made."
+    expect(getEditRatingCaption(4, true, true)).toBe('Good play - highlight already made.');
     expect(getEditRatingCaption(4, true, false)).not.toMatch(/one more star|another star|create a clip below/);
   });
 
   it('rating 5 + My Athlete + no clip yet -> Highlight label, no removed-control claim', () => {
     const caption = getEditRatingCaption(5, true, false);
-    expect(caption).toBe('Highlight play (!!).');
+    expect(caption).toBe('Highlight play.');
     expect(caption).not.toMatch(/will be created|create a clip below/);
   });
 
   it('rating 5 + My Athlete + clip already exists -> says so, does not re-offer creation', () => {
-    expect(getEditRatingCaption(5, true, true)).toBe('Highlight play (!!) - clip already created from play.');
+    expect(getEditRatingCaption(5, true, true)).toBe('Highlight play - highlight already made.');
   });
 
-  // T11110: team plays CAN become highlights (H13), so the "clip already created"
-  // clause applies to the Team label the same as the My Athlete label.
+  // T11110: team plays CAN become highlights (H13), so the "highlight already
+  // made" clause applies to the Team label the same as the My Athlete label.
   it('rating 5 + Team -> Highlight team label, reflects hasReel like My Athlete does', () => {
-    expect(getEditRatingCaption(5, false, false)).toBe('Highlight team play (!!).');
+    expect(getEditRatingCaption(5, false, false)).toBe('Highlight team play.');
     expect(getEditRatingCaption(5, false, true)).toBe(
-      'Highlight team play (!!) - clip already created from play.'
+      'Highlight team play - highlight already made.'
     );
   });
 

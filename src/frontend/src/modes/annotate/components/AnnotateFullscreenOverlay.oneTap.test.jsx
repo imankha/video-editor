@@ -70,7 +70,7 @@ describe('AnnotateFullscreenOverlay — no amber no_sport wall on mobile (T8140)
     render(<AnnotateFullscreenOverlay {...baseProps()} layout="inline" />);
     // The amber picker is replaced by the full-screen question (fired
     // elsewhere), so it must not render in-form.
-    expect(screen.queryByText('Pick your sport to tag this clip')).toBeNull();
+    expect(screen.queryByText('Pick your sport to tag this play')).toBeNull();
   });
 
   it('desktop no_sport form keeps the in-form picker (T7922 preserved), inside details', () => {
@@ -78,10 +78,10 @@ describe('AnnotateFullscreenOverlay — no amber no_sport wall on mobile (T8140)
     // T9830/T10580: the sport prompt is an optional detail behind the
     // disclosure, which defaults CLOSED on every layout — hidden until
     // opened, hidden again when collapsed.
-    expect(screen.queryByText('Pick your sport to tag this clip')).toBeNull();
+    expect(screen.queryByText('Pick your sport to tag this play')).toBeNull();
     fireEvent.click(screen.getByTestId('add-details-button'));
-    expect(screen.getByText('Pick your sport to tag this clip')).toBeTruthy();
+    expect(screen.getByText('Pick your sport to tag this play')).toBeTruthy();
     fireEvent.click(screen.getByTestId('add-details-button'));
-    expect(screen.queryByText('Pick your sport to tag this clip')).toBeNull();
+    expect(screen.queryByText('Pick your sport to tag this play')).toBeNull();
   });
 });

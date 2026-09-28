@@ -11,7 +11,7 @@ import { AnnotateFullscreenOverlay } from './components/AnnotateFullscreenOverla
 // exactly as AnnotateContainer derives their inputs (sourcesAtPlayhead @L307-310,
 // getAngleName @L1696-1701). Proves a real overlap game shows "sideline"
 // everywhere and NEVER the R2 content hash; a legacy game (no filename) shows
-// "Extra clip 1". Browser drive of the seeded overlap game is owed on staging
+// "Extra video 1". Browser drive of the seeded overlap game is owed on staging
 // (the angle UI is inert in prod until T8900/T8910 can create real overlap).
 
 const HASH_RE = /[0-9a-f]{8}/i;
@@ -92,22 +92,22 @@ describe('T8892 angle-name integration — every surface reads the real filename
     expect(chip.textContent).not.toMatch(HASH_RE);
   });
 
-  it('legacy overlap game (no original_filename): surfaces show "Extra clip 1", never a hash', () => {
+  it('legacy overlap game (no original_filename): surfaces show "Extra video 1", never a hash', () => {
     const t = buildGameTimeline(legacyGame);
     const activeName = t.angles.find((a) => a.sequence === 2).name;
-    expect(activeName).toBe('Extra clip 1');
+    expect(activeName).toBe('Extra video 1');
 
     const { unmount: u1 } = render(
       <AngleSwitcherBadge sources={sourcesAt(t, 700)} activeSourceSequence={2} onSelect={() => {}} />
     );
     const badge = screen.getByTestId('angle-switcher-badge');
-    expect(badge.textContent).toContain('Extra clip 1');
+    expect(badge.textContent).toContain('Extra video 1');
     expect(badge.textContent).not.toMatch(HASH_RE);
     u1();
 
     render(<AnnotateFullscreenOverlay {...baseOverlayProps} layout="strip" activeSourceName={activeName} />);
     const chip = screen.getByTestId('cut-from-angle');
-    expect(chip.textContent).toContain('from Extra clip 1');
+    expect(chip.textContent).toContain('from Extra video 1');
     expect(chip.textContent).not.toMatch(HASH_RE);
   });
 });

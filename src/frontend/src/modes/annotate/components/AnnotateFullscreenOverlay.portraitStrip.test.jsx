@@ -86,7 +86,7 @@ describe('AnnotateFullscreenOverlay portrait-strip — row 2 shrink priority', (
         existingClip={{ ...editClip, name: 'An extremely long clip name that would otherwise push the buttons off screen' }}
       />
     );
-    const input = screen.getByLabelText('Clip name');
+    const input = screen.getByLabelText('Play name');
     expect(input.className).toMatch(/flex-1/);
     expect(input.className).toMatch(/min-w-0/);
     // The two buttons are still present (not clipped out of the tree).
@@ -97,7 +97,7 @@ describe('AnnotateFullscreenOverlay portrait-strip — row 2 shrink priority', (
   it('the name input commits on blur via onUpdateClip({name}) — same per-gesture write', () => {
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={editClip} onUpdateClip={onUpdateClip} />);
-    const input = screen.getByLabelText('Clip name');
+    const input = screen.getByLabelText('Play name');
     fireEvent.change(input, { target: { value: 'Renamed' } });
     fireEvent.blur(input);
     expect(onUpdateClip).toHaveBeenCalledWith('c1', { name: 'Renamed' });
@@ -114,7 +114,7 @@ describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind 
     expect(within(dialog).getByRole('radio', { name: 'My athlete' })).toBeTruthy();
     expect(within(dialog).getByRole('radio', { name: 'Team' })).toBeTruthy();
     // Tags + Notes (shared DetailsFields)
-    expect(within(dialog).getByPlaceholderText('Add a note about this clip...')).toBeTruthy();
+    expect(within(dialog).getByPlaceholderText('Add a note about this play...')).toBeTruthy();
     // Delete play
     expect(within(dialog).getByRole('button', { name: /delete play/i })).toBeTruthy();
   });

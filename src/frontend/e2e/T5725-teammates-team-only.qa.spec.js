@@ -110,7 +110,7 @@ test.describe('T5725 — mobile (390px): Teammates control gating', () => {
     // Open the mobile clips drawer and view the just-created clip's details.
     // On mobile a clip row's own onClick is disabled; details open via the
     // per-row "View details" button (ClipListItem, isMobile branch).
-    await page.locator('button[title="Show clips"]').click();
+    await page.locator('button[title="Show plays"]').click();
     await page.locator('button[title="View details"]:visible').first().click();
 
     // The CSS-hidden desktop ClipsSidePanel (`hidden sm:flex`) stays mounted at
