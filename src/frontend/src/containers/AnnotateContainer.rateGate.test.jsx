@@ -179,10 +179,12 @@ describe('AnnotateContainer — "Rate this play" gate (T11120)', () => {
     act(() => { result.current.handleOverlayClose(); }); // gated (proceed = closeOverlay)
 
     apiFetch.mockClear();
-    await act(async () => { await result.current.handleRateGatePick(5); });
+    // T11130: pick a 1-4 rating so the continuation is the plain close (a
+    // 5-star pick flows into the Highlight choice card instead — covered below).
+    await act(async () => { await result.current.handleRateGatePick(3); });
 
-    // A PUT carrying rating:5 reached the network on this region's raw_clip.
-    expect(putCallsWith((b) => b.rating === 5).length).toBe(1);
+    // A PUT carrying rating:3 reached the network on this region's raw_clip.
+    expect(putCallsWith((b) => b.rating === 3).length).toBe(1);
     // Gate cleared and the stashed exit ran (editor closed).
     expect(result.current.rateGate).toBeNull();
     expect(result.current.showAnnotateOverlay).toBe(false);
@@ -245,8 +247,10 @@ describe('AnnotateContainer — "Rate this play" gate (T11120)', () => {
     const { result } = renderHook(() => AnnotateContainer(baseProps()));
 
     // Play 1: create, RATE it, then leave it so it can serve as the switch TARGET.
+    // T11130: rate it 4 (not 5) — a 5-star Done would open the Highlight choice
+    // card instead of closing; this play is only setup for the switch target.
     const id1 = await markUnratedPlay(result);
-    await act(async () => { await result.current.updateClipRegion(id1, { rating: 5 }); });
+    await act(async () => { await result.current.updateClipRegion(id1, { rating: 4 }); });
     act(() => { result.current.handleOverlayClose(); });        // rated -> closes to SELECTED
     act(() => { result.current.selectAnnotateRegion(null); });  // SELECTED -> NONE
     expect(result.current.showAnnotateOverlay).toBe(false);
@@ -365,5 +369,145 @@ describe('AnnotateContainer — "Rate this play" gate (T11120)', () => {
     });
     expect(result.current.rateGate).toBeNull();
     expect(result.current.clipRegions.length).toBe(0);
+  });
+});
+
+// T11130: Done on a Highlight-rated play not yet a highlight opens the in-place
+// "Make this a highlight now?" choice card (highlightChoice state). Sequential
+// with the T11120 rate gate — a play just rated Highlight in the gate flows into
+// the card; the two never block at once. 1-4 stars just close (H3).
+describe('AnnotateContainer — Done -> Highlight choice card (T11130)', () => {
+  beforeEach(() => {
+    apiFetch.mockReset();
+    apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: false, success: true }) });
+    useAuthStore.setState({ isAuthenticated: true });
+    useQuestStore.setState({ recordAchievement: vi.fn(), fetchProgress: vi.fn().mockResolvedValue(undefined) });
+    window.matchMedia = (query) => ({
+      matches: false, media: query, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {},
+      addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+    });
+    useToastStore.setState({ toasts: [] });
+  });
+  afterEach(() => {
+    useAuthStore.setState(authOriginal, true);
+    useQuestStore.setState(questOriginal, true);
+    useToastStore.setState({ toasts: [] });
+  });
+
+  it('an already-rated-Highlight play (no project) opens the card on Done instead of closing', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    const id = await markUnratedPlay(result);
+    await act(async () => { await result.current.updateClipRegion(id, { rating: 5 }); });
+
+    act(() => { result.current.handleOverlayClose(); });
+
+    expect(result.current.rateGate).toBeNull();                 // already rated -> no rate gate
+    expect(result.current.highlightChoice?.regionId).toBe(id);  // the card opens
+    expect(result.current.showAnnotateOverlay).toBe(true);      // editor stays open (mode-swap)
+  });
+
+  it('a play just rated Highlight IN THE GATE flows into the card (sequential, not both at once)', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    const id = await markUnratedPlay(result);
+
+    act(() => { result.current.handleOverlayClose(); });        // unrated -> rate gate
+    expect(result.current.rateGate?.regionId).toBe(id);
+    expect(result.current.highlightChoice).toBeNull();          // not both at once
+
+    await act(async () => { await result.current.handleRateGatePick(5); });
+
+    expect(result.current.rateGate).toBeNull();                 // gate cleared first
+    expect(result.current.highlightChoice?.regionId).toBe(id);  // then the card opens
+    expect(result.current.showAnnotateOverlay).toBe(true);
+  });
+
+  it('a 1-4 star Done closes with no card (H3)', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    const id = await markUnratedPlay(result);
+    await act(async () => { await result.current.updateClipRegion(id, { rating: 4 }); });
+
+    act(() => { result.current.handleOverlayClose(); });
+
+    expect(result.current.highlightChoice).toBeNull();
+    expect(result.current.showAnnotateOverlay).toBe(false);
+  });
+
+  it('Escape (dismiss) clears the card, writes nothing, stays in the editor', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    const id = await markUnratedPlay(result);
+    await act(async () => { await result.current.updateClipRegion(id, { rating: 5 }); });
+    act(() => { result.current.handleOverlayClose(); });
+    expect(result.current.highlightChoice?.regionId).toBe(id);
+
+    apiFetch.mockClear();
+    act(() => { result.current.handleHighlightChoiceDismiss(); });
+
+    expect(result.current.highlightChoice).toBeNull();
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(result.current.showAnnotateOverlay).toBe(true); // still EDITING
+  });
+
+  it('Make Highlight Now creates the project (createProject, silent) and navigates to Focus', async () => {
+    const onOpenReelInFocus = vi.fn();
+    const { result } = renderHook(() => AnnotateContainer(baseProps({ onOpenReelInFocus })));
+    const id = await markUnratedPlay(result);
+    await act(async () => { await result.current.updateClipRegion(id, { rating: 5 }); });
+    act(() => { result.current.handleOverlayClose(); });
+    expect(result.current.highlightChoice?.regionId).toBe(id);
+
+    // The create PUT returns a project id for the navigation.
+    apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: true, project_id: 77, success: true }) });
+    await act(async () => { await result.current.handleHighlightChoiceNow(); await flush(); });
+
+    // createProject went out (silent -> no default reel-created toast).
+    expect(putCallsWith((b) => b.create_project === true).length).toBe(1);
+    expect(onOpenReelInFocus).toHaveBeenCalledWith(77);
+    expect(result.current.highlightChoice).toBeNull();
+    // No default "is now in Clips" toast on the silent Frame Now path.
+    expect(useToastStore.getState().toasts.some((t) => /is now in Clips/i.test(t.title || ''))).toBe(false);
+  });
+
+  it('Back to Editing creates the highlight, toasts the exact copy with no action, and closes the editor', async () => {
+    const onOpenReelInFocus = vi.fn();
+    const { result } = renderHook(() => AnnotateContainer(baseProps({ onOpenReelInFocus })));
+    const id = await markUnratedPlay(result);
+    await act(async () => { await result.current.updateClipRegion(id, { rating: 5 }); });
+    act(() => { result.current.handleOverlayClose(); });
+    expect(result.current.highlightChoice?.regionId).toBe(id);
+
+    apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: true, project_id: 88, success: true }) });
+    await act(async () => { await result.current.handleHighlightChoiceLater(); await flush(); });
+
+    expect(putCallsWith((b) => b.create_project === true).length).toBe(1);
+    // Does NOT navigate (Back to Editing returns to marking plays).
+    expect(onOpenReelInFocus).not.toHaveBeenCalled();
+    // The card cleared and the editor closed.
+    expect(result.current.highlightChoice).toBeNull();
+    expect(result.current.showAnnotateOverlay).toBe(false);
+    // Exactly the owner-written toast, no action button.
+    const toasts = useToastStore.getState().toasts;
+    const toast = toasts.find((t) => t.title === 'Highlight moved to Clips so you can edit it later');
+    expect(toast).toBeTruthy();
+    expect(toast.action).toBeUndefined();
+  });
+
+  it('double-tap on a create button fires exactly one create (synchronous ref guard)', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    const id = await markUnratedPlay(result);
+    await act(async () => { await result.current.updateClipRegion(id, { rating: 5 }); });
+    act(() => { result.current.handleOverlayClose(); });
+    expect(result.current.highlightChoice?.regionId).toBe(id);
+
+    apiFetch.mockClear();
+    apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: true, project_id: 99, success: true }) });
+    // Two synchronous calls before the first settles — the in-flight ref blocks #2.
+    await act(async () => {
+      const a = result.current.handleHighlightChoiceNow();
+      const b = result.current.handleHighlightChoiceNow();
+      await Promise.all([a, b]);
+      await flush();
+    });
+    expect(putCallsWith((b) => b.create_project === true).length).toBe(1);
   });
 });

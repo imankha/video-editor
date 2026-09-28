@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Pencil, Crop, Sparkles, ChevronDown, ChevronUp, Video, Clapperboard } from 'lucide-react';
+import { X, Pencil, ChevronDown, ChevronUp, Video, Clapperboard } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
-import { useCurrentProfile, useProfileStore, useProjectsList } from '../../../stores';
-import { getClipStage, CLIP_STAGE } from '../clipStage';
+import { useCurrentProfile, useProfileStore } from '../../../stores';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { ClipScrubRegion } from './ClipScrubRegion';
-import { Button } from '../../../components/shared/Button';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
 import { DetailsFields } from './DetailsFields';
 import { RatingPill } from './RatingPill';
+import { HighlightChoiceCard } from './HighlightChoiceCard';
 import { DeletePlayButton } from './DeletePlayButton';
 import { onTextFieldKeyDown } from '../textFieldCommit';
 import { ANNOTATE } from '../../../config/displayNames';
@@ -129,19 +128,21 @@ export function AnnotateFullscreenOverlay({
   layout = 'overlay',
   teammateSuggestions = [],
   onScrubDragChange,
-  // T8600: desktop strip only — opens the clip's project in Focus mode. Same
-  // prop name/semantics ClipDetailsEditor already uses.
-  onOpenInFocus,
-  // T9330: opens the clip's project in Spotlight (Overlay mode) — the stage CTA
-  // routes here when getClipStage returns action 'overlay'. Same prop name
-  // ClipDetailsEditor already uses.
-  onOpenInOverlay,
   // T10610 § D.2/D.3: deletes the play the editor is open on (confirm, then
   // closes + deselects — see AnnotateContainer.handleDeletePlayFromEditor).
   onDeleteClip,
-  // T10610 § C.4: awaited by the stage CTA before navigating, so a write still
-  // in flight (or failed) can't be followed into Framing/Spotlight.
-  onAwaitWrites,
+  // T11130: the Done -> "Make this a highlight now?" choice card. When
+  // showHighlightChoice is true the editor mode-swaps its edit strip for the
+  // gold HighlightChoiceCard in place (video stays visible above). The two
+  // handlers create the highlight (owned by AnnotateContainer); onDismiss is
+  // Escape's no-save return to the editor. H8 removed the editor's own stage
+  // buttons (Frame / Apply Spotlight / View Final), so onOpenInFocus /
+  // onOpenInOverlay / onAwaitWrites are no longer consumed here — the single
+  // main-screen stage CTA (AnnotateModeView) owns that navigation now.
+  showHighlightChoice = false,
+  onHighlightChoiceNow,
+  onHighlightChoiceLater,
+  onHighlightChoiceDismiss,
   // T10610 § C.5: 'idle' | 'saving' | 'saved' | 'error', the outcome of the
   // most recent per-gesture write on this region — drives SaveStatusBadge.
   writeStatus = 'idle',
@@ -158,14 +159,10 @@ export function AnnotateFullscreenOverlay({
   mediaBounds = null,
 }) {
   const isMobile = useIsMobile();
-  // T9330: the clip's stage-aware CTA, shared with ClipDetailsEditor via
-  // getClipStage. linkedProject is looked up the SAME way ClipDetailsEditor does
-  // (useProjectsList by autoProjectId) — single source, not a passed prop.
-  const projects = useProjectsList();
-  const linkedProject = existingClip.autoProjectId
-    ? projects.find(p => p.id === existingClip.autoProjectId)
-    : null;
-  const clipStage = getClipStage(existingClip, linkedProject);
+  // T11130 (H8): the editor's own stage-aware CTA (getClipStage / linkedProject)
+  // is gone — the single main-screen stage CTA (AnnotateModeView) owns opening a
+  // made highlight in Framing/Spotlight now. The editor only reflects state
+  // (HighlightMadeChip), it no longer navigates.
   const currentProfile = useCurrentProfile();
   const updateProfile = useProfileStore(state => state.updateProfile);
   const sport = currentProfile?.sport || NO_SPORT;
@@ -266,6 +263,18 @@ export function AnnotateFullscreenOverlay({
     const handleKeyDown = (e) => {
       const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
 
+      // T11130: while the Highlight choice card is up (mode-swap of the edit
+      // strip), Escape is the ONLY no-save exit (M5) and returns to the editor;
+      // no other key does anything (the rating pill / number shortcuts are not
+      // on screen). Never a close, never a write.
+      if (showHighlightChoice) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          onHighlightChoiceDismiss?.();
+        }
+        return;
+      }
+
       if (e.key === 'Escape') {
         e.preventDefault();
         if (detailsOpen) {
@@ -284,7 +293,7 @@ export function AnnotateFullscreenOverlay({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isVisible, detailsOpen]);
+  }, [isVisible, detailsOpen, showHighlightChoice, onHighlightChoiceDismiss]);
 
   // T10610 § B.1/D3: rating persists on its OWN gesture now — no more
   // create-mode "manually edited" tracking (playProgress's `rated` is
@@ -365,6 +374,20 @@ export function AnnotateFullscreenOverlay({
   }, [existingClip.id, onUpdateClip]);
 
   if (!isVisible) return null;
+
+  // T11130: Done on a Highlight-rated play not yet a highlight mode-swaps the
+  // edit strip for the gold choice card IN PLACE (T8600 pattern) — a single
+  // early return so every layout (desktop strip, portrait strip, mobile sheet,
+  // dock) swaps uniformly, with the video card still visible above it. Escape
+  // (handled in the window keydown above) is the only no-save exit.
+  if (showHighlightChoice) {
+    return (
+      <HighlightChoiceCard
+        onMakeNow={onHighlightChoiceNow}
+        onBackToEditing={onHighlightChoiceLater}
+      />
+    );
+  }
 
   // T10610 § C.5: writeStatus comes straight from the container's own
   // per-gesture write outcome — no more local Unsaved/hasUnsavedEdits
@@ -530,59 +553,11 @@ export function AnnotateFullscreenOverlay({
     </div>
   );
 
-  // T9330/T10610 § C.4: the stage-aware primary CTA (project exists) —
-  // full-width, driven by getClipStage. SHARED by the desktop strip AND the
-  // mobile edit sheet (layout==='inline'), so both surfaces get one
-  // label/target. Awaits the region's write chain before navigating — a
-  // rejected/in-flight tail means "do not navigate", not a confirm dialog
-  // (there is nothing unsaved to confirm anymore).
-  const stageCta = (existingClip.autoProjectId && clipStage) ? (
-    <Button
-      variant="cyan"
-      size="lg"
-      icon={clipStage.action === 'overlay' ? Sparkles : Crop}
-      // 2026-09-18 (user request): the FOCUS-stage CTA gets a rollover explaining
-      // what Framing does (already-approved copy); other stages keep the
-      // generic "open the clip" hint.
-      title={clipStage.stage === CLIP_STAGE.FOCUS ? ANNOTATE.FRAME_THIS_CLIP_HINT : `Open: ${clipStage.label}`}
-      className="w-full coarse-pointer:min-h-[44px]"
-      onClick={async () => {
-        const ok = onAwaitWrites ? await onAwaitWrites(existingClip.id) : true;
-        if (!ok) return;
-        if (clipStage.action === 'overlay') {
-          onOpenInOverlay?.(existingClip.autoProjectId);
-        } else {
-          onOpenInFocus?.(existingClip.autoProjectId);
-        }
-      }}
-    >
-      {clipStage.label}
-    </Button>
-  ) : null;
-
-  // T9330: create-in-flight — the project is being created but its id has not
-  // landed. A disabled FOCUS-stage CTA ("Frame this clip" since T9580/N41) that
-  // goes live once setAutoProjectId resolves (pure re-render). Desktop strip
-  // only: mobile create closes on save, so the sheet is never open during that
-  // window (focusPending stays false).
-  // T9580 (N41): the first-clip invitation's dismiss secondary — "Keep marking
-  // plays". Paired with the FOCUS-stage primary CTA ("Frame this clip"), so the
-  // invitation reads as the intended two-choice prompt rather than a single
-  // button. Routes through closeWithCommit (a pure EDITING->SELECTED transition
-  // with no seek), so dismissing preserves the playhead and commits any dirty
-  // text field. Only at the FOCUS moment: once a clip has a working video the
-  // single stage CTA suffices.
-  const showFocusInvitation = existingClip.autoProjectId && clipStage?.stage === CLIP_STAGE.FOCUS;
-  const keepMarkingCta = showFocusInvitation ? (
-    <Button
-      variant="ghost"
-      size="lg"
-      className="w-full coarse-pointer:min-h-[44px]"
-      onClick={closeWithCommit}
-    >
-      {ANNOTATE.KEEP_MARKING_PLAYS}
-    </Button>
-  ) : null;
+  // T11130 (H8): the editor's stage-aware CTA and the first-clip "Keep marking
+  // plays" invitation are removed — H8 keeps ONE stage button, on the main
+  // screen (AnnotateModeView), not in the editor. The editor now only edits the
+  // play and reflects the highlight-made state; opening a made highlight in
+  // Framing/Spotlight happens from the main screen.
 
   if (layout === 'strip') {
     // T8600 C2: the desktop under-canvas editor. Entirely separate markup
@@ -742,11 +717,6 @@ export function AnnotateFullscreenOverlay({
             </button>
           </div>
         </div>
-
-        {/* T9330: the full-width stage-aware primary CTA (extracted so the
-            mobile inline edit sheet reuses the exact same button). */}
-        {stageCta && <div className="mt-5">{stageCta}</div>}
-        {keepMarkingCta && <div className="mt-2">{keepMarkingCta}</div>}
       </>
     );
   }
@@ -939,11 +909,6 @@ export function AnnotateFullscreenOverlay({
           </button>
         </div>
 
-        {/* Stage CTA (Frame / Apply Spotlight / View Final) full width below the
-            strip when the clip has a project. */}
-        {stageCta && <div className="mt-2">{stageCta}</div>}
-        {keepMarkingCta && <div className="mt-1.5">{keepMarkingCta}</div>}
-
         {/* Everything else lives behind the disclosure -> full-screen popup (may
             cover the video; none of these are needed while trimming). Category,
             teammates and Delete play join the shared tags/notes/sport fields
@@ -985,20 +950,9 @@ export function AnnotateFullscreenOverlay({
     return (
       <div data-add-clip-form className="border-t border-gray-700 flex flex-col min-h-0 max-h-full">
         <div className="p-3 overflow-y-auto min-h-0 flex-1">{formBody}</div>
-        {/* T9330 (design §2.6): the mobile edit sheet gets the SAME stage-aware
-            CTA as the desktop strip (Apply Framing / Apply Spotlight / View
-            Final / View Published), so editing an existing clip-with-a-project on
-            a phone has a path into Framing/Spotlight/the finished video. Edit mode
-            only — mobile CREATE still closes on save (Save/Cancel below) and does
-            not surface the in-flight CTA. Its own row above the footer. */}
-        {stageCta && (
-          <div className="px-3 pt-3 border-t border-gray-700 bg-gray-900/95 flex-shrink-0">{stageCta}</div>
-        )}
-        {/* T9580 (N41): the mobile EDIT sheet shares the FOCUS-stage invitation, so
-            it gets the "Keep marking plays" dismiss beside "Frame this clip". */}
-        {keepMarkingCta && (
-          <div className="px-3 pt-2 bg-gray-900/95 flex-shrink-0">{keepMarkingCta}</div>
-        )}
+        {/* T11130 (H8): the mobile edit sheet no longer carries the editor stage
+            CTA / "Keep marking plays" invitation — the single main-screen stage
+            CTA (AnnotateModeView) owns opening a made highlight. */}
         {/* T8790/F3: this sheet is `fixed bottom-0` but a `backdrop-blur` ancestor
             (AnnotateModeView's frosted card) becomes its containing block, so the
             sheet is anchored to that card's bottom (mid-screen), not the viewport, so

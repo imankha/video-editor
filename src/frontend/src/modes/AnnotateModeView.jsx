@@ -10,7 +10,6 @@ import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay
 import { ANNOTATE, SHARING } from '../config/displayNames';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
 import { getClipStage, CLIP_STAGE } from './annotate/clipStage';
-import { CLIP_NUDGE_RATING } from './annotate/playProgress';
 import { useCurrentProfile, useProfileStore, useProjectsList } from '../stores';
 import PlaybackControls from './annotate/components/PlaybackControls';
 import { generateClipName } from '../utils/clipDisplayName';
@@ -109,6 +108,13 @@ export function AnnotateModeView({
   rateGate,
   onRateGatePick,
   onRateGateDismiss,
+  // T11130: Done -> "Make this a highlight now?" choice card — state + handlers
+  // owned by AnnotateContainer. showHighlightChoice per overlay is derived from
+  // highlightChoice.regionId === existingClip.id at each render site.
+  highlightChoice,
+  onHighlightChoiceNow,
+  onHighlightChoiceLater,
+  onHighlightChoiceDismiss,
   // T10610 § D.3: deletes the play the editor is open on.
   onDeletePlayFromEditor,
   // T10610 § C.4: awaited before navigating into Framing/Spotlight, both from
@@ -257,20 +263,10 @@ export function AnnotateModeView({
       setFrameClipPending(false);
     }
   }, [selectedRegion, openExistingProjectStage, onFullscreenUpdateClip, onOpenClipInFocus]);
-  // T10450: "Frame Later" creates the project WITHOUT navigating — the play
-  // becomes an editable clip (visible in Clips), left for a later Framing
-  // pass. Only reachable while NO_PROJECT (button isn't rendered otherwise).
-  const handleFrameLater = useCallback(async () => {
-    if (!selectedRegion || frameCreateInFlightRef.current || selectedRegion.autoProjectId) return;
-    frameCreateInFlightRef.current = true;
-    setFrameClipPending(true);
-    try {
-      await onFullscreenUpdateClip(selectedRegion.id, { createProject: true });
-    } finally {
-      frameCreateInFlightRef.current = false;
-      setFrameClipPending(false);
-    }
-  }, [selectedRegion, onFullscreenUpdateClip]);
+  // T11130: "Frame Later" removed with the T10450 main-screen Frame Now / Frame
+  // Later create row — a project-less play becomes a highlight through the rating
+  // + Done -> Highlight popup gesture now, not a create button here. handleFrameNow
+  // survives only as the existing-project navigation the single stage CTA uses.
 
   // T8760 item 10: while a clip is open for editing, the transport readout is
   // clip-relative (elapsed / clip-duration). Null outside clip-edit mode, so
@@ -979,9 +975,11 @@ export function AnnotateModeView({
                 activeSourceName={activeSourceName}
                 mediaBounds={activeSourceMediaBounds}
                 teammateSuggestions={teammateSuggestions}
-                // T9330: mobile edit sheet gets the shared stage CTA (design §2.6)
-                onOpenInFocus={onOpenClipInFocus}
-                onOpenInOverlay={onOpenClipInOverlay}
+                // T11130: Done -> Highlight choice card (in-place mode-swap)
+                showHighlightChoice={!!highlightChoice && highlightChoice.regionId === existingClip?.id}
+                onHighlightChoiceNow={onHighlightChoiceNow}
+                onHighlightChoiceLater={onHighlightChoiceLater}
+                onHighlightChoiceDismiss={onHighlightChoiceDismiss}
               />
             </div>
           )}
@@ -1013,9 +1011,11 @@ export function AnnotateModeView({
                     mediaBounds={activeSourceMediaBounds}
                     teammateSuggestions={teammateSuggestions}
                     onScrubDragChange={setIsDraggingScrub}
-                    // T9330: mobile edit sheet gets the shared stage CTA (design §2.6)
-                    onOpenInFocus={onOpenClipInFocus}
-                    onOpenInOverlay={onOpenClipInOverlay}
+                    // T11130: Done -> Highlight choice card (in-place mode-swap)
+                    showHighlightChoice={!!highlightChoice && highlightChoice.regionId === existingClip?.id}
+                    onHighlightChoiceNow={onHighlightChoiceNow}
+                    onHighlightChoiceLater={onHighlightChoiceLater}
+                    onHighlightChoiceDismiss={onHighlightChoiceDismiss}
                   />
                 </div>
               ) : (
@@ -1136,8 +1136,11 @@ export function AnnotateModeView({
                 activeSourceName={activeSourceName}
                 mediaBounds={activeSourceMediaBounds}
                 teammateSuggestions={teammateSuggestions}
-                onOpenInFocus={onOpenClipInFocus}
-                onOpenInOverlay={onOpenClipInOverlay}
+                // T11130: Done -> Highlight choice card (in-place mode-swap)
+                showHighlightChoice={!!highlightChoice && highlightChoice.regionId === existingClip?.id}
+                onHighlightChoiceNow={onHighlightChoiceNow}
+                onHighlightChoiceLater={onHighlightChoiceLater}
+                onHighlightChoiceDismiss={onHighlightChoiceDismiss}
               />
             </div>
           )}
@@ -1226,32 +1229,11 @@ export function AnnotateModeView({
                       </button>
                     )}
                   </div>
-                  {selectedRegion && !selectedRegion.autoProjectId && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleFrameNow}
-                        disabled={frameClipPending}
-                        data-testid="annotate-frame-now-cta"
-                        title={ANNOTATE.FRAME_THIS_CLIP_HINT}
-                        className="flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white shadow-cyan-900/40"
-                      >
-                        <Crop size={22} />
-                        {ANNOTATE.FRAME_NOW}
-                      </button>
-                      <button
-                        onClick={handleFrameLater}
-                        disabled={frameClipPending}
-                        data-testid="annotate-frame-later-cta"
-                        title={ANNOTATE.FRAME_LATER_HINT}
-                        className={`flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg bg-teal-700 hover:bg-teal-600 disabled:opacity-60 text-white shadow-teal-900/40 ${
-                          selectedRegion.rating === CLIP_NUDGE_RATING ? 'motion-safe:animate-pulse' : ''
-                        }`}
-                      >
-                        <Clock size={22} />
-                        {ANNOTATE.FRAME_LATER}
-                      </button>
-                    </div>
-                  )}
+                  {/* T11130: the T10450 Frame Now / Frame Later create row is
+                      removed — a project-less play becomes a highlight through
+                      the rating + Done -> Highlight popup gesture, not a create
+                      button here. The single stage CTA above remains for a play
+                      that already IS a highlight (autoProjectId set, H8). */}
                 </div>
               ) : (
                 <button

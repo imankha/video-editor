@@ -838,6 +838,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         rateGate={annotate.rateGate}
         onRateGatePick={annotate.handleRateGatePick}
         onRateGateDismiss={annotate.handleRateGateDismiss}
+        // T11130: Done -> "Make this a highlight now?" choice card (owned by AnnotateContainer)
+        highlightChoice={annotate.highlightChoice}
+        onHighlightChoiceNow={annotate.handleHighlightChoiceNow}
+        onHighlightChoiceLater={annotate.handleHighlightChoiceLater}
+        onHighlightChoiceDismiss={annotate.handleHighlightChoiceDismiss}
         // T10610 § D.3/C.4/C.5
         onDeletePlayFromEditor={handleDeletePlayFromEditor}
         onAwaitRegionWrites={awaitRegionWrites}

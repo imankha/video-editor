@@ -11,19 +11,17 @@ import { getClipStage, CLIP_STAGE } from './clipStage';
 const baseRegion = { id: 'c1', startTime: 2, endTime: 8 };
 
 describe('getClipStage (T9330)', () => {
-  // T10240: NO_PROJECT is no longer a dead end. It carries two create actions —
-  // "Create clip" (stay in Annotate) and "Frame clip" (create then open Framing,
-  // navigate: true). The bare `label`/`action` fields are retained for back-compat.
-  it('no autoProjectId -> NO_PROJECT with two create actions (Create clip / Frame clip)', () => {
+  // T11130: NO_PROJECT no longer offers a "Create clip" / "Frame clip" CTA — the
+  // create decision moved to the rating + Done -> Highlight popup, and H8 removed
+  // the editor stage buttons. The stage CTA only renders once a project exists,
+  // so this branch carries no label/action and the old `createActions` array is
+  // gone (it had zero consumers).
+  it('no autoProjectId -> NO_PROJECT with no label/action', () => {
     const region = { ...baseRegion, autoProjectId: null };
     expect(getClipStage(region, null)).toEqual({
       stage: CLIP_STAGE.NO_PROJECT,
-      label: 'Create clip',
+      label: null,
       action: null,
-      createActions: [
-        { key: 'create', label: 'Create clip', navigate: false },
-        { key: 'frame', label: 'Frame clip', navigate: true },
-      ],
     });
   });
 

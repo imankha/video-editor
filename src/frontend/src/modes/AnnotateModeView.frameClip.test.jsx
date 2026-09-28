@@ -1,24 +1,17 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 /**
- * T10310 (2026-09-18 user request):
- *  - Once a play is selected, the whole-game "Review plays"/"Share plays"
- *    row is gone (only play-specific actions apply); the primary CTA splits
- *    into [Edit Play] + a Frame action.
- *  - The "You are bookmarking, not editing..." stage-reason line is gone.
- *
- * T10450 (2026-09-18 user request):
- *  - While the play has NO project yet, the Frame action splits into
- *    [Frame Now] (create the project, then opens Framing immediately) and
- *    [Frame Later] (create the project only, no navigation — the play
- *    becomes an editable clip left for a later Framing pass).
- *  - Once a project exists (the play already IS a clip), it's back to a
- *    single stage-CTA button (reusing getClipStage, the same logic the
- *    editor's own stage CTA already used) — Frame Now/Later was only ever
- *    about the create decision.
- *  - Frame Later throbs (motion-safe:animate-pulse) when the play is rated
- *    5 stars.
+ * T11130: the T10450 main-screen [Frame Now] / [Frame Later] create row is
+ * removed. A project-less play no longer has any create CTA here — it becomes a
+ * highlight through the rating + Done -> Highlight popup gesture (the popup is an
+ * in-place mode-swap of the editor, exercised in the AnnotateFullscreenOverlay /
+ * AnnotateContainer tests, not this main-screen view). What survives on this
+ * play-selected row:
+ *  - [Edit Play] always (project or not);
+ *  - a SINGLE stage CTA beside it ONLY once the play already has a project (H8:
+ *    the one main-screen stage button), reusing getClipStage — opens the clip's
+ *    current stage, never re-creates.
  */
 
 vi.mock('../components/VideoPlayer', () => ({ VideoPlayer: () => <div data-testid="video-player" /> }));
@@ -29,6 +22,7 @@ vi.mock('./annotate', () => ({
   AnnotateControls: () => <div />,
   NotesOverlay: () => <div />,
   AnnotateFullscreenOverlay: () => <div />,
+  RateThisPlayModal: () => <div />,
 }));
 vi.mock('./annotate/components/PlaybackControls', () => ({ default: () => <div /> }));
 vi.mock('../components/shared', () => ({ Button: ({ children }) => <button>{children}</button> }));
@@ -104,8 +98,8 @@ function renderView(overrides = {}) {
   return render(<AnnotateModeView {...buildProps(overrides)} />);
 }
 
-describe('AnnotateModeView — play-selected CTA row (T10310/T10450)', () => {
-  it('splits into [Edit Play] + [Frame Now] + [Frame Later] once a project-less play is selected', () => {
+describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
+  it('a project-less selected play shows [Edit Play] and NO Frame create CTA', () => {
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
@@ -113,11 +107,15 @@ describe('AnnotateModeView — play-selected CTA row (T10310/T10450)', () => {
       annotateSelectedRegionId: 'r1',
     });
     expect(screen.getByRole('button', { name: /^edit play$/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^frame now$/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^frame later$/i })).toBeTruthy();
+    // T11130: the removed create row — none of these exist anymore.
+    expect(screen.queryByRole('button', { name: /^frame now$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^frame later$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^create clip$/i })).toBeNull();
+    expect(screen.queryByTestId('annotate-frame-now-cta')).toBeNull();
+    expect(screen.queryByTestId('annotate-frame-later-cta')).toBeNull();
   });
 
-  it('collapses back to [Edit Play] + a single stage button once the play has a project', () => {
+  it('shows [Edit Play] + a single stage button once the play has a project (H8)', () => {
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
@@ -125,29 +123,9 @@ describe('AnnotateModeView — play-selected CTA row (T10310/T10450)', () => {
       annotateSelectedRegionId: 'r1',
     });
     expect(screen.getByRole('button', { name: /^edit play$/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^frame$/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^frame now$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^frame later$/i })).toBeNull();
-    expect(screen.getByRole('button', { name: /^frame$/i })).toBeTruthy();
-  });
-
-  it('Frame Later throbs when the play is rated 5 stars, not otherwise', () => {
-    const baseOverrides = {
-      isEditMode: true,
-      hasAnnotateClips: true,
-      annotateSelectedRegionId: 'r1',
-    };
-    const { rerender } = renderView({
-      ...baseOverrides,
-      clipRegions: [{ ...selectedRegion, rating: 3 }],
-    });
-    expect(screen.getByRole('button', { name: /^frame later$/i }).className).not.toMatch(/animate-pulse/);
-
-    rerender(
-      <AnnotateModeView
-        {...buildProps({ ...baseOverrides, clipRegions: [{ ...selectedRegion, rating: 5 }] })}
-      />,
-    );
-    expect(screen.getByRole('button', { name: /^frame later$/i }).className).toMatch(/animate-pulse/);
   });
 
   it('hides Review plays and Share plays once a play is selected, even with clips present', () => {
@@ -175,64 +153,6 @@ describe('AnnotateModeView — play-selected CTA row (T10310/T10450)', () => {
     expect(screen.getByText(/captures 6 seconds before and 2 after/i)).toBeTruthy();
   });
 
-  it('Frame Now on a project-less play creates the project, then opens Framing with the new id', async () => {
-    const onFullscreenUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true, projectId: 99 }));
-    const onOpenClipInFocus = vi.fn();
-    renderView({
-      isEditMode: true,
-      hasAnnotateClips: true,
-      clipRegions: [selectedRegion],
-      annotateSelectedRegionId: 'r1',
-      onFullscreenUpdateClip,
-      onOpenClipInFocus,
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /^frame now$/i }));
-
-    expect(onFullscreenUpdateClip).toHaveBeenCalledWith('r1', { createProject: true, silent: true });
-    await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(99));
-  });
-
-  it('disables both Frame Now and Frame Later while a create is in flight', async () => {
-    let resolveCreate;
-    const onFullscreenUpdateClip = vi.fn(() => new Promise((resolve) => { resolveCreate = resolve; }));
-    renderView({
-      isEditMode: true,
-      hasAnnotateClips: true,
-      clipRegions: [selectedRegion],
-      annotateSelectedRegionId: 'r1',
-      onFullscreenUpdateClip,
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /^frame now$/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /^frame now$/i }).disabled).toBe(true);
-      expect(screen.getByRole('button', { name: /^frame later$/i }).disabled).toBe(true);
-    });
-
-    resolveCreate({ saveOk: true, projectId: 99 });
-    await waitFor(() => expect(screen.getByRole('button', { name: /^frame later$/i }).disabled).toBe(false));
-  });
-
-  it('Frame Later on a project-less play creates the project WITHOUT navigating to Framing', async () => {
-    const onFullscreenUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true, projectId: 99 }));
-    const onOpenClipInFocus = vi.fn();
-    renderView({
-      isEditMode: true,
-      hasAnnotateClips: true,
-      clipRegions: [selectedRegion],
-      annotateSelectedRegionId: 'r1',
-      onFullscreenUpdateClip,
-      onOpenClipInFocus,
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /^frame later$/i }));
-
-    await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledWith('r1', { createProject: true }));
-    expect(onOpenClipInFocus).not.toHaveBeenCalled();
-  });
-
   it('the single stage button on a play that already has a project just opens its current stage (no re-create)', () => {
     const onFullscreenUpdateClip = vi.fn();
     const onOpenClipInFocus = vi.fn();
@@ -247,9 +167,7 @@ describe('AnnotateModeView — play-selected CTA row (T10310/T10450)', () => {
 
     // No linked project row in the store -> getClipStage reads it as a fresh
     // draft, action 'focus' -- the button opens Focus directly, no create call.
-    // FOCUS-stage label is "Frame" (ANNOTATE.FRAME_THIS_CLIP, shortened from
-    // "Frame this clip" 2026-09-18, same day this test was written) -- distinct
-    // from "Frame Now"/"Frame Later" which only ever apply pre-project.
+    // FOCUS-stage label is "Frame" (ANNOTATE.FRAME_THIS_CLIP).
     fireEvent.click(screen.getByRole('button', { name: /^frame$/i }));
 
     expect(onFullscreenUpdateClip).not.toHaveBeenCalled();

@@ -1984,6 +1984,44 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   convention like `markPlayInFlightRef`)**: rating rows aren't disabled mid-write and `setRateGate(null)` is
   batched (`rateGateRef` only refreshes on render), so without it two quick picks both pass the
   `rateGateRef.current !== gate` check and fire `proceed()` twice (dup `finishAnnotation` POST / dup nav).
+- **Done -> "Make this a highlight now?" choice card (T11130, 2026-09-28, epic Highlight-First).**
+  Done on a play rated **Highlight (5)** that is **not yet a highlight** (`autoProjectId` empty) mode-swaps
+  the editor's edit strip / portrait strip IN PLACE for a gold `HighlightChoiceCard`
+  (`modes/annotate/components/HighlightChoiceCard.jsx`; T8600 mode-swap pattern, video stays visible).
+  Owned by `AnnotateContainer` as **`highlightChoice` (`null | {regionId}`) / `handleHighlightChoiceNow` /
+  `handleHighlightChoiceLater` / `handleHighlightChoiceDismiss`**, threaded through `AnnotateScreen` ->
+  `AnnotateModeView` -> each `AnnotateFullscreenOverlay` as `showHighlightChoice` (=
+  `highlightChoice.regionId === existingClip.id`) + the three handlers. The overlay early-returns the card
+  (before all layout branches) and its window keydown routes **Escape -> `onHighlightChoiceDismiss`** (the
+  ONLY no-save exit, M5; no backdrop exists — the card is in-flow).
+  - **Sequential with the rate gate, never both at once.** `handleOverlayClose`'s continuation is
+    `(pickedRating) => maybeOpenHighlightChoice(editingId, closeOverlay, pickedRating)`. An UNRATED play
+    still opens the rate gate first; `handleRateGatePick` now calls `gate.proceed(rating)` so a play just
+    rated 5 in the gate flows straight into the card. **`pickedRating` is passed EXPLICITLY** because
+    `clipRegionsRef` has not necessarily re-rendered to the new rating by the time the continuation runs
+    synchronously after the pick's awaits (a real ordering trap, pinned by the "rated Highlight in the
+    gate" test). The already-rated path passes no `pickedRating` and reads the stored value (fresh).
+  - **Make Highlight Now** = the Frame Now path exactly: `updateClipRegionWithSync(id, {createProject:true,
+    silent:true})`, `await awaitRegionWrites`, then `onOpenReelInFocus(projectId)`. **Back to Editing** =
+    same create (silent) but no nav — closes the editor (returns to marking plays) and fires the ONLY
+    confirmation toast via `announceReelCreated(pid, {message: ANNOTATE.HIGHLIGHT_MOVED_TO_CLIPS,
+    withAction:false})` ("Highlight moved to Clips so you can edit it later", no action button —
+    `announceReelCreated` gained `message`/`withAction` params; default callers unchanged). Synchronous
+    double-create guard: `highlightChoiceInFlightRef`. Tests: `AnnotateContainer.rateGate.test.jsx`
+    (T11130 describe) + `AnnotateFullscreenOverlay.highlightChoice.test.jsx`.
+  - **H8 (T11130): the editor's OWN stage CTA + first-clip "Keep marking plays" invitation are REMOVED**
+    from `AnnotateFullscreenOverlay` (all layouts) — the ONE surviving stage button lives on the main
+    Annotate screen (`AnnotateModeView`, `annotate-stage-cta`, `handleFrameNow`/`openExistingProjectStage`,
+    rendered only when `selectedRegion.autoProjectId`). The overlay's `getClipStage`/`linkedProject`/
+    `stageCta`/`keepMarkingCta`/`showFocusInvitation` and its `onOpenInFocus`/`onOpenInOverlay`/
+    `onAwaitWrites` consumption are gone. The **T10450 Frame Now / Frame Later create row** in
+    `AnnotateModeView` and `handleFrameLater` are removed too; `getClipStage` NO_PROJECT now returns
+    `{stage, label:null, action:null}` (no `createActions`). Removed `ANNOTATE` keys: `CREATE_CLIP`,
+    `CREATE_EDITABLE_CLIP`, `SAVE_PLAY_AND_CLIP`, `FRAME_NOW`, `FRAME_LATER`, `FRAME_LATER_HINT`,
+    `KEEP_MARKING_PLAYS`. Removed `playProgress.js` exports: `getPlayProgress`, `CLIP_BADGE`,
+    `CLIP_NUDGE_RATING` (badge nudge fully gone; `BADGE_STATE` + name helpers survive). Known-gap note:
+    the T11120 proof-verifier's flagged editor stageCta bypass is now MOOT (that button is deleted); the
+    main-screen stage CTA only renders for plays that already have a project.
 - **[SUPERSEDED by T11150 above — badges removed; kept for history] Play-progress badges are a PURE READ of editor state (T10410, 2026-09-18; rewritten through
   T10590, 2026-09-19 — five follow-up rounds the SAME day, all user-driven live-testing corrections).**
   The Edit play editor shows four badges — **named / rated / noted / clip** (T10460 reordered named
