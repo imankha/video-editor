@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, ListVideo } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
-import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
+import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay, RateThisPlayModal } from './annotate';
 import AngleSwitcherBadge from './annotate/AngleSwitcherBadge';
 import FixTimingStrip from './annotate/FixTimingStrip';
 import AddFootageButton from './annotate/AddFootageButton';
@@ -105,6 +105,10 @@ export function AnnotateModeView({
   // Fullscreen overlay handlers
   onFullscreenUpdateClip,
   onOverlayClose,
+  // T11120: "Rate this play" gate — state + handlers owned by AnnotateContainer.
+  rateGate,
+  onRateGatePick,
+  onRateGateDismiss,
   // T10610 § D.3: deletes the play the editor is open on.
   onDeletePlayFromEditor,
   // T10610 § C.4: awaited before navigating into Framing/Spotlight, both from
@@ -655,6 +659,20 @@ export function AnnotateModeView({
   // --- ANNOTATING MODE (default) ---
   return (
     <>
+      {/* T11120: the "Rate this play" gate. Portaled to document.body at
+          z-[200], so it sits above the mobile fullscreen editor (z-[100])
+          regardless of where it lives in this tree. Opens only for an unrated
+          play the user is trying to leave; picking a row persists the rating
+          and continues the exit. */}
+      {rateGate && (
+        <RateThisPlayModal
+          isMobile={isMobile}
+          rating={existingClip?.rating ?? null}
+          onPick={onRateGatePick}
+          onDismiss={onRateGateDismiss}
+        />
+      )}
+
       {/* Video Metadata (resolution/format/size) moved 2026-09-18 (user request)
           to a de-emphasized footer below the bottom CTA (Review plays/Share
           plays) -- see the end of this component. */}

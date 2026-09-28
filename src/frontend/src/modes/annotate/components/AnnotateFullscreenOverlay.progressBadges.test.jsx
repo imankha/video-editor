@@ -71,7 +71,7 @@ describe('RatingPill — unrated state (no "Required", no amber-dashed to-do)', 
     expect(pill.className).not.toMatch(/amber/);
   });
 
-  it('opening the picker shows 5 rows best-first, with no chess notation text anywhere', () => {
+  it('opening the picker shows 5 rows best-first, with meanings and no chess notation', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating: null }} />);
     fireEvent.click(screen.getByTestId('rating-pill'));
     const group = screen.getByRole('radiogroup', { name: "Rate your athlete's play" });
@@ -81,7 +81,14 @@ describe('RatingPill — unrated state (no "Required", no amber-dashed to-do)', 
       '2 stars - Technical Lapse', '1 star - Mental Lapse',
     ]);
     const pickerText = screen.getByTestId('rating-picker').textContent;
-    for (const glyph of NOTATION_GLYPHS) {
+    // T11120: the picker now renders the shared meanings list, so each row
+    // carries a one-line meaning (owner copy). Highlight's approved line is
+    // "Brilliant Play! Everyone should see it." — that '!' is prose punctuation,
+    // NOT the chess glyph. So the bare '!'/'?' single-char forms can no longer be
+    // asserted absent here; the multi-char chess-notation forms (and the bare '?'
+    // of rating 2, which no meaning contains) still must be.
+    expect(pickerText).toContain('Brilliant Play! Everyone should see it.');
+    for (const glyph of ['??', '!?', '!!', '?']) {
       expect(pickerText).not.toContain(glyph);
     }
   });

@@ -40,6 +40,11 @@ export const ANNOTATE = {
   PLAY_NAME: 'Play name',
   RENAME_PLAY: 'Rename play',
   RATE_PLAY: 'Rate this play',
+  // T11120: the "Rate this play" gate modal. Title reuses RATE_PLAY. Subtitle
+  // and the sole no-save exit ("Keep editing" = M6; Escape does the same) are
+  // owner-approved copy (2026-09-24). Never closes on backdrop.
+  RATE_GATE_SUBTITLE: 'Pick one to finish.',
+  RATE_GATE_KEEP_EDITING: 'Keep editing',
   // T11150: shown when a play has produced a clip (existingClip.autoProjectId),
   // replacing the old T10410 progress-badges row's clip indicator.
   HIGHLIGHT_MADE: 'Highlight made',

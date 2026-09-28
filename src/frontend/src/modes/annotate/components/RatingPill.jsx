@@ -2,8 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Star, X } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
 import { RATING_ADJECTIVES, getRatingLabel } from '../../../components/shared/clipConstants';
-
-const RATING_VALUES = [5, 4, 3, 2, 1];
+import { RatingMeaningsList } from './RatingMeaningsList';
 
 /**
  * RatingPill (T11150) — the play editor's rating control, replacing the old
@@ -14,10 +13,11 @@ const RATING_VALUES = [5, 4, 3, 2, 1];
  * (T11110's RATING_BADGE_COLORS[5]) at a 5-star rating specifically — reusing
  * the shipped gold, not inventing a new color.
  *
- * The popup ("meanings list") is adapted from the old RatingBadge: five rows,
- * best-first (5 -> 1), each showing the amber star row + RATING_ADJECTIVES.
- * NO chess RATING_NOTATION anywhere on the pill or its rows (dropped per the
- * H12A=A2 ruling). Mobile renders a bottom sheet (explicit X, no
+ * The popup is the shared RatingMeaningsList (T11120): five rows, best-first
+ * (5 -> 1), each an amber star strip + RATING_ADJECTIVES + a one-line meaning —
+ * the SAME list the "Rate this play" gate modal renders (owner ruling: one
+ * component). NO chess RATING_NOTATION anywhere (dropped per the H12A=A2
+ * ruling). Mobile renders a bottom sheet (explicit X, no
  * backdrop-close — the standing project rule); desktop an anchored dropdown.
  * The Escape handler lives on `document` with `stopPropagation()` so it
  * doesn't also trip the editor's own window-level Escape handler on the same
@@ -97,7 +97,7 @@ export function RatingPill({ rating, onRatingChange, myAthlete, isMobile }) {
             className={
               isMobile
                 ? 'w-full pb-[max(0.5rem,env(safe-area-inset-bottom))] rounded-t-2xl p-2 border border-gray-700 bg-gray-800 shadow-xl'
-                : 'w-auto min-w-[190px] pb-2 rounded-xl p-2 border border-gray-700 bg-gray-800 shadow-xl'
+                : 'w-auto min-w-[260px] max-w-[320px] pb-2 rounded-xl p-2 border border-gray-700 bg-gray-800 shadow-xl'
             }
           >
             {isMobile ? (
@@ -118,40 +118,14 @@ export function RatingPill({ rating, onRatingChange, myAthlete, isMobile }) {
             ) : (
               <div id={headingId} className="px-1.5 pt-1 pb-2.5 text-lg font-bold text-white">{pickerTitle}</div>
             )}
-            <div role="radiogroup" aria-labelledby={headingId} className="flex flex-col gap-1">
-              {RATING_VALUES.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={rating === value}
-                  aria-label={`${value} star${value > 1 ? 's' : ''} - ${RATING_ADJECTIVES[value]}`}
-                  onClick={() => {
-                    onRatingChange(value);
-                    setOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm whitespace-nowrap
-                              coarse-pointer:min-h-[44px] coarse-pointer:py-3 transition-colors ${
-                    rating === value
-                      ? 'bg-gray-700 text-white'
-                      : 'text-gray-300 hover:bg-gray-700/70 hover:text-white'
-                  }`}
-                >
-                  <span className="flex items-center gap-0.5 shrink-0">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <Star
-                        key={i}
-                        size={14}
-                        fill={i <= value ? '#fbbf24' : 'transparent'}
-                        color={i <= value ? '#fbbf24' : '#6b7280'}
-                        strokeWidth={1.5}
-                      />
-                    ))}
-                  </span>
-                  {RATING_ADJECTIVES[value]}
-                </button>
-              ))}
-            </div>
+            <RatingMeaningsList
+              rating={rating}
+              headingId={headingId}
+              onPick={(value) => {
+                onRatingChange(value);
+                setOpen(false);
+              }}
+            />
           </div>
         </div>
       )}

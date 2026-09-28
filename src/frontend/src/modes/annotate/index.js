@@ -11,6 +11,7 @@ export { default as ClipDetailsEditor } from './components/ClipDetailsEditor';
 export { default as ClipRegionLayer } from './layers/ClipRegionLayer';
 export { default as AnnotateControls } from './components/AnnotateControls';
 export { default as AnnotateFullscreenOverlay } from './components/AnnotateFullscreenOverlay';
+export { RateThisPlayModal } from './components/RateThisPlayModal';
 export { default as PlaybackControls } from './components/PlaybackControls';
 export { useVirtualTimeline, buildVirtualTimeline } from './hooks/useVirtualTimeline';
 export { useAnnotationPlayback } from './hooks/useAnnotationPlayback';
