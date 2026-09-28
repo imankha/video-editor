@@ -1449,7 +1449,7 @@ def _compute_reel_counts(cursor, game_ids: list) -> dict:
     Multi-game mixes and game-less reels count for NO game.
 
     Same three filters GET /api/collections/summary uses (collections.py): latest
-    version per source, published only, teammate-only single-clip reels excluded.
+    version per source, published only, shared-in single-clip reels excluded.
     ONE query for the whole list, decoded in Python (no N+1).
     """
     from app.queries import exclude_shared_in_reels_clause, latest_final_videos_subquery
@@ -1997,8 +1997,9 @@ async def get_brilliant_clips(game_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         rows = cursor.execute(
-            f"""SELECT fv.id, fv.name, fv.duration
+            f"""SELECT fv.id, fv.name, fv.duration, rc.my_athlete
                 FROM final_videos fv
+                LEFT JOIN raw_clips rc ON rc.id = fv.source_clip_id
                 WHERE fv.source_type = 'brilliant_clip'
                   AND fv.game_id = ?
                   AND fv.published_at IS NOT NULL
@@ -2009,7 +2010,12 @@ async def get_brilliant_clips(game_id: int):
         ).fetchall()
 
     clips = [
-        {"id": row["id"], "name": row["name"] or f"Clip {row['id']}", "duration": row["duration"]}
+        {
+            "id": row["id"],
+            "name": row["name"] or f"Clip {row['id']}",
+            "duration": row["duration"],
+            "my_athlete": row["my_athlete"] != 0,
+        }
         for row in rows
     ]
     return {"clips": clips}

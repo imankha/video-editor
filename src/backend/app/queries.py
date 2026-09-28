@@ -184,3 +184,18 @@ def exclude_shared_in_reels_clause(fv_alias: str = "fv") -> str:
               AND rc.shared_by IS NOT NULL
         )
     """.strip()
+
+
+def exclude_team_highlights_from_rank_clause(fv_alias: str = "fv") -> str:
+    """Keep Team-layer highlights out of the athlete's ranking pool.
+
+    Team highlights remain visible everywhere else; ranking is specifically a
+    comparison of the athlete's own plays. Legacy NULL is My Athlete.
+    """
+    return f"""
+        AND NOT EXISTS (
+            SELECT 1 FROM raw_clips rank_rc
+            WHERE rank_rc.id = {fv_alias}.source_clip_id
+              AND rank_rc.my_athlete = 0
+        )
+    """.strip()

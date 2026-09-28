@@ -2247,6 +2247,10 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   viewed-duration high-water when viewed/duration < 0.95 (annotateVideoLoad.js:90-105).
 - **Team / My Athlete layer (T5700).** `raw_clips.my_athlete` (existing bit, no schema change) is
   now a visible two-value layer: `1`/`NULL` → My Athlete, `0` → Team. Legacy-NULL rule
+  does not limit highlight creation: Team plays can become highlights through the same Done /
+  Make Highlight Now flow. Downstream, Team highlights stay out of athlete rankings, omit the
+  athlete intro card, render under a Team heading in the recap highlight rail, and receive the
+  5-star-or-4-star auto-export fallback independently from the My Athlete layer (T11160).
   `region.my_athlete ?? true` must be applied at every read site (`LayerSegmentedControl`,
   `ClipListItem`'s `LayerChip` — **marks ONLY the Team layer** (amber `Users` icon, no visible
   text); My Athlete is the unmarked default, so an unmarked row MEANS My Athlete (follow-up UX
