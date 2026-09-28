@@ -141,6 +141,23 @@ def _seed_published_final_for_collection(db_path, *, game_ids=None, duration=30.
 # ===========================================================================
 
 class TestSingleReelIntroPlayback:
+    def test_team_highlight_never_resolves_an_intro(self, client, tmp_path):
+        db_path = _db_path(tmp_path)
+        card_id = _seed_card(db_path, "Hero Card")
+        fv_id = _seed_published_final(db_path, intro_card_id=card_id, duration=30.0)
+        conn = _connect(db_path)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO raw_clips (filename, my_athlete) VALUES ('team.mp4', 0)")
+        clip_id = cur.lastrowid
+        cur.execute("UPDATE final_videos SET source_clip_id = ? WHERE id = ?", (clip_id, fv_id))
+        conn.commit()
+        conn.close()
+
+        resp = client.get(f"/api/downloads/{fv_id}/intro-playback", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert resp.json() == {"intro": None}
+
     def test_happy_path_returns_full_playback_payload(self, client, tmp_path):
         db_path = _db_path(tmp_path)
         card_id = _seed_card(db_path, "Hero Card")

@@ -137,8 +137,8 @@ def _read_profile_misc() -> dict:
 
         # Downloads count -- counts actual gallery reels, so it matches the
         # gallery list (list_downloads / get_download_count). A single-clip reel
-        # built from a teammate clip (my_athlete=0) is not the user's own reel
-        # and is excluded everywhere the gallery is surfaced (bug 22).
+        # shared in from another athlete is excluded (bug 22). An own Team-layer
+        # highlight remains the user's reel and is counted normally (T10070).
         cursor.execute(f"""
             SELECT
                 COUNT(*) as count,

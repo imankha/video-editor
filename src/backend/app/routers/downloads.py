@@ -325,7 +325,9 @@ async def list_downloads(
                 fv.quality_score,
                 fv.clip_count,
                 fv.clip_game_start_time,
-                fv.match_count{intro_select}
+                fv.match_count,
+                (SELECT rc.my_athlete FROM raw_clips rc WHERE rc.id = fv.source_clip_id)
+                    AS source_my_athlete{intro_select}
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
             AND fv.published_at IS NOT NULL{extra}
@@ -573,7 +575,8 @@ async def list_downloads(
             # duration -- kept unused as `duration` above for the tile payload.
             raw_intro_card_id = row['intro_card_id'] if _has_intro else None
             resolved_intro_id = (
-                resolve_intro_card_id(raw_intro_card_id) if _has_intro else None
+                resolve_intro_card_id(raw_intro_card_id)
+                if _has_intro and row['source_my_athlete'] != 0 else None
             )
             intro_card_info = (
                 intro_card_map.get(resolved_intro_id) if resolved_intro_id is not None else None
@@ -711,7 +714,9 @@ async def download_file(download_id: int):
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT fv.filename, fv.name as project_name, fv.intro_card_id, fv.duration
+            SELECT fv.filename, fv.name as project_name, fv.intro_card_id, fv.duration,
+                   (SELECT rc.my_athlete FROM raw_clips rc WHERE rc.id = fv.source_clip_id)
+                       AS source_my_athlete
             FROM final_videos fv
             WHERE fv.id = ?
         """, (download_id,))
@@ -740,6 +745,8 @@ async def download_file(download_id: int):
             # Resolves its OWN read-only profile connection (never the ambient
             # `conn` above -- that closes when this `with` block exits, well
             # before a StreamingResponse's generator body actually runs).
+            if row['source_my_athlete'] == 0:
+                return None
             from app.services.intro_egress import resolve_intro_for_reel
             return resolve_intro_for_reel(
                 user_id, profile_id, intro_card_id, reel_duration, download_id,
@@ -907,7 +914,10 @@ async def get_download_intro_playback(download_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT intro_card_id, duration FROM final_videos WHERE id = ?",
+            """SELECT fv.intro_card_id, fv.duration,
+                      (SELECT rc.my_athlete FROM raw_clips rc WHERE rc.id = fv.source_clip_id)
+                          AS source_my_athlete
+               FROM final_videos fv WHERE fv.id = ?""",
             (download_id,),
         )
         row = cursor.fetchone()
@@ -918,11 +928,14 @@ async def get_download_intro_playback(download_id: int):
         user_id = get_current_user_id()
         profile_id = get_current_profile_id()
 
-        from app.services.intro_egress import resolve_intro_for_reel
-        intro = resolve_intro_for_reel(
-            user_id, profile_id, row['intro_card_id'], row['duration'], download_id,
-            mode="playback", profile_conn=conn,
-        )
+        if row['source_my_athlete'] == 0:
+            intro = None
+        else:
+            from app.services.intro_egress import resolve_intro_for_reel
+            intro = resolve_intro_for_reel(
+                user_id, profile_id, row['intro_card_id'], row['duration'], download_id,
+                mode="playback", profile_conn=conn,
+            )
 
     return {"intro": intro}
 

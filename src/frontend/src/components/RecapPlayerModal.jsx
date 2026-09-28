@@ -352,7 +352,10 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
     tags: [],
     notes: '',
     recap_end: clip.duration,
+    my_athlete: clip.my_athlete,
   }));
+  const athleteHighlightClips = highlightsSidebarClips.filter(clip => clip.my_athlete !== false);
+  const teamHighlightClips = highlightsSidebarClips.filter(clip => clip.my_athlete === false);
 
   // T5710: Team Recap clip-rail filter chips by tagged player (epic decision 7).
   const teammateNames = effectiveTab === 'team'
@@ -688,11 +691,30 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                   </div>
                 </div>
                 <div className={`flex-1 overflow-y-auto min-h-0 ${clipsCollapsed ? 'hidden sm:block' : ''}`}>
-                  <RecapClipsSidebar
-                    clips={highlightsSidebarClips}
-                    activeClipId={highlights.activeClipId}
-                    onSeekToClip={highlights.seekToClip}
-                  />
+                  {athleteHighlightClips.length > 0 && (
+                    <section aria-label="My Athlete highlights">
+                      <h3 className="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        My Athlete
+                      </h3>
+                      <RecapClipsSidebar
+                        clips={athleteHighlightClips}
+                        activeClipId={highlights.activeClipId}
+                        onSeekToClip={highlights.seekToClip}
+                      />
+                    </section>
+                  )}
+                  {teamHighlightClips.length > 0 && (
+                    <section aria-label="Team highlights">
+                      <h3 className="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        Team
+                      </h3>
+                      <RecapClipsSidebar
+                        clips={teamHighlightClips}
+                        activeClipId={highlights.activeClipId}
+                        onSeekToClip={highlights.seekToClip}
+                      />
+                    </section>
+                  )}
                 </div>
               </div>
             )}

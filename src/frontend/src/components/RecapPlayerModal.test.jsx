@@ -240,6 +240,26 @@ describe('RecapPlayerModal - Share Button', () => {
   });
 });
 
+describe('T11160 highlight rail layers', () => {
+  it('groups highlight exports under My Athlete and Team headings', async () => {
+    globalThis.fetch = mockFetch(RECAP_DATA_WITH_CLIPS, [
+      { id: 81, name: 'Athlete goal', duration: 8, my_athlete: true },
+      { id: 82, name: 'Team save', duration: 7, my_athlete: false },
+    ]);
+
+    render(
+      <RecapPlayerModal
+        game={{ id: 42, name: 'Big Game' }}
+        initialTab="highlights"
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByRole('region', { name: 'My Athlete highlights' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Team highlights' })).toBeTruthy();
+  });
+});
+
 describe('RecapPlayerModal - expired game (T3970)', () => {
   beforeEach(() => {
     vi.clearAllMocks();

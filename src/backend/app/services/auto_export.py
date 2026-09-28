@@ -161,9 +161,7 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
             logger.info(f"[AutoExport] game={game_id} no clips, skipped in {time.perf_counter() - t0:.2f}s")
             return status
 
-        brilliant_clips = [c for c in annotated_clips if c['rating'] == 5]
-        if not brilliant_clips:
-            brilliant_clips = [c for c in annotated_clips if c['rating'] == 4]
+        brilliant_clips = select_highlights_for_auto_export(annotated_clips)
         logger.info(f"[AutoExport] game={game_id} exporting {len(brilliant_clips)} brilliant clips")
 
         for clip in brilliant_clips:
@@ -292,6 +290,19 @@ def clip_matches_layer(my_athlete, layer: str) -> bool:
     if layer == RecapLayer.TEAM:
         return my_athlete == 0
     return my_athlete == 1 or my_athlete is None
+
+
+def select_highlights_for_auto_export(annotated_clips: list[dict]) -> list[dict]:
+    """Select every 5-star play, or 4-star fallback plays, independently per layer."""
+    selected = []
+    for layer in (RecapLayer.ATHLETE, RecapLayer.TEAM):
+        layer_clips = [
+            clip for clip in annotated_clips
+            if clip_matches_layer(clip.get('my_athlete'), layer)
+        ]
+        five_star = [clip for clip in layer_clips if clip['rating'] == 5]
+        selected.extend(five_star or [clip for clip in layer_clips if clip['rating'] == 4])
+    return selected
 
 
 class ArtifactVerdict(str, Enum):
