@@ -29,14 +29,19 @@ export function RateThisPlayModal({ onPick, onDismiss, isMobile, rating = null }
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key !== 'Escape') return;
+      // While the gate is open, Escape means ONLY "dismiss the gate". Capture
+      // phase + stopImmediatePropagation makes that win order-INDEPENDENTLY over
+      // every other Escape listener — the editor's window handler AND the
+      // container's fullscreen-exit `document` handler (a plain stopPropagation
+      // on `document` would NOT stop that same-target sibling; only capture +
+      // stopImmediate does). So dismissing can never also re-toggle fullscreen
+      // or re-stash a stale continuation, regardless of listener mount order.
+      e.stopImmediatePropagation();
       e.stopPropagation();
       onDismiss();
     };
-    // `document` (not `window`) + stopPropagation, so this Escape doesn't also
-    // reach the editor's window-level Escape or the container's fullscreen-exit
-    // handler on the same keypress.
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [onDismiss]);
 
   return createPortal(
