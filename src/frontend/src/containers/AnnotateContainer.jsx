@@ -31,7 +31,7 @@ import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
 import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInput';
 import { generateClipName } from '../utils/clipDisplayName';
-import { SECTION_NAMES, MODE_NAMES } from '../config/displayNames';
+import { SECTION_NAMES, MODE_NAMES, ANNOTATE } from '../config/displayNames';
 import { setPendingGame } from '../utils/pendingNavigation';
 import { beginGameVideoLoad, computeResumePosition, seekVideoElementWhenReady } from './annotateVideoLoad';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
@@ -1461,7 +1461,7 @@ export function AnnotateContainer({
         // games list, and refresh that list so the ghost game drops off.
         useGamesDataStore.getState().fetchGames();
         toast.error('This game no longer exists', {
-          message: "Your clip couldn't be saved because this game was removed. Your work is still on screen — head back to your games to continue.",
+          message: ANNOTATE.GHOST_GAME_SAVE_MESSAGE,
           duration: 0,
           dedupKey: 'annotate-ghost-game',
           action: {
@@ -2148,8 +2148,8 @@ export function AnnotateContainer({
         // No upload could ever produce a game id (never started, or failed before
         // creating the record). Fail LOUDLY — never silently drop visible clips.
         console.error('[AnnotateContainer] No game available - imported clips could not be saved to the library');
-        toast.error('Clips not saved', {
-          message: "Your imported clips couldn't be saved because the game isn't ready. Please try importing again.",
+        toast.error(ANNOTATE.IMPORT_FAILED_TITLE, {
+          message: ANNOTATE.IMPORT_FAILED_MESSAGE,
         });
         return;
       }

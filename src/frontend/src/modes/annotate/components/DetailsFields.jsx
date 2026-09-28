@@ -14,8 +14,9 @@ import { onTextFieldKeyDown } from '../textFieldCommit';
  * Rating does NOT live here. T11150: it is the `RatingPill` on the Name +
  * Rating tier (a labeled pill that opens the meanings-list picker), replacing
  * the T10410 rated badge (which itself replaced the duplicate star row this
- * component once carried). The landscape-inline layout keeps its own bespoke
- * `StarRating` row directly in `AnnotateFullscreenOverlay.jsx`, not here.
+ * component once carried). EVERY layout (incl. landscape-inline, redesigned in
+ * T11150) now uses that RatingPill — there is no bespoke `StarRating` row left
+ * in `AnnotateFullscreenOverlay.jsx`.
  *
  * The no_sport prompt is the DE-AMBERED NoSportTagWarning (a neutral
  * "pick your sport for tags" nudge, not a warning). Notes uses the stable

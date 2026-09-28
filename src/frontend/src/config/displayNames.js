@@ -43,6 +43,11 @@ export const ANNOTATE = {
   // T11150: shown when a play has produced a clip (existingClip.autoProjectId),
   // replacing the old T10410 progress-badges row's clip indicator.
   HIGHLIGHT_MADE: 'Highlight made',
+  // T11150: error-path toasts (AnnotateContainer) — single-sourced so the
+  // "no clip wording in Annotate" sweep is greppable/testable, not buried inline.
+  GHOST_GAME_SAVE_MESSAGE: "Your play couldn't be saved because this game was removed. Your work is still on screen — head back to your games to continue.",
+  IMPORT_FAILED_TITLE: 'Plays not saved',
+  IMPORT_FAILED_MESSAGE: "Your imported plays couldn't be saved because the game isn't ready. Please try importing again.",
   // T10610: the play editor's sole close affordance now that there is no
   // Save/Update button — commits any dirty text field first (closeWithCommit),
   // then closes. Nothing is ever discarded.

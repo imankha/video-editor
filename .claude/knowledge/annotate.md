@@ -1928,7 +1928,7 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   text nodes — the T11150 no-clip test asserts all three attribute kinds across all 5 layouts incl.
   landscape): layer `disabledReason` "imported clips"→"imported plays", `ClipScrubRegion` "Preview
   clip"→"Preview play", `AnnotateTimeline` "select clips layer / navigate clips"→"...plays..." and
-  "sideline clip"→"sideline play", `ClipRegionLayer` marker aria "Clip N"→"Play N" and "angle
+  "sideline clip"→"sideline video" (footage sense, matching Extra-video), `ClipRegionLayer` marker aria "Clip N"→"Play N" and "angle
   clip"→"angle play", `NotesOverlay` "Clip created…"→"Highlight made, not published yet" +
   "Published clip"→"Published highlight", `videoDisplayName` angle-source fallback "Extra clip
   N"→"Extra video N" (footage sense, not "play"), `AddFootageButton` "a clip you got later"→"footage

@@ -306,6 +306,24 @@ export function AnnotateFullscreenOverlay({
     maybeRecordRatedAndTagged(rating, newTags);
   };
 
+  // T11150: ONE shared category(layer)/teammates write path, mirroring
+  // handleRatingChange — the 5 render sites (strip, formBody, landscape-inline,
+  // portrait-strip, inline) call these instead of inlining the logic (was pasted
+  // 5x). T5725: switching TO My Athlete clears teammate tags in the SAME gesture
+  // (teammates are Team-layer-only). layerDisabledReason is likewise single-sourced.
+  const handleLayerChange = (mine) => {
+    setMyAthlete(mine);
+    if (mine) setTaggedTeammates([]);
+    onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
+  };
+  const handleTeammatesChange = (next) => {
+    setTaggedTeammates(next);
+    onUpdateClip(existingClip.id, { tagged_teammates: next });
+  };
+  const layerDisabledReason = existingClip.shared_by
+    ? `Shared by ${existingClip.shared_by} — imported plays stay on the Team layer`
+    : '';
+
   const handleNameChange = (e) => {
     setClipName(e.target.value); // local echo only — commitName below writes
   };
@@ -462,15 +480,8 @@ export function AnnotateFullscreenOverlay({
                 size={isMobile ? 'md' : 'sm'}
                 value={myAthlete}
                 disabled={!!existingClip.shared_by}
-                disabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported plays stay on the Team layer` : ''}
-                onChange={(mine) => {
-                  setMyAthlete(mine);
-                  // T5725: switching TO My Athlete clears teammate tags in the
-                  // SAME gesture — teammates are Team-layer-only, so a My
-                  // Athlete clip must never carry them.
-                  if (mine) setTaggedTeammates([]);
-                  onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
-                }}
+                disabledReason={layerDisabledReason}
+                onChange={handleLayerChange}
                 className="w-full"
               />
             </div>
@@ -479,7 +490,7 @@ export function AnnotateFullscreenOverlay({
                 <label className="block text-gray-400 text-sm mb-2">Teammates</label>
                 <TeammateTagInput
                   teammates={taggedTeammates}
-                  onChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
+                  onChange={handleTeammatesChange}
                   suggestions={teammateSuggestions}
                 />
               </div>
@@ -681,13 +692,9 @@ export function AnnotateFullscreenOverlay({
                 <LayerSegmentedControl
                   size="sm"
                   value={myAthlete}
-                  onChange={(mine) => {
-                    setMyAthlete(mine);
-                    if (mine) setTaggedTeammates([]);
-                    onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
-                  }}
+                  onChange={handleLayerChange}
                   disabled={!!existingClip.shared_by}
-                  disabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported plays stay on the Team layer` : ''}
+                  disabledReason={layerDisabledReason}
                   className="w-full"
                 />
               </div>
@@ -696,7 +703,7 @@ export function AnnotateFullscreenOverlay({
                   <label className="block text-gray-400 text-sm mb-2">Teammates</label>
                   <TeammateTagInput
                     teammates={taggedTeammates}
-                    onChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
+                    onChange={handleTeammatesChange}
                     suggestions={teammateSuggestions}
                   />
                 </div>
@@ -831,15 +838,11 @@ export function AnnotateFullscreenOverlay({
             storedNotes={existingClip.notes}
             onDone={() => setDetailsOpen(false)}
             myAthlete={myAthlete}
-            onLayerChange={(mine) => {
-              setMyAthlete(mine);
-              if (mine) setTaggedTeammates([]);
-              onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
-            }}
+            onLayerChange={handleLayerChange}
             layerDisabled={!!existingClip.shared_by}
-            layerDisabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported plays stay on the Team layer` : ''}
+            layerDisabledReason={layerDisabledReason}
             taggedTeammates={taggedTeammates}
-            onTeammatesChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
+            onTeammatesChange={handleTeammatesChange}
             teammateSuggestions={teammateSuggestions}
           />
         )}
@@ -858,13 +861,13 @@ export function AnnotateFullscreenOverlay({
     // bites `fixed`/`absolute` descendants).
     //
     // Deliberately its OWN branch, not a generalised landscape-inline: the two
-    // differ substantially (landscape is height-starved — rating+tags inline,
-    // NO disclosure, NO name input; portrait has room for a name input + a
-    // details disclosure). Keeping them separate leaves landscape-inline
-    // byte-identical (Reviewer checklist) while every PERSISTENCE handler and
-    // shared building block (ClipScrubRegion compact, RatingPill's own popup,
-    // stageCta, AddDetailsPopup, DeletePlayButton) is reused from the
-    // component scope above — no copied write logic.
+    // still differ in spacing/rows (landscape packs name+rating+Details onto one
+    // compact row for its height-starved viewport, portrait uses two rows). But
+    // both now follow the SAME hierarchy (time → name+rating → Details) after the
+    // T11150 landscape redesign, and BOTH reuse the component-scope write handlers
+    // (handleRatingChange, handleLayerChange, handleTeammatesChange) + shared
+    // building blocks (ClipScrubRegion compact, RatingPill's own popup, stageCta,
+    // AddDetailsPopup, DeletePlayButton) — no copied write logic in any layout.
     //
     // Layout decision (360px, the narrowest supported width): category
     // (My athlete / Team), teammates and Delete play live BEHIND the disclosure,
@@ -960,17 +963,11 @@ export function AnnotateFullscreenOverlay({
             storedNotes={existingClip.notes}
             onDone={() => setDetailsOpen(false)}
             myAthlete={myAthlete}
-            onLayerChange={(mine) => {
-              setMyAthlete(mine);
-              // T5725: switching TO My Athlete clears teammate tags in the SAME
-              // gesture (teammates are Team-layer-only).
-              if (mine) setTaggedTeammates([]);
-              onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
-            }}
+            onLayerChange={handleLayerChange}
             layerDisabled={!!existingClip.shared_by}
-            layerDisabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported plays stay on the Team layer` : ''}
+            layerDisabledReason={layerDisabledReason}
             taggedTeammates={taggedTeammates}
-            onTeammatesChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
+            onTeammatesChange={handleTeammatesChange}
             teammateSuggestions={teammateSuggestions}
             onDelete={() => onDeleteClip(existingClip.id)}
           />
@@ -1032,15 +1029,11 @@ export function AnnotateFullscreenOverlay({
             storedNotes={existingClip.notes}
             onDone={() => setDetailsOpen(false)}
             myAthlete={myAthlete}
-            onLayerChange={(mine) => {
-              setMyAthlete(mine);
-              if (mine) setTaggedTeammates([]);
-              onUpdateClip(existingClip.id, mine ? { my_athlete: true, tagged_teammates: [] } : { my_athlete: false });
-            }}
+            onLayerChange={handleLayerChange}
             layerDisabled={!!existingClip.shared_by}
-            layerDisabledReason={existingClip.shared_by ? `Shared by ${existingClip.shared_by} — imported plays stay on the Team layer` : ''}
+            layerDisabledReason={layerDisabledReason}
             taggedTeammates={taggedTeammates}
-            onTeammatesChange={(next) => { setTaggedTeammates(next); onUpdateClip(existingClip.id, { tagged_teammates: next }); }}
+            onTeammatesChange={handleTeammatesChange}
             teammateSuggestions={teammateSuggestions}
           />
         )}

@@ -172,3 +172,42 @@ describe('AnnotateFullscreenOverlay — Teammates in the desktop strip Details (
     expect(onUpdateClip).toHaveBeenCalledWith('c1', { my_athlete: true, tagged_teammates: [] });
   });
 });
+
+// T11150: the category(layer)/teammates writes are now ONE shared pair of
+// handlers (handleLayerChange/handleTeammatesChange) called from all 5 layouts.
+// The landscape-inline + inline (mobile-fullscreen) call sites had NO coverage
+// for these writes before this task; pin them so all 5 sites are covered.
+describe('AnnotateFullscreenOverlay — category/teammates writes via the mobile AddDetailsPopup (T11150)', () => {
+  for (const layout of ['landscape-inline', 'inline']) {
+    it(`${layout}: layer switch to My Athlete clears teammates + persists in one gesture`, () => {
+      mockViewport(true);
+      const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
+      render(
+        <AnnotateFullscreenOverlay
+          {...baseProps({ onUpdateClip, existingClip: { ...baseClip, my_athlete: false, tagged_teammates: ['Alex'] } })}
+          layout={layout}
+        />
+      );
+      openDetails(); // opens the full-screen AddDetailsPopup for both layouts
+      expect(screen.getByText('Alex')).toBeTruthy();
+      fireEvent.click(screen.getByRole('radio', { name: 'My athlete' }));
+      expect(onUpdateClip).toHaveBeenCalledWith('c1', { my_athlete: true, tagged_teammates: [] });
+    });
+
+    it(`${layout}: adding a teammate (Enter) persists the full array via onUpdateClip`, () => {
+      mockViewport(true);
+      const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
+      render(
+        <AnnotateFullscreenOverlay
+          {...baseProps({ onUpdateClip, existingClip: { ...baseClip, my_athlete: false, tagged_teammates: [] } })}
+          layout={layout}
+        />
+      );
+      openDetails();
+      const input = screen.getByPlaceholderText('Tag a teammate...');
+      fireEvent.change(input, { target: { value: 'Alex' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(onUpdateClip).toHaveBeenCalledWith('c1', { tagged_teammates: ['Alex'] });
+    });
+  }
+});
