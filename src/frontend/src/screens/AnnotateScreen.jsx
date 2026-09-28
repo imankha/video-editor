@@ -185,13 +185,28 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     if (playhead != null) saveLastPlayhead(gameIdRef.current, playhead);
   }, [finishAnnotation, saveLastPlayhead, handleGhostGame]);
 
-  const handleBackToProjects = useCallback(() => {
+  const doBackToProjects = useCallback(() => {
     persistAnnotateProgress();
     // T1550: Hint ProjectManager to open on the Games tab when coming from Annotate
     sessionStorage.setItem('projectManagerTab', 'games');
     onClearSelection?.();  // Clear App.jsx's selected project (from Framing → Annotate navigation)
     setEditorMode('project-manager');
   }, [persistAnnotateProgress, onClearSelection, setEditorMode]);
+
+  // T11120: Home / back / breadcrumb (UnifiedHeader onHomeClick) is the REAL
+  // "go Home" gesture — ModeSwitcher never emits 'project-manager', so the
+  // branch inside handleAnnotateModeChange never sees it. Gate it here on an
+  // unrated play (same annotateRef guard as the mode-bar path), continuing to
+  // project-manager once a rating is picked.
+  const handleBackToProjects = useCallback(() => {
+    const a = annotateRef.current;
+    const editingId = a && a.showAnnotateOverlay ? a.annotateSelectedRegionId : null;
+    if (editingId && a?.guardRateThenExit) {
+      a.guardRateThenExit(editingId, doBackToProjects);
+      return;
+    }
+    doBackToProjects();
+  }, [doBackToProjects]);
 
   // T1550: Unified mode change handler — fires finishAnnotation before delegating
   // T11120: leaving Annotate via the mode bar / Home while editing an UNRATED
@@ -202,7 +217,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const handleAnnotateModeChange = useCallback((newMode) => {
     const proceed = () => {
       if (newMode === 'project-manager') {
-        handleBackToProjects();
+        // proceed() already ran past the gate — call the raw nav, not the
+        // gated wrapper, to avoid a redundant re-guard.
+        doBackToProjects();
         return;
       }
       persistAnnotateProgress();
@@ -225,7 +242,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       return;
     }
     proceed();
-  }, [handleBackToProjects, persistAnnotateProgress, selectProject, onModeChange]);
+  }, [doBackToProjects, persistAnnotateProgress, selectProject, onModeChange]);
 
   // T8040: open Focus mode directly on a specific clip's existing reel — the
   // "Focus" button ClipDetailsEditor shows once region.autoProjectId is set.

@@ -1959,9 +1959,14 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
      overlay's `window` Escape (which bubbles AFTER `document`) can't also fire and clobber the
      fullscreen-aware continuation with a plain `closeOverlay`.
   4. switching to a DIFFERENT play while EDITING → `handleSelectRegion` (same-play re-select never gates).
-  5. mode bar / Home → `AnnotateScreen.handleAnnotateModeChange` delegates to
-     `annotateRef.current.guardRateThenExit` (reads via a ref because that handler is defined ABOVE
-     `annotate`, same pattern as `clipRegionsRef`).
+  5. mode bar / Home → TWO distinct gestures, BOTH gated via `annotateRef.current.guardRateThenExit`
+     (ref because those handlers are defined ABOVE `annotate`, same pattern as `clipRegionsRef`):
+     (a) mode-bar tabs (Framing/Overlay) → `AnnotateScreen.handleAnnotateModeChange`; (b) the
+     UnifiedHeader **Home icon / mobile back / breadcrumb** (`onHomeClick`) → `handleBackToProjects`,
+     which is the REAL "go Home" gesture — `ModeSwitcher` never emits `'project-manager'`, so
+     `handleAnnotateModeChange`'s project-manager branch never fires for Home. `handleBackToProjects`
+     is a gated wrapper around the raw `doBackToProjects` (T11120 reviewer MAJOR: the first pass gated
+     only the mode bar and left Home/back/breadcrumb bypassing the gate).
   `Delete play` (`handleDeletePlayFromEditor`) calls `closeOverlay` directly, never `handleOverlayClose`,
   so it stays ungated by construction. **Shared meanings list:** the picker rows are now
   `RatingMeaningsList.jsx` (stars + `RATING_ADJECTIVES` + `RATING_MEANINGS` one-line meaning), rendered
