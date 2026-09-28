@@ -17,6 +17,20 @@ export const RATING_ADJECTIVES = {
   1: 'Mental Lapse',
 };
 
+// T11120: one-line meaning per rating, shown as a row subtitle in the shared
+// rating meanings list (the editor's RatingPill popup AND the "Rate this play"
+// gate modal render the SAME list — one component). Owner-approved copy
+// (2026-09-24): 5's line is the owner's exact words. These describe what the
+// rating MEANS; they are distinct from getEditRatingCaption's context-varying
+// sentence (which also names highlight/hasReel state).
+export const RATING_MEANINGS = {
+  5: 'Brilliant Play! Everyone should see it.',
+  4: 'A solid play worth remembering.',
+  3: 'Worth a second look.',
+  2: 'A touch or skill to work on.',
+  1: 'A decision or focus moment to learn from.',
+};
+
 // Rating notation symbols (chess-style)
 export const RATING_NOTATION = {
   1: '??',   // Blunder

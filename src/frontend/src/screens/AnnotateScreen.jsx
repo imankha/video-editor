@@ -149,6 +149,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const getLastPlayheadRef = useRef(null);
   // Ref to clip regions for annotate-to-framing project selection
   const clipRegionsRef = useRef([]);
+  // T11120: the live container API, read by handleAnnotateModeChange (defined
+  // above `annotate`) to gate mode-bar / Home navigation on an unrated play.
+  const annotateRef = useRef(null);
 
   // Handlers
   // T8180: the game the user was annotating turned out to be deleted (a "ghost
@@ -182,7 +185,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     if (playhead != null) saveLastPlayhead(gameIdRef.current, playhead);
   }, [finishAnnotation, saveLastPlayhead, handleGhostGame]);
 
-  const handleBackToProjects = useCallback(() => {
+  const doBackToProjects = useCallback(() => {
     persistAnnotateProgress();
     // T1550: Hint ProjectManager to open on the Games tab when coming from Annotate
     sessionStorage.setItem('projectManagerTab', 'games');
@@ -190,25 +193,56 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     setEditorMode('project-manager');
   }, [persistAnnotateProgress, onClearSelection, setEditorMode]);
 
-  // T1550: Unified mode change handler — fires finishAnnotation before delegating
-  const handleAnnotateModeChange = useCallback((newMode) => {
-    if (newMode === 'project-manager') {
-      handleBackToProjects();
+  // T11120: Home / back / breadcrumb (UnifiedHeader onHomeClick) is the REAL
+  // "go Home" gesture — ModeSwitcher never emits 'project-manager', so the
+  // branch inside handleAnnotateModeChange never sees it. Gate it here on an
+  // unrated play (same annotateRef guard as the mode-bar path), continuing to
+  // project-manager once a rating is picked.
+  const handleBackToProjects = useCallback(() => {
+    const a = annotateRef.current;
+    const editingId = a && a.showAnnotateOverlay ? a.annotateSelectedRegionId : null;
+    if (editingId && a?.guardRateThenExit) {
+      a.guardRateThenExit(editingId, doBackToProjects);
       return;
     }
-    persistAnnotateProgress();
-    // When switching to framing, select the auto-project from the most recent clip
-    if (newMode === 'framing') {
-      const regions = clipRegionsRef.current;
-      const withProject = regions.filter(r => r.autoProjectId);
-      if (withProject.length > 0) {
-        const latest = withProject[withProject.length - 1];
-        selectProject(latest.autoProjectId);
+    doBackToProjects();
+  }, [doBackToProjects]);
+
+  // T1550: Unified mode change handler — fires finishAnnotation before delegating
+  // T11120: leaving Annotate via the mode bar / Home while editing an UNRATED
+  // play is an exit — gate it (annotateRef.current.guardRateThenExit) and
+  // continue the navigation once a rating is picked. Reads through annotateRef
+  // because `annotate` is defined below this callback (same ref pattern as
+  // clipRegionsRef).
+  const handleAnnotateModeChange = useCallback((newMode) => {
+    const proceed = () => {
+      if (newMode === 'project-manager') {
+        // proceed() already ran past the gate — call the raw nav, not the
+        // gated wrapper, to avoid a redundant re-guard.
+        doBackToProjects();
+        return;
       }
+      persistAnnotateProgress();
+      // When switching to framing, select the auto-project from the most recent clip
+      if (newMode === 'framing') {
+        const regions = clipRegionsRef.current;
+        const withProject = regions.filter(r => r.autoProjectId);
+        if (withProject.length > 0) {
+          const latest = withProject[withProject.length - 1];
+          selectProject(latest.autoProjectId);
+        }
+      }
+      // Delegate to App.jsx mode change handler (handles project selection, confirmations)
+      onModeChange?.(newMode);
+    };
+    const a = annotateRef.current;
+    const editingId = a && a.showAnnotateOverlay ? a.annotateSelectedRegionId : null;
+    if (editingId && a?.guardRateThenExit) {
+      a.guardRateThenExit(editingId, proceed);
+      return;
     }
-    // Delegate to App.jsx mode change handler (handles project selection, confirmations)
-    onModeChange?.(newMode);
-  }, [handleBackToProjects, persistAnnotateProgress, selectProject, onModeChange]);
+    proceed();
+  }, [doBackToProjects, persistAnnotateProgress, selectProject, onModeChange]);
 
   // T8040: open Focus mode directly on a specific clip's existing reel — the
   // "Focus" button ClipDetailsEditor shows once region.autoProjectId is set.
@@ -447,6 +481,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
 
   // Keep clipRegionsRef updated for annotate-to-framing project selection
   clipRegionsRef.current = clipRegions;
+  // T11120: keep the container API reachable from handleAnnotateModeChange.
+  annotateRef.current = annotate;
 
   // T251: Keep getViewedDuration ref updated for handleBackToProjects
   getViewedDurationRef.current = getViewedDuration;
@@ -798,6 +834,10 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         // Fullscreen overlay handlers
         onFullscreenUpdateClip={handleFullscreenUpdateClip}
         onOverlayClose={handleOverlayClose}
+        // T11120: "Rate this play" gate (owned by AnnotateContainer)
+        rateGate={annotate.rateGate}
+        onRateGatePick={annotate.handleRateGatePick}
+        onRateGateDismiss={annotate.handleRateGateDismiss}
         // T10610 § D.3/C.4/C.5
         onDeletePlayFromEditor={handleDeletePlayFromEditor}
         onAwaitRegionWrites={awaitRegionWrites}

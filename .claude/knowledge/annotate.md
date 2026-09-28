@@ -1941,6 +1941,49 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `RATE_PLAY`/`HIGHLIGHT_MADE`. Tests: `AnnotateFullscreenOverlay.progressBadges.test.jsx` (rewritten
   to the new contract), `RatingPill`-driven picker tests, `clipConstants.test.js`,
   `e2e/T11150-play-editor-hierarchy.qa.spec.js`.
+- **Unrated-exit "Rate this play" gate (T11120, 2026-09-28, epic Highlight-First; gate, NEVER a write).**
+  Trying to LEAVE the editor on a play whose `rating == null` opens the **`RateThisPlayModal`** instead
+  of leaving; a rated play leaves normally. Picking a row is the ONE gesture that persists `{rating}`
+  (normal surgical path) AND continues the original exit; dismissing writes NOTHING. **The gate lives
+  entirely in `AnnotateContainer`** (it owns every exit funnel + the write queue + clip rating), exposed
+  as `rateGate` / `guardRateThenExit(regionId, proceed)` / `handleRateGatePick` / `handleRateGateDismiss`.
+  The modal is rendered by `AnnotateModeView` from `rateGate` via a **portal to `document.body` at
+  `z-[200]`** so it sits above the mobile-fullscreen editor (`fixed inset-0 z-[100]`). **THE EXIT-PATH
+  SET (gate ALL; Delete play is the ONLY ungated leave):**
+  1. `closeWithCommit` funnel — Done / X / window-Escape / `keepMarkingCta` (7 overlay sites) all call
+     the overlay's `onClose` → container `handleOverlayClose`, gated there (ONE choke point; the overlay
+     component itself is UNCHANGED — its `onClose` contract is preserved, so overlay unit tests stay green).
+  2. empty-timeline click → `handleTimelineSeek` (was a bare `closeOverlay`).
+  3. mobile fullscreen exit → `handleToggleFullscreen` gates BEFORE toggling and returns `true` when
+     gated; the document-level fullscreen-exit Escape effect `stopPropagation`s on a gated exit so the
+     overlay's `window` Escape (which bubbles AFTER `document`) can't also fire and clobber the
+     fullscreen-aware continuation with a plain `closeOverlay`.
+  4. switching to a DIFFERENT play while EDITING → `handleSelectRegion` (same-play re-select never gates).
+  5. mode bar / Home → TWO distinct gestures, BOTH gated via `annotateRef.current.guardRateThenExit`
+     (ref because those handlers are defined ABOVE `annotate`, same pattern as `clipRegionsRef`):
+     (a) mode-bar tabs (Framing/Overlay) → `AnnotateScreen.handleAnnotateModeChange`; (b) the
+     UnifiedHeader **Home icon / mobile back / breadcrumb** (`onHomeClick`) → `handleBackToProjects`,
+     which is the REAL "go Home" gesture — `ModeSwitcher` never emits `'project-manager'`, so
+     `handleAnnotateModeChange`'s project-manager branch never fires for Home. `handleBackToProjects`
+     is a gated wrapper around the raw `doBackToProjects` (T11120 reviewer MAJOR: the first pass gated
+     only the mode bar and left Home/back/breadcrumb bypassing the gate).
+  `Delete play` (`handleDeletePlayFromEditor`) calls `closeOverlay` directly, never `handleOverlayClose`,
+  so it stays ungated by construction. **Shared meanings list:** the picker rows are now
+  `RatingMeaningsList.jsx` (stars + `RATING_ADJECTIVES` + `RATING_MEANINGS` one-line meaning), rendered
+  by BOTH `RatingPill`'s popup AND the modal (owner ruling: one component). Approved copy in
+  `clipConstants.RATING_MEANINGS` (5 = "Brilliant Play! Everyone should see it.") + `ANNOTATE.RATE_PLAY`
+  (title) / `RATE_GATE_SUBTITLE` "Pick one to finish." / `RATE_GATE_KEEP_EDITING` "Keep editing" (M6; Escape
+  same; backdrop inert). The `'!'` in rating-5's meaning is prose, so `progressBadges.test.jsx`'s
+  chess-glyph guard now excludes the bare `!` for the picker only. No effect watches rating; nothing seeds
+  a default. Tests: `AnnotateContainer.rateGate.test.jsx` (routes 1/2/3-mobile-fullscreen/4-switch/4-guard/5-guard
+  + pick/dismiss/delete + the dismiss-during-in-flight-write race + the double-pick race), `RateThisPlayModal.test.jsx`
+  (copy + inert backdrop + Escape). **Route 3 (mobile fullscreen exit) AND the live two-play switch ARE now
+  driven headless** in `AnnotateContainer.rateGate.test.jsx` (jsdom, matchMedia forced mobile for route 3);
+  the only path still verified by staging alone is the mobile LIVE-drive of the modal chrome.
+  **`handleRateGatePick` carries a SYNCHRONOUS in-flight ref guard (`rateGatePickInFlightRef`, T9830/T10450
+  convention like `markPlayInFlightRef`)**: rating rows aren't disabled mid-write and `setRateGate(null)` is
+  batched (`rateGateRef` only refreshes on render), so without it two quick picks both pass the
+  `rateGateRef.current !== gate` check and fire `proceed()` twice (dup `finishAnnotation` POST / dup nav).
 - **[SUPERSEDED by T11150 above — badges removed; kept for history] Play-progress badges are a PURE READ of editor state (T10410, 2026-09-18; rewritten through
   T10590, 2026-09-19 — five follow-up rounds the SAME day, all user-driven live-testing corrections).**
   The Edit play editor shows four badges — **named / rated / noted / clip** (T10460 reordered named

@@ -99,3 +99,15 @@ already has `autoProjectId`) is not gated and isn't in this task's 5-exit list. 
 for a LEGACY unrated play that somehow already has a project - an edge case, not the normal flow.
 Owner decision: leave it for T11130, which reworks this same stage-CTA area, rather than expanding
 T11120's scope. If T11130 ships without closing it, that's a T11130 gap, not a T11120 regression.
+
+## Status log
+
+PUSHREADY 2026-09-28 (commit af1dc7af): fixed the landing-gate reviewer's one MAJOR --
+the double-pick race in `handleRateGatePick`, where two quick rating picks could both
+pass the batched `rateGateRef.current !== gate` check and fire `gate.proceed()` twice
+(dup `finishAnnotation` POST / dup mode-bar nav). Fix is a SYNCHRONOUS in-flight ref
+guard (`rateGatePickInFlightRef`, T9830/T10450 convention). New headless test in
+`AnnotateContainer.rateGate.test.jsx` proven RED (proceed called 2x) on the committed
+code and GREEN after the guard. Curated set green (rateGate 12 + RateThisPlayModal 4 +
+adjacent AnnotateContainer regressions 16), eslint 0 errors. Stale knowledge-doc claim
+("route 3 + two-play switch not driven headless") corrected -- both ARE now headless.
