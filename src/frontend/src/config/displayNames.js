@@ -161,6 +161,14 @@ export const MODE_NAMES = {
   SPOTLIGHT: 'Spotlight',
 };
 
+// Header mode-bar labels are calls to action while the broader MODE_NAMES
+// vocabulary remains the noun used by status text, progress strips, and tiles.
+export const MODE_SWITCHER_NAMES = {
+  ANNOTATE: MODE_NAMES.ANNOTATE,
+  FRAMING: 'Frame Highlight',
+  SPOTLIGHT: 'Add Spotlight',
+};
+
 // T9860 (Shared Vocabulary epic, copy and concept sweep, design doc section 2.3
 // Section 5): one reason sentence per stage, none using the feature's own name
 // as the reason. T9860 aliased FOCUS_PUBLISH.SPOTLIGHT_CAPTION to SPOTLIGHT;

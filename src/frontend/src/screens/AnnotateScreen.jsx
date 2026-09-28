@@ -59,6 +59,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
 
   // Projects — Zustand store
   const fetchProjects = useProjectsStore(state => state.fetchProjects);
+  const projects = useProjectsStore(state => state.projects);
   const selectProject = useProjectsStore(state => state.selectProject);
   const selectedProject = useProjectsStore(state => state.selectedProject);
 
@@ -223,14 +224,20 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         return;
       }
       persistAnnotateProgress();
-      // When switching to framing, select the auto-project from the most recent clip
-      if (newMode === 'framing') {
+      // Frame/Spotlight always open the selected play's highlight, never whichever
+      // project happened to be selected globally or was created most recently.
+      if (newMode === 'framing' || newMode === 'overlay') {
         const regions = clipRegionsRef.current;
-        const withProject = regions.filter(r => r.autoProjectId);
-        if (withProject.length > 0) {
-          const latest = withProject[withProject.length - 1];
-          selectProject(latest.autoProjectId);
-        }
+        const selectedRegionId = annotateRef.current?.annotateSelectedRegionId;
+        const selectedRegion = regions.find(r => r.id === selectedRegionId);
+        if (!selectedRegion?.autoProjectId) return;
+        return selectProject(selectedRegion.autoProjectId).then((project) => {
+          if (!project) {
+            toast.error("Couldn't open this reel", { message: 'Check your network and try again.' });
+            return;
+          }
+          onModeChange?.(newMode);
+        });
       }
       // Delegate to App.jsx mode change handler (handles project selection, confirmations)
       onModeChange?.(newMode);
@@ -656,6 +663,10 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   }
 
   const clipCountDisplay = annotateClipCount;
+  const selectedModeRegion = clipRegions.find(region => region.id === annotateSelectedRegionId);
+  const selectedModeProject = selectedModeRegion?.autoProjectId
+    ? projects.find(project => project.id === selectedModeRegion.autoProjectId)
+    : null;
 
   return (
     <>
@@ -749,8 +760,10 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
             breadcrumbItemName={annotateGameName}
             editorMode="annotate"
             onModeChange={handleAnnotateModeChange}
-            hasProject={!!selectedProject}
-            hasWorkingVideo={!!selectedProject?.working_video_id}
+            hasProject={!!selectedModeProject}
+            hasSelectedPlay={!!selectedModeRegion}
+            hasWorkingVideo={!!selectedModeProject?.has_working_video}
+            modeProject={selectedModeProject}
             hasOverlayVideo={false}
             hasAnnotateVideo={true}
             extraControls={
