@@ -34,7 +34,7 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
     fireEvent.click(screen.getByTestId('mode-framing'));
 
     expect(onModeChange).not.toHaveBeenCalled();
-    expect(toastTitles()).toEqual(['Open a clip to start framing']);
+    expect(toastTitles()).toEqual(['Rate a play Highlight, then choose Make Highlight Now.']);
     expect(useToastStore.getState().toasts[0].type).toBe('info');
   });
 
@@ -45,7 +45,22 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
     fireEvent.click(screen.getByTestId('mode-overlay'));
 
     expect(onModeChange).not.toHaveBeenCalled();
-    expect(toastTitles()).toEqual(['Export from Framing first to unlock Spotlight']);
+    expect(toastTitles()).toEqual(['Generate Framing to unlock Spotlight.']);
+  });
+
+  it('uses action labels on desktop and mobile instead of renaming shared mode nouns', () => {
+    renderSwitcher({ hasProject: true, hasWorkingVideo: true });
+
+    expect(screen.getByText('Frame Highlight')).toBeTruthy();
+    expect(screen.getByText('Add Spotlight')).toBeTruthy();
+  });
+
+  it('explains that a play must be selected before framing can unlock', () => {
+    renderSwitcher({ hasSelectedPlay: false });
+
+    fireEvent.click(screen.getByTestId('mode-framing'));
+
+    expect(toastTitles()).toEqual(['Select a Highlight play to frame it.']);
   });
 
   it('repeat taps dedupe to a single toast instead of stacking', () => {

@@ -1,10 +1,9 @@
-import { Crop, Sparkles, Scissors, Loader2 } from 'lucide-react';
+import { Crop, Sparkles, Scissors, Loader2, Lock } from 'lucide-react';
 import { useAppState } from '../../contexts';
 import { GAME, REEL } from '../../config/themeColors';
-import { SCREENS } from '../../stores/editorStore';
 import { toast } from './Toast';
 import { allowEnterFraming } from '../../utils/reelReEditable';
-import { ANNOTATE } from '../../config/displayNames';
+import { ANNOTATE, MODE_SWITCHER_NAMES } from '../../config/displayNames';
 
 /**
  * ModeSwitcher - Tab toggle for switching between editor modes.
@@ -31,7 +30,9 @@ export function ModeSwitcher({
   onModeChange,
   disabled = false,
   hasProject: hasProjectProp,
+  hasSelectedPlay = true,
   hasWorkingVideo: hasWorkingVideoProp,
+  project: projectProp,
   hasOverlayVideo = false,
   framingOutOfSync = false,
   hasAnnotateVideo = false,
@@ -42,13 +43,15 @@ export function ModeSwitcher({
   const { selectedProject } = useAppState();
 
   // Use props if provided, otherwise derive from context
-  const hasProject = hasProjectProp ?? !!selectedProject;
-  const hasWorkingVideo = hasWorkingVideoProp ?? (selectedProject?.working_video_id != null);
+  const modeProject = projectProp ?? selectedProject;
+  const hasProject = hasProjectProp ?? !!modeProject;
+  const hasWorkingVideo = hasWorkingVideoProp
+    ?? (modeProject?.has_working_video ?? (modeProject?.working_video_id != null));
   // Define mode configurations
   const modes = [
     {
       id: 'annotate',
-      label: SCREENS.ANNOTATE.label,
+      label: MODE_SWITCHER_NAMES.ANNOTATE,
       icon: Scissors,
       description: ANNOTATE.MODE_DESCRIPTION,
       available: hasAnnotateVideo || mode === 'annotate',
@@ -56,7 +59,7 @@ export function ModeSwitcher({
     },
     {
       id: 'framing',
-      label: SCREENS.FRAMING.label,
+      label: MODE_SWITCHER_NAMES.FRAMING,
       icon: Crop,
       description: 'Reframe, trim & speed',
       available: hasProject,
@@ -64,7 +67,7 @@ export function ModeSwitcher({
     },
     {
       id: 'overlay',
-      label: SCREENS.OVERLAY.label,
+      label: MODE_SWITCHER_NAMES.SPOTLIGHT,
       icon: Sparkles,
       description: 'Spotlight, text & cover',
       available: hasProject && (hasWorkingVideo || hasOverlayVideo),
@@ -92,9 +95,13 @@ export function ModeSwitcher({
       isLoadingWorkingVideo && modeOption.id === 'overlay'
         ? 'Loading working video...'
         : !isAvailable && modeOption.id === 'framing'
-          ? 'Open a clip to start framing'
+          ? hasSelectedPlay
+            ? 'Rate a play Highlight, then choose Make Highlight Now.'
+            : 'Select a Highlight play to frame it.'
           : !isAvailable && modeOption.id === 'overlay'
-            ? hasProject ? 'Export from Framing first to unlock Spotlight' : 'Open a clip to start framing'
+            ? hasProject
+              ? 'Generate Framing to unlock Spotlight.'
+              : 'Make a highlight first. Spotlight comes after Framing.'
             : modeOption.showWarning
               ? 'Previously exported video no longer matches your settings. Export to create latest video before overlaying.'
               : modeOption.description;
@@ -117,17 +124,19 @@ export function ModeSwitcher({
           // than switching modes (which would burn credits on a re-export that
           // then 400s). ONE guard shared with OverlayScreen's Reapply tiles,
           // App's mode switch, and DraftTile.
-          if (modeOption.id === 'framing' && !allowEnterFraming(selectedProject)) return;
+          if (modeOption.id === 'framing' && !allowEnterFraming(modeProject)) return;
           onModeChange(modeOption.id);
         }}
         disabled={disabled}
         aria-disabled={disabled || !isAvailable}
         className={`
-          flex items-center gap-2 px-2 sm:px-4 py-2 rounded-md transition-all duration-200 relative
+          flex h-11 items-center gap-2 px-2 sm:px-4 py-2 rounded-md transition-all duration-200 relative
           ${isActive
-            ? `${activeColor} text-white shadow-lg`
+            ? modeOption.color === 'reel'
+              ? `${activeColor} text-gray-950 shadow-lg`
+              : `${activeColor} text-white shadow-lg`
             : isAvailable
-              ? 'text-white/70 hover:text-white hover:bg-white/10'
+              ? 'text-white/70 hover:text-white hover:bg-white/10 ring-1 ring-inset ring-yellow-400/70'
               : 'text-white/30 cursor-not-allowed'
           }
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
@@ -137,9 +146,9 @@ export function ModeSwitcher({
         {isLoadingWorkingVideo && modeOption.id === 'overlay' ? (
           <Loader2 size={16} className="animate-spin" />
         ) : (
-          <Icon size={16} />
+          isAvailable ? <Icon size={16} /> : <Lock size={16} />
         )}
-        <span className="font-medium text-sm hidden sm:inline">{modeOption.label}</span>
+        <span className="font-medium text-sm whitespace-nowrap">{modeOption.label}</span>
         {modeOption.showWarning && isAvailable && (
           <span className="text-yellow-400 font-bold text-xs">*</span>
         )}
