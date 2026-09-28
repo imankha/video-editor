@@ -1,6 +1,6 @@
 # T11130: Highlight popup (Make Highlight Now / Highlight Later); remove Create clip + Frame CTAs
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-09-24
