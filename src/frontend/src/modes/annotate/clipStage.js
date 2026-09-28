@@ -24,9 +24,8 @@
 import { ANNOTATE } from '../../config/displayNames';
 
 export const CLIP_STAGE = {
-  // The clip has no project yet — manual-create territory (ClipDetailsEditor's
-  // "Create Clip" affordance). NOT this CTA's job; the stage CTA only renders
-  // once a project exists.
+  // The play has no highlight project yet. The main CTA creates it and opens
+  // Framing in one gesture.
   NO_PROJECT: 'NO_PROJECT',
   // A project exists but no working video yet (fresh draft, drifted, or a
   // below-migration project with a null snapshot) — open it in Framing.
@@ -39,6 +38,14 @@ export const CLIP_STAGE = {
   PUBLISHED: 'PUBLISHED',
 };
 
+export const HIGHLIGHT_STATUS = {
+  NOT_STARTED: 'Not Started',
+  CLIPPED: 'Clipped',
+  FRAMED: 'Framed',
+  OVERLAID: 'Overlaid',
+  PUBLISHED: 'Published',
+};
+
 /**
  * getClipStage — the ordered stage table for a clip's own project.
  *
@@ -46,22 +53,21 @@ export const CLIP_STAGE = {
  *                               endTime, reelSourceStartTime, reelSourceEndTime)
  * @param {object|null} linkedProject the project row (reads has_working_video,
  *                               has_final_video, is_published)
- * @returns {{stage: string, label: string, action: 'focus'|'overlay'|null}}
+ * @returns {{stage: string, status: string, label: string, action: 'focus'|'overlay'|'preview'|'published'|null}}
  *          `action` is a token each surface maps to its own navigation prop
- *          (onOpenInFocus / onOpenInOverlay); null = disabled / not this CTA.
+ *          to Framing, Overlay, or the final-video viewer; null = no CTA.
  *
  * Order matters — first match wins.
  */
 export function getClipStage(region, linkedProject) {
   const hasProject = !!region?.autoProjectId;
   if (!hasProject) {
-    // T11130: a play with no project is no longer offered a "Create clip" /
-    // "Frame clip" CTA here — creation moved to the rating + Done -> Highlight
-    // popup gesture (see AnnotateContainer highlightChoice), and H8 removed the
-    // editor stage buttons. The stage CTA only renders once a project exists,
-    // so this branch carries no label/action anymore (the old `createActions`
-    // array had zero consumers after that removal).
-    return { stage: CLIP_STAGE.NO_PROJECT, label: null, action: null };
+    return {
+      stage: CLIP_STAGE.NO_PROJECT,
+      status: HIGHLIGHT_STATUS.NOT_STARTED,
+      label: ANNOTATE.FRAME_THIS_CLIP,
+      action: 'focus',
+    };
   }
 
   // T8070: exact-equality staleness gate (no epsilon).
@@ -81,21 +87,21 @@ export function getClipStage(region, linkedProject) {
 
   if (projectReflectsClip && linkedProject?.has_final_video) {
     return linkedProject.is_published
-      ? { stage: CLIP_STAGE.PUBLISHED, label: 'View Published', action: 'focus' }
-      : { stage: CLIP_STAGE.FINAL, label: 'View Final', action: 'focus' };
+      ? { stage: CLIP_STAGE.PUBLISHED, status: HIGHLIGHT_STATUS.PUBLISHED, label: 'View Final', action: 'published' }
+      : { stage: CLIP_STAGE.FINAL, status: HIGHLIGHT_STATUS.OVERLAID, label: 'Preview', action: 'preview' };
   }
   if (projectReflectsClip && linkedProject?.has_working_video) {
-    return { stage: CLIP_STAGE.SPOTLIGHT, label: 'Apply Spotlight', action: 'overlay' };
+    return { stage: CLIP_STAGE.SPOTLIGHT, status: HIGHLIGHT_STATUS.FRAMED, label: 'Add Overlay', action: 'overlay' };
   }
   if (projectReflectsClip) {
-    return { stage: CLIP_STAGE.FOCUS, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
+    return { stage: CLIP_STAGE.FOCUS, status: HIGHLIGHT_STATUS.CLIPPED, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
   }
   if (projectIsFreshDraft) {
     // Subsumes the old "Open clip (Draft)" label.
-    return { stage: CLIP_STAGE.FOCUS, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
+    return { stage: CLIP_STAGE.FOCUS, status: HIGHLIGHT_STATUS.CLIPPED, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
   }
   // Drifted (non-null snapshot, boundaries moved) OR below-migration (produced
   // video but null snapshot): the project EXISTS, so it should open — never fall
   // back to offering to re-create it (T9330 deliberate change).
-  return { stage: CLIP_STAGE.FOCUS, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
+  return { stage: CLIP_STAGE.FOCUS, status: HIGHLIGHT_STATUS.CLIPPED, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
 }

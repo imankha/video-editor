@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, ListVideo } from 'lucide-react';
+import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, ListVideo, Play } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay, RateThisPlayModal } from './annotate';
@@ -162,6 +162,7 @@ export function AnnotateModeView({
   // T9330: opens the clip's project in Spotlight (Overlay mode) for the strip's
   // stage CTA.
   onOpenClipInOverlay,
+  onOpenClipPreview,
   // T8890: angle strip + source switching (null for angle-free games)
   angleData = null,
   angleSwitcher = null,
@@ -235,8 +236,10 @@ export function AnnotateModeView({
     const ok = onAwaitRegionWrites ? await onAwaitRegionWrites(selectedRegion.id) : true;
     if (!ok) return;
     if (selectedClipStage?.action === 'overlay') onOpenClipInOverlay?.(selectedRegion.autoProjectId);
+    else if (selectedClipStage?.action === 'preview') onOpenClipPreview?.(selectedRegionProject, false);
+    else if (selectedClipStage?.action === 'published') onOpenClipPreview?.(selectedRegionProject, true);
     else onOpenClipInFocus?.(selectedRegion.autoProjectId);
-  }, [selectedRegion, selectedClipStage, onOpenClipInFocus, onOpenClipInOverlay, onAwaitRegionWrites]);
+  }, [selectedRegion, selectedRegionProject, selectedClipStage, onOpenClipInFocus, onOpenClipInOverlay, onOpenClipPreview, onAwaitRegionWrites]);
   // T10450: "Frame Now" is the T10310-era "Frame Clip" behavior — a
   // project-less play creates its project THEN opens Framing in one gesture
   // (same create-then-navigate seam as the editor's old Save and Frame).
@@ -1212,19 +1215,23 @@ export function AnnotateModeView({
                       <Pencil size={22} />
                       {ANNOTATE.EDIT_PLAY}
                     </button>
-                    {selectedRegion?.autoProjectId && (
+                    {selectedRegion && (
                       <button
                         onClick={handleFrameNow}
                         disabled={frameClipPending}
                         data-testid="annotate-stage-cta"
                         title={
-                          selectedClipStage?.stage !== CLIP_STAGE.FOCUS
+                          [CLIP_STAGE.SPOTLIGHT, CLIP_STAGE.FINAL, CLIP_STAGE.PUBLISHED].includes(selectedClipStage?.stage)
                             ? `Open the clip: ${selectedClipStage.label}`
                             : ANNOTATE.FRAME_THIS_CLIP_HINT
                         }
                         className="flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white shadow-cyan-900/40"
                       >
-                        {selectedClipStage?.action === 'overlay' ? <Sparkles size={22} /> : <Crop size={22} />}
+                        {selectedClipStage?.action === 'overlay'
+                          ? <Sparkles size={22} />
+                          : selectedClipStage?.action === 'focus'
+                            ? <Crop size={22} />
+                            : <Play size={22} />}
                         {selectedClipStage.label}
                       </button>
                     )}

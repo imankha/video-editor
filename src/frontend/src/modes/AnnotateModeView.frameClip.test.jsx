@@ -1,5 +1,5 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 /**
  * T11130: the T10450 main-screen [Frame Now] / [Frame Later] create row is
@@ -39,6 +39,7 @@ vi.mock('../hooks/useFullscreenControls', () => ({
 }));
 
 let projectsListMock = [];
+beforeEach(() => { projectsListMock = []; });
 vi.mock('../stores', () => ({
   useCurrentProfile: () => ({ id: 'p1', sport: 'soccer' }),
   useProfileStore: (selector) => selector({ updateProfile: vi.fn() }),
@@ -90,6 +91,7 @@ function buildProps(overrides = {}) {
     onFullscreenUpdateClip: vi.fn(),
     onOpenClipInFocus: vi.fn(),
     onOpenClipInOverlay: vi.fn(),
+    onOpenClipPreview: vi.fn(),
     ...overrides,
   };
 }
@@ -99,7 +101,7 @@ function renderView(overrides = {}) {
 }
 
 describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
-  it('a project-less selected play shows [Edit Play] and NO Frame create CTA', () => {
+  it('a not-started selected play shows [Edit Play] and a clear Frame CTA', () => {
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
@@ -107,12 +109,29 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
       annotateSelectedRegionId: 'r1',
     });
     expect(screen.getByRole('button', { name: /^edit play$/i })).toBeTruthy();
-    // T11130: the removed create row — none of these exist anymore.
+    expect(screen.getByRole('button', { name: /^frame$/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^frame now$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^frame later$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^create clip$/i })).toBeNull();
     expect(screen.queryByTestId('annotate-frame-now-cta')).toBeNull();
     expect(screen.queryByTestId('annotate-frame-later-cta')).toBeNull();
+  });
+
+  it('Frame creates a highlight project for a not-started play and opens Framing', async () => {
+    const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 42 });
+    const onOpenClipInFocus = vi.fn();
+    renderView({
+      isEditMode: true,
+      hasAnnotateClips: true,
+      clipRegions: [selectedRegion],
+      annotateSelectedRegionId: 'r1',
+      onFullscreenUpdateClip,
+      onOpenClipInFocus,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^frame$/i }));
+    await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(42));
+    expect(onFullscreenUpdateClip).toHaveBeenCalledWith('r1', { createProject: true, silent: true });
   });
 
   it('shows [Edit Play] + a single stage button once the play has a project (H8)', () => {
@@ -172,5 +191,37 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
 
     expect(onFullscreenUpdateClip).not.toHaveBeenCalled();
     expect(onOpenClipInFocus).toHaveBeenCalledWith(42);
+  });
+
+  it('opens an overlaid highlight in Preview instead of sending the user back to Framing', () => {
+    const project = { id: 42, has_working_video: true, has_final_video: true, is_published: false, final_video_id: 'final-1' };
+    projectsListMock = [project];
+    const onOpenClipPreview = vi.fn();
+    renderView({
+      isEditMode: true,
+      hasAnnotateClips: true,
+      clipRegions: [{ ...selectedRegion, autoProjectId: 42, reelSourceStartTime: 10, reelSourceEndTime: 20 }],
+      annotateSelectedRegionId: 'r1',
+      onOpenClipPreview,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^preview$/i }));
+    expect(onOpenClipPreview).toHaveBeenCalledWith(project, false);
+  });
+
+  it('opens a published highlight with the View Final CTA in published mode', () => {
+    const project = { id: 42, has_working_video: true, has_final_video: true, is_published: true, final_video_id: 'final-1' };
+    projectsListMock = [project];
+    const onOpenClipPreview = vi.fn();
+    renderView({
+      isEditMode: true,
+      hasAnnotateClips: true,
+      clipRegions: [{ ...selectedRegion, autoProjectId: 42, reelSourceStartTime: 10, reelSourceEndTime: 20 }],
+      annotateSelectedRegionId: 'r1',
+      onOpenClipPreview,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^view final$/i }));
+    expect(onOpenClipPreview).toHaveBeenCalledWith(project, true);
   });
 });
