@@ -1,10 +1,10 @@
 # T11140: Mode bar - Frame Highlight / Add Spotlight, gated on the selected play's highlight
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-24
-**Updated:** 2026-09-24
+**Updated:** 2026-09-28
 **Epic:** [Highlight-First Annotate Flow](EPIC.md)
 
 ## Problem
