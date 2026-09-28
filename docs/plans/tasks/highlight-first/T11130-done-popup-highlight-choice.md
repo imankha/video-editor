@@ -60,6 +60,17 @@ History: the Frame Now / Frame Later row being replaced shipped as T10450 (maste
 only relabelled the badge nudge "Create clip" -> "Frame" (`ANNOTATE.FRAME_THIS_CLIP`) while the
 click still only created the clip; that label/behavior mismatch is exactly what this task avoids.
 
+### Known gap in this area: `stageCta` bypasses T11120's rating gate (owner-deferred 2026-09-28)
+
+T11120's proof-verifier found `AnnotateFullscreenOverlay.jsx`'s `stageCta` "Open: <stage>" button
+(same area as the T10450 row above) lets a play that already has `autoProjectId` navigate straight
+to Focus/Spotlight without going through T11120's "Rate this play" gate. Only matters for a LEGACY
+unrated play that somehow already has a project - an edge case. Owner decided to leave it for this
+task rather than expand T11120's scope, since this task already reworks the same stage-CTA area.
+Check whether your rework needs to route this through the rating gate too (or whether it's already
+moot once you replace the row), and confirm before shipping - if you ship without addressing it,
+that's a T11130 gap, not a T11120 regression.
+
 ## Context
 
 ### Relevant Files

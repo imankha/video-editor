@@ -80,3 +80,22 @@ Always allowed: Delete play (`handleDeletePlayFromEditor` :1825).
 - [ ] Dismissing the modal writes nothing (network log)
 - [ ] Delete play works on an unrated play
 - [ ] Live-driven desktop + 393 px portrait + landscape phone
+
+### Live-drive scope decision (2026-09-28, owner)
+
+Desktop was live-verified in a real browser by the supervisor (dev-fixture account, game 11's
+"Play 3"): gate shows on Done for an unrated play, Escape dismisses with zero writes, picking
+Highlight persists the rating and continues the exit. The 393px portrait / landscape bottom-sheet
+variant was NOT live-screenshotted (no convenient second unrated fixture play; the worker's
+container has no Chromium at all). All 5 exit routes (including mobile fullscreen) have red-then-
+green jsdom coverage, and the bottom sheet reuses the same `RatingMeaningsList` component already
+live-confirmed on desktop. Owner decision: accept this as sufficient proof, land without a live
+mobile screenshot.
+
+### Deferred: `stageCta` "Open: <stage>" bypass (2026-09-28, owner)
+
+`AnnotateFullscreenOverlay.jsx` ~L539-561's stage button (opens Focus/Spotlight for a play that
+already has `autoProjectId`) is not gated and isn't in this task's 5-exit list. It only matters
+for a LEGACY unrated play that somehow already has a project - an edge case, not the normal flow.
+Owner decision: leave it for T11130, which reworks this same stage-CTA area, rather than expanding
+T11120's scope. If T11130 ships without closing it, that's a T11130 gap, not a T11120 regression.
