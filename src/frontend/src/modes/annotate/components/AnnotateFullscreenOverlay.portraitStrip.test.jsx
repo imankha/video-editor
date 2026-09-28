@@ -159,16 +159,19 @@ describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind 
   });
 });
 
-describe('AnnotateFullscreenOverlay portrait-strip — stage CTA', () => {
-  it('renders the full-width stage CTA below the strip when the clip has a project', () => {
+// T11130 (H8): the editor's own stage CTA is removed from every layout — the ONE
+// surviving stage button lives on the main Annotate screen. The portrait strip
+// renders no Frame / Apply / View button whether or not the play has a project.
+describe('AnnotateFullscreenOverlay portrait-strip — no editor stage CTA (T11130 / H8)', () => {
+  it('renders NO stage CTA for a play WITH a project (H8: it moved to the main screen)', () => {
     render(
       <AnnotateFullscreenOverlay
         {...baseProps}
         existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: null, reelSourceEndTime: null }}
       />
     );
-    const cta = screen.getByRole('button', { name: 'Frame' });
-    expect(cta.className).toMatch(/w-full/);
+    expect(screen.queryByRole('button', { name: 'Frame' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Apply Spotlight' })).toBeNull();
   });
 
   it('renders NO stage CTA for a project-less play', () => {

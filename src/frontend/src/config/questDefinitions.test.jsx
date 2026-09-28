@@ -63,23 +63,27 @@ describe('questDefinitions rate_clip split (T5150)', () => {
     expect(container.textContent).toMatch(/rate the play/i);
   });
 
-  it('retitles annotate_brilliant to the Save step', () => {
+  it('retitles annotate_brilliant to the Save step (T11130: Done -> Highlight popup copy)', () => {
     // T9575: epic vocabulary — the step saves a PLAY (which produces a clip), so
-    // the title is "Save your play", not the old single-clip-"reel" wording.
+    // the title is "Save your play". T11130: the step's DESCRIPTION now points at
+    // the Done -> Highlight popup gesture (the old "Create an editable clip"
+    // toggle is gone), so it names Done + the highlight offer, not "Save".
     expect(STEP_TITLES.annotate_brilliant).toBe('Save your play');
     const { container } = render(<>{STEP_DESCRIPTIONS.annotate_brilliant}</>);
-    expect(container.textContent).toMatch(/save/i);
+    expect(container.textContent).toMatch(/highlight/i);
+    expect(container.textContent).toMatch(new RegExp(ANNOTATE.DONE));
   });
 
-  it('keeps the trim/rate copy on rate_clip and the Save copy on annotate_brilliant', () => {
+  it('keeps the trim/rate copy on rate_clip and the highlight copy on annotate_brilliant (T11130)', () => {
     const rate = render(<>{STEP_DESCRIPTIONS.rate_clip}</>).container.textContent;
     const save = render(<>{STEP_DESCRIPTIONS.annotate_brilliant}</>).container.textContent;
-    // Rating copy lives on rate_clip, not on the Save step
+    // Trim copy lives on rate_clip, not on the Save/Done step
     expect(rate).toMatch(/start time and end time/i);
-    expect(save).not.toMatch(/rate the play/i);
-    // Save/toggle copy lives on annotate_brilliant, not on rate_clip. T9575: the
-    // toggle is the epic's "Create an editable clip", never the old "Create Reel".
-    expect(save).toMatch(/create an editable clip/i);
+    // T11130: annotate_brilliant is the Done -> Highlight popup step; the removed
+    // "Create an editable clip" toggle no longer appears anywhere.
+    expect(save).toMatch(/highlight/i);
+    expect(save).toMatch(new RegExp(ANNOTATE.DONE));
+    expect(save).not.toMatch(/create an editable clip/i);
     expect(save).not.toMatch(/create reel/i);
     expect(rate).not.toMatch(/create an editable clip/i);
   });
@@ -225,7 +229,7 @@ describe('questDefinitions vocabulary sweep (T9575)', () => {
   it('names the epic controls by their live labels', () => {
     const save = renderedText(STEP_DESCRIPTIONS.annotate_brilliant);
     expect(save).toMatch(/My athlete/);                 // ANNOTATE.LAYER_MINE (T9860 reversal, was "My player")
-    expect(save).toMatch(/Create an editable clip/);   // ANNOTATE.CREATE_EDITABLE_CLIP (was "Create Reel")
+    expect(save).toMatch(new RegExp(ANNOTATE.DONE));   // T11130: Done -> Highlight popup (was "Create an editable clip")
     expect(renderedText(STEP_DESCRIPTIONS.add_clip)).toMatch(/Mark play/); // ANNOTATE.MARK_PLAY (was "Add Play")
     expect(renderedText(STEP_DESCRIPTIONS.choose_shape)).toMatch(/Around athlete/); // EDITOR_PANELS (D3, was "Around player"/"Body")
     expect(STEP_TITLES.export_overlay).toBe('Apply Overlay'); // EXPORT_JOBS.overlay.action
@@ -233,18 +237,16 @@ describe('questDefinitions vocabulary sweep (T9575)', () => {
 });
 
 // T9850: first-result guidance must not instruct a REQUIRED Preview-plays click —
-// that control only exists on the Annotate screen, so the guide pointed at an
-// unavailable action once the user moved to Focus/Spotlight/Library (B05·R4,
-// acceptance criterion "no route references an unavailable control"). The step's
-// description now points at the persistent next actions that travel with a saved
-// clip (Frame this clip / Keep marking plays, the T9580 labels).
-describe('playback_annotations guidance points at persistent actions (T9850)', () => {
+// that control only exists on the Annotate screen. T11130: the persistent next
+// actions changed — the play becomes a highlight through the Done -> Highlight
+// popup ("Make Highlight Now"), or the user keeps marking plays ("Mark play").
+describe('playback_annotations guidance points at persistent actions (T9850 / T11130)', () => {
   const renderedText = (node) => render(<>{node}</>).container.textContent;
 
   it('names the persistent next actions instead of requiring Preview plays', () => {
     const text = renderedText(STEP_DESCRIPTIONS.playback_annotations);
-    expect(text).toMatch(new RegExp(ANNOTATE.FRAME_THIS_CLIP));
-    expect(text).toMatch(new RegExp(ANNOTATE.KEEP_MARKING_PLAYS));
+    expect(text).toMatch(new RegExp(ANNOTATE.MAKE_HIGHLIGHT_NOW));
+    expect(text).toMatch(new RegExp(ANNOTATE.MARK_PLAY));
     // The old copy told the user to go click "Preview plays" — a control absent on
     // every screen but Annotate. It must no longer appear in this step's guidance.
     expect(text).not.toMatch(new RegExp(ANNOTATE.PREVIEW_PLAYS));

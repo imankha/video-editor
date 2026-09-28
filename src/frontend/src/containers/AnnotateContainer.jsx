@@ -81,6 +81,12 @@ async function resolveImportGameId(gameIdRef, timeoutMs = IMPORT_AWAIT_GAME_ID_T
   return readId();
 }
 
+// T11130: the rating that makes a play a Highlight (5). Done on a play rated
+// this and not yet a highlight (no autoProjectId) opens the Highlight choice
+// card instead of closing. Distinct from the removed playProgress
+// CLIP_NUDGE_RATING — that drove a badge nudge; this gates the popup.
+const HIGHLIGHT_RATING = 5;
+
 /**
  * T8480: what every `result.project_created` save/update response triggers.
  * Selecting the new project is part of the same Save gesture (memory-only
@@ -90,20 +96,27 @@ async function resolveImportGameId(gameIdRef, timeoutMs = IMPORT_AWAIT_GAME_ID_T
  * FRAMING/OVERLAY mode), so this never navigates or reloads the video.
  * Module-scope (not a closure) so unit tests can exercise it directly.
  */
-export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProjects, clipName } = {}) {
+export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProjects, clipName, message, withAction = true } = {}) {
   useProjectsStore.getState().selectProject(projectId);
   // T8760 item 2: name the clip and confirm its new home — the Clips tab (T8555;
   // T9530/N10 dropped the "In Progress" prefix, single-sourced via SECTION_NAMES).
   // The "Open Framing" action still carries T8480's Framing-unlock affordance.
   // `dedupKey` unchanged so it collapses duplicates.
+  // T11130: the Highlight popup's "Back to Editing" outcome overrides the copy
+  // (HIGHLIGHT_MOVED_TO_CLIPS) and drops the action button (`withAction: false`)
+  // — the editor closes, so there is no "Open Framing" affordance to offer and
+  // the toast IS the confirmation. Default callers keep the original toast.
   const name = (clipName && clipName.trim()) ? clipName.trim() : 'Your clip';
-  toast.success(`${name} is now in ${SECTION_NAMES.CLIPS}`, {
+  const text = message || `${name} is now in ${SECTION_NAMES.CLIPS}`;
+  toast.success(text, {
     duration: 6000,
     dedupKey: 'reel-created',
-    action: {
-      label: `Open ${MODE_NAMES.FRAMING}`,
-      onClick: () => onOpenReelInFocus?.(projectId),
-    },
+    ...(withAction ? {
+      action: {
+        label: `Open ${MODE_NAMES.FRAMING}`,
+        onClick: () => onOpenReelInFocus?.(projectId),
+      },
+    } : {}),
   });
   fetchProjects({ force: true });
 }
@@ -643,6 +656,21 @@ export function AnnotateContainer({
   // cleared only after it fully settles makes any pick during that window a no-op.
   const rateGatePickInFlightRef = useRef(false);
 
+  // T11130: the Done -> "Make this a highlight now?" choice card. Distinct from
+  // (and sequential with) the T11120 rate gate: the rate gate fires when Done
+  // leaves an UNRATED play; THIS fires when the resulting play is rated Highlight
+  // (5) and is not yet a highlight (no autoProjectId). Both never block at once —
+  // the rate gate's continuation is what opens this (see maybeOpenHighlightChoice,
+  // wired into handleOverlayClose's proceed). `null | { regionId }`. The card is
+  // an in-place mode-swap of the edit strip (AnnotateFullscreenOverlay), NOT a
+  // portal modal, so only this state + the three handlers cross the boundary.
+  const [highlightChoice, setHighlightChoice] = useState(null);
+  // T9830/T11120 convention: a synchronously-set ref guards the two choice
+  // buttons' shared create seam against a double-create (state alone lags a
+  // render). setHighlightChoice(null) is batched, so a second tap in the same
+  // tick could otherwise re-enter before the first create resolves.
+  const highlightChoiceInFlightRef = useRef(false);
+
   const isUnrated = useCallback((regionId) => {
     if (!regionId) return false;
     const region = clipRegionsRef.current.find(r => r.id === regionId);
@@ -661,6 +689,26 @@ export function AnnotateContainer({
     proceed();
     return false;
   }, [isUnrated]);
+
+  // T11130: the exit continuation that decides between the Highlight choice card
+  // and a plain close. Highlight-rated (5) AND not yet a highlight -> swap the
+  // edit strip for the choice card; anything else (1-4 stars, or already a
+  // highlight) closes normally (H3). `pickedRating` is the rating the rate-gate
+  // pick just chose, passed EXPLICITLY because clipRegionsRef has not necessarily
+  // re-rendered to the new rating by the time this continuation runs synchronously
+  // after the pick's awaits (a real ordering trap — proven by the "rated Highlight
+  // in the gate" test). The already-rated path calls with no pickedRating and
+  // reads the stored value, which IS fresh (it was set in an earlier gesture).
+  const maybeOpenHighlightChoice = useCallback((regionId, fallbackClose, pickedRating) => {
+    const region = clipRegionsRef.current.find(r => r.id === regionId);
+    const rating = pickedRating != null ? pickedRating : region?.rating;
+    if (region && rating === HIGHLIGHT_RATING && !region.autoProjectId) {
+      setHighlightChoice({ regionId });
+      return;
+    }
+    fallbackClose();
+  }, []);
+
   // T10610 § C.5: memory-only view state reflecting the outcome of the most
   // recent per-gesture write — drives SaveStatusBadge. Not reactive persistence:
   // it is set by the SAME handler that enqueues the write, never by a useEffect.
@@ -1871,7 +1919,11 @@ export function AnnotateContainer({
       // late (the rating still persisted; only the exit is cancelled).
       if (rateGateRef.current !== gate) return;
       setRateGate(null);
-      gate.proceed();
+      // T11130: pass the just-picked rating to the continuation. handleOverlayClose's
+      // continuation (maybeOpenHighlightChoice) needs it to open the Highlight card
+      // for a play just rated 5 in the gate — clipRegionsRef may not have re-rendered
+      // to the new rating yet. Other exit continuations ignore the extra argument.
+      gate.proceed(rating);
     } finally {
       rateGatePickInFlightRef.current = false;
     }
@@ -1880,6 +1932,62 @@ export function AnnotateContainer({
   // T11120: "Keep editing" (M6) / Escape / inert backdrop — return to the editor
   // with NOTHING written. The gate is a gate, never a write.
   const handleRateGateDismiss = useCallback(() => setRateGate(null), []);
+
+  // T11130: "Make Highlight Now" — reuses the Frame Now path exactly
+  // (updateClipRegionWithSync createProject + silent, await the region's write
+  // chain, then navigate into Framing). `silent` suppresses the default
+  // notifyReelCreated toast: the navigation is the confirmation. The rating
+  // commit that opened this card is already queued on the same FIFO region queue,
+  // so awaiting settle() here guarantees BOTH rating and create landed before we
+  // follow the new project into Focus (§ C.4 await-then-navigate). On failure the
+  // card stays open so the write-queue's Retry toast remains actionable.
+  const handleHighlightChoiceNow = useCallback(async () => {
+    const choice = highlightChoice;
+    if (!choice) return;
+    if (highlightChoiceInFlightRef.current) return;
+    highlightChoiceInFlightRef.current = true;
+    try {
+      const result = await updateClipRegionWithSync(choice.regionId, { createProject: true, silent: true });
+      const ok = await awaitRegionWrites(choice.regionId);
+      if (!ok) return; // write still in flight or failed — keep the card open
+      setHighlightChoice(null);
+      if (result?.saveOk && result.projectId) onOpenReelInFocus?.(result.projectId);
+    } finally {
+      highlightChoiceInFlightRef.current = false;
+    }
+  }, [highlightChoice, updateClipRegionWithSync, awaitRegionWrites, onOpenReelInFocus]);
+
+  // T11130: "Back to Editing" — creates the highlight (same createProject call as
+  // Frame Later) but does NOT navigate: it closes the editor and returns to
+  // marking plays (M2). Because the editor closes, the gold "Highlight made" chip
+  // is off screen, so the toast is the sole confirmation (M3): announceReelCreated
+  // with the exact HIGHLIGHT_MOVED_TO_CLIPS copy and NO action button. `silent` on
+  // the create suppresses the DEFAULT reel-created toast so only this one fires.
+  const handleHighlightChoiceLater = useCallback(async () => {
+    const choice = highlightChoice;
+    if (!choice) return;
+    if (highlightChoiceInFlightRef.current) return;
+    highlightChoiceInFlightRef.current = true;
+    try {
+      const result = await updateClipRegionWithSync(choice.regionId, { createProject: true, silent: true });
+      if (result?.saveOk && result.projectId) {
+        announceReelCreated(result.projectId, {
+          onOpenReelInFocus,
+          fetchProjects,
+          message: ANNOTATE.HIGHLIGHT_MOVED_TO_CLIPS,
+          withAction: false,
+        });
+      }
+      setHighlightChoice(null);
+      closeOverlay(); // returns to marking plays (M2)
+    } finally {
+      highlightChoiceInFlightRef.current = false;
+    }
+  }, [highlightChoice, updateClipRegionWithSync, onOpenReelInFocus, fetchProjects, closeOverlay]);
+
+  // T11130: Escape on the choice card — return to the editor with NOTHING
+  // written (M5). Like the rate gate's dismiss, this is a gate, never a write.
+  const handleHighlightChoiceDismiss = useCallback(() => setHighlightChoice(null), []);
 
   /**
    * Delete a clip region - syncs to backend if the clip has been saved.
@@ -1929,13 +2037,19 @@ export function AnnotateContainer({
     // closeWithCommit through this onClose. On an unrated play, gate instead of
     // closing; the pick continues with closeOverlay. Delete play does NOT reach
     // here (it calls closeOverlay directly), so it stays ungated by design.
+    // T11130: the exit continuation is no longer a plain closeOverlay — it routes
+    // through maybeOpenHighlightChoice, which opens the "Make this a highlight
+    // now?" card when the (now-rated) play is a Highlight not yet made into a
+    // highlight, or closes otherwise. Sequential with the rate gate: an UNRATED
+    // play still gates first, and the gate's pick runs THIS continuation, so a
+    // play just rated Highlight in the gate flows straight into the card.
     const editingId = selectionState.type === 'EDITING' ? selectionState.clipId : null;
     if (editingId) {
-      guardRateThenExit(editingId, closeOverlay);
+      guardRateThenExit(editingId, (pickedRating) => maybeOpenHighlightChoice(editingId, closeOverlay, pickedRating));
       return;
     }
     closeOverlay();
-  }, [selectionState, guardRateThenExit, closeOverlay]);
+  }, [selectionState, guardRateThenExit, closeOverlay, maybeOpenHighlightChoice]);
 
   // T2750: In unified multi-video mode, convert virtual time to actual and match
   // against the correct video's clips. Clips store actual per-video times.
@@ -2367,6 +2481,12 @@ export function AnnotateContainer({
     guardRateThenExit,
     handleRateGatePick,
     handleRateGateDismiss,
+    // T11130: the Done -> "Make this a highlight now?" choice card — state + the
+    // two create handlers + the Escape dismiss the in-place card wires to.
+    highlightChoice,
+    handleHighlightChoiceNow,
+    handleHighlightChoiceLater,
+    handleHighlightChoiceDismiss,
     setAnnotatePlaybackSpeed,
     setAnnotateSelectedLayer,
 

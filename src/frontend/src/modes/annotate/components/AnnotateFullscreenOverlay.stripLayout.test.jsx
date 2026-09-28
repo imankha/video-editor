@@ -148,11 +148,11 @@ describe('AnnotateFullscreenOverlay strip — details panel has no inner scroll 
   });
 });
 
-// T9330 §3.5: the strip's stage CTA row is a FULL-WIDTH primary button driven
-// by getClipStage — no longer a small right-anchored chip that always says
-// "Framing" regardless of stage.
-describe('AnnotateFullscreenOverlay strip — full-width stage-aware primary CTA (T9330)', () => {
-  it('renders the stage CTA full-width, not a small right-anchored chip', () => {
+// T11130 (H8): the editor's own stage CTA row is REMOVED — the ONE surviving
+// stage button lives on the main Annotate screen (AnnotateModeView). The editor
+// strip renders no Frame / Apply Spotlight / View button at any stage.
+describe('AnnotateFullscreenOverlay strip — no editor stage CTA (T11130 / H8)', () => {
+  it('renders NO stage CTA in the strip even when the clip has a project', () => {
     render(
       <AnnotateFullscreenOverlay
         {...baseProps}
@@ -160,18 +160,11 @@ describe('AnnotateFullscreenOverlay strip — full-width stage-aware primary CTA
         existingClip={{ ...editClip, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
       />
     );
-    const cta = screen.getByRole('button', { name: 'Frame' });
-    expect(cta.className).toMatch(/w-full/);
-    // Regression (2026-09-18 user request): rollover explaining what Framing
-    // does, using the already-approved Clips-tab copy (T10280).
-    expect(cta.title).toBe(
-      'Framing focuses the camera on your player and lets you trim and add slo-mo to key moments.'
-    );
+    expect(screen.queryByRole('button', { name: 'Frame' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Apply Spotlight' })).toBeNull();
   });
 
-  it('reflects the linked project stage (Spotlight), not a hardcoded "Framing" label', () => {
-    // linkedProject is looked up via useProjectsList (matching ClipDetailsEditor),
-    // so seed the store rather than passing a prop.
+  it('renders NO stage CTA regardless of the linked project stage (Spotlight)', () => {
     useProjectsStore.setState({ projects: [{ id: 42, has_working_video: true, has_final_video: false, is_published: false }] });
     render(
       <AnnotateFullscreenOverlay
@@ -181,6 +174,6 @@ describe('AnnotateFullscreenOverlay strip — full-width stage-aware primary CTA
       />
     );
     expect(screen.queryByRole('button', { name: 'Frame' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Apply Spotlight' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Apply Spotlight' })).toBeNull();
   });
 });

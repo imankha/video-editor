@@ -92,6 +92,55 @@ describe('announceReelCreated (T8480)', () => {
   });
 });
 
+// T11130: the Highlight popup's "Back to Editing" outcome reuses
+// announceReelCreated with a custom message and NO action button (the editor
+// closes, so there is no "Open Framing" affordance and the toast is the sole
+// confirmation). The default callers keep the original copy + action.
+describe('announceReelCreated — T11130 message/withAction overrides', () => {
+  let selectProject;
+  let fetchProjects;
+  let onOpenReelInFocus;
+
+  beforeEach(() => {
+    selectProject = vi.fn();
+    fetchProjects = vi.fn();
+    onOpenReelInFocus = vi.fn();
+    useProjectsStore.setState({ selectProject });
+    useToastStore.setState({ toasts: [] });
+  });
+
+  afterEach(() => {
+    useProjectsStore.setState({ selectProject: originalSelectProject });
+    useToastStore.setState({ toasts: [] });
+  });
+
+  it('shows the exact custom message with no action button when withAction is false', () => {
+    announceReelCreated(42, {
+      onOpenReelInFocus,
+      fetchProjects,
+      clipName: 'Brilliant Interception',
+      message: 'Highlight moved to Clips so you can edit it later',
+      withAction: false,
+    });
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0].type).toBe('success');
+    expect(toasts[0].title).toBe('Highlight moved to Clips so you can edit it later');
+    expect(toasts[0].action).toBeUndefined();
+  });
+
+  it('still selects the project and refreshes the list on the custom path (so it appears in Clips)', () => {
+    announceReelCreated(42, {
+      onOpenReelInFocus,
+      fetchProjects,
+      message: 'Highlight moved to Clips so you can edit it later',
+      withAction: false,
+    });
+    expect(selectProject).toHaveBeenCalledWith(42);
+    expect(fetchProjects).toHaveBeenCalledWith({ force: true });
+  });
+});
+
 // T9580 AC #1: the bare-play save (createProject off) must SAY WHICH object it
 // created — the play — rather than the old generic "Saved to your library".
 describe('announcePlaySaved (T9580 AC #1)', () => {

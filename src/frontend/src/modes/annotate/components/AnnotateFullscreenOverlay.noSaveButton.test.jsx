@@ -219,23 +219,15 @@ describe('AnnotateFullscreenOverlay — the ONE Escape rule (v2 finding 6)', () 
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(onUpdateClip).not.toHaveBeenCalled();
   });
-});
 
-describe('AnnotateFullscreenOverlay — stage CTA awaits pending writes (§ C.4)', () => {
-  it('does not navigate when the write chain resolves false', async () => {
-    const onAwaitWrites = vi.fn(() => Promise.resolve(false));
-    const onOpenInFocus = vi.fn();
+  // T11130 (H8): the editor's own stage CTA is removed — the ONE surviving stage
+  // button lives on the main Annotate screen (AnnotateModeView), whose
+  // await-before-navigate is covered by AnnotateModeView.frameClip.test.jsx. The
+  // editor no longer renders any Frame / Apply / View stage button.
+  it('a made highlight (autoProjectId set) renders NO stage CTA in the editor strip (H8)', () => {
     const clip = { ...baseClip, autoProjectId: 42 };
-    render(
-      <AnnotateFullscreenOverlay
-        {...baseProps({ onAwaitWrites, onOpenInFocus, existingClip: clip })}
-        layout="strip"
-      />
-    );
-    const stageButtons = screen.getAllByRole('button').filter((b) => /Frame|Apply|View/.test(b.textContent));
-    expect(stageButtons.length).toBeGreaterThan(0);
-    await fireEvent.click(stageButtons[0]);
-    expect(onAwaitWrites).toHaveBeenCalledWith('clip-1');
-    expect(onOpenInFocus).not.toHaveBeenCalled();
+    render(<AnnotateFullscreenOverlay {...baseProps({ existingClip: clip })} layout="strip" />);
+    const stageButtons = screen.getAllByRole('button').filter((b) => /^(Frame|Apply Spotlight|View Final|View Published)$/.test(b.textContent));
+    expect(stageButtons.length).toBe(0);
   });
 });

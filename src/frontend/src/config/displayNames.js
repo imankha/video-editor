@@ -18,12 +18,11 @@ export const ANNOTATE = {
   // (DEFAULT_CLIP_BEFORE + DEFAULT_CLIP_AFTER, single-sourced in clipConstants.js — T9840).
   MARK_PLAY_HELPER: 'Captures 6 seconds before and 2 after',
   PLAYS_HEADING: 'Plays',                  // N06 — sidebar list heading
-  // N07 — create-an-editable-clip toggle. Positive polarity both states (T9450):
-  // ON produces a clip, OFF just saves the play. Never a "Don't …" double negative.
-  CREATE_EDITABLE_CLIP: 'Create an editable clip',
   JUST_SAVE_PLAY: 'Just save this play',
-  SAVE_PLAY_AND_CLIP: 'Save play and create clip', // N08 — save + produce a clip
-  CREATE_CLIP: 'Create clip',              // N09 — manual create-clip action
+  // T11130: CREATE_EDITABLE_CLIP / SAVE_PLAY_AND_CLIP / CREATE_CLIP removed —
+  // the "Create clip"/"Save and create clip" affordances are gone; a play
+  // becomes a highlight through the rating + Done -> Highlight popup gesture
+  // (HIGHLIGHT_CHOICE_* / HIGHLIGHT_MOVED_TO_CLIPS below), not a manual toggle.
   // T10550: the rating popup's own visible heading (+ its accessible name, so
   // they match) — layer-aware like `getRatingCaption`'s existing `mine` split,
   // so a Team play never claims to be "your athlete's".
@@ -48,6 +47,21 @@ export const ANNOTATE = {
   // T11150: shown when a play has produced a clip (existingClip.autoProjectId),
   // replacing the old T10410 progress-badges row's clip indicator.
   HIGHLIGHT_MADE: 'Highlight made',
+  // T11130: the Done -> Highlight choice card (in-place gold mode-swap of the
+  // edit strip when Done fires on a Highlight-rated play that is not yet a
+  // highlight). Owner-approved copy (2026-09-24). "Back to Editing" replaced
+  // round 2's "Highlight Later" (owner ruling round 3). Escape is the only
+  // no-save exit; never closes on backdrop.
+  HIGHLIGHT_CHOICE_EYEBROW: 'Highlight',
+  HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
+  MAKE_HIGHLIGHT_NOW: 'Make Highlight Now',
+  BACK_TO_EDITING: 'Back to Editing',
+  BACK_TO_EDITING_SUBTEXT: 'Saves play in Clips so you can make your highlight later',
+  // T11130: the "Back to Editing" confirmation toast (via announceReelCreated,
+  // no action button) — the editor closes, so the toast IS the confirmation.
+  // "Clips" (capital C) names the Home tab; one of only two strings in Annotate
+  // that still say "Clips".
+  HIGHLIGHT_MOVED_TO_CLIPS: 'Highlight moved to Clips so you can edit it later',
   // T11150: error-path toasts (AnnotateContainer) — single-sourced so the
   // "no clip wording in Annotate" sweep is greppable/testable, not buried inline.
   GHOST_GAME_SAVE_MESSAGE: "Your play couldn't be saved because this game was removed. Your work is still on screen — head back to your games to continue.",
@@ -76,7 +90,9 @@ export const ANNOTATE = {
   // own words, 2026-09-17) is the one place the app explains what Framing
   // does; this reuses its "what Framing does" sentence verbatim.
   FRAME_THIS_CLIP_HINT: 'Framing focuses the camera on your player and lets you trim and add slo-mo to key moments.',
-  KEEP_MARKING_PLAYS: 'Keep marking plays', // N41 — invitation dismiss secondary
+  // T11130: KEEP_MARKING_PLAYS removed with the editor's first-clip invitation
+  // (H8 removed the editor stage buttons); the Highlight popup owns the
+  // create-vs-keep-editing choice now.
   // T10240 (N42): the Framing-entry action. "Frame" is the VERB form of the
   // Framing mode (MODE_NAMES.FRAMING = 'Framing', T9860) — deliberately NOT
   // the old "Focus" mode name, and NOT the noun "Framing" (which would read
@@ -84,19 +100,12 @@ export const ANNOTATE = {
   // stage actions (create-only vs create-and-open-Framing, T10240).
   // T10610: SAVE_AND_FRAME (the editor's create-then-open-Framing outcome)
   // is retired — there is no save gesture left to attach it to.
-  FRAME_CLIP: 'Frame clip',                // N42 — NO_PROJECT create + open Framing
-  // T10450 (2026-09-18 user request): the T10310 main-screen row's NO_PROJECT
-  // case splits FRAME_CLIP into two explicit outcomes instead of one button
-  // that always both creates and navigates. "Frame Now" is FRAME_CLIP's old
-  // behavior (create the project, then open Framing); "Frame Later" creates
-  // the project WITHOUT navigating — the play becomes an editable clip, left
-  // for a later Framing pass (same create call as clipStage's NO_PROJECT
-  // "create" action, `navigate: false`). A play that already has a project
-  // keeps the single existing stage-CTA button (Frame/Apply Spotlight/View
-  // Final/View Published) — this split applies ONLY before a clip exists.
-  FRAME_NOW: 'Frame Now',              // N43 — NO_PROJECT create + open Framing immediately
-  FRAME_LATER: 'Frame Later',          // N43 — NO_PROJECT create only, stays in Annotate
-  FRAME_LATER_HINT: 'Save this play as an editable clip. Frame it whenever you are ready.',
+  FRAME_CLIP: 'Frame clip',                // N42 — retained for FramingHeaderStatus / ClipSelectorSidebar
+  // T11130: FRAME_NOW / FRAME_LATER / FRAME_LATER_HINT removed — the T10450
+  // main-screen Frame Now / Frame Later create row is gone; a play becomes a
+  // highlight through the rating + Done -> Highlight popup gesture. A play that
+  // already has a project keeps the single existing stage-CTA button
+  // (Frame/Apply Spotlight/View Final/View Published) on the main screen (H8).
   // T10290: the details disclosure label (was the inline literal "Add details",
   // then just "Details", then "Rate and Tag", then "Notes and Tags"). T10620:
   // back to "Details" — the portrait strip moved category/teammates/Delete play

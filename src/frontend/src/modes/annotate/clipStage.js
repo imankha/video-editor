@@ -55,23 +55,13 @@ export const CLIP_STAGE = {
 export function getClipStage(region, linkedProject) {
   const hasProject = !!region?.autoProjectId;
   if (!hasProject) {
-    // T10240: a saved play with no clip is no longer a dead end (was
-    // `action: null`). Two create outcomes, BOTH creating the auto-project via
-    // the same create path (updateClipRegionWithSync's `createProject: true`):
-    // "Create clip" stays in Annotate; "Frame clip" then opens it in Framing.
-    // `navigate` tells each surface whether to call onOpenInFocus with the new
-    // project id — threaded back synchronously from the create path (the shared
-    // create-then-navigate seam T10290's "Save and Frame" reuses). Neither is
-    // ever rendered disabled at the NO_PROJECT moment.
-    return {
-      stage: CLIP_STAGE.NO_PROJECT,
-      label: ANNOTATE.CREATE_CLIP,
-      action: null,
-      createActions: [
-        { key: 'create', label: ANNOTATE.CREATE_CLIP, navigate: false },
-        { key: 'frame', label: ANNOTATE.FRAME_CLIP, navigate: true },
-      ],
-    };
+    // T11130: a play with no project is no longer offered a "Create clip" /
+    // "Frame clip" CTA here — creation moved to the rating + Done -> Highlight
+    // popup gesture (see AnnotateContainer highlightChoice), and H8 removed the
+    // editor stage buttons. The stage CTA only renders once a project exists,
+    // so this branch carries no label/action anymore (the old `createActions`
+    // array had zero consumers after that removal).
+    return { stage: CLIP_STAGE.NO_PROJECT, label: null, action: null };
   }
 
   // T8070: exact-equality staleness gate (no epsilon).
