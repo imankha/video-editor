@@ -626,6 +626,13 @@ export function AnnotateContainer({
   // stashed continuation the chosen rating unblocks. Defined HERE (before
   // handleToggleFullscreen) so that route's dep array can reference isUnrated.
   const [rateGate, setRateGate] = useState(null); // null | { regionId, proceed }
+  // T11120: current gate identity, read at CONTINUATION time. handleRateGatePick
+  // awaits the rating write before running the stashed continuation; if the user
+  // dismisses ("Keep editing") or re-picks during that in-flight window, the
+  // ORIGINAL gate is abandoned and its continuation must not fire late. Comparing
+  // against this ref (not the closed-over `gate`) is how the pick detects that.
+  const rateGateRef = useRef(null);
+  rateGateRef.current = rateGate;
 
   const isUnrated = useCallback((regionId) => {
     if (!regionId) return false;
@@ -1845,6 +1852,9 @@ export function AnnotateContainer({
     await updateClipRegionWithSync(gate.regionId, { rating });
     const ok = await awaitRegionWrites(gate.regionId);
     if (!ok) return; // write still in flight or failed — keep the gate open
+    // A dismiss / re-pick during the await abandoned THIS gate — its continuation
+    // must not fire late (the rating still persisted; only the exit is cancelled).
+    if (rateGateRef.current !== gate) return;
     setRateGate(null);
     gate.proceed();
   }, [rateGate, updateClipRegionWithSync, awaitRegionWrites]);
