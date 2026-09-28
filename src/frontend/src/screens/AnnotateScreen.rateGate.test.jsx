@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, act, cleanup, waitFor } from '@testing-library/react';
 
 /**
  * T11120 — Route 5 at the AnnotateScreen level: leaving Annotate while EDITING an
@@ -25,6 +25,7 @@ const H = vi.hoisted(() => {
     holder,
     setEditorMode: vi.fn(),
     redirectToMode: vi.fn(),
+    selectProject: vi.fn(async (id) => ({ id })),
     // Mirrors the container's guardRateThenExit on an UNRATED play: stash the
     // continuation, open the gate, and tell the caller it was gated (return true).
     guard: vi.fn((regionId, proceed) => { holder.proceed = proceed; return true; }),
@@ -50,7 +51,11 @@ vi.mock('../containers', () => {
       showAnnotateOverlay: true,
       annotateSelectedRegionId: 'p1',
       guardRateThenExit: H.guard,
-      clipRegions: [],
+      fullTimeline: null,
+      clipRegions: [
+        { id: 'p1', autoProjectId: 11 },
+        { id: 'p2', autoProjectId: 22 },
+      ],
       annotateRegionsWithLayout: [],
     }),
   };
@@ -105,7 +110,24 @@ vi.mock('../stores/uploadStore', () => ({
   selectActiveUpload: () => null,
 }));
 vi.mock('../stores/gamesDataStore', () => ({ useGamesDataStore: mkStore() }));
-vi.mock('../stores/projectsStore', () => ({ useProjectsStore: mkStore() }));
+vi.mock('../stores/projectsStore', () => {
+  const bag = {
+    projects: [
+      { id: 11, has_working_video: true },
+      { id: 22, has_working_video: true },
+    ],
+    selectedProject: null,
+    selectProject: H.selectProject,
+    fetchProjects: vi.fn(),
+  };
+  return {
+    useProjectsStore: Object.assign((sel) => (sel ? sel(bag) : bag), {
+      getState: () => bag,
+      setState: vi.fn(),
+      subscribe: vi.fn(),
+    }),
+  };
+});
 vi.mock('./ProjectsScreen', () => ({ getPendingGameFile: () => null, getPendingGameDetails: () => null, clearPendingGameFile: vi.fn() }));
 vi.mock('../utils/pendingNavigation', () => ({ hasPendingGame: () => false, consumePendingGame: () => null }));
 
@@ -117,6 +139,7 @@ beforeEach(() => {
   H.guard.mockClear();
   H.setEditorMode.mockClear();
   H.redirectToMode.mockClear();
+  H.selectProject.mockClear();
 });
 afterEach(() => cleanup());
 
@@ -141,7 +164,7 @@ describe('AnnotateScreen — Route 5: mode-bar / Home exit gates on an unrated p
     expect(onClearSelection).toHaveBeenCalledTimes(1);
   });
 
-  it('mode-bar change gates (guardRateThenExit) and does NOT call onModeChange until a rating is picked', () => {
+  it('mode-bar change gates, then opens the selected play project rather than the most recent one', async () => {
     const onClearSelection = vi.fn();
     const onModeChange = vi.fn();
     render(<AnnotateScreen onClearSelection={onClearSelection} onModeChange={onModeChange} />);
@@ -155,6 +178,8 @@ describe('AnnotateScreen — Route 5: mode-bar / Home exit gates on an unrated p
 
     // Picking a rating runs the stashed continuation -> NOW the mode change fires.
     act(() => { H.holder.proceed(); });
-    expect(onModeChange).toHaveBeenCalledWith('overlay');
+    await waitFor(() => expect(onModeChange).toHaveBeenCalledWith('overlay'));
+    expect(H.selectProject).toHaveBeenCalledWith(11);
+    expect(H.selectProject).not.toHaveBeenCalledWith(22);
   });
 });

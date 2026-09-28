@@ -29,7 +29,9 @@ export function UnifiedHeader({
   editorMode,
   onModeChange,
   hasProject = false,
+  hasSelectedPlay = true,
   hasWorkingVideo = false,
+  modeProject,
   hasOverlayVideo = false,
   framingOutOfSync = false,
   hasAnnotateVideo = false,
@@ -58,7 +60,9 @@ export function UnifiedHeader({
           mode={editorMode}
           onModeChange={onModeChange}
           hasProject={hasProject}
+          hasSelectedPlay={hasSelectedPlay}
           hasWorkingVideo={hasWorkingVideo}
+          project={modeProject}
           hasOverlayVideo={hasOverlayVideo}
           framingOutOfSync={framingOutOfSync}
           hasAnnotateVideo={hasAnnotateVideo}
@@ -100,7 +104,9 @@ export function UnifiedHeader({
           mode={editorMode}
           onModeChange={onModeChange}
           hasProject={hasProject}
+          hasSelectedPlay={hasSelectedPlay}
           hasWorkingVideo={hasWorkingVideo}
+          project={modeProject}
           hasOverlayVideo={hasOverlayVideo}
           framingOutOfSync={framingOutOfSync}
           hasAnnotateVideo={hasAnnotateVideo}
