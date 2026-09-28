@@ -628,11 +628,20 @@ export function AnnotateContainer({
   const [rateGate, setRateGate] = useState(null); // null | { regionId, proceed }
   // T11120: current gate identity, read at CONTINUATION time. handleRateGatePick
   // awaits the rating write before running the stashed continuation; if the user
-  // dismisses ("Keep editing") or re-picks during that in-flight window, the
-  // ORIGINAL gate is abandoned and its continuation must not fire late. Comparing
-  // against this ref (not the closed-over `gate`) is how the pick detects that.
+  // dismisses ("Keep editing") during that in-flight window, the ORIGINAL gate is
+  // abandoned and its continuation must not fire late. Comparing against this ref
+  // (not the closed-over `gate`) is how the pick detects that. (A re-pick in that
+  // window can't abandon the gate — rateGatePickInFlightRef blocks it outright.)
   const rateGateRef = useRef(null);
   rateGateRef.current = rateGate;
+  // T11120: synchronous in-flight guard for the pick (T9830/T10450 convention,
+  // same as markPlayInFlightRef). The rating rows aren't disabled while the write
+  // is in flight, and setRateGate(null) is batched (rateGateRef only refreshes on
+  // render), so two quick picks could BOTH pass the `rateGateRef.current !== gate`
+  // check and fire gate.proceed() twice (duplicate finishAnnotation POST / dup
+  // navigation). A ref set synchronously the instant the first pick starts and
+  // cleared only after it fully settles makes any pick during that window a no-op.
+  const rateGatePickInFlightRef = useRef(false);
 
   const isUnrated = useCallback((regionId) => {
     if (!regionId) return false;
@@ -1849,14 +1858,23 @@ export function AnnotateContainer({
   const handleRateGatePick = useCallback(async (rating) => {
     const gate = rateGate;
     if (!gate) return;
-    await updateClipRegionWithSync(gate.regionId, { rating });
-    const ok = await awaitRegionWrites(gate.regionId);
-    if (!ok) return; // write still in flight or failed — keep the gate open
-    // A dismiss / re-pick during the await abandoned THIS gate — its continuation
-    // must not fire late (the rating still persisted; only the exit is cancelled).
-    if (rateGateRef.current !== gate) return;
-    setRateGate(null);
-    gate.proceed();
+    // Synchronous double-pick guard: a second pick fired before the first settles
+    // is a no-op, so proceed() can never run twice (see rateGatePickInFlightRef).
+    if (rateGatePickInFlightRef.current) return;
+    rateGatePickInFlightRef.current = true;
+    try {
+      await updateClipRegionWithSync(gate.regionId, { rating });
+      const ok = await awaitRegionWrites(gate.regionId);
+      if (!ok) return; // write still in flight or failed — keep the gate open
+      // A dismiss during the await abandoned THIS gate (a re-pick can't — it's
+      // blocked by the in-flight guard above) — its continuation must not fire
+      // late (the rating still persisted; only the exit is cancelled).
+      if (rateGateRef.current !== gate) return;
+      setRateGate(null);
+      gate.proceed();
+    } finally {
+      rateGatePickInFlightRef.current = false;
+    }
   }, [rateGate, updateClipRegionWithSync, awaitRegionWrites]);
 
   // T11120: "Keep editing" (M6) / Escape / inert backdrop — return to the editor

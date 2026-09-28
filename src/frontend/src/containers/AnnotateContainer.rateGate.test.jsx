@@ -307,6 +307,54 @@ describe('AnnotateContainer — "Rate this play" gate (T11120)', () => {
     expect(result.current.showAnnotateOverlay).toBe(true);
   });
 
+  // ---- Race: two quick picks while the write is in-flight run the continuation
+  // ONCE. Rating rows aren't disabled mid-write and setRateGate(null) is batched
+  // (rateGateRef only refreshes on render), so without a synchronous in-flight
+  // guard BOTH picks pass the `rateGateRef.current !== gate` check and fire
+  // proceed() twice (dup finishAnnotation POST / dup navigation). ----
+  it('two picks while a pick write is in-flight run the continuation exactly once', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    const id = await markUnratedPlay(result);
+
+    // Open the gate with a SPY continuation so a double-fire is countable (a plain
+    // closeOverlay is idempotent and would look identical on a second call).
+    const proceed = vi.fn();
+    act(() => { result.current.guardRateThenExit(id, proceed); });
+    expect(result.current.rateGate?.regionId).toBe(id);
+
+    // Suspend the rating write(s) so both picks hang on the write await together.
+    // Collect EVERY dispatched write's resolver: without the guard the second pick
+    // enqueues its own FIFO write behind the first (clipRegionsRef hasn't refreshed
+    // yet), so draining all of them is what lets both continuations reach proceed().
+    const resolvers = [];
+    apiFetch.mockReset();
+    apiFetch.mockImplementation(() => new Promise((res) => {
+      resolvers.push(() => res({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, success: true }) }));
+    }));
+
+    // Two picks back-to-back, with a render between them, while the write hangs.
+    let pick1, pick2;
+    await act(async () => {
+      pick1 = result.current.handleRateGatePick(4);
+      await flush(); // pick1 dispatches its (now hanging) write; a render lands
+      pick2 = result.current.handleRateGatePick(4);
+      await flush();
+    });
+    expect(resolvers.length).toBeGreaterThan(0); // a write is genuinely in flight
+
+    // Drain all in-flight writes (FIFO: releasing one may dispatch the next), then
+    // let both picks settle. proceed() must fire EXACTLY once, never twice.
+    await act(async () => {
+      for (let i = 0; i < 6 && resolvers.length; i++) {
+        resolvers.splice(0).forEach((r) => r());
+        await flush();
+      }
+      await pick1; await pick2; await flush();
+    });
+    expect(proceed).toHaveBeenCalledTimes(1);
+    expect(result.current.rateGate).toBeNull();
+  });
+
   // ---- Delete play always bypasses the gate ----
   it('Delete play bypasses the gate even on an unrated play', async () => {
     const { result } = renderHook(() => AnnotateContainer(baseProps()));

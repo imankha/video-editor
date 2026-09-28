@@ -1975,10 +1975,15 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   (title) / `RATE_GATE_SUBTITLE` "Pick one to finish." / `RATE_GATE_KEEP_EDITING` "Keep editing" (M6; Escape
   same; backdrop inert). The `'!'` in rating-5's meaning is prose, so `progressBadges.test.jsx`'s
   chess-glyph guard now excludes the bare `!` for the picker only. No effect watches rating; nothing seeds
-  a default. Tests: `AnnotateContainer.rateGate.test.jsx` (routes 1/2/4-guard/5-guard + pick/dismiss/delete),
-  `RateThisPlayModal.test.jsx` (copy + inert backdrop + Escape). **Route 3 (mobile fullscreen) + the live
-  two-play switch are not driven headless (jsdom, as T11150 documented) — gated by the shared guard,
-  verified by mechanism tests + staging.**
+  a default. Tests: `AnnotateContainer.rateGate.test.jsx` (routes 1/2/3-mobile-fullscreen/4-switch/4-guard/5-guard
+  + pick/dismiss/delete + the dismiss-during-in-flight-write race + the double-pick race), `RateThisPlayModal.test.jsx`
+  (copy + inert backdrop + Escape). **Route 3 (mobile fullscreen exit) AND the live two-play switch ARE now
+  driven headless** in `AnnotateContainer.rateGate.test.jsx` (jsdom, matchMedia forced mobile for route 3);
+  the only path still verified by staging alone is the mobile LIVE-drive of the modal chrome.
+  **`handleRateGatePick` carries a SYNCHRONOUS in-flight ref guard (`rateGatePickInFlightRef`, T9830/T10450
+  convention like `markPlayInFlightRef`)**: rating rows aren't disabled mid-write and `setRateGate(null)` is
+  batched (`rateGateRef` only refreshes on render), so without it two quick picks both pass the
+  `rateGateRef.current !== gate` check and fire `proceed()` twice (dup `finishAnnotation` POST / dup nav).
 - **[SUPERSEDED by T11150 above — badges removed; kept for history] Play-progress badges are a PURE READ of editor state (T10410, 2026-09-18; rewritten through
   T10590, 2026-09-19 — five follow-up rounds the SAME day, all user-driven live-testing corrections).**
   The Edit play editor shows four badges — **named / rated / noted / clip** (T10460 reordered named
