@@ -285,8 +285,9 @@ class TestResolverOrdering:
 
 
 # ---------------------------------------------------------------------------
-# Shared-in teammate reels excluded from the user's own collections + rankings
-# (bug 22); own Team-layer reels stay visible (T10070).
+# Shared-in teammate reels are excluded from the user's own collections +
+# rankings (bug 22). Own Team-layer reels stay visible in Gallery/collections
+# (T10070) but are excluded from the athlete-specific ranking pool (T11160).
 #
 # Provenance -- not layer -- is the signal. A reel is excluded only when its
 # source clip was SHARED IN by a teammate: materialization stamps
@@ -322,13 +323,13 @@ class TestMyAthleteReelExclusion:
             c.commit()
         return mine, shared_in, own_team, nul
 
-    def test_rankable_pool_excludes_shared_in_reel(self, db):
+    def test_rankable_pool_excludes_all_team_layer_reels(self, db):
         from app.routers.rank import _rankable_pool
         mine, shared_in, own_team, nul = self._seed(db)
         with _conn(db) as c:
             ids = {r["id"] for r in _rankable_pool(c.cursor(), "9:16")}
-        assert mine in ids and own_team in ids and nul in ids
-        assert shared_in not in ids
+        assert mine in ids and nul in ids
+        assert shared_in not in ids and own_team not in ids
 
     def test_downloads_excludes_shared_in_reel(self, db):
         mine, shared_in, own_team, nul = self._seed(db)
