@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Star, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
-import { RATING_ADJECTIVES, getRatingLabel } from '../../../components/shared/clipConstants';
+import { RATING_ADJECTIVES, RATING_NOTATION, getRatingLabel } from '../../../components/shared/clipConstants';
 import { RatingMeaningsList } from './RatingMeaningsList';
 
 /**
@@ -9,15 +9,14 @@ import { RatingMeaningsList } from './RatingMeaningsList';
  * T10410 RatingBadge (chess-notation disc + "Required"/amber-dashed to-do
  * treatment). A normal labeled pill: neutral slate when unrated (no amber, no
  * dashed border, no "Required" copy — rating is optional, not a checklist
- * item), amber-starred with the rating's adjective once set, and a gold pill
+ * item), chess notation with the rating's adjective once set, and a gold pill
  * (T11110's RATING_BADGE_COLORS[5]) at a 5-star rating specifically — reusing
  * the shipped gold, not inventing a new color.
  *
  * The popup is the shared RatingMeaningsList (T11120): five rows, best-first
  * (5 -> 1), each an amber star strip + RATING_ADJECTIVES + a one-line meaning —
- * the SAME list the "Rate this play" gate modal renders (owner ruling: one
- * component). NO chess RATING_NOTATION anywhere (dropped per the H12A=A2
- * ruling). Mobile renders a bottom sheet (explicit X, no
+ * the SAME list the "Rate this play" gate modal renders. Mobile renders a
+ * bottom sheet (explicit X, no
  * backdrop-close — the standing project rule); desktop an anchored dropdown.
  * The Escape handler lives on `document` with `stopPropagation()` so it
  * doesn't also trip the editor's own window-level Escape handler on the same
@@ -75,12 +74,7 @@ export function RatingPill({ rating, onRatingChange, myAthlete, isMobile }) {
         onClick={() => setOpen((o) => !o)}
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-sm font-medium transition-colors coarse-pointer:min-h-[44px] ${pillClass}`}
       >
-        <Star
-          size={14}
-          fill={rated ? '#fbbf24' : 'transparent'}
-          color={rated ? '#fbbf24' : '#9ca3af'}
-          strokeWidth={1.5}
-        />
+        {rated && <span aria-hidden="true" className="font-bold">{RATING_NOTATION[rating]}</span>}
         {rated ? RATING_ADJECTIVES[rating] : ANNOTATE.RATE_PLAY}
       </button>
       {open && (

@@ -4,7 +4,7 @@ import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
-import { useCurrentProfile, useProfileStore } from '../../../stores';
+import { useCurrentProfile, useProfileStore, useProjectsList } from '../../../stores';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
@@ -15,6 +15,7 @@ import { HighlightChoiceCard } from './HighlightChoiceCard';
 import { DeletePlayButton } from './DeletePlayButton';
 import { onTextFieldKeyDown } from '../textFieldCommit';
 import { ANNOTATE } from '../../../config/displayNames';
+import { getClipStage } from '../clipStage';
 
 // Persists across mounts within the same page session
 let savedDockPosition = 'left';
@@ -67,21 +68,18 @@ function CutFromAngleChip({ name }) {
 }
 
 /**
- * HighlightMadeChip (T11150) — shown once a play has produced a clip
- * (`existingClip.autoProjectId` truthy), replacing the old T10410 progress
- * badges' clip indicator. Gold (T11110 RATING_BADGE_COLORS[5] tint), no
- * spinner and no nudge — the create-project flow itself is untouched by this
- * task, this chip only reflects the resulting state.
+ * Stage-specific highlight status. The copy comes from the same stage model as
+ * the main CTA, so the editor cannot claim a highlight is complete while the
+ * next action still points to Framing or Overlay.
  */
-function HighlightMadeChip({ show }) {
-  if (!show) return null;
+function HighlightMadeChip({ status }) {
   return (
     <span
       data-testid="highlight-made-chip"
       className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-[#F5B700]/50 bg-[#F5B700]/15 text-[#F5B700] text-xs font-medium"
     >
       <Clapperboard size={12} />
-      {ANNOTATE.HIGHLIGHT_MADE}
+      {status}
     </span>
   );
 }
@@ -164,6 +162,7 @@ export function AnnotateFullscreenOverlay({
   // made highlight in Framing/Spotlight now. The editor only reflects state
   // (HighlightMadeChip), it no longer navigates.
   const currentProfile = useCurrentProfile();
+  const projectsList = useProjectsList();
   const updateProfile = useProfileStore(state => state.updateProfile);
   const sport = currentProfile?.sport || NO_SPORT;
   const tagSet = getTagSet(sport);
@@ -405,7 +404,10 @@ export function AnnotateFullscreenOverlay({
   // same-play identity churn a surgical update causes (updateClipRegion
   // spreads the region on every write), matching the reset effect's own
   // samePlay rule above.
-  const highlightMade = !!existingClip.autoProjectId;
+  const linkedProject = existingClip.autoProjectId
+    ? projectsList.find((project) => project.id === existingClip.autoProjectId)
+    : null;
+  const highlightStatus = getClipStage(existingClip, linkedProject).status;
 
   const formBody = (
     <>
@@ -465,7 +467,7 @@ export function AnnotateFullscreenOverlay({
               className="flex-1 min-w-0 px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
             />
             <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
-            <HighlightMadeChip show={highlightMade} />
+            <HighlightMadeChip status={highlightStatus} />
           </div>
         </div>
 
@@ -637,7 +639,7 @@ export function AnnotateFullscreenOverlay({
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
-              <HighlightMadeChip show={highlightMade} />
+              <HighlightMadeChip status={highlightStatus} />
             </div>
           </div>
 
@@ -764,7 +766,7 @@ export function AnnotateFullscreenOverlay({
             className="flex-1 min-w-0 px-3 py-1.5 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
           <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
-          <HighlightMadeChip show={highlightMade} />
+          <HighlightMadeChip status={highlightStatus} />
           <button
             type="button"
             onClick={() => setDetailsOpen(o => !o)}
@@ -884,7 +886,7 @@ export function AnnotateFullscreenOverlay({
             className="flex-1 min-w-0 px-3 py-2 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
           <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
-          <HighlightMadeChip show={highlightMade} />
+          <HighlightMadeChip status={highlightStatus} />
         </div>
 
         {/* Strip row 2: the disclosure + Done buttons NEVER shrink (flex-none,

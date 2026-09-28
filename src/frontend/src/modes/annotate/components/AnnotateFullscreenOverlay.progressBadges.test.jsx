@@ -5,8 +5,8 @@ import { useProjectsStore } from '../../../stores/projectsStore';
 
 // T11150 (Play editor hierarchy epic): the old T10410 play-progress badges
 // row (named/rated/noted/clip) is retired. This suite pins the replacement
-// contract: a RatingPill (normal pill, no "Required"/amber-dashed/chess
-// notation), an optional HighlightMadeChip, and the new top-to-bottom order
+// contract: a RatingPill (normal pill, no "Required"/amber-dashed treatment,
+// with chess notation), a stage-specific status chip, and the top-to-bottom order
 // (time -> name+rating -> Details) across every layout.
 
 beforeEach(() => {
@@ -43,8 +43,6 @@ const bareClip = {
   id: 'c1', startTime: 0, endTime: 10, rating: 4, tags: ['Goal'], my_athlete: true,
   name: 'Good Goal', hasCustomName: false, notes: '', autoProjectId: null,
 };
-
-const NOTATION_GLYPHS = ['??', '!?', '!', '?', '!!'];
 
 describe('old progress-badges row is gone (T11150)', () => {
   for (const layout of ['strip', 'inline']) {
@@ -95,15 +93,13 @@ describe('RatingPill — unrated state (no "Required", no amber-dashed to-do)', 
 });
 
 describe('RatingPill — rated state', () => {
-  it('shows the rating adjective, no chess glyph, once a rating is set', () => {
+  it('shows the rating adjective and its chess glyph once a rating is set', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating: 4 }} />);
     const pill = screen.getByTestId('rating-pill');
     expect(pill.dataset.state).toBe('rated');
     expect(pill.dataset.rating).toBe('4');
     expect(pill.textContent).toContain('Good');
-    for (const glyph of NOTATION_GLYPHS) {
-      expect(pill.textContent).not.toContain(glyph);
-    }
+    expect(pill.textContent).toContain('!');
   });
 
   it('picking a star sets the rating and closes the popup', () => {
@@ -222,16 +218,33 @@ describe('RatingPill — rated state', () => {
   });
 });
 
-describe('HighlightMadeChip', () => {
-  it('appears when the play has produced a clip (autoProjectId set)', () => {
+describe('highlight status chip', () => {
+  it('shows Clipped when a project exists but framing has not completed', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, autoProjectId: 42 }} />);
     expect(screen.getByTestId('highlight-made-chip')).toBeTruthy();
-    expect(screen.getByText('Highlight made')).toBeTruthy();
+    expect(screen.getByText('Clipped')).toBeTruthy();
   });
 
-  it('does not appear when no clip exists yet', () => {
+  it('shows Not Started before a highlight project exists', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, autoProjectId: null }} />);
-    expect(screen.queryByTestId('highlight-made-chip')).toBeNull();
+    expect(screen.getByTestId('highlight-made-chip')).toBeTruthy();
+    expect(screen.getByText('Not Started')).toBeTruthy();
+  });
+
+  it.each([
+    ['Framed', { has_working_video: true, has_final_video: false, is_published: false }],
+    ['Overlaid', { has_working_video: true, has_final_video: true, is_published: false }],
+    ['Published', { has_working_video: true, has_final_video: true, is_published: true }],
+  ])('shows %s from the linked highlight project state', (label, projectState) => {
+    useProjectsStore.setState({ projects: [{ id: 42, ...projectState }] });
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps}
+        layout="strip"
+        existingClip={{ ...bareClip, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
+      />,
+    );
+    expect(screen.getByText(label)).toBeTruthy();
   });
 });
 
@@ -314,7 +327,9 @@ describe('no user-visible "clip" wording remains in the editor (T11150)', () => 
         if (v) seen.push(v);
       }
     });
-    expect(seen.join(' | ')).not.toMatch(/clip/i);
+    // "Clipped" is now an intentional workflow state; keep rejecting the old
+    // standalone Clip/Clips product wording without rejecting that phase name.
+    expect(seen.join(' | ')).not.toMatch(/\bclips?\b/i);
   };
 
   it('strip layout (Details open)', () => {

@@ -44,9 +44,6 @@ export const ANNOTATE = {
   // owner-approved copy (2026-09-24). Never closes on backdrop.
   RATE_GATE_SUBTITLE: 'Pick one to finish.',
   RATE_GATE_KEEP_EDITING: 'Keep editing',
-  // T11150: shown when a play has produced a clip (existingClip.autoProjectId),
-  // replacing the old T10410 progress-badges row's clip indicator.
-  HIGHLIGHT_MADE: 'Highlight made',
   // T11130: the Done -> Highlight choice card (in-place gold mode-swap of the
   // edit strip when Done fires on a Highlight-rated play that is not yet a
   // highlight). Owner-approved copy (2026-09-24). "Back to Editing" replaced

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getClipStage, CLIP_STAGE } from './clipStage';
+import { getClipStage, CLIP_STAGE, HIGHLIGHT_STATUS } from './clipStage';
 
 // T9330 §2.5 — the 6-row stage table as one ordered pure function.
 // Order matters — first match wins; composes T8070 staleness and T8470 Part D.
@@ -11,17 +11,13 @@ import { getClipStage, CLIP_STAGE } from './clipStage';
 const baseRegion = { id: 'c1', startTime: 2, endTime: 8 };
 
 describe('getClipStage (T9330)', () => {
-  // T11130: NO_PROJECT no longer offers a "Create clip" / "Frame clip" CTA — the
-  // create decision moved to the rating + Done -> Highlight popup, and H8 removed
-  // the editor stage buttons. The stage CTA only renders once a project exists,
-  // so this branch carries no label/action and the old `createActions` array is
-  // gone (it had zero consumers).
-  it('no autoProjectId -> NO_PROJECT with no label/action', () => {
+  it('no autoProjectId -> NO_PROJECT with a clear Frame action', () => {
     const region = { ...baseRegion, autoProjectId: null };
     expect(getClipStage(region, null)).toEqual({
       stage: CLIP_STAGE.NO_PROJECT,
-      label: null,
-      action: null,
+      status: HIGHLIGHT_STATUS.NOT_STARTED,
+      label: 'Frame',
+      action: 'focus',
     });
   });
 
@@ -35,6 +31,7 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: false, has_final_video: false, is_published: false };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
+      status: HIGHLIGHT_STATUS.CLIPPED,
       label: 'Frame',
       action: 'focus',
     });
@@ -52,6 +49,7 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: true, has_final_video: true, is_published: false };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
+      status: HIGHLIGHT_STATUS.CLIPPED,
       label: 'Frame',
       action: 'focus',
     });
@@ -67,12 +65,13 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: true, has_final_video: true, is_published: false };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
+      status: HIGHLIGHT_STATUS.CLIPPED,
       label: 'Frame',
       action: 'focus',
     });
   });
 
-  it('projectReflectsClip (exact equality) + has_working_video, no final -> SPOTLIGHT, "Apply Spotlight"', () => {
+  it('projectReflectsClip (exact equality) + has_working_video, no final -> SPOTLIGHT, "Add Overlay"', () => {
     const region = {
       ...baseRegion,
       autoProjectId: 42,
@@ -82,12 +81,13 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: true, has_final_video: false, is_published: false };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.SPOTLIGHT,
-      label: 'Apply Spotlight',
+      status: HIGHLIGHT_STATUS.FRAMED,
+      label: 'Add Overlay',
       action: 'overlay',
     });
   });
 
-  it('projectReflectsClip + has_final_video, not published -> FINAL, "View Final"', () => {
+  it('projectReflectsClip + has_final_video, not published -> FINAL, "Preview"', () => {
     const region = {
       ...baseRegion,
       autoProjectId: 42,
@@ -97,12 +97,13 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: true, has_final_video: true, is_published: false };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FINAL,
-      label: 'View Final',
-      action: 'focus',
+      status: HIGHLIGHT_STATUS.OVERLAID,
+      label: 'Preview',
+      action: 'preview',
     });
   });
 
-  it('projectReflectsClip + has_final_video + is_published -> PUBLISHED, "View Published"', () => {
+  it('projectReflectsClip + has_final_video + is_published -> PUBLISHED, "View Final"', () => {
     const region = {
       ...baseRegion,
       autoProjectId: 42,
@@ -112,8 +113,9 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: true, has_final_video: true, is_published: true };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.PUBLISHED,
-      label: 'View Published',
-      action: 'focus',
+      status: HIGHLIGHT_STATUS.PUBLISHED,
+      label: 'View Final',
+      action: 'published',
     });
   });
 
@@ -133,6 +135,7 @@ describe('getClipStage (T9330)', () => {
       const linkedProject = { has_working_video: true, has_final_video: true, is_published: true };
       expect(getClipStage(region, linkedProject)).toEqual({
         stage: CLIP_STAGE.FOCUS,
+        status: HIGHLIGHT_STATUS.CLIPPED,
         label: 'Frame',
         action: 'focus',
       });
@@ -150,6 +153,7 @@ describe('getClipStage (T9330)', () => {
       const linkedProject = { has_working_video: true, has_final_video: true, is_published: false };
       expect(getClipStage(region, linkedProject)).toEqual({
         stage: CLIP_STAGE.FOCUS,
+        status: HIGHLIGHT_STATUS.CLIPPED,
         label: 'Frame',
         action: 'focus',
       });

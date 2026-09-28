@@ -19,6 +19,7 @@ import { useProjectsStore } from '../stores/projectsStore';
 import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from './ProjectsScreen';
 import { hasPendingGame, consumePendingGame } from '../utils/pendingNavigation';
 import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
+import { openFinishedReel } from '../utils/finishedReelNav';
 
 /**
  * AnnotateScreen - Self-contained screen for Annotate mode
@@ -280,6 +281,14 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     (autoProjectId) => openClipInEditorMode(autoProjectId, EDITOR_MODES.OVERLAY),
     [openClipInEditorMode]
   );
+  const openClipPreview = useCallback((project, alreadyPublished) => {
+    if (!project?.final_video_id) {
+      toast.error("Couldn't open this highlight", { message: 'Check your network and try again.' });
+      return;
+    }
+    persistAnnotateProgress();
+    openFinishedReel(project, { alreadyPublished });
+  }, [persistAnnotateProgress]);
 
   // AnnotateContainer - encapsulates all annotate mode state and handlers
   // NOTE: Clips are now saved in real-time during annotation, no batch import needed
@@ -869,6 +878,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         onOpenClipInFocus={openClipInFocus}
         // T9330: strip stage CTA Spotlight target
         onOpenClipInOverlay={openClipInOverlay}
+        onOpenClipPreview={openClipPreview}
         // T710: Annotation playback
         playback={playback}
         lockScrub={lockScrub}
