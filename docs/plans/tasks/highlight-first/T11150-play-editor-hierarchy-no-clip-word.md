@@ -83,3 +83,10 @@ task file as things it removes/rewrites, so leaving them for T11130 is correct, 
 - `questDefinitions.jsx:174,180` quest copy pointing at the removed controls - T11130 §4.
 
 If T11130 ships without closing one of these, that's a T11130 gap, not a T11150 regression.
+
+A third proof-verifier pass (2026-09-28, landing-gate reviewer capture) flagged one more:
+`shared/ModeSwitcher.jsx:90-113`'s locked-tab tooltip/toast "Open a clip to start framing",
+rendered on the Annotate screen's mode bar. This is T11140's own named scope
+(`T11140-mode-bar-rename-and-gating.md` line 30: "today's toast 'Open a clip to start framing'
+at `ModeSwitcher.jsx:90-113` goes"), not this task's - `ModeSwitcher.jsx` isn't even in T11150's
+Relevant Files. If T11140 ships without closing it, that's a T11140 gap, not a T11150 regression.
