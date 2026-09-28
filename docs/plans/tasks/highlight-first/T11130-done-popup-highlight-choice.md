@@ -1,10 +1,10 @@
 # T11130: Highlight popup (Make Highlight Now / Highlight Later); remove Create clip + Frame CTAs
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-09-24
-**Updated:** 2026-09-24
+**Updated:** 2026-09-28
 **Epic:** [Highlight-First Annotate Flow](EPIC.md)
 
 ## Problem
