@@ -152,12 +152,12 @@ describe('announcePlaySaved (T9580 AC #1)', () => {
     const toasts = useToastStore.getState().toasts;
     expect(toasts).toHaveLength(1);
     expect(toasts[0].type).toBe('success');
-    expect(toasts[0].title).toBe('Saved play "Brilliant Interception"');
+    expect(toasts[0].title).toBe('Added play "Brilliant Interception"');
   });
 
   it('falls back to a generic (but still object-named) confirmation when unnamed', () => {
     announcePlaySaved('');
-    expect(useToastStore.getState().toasts[0].title).toBe('Play saved');
+    expect(useToastStore.getState().toasts[0].title).toBe('Play added');
   });
 
   it('does not claim a clip/home the bare play does not have (no "in Clips")', () => {

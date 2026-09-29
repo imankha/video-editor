@@ -1,4 +1,4 @@
-import { useState, useMemo, useImperativeHandle, lazy, Suspense } from 'react';
+import { useState, useMemo, useImperativeHandle, useCallback, lazy, Suspense } from 'react';
 import { VideoPlayer } from '../../../components/VideoPlayer';
 import CropOverlay from '../overlays/CropOverlay';
 import { ExportButtonContainer } from '../../../containers/ExportButtonContainer';
@@ -64,6 +64,20 @@ export default function FocusCockpit({
   const [previewing, setPreviewing] = useState(false);
   const [straightenVisible, setStraightenVisible] = useState(false);
   const [dimOpacity, setDimOpacity] = useState(0.2);
+  const handleTogglePreview = useCallback(() => {
+    if (previewing) {
+      setPreviewing(false);
+      return;
+    }
+    seek?.(0);
+    const video = videoRef?.current;
+    if (video) {
+      video.currentTime = 0;
+      const playPromise = video.play?.();
+      playPromise?.catch?.(() => {});
+    }
+    setPreviewing(true);
+  }, [previewing, seek, videoRef]);
 
   // T10850 (D14): the first-entry card + the one-shot rings on Play and the CTA
   // are all driven by this single flag. `seen` is read lazily (never an effect);
@@ -260,7 +274,7 @@ export default function FocusCockpit({
         canUndo={canUndoFraming}
         onUndo={onUndoFraming}
         previewing={previewing}
-        onTogglePreview={() => setPreviewing((v) => !v)}
+        onTogglePreview={handleTogglePreview}
         ctaMode={ctaMode}
         estimatedCredits={exportCtrl.estimatedCredits}
         ctaDisabled={exportCtrl.isButtonDisabled}

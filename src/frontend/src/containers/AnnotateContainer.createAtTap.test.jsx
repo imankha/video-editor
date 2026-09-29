@@ -409,8 +409,8 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     await act(async () => { await flushMicrotasks(); });
 
     const toasts = useToastStore.getState().toasts;
-    const playSavedToasts = toasts.filter((t) => /play/i.test(t.title) && /saved/i.test(t.title));
-    expect(playSavedToasts.length).toBe(1);
+    const playAddedToasts = toasts.filter((t) => /play/i.test(t.title) && /added/i.test(t.title));
+    expect(playAddedToasts.length).toBe(1);
     expect(toasts.find((t) => t.dedupKey === 'reel-created')).toBeUndefined();
   });
 

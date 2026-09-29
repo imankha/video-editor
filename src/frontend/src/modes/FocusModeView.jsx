@@ -357,6 +357,21 @@ export function FocusModeView({
   // same pattern as advancedOverride/straightenVisible above — a click
   // toggles it, nothing is persisted, no useEffect involved.
   const [previewing, setPreviewing] = useState(false);
+  const handleTogglePreview = useCallback(() => {
+    if (previewing) {
+      setPreviewing(false);
+      return;
+    }
+
+    seek?.(0);
+    const video = videoRef?.current;
+    if (video) {
+      video.currentTime = 0;
+      const playPromise = video.play?.();
+      playPromise?.catch?.(() => {});
+    }
+    setPreviewing(true);
+  }, [previewing, seek, videoRef]);
   // The preview's own video->screen mapping, computed at zoom=1/panOffset=0 so
   // the editor's inspection zoom never leaks into the preview (design doc §4
   // landmine 2) regardless of the live editing zoom/panOffset above. Always
@@ -844,7 +859,7 @@ export function FocusModeView({
             canUndo={canUndoFraming}
             onUndo={onUndoFraming}
             previewing={previewing}
-            onTogglePreview={() => setPreviewing((v) => !v)}
+            onTogglePreview={handleTogglePreview}
           />
         )}
 

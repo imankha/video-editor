@@ -111,6 +111,8 @@ export const ANNOTATE = {
   // The count suffix (e.g. "Details (2 tags, note)") is composed at the call
   // site when content exists.
   DETAILS: 'Details',
+  ADD_TAGS_AND_NOTES: 'Add Tags and Notes',
+  VIEW_TAGS_AND_NOTES: 'View Tags and Notes',
   // T9900: caption under the create-in-flight DISABLED "Frame this clip" button, so a
   // briefly-disabled onward action explains its temporary preparation state instead of
   // reading as broken (evidence E09). Clears itself when the project id lands.
@@ -497,7 +499,7 @@ export function formatApproxMinutes(gpuSeconds) {
 // and HEADLINE is a new completion title; EXPORT_JOBS.framing.completed
 // ("Framing ready") stays the toast/job-row string. No em dashes anywhere.
 export const FOCUS_PUBLISH = {
-  HEADLINE: 'Your clip is ready',
+  HEADLINE: 'Your Highlight is Ready',
   ADD_SPOTLIGHT_LABEL: 'Add spotlight',
   SPOTLIGHT_CAPTION: 'Point out your athlete to everyone watching.',
   PUBLISH_LABEL: 'Publish without spotlight',
@@ -567,7 +569,7 @@ export const FOCUS_HINTS = {
 // this one copy. Callers reference SINGLE_CLIP directly, no branch.
 export const FOCUS_PUBLISH_LATER_TOAST = {
   SINGLE_CLIP: {
-    title: 'Saved to Clips',
+    title: 'Added to Clips',
     message: 'Clips are single plays. A highlight reel joins several clips into one video. '
       + 'Yours is still a draft, so add a spotlight or publish it from here whenever you want.',
   },
@@ -578,7 +580,7 @@ export const FOCUS_PUBLISH_LATER_TOAST = {
 // same as the existing Add Spotlight Later toast above). Short, since the
 // user isn't leaving the flow -- they land straight in Overlay right after.
 export const FOCUS_ADD_SPOTLIGHT_TOAST = {
-  title: 'Framing saved',
+  title: 'Framing ready',
   message: 'Now add a spotlight to your reel -- you can still publish it whenever you\'re ready.',
 };
 
@@ -600,7 +602,7 @@ export const FOCUS_ADD_SPOTLIGHT_TOAST = {
 // honest "uses credits" warning, verbatim with Focus's so the two read as one
 // system.
 export const OVERLAY_PUBLISH = {
-  HEADLINE: 'Your clip is ready',
+  HEADLINE: 'Your Highlight is Ready',
   PUBLISH_LABEL: 'Publish',
   PUBLISH_CAPTION: `Goes to Published. ${STAGE_REASONS.PUBLISH}`,
   REAPPLY_OVERLAY_LABEL: 'Reapply spotlight',

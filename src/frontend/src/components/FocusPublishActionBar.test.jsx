@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { FocusPublishActionBar } from './FocusPublishActionBar';
-import { FOCUS_PUBLISH, RESULT_RETENTION } from '../config/displayNames';
+import { FOCUS_PUBLISH } from '../config/displayNames';
 
 function makeHandlers() {
   return {
@@ -28,7 +28,7 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles
   it('renders the headline, three tile choices + the exit link with the approved copy and captions', () => {
     render(<FocusPublishActionBar {...makeHandlers()} />);
 
-    expect(screen.getByRole('heading', { name: 'Your clip is ready' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Your Highlight is Ready' })).toBeTruthy();
 
     expect(screen.getByRole('button', { name: 'Add spotlight' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Publish without spotlight' })).toBeTruthy();
@@ -44,23 +44,10 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles
     expect(screen.getByText('Reframe and export again. Uses credits.')).toBeTruthy();
   });
 
-  // T10670: the retention line is now a one-word "Saved" chip beside the headline;
-  // it renders when the screen passes it and is absent when null.
-  it('renders the "Saved" chip beside the headline when provided, and omits it otherwise', () => {
-    // A framing completion resolves to the one-word "Saved" chip text.
-    expect(RESULT_RETENTION.PRIVATE_DRAFT).toBe('Saved');
-    const { rerender, container } = render(
-      <FocusPublishActionBar {...makeHandlers()} retentionNote={RESULT_RETENTION.PRIVATE_DRAFT} />,
-    );
-    const el = container.querySelector('[data-testid="focus-retention-note"]');
-    expect(el).toBeTruthy();
-    expect(el.textContent).toBe(RESULT_RETENTION.PRIVATE_DRAFT);
-    // It is a chip (rounded-full), NOT one of the rounded-xl tiles.
-    expect(el.closest('[class*="rounded-xl"]')).toBeNull();
-    expect(el.className).toMatch(/rounded-full/);
-
-    rerender(<FocusPublishActionBar {...makeHandlers()} retentionNote={null} />);
+  it('does not show an autosave status badge', () => {
+    const { container } = render(<FocusPublishActionBar {...makeHandlers()} retentionNote="Saved" />);
     expect(container.querySelector('[data-testid="focus-retention-note"]')).toBeNull();
+    expect(screen.queryByText('Saved')).toBeNull();
   });
 
   it('the Publish tile carries data-tutorial-target="focus-publish" exactly once (guided-path rule 30 anchor)', () => {

@@ -37,6 +37,24 @@ function renderBar() {
 }
 
 describe('MobileScrollbar — finger-sized geometry (T10780)', () => {
+  it('honors a mode-owned reset to scroll position 0', () => {
+    const { rerender } = render(
+      <TimelineBase {...baseProps} timelineScrollPosition={50} />
+    );
+    const container = document.querySelector('.timeline-scroll-container');
+    let scrollLeft = 300;
+    Object.defineProperty(container, 'scrollWidth', { configurable: true, get: () => 900 });
+    Object.defineProperty(container, 'clientWidth', { configurable: true, get: () => 300 });
+    Object.defineProperty(container, 'scrollLeft', {
+      configurable: true,
+      get: () => scrollLeft,
+      set: (value) => { scrollLeft = value; },
+    });
+
+    rerender(<TimelineBase {...baseProps} timelineScrollPosition={0} />);
+    expect(container.scrollLeft).toBe(0);
+  });
+
   it('gives the row a >= 44px hit area with mt-2 / mb-3 spacing', () => {
     const { track } = renderBar();
     expect(track.className).toContain('min-h-[44px]');

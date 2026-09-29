@@ -141,7 +141,7 @@ function reelToastClipName(region) {
  */
 export function announcePlaySaved(clipName) {
   const name = (clipName && clipName.trim()) ? clipName.trim() : '';
-  toast.success(name ? `Saved play "${name}"` : 'Play saved');
+  toast.success(name ? `Added play "${name}"` : 'Play added');
 }
 
 /**

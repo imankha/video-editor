@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { FolderInput, Sparkles, Pencil, ArrowLeft, Check, Loader } from 'lucide-react';
+import { FolderInput, Sparkles, Pencil, ArrowLeft, Loader } from 'lucide-react';
 import { Button } from './shared/Button';
 import { FOCUS_PUBLISH } from '../config/displayNames';
 
@@ -179,26 +179,16 @@ export function FocusPublishActionBar({
   publishLoading = false,
   onRefocus,
   onSaveDraft,
-  retentionNote,
 }) {
   return (
     <div
       data-testid="focus-publish-action-bar"
       className="border-t border-gray-800 bg-gray-900 px-4 py-4 sm:px-6 sm:py-6"
     >
-      {/* Headline + the one-word "Saved" chip (T10670, replaces the green sentence). */}
-      <div className="mx-auto mb-4 flex max-w-md items-center justify-center gap-3 lg:max-w-4xl">
+      <div className="mx-auto mb-4 flex max-w-md items-center justify-center lg:max-w-4xl">
         <h2 className="text-lg font-semibold text-white sm:text-xl motion-safe:animate-[readyIn_320ms_ease-out_both]">
           {FOCUS_PUBLISH.HEADLINE}
         </h2>
-        {retentionNote && (
-          <span
-            data-testid="focus-retention-note"
-            className="inline-flex items-center gap-1 rounded-full border border-green-500/40 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-300 motion-safe:animate-[chipIn_240ms_ease-out_120ms_both]"
-          >
-            <Check size={12} aria-hidden="true" />{retentionNote}
-          </span>
-        )}
       </div>
 
       {/* Grid: class string byte-identical to T9590 (gap 4 -> 3 the only change). */}

@@ -107,7 +107,7 @@ function GamesActions({ onAddGame }) {
       <Button variant="success" size="lg" icon={Plus} onClick={onAddGame}>
         {LIBRARY_ACTIONS.UPLOAD_GAME}
       </Button>
-      <p className="text-xs text-gray-500">{c.addGameCaption}</p>
+      {c.addGameCaption && <p className="text-xs text-gray-500">{c.addGameCaption}</p>}
     </div>
   );
 }
