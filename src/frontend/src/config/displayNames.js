@@ -45,7 +45,7 @@ export const ANNOTATE = {
   RATE_GATE_SUBTITLE: 'Pick one to finish.',
   RATE_GATE_KEEP_EDITING: 'Keep editing',
   // T11130: the Done -> Highlight choice card (in-place gold mode-swap of the
-  // edit strip when Done fires on a Highlight-rated play that is not yet a
+  // edit strip when Done fires on a Brilliant-rated play that is not yet a
   // highlight). Owner-approved copy (2026-09-24). "Back to Editing" replaced
   // round 2's "Highlight Later" (owner ruling round 3). Escape is the only
   // no-save exit; never closes on backdrop.

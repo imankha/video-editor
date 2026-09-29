@@ -25,7 +25,7 @@ describe('RateThisPlayModal (T11120)', () => {
     expect(within(dialog).getByText('Pick one to finish.')).toBeTruthy();
 
     // Adjectives
-    for (const adj of ['Highlight', 'Good', 'Interesting', 'Technical Lapse', 'Mental Lapse']) {
+    for (const adj of ['Brilliant', 'Good', 'Interesting', 'Technical Lapse', 'Mental Lapse']) {
       expect(within(dialog).getByText(adj)).toBeTruthy();
     }
     // Meanings (exact strings)
@@ -40,7 +40,7 @@ describe('RateThisPlayModal (T11120)', () => {
     // Best-first radio order with the shared aria-labels.
     const options = within(dialog).getAllByRole('radio');
     expect(options.map((o) => o.getAttribute('aria-label'))).toEqual([
-      '5 stars - Highlight', '4 stars - Good', '3 stars - Interesting',
+      '5 stars - Brilliant', '4 stars - Good', '3 stars - Interesting',
       '2 stars - Technical Lapse', '1 star - Mental Lapse',
     ]);
   });
@@ -48,7 +48,7 @@ describe('RateThisPlayModal (T11120)', () => {
   it('picking a rating row reports that rating via onPick', () => {
     const onPick = vi.fn();
     render(<RateThisPlayModal {...baseProps({ onPick })} />);
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' }));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     expect(onPick).toHaveBeenCalledWith(5);
   });
 

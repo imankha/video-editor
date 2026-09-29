@@ -5,12 +5,10 @@
  * to ensure consistent visual styling across modes.
  */
 
-// Rating adjectives for clip name generation (e.g. "Highlight Goal")
-// T11110: the 5-star rating is the gesture that makes a highlight, so its
-// adjective is "Highlight" (was "Brilliant"). Persisted identifiers that still
-// read "brilliant" (source_type, quest ids, API fields) are unchanged.
+// Rating adjectives for clip name generation (e.g. "Brilliant Goal")
+// Keep the rating vocabulary separate from the Highlight creation workflow.
 export const RATING_ADJECTIVES = {
-  5: 'Highlight',
+  5: 'Brilliant',
   4: 'Good',
   3: 'Interesting',
   2: 'Technical Lapse',
@@ -110,7 +108,7 @@ export function getRatingCaption(rating, mine, createIntent) {
   if (rating === 2) return `Technical lapse - a play to learn from.`;
   if (rating === 3) return `Interesting play - worth a second look.`;
   if (rating === 4) return `Good play - ${outcome}`;
-  const label = mine ? 'Highlight play' : 'Highlight team play';
+  const label = mine ? 'Brilliant play' : 'Brilliant team play';
   return `${label} - ${outcome}`;
 }
 
@@ -121,8 +119,8 @@ export function getRatingCaption(rating, mine, createIntent) {
 // creates a clip" threshold; it now mirrors the 5-star branch's hasReel wording.
 // T10690: `!rating` covers null AND undefined — same reachable-unrated-state note
 // as getRatingCaption above.
-// T11110: "Brilliant" -> "Highlight". The old "create a clip below" / "team plays
-// don't create clips" clauses named a control that no longer exists, so they are
+// The old "create a clip below" / "team plays don't create clips" clauses named
+// a control that no longer exists, so they are
 // dropped (the full caption rewrite is T11150/T11160); the true "clip already
 // created" clause stays, and applies to team plays too (per H13, team plays CAN
 // become highlights).
@@ -136,7 +134,7 @@ export function getEditRatingCaption(rating, mine, hasReel) {
       ? `Good play - highlight already made.`
       : `Good play.`;
   }
-  const label = mine ? 'Highlight play' : 'Highlight team play';
+  const label = mine ? 'Brilliant play' : 'Brilliant team play';
   return hasReel
     ? `${label} - highlight already made.`
     : `${label}.`;

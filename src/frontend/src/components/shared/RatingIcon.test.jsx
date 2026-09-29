@@ -35,7 +35,7 @@ describe('RatingIcon', () => {
     expect(icon.textContent).toMatch(/not rated/i);
   });
 
-  it('T11110: Highlight (5) is gold, distinct from the 4-star green', () => {
+  it('Brilliant (5) is gold, distinct from the 4-star green', () => {
     expect(RATING_BADGE_COLORS[5]).toBe('#F5B700');
     expect(RATING_BADGE_COLORS[5]).not.toBe(RATING_BADGE_COLORS[4]);
   });
@@ -59,7 +59,7 @@ describe('NotesOverlay rating notation', () => {
       <NotesOverlay name="Great goal" notes="" rating={5} isVisible />
     );
     expect(screen.getByTestId('rating-icon').dataset.rating).toBe('5');
-    expect(screen.getByLabelText('5 stars · Highlight').textContent).toBe('!!');
+    expect(screen.getByLabelText('5 stars · Brilliant').textContent).toBe('!!');
 
     rerender(<NotesOverlay name="Nice pass" notes="" rating={4} isVisible />);
     expect(screen.getByTestId('rating-icon').dataset.rating).toBe('4');

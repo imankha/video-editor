@@ -39,7 +39,7 @@ export const CLIP_STAGE = {
 };
 
 export const HIGHLIGHT_STATUS = {
-  NOT_STARTED: 'Not Started',
+  NOT_STARTED: 'Highlight Not Started',
   CLIPPED: 'Clipped',
   FRAMING: 'Framing',
   FRAMED: 'Framed',

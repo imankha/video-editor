@@ -96,13 +96,10 @@ def phase_to_status(phase: str) -> ExportStatus:
         return ExportStatus.PROCESSING
 
 # Rating adjectives for clip name generation (1-5 stars)
-# Used to generate names like "Highlight Goal and Dribble"
-# T11110: the 5-star rating is the gesture that makes a highlight, so its
-# adjective is "Highlight" (was "Brilliant"). Persisted identifiers that still
-# read "brilliant" (SourceType value, quest ids, API fields) are deliberately
-# unchanged; only the shown word moved.
+# Used to generate names like "Brilliant Goal and Dribble". The rating adjective
+# stays distinct from the Highlight creation workflow.
 RATING_ADJECTIVES: dict[int, str] = {
-    5: 'Highlight',
+    5: 'Brilliant',
     4: 'Good',
     3: 'Interesting',
     2: 'Technical Lapse',
@@ -228,7 +225,7 @@ class SourceType(str, Enum):
     Source type for final video exports.
 
     Indicates where the export originated from:
-    - BRILLIANT_CLIP: Auto-generated from a Highlight-rated (5-star) clip. The
+    - BRILLIANT_CLIP: Auto-generated from a Brilliant-rated (5-star) clip. The
       enum VALUE stays "brilliant_clip" (persisted identifier, T11110); only the
       display_label follows the "Highlight" rename.
     - CUSTOM_PROJECT: User-created project with custom clip selection
