@@ -42,6 +42,18 @@ Annotate. `useZoom` clamps zoom to 1 through `zoomOut`/wheel/direct-set without 
 independent `panOffset`, while `VideoPlayer` continues applying that translation. Shared-hook fix
 must cover Annotate, Framing, and Spotlight. Impact 6 / Complexity 2, frontend-only.
 
+**TOP PRIORITY — 2026-09-28 production Annotate/Spotlight follow-ups:**
+[T11390](tasks/T11390-annotate-rating-popup-copy.md) (Impact 5 / Complexity 1 / Priority 5.0,
+WAITING ON USER) renames **Back to Editing** to **Keep Annotating** and removes the competing visible exit
+from the required-rating gate. [T11410](tasks/T11410-fullscreen-rating-picker-viewport-safe.md)
+(6 / 3 / 2.0) fixes the normal rating picker rendering offscreen in desktop fullscreen.
+[T11420](tasks/T11420-spotlight-timeline-reset-left-on-entry.md) (7 / 4 / 1.8) makes Spotlight
+open at timeline scroll position 0 after a Framing export while preserving detection auto-zoom.
+[T11400](tasks/T11400-required-rating-gate-immediate-feedback.md) (7 / 5 / 1.4) removes the
+perceived post-pick stall without weakening the current await-before-navigation persistence
+guarantee. The latter three are TODO and intentionally carry reproduction/test detail rather than
+speculative fixes.
+
 **2026-09-24 addition, unplaced — [T11050](tasks/T11050-annotate-clip-lane-click-seek.md):
 Annotate's clips-lane click didn't move the playhead.** Reported live by imankh@gmail.com.
 The thin video scrub row seeks correctly; the clips lane background (My Athlete/Team tracks,

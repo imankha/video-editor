@@ -102,7 +102,7 @@ export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProject
   // T9530/N10 dropped the "In Progress" prefix, single-sourced via SECTION_NAMES).
   // The "Open Framing" action still carries T8480's Framing-unlock affordance.
   // `dedupKey` unchanged so it collapses duplicates.
-  // T11130: the Highlight popup's "Back to Editing" outcome overrides the copy
+  // T11130: the Highlight popup's "Keep Annotating" outcome overrides the copy
   // (HIGHLIGHT_MOVED_TO_CLIPS) and drops the action button (`withAction: false`)
   // — the editor closes, so there is no "Open Framing" affordance to offer and
   // the toast IS the confirmation. Default callers keep the original toast.
@@ -641,7 +641,7 @@ export function AnnotateContainer({
   const [rateGate, setRateGate] = useState(null); // null | { regionId, proceed }
   // T11120: current gate identity, read at CONTINUATION time. handleRateGatePick
   // awaits the rating write before running the stashed continuation; if the user
-  // dismisses ("Keep editing") during that in-flight window, the ORIGINAL gate is
+  // is dismissed with Escape during that in-flight window, the ORIGINAL gate is
   // abandoned and its continuation must not fire late. Comparing against this ref
   // (not the closed-over `gate`) is how the pick detects that. (A re-pick in that
   // window can't abandon the gate — rateGatePickInFlightRef blocks it outright.)
@@ -1931,7 +1931,7 @@ export function AnnotateContainer({
     }
   }, [rateGate, updateClipRegionWithSync, awaitRegionWrites]);
 
-  // T11120: "Keep editing" (M6) / Escape / inert backdrop — return to the editor
+  // T11120: Escape returns to the editor; the inert backdrop does nothing.
   // with NOTHING written. The gate is a gate, never a write.
   const handleRateGateDismiss = useCallback(() => setRateGate(null), []);
 
@@ -1959,7 +1959,7 @@ export function AnnotateContainer({
     }
   }, [highlightChoice, updateClipRegionWithSync, awaitRegionWrites, onOpenReelInFocus]);
 
-  // T11130: "Back to Editing" — creates the highlight (same createProject call as
+  // T11130: "Keep Annotating" — creates the highlight (same createProject call as
   // Frame Later) but does NOT navigate: it closes the editor and returns to
   // marking plays (M2). Because the editor closes, the gold "Highlight made" chip
   // is off screen, so the toast is the sole confirmation (M3): announceReelCreated

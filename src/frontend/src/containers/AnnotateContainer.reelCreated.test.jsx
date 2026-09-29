@@ -92,7 +92,7 @@ describe('announceReelCreated (T8480)', () => {
   });
 });
 
-// T11130: the Highlight popup's "Back to Editing" outcome reuses
+// T11130: the Highlight popup's "Keep Annotating" outcome reuses
 // announceReelCreated with a custom message and NO action button (the editor
 // closes, so there is no "Open Framing" affordance and the toast is the sole
 // confirmation). The default callers keep the original copy + action.

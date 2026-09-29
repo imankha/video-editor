@@ -35,4 +35,3 @@ stale pan is non-zero. Annotate, Framing, and Spotlight share this hook/player b
 - [ ] Annotate, Framing, and Spotlight render the video centered at 100% after zoom interaction.
 - [ ] Live-drive the reported sequence at a desktop production-sized viewport; no asymmetric black
       bar remains.
-

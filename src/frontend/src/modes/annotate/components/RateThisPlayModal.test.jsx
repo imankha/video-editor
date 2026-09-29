@@ -3,8 +3,8 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { RateThisPlayModal } from './RateThisPlayModal';
 
 // T11120: the "Rate this play" gate modal. Verifies the EXACT owner-approved
-// copy (title / subtitle / per-rating adjective + meaning / dismiss), that
-// picking a row reports the rating, that "Keep editing"/Escape dismiss, and
+// copy (title / subtitle / per-rating adjective + meaning), that
+// picking a row reports the rating, that Escape dismisses, and
 // that the backdrop is inert (never dismisses on backdrop click).
 
 function baseProps(overrides = {}) {
@@ -18,7 +18,7 @@ function baseProps(overrides = {}) {
 }
 
 describe('RateThisPlayModal (T11120)', () => {
-  it('renders the exact approved copy: title, subtitle, 5 rows (adjective + meaning), and Keep editing', () => {
+  it('renders the exact approved copy and only rating choices (no competing action)', () => {
     render(<RateThisPlayModal {...baseProps()} />);
     const dialog = screen.getByTestId('rate-gate-modal');
     expect(within(dialog).getByText('Rate this play')).toBeTruthy();
@@ -35,7 +35,7 @@ describe('RateThisPlayModal (T11120)', () => {
     expect(within(dialog).getByText('A touch or skill to work on.')).toBeTruthy();
     expect(within(dialog).getByText('A decision or focus moment to learn from.')).toBeTruthy();
 
-    expect(within(dialog).getByRole('button', { name: 'Keep editing' })).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Keep editing' })).toBeNull();
 
     // Best-first radio order with the shared aria-labels.
     const options = within(dialog).getAllByRole('radio');
@@ -50,15 +50,6 @@ describe('RateThisPlayModal (T11120)', () => {
     render(<RateThisPlayModal {...baseProps({ onPick })} />);
     fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     expect(onPick).toHaveBeenCalledWith(5);
-  });
-
-  it('"Keep editing" dismisses (onDismiss), and picks nothing', () => {
-    const onDismiss = vi.fn();
-    const onPick = vi.fn();
-    render(<RateThisPlayModal {...baseProps({ onDismiss, onPick })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
-    expect(onDismiss).toHaveBeenCalledTimes(1);
-    expect(onPick).not.toHaveBeenCalled();
   });
 
   it('Escape dismisses; the backdrop is inert (a backdrop click never dismisses)', () => {
