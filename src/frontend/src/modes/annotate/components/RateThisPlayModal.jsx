@@ -7,9 +7,9 @@ import { RatingMeaningsList } from './RatingMeaningsList';
  * RateThisPlayModal (T11120) — the gate that opens when the user tries to leave
  * the editor on an UNRATED play. It renders the SAME RatingMeaningsList the
  * editor's rating pill opens (owner ruling: one component). Picking a row is the
- * rating gesture (onPick persists it and continues the original exit); the ONLY
- * no-save exit is "Keep editing" (M6) or Escape (onDismiss) — the backdrop is
- * inert (never closes on backdrop click).
+ * rating gesture (onPick persists it and continues the original exit). There is
+ * no competing visible action because this is a required-rating gate; Escape
+ * remains the keyboard-only no-save exit and the backdrop is inert.
  *
  * Rendered through a portal at z above the mobile fullscreen editor
  * (AnnotateModeView's `fixed inset-0 z-[100]`), and mobile is a bottom sheet.
@@ -18,7 +18,7 @@ import { RatingMeaningsList } from './RatingMeaningsList';
  * Escape or the container's fullscreen-exit Escape.
  *
  * @param {(value:number)=>void} onPick  chosen rating (1-5)
- * @param {()=>void} onDismiss  "Keep editing" / Escape — returns to the editor
+ * @param {()=>void} onDismiss  Escape — returns to the editor
  * @param {boolean} isMobile  bottom-sheet vs centered card
  * @param {number|null} rating  current rating (always null in practice — the
  *        gate only opens for unrated plays — but drives aria-checked correctly)
@@ -72,13 +72,6 @@ export function RateThisPlayModal({ onPick, onDismiss, isMobile, rating = null }
         <h2 id={headingId} className="text-lg font-bold text-white">{ANNOTATE.RATE_PLAY}</h2>
         <p className="mt-0.5 mb-3 text-sm text-gray-400">{ANNOTATE.RATE_GATE_SUBTITLE}</p>
         <RatingMeaningsList rating={rating} headingId={headingId} onPick={onPick} />
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="mt-3 w-full px-4 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700/70 rounded-lg transition-colors coarse-pointer:min-h-[44px]"
-        >
-          {ANNOTATE.RATE_GATE_KEEP_EDITING}
-        </button>
       </div>
     </div>,
     document.body,

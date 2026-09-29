@@ -191,7 +191,7 @@ describe('AnnotateContainer — "Rate this play" gate (T11120)', () => {
   });
 
   // ---- Dismissing the gate writes NOTHING ----
-  it('handleRateGateDismiss ("Keep editing"/Escape): clears the gate, writes nothing, stays in the editor', async () => {
+  it('handleRateGateDismiss (Escape): clears the gate, writes nothing, stays in the editor', async () => {
     const { result } = renderHook(() => AnnotateContainer(baseProps()));
     await markUnratedPlay(result);
     act(() => { result.current.handleOverlayClose(); });
@@ -300,7 +300,7 @@ describe('AnnotateContainer — "Rate this play" gate (T11120)', () => {
     });
     expect(typeof releaseWrite).toBe('function'); // the write is genuinely in flight
 
-    // User backs out with "Keep editing" while the write is still in flight.
+    // User backs out with Escape while the write is still in flight.
     act(() => { result.current.handleRateGateDismiss(); });
     expect(result.current.rateGate).toBeNull();
     expect(result.current.showAnnotateOverlay).toBe(true);
@@ -468,7 +468,7 @@ describe('AnnotateContainer — Done -> Highlight choice card (T11130)', () => {
     expect(useToastStore.getState().toasts.some((t) => /is now in Clips/i.test(t.title || ''))).toBe(false);
   });
 
-  it('Back to Editing creates the highlight, toasts the exact copy with no action, and closes the editor', async () => {
+  it('Keep Annotating creates the highlight, toasts the exact copy with no action, and closes the editor', async () => {
     const onOpenReelInFocus = vi.fn();
     const { result } = renderHook(() => AnnotateContainer(baseProps({ onOpenReelInFocus })));
     const id = await markUnratedPlay(result);
@@ -480,7 +480,7 @@ describe('AnnotateContainer — Done -> Highlight choice card (T11130)', () => {
     await act(async () => { await result.current.handleHighlightChoiceLater(); await flush(); });
 
     expect(putCallsWith((b) => b.create_project === true).length).toBe(1);
-    // Does NOT navigate (Back to Editing returns to marking plays).
+    // Does NOT navigate (Keep Annotating returns to marking plays).
     expect(onOpenReelInFocus).not.toHaveBeenCalled();
     // The card cleared and the editor closed.
     expect(result.current.highlightChoice).toBeNull();

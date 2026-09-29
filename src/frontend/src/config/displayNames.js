@@ -39,22 +39,20 @@ export const ANNOTATE = {
   PLAY_NAME: 'Play name',
   RENAME_PLAY: 'Rename play',
   RATE_PLAY: 'Rate this play',
-  // T11120: the "Rate this play" gate modal. Title reuses RATE_PLAY. Subtitle
-  // and the sole no-save exit ("Keep editing" = M6; Escape does the same) are
-  // owner-approved copy (2026-09-24). Never closes on backdrop.
+  // T11120: the "Rate this play" gate modal. Title reuses RATE_PLAY. The
+  // backdrop is inert; Escape remains the keyboard-only no-save exit.
   RATE_GATE_SUBTITLE: 'Pick one to finish.',
-  RATE_GATE_KEEP_EDITING: 'Keep editing',
   // T11130: the Done -> Highlight choice card (in-place gold mode-swap of the
   // edit strip when Done fires on a Brilliant-rated play that is not yet a
-  // highlight). Owner-approved copy (2026-09-24). "Back to Editing" replaced
-  // round 2's "Highlight Later" (owner ruling round 3). Escape is the only
+  // highlight). "Keep Annotating" is the explicit return-to-work action.
+  // Escape is the only
   // no-save exit; never closes on backdrop.
   HIGHLIGHT_CHOICE_EYEBROW: 'Highlight',
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
   MAKE_HIGHLIGHT_NOW: 'Make Highlight Now',
-  BACK_TO_EDITING: 'Back to Editing',
+  BACK_TO_EDITING: 'Keep Annotating',
   BACK_TO_EDITING_SUBTEXT: 'Saves play in Clips so you can make your highlight later',
-  // T11130: the "Back to Editing" confirmation toast (via announceReelCreated,
+  // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
   // no action button) — the editor closes, so the toast IS the confirmation.
   // "Clips" (capital C) names the Home tab; one of only two strings in Annotate
   // that still say "Clips".

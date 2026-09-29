@@ -1,6 +1,6 @@
 # T11150: Play editor hierarchy (time, name + rating, details) and no "clip" wording in Annotate
 
-**Status:** STAGING
+**Status:** DONE (deployed 2026-09-28 prod)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-24

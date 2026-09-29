@@ -1,10 +1,10 @@
 # T8660: Send Stripe receipts (receipt_email on the PaymentIntent)
 
-**Status:** STAGING
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-03
-**Updated:** 2026-09-05
+**Updated:** 2026-09-29
 
 Epic 5/6. See [EPIC.md](EPIC.md). Independent of the other tasks; can land any time.
 
@@ -63,10 +63,10 @@ Details:
       (PR #344, merged 2026-09-05: `_receipt_email_for` in payments.py reads
       Postgres `users.email` for the current session; red->green proof in
       `test_payments_receipt_email.py`)
-- [ ] A live test purchase produces a Stripe receipt email -- **outstanding, needs a
-      live-mode purchase**; test-mode sends no email so this cannot be automated
+- [ ] A live test purchase produces a Stripe receipt email — **waived by owner on 2026-09-29;
+      no real charge was made and live receipt delivery remains unobserved**
 - [ ] The statement descriptor is verified against the receipt and recorded in the task's
-      progress log -- **outstanding, Stripe dashboard operator step, no code involved**
+      progress log — **waived with the live-purchase step on 2026-09-29**
 - [x] No second receipt email is sent by our own mailer (nothing in this change touches
       `email.py`/Resend)
 
@@ -74,3 +74,9 @@ Details:
 steps (a live-mode purchase and a Stripe dashboard check) that gate calling this task
 DONE, not the merge -- the code-level fix was provably verified (red->green test +
 Branch CI green) before merging.
+
+**2026-09-29: owner decision.** The owner explicitly declared that the real-purchase step will
+be skipped and authorized completion. T8660 is therefore DONE based on the shipped, test-covered
+`receipt_email` implementation. This is a deliberate acceptance of an unverified operational
+claim, not evidence that Stripe delivered a live receipt or that the receipt's descriptor was
+visually confirmed.

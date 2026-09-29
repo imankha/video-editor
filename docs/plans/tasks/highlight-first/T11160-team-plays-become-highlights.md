@@ -1,6 +1,6 @@
 # T11160: Team plays become highlights like any other
 
-**Status:** WIP
+**Status:** DONE (deployed 2026-09-28 prod)
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-24
@@ -53,6 +53,11 @@ neutral wording for team highlights in the T11280 sweep.
 
 ## Acceptance Criteria
 
-- [ ] Red-then-green: a Team play rated Highlight shows the popup and Make Highlight Now opens Frame Highlight on it
-- [ ] No UI copy says team plays can't become highlights
-- [ ] T1-T5 behave per the owner's answers (a test per changed rule)
+- [x] Red-then-green: a Team play rated Highlight shows the popup and Make Highlight Now opens Frame Highlight on it
+- [x] No UI copy says team plays can't become highlights
+- [x] T1-T5 behave per the owner's answers (a test per changed rule)
+
+## Completion
+
+Merged in PR #525 and deployed to production on 2026-09-28. The implementation keeps Team
+highlights out of athlete ranking and intro-card behavior while preserving the decided layer rules.
