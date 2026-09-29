@@ -60,16 +60,9 @@ function renderView(overrides = {}) {
 }
 
 describe('FocusModeView FramingActionRow wiring (T9950 Slice 2)', () => {
-  it('passes canUndoFraming through to disable/enable the Undo button', () => {
-    renderView({ canUndoFraming: false });
-    expect(screen.getByTestId('framing-undo').disabled).toBe(true);
-  });
-
-  it('calls onUndoFraming when Undo is clicked', () => {
-    const onUndoFraming = vi.fn();
-    renderView({ canUndoFraming: true, onUndoFraming });
-    screen.getByTestId('framing-undo').click();
-    expect(onUndoFraming).toHaveBeenCalledTimes(1);
+  it('does not render the retired Undo control', () => {
+    renderView({ canUndoFraming: true, onUndoFraming: vi.fn() });
+    expect(screen.queryByTestId('framing-undo')).toBeNull();
   });
 
   it('never renders a widen-frame control', () => {

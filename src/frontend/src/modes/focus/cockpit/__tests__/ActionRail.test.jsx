@@ -5,8 +5,6 @@ function renderRail(overrides = {}) {
   const props = {
     activeSheet: null,
     onOpenSetup: vi.fn(),
-    canUndo: true,
-    onUndo: vi.fn(),
     previewing: false,
     onTogglePreview: vi.fn(),
     ctaMode: 'generate',
@@ -22,10 +20,10 @@ function renderRail(overrides = {}) {
 }
 
 describe('ActionRail (T10840 Zone D)', () => {
-  it('renders the three rail buttons and the primary CTA', () => {
+  it('renders setup, preview, and the primary CTA without Undo', () => {
     renderRail();
     expect(screen.getByTestId('cockpit-setup-btn')).toBeTruthy();
-    expect(screen.getByTestId('cockpit-undo-btn')).toBeTruthy();
+    expect(screen.queryByTestId('cockpit-undo-btn')).toBeNull();
     expect(screen.getByTestId('cockpit-preview-btn')).toBeTruthy();
     expect(screen.getByTestId('primary-cta')).toBeTruthy();
   });
@@ -42,11 +40,6 @@ describe('ActionRail (T10840 Zone D)', () => {
     expect(screen.getByTestId('cockpit-actions').className).toContain('z-50');
     // The CTA itself is still enabled + interactive with a sheet open.
     expect(screen.getByTestId('primary-cta').disabled).toBe(false);
-  });
-
-  it('the Undo button is disabled when there is nothing to undo', () => {
-    renderRail({ canUndo: false });
-    expect(screen.getByTestId('cockpit-undo-btn').disabled).toBe(true);
   });
 
   it('the preview CTA state renders "Back to / Preview" and fires onBackToPreview', () => {

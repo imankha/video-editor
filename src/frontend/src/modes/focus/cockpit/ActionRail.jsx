@@ -1,4 +1,4 @@
-import { Sliders, Undo2, Eye, Download, Loader } from 'lucide-react';
+import { Sliders, Eye, Download, Loader } from 'lucide-react';
 import PrimaryCta from '../../../components/PrimaryCta';
 import { FOCUS_COCKPIT } from '../../../config/displayNames';
 
@@ -27,8 +27,8 @@ function RailButton({ icon: Icon, label, onClick, active = false, disabled = fal
 }
 
 /**
- * ActionRail (T10840, Zone D) — the 72px right edge rail. Three rail buttons
- * (Setup / Undo / Preview — T11240 removed Clips) top, then the `~N cr`
+ * ActionRail (T10840, Zone D) — the 72px right edge rail. Setup and Preview
+ * buttons (T11240 removed Clips) sit on top, then the `~N cr`
  * estimate and the compact primary CTA in the bottom-right corner (the
  * best-reachable point, §7).
  *
@@ -40,8 +40,6 @@ function RailButton({ icon: Icon, label, onClick, active = false, disabled = fal
 export default function ActionRail({
   activeSheet,
   onOpenSetup,
-  canUndo,
-  onUndo,
   previewing,
   onTogglePreview,
   // Export CTA (D9/D13)
@@ -98,13 +96,6 @@ export default function ActionRail({
           label={FOCUS_COCKPIT.SETUP}
           onClick={onOpenSetup}
           active={activeSheet === 'setup'}
-        />
-        <RailButton
-          testId="cockpit-undo-btn"
-          icon={Undo2}
-          label={FOCUS_COCKPIT.UNDO}
-          onClick={onUndo}
-          disabled={!canUndo}
         />
         <RailButton
           testId="cockpit-preview-btn"

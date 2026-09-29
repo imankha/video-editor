@@ -15,7 +15,7 @@ import { HighlightChoiceCard } from './HighlightChoiceCard';
 import { DeletePlayButton } from './DeletePlayButton';
 import { onTextFieldKeyDown } from '../textFieldCommit';
 import { ANNOTATE } from '../../../config/displayNames';
-import { getClipStage } from '../clipStage';
+import { getClipStage, HIGHLIGHT_STATUS } from '../clipStage';
 
 // Persists across mounts within the same page session
 let savedDockPosition = 'left';
@@ -410,6 +410,7 @@ export function AnnotateFullscreenOverlay({
     ? projectsList.find((project) => project.id === existingClip.autoProjectId)
     : null;
   const highlightStatus = getClipStage(existingClip, linkedProject, { framingInProgress }).status;
+  const showHighlightStatus = highlightStatus !== HIGHLIGHT_STATUS.NOT_STARTED || Number(rating) === 5;
 
   const formBody = (
     <>
@@ -469,7 +470,7 @@ export function AnnotateFullscreenOverlay({
               className="flex-1 min-w-0 px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
             />
             <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
-            {Number(rating) === 5 && <HighlightMadeChip status={highlightStatus} />}
+            {showHighlightStatus && <HighlightMadeChip status={highlightStatus} />}
           </div>
         </div>
 
@@ -641,7 +642,7 @@ export function AnnotateFullscreenOverlay({
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
-              {Number(rating) === 5 && <HighlightMadeChip status={highlightStatus} />}
+              {showHighlightStatus && <HighlightMadeChip status={highlightStatus} />}
             </div>
           </div>
 
@@ -768,7 +769,7 @@ export function AnnotateFullscreenOverlay({
             className="flex-1 min-w-0 px-3 py-1.5 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
           <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
-          {Number(rating) === 5 && <HighlightMadeChip status={highlightStatus} />}
+          {showHighlightStatus && <HighlightMadeChip status={highlightStatus} />}
           <button
             type="button"
             onClick={() => setDetailsOpen(o => !o)}
@@ -888,7 +889,7 @@ export function AnnotateFullscreenOverlay({
             className="flex-1 min-w-0 px-3 py-2 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
           <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
-          {Number(rating) === 5 && <HighlightMadeChip status={highlightStatus} />}
+          {showHighlightStatus && <HighlightMadeChip status={highlightStatus} />}
         </div>
 
         {/* Strip row 2: the disclosure + Done buttons NEVER shrink (flex-none,

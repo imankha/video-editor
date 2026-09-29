@@ -1,8 +1,8 @@
-import { Undo2, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { EDITOR_PANELS } from '../../config/displayNames';
 
 /**
- * FramingActionRow (T9950, T10310) — [Undo] [Preview highlight]. "Use a wider
+ * FramingActionRow (T9950, T10310) — [Preview highlight]. "Use a wider
  * frame" was removed 2026-09-18 per user request.
  * Pure presentational: props in, callbacks out, no store reads (design doc
  * §5 Slice 2).
@@ -12,26 +12,11 @@ import { EDITOR_PANELS } from '../../config/displayNames';
  * (design doc §5: "each slice independently reviewable and shippable").
  */
 export default function FramingActionRow({
-  canUndo,
-  onUndo,
   previewing = false,
   onTogglePreview,
 }) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
-      <button
-        type="button"
-        data-testid="framing-undo"
-        onClick={onUndo}
-        disabled={!canUndo}
-        title={canUndo ? 'Undo the last framing edit' : EDITOR_PANELS.UNDO_NOTHING}
-        aria-disabled={!canUndo}
-        className="flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-gray-800 coarse-pointer:min-h-11"
-      >
-        <Undo2 size={14} aria-hidden="true" />
-        {EDITOR_PANELS.UNDO}
-      </button>
-
       {onTogglePreview && (
         <button
           type="button"

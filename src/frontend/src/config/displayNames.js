@@ -81,7 +81,7 @@ export const ANNOTATE = {
   // 2026-09-18 (user request): shortened from "Frame this clip" to "Frame" —
   // the timeline strip's Edit play/Frame pairing already frames it as an
   // action on the currently-selected clip; no need to repeat "this clip".
-  FRAME_THIS_CLIP: 'Frame',                // N41 — FOCUS-stage primary CTA
+  FRAME_THIS_CLIP: 'Make Highlight',       // FOCUS-stage primary CTA
   // 2026-09-18 (user request): rollover on the Frame this clip button, using
   // ALREADY-APPROVED copy -- the Clips-tab guidance body (T10280, the user's
   // own words, 2026-09-17) is the one place the app explains what Framing
@@ -97,7 +97,7 @@ export const ANNOTATE = {
   // stage actions (create-only vs create-and-open-Framing, T10240).
   // T10610: SAVE_AND_FRAME (the editor's create-then-open-Framing outcome)
   // is retired — there is no save gesture left to attach it to.
-  FRAME_CLIP: 'Frame clip',                // N42 — retained for FramingHeaderStatus / ClipSelectorSidebar
+  FRAME_CLIP: 'Make Highlight',            // retained for FramingHeaderStatus / ClipSelectorSidebar
   // T11130: FRAME_NOW / FRAME_LATER / FRAME_LATER_HINT removed — the T10450
   // main-screen Frame Now / Frame Later create row is gone; a play becomes a
   // highlight through the rating + Done -> Highlight popup gesture. A play that
@@ -402,16 +402,16 @@ export const UPLOAD_STATE = {
 // "Framing ready".
 export const EXPORT_JOBS = {
   framing: {
-    action: `Generate ${MODE_NAMES.FRAMING}`,          // N19 — render CTA, was "Export Focused Video"
-    inProgress: `Generating ${MODE_NAMES.FRAMING}...`, // N19 — progress/job label, was "Creating reel..."
-    completed: `${MODE_NAMES.FRAMING} ready`,          // N21 — names the stage that finished, was "Export Complete"
-    jobNoun: MODE_NAMES.FRAMING,                       // job-list row noun, was "Framing Export"
+    action: 'Generate Highlight',
+    inProgress: 'Generating Highlight...',
+    completed: 'Highlight ready',
+    jobNoun: 'Highlight',
   },
   overlay: {
-    action: 'Apply Overlay',                   // render CTA (T10970, 2026-09-21); was "Export", before that "Export clip with effects" (N20) and "Add Spotlight"
-    inProgress: 'Exporting clip...',          // N20
-    completed: 'Clip ready',                  // N21
-    jobNoun: 'Effects',                        // job-list row noun, was "Overlay Export"
+    action: 'Generate Highlight with Overlay',
+    inProgress: 'Generating Highlight with Overlay...',
+    completed: 'Highlight with Overlay ready',
+    jobNoun: 'Highlight with Overlay',
     // Q1 (approved): the effects render charges ZERO credits (backend-confirmed: no
     // reserve_credits in overlay.py). Surface that honestly instead of staying silent.
     costNote: 'No credits · effects are free',
@@ -530,11 +530,10 @@ export const FOCUS_COCKPIT = {
   // Zone A / D rail button labels (10px, under a Lucide icon).
   BACK: 'Back',
   SETUP: 'Setup',
-  UNDO: 'Undo',
   PREVIEW: 'Preview',
   // Compact CTA, two 10px lines (D9 / D13).
   GENERATE_LINE_1: 'Generate',
-  GENERATE_LINE_2: 'Framing',
+  GENERATE_LINE_2: 'Highlight',
   BACK_TO_PREVIEW_LINE_1: 'Back to',
   BACK_TO_PREVIEW_LINE_2: 'Preview',
   // Zone E sheet titles.
@@ -580,7 +579,7 @@ export const FOCUS_PUBLISH_LATER_TOAST = {
 // same as the existing Add Spotlight Later toast above). Short, since the
 // user isn't leaving the flow -- they land straight in Overlay right after.
 export const FOCUS_ADD_SPOTLIGHT_TOAST = {
-  title: 'Framing ready',
+  title: EXPORT_JOBS.framing.completed,
   message: 'Now add a spotlight to your reel -- you can still publish it whenever you\'re ready.',
 };
 

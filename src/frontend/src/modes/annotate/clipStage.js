@@ -99,11 +99,11 @@ export function getClipStage(region, linkedProject, { framingInProgress = false 
 
   if (projectReflectsClip && linkedProject?.has_final_video) {
     return linkedProject.is_published
-      ? { stage: CLIP_STAGE.PUBLISHED, status: HIGHLIGHT_STATUS.PUBLISHED, label: 'View Final', action: 'published' }
-      : { stage: CLIP_STAGE.FINAL, status: HIGHLIGHT_STATUS.OVERLAID, label: 'Preview', action: 'preview' };
+      ? { stage: CLIP_STAGE.PUBLISHED, status: HIGHLIGHT_STATUS.PUBLISHED, label: 'View Highlight', action: 'published' }
+      : { stage: CLIP_STAGE.FINAL, status: HIGHLIGHT_STATUS.OVERLAID, label: 'Preview Highlight', action: 'preview' };
   }
   if (projectReflectsClip && linkedProject?.has_working_video) {
-    return { stage: CLIP_STAGE.SPOTLIGHT, status: HIGHLIGHT_STATUS.FRAMED, label: 'Add Overlay', action: 'overlay' };
+    return { stage: CLIP_STAGE.SPOTLIGHT, status: HIGHLIGHT_STATUS.FRAMED, label: 'Add Overlay to Highlight', action: 'overlay' };
   }
   if (projectReflectsClip) {
     return { stage: CLIP_STAGE.FOCUS, status: HIGHLIGHT_STATUS.CLIPPED, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };

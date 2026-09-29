@@ -16,7 +16,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, null)).toEqual({
       stage: CLIP_STAGE.NO_PROJECT,
       status: HIGHLIGHT_STATUS.NOT_STARTED,
-      label: 'Frame',
+      label: 'Make Highlight',
       action: 'focus',
     });
   });
@@ -32,7 +32,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
       status: HIGHLIGHT_STATUS.CLIPPED,
-      label: 'Frame',
+      label: 'Make Highlight',
       action: 'focus',
     });
   });
@@ -43,7 +43,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject, { framingInProgress: true })).toEqual({
       stage: CLIP_STAGE.FOCUS,
       status: HIGHLIGHT_STATUS.FRAMING,
-      label: 'Frame',
+      label: 'Make Highlight',
       action: 'focus',
     });
   });
@@ -61,7 +61,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
       status: HIGHLIGHT_STATUS.CLIPPED,
-      label: 'Frame',
+      label: 'Make Highlight',
       action: 'focus',
     });
   });
@@ -77,7 +77,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
       status: HIGHLIGHT_STATUS.CLIPPED,
-      label: 'Frame',
+      label: 'Make Highlight',
       action: 'focus',
     });
   });
@@ -93,7 +93,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.SPOTLIGHT,
       status: HIGHLIGHT_STATUS.FRAMED,
-      label: 'Add Overlay',
+      label: 'Add Overlay to Highlight',
       action: 'overlay',
     });
   });
@@ -109,7 +109,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FINAL,
       status: HIGHLIGHT_STATUS.OVERLAID,
-      label: 'Preview',
+      label: 'Preview Highlight',
       action: 'preview',
     });
   });
@@ -125,7 +125,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.PUBLISHED,
       status: HIGHLIGHT_STATUS.PUBLISHED,
-      label: 'View Final',
+      label: 'View Highlight',
       action: 'published',
     });
   });
@@ -147,7 +147,7 @@ describe('getClipStage (T9330)', () => {
       expect(getClipStage(region, linkedProject)).toEqual({
         stage: CLIP_STAGE.FOCUS,
         status: HIGHLIGHT_STATUS.CLIPPED,
-        label: 'Frame',
+        label: 'Make Highlight',
         action: 'focus',
       });
     });
@@ -165,7 +165,7 @@ describe('getClipStage (T9330)', () => {
       expect(getClipStage(region, linkedProject)).toEqual({
         stage: CLIP_STAGE.FOCUS,
         status: HIGHLIGHT_STATUS.CLIPPED,
-        label: 'Frame',
+        label: 'Make Highlight',
         action: 'focus',
       });
     });

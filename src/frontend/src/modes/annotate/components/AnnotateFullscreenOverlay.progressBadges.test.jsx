@@ -231,8 +231,13 @@ describe('highlight status chip', () => {
     expect(screen.getByText('Not Started')).toBeTruthy();
   });
 
-  it('does not show a highlight status for a play rated below Highlight', () => {
+  it('shows a progressed status even when the play is rated below Highlight', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating: 4, autoProjectId: 42 }} />);
+    expect(screen.getByText('Clipped')).toBeTruthy();
+  });
+
+  it('hides Not Started when the play is rated below Highlight', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating: 4, autoProjectId: null }} />);
     expect(screen.queryByTestId('highlight-made-chip')).toBeNull();
   });
 
@@ -258,7 +263,7 @@ describe('highlight status chip', () => {
       <AnnotateFullscreenOverlay
         {...baseProps}
         layout="strip"
-        existingClip={{ ...bareClip, rating: 5, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
+        existingClip={{ ...bareClip, rating: 4, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
       />,
     );
     expect(screen.getByText(label)).toBeTruthy();
