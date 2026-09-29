@@ -247,8 +247,8 @@ CREATE TABLE IF NOT EXISTS user_segments (
     -- T8650: DISPLAY CACHE only, per-user. `payments` is the financial record
     -- every revenue aggregate reads; this column is not the source of truth.
     total_spent_cents INTEGER NOT NULL DEFAULT 0,
-    last_active_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    total_usage_seconds INTEGER NOT NULL DEFAULT 0,
+    last_active_at TIMESTAMPTZ DEFAULT now(),
+    total_usage_seconds INTEGER DEFAULT 0,
     current_session_start TIMESTAMPTZ,
     utm_source TEXT,
     utm_medium TEXT,
