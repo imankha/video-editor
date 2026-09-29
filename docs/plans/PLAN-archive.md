@@ -1018,3 +1018,9 @@ User ran the full local Playwright suite 2026-08-25 (348 passed / 144 failed / 2
 | T11130 | ↳ [Highlight popup: Make Highlight Now / Highlight Later; remove Create clip + Frame CTAs](tasks/highlight-first/T11130-done-popup-highlight-choice.md) | 9 | 5 | 1.8 | DONE | [x] | DONE (deployed 2026-09-28 prod). Merged PR #524. |
 | T11160 | ↳ [Team plays become highlights like any other](tasks/highlight-first/T11160-team-plays-become-highlights.md) | 5 | 3 | 1.7 | DONE | [ ] | DONE (deployed 2026-09-28 prod). Merged PR #525; Team highlights follow the decided ranking, intro-card, recap-layer, and expiry-fallback rules. |
 | T11140 | ↳ [Mode bar: Frame Highlight / Add Spotlight, gated on the selected play's highlight](tasks/highlight-first/T11140-mode-bar-rename-and-gating.md) | 7 | 3 | 2.3 | DONE | [ ] | DONE (deployed 2026-09-28 prod). Merged PR #526; mode entry follows the selected play and stage availability rather than the most recent global project. |
+
+## Current Focus — Production Annotate/Spotlight follow-ups
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T11390 | [Clarify Annotate highlight and required-rating actions](tasks/T11390-annotate-rating-popup-copy.md) | 5 | 1 | 5.0 | DONE | [ ] | DONE (deployed 2026-09-29 prod, frontend build 5874). “Back to Editing” now says “Keep Annotating,” and the required-rating gate no longer presents a competing visible “Keep editing” action. Merged PR #535; Branch CI green; 29/29 focused tests and changed-file ESLint passed locally. |

@@ -1,6 +1,6 @@
 # T11390: Clarify Annotate highlight and required-rating actions
 
-**Status:** WAITING ON USER
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 1
 **Created:** 2026-09-28
@@ -51,6 +51,9 @@ pre-change source for exactly the two requested differences.
 **2026-09-28:** Implementation complete. Curated result: 29/29 tests passed across the modal,
 fullscreen Escape interaction, Highlight choice, and container gate flows. ESLint passed on every
 changed frontend source/test file. Waiting only for landing/review disposition.
+
+**2026-09-29:** Merged in PR #535 (`9933d20a`) after green Branch CI and deployed to production
+as frontend build 5874. `app.reelballers.com` returned HTTP 200 after deployment.
 
 ## Acceptance Criteria
 
