@@ -220,15 +220,32 @@ describe('RatingPill — rated state', () => {
 
 describe('highlight status chip', () => {
   it('shows Clipped when a project exists but framing has not completed', () => {
-    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, autoProjectId: 42 }} />);
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating: 5, autoProjectId: 42 }} />);
     expect(screen.getByTestId('highlight-made-chip')).toBeTruthy();
     expect(screen.getByText('Clipped')).toBeTruthy();
   });
 
   it('shows Not Started before a highlight project exists', () => {
-    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, autoProjectId: null }} />);
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating: 5, autoProjectId: null }} />);
     expect(screen.getByTestId('highlight-made-chip')).toBeTruthy();
     expect(screen.getByText('Not Started')).toBeTruthy();
+  });
+
+  it('does not show a highlight status for a play rated below Highlight', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating: 4, autoProjectId: 42 }} />);
+    expect(screen.queryByTestId('highlight-made-chip')).toBeNull();
+  });
+
+  it('shows Framing while the highlight export is pending', () => {
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps}
+        layout="strip"
+        framingInProgress
+        existingClip={{ ...bareClip, rating: 5, autoProjectId: 42 }}
+      />,
+    );
+    expect(screen.getByText('Framing')).toBeTruthy();
   });
 
   it.each([
@@ -241,7 +258,7 @@ describe('highlight status chip', () => {
       <AnnotateFullscreenOverlay
         {...baseProps}
         layout="strip"
-        existingClip={{ ...bareClip, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
+        existingClip={{ ...bareClip, rating: 5, autoProjectId: 42, reelSourceStartTime: 0, reelSourceEndTime: 10 }}
       />,
     );
     expect(screen.getByText(label)).toBeTruthy();

@@ -9,8 +9,9 @@ import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { ANNOTATE, SHARING } from '../config/displayNames';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
-import { getClipStage, CLIP_STAGE } from './annotate/clipStage';
+import { getClipStage, isFramingExportInProgress, CLIP_STAGE } from './annotate/clipStage';
 import { useCurrentProfile, useProfileStore, useProjectsList } from '../stores';
+import { useExportStore } from '../stores/exportStore';
 import PlaybackControls from './annotate/components/PlaybackControls';
 import { generateClipName } from '../utils/clipDisplayName';
 import { clipGameClock } from '../utils/timeFormat';
@@ -214,10 +215,14 @@ export function AnnotateModeView({
     return clipRegions?.find(r => r.id === annotateSelectedRegionId) || null;
   }, [annotateSelectedRegionId, clipRegions]);
   const projectsList = useProjectsList();
+  const activeExports = useExportStore(state => state.activeExports);
   const selectedRegionProject = selectedRegion?.autoProjectId
     ? projectsList.find(p => p.id === selectedRegion.autoProjectId)
     : null;
-  const selectedClipStage = selectedRegion ? getClipStage(selectedRegion, selectedRegionProject) : null;
+  const selectedRegionFraming = isFramingExportInProgress(activeExports, selectedRegion?.autoProjectId);
+  const selectedClipStage = selectedRegion
+    ? getClipStage(selectedRegion, selectedRegionProject, { framingInProgress: selectedRegionFraming })
+    : null;
   const [frameClipPending, setFrameClipPending] = useState(false);
   // T9830/T10240 convention: a synchronously-set REF (not state) guards
   // against a double-fire from the two buttons sharing one create seam —
@@ -442,6 +447,7 @@ export function AnnotateModeView({
     ? getClipStage(
       activePlaybackClip,
       activePlaybackClip.autoProjectId ? projectsList.find(p => p.id === activePlaybackClip.autoProjectId) : null,
+      { framingInProgress: isFramingExportInProgress(activeExports, activePlaybackClip.autoProjectId) },
     ).stage
     : null;
 
@@ -978,6 +984,7 @@ export function AnnotateModeView({
                 activeSourceName={activeSourceName}
                 mediaBounds={activeSourceMediaBounds}
                 teammateSuggestions={teammateSuggestions}
+                framingInProgress={selectedRegionFraming}
                 // T11130: Done -> Highlight choice card (in-place mode-swap)
                 showHighlightChoice={!!highlightChoice && highlightChoice.regionId === existingClip?.id}
                 onHighlightChoiceNow={onHighlightChoiceNow}
@@ -1013,6 +1020,7 @@ export function AnnotateModeView({
                     activeSourceName={activeSourceName}
                     mediaBounds={activeSourceMediaBounds}
                     teammateSuggestions={teammateSuggestions}
+                    framingInProgress={selectedRegionFraming}
                     onScrubDragChange={setIsDraggingScrub}
                     // T11130: Done -> Highlight choice card (in-place mode-swap)
                     showHighlightChoice={!!highlightChoice && highlightChoice.regionId === existingClip?.id}
@@ -1139,6 +1147,7 @@ export function AnnotateModeView({
                 activeSourceName={activeSourceName}
                 mediaBounds={activeSourceMediaBounds}
                 teammateSuggestions={teammateSuggestions}
+                framingInProgress={selectedRegionFraming}
                 // T11130: Done -> Highlight choice card (in-place mode-swap)
                 showHighlightChoice={!!highlightChoice && highlightChoice.regionId === existingClip?.id}
                 onHighlightChoiceNow={onHighlightChoiceNow}

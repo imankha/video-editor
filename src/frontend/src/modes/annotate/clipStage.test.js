@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getClipStage, CLIP_STAGE, HIGHLIGHT_STATUS } from './clipStage';
+import { getClipStage, isFramingExportInProgress, CLIP_STAGE, HIGHLIGHT_STATUS } from './clipStage';
 
 // T9330 §2.5 — the 6-row stage table as one ordered pure function.
 // Order matters — first match wins; composes T8070 staleness and T8470 Part D.
@@ -32,6 +32,17 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
       status: HIGHLIGHT_STATUS.CLIPPED,
+      label: 'Frame',
+      action: 'focus',
+    });
+  });
+
+  it('an accepted in-progress framing export reports Framing before a working video exists', () => {
+    const region = { ...baseRegion, autoProjectId: 42 };
+    const linkedProject = { has_working_video: false, has_final_video: false, is_published: false };
+    expect(getClipStage(region, linkedProject, { framingInProgress: true })).toEqual({
+      stage: CLIP_STAGE.FOCUS,
+      status: HIGHLIGHT_STATUS.FRAMING,
       label: 'Frame',
       action: 'focus',
     });
@@ -158,5 +169,18 @@ describe('getClipStage (T9330)', () => {
         action: 'focus',
       });
     });
+  });
+});
+
+describe('isFramingExportInProgress', () => {
+  it.each(['pending', 'processing'])('recognizes a %s framing export for the project', (status) => {
+    expect(isFramingExportInProgress({ e1: { projectId: 42, type: 'framing', status } }, '42')).toBe(true);
+  });
+
+  it('ignores completed framing and active overlay exports', () => {
+    expect(isFramingExportInProgress({
+      e1: { projectId: 42, type: 'framing', status: 'complete' },
+      e2: { projectId: 42, type: 'overlay', status: 'processing' },
+    }, 42)).toBe(false);
   });
 });

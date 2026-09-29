@@ -363,10 +363,12 @@ export function FocusModeView({
       return;
     }
 
+    // useVideo.seek is clip-relative and translates zero to the source clip's
+    // offset. Do not write video.currentTime directly or that translation is
+    // lost and game-backed clips restart at the beginning of the full video.
     seek?.(0);
     const video = videoRef?.current;
     if (video) {
-      video.currentTime = 0;
       const playPromise = video.play?.();
       playPromise?.catch?.(() => {});
     }

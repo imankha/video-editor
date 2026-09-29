@@ -348,7 +348,8 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
       return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true }) });
     });
 
-    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    const fetchProjects = vi.fn().mockResolvedValue([]);
+    const { result } = renderHook(() => AnnotateContainer(baseProps({ fetchProjects })));
     act(() => { result.current.handleAddClipFromButton(); });
     await act(async () => { await flushMicrotasks(); });
     const region = result.current.clipRegions[0];
@@ -364,6 +365,7 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     });
 
     expect(outcome).toEqual({ saveOk: true, projectId: 99 });
+    expect(fetchProjects).toHaveBeenCalledWith({ force: true });
     expect(useToastStore.getState().toasts).toHaveLength(0);
   });
 
