@@ -1,6 +1,6 @@
 # Highlight-First Annotate Flow
 
-**Status:** TODO (design decided 2026-09-24)
+**Status:** DONE (deployed 2026-09-28 prod)
 **Started:** 2026-09-24
 **Impact:** 9 **Complexity:** 6 **Priority:** 1.5
 **Sibling epic:** [Single-Clip Editor, Reels removed](../single-clip-editor/EPIC.md) (ships in the same version)
@@ -82,13 +82,13 @@ T11120 -> T11130 are strict (same files: `AnnotateFullscreenOverlay.jsx`, `Detai
 
 | ID | Task | Tier | Status |
 |----|------|------|--------|
-| T11100 | [UX design gate: editor layout, rating modal, Highlight popup, mode bar](T11100-ux-design-gate.md) | design | DECIDED |
-| T11110 | [Rating 5 becomes "Highlight", in gold](T11110-brilliant-to-highlight-rename.md) | M | STAGING (merged PR #503, proof VERIFIED, CI green) |
-| T11150 | [Play editor hierarchy (time, name + rating, details) and no "clip" wording in Annotate](T11150-play-editor-hierarchy-no-clip-word.md) | M | TODO |
-| T11120 | [Unrated Done opens the "Rate this play" modal](T11120-require-rating-gate.md) | M | TODO |
-| T11130 | [Highlight popup: Make Highlight Now / Highlight Later; remove Create clip + Frame CTAs](T11130-done-popup-highlight-choice.md) | L | TODO |
-| T11140 | [Mode bar: Frame Highlight / Add Spotlight, gated on the selected play's highlight](T11140-mode-bar-rename-and-gating.md) | M | TODO |
-| T11160 | [Team plays become highlights like any other](T11160-team-plays-become-highlights.md) | M | TODO |
+| T11100 | [UX design gate: editor layout, rating modal, Highlight popup, mode bar](T11100-ux-design-gate.md) | design | DONE |
+| T11110 | [Rating 5 becomes "Highlight", in gold](T11110-brilliant-to-highlight-rename.md) | M | DONE |
+| T11150 | [Play editor hierarchy (time, name + rating, details) and no "clip" wording in Annotate](T11150-play-editor-hierarchy-no-clip-word.md) | M | DONE |
+| T11120 | [Unrated Done opens the "Rate this play" modal](T11120-require-rating-gate.md) | M | DONE |
+| T11130 | [Highlight popup: Make Highlight Now / Highlight Later; remove Create clip + Frame CTAs](T11130-done-popup-highlight-choice.md) | L | DONE |
+| T11140 | [Mode bar: Frame Highlight / Add Spotlight, gated on the selected play's highlight](T11140-mode-bar-rename-and-gating.md) | M | DONE |
+| T11160 | [Team plays become highlights like any other](T11160-team-plays-become-highlights.md) | M | DONE |
 
 ## Open questions (answered in the decision artifact)
 

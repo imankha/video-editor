@@ -1,6 +1,6 @@
 # T11110: Rating 5 becomes "Highlight", in gold
 
-**Status:** STAGING (merged PR #503, 739ff784)
+**Status:** DONE (deployed 2026-09-28 prod; final production vocabulary restored to Brilliant)
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-09-24

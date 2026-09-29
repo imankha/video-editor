@@ -36,6 +36,12 @@ a correctly-worded capture landed. Impact 5 / Complexity 2. Touches the trusted 
 Landing Policy. Workaround documented in `docs/plans/landing-gate-usage.md` (recapture, never
 hand-edit a receipt) until this is fixed.
 
+**2026-09-28 addition, unplaced — [T11380](tasks/T11380-video-zoom-out-centering.md):
+Video remains panned off-center after returning to 100% zoom.** Reported live on production in
+Annotate. `useZoom` clamps zoom to 1 through `zoomOut`/wheel/direct-set without clearing the
+independent `panOffset`, while `VideoPlayer` continues applying that translation. Shared-hook fix
+must cover Annotate, Framing, and Spotlight. Impact 6 / Complexity 2, frontend-only.
+
 **2026-09-24 addition, unplaced — [T11050](tasks/T11050-annotate-clip-lane-click-seek.md):
 Annotate's clips-lane click didn't move the playhead.** Reported live by imankh@gmail.com.
 The thin video scrub row seeks correctly; the clips lane background (My Athlete/Team tracks,
@@ -246,14 +252,6 @@ be re-derived against these screens. Table must stay CONTIGUOUS.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-|  | **[Highlight-First Annotate Flow](tasks/highlight-first/EPIC.md)** | 9 | 6 | 1.5 | WIP |  | Rating becomes the gesture that makes a highlight. T11100 design gate first; T11120 -> T11130 strict (same files). |
-| T11100 | ↳ [UX design gate: editor layout, rating modal, Highlight popup, mode bar](tasks/highlight-first/T11100-ux-design-gate.md) | 8 | 2 | 4.0 | DECIDED | [ ] | Decided 2026-09-24 after 4 rounds: P2 palette, A2 editor layout, rate modal (only when unrated), B3 in-place choice card (Make Highlight Now / Back to Editing, closes editor, toast), D2 mode bar. Mockups https://claude.ai/artifact/FFGqtZQnE4a9n9PHjANaeA |
-| T11110 | ↳ [Rating 5 becomes "Highlight", in gold](tasks/highlight-first/T11110-brilliant-to-highlight-rename.md) | 6 | 3 | 2.0 | STAGING | [x] | Merged PR #503 (739ff784), proof VERIFIED, CI green. UI labels + backend derived names + gold P2 palette; v055 migration ports provably-derived persisted names. Persisted ids (`brilliant_clip`, `annotate_brilliant`, `brilliant_count`) unchanged. |
-| T11150 | ↳ [Play editor hierarchy (time, name + rating, details) and no "clip" wording in Annotate](tasks/highlight-first/T11150-play-editor-hierarchy-no-clip-word.md) | 7 | 4 | 1.8 | STAGING | [x] | Merged PR #522 (a96a5108), reviewer APPROVED, proof VERIFIED, CI green. All 5 layouts reordered incl. landscape-inline (redesigned live, per T11100); attribute-level clip sweep; mobile-fullscreen inline/landscape-inline proven by jsdom only (owner accepted, human_checks H1). Before T11120 (same files). |
-| T11120 | ↳ [Unrated Done opens the "Rate this play" modal](tasks/highlight-first/T11120-require-rating-gate.md) | 8 | 4 | 2.0 | STAGING | [x] | Merged PR #523 (6e217751), CI green. All 5 exit routes gated + tested; double-pick race fixed. Desktop live-verified; mobile bottom-sheet accepted on jsdom proof (owner). |
-| T11130 | ↳ [Highlight popup: Make Highlight Now / Highlight Later; remove Create clip + Frame CTAs](tasks/highlight-first/T11130-done-popup-highlight-choice.md) | 9 | 5 | 1.8 | STAGING | [x] | Merged PR #524 (0f09ee62), CI green. Reuses T10450 handlers, ref-guarded; fixed a real rating-timing bug vs T11120's gate. e2e specs for removed CTAs not rewritten (follow-up needed). |
-| T11160 | ↳ [Team plays become highlights like any other](tasks/highlight-first/T11160-team-plays-become-highlights.md) | 5 | 3 | 1.7 | WIP | [ ] | Owner ruling 2026-09-24. Audit: nothing blocks it except a caption; downstream questions T1-T5 (star counts, ranking, intro card, recap split, auto-export fallback). |
-| T11140 | ↳ [Mode bar: Frame Highlight / Add Spotlight, gated on the selected play's highlight](tasks/highlight-first/T11140-mode-bar-rename-and-gating.md) | 7 | 3 | 2.3 | WIP | [ ] | Today Framing opens the most recent clip, not the selected play's. Switcher-only label keys (MODE_NAMES feeds ~30 strings). |
 |  | **[Single-Clip Editor: remove Reels and multi-clip editing](tasks/single-clip-editor/EPIC.md)** | 8 | 7 | 1.1 | TODO |  | Dependency order below. No schema migration unless R3 picks the split option. |
 | T11200 | ↳ [Read-only census of multi-clip drafts and reels (all envs)](tasks/single-clip-editor/T11200-multiclip-data-census.md) | 7 | 3 | 2.3 | STAGING | [ ] | Merged PR #509 (7b6b2c60), CI green, reviewer APPROVED; merged on that evidence, not the automatic gate (new script, no before/after to prove against, see T11310). Dev run done; supervisor still owes staging/prod passes from the host. |
 | T11210 | ↳ [Characterization: single-clip Modal golden + delete dead endpoints](tasks/single-clip-editor/T11210-characterize-and-delete-dead-endpoints.md) | 5 | 3 | 1.7 | STAGING | [ ] | Merged PR #506 (cbf791a2), proof VERIFIED, CI green. `/chapters`, `/concat-for-overlay`, `preview-clips`, `ProjectCreationSettings.jsx` deleted; bare `POST /api/projects` KEPT (e2e fixtures seed through it). |

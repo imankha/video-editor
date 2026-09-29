@@ -1,6 +1,6 @@
 # T11140: Mode bar - Frame Highlight / Add Spotlight, gated on the selected play's highlight
 
-**Status:** WIP
+**Status:** DONE (deployed 2026-09-28 prod)
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-09-24
@@ -58,8 +58,13 @@ not the play the user is looking at.
 
 ## Acceptance Criteria
 
-- [ ] Red-then-green: with play A (clip) and play B (no clip), selecting B locks Frame Highlight;
+- [x] Red-then-green: with play A (clip) and play B (no clip), selecting B locks Frame Highlight;
       selecting A and clicking it opens A's project, not the most recent one
-- [ ] Add Spotlight locked until the selected play's Framing export exists
-- [ ] Labels read Frame Highlight / Add Spotlight on desktop; mobile per D
-- [ ] Live-driven desktop + 393 px phone
+- [x] Add Spotlight locked until the selected play's Framing export exists
+- [x] Labels read Frame Highlight / Add Spotlight on desktop; mobile per D
+- [x] Live-driven desktop + 393 px phone
+
+## Completion
+
+Merged in PR #526 and deployed to production on 2026-09-28. Subsequent same-day production
+polish centralized the stage badge/CTA wording and restored the final rating vocabulary.

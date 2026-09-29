@@ -1,6 +1,6 @@
 # T11100: UX design gate - badges, Done popup, rating gate, mode bar
 
-**Status:** DECIDED
+**Status:** DONE (deployed with epic 2026-09-28 prod)
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-09-24
