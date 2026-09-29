@@ -1,10 +1,10 @@
 # T10790: "Add footage" (attach to existing game) 422s on every real attempt
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 2
 **Created:** 2026-09-20
-**Updated:** 2026-09-20
+**Updated:** 2026-09-29
 
 ## Problem
 
@@ -100,8 +100,32 @@ schema, so a future frontend/backend contract drift here is caught again.
 
 ## Acceptance Criteria
 
-- [ ] `VideoReference.sequence` is optional; `add_game_videos` behavior unchanged (still
+- [x] `VideoReference.sequence` is optional; `add_game_videos` behavior unchanged (still
       append-only, still ignores client value)
 - [ ] A real "Add footage to game" click on a ready game succeeds (manual, dev)
-- [ ] A new test posts through the actual HTTP/Pydantic boundary with no `sequence` key and gets 200
-- [ ] Existing `test_t8700_attach_video.py` suite still passes unchanged
+- [x] A new test posts through the actual HTTP/Pydantic boundary with no `sequence` key and gets 200
+- [x] Existing `test_t8700_attach_video.py` suite still passes unchanged
+
+## Progress Log
+
+### 2026-09-29 — Implementation and local proof
+
+- Started from `origin/master` at `b496391804375fc506ce114580906c2a97ffe019` in an isolated
+  worktree/branch.
+- Added an HTTP-boundary regression using the exact attach payload shape produced by
+  `attachVideoToExistingGame` (including no `sequence` key). Before the production fix, the test
+  failed as intended with HTTP 422 and Pydantic's `body.videos.0.sequence` / `Field required` error.
+- Made `VideoReference.sequence` optional for attach requests while retaining a create-request
+  validator that rejects missing initial sequences. The attach handler remains the sole owner of
+  append ordering and still overwrites any supplied value with `MAX(sequence)+1`.
+- The same boundary test passes after the fix and verifies HTTP 200, persisted sequences `[1, 2]`,
+  and aggregate duration growth from 10.0 to 52.5 seconds.
+- Curated router suite passed: `test_t8700_attach_video.py`, `test_games_create_requires_video.py`,
+  `test_t8870_overlap_schema.py`, and `test_t8892_original_filename.py` (50 passed). The latter two
+  retain coverage that initial multi-video create persists real sequence values.
+- Manual browser verification was attempted against the running local frontend/backend, but the
+  available browser session stopped at the sign-in screen and provided no signed-in ready-game or
+  media fixture. Authentication could not be automated safely, so the click path remains
+  unverified locally. The HTTP-boundary regression covers the same 200 response, additional
+  `game_videos` row, append sequence, and expanded aggregate duration. PR/CI evidence and final
+  review are still pending.

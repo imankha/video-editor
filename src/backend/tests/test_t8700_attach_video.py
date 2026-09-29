@@ -19,7 +19,8 @@ import sqlite3
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
 USER_ID = "test-user-t8700"
 PROFILE_ID = "testdefault"
@@ -131,6 +132,53 @@ def _patched_externalities(**overrides):
     defaults.update(overrides)
     target = defaults.pop("target")
     return patch.multiple(target, **defaults)
+
+
+def test_attach_frontend_payload_without_sequence_crosses_http_boundary(profile_db):
+    """The real attach client omits sequence; the server owns append ordering."""
+    from app.routers import games as games_router
+
+    game_id = _seed_game(profile_db, status="ready", sequences=(1,))
+    app = FastAPI()
+    app.include_router(games_router.router)
+    payload = {
+        "videos": [
+            {
+                "blake3_hash": HASH_2,
+                "file_size": 2_000_000,
+                "duration": None,
+                "width": None,
+                "height": None,
+                "recorded_at": None,
+                "original_filename": "second-half.mp4",
+            }
+        ]
+    }
+
+    probe = MagicMock(
+        return_value={"duration": 42.5, "width": 1280, "height": 720, "fps": 25.0}
+    )
+    with _patched_externalities(_probe_video_metadata=probe):
+        response = TestClient(app).post(f"/api/games/{game_id}/videos", json=payload)
+
+    assert response.status_code == 200, response.text
+    assert _sequences(profile_db, game_id) == [1, 2]
+    assert _aggregate(profile_db, game_id)["video_duration"] == pytest.approx(52.5)
+
+
+def test_create_game_http_boundary_still_requires_sequence():
+    """Optional attach sequencing must not weaken initial-create ordering."""
+    from app.routers import games as games_router
+
+    app = FastAPI()
+    app.include_router(games_router.router)
+    response = TestClient(app).post(
+        "/api/games",
+        json={"videos": [{"blake3_hash": HASH_1, "duration": 10.0}]},
+    )
+
+    assert response.status_code == 422, response.text
+    assert "sequence is required when creating a game" in response.text
 
 
 # ---------------------------------------------------------------------------

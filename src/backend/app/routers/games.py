@@ -294,7 +294,10 @@ def generate_game_display_name(
 
 class VideoReference(BaseModel):
     blake3_hash: str = Field(..., description="BLAKE3 hash of the video file")
-    sequence: int = Field(..., description="Video sequence number (1-based)")
+    sequence: int | None = Field(
+        None,
+        description="Video sequence number (1-based); required for create and server-assigned for attach",
+    )
     duration: float | None = Field(None, description="Video duration in seconds")
     width: int | None = Field(None, description="Video width in pixels")
     height: int | None = Field(None, description="Video height in pixels")
@@ -327,6 +330,13 @@ class CreateGameRequest(BaseModel):
     tournament_name: str | None = Field(None, description="Tournament name")
     videos: list[VideoReference] = Field(default_factory=list, description="Video references (0-N)")
     status: str | None = Field(None, description="Game status: 'pending' (pre-upload) or 'ready' (default)")
+
+    @field_validator("videos")
+    @classmethod
+    def _require_initial_video_sequences(cls, videos: list[VideoReference]) -> list[VideoReference]:
+        if any(video.sequence is None for video in videos):
+            raise ValueError("sequence is required when creating a game")
+        return videos
 
 
 class AddVideosRequest(BaseModel):
