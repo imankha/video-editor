@@ -40,6 +40,16 @@ describe('parseGameFilename', () => {
     expect(result.ourTeamName).toBe('Sporting CA ECNL');
   });
 
+  it('treats a null profile team as unknown instead of crashing', () => {
+    expect(
+      parseGameFilename('match-west-coast-fc-vs-sporting-ca-2026-09-13.mp4', null)
+    ).toEqual({
+      ourTeamName: 'West Coast FC',
+      opponentName: 'Sporting CA',
+      gameDate: '2026-09-13',
+    });
+  });
+
   it('returns null for filenames with no recognizable "vs" pattern', () => {
     expect(parseGameFilename('GX010045.MP4')).toBeNull();
     expect(parseGameFilename('game.mp4')).toBeNull();

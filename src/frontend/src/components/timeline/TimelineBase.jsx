@@ -116,6 +116,21 @@ export function TimelineBase({
   const isAutoScrollingRef = React.useRef(false);
   const lastAutoScrollValueRef = React.useRef(null);
 
+  // Keep the DOM scroller aligned with the mode-owned position. In particular,
+  // Overlay enters with position 0, so reopening Spotlight never inherits the
+  // browser's previous horizontal scroll offset.
+  React.useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const maxScroll = Math.max(0, container.scrollWidth - container.clientWidth);
+    const target = maxScroll * (timelineScrollPosition / 100);
+    if (Math.abs(container.scrollLeft - target) >= 1) {
+      isAutoScrollingRef.current = true;
+      lastAutoScrollValueRef.current = target;
+      container.scrollLeft = target;
+    }
+  }, [timelineScrollPosition, timelineScale]);
+
   // Padding at timeline edges for easier keyframe selection (in pixels)
   const EDGE_PADDING = 20;
 

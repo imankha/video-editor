@@ -87,8 +87,6 @@ function HighlightMadeChip({ status }) {
 // T9630: labels/colors for the Saving/Saved/error status, derived from real
 // per-gesture write state (see `displayStatus` below), never asserted.
 const SAVE_STATUS_COPY = {
-  saving: { text: 'Saving...', className: 'text-gray-400' },
-  saved: { text: 'Saved', className: 'text-green-400' },
   error: { text: "Couldn't save — try again", className: 'text-red-400' },
 };
 
@@ -396,7 +394,10 @@ export function AnnotateFullscreenOverlay({
     : null;
 
   // T8600: shared disclosure label.
-  const detailsLabel = ANNOTATE.DETAILS;
+  const hasTagsOrNotes = selectedTags.length > 0 || notes.trim().length > 0;
+  const detailsLabel = hasTagsOrNotes
+    ? ANNOTATE.VIEW_TAGS_AND_NOTES
+    : ANNOTATE.ADD_TAGS_AND_NOTES;
 
   // T11150: RatingPill is keyed on clip identity (below, at each render site)
   // so its open popup resets on a REAL clip switch, but — like the

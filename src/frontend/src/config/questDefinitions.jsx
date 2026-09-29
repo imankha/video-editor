@@ -177,7 +177,7 @@ export const STEP_DESCRIPTIONS = {
   // once the user moved on (B05·R4). Point at the persistent next actions that
   // travel with a saved clip instead, reusing the existing T9580 ANNOTATE.* labels
   // (T9860 owns final vocabulary; no new copy is coined here).
-  playback_annotations: <>Your play is saved. Rate it a Highlight and press <strong>{ANNOTATE.DONE}</strong>, then choose <MiniButton icon={Clapperboard}>{ANNOTATE.MAKE_HIGHLIGHT_NOW}</MiniButton> to frame it now, or <MiniButton icon={Plus} variant="green">{ANNOTATE.MARK_PLAY}</MiniButton> to mark another moment.</>,
+  playback_annotations: <>Your play is ready. Rate it a Highlight and press <strong>{ANNOTATE.DONE}</strong>, then choose <MiniButton icon={Clapperboard}>{ANNOTATE.MAKE_HIGHLIGHT_NOW}</MiniButton> to frame it now, or <MiniButton icon={Plus} variant="green">{ANNOTATE.MARK_PLAY}</MiniButton> to mark another moment.</>,
   // Quest 2 — Frame Your Highlight
   return_home: <>Nice clip! Now head back to the home screen, where the clip you just saved is waiting for you to frame it.</>,
   open_framing: <>Switch to <MiniButton icon={FolderOpen} variant="gray">{SECTION_NAMES.CLIPS}</MiniButton> and tap your clip's card to start framing.</>,

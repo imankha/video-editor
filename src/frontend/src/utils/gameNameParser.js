@@ -64,7 +64,9 @@ export function parseGameFilename(filename, existingTeamName = '') {
   // Veo's own convention names the account's team first, opponent second.
   // The only reason to flip that default is proof: the profile's stored team
   // name already matches the SECOND slug.
-  const known = existingTeamName.trim().toLowerCase();
+  const known = typeof existingTeamName === 'string'
+    ? existingTeamName.trim().toLowerCase()
+    : '';
   const flip = known && known === teamB.toLowerCase();
 
   return flip

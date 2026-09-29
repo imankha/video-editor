@@ -164,7 +164,7 @@ export const useOverlayActionStore = create((set, get) => ({
       get()._surfaceFailureToast();
       return false;
     }
-    toast.success('Your highlight edits are saved.');
+    toast.success('Your highlight edits are ready.');
     return true;
   },
 

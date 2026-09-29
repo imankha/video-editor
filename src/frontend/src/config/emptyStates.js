@@ -43,7 +43,7 @@ export const EMPTY_TAB_GUIDE = {
     body:
       'Mark plays from game video you want to review with your athlete. ' +
       'Create clips you want to use in highlights.',
-    addGameCaption: 'From your phone or computer, 2 credits.',
+    addGameCaption: null,
     // Footer kept ONLY on Games: it carries the "a game is not a hard
     // prerequisite either" message -- have a clip already, skip ahead to Clips.
     footerPrefix: 'Have a clip already? ',

@@ -58,16 +58,16 @@ describe('AnnotateFullscreenOverlay — SaveStatusBadge driven by the writeStatu
     expect(screen.queryByTestId('save-status')).toBeNull();
   });
 
-  it('saving renders "Saving..." on the formBody (overlay) layout', () => {
+  it('saving is silent on the formBody (overlay) layout', () => {
     mockViewport(false);
     render(<AnnotateFullscreenOverlay {...baseProps} layout="overlay" writeStatus="saving" />);
-    expect(screen.getByTestId('save-status').textContent).toBe('Saving...');
+    expect(screen.queryByTestId('save-status')).toBeNull();
   });
 
-  it('saved renders "Saved" on the formBody (overlay) layout', () => {
+  it('saved is silent on the formBody (overlay) layout', () => {
     mockViewport(false);
     render(<AnnotateFullscreenOverlay {...baseProps} layout="overlay" writeStatus="saved" />);
-    expect(screen.getByTestId('save-status').textContent).toBe('Saved');
+    expect(screen.queryByTestId('save-status')).toBeNull();
   });
 
   it('error renders the failure copy on the formBody (overlay) layout', () => {

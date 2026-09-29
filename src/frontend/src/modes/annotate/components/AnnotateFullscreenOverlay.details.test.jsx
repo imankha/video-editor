@@ -49,12 +49,12 @@ const baseProps = {
 // not just mobile -- T10290's desktop-open-by-default existed only because
 // rating used to live here and needed to be visible without an extra tap.
 describe('AnnotateFullscreenOverlay — "Details" disclosure label (T8600/T10290/T10580/T10620/c92fd726)', () => {
-  it('shows plain "Details" when there are no tags and no note', () => {
+  it('prompts the user to add tags and notes when neither exists', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
-    expect(screen.getByText('Details')).toBeTruthy();
+    expect(screen.getByText('Add Tags and Notes')).toBeTruthy();
   });
 
-  it('still shows plain "Details" (no count suffix) once tags/notes exist (c92fd726: dropped as clutter)', () => {
+  it('offers to view tags and notes once either exists', () => {
     render(
       <AnnotateFullscreenOverlay
         {...baseProps}
@@ -62,8 +62,7 @@ describe('AnnotateFullscreenOverlay — "Details" disclosure label (T8600/T10290
         existingClip={{ ...existingClip, tags: ['Goal', 'Assist'], notes: 'nice one' }}
       />
     );
-    expect(screen.getByText('Details')).toBeTruthy();
-    expect(screen.queryByText(/Details \(/)).toBeNull();
+    expect(screen.getByText('View Tags and Notes')).toBeTruthy();
   });
 });
 
@@ -73,13 +72,13 @@ describe('AnnotateFullscreenOverlay — desktop expand-in-place (layout="strip")
     // Desktop panel is in-flow content, not a portaled dialog, and closed by default.
     expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
     expect(screen.queryByLabelText('Notes (optional)')).toBeNull();
-    fireEvent.click(screen.getByText('Details'));
+    fireEvent.click(screen.getByText('Add Tags and Notes'));
     expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
   });
 
   it('re-clicking the disclosure toggles the panel open and closed', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
-    const toggle = () => screen.getByText(/Details/);
+    const toggle = () => screen.getByText('Add Tags and Notes');
     // Starts closed (T10580 default) -> click opens -> click re-closes.
     fireEvent.click(toggle());
     expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
@@ -94,7 +93,7 @@ describe('AnnotateFullscreenOverlay — mobile full-screen popup (layout="inline
   it('is closed by default on mobile; tapping "Details" opens a full-screen popup with Tags + Notes', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" />);
     expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
-    fireEvent.click(screen.getByText('Details'));
+    fireEvent.click(screen.getByText('Add Tags and Notes'));
     const dialog = screen.getByRole('dialog', { name: 'Details' });
     expect(dialog).toBeTruthy();
     expect(screen.getByPlaceholderText('Add a note about this play...')).toBeTruthy();
@@ -105,7 +104,7 @@ describe('AnnotateFullscreenOverlay — mobile full-screen popup (layout="inline
     // X is now the popup's one dismissal control, per the no-backdrop-close rule.
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" onUpdateClip={onUpdateClip} />);
-    fireEvent.click(screen.getByText('Details'));
+    fireEvent.click(screen.getByText('Add Tags and Notes'));
     const dialog = screen.getByRole('dialog', { name: 'Details' });
     expect(within(dialog).queryByRole('button', { name: 'Done' })).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
@@ -116,7 +115,7 @@ describe('AnnotateFullscreenOverlay — mobile full-screen popup (layout="inline
 
   it('Notes is newly available on mobile via the popup (was desktop-only)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" />);
-    fireEvent.click(screen.getByText('Details'));
+    fireEvent.click(screen.getByText('Add Tags and Notes'));
     expect(screen.getByPlaceholderText('Add a note about this play...')).toBeTruthy();
   });
 });

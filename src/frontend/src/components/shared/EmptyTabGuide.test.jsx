@@ -45,14 +45,15 @@ describe('EmptyTabGuide shared guidance structure (T10280)', () => {
 });
 
 describe('EmptyTabGuide - Games tab', () => {
-  it('shows the approved headline, body, Add Game CTA + cost caption, and the Clips footer link', () => {
+  it('shows the approved headline, body, Add Game CTA, and the Clips footer link without a cost caption', () => {
     const onAddGame = vi.fn();
     const onNavigate = vi.fn();
     render(<EmptyTabGuide tab="games" gamesCount={0} onAddGame={onAddGame} onNavigate={onNavigate} />);
 
     expect(screen.getByText(EMPTY_TAB_GUIDE.games.headline)).toBeTruthy();
     expect(screen.getByText(EMPTY_TAB_GUIDE.games.body)).toBeTruthy();
-    expect(screen.getByText(EMPTY_TAB_GUIDE.games.addGameCaption)).toBeTruthy();
+    expect(EMPTY_TAB_GUIDE.games.addGameCaption).toBeNull();
+    expect(screen.queryByText(/from your phone or computer/i)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
     expect(onAddGame).toHaveBeenCalledTimes(1);

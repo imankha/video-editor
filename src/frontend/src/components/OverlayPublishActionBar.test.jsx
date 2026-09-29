@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { OverlayPublishActionBar } from './OverlayPublishActionBar';
-import { OVERLAY_PUBLISH, RESULT_RETENTION } from '../config/displayNames';
+import { OVERLAY_PUBLISH } from '../config/displayNames';
 
 function makeHandlers() {
   return {
@@ -24,7 +24,7 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590, celebration til
   it('renders the headline, three tile choices + the exit link with the approved copy and captions', () => {
     render(<OverlayPublishActionBar {...makeHandlers()} />);
 
-    expect(screen.getByRole('heading', { name: 'Your clip is ready' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Your Highlight is Ready' })).toBeTruthy();
 
     expect(screen.getByRole('button', { name: OVERLAY_PUBLISH.PUBLISH_LABEL })).toBeTruthy();
     expect(screen.getByRole('button', { name: OVERLAY_PUBLISH.REAPPLY_OVERLAY_LABEL })).toBeTruthy();
@@ -109,21 +109,10 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590, celebration til
     expect(saveDraft.className).toMatch(/bg-transparent/);
   });
 
-  // T10670: the retention line is now a one-word "Saved" chip beside the headline.
-  it('renders the "Saved" chip beside the headline when provided, and omits it otherwise', () => {
-    // An overlay (final-video) completion resolves to the one-word "Saved" chip text.
-    expect(RESULT_RETENTION.PRIVATE_READY).toBe('Saved');
-    const { rerender, container } = render(
-      <OverlayPublishActionBar {...makeHandlers()} retentionNote={RESULT_RETENTION.PRIVATE_READY} />,
-    );
-    const el = container.querySelector('[data-testid="overlay-retention-note"]');
-    expect(el).toBeTruthy();
-    expect(el.textContent).toBe(RESULT_RETENTION.PRIVATE_READY);
-    expect(el.closest('[class*="rounded-xl"]')).toBeNull();
-    expect(el.className).toMatch(/rounded-full/);
-
-    rerender(<OverlayPublishActionBar {...makeHandlers()} retentionNote={null} />);
+  it('does not show an autosave status badge', () => {
+    const { container } = render(<OverlayPublishActionBar {...makeHandlers()} retentionNote="Saved" />);
     expect(container.querySelector('[data-testid="overlay-retention-note"]')).toBeNull();
+    expect(screen.queryByText('Saved')).toBeNull();
   });
 
   it('reads Publish, Reapply spotlight, Reapply Framing, Done for now in that DOM/tab order, no order-* juggling', () => {

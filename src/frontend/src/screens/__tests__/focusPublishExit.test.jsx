@@ -177,7 +177,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     // T11230: the is_auto_created-routed MULTI_CLIP "Saved to Reels" variant is
     // gone; every draft now shows this one SINGLE_CLIP copy.
     expect(deps.toastSuccess).toHaveBeenCalledWith(
-      'Saved to Clips',
+      'Added to Clips',
       expect.objectContaining({ duration: 10000 }),
     );
     expect(deps.goToProjectManager).toHaveBeenCalledTimes(1);
