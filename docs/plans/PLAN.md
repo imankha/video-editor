@@ -594,10 +594,10 @@ T7620/T7630; the four blocking prerequisites (T8390/T8400/T8370/T8380) are DONE.
 investigation, then deliberately sequenced behind the tutorial work: the accounting hole is
 real but bounded (one $3.99 payment, one deleted account), while the tutorial group is the
 growth lever. Nothing here blocks or is blocked by the tutorial tasks, and no task in this
-epic has a UI surface that would gate the tutorial group. **Pull-forward exception:** T8660
-(Stripe receipts, Cmplx 2, independent of the other five) is the one row worth taking early
-if a dispute ever lands, since a receipt is the standard dispute defence and we currently
-send none.
+epic has a UI surface that would gate the tutorial group. **T8660 was pulled forward and is
+DONE:** the receipt email is now supplied to Stripe. On 2026-09-29 the owner explicitly waived
+the remaining real-purchase/inbox/descriptor verification, so live delivery is not claimed as
+observed.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|

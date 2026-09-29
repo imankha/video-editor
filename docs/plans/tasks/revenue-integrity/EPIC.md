@@ -173,7 +173,7 @@ Order is dependency order: the record must exist before anything can read it or 
 | T8650 | [Revenue totals read the ledger, not the per-user cache](T8650-revenue-totals-from-ledger.md) | STAGING |
 | T8655 | [Remove the dead credit-amount-to-price map](T8655-remove-dead-credit-price-map.md) | STAGING |
 | T8657 | [Admin "paying" filter selects users from the ledger](T8657-paying-filter-reads-ledger.md) | STAGING |
-| T8660 | [Send Stripe receipts (receipt_email on the PaymentIntent)](T8660-stripe-receipt-email.md) | STAGING |
+| T8660 | [Send Stripe receipts (receipt_email on the PaymentIntent)](T8660-stripe-receipt-email.md) | DONE |
 | T8670 | [Scheduled reconciliation with a drift alert](T8670-scheduled-reconciliation-alert.md) | STAGING |
 | T8675 | [Dispute webhook writes ledger rows](T8675-dispute-webhook-ledger-rows.md) | STAGING |
 
@@ -190,10 +190,9 @@ Order is dependency order: the record must exist before anything can read it or 
       offers a terminal acknowledge action instead of a heal that cannot work (T8640)
 - [x] Admin revenue totals are computed from `payments` and do not change when an account
       is deleted (T8650)
-- [ ] A new live purchase produces a Stripe receipt to the customer's email (T8660)
-      -- awaiting a live-mode Stripe purchase to confirm receipt delivery; see T8660's
-      task file (the code ships receipt_email, but the delivery has not been observed in
-      live mode yet)
+- [ ] A new live purchase produces a Stripe receipt to the customer's email (T8660) — owner
+      waived this live-purchase verification on 2026-09-29. The code ships and tests
+      `receipt_email`; actual live receipt delivery remains explicitly unobserved.
 - [x] Drift is detected without a human clicking anything (T8670)
 - [x] Knowledge docs updated: `backend-services.md` (new table, deletion contract) and
       `persistence-sync.md` if the deletion contract touches the sync seam

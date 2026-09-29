@@ -883,7 +883,7 @@ User ran the full local Playwright suite 2026-08-25 (348 passed / 144 failed / 2
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T8660 | ↳ [Send Stripe receipts (receipt_email)](tasks/revenue-integrity/T8660-stripe-receipt-email.md) | 5 | 2 | 2.5 | DONE | [ ] | DONE (deployed 2026-09-13 prod). Epic 5/6, independent, can land any time. Every live charge has `receipt_email: null` - customers get no confirmation from anyone, the top dispute cause is "I do not recognize this charge", and the 2026-08-24 charge had no billing email or name either, so after deletion the customer was unreachable. Set `receipt_email` server-side from the `users` row at PaymentIntent creation (never from the client); Stripe sends on capture. Includes an operator step: verify the statement descriptor reads as the product and matches the receipt. Explicitly NOT building our own receipt mail on Resend - two sources of truth for what a customer was charged is worse than none. |
+| T8660 | ↳ [Send Stripe receipts (receipt_email)](tasks/revenue-integrity/T8660-stripe-receipt-email.md) | 5 | 2 | 2.5 | DONE | [ ] | DONE (deployed 2026-09-13 prod). Epic 5/6, independent. `receipt_email` is sourced server-side from the `users` row for every PaymentIntent; no duplicate Resend receipt exists. Owner explicitly waived the real live-mode purchase, inbox-delivery, and receipt-descriptor verification on 2026-09-29, so those operational claims remain unobserved rather than being represented as verified. |
 
 ## Single-Server Priority (2026-07-18; durability re-escalated 2026-07-24) — Milestone: Final Polish
 
