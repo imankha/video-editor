@@ -168,7 +168,10 @@ fi
 if $deploy_frontend; then
   echo "[frontend] Building with production env..."
   cd "$REPO_ROOT/src/frontend"
-  npm run build:production
+  # The production API URL is public configuration, not a secret. Keep a safe
+  # production default here so a missing local .env.production can never build
+  # a bundle that sends auth/API requests to the Cloudflare Pages origin.
+  VITE_API_BASE="${VITE_API_BASE:-https://reel-ballers-api.fly.dev}" npm run build:production
   echo "[frontend] Deploying to Cloudflare Pages (reel-ballers-prod)..."
   npx wrangler pages deploy dist --project-name reel-ballers-prod --branch main
   echo "[frontend] Deploy complete, verifying site..."
