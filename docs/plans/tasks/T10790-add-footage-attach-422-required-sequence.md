@@ -123,13 +123,19 @@ schema, so a future frontend/backend contract drift here is caught again.
 - Curated router suite passed: `test_t8700_attach_video.py`, `test_games_create_requires_video.py`,
   `test_t8870_overlap_schema.py`, and `test_t8892_original_filename.py` (50 passed). The latter two
   retain coverage that initial multi-video create persists real sequence values.
-- Manual browser verification was attempted against the running local frontend/backend, but the
-  available browser session stopped at the sign-in screen and provided no signed-in ready-game or
-  media fixture. Authentication could not be automated safely, so the click path remains
-  unverified locally. The HTTP-boundary regression covers the same 200 response, additional
-  `game_videos` row, append sequence, and expanded aggregate duration.
+- Manual browser verification used the repository's supported `dev-login` helper for
+  `imankh@gmail.com` / profile `9fa7378c`, opened ready game `1` (300.841867-second timeline), and
+  selected the supplied real 10.038333-second `VID_20260905_094101.mp4`. The real UI extracted
+  metadata, faststart-relocated and hashed the file, and reached `POST /api/games/prepare-upload`
+  with HTTP 200. The fixture then encountered its pre-existing R2 database-version conflict while
+  preparing/finalizing the multipart upload, before `POST /api/games/1/videos` was issued. Thus the
+  conditional manual acceptance item remains unchecked: no manual 200/row/duration claim is made.
+  The HTTP-boundary regression independently covers the exact no-`sequence` attach payload and
+  proves HTTP 200, an additional `game_videos` row, append sequence, and expanded duration.
 - Fresh-context review approved the patch with 0 blocking, 0 major, and 0 minor findings; the
   reviewer independently reproduced the curated suite (50 passed).
-- Opened PR [#538](https://github.com/imankha/video-editor/pull/538). Branch CI is the remaining
-  automated gate; the task stays WIP and the PR must not be merged without the active workflow's
-  landing authorization.
+- Opened PR [#538](https://github.com/imankha/video-editor/pull/538). Manually dispatched Branch CI
+  run [36634524147](https://github.com/imankha/video-editor/actions/runs/36634524147): changed-file
+  Ruff, whole-app Ruff ratchet, import check, and tooling passed; the repository-wide backend run
+  reported seven failures outside this patch's files (4,339 passed, 21 skipped, 1 xfailed). The
+  task remains WIP pending the repository landing gate and an acceptable CI disposition.
