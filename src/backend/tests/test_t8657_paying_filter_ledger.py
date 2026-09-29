@@ -163,6 +163,49 @@ def _seed_repro():
     _set_total_spent("u_b", 0)
 
 
+def _seed_production_missing_backfill_repro():
+    """Mirror the production state observed on 2026-09-29.
+
+    Stripe-backed purchases had already populated the legacy per-user cache, but
+    the deploy created an empty ``payments`` ledger without running the one-time
+    backfill.  Four real accounts therefore carried $42.96 of durable purchase
+    history (three $12.99 purchases and one $3.99 purchase) while the new ledger
+    contained no rows.  A fifth $3.99 test-account purchase existed in the cache
+    but must remain excluded from the default admin view.
+
+    Deliberately do *not* call ``_seed_payment`` here: the missing ledger rows are
+    the production defect this regression fixture preserves.
+    """
+    cached_purchases = (
+        ("prod-real-a", "real-a@missing-backfill.test", 1299, False),
+        ("prod-real-b", "real-b@missing-backfill.test", 1299, False),
+        ("prod-real-c", "real-c@missing-backfill.test", 1299, False),
+        ("prod-real-d", "real-d@missing-backfill.test", 399, False),
+        ("prod-test", "test@missing-backfill.test", 399, True),
+    )
+    for user_id, email, amount_cents, is_test in cached_purchases:
+        create_user(user_id, email=email)
+        create_user_segment(user_id, "organic", None, "otp")
+        _set_total_spent(user_id, amount_cents)
+        if is_test:
+            _mark_test_account(user_id)
+
+
+class TestMissingProductionBackfill:
+    def test_admin_does_not_report_zero_when_historical_purchases_exist(self, client):
+        """Red regression: an omitted ledger backfill must not erase revenue.
+
+        Current behavior is ``revenue == 0`` and ``paying_users == 0``.  The
+        production-aligned expected values make this fail loudly until startup,
+        deployment verification, or the read path prevents an unbackfilled
+        ledger from masquerading as a legitimate zero-revenue business.
+        """
+        _seed_production_missing_backfill_repro()
+
+        assert _pulse_revenue(client, exclude_test=True) == 4296
+        assert _paying_user_count(client, exclude_test=True) == 4
+
+
 class TestPayingSelectorFromLedger:
     def test_user_list_paying_count_counts_ledger_payer_with_zero_cache(self, client):
         _seed_repro()
