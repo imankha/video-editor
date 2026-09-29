@@ -150,3 +150,24 @@ describe('UserTable Exports split (T8230 Focus / Overlay)', () => {
     expect(zeros.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe('UserTable deleted payer tombstone', () => {
+  it('shows retained spend without exposing account actions', () => {
+    const deleted = {
+      ...BASE_USER,
+      user_id: 'deleted-payer',
+      email: 'Deleted account',
+      is_deleted: true,
+      total_spent_cents: 399,
+    };
+    render(<UserTable users={[deleted]} onUserClick={() => {}} funnelTotals={{}} />);
+
+    expect(screen.getByText('Deleted account')).toBeTruthy();
+    expect(screen.getByText('DELETED')).toBeTruthy();
+    expect(screen.getByText('$3.99')).toBeTruthy();
+    expect(screen.queryByTitle('Log in as this user')).toBeNull();
+    expect(screen.queryByTitle('Grant credits')).toBeNull();
+    expect(screen.queryByTitle('Mark as test account')).toBeNull();
+    expect(screen.queryByTitle('View journey')).toBeNull();
+  });
+});

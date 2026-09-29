@@ -862,6 +862,25 @@ class TestT9BackfillIdempotencyAndOrphan:
             sys.path.remove(str(SCRIPTS_DIR))
             sys.modules.pop(spec_module_name, None)
 
+    def test_production_runtime_alias_is_accepted_but_wrong_key_is_rejected(self):
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        try:
+            module = importlib.import_module("backfill_payments_ledger")
+            module._validate_target({
+                "APP_ENV": "production",
+                "DATABASE_URL": "postgresql://user:pass@reel-ballers-db.flycast/db",
+                "STRIPE_SECRET_KEY": "sk_live_placeholder",
+            })
+            with pytest.raises(module.BackfillSafetyError, match="live-mode"):
+                module._validate_target({
+                    "APP_ENV": "production",
+                    "DATABASE_URL": "postgresql://user:pass@reel-ballers-db.flycast/db",
+                    "STRIPE_SECRET_KEY": "sk_test_wrong_mode",
+                })
+        finally:
+            sys.path.remove(str(SCRIPTS_DIR))
+            sys.modules.pop("backfill_payments_ledger", None)
+
 
 class TestT9DisputeRefundNetting:
     """Reviewer MAJOR finding (post-implementation): a dispute resolved by
@@ -1052,6 +1071,73 @@ class TestG4RealBackfillRun:
                 assert sums.get(uid, 0) == agg["net_cents"], (
                     f"user {uid}: ledger SUM {sums.get(uid, 0)} != reconciler net {agg['net_cents']}"
                 )
+        finally:
+            sys.path.remove(str(SCRIPTS_DIR))
+            sys.modules.pop("backfill_payments_ledger", None)
+
+    def test_missing_user_metadata_fails_before_any_write(self, pg_conn, monkeypatch):
+        """A succeeded but unattributable Stripe payment is a hard failure, not a skip."""
+        import os
+
+        intents = self._intents()
+        intents.append({
+            "id": "pi_missing_user", "status": "succeeded", "currency": "usd",
+            "metadata": {}, "amount_received": 399, "created": 1690000000,
+            "latest_charge": {"id": "ch_missing_user", "amount_captured": 399,
+                              "amount_refunded": 0, "disputed": False, "dispute": None},
+        })
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        try:
+            backfill = importlib.import_module("backfill_payments_ledger")
+            monkeypatch.setattr(
+                "app.services.revenue_reconciliation.fetch_stripe_intents",
+                lambda *a, **k: intents,
+            )
+            monkeypatch.setattr(
+                backfill.stripe.Refund, "list",
+                lambda **kwargs: _FakeRefundList(self._refund_map().get(kwargs["charge"], [])),
+            )
+            config = {"DATABASE_URL": os.environ["DATABASE_URL"], "APP_ENV": "dev",
+                      "STRIPE_SECRET_KEY": "sk_test_dummy"}
+            with pytest.raises(backfill.BackfillSafetyError, match="no metadata.user_id"):
+                backfill.run_backfill(config, write=True)
+            assert _payments_rows() == [], "preflight failure must write zero rows"
+        finally:
+            sys.path.remove(str(SCRIPTS_DIR))
+            sys.modules.pop("backfill_payments_ledger", None)
+
+    def test_verification_mismatch_rolls_back_entire_plan(self, pg_conn, monkeypatch):
+        """A conflicting immutable row aborts and rolls back other new rows."""
+        import os
+        from app.services import payments_ledger
+        from app.services.pg import get_pg
+
+        intents = self._intents()[:2]
+        # Pre-existing corruption for the second PI: same idempotency key, wrong amount.
+        with get_pg() as conn:
+            payments_ledger.record_purchase(
+                conn.cursor(), user_id="user-b", stripe_object_id="pi_g4_partial",
+                amount_cents=1, currency="usd", stripe_charge_id="ch_g4_partial",
+                pack="starter", credits=40, occurred_at="2023-07-22T00:00:00Z",
+                source="backfill",
+            )
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        try:
+            backfill = importlib.import_module("backfill_payments_ledger")
+            monkeypatch.setattr(
+                "app.services.revenue_reconciliation.fetch_stripe_intents",
+                lambda *a, **k: intents,
+            )
+            monkeypatch.setattr(
+                backfill.stripe.Refund, "list",
+                lambda **kwargs: _FakeRefundList(self._refund_map().get(kwargs["charge"], [])),
+            )
+            config = {"DATABASE_URL": os.environ["DATABASE_URL"], "APP_ENV": "dev",
+                      "STRIPE_SECRET_KEY": "sk_test_dummy"}
+            with pytest.raises(backfill.BackfillSafetyError, match="transaction rolled back"):
+                backfill.run_backfill(config, write=True)
+            assert _payments_rows("user-a") == [], "new first row must roll back with the batch"
+            assert len(_payments_rows("user-b")) == 1, "pre-existing row must remain untouched"
         finally:
             sys.path.remove(str(SCRIPTS_DIR))
             sys.modules.pop("backfill_payments_ledger", None)
