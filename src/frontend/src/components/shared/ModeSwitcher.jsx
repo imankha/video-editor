@@ -100,7 +100,7 @@ export function ModeSwitcher({
             : 'Select a Highlight play to frame it.'
           : !isAvailable && modeOption.id === 'overlay'
             ? hasProject
-              ? 'Generate Framing to unlock Spotlight.'
+              ? 'Generate Highlight to unlock Spotlight.'
               : 'Make a highlight first. Spotlight comes after Framing.'
             : modeOption.showWarning
               ? 'Previously exported video no longer matches your settings. Export to create latest video before overlaying.'

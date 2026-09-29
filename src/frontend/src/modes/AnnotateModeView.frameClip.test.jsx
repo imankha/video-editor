@@ -101,7 +101,7 @@ function renderView(overrides = {}) {
 }
 
 describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
-  it('a not-started selected play shows [Edit Play] and a clear Frame CTA', () => {
+  it('a not-started selected play shows [Edit Play] and a clear Make Highlight CTA', () => {
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
@@ -109,7 +109,7 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
       annotateSelectedRegionId: 'r1',
     });
     expect(screen.getByRole('button', { name: /^edit play$/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^frame$/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^make highlight$/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^frame now$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^frame later$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^create clip$/i })).toBeNull();
@@ -117,7 +117,7 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
     expect(screen.queryByTestId('annotate-frame-later-cta')).toBeNull();
   });
 
-  it('Frame creates a highlight project for a not-started play and opens Framing', async () => {
+  it('Make Highlight creates a highlight project for a not-started play and opens Framing', async () => {
     const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 42 });
     const onOpenClipInFocus = vi.fn();
     renderView({
@@ -129,7 +129,7 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
       onOpenClipInFocus,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /^frame$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^make highlight$/i }));
     await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(42));
     expect(onFullscreenUpdateClip).toHaveBeenCalledWith('r1', { createProject: true, silent: true });
   });
@@ -142,7 +142,7 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
       annotateSelectedRegionId: 'r1',
     });
     expect(screen.getByRole('button', { name: /^edit play$/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^frame$/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^make highlight$/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^frame now$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^frame later$/i })).toBeNull();
   });
@@ -186,8 +186,8 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
 
     // No linked project row in the store -> getClipStage reads it as a fresh
     // draft, action 'focus' -- the button opens Focus directly, no create call.
-    // FOCUS-stage label is "Frame" (ANNOTATE.FRAME_THIS_CLIP).
-    fireEvent.click(screen.getByRole('button', { name: /^frame$/i }));
+    // FOCUS-stage label is "Make Highlight" (ANNOTATE.FRAME_THIS_CLIP).
+    fireEvent.click(screen.getByRole('button', { name: /^make highlight$/i }));
 
     expect(onFullscreenUpdateClip).not.toHaveBeenCalled();
     expect(onOpenClipInFocus).toHaveBeenCalledWith(42);
@@ -205,11 +205,11 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
       onOpenClipPreview,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /^preview$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^preview highlight$/i }));
     expect(onOpenClipPreview).toHaveBeenCalledWith(project, false);
   });
 
-  it('opens a published highlight with the View Final CTA in published mode', () => {
+  it('opens a published highlight with the View Highlight CTA in published mode', () => {
     const project = { id: 42, has_working_video: true, has_final_video: true, is_published: true, final_video_id: 'final-1' };
     projectsListMock = [project];
     const onOpenClipPreview = vi.fn();
@@ -221,7 +221,7 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
       onOpenClipPreview,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /^view final$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^view highlight$/i }));
     expect(onOpenClipPreview).toHaveBeenCalledWith(project, true);
   });
 });

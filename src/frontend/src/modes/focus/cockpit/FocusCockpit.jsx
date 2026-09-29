@@ -49,7 +49,6 @@ export default function FocusCockpit({
   keyframes, framerate, seek,
   onKeyframeDelete, onKeyframeTimeMove, onCopyCrop,
   // Action rail
-  canUndoFraming, onUndoFraming,
   framingCtaMode, onBackToPreview, backToPreviewLoading,
   // Settings sheet
   includeAudio, onIncludeAudioChange, onAspectRatioChange,
@@ -272,8 +271,6 @@ export default function FocusCockpit({
       <ActionRail
         activeSheet={activeSheet}
         onOpenSetup={() => setActiveSheet(activeSheet === 'setup' ? null : 'setup')}
-        canUndo={canUndoFraming}
-        onUndo={onUndoFraming}
         previewing={previewing}
         onTogglePreview={handleTogglePreview}
         ctaMode={ctaMode}

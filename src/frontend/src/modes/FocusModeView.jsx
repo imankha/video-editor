@@ -219,10 +219,6 @@ export function FocusModeView({
   onCopyCrop,
   onPasteCrop,
 
-  // T9950 Slice 2: Undo
-  canUndoFraming = false,
-  onUndoFraming,
-
   // Zoom state
   zoom,
   panOffset,
@@ -560,8 +556,6 @@ export function FocusModeView({
         onKeyframeDelete={onKeyframeDelete}
         onKeyframeTimeMove={onKeyframeTimeMove}
         onCopyCrop={onCopyCrop}
-        canUndoFraming={canUndoFraming}
-        onUndoFraming={onUndoFraming}
         framingCtaMode={framingCtaMode}
         onBackToPreview={onBackToPreview}
         backToPreviewLoading={backToPreviewLoading}
@@ -852,14 +846,12 @@ export function FocusModeView({
         )}
 
         {/* T9950 Slice 2/3 (T10310: "Use a wider frame" removed 2026-09-18) —
-            [Undo] [Preview highlight] — below the Trim and Slo-mo disclosure
+            [Preview highlight] — below the Trim and Slo-mo disclosure
             now (design doc §5's original order reversed 2026-09-18; this row
             acts on the crop/frame, not the timeline, so it no longer needs to
             sit between the timeline and its own disclosure). */}
         {!mobileFs && videoUrl && (
           <FramingActionRow
-            canUndo={canUndoFraming}
-            onUndo={onUndoFraming}
             previewing={previewing}
             onTogglePreview={handleTogglePreview}
           />

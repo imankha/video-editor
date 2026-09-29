@@ -45,7 +45,7 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
     fireEvent.click(screen.getByTestId('mode-overlay'));
 
     expect(onModeChange).not.toHaveBeenCalled();
-    expect(toastTitles()).toEqual(['Generate Framing to unlock Spotlight.']);
+    expect(toastTitles()).toEqual(['Generate Highlight to unlock Spotlight.']);
   });
 
   it('uses action labels on desktop and mobile instead of renaming shared mode nouns', () => {
