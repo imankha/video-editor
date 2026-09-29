@@ -42,6 +42,15 @@ Annotate. `useZoom` clamps zoom to 1 through `zoomOut`/wheel/direct-set without 
 independent `panOffset`, while `VideoPlayer` continues applying that translation. Shared-hook fix
 must cover Annotate, Framing, and Spotlight. Impact 6 / Complexity 2, frontend-only.
 
+**2026-09-29 addition, unplaced — [T11430](tasks/T11430-multiple-highlights-per-play-aspect-status.md):
+Published play still says “Highlight Not Started”; support N vertical/horizontal highlights per
+play.** Reported on production for `imankh@gmail.com`, game `at Oceanside Breakers Aug 30`, play
+`Great Goal` near 24:01. Today one `raw_clips.auto_project_id` collapses the play to one project, so
+the UI cannot represent a published vertical version plus another orientation/version in progress.
+Requires a durable one-to-many play→highlight association, orientation-qualified status badges,
+stable per-orientation ordinals, **Make Another Highlight**, legacy backfill, and production-shaped
+staging verification. Impact 7 / Complexity 7; L-tier architecture/design gate before implementation.
+
 **TOP PRIORITY — 2026-09-28 production Annotate/Spotlight follow-ups:**
 [T11410](tasks/T11410-fullscreen-rating-picker-viewport-safe.md) (Impact 6 / Complexity 3 /
 Priority 2.0) fixes the normal rating picker rendering offscreen in desktop fullscreen.
