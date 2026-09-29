@@ -187,7 +187,9 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
     [users, selectedIds],
   );
 
-  const allFilteredSelected = matchedUsers.length > 0 && matchedUsers.every(u => selectedIds.has(u.user_id));
+  const selectableUsers = matchedUsers.filter(u => !u.is_deleted);
+  const allFilteredSelected = selectableUsers.length > 0
+    && selectableUsers.every(u => selectedIds.has(u.user_id));
 
   function toggleRow(userId) {
     setSelectedIds(prev => {
@@ -202,9 +204,9 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (allFilteredSelected) {
-        for (const u of matchedUsers) next.delete(u.user_id);
+        for (const u of selectableUsers) next.delete(u.user_id);
       } else {
-        for (const u of matchedUsers) next.add(u.user_id);
+        for (const u of selectableUsers) next.add(u.user_id);
       }
       return next;
     });
@@ -333,18 +335,24 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
               >
                 {selectionMode && (
                   <td className="px-3 py-2.5 text-center">
-                    <button
-                      type="button"
-                      onClick={() => toggleRow(user.user_id)}
-                      className="text-gray-400 hover:text-purple-300 transition-colors align-middle"
-                      title={isSelected ? 'Deselect' : 'Select'}
-                    >
-                      {isSelected ? <CheckSquare size={14} /> : <Square size={14} />}
-                    </button>
+                    {!user.is_deleted && (
+                      <button
+                        type="button"
+                        onClick={() => toggleRow(user.user_id)}
+                        className="text-gray-400 hover:text-purple-300 transition-colors align-middle"
+                        title={isSelected ? 'Deselect' : 'Select'}
+                      >
+                        {isSelected ? <CheckSquare size={14} /> : <Square size={14} />}
+                      </button>
+                    )}
                   </td>
                 )}
                 <td className="px-3 py-2.5 text-gray-200 text-xs">
-                  {user.email ? (
+                  {user.is_deleted ? (
+                    <span className="text-gray-400 italic" title="Payment retained; personal account data deleted">
+                      Deleted account
+                    </span>
+                  ) : user.email ? (
                     <button
                       onClick={async () => {
                         if (!window.confirm(`Impersonate ${user.email}?`)) return;
@@ -361,6 +369,11 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                     </button>
                   ) : (
                     <span className="text-gray-500 italic">guest</span>
+                  )}
+                  {user.is_deleted && (
+                    <span className="ml-1.5 inline-block px-1 py-0.5 text-[9px] rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 align-middle">
+                      DELETED
+                    </span>
                   )}
                   {/* T8110: internal/test-account badge -- visible when the Real
                       pill is off (test accounts shown), so they read as ours. */}
@@ -417,13 +430,15 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                 <td className="px-3 py-2.5 text-right">
                   <div className="flex items-center justify-end gap-1.5">
                     <span className="text-gray-200 text-xs">{user.credits == null ? '—' : user.credits}</span>
-                    <button
-                      onClick={() => setGrantUsers([user])}
-                      className="text-gray-500 hover:text-purple-400 transition-colors"
-                      title="Grant credits"
-                    >
-                      <Plus size={12} />
-                    </button>
+                    {!user.is_deleted && (
+                      <button
+                        onClick={() => setGrantUsers([user])}
+                        className="text-gray-500 hover:text-purple-400 transition-colors"
+                        title="Grant credits"
+                      >
+                        <Plus size={12} />
+                      </button>
+                    )}
                   </div>
                 </td>
 
@@ -442,7 +457,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                     <span>{user.last_active_at ? user.last_active_at.slice(0, 10) : '—'}</span>
                     {/* T8110: per-row mark/unmark as a test account (gesture DB
                         write). Amber when flagged; toggles the badge in place. */}
-                    <button
+                    {!user.is_deleted && <button
                       onClick={async () => {
                         try {
                           await markTestAccount(user.user_id, !user.is_test_account);
@@ -458,8 +473,8 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                       title={user.is_test_account ? 'Unmark as test account' : 'Mark as test account'}
                     >
                       <FlaskConical size={12} />
-                    </button>
-                    {onUserClick && (
+                    </button>}
+                    {onUserClick && !user.is_deleted && (
                       <button
                         onClick={() => onUserClick(user.user_id)}
                         className="text-gray-600 hover:text-purple-400 transition-colors"

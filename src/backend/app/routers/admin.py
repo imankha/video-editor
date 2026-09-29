@@ -154,6 +154,63 @@ _LEDGER_REVENUE_BY_USER = (
 )
 
 
+def _admin_user_population(include_deleted_payers: bool) -> str:
+    """User-table population, optionally including ledger-only payer tombstones.
+
+    Deleted accounts have no email and cannot be impersonated or mutated.  They
+    enter only the Paying view, where omitting them would make both the user count
+    and filtered revenue contradict the append-only financial record.
+    """
+    live = (
+        "SELECT user_id, email, created_at, is_test_account, false AS is_deleted "
+        "FROM users"
+    )
+    if not include_deleted_payers:
+        return f"({live}) u"
+    deleted = f"""
+        SELECT pay.user_id, NULL::text AS email, NULL::timestamptz AS created_at,
+               COALESCE(s.was_test_account, false) AS is_test_account,
+               true AS is_deleted
+        FROM {_LEDGER_REVENUE_BY_USER} pay
+        LEFT JOIN users live_u ON live_u.user_id = pay.user_id
+        LEFT JOIN user_segments s ON s.user_id = pay.user_id
+        WHERE live_u.user_id IS NULL AND pay.revenue_cents > 0
+    """
+    return f"({live} UNION ALL {deleted}) u"
+
+
+def _ledger_positive_revenue_total(cur, exclude_test: bool) -> int:
+    """Net revenue for every positive-net payer, including deleted accounts."""
+    excl = f"WHERE {_test_exclusion(True)}" if exclude_test else ""
+    cur.execute(f"""
+        SELECT COALESCE(SUM(pay.revenue_cents), 0) AS total
+        FROM {_LEDGER_REVENUE_BY_USER} pay
+        LEFT JOIN users u ON u.user_id = pay.user_id
+        LEFT JOIN user_segments s ON s.user_id = pay.user_id
+        {excl}
+        {'AND' if excl else 'WHERE'} pay.revenue_cents > 0
+    """)
+    return cur.fetchone()["total"]
+
+
+def _assert_payments_ledger_ready(cur) -> None:
+    """Never present an omitted historical backfill as legitimate zero revenue."""
+    cur.execute("SELECT EXISTS(SELECT 1 FROM payments) AS has_ledger")
+    if cur.fetchone()["has_ledger"]:
+        return
+    cur.execute(
+        "SELECT EXISTS(SELECT 1 FROM user_segments WHERE total_spent_cents > 0) AS has_cache"
+    )
+    if cur.fetchone()["has_cache"]:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "payments_ledger_backfill_required",
+                "message": "Revenue ledger is empty while historical purchases exist.",
+            },
+        )
+
+
 def _grouped_view_grand_total(cur, exclude_test: bool, origin: str | None = None) -> int:
     """Ledger grand total for a grouped view's unattributed remainder, scoped to the
     view's SEGMENT filter (origin + test exclusion) but NOT its acquisition-date window
@@ -200,7 +257,9 @@ _SORT_COLUMNS = {
     "overlay_exported_count": "overlay_exported_count",
     "share_completed_count":  "share_completed_count",
     "credits":                "credits",
-    "total_spent_cents":      "s.total_spent_cents",
+    "total_spent_cents":      (
+        "CASE WHEN u.is_deleted THEN pay.revenue_cents ELSE s.total_spent_cents END"
+    ),
     "action_count":           "action_count",
     "session_count":          "session_count",
     "total_usage_seconds":    "usage_sort_seconds",   # banked usage (design §7A)
@@ -304,15 +363,22 @@ def list_users(
     # unknown key 422s and never reaches SQL.
     order_fragment = _order_by(sort, sort_dir)
 
-    seg_parts, params = _build_segment_filter(origin, acquired_from, acquired_to, filter)
+    seg_parts, params = _build_segment_filter(
+        origin, acquired_from, acquired_to, filter, user_alias="u"
+    )
+    funnel_seg_parts, funnel_params = _build_segment_filter(
+        origin, acquired_from, acquired_to, filter
+    )
     excl = _test_exclusion(exclude_test)
     where_parts = [*seg_parts]
     if excl:
         where_parts.append(excl)
     where_clause = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+    population = _admin_user_population(include_deleted_payers=filter == "paying")
 
     with get_pg() as conn:
         cur = conn.cursor()
+        _assert_payments_ledger_ready(cur)
 
         # LEFT JOIN (T4970): a user with no user_segments row (test-login/OTP-
         # bypass accounts, copied accounts — segments are created only in the
@@ -322,7 +388,7 @@ def list_users(
         # segment fields, so filtered views are unchanged.
         cur.execute(f"""
             SELECT COUNT(*) AS cnt
-            FROM users u
+            FROM {population}
             LEFT JOIN user_segments s ON u.user_id = s.user_id
             {where_clause}
         """, params)
@@ -391,9 +457,10 @@ def list_users(
                 WHERE day >= CURRENT_DATE - INTERVAL '6 days'
                 GROUP BY user_id
             ),
-            bal AS (SELECT user_id, balance FROM credits)
+            bal AS (SELECT user_id, balance FROM credits),
+            pay AS {_LEDGER_REVENUE_BY_USER}
             SELECT
-                u.user_id, u.email, u.created_at, u.is_test_account,
+                u.user_id, u.email, u.created_at, u.is_test_account, u.is_deleted,
                 s.origin, s.acquired_at, s.total_spent_cents, s.last_active_at,
                 s.total_usage_seconds, s.current_session_start,
                 COALESCE(act.action_count, 0)           AS action_count,
@@ -413,6 +480,7 @@ def list_users(
                 act.last_step_rank,
                 COALESCE(u7.last_7d_seconds, 0)         AS last_7d_seconds,
                 bal.balance                             AS credits,
+                pay.revenue_cents                       AS ledger_revenue_cents,
                 -- banked usage only, for a STABLE sort key (the displayed Usage
                 -- adds a live open-session tail in Python -- design §7A, so an
                 -- online user's shown value can exceed its rank value by <=30min).
@@ -420,11 +488,12 @@ def list_users(
                 (COALESCE(s.total_usage_seconds, 0)::float
                     / GREATEST(1.0, EXTRACT(EPOCH FROM (now() - COALESCE(s.acquired_at, u.created_at))) / 604800.0)
                 )                                       AS avg_weekly_sort
-            FROM users u
+            FROM {population}
             LEFT JOIN user_segments s ON u.user_id = s.user_id
             LEFT JOIN act ON act.user_id = u.user_id
             LEFT JOIN u7  ON u7.user_id  = u.user_id
             LEFT JOIN bal ON bal.user_id = u.user_id
+            LEFT JOIN pay ON pay.user_id = u.user_id
             {where_clause}
             ORDER BY {order_fragment}
             LIMIT %s OFFSET %s
@@ -439,7 +508,7 @@ def list_users(
         # and the test-account exclusion (needs users u) -- thread the SAME
         # predicates, joining only the tables the active predicates reference.
         funnel_joins = ""
-        if seg_parts:
+        if funnel_seg_parts:
             funnel_joins += " JOIN user_segments s ON a.user_id = s.user_id"
         if excl:
             # T8630 r5: the shared exclusion predicate now falls back to
@@ -449,10 +518,10 @@ def list_users(
             # count keeps excluding deleted accounts exactly as before -- u is
             # always present on a surviving row, so the was_test_account fallback
             # is inert and exists only so the shared predicate resolves.
-            if not seg_parts:
+            if not funnel_seg_parts:
                 funnel_joins += " LEFT JOIN user_segments s ON a.user_id = s.user_id"
             funnel_joins += " JOIN users u ON a.user_id = u.user_id"
-        funnel_where_parts = [*seg_parts]
+        funnel_where_parts = [*funnel_seg_parts]
         if excl:
             funnel_where_parts.append(excl)
         funnel_where = ("WHERE " + " AND ".join(funnel_where_parts)) if funnel_where_parts else ""
@@ -462,7 +531,7 @@ def list_users(
             {funnel_joins}
             {funnel_where}
             GROUP BY a.action
-        """, list(params))
+        """, list(funnel_params))
         action_totals = {r["action"]: r["users"] for r in cur.fetchall()}
 
         funnel_totals = {"signed_up": total_users}
@@ -512,7 +581,8 @@ def list_users(
 
         users.append({
             "user_id": user_id,
-            "email": row["email"],
+            "email": "Deleted account" if row["is_deleted"] else row["email"],
+            "is_deleted": row["is_deleted"],
             "is_test_account": row["is_test_account"],
             "origin": row["origin"],
             "acquired_at": str(row["acquired_at"]) if row["acquired_at"] else None,
@@ -541,7 +611,10 @@ def list_users(
             "credits_purchased": user_credit["credits_purchased"] if user_credit else 0,
             # T8650: per-user DISPLAY CACHE only (fast per-page read). NOT a revenue
             # source -- aggregates read the payments ledger (see _ledger_revenue_total).
-            "total_spent_cents": row["total_spent_cents"] or 0,
+            "total_spent_cents": (
+                row["ledger_revenue_cents"] if row["is_deleted"]
+                else (row["total_spent_cents"] or 0)
+            ),
             "last_active_at": row["last_active_at"].isoformat() if row["last_active_at"] else None,
             "session_count": row["session_count"],
             "last_step": last_step,
@@ -2295,7 +2368,7 @@ def analytics_user_actions(
     return {"actions": actions, "total": total, "page": page, "page_size": page_size}
 
 
-def _build_segment_filter(origin, acquired_from, acquired_to, user_filter):
+def _build_segment_filter(origin, acquired_from, acquired_to, user_filter, user_alias="s"):
     where_parts = []
     params = []
     if origin:
@@ -2314,11 +2387,12 @@ def _build_segment_filter(origin, acquired_from, acquired_to, user_filter):
         # heal, so a cache-based selector both DROPS backfill-only payers (cache never
         # moved) and KEEPS refunded-to-zero ones -- diverging from the ledger totals
         # every other admin revenue figure reads since T8650. Reuse the shared
-        # per-user pre-aggregate rather than adding a third copy of the SUM. A deleted
-        # payer has no `user_segments` row, so this predicate on `s.user_id` can never
-        # select them -- their money lives only in the unfiltered grand total.
+        # per-user pre-aggregate rather than adding a third copy of the SUM. Callers
+        # choose the population alias: segment-scoped analytics use `s`, while the
+        # admin Paying table uses its ledger-aware `u` population so deleted payer
+        # tombstones remain selectable.
         where_parts.append(
-            f"s.user_id IN (SELECT user_id FROM {_LEDGER_REVENUE_BY_USER} pay "
+            f"{user_alias}.user_id IN (SELECT user_id FROM {_LEDGER_REVENUE_BY_USER} pay "
             "WHERE pay.revenue_cents > 0)"
         )
     elif user_filter == "active_7d":
@@ -2383,6 +2457,7 @@ def analytics_pulse(
 
     with get_pg() as conn:
         cur = conn.cursor()
+        _assert_payments_ledger_ready(cur)
 
         if has_filter:
             seg_where = "WHERE " + " AND ".join(filter_parts)
@@ -2456,7 +2531,13 @@ def analytics_pulse(
             #    no segment row and so can never match a filter -- correct, no remainder.
             #  - only test-exclusion (the default view, no real filter) -> the platform
             #    grand total, which DOES count a deleted payer's money (no segment join).
-            if has_real_filter:
+            if filter == "paying" and not any((origin, acquired_from, acquired_to)):
+                # A deleted payer may have no segment row (the historical
+                # pre-T8630 production deletion does not). Paying is a financial
+                # ledger predicate, so the filtered headline must retain those
+                # tombstones instead of silently losing legitimate revenue.
+                revenue_total = _ledger_positive_revenue_total(cur, exclude_test)
+            elif has_real_filter:
                 cur.execute(f"""
                     SELECT COALESCE(SUM(pay.revenue_cents), 0) AS total
                     FROM user_segments s{seg_join}

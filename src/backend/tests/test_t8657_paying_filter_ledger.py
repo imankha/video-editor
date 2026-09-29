@@ -202,8 +202,50 @@ class TestMissingProductionBackfill:
         """
         _seed_production_missing_backfill_repro()
 
-        assert _pulse_revenue(client, exclude_test=True) == 4296
-        assert _paying_user_count(client, exclude_test=True) == 4
+        pulse = client.get(
+            "/api/admin/analytics/pulse?exclude_test=true", headers=_auth()
+        )
+        users = client.get(
+            "/api/admin/users?filter=paying&exclude_test=true", headers=_auth()
+        )
+        for response in (pulse, users):
+            assert response.status_code == 503
+            assert response.json()["detail"]["code"] == "payments_ledger_backfill_required"
+
+
+class TestDeletedPayerTombstone:
+    def test_paying_filter_includes_live_and_deleted_real_payers(self, client):
+        # Production shape after backfill: four live real payers ($42.96), one
+        # deleted real payer ($3.99), and one excluded test payer ($3.99).
+        live = (("real-a", 1299), ("real-b", 1299), ("real-c", 1299), ("real-d", 399))
+        for user_id, cents in live:
+            create_user(user_id, email=f"{user_id}@paying.test")
+            create_user_segment(user_id, "organic", None, "otp")
+            _seed_payment(user_id, "purchase", cents, obj_id=f"pi_{user_id}")
+            _set_total_spent(user_id, cents)
+
+        _seed_payment("deleted-real", "purchase", 399, obj_id="pi_deleted_real")
+
+        create_user("test-payer", email="test@paying.test")
+        create_user_segment("test-payer", "organic", None, "otp")
+        _seed_payment("test-payer", "purchase", 399, obj_id="pi_test_payer")
+        _set_total_spent("test-payer", 399)
+        _mark_test_account("test-payer")
+
+        response = client.get(
+            "/api/admin/users",
+            params={"filter": "paying", "exclude_test": "true", "page_size": 50},
+            headers=_auth(),
+        )
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["total_users"] == 5
+        tombstones = [row for row in data["users"] if row["is_deleted"]]
+        assert len(tombstones) == 1
+        assert tombstones[0]["user_id"] == "deleted-real"
+        assert tombstones[0]["email"] == "Deleted account"
+        assert tombstones[0]["total_spent_cents"] == 399
+        assert _pulse_revenue(client, filter="paying", exclude_test=True) == 4695
 
 
 class TestPayingSelectorFromLedger:
@@ -232,10 +274,9 @@ class TestPayingSelectorFromLedger:
         assert _paying_user_count(client, exclude_test=False) == 0
         assert _pulse_revenue(client, filter="paying", exclude_test=False) == 0
 
-    def test_deleted_payer_cannot_match_the_filter(self, client):
-        # A deleted payer keeps ledger rows but loses their user_segments row. The
-        # paying filter is a predicate on user_segments, so a deleted payer can never
-        # be selected by it -- their money belongs only in the UNFILTERED grand total.
+    def test_deleted_payer_matches_filter_as_tombstone(self, client):
+        # A deleted payer keeps ledger rows and remains a paying user even when
+        # both the live account and its segment are gone.
         create_user("u_live", email="live@paying.test")
         create_user_segment("u_live", "organic", None, "otp")
         _seed_payment("u_live", "purchase", 700, obj_id="pi_live")
@@ -247,9 +288,8 @@ class TestPayingSelectorFromLedger:
 
         # Unfiltered grand total still counts the deleted payer (T8650 behaviour).
         assert _pulse_revenue(client, exclude_test=False) == 1500
-        # The paying filter selects only the live payer.
-        assert _paying_user_count(client, exclude_test=False) == 1
-        assert _pulse_revenue(client, filter="paying", exclude_test=False) == 700
+        assert _paying_user_count(client, exclude_test=False) == 2
+        assert _pulse_revenue(client, filter="paying", exclude_test=False) == 1500
 
     def test_test_account_exclusion_unchanged(self, client):
         # A test account with ledger revenue is excluded from the paying population
