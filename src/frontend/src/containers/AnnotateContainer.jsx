@@ -1722,6 +1722,7 @@ export function AnnotateContainer({
         if (result.project_created) {
           createdProjectId = result.project_id;
           setAutoProjectId(region.id, result.project_id);
+          if (actualUpdates.silent) await fetchProjects({ force: true });
           // Frame Now navigates straight into Framing as this call's
           // own outcome — a toast announcing the same thing the navigation
           // just showed is redundant. Frame Later (no navigation) still wants
@@ -1764,6 +1765,7 @@ export function AnnotateContainer({
         if (result?.project_created) {
           createdProjectId = result.project_id;
           setAutoProjectId(region.id, result.project_id);
+          if (actualUpdates.silent) await fetchProjects({ force: true });
           // See the matching guard above — Frame Now's navigation
           // already confirms the clip landed, so it opts out of the toast.
           if (!actualUpdates.silent) notifyReelCreated(result.project_id, reelToastClipName(region));
@@ -1777,7 +1779,7 @@ export function AnnotateContainer({
       // branch is never the create-project path.)
       return { saveOk: true, projectId: null };
     }
-  }, [resolveSaveGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, activeSourceSequence, notifyReelCreated]);
+  }, [resolveSaveGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, activeSourceSequence, notifyReelCreated, fetchProjects]);
 
   /**
    * T10610 § C.2: clean-check (binding constraint 6) — a gesture whose value

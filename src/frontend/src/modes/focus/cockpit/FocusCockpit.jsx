@@ -69,10 +69,11 @@ export default function FocusCockpit({
       setPreviewing(false);
       return;
     }
+    // seek is clip-relative; zero maps to the clipped source boundary.
+    // Assigning video.currentTime directly would bypass that mapping.
     seek?.(0);
     const video = videoRef?.current;
     if (video) {
-      video.currentTime = 0;
       const playPromise = video.play?.();
       playPromise?.catch?.(() => {});
     }

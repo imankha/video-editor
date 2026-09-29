@@ -41,6 +41,7 @@ export const CLIP_STAGE = {
 export const HIGHLIGHT_STATUS = {
   NOT_STARTED: 'Not Started',
   CLIPPED: 'Clipped',
+  FRAMING: 'Framing',
   FRAMED: 'Framed',
   OVERLAID: 'Overlaid',
   PUBLISHED: 'Published',
@@ -59,12 +60,23 @@ export const HIGHLIGHT_STATUS = {
  *
  * Order matters — first match wins.
  */
-export function getClipStage(region, linkedProject) {
+export function getClipStage(region, linkedProject, { framingInProgress = false } = {}) {
   const hasProject = !!region?.autoProjectId;
   if (!hasProject) {
     return {
       stage: CLIP_STAGE.NO_PROJECT,
       status: HIGHLIGHT_STATUS.NOT_STARTED,
+      label: ANNOTATE.FRAME_THIS_CLIP,
+      action: 'focus',
+    };
+  }
+
+  // A render accepted for this project is already Framing even though the
+  // working-video row does not exist until the background job completes.
+  if (framingInProgress) {
+    return {
+      stage: CLIP_STAGE.FOCUS,
+      status: HIGHLIGHT_STATUS.FRAMING,
       label: ANNOTATE.FRAME_THIS_CLIP,
       action: 'focus',
     };
@@ -104,4 +116,13 @@ export function getClipStage(region, linkedProject) {
   // video but null snapshot): the project EXISTS, so it should open — never fall
   // back to offering to re-create it (T9330 deliberate change).
   return { stage: CLIP_STAGE.FOCUS, status: HIGHLIGHT_STATUS.CLIPPED, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
+}
+
+export function isFramingExportInProgress(activeExports, projectId) {
+  if (!projectId) return false;
+  return Object.values(activeExports || {}).some((entry) =>
+    String(entry.projectId) === String(projectId) &&
+    entry.type === 'framing' &&
+    (entry.status === 'pending' || entry.status === 'processing')
+  );
 }

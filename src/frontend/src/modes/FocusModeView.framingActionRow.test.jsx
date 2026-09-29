@@ -82,10 +82,10 @@ describe('FocusModeView FramingActionRow wiring (T9950 Slice 2)', () => {
     expect(screen.queryByTestId('framing-undo')).toBeNull();
   });
 
-  it('toggling Preview highlight flips its label and shows the approximation disclosure (T9950 Slice 3)', () => {
+  it('starts Preview highlight at clip-relative zero without overwriting the translated media time', () => {
     const seek = vi.fn();
     const play = vi.fn(() => Promise.resolve());
-    const videoRef = { current: { currentTime: 12, play, closest: () => null } };
+    const videoRef = { current: { currentTime: 561.9, play, closest: () => null } };
     renderView({ seek, videoRef });
     const previewBtn = screen.getByTestId('framing-preview-toggle');
     expect(previewBtn.textContent).toMatch(/preview highlight/i);
@@ -94,7 +94,9 @@ describe('FocusModeView FramingActionRow wiring (T9950 Slice 2)', () => {
     fireEvent.click(previewBtn);
 
     expect(seek).toHaveBeenCalledWith(0);
-    expect(videoRef.current.currentTime).toBe(0);
+    // useVideo.seek translates clip-relative zero to the underlying source
+    // boundary. The click handler must not replace it with absolute media zero.
+    expect(videoRef.current.currentTime).toBe(561.9);
     expect(play).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/back to framing/i);
     expect(screen.getByTestId('preview-disclosure')).not.toBeNull();
