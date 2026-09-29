@@ -37,6 +37,7 @@ filter rows by "user exists".
 import argparse
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 import stripe
 
@@ -45,6 +46,62 @@ sys.path.insert(0, str(PROJECT_ROOT / "src" / "backend"))
 
 # Terminal-lost dispute statuses (mirrors revenue_reconciliation.LOST_DISPUTE_STATUSES).
 LOST_DISPUTE_STATUSES = frozenset({"lost", "charge_refunded"})
+
+
+class BackfillSafetyError(RuntimeError):
+    """A preflight or reconciliation failure that makes a write unsafe."""
+
+
+def _validate_target(config: dict) -> None:
+    """Fail closed when credentials and the requested environment disagree."""
+    env_name = config.get("APP_ENV")
+    database_url = config.get("DATABASE_URL", "")
+    stripe_key = config.get("STRIPE_SECRET_KEY", "")
+    host = (urlparse(database_url).hostname or "").lower()
+
+    if env_name == "staging":
+        if "staging" not in host:
+            raise BackfillSafetyError(
+                f"staging requested but DATABASE_URL host is not a staging host: {host or '<missing>'}"
+            )
+        if not stripe_key.startswith("sk_test_"):
+            raise BackfillSafetyError("staging requires a Stripe test-mode secret key")
+    elif env_name == "prod":
+        if not host or "staging" in host or host in {"localhost", "127.0.0.1"}:
+            raise BackfillSafetyError(
+                f"prod requested but DATABASE_URL host is not a production host: {host or '<missing>'}"
+            )
+        if not stripe_key.startswith("sk_live_"):
+            raise BackfillSafetyError("prod requires a Stripe live-mode secret key")
+    elif env_name != "dev":
+        raise BackfillSafetyError(f"unknown APP_ENV: {env_name!r}")
+
+
+def _assert_database_guards(cur) -> None:
+    """Verify the append-only table, idempotency index, and triggers before writing."""
+    cur.execute("SELECT to_regclass('public.payments') AS table_name")
+    if not cur.fetchone()["table_name"]:
+        raise BackfillSafetyError("payments table is missing; run migrations before backfill")
+
+    cur.execute(
+        "SELECT indexdef FROM pg_indexes "
+        "WHERE schemaname = 'public' AND indexname = 'uq_payments_object_kind'"
+    )
+    index_row = cur.fetchone()
+    if not index_row or "UNIQUE INDEX" not in index_row["indexdef"].upper():
+        raise BackfillSafetyError("payments idempotency unique index is missing")
+
+    cur.execute(
+        "SELECT tgname FROM pg_trigger "
+        "WHERE tgrelid = 'public.payments'::regclass AND NOT tgisinternal"
+    )
+    triggers = {row["tgname"] for row in cur.fetchall()}
+    required = {"trg_payments_append_only", "trg_payments_no_truncate"}
+    missing = required - triggers
+    if missing:
+        raise BackfillSafetyError(
+            f"payments safety trigger(s) missing: {', '.join(sorted(missing))}"
+        )
 
 
 def load_env(env_name: str) -> dict:
@@ -144,13 +201,129 @@ def _iso(created_epoch):
     return datetime.fromtimestamp(created_epoch, tz=UTC)
 
 
+def _build_plan(intents: list) -> list[dict]:
+    """Resolve and validate the complete Stripe plan before any DB write."""
+    plan, errors, keys = [], [], set()
+
+    def add(row):
+        key = (row["stripe_object_id"], row["kind"])
+        if key in keys:
+            errors.append(f"duplicate Stripe event: kind={key[1]} object={key[0]}")
+        else:
+            keys.add(key)
+            plan.append(row)
+
+    for pi in intents:
+        if pi.get("status") != "succeeded":
+            continue
+        pi_id = pi.get("id")
+        meta = pi.get("metadata") or {}
+        user_id = meta.get("user_id")
+        amount = pi.get("amount_received", 0) or 0
+        currency = (pi.get("currency") or "").lower()
+        if not pi_id:
+            errors.append("succeeded PaymentIntent has no id")
+            continue
+        if not user_id:
+            errors.append(f"succeeded PaymentIntent {pi_id} has no metadata.user_id")
+            continue
+        if amount <= 0:
+            errors.append(f"succeeded PaymentIntent {pi_id} has invalid amount_received={amount}")
+            continue
+        if currency != "usd":
+            errors.append(f"PaymentIntent {pi_id} has unsupported currency={currency!r}")
+            continue
+        try:
+            credits = int(meta["credits"]) if meta.get("credits") else None
+        except (TypeError, ValueError):
+            errors.append(f"PaymentIntent {pi_id} has invalid metadata.credits={meta.get('credits')!r}")
+            continue
+
+        charge = _charge_of(pi)
+        charge_id = charge.get("id") if charge else None
+        occurred_at = _iso(pi.get("created") or 0)
+        add({"kind": "purchase", "user_id": user_id, "amount_cents": amount,
+             "currency": currency, "stripe_object_id": pi_id,
+             "stripe_charge_id": charge_id, "pack": meta.get("pack"),
+             "credits": credits, "occurred_at": occurred_at})
+
+        refunds = list(_refund_rows(charge))
+        if charge:
+            expected = charge.get("amount_refunded", 0) or 0
+            actual = sum(value for _, value, _ in refunds)
+            if actual != expected:
+                errors.append(
+                    f"charge {charge_id or '<missing>'} refund rows total {actual}, "
+                    f"Stripe amount_refunded={expected}"
+                )
+        for refund_id, refund_amount, refund_created in refunds:
+            add({"kind": "refund", "user_id": user_id,
+                 "amount_cents": -refund_amount, "currency": currency,
+                 "stripe_object_id": refund_id, "stripe_charge_id": charge_id,
+                 "pack": None, "credits": None,
+                 "occurred_at": _iso(refund_created) if refund_created else occurred_at})
+
+        dispute = _dispute_lost_row(pi, charge)
+        if dispute:
+            dispute_id, dispute_amount = dispute
+            add({"kind": "dispute_lost", "user_id": user_id,
+                 "amount_cents": -dispute_amount, "currency": currency,
+                 "stripe_object_id": dispute_id, "stripe_charge_id": charge_id,
+                 "pack": None, "credits": None, "occurred_at": occurred_at})
+
+    if errors:
+        raise BackfillSafetyError("Stripe preflight failed:\n  - " + "\n  - ".join(errors))
+    return plan
+
+
+def _verify_rows_and_totals(cur, plan: list[dict], stripe_net: dict) -> None:
+    mismatches = []
+    for expected in plan:
+        cur.execute(
+            "SELECT user_id, amount_cents, currency, stripe_charge_id FROM payments "
+            "WHERE stripe_object_id = %s AND kind = %s",
+            (expected["stripe_object_id"], expected["kind"]),
+        )
+        actual = cur.fetchone()
+        if not actual:
+            mismatches.append(
+                f"missing kind={expected['kind']} object={expected['stripe_object_id']}"
+            )
+            continue
+        for field in ("user_id", "amount_cents", "currency", "stripe_charge_id"):
+            if actual[field] != expected[field]:
+                mismatches.append(
+                    f"kind={expected['kind']} object={expected['stripe_object_id']} "
+                    f"field={field} ledger={actual[field]!r} stripe={expected[field]!r}"
+                )
+
+    cur.execute("SELECT user_id, COALESCE(SUM(amount_cents), 0) AS total FROM payments GROUP BY user_id")
+    ledger = {row["user_id"]: row["total"] for row in cur.fetchall()}
+    expected = {uid: agg["net_cents"] for uid, agg in stripe_net.items()}
+    for uid in sorted(set(ledger) | set(expected)):
+        if ledger.get(uid, 0) != expected.get(uid, 0):
+            mismatches.append(
+                f"user={uid} ledger_sum={ledger.get(uid, 0)} stripe_net={expected.get(uid, 0)}"
+            )
+    if mismatches:
+        raise BackfillSafetyError(
+            "post-write verification failed; transaction rolled back:\n  - "
+            + "\n  - ".join(mismatches)
+        )
+
+
 def run_backfill(config: dict, write: bool):
-    sys.path.insert(0, str(PROJECT_ROOT / "src" / "backend"))
+    """Validated, atomic, idempotent ledger backfill.
+
+    Stripe and refund pagination complete before a transaction is opened. The
+    entire plan then writes and verifies in one transaction, so any exception or
+    mismatch rolls back every row from this run.
+    """
     import os
 
+    _validate_target(config)
     os.environ["DATABASE_URL"] = config["DATABASE_URL"]
     os.environ.setdefault("APP_ENV", config["APP_ENV"])
-
     stripe.api_key = config["STRIPE_SECRET_KEY"]
 
     from app.services import payments_ledger
@@ -158,121 +331,65 @@ def run_backfill(config: dict, write: bool):
     from app.services.revenue_reconciliation import build_stripe_net_by_user, fetch_stripe_intents
 
     init_pg_pool()
-
     print(f"Target DB host: {_target_host(config['DATABASE_URL'])}")
     print(f"Mode: {'WRITE' if write else 'DRY RUN'}")
 
     intents = fetch_stripe_intents()
     print(f"Fetched {len(intents)} PaymentIntents from Stripe.")
+    plan = _build_plan(intents)
+    counts = {kind: sum(row["kind"] == kind for row in plan)
+              for kind in ("purchase", "refund", "dispute_lost")}
+    for row in plan:
+        print(
+            f"  {row['kind']} user={row['user_id']} amount_cents={row['amount_cents']} "
+            f"stripe_object_id={row['stripe_object_id']}"
+        )
+    print("\n--- Validated plan ---")
+    print(f"  purchase={counts['purchase']} refund={counts['refund']} "
+          f"dispute_lost={counts['dispute_lost']}")
+    if not write:
+        print(f"Dry run: {len(plan)} validated rows; zero database writes.")
+        return
 
-    inserted = {"purchase": 0, "refund": 0, "dispute_lost": 0}
-    skipped = {"purchase": 0, "refund": 0, "dispute_lost": 0}
+    inserted = {kind: 0 for kind in counts}
+    skipped = {kind: 0 for kind in counts}
     charge_ids_filled = 0
-    would_be_rows = []
+    stripe_net = build_stripe_net_by_user(intents)
 
-    for pi in intents:
-        if pi.get("status") != "succeeded":
-            continue
-
-        meta = pi.get("metadata") or {}
-        user_id = meta.get("user_id")
-        pi_id = pi["id"]
-        if not user_id:
-            print(f"  SKIP purchase pi={pi_id}: no metadata.user_id, cannot key a row")
-            continue
-
-        amount_cents = pi.get("amount_received", 0) or 0
-        charge = _charge_of(pi)
-        charge_id = charge.get("id") if charge else None
-        occurred_at = _iso(pi.get("created") or 0)
-        pack = meta.get("pack")
-        credits = int(meta["credits"]) if meta.get("credits") else None
-
-        would_be_rows.append(("purchase", user_id, amount_cents, pi_id))
-
-        if write:
-            with get_pg() as conn:
-                cur = conn.cursor()
-                did_insert = payments_ledger.record_purchase(
-                    cur, user_id=user_id, stripe_object_id=pi_id,
-                    amount_cents=amount_cents, currency=pi.get("currency") or "usd",
-                    stripe_charge_id=charge_id, pack=pack, credits=credits,
-                    occurred_at=occurred_at, source="backfill",
+    with get_pg() as conn:
+        cur = conn.cursor()
+        _assert_database_guards(cur)
+        for row in plan:
+            common = dict(
+                user_id=row["user_id"], stripe_object_id=row["stripe_object_id"],
+                amount_cents=row["amount_cents"], currency=row["currency"],
+                stripe_charge_id=row["stripe_charge_id"], occurred_at=row["occurred_at"],
+                source="backfill",
+            )
+            if row["kind"] == "purchase":
+                changed = payments_ledger.record_purchase(
+                    cur, pack=row["pack"], credits=row["credits"], **common
                 )
-            inserted["purchase"] += 1 if did_insert else 0
-            skipped["purchase"] += 0 if did_insert else 1
-        else:
-            print(f"  purchase kind=purchase user={user_id} amount_cents={amount_cents} stripe_object_id={pi_id}")
-
-        # Refund rows (one per individual SUCCEEDED re_... id). Each refund's own
-        # `created` is the occurred_at (G6), not the PI's.
-        for refund_id, refund_amount, refund_created in _refund_rows(charge):
-            would_be_rows.append(("refund", user_id, -refund_amount, refund_id))
-            if write:
-                with get_pg() as conn:
-                    cur = conn.cursor()
-                    did_insert = payments_ledger.record_refund(
-                        cur, user_id=user_id, stripe_object_id=refund_id,
-                        amount_cents=-refund_amount, currency=pi.get("currency") or "usd",
-                        stripe_charge_id=charge_id,
-                        occurred_at=_iso(refund_created) if refund_created else occurred_at,
-                        source="backfill",
-                    )
-                inserted["refund"] += 1 if did_insert else 0
-                skipped["refund"] += 0 if did_insert else 1
+            elif row["kind"] == "refund":
+                changed = payments_ledger.record_refund(cur, **common)
             else:
-                print(f"  refund kind=refund user={user_id} amount_cents={-refund_amount} stripe_object_id={refund_id}")
+                changed = payments_ledger.record_dispute_lost(cur, **common)
+            inserted[row["kind"]] += int(changed)
+            skipped[row["kind"]] += int(not changed)
 
-        # Terminal-lost dispute row.
-        dispute_row = _dispute_lost_row(pi, charge)
-        if dispute_row:
-            dp_id, dp_amount = dispute_row
-            would_be_rows.append(("dispute_lost", user_id, -dp_amount, dp_id))
-            if write:
-                with get_pg() as conn:
-                    cur = conn.cursor()
-                    did_insert = payments_ledger.record_dispute_lost(
-                        cur, user_id=user_id, stripe_object_id=dp_id,
-                        amount_cents=-dp_amount, currency=pi.get("currency") or "usd",
-                        stripe_charge_id=charge_id, occurred_at=occurred_at, source="backfill",
-                    )
-                inserted["dispute_lost"] += 1 if did_insert else 0
-                skipped["dispute_lost"] += 0 if did_insert else 1
-            else:
-                print(f"  dispute_lost kind=dispute_lost user={user_id} amount_cents={-dp_amount} stripe_object_id={dp_id}")
+            if row["kind"] == "purchase" and row["stripe_charge_id"]:
+                charge_ids_filled += int(payments_ledger.fill_missing_charge_id(
+                    cur, stripe_object_id=row["stripe_object_id"],
+                    stripe_charge_id=row["stripe_charge_id"],
+                ))
 
-        # Charge-id completion pass: fill NULL stripe_charge_id using the
-        # already-expanded latest_charge.id (no extra Stripe call).
-        if charge_id and write:
-            with get_pg() as conn:
-                cur = conn.cursor()
-                if payments_ledger.fill_missing_charge_id(
-                    cur, stripe_object_id=pi_id, stripe_charge_id=charge_id,
-                ):
-                    charge_ids_filled += 1
-        elif charge_id:
-            would_be_rows.append(("fill_charge_id", user_id, 0, pi_id))
+        _verify_rows_and_totals(cur, plan, stripe_net)
 
-    if write:
-        print("\n--- Backfill summary ---")
-        for kind in ("purchase", "refund", "dispute_lost"):
-            print(f"  {kind}: inserted={inserted[kind]} skipped_existing={skipped[kind]}")
-        print(f"  charge_ids_filled={charge_ids_filled}")
-
-        stripe_net = build_stripe_net_by_user(intents)
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT user_id, COALESCE(SUM(amount_cents), 0) AS total FROM payments GROUP BY user_id")
-            ledger_sums = {row["user_id"]: row["total"] for row in cur.fetchall()}
-        mismatches = 0
-        for uid, agg in stripe_net.items():
-            ledger_sum = ledger_sums.get(uid, 0)
-            if ledger_sum != agg["net_cents"]:
-                mismatches += 1
-                print(f"  MISMATCH user={uid}: ledger_sum={ledger_sum} stripe_net={agg['net_cents']}")
-        print(f"  Sanity check: {len(stripe_net) - mismatches}/{len(stripe_net)} users match Stripe net.")
-    else:
-        print(f"\nDry run: {len(would_be_rows)} would-be rows/fills listed above. Pass --write to insert.")
+    print("\n--- Backfill committed and verified ---")
+    for kind in ("purchase", "refund", "dispute_lost"):
+        print(f"  {kind}: inserted={inserted[kind]} skipped_existing={skipped[kind]}")
+    print(f"  charge_ids_filled={charge_ids_filled}")
+    print(f"  Stripe reconciliation: {len(stripe_net)}/{len(stripe_net)} users match.")
 
 
 def main():
@@ -295,7 +412,11 @@ def main():
         )
         sys.exit(1)
 
-    run_backfill(config, write=args.write)
+    try:
+        run_backfill(config, write=args.write)
+    except BackfillSafetyError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == "__main__":
