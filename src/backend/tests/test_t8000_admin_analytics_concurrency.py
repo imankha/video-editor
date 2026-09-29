@@ -222,10 +222,15 @@ class _ListUsersFakeCursor:
     clean 200: 0 users -> page_user_ids empty -> stats_for_admin([]) short-circuits to {}
     without any real get_pg, and no per-user branch executes."""
 
-    def execute(self, *a, **k):
-        pass
+    def __init__(self):
+        self._last_query = ""
+
+    def execute(self, query, *a, **k):
+        self._last_query = query
 
     def fetchone(self):
+        if "SELECT EXISTS(SELECT 1 FROM payments) AS has_ledger" in self._last_query:
+            return {"has_ledger": True}
         return {"cnt": 0}
 
     def fetchall(self):

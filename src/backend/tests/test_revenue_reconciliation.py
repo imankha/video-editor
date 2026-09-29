@@ -191,6 +191,18 @@ def admin_env(pg_conn):
                 ('admin-user', 0), ('user-a', 699), ('user-b', 399), ('user-c', 999)
             ON CONFLICT (user_id) DO UPDATE SET total_spent_cents = EXCLUDED.total_spent_cents
         """)
+        # list_users now refuses to report cached revenue while the durable
+        # ledger is completely empty. Seed one representative historical row
+        # so this fixture models a completed ledger backfill.
+        cur.execute("""
+            INSERT INTO payments (
+                user_id, kind, amount_cents, currency, stripe_object_id,
+                occurred_at, source
+            ) VALUES (
+                'user-a', 'purchase', 699, 'usd',
+                'pi_reconciliation_fixture', now(), 'backfill'
+            ) ON CONFLICT DO NOTHING
+        """)
     yield
 
 

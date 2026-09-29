@@ -48,11 +48,12 @@ _ORIGIN = "t8630r4_paid_channel"
 
 _STRIPPED_COLS = (
     "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
-    "click_source", "current_session_start",
+    "click_source", "current_session_start", "last_active_at",
+    "total_usage_seconds",
 )
 _KEPT_SEGMENT_COLS = (
     "origin", "acquired_at", "referrer_id", "signup_method",
-    "total_spent_cents", "total_usage_seconds",
+    "total_spent_cents",
 )
 
 
@@ -169,7 +170,6 @@ def _assert_analytics_kept(conn, user_id):
     assert str(seg["acquired_at"]) == "2026-09-01", "acquired_at (cohort) must be KEPT"
     assert seg["referrer_id"] == _REFERRER, "referrer_id (opaque) must be KEPT"
     assert seg["signup_method"] == "google", "signup_method must be KEPT"
-    assert seg["total_usage_seconds"] == 4242, "total_usage_seconds must be KEPT"
     assert _count(conn, "user_actions", "user_id", user_id) == 1, "user_actions must be KEPT"
     assert _count(conn, "user_usage_daily", "user_id", user_id) == 2, "user_usage_daily must be KEPT"
     assert _count(conn, "referrals", "referred_id", user_id) == 1, "referrals row must be KEPT"
