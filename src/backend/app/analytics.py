@@ -574,7 +574,7 @@ def create_user_segment(
 # T8630 round 4: the identifying columns a real account deletion clears from a
 # retained user_segments row. The KEPT columns (user_id, origin, acquired_at,
 # referrer_id, signup_method, total_spent_cents, last_active_at,
-# total_usage_seconds, created_at) carry no name/email/contact and are what the
+# created_at) carry no name/email/contact and are what the
 # revenue views group by, so channel/cohort attribution survives. current_
 # session_start is stripped too: it models a LIVE session, which a deleted
 # account cannot have. Full column-by-column rationale: T8630 task file
@@ -582,7 +582,8 @@ def create_user_segment(
 # (privacy.delete_account, delete_user.py, copy_user_between_envs.py).
 _DEIDENTIFY_SEGMENT_COLUMNS = (
     "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
-    "click_source", "current_session_start",
+    "click_source", "current_session_start", "last_active_at",
+    "total_usage_seconds",
 )
 
 
