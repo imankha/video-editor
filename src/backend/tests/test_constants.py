@@ -51,7 +51,7 @@ class TestRatingAdjectives:
 
     def test_expected_values(self):
         """RATING_ADJECTIVES should have the expected values."""
-        assert RATING_ADJECTIVES[5] == 'Highlight'
+        assert RATING_ADJECTIVES[5] == 'Brilliant'
         assert RATING_ADJECTIVES[4] == 'Good'
         assert RATING_ADJECTIVES[3] == 'Interesting'
         assert RATING_ADJECTIVES[2] == 'Technical Lapse'

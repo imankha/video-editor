@@ -75,7 +75,7 @@ describe('RatingPill — unrated state (no "Required", no amber-dashed to-do)', 
     const group = screen.getByRole('radiogroup', { name: "Rate your athlete's play" });
     const options = within(group).getAllByRole('radio');
     expect(options.map((o) => o.getAttribute('aria-label'))).toEqual([
-      '5 stars - Highlight', '4 stars - Good', '3 stars - Interesting',
+      '5 stars - Brilliant', '4 stars - Good', '3 stars - Interesting',
       '2 stars - Technical Lapse', '1 star - Mental Lapse',
     ]);
     const pickerText = screen.getByTestId('rating-picker').textContent;
@@ -105,7 +105,7 @@ describe('RatingPill — rated state', () => {
   it('picking a star sets the rating and closes the popup', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating: null }} />);
     fireEvent.click(screen.getByTestId('rating-pill'));
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' }));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     const pill = screen.getByTestId('rating-pill');
     expect(pill.dataset.state).toBe('rated');
     expect(pill.dataset.rating).toBe('5');
@@ -128,7 +128,7 @@ describe('RatingPill — rated state', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, my_athlete: true }} />);
     fireEvent.click(screen.getByTestId('rating-pill'));
     expect(screen.getByRole('radiogroup', { name: "Rate your athlete's play" })).toBeTruthy();
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' }));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
 
     fireEvent.click(screen.getByTestId('add-details-button'));
     fireEvent.click(screen.getByRole('radio', { name: 'Team' })); // flip the layer toggle
@@ -228,7 +228,7 @@ describe('highlight status chip', () => {
   it('shows Not Started before a highlight project exists', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating: 5, autoProjectId: null }} />);
     expect(screen.getByTestId('highlight-made-chip')).toBeTruthy();
-    expect(screen.getByText('Not Started')).toBeTruthy();
+    expect(screen.getByText('Highlight Not Started')).toBeTruthy();
   });
 
   it('shows a progressed status even when the play is rated below Highlight', () => {
@@ -410,7 +410,7 @@ describe('same-play identity churn keeps unsaved edits', () => {
   it('re-rendering with a new object for the same clip id preserves the 5-star edit and typed name', () => {
     const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
     fireEvent.click(screen.getByTestId('rating-pill'));
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' }));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     fireEvent.click(screen.getByTitle('Rename play'));
     fireEvent.change(screen.getByLabelText('Play name'), { target: { value: 'Banger' } });
 
@@ -423,7 +423,7 @@ describe('same-play identity churn keeps unsaved edits', () => {
   it('a DIFFERENT clip id still resets the form', () => {
     const { rerender } = render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
     fireEvent.click(screen.getByTestId('rating-pill'));
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' }));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     rerender(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, id: 'c2', rating: 3 }} />);
     fireEvent.click(screen.getByTestId('rating-pill'));
     expect(screen.getByRole('radio', { name: '3 stars - Interesting' }).getAttribute('aria-checked')).toBe('true');

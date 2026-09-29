@@ -7,7 +7,7 @@ import { RATING_BADGE_COLORS, RATING_NOTATION, RATING_GLYPH_COLORS, UNRATED_BADG
  * notation drawn as SVG shapes (tapered bars, hooks, rounded dots), a darker
  * bottom rim and a glyph drop shadow, so the badge reads at 18px as well as at
  * 160px. Ratings 1-5 map to ??, ?, !?, !, !! (`RATING_NOTATION`). T11110:
- * Highlight (5) is gold; its notation glyph is drawn dark (`RATING_GLYPH_COLORS`)
+ * Brilliant (5) is gold; its notation glyph is drawn dark (`RATING_GLYPH_COLORS`)
  * for contrast, since white on gold is illegible. The other faces keep a white
  * glyph.
  *

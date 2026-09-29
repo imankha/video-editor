@@ -13,7 +13,7 @@ describe('getRatingLabel (N35 star-to-descriptor mapping)', () => {
     expect(getRatingLabel(2)).toBe('2 stars · Technical Lapse');
     expect(getRatingLabel(3)).toBe('3 stars · Interesting');
     expect(getRatingLabel(4)).toBe('4 stars · Good');
-    expect(getRatingLabel(5)).toBe('5 stars · Highlight');
+    expect(getRatingLabel(5)).toBe('5 stars · Brilliant');
   });
 
 });
@@ -122,19 +122,19 @@ describe('getRatingCaption (create mode)', () => {
 
   it('rating 5 + My Athlete -> outcome follows the toggle, not the star count', () => {
     expect(getRatingCaption(5, true, true)).toBe(
-      'Highlight play - this play will also become an editable clip.'
+      'Brilliant play - this play will also become an editable clip.'
     );
     expect(getRatingCaption(5, true, false)).toBe(
-      'Highlight play - this saves the play without creating a clip.'
+      'Brilliant play - this saves the play without creating a clip.'
     );
   });
 
-  it('rating 5 + Team -> "Highlight team play" label, outcome still follows the toggle', () => {
+  it('rating 5 + Team -> "Brilliant team play" label, outcome still follows the toggle', () => {
     expect(getRatingCaption(5, false, true)).toBe(
-      'Highlight team play - this play will also become an editable clip.'
+      'Brilliant team play - this play will also become an editable clip.'
     );
     expect(getRatingCaption(5, false, false)).toBe(
-      'Highlight team play - this saves the play without creating a clip.'
+      'Brilliant team play - this saves the play without creating a clip.'
     );
   });
 
@@ -171,22 +171,22 @@ describe('getEditRatingCaption (edit mode)', () => {
     expect(getEditRatingCaption(4, true, false)).not.toMatch(/one more star|another star|create a clip below/);
   });
 
-  it('rating 5 + My Athlete + no clip yet -> Highlight label, no removed-control claim', () => {
+  it('rating 5 + My Athlete + no clip yet -> Brilliant label, no removed-control claim', () => {
     const caption = getEditRatingCaption(5, true, false);
-    expect(caption).toBe('Highlight play.');
+    expect(caption).toBe('Brilliant play.');
     expect(caption).not.toMatch(/will be created|create a clip below/);
   });
 
   it('rating 5 + My Athlete + clip already exists -> says so, does not re-offer creation', () => {
-    expect(getEditRatingCaption(5, true, true)).toBe('Highlight play - highlight already made.');
+    expect(getEditRatingCaption(5, true, true)).toBe('Brilliant play - highlight already made.');
   });
 
   // T11110: team plays CAN become highlights (H13), so the "highlight already
   // made" clause applies to the Team label the same as the My Athlete label.
-  it('rating 5 + Team -> Highlight team label, reflects hasReel like My Athlete does', () => {
-    expect(getEditRatingCaption(5, false, false)).toBe('Highlight team play.');
+  it('rating 5 + Team -> Brilliant team label, reflects hasReel like My Athlete does', () => {
+    expect(getEditRatingCaption(5, false, false)).toBe('Brilliant team play.');
     expect(getEditRatingCaption(5, false, true)).toBe(
-      'Highlight team play - highlight already made.'
+      'Brilliant team play - highlight already made.'
     );
   });
 

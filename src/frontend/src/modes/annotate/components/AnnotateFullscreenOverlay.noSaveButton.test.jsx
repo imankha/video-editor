@@ -95,7 +95,7 @@ describe('AnnotateFullscreenOverlay — per-gesture writes (T10600-design.md § 
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip })} layout="landscape-inline" />);
     fireEvent.click(screen.getByTestId('rating-pill'));
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Highlight' }));
+    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip).toHaveBeenCalledWith('clip-1', { rating: 5 });
   });

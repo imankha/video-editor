@@ -142,7 +142,7 @@ class TestDeriveClipNameWithTfidf:
         from app.queries import derive_clip_name
         result = derive_clip_name(None, 5, ['Goal'], 'some notes', 'Covering Close Man')
         # T11110: 5-star adjective is "Highlight" (was "Brilliant").
-        assert result == 'Highlight Goal'
+        assert result == 'Brilliant Goal'
 
     def test_empty_generated_title_falls_back_to_notes_truncation(self):
         from app.queries import derive_clip_name
