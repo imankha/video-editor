@@ -862,6 +862,25 @@ class TestT9BackfillIdempotencyAndOrphan:
             sys.path.remove(str(SCRIPTS_DIR))
             sys.modules.pop(spec_module_name, None)
 
+    def test_production_runtime_alias_is_accepted_but_wrong_key_is_rejected(self):
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        try:
+            module = importlib.import_module("backfill_payments_ledger")
+            module._validate_target({
+                "APP_ENV": "production",
+                "DATABASE_URL": "postgresql://user:pass@reel-ballers-db.flycast/db",
+                "STRIPE_SECRET_KEY": "sk_live_placeholder",
+            })
+            with pytest.raises(module.BackfillSafetyError, match="live-mode"):
+                module._validate_target({
+                    "APP_ENV": "production",
+                    "DATABASE_URL": "postgresql://user:pass@reel-ballers-db.flycast/db",
+                    "STRIPE_SECRET_KEY": "sk_test_wrong_mode",
+                })
+        finally:
+            sys.path.remove(str(SCRIPTS_DIR))
+            sys.modules.pop("backfill_payments_ledger", None)
+
 
 class TestT9DisputeRefundNetting:
     """Reviewer MAJOR finding (post-implementation): a dispute resolved by

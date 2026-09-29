@@ -55,6 +55,8 @@ class BackfillSafetyError(RuntimeError):
 def _validate_target(config: dict) -> None:
     """Fail closed when credentials and the requested environment disagree."""
     env_name = config.get("APP_ENV")
+    if env_name == "production":
+        env_name = "prod"
     database_url = config.get("DATABASE_URL", "")
     stripe_key = config.get("STRIPE_SECRET_KEY", "")
     host = (urlparse(database_url).hostname or "").lower()
