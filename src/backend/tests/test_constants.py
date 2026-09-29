@@ -7,22 +7,19 @@ These tests ensure that:
 3. Constants are consistent with each other
 """
 
-import pytest
 from app.constants import (
-    RATING_ADJECTIVES,
-    RATING_NOTATION,
-    RATING_COLORS_HEX,
-    RATING_COLORS_CSS,
-    OVERLAY_STYLE_VERSION,
-    MIN_RATING,
-    MAX_RATING,
     DEFAULT_RATING,
-    get_rating_adjective,
-    get_rating_notation,
-    get_rating_color_hex,
-    get_rating_color_css,
-    is_valid_rating,
+    MAX_RATING,
+    MIN_RATING,
+    RATING_ADJECTIVES,
+    RATING_COLORS_CSS,
+    RATING_COLORS_HEX,
+    RATING_NOTATION,
     SourceType,
+    get_rating_adjective,
+    get_rating_color_hex,
+    get_rating_notation,
+    is_valid_rating,
 )
 
 
@@ -59,7 +56,7 @@ class TestRatingAdjectives:
 
     def test_get_rating_adjective_valid(self):
         """get_rating_adjective returns correct values for valid ratings."""
-        assert get_rating_adjective(5) == 'Highlight'
+        assert get_rating_adjective(5) == 'Brilliant'
         assert get_rating_adjective(1) == 'Mental Lapse'
 
     def test_get_rating_adjective_invalid(self):
