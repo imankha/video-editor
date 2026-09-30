@@ -1,10 +1,10 @@
 # T10340: `reset_user_id()` doesn't actually clear a leaked user-context contextvar
 
-**Status:** TODO
+**Status:** IN PROGRESS
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-17
-**Updated:** 2026-09-17
+**Updated:** 2026-09-29
 
 ## Problem
 
@@ -60,16 +60,26 @@ This mirrors the pattern already used by `_current_impersonator_id` (`default=No
 ## Implementation
 
 ### Steps
-1. [ ] Add `_UNSET` sentinel, give `_current_user_id` a `default=_UNSET`
-2. [ ] Rewrite `get_current_user_id()` to check for `_UNSET` instead of catching `LookupError`
-3. [ ] Rewrite `reset_user_id()` to a direct `.set(_UNSET)`
+1. [x] Add `_UNSET` sentinel, give `_current_user_id` a `default=_UNSET`
+2. [x] Rewrite `get_current_user_id()` to check for `_UNSET` instead of catching `LookupError`
+3. [x] Rewrite `reset_user_id()` to a direct `.set(_UNSET)`
 4. [ ] Run the full backend suite (not just T10270's tests) to confirm nothing relied on the leak
 
 ### Progress Log
 
 **2026-09-17**: Filed from T10270's Branch CI investigation. Not fixed yet — T10270 worked around it locally instead of touching this shared file mid-task.
 
+**2026-09-29**: Implemented the sentinel reset and added focused regression coverage for direct clearing, nested token restoration, repeated resets, and task/thread isolation. Verification and PR evidence follow.
+
+### Evidence
+
+- Focused user-context pytest: blocked during shared `conftest.py` setup because this local Python 3.14 environment imports `app` without exposing `app.services`; direct behavioral checks and `compileall` pass.
+- T10270 relevant tests: blocked at collection because `cv2` is unavailable locally.
+- `test_shared_game_extension.py`: blocked at collection because `cv2` is unavailable locally.
+- Full backend suite: attempted via `run_tests.py`; local dependency/environment setup did not produce a usable verification result.
+- PR: pending
+
 ## Acceptance Criteria
 
-- [ ] `reset_user_id()` reliably returns `get_current_user_id()` to a raising "unset" state regardless of what was set before it, in the same process
+- [x] `reset_user_id()` reliably returns `get_current_user_id()` to a raising "unset" state regardless of what was set before it, in the same process
 - [ ] Full backend suite still green
