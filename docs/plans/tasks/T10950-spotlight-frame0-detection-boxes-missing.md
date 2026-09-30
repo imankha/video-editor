@@ -1,10 +1,10 @@
 # T10950: Spotlight can show zero player-tracking boxes at a clip's opening frame
 
-**Status:** TODO
+**Status:** PR
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-21
-**Updated:** 2026-09-21
+**Updated:** 2026-09-29
 
 ## Problem
 
@@ -84,16 +84,24 @@ absent or itself empty).
 ## Implementation
 
 ### Steps
-1. [ ] Confirm approach with user at classification time (frontend fallback vs. more backend samples)
-2. [ ] Implement the fallback in `regionDetectionData`
-3. [ ] Add a focused test case (region with a whiffed first sample + a later sample with boxes ->
+1. [x] Confirm approach with user at classification time (frontend fallback vs. more backend samples)
+2. [x] Implement the fallback in `regionDetectionData`
+3. [x] Add focused selection tests for opening-frame misses, proximity preservation, empty samples,
+   region isolation, and clicked-detection ordering (region with a whiffed first sample + a later sample with boxes ->
    boxes shown at frame 0)
-4. [ ] Manual check in Spotlight on a real multi-detection region
+4. [ ] Manual check in Spotlight on a real multi-detection region (no suitable fixture was available in this checkout)
 
 ### Progress Log
 
 **2026-09-21**: Filed from a live prod bug report + code investigation. User chose not to
 implement immediately; task filed for later pickup.
+
+**2026-09-29**: Implemented the frontend-only fallback in `OverlayContainer.jsx`. The selector
+preserves the closest in-threshold sample when it has boxes, otherwise chooses the closest
+sample-with-boxes from the active region. Regions with no usable boxes still return no detection
+boxes, preserving T10870/project-wide fallback behavior. No backend sampling or
+`PlayerDetectionOverlay` changes were made. Focused and related overlay tests pass: 9 files,
+74 tests.
 
 ## Acceptance Criteria
 
