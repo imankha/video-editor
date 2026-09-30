@@ -11,19 +11,28 @@ export default function useZoom() {
   const MAX_ZOOM = 4; // 400%
   const ZOOM_STEP = 0.25; // 25% increment
 
+  const applyZoom = useCallback((nextZoom) => {
+    const clampedZoom = Math.max(MIN_ZOOM, Math.min(nextZoom, MAX_ZOOM));
+
+    setZoom(clampedZoom);
+    if (clampedZoom === MIN_ZOOM) {
+      setPanOffset((prev) => (prev.x === 0 && prev.y === 0 ? prev : { x: 0, y: 0 }));
+    }
+  }, []);
+
   /**
    * Zoom in by one step
    */
   const zoomIn = useCallback(() => {
-    setZoom(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM));
-  }, []);
+    applyZoom(zoom + ZOOM_STEP);
+  }, [applyZoom, zoom]);
 
   /**
    * Zoom out by one step
    */
   const zoomOut = useCallback(() => {
-    setZoom(prev => Math.max(prev - ZOOM_STEP, MIN_ZOOM));
-  }, []);
+    applyZoom(zoom - ZOOM_STEP);
+  }, [applyZoom, zoom]);
 
   /**
    * Reset zoom to 100% and center pan. Idempotent -- a caller that resets
@@ -40,8 +49,8 @@ export default function useZoom() {
    * Set zoom to specific level
    */
   const setZoomLevel = useCallback((level) => {
-    setZoom(Math.max(MIN_ZOOM, Math.min(level, MAX_ZOOM)));
-  }, []);
+    applyZoom(level);
+  }, [applyZoom]);
 
   /**
    * Zoom by mouse wheel (center-based, no focal point)
@@ -49,13 +58,10 @@ export default function useZoom() {
   const zoomByWheel = useCallback((delta) => {
     const zoomFactor = delta > 0 ? 1.1 : 0.9;
 
-    setZoom(prev => {
-      const newZoom = Math.max(MIN_ZOOM, Math.min(prev * zoomFactor, MAX_ZOOM));
-      return newZoom;
-    });
+    applyZoom(zoom * zoomFactor);
 
     // Always zoom to center - don't adjust pan offset
-  }, []);
+  }, [applyZoom, zoom]);
 
   /**
    * Update pan offset
