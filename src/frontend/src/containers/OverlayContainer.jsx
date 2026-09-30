@@ -5,6 +5,37 @@ import { EDITOR_MODES } from '../stores';
 import { useQuestStore } from '../stores/questStore';
 import { countDetectionAssignments, detectionAssignmentStates } from '../modes/overlay/utils/detectionAssignment';
 
+export const selectRegionDetection = (detections, currentFrame, fps) => {
+  let closestDetection = null;
+  let closestFrameDistance = Infinity;
+  let closestWithBoxes = null;
+  let closestWithBoxesDistance = Infinity;
+
+  for (const detection of detections) {
+    const detectionFrame = detection.frame !== undefined
+      ? detection.frame
+      : Math.round(detection.timestamp * fps);
+    const frameDistance = Math.abs(detectionFrame - currentFrame);
+
+    if (frameDistance < closestFrameDistance) {
+      closestFrameDistance = frameDistance;
+      closestDetection = detection;
+    }
+    if (detection.boxes?.length > 0 && frameDistance < closestWithBoxesDistance) {
+      closestWithBoxesDistance = frameDistance;
+      closestWithBoxes = detection;
+    }
+  }
+
+  const threshold = 2;
+  const normalMatchIsUsable = closestDetection &&
+    closestFrameDistance <= threshold && closestDetection.boxes?.length > 0;
+  return {
+    detection: normalMatchIsUsable ? closestDetection : closestWithBoxes,
+    frameDistance: normalMatchIsUsable ? closestFrameDistance : closestWithBoxesDistance,
+  };
+};
+
 /**
  * OverlayContainer - Encapsulates all Overlay mode logic and UI
  *
@@ -321,31 +352,10 @@ export function OverlayContainer({
     // Calculate current frame from currentTime (integer comparison is more reliable)
     const currentFrame = Math.round(currentTime * fps);
 
-    // Find the closest detection by frame number (integer comparison)
-    let closestDetection = null;
-    let closestFrameDistance = Infinity;
+    const { detection: selectedDetection, frameDistance: selectedFrameDistance } =
+      selectRegionDetection(currentRegion.detections, currentFrame, fps);
 
-    for (const detection of currentRegion.detections) {
-      // Use frame number if available, otherwise calculate from timestamp
-      const detectionFrame = detection.frame !== undefined
-        ? detection.frame
-        : Math.round(detection.timestamp * fps);
-
-      const frameDistance = Math.abs(detectionFrame - currentFrame);
-      if (frameDistance < closestFrameDistance) {
-        closestFrameDistance = frameDistance;
-        closestDetection = detection;
-      }
-    }
-
-    // FRAME-BASED THRESHOLD: ±2 frame tolerance
-    // This accounts for browser seek imprecision (typically 50-100ms):
-    // - At 30fps: ±2 frames = ±83ms tolerance
-    // - At 60fps: ±2 frames = ±42ms tolerance
-    // This guarantees boxes show when within 2 frames of a detection,
-    // which is visually indistinguishable and handles seek imprecision.
-    const DETECTION_FRAME_THRESHOLD = 2; // ±2 frame tolerance (~83ms at 30fps)
-    if (!closestDetection || closestFrameDistance > DETECTION_FRAME_THRESHOLD) {
+    if (!selectedDetection) {
       return {
         detections: [],
         videoWidth: currentRegion.videoWidth || 0,
@@ -355,24 +365,24 @@ export function OverlayContainer({
     }
 
     // Diagnostic: log detection match details for debugging box alignment
-    const detectionFrame = closestDetection.frame !== undefined
-      ? closestDetection.frame
-      : Math.round(closestDetection.timestamp * fps);
+    const detectionFrame = selectedDetection.frame !== undefined
+      ? selectedDetection.frame
+      : Math.round(selectedDetection.timestamp * fps);
     console.debug('[Detection Match]', {
       currentTime: currentTime.toFixed(3),
       currentFrame,
       detectionFrame,
-      frameDelta: closestFrameDistance,
-      detectionTimestamp: closestDetection.timestamp?.toFixed(3),
+      frameDelta: selectedFrameDistance,
+      detectionTimestamp: selectedDetection.timestamp?.toFixed(3),
       regionVideoSize: `${currentRegion.videoWidth}x${currentRegion.videoHeight}`,
       fps,
-      boxCount: closestDetection.boxes?.length || 0,
+      boxCount: selectedDetection.boxes?.length || 0,
       regionId: currentRegion.id,
       regionLabel: currentRegion.label,
     });
 
     return {
-      detections: closestDetection.boxes || [],
+      detections: selectedDetection.boxes || [],
       videoWidth: currentRegion.videoWidth || 0,
       videoHeight: currentRegion.videoHeight || 0,
       hasDetections: true
