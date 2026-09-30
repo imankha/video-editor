@@ -1,6 +1,6 @@
 # T10950: Spotlight can show zero player-tracking boxes at a clip's opening frame
 
-**Status:** PR
+**Status:** STAGING (merged to master in PR #543, `644ea6c1`, 2026-09-30)
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-21

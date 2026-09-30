@@ -1,6 +1,6 @@
 # T10340: `reset_user_id()` doesn't actually clear a leaked user-context contextvar
 
-**Status:** IN PROGRESS
+**Status:** STAGING (merged to master in PR #544, `3026e903`, 2026-09-30)
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-17

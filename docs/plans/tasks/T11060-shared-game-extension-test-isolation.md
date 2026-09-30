@@ -1,6 +1,6 @@
 # T11060: test_shared_game_extension.py depends on leaked user context
 
-**Status:** IN PROGRESS
+**Status:** STAGING (merged to master in PR #545, `65fd2d67`, 2026-09-30)
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-09-24
