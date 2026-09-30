@@ -36,6 +36,27 @@ from app.services.auth_db import (
 from app.services.materialization import _collect_video_hashes, _copy_game, _create_storage_refs
 from app.services.storage_credits import calculate_extension_cost, storage_expires_at
 
+
+@pytest.fixture(autouse=True, scope="module")
+def _shared_game_test_context():
+    """Provide the request context needed by per-user database helpers.
+
+    ``insert_game_storage_ref`` ultimately calls ``ensure_database`` through
+    ``get_db_connection``.  Keep this context explicit so this module does not
+    depend on a previous test module leaving a user selected in its
+    ``ContextVar``.  Token reset restores both values even if a test fails.
+    """
+    from app.profile_context import reset_profile_id_token, set_current_profile_id
+    from app.user_context import reset_user_id_token, set_current_user_id
+
+    user_token = set_current_user_id("recipient-user")
+    profile_token = set_current_profile_id("recipient-profile")
+    try:
+        yield
+    finally:
+        reset_profile_id_token(profile_token)
+        reset_user_id_token(user_token)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -508,25 +529,18 @@ class TestStorageStatusDerivation:
         # insert_game_storage_ref -> get_db_connection reads the CURRENT user
         # context (not the passed user_id) to locate the per-profile SQLite, so
         # a bare pytest run of this class hit "RuntimeError: No user context
-        # set". The derivation assertions read from Postgres, so the SQLite
-        # write is incidental but must not crash — set a context and isolate it
-        # in tmp_path, mirroring the other pg-backed classes (T5050).
-        from app.profile_context import reset_profile_id_token, set_current_profile_id
-        from app.user_context import reset_user_id, set_current_user_id
+        # set". The module fixture supplies that context. The derivation
+        # assertions read from Postgres, so the SQLite write is incidental but
+        # must not crash — isolate it in tmp_path, mirroring the other pg-backed
+        # classes (T5050).
 
         create_user("sharer-user", email="sharer@test.com")
         create_user("recipient-user", email="recipient@test.com")
 
-        set_current_user_id("recipient-user")
-        prof_token = set_current_profile_id("recipient-profile")
         with patch("app.database.USER_DATA_BASE", tmp_path), \
              patch("app.database._initialized_users", {"sharer-user", "recipient-user"}), \
              patch("app.database.R2_ENABLED", False):
             yield
-        # Restore the pre-class context (session default profile / no user) so a
-        # leaked context can't pollute later tests under full-suite ordering.
-        reset_user_id()
-        reset_profile_id_token(prof_token)
 
     @staticmethod
     def _derive_status(expires_at_val, auto_export_status=None, has_hash=True):
