@@ -95,21 +95,6 @@ describe('AnnotateFullscreenOverlay — Esc layering (T8600)', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  // T10590 (Reviewer BLOCKING): the rating picker's OWN Escape handler is on
-  // `document` (RatingBadge has no `window`-level access), so without
-  // stopPropagation the SAME keypress also reached this file's window-level
-  // handler and discarded the whole editor. Dispatching from `document` (not
-  // `window`, which every other test here uses and which SKIPS
-  // document-level listeners entirely in jsdom) is required to reproduce it.
-  it('Esc closes the rating picker only -- it does not also discard the editor', () => {
-    const onClose = vi.fn();
-    render(<AnnotateFullscreenOverlay {...baseProps({ onClose })} layout="strip" />);
-    fireEvent.click(screen.getByTestId('rating-pill'));
-    expect(screen.getByRole('radiogroup', { name: "Rate your athlete's play" })).toBeTruthy();
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByRole('radiogroup', { name: "Rate your athlete's play" })).toBeNull();
-    expect(onClose).not.toHaveBeenCalled();
-  });
 });
 
 describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unchanged)', () => {
@@ -119,11 +104,7 @@ describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unc
     fireEvent.click(screen.getByTitle('Rename play'));
     const nameInput = screen.getByLabelText('Play name');
     fireEvent.keyDown(nameInput, { key: '1' });
-    // T11150: rating now lives in the RatingPill's popup picker — open it and
-    // confirm the default (4 stars · Good) is still checked, unaffected by
-    // the keypress typed into the name field.
-    fireEvent.click(screen.getByTestId('rating-pill'));
-    expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByTestId('rating-pill').dataset.rating).toBe('4');
   });
 
   it('Enter with nothing focused does nothing (no crash, no write, no close)', () => {
@@ -153,7 +134,6 @@ describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unc
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip).toHaveBeenCalledWith('c1', { rating: 5 });
     // Visual state also reflects it.
-    fireEvent.click(screen.getByTestId('rating-pill'));
-    expect(screen.getByRole('radio', { name: '5 stars - Brilliant' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByTestId('rating-pill').dataset.rating).toBe('5');
   });
 });

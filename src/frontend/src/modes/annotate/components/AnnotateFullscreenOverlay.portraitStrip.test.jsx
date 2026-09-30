@@ -9,7 +9,8 @@ import { useProjectsStore } from '../../../stores/projectsStore';
 //   - no fixed / max-h-[85vh] wrapper in the strip's own render path
 //   - strip row 2: Done + disclosure NEVER shrink (flex-none); the name input
 //     absorbs the squeeze (flex-1 min-w-0) — the artifact's clipped-button bug
-//   - category, teammates and Delete play are reachable behind the disclosure
+//   - category and teammates are reachable behind the disclosure
+//   - Delete play and Done remain obvious on the main strip
 //   - no Save/Update button anywhere (T10610 contract still holds)
 
 function mockViewport(matches) {
@@ -105,7 +106,7 @@ describe('AnnotateFullscreenOverlay portrait-strip — row 2 shrink priority', (
 });
 
 describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind the disclosure', () => {
-  it('opens a full-screen popup carrying category, tags, notes, and Delete play', () => {
+  it('opens a full-screen popup carrying category, tags, and notes while Delete stays visible on the strip', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={editClip} />);
     fireEvent.click(screen.getByTestId('add-details-button'));
     const dialog = screen.getByRole('dialog', { name: 'Details' });
@@ -115,8 +116,8 @@ describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind 
     expect(within(dialog).getByRole('radio', { name: 'Team' })).toBeTruthy();
     // Tags + Notes (shared DetailsFields)
     expect(within(dialog).getByPlaceholderText('Add a note about this play...')).toBeTruthy();
-    // Delete play
-    expect(within(dialog).getByRole('button', { name: /delete play/i })).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: /delete play/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /delete play/i })).toBeTruthy();
   });
 
   it('reveals Teammates in the popup only on the Team layer', () => {
@@ -138,14 +139,12 @@ describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind 
     expect(within(dialog).queryByText('Teammates')).toBeNull();
   });
 
-  it('Delete play in the popup fires onDeleteClip with the clip id (after confirm)', () => {
+  it('the always-visible Delete play fires onDeleteClip with the clip id (after confirm)', () => {
     const onDeleteClip = vi.fn();
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={editClip} onDeleteClip={onDeleteClip} />);
-    fireEvent.click(screen.getByTestId('add-details-button'));
-    const dialog = screen.getByRole('dialog', { name: 'Details' });
     // DeletePlayButton is a two-step confirm (shared control, T10610 § D.1).
-    fireEvent.click(within(dialog).getByRole('button', { name: /delete play/i }));
-    fireEvent.click(within(dialog).getByRole('button', { name: /confirm delete/i }));
+    fireEvent.click(screen.getByRole('button', { name: /delete play/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm delete/i }));
     expect(onDeleteClip).toHaveBeenCalledWith('c1');
   });
 

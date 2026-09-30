@@ -4,18 +4,18 @@ import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
-import { useCurrentProfile, useProfileStore, useProjectsList } from '../../../stores';
+import { useCurrentProfile, useProfileStore } from '../../../stores';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
 import { DetailsFields } from './DetailsFields';
+import { StarRating } from '../../../components/shared/StarRating';
 import { RatingPill } from './RatingPill';
 import { HighlightChoiceCard } from './HighlightChoiceCard';
 import { DeletePlayButton } from './DeletePlayButton';
 import { onTextFieldKeyDown } from '../textFieldCommit';
 import { ANNOTATE } from '../../../config/displayNames';
-import { getClipStage, HIGHLIGHT_STATUS } from '../clipStage';
 
 // Persists across mounts within the same page session
 let savedDockPosition = 'left';
@@ -68,18 +68,21 @@ function CutFromAngleChip({ name }) {
 }
 
 /**
- * Stage-specific highlight status. The copy comes from the same stage model as
- * the main CTA, so the editor cannot claim a highlight is complete while the
- * next action still points to Framing or Overlay.
+ * HighlightMadeChip (T11150) — shown once a play has produced a clip
+ * (`existingClip.autoProjectId` truthy), replacing the old T10410 progress
+ * badges' clip indicator. Gold (T11110 RATING_BADGE_COLORS[5] tint), no
+ * spinner and no nudge — the create-project flow itself is untouched by this
+ * task, this chip only reflects the resulting state.
  */
-function HighlightMadeChip({ status }) {
+function HighlightMadeChip({ show }) {
+  if (!show) return null;
   return (
     <span
       data-testid="highlight-made-chip"
       className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-[#F5B700]/50 bg-[#F5B700]/15 text-[#F5B700] text-xs font-medium"
     >
       <Clapperboard size={12} />
-      {status}
+      {ANNOTATE.HIGHLIGHT_MADE}
     </span>
   );
 }
@@ -87,6 +90,8 @@ function HighlightMadeChip({ status }) {
 // T9630: labels/colors for the Saving/Saved/error status, derived from real
 // per-gesture write state (see `displayStatus` below), never asserted.
 const SAVE_STATUS_COPY = {
+  saving: { text: 'Saving...', className: 'text-gray-400' },
+  saved: { text: 'Saved', className: 'text-green-400' },
   error: { text: "Couldn't save — try again", className: 'text-red-400' },
 };
 
@@ -123,7 +128,6 @@ export function AnnotateFullscreenOverlay({
   isFullscreen = false,
   layout = 'overlay',
   teammateSuggestions = [],
-  framingInProgress = false,
   onScrubDragChange,
   // T10610 § D.2/D.3: deletes the play the editor is open on (confirm, then
   // closes + deselects — see AnnotateContainer.handleDeletePlayFromEditor).
@@ -161,7 +165,6 @@ export function AnnotateFullscreenOverlay({
   // made highlight in Framing/Spotlight now. The editor only reflects state
   // (HighlightMadeChip), it no longer navigates.
   const currentProfile = useCurrentProfile();
-  const projectsList = useProjectsList();
   const updateProfile = useProfileStore(state => state.updateProfile);
   const sport = currentProfile?.sport || NO_SPORT;
   const tagSet = getTagSet(sport);
@@ -394,23 +397,12 @@ export function AnnotateFullscreenOverlay({
     ? writeStatus
     : null;
 
-  // T8600: shared disclosure label.
-  const hasTagsOrNotes = selectedTags.length > 0 || notes.trim().length > 0;
-  const detailsLabel = hasTagsOrNotes
-    ? ANNOTATE.VIEW_TAGS_AND_NOTES
-    : ANNOTATE.ADD_TAGS_AND_NOTES;
+  // Keep the disclosure action explicit: empty metadata invites entry, while
+  // existing metadata is presented as something the user can review.
+  const hasTagsOrNotes = (selectedTags?.length ?? 0) > 0 || Boolean(notes?.trim());
+  const detailsLabel = hasTagsOrNotes ? 'View Tags and Notes' : 'Add Tags and Notes';
 
-  // T11150: RatingPill is keyed on clip identity (below, at each render site)
-  // so its open popup resets on a REAL clip switch, but — like the
-  // existingClip object itself — stays mounted (and open) across the
-  // same-play identity churn a surgical update causes (updateClipRegion
-  // spreads the region on every write), matching the reset effect's own
-  // samePlay rule above.
-  const linkedProject = existingClip.autoProjectId
-    ? projectsList.find((project) => project.id === existingClip.autoProjectId)
-    : null;
-  const highlightStatus = getClipStage(existingClip, linkedProject, { framingInProgress }).status;
-  const showHighlightStatus = highlightStatus !== HIGHLIGHT_STATUS.NOT_STARTED || Number(rating) === 5;
+  const highlightMade = !!existingClip.autoProjectId;
 
   const formBody = (
     <>
@@ -458,7 +450,7 @@ export function AnnotateFullscreenOverlay({
             with the highlight-made chip alongside once a clip exists. */}
         <div className="mb-4">
           <label className="block text-gray-400 text-sm mb-2">{ANNOTATE.PLAY_NAME}</label>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
             <input
               ref={nameInputRef}
               type="text"
@@ -469,9 +461,16 @@ export function AnnotateFullscreenOverlay({
               placeholder="Enter play name..."
               className="flex-1 min-w-0 px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
             />
-            <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
-            {showHighlightStatus && <HighlightMadeChip status={highlightStatus} />}
+            <div className="justify-self-end flex items-center gap-2">
+              <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
+              <HighlightMadeChip show={highlightMade} />
+            </div>
           </div>
+        </div>
+
+        <div data-testid="rating-input" className="mb-4 flex items-center justify-start gap-2" aria-label="Rating">
+          <span className="text-sm text-gray-400">Rating</span>
+          <StarRating rating={rating} onRatingChange={handleRatingChange} />
         </div>
 
         {/* T10310 (2026-09-18 user request): the "Create clip" affordance moved
@@ -548,13 +547,12 @@ export function AnnotateFullscreenOverlay({
       {displayStatus && (
         <div className="mb-1.5"><SaveStatusBadge status={displayStatus} /></div>
       )}
-      <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
-      <button
-        onClick={closeWithCommit}
-        className="w-full mt-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
-      >
-        {ANNOTATE.DONE}
-      </button>
+      <div className="grid grid-cols-2 gap-2">
+        <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
+        <button onClick={closeWithCommit} className="min-h-[44px] px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors">
+          {ANNOTATE.DONE}
+        </button>
+      </div>
     </div>
   );
 
@@ -605,9 +603,8 @@ export function AnnotateFullscreenOverlay({
             />
           </div>
 
-          {/* Name + rating tier — T11150: the second tier, right after time.
-              Inline-pencil rename (unchanged affordance) plus the RatingPill
-              and (once a clip exists) the highlight-made chip. */}
+          {/* Name + rating summary — the second tier, right after time.
+              The pill remains a shortcut; the prominent star input follows. */}
           <div className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-700">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               {isEditingName ? (
@@ -642,13 +639,19 @@ export function AnnotateFullscreenOverlay({
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
-              {showHighlightStatus && <HighlightMadeChip status={highlightStatus} />}
+              <HighlightMadeChip show={highlightMade} />
             </div>
           </div>
 
-          {/* Controls row — T11150: category/Layer moved into the Details
-              disclosure below (H16). */}
-          <div className="px-4 pb-3 pt-3 flex flex-wrap items-center gap-3">
+          {/* The prominent rating input is the primary editing affordance.
+              Keep optional details after rating in reading/tab order. */}
+          <div className="px-4 pt-3 flex flex-wrap items-center justify-start gap-3">
+            <div data-testid="rating-input" className="flex items-center gap-2" aria-label="Rating">
+              <span className="text-xs text-gray-400">Rating</span>
+              <StarRating rating={rating} onRatingChange={handleRatingChange} />
+            </div>
+          </div>
+          <div className="px-4 py-3 flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => setDetailsOpen(o => !o)}
@@ -659,6 +662,21 @@ export function AnnotateFullscreenOverlay({
             >
               {detailsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               {detailsLabel}
+            </button>
+          </div>
+
+          {/* Keep primary actions ahead of expandable content. On tablet-height
+              viewports this prevents the details region from pushing them out
+              of a clipped under-canvas editor. */}
+          <div className="mt-2 px-4 pb-3 pt-2 flex flex-wrap items-center justify-between gap-2 bg-gray-900 border-t-2 border-gray-600 rounded-b-lg">
+            <div className="min-w-[8rem] shrink-0">
+              <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
+            </div>
+            <button
+              onClick={closeWithCommit}
+              className="flex-none whitespace-nowrap px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
+            >
+              {ANNOTATE.DONE}
             </button>
           </div>
 
@@ -703,24 +721,6 @@ export function AnnotateFullscreenOverlay({
             </div>
           )}
 
-          {/* Delete play + Done — placed after the details disclosure (open or
-              closed) so toggling "Details" reveals content ABOVE these
-              buttons rather than pushing them down past already-visible
-              controls. */}
-          <div className={`px-4 pb-3 flex items-center justify-end gap-2 ${detailsOpen ? 'pt-2 border-t border-gray-700' : ''}`}>
-            {/* T10900: min-width, not a fixed w-32 -- the confirm state is TWO
-                buttons ("Confirm Delete" + "Cancel") that overflowed a 128px
-                slot and overlapped Done. */}
-            <div className="min-w-[8rem] shrink-0">
-              <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
-            </div>
-            <button
-              onClick={closeWithCommit}
-              className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
-            >
-              {ANNOTATE.DONE}
-            </button>
-          </div>
         </div>
       </>
     );
@@ -728,7 +728,7 @@ export function AnnotateFullscreenOverlay({
 
   if (layout === 'landscape-inline') {
     return (
-      <div data-add-clip-form className="border-t border-gray-700 px-3 py-2">
+      <div data-add-clip-form className="border-t border-gray-700 px-3 py-2 flex max-h-[76dvh] flex-col overflow-y-auto">
         {/* T8892: which camera this play is cut from (angle-active only). Same
             chip as the other editor surfaces so landscape phone isn't the one
             orientation left without it. */}
@@ -752,11 +752,11 @@ export function AnnotateFullscreenOverlay({
         {/* Name + rating tier (T11150: Play editor hierarchy). Landscape phone
             was never mocked (T11100 gate), so it is designed here against the
             live layout: one compact row — name absorbs the width (flex-1),
-            RatingPill + highlight chip + the Details disclosure + Delete + close
-            never shrink. Tags/notes/category live BEHIND Details (the
+            rating badge + highlight chip + Delete + close never shrink.
+            The star input and Details follow on their own rows. Tags/notes/category live BEHIND Details (the
             full-screen AddDetailsPopup), NOT inline, matching the other four
             layouts' time -> name+rating -> Details hierarchy. */}
-        <div className="flex items-center gap-2 mt-1.5">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 mt-1.5">
           <input
             ref={nameInputRef}
             type="text"
@@ -766,10 +766,16 @@ export function AnnotateFullscreenOverlay({
             onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
             aria-label={ANNOTATE.PLAY_NAME}
             placeholder="Name this play"
-            className="flex-1 min-w-0 px-3 py-1.5 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
+            className="order-2 min-w-0 px-3 py-1.5 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
-          <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
-          {showHighlightStatus && <HighlightMadeChip status={highlightStatus} />}
+          <span className="order-1"><RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} /></span>
+          <HighlightMadeChip show={highlightMade} />
+        </div>
+        <div data-testid="rating-input" className="mt-1.5 flex items-center justify-start gap-2" aria-label="Rating">
+          <span className="text-xs text-gray-400">Rating</span>
+          <StarRating rating={rating} onRatingChange={handleRatingChange} />
+        </div>
+        <div className="mt-1.5 flex justify-end">
           <button
             type="button"
             onClick={() => setDetailsOpen(o => !o)}
@@ -780,13 +786,16 @@ export function AnnotateFullscreenOverlay({
             <ChevronDown size={14} />
             {detailsLabel}
           </button>
-          <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} variant="icon" />
+        </div>
+        <div className="mt-1.5 grid grid-cols-2 gap-2 border-t border-gray-700 bg-gray-900/95 pt-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+          <div className="min-w-0">
+            <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
+          </div>
           <button
             onClick={closeWithCommit}
-            className="p-1 hover:bg-gray-700 rounded transition-colors flex-shrink-0"
-            title="Close (Esc)"
+            className="flex-none whitespace-nowrap px-4 py-2 coarse-pointer:min-h-[44px] bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
           >
-            <X size={18} className="text-gray-400" />
+            {ANNOTATE.DONE}
           </button>
         </div>
         {/* T9630: same real Unsaved/Saving/Saved/error state as the other two
@@ -841,7 +850,7 @@ export function AnnotateFullscreenOverlay({
     // both now follow the SAME hierarchy (time → name+rating → Details) after the
     // T11150 landscape redesign, and BOTH reuse the component-scope write handlers
     // (handleRatingChange, handleLayerChange, handleTeammatesChange) + shared
-    // building blocks (ClipScrubRegion compact, RatingPill's own popup, stageCta,
+    // building blocks (ClipScrubRegion compact, RatingPill, StarRating,
     // AddDetailsPopup, DeletePlayButton) — no copied write logic in any layout.
     //
     // Layout decision (360px, the narrowest supported width): category
@@ -876,7 +885,7 @@ export function AnnotateFullscreenOverlay({
         {/* Row 1b: name + rating tier (T11150) — the second tier, right after
             time; name absorbs the squeeze (flex-1 min-w-0), the pill/chip never
             shrink. */}
-        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 mt-1.5">
           <input
             ref={nameInputRef}
             type="text"
@@ -888,14 +897,21 @@ export function AnnotateFullscreenOverlay({
             placeholder="Name this play"
             className="flex-1 min-w-0 px-3 py-2 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
-          <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
-          {showHighlightStatus && <HighlightMadeChip status={highlightStatus} />}
+          <div className="justify-self-end flex items-center gap-2">
+            <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
+            <HighlightMadeChip show={highlightMade} />
+          </div>
+        </div>
+
+        <div data-testid="rating-input" className="mt-1.5 flex items-center justify-start gap-2" aria-label="Rating">
+          <span className="text-xs text-gray-400">Rating</span>
+          <StarRating rating={rating} onRatingChange={handleRatingChange} />
         </div>
 
         {/* Strip row 2: the disclosure + Done buttons NEVER shrink (flex-none,
             whitespace-nowrap). This is the artifact mockup's clipped-button
             regression — pinned by AnnotateFullscreenOverlay.portraitStrip.test. */}
-        <div className="flex items-center gap-2 mt-1.5">
+        <div className="mt-1.5 flex justify-end">
           <button
             type="button"
             onClick={() => setDetailsOpen(o => !o)}
@@ -906,6 +922,11 @@ export function AnnotateFullscreenOverlay({
             <ChevronDown size={14} />
             {detailsLabel}
           </button>
+        </div>
+        <div className="sticky bottom-0 z-10 mt-1.5 grid grid-cols-2 gap-2 border-t border-gray-700 bg-gray-900/95 pt-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+          <div className="min-w-0">
+            <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
+          </div>
           <button
             onClick={closeWithCommit}
             className="flex-none whitespace-nowrap px-4 py-2 coarse-pointer:min-h-[44px] bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
@@ -939,7 +960,6 @@ export function AnnotateFullscreenOverlay({
             taggedTeammates={taggedTeammates}
             onTeammatesChange={handleTeammatesChange}
             teammateSuggestions={teammateSuggestions}
-            onDelete={() => onDeleteClip(existingClip.id)}
           />
         )}
       </div>

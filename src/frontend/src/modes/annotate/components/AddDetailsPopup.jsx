@@ -71,14 +71,14 @@ export function AddDetailsPopup({
       className={`fixed inset-0 ${Z.MODAL} flex flex-col bg-gray-950/95`}
       role="dialog"
       aria-modal="true"
-      aria-label={ANNOTATE.DETAILS}
+      aria-label="Tags and Notes"
     >
       {/* T11150 (H19): neutral-gray accent, was yellow — the play editor's
           amber "to-do" treatment is retired everywhere. */}
       <div className="h-0.5 shrink-0 bg-gray-600" />
 
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 shrink-0">
-        <h2 className="text-base font-semibold text-white">{ANNOTATE.DETAILS}</h2>
+        <h2 className="text-base font-semibold text-white">Tags and Notes</h2>
         <button onClick={handleClose} title="Close" className="p-1.5 hover:bg-gray-800 rounded transition-colors">
           <X size={20} className="text-gray-400" />
         </button>

@@ -1,7 +1,14 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { Star, X } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
-import { RATING_ADJECTIVES, RATING_NOTATION, getRatingLabel } from '../../../components/shared/clipConstants';
+import {
+  RATING_ADJECTIVES,
+  RATING_BACKGROUND_COLORS,
+  RATING_BADGE_COLORS,
+  UNRATED_BACKGROUND_COLOR,
+  UNRATED_BADGE_COLOR,
+  getRatingLabel,
+} from '../../../components/shared/clipConstants';
 import { RatingMeaningsList } from './RatingMeaningsList';
 
 /**
@@ -9,14 +16,15 @@ import { RatingMeaningsList } from './RatingMeaningsList';
  * T10410 RatingBadge (chess-notation disc + "Required"/amber-dashed to-do
  * treatment). A normal labeled pill: neutral slate when unrated (no amber, no
  * dashed border, no "Required" copy — rating is optional, not a checklist
- * item), chess notation with the rating's adjective once set, and a gold pill
+ * item), amber-starred with the rating's adjective once set, and a gold pill
  * (T11110's RATING_BADGE_COLORS[5]) at a 5-star rating specifically — reusing
  * the shipped gold, not inventing a new color.
  *
  * The popup is the shared RatingMeaningsList (T11120): five rows, best-first
  * (5 -> 1), each an amber star strip + RATING_ADJECTIVES + a one-line meaning —
- * the SAME list the "Rate this play" gate modal renders. Mobile renders a
- * bottom sheet (explicit X, no
+ * the SAME list the "Rate this play" gate modal renders (owner ruling: one
+ * component). NO chess RATING_NOTATION anywhere (dropped per the H12A=A2
+ * ruling). Mobile renders a bottom sheet (explicit X, no
  * backdrop-close — the standing project rule); desktop an anchored dropdown.
  * The Escape handler lives on `document` with `stopPropagation()` so it
  * doesn't also trip the editor's own window-level Escape handler on the same
@@ -52,13 +60,8 @@ export function RatingPill({ rating, onRatingChange, myAthlete, isMobile }) {
   const pickerTitle = myAthlete ? ANNOTATE.RATE_ATHLETES_PLAY : ANNOTATE.RATE_TEAMS_PLAY;
   const rated = rating != null;
   const pillTitle = rated ? getRatingLabel(rating) : ANNOTATE.RATE_PLAY;
-  const gold = rated && rating === 5;
-
-  const pillClass = gold
-    ? 'border-[#F5B700]/50 bg-[#F5B700]/15 text-[#F5B700]'
-    : rated
-      ? 'border-gray-600 bg-gray-800 text-amber-300'
-      : 'border-gray-600 bg-gray-800 text-gray-300';
+  const color = rated ? RATING_BADGE_COLORS[rating] : UNRATED_BADGE_COLOR;
+  const backgroundColor = rated ? RATING_BACKGROUND_COLORS[rating] : UNRATED_BACKGROUND_COLOR;
 
   return (
     <div ref={rootRef} className="relative">
@@ -72,9 +75,15 @@ export function RatingPill({ rating, onRatingChange, myAthlete, isMobile }) {
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-sm font-medium transition-colors coarse-pointer:min-h-[44px] ${pillClass}`}
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-sm font-medium transition-transform hover:scale-[1.03] coarse-pointer:min-h-[44px]"
+        style={{ color, backgroundColor, borderColor: `${color}80` }}
       >
-        {rated && <span aria-hidden="true" className="font-bold">{RATING_NOTATION[rating]}</span>}
+        <Star
+          size={14}
+          fill={rated ? color : 'transparent'}
+          color={color}
+          strokeWidth={1.5}
+        />
         {rated ? RATING_ADJECTIVES[rating] : ANNOTATE.RATE_PLAY}
       </button>
       {open && (

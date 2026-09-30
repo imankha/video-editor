@@ -88,14 +88,11 @@ describe('AnnotateFullscreenOverlay — no Save/Update/Cancel button anywhere (T
 
 describe('AnnotateFullscreenOverlay — per-gesture writes (T10600-design.md § 2.2)', () => {
   it('rating tap sends exactly {rating}', () => {
-    // T11150: landscape-inline now uses the RatingPill (was a bespoke
-    // StarRating row) — open the pill's picker, pick a rating. Same per-gesture
-    // write contract: exactly { rating }.
+    // The badge is read-only; the side-panel-style star row owns edits.
     mockViewport(true);
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip })} layout="landscape-inline" />);
-    fireEvent.click(screen.getByTestId('rating-pill'));
-    fireEvent.click(screen.getByRole('radio', { name: '5 stars - Brilliant' }));
+    fireEvent.click(screen.getByTitle('5 stars'));
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip).toHaveBeenCalledWith('clip-1', { rating: 5 });
   });

@@ -143,26 +143,14 @@ describe('AnnotateFullscreenOverlay — Layer control in the desktop strip (T860
   });
 });
 
-// T11150: rating lives in the RatingPill regardless of the "Details"
-// disclosure state (they are two independent controls now).
-describe('AnnotateFullscreenOverlay — rating reachable via the pill regardless of details state', () => {
-  it('formBody: the pill works both while details is closed and after opening it', () => {
-    render(<AnnotateFullscreenOverlay {...baseProps()} />);
-    fireEvent.click(screen.getByTestId('rating-pill'));
-    expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
-    fireEvent.keyDown(document, { key: 'Escape' }); // close the picker without opening details
-    openDetails(); // now open details too
-    fireEvent.click(screen.getByTestId('rating-pill'));
-    expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
-  });
-
-  it('same on the strip layout', () => {
-    render(<AnnotateFullscreenOverlay {...baseProps()} layout="strip" />);
-    fireEvent.click(screen.getByTestId('rating-pill'));
-    expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
-    fireEvent.keyDown(document, { key: 'Escape' });
-    openDetails();
-    fireEvent.click(screen.getByTestId('rating-pill'));
-    expect(screen.getByRole('radio', { name: '4 stars - Good' }).getAttribute('aria-checked')).toBe('true');
-  });
+describe('AnnotateFullscreenOverlay — rating input remains reachable regardless of details state', () => {
+  for (const layout of ['overlay', 'strip']) {
+    it(`${layout}: stars work while details is open`, () => {
+      const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
+      render(<AnnotateFullscreenOverlay {...baseProps({ onUpdateClip })} layout={layout} />);
+      openDetails();
+      fireEvent.click(screen.getByTitle('5 stars'));
+      expect(onUpdateClip).toHaveBeenCalledWith('c1', { rating: 5 });
+    });
+  }
 });
