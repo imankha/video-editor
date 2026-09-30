@@ -1,6 +1,6 @@
 # T11380: Video remains panned off-center after zooming back to 100%
 
-**Status:** TODO
+**Status:** IN PROGRESS
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-09-28
@@ -35,3 +35,16 @@ stale pan is non-zero. Annotate, Framing, and Spotlight share this hook/player b
 - [ ] Annotate, Framing, and Spotlight render the video centered at 100% after zoom interaction.
 - [ ] Live-drive the reported sequence at a desktop production-sized viewport; no asymmetric black
       bar remains.
+
+## Implementation
+
+- [x] Centralize clamped zoom transitions in `useZoom`; reaching `MIN_ZOOM` also centers pan.
+- [x] Cover button zoom-out, wheel/pinch zoom-out, and direct `setZoomLevel(1)`.
+- [x] Preserve pan while the resulting zoom remains above 100%.
+- [x] Add focused hook regression coverage for all required transitions and `isZoomed`.
+
+## Progress Log
+
+**2026-09-29:** Implemented the shared-hook invariant and added four regression tests covering
+button zoom-out, wheel zoom-out, direct reset to 100%, and pan preservation above 100%. The focused
+hook and video-player suites pass: 20/20 tests. Desktop live-drive verification remains pending.
