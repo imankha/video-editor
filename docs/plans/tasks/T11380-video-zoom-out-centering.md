@@ -1,6 +1,6 @@
 # T11380: Video remains panned off-center after zooming back to 100%
 
-**Status:** IN PROGRESS
+**Status:** STAGING (merged to master in PR #542, `55ef7b56`, 2026-09-30)
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-09-28
