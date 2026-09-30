@@ -96,7 +96,7 @@ from T10870 (that one messages around a *project-wide* zero-detection fallback; 
 
 **2026-09-20 addition, unplaced — [T10790](tasks/T10790-add-footage-attach-422-required-sequence.md):
 "Add footage to game" 422s on every real attempt (live on master since 2026-09-07, not
-dev-specific). Status: WIP (2026-09-29).** Found incidentally while doing live verification for T10770. Impact 9 / Complexity
+dev-specific). Status: STAGING (merged PR #538, `373660fb`, 2026-09-30).** Found incidentally while doing live verification for T10770. Impact 9 / Complexity
 2 — a one-line Pydantic fix (`VideoReference.sequence` required → optional) plus a boundary-level
 test. Needs a placement decision (bugs-before-features policy suggests it jumps the queue given a
 core action is fully broken); left here for triage rather than self-inserted into a milestone.

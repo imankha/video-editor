@@ -1,6 +1,6 @@
 # T10790: "Add footage" (attach to existing game) 422s on every real attempt
 
-**Status:** WIP
+**Status:** STAGING (merged to master `373660fb`, 2026-09-30)
 **Impact:** 9
 **Complexity:** 2
 **Created:** 2026-09-20
