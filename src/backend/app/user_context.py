@@ -15,10 +15,12 @@ RuntimeError. This prevents silent fallback to a phantom shared user.
 """
 
 from contextvars import ContextVar, Token
+from typing import cast
 
-# Context variable for current user ID — NO default.
-# Must be explicitly set by middleware before any route handler runs.
-_current_user_id: ContextVar[str] = ContextVar('current_user_id')
+_UNSET = object()
+_current_user_id: ContextVar[str | object] = ContextVar(
+    'current_user_id', default=_UNSET
+)
 
 # Request-id ContextVar. Set by middleware from the X-Request-ID header so
 # downstream log lines (R2_CALL, session-init restores, slow DB queries) can
@@ -99,16 +101,14 @@ def get_current_user_id() -> str:
     Raises RuntimeError if no user context has been set — this indicates
     a code path that bypassed middleware or forgot to set user context.
     """
-    try:
-        return _current_user_id.get()
-    except LookupError:
-        # `from None`: the unset ContextVar is the EXPECTED signal here, not an
-        # error in exception handling — surface the RuntimeError cleanly (B904).
+    value = _current_user_id.get()
+    if value is _UNSET:
         raise RuntimeError(
             "No user context set. All requests must go through auth middleware "
             "which sets user context from session cookie. If you're in a test, "
             "call set_current_user_id() first."
-        ) from None
+        )
+    return cast(str, value)
 
 
 def set_current_user_id(user_id: str) -> Token:
@@ -135,16 +135,4 @@ def reset_user_id_token(token: Token) -> None:
 
 def reset_user_id() -> None:
     """Clear the user context (used in test teardown)."""
-    # ContextVar doesn't have a delete/clear method, but we can use a
-    # Token to reset. The simplest approach: set a sentinel and have
-    # get_current_user_id() treat it as unset. However, since ContextVar
-    # copies per-task, the cleanest option is to just not call get after reset.
-    # For test compat, we create a new token-based reset.
-    try:
-        _token = _current_user_id.set("__reset__")
-        # Immediately revert using the token — this restores the "no value" state
-        # only if __reset__ was the most recent set. But ContextVar.reset() requires
-        # the token from the SAME set call. So we use it:
-        _current_user_id.reset(_token)
-    except ValueError:
-        pass  # Already in unset state
+    _current_user_id.set(_UNSET)
