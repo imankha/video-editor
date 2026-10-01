@@ -65,6 +65,20 @@ class TestWriterValidation:
         monkeypatch.setattr("app.services.upload_failures.get_pg", _stub_get_pg())
         record_upload_failure(kind="game", stage="preparing", reason="not_a_real_reason", terminal=True)
 
+    def test_diagnostic_error_text_is_preserved_by_payload_adapter(self):
+        """The beacon's actionable exception must reach the sole writer instead
+        of being replaced by the coarse reason label."""
+        detail = "substage=faststart_analysis type=NotReadableError message=file handle expired"
+        with patch("app.services.upload_failures.record_upload_failure") as mock_writer:
+            record_upload_failure_from_payload({
+                "kind": "clip", "stage": "hashing", "reason": "analyze_failed",
+                "terminal": True, "error_text": detail,
+            })
+        mock_writer.assert_called_once_with(
+            kind="clip", stage="hashing", reason="analyze_failed",
+            terminal=True, error_text=detail,
+        )
+
 
 class TestNeverRaisesContract:
     def test_get_pg_raising_is_swallowed(self, monkeypatch):

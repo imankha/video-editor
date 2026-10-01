@@ -135,8 +135,8 @@ function withTimeout(promise, ms, message, onTimeout) {
 
 /**
  * T7480 failure beacon. Fire-and-forget POST of a terminal upload failure so the
- * browser-side reason lands in SERVER logs — the only server-visible evidence
- * channel, because prod builds strip console.log. Writes to logs only (no DB).
+ * browser-side reason lands in the durable upload-failure record and canonical
+ * server log, because production builds strip console.log.
  *
  * Contract: MUST NEVER throw or block the failure path. Not awaited by callers;
  * uses keepalive so it survives a navigation away. Any error is swallowed.
@@ -637,7 +637,16 @@ async function _hashAndAnalyze(file, onProgress, signal) {
   // Phase 0: Analyze MP4 structure for faststart (T1380)
   notify(UPLOAD_PHASE.HASHING, 0, 'Analyzing video...');
   const __diagAnalyzeStart = performance.now();
-  const faststartInfo = await analyzeMp4Faststart(file);
+  let faststartInfo;
+  try {
+    faststartInfo = await analyzeMp4Faststart(file);
+  } catch (err) {
+    // Preserve which half of the combined hash/analyze phase failed. The
+    // outer beacon still owns transport; this annotation only prevents every
+    // client exception from collapsing into an undiagnosable analyze_failed.
+    try { err.uploadSubstage = 'faststart_analysis'; } catch { /* immutable error */ }
+    throw err;
+  }
   console.log(`[DIAG upload-freeze] analyzeMp4Faststart ${(performance.now() - __diagAnalyzeStart).toFixed(0)}ms needsRelocation=${faststartInfo.needsRelocation}`);
   // T8838: shrink-capability census. The user just started this upload (a named
   // gesture), so probe the file's real codec + WebCodecs decode/encode support and
@@ -662,9 +671,15 @@ async function _hashAndAnalyze(file, onProgress, signal) {
 
   notify(UPLOAD_PHASE.HASHING, 0, 'Computing file hash...');
   const __diagHashStart = performance.now();
-  const hash = await hashFile(file, (p) => {
-    notify(UPLOAD_PHASE.HASHING, p, `Computing hash... ${p}%`);
-  }, signal);
+  let hash;
+  try {
+    hash = await hashFile(file, (p) => {
+      notify(UPLOAD_PHASE.HASHING, p, `Computing hash... ${p}%`);
+    }, signal);
+  } catch (err) {
+    try { err.uploadSubstage = 'blake3_hash'; } catch { /* immutable error */ }
+    throw err;
+  }
   console.log(`[DIAG upload-freeze] hashFile ${(performance.now() - __diagHashStart).toFixed(0)}ms`);
   notify(UPLOAD_PHASE.HASHING, 100, 'Hash complete');
 
@@ -681,14 +696,32 @@ async function _hashAndAnalyze(file, onProgress, signal) {
  * attachVideoToExistingGame) so the beacon logic lives in exactly one place.
  */
 async function hashAndAnalyzeOrBeacon(file, onProgress, kind) {
+  const startedAt = performance.now();
   try {
     return await hashAndAnalyze(file, onProgress);
   } catch (err) {
+    const substage = err?.uploadSubstage || (err?.isUploadTimeout ? 'hash_analyze_timeout' : 'unknown');
+    // Bounded, single-line diagnostic stored in upload_failures.error_text.
+    // Do not include file contents, paths, or stack traces; filename/size are
+    // already separate bounded columns and UA/build/platform are server-added.
+    const errorType = String(err?.name || err?.constructor?.name || typeof err).replace(/\s+/g, ' ');
+    const errorMessage = String(err?.message || err || 'unknown error').replace(/\s+/g, ' ');
+    const errorDetail = [
+      `substage=${substage}`,
+      `type=${errorType}`,
+      `message=${errorMessage}`,
+      `mime=${file.type || 'unknown'}`,
+      `lastModified=${Number.isFinite(file.lastModified) ? file.lastModified : 'unknown'}`,
+    ].join(' ').slice(0, 300);
     sendUploadFailureBeacon({
       phase: 'hashing',
       reason: err?.isUploadTimeout ? 'hash_timeout' : 'analyze_failed',
+      error_detail: errorDetail,
       original_filename: file.name,
       file_size: file.size,
+      file_type: file.type || null,
+      file_last_modified: Number.isFinite(file.lastModified) ? file.lastModified : null,
+      elapsed_ms: Math.round(performance.now() - startedAt),
       kind,
       server_responded: false,
     });

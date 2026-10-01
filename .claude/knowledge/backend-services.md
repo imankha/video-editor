@@ -709,6 +709,16 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 
 ## Upload-failure observability (T10270)
 
+Diagnostic enrichment (2026-09-30): pre-prepare client failures now
+preserve a bounded exception diagnostic in `upload_failures.error_text` instead
+of storing only the coarse reason literal. `hashAndAnalyzeOrBeacon` identifies
+`faststart_analysis`, `blake3_hash`, or `hash_analyze_timeout`, and includes the
+exception type/message, MIME type, file last-modified timestamp, and elapsed
+time. Filename, size, user agent, platform, build, and commit continue to use
+their existing columns/context. Do not add file contents, local paths, or raw
+stack traces. `upload_failure_beacon` must prefer a string `error_detail` over
+the coarse reason while retaining the reason as the closed aggregation bucket.
+
 **What it is.** `upload_failures` (Postgres, v029) is a durable, per-event record of
 every upload failure — game or clip, client or server, terminal or not. It answers
 "which uploads failed since build X, for whom, at what stage, why" (`GET

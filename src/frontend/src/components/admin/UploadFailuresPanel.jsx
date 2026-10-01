@@ -1,4 +1,3 @@
-import React from 'react';
 import { RefreshCw } from 'lucide-react';
 
 // T10270: pure view -- receives rows+rates as props, does no fetching, does
@@ -77,6 +76,7 @@ export function UploadFailuresPanel({ data, loading, error, onRefresh }) {
                     <th className="text-left px-3 py-2.5">Origin</th>
                     <th className="text-left px-3 py-2.5">Terminal</th>
                     <th className="text-left px-3 py-2.5">Filename</th>
+                    <th className="text-left px-3 py-2.5">Diagnostic detail</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -90,6 +90,12 @@ export function UploadFailuresPanel({ data, loading, error, onRefresh }) {
                       <td className="px-3 py-2.5 text-gray-400 text-xs">{row.origin}</td>
                       <td className="px-3 py-2.5 text-gray-400 text-xs">{row.terminal ? 'yes' : 'no'}</td>
                       <td className="px-3 py-2.5 text-gray-400 text-xs">{row.original_filename || '--'}</td>
+                      <td
+                        className="px-3 py-2.5 text-gray-400 text-xs max-w-md break-words"
+                        title={row.error_text || ''}
+                      >
+                        {row.error_text || '--'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -9,7 +9,8 @@ const RESPONSE = {
   rows: [
     { id: 1, occurred_at: '2026-09-17T10:00:00Z', kind: 'game', stage: 'preparing',
       reason: 'refused', user_id: 'user-a', origin: 'server', terminal: true,
-      original_filename: 'clip.mp4' },
+      original_filename: 'clip.mp4',
+      error_text: 'substage=faststart_analysis type=NotReadableError message=file handle expired' },
   ],
   total: 1,
   rates: {
@@ -55,6 +56,7 @@ describe('UploadFailuresPanel (T10270) -- pure view', () => {
     expect(screen.getByText('user-a')).toBeTruthy();
     expect(screen.getByText('clip.mp4')).toBeTruthy();
     expect(screen.getByText('refused')).toBeTruthy();
+    expect(screen.getByText(/substage=faststart_analysis/)).toBeTruthy();
   });
 
   it('shows the migrated:false message instead of an empty table', () => {

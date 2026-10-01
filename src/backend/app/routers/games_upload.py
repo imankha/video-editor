@@ -838,7 +838,14 @@ async def upload_failure_beacon(request: Request):
         elapsed_ms=elapsed_ms,
         original_filename=payload.get("original_filename"),
         file_size=payload.get("file_size"),
-        error_text=reason if isinstance(reason, str) else None,
+        # Client-side failures used to persist only the coarse reason (for
+        # example the literal "analyze_failed"), discarding the exception that
+        # could distinguish a FileReader failure from MP4 parsing or hashing.
+        # The client sends a bounded, single-line diagnostic; the sole writer
+        # applies its own 300-char cap as the final trust boundary.
+        error_text=(payload.get("error_detail")
+                    if isinstance(payload.get("error_detail"), str)
+                    else (reason if isinstance(reason, str) else None)),
         user_agent=beacon_user_agent,
     )
 

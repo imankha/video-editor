@@ -87,9 +87,14 @@ describe('T10270 class 1: pre-prepare client death beacons', () => {
     expect(payloads[0]).toMatchObject({
       phase: 'hashing',
       reason: 'analyze_failed',
+      error_detail: expect.stringContaining('substage=faststart_analysis'),
       original_filename: 'test.mp4',
+      file_type: 'video/mp4',
       server_responded: false,
     });
+    expect(payloads[0].error_detail).toContain('type=Error');
+    expect(payloads[0].error_detail).toContain('message=corrupt moov atom');
+    expect(payloads[0].elapsed_ms).toEqual(expect.any(Number));
     vi.doUnmock('../utils/mp4Faststart');
   });
 
