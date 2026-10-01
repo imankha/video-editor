@@ -109,7 +109,7 @@ describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind 
   it('opens a full-screen popup carrying category, tags, and notes while Delete stays visible on the strip', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={editClip} />);
     fireEvent.click(screen.getByTestId('add-details-button'));
-    const dialog = screen.getByRole('dialog', { name: 'Details' });
+    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
     // Category (My athlete / Team)
     expect(within(dialog).getByText('Play category')).toBeTruthy();
     expect(within(dialog).getByRole('radio', { name: 'My athlete' })).toBeTruthy();
@@ -128,14 +128,14 @@ describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind 
       />
     );
     fireEvent.click(screen.getByTestId('add-details-button'));
-    const dialog = screen.getByRole('dialog', { name: 'Details' });
+    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
     expect(within(dialog).getByText('Teammates')).toBeTruthy();
   });
 
   it('a My-athlete clip hides Teammates in the popup', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={editClip} />);
     fireEvent.click(screen.getByTestId('add-details-button'));
-    const dialog = screen.getByRole('dialog', { name: 'Details' });
+    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
     expect(within(dialog).queryByText('Teammates')).toBeNull();
   });
 
@@ -152,7 +152,7 @@ describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind 
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={editClip} onUpdateClip={onUpdateClip} />);
     fireEvent.click(screen.getByTestId('add-details-button'));
-    const dialog = screen.getByRole('dialog', { name: 'Details' });
+    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
     fireEvent.click(within(dialog).getByRole('radio', { name: 'Team' }));
     expect(onUpdateClip).toHaveBeenCalledWith('c1', { my_athlete: false });
   });
