@@ -77,4 +77,4 @@ Measure first, then fix only what fails:
       recorded in the Progress Log, for prod and staging.
 - [ ] No presigned URL appears in edge-cacheable share HTML (test on the rendered HTML).
 - [ ] `og:image` is under the WhatsApp size threshold, or this was measured and found unnecessary.
-- [ ] Live-verified: a reel link pasted into WhatsApp and iMessage shows the chosen cover.
+- [ ] Live-verified: a highlight link pasted into WhatsApp and iMessage shows the chosen cover.

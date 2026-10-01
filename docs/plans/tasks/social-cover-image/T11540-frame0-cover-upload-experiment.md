@@ -27,7 +27,7 @@ some uploader, for example by being picked as the cover, or by causing the uploa
 
 **AI prepares the files. The user uploads them and records the results.**
 
-Starting from one real reel's download (`GET /api/downloads/{id}/file`, which includes the intro
+Starting from one real highlight's download (`GET /api/downloads/{id}/file`, which includes the intro
 if attached), build these variants with ffmpeg. Put each variant's first frames on a distinct,
 obviously recognisable still, such as the chosen cover with a big "A", "B" or "C" burned in:
 
@@ -62,7 +62,7 @@ For each upload, they record the **default** cover or thumbnail before touching 
 
 ### Technical Notes
 - Build variants with stream copy where possible. For V2-V4, encode the still segment to match the
-  reel's codec, fps and resolution, then concat.
+  highlight's codec, fps and resolution, then concat.
 - Keep the variant files out of the repo (scratchpad). Record only results.
 
 ## Acceptance Criteria

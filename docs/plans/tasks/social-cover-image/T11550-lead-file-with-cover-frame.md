@@ -21,7 +21,7 @@ If T11540 shows no win, mark this task OBSOLETE.
 ## Problem
 
 When a video *file* is uploaded, most platforms default the cover to the first frame. Our first
-frame is the intro card's first frame, or the reel's first frame. Neither is the cover the user
+frame is the intro card's first frame, or the highlight's first frame. Neither is the cover the user
 chose, so every upload starts with the wrong default cover.
 
 ## Solution (sketch; the Architect produces the real design)
@@ -29,7 +29,7 @@ chose, so every upload starts with the wrong default cover.
 Put the chosen cover still in front of the served file, for the minimum hold that T11540 found
 wins. Do it in the existing serve-time compose pass (`compose_serve_time` /
 `compose_serve_time_dispatched`), which already re-encodes and concatenates
-`[intro?][reel][outro]`. The result becomes `[cover still][intro?][reel][outro]`.
+`[intro?][highlight][outro]`. The result becomes `[cover still][intro?][highlight][outro]`.
 
 Design questions the Architect must settle:
 
@@ -37,12 +37,12 @@ Design questions the Architect must settle:
    recommendation is delivered files only, because the in-app player already shows the cover as
    its poster.
 2. **Interaction with the intro card:** put the cover first, or make the intro card's first frame
-   the cover, which avoids a flash but only helps reels that have an intro?
+   the cover, which avoids a flash but only helps highlights that have an intro?
 3. **Cache keys:** serve-time compose output is cached. The key must include `poster_frame_time`,
    or the poster's identity, so that moving the marker yields a new file.
 4. **Modal vs local ffmpeg routing:** the memory note on intro-card OOM says heavy ffmpeg work goes
    to Modal.
-5. **Opt-out:** should there be a per-reel or per-user toggle? Ask the user. The default is no
+5. **Opt-out:** should there be a per-highlight or per-user toggle? Ask the user. The default is no
    toggle unless they want one.
 
 ## Context

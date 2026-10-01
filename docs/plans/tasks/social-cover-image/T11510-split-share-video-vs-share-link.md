@@ -53,7 +53,7 @@ Desktop behaviour (ShareModal / Copy link) is unchanged.
 - `src/frontend/src/components/collections/ReelTile.jsx`: the kebab routes through
   PublishedReelsPanel.
 - `src/frontend/src/components/GlobalExportIndicator.jsx` (L209-234): the post-export toast
-  action. Decided: a direct "Share video" (see UI Decisions D5).
+  action. Decided: no share action on coarse pointers (see UI Decisions D5).
 - New: `src/frontend/src/components/shared/ActionSheet.jsx`, `src/frontend/src/components/ShareActionSheet.jsx`
   (UI Decisions D1). Touched: `src/frontend/src/components/shared/Toast.jsx` (D5),
   `LinkReadyCard.jsx` (D6), `collections/CollectionPlayer.jsx` (D2, Share tap target).
@@ -66,10 +66,11 @@ Desktop behaviour (ShareModal / Copy link) is unchanged.
 
 ### Technical Notes
 - **Visibility landmine (EPIC decision 6):** `createShareUrl` POSTs `is_public: true`, which makes
-  the reel publicly reachable.
-  - On a reel that is already Shared, "Share link" may mint or reuse the token directly.
-  - On a Private reel, "Share link" must route through T10180's visibility-review confirm.
-  - "Share video" sends a file and needs no token, so it doesn't change visibility.
+  the highlight publicly reachable. User decisions 2026-10-01:
+  - A **published** highlight mints or reuses the token directly, with no review (T10180 R5).
+  - An **unpublished** highlight gets a link only through T10180's existing "Publish and get
+    link" review, and never offers "Share video".
+  - Desktop Copy link needs no confirm step.
 - `navigator.share` with BOTH `files` and `url` behaves differently per target app (Messages sends
   both; Instagram drops the url). Don't combine them. Keep the two payloads separate.
 - AbortError (the user closed the sheet) stays silent, as today.
@@ -85,7 +86,7 @@ the same surfaces; its row/slot is reserved here so T11530 is additive.
 
 | Device | Share link | Copy link | Share video | Save cover image (T11530) |
 |---|---|---|---|---|
-| FULL (`canShare({files:[mp4]})`) | yes | yes | yes | yes, if the reel has a cover |
+| FULL (`canShare({files:[mp4]})`) | yes | yes | yes | yes, if the highlight has a cover |
 | LINK_ONLY (`navigator.share`, no file share) | yes | yes | **hidden** | only if `canShare({files:[jpeg]})` passes |
 | Coarse pointer, no `navigator.share` | **hidden** | yes | **hidden** | hidden |
 
@@ -104,7 +105,7 @@ Rule 1 it is extracted:
   **inert**, Escape closes it, and it has one explicit bottom control (Cancel / Done). Its shape
   is modelled on `RateThisPlayModal.jsx`, which already has an inert backdrop.
 - `src/frontend/src/components/ShareActionSheet.jsx`: the share rows plus the in-sheet
-  link-review and link-ready views (D3). It is the **only** mobile owner of link-review logic
+  link-making and link-ready views (D3). It is the **only** mobile owner of link-minting logic
   outside the draft result.
 - Migrating the three existing kebab sheets onto `ActionSheet` is a separate follow-up task
   (mechanical move, kept apart from this behavior change). The exception is ReelTile's mobile
@@ -151,11 +152,11 @@ resolves, or rejects with AbortError, the sheet closes silently. On any other er
 `toast.error('Share failed')` and the sheet stays open. Success never produces a toast or a
 "saved"/"shared" chip; the OS sheet is the confirmation.
 
-Mockup (My Reels, a reel that already has a public link, FULL device, 390px):
+Mockup (published highlights list, a highlight that already has a public link, FULL device, 390px):
 
 ```
 +------------------------------------------+
-|        (player / My Reels, dimmed)       |
+|     (player / highlights list, dimmed)   |
 +------------------------------------------+
 |                  ----                    |
 | Share "Rangers U12 Goal vs Sharks"       |
@@ -177,11 +178,11 @@ Mockup (My Reels, a reel that already has a public link, FULL device, 390px):
 +------------------------------------------+
 ```
 
-Rationale: one component, used by every mobile Share entry point, gives one place for the review
-gate and the capability logic. It also fits rows with explanatory hints at 360px, which no
+Rationale: one component, used by every mobile Share entry point, gives one place for link minting
+and the capability logic. It also fits rows with explanatory hints at 360px, which no
 toolbar can.
 
-### D2. My Reels player: keep ONE "Share" button, which opens `ShareActionSheet`
+### D2. Published highlight player (`PublishedReelsPanel`): keep ONE "Share" button, which opens `ShareActionSheet`
 
 - `CollectionPlayer`'s header already holds Share, Download, Re-edit, Re-rank, Play/Pause,
   Fullscreen and Close (`CollectionPlayer.jsx:513-600`). Two or three labeled share buttons
@@ -194,22 +195,17 @@ toolbar can.
 Rationale: Share stays the player's single primary verb (T8540), and the choice happens one tap
 later, where there is room to explain it.
 
-### D3. Link review inside the sheet (EPIC decision 6)
+### D3. Making the link inside the sheet (EPIC decision 6, as narrowed by the user 2026-10-01)
 
-When the reel has **no active public link**, tapping Share link or Copy link does not mint a
-link. The sheet body swaps in place to the review view:
+**User decision 2026-10-01:** T10180 R5 stands. A highlight that is already **published** gets
+its link with no review step, because publishing was the visibility decision. The review step
+exists only on the draft result's idle path ("Publish and get link"), for highlights that are
+still private, and it is unchanged. Everything the chooser opens on is published (`PublishedReelsPanel`
+lists published highlights only), so **the chooser has no review view.**
 
-```
-| Make a public link for                   |
-| "Rangers U12 Goal vs Sharks"?            |
-| Anyone with the link can watch. Making a |
-| link does not send it.                   |
-| +-----------------+ +------------------+ |
-| |      Back       | |    Make link     | |   Back = secondary (returns to the list)
-| +-----------------+ +------------------+ |   Make link = cyan (the only write gesture)
-```
-
-On confirm, the view shows `Loader` and "Making link...", then the **link-ready view**:
+When the highlight has **no active public link yet**, tapping Share link or Copy link mints the
+link directly (`createShareLink`). The view shows `Loader` and "Making link...", then the
+**link-ready view**:
 
 ```
 | Link ready                               |
@@ -227,20 +223,21 @@ On confirm, the view shows `Loader` and "Making link...", then the **link-ready 
 - Share link is a **second tap** on purpose. After awaiting the mint POST, iOS Safari can drop
   the transient user activation `navigator.share` needs. A fresh tap guarantees it, and the
   draft result's T10180 link-ready phase works the same way.
-- The bottom control reads "Cancel" in the list and review views, and "Done" in the ready view.
-- When the reel **already has** an active public link, Share link calls `shareLink` directly and
-  Copy link copies directly. There is no review and no ready view.
+- Copy link, when it had to mint, copies as soon as the mint resolves (clipboard writes don't
+  need the share sheet's user activation) and shows the ready view with the link.
+- The bottom control reads "Cancel" in the list view, and "Done" in the ready view.
+- When the highlight **already has** an active public link, Share link calls `shareLink` directly
+  and Copy link copies directly. There is no ready view.
 - **Data dependency:** the sheet needs to know whether a public link exists. Add a read-only
-  boolean (e.g. `has_public_link`) to the existing My Reels member read and to the draft
-  payload. Fold it into the current query, the way T10860 folded `stale_share` into
-  `GET /api/projects`: no new fetch and no effect. Until the field is true, every link action
-  reviews. Never infer "already shared" in the other direction. This adds a backend layer to
-  this task, which is still tier M.
+  boolean (e.g. `has_public_link`) to the existing published-highlights member read. Fold it into the current
+  query, the way T10860 folded `stale_share` into `GET /api/projects`: no new fetch and no effect.
+  Until the field is true, link actions take the mint-then-ready path. This adds a backend layer
+  to this task, which is still tier M.
 
-Rationale: the review sits exactly where the public link is made, reuses T10180's
-review-then-ready shape, and costs a tap only the first time a reel gets a link.
+Rationale: the extra tap happens only the first time a highlight gets a link, and only because
+iOS needs a fresh tap to open the share sheet.
 
-### D4. My Reels tile: card face and kebab
+### D4. Published highlight tile (`ReelTile`): card face and kebab
 
 - **Card-face "Share"** (`ReelTile.jsx:359`, T8540): unchanged visually. On coarse pointers,
   `onWebShare` opens `ShareActionSheet` instead of sending the file.
@@ -263,45 +260,30 @@ Kebab sheet (390px)            ->   ShareActionSheet (D1)
 | [        Cancel         ] |
 ```
 
-Rationale: a single owner for share and review logic, a shorter kebab, and no sheet stacked on
+Rationale: a single owner for share and link logic, a shorter kebab, and no sheet stacked on
 another sheet. The card-face Share is still one tap from the chooser.
 
-### D5. Post-export toast: a direct "Share video", no chooser
+### D5. Post-export toast: no share action on coarse pointers
 
 `GlobalExportIndicator.jsx:228-254`:
 
-- When the export completes, the reel is a **private draft**. Share link would need the
-  visibility review, and an 8-second toast is the wrong place for a confirm step. Share video
-  sends only a file and changes no visibility, so it is safe from a toast.
-- **FULL:** the action label is "Share video" (`SHARE_ACTIONS.SHARE_VIDEO`) with the `Share2`
-  icon. It calls `shareVideoFile`. On success it shows the T11530 hint (see T11530 UI Decisions).
-- **LINK_ONLY / no `navigator.share`:** the toast has **no action**. It never mints a link and
-  never sends a link. Link sharing for that reel happens on the draft result surface, which
-  owns the review.
-- **Fine pointer:** unchanged. (Flag: desktop "Copy Link" here silently mints a public link on a
-  private draft, which also violates EPIC decision 6. Filed as a follow-up, outside this task's
-  desktop scope.)
-- **Toast component fixes** these decisions need (`components/shared/Toast.jsx`):
-  1. `action.icon` option. The action currently always shows `ExternalLink`, which is wrong for
-     a share. The default stays `ExternalLink` for existing callers.
+- When the export completes, the highlight is an **unpublished draft**. **User decision
+  2026-10-01:** an unpublished highlight cannot be shared as a video file, and a link needs the
+  publish review, which doesn't belong in an 8-second toast.
+- **Coarse pointer (any capability):** remove today's Share action (it sends the file). The toast
+  carries no share action. Sharing happens from the draft result surface after publishing.
+- **Fine pointer:** unchanged. **User decision 2026-10-01:** desktop Copy link needs no confirm
+  step, so there is no follow-up task.
+- **Toast component fixes**, still needed by T11530's tip (`components/shared/Toast.jsx`):
+  1. `action.icon` option. The action currently always shows `ExternalLink`. The default stays
+     `ExternalLink` for existing callers.
   2. Add `coarse-pointer:min-h-11` to the action button. It is a bare text link today, below
      44px.
   3. The container (`fixed bottom-4 right-4 max-w-sm w-full`) overflows the left edge by 16px
      at 360px. Change it to `fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-4 sm:w-full max-w-sm`.
 
-```
-+------------------------------------------+
-|  ...app...                               |
-| +--------------------------------------+ |
-| |[ok] Clip ready                   [x] | |
-| |     Rangers U12 Goal vs Sharks       | |
-| |     [share] Share video              | |   min-h-11 tap target
-| +--------------------------------------+ |
-+------------------------------------------+
-```
-
-Rationale: the reel is private at that moment, so the one action a toast can offer safely is
-the file. The link path goes where the review lives.
+Rationale: the toast must not offer an action the user's decisions rule out for an unpublished
+highlight.
 
 ### D6. Draft result, link-ready phase (`PublishLinkFlow` `phase==='ready'`, coarse pointer)
 
@@ -343,16 +325,9 @@ Width check: 390 - 24 padding - 8 gap gives 179px per button, and 360 gives 164p
 content, an icon plus "Share video", is about 126px.
 
 **`ready-capable` (already published, no link yet) on mobile:** the same layout, minus the URL
-card. Share video works at once (it needs no token). **Share link routes to the existing `review`
-phase** with `SHARE_ACTIONS.LINK_REVIEW_TITLE` / `LINK_REVIEW_BODY`, not `RESULT_PUBLISH.REVIEW_*`,
-whose copy says "Publish", and the reel is already published. Confirm mints the link, then
-`ready`.
-
-> **Conflict to confirm (dates):** T10180 R5 (2026-09-21) says an `alreadyPublished` preview reaches
-> link-ready "without a phantom review step". EPIC decision 6 (2026-10-01) says any Share link on a
-> reel not yet shared must go through review. This spec follows the newer decision 6 on mobile, and
-> leaves desktop "Get Link" as R5 left it. The orchestrator should confirm with the user before
-> implementing.
+card. Share video works at once (it needs no token, and the highlight is published). **Share link
+mints the link directly with no review (T10180 R5, upheld by the user 2026-10-01)**, then moves to
+`ready`, where Share link is the second tap.
 
 Also, `PublishLinkFlow`'s idle and review buttons ("Publish and get link", Cancel, "Publish and
 create link") gain `coarse-pointer:min-h-11` while this file is being edited. They have no 44px
@@ -379,10 +354,6 @@ export const SHARE_ACTIONS = {
   SHARE_VIDEO: 'Share video',
   SHARE_VIDEO_HINT: 'For posting to Instagram Reels, TikTok or Stories.',
   SHARE_VIDEO_PREPARING: 'Preparing video...',
-  LINK_REVIEW_TITLE: (name) => `Make a public link for "${name}"?`,
-  LINK_REVIEW_BODY: 'Anyone with the link can watch. Making a link does not send it.',
-  LINK_REVIEW_BACK: 'Back',
-  LINK_REVIEW_CONFIRM: 'Make link',
   MAKING_LINK: 'Making link...',
   CANCEL: 'Cancel',
   DONE: 'Done',
@@ -404,13 +375,19 @@ Analytics: `track('share_initiated', { method, source })`. `method` becomes
 
 ### D8. Other ambiguities resolved or flagged
 
-- **Draft idle phase stays as it is** ("Publish and get link" only). Offering Share video before
-  publish would let a parent post to Instagram without making a public link, which is arguably
-  right under decision 1. It changes the T10180 funnel, though, so it is **flagged for the user
-  as a follow-up**, not decided here.
-- **Desktop silent public-link minting** (toast Copy Link, and My Reels `copyReelLink`) violates
-  decision 6. Desktop is out of scope, so this goes to a follow-up task.
+- **Draft idle phase stays as it is** ("Publish and get link" only). **User decision
+  2026-10-01:** no Share video before publishing. Share video appears only on published
+  highlights (the chooser, and the draft result's `ready-capable` / `ready` phases).
+- **Desktop Copy link** (toast and the highlights list's `copyReelLink`) mints a public link with no review.
+  **User decision 2026-10-01:** that is fine; no confirm step, no follow-up task.
 - **Collections** (`CollectionCard` share) are out of scope. They have no single cover.
+- **Vocabulary (user, 2026-10-01):** the finished product is a **highlight**: a **highlight
+  clip** (one play) or a **highlight reel** (a collection of highlight clips). User-facing copy
+  never calls a single finished highlight a "reel". `SHEET_TITLE` and the share `title`/`text`
+  fallbacks use the highlight's name, falling back to "Highlight" / "this highlight" (today
+  `DraftReelPreview.jsx:241-243` falls back to "Highlight Reel"). Code identifiers
+  (`ReelTile`, `PublishedReelsPanel`, `final_videos`) keep their names; renaming them is out of
+  scope.
 - The style guide gains an "Action sheet" entry once this ships and is approved (not before).
 
 ## Acceptance Criteria
@@ -418,21 +395,20 @@ Analytics: `track('share_initiated', { method, source })`. `method` becomes
       `files` and no `url`, and "Share link" calls it with `url` and no `files`. Unit tests assert
       the exact payload for each.
 - [ ] A LINK_ONLY device shows "Share link" and doesn't show "Share video" on every surface: the
-      chooser, the draft link-ready grid (which collapses to one full-width button) and the toast
-      (no action).
-- [ ] "Share link" (and mobile "Copy link") on a reel without an active public link goes through
-      the visibility review; it never POSTs `is_public:true` without that confirm (test). This
-      applies in the chooser AND in the draft `ready-capable` phase.
+      chooser and the draft link-ready grid (which collapses to one full-width button).
+- [ ] An unpublished highlight never offers Share video or mints a link without the existing
+      "Publish and get link" review (test). A published highlight with no link mints it directly
+      on Share link / Copy link, with no review (T10180 R5).
 - [ ] No label on any surface names a payload different from the one it sends.
 - [ ] Live-verified on a real phone: Share link -> iMessage shows the chosen cover frame in the
       preview card.
 - [ ] Desktop ShareModal / Copy link behaviour unchanged.
-- [ ] My Reels player Share, the tile card-face Share and the mobile kebab "Share..." all open the
+- [ ] The published highlight player Share, the tile card-face Share and the mobile kebab "Share..." all open the
       same `ShareActionSheet` on coarse pointers (test).
 - [ ] `ActionSheet` closes only via Cancel/Done or Escape; tapping the backdrop does nothing
       (test). ReelTile's mobile kebab no longer closes on a backdrop tap and has a Cancel row.
-- [ ] The post-export toast on a FULL device offers "Share video" and sends the file; on
-      LINK_ONLY it offers no action and never mints a link (test).
+- [ ] The post-export toast on coarse pointers offers no share action (test); desktop toast is
+      unchanged.
 - [ ] The draft link-ready phase on mobile shows the link card, Share link (cyan) and Share video
       side by side, with no horizontal overflow at 360px.
 - [ ] Every new or touched mobile control meets the 44px floor (`coarse-pointer:min-h-11` or
@@ -441,5 +417,5 @@ Analytics: `track('share_initiated', { method, source })`. `method` becomes
 - [ ] The toast container does not overflow at 360px.
 - [ ] A Share video in progress shows "Preparing video..." with a spinner and disables the other
       rows; the sheet closes on success or AbortError and stays open on any other error.
-- [ ] The T10180 R5 vs EPIC decision 6 conflict (D6) is confirmed by the user before
-      implementation.
+- [ ] No user-facing string added or touched by this task calls a single finished highlight a
+      "reel".

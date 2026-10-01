@@ -8,7 +8,7 @@
 ## Goal
 
 The user picks a cover image in Spotlight (the "Cover image" panel; `poster_*` in the data model).
-They expect every social platform to show that cover. On 2026-10-01 they posted a reel to Instagram
+They expect every social platform to show that cover. On 2026-10-01 they posted a highlight to Instagram
 twice, once through the PWA's Share button and once by downloading the file and uploading it. Both
 times Instagram showed a cover it picked itself.
 
@@ -33,8 +33,8 @@ poster JPEG as an `attached_pic` stream (the `covr` atom). That atom is read by 
 and some gallery apps. Instagram, TikTok, Facebook, X, WhatsApp and iOS all transcode the upload
 and pick their own thumbnail. The default is the **first video frame**, or a frame near it.
 
-Today, frame 0 is the first frame of the intro card when the reel has one, and otherwise the
-reel's first frame. The chosen cover is normally a frame in the middle of the slow-mo section
+Today, frame 0 is the first frame of the intro card when the highlight has one, and otherwise
+the highlight's first frame. The chosen cover is normally a frame in the middle of the slow-mo section
 (`poster.py::select_poster_frame`), so it almost never matches frame 0.
 
 **Link shares already use the cover.** `functions/shared/[token].js:199-236` emits these tags:
@@ -47,8 +47,8 @@ iMessage, WhatsApp, Instagram DM, Facebook link posts, X and Messenger render `o
 
 **The mobile share paths never send a link.** The draft result's button is labelled
 "Share link..." (`RESULT_PUBLISH.SHARE_LINK`, `PublishLinkFlow.jsx:88-89`), but it calls the same
-`webShare` and sends the **file** (`DraftReelPreview.jsx:237-252`). The My Reels kebab, the player
-Share button (`PublishedReelsPanel.jsx:638, :677`) and the post-export toast
+`webShare` and sends the **file** (`DraftReelPreview.jsx:237-252`). The published-highlight tile
+kebab, the player Share button (`PublishedReelsPanel.jsx:638, :677`) and the post-export toast
 (`GlobalExportIndicator.jsx:234`) also send only the file on mobile.
 
 So on a phone, the native share sheet cannot send the one kind of payload that would carry the
@@ -93,9 +93,18 @@ upload-side column before T11550 builds anything on it.
 5. **Copy must not overclaim.** Never say or imply that Instagram, TikTok or Facebook use the cover
    automatically for an uploaded video. Name where the cover does apply: link previews, plus covers
    the user sets themselves. No em dashes in shipped copy.
-6. **Publishing a link is still a visibility gesture.** `createShareUrl` mints an `is_public: true`
-   token. A "Share link" action on a reel that is not yet shared must go through T10180's existing
-   visibility-review step, never mint a public link silently.
+6. **Publishing is the visibility decision** (user decisions 2026-10-01). `createShareUrl` mints
+   an `is_public: true` token.
+   - A **published** highlight gets its link directly, with no review step (T10180 R5 stands).
+   - An **unpublished** highlight gets a link only through T10180's existing "Publish and get
+     link" review, and **cannot be shared as a video file** before publishing.
+   - Desktop Copy link needs no confirm step.
+7. **Vocabulary** (user, 2026-10-01). The finished product is a **highlight**: either a
+   **highlight clip** (one play) or a **highlight reel** (a collection of highlight clips).
+   Copy never calls a single finished highlight a "reel". "Instagram Reels" and "Facebook Reels"
+   are the platforms' product names and stay. Code identifiers (`ReelTile`,
+   `PublishedReelsPanel`, `final_videos`) keep their names; renaming existing app-wide "Reels"
+   labels is outside this epic.
 
 ## Tasks
 
@@ -120,7 +129,7 @@ on real phones and has no code dependency, so it can start any time, in parallel
 
 - [ ] On a phone, the user can choose between sharing the video and sharing the link, and each
       label matches what it sends
-- [ ] Sending a reel link into iMessage, WhatsApp and Instagram DM shows the chosen cover (live-verified)
+- [ ] Sending a highlight link into iMessage, WhatsApp and Instagram DM shows the chosen cover (live-verified)
 - [ ] The user can save the cover image to their phone in one tap and use it in Instagram's
       "Add from camera roll"
 - [ ] The Cover image panel and share flow say accurately where the cover applies
