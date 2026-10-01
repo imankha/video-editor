@@ -850,6 +850,57 @@ def admin_mark_test_account(user_id: str, request: TestAccountRequest):
     return {"user_id": user_id, "is_test_account": request.is_test}
 
 
+@router.post("/users/{user_id}/reset-data")
+async def admin_reset_test_account_data(user_id: str):
+    """Clear project/clip data (profiles/clips/exports) for a TEST account only.
+
+    Data-only reset: keeps the login, session, credits, profile identity, and
+    games -- see app/services/test_account_reset.py for the exact scope and
+    why it's safe to run against a live server (CAS, migration seam).
+
+    Gated server-side on `users.is_test_account` (NOT just a UI affordance) --
+    this must never be reachable against a real user's data. Acquires the
+    TARGET user's write lock (not the admin's) so it can't race that user's
+    own in-flight requests; a background worker (export_worker, etc.) is a
+    known, accepted gap documented in the service module.
+    """
+    _require_admin()
+    admin_id = get_current_user_id()
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT email, is_test_account FROM users WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not row["is_test_account"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Only accounts flagged is_test_account can be reset this way",
+        )
+
+    from ..middleware.db_sync import _get_user_write_lock
+    from ..services.test_account_reset import (
+        ActiveExportInProgress,
+        TestAccountResetFailed,
+        reset_test_account_data,
+    )
+
+    async with _get_user_write_lock(user_id):
+        try:
+            result = await asyncio.to_thread(reset_test_account_data, user_id)
+        except ActiveExportInProgress as e:
+            raise HTTPException(status_code=409, detail=str(e)) from None
+        except TestAccountResetFailed as e:
+            raise HTTPException(status_code=503, detail=str(e)) from None
+
+    logger.info(
+        "[ADMIN] %s reset test-account data for %s (%s): %s",
+        admin_id, user_id, row["email"], result,
+    )
+    return {"user_id": user_id, **result}
+
+
 class SetCreditsRequest(BaseModel):
     amount: int
     request_id: str

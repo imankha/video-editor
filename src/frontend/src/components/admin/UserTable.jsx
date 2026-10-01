@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronLeft, Activity, CheckSquare, Square, FlaskConical } from 'lucide-react';
+import { Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronLeft, Activity, CheckSquare, Square, FlaskConical, RotateCcw } from 'lucide-react';
 import { CreditGrantModal } from './CreditGrantModal';
 import { BulkEmailModal } from './BulkEmailModal';
 import { BulkActionBar } from './BulkActionBar';
@@ -161,10 +161,15 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
   const sortDir = useAdminStore(s => s.sortDir);
   const setSort = useAdminStore(s => s.setSort);
   const markTestAccount = useAdminStore(s => s.markTestAccount);
+  const resetTestAccountData = useAdminStore(s => s.resetTestAccountData);
 
   const [grantUsers, setGrantUsers] = useState(null);
   const [emailUsers, setEmailUsers] = useState(null);
   const [search, setSearch] = useState('');
+  // Per-row busy flag for the test-account reset button -- ephemeral view
+  // state only (no-persisted-view-state), prevents a double-click from
+  // firing the reset twice while the request is in flight.
+  const [resettingId, setResettingId] = useState(null);
 
   // T4860: selection is ephemeral view state — local useState only, never
   // persisted (no-redundant-state / no persisted view state).
@@ -231,6 +236,22 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
     exitSelectionMode();
   }
 
+  async function handleResetTestAccountData(user) {
+    if (!window.confirm(
+      `Clear all clips/projects/exports for ${user.email || user.user_id}?\n\n` +
+      `Games and the account/login are kept. This cannot be undone.`
+    )) return;
+    setResettingId(user.user_id);
+    try {
+      await resetTestAccountData(user.user_id);
+      window.alert(`${user.email || user.user_id}: data cleared.`);
+    } catch (e) {
+      window.alert(e.message || 'Reset failed');
+    } finally {
+      setResettingId(null);
+    }
+  }
+
   function SortIcon({ colKey }) {
     if (sortKey !== colKey) return <ArrowUpDown size={10} className="opacity-30" />;
     return sortDir === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />;
@@ -292,7 +313,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
       )}
 
       {/* Table */}
-      <div className="rounded-lg border border-white/10">
+      <div className="rounded-lg border border-white/10 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10 text-gray-400 text-xs uppercase tracking-wider">
@@ -474,6 +495,18 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                     >
                       <FlaskConical size={12} />
                     </button>}
+                    {/* Data-only reset, is_test_account rows only (server
+                        re-checks the flag -- not just a UI gate). */}
+                    {user.is_test_account && !user.is_deleted && (
+                      <button
+                        onClick={() => handleResetTestAccountData(user)}
+                        disabled={resettingId === user.user_id}
+                        className="text-gray-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                        title="Clear clips/projects/exports (test accounts only) -- keeps login, profile, and games"
+                      >
+                        <RotateCcw size={12} />
+                      </button>
+                    )}
                     {onUserClick && !user.is_deleted && (
                       <button
                         onClick={() => onUserClick(user.user_id)}

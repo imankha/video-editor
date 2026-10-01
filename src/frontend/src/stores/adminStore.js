@@ -103,6 +103,22 @@ export const useAdminStore = create((set, get) => ({
     return res.json();
   },
 
+  // Admin "reset data" button, is_test_account rows only (server
+  // rejects any other user_id with 403). Clears clips/projects/exports per
+  // profile; keeps the login, profile identity, credits, and games -- the
+  // funnel/usage columns in this table are untouched (Postgres analytics,
+  // not SQLite project data), so this never changes what a row displays.
+  resetTestAccountData: async (userId) => {
+    const res = await apiFetch(`${API_BASE}/api/admin/users/${userId}/reset-data`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
   clearSegmentFilter: () => {
     set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, userFilter: null });
     get().fetchUsers(1);

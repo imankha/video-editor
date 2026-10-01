@@ -2254,6 +2254,58 @@ def delete_profile_r2_data(user_id: str, profile_id: str) -> bool:
         return False
 
 
+def delete_profile_project_r2_data(user_id: str, profile_id: str) -> int:
+    """Delete a profile's project/clip media (raw clips, working/final videos,
+    recaps, posters, etc.) WITHOUT touching `profile.sqlite` itself or any
+    `/games/` object.
+
+    Used by the admin "reset test account data" action (data-only reset --
+    keeps the login, the profile, and games; see app/services/test_account_reset.py).
+    Unlike `delete_profile_r2_data`, this is NOT profile deletion: the caller
+    has already re-uploaded a cleared `profile.sqlite` via
+    `sync_db_to_r2_explicit` and that object must survive this call, or the
+    next read would see a 404 / stale pre-clear copy depending on timing.
+    Per-profile game objects live at .../profiles/{profile_id}/games/{filename}
+    (pre-T80 layout) and must be preserved the same way reset_all_accounts.py
+    does for the equivalent offline operation. Paginated like
+    `delete_user_r2_data` -- a single profile can exceed 1000 objects.
+    Returns the number of objects deleted. Raises on a partial R2 failure so
+    a caller never reports an incomplete cleanup as done.
+    """
+    client = get_r2_client()
+    if not client:
+        return 0
+
+    from .utils.retry import TIER_3, retry_r2_call
+
+    prefix = r2_user_key(user_id, f"profiles/{profile_id}/")
+    sqlite_key = profile_r2_key(user_id, profile_id, "profile.sqlite")
+    paginator = client.get_paginator("list_objects_v2")
+    deleted = 0
+    for page in paginator.paginate(Bucket=R2_BUCKET, Prefix=prefix):
+        objects = page.get("Contents", [])
+        delete_keys = [
+            {"Key": obj["Key"]} for obj in objects
+            if obj["Key"] != sqlite_key and "/games/" not in obj["Key"]
+        ]
+        if not delete_keys:
+            continue
+        resp = retry_r2_call(
+            client.delete_objects,
+            Bucket=R2_BUCKET, Delete={"Objects": delete_keys},
+            operation=f"delete_profile_project_data {profile_id}", **TIER_3,
+        )
+        errors = resp.get("Errors") if isinstance(resp, dict) else None
+        if errors:
+            raise RuntimeError(
+                f"R2 delete_objects reported {len(errors)} error(s) for profile "
+                f"{profile_id} of user {user_id}: {errors[:3]}"
+            )
+        deleted += len(delete_keys)
+    logger.info(f"Deleted {deleted} project R2 objects for profile {profile_id} of user {user_id} (kept profile.sqlite + games)")
+    return deleted
+
+
 def delete_local_profile_data(user_id: str, profile_id: str) -> bool:
     """Delete local data directory for a profile.
 
