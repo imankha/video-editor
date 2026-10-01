@@ -4,6 +4,11 @@
 
 ## Current Focus
 
+**HIGH PRIORITY (user-ordered 2026-10-01): [Social Cover Image epic](tasks/social-cover-image/EPIC.md)
+(T11510-T11550).** Instagram ignored the user's chosen cover image on both Share and Download.
+Start with T11510 (mobile Share always sends the file, never the link that carries our cover).
+See the milestone section below.
+
 **TOP PRIORITY (user-flagged, 2026-09-25) — [Modal Export Safety & Capacity epic](tasks/modal-export-safety/EPIC.md)
 (T11320-T11350), plus standalone [T11360](tasks/T11360-admin-credits-spent-stat-not-net-of-refunds.md).**
 Filed from investigating Bug 58p (prod): a user's 16:9, full-frame (uncropped) 14-clip export hit
@@ -132,6 +137,27 @@ move_reels `require_fresh`) shipped alongside the epic itself.
 **Phase: Feature** — Season Highlights & Collections epic: My Reels becomes the curation home (annotate → publish → rank → share). Spec: [season-highlights-spec.md](season-highlights-spec.md) · Tech notes: [season-highlights-tech-notes.md](season-highlights-tech-notes.md)
 
 **Landing Page:** Already live at `reelballers.com`
+
+### Milestone: Social Cover Image (user-ordered 2026-10-01, HIGH PRIORITY)
+
+**Filed 2026-10-01 from a user report:** Instagram ignored the cover image the user picked, both
+via the PWA Share button and via download + manual upload. Expert root cause (verified against
+code): on mobile every Share sends the raw MP4 file, never a link (`useWebShare.js:118-126`), so
+Share and Download hand Instagram the same bytes and our `og:image` never runs; the cover is
+already embedded as `covr` (T6360) but platforms ignore it and default to frame 0. The draft's
+"Share link..." button actually sends the file. Levers are exactly three: `og:image` for links, a
+user-supplied cover in the platform's own picker, and frame 0 of the file. Row order is the
+sequence; T11540 is user-run on real phones and can start any time. Full findings and the
+per-platform map: [EPIC.md](tasks/social-cover-image/EPIC.md).
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+|  | **[Social Cover Image](tasks/social-cover-image/EPIC.md)** | 8 | 5 | 1.6 |  |  | Make the user's chosen cover show up wherever a platform allows it, give a one-tap path where only the poster can set it, and say so honestly where nothing can. |
+| T11510 | ↳ [Separate "Share video" and "Share link" on mobile](tasks/social-cover-image/T11510-split-share-video-vs-share-link.md) | 8 | 3 | 2.7 | TODO | [ ] | M-tier, frontend. Split `webShare` into file vs link intents; fix the mislabeled draft "Share link..." button; add both on result, My Reels kebab/player, export toast. Link on a Private reel must go through T10180's visibility review. |
+| T11530 | ↳ [Save cover image + honest platform guidance](tasks/social-cover-image/T11530-save-cover-image-and-platform-guidance.md) | 7 | 3 | 2.3 | TODO | [ ] | M-tier, depends on T11510. One-tap save of the full-size cover JPEG for Instagram "Add from camera roll" / Facebook custom thumbnail; Cover image panel + post-share hint state where the cover applies. |
+| T11520 | ↳ [Harden share-link unfurls for real crawlers](tasks/social-cover-image/T11520-harden-share-link-unfurls.md) | 6 | 4 | 1.5 | TODO | [ ] | M-tier. Measure with crawler UAs, then fix: `og:video` is a presigned URL in edge-cacheable HTML (same bug T4890 fixed for og:image), WhatsApp og:image size limit, cold-start fetch. |
+| T11540 | ↳ [Experiment: does frame 0 set the default cover on upload?](tasks/social-cover-image/T11540-frame0-cover-upload-experiment.md) | 6 | 2 | 3.0 | TODO | [ ] | User-run. AI builds 5 variant MP4s (as-is, no covr, cover held 1f/3f/0.5s); user uploads to IG/TikTok/FB/X/WhatsApp/iMessage/Snapchat/Shorts and records default covers. Gates T11550. |
+| T11550 | ↳ [Lead the delivered file with the chosen cover (conditional)](tasks/social-cover-image/T11550-lead-file-with-cover-frame.md) | 7 | 6 | 1.2 | TODO | [ ] | L-tier, BLOCKED on T11540 results + explicit user approval (visible change to the delivered video). Prepend the cover still in the serve-time compose pass. OBSOLETE if T11540 shows no win. |
 
 ### Next Work: September 12-13 Evaluation Handoff
 
