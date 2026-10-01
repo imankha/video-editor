@@ -507,3 +507,23 @@ Bug status changes are done by the user:
 - Via the task board "Resolve" button
 - Via `/bug {id} status {status}` command
 - AI does not change bug statuses automatically
+
+## Maintenance: Purging Old Bug Reports
+
+`scripts/purge_old_bug_reports.py` hard-deletes `bug_reports` rows (and their
+R2 screenshot/log assets) older than N days, with an optional `--status`
+filter restricting to a subset of `new`, `testing`, `done`, `duplicate`
+(default: all statuses). Dry-run by default -- always run without `--execute`
+first and review the listed rows before adding `--execute`. This is distinct
+from the narrower admin API `DELETE /bugs/purge`, which only purges
+`status='done'` bugs by `resolved_at`.
+
+```bash
+# Dry run (lists candidates, deletes nothing)
+cd src/backend && .venv/Scripts/python.exe ../../scripts/purge_old_bug_reports.py --env prod --days 30
+
+# Restrict to resolved/duplicate reports only, then execute
+cd src/backend && .venv/Scripts/python.exe ../../scripts/purge_old_bug_reports.py --env prod --days 30 --status done,duplicate --execute
+```
+
+Requires a Fly proxy to prod Postgres (`fly proxy 15433:5432 --app reel-ballers-db-prod`) and `.env.prod` at the project root. A row still referenced by a newer report's `duplicate_of` is automatically excluded from the run (reported, not deleted) rather than silently mutated.
