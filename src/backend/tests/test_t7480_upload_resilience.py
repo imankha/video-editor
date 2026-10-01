@@ -13,7 +13,7 @@ Covers the confirmed-root-cause fix set:
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -229,6 +229,20 @@ async def test_beacon_returns_204_on_valid_body():
     req = _StubRequest({"phase": "uploading", "reason": "stalled", "session_id": "s1"})
     result = await games_upload.upload_failure_beacon(req)
     assert result is None  # 204 No Content
+
+
+@pytest.mark.asyncio
+async def test_beacon_forwards_bounded_client_exception_detail_to_writer():
+    detail = "substage=faststart_analysis type=NotReadableError message=file handle expired"
+    req = _StubRequest({
+        "phase": "hashing", "reason": "analyze_failed", "kind": "clip",
+        "error_detail": detail, "elapsed_ms": 37,
+    })
+    with patch.object(games_upload, "_write_upload_failure", new_callable=AsyncMock) as writer:
+        result = await games_upload.upload_failure_beacon(req)
+    assert result is None
+    assert writer.await_args.kwargs["error_text"] == detail
+    assert writer.await_args.kwargs["elapsed_ms"] == 37
 
 
 @pytest.mark.asyncio
