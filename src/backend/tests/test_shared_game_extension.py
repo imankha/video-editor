@@ -33,7 +33,7 @@ from app.services.auth_db import (
     insert_game_storage_ref,
     insert_grace_deletion,
 )
-from app.services.materialization import _collect_video_hashes, _copy_game, _create_storage_refs
+from app.services.materialization import _collect_video_hashes, _copy_game, _resolve_sharer_storage_refs
 from app.services.storage_credits import calculate_extension_cost, storage_expires_at
 
 
@@ -148,6 +148,13 @@ def _create_profile_db(path: Path) -> sqlite3.Connection:
             clip_id INTEGER NOT NULL REFERENCES raw_clips(id) ON DELETE CASCADE,
             tag_name TEXT NOT NULL,
             UNIQUE(clip_id, tag_name)
+        );
+        CREATE TABLE IF NOT EXISTS game_storage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            blake3_hash TEXT NOT NULL UNIQUE,
+            game_size_bytes INTEGER NOT NULL,
+            storage_expires_at TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
     """)
     conn.commit()
@@ -290,25 +297,64 @@ class TestStorageRefIndependence:
         create_user("user-2", email="u2@test.com")
 
     def test_create_storage_refs_copies_sharer_expiry(self, pg_conn, tmp_path):
+        """T11560 (review round 2): _resolve_sharer_storage_refs reads
+        directly off the sharer's own already-open connection -- no
+        ContextVar/ambient context involved at all (that's the whole fix:
+        the OLD code depended on ambient == sharer, which doesn't hold for
+        every materialize_game_share caller). So this test needs no ambient
+        gymnastics; it seeds the sharer's real game_storage row directly and
+        reads it back via the real primitives, then writes the recipient
+        side exactly as materialize_game_share does."""
+        from app.services.auth_db import insert_game_storage_ref_pg_only, upsert_game_storage_row
+
         s_conn = _create_profile_db(tmp_path / "sharer" / "profile.sqlite")
+        r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
         game_id = _insert_game(s_conn, blake3_hash="shared_hash_1")
 
         sharer_expiry = (datetime.utcnow() + timedelta(days=30)).isoformat()
-        insert_game_storage_ref("sharer-user", "sharer-profile", "shared_hash_1",
-                                5_000_000_000, sharer_expiry)
+        s_conn.execute(
+            "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+            "VALUES (?, ?, ?)",
+            ("shared_hash_1", 5_000_000_000, sharer_expiry),
+        )
+        s_conn.commit()
 
         hashes = _collect_video_hashes(s_conn, game_id)
-        _create_storage_refs(
-            "sharer-user", "sharer-profile",
-            "recipient-user", "recipient-profile",
-            hashes,
-        )
+        refs = _resolve_sharer_storage_refs(s_conn, hashes)
 
-        recipient_ref = get_game_storage_ref("recipient-user", "recipient-profile", "shared_hash_1")
-        assert recipient_ref is not None
-        assert str(recipient_ref["storage_expires_at"]).startswith(sharer_expiry[:10])
+        assert refs == [("shared_hash_1", 5_000_000_000, sharer_expiry)]
+
+        # Recipient side, written directly via the recipient's OWN connection
+        # + explicit Postgres args -- exactly as materialize_game_share does.
+        for h, size, expires in refs:
+            upsert_game_storage_row(r_conn, h, size, expires)
+            insert_game_storage_ref_pg_only("recipient-user", "recipient-profile", h, size, expires)
+        r_conn.commit()
+
+        local_row = r_conn.execute(
+            "SELECT * FROM game_storage WHERE blake3_hash = ?", ("shared_hash_1",)
+        ).fetchone()
+        assert local_row is not None, "recipient's own SQLite must have the ref row"
+        assert local_row["game_size_bytes"] == 5_000_000_000
+
+        # get_game_storage_ref is SQLite-only (ambient-context, per-profile
+        # local cache) -- the Postgres write is verified directly against
+        # game_storage_refs, which is what insert_game_storage_ref_pg_only
+        # actually touches.
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT storage_expires_at, game_size_bytes FROM game_storage_refs
+                   WHERE user_id = %s AND profile_id = %s AND blake3_hash = %s""",
+                ("recipient-user", "recipient-profile", "shared_hash_1"),
+            )
+            pg_row = cur.fetchone()
+        assert pg_row is not None
+        assert str(pg_row["storage_expires_at"]).startswith(sharer_expiry[:10])
 
         s_conn.close()
+        r_conn.close()
 
     def test_recipient_extend_does_not_affect_sharer(self, pg_conn, tmp_path):
         # Storage refs live in per-profile SQLite (game_storage keyed by hash);
@@ -580,21 +626,44 @@ class TestStorageStatusDerivation:
         status = self._derive_status(None, auto_export_status='completed')
         assert status == 'expired'
 
-    def test_can_extend_true_recipient_expired_sharer_active(self, pg_conn):
-        """Recipient's ref expired but sharer's is active -> can_extend=True."""
-        sharer_future = (datetime.utcnow() + timedelta(days=20)).isoformat()
-        insert_game_storage_ref("sharer-user", "sharer-profile", "cross_extend",
-                                1000, sharer_future)
-        recipient_past = (datetime.utcnow() - timedelta(days=2)).isoformat()
-        insert_game_storage_ref("recipient-user", "recipient-profile", "cross_extend",
-                                1000, recipient_past)
+    def test_can_extend_true_recipient_expired_sharer_active(self, pg_conn, tmp_path):
+        """Recipient's ref expired but sharer's is active -> can_extend=True.
 
-        recipient_refs = get_storage_refs_for_user("recipient-user")
+        T11560 (review round 2): game_storage is keyed by blake3_hash ONLY
+        within a single profile's SQLite file -- independence between sharer
+        and recipient comes from them having SEPARATE files, not from a
+        user_id column (same note as test_recipient_extend_does_not_affect_sharer
+        above). insert_game_storage_ref's SQLite half resolves its target
+        via get_db_connection()'s ambient context, so this test must route
+        each user's write to its own real connection -- two sequential
+        inserts against ONE ambient-resolved file (the old version of this
+        test) don't model "two users," they model one profile overwriting
+        its own single row twice, which upsert_game_storage_row's
+        never-move-expiry-backward fix (also T11560, MAJOR-2) now correctly
+        refuses to do."""
+        sharer_db = _create_profile_db(tmp_path / "sharer" / "profile.sqlite")
+        recipient_db = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
+
+        @contextmanager
+        def _conn_for(conn):
+            yield conn
+
+        sharer_future = (datetime.utcnow() + timedelta(days=20)).isoformat()
+        with patch("app.database.get_db_connection", lambda: _conn_for(sharer_db)):
+            insert_game_storage_ref("sharer-user", "sharer-profile", "cross_extend",
+                                    1000, sharer_future)
+
+        recipient_past = (datetime.utcnow() - timedelta(days=2)).isoformat()
+        with patch("app.database.get_db_connection", lambda: _conn_for(recipient_db)):
+            insert_game_storage_ref("recipient-user", "recipient-profile", "cross_extend",
+                                    1000, recipient_past)
+            recipient_refs = get_storage_refs_for_user("recipient-user")
+            all_hashes = get_all_ref_hashes()
+
         expiry_by_hash = {r['blake3_hash']: r['storage_expires_at'] for r in recipient_refs}
         status = self._derive_status(expiry_by_hash.get("cross_extend"))
         assert status == 'expired'
 
-        all_hashes = get_all_ref_hashes()
         can_extend = "cross_extend" in all_hashes
         assert can_extend is True
 
@@ -625,9 +694,22 @@ class TestExtendEndpointHandler:
     """Test the extend_game_storage endpoint with mocked user context."""
 
     @pytest.fixture(autouse=True)
-    def _create_users(self, pg_conn):
+    def _create_users(self, pg_conn, tmp_path):
         create_user("recipient-user", email="recipient@test.com")
         create_user("sharer-user", email="sharer@test.com")
+        # T11560 (review round 2): extend_game_storage's own ref read/write
+        # (auth_db.get_game_storage_ref/insert_game_storage_ref) goes through
+        # the AMBIENT get_db_connection(), independent of each test's own
+        # `app.routers.games.get_db_connection` patch -> r_conn (that only
+        # covers the endpoint's direct game/game_videos reads). Without this,
+        # those ambient ref calls hit the real machine's app-data directory
+        # instead of a fresh tmp_path, so leftover rows from a PRIOR run of
+        # the SAME test on this machine could still be present -- harmless
+        # before, because an unconditional overwrite always reset them, but
+        # upsert_game_storage_row's never-shorten-expiry fix (T11560,
+        # MAJOR-2) now lets stale rows survive and silently stack across runs.
+        with patch("app.database.USER_DATA_BASE", tmp_path):
+            yield
 
     @pytest.mark.asyncio
     async def test_recipient_extends_shared_game(self, pg_conn, tmp_path):

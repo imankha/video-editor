@@ -398,7 +398,17 @@ def upsert_game_storage_row(
     path) — both expose `.cursor()`. Migrations call this with their own
     `up(conn)` connection instead of insert_game_storage_ref/get_db_connection,
     which would re-enter the JIT seam lock this thread already holds. Does not
-    commit — the caller controls the transaction."""
+    commit — the caller controls the transaction.
+
+    T11560: the UPDATE never moves storage_expires_at backwards (SQLite's
+    2+-arg max() is a scalar max over the ISO8601 strings, same ordering the
+    rest of this table already relies on) -- matches insert_game_storage_ref_pg_only's
+    GREATEST on the Postgres side. Before this, a share/claim re-materializing
+    an already-extended hash (e.g. a recipient who paid to extend storage,
+    then the game is re-shared/re-merged) would silently roll their local
+    expiry back to the sharer's shorter one, even though Postgres kept the
+    longer one -- the two stores would disagree and the recipient could see
+    an early false 'expired'."""
     cursor = conn.cursor()
     cursor.execute(
         """INSERT OR IGNORE INTO game_storage
@@ -410,7 +420,7 @@ def upsert_game_storage_row(
     if not is_new:
         cursor.execute(
             """UPDATE game_storage
-               SET game_size_bytes = ?, storage_expires_at = ?
+               SET game_size_bytes = ?, storage_expires_at = MAX(storage_expires_at, ?)
                WHERE blake3_hash = ?""",
             (game_size_bytes, storage_expires_at, blake3_hash),
         )

@@ -179,12 +179,13 @@ class TestScopedMaterialization:
         create_user(SHARER_ID, email=SHARER_EMAIL)
         create_user("user-a", email="a@example.com")
         create_user("user-b", email="b@example.com")
+        # T11560: _resolve_sharer_storage_refs now reads straight off the
+        # sharer's own connection -- nothing to mock; _seed_sharer below
+        # seeds no game_storage row, so it naturally resolves to no refs,
+        # same as the old get_game_storage_ref(return_value=None).
         with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
              patch("app.database.USER_DATA_BASE", tmp_path), \
-             patch("app.services.materialization.get_pg", pgmod.get_pg), \
-             patch("app.services.materialization.get_game_storage_ref",
-                   return_value=None), \
-             patch("app.services.materialization.insert_game_storage_ref"):
+             patch("app.services.materialization.get_pg", pgmod.get_pg):
             yield tmp_path
 
     def _seed_sharer(self, base):
@@ -266,7 +267,8 @@ class TestScopedMaterialization:
         b_clips = b.execute("SELECT * FROM raw_clips").fetchall()
         a_game = a.execute("SELECT shared_by FROM games").fetchone()
         b_game = b.execute("SELECT shared_by FROM games").fetchone()
-        a.close(); b.close()
+        a.close()
+        b.close()
         assert a_names == {"Team goal", "Big save"}
         assert len(b_clips) == 0, "untagged tagged-only recipient gets zero clips"
         # game copied for BOTH, shared_by non-null even on the zero-clip game.
@@ -297,7 +299,8 @@ class TestScopedMaterialization:
         b = _open(env, "user-b", "bp")
         a_names = {r["name"] for r in a.execute("SELECT name FROM raw_clips").fetchall()}
         b_names = {r["name"] for r in b.execute("SELECT name FROM raw_clips").fetchall()}
-        a.close(); b.close()
+        a.close()
+        b.close()
         assert a_names == {"Seven play"}
         assert b_names == {"Nine play"}
 
@@ -372,6 +375,7 @@ class TestShareViewCounts:
 
 class TestAdminShareFunnel:
     def test_multi_claim_aggregation(self, pg_conn):
+        from app.routers import admin as admin_mod
         from app.services.auth_db import create_user
         from app.services.pg import get_pg
         from app.services.sharing_db import (
@@ -379,7 +383,6 @@ class TestAdminShareFunnel:
             get_game_share_by_token,
             record_share_claim,
         )
-        from app.routers import admin as admin_mod
 
         create_user("sharer-user", email="funnelsharer@example.com")
         create_user("user-1", email="claimer1@example.com")
@@ -415,7 +418,7 @@ class TestAdminShareFunnel:
             result = admin_mod.analytics_share_funnel(limit=100)
 
         assert result["activation_metric"] == "export_completed"
-        links = [l for l in result["links"] if l["share_token"] == share["share_token"]]
+        links = [row for row in result["links"] if row["share_token"] == share["share_token"]]
         assert len(links) == 1
         link = links[0]
         assert link["game_name"] == "Funnel Game"

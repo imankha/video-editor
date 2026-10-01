@@ -4,6 +4,17 @@
 
 ## Current Focus
 
+**2026-10-01 addition, P0 (user-reported prod bug) — [T11560](tasks/T11560-share-storage-ref-wrong-profile.md):
+Direct game share wrote the recipient's storage ref into the SHARER's own SQLite instead of the
+recipient's, so the recipient sees a false "Source video expired."** Reported live: imankh@gmail.com
+shared a game with gsarah@gmail.com on 2026-09-02; gsarah got the expired error, but the R2 source
+was never touched. Root cause: `insert_game_storage_ref`'s SQLite half uses
+`get_db_connection()`'s ambient request context instead of the explicit `user_id`/`profile_id`
+it receives, and `materialize_game_share` runs inside the SHARER's own request context. Postgres
+side is correct; only the recipient's local SQLite ref row is missing. Depth-2 (sync/persistence)
+bug, hits the core sharing/growth loop directly — jumps the queue. Impact 8 / Complexity 3,
+Tier M, backend-only. **Status: WIP.**
+
 **HIGH PRIORITY (user-ordered 2026-10-01): [Social Cover Image epic](tasks/social-cover-image/EPIC.md)
 (T11510-T11550).** Instagram ignored the user's chosen cover image on both Share and Download.
 Start with T11510 (mobile Share always sends the file, never the link that carries our cover).

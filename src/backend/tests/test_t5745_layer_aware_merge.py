@@ -20,20 +20,20 @@ Fixture style mirrors ``tests/test_materialization.py`` /
 """
 
 import sqlite3
-from pathlib import Path
 from unittest.mock import patch
 
-from app.utils.encoding import encode_data, decode_data
 from app.services.materialization import (
     _materialize_clips,
     materialize_game_share,
 )
+from app.utils.encoding import decode_data, encode_data
 
 # Reuse the canonical fixtures from the materialization test module.
 from tests.test_materialization import (
-    _create_profile_db, _insert_game, _insert_game_video, _insert_clip,
+    _create_profile_db,
+    _insert_clip,
+    _insert_game,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper: insert an existing raw_clip with an explicit my_athlete value
@@ -309,10 +309,8 @@ class TestFullClaimPath:
         return s_conn, r_conn
 
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.insert_game_storage_ref")
-    @patch("app.services.materialization.get_game_storage_ref")
     def test_recipient_my_athlete_clip_survives_real_claim(
-        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+        self, mock_mark, tmp_path
     ):
         """A claim through materialize_game_share where the recipient already
         has an intersecting My Athlete clip: their clip survives with layer and
@@ -324,6 +322,12 @@ class TestFullClaimPath:
         s_game_id = _insert_game(s_conn, name="Match", blake3_hash="shared_hash")
         _insert_clip(s_conn, s_game_id, 15.0, 25.0, tagged_teammates=["Jake"],
                      name="Team play", rating=4, video_sequence=0)
+        s_conn.execute(
+            "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+            "VALUES (?, ?, ?)",
+            ("shared_hash", 50000, "2027-01-01T00:00:00+00:00"),
+        )
+        s_conn.commit()
 
         # Recipient already has the same game (dedup by hash) with their own
         # deliberately-trimmed My Athlete clip covering the same play.
@@ -331,11 +335,6 @@ class TestFullClaimPath:
         _insert_existing_clip(r_conn, r_game_id, 10.0, 20.0, my_athlete=1,
                               name="My kid scores", video_sequence=0)
         r_conn.close()
-
-        mock_get_ref.return_value = {
-            "game_size_bytes": 50000,
-            "storage_expires_at": "2027-01-01T00:00:00+00:00",
-        }
 
         with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
             result = materialize_game_share(
