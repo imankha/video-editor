@@ -5,6 +5,7 @@ import { OverlayPublishActionBar } from '../../components/OverlayPublishActionBa
 import { OVERLAY_PUBLISH, OVERLAY_REAPPLY_FOCUS_TOAST, FOCUS_PUBLISH_LATER_TOAST } from '../../config/displayNames';
 import { usePublishIntentStore } from '../../stores/publishIntentStore';
 import { EDITOR_MODES } from '../../stores/editorStore';
+import { setAnnotateOrigin, peekAnnotateOrigin, clearAnnotateOrigin, setPendingGame, consumePendingGame } from '../../utils/pendingNavigation';
 
 // T9110: OverlayScreen is a very large screen that cannot be mounted in isolation
 // (dozens of stores/hooks/contexts). This harness reproduces the post-export
@@ -68,8 +69,17 @@ function OverlayPublishExitHarness({
     // with the Reels building surfaces).
     const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
     toastSuccess(copy.title, { message: copy.message, duration: 10000 });
-    goToProjectManager();
-  }, [goToProjectManager, toastSuccess]);
+    // Back to the exact Annotate spot this play came from, if this session got
+    // here via Annotate -> Focus/Overlay; otherwise the drafts surface as before.
+    const origin = peekAnnotateOrigin(projectId);
+    if (origin) {
+      clearAnnotateOrigin();
+      setPendingGame(origin.gameId, null, origin.sourceClipId);
+      setEditorMode(EDITOR_MODES.ANNOTATE);
+    } else {
+      goToProjectManager();
+    }
+  }, [goToProjectManager, toastSuccess, projectId, setEditorMode]);
 
   return (
     <>
@@ -101,8 +111,14 @@ function makeDeps({ published = true, refreshed = { id: 42, final_video_id: 'fv1
 }
 
 describe('T9110 Overlay post-export completion preview + publish-exit action bar', () => {
-  beforeEach(() => usePublishIntentStore.getState().clear());
-  afterEach(() => usePublishIntentStore.getState().clear());
+  beforeEach(() => {
+    usePublishIntentStore.getState().clear();
+    sessionStorage.clear();
+  });
+  afterEach(() => {
+    usePublishIntentStore.getState().clear();
+    sessionStorage.clear();
+  });
 
   it('on a plain overlay export (no publish intent): raises the preview and still calls App onExportComplete', async () => {
     const deps = makeDeps();
@@ -229,5 +245,21 @@ describe('T9110 Overlay post-export completion preview + publish-exit action bar
     fireEvent.click(screen.getByRole('button', { name: OVERLAY_PUBLISH.SAVE_DRAFT_LABEL }));
 
     expect(deps.toastSuccess).toHaveBeenCalledWith('Added to Clips', expect.objectContaining({ duration: 10000 }));
+  });
+
+  it('"Save draft" returns to the exact Annotate spot instead of Project Manager when this session got here via Annotate', () => {
+    setAnnotateOrigin(42, 7, 99); // this project came from Annotate's game 7, play 99
+    const deps = makeDeps();
+    render(<OverlayPublishExitHarness deps={deps} startOpen projectId={42} />);
+
+    fireEvent.click(screen.getByRole('button', { name: OVERLAY_PUBLISH.SAVE_DRAFT_LABEL }));
+
+    expect(deps.goToProjectManager).not.toHaveBeenCalled();
+    expect(deps.setEditorMode).toHaveBeenCalledWith(EDITOR_MODES.ANNOTATE);
+    // No seek time: lands on the game's saved last-playhead (persisted on the
+    // way out of Annotate), which IS "where we left off".
+    expect(consumePendingGame()).toEqual({ gameId: 7, seekTime: null, sourceClipId: 99 });
+    // The breadcrumb is consumed, not left to misfire on a later unrelated visit.
+    expect(peekAnnotateOrigin(42)).toBeNull();
   });
 });

@@ -9,6 +9,9 @@ import {
   setPendingGameReference,
   peekPendingGameReference,
   consumePendingGameReference,
+  setAnnotateOrigin,
+  peekAnnotateOrigin,
+  clearAnnotateOrigin,
 } from './pendingNavigation';
 
 describe('pendingNavigation', () => {
@@ -150,6 +153,46 @@ describe('pendingNavigation', () => {
       // The annotate breadcrumb is untouched by consuming the reference one.
       expect(hasPendingGame()).toBe(true);
       expect(consumePendingGame()).toEqual({ gameId: 42, seekTime: 12.5, sourceClipId: null });
+    });
+  });
+
+  describe('annotate origin (Focus/Overlay publish-exit return-to-Annotate)', () => {
+    it('round-trips game id and source clip id, scoped to the matching project', () => {
+      setAnnotateOrigin(42, 7, 99);
+      expect(peekAnnotateOrigin(42)).toEqual({ gameId: 7, sourceClipId: 99 });
+    });
+
+    it('returns null for a project id that does not match the stored breadcrumb', () => {
+      setAnnotateOrigin(42, 7, 99);
+      expect(peekAnnotateOrigin(43)).toBeNull();
+    });
+
+    it('omits source clip id when not provided', () => {
+      setAnnotateOrigin(42, 7);
+      expect(peekAnnotateOrigin(42)).toEqual({ gameId: 7, sourceClipId: null });
+    });
+
+    it('a later handoff for a different project overwrites the breadcrumb entirely', () => {
+      setAnnotateOrigin(42, 7, 99);
+      setAnnotateOrigin(43, 8, 100);
+      expect(peekAnnotateOrigin(42)).toBeNull();
+      expect(peekAnnotateOrigin(43)).toEqual({ gameId: 8, sourceClipId: 100 });
+    });
+
+    it('peek does NOT clear — survives a Focus -> Overlay in-place mode switch', () => {
+      setAnnotateOrigin(42, 7, 99);
+      peekAnnotateOrigin(42);
+      expect(peekAnnotateOrigin(42)).toEqual({ gameId: 7, sourceClipId: 99 });
+    });
+
+    it('clearAnnotateOrigin removes the breadcrumb', () => {
+      setAnnotateOrigin(42, 7, 99);
+      clearAnnotateOrigin();
+      expect(peekAnnotateOrigin(42)).toBeNull();
+    });
+
+    it('returns null when nothing is pending', () => {
+      expect(peekAnnotateOrigin(42)).toBeNull();
     });
   });
 });

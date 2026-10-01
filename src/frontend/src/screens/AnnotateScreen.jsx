@@ -17,7 +17,7 @@ import { useUploadStore, useActiveUploadBlobUrl, selectActiveUpload } from '../s
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from './ProjectsScreen';
-import { hasPendingGame, consumePendingGame } from '../utils/pendingNavigation';
+import { hasPendingGame, consumePendingGame, setAnnotateOrigin } from '../utils/pendingNavigation';
 import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { openFinishedReel } from '../utils/finishedReelNav';
 
@@ -237,6 +237,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
             toast.error("Couldn't open this reel", { message: 'Check your network and try again.' });
             return;
           }
+          // Remember this handoff so Focus/Overlay's publish-exit can return
+          // here instead of Project Manager (see pendingNavigation's annotateOrigin).
+          if (gameIdRef.current) {
+            setAnnotateOrigin(selectedRegion.autoProjectId, gameIdRef.current, selectedRegion.rawClipId ?? null);
+          }
           onModeChange?.(newMode);
         });
       }
@@ -268,6 +273,10 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       toast.error("Couldn't open this reel", { message: 'Check your network and try again.' });
       return;
     }
+    // Remember this handoff so Focus/Overlay's publish-exit can return here
+    // instead of Project Manager (see pendingNavigation's annotateOrigin).
+    const region = clipRegionsRef.current.find(r => r.autoProjectId === autoProjectId);
+    if (gameIdRef.current) setAnnotateOrigin(autoProjectId, gameIdRef.current, region?.rawClipId ?? null);
     onModeChange?.(mode);
   }, [persistAnnotateProgress, selectProject, onModeChange]);
 

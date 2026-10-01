@@ -13,7 +13,7 @@ import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
-import { setPendingProject, clearPendingProject, consumePendingProject } from '../utils/pendingNavigation';
+import { setPendingProject, clearPendingProject, consumePendingProject, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared/Toast';
 
 // Module-level variable to pass File object and game details to AnnotateScreen
@@ -205,6 +205,10 @@ export function ProjectsScreen({
     console.log('[ProjectsScreen] Selecting project:', projectId);
     if (PROFILING_ENABLED) performance.mark('gesture:open-project:start');
     setLoadingProjectId(projectId);
+    // This open did NOT come from Annotate -- drop any stale annotateOrigin
+    // breadcrumb for this (or a prior profile's) project id, or Focus/Overlay's
+    // publish-exit would wrongly route back to Annotate instead of here.
+    clearAnnotateOrigin();
     // Breadcrumb so the selection survives a lazyWithReload page reload
     // (post-deploy stale chunk hash); cleared in finally once the load settles
     setPendingProject(projectId);
@@ -256,6 +260,8 @@ export function ProjectsScreen({
   const handleSelectProjectWithMode = useCallback(async (projectId, options = {}) => {
     console.log('[ProjectsScreen] Selecting project with mode:', projectId, options);
     setLoadingProjectId(projectId);
+    // This open did NOT come from Annotate -- see handleSelectProject above.
+    clearAnnotateOrigin();
     // Breadcrumb so the selection survives a lazyWithReload page reload
     // (post-deploy stale chunk hash); cleared in finally once the load settles
     setPendingProject(projectId, options);

@@ -33,7 +33,7 @@ import { shouldPersistFocusForOverlayTransition, shouldSkipFocusCompletionPrevie
 import { offerFocusCompletionPreview } from './focusCompletionOffer';
 import { isClipFromAnotherProject, shouldRetryClipVideoViaProxy } from './clipVideoResolution';
 import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
-import { setPendingGame } from '../utils/pendingNavigation';
+import { setPendingGame, peekAnnotateOrigin, clearAnnotateOrigin } from '../utils/pendingNavigation';
 
 // T8390: safety-net expiry for a staked publish intent (see handlePublish).
 // ExportButtonContainer exposes no onError callback to this screen, so a
@@ -1125,9 +1125,18 @@ export function FocusScreen({
     // one SINGLE_CLIP copy. Centralized in displayNames.js, not inlined here.
     const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
     toast.success(copy.title, { message: copy.message, duration: 10000 });
-    // Navigation only — lands on the drafts surface. Persists NOTHING; the draft
-    // stays at its current stage and the Overlay tab remains enabled.
-    useEditorStore.getState().goToProjectManager();
+    // Navigation: back to the exact Annotate spot this play came from, if this
+    // session got here via Annotate -> Focus; otherwise the drafts surface as
+    // before. Persists NOTHING else; the draft stays at its current stage and
+    // the Overlay tab remains enabled.
+    const origin = peekAnnotateOrigin(projectId);
+    if (origin) {
+      clearAnnotateOrigin();
+      setPendingGame(origin.gameId, null, origin.sourceClipId);
+      useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
+    } else {
+      useEditorStore.getState().goToProjectManager();
+    }
   }, [projectId, closePreview, acknowledgeCompletionJob]);
 
   // T8390: Publish — renamed from "Finish Now" now that the user has actually

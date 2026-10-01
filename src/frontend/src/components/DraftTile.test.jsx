@@ -634,6 +634,27 @@ describe('DraftTile (T5672)', () => {
     });
   });
 
+  // This open did NOT come from Annotate, so any stale annotateOrigin breadcrumb
+  // for this project id (left over from an earlier, abandoned Annotate ->
+  // Focus/Overlay session that never published or saved a draft) must be
+  // dropped here -- otherwise DraftReelPreview's close would wrongly route this
+  // Project-Manager-initiated preview back to Annotate instead of a plain close.
+  describe('T11250 clears a stale annotateOrigin breadcrumb on preview open', () => {
+    afterEach(() => sessionStorage.clear());
+
+    it('clears annotateOrigin for this project id when Preview is clicked', async () => {
+      const { setAnnotateOrigin, peekAnnotateOrigin } = await import('../utils/pendingNavigation');
+      // baseProject.id is 7 (see renderTile below) -- simulate a stale breadcrumb
+      // left over from an earlier, abandoned Annotate -> Focus/Overlay session.
+      setAnnotateOrigin(7, 99, 55);
+      renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
+
+      fireEvent.click(screen.getByTitle('Watch finished highlight'));
+
+      expect(peekAnnotateOrigin(7)).toBeNull();
+    });
+  });
+
   // T10190 §2.5/§3.0: the Preview CTA's copy moves to the centralized
   // RESULT_SURFACE.WATCH_HIGHLIGHT constant (was the ad-hoc "Preview video"
   // literal at DraftTile.jsx:748). Card CTA, in scope per the design's

@@ -62,7 +62,11 @@ vi.mock('../stores/uploadStore', () => ({
 vi.mock('../stores/gamesDataStore', () => ({ useGamesDataStore: mkStore() }));
 vi.mock('../stores/projectsStore', () => ({ useProjectsStore: mkStore() }));
 vi.mock('./ProjectsScreen', () => ({ getPendingGameFile: () => null, getPendingGameDetails: () => null, clearPendingGameFile: vi.fn() }));
-vi.mock('../utils/pendingNavigation', () => ({ hasPendingGame: () => false, consumePendingGame: () => null }));
+vi.mock('../utils/pendingNavigation', () => ({
+  hasPendingGame: () => false,
+  consumePendingGame: () => null,
+  setAnnotateOrigin: () => {},
+}));
 
 import { AnnotateScreen } from './AnnotateScreen';
 

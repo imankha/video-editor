@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { FocusPublishActionBar } from '../../components/FocusPublishActionBar';
 import { FOCUS_PUBLISH, FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST } from '../../config/displayNames';
 import { usePublishIntentStore } from '../../stores/publishIntentStore';
+import { setAnnotateOrigin, peekAnnotateOrigin, clearAnnotateOrigin, setPendingGame, consumePendingGame } from '../../utils/pendingNavigation';
 
 // T8390: FocusScreen is a very large screen that cannot be mounted in isolation
 // (dozens of stores/hooks/contexts). This test harness reproduces the post-export
@@ -62,8 +63,17 @@ function FocusPublishExitHarness({ deps, startOpen = false, projectId = 42 }) {
     // with the Reels building surfaces).
     const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
     toastSuccess(copy.title, { message: copy.message, duration: 10000 });
-    goToProjectManager();
-  }, [recordAchievement, goToProjectManager, toastSuccess, projectId]);
+    // Back to the exact Annotate spot this play came from, if this session got
+    // here via Annotate -> Focus; otherwise the drafts surface as before.
+    const origin = peekAnnotateOrigin(projectId);
+    if (origin) {
+      clearAnnotateOrigin();
+      setPendingGame(origin.gameId, null, origin.sourceClipId);
+      setEditorMode('annotate');
+    } else {
+      goToProjectManager();
+    }
+  }, [recordAchievement, goToProjectManager, toastSuccess, projectId, setEditorMode]);
 
   // T10660: no setEditorMode, no closePreview, no poll — stake + delegate.
   const handlePublish = useCallback(() => {
@@ -114,11 +124,13 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     usePublishIntentStore.getState().clear();
+    sessionStorage.clear();
   });
   afterEach(() => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
     usePublishIntentStore.getState().clear();
+    sessionStorage.clear();
   });
 
   it('on completion: shows the preview, records overlay_offered once, and does NOT switch editorMode', () => {
@@ -183,6 +195,22 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     expect(deps.goToProjectManager).toHaveBeenCalledTimes(1);
     expect(deps.setEditorMode).not.toHaveBeenCalled();
     expect(deps.onPublishWithoutSpotlight).not.toHaveBeenCalled();
+  });
+
+  it('"Save draft" returns to the exact Annotate spot instead of Project Manager when this session got here via Annotate', () => {
+    setAnnotateOrigin(42, 7, 99); // this project came from Annotate's game 7, play 99
+    const deps = makeDeps();
+    render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
+
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.SAVE_DRAFT_LABEL }));
+
+    expect(deps.goToProjectManager).not.toHaveBeenCalled();
+    expect(deps.setEditorMode).toHaveBeenCalledWith('annotate');
+    // No seek time: lands on the game's saved last-playhead (persisted on the
+    // way out of Annotate), which IS "where we left off".
+    expect(consumePendingGame()).toEqual({ gameId: 7, seekTime: null, sourceClipId: 99 });
+    // The breadcrumb is consumed, not left to misfire on a later unrelated visit.
+    expect(peekAnnotateOrigin(42)).toBeNull();
   });
 
   it('Edit framing (and the X/onClose it also drives) just closes the preview — no achievement/toast/navigation', () => {

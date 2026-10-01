@@ -129,7 +129,11 @@ vi.mock('../stores/projectsStore', () => {
   };
 });
 vi.mock('./ProjectsScreen', () => ({ getPendingGameFile: () => null, getPendingGameDetails: () => null, clearPendingGameFile: vi.fn() }));
-vi.mock('../utils/pendingNavigation', () => ({ hasPendingGame: () => false, consumePendingGame: () => null }));
+vi.mock('../utils/pendingNavigation', () => ({
+  hasPendingGame: () => false,
+  consumePendingGame: () => null,
+  setAnnotateOrigin: () => {},
+}));
 
 import { AnnotateScreen } from './AnnotateScreen';
 

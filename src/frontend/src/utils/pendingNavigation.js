@@ -143,6 +143,55 @@ export function consumePendingGameReference() {
   return pending;
 }
 
+// --- Annotate origin (consumed by Focus/Overlay publish-exit handlers) ---
+//
+// When Annotate hands off to Focus or Overlay for a specific play, this
+// records where to come back to. It is a single flat slot (like the others
+// above), overwritten on every Annotate -> Focus/Overlay handoff, so it always
+// reflects the CURRENT project's origin -- a stale breadcrumb for a different
+// project simply fails the projectId match in peekAnnotateOrigin and is
+// ignored. Survives the Focus -> Overlay "Add Spotlight Now" in-place switch
+// (same project, no re-entry through Annotate) since it's sessionStorage, not
+// component state. No seekTime: landing with none makes AnnotateContainer fall
+// back to the game's saved last-playhead (persisted on the way out), which IS
+// "where we left off" -- no need to carry an explicit position here.
+
+const ANNOTATE_ORIGIN_PROJECT_KEY = 'annotateOriginProjectId';
+const ANNOTATE_ORIGIN_GAME_KEY = 'annotateOriginGameId';
+const ANNOTATE_ORIGIN_CLIP_KEY = 'annotateOriginSourceClipId';
+
+export function setAnnotateOrigin(projectId, gameId, sourceClipId = null) {
+  sessionStorage.setItem(ANNOTATE_ORIGIN_PROJECT_KEY, projectId.toString());
+  sessionStorage.setItem(ANNOTATE_ORIGIN_GAME_KEY, gameId.toString());
+  if (sourceClipId != null) {
+    sessionStorage.setItem(ANNOTATE_ORIGIN_CLIP_KEY, sourceClipId.toString());
+  } else {
+    sessionStorage.removeItem(ANNOTATE_ORIGIN_CLIP_KEY);
+  }
+}
+
+/**
+ * Read the breadcrumb WITHOUT clearing it, scoped to `projectId` -- returns
+ * null when there is none, or it belongs to a different project.
+ */
+export function peekAnnotateOrigin(projectId) {
+  const storedProjectId = sessionStorage.getItem(ANNOTATE_ORIGIN_PROJECT_KEY);
+  if (storedProjectId == null || parseInt(storedProjectId) !== projectId) return null;
+  const gameId = sessionStorage.getItem(ANNOTATE_ORIGIN_GAME_KEY);
+  if (gameId == null) return null;
+  const sourceClipId = sessionStorage.getItem(ANNOTATE_ORIGIN_CLIP_KEY);
+  return {
+    gameId: parseInt(gameId),
+    sourceClipId: sourceClipId != null ? parseInt(sourceClipId) : null,
+  };
+}
+
+export function clearAnnotateOrigin() {
+  sessionStorage.removeItem(ANNOTATE_ORIGIN_PROJECT_KEY);
+  sessionStorage.removeItem(ANNOTATE_ORIGIN_GAME_KEY);
+  sessionStorage.removeItem(ANNOTATE_ORIGIN_CLIP_KEY);
+}
+
 // --- Projects/reels (consumed by ProjectsScreen restore effect) ---
 
 export function setPendingProject(projectId, { mode = null } = {}) {

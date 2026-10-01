@@ -102,9 +102,15 @@ vi.mock('./collections/CollectionPlayer', async () => {
 // CollectionPlayer's reel shape AND pass onBackToGame iff payload.gameId != null,
 // wired to setPendingGame(gameId, gameStartTime, sourceClipId) + navigate to
 // ANNOTATE (the same gesture primitives handleEditInAnnotate in App.jsx uses).
-const { setPendingGameMock } = vi.hoisted(() => ({ setPendingGameMock: vi.fn() }));
+const { setPendingGameMock, peekAnnotateOriginMock, clearAnnotateOriginMock } = vi.hoisted(() => ({
+  setPendingGameMock: vi.fn(),
+  peekAnnotateOriginMock: vi.fn(() => null),
+  clearAnnotateOriginMock: vi.fn(),
+}));
 vi.mock('../utils/pendingNavigation', () => ({
   setPendingGame: (...a) => setPendingGameMock(...a),
+  peekAnnotateOrigin: (...a) => peekAnnotateOriginMock(...a),
+  clearAnnotateOrigin: (...a) => clearAnnotateOriginMock(...a),
 }));
 
 import { DraftReelPreview } from './DraftReelPreview';
@@ -329,6 +335,48 @@ describe('DraftReelPreview gameId threading and onBackToGame (T10190)', () => {
     fireEvent.click(screen.getByTitle('Back to game plays'));
 
     expect(setPendingGameMock).toHaveBeenCalledWith(55, 750, 123);
+    expect(useEditorStore.getState().editorMode).toBe(EDITOR_MODES.ANNOTATE);
+  });
+});
+
+// Closing the preview returns to the exact Annotate spot (instead of a plain
+// close, which leaves the user on Project Manager) when this draft's publish
+// came from a Focus/Overlay session that started in Annotate -- covers both
+// Overlay's "Publish Now" and Focus's one-tap "Publish" (both funnel into this
+// component via openFinishedReel/handleOverlayExportCompletion).
+describe('DraftReelPreview close returns to Annotate when annotateOrigin matches (T11250)', () => {
+  beforeEach(() => {
+    setPendingGameMock.mockClear();
+    peekAnnotateOriginMock.mockReset();
+    peekAnnotateOriginMock.mockReturnValue(null);
+    clearAnnotateOriginMock.mockClear();
+    act(() => useReelPreviewStore.getState().close());
+    act(() => useEditorStore.getState().setEditorMode(EDITOR_MODES.PROJECT_MANAGER));
+  });
+
+  it('a plain close with no matching origin behaves as before (just closes)', () => {
+    render(<DraftReelPreview />);
+    openPreview();
+
+    fireEvent.click(screen.getByTitle('Close'));
+
+    expect(peekAnnotateOriginMock).toHaveBeenCalledWith(snapshot.projectId);
+    expect(setPendingGameMock).not.toHaveBeenCalled();
+    expect(useEditorStore.getState().editorMode).toBe(EDITOR_MODES.PROJECT_MANAGER);
+    expect(useReelPreviewStore.getState().payload).toBeNull();
+  });
+
+  it('close consumes the matching origin and returns to Annotate at the saved spot instead of closing to Project Manager', () => {
+    peekAnnotateOriginMock.mockReturnValue({ gameId: 7, sourceClipId: 99 });
+    render(<DraftReelPreview />);
+    openPreview();
+
+    fireEvent.click(screen.getByTitle('Close'));
+
+    expect(clearAnnotateOriginMock).toHaveBeenCalled();
+    // No seek time: lands on the game's saved last-playhead, which IS "where
+    // we left off".
+    expect(setPendingGameMock).toHaveBeenCalledWith(7, null, 99);
     expect(useEditorStore.getState().editorMode).toBe(EDITOR_MODES.ANNOTATE);
   });
 });

@@ -35,7 +35,7 @@ import { openFinishedReel } from '../utils/finishedReelNav';
 import { allowEnterFraming } from '../utils/reelReEditable';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { resultRetentionNote } from '../utils/resultRetentionNote';
-import { setPendingGame } from '../utils/pendingNavigation';
+import { setPendingGame, peekAnnotateOrigin, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared';
 import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS } from '../config/displayNames';
 
@@ -1695,7 +1695,16 @@ export function OverlayScreen({
     recordFunnelEvent(FUNNEL_EVENTS.DRAFT_SAVED, { project_id: projectId });
     const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
     toast.success(copy.title, { message: copy.message, duration: 10000 });
-    useEditorStore.getState().goToProjectManager();
+    // Back to the exact Annotate spot this play came from, if this session got
+    // here via Annotate -> Focus/Overlay; otherwise the drafts surface as before.
+    const origin = peekAnnotateOrigin(projectId);
+    if (origin) {
+      clearAnnotateOrigin();
+      setPendingGame(origin.gameId, null, origin.sourceClipId);
+      useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
+    } else {
+      useEditorStore.getState().goToProjectManager();
+    }
   }, [projectId]);
 
   // =========================================
