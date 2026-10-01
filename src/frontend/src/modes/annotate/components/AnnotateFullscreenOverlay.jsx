@@ -87,11 +87,9 @@ function HighlightMadeChip({ show }) {
   );
 }
 
-// T9630: labels/colors for the Saving/Saved/error status, derived from real
-// per-gesture write state (see `displayStatus` below), never asserted.
+// T9630/T10610 § C.5: only a write failure ever surfaces a badge — autosave
+// is silent by design, so there is no Saving/Saved copy here.
 const SAVE_STATUS_COPY = {
-  saving: { text: 'Saving...', className: 'text-gray-400' },
-  saved: { text: 'Saved', className: 'text-green-400' },
   error: { text: "Couldn't save — try again", className: 'text-red-400' },
 };
 
@@ -393,9 +391,9 @@ export function AnnotateFullscreenOverlay({
   // T10610 § C.5: writeStatus comes straight from the container's own
   // per-gesture write outcome — no more local Unsaved/hasUnsavedEdits
   // derivation (nothing is ever "unsaved" once every control autosaves).
-  const displayStatus = (writeStatus === 'saving' || writeStatus === 'saved' || writeStatus === 'error')
-    ? writeStatus
-    : null;
+  // saving/saved stay silent (autosave is silent by design); only a
+  // failure surfaces a badge.
+  const displayStatus = writeStatus === 'error' ? writeStatus : null;
 
   // Keep the disclosure action explicit: empty metadata invites entry, while
   // existing metadata is presented as something the user can review.

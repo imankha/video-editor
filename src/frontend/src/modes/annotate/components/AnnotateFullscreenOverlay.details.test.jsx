@@ -70,7 +70,7 @@ describe('AnnotateFullscreenOverlay — desktop expand-in-place (layout="strip")
   it('the details panel is CLOSED by default and expands on click, no popup (T10580)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
     // Desktop panel is in-flow content, not a portaled dialog, and closed by default.
-    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Tags and Notes' })).toBeNull();
     expect(screen.queryByLabelText('Notes (optional)')).toBeNull();
     fireEvent.click(screen.getByText('Add Tags and Notes'));
     expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
@@ -92,9 +92,9 @@ describe('AnnotateFullscreenOverlay — mobile full-screen popup (layout="inline
 
   it('is closed by default on mobile; tapping "Details" opens a full-screen popup with Tags + Notes', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" />);
-    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Tags and Notes' })).toBeNull();
     fireEvent.click(screen.getByText('Add Tags and Notes'));
-    const dialog = screen.getByRole('dialog', { name: 'Details' });
+    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
     expect(dialog).toBeTruthy();
     expect(screen.getByPlaceholderText('Add a note about this play...')).toBeTruthy();
   });
@@ -105,10 +105,10 @@ describe('AnnotateFullscreenOverlay — mobile full-screen popup (layout="inline
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" onUpdateClip={onUpdateClip} />);
     fireEvent.click(screen.getByText('Add Tags and Notes'));
-    const dialog = screen.getByRole('dialog', { name: 'Details' });
+    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
     expect(within(dialog).queryByRole('button', { name: 'Done' })).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
-    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Tags and Notes' })).toBeNull();
     // Notes was never touched, so closing -> commitNotes() is a no-op.
     expect(onUpdateClip).not.toHaveBeenCalled();
   });
