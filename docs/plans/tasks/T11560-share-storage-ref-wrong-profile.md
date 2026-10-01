@@ -1,6 +1,6 @@
 # T11560: Direct game share writes the recipient's storage ref into the sharer's own SQLite, not the recipient's
 
-**Status:** WAITING ON USER (branch pushed, awaiting PR review/merge)
+**Status:** STAGING (merged to master `7b08ef806`, 2026-10-01; auto-deploys to staging)
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-10-01
