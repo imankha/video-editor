@@ -13,7 +13,9 @@ was never touched. Root cause: `insert_game_storage_ref`'s SQLite half uses
 it receives, and `materialize_game_share` runs inside the SHARER's own request context. Postgres
 side is correct; only the recipient's local SQLite ref row is missing. Depth-2 (sync/persistence)
 bug, hits the core sharing/growth loop directly — jumps the queue. Impact 8 / Complexity 3,
-Tier M, backend-only. **Status: WIP.**
+Tier M, backend-only. **Status: WAITING ON USER — branch pushed
+(`feature/T11560-share-storage-ref-wrong-profile`), 4 review rounds (0 BLOCKING/MAJOR findings),
+331 tests passing, waiting on PR review/merge decision.**
 
 **HIGH PRIORITY (user-ordered 2026-10-01): [Social Cover Image epic](tasks/social-cover-image/EPIC.md)
 (T11510-T11550).** Instagram ignored the user's chosen cover image on both Share and Download.
