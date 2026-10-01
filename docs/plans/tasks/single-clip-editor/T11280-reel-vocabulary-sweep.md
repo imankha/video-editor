@@ -1,10 +1,10 @@
 # T11280: Reel vocabulary sweep on published, share, legal and landing copy
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-24
-**Updated:** 2026-09-24
+**Updated:** 2026-10-01
 **Epic:** [Single-Clip Editor](EPIC.md)
 
 ## Problem
