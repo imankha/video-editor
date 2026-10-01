@@ -697,10 +697,15 @@ class TestMaterializeGameShare:
 
     @patch("app.services.materialization.mark_game_share_materialized")
     @patch("app.services.materialization.USER_DATA_BASE")
-    def test_full_materialization(self, mock_base, mock_mark, tmp_path):
+    def test_full_materialization(self, mock_base, mock_mark, tmp_path, pg_conn):
+        from app.services.auth_db import create_user
+
         mock_base.__truediv__ = lambda self, x: tmp_path / x
         # Make Path operations work on mock
         type(mock_base).__truediv__ = lambda self, x: tmp_path / x
+
+        create_user("sharer-user", email="sharer@test.com")
+        create_user("recipient-user", email="recipient@test.com")
 
         s_conn, r_conn = self._setup_dbs(tmp_path)
         game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_1")
@@ -769,6 +774,26 @@ class TestMaterializeGameShare:
             "(this is what _compute_storage_status reads to decide 'expired')"
         )
         assert recipient_refs[0]["game_size_bytes"] == 100000
+
+        # T11560 (review on merge): the Postgres half must ALSO land under
+        # the RECIPIENT's ids, via insert_game_storage_ref_pg_only -- a
+        # previous version of this test only checked SQLite, so a caller
+        # bug that passed the wrong ids to the Postgres half (or dropped it
+        # entirely) would have gone undetected while has_remaining_refs/the
+        # sweep's ref-count undercounts.
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT game_size_bytes FROM game_storage_refs
+                   WHERE user_id = %s AND profile_id = %s AND blake3_hash = %s""",
+                ("recipient-user", "recipient-profile", "game_hash_1"),
+            )
+            pg_row = cur.fetchone()
+        assert pg_row is not None, (
+            "recipient's game_storage_refs row must exist in Postgres too"
+        )
+        assert pg_row["game_size_bytes"] == 100000
 
         s_conn.close()
         r_conn.close()

@@ -366,6 +366,26 @@ class TestClaimGameLink:
         assert refs == 0
         conn.close()
 
+        # T11560 (review on merge): also prove the POSTGRES half stays
+        # suppressed. materialize_storage_refs=False gates BOTH halves at
+        # the same `if materialize_storage_refs and hashes and sharer_conn`
+        # check (materialization.py) -- but a future refactor that moved the
+        # Postgres loop outside that gate (e.g. iterating `hashes` directly
+        # instead of the already-gated `storage_refs`) would still pass the
+        # SQLite-only assertion above while violating EPIC decision 3 for
+        # Postgres. `env` already provides a real throwaway Postgres via
+        # pg_conn.
+        from app.services.pg import get_pg
+        with get_pg() as pg:
+            cur = pg.cursor()
+            cur.execute(
+                """SELECT COUNT(*) c FROM game_storage_refs
+                   WHERE user_id = %s AND profile_id = %s AND blake3_hash = %s""",
+                (CLAIMER_ID, CLAIMER_PROFILE, "claimhash"),
+            )
+            pg_refs = cur.fetchone()["c"]
+        assert pg_refs == 0
+
 
 # ===========================================================================
 # Endpoint contract: /api/shared/game/{token}/claim
