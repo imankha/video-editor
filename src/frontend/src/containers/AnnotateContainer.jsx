@@ -2122,6 +2122,7 @@ export function AnnotateContainer({
       console.log('[SelectClip] Found region:', regionId, 'actual:', region.startTime, '-', region.endTime, 'seq:', region.videoSequence, 'state:', selectionState.type);
       // If overlay is open (EDITING), stay in EDITING with new clip; otherwise SELECTED
       if (selectionState.type === 'EDITING') {
+        effectivePause(); // switching the edited play mid-playback left video running
         editClip(regionId);
       } else {
         selectClip(regionId);
@@ -2150,7 +2151,7 @@ export function AnnotateContainer({
       return;
     }
     doSelect();
-  }, [clipRegions, selectionState, selectClip, editClip, guardRateThenExit, effectiveSeek, effectiveCurrentTime, fullTimeline, isOverlapTimeline, switchToSource]);
+  }, [clipRegions, selectionState, selectClip, editClip, effectivePause, guardRateThenExit, effectiveSeek, effectiveCurrentTime, fullTimeline, isOverlapTimeline, switchToSource]);
 
   // Effect: Auto-select/deselect based on playhead position
   // EDITING is immune — scrub handles move playhead without deselecting
