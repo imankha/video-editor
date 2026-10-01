@@ -10,14 +10,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 import psycopg2
-import pytest
 from psycopg2.extras import RealDictCursor
 
-from app.utils.encoding import encode_data
-from app.session_init import user_session_init, invalidate_user_cache, _init_cache
 from app.services.user_db import _USER_DB_SCHEMA
+from app.session_init import invalidate_user_cache, user_session_init
 from app.user_context import set_current_user_id
-
+from app.utils.encoding import encode_data
 
 SHARER_ID = "sharer-user"
 SHARER_EMAIL = "sharer@example.com"
@@ -102,6 +100,13 @@ def _create_profile_db(path: Path) -> sqlite3.Connection:
             UNIQUE(clip_id, tag_name)
         );
         CREATE INDEX IF NOT EXISTS idx_clip_teammates_tag ON clip_teammates(tag_name);
+        CREATE TABLE IF NOT EXISTS game_storage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            blake3_hash TEXT NOT NULL UNIQUE,
+            game_size_bytes INTEGER NOT NULL,
+            storage_expires_at TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
     """)
     conn.commit()
     return conn
@@ -234,8 +239,11 @@ def _common_patches(tmp_path):
     stack.enter_context(patch("app.services.materialization.USER_DATA_BASE", tmp_path))
     stack.enter_context(patch("app.database.USER_DATA_BASE", tmp_path))
     stack.enter_context(patch("app.storage.R2_ENABLED", False))
-    stack.enter_context(patch("app.services.materialization.insert_game_storage_ref"))
-    stack.enter_context(patch("app.services.materialization.get_game_storage_ref", return_value=None))
+    # T11560: _resolve_sharer_storage_refs reads straight off the sharer's
+    # own already-open connection now (no ContextVar/ambient lookup), so
+    # there's nothing left to mock here -- a sharer DB with no game_storage
+    # row (the default, since none of these tests seed one) naturally
+    # produces no ref, same as the old get_game_storage_ref(return_value=None).
     stack.enter_context(patch("app.services.project_archive.archive_completed_projects", return_value=0))
     stack.enter_context(patch("app.services.project_archive.cleanup_database_bloat"))
     stack.enter_context(patch("app.session_init._schedule_startup_recovery"))
@@ -259,6 +267,18 @@ class TestAutoMaterialize:
         game_id = _insert_game(s_conn, name="Vs LA Breakers")
         _insert_clip(s_conn, game_id, 10.0, 15.0, name="Great Goal",
                      tagged_teammates=["Nico"])
+        # T11560 regression: this auto-materialize path (T3230) runs on a bare
+        # background thread with NO request context at all (see
+        # _ImmediateThread above) -- pre-fix, insert_game_storage_ref's
+        # ambient-context SQLite write raised RuntimeError: No user context
+        # set here, aborting materialize_game_share entirely. Seed a real
+        # sharer storage ref so this exercises that exact path end-to-end.
+        s_conn.execute(
+            "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+            "VALUES (?, ?, ?)",
+            ("abc123", 100000, "2027-01-01T00:00:00+00:00"),
+        )
+        s_conn.commit()
         s_conn.close()
 
         clip_data = [
@@ -307,6 +327,17 @@ class TestAutoMaterialize:
         games = r_conn.execute("SELECT * FROM games").fetchall()
         assert len(games) >= 1
         assert games[0]["name"] == "Vs LA Breakers"
+
+        # T11560: the recipient must also get the storage ref -- this is the
+        # exact T3230 path the production bug's root cause (and the fix)
+        # applies to, just reached through session_init instead of share_game.
+        storage_refs = r_conn.execute(
+            "SELECT * FROM game_storage WHERE blake3_hash = ?", ("abc123",)
+        ).fetchall()
+        assert len(storage_refs) == 1, (
+            "recipient's own SQLite must have the game_storage ref row after "
+            "T3230 auto-materialization, not just the sharer's"
+        )
         r_conn.close()
 
     def test_multi_profile_user_skips_auto_materialize(self, pg_conn, tmp_path):
@@ -325,7 +356,7 @@ class TestAutoMaterialize:
             {"name": "Clip", "start_time": 0.0, "end_time": 5.0,
              "rating": 3, "video_sequence": None, "tagged_teammates": ["Nico"]},
         ]
-        share_id, pending_id = _seed_postgres_share(pg_conn, game_id, "Nico", clip_data)
+        _share_id, pending_id = _seed_postgres_share(pg_conn, game_id, "Nico", clip_data)
 
         # Set up recipient: 2 profiles in user.sqlite
         recipient_profile_id = "recip-prof"

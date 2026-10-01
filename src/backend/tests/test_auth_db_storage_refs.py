@@ -10,9 +10,10 @@ Tests for game storage functions after the T6770 derived-ref-set rework:
 import sqlite3
 import sys
 import types
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
+
+import pytest
 
 # Prevent cv2 import failure when app.services.__init__ loads image_extractor
 if "cv2" not in sys.modules:
@@ -24,9 +25,9 @@ from app.services import auth_db
 @pytest.fixture(autouse=True)
 def temp_auth_db(pg_conn, tmp_path):
     """Clean Postgres tables + isolated profile SQLite for each test."""
+    from app.profile_context import set_current_profile_id
     from app.services.auth_db import create_user
     from app.user_context import set_current_user_id
-    from app.profile_context import set_current_profile_id
 
     create_user("user-1", email="user1@example.com")
     create_user("user-2", email="user2@example.com")
@@ -62,8 +63,8 @@ def temp_auth_db(pg_conn, tmp_path):
 
 def _setup_user2_profile(tmp_path):
     """Create a second user's profile DB for multi-user tests."""
-    from app.user_context import set_current_user_id
     from app.profile_context import set_current_profile_id
+    from app.user_context import set_current_user_id
 
     set_current_user_id("user-2")
     set_current_profile_id("prof-2")
@@ -104,7 +105,7 @@ def _pg_ref_count(blake3_hash):
 
 class TestInsertGameStorageRef:
     def test_inserts_into_sqlite_and_creates_pg_ref_row(self, temp_auth_db):
-        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=30)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
 
         ref = auth_db.get_game_storage_ref("user-1", "prof-1", "hash_a")
@@ -115,8 +116,8 @@ class TestInsertGameStorageRef:
         assert _pg_ref_count("hash_a") == 1
 
     def test_upsert_updates_expiry_without_creating_a_second_row(self, temp_auth_db):
-        future1 = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-        future2 = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
+        future1 = (datetime.now(UTC) + timedelta(days=30)).isoformat()
+        future2 = (datetime.now(UTC) + timedelta(days=60)).isoformat()
 
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future1)
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future2)
@@ -136,7 +137,7 @@ class TestInsertGameStorageRef:
         from app.profile_context import set_current_profile_id
         from app.user_context import set_current_user_id
 
-        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=30)).isoformat()
         set_current_user_id("user-1")
         set_current_profile_id("prof-1")
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
@@ -150,7 +151,7 @@ class TestInsertGameStorageRef:
     def test_clears_grace_deletion_on_insert(self, temp_auth_db):
         auth_db.insert_grace_deletion("hash_a")
 
-        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=30)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
 
         with auth_db.get_pg() as conn:
@@ -159,8 +160,8 @@ class TestInsertGameStorageRef:
             assert cur.fetchone() is None
 
     def test_updates_expiry_via_greatest(self, temp_auth_db):
-        early = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
-        late = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
+        early = (datetime.now(UTC) + timedelta(days=10)).isoformat()
+        late = (datetime.now(UTC) + timedelta(days=60)).isoformat()
 
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, early)
 
@@ -178,13 +179,51 @@ class TestInsertGameStorageRef:
             row = cur.fetchone()
         assert row["storage_expires_at"].isoformat() >= late[:19]
 
+    def test_sqlite_upsert_never_moves_expiry_backward(self, temp_auth_db):
+        """T11560 MAJOR-2: the SQLite half (game_storage, upsert_game_storage_row)
+        must match Postgres's GREATEST invariant above -- before this fix it
+        unconditionally overwrote storage_expires_at, so a LATER re-upsert with
+        an EARLIER expiry (e.g. a recipient who paid to extend storage, then had
+        the same game re-shared/re-merged with the sharer's shorter expiry)
+        would silently roll the recipient's local copy back, disagreeing with
+        Postgres and producing a false early 'expired'."""
+        from app.database import get_db_connection
+
+        late = (datetime.now(UTC) + timedelta(days=60)).isoformat()
+        early = (datetime.now(UTC) + timedelta(days=10)).isoformat()
+
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_backward", 1000, late)
+        # A later re-upsert with an EARLIER expiry must NOT move it backward.
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_backward", 1000, early)
+
+        with get_db_connection() as conn:
+            row = conn.execute(
+                "SELECT storage_expires_at FROM game_storage WHERE blake3_hash = ?",
+                ("hash_backward",),
+            ).fetchone()
+        assert row["storage_expires_at"] == late, (
+            "a shorter re-upsert must never shorten an existing SQLite expiry"
+        )
+
+        # A genuinely LATER expiry must still be able to extend it further.
+        later_still = (datetime.now(UTC) + timedelta(days=90)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_backward", 1000, later_still)
+        with get_db_connection() as conn:
+            row = conn.execute(
+                "SELECT storage_expires_at FROM game_storage WHERE blake3_hash = ?",
+                ("hash_backward",),
+            ).fetchone()
+        assert row["storage_expires_at"] == later_still, (
+            "a genuinely later expiry must still extend forward normally"
+        )
+
     def test_creates_pg_row_even_when_sqlite_row_already_exists(self, temp_auth_db):
         """Regression test for the 2026-08-11 missing-row finding: the OLD
         is_new-gated write skipped the Postgres mutation whenever the SQLite
         row already existed, so a PG row lost to a prior crash/purge could
         never self-heal. The new upsert is keyed on the actual pair, not
         SQLite novelty, so it must (re)create the PG row unconditionally."""
-        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=30)).isoformat()
 
         # First call creates both rows normally.
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
@@ -213,7 +252,7 @@ class TestGetGameStorageRef:
         assert auth_db.get_game_storage_ref("user-1", "prof-1", "nope") is None
 
     def test_returns_ref_data(self, temp_auth_db):
-        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=30)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 2000, future)
 
         ref = auth_db.get_game_storage_ref("user-1", "prof-1", "hash_a")
@@ -227,8 +266,8 @@ class TestGetGameStorageRef:
 
 class TestGetStorageRefsForUser:
     def test_returns_all_refs(self, temp_auth_db):
-        f1 = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-        f2 = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
+        f1 = (datetime.now(UTC) + timedelta(days=30)).isoformat()
+        f2 = (datetime.now(UTC) + timedelta(days=60)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, f1)
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_b", 2000, f2)
 
@@ -248,7 +287,7 @@ class TestGetStorageRefsForUser:
 
 class TestDeleteRef:
     def test_deletes_from_sqlite_and_pg_ref_row(self, temp_auth_db):
-        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=30)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
 
         auth_db.delete_ref("user-1", "prof-1", "hash_a")
@@ -266,7 +305,7 @@ class TestDeleteRef:
         time, never able to drive the count below the true number of live
         refs (the old GREATEST(ref_count-1, 0) floor existed only because a
         counter COULD be decremented past zero; a derived COUNT(*) cannot)."""
-        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=30)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
 
         auth_db.delete_ref("user-1", "prof-1", "hash_a")
@@ -279,7 +318,7 @@ class TestDeleteRef:
         from app.profile_context import set_current_profile_id
         from app.user_context import set_current_user_id
 
-        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=30)).isoformat()
         set_current_user_id("user-1")
         set_current_profile_id("prof-1")
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
@@ -300,7 +339,7 @@ class TestDeleteRef:
 
 class TestHasRemainingRefs:
     def test_true_when_refs_exist(self, temp_auth_db):
-        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=30)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
         assert auth_db.has_remaining_refs("hash_a") is True
 
@@ -308,7 +347,7 @@ class TestHasRemainingRefs:
         assert auth_db.has_remaining_refs("hash_a") is False
 
     def test_false_after_all_deleted(self, temp_auth_db):
-        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=30)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
         auth_db.delete_ref("user-1", "prof-1", "hash_a")
         assert auth_db.has_remaining_refs("hash_a") is False
@@ -320,7 +359,7 @@ class TestHasRemainingRefs:
 
 class TestGetAllRefHashes:
     def test_returns_all_hashes(self, temp_auth_db):
-        f = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        f = (datetime.now(UTC) + timedelta(days=30)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, f)
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_b", 2000, f)
 
@@ -340,24 +379,24 @@ class TestGetNextExpiry:
         assert auth_db.get_next_expiry() is None
 
     def test_returns_earliest_future_expiry(self, temp_auth_db):
-        soon = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
-        later = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        soon = (datetime.now(UTC) + timedelta(hours=2)).isoformat()
+        later = (datetime.now(UTC) + timedelta(days=7)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, soon)
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_b", 1000, later)
 
         result = auth_db.get_next_expiry()
         assert result is not None
-        expected = datetime.now(timezone.utc) + timedelta(hours=2)
+        expected = datetime.now(UTC) + timedelta(hours=2)
         assert abs((result - expected).total_seconds()) < 5
 
     def test_returns_grace_expiry_when_earlier(self, temp_auth_db):
-        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=30)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
         auth_db.insert_grace_deletion("hash_b", grace_days=3)
 
         result = auth_db.get_next_expiry()
         assert result is not None
-        grace_expected = datetime.now(timezone.utc) + timedelta(days=3)
+        grace_expected = datetime.now(UTC) + timedelta(days=3)
         assert abs((result - grace_expected).total_seconds()) < 5
 
     def test_returns_grace_expiry_when_no_refs(self, temp_auth_db):
@@ -365,7 +404,7 @@ class TestGetNextExpiry:
 
         result = auth_db.get_next_expiry()
         assert result is not None
-        expected = datetime.now(timezone.utc) + timedelta(days=7)
+        expected = datetime.now(UTC) + timedelta(days=7)
         assert abs((result - expected).total_seconds()) < 5
 
 
@@ -375,8 +414,8 @@ class TestGetNextExpiry:
 
 class TestGetExpiredRefsForProfile:
     def test_returns_expired_refs(self, temp_auth_db):
-        past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-        future = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        past = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=7)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, past)
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_b", 1000, future)
 
@@ -385,7 +424,7 @@ class TestGetExpiredRefsForProfile:
         assert result[0]["blake3_hash"] == "hash_a"
 
     def test_returns_empty_when_none_expired(self, temp_auth_db):
-        future = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        future = (datetime.now(UTC) + timedelta(days=7)).isoformat()
         auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
 
         result = auth_db.get_expired_refs_for_profile()
@@ -406,7 +445,7 @@ class TestInsertGraceDeletion:
             row = cur.fetchone()
         assert row is not None
         expires = row["grace_expires_at"]
-        expected = datetime.now(timezone.utc) + timedelta(days=14)
+        expected = datetime.now(UTC) + timedelta(days=14)
         assert abs((expires - expected).total_seconds()) < 2
 
     def test_idempotent(self, temp_auth_db):
@@ -418,14 +457,14 @@ class TestInsertGraceDeletion:
             cur.execute("SELECT * FROM r2_grace_deletions WHERE blake3_hash = %s", ("hash_a",))
             row = cur.fetchone()
         expires = row["grace_expires_at"]
-        expected = datetime.now(timezone.utc) + timedelta(days=14)
+        expected = datetime.now(UTC) + timedelta(days=14)
         assert abs((expires - expected).total_seconds()) < 2
 
 
 class TestGetExpiredGraceDeletions:
     def test_returns_only_past(self, temp_auth_db):
-        past = datetime.now(timezone.utc) - timedelta(days=1)
-        future = datetime.now(timezone.utc) + timedelta(days=7)
+        past = datetime.now(UTC) - timedelta(days=1)
+        future = datetime.now(UTC) + timedelta(days=7)
         with auth_db.get_auth_db() as conn:
             cur = conn.cursor()
             cur.execute(

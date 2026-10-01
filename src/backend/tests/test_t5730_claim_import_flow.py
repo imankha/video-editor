@@ -127,24 +127,25 @@ class TestTeamLayerClips:
 class TestClaimGameLink:
     @pytest.fixture()
     def env(self, pg_conn, tmp_path):
-        # get_game_storage_ref / insert_game_storage_ref go through
-        # get_db_connection (the CURRENT context's profile SQLite), so they are
-        # mocked here exactly as the existing materialization tests do -- the
-        # claim's provenance/clip behavior is what these tests assert, not the
-        # storage-ref bookkeeping (which the head-object-guarded heal path owns,
-        # T4820). get_ref defaults to None so a claim fabricates NO storage ref.
+        # T11560: claim_game_link explicitly passes materialize_storage_refs=
+        # False to materialize_game_share, so _resolve_sharer_storage_refs is
+        # never even called for this path -- no storage-ref bookkeeping to
+        # mock here at all now (the claim's provenance/clip behavior is what
+        # these tests assert). Previously this mocked get_game_storage_ref/
+        # insert_game_storage_ref directly, relying on the ambient-context
+        # mismatch between the claimer's own request and the sharer's data to
+        # produce a no-op; that was incidental, not the actual mechanism.
+        # Separately: a claimed hash-backed game currently shows 'expired'
+        # either way -- the heal path (_ensure_game_storage_refs, T4820) only
+        # runs on activate/attach, not list/load (pre-existing gap, not this
+        # flag's job to fix).
         import app.services.pg as pgmod
         from app.services.auth_db import create_user
         create_user(SHARER_ID, email=SHARER_EMAIL)
         create_user(CLAIMER_ID, email=CLAIMER_EMAIL)
         with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
              patch("app.database.USER_DATA_BASE", tmp_path), \
-             patch("app.services.materialization.get_pg", pgmod.get_pg), \
-             patch("app.services.materialization.get_game_storage_ref",
-                   return_value=None) as get_ref, \
-             patch("app.services.materialization.insert_game_storage_ref") as insert_ref:
-            self.get_ref = get_ref
-            self.insert_ref = insert_ref
+             patch("app.services.materialization.get_pg", pgmod.get_pg):
             yield tmp_path
 
     def test_game_only_claim_shared_by_non_null(self, env):
@@ -221,7 +222,8 @@ class TestClaimGameLink:
         b_game = b.execute("SELECT * FROM games").fetchone()
         a_clips = a.execute("SELECT COUNT(*) c FROM raw_clips").fetchone()["c"]
         b_clips = b.execute("SELECT COUNT(*) c FROM raw_clips").fetchone()["c"]
-        a.close(); b.close()
+        a.close()
+        b.close()
         assert a_clips == 0 and b_clips == 2
         assert a_game["shared_by"] == SHARER_EMAIL
         assert b_game["shared_by"] == SHARER_EMAIL
@@ -299,7 +301,8 @@ class TestClaimGameLink:
         other = _open(env, CLAIMER_ID, "otherprof")
         assert orig.execute("SELECT COUNT(*) c FROM raw_clips").fetchone()["c"] == 2
         assert other.execute("SELECT COUNT(*) c FROM games").fetchone()["c"] == 0
-        orig.close(); other.close()
+        orig.close()
+        other.close()
 
     def test_share_claim_row_recorded(self, env):
         game_id = _seed_sharer_dbs(env)
@@ -331,21 +334,57 @@ class TestClaimGameLink:
         assert row["channel"] == "game_link_share"
 
     def test_expired_source_imports_annotations_no_fabricated_ref(self, env):
-        """Source expired = the sharer has no live storage ref (get_game_storage_ref
-        -> None). The claim still imports the game + annotations, but fabricates NO
-        storage ref for the recipient -- source availability is resolved honestly by
-        the head-object-guarded heal path (T4820), so the game shows the existing
-        expired degradation rather than a faked live ref."""
+        """T11560: claim_game_link passes materialize_storage_refs=False
+        explicitly (not an ambient-context coincidence) -- the claim still
+        imports the game + annotations, but fabricates NO storage ref for
+        the recipient, regardless of whether the sharer has a live ref or
+        not. (Separately: the claimed game currently shows 'expired' with no
+        ref either way -- the activate/attach-only heal path doesn't run on
+        list/load, a pre-existing gap this flag doesn't fix or claim to.)"""
         game_id = _seed_sharer_dbs(env)
+        # The sharer DOES have a live ref -- proves materialize_storage_refs=
+        # False is what suppresses the claimer's ref, not an absent sharer row.
+        s_conn = _open(env, SHARER_ID, SHARER_PROFILE)
+        s_conn.execute(
+            "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+            "VALUES (?, ?, ?)",
+            ("claimhash", 100000, "2027-01-01T00:00:00+00:00"),
+        )
+        s_conn.commit()
+        s_conn.close()
         share = _make_game_link_share(game_id)
-        # env's get_ref already returns None (source gone).
         claim_game_link(share, CLAIMER_ID, CLAIMER_PROFILE,
                         include_annotations=True, sharer_email=SHARER_EMAIL)
         conn = _open(env, CLAIMER_ID, CLAIMER_PROFILE)
         assert conn.execute("SELECT COUNT(*) c FROM raw_clips").fetchone()["c"] == 2
+        # No ref fabricated for the claimer, even though the sharer DOES have
+        # one (_seed_sharer_dbs's game_hash="claimhash") -- proves this is
+        # the explicit flag, not an accident of an empty/missing sharer ref.
+        refs = conn.execute(
+            "SELECT COUNT(*) c FROM game_storage WHERE blake3_hash = ?", ("claimhash",)
+        ).fetchone()["c"]
+        assert refs == 0
         conn.close()
-        # No sharer ref -> no ref fabricated for the claimer.
-        self.insert_ref.assert_not_called()
+
+        # T11560 (review on merge): also prove the POSTGRES half stays
+        # suppressed. materialize_storage_refs=False gates BOTH halves at
+        # the same `if materialize_storage_refs and hashes and sharer_conn`
+        # check (materialization.py) -- but a future refactor that moved the
+        # Postgres loop outside that gate (e.g. iterating `hashes` directly
+        # instead of the already-gated `storage_refs`) would still pass the
+        # SQLite-only assertion above while violating EPIC decision 3 for
+        # Postgres. `env` already provides a real throwaway Postgres via
+        # pg_conn.
+        from app.services.pg import get_pg
+        with get_pg() as pg:
+            cur = pg.cursor()
+            cur.execute(
+                """SELECT COUNT(*) c FROM game_storage_refs
+                   WHERE user_id = %s AND profile_id = %s AND blake3_hash = %s""",
+                (CLAIMER_ID, CLAIMER_PROFILE, "claimhash"),
+            )
+            pg_refs = cur.fetchone()["c"]
+        assert pg_refs == 0
 
 
 # ===========================================================================

@@ -119,6 +119,13 @@ def _create_profile_db(path: Path) -> sqlite3.Connection:
             fps REAL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS game_storage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            blake3_hash TEXT NOT NULL UNIQUE,
+            game_size_bytes INTEGER NOT NULL,
+            storage_expires_at TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
     """)
     # T5085: this profile.sqlite is now reachable through the JIT seam
     # (materialization._open_profile_db / ensure_profile_db_local both call
@@ -689,24 +696,32 @@ class TestMaterializeGameShare:
         return s_conn, r_conn
 
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.insert_game_storage_ref")
-    @patch("app.services.materialization.get_game_storage_ref")
     @patch("app.services.materialization.USER_DATA_BASE")
-    def test_full_materialization(self, mock_base, mock_get_ref, mock_insert_ref,
-                                  mock_mark, tmp_path):
+    def test_full_materialization(self, mock_base, mock_mark, tmp_path, pg_conn):
+        from app.services.auth_db import create_user
+
         mock_base.__truediv__ = lambda self, x: tmp_path / x
         # Make Path operations work on mock
         type(mock_base).__truediv__ = lambda self, x: tmp_path / x
+
+        create_user("sharer-user", email="sharer@test.com")
+        create_user("recipient-user", email="recipient@test.com")
 
         s_conn, r_conn = self._setup_dbs(tmp_path)
         game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_1")
         _insert_clip(s_conn, game_id, 0, 5, tagged_teammates=["Jake"], name="Jake Goal")
         _insert_clip(s_conn, game_id, 10, 15, tagged_teammates=["Other"], name="Other Play")
 
-        mock_get_ref.return_value = {
-            "game_size_bytes": 100000,
-            "storage_expires_at": "2027-01-01T00:00:00+00:00",
-        }
+        # T11560: _resolve_sharer_storage_refs now reads straight off the
+        # sharer's own connection (no ContextVar/ambient context involved at
+        # all) -- seed a real game_storage row instead of mocking
+        # get_game_storage_ref (which materialization.py no longer imports).
+        s_conn.execute(
+            "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+            "VALUES (?, ?, ?)",
+            ("game_hash_1", 100000, "2027-01-01T00:00:00+00:00"),
+        )
+        s_conn.commit()
 
         with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
             result = materialize_game_share(
@@ -740,11 +755,147 @@ class TestMaterializeGameShare:
         assert clips[0]["my_athlete"] == 0
 
         mock_mark.assert_called_once_with(1, "recipient-profile")
-        mock_insert_ref.assert_called_once()
+
+        # T11560 regression: the storage-ref row must land in the
+        # RECIPIENT's own game_storage table (what _compute_storage_status
+        # actually reads to decide 'expired'), not the sharer's. This is a
+        # wiring check for the normal case (sharer's own game_storage row
+        # exists, read straight off sharer_conn) -- the ambient-context
+        # failure mode this was originally written to catch is covered more
+        # directly by test_storage_ref_lands_in_recipient_even_under_sharer_ambient_context
+        # below, which sets ambient context the way a real share_game
+        # request actually does and asserts the sharer's own row is
+        # untouched (count stays 1, not duplicated or moved).
+        recipient_refs = r_conn2.execute(
+            "SELECT * FROM game_storage WHERE blake3_hash = ?", ("game_hash_1",)
+        ).fetchall()
+        assert len(recipient_refs) == 1, (
+            "recipient's own SQLite must have the game_storage ref row "
+            "(this is what _compute_storage_status reads to decide 'expired')"
+        )
+        assert recipient_refs[0]["game_size_bytes"] == 100000
+
+        # T11560 (review on merge): the Postgres half must ALSO land under
+        # the RECIPIENT's ids, via insert_game_storage_ref_pg_only -- a
+        # previous version of this test only checked SQLite, so a caller
+        # bug that passed the wrong ids to the Postgres half (or dropped it
+        # entirely) would have gone undetected while has_remaining_refs/the
+        # sweep's ref-count undercounts.
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT game_size_bytes FROM game_storage_refs
+                   WHERE user_id = %s AND profile_id = %s AND blake3_hash = %s""",
+                ("recipient-user", "recipient-profile", "game_hash_1"),
+            )
+            pg_row = cur.fetchone()
+        assert pg_row is not None, (
+            "recipient's game_storage_refs row must exist in Postgres too"
+        )
+        assert pg_row["game_size_bytes"] == 100000
 
         s_conn.close()
         r_conn.close()
         r_conn2.close()
+
+    @patch("app.services.materialization.mark_game_share_materialized")
+    def test_storage_ref_lands_in_recipient_even_under_sharer_ambient_context(
+        self, mock_mark, tmp_path
+    ):
+        """T11560 direct regression test. The original production bug (2026-09-02,
+        imankh -> gsarah) happened specifically because materialize_game_share
+        runs inside the SHARER's own HTTP request, so request-context helpers
+        see AMBIENT == sharer the whole time. Pre-fix, insert_game_storage_ref's
+        SQLite half used that ambient context instead of its own recipient_id/
+        profile_id args, silently writing the ref into the SHARER's own
+        game_storage row (itself already present, so a harmless-looking no-op
+        there) while leaving the RECIPIENT's local copy without one. This test
+        sets ambient context to the sharer -- exactly like a real share_game
+        request -- and asserts the ref lands in the RECIPIENT, not the sharer,
+        and that the sharer's own existing row is untouched (still exactly 1
+        row, not duplicated).
+
+        The sharer's profile DB is built via the REAL ensure_database() (full
+        production schema), not this file's minimal hand-rolled fixture:
+        pre-fix, the vulnerable code path (insert_game_storage_ref ->
+        get_db_connection -> ensure_database) runs with ambient context set
+        here (unlike test_full_materialization's crash-mode proof), so it
+        reaches real schema-dependent machinery the minimal fixture doesn't
+        satisfy -- against the minimal fixture this test would fail on an
+        unrelated "no such column" error instead of the intended assertion
+        (review round 2, MAJOR finding)."""
+        from app.database import ensure_database
+        from app.profile_context import reset_profile_id_token, set_current_profile_id
+        from app.user_context import reset_user_id_token, set_current_user_id
+
+        user_token = set_current_user_id("sharer-user")
+        profile_token = set_current_profile_id("sharer-profile")
+        try:
+            with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+                 patch("app.database.USER_DATA_BASE", tmp_path), \
+                 patch("app.database.R2_ENABLED", False), \
+                 patch("app.database._initialized_users", set()):
+                ensure_database()  # builds the sharer's REAL schema fresh
+        finally:
+            reset_profile_id_token(profile_token)
+            reset_user_id_token(user_token)
+
+        s_path = tmp_path / "sharer-user" / "profiles" / "sharer-profile" / "profile.sqlite"
+        s_conn = sqlite3.connect(str(s_path))
+        s_conn.row_factory = sqlite3.Row
+        game_id = _insert_game(s_conn, name="League Match", blake3_hash="ambient_hash_1")
+        _insert_clip(s_conn, game_id, 0, 5, tagged_teammates=["Jake"], name="Jake Goal")
+        s_conn.execute(
+            "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+            "VALUES (?, ?, ?)",
+            ("ambient_hash_1", 100000, "2027-01-01T00:00:00+00:00"),
+        )
+        s_conn.commit()
+
+        r_conn = _create_profile_db(
+            tmp_path / "recipient-user" / "profiles" / "recipient-profile" / "profile.sqlite"
+        )
+
+        user_token = set_current_user_id("sharer-user")
+        profile_token = set_current_profile_id("sharer-profile")
+        try:
+            with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+                 patch("app.database.USER_DATA_BASE", tmp_path):
+                materialize_game_share(
+                    sharer_user_id="sharer-user",
+                    sharer_profile_id="sharer-profile",
+                    recipient_user_id="recipient-user",
+                    recipient_profile_id="recipient-profile",
+                    game_id=game_id,
+                    tag_name="Jake",
+                    share_id=5,
+                )
+        finally:
+            reset_profile_id_token(profile_token)
+            reset_user_id_token(user_token)
+
+        recipient_rows = sqlite3.connect(
+            str(tmp_path / "recipient-user" / "profiles" / "recipient-profile" / "profile.sqlite")
+        )
+        recipient_rows.row_factory = sqlite3.Row
+        r_refs = recipient_rows.execute(
+            "SELECT * FROM game_storage WHERE blake3_hash = ?", ("ambient_hash_1",)
+        ).fetchall()
+        assert len(r_refs) == 1, "the ref must land in the RECIPIENT's SQLite, not be silently lost"
+        assert r_refs[0]["game_size_bytes"] == 100000
+        recipient_rows.close()
+
+        s_refs = s_conn.execute(
+            "SELECT * FROM game_storage WHERE blake3_hash = ?", ("ambient_hash_1",)
+        ).fetchall()
+        assert len(s_refs) == 1, (
+            "the sharer's own row must be untouched, not duplicated by a "
+            "misdirected write landing in the sharer's table instead"
+        )
+
+        s_conn.close()
+        r_conn.close()
 
     # -----------------------------------------------------------------
     # T4315 round 2 (BLOCKING-1): recipient_conn is a raw sqlite3.Connection
@@ -757,11 +908,9 @@ class TestMaterializeGameShare:
 
     @patch("app.services.materialization.sync_db_to_r2_explicit")
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.insert_game_storage_ref")
-    @patch("app.services.materialization.get_game_storage_ref")
     @patch("app.services.materialization.USER_DATA_BASE")
     def test_recipient_db_is_explicitly_synced_to_r2(
-        self, mock_base, mock_get_ref, mock_insert_ref, mock_mark, mock_sync, tmp_path
+        self, mock_base, mock_mark, mock_sync, tmp_path
     ):
         """BLOCKING-1 fix: the recipient's write is invisible to the request
         middleware (raw connection, not TrackedConnection) -- without an
@@ -774,7 +923,8 @@ class TestMaterializeGameShare:
         s_conn, r_conn = self._setup_dbs(tmp_path)
         game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_sync")
         _insert_clip(s_conn, game_id, 0, 5, tagged_teammates=["Jake"], name="Jake Goal")
-        mock_get_ref.return_value = None
+        # No game_storage row seeded for the sharer -> _resolve_sharer_storage_refs
+        # finds nothing, no ref created (mirrors the old mock_get_ref.return_value = None).
 
         with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
             materialize_game_share(
@@ -803,10 +953,8 @@ class TestMaterializeGameShare:
     # -----------------------------------------------------------------
 
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.insert_game_storage_ref")
-    @patch("app.services.materialization.get_game_storage_ref")
     def test_recipient_upload_contains_the_materialized_data(
-        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+        self, mock_mark, tmp_path
     ):
         """Without checkpointing before upload, R2 would receive the STALE
         pre-share main-file bytes stamped at a NEWER version -- worse than
@@ -816,8 +964,6 @@ class TestMaterializeGameShare:
         shared game and clip."""
         from app.storage import profile_r2_key
         from tests.test_t4050_durable_sync import FakeR2, _r2_patched
-
-        mock_get_ref.return_value = None
 
         s_conn, r_conn = self._setup_dbs(tmp_path)
         game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_walcheck")
@@ -856,10 +1002,8 @@ class TestMaterializeGameShare:
         mock_mark.assert_called_once()
 
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.insert_game_storage_ref")
-    @patch("app.services.materialization.get_game_storage_ref")
     def test_contended_checkpoint_refuses_instead_of_uploading_stale_bytes(
-        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+        self, mock_mark, tmp_path
     ):
         """T4315 round 4 (BLOCKING-1): PRAGMA wal_checkpoint does NOT raise on
         contention -- it returns (busy, log, checkpointed) with busy=1 and
@@ -875,8 +1019,6 @@ class TestMaterializeGameShare:
         from app.services.materialization import ProfileDBRefreshFailed
         from app.storage import profile_r2_key
         from tests.test_t4050_durable_sync import FakeR2, _r2_patched
-
-        mock_get_ref.return_value = None
 
         s_conn, r_conn = self._setup_dbs(tmp_path)
         game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_contend")
@@ -919,11 +1061,9 @@ class TestMaterializeGameShare:
 
     @patch("app.services.materialization.sync_db_to_r2_explicit")
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.insert_game_storage_ref")
-    @patch("app.services.materialization.get_game_storage_ref")
     @patch("app.services.materialization.USER_DATA_BASE")
     def test_sync_failure_refuses_to_mark_materialized(
-        self, mock_base, mock_get_ref, mock_insert_ref, mock_mark, mock_sync, tmp_path
+        self, mock_base, mock_mark, mock_sync, tmp_path
     ):
         """A failed recipient sync must raise -- never a lying Postgres
         success for a share that only landed on local disk."""
@@ -935,7 +1075,6 @@ class TestMaterializeGameShare:
         s_conn, r_conn = self._setup_dbs(tmp_path)
         game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_syncfail")
         _insert_clip(s_conn, game_id, 0, 5, tagged_teammates=["Jake"], name="Jake Goal")
-        mock_get_ref.return_value = None
 
         with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
              pytest.raises(ProfileDBRefreshFailed):
@@ -957,10 +1096,8 @@ class TestMaterializeGameShare:
         r_conn.close()
 
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.insert_game_storage_ref")
-    @patch("app.services.materialization.get_game_storage_ref")
     def test_materialization_with_existing_game_merges(
-        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+        self, mock_mark, tmp_path
     ):
         s_conn, r_conn = self._setup_dbs(tmp_path)
 
@@ -968,6 +1105,12 @@ class TestMaterializeGameShare:
         s_game_id = _insert_game(s_conn, name="Match", blake3_hash="same_hash")
         _insert_clip(s_conn, s_game_id, 0, 5, tagged_teammates=["Jake"], name="Goal 1")
         _insert_clip(s_conn, s_game_id, 10, 15, tagged_teammates=["Jake"], name="Goal 2")
+        s_conn.execute(
+            "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+            "VALUES (?, ?, ?)",
+            ("same_hash", 50000, "2027-01-01T00:00:00+00:00"),
+        )
+        s_conn.commit()
 
         # Recipient already has the same game (dedup by hash). The existing clip
         # is Team-layer so the overlapping shared clip still merges (T5745:
@@ -976,11 +1119,6 @@ class TestMaterializeGameShare:
         _insert_clip(r_conn, r_game_id, 3, 8, name="Existing clip", video_sequence=None,
                      my_athlete=0)
         r_conn.commit()
-
-        mock_get_ref.return_value = {
-            "game_size_bytes": 50000,
-            "storage_expires_at": "2027-01-01T00:00:00+00:00",
-        }
 
         with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
             result = materialize_game_share(
@@ -1003,20 +1141,19 @@ class TestMaterializeGameShare:
         r_conn.close()
 
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.insert_game_storage_ref")
-    @patch("app.services.materialization.get_game_storage_ref")
     def test_game_only_share_when_no_clips_for_tag(
-        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+        self, mock_mark, tmp_path
     ):
         """No clips match tag -> game-only share (game copied, zero clips)."""
         s_conn, r_conn = self._setup_dbs(tmp_path)
-        s_game_id = _insert_game(s_conn, name="Match")
+        s_game_id = _insert_game(s_conn, name="Match")  # default blake3_hash="abc123"
         _insert_clip(s_conn, s_game_id, 0, 5, tagged_teammates=["Other"])
-
-        mock_get_ref.return_value = {
-            "game_size_bytes": 50000,
-            "storage_expires_at": "2027-01-01T00:00:00+00:00",
-        }
+        s_conn.execute(
+            "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+            "VALUES (?, ?, ?)",
+            ("abc123", 50000, "2027-01-01T00:00:00+00:00"),
+        )
+        s_conn.commit()
 
         with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
             result = materialize_game_share(
@@ -1039,24 +1176,23 @@ class TestMaterializeGameShare:
         r_conn.close()
 
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.insert_game_storage_ref")
-    @patch("app.services.materialization.get_game_storage_ref")
     def test_materializes_from_clip_data(
-        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+        self, mock_mark, tmp_path
     ):
         """Test materialization with pre-serialized clip_data (pending share path)."""
         s_conn, r_conn = self._setup_dbs(tmp_path)
         s_game_id = _insert_game(s_conn, name="Match", blake3_hash="pending_hash")
+        s_conn.execute(
+            "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+            "VALUES (?, ?, ?)",
+            ("pending_hash", 50000, "2027-01-01T00:00:00+00:00"),
+        )
+        s_conn.commit()
 
         clip_data = [
             {"rating": 5, "name": "Provided clip", "notes": None,
              "start_time": 0, "end_time": 5, "video_sequence": 0, "tags": None},
         ]
-
-        mock_get_ref.return_value = {
-            "game_size_bytes": 50000,
-            "storage_expires_at": "2027-01-01T00:00:00+00:00",
-        }
 
         with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
             result = materialize_game_share(
@@ -1077,10 +1213,8 @@ class TestMaterializeGameShare:
         r_conn.close()
 
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.insert_game_storage_ref")
-    @patch("app.services.materialization.get_game_storage_ref")
     def test_five_star_shared_clip_creates_draft_reel(
-        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+        self, mock_mark, tmp_path
     ):
         """A shared 5-star clip auto-creates a draft reel (9:16 auto-project)
         for the recipient, reusing the 'create reel' gesture path."""
@@ -1091,11 +1225,12 @@ class TestMaterializeGameShare:
                      name="Brilliant Goal", rating=5)
         _insert_clip(s_conn, s_game_id, 10, 15, tagged_teammates=["Jake"],
                      name="Ordinary Play", rating=3)
-
-        mock_get_ref.return_value = {
-            "game_size_bytes": 50000,
-            "storage_expires_at": "2027-01-01T00:00:00+00:00",
-        }
+        s_conn.execute(
+            "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+            "VALUES (?, ?, ?)",
+            ("five_star_hash", 50000, "2027-01-01T00:00:00+00:00"),
+        )
+        s_conn.commit()
 
         with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
             materialize_game_share(
@@ -1141,21 +1276,20 @@ class TestMaterializeGameShare:
         r_conn2.close()
 
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.insert_game_storage_ref")
-    @patch("app.services.materialization.get_game_storage_ref")
     def test_no_draft_reel_without_five_star_clip(
-        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+        self, mock_mark, tmp_path
     ):
         """A share with no 5-star clips creates no draft reels."""
         s_conn, r_conn = self._setup_dbs(tmp_path)
         s_game_id = _insert_game(s_conn, name="Match", blake3_hash="no_five_hash")
         _insert_clip(s_conn, s_game_id, 0, 5, tagged_teammates=["Jake"],
                      name="Good Play", rating=4)
-
-        mock_get_ref.return_value = {
-            "game_size_bytes": 50000,
-            "storage_expires_at": "2027-01-01T00:00:00+00:00",
-        }
+        s_conn.execute(
+            "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+            "VALUES (?, ?, ?)",
+            ("no_five_hash", 50000, "2027-01-01T00:00:00+00:00"),
+        )
+        s_conn.commit()
 
         with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
             materialize_game_share(
@@ -1179,10 +1313,8 @@ class TestMaterializeGameShare:
         r_conn2.close()
 
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.insert_game_storage_ref")
-    @patch("app.services.materialization.get_game_storage_ref")
     def test_re_materialization_does_not_duplicate_draft_reel(
-        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+        self, mock_mark, tmp_path
     ):
         """Resolving the same share twice does not create duplicate draft reels:
         the second pass merges the clip rather than inserting a new one."""
@@ -1190,11 +1322,12 @@ class TestMaterializeGameShare:
         s_game_id = _insert_game(s_conn, name="Match", blake3_hash="dup_hash")
         _insert_clip(s_conn, s_game_id, 0, 5, tagged_teammates=["Jake"],
                      name="Brilliant Goal", rating=5)
-
-        mock_get_ref.return_value = {
-            "game_size_bytes": 50000,
-            "storage_expires_at": "2027-01-01T00:00:00+00:00",
-        }
+        s_conn.execute(
+            "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+            "VALUES (?, ?, ?)",
+            ("dup_hash", 50000, "2027-01-01T00:00:00+00:00"),
+        )
+        s_conn.commit()
 
         def _run():
             with patch("app.services.materialization.USER_DATA_BASE", tmp_path):

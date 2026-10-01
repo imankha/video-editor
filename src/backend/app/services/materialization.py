@@ -12,7 +12,10 @@ import sqlite3
 from pathlib import Path
 
 from app.database import USER_DATA_BASE, sync_db_to_r2_explicit
-from app.services.auth_db import get_game_storage_ref, insert_game_storage_ref
+from app.services.auth_db import (
+    insert_game_storage_ref_pg_only,
+    upsert_game_storage_row,
+)
 from app.services.db_refresh import RefreshFailed, clear_stale_wal_sidecars, wal_sidecars_present
 from app.services.pg import get_pg
 from app.services.sharing_db import (
@@ -785,24 +788,35 @@ def _materialize_clips(
     return {"inserted": inserted, "merged": merged, "inserted_clips": inserted_clips}
 
 
-def _create_storage_refs(
-    sharer_user_id: str,
-    sharer_profile_id: str,
-    recipient_user_id: str,
-    recipient_profile_id: str,
+def _resolve_sharer_storage_refs(
+    sharer_conn: sqlite3.Connection,
     hashes: list[str],
-) -> None:
-    """Create game_storage_refs in Postgres for the recipient."""
+) -> list[tuple[str, int, str]]:
+    """Look up the sharer's existing storage-ref row (size/expiry) for each
+    hash, skipping any the sharer has no ref for.
+
+    T11560 (review round 2): reads directly off the sharer's own already-open
+    connection (`_open_profile_db`, which explicitly bypasses ContextVar) --
+    NOT via auth_db.get_game_storage_ref, which resolves the AMBIENT request
+    context instead of its own user_id/profile_id args. That was only
+    "correct" for the direct share_game/share_playback/teammate-share
+    callers, where materialize_game_share happens to run inside the SHARER's
+    own request (ambient == sharer). It silently produced NO ref for every
+    caller where that coincidence doesn't hold: resolve_pending_shares (runs
+    as the RECIPIENT), session_init._materialize_pending_shares_for_user
+    (runs on a bare background thread with NO ambient context at all --
+    raised RuntimeError there, not just a silent no-op). Reading straight off
+    sharer_conn needs no ambient context, so it works identically for every
+    caller that has a real sharer_conn open."""
+    refs = []
     for h in hashes:
-        sharer_ref = get_game_storage_ref(sharer_user_id, sharer_profile_id, h)
-        if sharer_ref:
-            insert_game_storage_ref(
-                user_id=recipient_user_id,
-                profile_id=recipient_profile_id,
-                blake3_hash=h,
-                game_size_bytes=sharer_ref["game_size_bytes"],
-                storage_expires_at=str(sharer_ref["storage_expires_at"]),
-            )
+        row = sharer_conn.execute(
+            "SELECT game_size_bytes, storage_expires_at FROM game_storage WHERE blake3_hash = ?",
+            (h,),
+        ).fetchone()
+        if row:
+            refs.append((h, row["game_size_bytes"], str(row["storage_expires_at"])))
+    return refs
 
 
 def materialize_game_share(
@@ -815,11 +829,26 @@ def materialize_game_share(
     share_id: int,
     clip_data: list[dict] | None = None,
     sharer_email: str | None = None,
+    materialize_storage_refs: bool = True,
 ) -> dict:
     """Materialize a game share into the recipient's profile.
 
     If clip_data is provided (from a pending share), uses that instead of
     re-querying the sharer's SQLite.
+
+    materialize_storage_refs: whether to give the recipient a game_storage
+    ref for the sharer's video hash(es) (T11560). Defaults True for the
+    direct share_game/share_playback/teammate-share/resolve_pending_shares/
+    session_init callers -- they're all "this is now also your game", and
+    the recipient should be able to see the source like the sharer can.
+    claim_game_link (public game-link claims, T5730) explicitly passes
+    False: EPIC decision was NOT to fabricate a storage ref for an anonymous
+    claim. (Pre-existing, separate from this flag: a claimed hash-backed game
+    with no ref currently shows 'expired' -- the activate/attach-only heal
+    path does not run on list/load, see backend-services.md T5730 section;
+    not this task's fix to make.) Explicit flag per review -- this must
+    never again be an accident of which request context happens to be
+    ambient.
 
     Returns dict with keys: game_id, inserted, merged, skipped.
     """
@@ -872,6 +901,11 @@ def materialize_game_share(
         hashes = _collect_video_hashes(sharer_conn, game_id)
     else:
         hashes = []
+    storage_refs = (
+        _resolve_sharer_storage_refs(sharer_conn, hashes)
+        if (materialize_storage_refs and hashes and sharer_conn)
+        else []
+    )
 
     from app.migrations import MigrationBlocked  # local: migrations imports this module (v033)
     try:
@@ -933,6 +967,23 @@ def materialize_game_share(
             if clip["rating"] == 5:
                 _create_auto_project_for_clip(
                     reel_cursor, clip["id"], clip["name"] or "")
+
+        # T11560: write the recipient's storage-ref rows directly into
+        # recipient_conn (the connection _open_profile_db already opened for
+        # THIS profile), not via insert_game_storage_ref -- that helper's
+        # SQLite half opens its own connection through get_db_connection(),
+        # which resolves the AMBIENT request context (the SHARER, since this
+        # whole request runs in the sharer's context), not the recipient_id/
+        # profile_id args it's given. That silently wrote the ref into the
+        # SHARER's own game_storage table (a harmless no-op there) and left
+        # the recipient's local copy without it, so the recipient's own
+        # load/list later found no ref row and reported the source "expired"
+        # even though R2 and Postgres were both fine. Written here, before
+        # commit/checkpoint/upload, so the ref rides the same R2 sync as the
+        # copied game/clips instead of risking loss if the local cache is
+        # ever evicted and re-restored from R2 at the pre-ref version.
+        for h, size, expires in storage_refs:
+            upsert_game_storage_row(recipient_conn, h, size, expires)
 
         recipient_conn.commit()
 
@@ -998,13 +1049,10 @@ def materialize_game_share(
                 f"after materializing share_id={share_id}"
             )
 
-        # Create storage refs in Postgres
-        if hashes:
-            _create_storage_refs(
-                sharer_user_id, sharer_profile_id,
-                recipient_user_id, recipient_profile_id,
-                hashes,
-            )
+        # Create storage refs in Postgres (SQLite half already written above,
+        # before the sync, using the recipient_conn connection directly).
+        for h, size, expires in storage_refs:
+            insert_game_storage_ref_pg_only(recipient_user_id, recipient_profile_id, h, size, expires)
 
         mark_game_share_materialized(share_id, recipient_profile_id)
 
@@ -1130,6 +1178,12 @@ def claim_game_link(
 
     # tag_name="" (falsy) -> materialize attributes the referral via the share's
     # own type (game_link -> "game_link_share"), NOT the teammate_share channel.
+    # materialize_storage_refs=False (T11560, EPIC decision 3 restated explicitly):
+    # a public game-link claim must NOT fabricate a game_storage ref for the
+    # claimer, never a side effect of this call. (Separately, a claimed
+    # hash-backed game with no ref currently shows 'expired' -- the
+    # head-object-guarded heal path only runs on activate/attach, not list/
+    # load; pre-existing gap, not fixed by this flag, see backend-services.md.)
     result = materialize_game_share(
         sharer_user_id=sharer_user_id,
         sharer_profile_id=sharer_profile_id,
@@ -1140,6 +1194,7 @@ def claim_game_link(
         share_id=share_id,
         clip_data=clip_data,
         sharer_email=sharer_email,
+        materialize_storage_refs=False,
     )
     local_game_id = result["game_id"]
 
