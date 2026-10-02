@@ -1,6 +1,6 @@
 # T11280: Reel vocabulary sweep on published, share, legal and landing copy
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-24
@@ -93,4 +93,4 @@ and progressively converging to zero blocking/major findings. Key findings along
   (2nd recurrence of this exact incident class; repaired via `npm install`, now a standing project
   memory to warn future review/proof agents explicitly).
 
-Final head `e74db658b`, Branch CI green on all jobs. PR: #549. Status set to STAGING once merged.
+Final head `e74db658b`, Branch CI green on all jobs. **Merged PR #549 (`2402eb635`), 2026-10-02.**
