@@ -128,7 +128,7 @@ export const USE_CASES: UseCase[] = [
       {
         heading: 'What changes',
         body: [
-          'You watch the game once, the way you would anyway, tap to mark the moments worth keeping, and drag the crop over your player a few times per clip. ReelBallers connects the motion in between and builds the reel: your athlete stays in focus, zoomed in and sharp, and you get a link.',
+          'You watch the game once, the way you would anyway, tap to mark the moments worth keeping, and drag the crop over your player a few times per clip. ReelBallers connects the motion in between and produces your highlight: your athlete stays in focus, zoomed in and sharp, and you get a link.',
           'Because each clip is tagged, the library compounds. By mid-season you can pull every goal, or everything from one tournament, without touching the original footage again.',
         ],
       },

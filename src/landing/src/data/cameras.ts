@@ -117,7 +117,7 @@ export const CAMERAS: Camera[] = [
       'Turn XbotGo auto-tracked footage into a highlight reel. How the gimbal handles tracking, what to fix in editing, and how to spotlight your player. Free.',
     h1: 'How to edit XbotGo footage into a highlight reel',
     answer:
-      'Upload the video your phone recorded on the XbotGo gimbal, mark the plays worth keeping, and ReelBallers builds the reel. XbotGo tracks the ball or the team during capture; ReelBallers handles what comes after -- selecting plays, framing your specific player, and producing a shareable cut.',
+      'Upload the video your phone recorded on the XbotGo gimbal, mark the plays worth keeping, and ReelBallers turns each into a highlight. XbotGo tracks the ball or the team during capture; ReelBallers handles what comes after -- selecting plays, framing your specific player, and producing a shareable cut.',
     reality:
       'XbotGo and ReelBallers solve different halves of the same problem, which is why they pair well. The gimbal means nobody has to stand and film. But it tracks play generally, not your child specifically, and it produces one long unbroken recording -- so you still finish the game with a two-hour file and no highlight reel.',
     tips: [

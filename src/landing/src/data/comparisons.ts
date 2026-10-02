@@ -126,7 +126,7 @@ export const COMPARISONS: Comparison[] = [
       },
       {
         q: 'Can I use both?',
-        a: 'Yes, and some people do -- build the reel here, then export and add a custom intro or specific treatment in a general editor.',
+        a: 'Yes, and some people do -- make the highlight here, then export and add a custom intro or specific treatment in a general editor.',
       },
     ],
   },
@@ -223,7 +223,7 @@ export const COMPARISONS: Comparison[] = [
       },
       {
         q: 'Can I use both together?',
-        a: 'Yes. A reasonable workflow is to build the reel in ReelBallers and, if you want a stylised social version, take the export into CapCut for captions and effects.',
+        a: 'Yes. A reasonable workflow is to make the highlight in ReelBallers and, if you want a stylised social version, take the export into CapCut for captions and effects.',
       },
       {
         q: 'Is ReelBallers free like CapCut?',
