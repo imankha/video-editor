@@ -67,7 +67,7 @@ may exceed). **Order is dependency order.**
 | T11250 | [Remove multi-clip backend: clip-management endpoints + export N>1 branches](T11250-remove-multiclip-backend-export.md) | L | TODO |
 | T11260 | [Remove multi-clip highlight carry, clip boundaries, Spotlight gates](T11260-remove-multiclip-highlight-carry.md) | M | TODO |
 | T11270 | [Collapse clip selection to "the clip" (mechanical)](T11270-collapse-clip-selection.md) | M | TODO |
-| T11280 | [Reel vocabulary sweep on published, share, legal and landing copy](T11280-reel-vocabulary-sweep.md) | M | WIP |
+| T11280 | [Reel vocabulary sweep on published, share, legal and landing copy](T11280-reel-vocabulary-sweep.md) | M | WAITING ON USER (PR #549, 7 reviewer + 2 proof-verifier passes, CI green, awaiting merge decision) |
 
 T11200 gates T11220 (the counts pick option A/B/C). T11220 gates T11230 (no draft may vanish) and
 T11260 (carry code is what keeps legacy highlights alive). T11240 before T11250 (frontend stops

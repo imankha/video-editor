@@ -47,6 +47,50 @@ Landing ships via the separate landing deploy (`/deploy-landing`).
 
 ## Acceptance Criteria
 
-- [ ] No user-visible "reel" for a single published clip in app copy (grep list in PR)
-- [ ] Landing makes no multi-clip assembly claim
-- [ ] E2E vocabulary specs (`T9530-library-vocabulary.qa`) updated
+- [x] AC1: No user-visible "reel" for a single published clip in app copy (grep list in PR #549)
+- [x] AC2: Landing makes no multi-clip assembly claim (all 12 sports in `sports.ts`, plus
+      `comparisons.ts`, `useCases.ts`, `cameras.ts`, `how-it-works.astro`, `index.astro`,
+      `about.astro`, `site.ts`, `llms.txt.ts`, `sports.astro`, `works-with/*`)
+- [x] AC3: E2E vocabulary specs (`T9530-library-vocabulary.qa`) updated
+- [x] AC4 (live addition, 2026-10-01): Published "Top Plays"/"Game Highlights" leftover
+      "reel(s)" share-link copy fixed (`CollectionShareModal.jsx`, `collections.py::_context_line`)
+- [x] AC5 (live addition): confusing "No credits · effects are free" cost caption reworded to
+      "Effects are free -- no credits needed"
+- [x] AC6 (live addition, owner ruling "sweep every remaining export instance, no exceptions"):
+      "Export" -> "Generate"/"Generation" across instructional/pop-up copy AND landing's own
+      product-action copy. Excludes: third-party "export from Veo/Trace/Hudl/GoPro/CapCut"
+      references, generic SEO "highlight reel" phrasing, manual-editing-comparison-column text,
+      the main app CTA button (already said "Generate Highlight" from unrelated prior work),
+      legal copy (separate judgment bucket per this file's own "review wording" note), and
+      confirmed-dead/unreachable code paths (`displayMessage` strings never rendered by any view).
+
+## Progress Log
+
+**2026-10-02**: Implemented across ~13 rounds in a single container worker
+(`feature/T11280-reel-vocabulary-sweep`), driven by 7 independent fresh-context Reviewer passes
+(Opus 5.5) and 2 independent Proof Verifier passes, each confirming the prior round's fixes held
+and progressively converging to zero blocking/major findings. Key findings along the way:
+- Pass 1-4: landing pages never touched (`how-it-works.astro` etc.), several "reel" strings
+  surviving in collection-share/move-reel/ranking UI, stale e2e specs, one regression
+  (`OverlayModeView.jsx` briefly reintroduced "clip" during an unrelated fix) — all fixed.
+- Proof Verifier pass 1: found AC2 (`sports.ts` never touched despite being named in this task's
+  own original scope) and AC6 (partial coverage) incomplete via a real counterfactual test run
+  (505/520 pass at head vs 101-105/520 fail against base). Owner ruled: `sports.ts` gets the full
+  single-highlight reframe; AC6 gets swept with "no exceptions".
+- Pass 5-7: `sports.ts` soccer/football initially missed (fixed), landing-wide "reel"->"highlight"
+  consistency gaps (fixed), final MAJOR in `multi_clip.py`/`modal_client.py` connection-lost
+  messages (fixed).
+- Proof Verifier pass 2: found one more LIVE gap by actually calling the runtime
+  `exportProgressLabel` function rather than static reading -- a phase-less "Starting export..."
+  message shown on every single generation's progress card, missed by all 7 code-review passes
+  because it required runtime verification. Fixed with a proven red-to-green regression test
+  (`GlobalExportIndicator.test.jsx`). Also flagged 4 remaining em-dash violations in copy this
+  task had already touched; fixed those plus 4 more siblings found while fixing them.
+- Two unrelated incidents surfaced and resolved: a CRLF-blob-file whitespace-check false positive
+  (`overlay.py`, then self-caught again on `ExportButtonContainer.jsx` — now 3 confirmed CRLF-blob
+  files in this repo, see `reference_repo_line_endings_per_file` memory) and a proof-verifier
+  subagent accidentally destroying the shared `node_modules` via a worktree-junction cleanup bug
+  (2nd recurrence of this exact incident class; repaired via `npm install`, now a standing project
+  memory to warn future review/proof agents explicitly).
+
+Final head `e74db658b`, Branch CI green on all jobs. PR: #549. Status set to STAGING once merged.
