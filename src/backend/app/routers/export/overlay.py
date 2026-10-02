@@ -1616,7 +1616,7 @@ async def export_overlay_only(
                 shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception as cleanup_error:
             logger.warning(f"[Overlay Export] Cleanup failed: {cleanup_error}")
-        raise HTTPException(status_code=500, detail=f"Overlay export failed: {e!s}") from e
+        raise HTTPException(status_code=500, detail=f"Overlay generation failed: {e!s}") from e
 
 
 @router.post("/final")
@@ -2965,7 +2965,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
         except Exception as e:
             logger.error(f"[Overlay Render] TEST MODE failed: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Test mode overlay export failed: {e}") from e
+            raise HTTPException(status_code=500, detail=f"Test mode overlay generation failed: {e}") from e
 
     # Always run in background so the per-user write lock is released immediately.
     # All progress is reported via WebSocket (export_progress/manager), not the
