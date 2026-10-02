@@ -2304,7 +2304,7 @@ async def restore_project_from_archive(
             )
             raise HTTPException(
                 status_code=400,
-                detail="This highlight was made from multiple clips and can no longer "
+                detail="This highlight was made from multiple plays and can no longer "
                        "be re-edited. You can still view, download, and share it.",
             )
 
