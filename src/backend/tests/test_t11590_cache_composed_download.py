@@ -608,7 +608,7 @@ def test_background_cache_write_does_not_block_streaming_local_branch(client):
         body = b"".join([c async for c in resp.body_iterator])
         elapsed = time.monotonic() - t0
 
-        assert upload_started.is_set(), "the background write must have started"
+        assert upload_started.wait(timeout=1), "the background write must have started"
         assert elapsed < 1.0, (
             f"streaming must not wait for the background cache write "
             f"(took {elapsed:.2f}s; the mocked upload blocks for up to 5s)"
@@ -659,7 +659,7 @@ def test_background_cache_write_does_not_block_streaming_r2_source_branch(client
         body = b"".join([c async for c in resp.body_iterator])
         elapsed = time.monotonic() - t0
 
-        assert upload_started.is_set(), "the background write must have started"
+        assert upload_started.wait(timeout=1), "the background write must have started"
         assert elapsed < 1.0, (
             f"streaming must not wait for the background cache write "
             f"(took {elapsed:.2f}s; the mocked upload blocks for up to 5s)"
@@ -677,3 +677,54 @@ def test_background_cache_write_does_not_block_streaming_r2_source_branch(client
         asyncio.run(_run())
 
     assert store, "the cache write eventually completes in the background"
+
+
+# ===========================================================================
+# 7. Review MAJOR: a failure in the copy step itself (NOT the upload) must
+#    never break the user-facing response. The copy runs synchronously in
+#    the request path (`_copy_for_background_cache_write`, awaited by
+#    `_spawn_background_cache_write` before the background task is even
+#    created) -- most plausibly failing with ENOSPC, since a MISS briefly
+#    holds two copies of the reel on disk. Starlette's StreamingResponse has
+#    already sent 200 headers before the first chunk, so an unguarded
+#    exception here would cut the response off with zero body bytes -- the
+#    user's actual download/share breaking, which this whole cache feature
+#    must never do.
+# ===========================================================================
+
+def test_copy_failure_during_background_write_does_not_break_response(client):
+    """Patches the REAL `shutil.copyfile` (what `downloads.py` actually
+    calls) to raise `OSError(ENOSPC)`. The response must still complete 200
+    with the full correct body, nothing must land in the cache store, and no
+    `rb_dl_cache_write_*` tempdir must be left on disk (the copy step owns +
+    cleans up its own partial tempdir on failure)."""
+    import errno
+    import glob
+    import os
+    import tempfile as _tempfile
+
+    db = _db_path()
+    fv_id, filename = _seed_final_video(db)
+    _write_local_final_video(filename)
+
+    store, counters = {}, {"compose": 0}
+
+    def _raise_enospc(src, dst, *args, **kwargs):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    leak_glob = os.path.join(_tempfile.gettempdir(), "rb_dl_cache_write_*")
+    before = set(glob.glob(leak_glob))
+
+    with ExitStack() as stack:
+        _install_cached_pipeline(stack, store, counters)
+        stack.enter_context(patch("shutil.copyfile", side_effect=_raise_enospc))
+
+        resp = _get(client, fv_id)
+        assert resp.status_code == 200, "a failed cache-write copy must not break the download"
+        assert resp.content == b"COMPOSED", "the user's actual bytes must still stream correctly"
+        assert counters["compose"] == 1, "compose itself is unaffected by the cache-write failure"
+        assert store == {}, "nothing should land in the cache when the copy step failed"
+
+    after = set(glob.glob(leak_glob))
+    leaked = after - before
+    assert not leaked, f"a failed copy must not leak a cache-write tempdir: {leaked}"

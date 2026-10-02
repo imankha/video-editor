@@ -784,10 +784,21 @@ async def _copy_for_background_cache_write(serve_path: str) -> tuple[str, str]:
     `(copy_path, copy_dir)`. Awaited by the request handler BEFORE scheduling
     the background upload task, so the copy is guaranteed complete while
     `serve_path`'s own `tmp_dir` is still guaranteed alive -- the background
-    task then only ever touches its OWN `copy_dir`, never the caller's."""
+    task then only ever touches its OWN `copy_dir`, never the caller's.
+
+    Raises on failure (most plausibly `OSError(ENOSPC)` -- a MISS briefly
+    holds two copies of the reel on disk, doubling peak temp usage) OR on
+    cancellation (client disconnect mid-copy). Either way this function
+    cleans up its OWN partially-created `copy_dir` before re-raising -- the
+    caller never learns about `copy_dir` on a failed copy, so nothing else
+    needs to (or could) clean it up."""
     copy_dir = tempfile.mkdtemp(prefix="rb_dl_cache_write_")
     copy_path = os.path.join(copy_dir, "cache_write.mp4")
-    await asyncio.to_thread(shutil.copyfile, serve_path, copy_path)
+    try:
+        await asyncio.to_thread(shutil.copyfile, serve_path, copy_path)
+    except BaseException:
+        shutil.rmtree(copy_dir, ignore_errors=True)
+        raise
     return copy_path, copy_dir
 
 
@@ -795,28 +806,55 @@ async def _background_cache_write(cache_key: str, copy_path: str, copy_dir: str)
     """Uploads the ALREADY-COPIED file (see `_copy_for_background_cache_write`)
     to the disposable cache key in the background. Fired via
     `asyncio.create_task` and never awaited by the request handler, so the R2
-    PUT never blocks the first byte. Best-effort: a failure is logged and
-    swallowed, same contract as the original synchronous write -- it must
-    never surface to a client that already received its bytes. Owns + cleans
-    up `copy_dir` -- independent of the request's own `tmp_dir`."""
+    PUT never blocks the first byte. Best-effort: a failure is logged (with
+    the actual exception, or a plain warning when the upload swallowed its
+    own error and just returned False) and otherwise swallowed, same contract
+    as the original synchronous write -- it must never surface to a client
+    that already received its bytes. Owns + cleans up `copy_dir` --
+    independent of the request's own `tmp_dir`."""
     try:
-        await asyncio.to_thread(
+        ok = await asyncio.to_thread(
             upload_file_to_r2_global, cache_key, Path(copy_path), content_type="video/mp4",
         )
+        if not ok:
+            logger.warning(f"[Download] cache write failed (non-fatal): {cache_key}")
     except Exception:
-        logger.warning(f"[Download] cache write failed (non-fatal): {cache_key}")
+        logger.warning(f"[Download] cache write failed (non-fatal): {cache_key}", exc_info=True)
     finally:
         shutil.rmtree(copy_dir, ignore_errors=True)
 
 
 async def _spawn_background_cache_write(cache_key: str, serve_path: str) -> None:
     """Call site for both the R2-source and local-source branches: copy then
-    schedule (never await the upload itself). Keeps a reference to the
-    created `Task` in a module-level set (and detaches on completion) --
-    without this, nothing else references the task and it can be garbage
-    collected mid-flight (a documented asyncio footgun for fire-and-forget
-    tasks)."""
-    copy_path, copy_dir = await _copy_for_background_cache_write(serve_path)
+    schedule (never await the upload itself).
+
+    The copy step runs HERE, in the request path (it must complete before
+    `serve_path`'s own `tmp_dir` can be torn down -- see
+    `_copy_for_background_cache_write`'s docstring), so it must behave like
+    every other best-effort cache-write step in this file: a failure is
+    logged and swallowed, NEVER allowed to escape into the StreamingResponse
+    generator and cut off an already-200'd response with zero bytes. Only
+    cancellation (client disconnect) propagates -- there is no cache write
+    left to finish in that case anyway, and `_copy_for_background_cache_write`
+    has already cleaned up its own partial copy before re-raising it.
+
+    Keeps a reference to the created upload `Task` in a module-level set (and
+    detaches on completion) -- without this, nothing else references the
+    task and it can be garbage collected mid-flight (a documented asyncio
+    footgun for fire-and-forget tasks; the identical pattern already exists
+    twice in this codebase -- `poster_warmer.fire_and_forget` and
+    `auth.py`'s `_background_tasks` -- a 3rd-occurrence candidate for
+    extraction, noted in the knowledge doc rather than done here)."""
+    try:
+        copy_path, copy_dir = await _copy_for_background_cache_write(serve_path)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.warning(
+            f"[Download] cache write copy failed (non-fatal, skipping cache write): {cache_key}",
+            exc_info=True,
+        )
+        return
     task = asyncio.create_task(_background_cache_write(cache_key, copy_path, copy_dir))
     _BACKGROUND_CACHE_WRITE_TASKS.add(task)
     task.add_done_callback(_BACKGROUND_CACHE_WRITE_TASKS.discard)
