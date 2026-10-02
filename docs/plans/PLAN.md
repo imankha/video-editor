@@ -17,6 +17,20 @@ so the walk always finishes. Reverses part of T9960's "add another only if you w
 Complexity 4, Tier M, frontend-only, no new persistence. Supersedes T10880 (pulsating-guidance
 audit) for this specific flow. **Status: TODO.**
 
+**2026-10-01 addition (user-flagged) — [T11580](tasks/T11580-published-tab-spotlight-just-published-highlight.md):
+Published tab buries the highlight a user just published.** User's own words: "Place published
+highlight above the 'top plays' and 'game highlights'. The published highlight should already be
+expanded instead of requiring the user to hit the arrow to expand it." Today every game group on the
+Published tab starts collapsed (`CollectionsTab.jsx`), so the just-published highlight requires
+finding the right game, expanding it, then scanning its carousel — while Top Plays, something the
+user did not just create, occupies the top slot. Mockup/spec built and shared before filing:
+https://claude.ai/artifact/WBdHeo6vb3DLCtxSbFbCwT. Fix: a "Just published" spotlight card above Top
+Plays and every game group, already expanded (poster, play, Share/Copy link/Download, Share
+primary), shown only right after a publish (memory-only, never persisted); its game group
+auto-expands once with the tile ringed + NEW, consume-once so reopening the tab never re-forces a
+group the user collapsed (the T8990 landmine). Impact 6 / Complexity 3, Tier M, frontend-only, no
+new persistence. **Status: TODO.**
+
 **2026-10-01 addition, P0 (user-reported prod bug) — [T11560](tasks/T11560-share-storage-ref-wrong-profile.md):
 Direct game share wrote the recipient's storage ref into the SHARER's own SQLite instead of the
 recipient's, so the recipient sees a false "Source video expired."** Reported live: imankh@gmail.com
