@@ -794,6 +794,16 @@ export function PublishedReelsPanel({
           accountGamesCount={accountGamesCount}
           onNavigateTab={onNavigateTab}
           onAddGame={onAddGame}
+          // T11580: the Just Published spotlight card reuses the SAME per-reel
+          // handlers ReelTile's own tile actions call (not the collection-level
+          // onShareCollection/etc. above, which have no single-video scope) so
+          // Share/Copy Link/Download provably match the highlight's own tile.
+          buildPosterUrl={(finalVideoId) => `${API_BASE}/api/downloads/${finalVideoId}/poster.jpg?profile_id=${currentProfileId}`}
+          onPlayReel={handlePlay}
+          onShareReel={webShareReel}
+          onCopyReelLink={copyReelLink}
+          onDownloadReel={handleDownload}
+          formatReelMeta={reelMetaLine}
         />
       </div>
       )}

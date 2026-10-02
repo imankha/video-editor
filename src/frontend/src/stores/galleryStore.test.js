@@ -87,3 +87,66 @@ describe('galleryStore count derivation', () => {
     });
   });
 });
+
+// T11580: Published tab "Just published" spotlight — memory-only view state
+// (never persisted). These lock in the consume-once auto-expand contract:
+// setJustPublished always arms autoExpandPending; only consumeAutoExpand (not
+// just the passage of time/renders) spends it, and clear/reset both wipe it.
+describe('galleryStore justPublished (T11580)', () => {
+  beforeEach(() => {
+    useGalleryStore.getState().reset();
+  });
+
+  it('starts with no spotlight and no pending auto-expand', () => {
+    const { justPublished, autoExpandPending } = useGalleryStore.getState();
+    expect(justPublished).toBeNull();
+    expect(autoExpandPending).toBe(false);
+  });
+
+  it('setJustPublished stores the highlight and arms autoExpandPending', () => {
+    useGalleryStore.getState().setJustPublished({ finalVideoId: 42, gameId: 9, aspectRatio: '9:16' });
+    const { justPublished, autoExpandPending } = useGalleryStore.getState();
+    expect(justPublished).toEqual({ finalVideoId: 42, gameId: 9, aspectRatio: '9:16' });
+    expect(autoExpandPending).toBe(true);
+  });
+
+  it('a newer publish REPLACES the previous spotlight and re-arms auto-expand', () => {
+    useGalleryStore.getState().setJustPublished({ finalVideoId: 1, gameId: 1, aspectRatio: '9:16' });
+    useGalleryStore.getState().consumeAutoExpand();
+    useGalleryStore.getState().setJustPublished({ finalVideoId: 2, gameId: 2, aspectRatio: '16:9' });
+    const { justPublished, autoExpandPending } = useGalleryStore.getState();
+    expect(justPublished.finalVideoId).toBe(2);
+    expect(autoExpandPending).toBe(true);
+  });
+
+  it('consumeAutoExpand spends the signal without touching justPublished itself', () => {
+    useGalleryStore.getState().setJustPublished({ finalVideoId: 42, gameId: 9, aspectRatio: '9:16' });
+    useGalleryStore.getState().consumeAutoExpand();
+    const { justPublished, autoExpandPending } = useGalleryStore.getState();
+    expect(justPublished).toEqual({ finalVideoId: 42, gameId: 9, aspectRatio: '9:16' });
+    expect(autoExpandPending).toBe(false);
+  });
+
+  it('a second consumeAutoExpand call (simulating a later reopen) is a no-op', () => {
+    useGalleryStore.getState().setJustPublished({ finalVideoId: 42, gameId: 9, aspectRatio: '9:16' });
+    useGalleryStore.getState().consumeAutoExpand();
+    useGalleryStore.getState().consumeAutoExpand();
+    expect(useGalleryStore.getState().autoExpandPending).toBe(false);
+  });
+
+  it('clearJustPublished (dismiss) drops both the spotlight and any pending auto-expand', () => {
+    useGalleryStore.getState().setJustPublished({ finalVideoId: 42, gameId: 9, aspectRatio: '9:16' });
+    useGalleryStore.getState().clearJustPublished();
+    const { justPublished, autoExpandPending } = useGalleryStore.getState();
+    expect(justPublished).toBeNull();
+    expect(autoExpandPending).toBe(false);
+  });
+
+  it('reset (profile switch) drops both the spotlight and any pending auto-expand', () => {
+    useGalleryStore.getState().setJustPublished({ finalVideoId: 42, gameId: 9, aspectRatio: '9:16' });
+    useGalleryStore.getState().reset();
+    const { justPublished, autoExpandPending } = useGalleryStore.getState();
+    expect(justPublished).toBeNull();
+    expect(autoExpandPending).toBe(false);
+  });
+});

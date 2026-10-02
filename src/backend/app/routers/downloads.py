@@ -2129,8 +2129,21 @@ async def publish_to_my_reels(
         # ever consumed by the T5280 poster generator this reverses -- poster
         # capture now runs at export, not here). Plain SELECT, no column guard
         # needed.
+        #
+        # T11580 (fixed after an independent proof-verifier pass caught the
+        # first version of this): game_ids/clip_count are READ here, not
+        # re-derived via a fresh working_clips/raw_clips join. They are
+        # ALREADY FROZEN onto this exact row at export-finalize time
+        # (publish_final_video -> compute_project_game_ids /
+        # compute_project_ranking_freeze) -- the SAME frozen values
+        # list_downloads/collections_summary route on via route_collection()
+        # below. A fresh join ignores clip_count entirely: a multi-clip
+        # highlight from ONE game would wrongly resolve to that game instead
+        # of Mixes (list_downloads routes any clip_count != 1 reel to Mixes
+        # regardless of how many games it touches) -- the spotlight would
+        # target a game group the highlight was never actually a member of.
         cursor.execute("""
-            SELECT id, filename
+            SELECT id, filename, aspect_ratio, game_ids, clip_count
             FROM final_videos
             WHERE project_id = ?
             ORDER BY version DESC
@@ -2144,6 +2157,14 @@ async def publish_to_my_reels(
                 f"req_id={req_id} - returning 404, nothing persisted"
             )
             raise HTTPException(status_code=404, detail="No final video found for this project")
+
+        # The Published-tab "just published" spotlight needs to know which
+        # collection THIS highlight actually routes to (a single game group,
+        # or None for Mixes) -- the EXACT SAME routing rule list_downloads
+        # uses (route_collection, collection_metadata.py), computed from the
+        # SAME frozen final_videos row already selected above, at THIS
+        # request's connection. No client-side cache involved for this value.
+        collection_game_id = route_collection(row['game_ids'], row['clip_count'])
 
         # T5260: the name is frozen once at render time (overlay.py INSERT), but the
         # draft stays renameable in Reel Drafts right up until this gesture. Publish
@@ -2225,7 +2246,20 @@ async def publish_to_my_reels(
         f"archived={archived} user={user_id} req_id={req_id} - watch for the "
         f"matching [SYNC] ... R2 sync OK/FAILED line to confirm durability"
     )
-    return {"success": True, "final_video_id": row['id'], "archived": archived}
+    # T11580: collection_game_id/aspect_ratio ride this response so the
+    # frontend's Published-tab spotlight never needs a client-side
+    # project-list cache lookup for them -- additive fields, existing
+    # consumers reading only success/final_video_id/archived are unaffected.
+    # collection_game_id is the ACTUAL routing target (a single game id, or
+    # None for Mixes) -- not a raw game_ids list -- so the frontend has no
+    # second gating decision to make or get wrong.
+    return {
+        "success": True,
+        "final_video_id": row['id'],
+        "archived": archived,
+        "collection_game_id": collection_game_id,
+        "aspect_ratio": row['aspect_ratio'],
+    }
 
 
 @router.get("/count")
