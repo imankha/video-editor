@@ -85,7 +85,12 @@ export function JustPublishedCard({
         data-testid="just-published-media"
         className={
           isLandscape
-            ? 'relative w-full sm:w-64 shrink-0 aspect-video bg-black'
+            // self-start: at sm:flex-row the row's default align-items:stretch
+            // otherwise stretches this box's HEIGHT to match the taller text
+            // column (measured 208.5px/160.5px tall instead of the correct
+            // 144px at a 256px width) -- self-start lets aspect-video size it
+            // naturally instead of being stretched by the row's cross axis.
+            ? 'relative self-start w-full sm:w-64 shrink-0 aspect-video bg-black'
             // BUG (live-verified 2026-10-02): `w-full max-h-[300px] aspect-[9/16]`
             // let the CONTAINER WIDTH drive the box, computed a ~613px-tall box
             // from that width, then max-h clamped the HEIGHT to 300px without

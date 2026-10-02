@@ -75,7 +75,7 @@ describe('usePublishProject (T8530 — T4050 contract carried through the extrac
 
   it('success: POSTs publish, fires fetchCount/notify/fetchProjects/recordAchievement, no optimistic removal', async () => {
     apiFetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { success: true, archived: true, final_video_id: 99, game_ids: [], aspect_ratio: '9:16' })
+      jsonResponse(200, { success: true, archived: true, final_video_id: 99, collection_game_id: null, aspect_ratio: '9:16' })
     );
     const { result } = renderHook(() => usePublishProject(project));
 
@@ -146,14 +146,24 @@ describe('usePublishProject (T8530 — T4050 contract carried through the extrac
 
 // T11580: justPublished spotlight wiring. gameId/aspectRatio come from the
 // PUBLISH RESPONSE itself (server-computed, at the exact moment of publish),
-// NOT a client-side projectsStore snapshot. A live-verification bug
-// (2026-10-02, dev fixture account) found the client cache's game_ids could
-// be stale relative to server truth: a real single-game highlight (server's
-// own GET /api/downloads later showed game_ids:[11]) resolved to gameId: null
-// client-side and auto-expanded "Mixes & compilations" instead of its real
-// game group. Moving the source of truth to the publish response itself
-// eliminates the whole staleness class -- see
-// test_t11580_publish_game_ids_response.py for the backend half.
+// NOT a client-side projectsStore snapshot. Two live-verification bugs found
+// here, both fixed:
+// (1) 2026-10-02, dev fixture account: the client cache's game_ids could be
+//     stale relative to server truth -- a real single-game highlight (server's
+//     own GET /api/downloads later showed game_ids:[11]) resolved to
+//     gameId: null client-side and auto-expanded "Mixes & compilations"
+//     instead of its real game group. Fixed by moving the source of truth to
+//     the publish response.
+// (2) Independent proof-verifier pass, same day: the FIRST fix for (1) sent a
+//     raw game_ids list re-derived via a fresh working_clips join that
+//     ignored clip_count -- so a MULTI-CLIP highlight from one game still
+//     wrongly targeted that game's group (list_downloads routes any
+//     clip_count != 1 reel to Mixes regardless of game count). Fixed by
+//     having the backend return `collection_game_id`, its OWN routing
+//     decision (route_collection on the frozen final_videos.game_ids/
+//     clip_count), not a raw list the frontend re-gates.
+// See test_t11580_publish_game_ids_response.py for the backend half + the
+// routing-agreement test against the real freeze path + list_downloads.
 describe('usePublishProject justPublished wiring (T11580)', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
@@ -166,9 +176,9 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
     setJustPublishedMock.mockReset();
   });
 
-  it('single-game publish response: setJustPublished with that one gameId', async () => {
+  it('publish response targets a game group: setJustPublished with that collection_game_id verbatim', async () => {
     apiFetchMock.mockResolvedValueOnce(jsonResponse(200, {
-      archived: true, final_video_id: 99, game_ids: [7], aspect_ratio: '9:16',
+      archived: true, final_video_id: 99, collection_game_id: 7, aspect_ratio: '9:16',
     }));
     const { result } = renderHook(() => usePublishProject(project));
 
@@ -181,9 +191,9 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
     });
   });
 
-  it('multi-game (Mix) publish response: gameId null, same gating as finishedReelNav', async () => {
+  it('publish response targets Mixes (collection_game_id: null): setJustPublished with gameId null', async () => {
     apiFetchMock.mockResolvedValueOnce(jsonResponse(200, {
-      archived: true, final_video_id: 100, game_ids: [7, 8], aspect_ratio: '16:9',
+      archived: true, final_video_id: 100, collection_game_id: null, aspect_ratio: '16:9',
     }));
     const { result } = renderHook(() => usePublishProject(project));
 
@@ -196,25 +206,11 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
     });
   });
 
-  it('no-source-game (directly uploaded) publish response: gameId null, still spotlights', async () => {
-    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, {
-      archived: true, final_video_id: 101, game_ids: [], aspect_ratio: '9:16',
-    }));
-    const { result } = renderHook(() => usePublishProject(project));
-
-    await act(async () => { await result.current.publish({ openGallery: false }); });
-
-    expect(setJustPublishedMock).toHaveBeenCalledWith({
-      finalVideoId: 101,
-      gameId: null,
-      aspectRatio: '9:16',
-    });
-  });
-
   // Rolling-deploy skew: an older backend instance's response predates T11580
-  // and carries no game_ids/aspect_ratio at all. Must degrade to "skip the
+  // and carries no collection_game_id/aspect_ratio at all (undefined, never
+  // null -- null is Mixes, a legitimate value). Must degrade to "skip the
   // spotlight" (no guessed data), never crash and never guess a game.
-  it('publish response missing game_ids/aspect_ratio (older backend): skips the spotlight, no crash', async () => {
+  it('publish response missing collection_game_id/aspect_ratio (older backend): skips the spotlight, no crash', async () => {
     apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 102 }));
     const { result } = renderHook(() => usePublishProject(project));
 
@@ -245,7 +241,7 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
   it('a throwing setJustPublished must not prevent the critical post-publish effects from running', async () => {
     setJustPublishedMock.mockImplementationOnce(() => { throw new Error('boom'); });
     apiFetchMock.mockResolvedValueOnce(jsonResponse(200, {
-      archived: true, final_video_id: 99, game_ids: [7], aspect_ratio: '9:16',
+      archived: true, final_video_id: 99, collection_game_id: 7, aspect_ratio: '9:16',
     }));
     const { result } = renderHook(() => usePublishProject(project));
 

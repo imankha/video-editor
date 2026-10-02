@@ -134,5 +134,25 @@ describe('JustPublishedCard (T11580)', () => {
       expect(media.className).toContain('w-full');
       expect(media.className).toContain('aspect-video');
     });
+
+    // BUG regression (live-verified 2026-10-02 at sm/desktop widths): at the
+    // sm:flex-row two-column layout, flexbox's default align-items:stretch
+    // stretched the 16:9 media box's HEIGHT to match the taller text column
+    // (measured 208.5px/160.5px instead of the correct 144px at a 256px
+    // width). self-start opts the media box out of that stretch so
+    // aspect-video can size it correctly.
+    it('16:9: self-start so the sm:flex-row two-column layout does not stretch its height', () => {
+      const landscapeHighlight = { ...highlight, aspect_ratio: '16:9' };
+      const collections = makeCollections({ members: { 'game:7': [landscapeHighlight] }, memberStates: { 'game:7': 'ready' } });
+      render(
+        <JustPublishedCard
+          {...baseProps}
+          justPublished={{ finalVideoId: 501, gameId: 7, aspectRatio: '16:9' }}
+          collections={collections}
+        />,
+      );
+      const media = screen.getByTestId('just-published-media');
+      expect(media.className).toContain('self-start');
+    });
   });
 });

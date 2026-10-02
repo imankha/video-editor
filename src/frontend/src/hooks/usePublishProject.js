@@ -5,7 +5,6 @@ import { SECTION_NAMES } from '../config/displayNames';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useQuestStore } from '../stores/questStore';
 import { useProjectsStore } from '../stores/projectsStore';
-import { singleSourceGameId } from '../utils/finishedReelNav';
 import { toast } from '../components/shared/Toast';
 
 /**
@@ -110,23 +109,37 @@ export function usePublishProject(project) {
       // live-verification bug (2026-10-02) found the client cache's game_ids
       // stale relative to server truth (a single-game highlight resolved to
       // gameId: null and auto-expanded Mixes instead of its real game group).
-      // `result.game_ids` is undefined on an older backend during a rolling
-      // deploy (response shape predates T11580) -- guarded so a skew window
-      // degrades to "skip the spotlight", never a guessed/wrong game. Still
-      // isolated in its own try/catch (defense in depth, unrelated failure
-      // modes) so it can never take down the critical effects below
-      // (fetchCount/notifyCollectionsChanged/fetchProjects/recordAchievement),
-      // which must run unconditionally on every successful publish (Branch CI
-      // run 37040668288 caught a prior version of this sharing the outer catch).
+      //
+      // `collection_game_id` is the backend's ACTUAL ROUTING DECISION (same
+      // route_collection() rule list_downloads/collections_summary use on the
+      // FROZEN final_videos.game_ids/clip_count) -- a single game id, or null
+      // for Mixes -- not a raw game_ids list the frontend re-gates itself. An
+      // earlier version of this fix sent a raw game_ids list re-derived via a
+      // fresh working_clips join that ignored clip_count entirely, so a
+      // multi-clip highlight from ONE game wrongly targeted that game's group
+      // instead of Mixes (list_downloads routes any clip_count != 1 reel to
+      // Mixes regardless of game count) -- caught by an independent
+      // proof-verifier pass. Reading the backend's own routing decision
+      // directly eliminates that whole class of disagreement.
+      //
+      // `result.collection_game_id` is undefined (never null) on an older
+      // backend during a rolling deploy (response shape predates T11580) --
+      // guarded so a skew window degrades to "skip the spotlight", never a
+      // guessed/wrong game. Still isolated in its own try/catch (defense in
+      // depth, unrelated failure modes) so it can never take down the
+      // critical effects below (fetchCount/notifyCollectionsChanged/
+      // fetchProjects/recordAchievement), which must run unconditionally on
+      // every successful publish (Branch CI run 37040668288 caught a prior
+      // version of this sharing the outer catch).
       try {
-        if (Array.isArray(result.game_ids) && result.aspect_ratio) {
+        if (result.collection_game_id !== undefined && result.aspect_ratio) {
           useGalleryStore.getState().setJustPublished({
             finalVideoId: result.final_video_id,
-            gameId: singleSourceGameId(result),
+            gameId: result.collection_game_id,
             aspectRatio: result.aspect_ratio,
           });
         } else {
-          console.warn(`[Publish] project=${targetId} publish response missing game_ids/aspect_ratio (older backend?) - skipping justPublished spotlight`);
+          console.warn(`[Publish] project=${targetId} publish response missing collection_game_id/aspect_ratio (older backend?) - skipping justPublished spotlight`);
         }
       } catch (spotlightError) {
         console.error('[Publish] justPublished spotlight failed (non-fatal, publish still succeeded):', spotlightError);
