@@ -1,6 +1,6 @@
 # T11600: Published tab shows stale summary after a publish while the tab was inactive
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-10-02
@@ -124,7 +124,11 @@ misleading about a gap that no longer exists.
 8. [x] Fixed both MAJOR findings + MINOR 1/2 (MINOR 3/4 addressed or accepted, see below);
    re-ran full regression set green; re-requested review
 9. [x] Final reviewer sign-off: APPROVED (round 2), 0 blocking/major
-10. [ ] Commit
+10. [x] Independently VERIFIED by proof-verifier (red-to-green reproduced in an isolated
+    worktree, ABA-regression mutant confirmed caught, real-store usage confirmed, scope
+    confirmed exact)
+11. [x] Commit, push, PR #550, Branch CI green (`ci-ready: success`, head SHA `38e29770a`),
+    merged to master (`b473fe977`, fast-forward)
 
 ### Progress Log
 
