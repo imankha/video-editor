@@ -239,7 +239,7 @@ describe('ExportButtonView — T9540 render/job vocabulary (supersedes T7580)', 
 
   it('Overlay cost cell shows the backend-confirmed free caption (Q1), Focus does not', () => {
     const { rerender } = render(<ExportButtonView {...baseProps} isFramingMode={false} />);
-    expect(screen.getByTestId('export-free-cost-note').textContent).toContain('No credits · effects are free');
+    expect(screen.getByTestId('export-free-cost-note').textContent).toContain('Effects are free -- no credits needed');
     // Framing mode never shows the free caption (it is a paid stage).
     rerender(<ExportButtonView {...baseProps} isFramingMode={true} />);
     expect(screen.queryByTestId('export-free-cost-note')).toBeNull();

@@ -411,7 +411,7 @@ export const EXPORT_JOBS = {
     jobNoun: 'Highlight with Overlay',
     // Q1 (approved): the effects render charges ZERO credits (backend-confirmed: no
     // reserve_credits in overlay.py). Surface that honestly instead of staying silent.
-    costNote: 'No credits · effects are free',
+    costNote: 'Effects are free -- no credits needed',
   },
 };
 
@@ -440,7 +440,7 @@ export const EXPORT_PROGRESS = {
 // guard rejects inside the background task AFTER credits were reserved+confirmed at dispatch,
 // so the same handler refunds them — the net cost is zero, stated honestly as "refunded".
 export const EXPORT_TOO_LARGE = {
-  TITLE: 'This export is too big to finish in time',
+  TITLE: 'This highlight is too big to generate in time',
   WHY:
     'Every frame is upscaled on our video processor, and this batch needs more GPU time '
     + 'than one job can finish before it times out. Rather than run for the full limit and '
@@ -449,7 +449,7 @@ export const EXPORT_TOO_LARGE = {
   SUGGESTION_CROP: 'Crop in tighter on the highlight(s) below, a smaller crop is much faster to process.',
   // Shown only for a multi-clip rejection (>1 contributing clip); it isn't actionable for a
   // single clip (the /render path also hits this guard with a one-element list, T11330 minor 2).
-  SUGGESTION_SPLIT: 'Export fewer highlights at once, or split this batch into two smaller exports.',
+  SUGGESTION_SPLIT: 'Generate fewer highlights at once, or split this batch into two smaller batches.',
   CONTRIBUTORS_HEADING: 'Biggest contributors',
   // A single worst-offender row: "Highlight 3, 1920x1080 crop, about 6 min".
   contributorLine: (c) => {
@@ -457,7 +457,7 @@ export const EXPORT_TOO_LARGE = {
     const crop = c.crop_width && c.crop_height ? `${c.crop_width}x${c.crop_height} crop, ` : '';
     return `${label}, ${crop}${formatApproxMinutes(c.estimated_gpu_seconds)}`;
   },
-  CREDIT_NOTE: 'Credits reserved for this export have been refunded. This attempt cost you nothing.',
+  CREDIT_NOTE: 'Credits reserved for this generation have been refunded. This attempt cost you nothing.',
   DISMISS: 'Got it',
 };
 
@@ -502,7 +502,7 @@ export const FOCUS_PUBLISH = {
   PUBLISH_LABEL: 'Publish without spotlight',
   PUBLISH_CAPTION: `Goes to Published. ${STAGE_REASONS.PUBLISH}`,
   EDIT_FRAMING_LABEL: 'Edit framing',
-  EDIT_FRAMING_CAPTION: 'Reframe and export again. Uses credits.',
+  EDIT_FRAMING_CAPTION: 'Reframe and generate again. Uses credits.',
   SAVE_DRAFT_LABEL: 'Done for now',
 };
 
@@ -604,7 +604,7 @@ export const OVERLAY_PUBLISH = {
   REAPPLY_OVERLAY_LABEL: 'Reapply spotlight',
   REAPPLY_OVERLAY_CAPTION: 'Go back and redo the spotlight.',
   REAPPLY_FOCUS_LABEL: `Reapply ${MODE_NAMES.FRAMING}`,
-  REAPPLY_FOCUS_CAPTION: 'Reframe and export again. Uses credits.',
+  REAPPLY_FOCUS_CAPTION: 'Reframe and generate again. Uses credits.',
   SAVE_DRAFT_LABEL: 'Done for now',
 };
 
@@ -632,7 +632,7 @@ export const RESULT_RETENTION = {
 // (highlight carry-forward, T4350/T4355) and that a fresh export follows.
 export const OVERLAY_REAPPLY_FOCUS_TOAST = {
   title: 'Spotlight saved',
-  message: `Reframe your highlight in ${MODE_NAMES.FRAMING}, then export again, your spotlight carries over to the new highlight.`,
+  message: `Reframe your highlight in ${MODE_NAMES.FRAMING}, then generate again, your spotlight carries over to the new highlight.`,
 };
 
 // T10870: auto-spotlight tried the clip's player detections but found no usable
@@ -756,7 +756,7 @@ export const CREDITS = {
 //   stays visible but becomes un-editable / un-exportable once its source is gone.
 export const RETENTION = {
   SOURCE: 'Your uploaded game is kept for 30 days, and you can extend it anytime.',
-  EXPORTED: 'Highlights you export are kept for good and are free to store.',
+  EXPORTED: 'Highlights you generate are kept for good and are free to store.',
   DRAFT: 'An unexported draft stays viewable, but you need its source to re-edit or export it, so finish the ones you want to keep before the 30 days are up.',
 };
 

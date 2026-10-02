@@ -255,7 +255,7 @@ export function GlobalExportIndicator() {
         // T9540 (N21): title names the STAGE that finished (Framing ready / Clip ready);
         // the message names the object instance (the reel/clip name).
         const completeVocab = jobVocab(exp);
-        toast.success(completeVocab ? completeVocab.completed : 'Export complete', {
+        toast.success(completeVocab ? completeVocab.completed : 'Highlight generated', {
           message: projectLabel,
           action: shareAction,
           duration: 8000,
@@ -264,7 +264,7 @@ export function GlobalExportIndicator() {
         // T11330: an over-budget preflight rejection is surfaced by the explanatory
         // ExportTooLargeModal (below), not a toast that scrolls away — skip the generic toast.
         if (exp.budgetRejection) return;
-        toast.error('Export failed', {
+        toast.error("Couldn't generate highlight", {
           message: `${projectLabel} - ${exp.error || 'An error occurred during export'}`,
           duration: 8000,
         });
@@ -373,7 +373,7 @@ export function GlobalExportIndicator() {
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium text-white">
-                {processingExports.length} Export{processingExports.length !== 1 ? 's' : ''} Active
+                {processingExports.length} Highlight{processingExports.length !== 1 ? 's' : ''} Generating
               </div>
               {primaryExport && (
                 // T9900: give the object name, stage, percent and estimate their own lines

@@ -41,7 +41,7 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles
     // Destination + honest precondition stated on the publish choice BEFORE the tap.
     expect(screen.getByText('Goes to Published. Nobody else can see this until you share a link.')).toBeTruthy();
     // Re-render charge stated on the edit-framing choice BEFORE the tap.
-    expect(screen.getByText('Reframe and export again. Uses credits.')).toBeTruthy();
+    expect(screen.getByText('Reframe and generate again. Uses credits.')).toBeTruthy();
   });
 
   it('does not show an autosave status badge', () => {
