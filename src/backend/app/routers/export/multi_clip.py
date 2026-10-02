@@ -2014,7 +2014,7 @@ async def _export_clips(
             user_error = "Network error during export. Please check your internet connection and try again."
             is_recoverable = True
         else:
-            user_error = f"Export failed: {error_str}"
+            user_error = f"Generation failed: {error_str}"
             is_recoverable = False
 
         error_data = {
@@ -2544,8 +2544,8 @@ async def _run_multi_clip_background(
         if export_progress.get(export_id, {}).get('status') != 'error':
             error_data = {
                 "progress": 0,
-                "message": f"Export failed: {e}",
-                "error": f"Export failed: {e}",
+                "message": f"Generation failed: {e}",
+                "error": f"Generation failed: {e}",
                 "status": "error",
                 "projectId": project_id,
                 "projectName": project_name,

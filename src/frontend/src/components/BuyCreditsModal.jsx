@@ -117,7 +117,7 @@ function CreditsExplainer() {
       <div>
         <p className="text-gray-400">Credits are spent on:</p>
         <ul className="list-disc list-inside text-gray-300">
-          <li>Exporting video ({CREDITS.PER_SECOND_RULE})</li>
+          <li>Generating video ({CREDITS.PER_SECOND_RULE})</li>
           <li>{CREDITS.MIN_CHARGE}</li>
           <li>Uploading a game (storage for 30 days)</li>
         </ul>

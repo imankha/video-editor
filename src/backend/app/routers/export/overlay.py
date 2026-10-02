@@ -1572,7 +1572,7 @@ async def export_overlay_only(
         from app.websocket import make_progress_data
         error_data = make_progress_data(
             current=0, total=100, phase='error',
-            message=f"Export failed: {error_msg}",
+            message=f"Generation failed: {error_msg}",
             export_type='overlay',
             project_id=project_id, project_name=project_name,
         )
@@ -1602,7 +1602,7 @@ async def export_overlay_only(
         from app.websocket import make_progress_data
         error_data = make_progress_data(
             current=0, total=100, phase='error',
-            message=f"Export failed: {e!s}",
+            message=f"Generation failed: {e!s}",
             export_type='overlay',
             project_id=project_id, project_name=project_name,
         )
@@ -2604,7 +2604,7 @@ async def _run_overlay_export_background(
         from app.websocket import make_progress_data
         error_data = make_progress_data(
             current=0, total=100, phase='error',
-            message=f"Export failed: {e}",
+            message=f"Generation failed: {e}",
             export_type='overlay',
             project_id=project_id, project_name=project_name,
         )

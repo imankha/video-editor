@@ -164,7 +164,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             <>
               <div className="flex items-center gap-2">
                 <Loader size={14} className="animate-spin" />
-                <span>Monitoring export via server polling...</span>
+                <span>Monitoring generation via server polling...</span>
               </div>
               <div className="flex gap-2 mt-2">
                 <button
@@ -187,7 +187,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             <>
               <div className="flex items-center gap-2">
                 <Loader size={14} className="animate-spin" />
-                <span>Connection lost — export continues on server. Reconnecting...</span>
+                <span>Connection lost — generation continues on server. Reconnecting...</span>
               </div>
               <button
                 onClick={onRetryConnection}
@@ -283,7 +283,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           className="flex items-center gap-1.5 text-xs text-gray-400"
         >
           <span>
-            {`Recorded at ${sourceFps}fps — exported at 30fps for a smaller, cheaper file.`}
+            {`Recorded at ${sourceFps}fps — generated at 30fps for a smaller, cheaper file.`}
           </span>
         </div>
       )}

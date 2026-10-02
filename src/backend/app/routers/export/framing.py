@@ -598,7 +598,7 @@ async def _run_render_background(
             from app.websocket import make_progress_data
             error_data = make_progress_data(
                 current=0, total=100, phase='error',
-                message=f"Export failed: {failure_message}",
+                message=f"Generation failed: {failure_message}",
                 export_type='framing', project_id=project_id, project_name=project_name,
             )
             export_progress[export_id] = error_data

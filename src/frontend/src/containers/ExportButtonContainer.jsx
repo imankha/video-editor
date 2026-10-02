@@ -463,7 +463,7 @@ export function ExportButtonContainer({
       }
     }
 
-    return { success: false, error: 'Export timed out' };
+    return { success: false, error: 'Generation timed out' };
   };
 
   /**
@@ -622,10 +622,10 @@ export function ExportButtonContainer({
         // guards every entry). No defensive branch here: /api/export/render
         // refuses more than one clip loudly (fail-visible per coding standards).
         if (!projectId) {
-          throw new Error('Cannot export: No project selected. Please save your project first.');
+          throw new Error('Cannot generate: No project selected. Please save your project first.');
         }
         if (!saveCurrentClipState) {
-          throw new Error('Cannot export: Clip state manager not available. Please reload the page and try again.');
+          throw new Error('Cannot generate: Clip state manager not available. Please reload the page and try again.');
         }
 
         console.log('[ExportButtonContainer] Using backend-authoritative render');
@@ -636,7 +636,7 @@ export function ExportButtonContainer({
           console.log('[ExportButtonContainer] Clip state saved, requesting render');
         } catch (saveErr) {
           console.error('[ExportButtonContainer] Failed to save clip state:', saveErr);
-          throw new Error('Failed to save highlight edits before export. Please try again.');
+          throw new Error('Failed to save highlight edits before generating. Please try again.');
         }
 
         endpoint = `${API_BASE}/api/export/render`;

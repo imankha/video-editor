@@ -280,7 +280,7 @@ export function useExportRecovery() {
         } else if (data.status === 'expired') {
           // Modal job expired (too old to recover)
           console.warn(`[ExportRecovery] Export ${exp.job_id} expired:`, data.message);
-          failExport(exp.job_id, data.message || 'Export job expired');
+          failExport(exp.job_id, data.message || 'Generation job expired');
           return false;
         } else if (data.status === 'not_modal') {
           // Not a Modal job or no call_id - just show as processing
