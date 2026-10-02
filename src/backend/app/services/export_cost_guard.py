@@ -1,4 +1,5 @@
-"""Preflight GPU-cost estimate + budget guard for Modal framing/upscale exports (T11320).
+"""Preflight GPU-cost estimate + budget guard for Modal framing/upscale exports (T11320,
+calibrated T11370).
 
 Bug 58p (prod, 2026-09-25): a user exported 14 clips at full 1920x1080 (no crop reduction,
 16:9) four separate times. Each attempt ran Modal's ``process_clips_ai`` for the full hard
@@ -13,17 +14,40 @@ can act on (crop in / split the batch -- see T11330) instead of an hour of silen
 Cost model (deliberately conservative -- a false rejection just tells the user to crop in or
 split; a false acceptance repeats Bug 58p):
 
-- Real-ESRGAN GAN cost scales with the crop's INPUT pixel count, not the output resolution or
-  the enlargement factor (see ``video_processing.py`` ``_upscale_crop`` docstring, ~:1328).
-- Anchor (the MEASURED crop, not a restated one): the E6 benchmark upscaled a **540x960** input
-  crop on a T4 -- 180 frames in 122.67s == 1.4674 fps == **0.681 s/frame** (source:
-  ``experiments/e6_l4_benchmark.py:56-58`` for the crop dims + ``experiments/
-  e6_l4_benchmark_results.json`` ``results.t4`` for the timing). This is where
-  ``.claude/knowledge/modal-gpu.md``'s ``T4 ~= 681 ms/frame`` figure comes from. Because GAN
-  cost scales with the crop's INPUT pixel count, that pins the per-pixel rate. This is the E6
-  *performance* benchmark crop -- NOT ``DEFAULT_CROP_SIZES["9:16"]`` (a product default,
-  unrelated to what the 681ms was timed at).
-- ``per_frame_cost(w, h) = ANCHOR_SECONDS_PER_FRAME * (w*h) / ANCHOR_CROP_PIXELS``.
+- Real-ESRGAN GAN cost scales LINEARLY with the crop's INPUT pixel count (confirmed by T11370's
+  real Modal staging calibration, not just assumed -- see below). It does NOT scale with the
+  enlargement factor (``video_processing.py`` ``_upscale_crop`` docstring, ~:1328).
+- ``per_frame_cost(crop_w, crop_h, target_w, target_h) = per_frame_overhead(target_w, target_h)
+  + SLOPE_SECONDS_PER_CROP_PIXEL * crop_w * crop_h``. The crop-pixel SLOPE is a single constant
+  (target-independent -- confirmed below); the OVERHEAD (fixed per-frame cost: decode, PNG
+  write, resize, concat -- everything that does NOT scale with crop size) depends on the
+  OUTPUT TARGET resolution, not the crop, which is why ``target_w``/``target_h`` are now
+  required arguments.
+
+T11370 calibration (2026-10-02, real Modal staging dispatch, 3 jobs / 12 measured points,
+`src/backend/experiments/t11370_cost_calibration.py` +
+`src/backend/experiments/t11370_results/*.jsonl`):
+
+- Per-clip in-loop GAN rate was isolated from fixed per-job overhead (cold start, model load,
+  extract/seek, encode) by timestamping every Modal-streamed progress item and fitting
+  wall-clock against emitted frame number -- NOT total wall-clock / frame-count (which is what
+  the original single-point E6 benchmark did, and why its 0.681s/frame figure ran ~30% high: it
+  folded ~2s of cold-start/extract/encode into a 180-frame average).
+- The crop-pixel SLOPE agreed within ~1% across two independently-tested target resolutions
+  (job A at 810x1440: slope=0.8663e-6 s/frame/px, R2=0.9999; job B at 2560x1440:
+  slope=0.8627e-6, R2=1.0000; job C, a same-target replicate in a fresh container:
+  slope=0.8589e-6, R2=0.9997) -- this is the evidence the crop-pixel scaling really is linear
+  and target-independent, not just an assumption.
+- The OVERHEAD differed by target resolution: 0.0817 s/frame pooled at 810x1440 (9:16 default)
+  vs 0.2004 s/frame pooled at 2560x1440 (``VIDEO_MAX_WIDTH``x``VIDEO_MAX_HEIGHT`` -- the hard
+  ceiling ``calculate_multi_clip_resolution`` can ever produce, so this is the MEASURED max, not
+  an extrapolation). ``OVERHEAD_INTERCEPT``/``OVERHEAD_PER_TARGET_PIXEL`` fit a line through
+  these two real points; every possible ``target_w x target_h`` this system can produce (0 to
+  ``VIDEO_MAX_WIDTH * VIDEO_MAX_HEIGHT``) falls inside that measured range, so this is
+  interpolation across the full real domain, not extrapolation beyond it. This 2-point fit for
+  the TARGET-resolution dependence is weaker evidence than the crop-pixel slope (3 jobs, 12
+  points, R2>0.998 each) -- a 3rd target-resolution anchor would strengthen it; flagged in
+  ``.claude/knowledge/modal-gpu.md``.
 - Frame count per clip = the TRIMMED source seconds * target_fps. Modal's ``process_clips_ai``
   runs the GAN only over the trim range (``video_processing.py`` ~:2984-2990, start/end frame
   from the trim range); slow-mo/speed segments are applied AFTER the GAN via ``setpts`` and add
@@ -47,13 +71,29 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# --- Benchmark anchor (see module docstring for provenance) -----------------
-# MEASURED at a 540x960 input crop (experiments/e6_l4_benchmark.py:56-58 +
-# e6_l4_benchmark_results.json: T4 did 180 frames in 122.67s = 0.681 s/frame).
-ANCHOR_SECONDS_PER_FRAME = 0.681
-ANCHOR_CROP_WIDTH = 540
-ANCHOR_CROP_HEIGHT = 960
-ANCHOR_CROP_PIXELS = ANCHOR_CROP_WIDTH * ANCHOR_CROP_HEIGHT  # 518400
+# --- T11370 real-Modal-staging calibration (see module docstring for full provenance) -------
+# Crop-pixel slope: target-independent (agreed within ~1% across 2 target resolutions + a
+# replicate), pooled from all 3 jobs' individual fits (0.8663e-6, 0.8627e-6, 0.8589e-6 -> avg).
+SLOPE_SECONDS_PER_CROP_PIXEL = 0.863e-6
+
+# Fixed per-frame overhead (decode/PNG-write/resize/concat -- does NOT scale with crop size),
+# fit as a line through the two MEASURED target-resolution anchors:
+#   810x1440  (1,166,400 px) -> 0.0817 s/frame  (9:16 default-scale target)
+#   2560x1440 (3,686,400 px) -> 0.2004 s/frame  (VIDEO_MAX_WIDTH x VIDEO_MAX_HEIGHT, the hard
+#                                                 ceiling -- every real target falls <= this)
+OVERHEAD_INTERCEPT = 0.0268  # s/frame at target_px -> 0 (extrapolated floor, never hit in prod)
+OVERHEAD_PER_TARGET_PIXEL = 4.71e-8  # s/frame per output-target pixel
+
+
+def _overhead_seconds_per_frame(target_width: int, target_height: int) -> float:
+    """Fixed per-frame overhead for a given OUTPUT target resolution (see module docstring)."""
+    if not target_width or not target_height or target_width <= 0 or target_height <= 0:
+        raise ValueError(
+            f"_overhead_seconds_per_frame got invalid target dims "
+            f"({target_width}x{target_height}); the export target resolution must be positive "
+            f"by the time the guard runs"
+        )
+    return OVERHEAD_INTERCEPT + OVERHEAD_PER_TARGET_PIXEL * (target_width * target_height)
 
 # --- Timeout budget ---------------------------------------------------------
 # process_clips_ai runs on a single T4 with no chunking and a hard timeout of
@@ -138,29 +178,39 @@ class ExportBudgetExceeded(Exception):
         super().__init__(estimate.to_error_detail()["message"])
 
 
-def per_frame_cost(crop_width: int, crop_height: int) -> float:
-    """Estimated T4 GPU-seconds to upscale ONE frame cropped to ``crop_width x crop_height``.
-
-    Scales the benchmark anchor by the crop's INPUT pixel count. Missing/zero/negative dims are
-    an internal-data bug (crop keyframes are always populated -- defaults are applied upstream at
-    dispatch time), so we fail loudly rather than guessing a default (No Silent Fallbacks).
+def per_frame_cost(crop_width: int, crop_height: int, target_width: int, target_height: int) -> float:
+    """Estimated T4 GPU-seconds to produce ONE emitted frame: a crop-size-scaled GAN cost plus a
+    target-resolution-scaled fixed overhead (see module docstring for the T11370 calibration that
+    derived both terms). ``target_width``/``target_height`` are the EXPORT'S output resolution
+    (``calculate_multi_clip_resolution``'s result), not the crop -- required because the fixed
+    per-frame overhead (decode/PNG-write/resize/concat) scales with how big the output frame is,
+    not with the crop. Missing/zero/negative dims (crop OR target) are an internal-data bug (crop
+    keyframes are always populated and the target is always computed before this runs), so we
+    fail loudly rather than guessing a default (No Silent Fallbacks).
     """
     if not crop_width or not crop_height or crop_width <= 0 or crop_height <= 0:
         raise ValueError(
             f"per_frame_cost got invalid crop dims ({crop_width}x{crop_height}); "
             f"crop keyframes must carry positive width/height by dispatch time"
         )
-    return ANCHOR_SECONDS_PER_FRAME * (crop_width * crop_height) / ANCHOR_CROP_PIXELS
+    return (
+        _overhead_seconds_per_frame(target_width, target_height)
+        + SLOPE_SECONDS_PER_CROP_PIXEL * (crop_width * crop_height)
+    )
 
 
-def estimate_total_gpu_seconds(clip_specs: list[tuple[int, int, int]]) -> float:
-    """Pure cost function: total estimated GPU-seconds for a list of clips.
+def estimate_total_gpu_seconds(
+    clip_specs: list[tuple[int, int, int]], target_width: int, target_height: int
+) -> float:
+    """Pure cost function: total estimated GPU-seconds for a list of clips sharing one export
+    target resolution.
 
     Each spec is ``(frame_count, crop_input_width, crop_input_height)``. Returns
-    ``sum(frame_count * per_frame_cost(w, h))``. No I/O, no Modal -- unit-testable in isolation.
+    ``sum(frame_count * per_frame_cost(w, h, target_width, target_height))``. No I/O, no Modal --
+    unit-testable in isolation.
     """
     return sum(
-        frame_count * per_frame_cost(crop_w, crop_h)
+        frame_count * per_frame_cost(crop_w, crop_h, target_width, target_height)
         for (frame_count, crop_w, crop_h) in clip_specs
     )
 
@@ -220,8 +270,12 @@ def _max_crop_dims(crop_keyframes: list[dict[str, Any]]) -> tuple[int, int] | No
     return best_w, best_h
 
 
-def estimate_export_cost(clips: list[dict[str, Any]], target_fps: int) -> ExportCostEstimate:
-    """Estimate the whole export's GPU-seconds from clip dicts + target fps.
+def estimate_export_cost(
+    clips: list[dict[str, Any]], target_fps: int, target_width: int, target_height: int
+) -> ExportCostEstimate:
+    """Estimate the whole export's GPU-seconds from clip dicts + target fps + the export's output
+    target resolution (``calculate_multi_clip_resolution``'s result -- the fixed per-frame
+    overhead scales with this, see module docstring).
 
     ``clips`` entries use the internal ``clips_data`` shape: ``cropKeyframes`` (list of
     ``{width, height, ...}``), ``duration`` (seconds), ``clipIndex``, ``clipName``. Per clip we
@@ -254,7 +308,9 @@ def estimate_export_cost(clips: list[dict[str, Any]], target_fps: int) -> Export
         effective_seconds = _trimmed_source_seconds(clip.get("segments"), raw_duration)
         frame_count = _clip_frame_count(effective_seconds, target_fps)
         # Round each clip UP to whole GPU-seconds -- conservative, tidy reporting.
-        clip_seconds = math.ceil(frame_count * per_frame_cost(crop_w, crop_h))
+        clip_seconds = math.ceil(
+            frame_count * per_frame_cost(crop_w, crop_h, target_width, target_height)
+        )
         per_clip.append(
             ClipCostEstimate(
                 clip_index=clip_index,
@@ -279,14 +335,20 @@ def estimate_export_cost(clips: list[dict[str, Any]], target_fps: int) -> Export
     )
 
 
-def enforce_export_budget(clips: list[dict[str, Any]], target_fps: int) -> ExportCostEstimate:
+def enforce_export_budget(
+    clips: list[dict[str, Any]], target_fps: int, target_width: int, target_height: int
+) -> ExportCostEstimate:
     """Estimate the export's GPU cost and raise :class:`ExportBudgetExceeded` if over budget.
+
+    ``target_width``/``target_height`` is the export's OUTPUT resolution (pass
+    ``calculate_multi_clip_resolution``'s result) -- the fixed per-frame overhead scales with it
+    (T11370 calibration, see module docstring).
 
     Returns the estimate when within budget (callers may log it). Call this BEFORE dispatching
     to ``call_modal_clips_ai`` so an over-budget export is rejected immediately instead of after
     the full Modal timeout.
     """
-    estimate = estimate_export_cost(clips, target_fps)
+    estimate = estimate_export_cost(clips, target_fps, target_width, target_height)
     if estimate.over_budget:
         logger.warning(
             "[ExportGuard] Rejecting over-budget export: "
