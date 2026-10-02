@@ -2008,10 +2008,10 @@ async def _export_clips(
             user_error = budget_detail["message"]
             is_recoverable = False
         elif isinstance(e, socket.gaierror) or "getaddrinfo failed" in error_str:
-            user_error = "Internet connection lost. Your export may still complete - check 'In Progress' exports to see if it finished."
+            user_error = "Internet connection lost. Your highlight may still generate - check 'In Progress' highlights to see if it finished."
             is_recoverable = True
         elif "connection" in error_str.lower() or "network" in error_str.lower():
-            user_error = "Network error during export. Please check your internet connection and try again."
+            user_error = "Network error during generation. Please check your internet connection and try again."
             is_recoverable = True
         else:
             user_error = f"Generation failed: {error_str}"
@@ -2466,7 +2466,7 @@ async def _run_multi_clip_background(
 
         if clips_missing_framing:
             raise RuntimeError(
-                f"Cannot export: {len(clips_missing_framing)} clip(s) missing framing data: {', '.join(clips_missing_framing)}. Please add crop keyframes to all clips before exporting."
+                f"Cannot generate: {len(clips_missing_framing)} highlight(s) missing framing data: {', '.join(clips_missing_framing)}. Please add crop keyframes to all highlights before generating."
             )
 
         # Build ClipExportData list for the shared pipeline
