@@ -1,5 +1,27 @@
 ---
 domain: keyframes-framing
+updated: 2026-10-02 (T11570 WIP, data/behavior layer only — NOT the full guided-pick feature; the
+view is still unbuilt, see below. `modes/overlay/utils/detectionAssignment.js` gained
+`orderedDetectionMarkers(regions)`: the ONE ordering source (region start, then detection time
+within it) that `detectionAssignmentStates` now derives from, and that any future "marker N"
+consumer (guide step numbers, forward/wrap navigation) MUST derive from too — do not re-sort
+regions/detections a second way. `nextUnpickedMarker(regions, fromIndex, justAssigned)` is the
+forward-then-wrap navigation primitive (fromIndex=-1 finds the first unpicked marker for
+entry-park). `OverlayContainer.parkOnDetection(marker)` is now the SINGLE "land on marker X" path
+(sets clickedDetection + seeks via frameToTime) — DetectionMarkerLayer no longer computes its own
+seek target; it just forwards the full marker (incl. `fps`) to the handler. New hook
+`modes/overlay/hooks/useGuidedAthletePick.js` holds the auto-advance state machine (entry-park,
+650ms "Got it" confirm, forward-then-wrap advance, cancel on play/scrub-away/direct-tap/
+mode-switch/unmount) — ephemeral view state only, zero new persistence; `scheduleGuidedAdvance` is
+called SYNCHRONOUSLY inside `handlePlayerSelect`/`handleHighlightComplete` (gesture-based, never a
+reactive `useEffect`). **NOT YET BUILT**: `SpotlightPickGuide.jsx` (the presentational guide + its
+10-viewport placement table) and the `OverlaySpotlightPanel` checklist swap — both need the
+task's approved design artifact (https://claude.ai/artifact/Qpji171nS2AK5xsCWfTou5), which this
+worker's session could not read (Claude Docs MCP returned access-denied — doc not shared with the
+session). `OverlayContainer` already exports `pickGuidePhase`/`pickGuideStep`/`pickGuideTotal`/
+`onDetectionMarkerTap`/`onResumePickGuideStep` for that view to consume once unblocked. See
+docs/plans/tasks/T11570-spotlight-guided-athlete-pick.md and `/workspace/.dotask-status` on that
+branch for the full blocked-state writeup.)
 updated: 2026-09-27 (T11240 — Removed Framing's multi-clip editor UI: a project is now exactly one
 clip. Deleted `ClipSelectorSidebar`/`ClipLibraryModal`/`UploadClipModal`/`FocusClipsPanel`, the
 cockpit Clips sheet + rail button, the project Total output chip, `isMultiClip`/`isMultiClipMode`,
