@@ -64,6 +64,10 @@ function Harness() {
 
   const guidedPick = useGuidedAthletePick({
     active: true,
+    // This harness tests the WALK itself, not the async-load gating (that's
+    // OverlayContainer.test.jsx's job) -- canPark is simply always true here.
+    canPark: true,
+    sessionKey: 'walkdiag-session',
     highlightRegions: regions,
     isPlaying,
     clickedDetection,
@@ -153,7 +157,6 @@ function Harness() {
           progress={regions.flatMap((r) => r.detections.map((d) => isDetectionAssigned(r, d)))}
           placement="overlay"
           isTouch={false}
-          flipToBottom={false}
         />
       </div>
 

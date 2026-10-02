@@ -1,4 +1,4 @@
-import { forwardRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { forwardRef, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { computeSpotlightReveal } from '../utils/spotlightReveal';
 import OverrideHint from './overlay/overlays/OverrideHint';
@@ -478,16 +478,12 @@ export function OverlayModeView({
   const pickGuideCompact = pickGuideVariant === 'strip-compact' || pickGuideVariant === 'pill-safearea';
   const pickGuideSafeArea = pickGuideVariant === 'pill-safearea';
 
-  // Flip the floating pill below the video when any CURRENTLY VISIBLE box's top
-  // edge sits in the top 20% of the frame, so the guide never covers it. `x,y` on
-  // a detection box is its CENTER (see PlayerDetectionOverlay.handlePlayerClick).
-  const pickGuideFlipToBottom = useMemo(() => {
-    if (pickGuidePlacement !== 'overlay' || !playerDetections?.length || !detectionVideoHeight) return false;
-    return playerDetections.some((box) => {
-      const topEdge = (box.y ?? 0) - (box.height ?? 0) / 2;
-      return topEdge / detectionVideoHeight < 0.2;
-    });
-  }, [pickGuidePlacement, playerDetections, detectionVideoHeight]);
+  // Real-geometry top/bottom placement (T11570 MAJOR-2 fix): SpotlightPickGuide
+  // itself measures its OWN rendered height against `stageRef`'s real height
+  // and these CURRENTLY VISIBLE boxes (video-pixel space, same space
+  // PlayerDetectionOverlay renders them in) -- no static "top 20%" guess
+  // blind to the pill's actual size or to obstacles near the bottom.
+  const stageRef = useRef(null);
 
   // Per-marker picked/unpicked flags for the guide's progress dots — the SAME
   // ordering/derivation the quest store's detectionAssignProgress uses
@@ -713,7 +709,9 @@ export function OverlayModeView({
           compact={pickGuideCompact}
           safeArea={pickGuideSafeArea}
           isTouch={isMobile}
-          flipToBottom={pickGuideFlipToBottom}
+          stageRef={stageRef}
+          obstacleBoxes={playerDetections}
+          videoHeight={detectionVideoHeight}
           isPlaying={isPlaying}
           onResumeStep={onResumePickGuideStep}
           onPlaySpotlight={onPlaySpotlight}
@@ -966,6 +964,7 @@ export function OverlayModeView({
               the video on desktop, and Controls bound to the video width below it. */}
           {(isFullscreen || mobileFs) ? (
             <div
+              ref={stageRef}
               data-testid="overlay-video-stage"
               className={stageBoxClass}
               // While the circle is editable (tracking OFF or tap-the-circle override) the
@@ -996,7 +995,7 @@ export function OverlayModeView({
                   reflows this column wider for free). The stage box inside just
                   respects whatever width the column leaves it via max-w-full. */}
               <div className="flex flex-col w-full lg:w-fit lg:flex-1 lg:min-w-0 lg:pr-6">
-                <div data-testid="overlay-video-stage" className={stageBoxClass} style={stageBoxStyle}>
+                <div ref={stageRef} data-testid="overlay-video-stage" className={stageBoxClass} style={stageBoxStyle}>
                   {videoStageInner}
                 </div>
                 {controlsEl}

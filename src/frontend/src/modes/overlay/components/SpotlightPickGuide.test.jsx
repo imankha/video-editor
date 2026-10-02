@@ -125,18 +125,9 @@ describe('SpotlightPickGuide (T11570)', () => {
   });
 
   describe('placement', () => {
-    it('"overlay" placement positions the pill top-4 by default, bottom-4 when flipped', () => {
-      const { container, rerender } = render(
-        <SpotlightPickGuide phase="parked" step={1} total={1} placement="overlay" flipToBottom={false} />
-      );
-      expect(container.querySelector('[data-testid="spotlight-pick-guide"]').className).toContain('top-4');
-      rerender(<SpotlightPickGuide phase="parked" step={1} total={1} placement="overlay" flipToBottom />);
-      expect(container.querySelector('[data-testid="spotlight-pick-guide"]').className).toContain('bottom-4');
-    });
-
-    it('"strip" placement is a plain block, ignoring flipToBottom', () => {
+    it('"strip" placement is a plain block -- never measures, no top-4/bottom-4', () => {
       const { container } = render(
-        <SpotlightPickGuide phase="parked" step={1} total={1} placement="strip" flipToBottom />
+        <SpotlightPickGuide phase="parked" step={1} total={1} placement="strip" />
       );
       const el = container.querySelector('[data-testid="spotlight-pick-guide"]');
       expect(el.className).not.toContain('absolute');
@@ -151,6 +142,173 @@ describe('SpotlightPickGuide (T11570)', () => {
         <SpotlightPickGuide phase="parked" step={1} total={1} placement="overlay" safeArea />
       );
       expect(container.querySelector('[data-testid="spotlight-pick-guide"]')).toBeTruthy();
+    });
+
+    it('defaults to top-4 when no stageRef/videoHeight is supplied (nothing to measure against)', () => {
+      const { container } = render(
+        <SpotlightPickGuide phase="parked" step={1} total={1} placement="overlay" />
+      );
+      const el = container.querySelector('[data-testid="spotlight-pick-guide"]');
+      expect(el.className).toContain('top-4');
+      expect(el.getAttribute('data-side')).toBe('top');
+    });
+  });
+
+  describe('real-geometry flip (MAJOR 2 fix: measured pill height vs real obstacle rects)', () => {
+    // jsdom has no layout engine -- every element reports getBoundingClientRect
+    // height 0 by default. Mock it per-instance: the stage element gets a fixed
+    // STAGE_HEIGHT; every OTHER element (the pill) gets a fixed PILL_HEIGHT via
+    // the prototype default, which own-instance mocks (the stage) shadow.
+    const STAGE_HEIGHT = 600;
+    const PILL_HEIGHT = 100;
+    let originalRect;
+
+    function makeStageRef() {
+      const el = document.createElement('div');
+      // A plain OWN-property reassignment (not vi.spyOn) -- spying on an
+      // INHERITED method with vi.spyOn can return the SAME shared mock the
+      // prototype-level spy below created, so a later .mockReturnValue() on
+      // "this instance" silently overwrites the prototype default for every
+      // element instead of shadowing it for just this one. Plain assignment
+      // has no such sharing: it's a genuine own property.
+      el.getBoundingClientRect = () => (
+        { height: STAGE_HEIGHT, top: 0, bottom: STAGE_HEIGHT, left: 0, right: 0, width: 0 }
+      );
+      return { current: el };
+    }
+
+    beforeEach(() => {
+      originalRect = HTMLElement.prototype.getBoundingClientRect;
+      HTMLElement.prototype.getBoundingClientRect = function () {
+        return { height: PILL_HEIGHT, top: 0, bottom: PILL_HEIGHT, left: 0, right: 0, width: 0 };
+      };
+    });
+    afterEach(() => { HTMLElement.prototype.getBoundingClientRect = originalRect; });
+
+    it('stays top when the top band [16, 16+pillHeight] is clear of every obstacle', () => {
+      const stageRef = makeStageRef();
+      // Obstacle near the BOTTOM of the video frame (video-px 850-950 of 1000) --
+      // maps to stage-px [510, 570], nowhere near the top band [16, 116].
+      const { container } = render(
+        <SpotlightPickGuide
+          phase="parked" step={1} total={1} placement="overlay"
+          stageRef={stageRef} videoHeight={1000} obstacleBoxes={[{ y: 900, height: 100 }]}
+        />
+      );
+      const el = container.querySelector('[data-testid="spotlight-pick-guide"]');
+      expect(el.getAttribute('data-side')).toBe('top');
+      expect(el.className).toContain('top-4');
+    });
+
+    it('flips to bottom when the top band collides but the bottom band is clear', () => {
+      const stageRef = makeStageRef();
+      // Obstacle near the TOP of the frame (video-px 0-100 of 1000) -> stage-px
+      // [0, 60] -- collides with the top band [16, 116] but not the bottom
+      // band [484, 584].
+      const { container } = render(
+        <SpotlightPickGuide
+          phase="parked" step={1} total={1} placement="overlay"
+          stageRef={stageRef} videoHeight={1000} obstacleBoxes={[{ y: 50, height: 100 }]}
+        />
+      );
+      const el = container.querySelector('[data-testid="spotlight-pick-guide"]');
+      expect(el.getAttribute('data-side')).toBe('bottom');
+      expect(el.className).toContain('bottom-4');
+    });
+
+    it('checks ALL obstacle boxes, not just the first/top one', () => {
+      const stageRef = makeStageRef();
+      // Top box blocks the top band; a SECOND box (middle of frame) must NOT
+      // be ignored -- it maps to stage-px [270, 330], clear of both the top
+      // [16,116] and bottom [484,584] bands, so bottom is correctly chosen.
+      const { container } = render(
+        <SpotlightPickGuide
+          phase="parked" step={1} total={1} placement="overlay"
+          stageRef={stageRef} videoHeight={1000}
+          obstacleBoxes={[{ y: 50, height: 100 }, { y: 500, height: 100 }]}
+        />
+      );
+      const el = container.querySelector('[data-testid="spotlight-pick-guide"]');
+      expect(el.getAttribute('data-side')).toBe('bottom');
+    });
+
+    it('tries the compact form once when NEITHER band is clear, forcing compact copy even if the caller passed compact=false', () => {
+      const stageRef = makeStageRef();
+      // One obstacle spanning almost the entire frame -- collides with both
+      // bands regardless of pill height.
+      const { container } = render(
+        <SpotlightPickGuide
+          phase="parked" step={2} total={4} placement="overlay" compact={false}
+          stageRef={stageRef} videoHeight={1000} obstacleBoxes={[{ y: 500, height: 1000 }]}
+        />
+      );
+      // Forced compact: step text drops the word "Step".
+      expect(screen.getByTestId('pick-guide-step').textContent).toBe('2 of 4');
+      // Gives up gracefully rather than looping -- still renders at 'top'.
+      const el = container.querySelector('[data-testid="spotlight-pick-guide"]');
+      expect(el.getAttribute('data-side')).toBe('top');
+    });
+
+    it('re-measures when the obstacle list changes (e.g. the playhead moved to a new marker)', () => {
+      const stageRef = makeStageRef();
+      const { container, rerender } = render(
+        <SpotlightPickGuide
+          phase="parked" step={1} total={2} placement="overlay"
+          stageRef={stageRef} videoHeight={1000} obstacleBoxes={[{ y: 900, height: 100 }]}
+        />
+      );
+      expect(container.querySelector('[data-testid="spotlight-pick-guide"]').getAttribute('data-side')).toBe('top');
+
+      rerender(
+        <SpotlightPickGuide
+          phase="parked" step={2} total={2} placement="overlay"
+          stageRef={stageRef} videoHeight={1000} obstacleBoxes={[{ y: 50, height: 100 }]}
+        />
+      );
+      expect(container.querySelector('[data-testid="spotlight-pick-guide"]').getAttribute('data-side')).toBe('bottom');
+    });
+
+    it('retries one frame after mount if the ancestor stageRef had not attached yet on the first pass (real-browser regression)', async () => {
+      // Real browsers observed: a ref owned by an ANCESTOR (OverlayModeView /
+      // the diag harness) is not always guaranteed attached by the time THIS
+      // component's own layout effect first runs. Simulate that exact gap:
+      // stageRef.current starts null, then becomes available shortly after.
+      const stageRef = { current: null };
+      const { container } = render(
+        <SpotlightPickGuide
+          phase="parked" step={1} total={1} placement="overlay"
+          stageRef={stageRef} videoHeight={1000} obstacleBoxes={[{ y: 50, height: 100 }]}
+        />
+      );
+      // First pass: stageRef.current is still null -> no measurement yet,
+      // stays at the default 'top' (NOT a permanent commitment).
+      expect(container.querySelector('[data-testid="spotlight-pick-guide"]').getAttribute('data-side')).toBe('top');
+
+      stageRef.current = makeStageRef().current;
+      // The mountTick rAF retry fires on its own -- no rerender needed.
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+
+      expect(container.querySelector('[data-testid="spotlight-pick-guide"]').getAttribute('data-side')).toBe('bottom');
+    });
+  });
+
+  describe('pointer-events scoping (MAJOR 2 fix: a covered box must stay tappable)', () => {
+    it('the pill container and its body are pointer-events-none; only buttons/the Not-boxed control opt back in', () => {
+      const { container } = render(
+        <SpotlightPickGuide phase="away" step={1} total={2} placement="overlay" onResumeStep={() => {}} />
+      );
+      const outer = container.querySelector('[data-testid="spotlight-pick-guide"]');
+      expect(outer.className).toContain('pointer-events-none');
+      const body = outer.querySelector('[role="status"]');
+      expect(body.className).toContain('pointer-events-none');
+      const button = outer.querySelector('button');
+      expect(button.className).toContain('pointer-events-auto');
+    });
+
+    it('the "Not boxed?" control opts back in (parked phase)', () => {
+      const { container } = render(<SpotlightPickGuide phase="parked" step={1} total={2} placement="overlay" />);
+      const notBoxed = container.querySelector('[data-testid="pick-guide-not-boxed"]');
+      expect(notBoxed.className).toContain('pointer-events-auto');
     });
   });
 });
