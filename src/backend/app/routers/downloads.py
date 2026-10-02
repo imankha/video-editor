@@ -2112,14 +2112,14 @@ async def publish_to_my_reels(
     user_id = get_current_user_id()
     req_id = get_current_req_id()
     # T4050 publish tracing: this gesture commits published_at + archived_at to the
-    # LOCAL profile.sqlite, but the R2 upload of that file is fired fire-and-forget by
-    # the middleware AFTER this response returns (see _background_sync in db_sync.py).
-    # If the machine is replaced or the upload lock times out before that background
-    # task completes, the local commit never reaches R2 and a later session_init pulls
-    # the pre-publish snapshot back down -> published_at/archived_at revert to NULL.
-    # These [Publish] markers let a real attempt be traced end-to-end against the
-    # middleware's "[SYNC] POST /api/downloads/publish/... -> R2 sync OK/FAILED" line
-    # (chain by req_id).
+    # LOCAL profile.sqlite, then this route's `Depends(durable_sync)` (above) makes
+    # the middleware AWAIT the R2 upload of that file, inside the still-held
+    # per-user write lock, BEFORE this response is returned -- a machine swap can
+    # never strand this commit; a sync failure returns 503 instead of a lying 200
+    # (db_sync.py durable_sync/DURABLE_SYNC_FAILED_RESPONSE). These [Publish]
+    # markers let a real attempt be traced end-to-end against the middleware's
+    # "[SYNC] POST /api/downloads/publish/... -> R2 sync OK/FAILED" line (chain by
+    # req_id).
     logger.info(f"[Publish] start project={project_id} user={user_id} req_id={req_id}")
 
     with get_db_connection() as conn:
@@ -2176,7 +2176,7 @@ async def publish_to_my_reels(
         logger.info(
             f"[Publish] published_at committed LOCALLY project={project_id} "
             f"final_video_id={row['id']} user={user_id} req_id={req_id} "
-            f"(R2 sync still pending - runs in middleware background task)"
+            f"(durable_sync will await the R2 push before this request returns)"
         )
 
     # T5410: REVERSED T5280 -- poster capture no longer happens at publish. It
@@ -2210,7 +2210,7 @@ async def publish_to_my_reels(
         logger.info(
             f"[Publish] archived LOCALLY project={project_id} user={user_id} "
             f"req_id={req_id} - archive/{project_id}.msgpack uploaded to R2, working "
-            f"data deleted locally; profile.sqlite R2 sync still pending (background)"
+            f"data deleted locally; durable_sync will push profile.sqlite before return"
         )
     else:
         logger.warning(
