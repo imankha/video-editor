@@ -4,8 +4,9 @@ import { computeSpotlightReveal } from '../utils/spotlightReveal';
 import OverrideHint from './overlay/overlays/OverrideHint';
 import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
-import { useIsMobile } from '../hooks/useIsMobile';
+import { useIsMobile, useIsLandscape, useIsPhonePortrait, useIsSmallPhoneViewport } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
+import SpotlightPickGuide from './overlay/components/SpotlightPickGuide';
 import ExportButtonView from '../components/ExportButtonView';
 import ThumbnailPanel from '../components/overlay/ThumbnailPanel';
 import TextManagementPanel from '../components/overlay/TextManagementPanel';
@@ -14,7 +15,7 @@ import OverlaySpotlightPanel from '../components/settings/OverlaySpotlightPanel'
 import { ExportButtonContainer } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
-import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, ChevronDown, ChevronRight, MousePointerClick } from 'lucide-react';
+import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, ChevronDown, ChevronRight } from 'lucide-react';
 import { formatInstant, formatLength, PRECISION } from '../utils/timeFormat';
 import { highlightColorLabel } from '../constants/highlightColors';
 import { EDITOR_PANELS, MODE_NAMES } from '../config/displayNames';
@@ -24,6 +25,7 @@ import {
   countDetectionAssignments,
   detectableDetections,
   isDetectionAssigned,
+  detectionAssignmentStates,
 } from './overlay/utils/detectionAssignment';
 
 /**
@@ -216,6 +218,12 @@ export function OverlayModeView({
   showPlayerBoxes,
   onTogglePlayerBoxes,
   onDetectionMarkerClick,
+
+  // Guided athlete-pick walk (T11570)
+  pickGuidePhase = null,
+  pickGuideStep = null,
+  pickGuideTotal = 0,
+  onResumePickGuideStep,
 
   // Zoom
   zoom,
@@ -454,12 +462,41 @@ export function OverlayModeView({
     return dets.length > 0 && !dets.some((d) => isDetectionAssigned(currentRegion, d));
   }, [currentRegion]);
 
-  // The stated primary task (never a tooltip): if boxes are on screen right now,
-  // point at them; otherwise route the user to a timeline marker to surface them.
-  const showSelectPlayerPrompt = awaitingPlayerSelection && showPlayerBoxes;
-  const selectPlayerPromptText = playerDetections?.length > 0
-    ? (isMobile ? EDITOR_PANELS.SELECT_PLAYER_TAP : EDITOR_PANELS.SELECT_PLAYER_CLICK)
-    : EDITOR_PANELS.SELECT_PLAYER_FIND;
+  // T11570 — SpotlightPickGuide placement bucket, from the approved design
+  // artifact's responsive table. Order matters: landscape-phone/fullscreen
+  // (pill + safe-area) is checked FIRST since a phone-portrait viewport in
+  // fullscreen mode must NOT fall into the phone-portrait strip bucket below.
+  const isLandscapePhone = useIsLandscape();
+  const isPhonePortrait = useIsPhonePortrait();
+  const isSmallPhoneViewport = useIsSmallPhoneViewport();
+  const pickGuideVariant =
+    (isLandscapePhone || mobileFs) ? 'pill-safearea'
+    : isSmallPhoneViewport ? 'strip-compact'
+    : isPhonePortrait ? 'strip'
+    : 'pill';
+  const pickGuidePlacement = pickGuideVariant.startsWith('pill') ? 'overlay' : 'strip';
+  const pickGuideCompact = pickGuideVariant === 'strip-compact' || pickGuideVariant === 'pill-safearea';
+  const pickGuideSafeArea = pickGuideVariant === 'pill-safearea';
+
+  // Flip the floating pill below the video when any CURRENTLY VISIBLE box's top
+  // edge sits in the top 20% of the frame, so the guide never covers it. `x,y` on
+  // a detection box is its CENTER (see PlayerDetectionOverlay.handlePlayerClick).
+  const pickGuideFlipToBottom = useMemo(() => {
+    if (pickGuidePlacement !== 'overlay' || !playerDetections?.length || !detectionVideoHeight) return false;
+    return playerDetections.some((box) => {
+      const topEdge = (box.y ?? 0) - (box.height ?? 0) / 2;
+      return topEdge / detectionVideoHeight < 0.2;
+    });
+  }, [pickGuidePlacement, playerDetections, detectionVideoHeight]);
+
+  // Per-marker picked/unpicked flags for the guide's progress dots — the SAME
+  // ordering/derivation the quest store's detectionAssignProgress uses
+  // (OverlayContainer), recomputed here (pure, cheap) rather than threading yet
+  // another store subscription into this already-prop-driven view.
+  const pickGuideProgress = useMemo(
+    () => detectionAssignmentStates(highlightRegions),
+    [highlightRegions]
+  );
 
   // Is the spotlight circle visible right now (a region exists at the current time and it
   // renders)? Mirrors HighlightOverlay's own render gate — including the T9620
@@ -612,6 +649,10 @@ export function OverlayModeView({
               panOffset={panOffset}
               isFullscreen={isFullscreen}
               isDisabled={!showPlayerBoxes}
+              // T11570: the guide's own "Step N of total" already states the
+              // count — don't show both at once, and avoid stacking with the
+              // pill on phone fullscreen/landscape's cramped top area.
+              hideCountBadge={!!pickGuidePhase}
             />
           ),
           effectiveOverlayMetadata && !textLayerHidden && textOverlays.length > 0 && (
@@ -657,18 +698,26 @@ export function OverlayModeView({
         loadingMessage={loadingMessage}
       />
 
-      {/* T9620 (UX-10): the PRIMARY task, stated on screen (not a hover tooltip).
-          A prominent top-center banner while a player is still unpicked; pointer
-          -events-none so it never intercepts a click on the player boxes beneath
-          it. Adapts to whether boxes are already visible or the user must first
-          open a detection frame from the timeline. */}
-      {showSelectPlayerPrompt && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none max-w-[90%]">
-          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-600/95 text-white text-sm font-semibold shadow-lg ring-1 ring-white/20">
-            <MousePointerClick size={16} aria-hidden="true" className="shrink-0" />
-            <span data-testid="select-player-prompt">{selectPlayerPromptText}</span>
-          </div>
-        </div>
+      {/* T11570: guided athlete-pick walk — floating pill over the video
+          (desktop/laptop, tablet, or phone fullscreen/landscape with a
+          safe-area pad). The phone-portrait "strip" variant renders instead,
+          below the video (see pickGuideStripEl near the timeline). */}
+      {pickGuidePlacement === 'overlay' && (
+        <SpotlightPickGuide
+          phase={pickGuidePhase}
+          step={pickGuideStep}
+          total={pickGuideTotal}
+          assignedCount={assignedDetections}
+          progress={pickGuideProgress}
+          placement="overlay"
+          compact={pickGuideCompact}
+          safeArea={pickGuideSafeArea}
+          isTouch={isMobile}
+          flipToBottom={pickGuideFlipToBottom}
+          isPlaying={isPlaying}
+          onResumeStep={onResumePickGuideStep}
+          onPlaySpotlight={onPlaySpotlight}
+        />
       )}
 
       {/* Fullscreen exit button - desktop only */}
@@ -765,13 +814,14 @@ export function OverlayModeView({
       onHighlightEffectTypeChange={onHighlightEffectTypeChange}
       isHighlightEnabled={highlightRegions.length > 0}
       disabled={settingsDisabled}
-      // T9620/T9960: sequence styling AFTER player selection — the panel shows the
-      // "pick your player" guidance while unpicked, then a completion affirmation
-      // (one athlete satisfies the step, adding more is optional) plus the styling
-      // controls once assignment begins.
+      // T9620: sequence styling AFTER player selection — the panel shows the
+      // "pick your player" guidance while unpicked, then the styling controls
+      // once assignment begins.
       awaitingPlayerSelection={awaitingPlayerSelection}
-      assignedCount={assignedDetections}
-      totalDetections={totalDetections}
+      // T11570: the guided walk's step checklist replaces the old single-pick
+      // "done" copy — same progress array the pick guide itself renders.
+      pickProgress={pickGuideProgress}
+      activeStep={pickGuideStep}
       // T9960: surface the (already adjustable) effect interval as a named,
       // previewable readout. Derived from the region span — no new state, no
       // stored default; adjusting stays a timeline-lever gesture.
@@ -950,6 +1000,24 @@ export function OverlayModeView({
                   {videoStageInner}
                 </div>
                 {controlsEl}
+                {/* T11570: guided-pick "strip" variant — phone portrait (inline,
+                    not fullscreen). Sits between the video/controls and the
+                    timeline below, never drawn over the video. */}
+                {pickGuidePlacement === 'strip' && (
+                  <SpotlightPickGuide
+                    phase={pickGuidePhase}
+                    step={pickGuideStep}
+                    total={pickGuideTotal}
+                    assignedCount={assignedDetections}
+                    progress={pickGuideProgress}
+                    placement="strip"
+                    compact={pickGuideCompact}
+                    isTouch={isMobile}
+                    isPlaying={isPlaying}
+                    onResumeStep={onResumePickGuideStep}
+                    onPlaySpotlight={onPlaySpotlight}
+                  />
+                )}
               </div>
               {/* T9270: the unified settings rail — desktop (fine pointer) only, a
                   380px in-flow box that width-tweens to a 64px icon strip when

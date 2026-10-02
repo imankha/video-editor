@@ -64,6 +64,50 @@ export function useIsLandscape() {
   return isLandscape;
 }
 
+// Phone-WIDTH portrait (T11570 Spotlight pick guide): distinguishes a phone from a
+// tablet within the "mobile" bucket, where useIsMobile's 1023px threshold covers
+// both. Portrait-gated so a landscape phone (handled by useIsLandscape) isn't
+// double-matched.
+const PHONE_PORTRAIT_QUERY = '(max-width: 640px) and (orientation: portrait)';
+
+export function useIsPhonePortrait() {
+  const [isPhonePortrait, setIsPhonePortrait] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia(PHONE_PORTRAIT_QUERY).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mql = window.matchMedia(PHONE_PORTRAIT_QUERY);
+    const handler = (e) => setIsPhonePortrait(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
+
+  return isPhonePortrait;
+}
+
+// The smallest phones (T11570): width AND height both small enough that even the
+// phone-portrait guide strip must drop its sub-line and compact its step count.
+const SMALL_PHONE_QUERY = '(max-width: 360px) and (max-height: 700px)';
+
+export function useIsSmallPhoneViewport() {
+  const [isSmallPhone, setIsSmallPhone] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia(SMALL_PHONE_QUERY).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mql = window.matchMedia(SMALL_PHONE_QUERY);
+    const handler = (e) => setIsSmallPhone(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
+
+  return isSmallPhone;
+}
+
 // Detect the "cockpit" condition: a phone held sideways. A PURE derivation of the two
 // hooks above (D1) — no state, no effect, no store field. When true, Focus renders its
 // distinct landscape cockpit layout (full-bleed stage, edge rails, one timeline strip,

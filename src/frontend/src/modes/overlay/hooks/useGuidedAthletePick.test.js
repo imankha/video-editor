@@ -118,6 +118,47 @@ describe('useGuidedAthletePick', () => {
     expect(result.current.total).toBe(2);
   });
 
+  it('Done -> tap a marker re-opens Picking for it only, then falls back to Done (no re-pick)', () => {
+    const region = regionWith([boundary(0), userKf(30), userKf(60), boundary(90)]);
+    const { result, rerender } = drive({
+      active: true, highlightRegions: [region], isPlaying: false, clickedDetection: null,
+    });
+    expect(result.current.phase).toBe('done');
+
+    // Direct tap on marker 1 to revisit it -- shows Picking for that marker,
+    // even though the walk as a whole is already done.
+    act(() => {
+      result.current.handleDetectionMarkerTap({ regionId: 'r1', frame: 30, fps: 30, timestamp: 1.0, boxes: [] });
+    });
+    rerender({ active: true, highlightRegions: [region], isPlaying: false, clickedDetection: { regionId: 'r1', timestamp: 1.0 } });
+    expect(result.current.phase).toBe('parked');
+    expect(result.current.step).toBe(1);
+
+    // Scrubbing/playing away WITHOUT re-picking falls back to Done, not Away --
+    // nothing is actually missing.
+    rerender({ active: true, highlightRegions: [region], isPlaying: false, clickedDetection: null });
+    expect(result.current.phase).toBe('done');
+  });
+
+  it('Done -> tap a marker -> re-pick it -> returns to Done (Confirming -> Done, no unpicked left)', () => {
+    const region = regionWith([boundary(0), userKf(30), userKf(60), boundary(90)]);
+    const { result, rerender } = drive({
+      active: true, highlightRegions: [region], isPlaying: false, clickedDetection: null,
+    });
+    act(() => {
+      result.current.handleDetectionMarkerTap({ regionId: 'r1', frame: 30, fps: 30, timestamp: 1.0, boxes: [] });
+    });
+    rerender({ active: true, highlightRegions: [region], isPlaying: false, clickedDetection: { regionId: 'r1', timestamp: 1.0 } });
+
+    act(() => { result.current.scheduleGuidedAdvance('r1', 1.0); });
+    expect(result.current.phase).toBe('confirm');
+    act(() => { vi.advanceTimersByTime(PICK_CONFIRM_MS); });
+    // Every marker still assigned (the re-pick didn't unassign anything else) --
+    // nextUnpickedMarker finds nothing, walk returns to Done.
+    expect(result.current.phase).toBe('done');
+    expect(result.current.step).toBeNull();
+  });
+
   it('cancels the pending auto-advance when the user starts playing during the confirm window', () => {
     const region = regionWith([boundary(0), boundary(90)]);
     const { parkOnDetection, result, rerender } = drive({

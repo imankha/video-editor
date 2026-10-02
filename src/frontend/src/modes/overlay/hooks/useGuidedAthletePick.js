@@ -142,10 +142,15 @@ export function useGuidedAthletePick({
     if (entry) parkOnEntry(entry);
   }, [trackedMarkerIndex, orderedMarkers, parkOnEntry]);
 
+  // Order matters: 'confirm'/'parked' are checked BEFORE 'done' so that tapping
+  // a marker to revisit it after the whole walk is finished shows "Picking"
+  // (Confirming on a re-pick) for that marker, then falls back to 'done' once
+  // it's no longer actively tracked — never stuck re-showing 'away' for a walk
+  // that has nothing left to pick.
   const phase = total === 0 ? null
-    : done ? 'done'
     : isConfirmingPick ? 'confirm'
     : (clickedDetection && trackedMarkerIndex != null) ? 'parked'
+    : done ? 'done'
     : trackedMarkerIndex != null ? 'away'
     : null;
 

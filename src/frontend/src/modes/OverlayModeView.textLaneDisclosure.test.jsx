@@ -43,7 +43,7 @@ vi.mock('../hooks/useFullscreenControls', () => ({
     handleLongPressTouchEnd: () => {},
   }),
 }));
-vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => false }));
+vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => false, useIsLandscape: () => false, useIsPhonePortrait: () => false, useIsSmallPhoneViewport: () => false }));
 
 import { OverlayModeView } from './OverlayModeView';
 

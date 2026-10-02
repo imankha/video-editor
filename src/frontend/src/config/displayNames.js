@@ -689,19 +689,37 @@ export const EDITOR_PANELS = {
   // styling controls. These name that primary task (stated on screen, never a
   // tooltip) and gate the styling copy behind it. The word "player" keeps the
   // detection COUNTS unmistakable as counts, not jersey identities.
+  // T11570: SELECT_PLAYER_TAP/FIND are RETIRED (zero callers) -- the guided
+  // walk auto-navigates to each marker itself (PICK_GUIDE_TAP/CLICK below), so
+  // there's no "find a marker yourself" or boxes-not-visible-yet copy anymore.
+  // SELECT_PLAYER_CLICK survives for the pre-selection panel body, which
+  // always reads "Click" there regardless of touch (unrelated to the guide).
   SELECT_PLAYER_TITLE: 'Pick your athlete',
   SELECT_PLAYER_CLICK: 'Click your athlete to add a spotlight',
-  SELECT_PLAYER_TAP: 'Tap your athlete to add a spotlight',
-  SELECT_PLAYER_FIND: 'Tap a green marker on the timeline to find your athlete',
   SELECT_PLAYER_STYLING_HINT: 'Spotlight color, shape, and dimming appear once you pick a player.',
-  // T9960 (EP05) -- one athlete SATISFIES the step; picking more is optional, never
-  // implied as required. Replaces the old "N of M players selected -- click the
-  // remaining players to spotlight each too" progress line, which read as an
-  // all-player instruction. SELECT_PLAYER_OPTIONAL reassures (pre-selection) that
-  // Spotlight never blocks reaching the framed result.
-  SELECT_PLAYER_DONE: 'Your player is selected.',
-  SELECT_PLAYER_ADD_MORE: 'Add another only if you want to highlight more than one.',
+  // T9960 (EP05) -- SELECT_PLAYER_OPTIONAL reassures (pre-selection) that Spotlight
+  // never blocks reaching the framed result. SELECT_PLAYER_DONE/ADD_MORE (the old
+  // single-pick "done" copy) are RETIRED by T11570's guided walk below -- the panel's
+  // step checklist replaces them.
   SELECT_PLAYER_OPTIONAL: 'Spotlight is optional -- you can publish the framed result without it.',
+  // T11570 -- the guided athlete-pick walk: auto-advance through every unpicked
+  // detection marker instead of leaving the user to hunt for the next one. Counts
+  // are always STEPS, never jersey numbers. `compact` drops words for the smallest
+  // viewports (SpotlightPickGuide picks it from the responsive placement table).
+  PICK_GUIDE_TAP: 'Tap your athlete',
+  PICK_GUIDE_CLICK: 'Click your athlete',
+  PICK_GUIDE_STEP: (n, total, compact) => (compact ? `${n} of ${total}` : `Step ${n} of ${total}`),
+  PICK_GUIDE_WHY: 'We check a few moments so the spotlight can follow them.',
+  PICK_GUIDE_AGAIN: 'Same athlete, next moment.',
+  PICK_GUIDE_CONFIRM: 'Got it',
+  PICK_GUIDE_NOT_BOXED: (compact) => (compact ? 'Not boxed?' : 'Not boxed? Drag the circle'),
+  PICK_GUIDE_DRAG: 'Drag the circle onto your athlete',
+  PICK_GUIDE_AWAY: (n, total, compact) =>
+    (compact ? `Step ${n} needs your athlete` : `Step ${n} of ${total} still needs your athlete`),
+  PICK_GUIDE_AWAY_BUTTON: (n) => `Go to step ${n}`,
+  PICK_GUIDE_DONE: (total, compact) =>
+    (compact ? `All ${total} done` : `All ${total} done. The spotlight follows your athlete.`),
+  PICK_GUIDE_PLAY_SPOTLIGHT: 'Play spotlight',
   // T9960 -- surface the (already adjustable) effect interval as its own primary
   // readout, with the advanced styling controls kept secondary below it. The
   // interval is adjusted by dragging the region ends on the timeline and previewed

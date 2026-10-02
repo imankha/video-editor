@@ -10,7 +10,7 @@
  * terminal buttons: "Generate Framing" (framing) and "Apply Overlay" (overlay) (T9540, T10970).
  */
 
-import { Image, Plus, Star, Film, Crosshair, FolderOpen, CheckCircle, Video, Clapperboard } from 'lucide-react';
+import { Image, Plus, Star, Film, FolderOpen, CheckCircle, Video, Clapperboard } from 'lucide-react';
 import { SECTION_NAMES, ANNOTATE, EDITOR_PANELS, EXPORT_JOBS, MODE_NAMES, LIBRARY_ACTIONS } from './displayNames';
 import { useTutorialStore } from '../stores/useTutorialStore';
 
@@ -18,15 +18,6 @@ import { useTutorialStore } from '../stores/useTutorialStore';
 function QIcon({ icon: IconComponent, className = 'text-gray-300' }) {
   return (
     <IconComponent size={12} className={`inline-block align-text-bottom mx-0.5 ${className}`} />
-  );
-}
-
-/** Detection marker — matches the green squares on the overlay timeline */
-function GreenSquare() {
-  return (
-    <span className="inline-flex items-center justify-center align-text-bottom mx-0.5 w-4 h-4 bg-green-600 rounded border border-green-400">
-      <Crosshair size={10} className="text-white" />
-    </span>
   );
 }
 
@@ -187,7 +178,10 @@ export const STEP_DESCRIPTIONS = {
   wait_for_export: 'We are enhancing your video. This takes a minute. Sit tight; next you will add a spotlight to your athlete on this same highlight.',
   // Quest 3 — Spotlight Your Player
   open_overlay: <>Click the highlight's card under <strong>{SECTION_NAMES.CLIPS}</strong> to open it in Spotlight mode and add a spotlight to your athlete. On the card, the progress strip <MiniStrip /> shows {MODE_NAMES.FRAMING} complete (green) and Spotlight not yet started (blue).</>,
-  select_players: <>Click each <GreenSquare /> green marker on the timeline and tap your athlete. Can't spot them? Drag the circle right onto them.</>,
+  // T11570: the guided walk auto-advances through every marker, so the quest
+  // description states that instead of "click each green marker" (T9620 copy,
+  // now stale -- the walk itself finds the next one for the user).
+  select_players: 'Tap your athlete in each step. We move you to the next one automatically.',
   choose_color: 'Pick a spotlight color that pops against the jerseys.',
   choose_shape: <>Spotlight around your athlete, or a glow under them? Pick <strong>{EDITOR_PANELS.SPOTLIGHT_AROUND_PLAYER}</strong> or <strong>{EDITOR_PANELS.SPOTLIGHT_UNDER_PLAYER}</strong>.</>,
   // Quest 4 - Publish your highlight

@@ -34,12 +34,17 @@ export default function OverlaySpotlightPanel({
   // unpicked the styling controls are hidden behind the "pick your player"
   // guidance; once assignment begins they appear.
   awaitingPlayerSelection = false,
-  assignedCount = 0,
-  totalDetections = 0,
   // T9960 (EP05): the current effect interval length (seconds), derived from the
   // region span in OverlayModeView. Surfaced as the PRIMARY readout above the
   // advanced styling controls; null hides the row (no region / unknown length).
   spotlightDurationSeconds = null,
+  // T11570: the guided athlete-pick walk's step checklist, replacing the old
+  // single-pick "done" copy. `pickProgress` is one bool per detection marker in
+  // timeline order (questStore.detectionAssignProgress, threaded through
+  // OverlayModeView — no second store read here, stays presentational).
+  // `activeStep` is the 1-based marker the guide is currently on (or null).
+  pickProgress = [],
+  activeStep = null,
 }) {
   // Pre-selection: no styling controls, just the stated next step (on-screen
   // text, not a tooltip). Detection COUNT copy always says "player(s)" so the
@@ -65,12 +70,6 @@ export default function OverlaySpotlightPanel({
     );
   }
 
-  // T9960 (EP05): one selected athlete SATISFIES the step. After the first pick,
-  // affirm completion; only when other detection frames remain do we mention that
-  // adding more is OPTIONAL — never an instruction to select "the remaining
-  // players". Derived from the same assignment counts, never a second stored copy.
-  const hasSelection = assignedCount > 0;
-  const moreAvailable = totalDetections - assignedCount > 0;
   // The effect interval, surfaced as the primary readout. It's a LENGTH, so it
   // rounds half-up (T9480 rule); hidden when unknown/non-positive.
   const durationLabel =
@@ -107,11 +106,31 @@ export default function OverlaySpotlightPanel({
 
   return (
     <SettingsPanel title="This spotlight">
-      {hasSelection && (
-        <p data-testid="player-selected-status" className="text-xs text-blue-300">
-          {EDITOR_PANELS.SELECT_PLAYER_DONE}
-          {moreAvailable ? ` ${EDITOR_PANELS.SELECT_PLAYER_ADD_MORE}` : ''}
-        </p>
+      {/* T11570: the guided walk's step checklist replaces the old single-pick
+          "done" copy — one row per detection marker (questStore.detectionAssignProgress,
+          threaded in as pickProgress), checked off as each is picked, with a
+          "now" marker on the one the guide is currently on. */}
+      {pickProgress.length > 0 && (
+        <ul data-testid="pick-guide-checklist" className="flex flex-col gap-1">
+          {pickProgress.map((picked, i) => {
+            const n = i + 1;
+            const isActive = activeStep === n;
+            return (
+              <li
+                key={i}
+                data-testid={`pick-guide-checklist-step-${n}`}
+                className={`flex items-center gap-1.5 text-xs ${
+                  picked ? 'text-green-300' : isActive ? 'text-blue-300' : 'text-gray-500'
+                }`}
+              >
+                {picked
+                  ? <Check size={12} aria-hidden="true" className="shrink-0" />
+                  : <span aria-hidden="true" className="w-3 h-3 rounded-full border border-current shrink-0" />}
+                <span>Step {n}{isActive && !picked ? ' (now)' : ''}</span>
+              </li>
+            );
+          })}
+        </ul>
       )}
       {/* T9960: the (already adjustable) effect interval, named and shown as the
           PRIMARY control — the advanced styling sliders stay secondary below. */}

@@ -111,54 +111,51 @@ describe('OverlaySpotlightPanel player-selection sequencing (T9620)', () => {
 });
 
 /**
- * T9960 (EP05): one selected athlete SATISFIES the step; picking more is optional,
- * never implied as required. The effect interval is surfaced as a named readout
- * above the (secondary) advanced styling controls.
+ * T11570: the guided athlete-pick walk's step checklist replaces the old
+ * single-pick "done" copy (T9960's SELECT_PLAYER_DONE/ADD_MORE, retired) --
+ * one row per detection marker, checked off as each is picked, with a "now"
+ * marker on the one the guide is currently on.
  */
-describe('OverlaySpotlightPanel single-athlete completion (T9960)', () => {
-  it('affirms completion after one pick and never implies all players are required', () => {
+describe('OverlaySpotlightPanel guided-pick step checklist (T11570)', () => {
+  it('renders one checklist row per detection marker, checked off as picked', () => {
     render(
       <OverlaySpotlightPanel
         {...baseProps}
         awaitingPlayerSelection={false}
-        assignedCount={1}
-        totalDetections={4}
+        pickProgress={[true, false, false, false]}
+        activeStep={2}
       />
     );
-    const status = screen.getByTestId('player-selected-status');
-    expect(status.textContent).toContain(EDITOR_PANELS.SELECT_PLAYER_DONE);
-    // More detections remain -> adding is OPTIONAL, not an instruction.
-    expect(status.textContent).toContain(EDITOR_PANELS.SELECT_PLAYER_ADD_MORE);
-    // No all-player implication survives.
-    expect(status.textContent).not.toMatch(/of 4/);
-    expect(status.textContent).not.toMatch(/remaining/i);
-    expect(status.textContent).not.toMatch(/each too/i);
+    const list = screen.getByTestId('pick-guide-checklist');
+    expect(list.querySelectorAll('li')).toHaveLength(4);
+    expect(screen.getByTestId('pick-guide-checklist-step-1').textContent).toContain('Step 1');
+    // The active (not-yet-picked) step is marked "now".
+    expect(screen.getByTestId('pick-guide-checklist-step-2').textContent).toContain('now');
+    expect(screen.getByTestId('pick-guide-checklist-step-3').textContent).not.toContain('now');
   });
 
-  it('affirms completion without the add-more clause when no other players exist', () => {
+  it('marks a picked step without the "now" suffix even if somehow also active', () => {
     render(
       <OverlaySpotlightPanel
         {...baseProps}
         awaitingPlayerSelection={false}
-        assignedCount={1}
-        totalDetections={1}
+        pickProgress={[true, true]}
+        activeStep={1}
       />
     );
-    const status = screen.getByTestId('player-selected-status');
-    expect(status.textContent).toContain(EDITOR_PANELS.SELECT_PLAYER_DONE);
-    expect(status.textContent).not.toContain(EDITOR_PANELS.SELECT_PLAYER_ADD_MORE);
+    expect(screen.getByTestId('pick-guide-checklist-step-1').textContent).not.toContain('now');
   });
 
-  it('shows no completion status before any player is picked', () => {
+  it('shows no checklist before any detection markers exist', () => {
     render(
       <OverlaySpotlightPanel
         {...baseProps}
         awaitingPlayerSelection={false}
-        assignedCount={0}
-        totalDetections={0}
+        pickProgress={[]}
+        activeStep={null}
       />
     );
-    expect(screen.queryByTestId('player-selected-status')).toBeNull();
+    expect(screen.queryByTestId('pick-guide-checklist')).toBeNull();
   });
 
   it('states Spotlight is optional in the pre-selection guidance', () => {
