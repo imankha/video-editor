@@ -44,8 +44,8 @@ function OutputLengthChip({ seconds, emphasized, label = 'Output', className = '
         emphasized ? 'bg-blue-500/25 text-blue-200' : 'bg-white/10 text-gray-400'
       } ${className}`}
       title={emphasized
-        ? 'Output length after slow-motion / trim — what you generate and are billed for'
-        : 'Output length (matches source — no speed or trim changes)'}
+        ? 'Output length after slow-motion / trim -- what you generate and are billed for'
+        : 'Output length (matches source -- no speed or trim changes)'}
     >
       {label}: {formatLength(seconds, PRECISION.SECOND, { style: 'clock' })}
     </span>

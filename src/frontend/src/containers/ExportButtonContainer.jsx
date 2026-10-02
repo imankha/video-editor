@@ -346,13 +346,13 @@ export function ExportButtonContainer({
       onDisconnect: () => {
         disconnectedRef.current = true;
         setDisconnected(true);
-        setProgressMessage('Connection lost — export continues on server...');
+        setProgressMessage('Connection lost -- generation continues on server...');
       },
       onReconnect: () => {
         disconnectedRef.current = false;
         setDisconnected(false);
         setReconnectionFailed(false);
-        setProgressMessage('Reconnected — resuming progress...');
+        setProgressMessage('Reconnected -- resuming progress...');
       },
       onReconnectExhausted: () => {
         setReconnectionFailed(true);
@@ -409,14 +409,14 @@ export function ExportButtonContainer({
       } else {
         // Still running — reset WS backoff and reconnect
         const progress = response.data.progress;
-        setProgressMessage(progress ? `Export at ${progress}% — still running` : 'Export still running — reconnecting...');
+        setProgressMessage(progress ? `Generating at ${progress}% -- still running` : 'Generation still running -- reconnecting...');
         setReconnectionFailed(false);
         exportWebSocketManager.resetReconnect(exportId);
         await connectWebSocket(exportId);
       }
     } catch (retryErr) {
       console.warn('[ExportButtonContainer] Retry connection failed:', retryErr.message);
-      setProgressMessage('Could not reach server — will keep trying...');
+      setProgressMessage('Could not reach server -- will keep trying...');
     } finally {
       setRetrying(false);
     }
@@ -485,7 +485,7 @@ export function ExportButtonContainer({
     // Block, tell the user, and re-send the failed actions (gesture-initiated).
     if (editorMode === EDITOR_MODES.OVERLAY &&
         useOverlayActionStore.getState().failedActions.length > 0) {
-      setError("Some edits haven't saved. Retrying now — please generate again once they save.");
+      setError("Some edits haven't saved. Retrying now -- please generate again once they save.");
       useOverlayActionStore.getState().retryFailedOverlayActions();
       inFlightRef.current = false;
       return;
@@ -823,7 +823,7 @@ export function ExportButtonContainer({
       // Don't fail it — show a disconnected state and let WS reconnect handle it.
       if (renderRequestAccepted) {
         setDisconnected(true);
-        setProgressMessage('Connection lost — export continues on server...');
+        setProgressMessage('Connection lost -- generation continues on server...');
         // Don't call setIsExporting(false), failExportInStore, or disconnect WS.
         // The WS manager will reconnect and onComplete/onError callbacks will finish the flow.
         return;
@@ -898,7 +898,7 @@ export function ExportButtonContainer({
           // Don't show a terminal error; show the recoverable disconnected state.
           if (disconnectedRef.current) {
             setDisconnected(true);
-            setProgressMessage('Connection lost — export continues on server...');
+            setProgressMessage('Connection lost -- generation continues on server...');
             return;
           }
           setError('Generation failed due to a network error. Please check your connection and try again.');
@@ -1035,7 +1035,7 @@ export function ExportButtonContainer({
 
   // Button title/tooltip
   const buttonTitle = (!isFramingMode && hasUnsavedOverlayFailures)
-    ? "Some edits haven't saved — retry saving before generating"
+    ? "Some edits haven't saved -- retry saving before generating"
     : (isFramingMode && hasUnframedClips
       ? 'Set at least one focus point to generate'
       : undefined);

@@ -24,9 +24,9 @@ export function describeHighlightCarryNote(note) {
 
   switch (note) {
     case 'multiclip_reset':
-      return 'Your highlights were reset after a multi-clip change — re-place them in Overlay.';
+      return 'Your highlights were reset after a multi-clip change -- re-place them in Overlay.';
     case 'legacy_uncertain':
-      return 'Regenerating changed the timing — double-check your highlight positions in Overlay.';
+      return 'Regenerating changed the timing -- double-check your highlight positions in Overlay.';
     default:
       return null;
   }
