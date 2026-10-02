@@ -91,6 +91,32 @@ per-platform map: [EPIC.md](tasks/social-cover-image/EPIC.md).
 | T11540 | ↳ [Experiment: does frame 0 set the default cover on upload?](tasks/social-cover-image/T11540-frame0-cover-upload-experiment.md) | 6 | 2 | 3.0 | TODO | [ ] | User-run. AI builds 5 variant MP4s (as-is, no covr, cover held 1f/3f/0.5s); user uploads to IG/TikTok/FB/X/WhatsApp/iMessage/Snapchat/Shorts and records default covers. Gates T11550. |
 | T11550 | ↳ [Lead the delivered file with the chosen cover (conditional)](tasks/social-cover-image/T11550-lead-file-with-cover-frame.md) | 7 | 6 | 1.2 | TODO | [ ] | L-tier, BLOCKED on T11540 results + explicit user approval (visible change to the delivered video). Prepend the cover still in the serve-time compose pass. OBSOLETE if T11540 shows no win. |
 
+### Milestone: Free Second Highlight (user-ordered 2026-10-02)
+
+**Filed 2026-10-02.** The goal is more users making a second highlight. When a user publishes,
+congratulate them and give them a free pass: their next highlight is free (up to 40 s) if they make
+it within 24 hours, and a Resend email goes out with 5 hours left. Signup drops from 88 to 48 so
+the total free value stays 88.
+
+User decisions:
+- Proposal C (next one free) over two-step credits or a reserved bonus.
+- Ruling G1 of the quest-removal epic is superseded.
+- Every account gets exactly one pass (fewest code branches; the extra cost for existing users is
+  accepted).
+- The landing page is updated.
+
+Row order is the sequence. **T11650 merges LAST** so nobody gets 48 credits without the pass.
+Mockups and the original spec: [canvas](https://claude.ai/artifact/6DVHn3V3Y16rzEGJBPKg9x).
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+|  | **[Free Second Highlight](tasks/free-second-highlight/EPIC.md)** | 8 | 5 | 1.6 |  |  | Publish -> congrats + "your next highlight is free for 24h (up to 40 s)" -> reminder email at 5h left. Signup 88 -> 48, so the max free value is unchanged. |
+| T11610 | ↳ [Baseline: second-export rate + credits spent before first export](tasks/free-second-highlight/T11610-baseline-second-export-metrics.md) | 5 | 2 | 2.5 | TODO | [ ] | S/M-tier, read-only Postgres script run on prod. Records the 24h/7d second-export baseline and p90 credits spent before the first export. Gate for T11650: p90 must be 48 or less, or the user must accept otherwise. |
+| T11620 | ↳ [Backend: free highlight pass](tasks/free-second-highlight/T11620-free-pass-backend.md) | 8 | 5 | 1.6 | TODO | [x] | L-tier. Postgres v036 `free_highlight_passes` (PK user_id = one pass ever). Granted in `publish_to_my_reels`; redeemed in one transaction at both export reserve sites (grant LEAST(cost,40) under a new `free_highlight_pass` ledger source); `free_pass` on `GET /api/credits`. |
+| T11630 | ↳ [Frontend: pass sheet, "Free" export price, Home banner](tasks/free-second-highlight/T11630-free-pass-frontend.md) | 8 | 4 | 2.0 | TODO | [ ] | M-tier. Sheet driven by the publish response (gesture, memory-only); export price "Free" / "N credits (40 free)" with a net-cost insufficient check; Home countdown banner + chip tag; credit history label. |
+| T11640 | ↳ [Reminder email: Resend scheduled send + cancel](tasks/free-second-highlight/T11640-free-pass-reminder-email.md) | 6 | 4 | 1.5 | TODO | [ ] | M-tier. Step 0: verify Resend `scheduled_at` + cancel. Schedule at grant +19h, cancel on redeem, honor opt-out; minimal HMAC unsubscribe through the restore-if-newer seam. No scheduler of our own. |
+| T11650 | ↳ [Signup 88 -> 48 + landing page copy](tasks/free-second-highlight/T11650-signup-split-and-landing-copy.md) | 6 | 2 | 3.0 | TODO | [ ] | M-tier, ships LAST. `WELCOME_CREDITS` 80 -> 40 (the remainder calc leaves existing accounts untouched); landing `freeCredits` 48 + free-next-highlight caption; `/deploy-landing` right after the prod deploy. |
+
 ### Next Work: September 12-13 Evaluation Handoff
 
 **NEXT BATCH (user-ordered 2026-09-13): 20 live tasks in T9770-T9970 + T10010.** Work this batch
