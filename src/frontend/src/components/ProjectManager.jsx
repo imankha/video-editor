@@ -1948,7 +1948,7 @@ export function ProjectManager({
                       // T66: 'complete' and 'uncompleted' removed - completed projects are archived
                       { value: 'overlay', label: 'In Overlay', color: 'blue' },
                       { value: 'editing', label: 'Focus Started', color: 'blue' },
-                      { value: 'exported', label: 'Exported', color: 'purple' },
+                      { value: 'exported', label: 'Generated', color: 'purple' },
                       { value: 'not_started', label: 'Draft', color: 'gray' }
                     ].map(opt => {
                       const count = opt.value === 'all' ? filterCounts.all : filterCounts[opt.value];

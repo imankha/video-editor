@@ -298,7 +298,7 @@ export const useExportStore = create((set, get) => ({
           [exportId]: {
             ...existing,
             status: 'error',
-            error: typeof error === 'string' ? error : error?.message || 'Export failed',
+            error: typeof error === 'string' ? error : error?.message || 'Generation failed',
             // T4110: render-OK-but-sync-failed is retryable; the UI prompts Retry.
             retryable: opts.retryable === true,
             // T11330: raw guard payload for the explanatory popup (null for ordinary failures).

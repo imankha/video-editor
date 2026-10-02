@@ -425,7 +425,7 @@ export function GlobalExportIndicator() {
                     {getStatusIcon(exp.status)}
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-white">
-                        {jobVocab(exp) ? jobVocab(exp).jobNoun : `${exp.type} export`}
+                        {jobVocab(exp) ? jobVocab(exp).jobNoun : `${exp.type} generation`}
                       </div>
                       <div className="text-xs text-gray-400 truncate">
                         {getExportLabel(exp)}

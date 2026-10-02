@@ -134,7 +134,7 @@ export function PrivacyPolicy() {
           <ul className="list-disc pl-5 space-y-1">
             <li>Game footage: 30 days after game expiry</li>
             <li>Account data: retained until you request deletion</li>
-            <li>Processing artifacts: deleted immediately after export</li>
+            <li>Processing artifacts: deleted immediately after generation</li>
             <li>Sessions: 30 days max, or until logout</li>
             <li>OTP codes: expire after 10 minutes</li>
           </ul>

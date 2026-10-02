@@ -193,7 +193,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
               title={`${segment.label}${segment.tags?.length ? ` [${segment.tags.join(', ')}]` : ''}: ${
                 segment.status === 'done' ? 'Complete' :
                 segment.status === 'disconnected' ? 'Not Connected' :
-                segment.status === 'exporting' ? 'Exporting...' :
+                segment.status === 'exporting' ? 'Generating...' :
                 segment.status === 'in_progress' ? (isOverlay ? 'Started - generate to complete' : `Started - generate ${MODE_NAMES.FRAMING} to complete`) :
                 // T9600: the 'ready' spotlight segment is a working-video-only reel
                 // (draftStage IN_OVERLAY), not a shared one — route through the single

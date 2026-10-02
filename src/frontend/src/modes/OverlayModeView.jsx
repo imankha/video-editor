@@ -265,7 +265,7 @@ export function OverlayModeView({
   // (mirrors the export container's isCurrentlyExporting; threaded from OverlayScreen).
   settingsDisabled = false,
 }) {
-  // Show "export required" message if no overlay video but framing has edits.
+  // Show "generate required" message if no overlay video but framing has edits.
   // T9800: !shouldWaitForWorkingVideo suppresses the banner during the transient
   // post-export hydration window (effectiveOverlayVideoUrl is momentarily falsy
   // while the new working video loads); the neutral loading state shows instead.

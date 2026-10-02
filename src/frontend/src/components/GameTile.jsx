@@ -197,7 +197,7 @@ export function GameTile({
         onClick: onExtend,
         // T10130: reassure that skipping the extension is fine once everything's
         // exported -- the only row in this menu with a second line.
-        caption: 'Exported everything already? Skipping is fine. Annotations stay playable.',
+        caption: 'Generated everything already? Skipping is fine. Annotations stay playable.',
       },
   ].filter(Boolean);
 

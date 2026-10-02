@@ -54,7 +54,7 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
     render(<ExportButtonView {...baseProps} estimatedCredits={9} insufficientForEstimate={true} creditBalance={3} />);
     const line = screen.getByTestId('export-credit-estimate');
     expect(line.className).toContain('text-amber-400');
-    expect(line.textContent).toContain('add credits to export');
+    expect(line.textContent).toContain('add credits to generate');
   });
 
   it('hides the estimate when duration is unknown (estimatedCredits null — no fabricated number)', () => {

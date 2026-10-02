@@ -212,7 +212,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
       {/* Persistent failed export from store (survives navigation) */}
       {!error && failedExport && (
         <div className="text-orange-400 text-xs bg-orange-900/20 border border-orange-800 rounded p-2 w-full">
-          Export failed: {failedExport.error || 'Unknown error'}
+          Generation failed: {failedExport.error || 'Unknown error'}
         </div>
       )}
 
@@ -256,7 +256,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           {insufficientForEstimate && <AlertCircle size={12} />}
           <span>
             {`~${estimatedCredits} credit${estimatedCredits === 1 ? '' : 's'} · balance ${creditBalance}`}
-            {insufficientForEstimate ? ' — add credits to export' : ''}
+            {insufficientForEstimate ? ' — add credits to generate' : ''}
           </span>
         </div>
       )}

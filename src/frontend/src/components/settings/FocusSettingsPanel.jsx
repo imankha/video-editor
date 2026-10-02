@@ -59,7 +59,7 @@ export default function FocusSettingsPanel({
           <Toggle
             checked={includeAudio}
             onChange={onIncludeAudioChange}
-            title="Include the highlight's original audio in the exported video"
+            title="Include the highlight's original audio in the generated video"
             className="coarse-pointer:min-h-11"
           />
         </SettingRow>

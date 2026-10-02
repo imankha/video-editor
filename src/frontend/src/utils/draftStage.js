@@ -79,7 +79,7 @@ export const DRAFT_STATUS = {
 };
 
 const DRAFT_STATUS_INFO = {
-  [DRAFT_STATUS.DRAFT]: { label: 'Draft', detail: 'Not exported yet' },
+  [DRAFT_STATUS.DRAFT]: { label: 'Draft', detail: 'Not generated yet' },
   [DRAFT_STATUS.PRIVATE]: { label: 'Private', detail: 'Only you can see it' },
   [DRAFT_STATUS.PUBLISHED]: { label: 'Published', detail: 'Only you can see it until you share a link' },
 };

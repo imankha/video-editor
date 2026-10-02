@@ -152,7 +152,7 @@ export function useExportRecovery() {
               // act on), keep the existing unconditional mount-time acknowledge.
               if (exp.type === 'framing') continue;
             } else if (exp.status === ExportStatus.ERROR) {
-              failExport(exp.job_id, exp.error || 'Export failed');
+              failExport(exp.job_id, exp.error || 'Generation failed');
             }
             jobIdsToAcknowledge.push(exp.job_id);
           }
@@ -275,7 +275,7 @@ export function useExportRecovery() {
           // Modal job failed
           console.error(`[ExportRecovery] Export ${exp.job_id} failed on Modal:`, data.error);
           // Update store — GlobalExportIndicator handles the toast
-          failExport(exp.job_id, data.error || 'Export failed on cloud GPU');
+          failExport(exp.job_id, data.error || 'Generation failed on cloud GPU');
           return false;
         } else if (data.status === 'expired') {
           // Modal job expired (too old to recover)

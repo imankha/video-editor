@@ -399,7 +399,7 @@ export function ExportButtonContainer({
         disconnectedRef.current = false;
         setDisconnected(false);
         setReconnectionFailed(false);
-        const errorMsg = response.data.error || 'Export failed on server';
+        const errorMsg = response.data.error || 'Generation failed on server';
         setError(errorMsg);
         if (exportId) {
           failExportInStore(exportId, errorMsg);
@@ -485,7 +485,7 @@ export function ExportButtonContainer({
     // Block, tell the user, and re-send the failed actions (gesture-initiated).
     if (editorMode === EDITOR_MODES.OVERLAY &&
         useOverlayActionStore.getState().failedActions.length > 0) {
-      setError("Some edits haven't saved. Retrying now — please export again once they save.");
+      setError("Some edits haven't saved. Retrying now — please generate again once they save.");
       useOverlayActionStore.getState().retryFailedOverlayActions();
       inFlightRef.current = false;
       return;
@@ -874,7 +874,7 @@ export function ExportButtonContainer({
       }
 
       if (exportIdRef.current) {
-        failExportInStore(exportIdRef.current, err.message || 'Export failed');
+        failExportInStore(exportIdRef.current, err.message || 'Generation failed');
         exportWebSocketManager.disconnect(exportIdRef.current);
       }
 
@@ -901,7 +901,7 @@ export function ExportButtonContainer({
             setProgressMessage('Connection lost — export continues on server...');
             return;
           }
-          setError('Export failed due to a network error. Please check your connection and try again.');
+          setError('Generation failed due to a network error. Please check your connection and try again.');
           setProgressMessage('Network error');
         } else if (err.response) {
           const status = err.response.status;
@@ -938,7 +938,7 @@ export function ExportButtonContainer({
             // Detect transient processing failures (R2 download, GPU timeout, etc.)
             const detail = typeof data.detail === 'object' ? data.detail : data;
             if (detail.error === 'processing_failed') {
-              errorMessage = 'Export failed due to a temporary issue. Your credit has been refunded. Please try again.';
+              errorMessage = 'Generation failed due to a temporary issue. Your credit has been refunded. Please try again.';
               useCreditStore.getState().fetchCredits();
             } else {
               const extracted = data.message || data.detail || data.error;
@@ -954,7 +954,7 @@ export function ExportButtonContainer({
           setProgressMessage('');
         } else {
           console.error('[ExportButtonContainer] Unknown error:', err);
-          setError(err.message || 'Export failed. Please try again.');
+          setError(err.message || 'Generation failed. Please try again.');
           setProgressMessage('');
         }
       }

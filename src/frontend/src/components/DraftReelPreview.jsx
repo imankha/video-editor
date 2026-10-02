@@ -21,7 +21,7 @@ import { RESULT_PUBLISH } from '../config/displayNames';
 // specific-copy-per-code intent).
 const REPOINT_ERROR_MESSAGES = {
   video_not_current: 'This draft changed; reopen it and try Update shared version.',
-  target_missing: "The re-exported video isn't ready yet; try again shortly.",
+  target_missing: "The re-generated video isn't ready yet; try again shortly.",
   repoint_conflict: 'This share changed; refresh and retry.',
   share_project_mismatch: 'This share does not belong to this project.',
 };

@@ -55,7 +55,7 @@ export function TermsOfService() {
             <li>Highlight extraction and annotation</li>
             <li>Video framing and cropping (with AI-assisted upscaling)</li>
             <li>Highlight overlay creation</li>
-            <li>Video export and sharing</li>
+            <li>Video generation and sharing</li>
           </ul>
         </Section>
 

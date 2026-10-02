@@ -204,7 +204,7 @@ export const RESULT_PUBLISH = {
   // T10860: re-point an already-distributed share token to a moved final_video
   // after a private re-export. Shown only when payload.staleShare is non-null.
   UPDATE_SHARED: 'Update shared version',
-  UPDATE_SHARED_HINT: 'Your link still shows the old export. Update it to point at the latest.',
+  UPDATE_SHARED_HINT: 'Your link still shows the previously generated video. Update it to point at the latest.',
 };
 
 export const SECTION_NAMES = {
@@ -725,7 +725,7 @@ export const EDITOR_PANELS = {
   // sharpness claim in either direction.
   PREVIEW_HIGHLIGHT: 'Preview highlight',
   PREVIEW_BACK_TO_FRAMING: 'Back to framing',
-  PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced at export.',
+  PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced when you generate.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
   // same shape as TRIM_AND_SLOWMO above (user request 2026-09-21).
   TEXT_LANE: 'Text',
@@ -757,7 +757,7 @@ export const CREDITS = {
 export const RETENTION = {
   SOURCE: 'Your uploaded game is kept for 30 days, and you can extend it anytime.',
   EXPORTED: 'Highlights you generate are kept for good and are free to store.',
-  DRAFT: 'An unexported draft stays viewable, but you need its source to re-edit or generate it, so finish the ones you want to keep before the 30 days are up.',
+  DRAFT: 'A draft you haven\'t generated stays viewable, but you need its source to re-edit or generate it, so finish the ones you want to keep before the 30 days are up.',
 };
 
 // T10190: the shared finished-result surface (CollectionPlayer + the card CTAs

@@ -15,11 +15,11 @@ import { useCreditStore } from '../stores/creditStore';
 
 const SOURCE_LABELS = {
   stripe_purchase: 'Credit purchase',
-  framing_usage: 'Video export',
-  framing_refund: 'Export refund',
-  framing_export: 'Video export',
-  multi_clip_export: 'Video export',
-  export: 'Video export',
+  framing_usage: 'Video generation',
+  framing_refund: 'Generation refund',
+  framing_export: 'Video generation',
+  multi_clip_export: 'Video generation',
+  export: 'Video generation',
   game_upload: 'Game upload',
   storage_extension: 'Storage extension',
   // T11170: both the historic per-quest reward rows (quest_reward) and the lump

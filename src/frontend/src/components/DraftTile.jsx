@@ -464,11 +464,11 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   if (isComplete) { statusLabel = getDraftStatus(project).label; statusTint = 'text-green-300'; }
   else if (isWaitingForUpload) { statusLabel = 'Uploading'; statusTint = 'text-amber-300'; }
   else if (isExporting && isOffline) { statusLabel = 'Offline'; statusTint = 'text-gray-300'; }
-  else if (isExporting) { statusLabel = 'Exporting'; statusTint = 'text-amber-300'; }
+  else if (isExporting) { statusLabel = 'Generating'; statusTint = 'text-amber-300'; }
   else if (failedExportType) { statusLabel = 'Failed'; statusTint = 'text-orange-300'; }
   else if (project.has_working_video) { statusLabel = 'In Spotlight'; statusTint = 'text-blue-300'; }
   else if (project.clips_in_progress > 0) { statusLabel = MODE_NAMES.FRAMING; statusTint = 'text-blue-300'; }
-  else if (project.clips_exported > 0) { statusLabel = 'Exported'; statusTint = 'text-gray-200'; }
+  else if (project.clips_exported > 0) { statusLabel = 'Generated'; statusTint = 'text-gray-200'; }
 
   // Fine pointer reveals actions on hover; coarse pointer reveals on long-press (actionsRevealed).
   const actionsVisibility = isCoarsePointer

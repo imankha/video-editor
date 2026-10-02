@@ -237,8 +237,8 @@ class ExportWebSocketManager {
         // best-available message is resolved HERE (retryable-aware) so the store — and every
         // consumer of the onError callback — gets it, not a bare fallback in one place only.
         const terminalError = message.error || (retryable
-          ? "Render finished but couldn't save to the cloud. Please try Export again."
-          : 'Export failed');
+          ? "Render finished but couldn't save to the cloud. Please try generating again."
+          : 'Generation failed');
         store.failExport(exportId, terminalError, { retryable, budgetRejection });
 
         // Notify callback (wrap in try-catch - callback may reference unmounted component)
@@ -561,7 +561,7 @@ class ExportWebSocketManager {
         this._emitEvent(exportId, 'complete', data);
         return data;
       } else if (data.status === ExportStatus.ERROR) {
-        const errorMsg = data.error || 'Export failed (job was cancelled by server)';
+        const errorMsg = data.error || 'Generation failed (job was cancelled by server)';
         store.failExport(exportId, errorMsg);
         if (callbacks.onError) {
           try {
