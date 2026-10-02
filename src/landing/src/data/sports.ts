@@ -63,10 +63,10 @@ export const SPORTS: Sport[] = [
     emoji: '⚽',
     title: 'Soccer Highlight Video Maker | ReelBallers',
     description:
-      'Turn soccer match footage into a highlight reel. Frame your player with a few drags; ReelBallers smooths the motion. Works with any camera. Free.',
+      'Turn soccer match footage into highlights. Frame your player with a few drags; ReelBallers smooths the motion and generates a highlight for each. Works with any camera. Free.',
     h1: 'Soccer highlight video maker',
     answer:
-      'ReelBallers turns full soccer match footage into a highlight reel: you mark the moments that matter and frame your player across the pitch, and ReelBallers connects the dots between your marks so they stay in frame, even in wide sideline video.',
+      'ReelBallers turns full soccer match footage into shareable highlights: mark the moments that matter and frame your player across the pitch, then generate a highlight for each -- ReelBallers connects the dots between your marks so they stay in frame, even in wide sideline video.',
     challenge:
       'Soccer is the hardest sport to film from the sideline. The field is huge, play switches ends in seconds, and a wide shot that captures the run leaves your player eight pixels tall. That is the exact problem framing solves: keep the wide camera, drag the crop over your player a few times as they move, and ReelBallers fills in the motion between your marks.',
     scouting:
@@ -105,10 +105,10 @@ export const SPORTS: Sport[] = [
     emoji: '🏈',
     title: 'Football Highlight Video Maker | ReelBallers',
     description:
-      'Build a football highlight reel from game film. Tag touchdowns, sacks, and blocks by position, spotlight your player on every snap. Free to start.',
+      'Build football highlights from game film. Tag touchdowns, sacks, and blocks by position, spotlight your player, and generate a highlight for each. Free to start.',
     h1: 'Football highlight video maker',
     answer:
-      'ReelBallers turns football game film into a highlight reel: tag plays by position -- touchdown passes, broken tackles, pancake blocks, sacks -- and spotlight your player so a coach can find them on every snap.',
+      'ReelBallers turns football game film into shareable highlights: tag plays by position -- touchdown passes, broken tackles, pancake blocks, sacks -- then generate a highlight for each, spotlighting your player so a coach can find them on every snap.',
     challenge:
       'Football film is only useful if the viewer can tell which of the twenty-two players is yours. Without a spotlight, a coach watching an offensive lineman has no idea where to look, and stops watching. The spotlight effect solves the single biggest reason football reels get skipped.',
     scouting:
@@ -126,7 +126,7 @@ export const SPORTS: Sport[] = [
     emoji: '🏈',
     title: 'Flag Football Highlight Reel Maker | ReelBallers',
     description:
-      'Make a flag football highlight reel from phone footage. Tag touchdowns, flag pulls, and routes, spotlight your player, and share one link. Free to start.',
+      'Make flag football highlights from phone footage. Tag touchdowns, flag pulls, and routes, spotlight your player, and generate a highlight for each. Free to start.',
     h1: 'Flag football highlight reel maker',
     answer:
       'ReelBallers turns flag football footage into shareable highlights: tag touchdown passes, catches, flag pulls, and pass breakups, then generate a highlight for each, spotlighting your player.',
@@ -189,7 +189,7 @@ export const SPORTS: Sport[] = [
     emoji: '🏐',
     title: 'Volleyball Highlight Video Maker | ReelBallers',
     description:
-      'Make a volleyball highlight reel from match footage. Tag kills, blocks, digs, and aces by position, spotlight your player, and share one link. Free.',
+      'Make volleyball highlights from match footage. Tag kills, blocks, digs, and aces by position, spotlight your player, and generate a highlight for each. Free.',
     h1: 'Volleyball highlight video maker',
     answer:
       'ReelBallers turns volleyball match footage into shareable highlights: tag kills, blocks, digs, sets, and aces by position, then generate a highlight for each, spotlighting your player through the rally.',
@@ -210,7 +210,7 @@ export const SPORTS: Sport[] = [
     emoji: '🥍',
     title: 'Lacrosse Highlight Video Maker | ReelBallers',
     description:
-      'Turn lacrosse game film into a highlight reel. Tag goals, assists, ground balls, and saves, keep your player framed, and share one link. Free to start.',
+      'Turn lacrosse game film into highlights. Tag goals, assists, ground balls, and saves, keep your player framed, and generate a highlight for each. Free to start.',
     h1: 'Lacrosse highlight video maker',
     answer:
       'ReelBallers turns lacrosse game film into shareable highlights: tag goals, assists, dodges, ground balls, and saves, then generate a recruiting-ready highlight for each, keeping your player in frame.',
@@ -231,7 +231,7 @@ export const SPORTS: Sport[] = [
     emoji: '🏒',
     title: 'Hockey Highlight Video Maker | ReelBallers',
     description:
-      'Make a hockey highlight reel from game footage. Tag goals, assists, checks, and saves, spotlight your skater through traffic. Free to start.',
+      'Make hockey highlights from game footage. Tag goals, assists, checks, and saves, spotlight your skater, and generate a highlight for each. Free to start.',
     h1: 'Hockey highlight video maker',
     answer:
       'ReelBallers turns hockey game footage into shareable highlights: tag goals, assists, dekes, checks, and saves, then generate a highlight for each, spotlighting your skater through traffic.',
@@ -252,7 +252,7 @@ export const SPORTS: Sport[] = [
     emoji: '🏉',
     title: 'Rugby Highlight Video Maker | ReelBallers',
     description:
-      'Turn rugby match footage into a highlight reel. Tag tries, line breaks, tackles, and carries, keep your player framed, and share one link. Free to start.',
+      'Turn rugby match footage into highlights. Tag tries, line breaks, tackles, and carries, keep your player framed, and generate a highlight for each. Free to start.',
     h1: 'Rugby highlight video maker',
     answer:
       'ReelBallers turns rugby match footage into shareable highlights: tag tries, line breaks, tackles, carries, and rucks, then generate a highlight for each, keeping your player in frame across the pitch.',
