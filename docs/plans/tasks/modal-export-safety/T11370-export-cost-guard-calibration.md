@@ -1,10 +1,10 @@
 # T11370: Calibrate T11320's Export-Cost-Guard Per-Pixel Constant
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-25
-**Updated:** 2026-09-25
+**Updated:** 2026-10-02
 
 ## Problem
 
@@ -67,21 +67,49 @@ them back-to-back may save setup cost.
 ## Implementation
 
 ### Steps
-1. [ ] Get user sign-off on how the staging runs happen (supervisor-driven vs. user-driven)
-2. [ ] Run 2-3 Modal staging exports across a spread of crop sizes, capture real GPU-seconds
-3. [ ] Fit/verify the per-pixel constant against real data; check the linear-scaling assumption
-4. [ ] Update `export_cost_guard.py`'s constant and `modal-gpu.md`'s documentation
-5. [ ] Update T11320's "Known accepted risk" progress-log note to reflect the calibrated state
+1. [x] Get user sign-off on how the staging runs happen (supervisor-driven vs. user-driven) —
+   user chose supervisor-driven, real-cost dispatch directly from this session
+2. [x] Run 2-3 Modal staging exports across a spread of crop sizes, capture real GPU-seconds —
+   3 jobs / 12 measured points (9:16 sizes, 16:9 sizes incl. the max 2560x1440 target and the
+   full Bug-58p-shaped 1920x1080 crop, plus a replicate for variance)
+3. [x] Fit/verify the per-pixel constant against real data; check the linear-scaling assumption —
+   linear-in-crop-pixels CONFIRMED (slope agrees within ~1% across jobs, R²>0.998 each); found
+   the formula also needed a target-resolution-dependent overhead term it didn't have at all
+4. [x] Update `export_cost_guard.py`'s constant and `modal-gpu.md`'s documentation — done; user
+   explicitly chose to thread target resolution through rather than use a conservative single
+   intercept, given the real finding
+5. [x] Update T11320's "Known accepted risk" progress-log note to reflect the calibrated state
 
 ### Progress Log
 
 **2026-09-25**: Filed as a T11320 landing follow-up (user accepted the uncalibrated-constant
 risk to land T11320 without blocking on this). Not started.
 
+**2026-10-02**: Dispatched directly by the supervisor (containers can't reach Modal, T4180; user
+chose supervisor-driven real staging dispatch over user-driven or deferring). The `expert` agent
+found `experiments/e6_l4_benchmark.py` fully stale (old pre-T8270 app name, wrong/non-existent
+function, deleted test fixture) and designed a fresh calibration script
+(`experiments/t11370_cost_calibration.py`) targeting `process_clips_ai` on
+`reel-ballers-video-v2-staging` directly, isolating per-clip GAN-loop rate from fixed overhead via
+Modal's own streamed per-frame progress timestamps. Ran 3 real jobs (~$0.55 actual, under the
+~$0.55-0.70 estimate): all succeeded cleanly, no silent GPU-upscale fallback (checked live Modal
+logs during the run). Found the crop-pixel slope is linear and target-resolution-independent
+(confirmed, not assumed) but the fixed per-frame overhead is NOT crop-dependent — it's
+TARGET-resolution-dependent, 2.4x higher at the max 16:9 target than the 9:16 default, which the
+original formula had no term for at all. Asked the user how to handle this: conservative single
+intercept vs. threading target resolution through vs. keeping the old zero-intercept shape; user
+chose to thread target resolution through `export_cost_guard.py`/`multi_clip.py` properly rather
+than take the conservative shortcut. Implemented, updated all existing tests (new
+target-resolution-dependence tests added), ran the relevant set (20 preflight-guard tests + T11330
++ 3 golden export tests, all green), updated `modal-gpu.md` and this task's own + T11320's progress
+notes.
+
 ## Acceptance Criteria
 
-- [ ] Per-pixel constant is derived from 2+ real Modal staging measurements across different
-      crop sizes, not a single extrapolated point
-- [ ] Linear-in-pixel-count scaling is confirmed (or the formula is corrected if it doesn't hold)
-- [ ] `export_cost_guard.py` and `modal-gpu.md` updated with the new constant and its provenance
-- [ ] T11320's task file's risk note is updated to reflect the calibrated state
+- [x] Per-pixel constant is derived from 2+ real Modal staging measurements across different
+      crop sizes, not a single extrapolated point — 12 points across 3 jobs
+- [x] Linear-in-pixel-count scaling is confirmed (or the formula is corrected if it doesn't hold)
+      — confirmed for crop pixels; the formula WAS corrected to add a target-resolution-dependent
+      overhead term the original shape couldn't represent
+- [x] `export_cost_guard.py` and `modal-gpu.md` updated with the new constant and its provenance
+- [x] T11320's task file's risk note is updated to reflect the calibrated state

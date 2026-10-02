@@ -79,19 +79,20 @@ exception handler, so no HTTP client ever sees it — the real channel is the WS
 payload, which was untested; sent back for a fix). M1/M3 sent back to the implementor; M2 was a
 user decision.
 
-**Known accepted risk (M2, user decision 2026-09-25):** the per-pixel GPU-cost constant
-(0.6815 s/frame at a 540x960 crop, from `experiments/e6_l4_benchmark_results.json`) rests on a
-SINGLE measurement, and the same benchmark script shows 1.57x run-to-run variance on an
-identical config across two runs (E1: 192.19s, E6: 122.67s, same 540x960/180-frame config). The
-guard's estimate could therefore be off by roughly that factor in either direction. User chose
-to accept this and land now rather than block on a real calibration run. Approximate
-false-rejection risk zone with the current constant and 80%-of-3600s budget: exports with
-roughly 80-140s of effective (post-trim) 16:9-crop-equivalent GAN work sit close enough to the
-threshold that the 1.57x uncertainty could flip the verdict either way. **Follow-up: T11370**
-(real Modal staging calibration across 2-3 crop sizes) — land this task without blocking on it,
-but treat T11370 as a near-term priority, not indefinite backlog, since every day it's open is a
-day the constant could be silently wrong in either direction (false rejections OR a return to
-Bug 58p's failure mode for a crop size the single measurement doesn't represent well).
+**Known accepted risk (M2, user decision 2026-09-25) — CALIBRATED, see T11370 (2026-10-02):** the
+per-pixel GPU-cost constant originally shipped here (0.6815 s/frame at a 540x960 crop, from a
+SINGLE `experiments/e6_l4_benchmark_results.json` measurement with 1.57x run-to-run variance
+across two runs) has been superseded. T11370 ran 3 real Modal staging dispatches (12 measured
+points across 2 target resolutions + a replicate) and found two things: (1) the crop-pixel cost
+really is linear, confirmed rather than assumed (slope agreed within ~1% across all 3 jobs,
+R²>0.998 each); (2) the single zero-intercept constant this task shipped with was missing a real
+target-resolution-dependent fixed overhead term entirely (0.0817 s/frame at a 9:16-scale target
+vs 0.2004 s/frame at the max 16:9 target — a ~2.4x difference the original formula had no way to
+represent). The guard now takes the export's target resolution as a required input. Current
+formula + full provenance: `.claude/knowledge/modal-gpu.md` § Preflight cost guard;
+implementation: `app/services/export_cost_guard.py`. The remaining weak spot (2-point fit for the
+target-resolution/overhead term, vs. the well-replicated crop-pixel slope) is documented there,
+not hidden.
 
 **2026-09-26 (landed)**: Merged via PR #511 (merge commit `2613efcc`), full executable landing
 gate (independently VERIFIED proof, reviewer receipt, green Branch CI, head-pinned merge).

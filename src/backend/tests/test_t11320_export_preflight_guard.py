@@ -18,15 +18,22 @@ import pytest
 
 from app.routers.export import multi_clip as mc
 from app.services.export_cost_guard import (
-    ANCHOR_CROP_PIXELS,
-    ANCHOR_SECONDS_PER_FRAME,
     GPU_SECONDS_BUDGET,
+    OVERHEAD_INTERCEPT,
+    OVERHEAD_PER_TARGET_PIXEL,
+    PER_CLIP_OVERHEAD_SECONDS,
+    PER_JOB_OVERHEAD_SECONDS,
+    SLOPE_SECONDS_PER_CROP_PIXEL,
     ExportBudgetExceeded,
     enforce_export_budget,
     estimate_export_cost,
     estimate_total_gpu_seconds,
     per_frame_cost,
 )
+
+# The two T11370-measured target-resolution anchors (see export_cost_guard.py module docstring).
+TARGET_916 = (810, 1440)   # 9:16 default-scale target
+TARGET_MAX = (2560, 1440)  # VIDEO_MAX_WIDTH x VIDEO_MAX_HEIGHT -- the hard ceiling
 
 
 # ----------------------------------------------------------------------------
@@ -64,44 +71,99 @@ def _bug58p_clips() -> list[dict]:
 
 
 # ----------------------------------------------------------------------------
-# Pure cost-model unit tests
+# Pure cost-model unit tests (T11370 calibration: crop-pixel slope + target-resolution overhead)
 # ----------------------------------------------------------------------------
-def test_per_frame_cost_matches_anchor_at_anchor_crop():
-    # At exactly the measured anchor crop (540x960) one frame costs the anchor seconds.
-    assert per_frame_cost(540, 960) == pytest.approx(ANCHOR_SECONDS_PER_FRAME)
+def test_per_frame_cost_matches_calibrated_anchors():
+    # The two REAL Modal-staging measured anchors this formula was fit from (see module
+    # docstring): 540x960 crop at each of the two measured target resolutions.
+    assert per_frame_cost(540, 960, *TARGET_916) == pytest.approx(0.5291, abs=0.01)
+    assert per_frame_cost(540, 960, *TARGET_MAX) == pytest.approx(0.6478, abs=0.01)
 
 
-def test_per_frame_cost_scales_with_input_pixels():
-    # Doubling area doubles cost (GAN scales with INPUT pixel count).
-    base = per_frame_cost(410, 365)
-    assert per_frame_cost(820, 365) == pytest.approx(2 * base)
-    # A full 1080p crop is (1920*1080)/(540*960) = 4.0x the anchor.
-    assert per_frame_cost(1920, 1080) == pytest.approx(
-        ANCHOR_SECONDS_PER_FRAME * (1920 * 1080) / ANCHOR_CROP_PIXELS
+def test_per_frame_cost_scales_linearly_with_crop_pixels():
+    # Doubling crop area doubles the SLOPE term (GAN scales with INPUT pixel count) -- the
+    # overhead term is constant for a fixed target, so compare deltas, not raw totals.
+    base = per_frame_cost(410, 365, *TARGET_916)
+    doubled = per_frame_cost(820, 365, *TARGET_916)
+    overhead = OVERHEAD_INTERCEPT + OVERHEAD_PER_TARGET_PIXEL * (TARGET_916[0] * TARGET_916[1])
+    assert (doubled - overhead) == pytest.approx(2 * (base - overhead))
+    assert per_frame_cost(1920, 1080, *TARGET_916) == pytest.approx(
+        overhead + SLOPE_SECONDS_PER_CROP_PIXEL * (1920 * 1080)
     )
-    assert per_frame_cost(1920, 1080) == pytest.approx(4.0 * ANCHOR_SECONDS_PER_FRAME)
+
+
+def test_per_frame_cost_overhead_depends_on_target_not_crop():
+    # Same crop, two different target resolutions -> different cost, entirely from the overhead
+    # term (the T11370 finding this task calibrated: fixed overhead scales with OUTPUT target
+    # size, which the pre-T11370 formula couldn't represent at all).
+    small_target = per_frame_cost(540, 960, *TARGET_916)
+    max_target = per_frame_cost(540, 960, *TARGET_MAX)
+    assert max_target > small_target
+    assert (max_target - small_target) == pytest.approx(
+        OVERHEAD_PER_TARGET_PIXEL * (TARGET_MAX[0] * TARGET_MAX[1] - TARGET_916[0] * TARGET_916[1])
+    )
 
 
 def test_per_frame_cost_rejects_missing_dims():
-    # No silent fallback: a missing/zero dim is an internal-data bug, fail loudly.
-    for bad in [(0, 365), (205, 0), (None, 365), (205, None), (-5, 365)]:
+    # No silent fallback: a missing/zero dim (crop OR target) is an internal-data bug, fail loud.
+    for bad_crop in [(0, 365), (205, 0), (None, 365), (205, None), (-5, 365)]:
         with pytest.raises(ValueError):
-            per_frame_cost(*bad)
+            per_frame_cost(*bad_crop, *TARGET_916)
+    for bad_target in [(0, 1440), (810, 0), (None, 1440), (810, None), (-5, 1440)]:
+        with pytest.raises(ValueError):
+            per_frame_cost(410, 730, *bad_target)
 
 
 def test_estimate_total_gpu_seconds_is_sum():
     specs = [(30, 205, 365), (60, 410, 730)]
-    expected = 30 * per_frame_cost(205, 365) + 60 * per_frame_cost(410, 730)
-    assert estimate_total_gpu_seconds(specs) == pytest.approx(expected)
+    expected = (
+        30 * per_frame_cost(205, 365, *TARGET_916)
+        + 60 * per_frame_cost(410, 730, *TARGET_916)
+    )
+    assert estimate_total_gpu_seconds(specs, *TARGET_916) == pytest.approx(expected)
+
+
+def test_estimate_export_cost_includes_measured_fixed_overheads():
+    # Reviewer catch (2026-10-02): the in-loop per_frame_cost formula alone does NOT capture the
+    # measured per-clip (extract/encode) and per-job (cold start/model load/concat/upload) costs
+    # -- the pre-T11370 formula's systematic overestimate had accidentally been absorbing these.
+    # PER_CLIP_OVERHEAD_SECONDS must land on EVERY clip (ceil'd in with its per-frame cost);
+    # PER_JOB_OVERHEAD_SECONDS must land exactly ONCE on the export total, never per clip (that
+    # would double-count it and wrongly inflate the "biggest contributors" popup per clip).
+    clips = [_default_916_clip(i, duration=5.0) for i in range(3)]
+    est = estimate_export_cost(clips, target_fps=30, target_width=TARGET_916[0], target_height=TARGET_916[1])
+    bare_total = sum(
+        math.ceil(c.frame_count * per_frame_cost(c.crop_width, c.crop_height, *TARGET_916))
+        for c in est.per_clip
+    )
+    assert est.estimated_gpu_seconds == pytest.approx(
+        bare_total + 3 * PER_CLIP_OVERHEAD_SECONDS + PER_JOB_OVERHEAD_SECONDS, abs=3.0
+    )
+    # Each per-clip figure already carries its own PER_CLIP_OVERHEAD_SECONDS share (not the
+    # per-job share, which is export-total-only).
+    for c in est.per_clip:
+        bare_clip = math.ceil(c.frame_count * per_frame_cost(c.crop_width, c.crop_height, *TARGET_916))
+        assert c.estimated_gpu_seconds >= bare_clip + PER_CLIP_OVERHEAD_SECONDS - 1.0
+
+
+def test_estimate_export_cost_no_job_overhead_when_no_clips_counted():
+    # An export where every clip is excluded (all-empty-keyframes) must estimate exactly 0, not
+    # PER_JOB_OVERHEAD_SECONDS for a job that was never actually going to dispatch any GAN work.
+    est = estimate_export_cost(
+        [{"clipIndex": 0, "duration": 5.0, "cropKeyframes": []}],
+        target_fps=30, target_width=TARGET_916[0], target_height=TARGET_916[1],
+    )
+    assert est.estimated_gpu_seconds == 0
 
 
 def test_bug58p_estimate_is_over_budget():
-    est = estimate_export_cost(_bug58p_clips(), target_fps=30)
+    est = estimate_export_cost(_bug58p_clips(), target_fps=30, target_width=TARGET_MAX[0], target_height=TARGET_MAX[1])
     assert est.over_budget is True
-    # Sanity: a 14x1080p export is well over the 2880s budget. At the measured anchor
-    # a full 1080p frame costs 4x0.681s; 14 clips x ~170 frames each ~= 6.5k GPU-s.
+    # Sanity: a 14x1080p export is well over the 2880s budget (T11370-calibrated estimate is
+    # LOWER than the old uncalibrated E6-anchor estimate would have given -- see module
+    # docstring -- but still ~1.6x the budget).
     assert est.estimated_gpu_seconds > GPU_SECONDS_BUDGET
-    assert est.estimated_gpu_seconds > 5_000
+    assert est.estimated_gpu_seconds > 4_000
     # Biggest contributors are sorted largest-first and name the clips.
     assert est.per_clip[0].estimated_gpu_seconds >= est.per_clip[-1].estimated_gpu_seconds
     assert est.per_clip[0].crop_width == 1920
@@ -110,14 +172,14 @@ def test_bug58p_estimate_is_over_budget():
 def test_normal_export_is_within_budget():
     # 3 short clips at the default 9:16 crop -- the everyday case.
     clips = [_default_916_clip(i, duration=5.0) for i in range(3)]
-    est = estimate_export_cost(clips, target_fps=30)
+    est = estimate_export_cost(clips, target_fps=30, target_width=TARGET_916[0], target_height=TARGET_916[1])
     assert est.over_budget is False
     assert est.estimated_gpu_seconds < GPU_SECONDS_BUDGET
 
 
 def test_enforce_budget_raises_structured_for_bug58p():
     with pytest.raises(ExportBudgetExceeded) as ei:
-        enforce_export_budget(_bug58p_clips(), target_fps=30)
+        enforce_export_budget(_bug58p_clips(), target_fps=30, target_width=TARGET_MAX[0], target_height=TARGET_MAX[1])
     detail = ei.value.estimate.to_error_detail()
     assert detail["code"] == "export_too_large"
     assert detail["estimated_gpu_seconds"] > detail["budget_seconds"]
@@ -132,8 +194,18 @@ def test_enforce_budget_raises_structured_for_bug58p():
 
 def test_enforce_budget_passes_normal_export():
     clips = [_default_916_clip(i, duration=5.0) for i in range(3)]
-    est = enforce_export_budget(clips, target_fps=30)  # must NOT raise
+    est = enforce_export_budget(clips, target_fps=30, target_width=TARGET_916[0], target_height=TARGET_916[1])  # must NOT raise
     assert est.over_budget is False
+
+
+def test_enforce_budget_target_resolution_changes_the_decision():
+    # T11370 finding: the SAME clips can be within budget at a small target and over budget at
+    # the max target, because the fixed per-frame overhead scales with the OUTPUT target, not
+    # the crop. This is the behavior the pre-T11370 formula could not represent at all.
+    clips = [_full_frame_clip(i, duration=180.0) for i in range(10)]
+    est_small = estimate_export_cost(clips, target_fps=30, target_width=TARGET_916[0], target_height=TARGET_916[1])
+    est_max = estimate_export_cost(clips, target_fps=30, target_width=TARGET_MAX[0], target_height=TARGET_MAX[1])
+    assert est_max.estimated_gpu_seconds > est_small.estimated_gpu_seconds
 
 
 def test_estimate_fails_loud_on_broken_keyframe_dims():
@@ -141,7 +213,7 @@ def test_estimate_fails_loud_on_broken_keyframe_dims():
     with pytest.raises(ValueError):
         estimate_export_cost(
             [{"clipIndex": 0, "duration": 5.0, "cropKeyframes": [{"x": 0, "y": 0}]}],
-            target_fps=30,
+            target_fps=30, target_width=TARGET_916[0], target_height=TARGET_916[1],
         )
 
 
@@ -153,7 +225,7 @@ def test_empty_keyframes_are_skipped_not_crashed():
         {"clipIndex": 0, "duration": 5.0, "cropKeyframes": []},   # skipped (no keyframes)
         _full_frame_clip(1, duration=200.0),                      # counted, huge -> over budget
     ]
-    est = estimate_export_cost(clips, target_fps=30)
+    est = estimate_export_cost(clips, target_fps=30, target_width=TARGET_MAX[0], target_height=TARGET_MAX[1])
     assert [c.clip_index for c in est.per_clip] == [1]  # only the keyframed clip is counted
     assert est.over_budget is True
 
@@ -162,7 +234,8 @@ def test_all_empty_keyframes_estimate_is_zero_and_passes():
     # An all-empty-keyframes export estimates 0 (nothing bounded) and is NOT rejected --
     # the guard never blocks a valid no-crop export just because it can't size it.
     est = estimate_export_cost(
-        [{"clipIndex": 0, "duration": 5.0, "cropKeyframes": []}], target_fps=30
+        [{"clipIndex": 0, "duration": 5.0, "cropKeyframes": []}],
+        target_fps=30, target_width=TARGET_916[0], target_height=TARGET_916[1],
     )
     assert est.per_clip == []
     assert est.estimated_gpu_seconds == 0
@@ -171,7 +244,10 @@ def test_all_empty_keyframes_estimate_is_zero_and_passes():
 
 def test_clip_frame_count_rounds_up():
     # 79/14 s * 30 fps = 169.28 -> ceil 170 frames per clip (conservative).
-    est = estimate_export_cost([_full_frame_clip(0, duration=79.0 / 14)], target_fps=30)
+    est = estimate_export_cost(
+        [_full_frame_clip(0, duration=79.0 / 14)],
+        target_fps=30, target_width=TARGET_MAX[0], target_height=TARGET_MAX[1],
+    )
     assert est.per_clip[0].frame_count == math.ceil((79.0 / 14) * 30)
 
 
@@ -191,7 +267,10 @@ def _trimmed_clip(clip_index, raw_duration, trim_start, trim_end, w=410, h=730):
 def test_estimate_uses_trimmed_not_raw_duration():
     # A 12s raw clip trimmed to [2,6] (4s): the GAN only processes the 4s trim range, not the
     # full 12s. Frame count must reflect the TRIMMED length. (M1 regression.)
-    est = estimate_export_cost([_trimmed_clip(0, raw_duration=12.0, trim_start=2.0, trim_end=6.0)], 30)
+    est = estimate_export_cost(
+        [_trimmed_clip(0, raw_duration=12.0, trim_start=2.0, trim_end=6.0)],
+        30, *TARGET_916,
+    )
     assert est.per_clip[0].frame_count == math.ceil(4.0 * 30)  # 120, from 4s not 12s
     # And NOT the raw-length count that the bug produced.
     assert est.per_clip[0].frame_count != math.ceil(12.0 * 30)
@@ -202,13 +281,13 @@ def test_trimmed_batch_not_falsely_rejected():
     # default 9:16 crop). Real GAN work is the trimmed length -> within budget. Counting the raw
     # 12s (the M1 bug) would push the same normal export over budget and wrongly reject it.
     trimmed = [_trimmed_clip(i, raw_duration=12.0, trim_start=0.0, trim_end=4.0) for i in range(25)]
-    assert estimate_export_cost(trimmed, 30).over_budget is False
+    assert estimate_export_cost(trimmed, 30, *TARGET_916).over_budget is False
     raw_counted = [
         {"clipIndex": i, "duration": 12.0,
          "cropKeyframes": [{"width": 410, "height": 730}]}
         for i in range(25)
     ]
-    assert estimate_export_cost(raw_counted, 30).over_budget is True  # the bug's behavior
+    assert estimate_export_cost(raw_counted, 30, *TARGET_916).over_budget is True  # the bug's behavior
 
 
 def test_no_segments_uses_full_raw_length():
@@ -216,7 +295,7 @@ def test_no_segments_uses_full_raw_length():
     est = estimate_export_cost(
         [{"clipIndex": 0, "duration": 10.0, "segments": None,
           "cropKeyframes": [{"width": 410, "height": 730}]}],
-        30,
+        30, *TARGET_916,
     )
     assert est.per_clip[0].frame_count == math.ceil(10.0 * 30)
 
@@ -229,7 +308,7 @@ def test_zero_or_missing_duration_fails_loud():
             estimate_export_cost(
                 [{"clipIndex": 0, "duration": bad,
                   "cropKeyframes": [{"width": 410, "height": 730}]}],
-                30,
+                30, *TARGET_916,
             )
 
 
