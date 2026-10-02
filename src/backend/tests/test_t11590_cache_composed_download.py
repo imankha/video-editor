@@ -25,11 +25,22 @@ ever exercise the other. These patch `get_download_file_url` (skips the real
 presign/HEAD-verify) and `httpx.AsyncClient` (a fake async context manager /
 streaming response standing in for the real R2 GET) so the cache HEAD/download/
 upload calls -- the thing actually under test -- still run for real.
+
+Section 6 proves the T11590 gap-3 fix: the write-after-build runs as a
+DETACHED `asyncio.Task` (never awaited by the request handler), so an R2 PUT
+can never block the first byte -- a cache MISS must never be slower than the
+pre-T11590 behavior. Since the background task may still be running on
+TestClient's own portal thread/event loop after `client.get()` returns, `_get()`
+below drains pending background tasks (polls `_BACKGROUND_CACHE_WRITE_TASKS`)
+after every call so the rest of the suite observes a SETTLED cache state
+before asserting on it, exactly like a real caller would see eventual (not
+immediate) consistency.
 """
 
 import asyncio
 import sqlite3
 import threading
+import time
 from contextlib import ExitStack
 from unittest.mock import patch
 
@@ -126,12 +137,15 @@ def _write_local_final_video(filename: str, content: bytes = b"ORIGINAL"):
 
 def _install_cached_pipeline(stack, store, counters, *, barrier=None,
                               compose_bytes=b"COMPOSED", compose_full_fidelity=True,
-                              field_values=None):
+                              field_values=None, upload_hook=None):
     """Patch the compose engine with a COUNTING stub and the R2 cache boundary
     with an in-memory `store` dict (key -> bytes). `counters` tracks how many
     times the heavy compose actually ran, so a cache hit is provable by the
     count NOT advancing. `barrier` forces two concurrent composes to overlap
-    for the race test."""
+    for the race test. `upload_hook(key, local_path)`, when supplied, runs
+    BEFORE `store` is populated -- used to simulate an artificially slow R2
+    PUT (e.g. blocking on a `threading.Event`) for the background-write
+    proof, without changing the eventual (store IS populated) outcome."""
     def _head_global(key):
         return {"ContentLength": len(store[key])} if key in store else None
 
@@ -143,6 +157,8 @@ def _install_cached_pipeline(stack, store, counters, *, barrier=None,
         return True
 
     def _upload_file_global(key, local_path, content_type=None):
+        if upload_hook is not None:
+            upload_hook(key, local_path)
         with open(local_path, "rb") as f:
             store[key] = f.read()
         return True
@@ -184,8 +200,28 @@ def _install_cached_pipeline(stack, store, counters, *, barrier=None,
     stack.enter_context(patch("app.routers.downloads._stamp_download", _stamp))
 
 
+def _drain_background_cache_writes(timeout=2.0, interval=0.02):
+    """Block until no T11590 background cache-write task is pending, or
+    `timeout` elapses. The write-after-build runs as a detached `asyncio.Task`
+    (gap 3) possibly on TestClient's own portal thread/event loop, so a plain
+    `time.sleep` poll on the module-level task-tracking set (not a direct
+    `await`, which would need to run on that same loop) is how a DIFFERENT
+    thread observes it settle."""
+    from app.routers import downloads as downloads_module
+    deadline = time.monotonic() + timeout
+    while downloads_module._BACKGROUND_CACHE_WRITE_TASKS and time.monotonic() < deadline:
+        time.sleep(interval)
+
+
 def _get(client, download_id):
-    return client.get(f"/api/downloads/{download_id}/file", headers=_auth_headers())
+    """Drains pending background cache-write tasks after every call, so the
+    rest of a test observes a SETTLED cache state -- both so a hit-after-miss
+    assertion isn't racing its own prior write, and so a slow-finishing
+    background task never leaks execution past the `ExitStack` block whose
+    patches it depends on."""
+    resp = client.get(f"/api/downloads/{download_id}/file", headers=_auth_headers())
+    _drain_background_cache_writes()
+    return resp
 
 
 # ===========================================================================
@@ -462,7 +498,15 @@ def test_concurrent_uncached_requests_dont_corrupt_output(client):
         set_current_user_id(USER_ID)
         set_current_profile_id(PROFILE_ID)
         r1, r2 = await asyncio.gather(download_file(fv_id), download_file(fv_id))
-        return await asyncio.gather(_consume(r1), _consume(r2))
+        bodies = await asyncio.gather(_consume(r1), _consume(r2))
+        # The write-after-build is now a detached background task (gap 3) --
+        # same event loop as this coroutine, so awaiting it directly (not
+        # polling) is both possible and precise.
+        from app.routers import downloads as downloads_module
+        pending = list(downloads_module._BACKGROUND_CACHE_WRITE_TASKS)
+        if pending:
+            await asyncio.gather(*pending)
+        return bodies
 
     with ExitStack() as stack:
         _install_cached_pipeline(stack, store, counters, barrier=barrier)
@@ -521,3 +565,115 @@ def test_r2_source_degraded_compose_is_not_cached(client):
         assert store == {}, "a degraded (not full-fidelity) compose must NOT poison the cache"
         assert _get(client, fv_id).status_code == 200
         assert counters["compose"] == 2, "degraded output was not cached -> a fresh build"
+
+
+# ===========================================================================
+# 6. GAP 3: the write-after-build runs in the BACKGROUND -- an R2 PUT must
+#    never block the response. A live-measured real-R2 regression found the
+#    ORIGINAL synchronous write made a cache MISS (including a first-ever
+#    share/download) slower than the pre-T11590 behavior. Proven here by
+#    mocking `upload_file_to_r2_global` to block on a `threading.Event`
+#    (simulating an artificially slow R2 PUT, which blocks a thread-pool
+#    thread via `asyncio.to_thread`, never the event loop) and asserting the
+#    full streamed response completes WITHOUT waiting for it, then that the
+#    cache object still lands once the upload is allowed to proceed.
+# ===========================================================================
+
+def test_background_cache_write_does_not_block_streaming_local_branch(client):
+    """Local-disk source branch (`_stream_composed_local`)."""
+    from app.profile_context import set_current_profile_id
+    from app.routers import downloads as downloads_module
+    from app.routers.downloads import download_file
+    from app.user_context import set_current_user_id
+
+    db = _db_path()
+    fv_id, filename = _seed_final_video(db)
+    _write_local_final_video(filename)
+
+    store, counters = {}, {"compose": 0}
+    upload_started = threading.Event()
+    upload_may_finish = threading.Event()
+
+    def _slow_upload(key, local_path):
+        upload_started.set()
+        # Blocks a THREAD-POOL thread (asyncio.to_thread), never the event
+        # loop driving the response -- the whole point under test.
+        assert upload_may_finish.wait(timeout=5), "test harness: never unblocked"
+
+    async def _run():
+        set_current_user_id(USER_ID)
+        set_current_profile_id(PROFILE_ID)
+        t0 = time.monotonic()
+        resp = await download_file(fv_id)
+        body = b"".join([c async for c in resp.body_iterator])
+        elapsed = time.monotonic() - t0
+
+        assert upload_started.is_set(), "the background write must have started"
+        assert elapsed < 1.0, (
+            f"streaming must not wait for the background cache write "
+            f"(took {elapsed:.2f}s; the mocked upload blocks for up to 5s)"
+        )
+        assert body == b"COMPOSED"
+        assert store == {}, "the cache write has not completed yet -- still blocked"
+
+        # Let the artificially slow upload proceed, then await it on THIS
+        # SAME loop -- asyncio.run() cancels any task still pending when its
+        # coroutine returns, so it must be drained here, not after.
+        upload_may_finish.set()
+        pending = list(downloads_module._BACKGROUND_CACHE_WRITE_TASKS)
+        if pending:
+            await asyncio.gather(*pending)
+
+    with ExitStack() as stack:
+        _install_cached_pipeline(stack, store, counters, upload_hook=_slow_upload)
+        asyncio.run(_run())
+
+    assert store, "the cache write eventually completes in the background"
+
+
+def test_background_cache_write_does_not_block_streaming_r2_source_branch(client):
+    """Production `R2_ENABLED=True` source branch (`_stream_composed_r2`) --
+    the local-disk branch above never exercises this branch's OWN
+    independent write-after-build call."""
+    from app.profile_context import set_current_profile_id
+    from app.routers import downloads as downloads_module
+    from app.routers.downloads import download_file
+    from app.user_context import set_current_user_id
+
+    db = _db_path()
+    fv_id, _filename = _seed_final_video(db)
+
+    store, counters = {}, {"compose": 0}
+    upload_started = threading.Event()
+    upload_may_finish = threading.Event()
+
+    def _slow_upload(key, local_path):
+        upload_started.set()
+        assert upload_may_finish.wait(timeout=5), "test harness: never unblocked"
+
+    async def _run():
+        set_current_user_id(USER_ID)
+        set_current_profile_id(PROFILE_ID)
+        t0 = time.monotonic()
+        resp = await download_file(fv_id)
+        body = b"".join([c async for c in resp.body_iterator])
+        elapsed = time.monotonic() - t0
+
+        assert upload_started.is_set(), "the background write must have started"
+        assert elapsed < 1.0, (
+            f"streaming must not wait for the background cache write "
+            f"(took {elapsed:.2f}s; the mocked upload blocks for up to 5s)"
+        )
+        assert body == b"COMPOSED"
+        assert store == {}, "the cache write has not completed yet -- still blocked"
+
+        upload_may_finish.set()
+        pending = list(downloads_module._BACKGROUND_CACHE_WRITE_TASKS)
+        if pending:
+            await asyncio.gather(*pending)
+
+    with ExitStack() as stack:
+        _install_r2_source_pipeline(stack, store, counters, upload_hook=_slow_upload)
+        asyncio.run(_run())
+
+    assert store, "the cache write eventually completes in the background"

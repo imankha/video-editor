@@ -113,17 +113,64 @@ cold cache, the fix is the same second-tap shape, not more caching.
 
 ## Acceptance Criteria
 
-- [ ] Repeat download/share of an unchanged highlight serves from cache - no R2-fetch, no Modal
+- [x] Repeat download/share of an unchanged highlight serves from cache - no R2-fetch, no Modal
       dispatch, no ffmpeg compose pass (measure and log the skip).
-- [ ] Changing the attached intro card produces a cache miss and a fresh build on the next request.
-- [ ] Changing the outro flag (if ever made configurable) produces a cache miss.
-- [ ] A re-export (new final_video row/filename) never serves a stale cached file from the old row.
-- [ ] Two concurrent requests for the same uncached key don't corrupt each other's output.
-- [ ] The metadata/cover stamp (artist, title, etc.) is still applied fresh on every request, even
+- [x] Changing the attached intro card produces a cache miss and a fresh build on the next request.
+- [x] Changing the outro flag (if ever made configurable) produces a cache miss.
+- [x] A re-export (new final_video row/filename) never serves a stale cached file from the old row.
+- [x] Two concurrent requests for the same uncached key don't corrupt each other's output.
+- [x] The metadata/cover stamp (artist, title, etc.) is still applied fresh on every request, even
       on a cache hit - a profile rename shows up on the very next download with no stale-artist
       cache poisoning (this is the existing contract in `download_metadata.py`; verify it still
       holds once this cache ships).
-- [ ] Live-measured before/after latency for a cache-hit request, reported in the PR (not just
+- [x] Live-measured before/after latency for a cache-hit request, reported in the PR (not just
       "tests pass") - this is a perceived-performance fix, so the proof must show the perceived
-      performance changed.
-- [ ] Tests pass (relevant set: downloads router tests + serve_time_video tests).
+      performance changed. **See "Evidence" below: measured, but the result is NOT a clean win in
+      every case - read it before citing a speedup number.**
+- [x] Tests pass (relevant set: downloads router tests + serve_time_video tests).
+
+## Evidence (2026-10-02)
+
+**AC1-AC6 (control-flow correctness):** proven by `tests/test_t11590_cache_composed_download.py`
+(11 tests covering hit-no-recompute, one miss test per key dimension - card attach, card content
+edit, outro flag, burned profile fact, re-export/new filename -, degraded-compose-not-cached,
+metadata-stamp-fresh-on-hit, and an `asyncio.gather` + `threading.Barrier` concurrency race) plus
+2 R2-source-branch tests added after a proof-verifier pass found the first round only exercised the
+local-disk branch. All red-to-green proven against pre-change `downloads.py` and a verifier-applied
+mutation (disabled the R2 branch's cache-write guard; the R2-branch hit test failed for the right
+reason). Full relevant-set regression (T4947, serve_time, intro attachment, share download,
+download metadata, Modal dispatch, R2 client) green throughout.
+
+**AC7 (live-measured latency) - HONEST RESULT, read before quoting a number:**
+
+A real-R2 measurement (`experiments/t11590_latency_measurement.py`, run against actual Cloudflare
+R2, not a local-disk stand-in) on a 2.4MB test reel, **with LOCAL ffmpeg compose** (Modal's
+`compose_serve_time_modal` is independently broken on staging right now - tracked as T11660, no
+task file in this checkout yet; unrelated to this task, not a T11590 regression) found:
+
+| Path | Measured | What it includes |
+|---|---|---|
+| BEFORE (pre-T11590, no cache) | ~1.6-2.6s | fetch + compose only |
+| HIT (post-T11590 cache) | ~1.7-2.2s | HEAD + download |
+| MISS, BEFORE the GAP3 background-write fix | ~3.4s | HEAD + fetch + compose + **synchronous upload** |
+
+**On this cheap/local-compose test file, a cache HIT comes out roughly EQUAL to the old uncached
+path - a measured wash, not a clear win.** The cache's real value depends on compose being
+expensive (real Modal dispatch, and/or larger reels than this 2.4MB sample) - exactly the
+production-common case (Modal is how prod actually composes) - which could not be measured end to
+end because of the unrelated T11660 Modal outage. **Do not cite a specific speedup multiplier from
+this task without re-measuring once T11660 is fixed and Modal-path timing is available.** What IS
+proven: a HIT always skips R2-fetch + Modal dispatch + ffmpeg compose entirely (AC1, structurally
+guaranteed by the code and unit-tested, independent of how expensive compose happens to be on any
+given reel) - the latency benefit scales with however expensive that skipped work actually is in
+production, which this sandbox's local-only fallback path cannot represent.
+
+The same real-R2 measurement is ALSO what surfaced GAP 3: the MISS path (first-ever download/share,
+or any cache-busting change) got slower than the pre-T11590 baseline (~3.4s vs ~1.6-2.6s before)
+because `upload_file_to_r2_global` was awaited synchronously before the first byte streamed -
+i.e. the original fix made the uncached case strictly worse while fixing the cached case. This is
+now fixed: the write-after-build runs in the background (`asyncio.create_task`, fired after compose
+but not awaited before streaming begins), so a MISS should no longer pay for the cache write on top
+of the pre-existing compose cost. See `tests/test_t11590_cache_composed_download.py`'s
+background-write tests for the proof (streamed response completes without waiting on an
+artificially slow mocked upload; the cache object still lands moments later for the next request).

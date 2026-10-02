@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -753,6 +754,74 @@ def _stream_cache_hit_and_cleanup(path: str, cleanup_dir: str):
     return _gen()
 
 
+# ---- write-after-build runs in the BACKGROUND (T11590 gap 3) ---------------
+# A live-measured regression: the ORIGINAL write-after-build awaited
+# `upload_file_to_r2_global` synchronously, before `_stamp_download` and
+# before the first streamed byte -- so every MISS (including a first-ever
+# share/download, the exact case the "Share took too long" complaint was
+# about) paid for an extra R2 PUT on top of compose, making the uncached path
+# STRICTLY SLOWER than before this cache existed. A cache MISS must never be
+# slower than the pre-T11590 behavior.
+#
+# Fix: the upload runs as a detached `asyncio.Task`, created but never
+# awaited by the request handler, so it cannot block the response. The ONE
+# subtlety: the file being uploaded (`serve_path`) lives inside the request's
+# own `tmp_dir`, which the generator's `finally` tears down as soon as
+# stamping+streaming finishes -- a finish that can easily race a slower
+# network upload. Rather than make that teardown conditional (fragile -- two
+# code paths would now need to agree on who owns cleanup), this SYNCHRONOUSLY
+# copies the file into its OWN independent tempdir FIRST (fast local
+# disk-to-disk I/O, not the slow network PUT) before scheduling the
+# background task, so the task's lifetime is fully decoupled from the
+# request's `tmp_dir` and can never race its teardown. The request handler
+# awaits only the cheap copy, never the upload.
+_BACKGROUND_CACHE_WRITE_TASKS: set[asyncio.Task] = set()
+
+
+async def _copy_for_background_cache_write(serve_path: str) -> tuple[str, str]:
+    """Synchronously (but off-loop, via `asyncio.to_thread`) copies
+    `serve_path` into a fresh independent tempdir, returning
+    `(copy_path, copy_dir)`. Awaited by the request handler BEFORE scheduling
+    the background upload task, so the copy is guaranteed complete while
+    `serve_path`'s own `tmp_dir` is still guaranteed alive -- the background
+    task then only ever touches its OWN `copy_dir`, never the caller's."""
+    copy_dir = tempfile.mkdtemp(prefix="rb_dl_cache_write_")
+    copy_path = os.path.join(copy_dir, "cache_write.mp4")
+    await asyncio.to_thread(shutil.copyfile, serve_path, copy_path)
+    return copy_path, copy_dir
+
+
+async def _background_cache_write(cache_key: str, copy_path: str, copy_dir: str) -> None:
+    """Uploads the ALREADY-COPIED file (see `_copy_for_background_cache_write`)
+    to the disposable cache key in the background. Fired via
+    `asyncio.create_task` and never awaited by the request handler, so the R2
+    PUT never blocks the first byte. Best-effort: a failure is logged and
+    swallowed, same contract as the original synchronous write -- it must
+    never surface to a client that already received its bytes. Owns + cleans
+    up `copy_dir` -- independent of the request's own `tmp_dir`."""
+    try:
+        await asyncio.to_thread(
+            upload_file_to_r2_global, cache_key, Path(copy_path), content_type="video/mp4",
+        )
+    except Exception:
+        logger.warning(f"[Download] cache write failed (non-fatal): {cache_key}")
+    finally:
+        shutil.rmtree(copy_dir, ignore_errors=True)
+
+
+async def _spawn_background_cache_write(cache_key: str, serve_path: str) -> None:
+    """Call site for both the R2-source and local-source branches: copy then
+    schedule (never await the upload itself). Keeps a reference to the
+    created `Task` in a module-level set (and detaches on completion) --
+    without this, nothing else references the task and it can be garbage
+    collected mid-flight (a documented asyncio footgun for fire-and-forget
+    tasks)."""
+    copy_path, copy_dir = await _copy_for_background_cache_write(serve_path)
+    task = asyncio.create_task(_background_cache_write(cache_key, copy_path, copy_dir))
+    _BACKGROUND_CACHE_WRITE_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_CACHE_WRITE_TASKS.discard)
+
+
 def _stamp_download(
     serve_path: str, tmp_dir: str, meta: dict,
     user_id: str, profile_id: str,
@@ -970,22 +1039,19 @@ async def download_file(download_id: int):
                             intro.cleanup()
 
                     # ---- write-after-build: populate the disposable cache
-                    # (best-effort, T11590). Only a FULL-FIDELITY compose is
-                    # cached -- a transient intro/outro/concat degradation
-                    # streams to THIS caller but must not freeze degraded bytes
-                    # into the cache (no self-heal otherwise). An R2 object PUT
-                    # is atomic and each concurrent request streams its OWN
-                    # freshly-built `serve_path`, so two concurrent uncached
-                    # requests for the same key can race the write but never
-                    # corrupt either caller's bytes.
+                    # IN THE BACKGROUND (best-effort, T11590; backgrounded per
+                    # gap 3 -- see `_spawn_background_cache_write`'s docstring,
+                    # a MISS must never pay for the R2 PUT before its first
+                    # byte). Only a FULL-FIDELITY compose is cached -- a
+                    # transient intro/outro/concat degradation streams to THIS
+                    # caller but must not freeze degraded bytes into the cache
+                    # (no self-heal otherwise). An R2 object PUT is atomic and
+                    # each concurrent request streams its OWN freshly-built
+                    # `serve_path`, so two concurrent uncached requests for the
+                    # same key can race the write but never corrupt either
+                    # caller's bytes.
                     if compose_report.get("full_fidelity"):
-                        try:
-                            await asyncio.to_thread(
-                                upload_file_to_r2_global, cache_key, Path(serve_path),
-                                content_type="video/mp4",
-                            )
-                        except Exception:
-                            logger.warning(f"[Download] cache write failed (non-fatal): {cache_key}")
+                        await _spawn_background_cache_write(cache_key, serve_path)
                     else:
                         logger.info(
                             f"[Download] compose degraded (not full fidelity); "
@@ -1044,17 +1110,12 @@ async def download_file(download_id: int):
                     if intro is not None:
                         intro.cleanup()
 
-                # ---- write-after-build: populate the disposable cache
-                # (best-effort, T11590) -- same full-fidelity-only gate and
-                # concurrency reasoning as the R2 branch above.
+                # ---- write-after-build: populate the disposable cache IN THE
+                # BACKGROUND (best-effort, T11590) -- same full-fidelity-only
+                # gate, concurrency reasoning, and background-write rationale
+                # as the R2 branch above.
                 if compose_report.get("full_fidelity"):
-                    try:
-                        await asyncio.to_thread(
-                            upload_file_to_r2_global, cache_key, Path(serve_path),
-                            content_type="video/mp4",
-                        )
-                    except Exception:
-                        logger.warning(f"[Download] cache write failed (non-fatal): {cache_key}")
+                    await _spawn_background_cache_write(cache_key, serve_path)
                 else:
                     logger.info(
                         f"[Download] compose degraded (not full fidelity); "
