@@ -54,7 +54,7 @@ function Harness() {
   };
 
   return (
-    <div style={{ margin: 0, padding: 0, background: '#0b1220', minHeight: '100vh' }}>
+    <div style={{ margin: 0, padding: 0, background: '#0b1220', minHeight: '100dvh' }}>
       <div
         data-testid="stage"
         style={{

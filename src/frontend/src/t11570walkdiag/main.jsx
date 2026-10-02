@@ -121,7 +121,7 @@ function Harness() {
     Math.abs(clickedDetection.timestamp - marker.time) < 0.01;
 
   return (
-    <div style={{ margin: 0, padding: 24, background: '#0b1220', minHeight: '100vh', color: '#e5e7eb', fontFamily: 'sans-serif' }}>
+    <div style={{ margin: 0, padding: 24, background: '#0b1220', minHeight: '100dvh', color: '#e5e7eb', fontFamily: 'sans-serif' }}>
       <h1 style={{ fontSize: 16 }}>T11570 guided-pick walk — live-drive harness</h1>
 
       {/* The guide pill floats top-4 and can grow to ~110px tall (sub-line +
