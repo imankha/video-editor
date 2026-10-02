@@ -38,6 +38,10 @@ import { collectionIntroKey } from './introBadgeKey';
  * @param {Function=} onCopyLink    - (definition) => void
  * @param {Function=} onIntro       - (definition, title) => void, the collection's OWN intro (T5215 round 2)
  * @param {Object=} introBadgesByKey - {key: {intro_card_id, intro_card_name}}, batch-resolved (T5215 round 6)
+ * @param {number=} highlightId     - (T11580) a member id to ring + mark NEW -- the just-published
+ *                                     spotlight's own tile, ties the spotlight card to its tile in
+ *                                     this group so the user learns where it lives after dismissing
+ *                                     the card. Independent of `defaultExpanded` (T8990 landmine).
  */
 export function GameCollectionGroup({
   name,
@@ -55,6 +59,7 @@ export function GameCollectionGroup({
   onDownload,
   introBadgesByKey = {},
   fillerSlot = null,
+  highlightId,
 }) {
   const ratioCounts = collection.ratio_counts || {};
   const ratioDurations = collection.ratio_durations || {};
@@ -98,6 +103,29 @@ export function GameCollectionGroup({
   const membersFor = (ratio) => membersByRatio[ratio] || [];
   const loadingMembers = memberState === 'loading' || memberState === undefined;
 
+  // T11580: ring + NEW-badge the just-published highlight's own tile, without
+  // reaching into ReelTile's internals -- renderCard is an opaque (download) =>
+  // ReactNode the panel owns. The ring (box-shadow) and badge (absolutely
+  // positioned) add no layout size, so this wrapper doesn't perturb
+  // CardCarousel's tile-width measurements (computeGap/computeFiller read
+  // offsetWidth, which box-shadow/absolute children never contribute to).
+  const renderMember = (d) => {
+    const card = renderCard(d);
+    if (highlightId == null || d.id !== highlightId) return card;
+    return (
+      <div
+        key={d.id}
+        data-testid="just-published-tile-ring"
+        className="relative shrink-0 snap-start rounded-lg ring-2 ring-offset-2 ring-offset-gray-900 ring-cyan-400"
+      >
+        {card}
+        <span className="absolute -top-2 -right-2 z-30 px-1.5 py-0.5 rounded-full bg-cyan-500 text-black text-[10px] font-bold shadow">
+          NEW
+        </span>
+      </div>
+    );
+  };
+
   return (
     <CollapsibleGroup
       title={name}
@@ -137,7 +165,7 @@ export function GameCollectionGroup({
                   // only (the tab's first row, passed only to the first group).
                   fillerSlot={ratioIdx === 0 ? fillerSlot : null}
                 >
-                  {membersFor(ratio).map((d) => renderCard(d))}
+                  {membersFor(ratio).map((d) => renderMember(d))}
                 </CardCarousel>
               )
             : loadingMembers && (
@@ -161,7 +189,7 @@ export function GameCollectionGroup({
             ratio={ratio}
             currentSec={ratioDurations[ratio]}
             reels={members ? membersFor(ratio) : []}
-            renderCard={renderCard}
+            renderCard={renderMember}
           />
         </div>
       ))}

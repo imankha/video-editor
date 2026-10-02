@@ -185,12 +185,32 @@ export function useCollections(isActive = false) {
   // Event-driven refresh: when the published-reels model changes (publish /
   // unpublish dispatches notifyCollectionsChanged), re-fetch while the tab is
   // active so My Reels updates immediately — no reopen/refetch race.
+  // T11600: track every version change (seenVersionRef), but only ACT on it
+  // once isActive is true (refetchPendingRef) -- a bump that arrives while
+  // inactive must survive until activation instead of being silently marked
+  // handled. `collectionsVersion` is not monotonic (galleryStore.reset() zeros
+  // it on profile switch, independent of this hook's lifetime), so a version
+  // comparison alone can false-positive "already seen" across that reset -- a
+  // separate pending flag avoids that ABA hazard entirely. Clearing the member
+  // caches here too: they never refetch once 'ready' (see the T6950 comment
+  // above), so an already-expanded game group would otherwise keep showing a
+  // stale tile list even after the summary itself catches up.
   const collectionsVersion = useGalleryStore((state) => state.collectionsVersion);
   const seenVersionRef = useRef(collectionsVersion);
+  const refetchPendingRef = useRef(false);
   useEffect(() => {
-    if (collectionsVersion === seenVersionRef.current) return;
-    seenVersionRef.current = collectionsVersion;
-    if (isActive) fetchSummary();
+    if (collectionsVersion !== seenVersionRef.current) {
+      seenVersionRef.current = collectionsVersion;
+      refetchPendingRef.current = true;
+    }
+    if (isActive && refetchPendingRef.current) {
+      refetchPendingRef.current = false;
+      fetchSummary();
+      Object.values(memberAbortsRef.current).forEach((c) => c.abort());
+      memberAbortsRef.current = {};
+      setMembers({});
+      setMemberStates({});
+    }
   }, [collectionsVersion, isActive, fetchSummary]);
 
   // Abort everything on unmount.

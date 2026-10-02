@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Loader, AlertCircle } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { EmptyTabGuide, TabGuideHeader } from '../shared/EmptyTabGuide';
@@ -8,8 +8,10 @@ import { GameCollectionGroup } from './GameCollectionGroup';
 import { GameAxisGroup } from './GameAxisGroup';
 import { CollectionCard } from './CollectionCard';
 import { SmartLockedCard } from './SmartLockedCard';
+import { JustPublishedCard } from './JustPublishedCard';
 import { toPlayerReels } from './playerReels';
 import { collectionIntroKey } from './introBadgeKey';
+import { useGalleryStore } from '../../stores/galleryStore';
 
 const MIXES_NAME = 'Mixes & compilations';
 
@@ -41,6 +43,12 @@ const AXIS_LABEL = { game: 'By game', tournament: 'By tournament', month: 'By mo
  * @param {Function=} onIntroCollection - (definition, title) => void, the collection's OWN intro (T5215 round 2)
  * @param {Function=} onDownloadCollection - (definition) => Promise, download the stitched MP4 (T4945)
  * @param {Object=} introBadgesByKey - {key: {intro_card_id, intro_card_name}}, batch-resolved (T5215 round 6)
+ * @param {Function=} buildPosterUrl  - (finalVideoId) => string (T11580, JustPublishedCard poster)
+ * @param {Function=} onPlayReel      - (e, download) => void, SAME handler ReelTile's Play uses (T11580)
+ * @param {Function=} onShareReel     - (e, download) => void, SAME handler ReelTile's Share uses (T11580)
+ * @param {Function=} onCopyReelLink  - (e, download) => void, SAME handler ReelTile's Copy Link uses (T11580)
+ * @param {Function=} onDownloadReel  - (e, download) => void, SAME handler ReelTile's Download uses (T11580)
+ * @param {Function=} formatReelMeta  - (download) => string, "date · duration · game-time" (T11580)
  */
 export function CollectionsTab({
   collections,
@@ -57,12 +65,44 @@ export function CollectionsTab({
   accountGamesCount = 0,
   onNavigateTab,
   onAddGame,
+  // T11580: Just Published spotlight card wiring.
+  buildPosterUrl,
+  onPlayReel,
+  onShareReel,
+  onCopyReelLink,
+  onDownloadReel,
+  formatReelMeta,
 }) {
   const { summary, summaryState, members, memberStates, fetchSummary, fetchMembers } = collections;
 
   // View-only grouping axis for the game section (T5880). Ephemeral toggle
   // state, not persisted -- switching it never writes anything.
   const [groupBy, setGroupBy] = useState(GROUP_BY.GAME);
+
+  // T11580: the just-published spotlight. `justPublished` drives the card AND
+  // the matching tile's ring/NEW badge for its WHOLE lifetime (until dismiss/
+  // replace/profile-switch) -- Decision: "the badge ties card and tile
+  // together so the user learns where it lives after dismissing the card."
+  // Auto-EXPAND is a SEPARATE, consume-once signal (landmine, T8990): forcing
+  // defaultExpanded off `justPublished` staying truthy would re-force the same
+  // group open on every later reopen of this tab, discarding a user's
+  // deliberate collapse -- exactly the bug T8990 fixed. `autoExpandTarget` is
+  // therefore captured ONCE via a lazy useState initializer (this component's
+  // own first mount after the publish -- CollectionsTab unmounts whenever the
+  // Published tab goes inactive, so "first mount" == "first time this tab is
+  // shown since the publish"), then immediately consumed so any later remount
+  // captures `null` and forces nothing.
+  const justPublished = useGalleryStore((state) => state.justPublished);
+  const clearJustPublished = useGalleryStore((state) => state.clearJustPublished);
+  const consumeAutoExpand = useGalleryStore((state) => state.consumeAutoExpand);
+  const [autoExpandTarget] = useState(() => {
+    const { autoExpandPending, justPublished: jp } = useGalleryStore.getState();
+    return autoExpandPending && jp ? { gameId: jp.gameId } : null;
+  });
+  useEffect(() => {
+    consumeAutoExpand();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onPlay = (items, title, definition) => {
     const reels = toPlayerReels(items);
@@ -103,6 +143,10 @@ export function CollectionsTab({
   // A game group is nested from the SAME per-game buckets rendered flat, keyed
   // by id -- no duplicated aggregate data, just a different arrangement.
   const gamesById = new Map(games.map((g) => [g.game_id, g]));
+  // T11580: this game is the justPublished target -- drives the ring/NEW tile
+  // badge for the highlight's WHOLE lifetime (every render), kept separate
+  // from the one-shot auto-expand below (see the autoExpandTarget comment).
+  const isJustPublishedGame = (gameId) => !!justPublished && justPublished.gameId === gameId;
   const renderGameGroup = (g, withFiller = false) => {
     const key = `game:${g.game_id}`;
     return (
@@ -110,7 +154,8 @@ export function CollectionsTab({
         key={key}
         name={g.game_name}
         collection={g}
-        defaultExpanded={false}
+        defaultExpanded={!!autoExpandTarget && autoExpandTarget.gameId === g.game_id}
+        highlightId={isJustPublishedGame(g.game_id) ? justPublished.finalVideoId : undefined}
         members={members[key]}
         memberState={memberStates[key]}
         requestMembers={reqGame(g.game_id)}
@@ -164,6 +209,25 @@ export function CollectionsTab({
       <div className="mb-4 sm:mb-5">
         <TabGuideHeader tab="published" />
       </div>
+      {/* T11580: the just-published spotlight -- above Top Plays and every game
+          group, shown only right after a publish (memory-only trigger). Renders
+          nothing by itself if the highlight isn't resolvable (missing-highlight
+          spec case); buildPosterUrl/onPlayReel/etc. may be omitted by callers
+          that don't wire this feature (e.g. existing unit tests), in which case
+          there is nothing to spotlight. */}
+      {justPublished && buildPosterUrl && (
+        <JustPublishedCard
+          justPublished={justPublished}
+          collections={collections}
+          onDismiss={clearJustPublished}
+          buildPosterUrl={buildPosterUrl}
+          onPlay={onPlayReel}
+          onShare={onShareReel}
+          onCopyLink={onCopyReelLink}
+          onDownload={onDownloadReel}
+          formatMeta={formatReelMeta}
+        />
+      )}
       {/* Smart collections */}
       {smart.map((sc) => (
         <div key={`smart:${sc.key}`} className="mb-3">
@@ -283,7 +347,8 @@ export function CollectionsTab({
           key="mixes"
           name={MIXES_NAME}
           collection={mixes}
-          defaultExpanded={games.length === 0}
+          defaultExpanded={games.length === 0 || (!!autoExpandTarget && autoExpandTarget.gameId === null)}
+          highlightId={isJustPublishedGame(null) ? justPublished.finalVideoId : undefined}
           members={members.mixes}
           memberState={memberStates.mixes}
           requestMembers={reqMixes}

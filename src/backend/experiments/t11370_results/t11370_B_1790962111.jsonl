@@ -1,0 +1,104 @@
+{"kind": "meta", "job": "B", "job_id": "t11370_B_1790962111", "app": "reel-ballers-video-v2-staging", "fn": "process_clips_ai", "target": [2560, 1440], "clips": [["warmup", 205, 365, [1.0, 3.0]], ["c205x365", 205, 365, [1.0, 11.0]], ["c540x960", 540, 960, [1.0, 11.0]], ["c1280x720", 1280, 720, [1.0, 11.0]], ["c1920x1080", 1920, 1080, [1.0, 11.0]]], "dispatch_utc": "2026-10-02T17:28:31.421175+00:00"}
+{"kind": "item", "t": 5.456490200012922, "progress": 0, "phase": "dispatched", "message": "Starting...", "clip": 0, "total_clips": 5, "modal_call_id": "fc-01M3YTJ75ANEPN3YV73BJ6QEAP"}
+{"kind": "item", "t": 5.903746000025421, "progress": 2, "phase": "initializing", "message": "Initializing...", "clip": 0, "total_clips": 5}
+{"kind": "item", "t": 6.6247966000810266, "progress": 10, "phase": "initializing", "message": "Sources resolved", "clip": 0, "total_clips": 5}
+{"kind": "item", "t": 6.625093300128356, "progress": 12, "phase": "loading_model", "message": "Loading AI model...", "clip": 0, "total_clips": 5}
+{"kind": "item", "t": 11.20529600000009, "progress": 15, "phase": "loading_model", "message": "AI model loaded", "clip": 0, "total_clips": 5}
+{"kind": "item", "t": 11.28285129996948, "progress": 15, "phase": "upscaling", "message": "Processing clip 1/5...", "clip": 1, "total_clips": 5}
+{"kind": "item", "t": 17.031969800125808, "progress": 18, "phase": "upscaling", "message": "Clip 1: frame 15/60", "clip": 1, "total_clips": 5, "current_frame": 15, "total_frames": 60}
+{"kind": "item", "t": 20.66808810015209, "progress": 21, "phase": "upscaling", "message": "Clip 1: frame 30/60", "clip": 1, "total_clips": 5, "current_frame": 30, "total_frames": 60}
+{"kind": "item", "t": 24.52585109998472, "progress": 24, "phase": "upscaling", "message": "Clip 1: frame 45/60", "clip": 1, "total_clips": 5, "current_frame": 45, "total_frames": 60}
+{"kind": "item", "t": 28.281059599947184, "progress": 27, "phase": "upscaling", "message": "Clip 1: frame 60/60", "clip": 1, "total_clips": 5, "current_frame": 60, "total_frames": 60}
+{"kind": "item", "t": 28.35434429999441, "progress": 25, "phase": "encoding", "message": "Encoding clip 1/5...", "clip": 1, "total_clips": 5}
+{"kind": "item", "t": 31.80744930007495, "progress": 27, "phase": "upscaling", "message": "Processing clip 2/5...", "clip": 2, "total_clips": 5}
+{"kind": "item", "t": 37.33315970003605, "progress": 27, "phase": "upscaling", "message": "Clip 2: frame 15/300", "clip": 2, "total_clips": 5, "current_frame": 15, "total_frames": 300}
+{"kind": "item", "t": 41.05787319992669, "progress": 28, "phase": "upscaling", "message": "Clip 2: frame 30/300", "clip": 2, "total_clips": 5, "current_frame": 30, "total_frames": 300}
+{"kind": "item", "t": 44.833020200021565, "progress": 28, "phase": "upscaling", "message": "Clip 2: frame 45/300", "clip": 2, "total_clips": 5, "current_frame": 45, "total_frames": 300}
+{"kind": "item", "t": 48.584424500120804, "progress": 29, "phase": "upscaling", "message": "Clip 2: frame 60/300", "clip": 2, "total_clips": 5, "current_frame": 60, "total_frames": 300}
+{"kind": "item", "t": 52.34541820012964, "progress": 30, "phase": "upscaling", "message": "Clip 2: frame 75/300", "clip": 2, "total_clips": 5, "current_frame": 75, "total_frames": 300}
+{"kind": "item", "t": 56.060430499957874, "progress": 30, "phase": "upscaling", "message": "Clip 2: frame 90/300", "clip": 2, "total_clips": 5, "current_frame": 90, "total_frames": 300}
+{"kind": "item", "t": 59.8949538001325, "progress": 31, "phase": "upscaling", "message": "Clip 2: frame 105/300", "clip": 2, "total_clips": 5, "current_frame": 105, "total_frames": 300}
+{"kind": "item", "t": 63.86574409995228, "progress": 31, "phase": "upscaling", "message": "Clip 2: frame 120/300", "clip": 2, "total_clips": 5, "current_frame": 120, "total_frames": 300}
+{"kind": "item", "t": 67.72670509992167, "progress": 32, "phase": "upscaling", "message": "Clip 2: frame 135/300", "clip": 2, "total_clips": 5, "current_frame": 135, "total_frames": 300}
+{"kind": "item", "t": 71.57071440014988, "progress": 33, "phase": "upscaling", "message": "Clip 2: frame 150/300", "clip": 2, "total_clips": 5, "current_frame": 150, "total_frames": 300}
+{"kind": "item", "t": 75.27065680013038, "progress": 33, "phase": "upscaling", "message": "Clip 2: frame 165/300", "clip": 2, "total_clips": 5, "current_frame": 165, "total_frames": 300}
+{"kind": "item", "t": 79.30934450007044, "progress": 34, "phase": "upscaling", "message": "Clip 2: frame 180/300", "clip": 2, "total_clips": 5, "current_frame": 180, "total_frames": 300}
+{"kind": "item", "t": 83.07506630010903, "progress": 34, "phase": "upscaling", "message": "Clip 2: frame 195/300", "clip": 2, "total_clips": 5, "current_frame": 195, "total_frames": 300}
+{"kind": "item", "t": 86.82701639994048, "progress": 35, "phase": "upscaling", "message": "Clip 2: frame 210/300", "clip": 2, "total_clips": 5, "current_frame": 210, "total_frames": 300}
+{"kind": "item", "t": 90.6854888999369, "progress": 36, "phase": "upscaling", "message": "Clip 2: frame 225/300", "clip": 2, "total_clips": 5, "current_frame": 225, "total_frames": 300}
+{"kind": "item", "t": 94.60651980014518, "progress": 36, "phase": "upscaling", "message": "Clip 2: frame 240/300", "clip": 2, "total_clips": 5, "current_frame": 240, "total_frames": 300}
+{"kind": "item", "t": 98.52887209993787, "progress": 37, "phase": "upscaling", "message": "Clip 2: frame 255/300", "clip": 2, "total_clips": 5, "current_frame": 255, "total_frames": 300}
+{"kind": "item", "t": 102.33342689997517, "progress": 37, "phase": "upscaling", "message": "Clip 2: frame 270/300", "clip": 2, "total_clips": 5, "current_frame": 270, "total_frames": 300}
+{"kind": "item", "t": 106.256011800142, "progress": 38, "phase": "upscaling", "message": "Clip 2: frame 285/300", "clip": 2, "total_clips": 5, "current_frame": 285, "total_frames": 300}
+{"kind": "item", "t": 110.05591990007088, "progress": 39, "phase": "upscaling", "message": "Clip 2: frame 300/300", "clip": 2, "total_clips": 5, "current_frame": 300, "total_frames": 300}
+{"kind": "item", "t": 110.12956540007144, "progress": 37, "phase": "encoding", "message": "Encoding clip 2/5...", "clip": 2, "total_clips": 5}
+{"kind": "item", "t": 115.95865570008755, "progress": 39, "phase": "upscaling", "message": "Processing clip 3/5...", "clip": 3, "total_clips": 5}
+{"kind": "item", "t": 127.16158240009099, "progress": 39, "phase": "upscaling", "message": "Clip 3: frame 15/300", "clip": 3, "total_clips": 5, "current_frame": 15, "total_frames": 300}
+{"kind": "item", "t": 137.32032679999247, "progress": 40, "phase": "upscaling", "message": "Clip 3: frame 30/300", "clip": 3, "total_clips": 5, "current_frame": 30, "total_frames": 300}
+{"kind": "item", "t": 147.217774100136, "progress": 40, "phase": "upscaling", "message": "Clip 3: frame 45/300", "clip": 3, "total_clips": 5, "current_frame": 45, "total_frames": 300}
+{"kind": "item", "t": 156.92539290012792, "progress": 41, "phase": "upscaling", "message": "Clip 3: frame 60/300", "clip": 3, "total_clips": 5, "current_frame": 60, "total_frames": 300}
+{"kind": "item", "t": 166.727118199924, "progress": 42, "phase": "upscaling", "message": "Clip 3: frame 75/300", "clip": 3, "total_clips": 5, "current_frame": 75, "total_frames": 300}
+{"kind": "item", "t": 176.8192150001414, "progress": 42, "phase": "upscaling", "message": "Clip 3: frame 90/300", "clip": 3, "total_clips": 5, "current_frame": 90, "total_frames": 300}
+{"kind": "item", "t": 186.60115180001594, "progress": 43, "phase": "upscaling", "message": "Clip 3: frame 105/300", "clip": 3, "total_clips": 5, "current_frame": 105, "total_frames": 300}
+{"kind": "item", "t": 196.49611090007238, "progress": 43, "phase": "upscaling", "message": "Clip 3: frame 120/300", "clip": 3, "total_clips": 5, "current_frame": 120, "total_frames": 300}
+{"kind": "item", "t": 206.40314690000378, "progress": 44, "phase": "upscaling", "message": "Clip 3: frame 135/300", "clip": 3, "total_clips": 5, "current_frame": 135, "total_frames": 300}
+{"kind": "item", "t": 216.23146659997292, "progress": 45, "phase": "upscaling", "message": "Clip 3: frame 150/300", "clip": 3, "total_clips": 5, "current_frame": 150, "total_frames": 300}
+{"kind": "item", "t": 225.97002910007723, "progress": 45, "phase": "upscaling", "message": "Clip 3: frame 165/300", "clip": 3, "total_clips": 5, "current_frame": 165, "total_frames": 300}
+{"kind": "item", "t": 235.71367630013265, "progress": 46, "phase": "upscaling", "message": "Clip 3: frame 180/300", "clip": 3, "total_clips": 5, "current_frame": 180, "total_frames": 300}
+{"kind": "item", "t": 245.30840929993428, "progress": 46, "phase": "upscaling", "message": "Clip 3: frame 195/300", "clip": 3, "total_clips": 5, "current_frame": 195, "total_frames": 300}
+{"kind": "item", "t": 255.72382750012912, "progress": 47, "phase": "upscaling", "message": "Clip 3: frame 210/300", "clip": 3, "total_clips": 5, "current_frame": 210, "total_frames": 300}
+{"kind": "item", "t": 265.490683699958, "progress": 48, "phase": "upscaling", "message": "Clip 3: frame 225/300", "clip": 3, "total_clips": 5, "current_frame": 225, "total_frames": 300}
+{"kind": "item", "t": 275.33292630012147, "progress": 48, "phase": "upscaling", "message": "Clip 3: frame 240/300", "clip": 3, "total_clips": 5, "current_frame": 240, "total_frames": 300}
+{"kind": "item", "t": 285.0873740001116, "progress": 49, "phase": "upscaling", "message": "Clip 3: frame 255/300", "clip": 3, "total_clips": 5, "current_frame": 255, "total_frames": 300}
+{"kind": "item", "t": 294.90385639993474, "progress": 49, "phase": "upscaling", "message": "Clip 3: frame 270/300", "clip": 3, "total_clips": 5, "current_frame": 270, "total_frames": 300}
+{"kind": "item", "t": 304.74877690011635, "progress": 50, "phase": "upscaling", "message": "Clip 3: frame 285/300", "clip": 3, "total_clips": 5, "current_frame": 285, "total_frames": 300}
+{"kind": "item", "t": 314.8748894999735, "progress": 51, "phase": "upscaling", "message": "Clip 3: frame 300/300", "clip": 3, "total_clips": 5, "current_frame": 300, "total_frames": 300}
+{"kind": "item", "t": 314.9472577001434, "progress": 49, "phase": "encoding", "message": "Encoding clip 3/5...", "clip": 3, "total_clips": 5}
+{"kind": "item", "t": 321.6261667001527, "progress": 51, "phase": "upscaling", "message": "Processing clip 4/5...", "clip": 4, "total_clips": 5}
+{"kind": "item", "t": 338.1182206000667, "progress": 51, "phase": "upscaling", "message": "Clip 4: frame 15/300", "clip": 4, "total_clips": 5, "current_frame": 15, "total_frames": 300}
+{"kind": "item", "t": 353.3132066000253, "progress": 52, "phase": "upscaling", "message": "Clip 4: frame 30/300", "clip": 4, "total_clips": 5, "current_frame": 30, "total_frames": 300}
+{"kind": "item", "t": 368.31707600015216, "progress": 52, "phase": "upscaling", "message": "Clip 4: frame 45/300", "clip": 4, "total_clips": 5, "current_frame": 45, "total_frames": 300}
+{"kind": "item", "t": 383.56194390007295, "progress": 53, "phase": "upscaling", "message": "Clip 4: frame 60/300", "clip": 4, "total_clips": 5, "current_frame": 60, "total_frames": 300}
+{"kind": "item", "t": 398.7799605000764, "progress": 54, "phase": "upscaling", "message": "Clip 4: frame 75/300", "clip": 4, "total_clips": 5, "current_frame": 75, "total_frames": 300}
+{"kind": "item", "t": 413.79581720009446, "progress": 54, "phase": "upscaling", "message": "Clip 4: frame 90/300", "clip": 4, "total_clips": 5, "current_frame": 90, "total_frames": 300}
+{"kind": "item", "t": 428.78434480004944, "progress": 55, "phase": "upscaling", "message": "Clip 4: frame 105/300", "clip": 4, "total_clips": 5, "current_frame": 105, "total_frames": 300}
+{"kind": "item", "t": 443.79767020000145, "progress": 55, "phase": "upscaling", "message": "Clip 4: frame 120/300", "clip": 4, "total_clips": 5, "current_frame": 120, "total_frames": 300}
+{"kind": "item", "t": 458.68382339994423, "progress": 56, "phase": "upscaling", "message": "Clip 4: frame 135/300", "clip": 4, "total_clips": 5, "current_frame": 135, "total_frames": 300}
+{"kind": "item", "t": 473.6573169999756, "progress": 57, "phase": "upscaling", "message": "Clip 4: frame 150/300", "clip": 4, "total_clips": 5, "current_frame": 150, "total_frames": 300}
+{"kind": "item", "t": 488.5743251000531, "progress": 57, "phase": "upscaling", "message": "Clip 4: frame 165/300", "clip": 4, "total_clips": 5, "current_frame": 165, "total_frames": 300}
+{"kind": "item", "t": 503.3927597999573, "progress": 58, "phase": "upscaling", "message": "Clip 4: frame 180/300", "clip": 4, "total_clips": 5, "current_frame": 180, "total_frames": 300}
+{"kind": "item", "t": 518.5056890000124, "progress": 58, "phase": "upscaling", "message": "Clip 4: frame 195/300", "clip": 4, "total_clips": 5, "current_frame": 195, "total_frames": 300}
+{"kind": "item", "t": 533.4505819999613, "progress": 59, "phase": "upscaling", "message": "Clip 4: frame 210/300", "clip": 4, "total_clips": 5, "current_frame": 210, "total_frames": 300}
+{"kind": "item", "t": 548.1758306999691, "progress": 60, "phase": "upscaling", "message": "Clip 4: frame 225/300", "clip": 4, "total_clips": 5, "current_frame": 225, "total_frames": 300}
+{"kind": "item", "t": 563.2625221000053, "progress": 60, "phase": "upscaling", "message": "Clip 4: frame 240/300", "clip": 4, "total_clips": 5, "current_frame": 240, "total_frames": 300}
+{"kind": "item", "t": 578.2741869001184, "progress": 61, "phase": "upscaling", "message": "Clip 4: frame 255/300", "clip": 4, "total_clips": 5, "current_frame": 255, "total_frames": 300}
+{"kind": "item", "t": 593.3127888999879, "progress": 61, "phase": "upscaling", "message": "Clip 4: frame 270/300", "clip": 4, "total_clips": 5, "current_frame": 270, "total_frames": 300}
+{"kind": "item", "t": 608.1310113000218, "progress": 62, "phase": "upscaling", "message": "Clip 4: frame 285/300", "clip": 4, "total_clips": 5, "current_frame": 285, "total_frames": 300}
+{"kind": "item", "t": 623.2265425000805, "progress": 63, "phase": "upscaling", "message": "Clip 4: frame 300/300", "clip": 4, "total_clips": 5, "current_frame": 300, "total_frames": 300}
+{"kind": "item", "t": 623.3024371999782, "progress": 61, "phase": "encoding", "message": "Encoding clip 4/5...", "clip": 4, "total_clips": 5}
+{"kind": "item", "t": 630.0031264999416, "progress": 63, "phase": "upscaling", "message": "Processing clip 5/5...", "clip": 5, "total_clips": 5}
+{"kind": "item", "t": 660.8193588999566, "progress": 63, "phase": "upscaling", "message": "Clip 5: frame 15/300", "clip": 5, "total_clips": 5, "current_frame": 15, "total_frames": 300}
+{"kind": "item", "t": 690.4677788000554, "progress": 64, "phase": "upscaling", "message": "Clip 5: frame 30/300", "clip": 5, "total_clips": 5, "current_frame": 30, "total_frames": 300}
+{"kind": "item", "t": 720.3558739, "progress": 64, "phase": "upscaling", "message": "Clip 5: frame 45/300", "clip": 5, "total_clips": 5, "current_frame": 45, "total_frames": 300}
+{"kind": "item", "t": 749.8683372000232, "progress": 65, "phase": "upscaling", "message": "Clip 5: frame 60/300", "clip": 5, "total_clips": 5, "current_frame": 60, "total_frames": 300}
+{"kind": "item", "t": 779.3430087999441, "progress": 66, "phase": "upscaling", "message": "Clip 5: frame 75/300", "clip": 5, "total_clips": 5, "current_frame": 75, "total_frames": 300}
+{"kind": "item", "t": 808.7205485000741, "progress": 66, "phase": "upscaling", "message": "Clip 5: frame 90/300", "clip": 5, "total_clips": 5, "current_frame": 90, "total_frames": 300}
+{"kind": "item", "t": 838.0025490000844, "progress": 67, "phase": "upscaling", "message": "Clip 5: frame 105/300", "clip": 5, "total_clips": 5, "current_frame": 105, "total_frames": 300}
+{"kind": "item", "t": 867.3602978999261, "progress": 67, "phase": "upscaling", "message": "Clip 5: frame 120/300", "clip": 5, "total_clips": 5, "current_frame": 120, "total_frames": 300}
+{"kind": "item", "t": 897.1128736000974, "progress": 68, "phase": "upscaling", "message": "Clip 5: frame 135/300", "clip": 5, "total_clips": 5, "current_frame": 135, "total_frames": 300}
+{"kind": "item", "t": 926.4295296999626, "progress": 69, "phase": "upscaling", "message": "Clip 5: frame 150/300", "clip": 5, "total_clips": 5, "current_frame": 150, "total_frames": 300}
+{"kind": "item", "t": 956.625230900012, "progress": 69, "phase": "upscaling", "message": "Clip 5: frame 165/300", "clip": 5, "total_clips": 5, "current_frame": 165, "total_frames": 300}
+{"kind": "item", "t": 986.1501998000313, "progress": 70, "phase": "upscaling", "message": "Clip 5: frame 180/300", "clip": 5, "total_clips": 5, "current_frame": 180, "total_frames": 300}
+{"kind": "item", "t": 1017.4334420000669, "progress": 70, "phase": "upscaling", "message": "Clip 5: frame 195/300", "clip": 5, "total_clips": 5, "current_frame": 195, "total_frames": 300}
+{"kind": "item", "t": 1050.982346799923, "progress": 71, "phase": "upscaling", "message": "Clip 5: frame 210/300", "clip": 5, "total_clips": 5, "current_frame": 210, "total_frames": 300}
+{"kind": "item", "t": 1076.5626523999963, "progress": 72, "phase": "upscaling", "message": "Clip 5: frame 225/300", "clip": 5, "total_clips": 5, "current_frame": 225, "total_frames": 300}
+{"kind": "item", "t": 1106.7535596000962, "progress": 72, "phase": "upscaling", "message": "Clip 5: frame 240/300", "clip": 5, "total_clips": 5, "current_frame": 240, "total_frames": 300}
+{"kind": "item", "t": 1137.2690604000818, "progress": 73, "phase": "upscaling", "message": "Clip 5: frame 255/300", "clip": 5, "total_clips": 5, "current_frame": 255, "total_frames": 300}
+{"kind": "item", "t": 1166.5973144001327, "progress": 73, "phase": "upscaling", "message": "Clip 5: frame 270/300", "clip": 5, "total_clips": 5, "current_frame": 270, "total_frames": 300}
+{"kind": "item", "t": 1195.9788367000874, "progress": 74, "phase": "upscaling", "message": "Clip 5: frame 285/300", "clip": 5, "total_clips": 5, "current_frame": 285, "total_frames": 300}
+{"kind": "item", "t": 1225.4687095000409, "progress": 75, "phase": "upscaling", "message": "Clip 5: frame 300/300", "clip": 5, "total_clips": 5, "current_frame": 300, "total_frames": 300}
+{"kind": "item", "t": 1225.544266999932, "progress": 73, "phase": "encoding", "message": "Encoding clip 5/5...", "clip": 5, "total_clips": 5}
+{"kind": "item", "t": 1232.88984790002, "progress": 78, "phase": "concatenating", "message": "Finalizing video...", "clip": 0, "total_clips": 5}
+{"kind": "item", "t": 1233.4363063001074, "progress": 90, "phase": "uploading", "message": "Uploading result...", "clip": 0, "total_clips": 5}
+{"kind": "item", "t": 1237.1871043001302, "status": "success", "output_key": "out_B_1790962111.mp4", "clips_processed": 5, "progress": 100, "phase": "complete", "message": "Processing complete"}
+{"kind": "end", "t": 1237.3334369999357, "end_utc": "2026-10-02T17:49:08.755700+00:00"}

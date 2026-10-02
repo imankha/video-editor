@@ -27,6 +27,22 @@ export const useGalleryStore = create((set) => ({
   // change -> event -> UI updates, instead of relying on a reopen/refetch race.
   collectionsVersion: 0,
 
+  // T11580: the highlight most recently published THIS session, memory-only
+  // (never persisted -- Decision 1, "Just published" spotlight is Option A:
+  // appears only right after a publish, not derived from published_at).
+  // { finalVideoId, gameId, aspectRatio } | null. gameId is null for a
+  // multi-game/no-game highlight (mirrors finishedReelNav.js's gating), which
+  // targets the Mixes group instead of a single game group.
+  justPublished: null,
+  // Consume-once signal for the one auto-expand that should follow THIS
+  // publish (landmine: T8990 -- a group's defaultExpanded must never be
+  // derived from justPublished staying truthy, or every later remount of
+  // CollectionsTab would re-force the same group open again, discarding a
+  // user's deliberate collapse). Readers capture this once at their own first
+  // mount after a publish (lazy useState initializer) then call
+  // consumeAutoExpand() so a later remount sees it already spent.
+  autoExpandPending: false,
+
   // Actions
   open: () => {
     setWarmupPriority(WARMUP_PRIORITY.GALLERY);
@@ -39,6 +55,16 @@ export const useGalleryStore = create((set) => ({
   // Dispatch a "published reels changed" event. Call after a publish/unpublish
   // succeeds on the backend (the model change), so subscribed views refresh.
   notifyCollectionsChanged: () => set((state) => ({ collectionsVersion: state.collectionsVersion + 1 })),
+
+  // T11580: set from usePublishProject's success path (inside the publish
+  // gesture, never a useEffect). A newer publish replaces whatever was there.
+  setJustPublished: (justPublished) => set({ justPublished, autoExpandPending: true }),
+  // Dismiss (X) -- also clears the auto-expand signal so a stale pending
+  // expand can't fire for a highlight the user already dismissed.
+  clearJustPublished: () => set({ justPublished: null, autoExpandPending: false }),
+  // Read-and-clear: the FIRST caller after a publish gets true; every
+  // subsequent call (later remounts/reopens) gets false until the next publish.
+  consumeAutoExpand: () => set({ autoExpandPending: false }),
 
   /**
    * Fetch downloads count from backend (for badge).
@@ -69,10 +95,19 @@ export const useGalleryStore = create((set) => ({
     return _fetchCountPromise;
   },
 
-  // Reset on profile switch — clears badge count and closes panel
+  // Reset on profile switch — clears badge count, closes panel, and drops the
+  // just-published spotlight (Decision 1: cleared on profile switch).
   reset: () => {
     _fetchCountPromise = null;
-    set({ isOpen: false, count: 0, unwatchedCount: 0, countLoaded: false, collectionsVersion: 0 });
+    set({
+      isOpen: false,
+      count: 0,
+      unwatchedCount: 0,
+      countLoaded: false,
+      collectionsVersion: 0,
+      justPublished: null,
+      autoExpandPending: false,
+    });
   },
 }));
 

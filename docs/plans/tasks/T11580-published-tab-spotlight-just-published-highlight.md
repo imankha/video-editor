@@ -1,6 +1,6 @@
 # T11580: Published tab buries the highlight a user just published
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-10-01

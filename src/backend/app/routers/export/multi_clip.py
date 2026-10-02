@@ -1403,7 +1403,9 @@ async def _export_clips(
             # Raises ExportBudgetExceeded -> the handler below surfaces the structured reason
             # to the client over the WS via export_progress[export_id] (this runs in a
             # background task, so no HTTP response reaches the client) -- the T11330 popup contract.
-            enforce_export_budget(clips_data, target_fps)
+            enforce_export_budget(
+                clips_data, target_fps, target_resolution[0], target_resolution[1]
+            )
 
             # Upload all source videos to R2 temp folder
             source_keys = []
