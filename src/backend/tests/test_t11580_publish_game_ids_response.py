@@ -29,8 +29,8 @@ PROFILE_ID = "testdefault"
 
 @pytest.fixture()
 def env(tmp_path):
-    from app.user_context import set_current_user_id
     from app.profile_context import set_current_profile_id
+    from app.user_context import set_current_user_id
 
     set_current_user_id(USER_ID)
     set_current_profile_id(PROFILE_ID)
@@ -165,7 +165,7 @@ async def test_publish_reads_frozen_final_video_aspect_ratio_not_project_aspect_
     aspect_ratio, fv.aspect_ratio) and so is the only correct source here."""
     db_path = env
     game_id = _seed_game(db_path, "Game X")
-    project_id, final_video_id = _seed_published_project(
+    project_id, _final_video_id = _seed_published_project(
         db_path, aspect_ratio="9:16", game_ids=[game_id])
 
     # Diverge the two values directly: project says 16:9, frozen final stays 9:16.
