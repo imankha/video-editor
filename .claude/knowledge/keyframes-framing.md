@@ -1,27 +1,52 @@
 ---
 domain: keyframes-framing
-updated: 2026-10-02 (T11570 WIP, data/behavior layer only — NOT the full guided-pick feature; the
-view is still unbuilt, see below. `modes/overlay/utils/detectionAssignment.js` gained
+updated: 2026-10-02 (T11570 — Spotlight's "Pick your player" now auto-advances through every
+unpicked detection marker instead of leaving the user to hunt for the next one; supersedes T9620's
+single-pick banner entirely. `modes/overlay/utils/detectionAssignment.js` gained
 `orderedDetectionMarkers(regions)`: the ONE ordering source (region start, then detection time
-within it) that `detectionAssignmentStates` now derives from, and that any future "marker N"
-consumer (guide step numbers, forward/wrap navigation) MUST derive from too — do not re-sort
-regions/detections a second way. `nextUnpickedMarker(regions, fromIndex, justAssigned)` is the
-forward-then-wrap navigation primitive (fromIndex=-1 finds the first unpicked marker for
-entry-park). `OverlayContainer.parkOnDetection(marker)` is now the SINGLE "land on marker X" path
-(sets clickedDetection + seeks via frameToTime) — DetectionMarkerLayer no longer computes its own
-seek target; it just forwards the full marker (incl. `fps`) to the handler. New hook
-`modes/overlay/hooks/useGuidedAthletePick.js` holds the auto-advance state machine (entry-park,
-650ms "Got it" confirm, forward-then-wrap advance, cancel on play/scrub-away/direct-tap/
-mode-switch/unmount) — ephemeral view state only, zero new persistence; `scheduleGuidedAdvance` is
-called SYNCHRONOUSLY inside `handlePlayerSelect`/`handleHighlightComplete` (gesture-based, never a
-reactive `useEffect`). **NOT YET BUILT**: `SpotlightPickGuide.jsx` (the presentational guide + its
-10-viewport placement table) and the `OverlaySpotlightPanel` checklist swap — both need the
-task's approved design artifact (https://claude.ai/artifact/Qpji171nS2AK5xsCWfTou5), which this
-worker's session could not read (Claude Docs MCP returned access-denied — doc not shared with the
-session). `OverlayContainer` already exports `pickGuidePhase`/`pickGuideStep`/`pickGuideTotal`/
-`onDetectionMarkerTap`/`onResumePickGuideStep` for that view to consume once unblocked. See
-docs/plans/tasks/T11570-spotlight-guided-athlete-pick.md and `/workspace/.dotask-status` on that
-branch for the full blocked-state writeup.)
+within it) that `detectionAssignmentStates` derives from, and that every "marker N" consumer
+(guide step numbers, forward/wrap navigation) derives from too — do not re-sort regions/detections
+a second way. `nextUnpickedMarker(regions, fromIndex, justAssigned)` is the forward-then-wrap
+navigation primitive (fromIndex=-1 finds the first unpicked marker for entry-park).
+`OverlayContainer.parkOnDetection(marker)` is the SINGLE "land on marker X" path (sets
+clickedDetection + seeks via frameToTime) — `DetectionMarkerLayer` no longer computes its own seek
+target, it just forwards the full marker (incl. `fps`) to the handler (renamed from
+`handleDetectionMarkerClick`). New hook `modes/overlay/hooks/useGuidedAthletePick.js` holds the
+auto-advance state machine: phases `null|'parked'|'confirm'|'away'|'done'`, entry-park on mount,
+650ms "Got it" confirm (`scheduleGuidedAdvance`, called SYNCHRONOUSLY inside
+`handlePlayerSelect`/`handleHighlightComplete` — gesture-based, never a reactive `useEffect`),
+cancel-on-play/scrub-away/direct-tap/mode-switch/unmount, and a `resumeTrackedMarker` for the away
+state's "Go to step N". **Phase-priority landmine (fixed before ship): check 'confirm'/'parked'
+BEFORE 'done'** — otherwise revisiting an already-picked marker after the whole walk is done gets
+stuck showing 'done' (or 'away') instead of briefly showing 'Picking' for that one marker before
+falling back to 'done'. Ephemeral view state only — zero new persistence; the only DB write stays
+the existing per-pick `addHighlightRegionKeyframe` call. New presentational
+`modes/overlay/components/SpotlightPickGuide.jsx`: 2 placements (`overlay` floating pill with a
+flip-to-bottom rule when a box's top edge is in the top 20% of frame, computed in
+`OverlayModeView` from `playerDetections`/`detectionVideoHeight`; `strip` sits between the video
+and timeline on phone-portrait, never over the video), `compact` copy for the smallest viewports,
+progress dots (reads `detectionAssignmentStates` fresh, not the quest store), a "Not boxed?"
+disclosure, and a Done-state auto-hide (next play or 4s). Placement bucket is resolved in
+`OverlayModeView` via two NEW hooks in `hooks/useIsMobile.js` (`useIsPhonePortrait`,
+`useIsSmallPhoneViewport`, same matchMedia pattern as the existing `useIsLandscape`) plus the
+existing `mobileFs` flag — landscape-phone OR mobileFs wins first (pill+safe-area), independent of
+raw viewport width. `OverlaySpotlightPanel`'s old single-pick "done" copy
+(`SELECT_PLAYER_DONE`/`SELECT_PLAYER_ADD_MORE`, retired) is replaced by a step checklist driven by
+the SAME progress array the guide renders (threaded in as `pickProgress`/`activeStep` props — the
+panel stays presentational, no store read). Copy: new `EDITOR_PANELS.PICK_GUIDE_*` keys;
+`SELECT_PLAYER_TAP`/`SELECT_PLAYER_FIND` also retired (zero callers once the guide replaced the
+banner — the guide auto-navigates, so there's no "find a marker yourself" state anymore).
+Dev-only diag harnesses (never ship — not in vite's `rollupOptions.input`, same T9620 precedent):
+`t11570diag.html` (responsive placement, real hooks reacting to the real viewport) and
+`t11570walkdiag.html` (live-drives the real hook+view against an in-memory fixture — there is no
+dedicated `OverlayContainer` test harness in this codebase, so this is the closest real-browser
+proof of the container-level wiring). Coverage: `detectionAssignment.test.js`,
+`useGuidedAthletePick.test.js` (12, incl. the phase-priority landmine), `SpotlightPickGuide.test.jsx`
+(16), `OverlaySpotlightPanel.test.jsx` checklist block, `OverlayModeView.playerSelection.test.jsx` +
+7 sibling OverlayModeView suites (needed the 2 new `useIsMobile` hook exports added to their
+mocks), `e2e/T11570-spotlight-pick-guide-responsive.qa.spec.js` (10-viewport no-overlap sweep,
+negative-control-verified), `e2e/T11570-spotlight-guided-pick-walk.qa.spec.js` (all 7 acceptance
+criteria live-driven end to end).)
 updated: 2026-09-27 (T11240 — Removed Framing's multi-clip editor UI: a project is now exactly one
 clip. Deleted `ClipSelectorSidebar`/`ClipLibraryModal`/`UploadClipModal`/`FocusClipsPanel`, the
 cockpit Clips sheet + rail button, the project Total output chip, `isMultiClip`/`isMultiClipMode`,
