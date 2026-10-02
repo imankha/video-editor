@@ -387,7 +387,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
               </Button>
               {profiles.length <= 1 && (
                 <p className="text-xs text-gray-400 mt-3 text-center leading-relaxed">
-                  Use profiles to keep your videos and reels organized by athlete, team, sport, or season.
+                  Use profiles to keep your videos and highlights organized by athlete, team, sport, or season.
                 </p>
               )}
             </div>

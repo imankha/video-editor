@@ -96,7 +96,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
 
     // Clicking in reveals the two-path empty state with the Add Video CTA.
     await tab.click();
-    const addVideo = page.getByRole('button', { name: 'Upload clip' });
+    const addVideo = page.getByRole('button', { name: 'Upload highlight' });
     await expect(addVideo).toBeVisible();
     await expect(addVideo).toHaveAttribute('data-tutorial-target', 'clips-add-video');
     // Path B guidance (extract in Annotate) is present alongside. T8960 renamed
@@ -115,7 +115,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Upload clip' }).click();
+    await page.getByRole('button', { name: 'Upload highlight' }).click();
 
     // The one-time consequence notice appears (never a hard gate): Cancel + Continue.
     const notice = page.getByRole('alertdialog');
@@ -136,7 +136,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     await expect(notice).toBeHidden();
 
     // Cancel path also works without side effects.
-    await page.getByRole('button', { name: 'Upload clip' }).click();
+    await page.getByRole('button', { name: 'Upload highlight' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByRole('alertdialog')).toBeHidden();
   });
@@ -146,7 +146,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Upload clip' }).click();
+    await page.getByRole('button', { name: 'Upload highlight' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 
@@ -186,7 +186,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     // network call `ensureVideoInR2` makes for a clip upload.
     await page.route('**/api/games/prepare-upload', (route) => route.abort('failed'));
 
-    await page.getByRole('button', { name: 'Upload clip' }).click();
+    await page.getByRole('button', { name: 'Upload highlight' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 

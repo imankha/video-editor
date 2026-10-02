@@ -128,7 +128,7 @@ function CreditsExplainer() {
           <li>Spotlight &amp; highlight render</li>
           <li>Player detection</li>
           <li>Downloads &amp; sharing</li>
-          <li>Storing your exported highlights</li>
+          <li>Storing your generated highlights</li>
         </ul>
       </div>
       <p className="text-gray-400">Credits never expire.</p>

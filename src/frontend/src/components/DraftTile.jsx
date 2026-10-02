@@ -671,9 +671,9 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         <span
           className="absolute top-9 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/90 text-gray-950 shadow backdrop-blur-sm"
           title={staleCount === 1
-            ? '1 highlight changed since this highlight was made - re-export to update it'
-            : `${staleCount} highlights changed since this highlight was made - re-export to update them`}
-          aria-label={`${staleCount} ${staleCount === 1 ? 'highlight' : 'highlights'} changed since this highlight was made`}
+            ? '1 play changed since this highlight was made - re-generate to update it'
+            : `${staleCount} plays changed since this highlight was made - re-generate to update them`}
+          aria-label={`${staleCount} ${staleCount === 1 ? 'play' : 'plays'} changed since this highlight was made`}
         >
           <AlertTriangle size={11} />
           {staleCount} outdated

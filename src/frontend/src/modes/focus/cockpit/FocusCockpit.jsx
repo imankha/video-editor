@@ -228,7 +228,7 @@ export default function FocusCockpit({
             isUrlExpiredError={isUrlExpiredError}
             onRetryVideo={onRetryVideo}
             loadingMessage={
-              loadingStage === 'clips' ? 'Loading clips...'
+              loadingStage === 'clips' ? 'Loading highlights...'
                 : loadingStage === 'video' ? 'Loading video...'
                 : loadingStage === 'working-video' ? 'Loading working video...'
                 : isLoading ? 'Loading video...' : 'Loading...'

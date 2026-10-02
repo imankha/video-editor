@@ -74,14 +74,14 @@ test('T5672 drawer aspect split at 1280px: two rows, portrait first, legible chi
   await page.waitForTimeout(1000);
 
   // Two carousel rows, portrait first.
-  const rowLabels = await page.locator('[role="group"][aria-label*="reels"]').evaluateAll(
+  const rowLabels = await page.locator('[role="group"][aria-label*="highlights"]').evaluateAll(
     (els) => els.map((el) => el.getAttribute('aria-label')),
   );
   console.log(`Drawer row labels: ${JSON.stringify(rowLabels)}`);
-  expect(rowLabels).toContain('Game Highlights 9:16 reels');
-  expect(rowLabels).toContain('Game Highlights 16:9 reels');
-  const portraitIdx = rowLabels.indexOf('Game Highlights 9:16 reels');
-  const landscapeIdx = rowLabels.indexOf('Game Highlights 16:9 reels');
+  expect(rowLabels).toContain('Game Highlights 9:16 highlights');
+  expect(rowLabels).toContain('Game Highlights 16:9 highlights');
+  const portraitIdx = rowLabels.indexOf('Game Highlights 9:16 highlights');
+  const landscapeIdx = rowLabels.indexOf('Game Highlights 16:9 highlights');
   expect(portraitIdx).toBeGreaterThanOrEqual(0);
   expect(landscapeIdx).toBeGreaterThan(portraitIdx);
 

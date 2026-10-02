@@ -88,7 +88,7 @@ export function CollectionsTab({
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <AlertCircle size={32} className="text-red-400 mb-3" />
-        <p className="text-gray-400 mb-4">Failed to load reels</p>
+        <p className="text-gray-400 mb-4">Failed to load highlights</p>
         <Button variant="secondary" onClick={() => fetchSummary()}>Retry</Button>
       </div>
     );

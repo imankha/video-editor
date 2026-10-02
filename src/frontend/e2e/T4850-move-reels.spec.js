@@ -32,7 +32,7 @@ async function movePerReel(page, targetName) {
   await page.getByTitle('More actions').first().click();
   await page.getByRole('button', { name: /Move to profile/ }).click();
   await page.getByRole('button', { name: targetName }).click();      // pick profile
-  await page.getByRole('button', { name: /^Move reel/ }).click();    // confirm step
+  await page.getByRole('button', { name: /^Move highlight/ }).click();    // confirm step
 }
 
 const API_PORT = 8000;
@@ -149,7 +149,7 @@ test.describe('T4850 move reels between profiles', () => {
     await page.getByRole('button', { name: /Move to profile/ }).click();
     await saveEvidence(page, 'criterion-1-move-modal');
     await page.getByRole('button', { name: 'Athlete B' }).click();      // pick profile
-    await page.getByRole('button', { name: /^Move reel/ }).click();      // confirm step (T5678)
+    await page.getByRole('button', { name: /^Move highlight/ }).click();      // confirm step (T5678)
     await page.waitForTimeout(1500);
 
     expect(await reelCount(request, A)).toBe(before - 1);

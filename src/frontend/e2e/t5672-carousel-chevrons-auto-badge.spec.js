@@ -53,7 +53,7 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
       const label = await firstChip.textContent();
       console.log(`  Title: ${title}`);
       console.log(`  Label: ${label}`);
-      expect(title).toMatch(/Contains \d+ clips/);
+      expect(title).toMatch(/Contains \d+ highlights/);
     }
 
     // Migrated from t5672-screenshot-verify (T7770): the multi-clip marker must be a

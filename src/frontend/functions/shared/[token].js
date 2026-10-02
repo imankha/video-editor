@@ -282,7 +282,7 @@ ${introCard.html}
 <span class="ec-lt">Ballers</span>
 </div>
 </div>
-<a class="ec-cta" href="https://www.reelballers.com/?utm_source=share_endcard&amp;utm_medium=viral&amp;utm_campaign=reel_endcard" target="_blank" rel="noopener">Make your own reel at www.reelballers.com</a>
+<a class="ec-cta" href="https://www.reelballers.com/?utm_source=share_endcard&amp;utm_medium=viral&amp;utm_campaign=reel_endcard" target="_blank" rel="noopener">Make your own highlights at www.reelballers.com</a>
 </div>
 </main>
 <footer>

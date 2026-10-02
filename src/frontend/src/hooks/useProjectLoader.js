@@ -255,7 +255,7 @@ export function useProjectLoader() {
       }
 
       setLoading(false, 'complete');
-      onProgress({ stage: 'complete', message: 'Reel loaded' });
+      onProgress({ stage: 'complete', message: 'Highlight loaded' });
 
       return {
         project,

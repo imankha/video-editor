@@ -347,8 +347,8 @@ describe('DraftTile (T5672)', () => {
         clips: [stale({ start_time: 99 }), stale({ id: 2 })],
       });
       const badge = screen.getByText('1 outdated').closest('span');
-      expect(badge.getAttribute('title')).toBe('1 highlight changed since this highlight was made - re-export to update it');
-      expect(badge.getAttribute('aria-label')).toBe('1 highlight changed since this highlight was made');
+      expect(badge.getAttribute('title')).toBe('1 play changed since this highlight was made - re-generate to update it');
+      expect(badge.getAttribute('aria-label')).toBe('1 play changed since this highlight was made');
     });
   });
 

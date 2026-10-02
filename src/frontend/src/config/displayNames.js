@@ -243,8 +243,8 @@ export const LIBRARY_ACTIONS = {
   UPLOAD_GAME: 'Upload game',              // N01 — was "Add Game"/"Add New Game"
   UPLOADING_GAME: 'Uploading game...',     // N01 — submit busy state
   ADD_FOOTAGE: 'Add footage to game',      // N03 — was "Add footage"/"Add footage to this game"
-  DELETE_CLIP: ANNOTATE.DELETE_CLIP,       // N14 — 'Delete clip'
-  RENAME_CLIP: ANNOTATE.RENAME_CLIP,       // N15 — 'Rename clip'
+  DELETE_CLIP: ANNOTATE.DELETE_CLIP,       // N14 — 'Delete highlight'
+  RENAME_CLIP: ANNOTATE.RENAME_CLIP,       // N15 — 'Rename highlight'
   PUBLISH_CLIP: 'Publish highlight',       // N12
   // PUBLISH_REEL survives the T11230 Reels-building removal: it is still the
   // publish label on the KEEP CollectionPlayer/published surface. T11280 (R2)
@@ -757,7 +757,7 @@ export const CREDITS = {
 export const RETENTION = {
   SOURCE: 'Your uploaded game is kept for 30 days, and you can extend it anytime.',
   EXPORTED: 'Highlights you generate are kept for good and are free to store.',
-  DRAFT: 'An unexported draft stays viewable, but you need its source to re-edit or export it, so finish the ones you want to keep before the 30 days are up.',
+  DRAFT: 'An unexported draft stays viewable, but you need its source to re-edit or generate it, so finish the ones you want to keep before the 30 days are up.',
 };
 
 // T10190: the shared finished-result surface (CollectionPlayer + the card CTAs

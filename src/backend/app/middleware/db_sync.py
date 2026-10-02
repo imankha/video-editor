@@ -91,7 +91,7 @@ logger = logging.getLogger(__name__)
 # locally but cannot push the change to R2. The frontend keeps the card in place
 # and offers Retry instead of optimistically moving/removing it.
 DURABLE_SYNC_FAILED_RESPONSE = {
-    "detail": "Could not save to the cloud. Your reel was not moved. Please try again.",
+    "detail": "Could not save to the cloud. Your highlight was not moved. Please try again.",
     "code": "sync_failed",
     "retryable": True,
 }

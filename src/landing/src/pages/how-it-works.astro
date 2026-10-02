@@ -28,7 +28,7 @@ const steps = [
   },
   {
     name: 'Export and share',
-    text: `ReelBallers upscales toward ${FACTS.upscaleTarget}, renders the reel, and gives you one link to share. The same clips can be exported in more than one aspect ratio, so a wide recruiting cut and a vertical social version come from the same work.`,
+    text: `ReelBallers upscales toward ${FACTS.upscaleTarget}, renders your highlight, and gives you one link to share. The same highlight can be exported in more than one aspect ratio, so a wide recruiting cut and a vertical social version come from the same work.`,
   },
 ]
 
@@ -50,12 +50,12 @@ const faqs: FaqItem[] = [
     a: `Any standard video file: ${INPUT_SOURCES.join('; ')}. There is no hardware to buy and no integration to configure.`,
   },
   {
-    q: 'Can I reuse clips across several reels?',
-    a: 'Yes. Tagged clips go into a library, so a season reel, a single-tournament cut, and a recruiting reel can all be generated from the same tagging work rather than edited separately.',
+    q: 'Can I reuse my tagged plays?',
+    a: 'Yes. Tagged plays go into a library, so you can come back and generate another highlight from the same tagging work rather than marking the game again.',
   },
   {
-    q: 'What does the person receiving the reel need?',
-    a: `Just ${FACTS.viewerRequirement}. The reel plays at full resolution in a browser.`,
+    q: 'What does the person receiving the highlight need?',
+    a: `Just ${FACTS.viewerRequirement}. The highlight plays at full resolution in a browser.`,
   },
 ]
 
@@ -65,7 +65,7 @@ const schemas = [
   breadcrumbs([{ name: 'How it works', path }]),
   howTo({
     name: 'How to turn game footage into a highlight reel',
-    description: 'Upload your video, mark the plays worth keeping, frame and spotlight your player, and export a shareable reel.',
+    description: 'Upload your video, mark the plays worth keeping, frame and spotlight your player, and export a shareable highlight.',
     path,
     steps,
   }),
@@ -74,7 +74,7 @@ const schemas = [
 ---
 
 <PageLayout
-  title="How ReelBallers Works | From Game Footage to Reel"
+  title="How ReelBallers Works | From Game Footage to Highlight"
   description="The four steps from a two-hour game file to a shareable highlight reel: upload, mark the plays, frame your player, export. No editing experience needed."
   path={path}
   schemas={schemas}
@@ -86,7 +86,7 @@ const schemas = [
       <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">How ReelBallers works</h1>
       <p class="text-lg md:text-xl text-gray-300 leading-relaxed">
         Four steps. Upload your video, mark the plays worth keeping while you watch, frame and spotlight
-        the player each clip is about, and export a reel you can share with one link. See the{' '}
+        the player each clip is about, and export a highlight you can share with one link. See the{' '}
         <a href="/soccer" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">soccer walkthrough</a>{' '}
         for sport-specific detail, or{' '}
         <a href="/guides/filming-youth-sports-from-the-sideline" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">

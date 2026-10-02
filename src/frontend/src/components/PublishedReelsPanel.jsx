@@ -182,7 +182,7 @@ export function PublishedReelsPanel({
       });
       setRankRefreshKey((k) => k + 1); // banner refetches the dropped %
     } catch {
-      toast.error('Could not re-rank this reel');
+      toast.error('Could not re-rank this highlight');
     } finally {
       setReRankingId(null);
     }
@@ -482,7 +482,7 @@ export function PublishedReelsPanel({
       await downloadFile(download.id);
     } catch (err) {
       console.error('[PublishedReelsPanel] reel download failed:', err);
-      toast.error('Could not download reel');
+      toast.error('Could not download highlight');
     }
   };
 
@@ -869,7 +869,7 @@ export function PublishedReelsPanel({
           onShare={sharePlayerReel}
           onDownload={storyPlayer.downloadId ? () => downloadFile(storyPlayer.downloadId).catch((err) => {
             console.error('[PublishedReelsPanel] story-player download failed:', err);
-            toast.error('Could not download reel');
+            toast.error('Could not download highlight');
           }) : undefined}
           downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}
           onReEdit={onOpenProject ? openReelAsProject : undefined}

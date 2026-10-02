@@ -85,7 +85,7 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Upload clip' }).click();
+    await page.getByRole('button', { name: 'Upload highlight' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 
@@ -112,7 +112,7 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Upload clip' }).click();
+    await page.getByRole('button', { name: 'Upload highlight' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 
@@ -131,7 +131,7 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Upload clip' }).click();
+    await page.getByRole('button', { name: 'Upload highlight' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 

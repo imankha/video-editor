@@ -194,7 +194,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
                 segment.status === 'done' ? 'Complete' :
                 segment.status === 'disconnected' ? 'Not Connected' :
                 segment.status === 'exporting' ? 'Exporting...' :
-                segment.status === 'in_progress' ? (isOverlay ? 'Started - export to complete' : `Started - export ${MODE_NAMES.FRAMING} to complete`) :
+                segment.status === 'in_progress' ? (isOverlay ? 'Started - generate to complete' : `Started - generate ${MODE_NAMES.FRAMING} to complete`) :
                 // T9600: the 'ready' spotlight segment is a working-video-only reel
                 // (draftStage IN_OVERLAY), not a shared one — route through the single
                 // source instead of the old "Ready to share" literal that read as
@@ -202,7 +202,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
                 // separate domain draftStage does not model, so they stay as-is.
                 segment.status === 'ready' ? DRAFT_STAGE_LABELS[DRAFT_STAGE.IN_OVERLAY] :
                 'Draft'
-              } (click to open)${segment.stale ? ' - highlight edited since this highlight was made' : ''}`}
+              } (click to open)${segment.stale ? ' - play edited since this highlight was made' : ''}`}
             >
               {isInProgress && (
                 <div className="absolute bottom-0 inset-x-0 h-1/2 bg-blue-500 pointer-events-none" />

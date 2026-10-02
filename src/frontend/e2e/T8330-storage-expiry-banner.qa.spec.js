@@ -112,7 +112,7 @@ test.describe('T8330 storage-expiry banner', () => {
     await expect(banner(page)).toBeVisible({ timeout: 15000 });
     const text = (await banner(page).innerText()).replace(/\s+/g, ' ');
     expect(text).toContain('1 game expiring soon');
-    expect(text).toContain('1 draft reel depends on it');
+    expect(text).toContain('1 draft highlight depends on it');
     await saveEvidence(page, 'T8330-criterion-b-banner-counts');
 
     // Deep-link: "Extend storage" switches to the Games tab (Add Game button is
@@ -141,7 +141,7 @@ test.describe('T8330 storage-expiry banner', () => {
     const text = (await banner(page).innerText()).replace(/\s+/g, ' ');
     // Only the grace game counts; the permanently-deleted one is excluded.
     expect(text).toContain('1 game expiring soon');
-    expect(text).toContain('1 draft reel depends on it');
+    expect(text).toContain('1 draft highlight depends on it');
     await saveEvidence(page, 'T8330-criterion-c-grace-banner');
   });
 });

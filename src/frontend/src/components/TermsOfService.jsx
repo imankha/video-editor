@@ -52,7 +52,7 @@ export function TermsOfService() {
           <p className="mb-3">ReelBallers is a browser-based video editing application for youth sports highlights. The Service includes:</p>
           <ul className="list-disc pl-5 space-y-1">
             <li>Video upload and storage</li>
-            <li>Clip extraction and annotation</li>
+            <li>Highlight extraction and annotation</li>
             <li>Video framing and cropping (with AI-assisted upscaling)</li>
             <li>Highlight overlay creation</li>
             <li>Video export and sharing</li>
@@ -73,7 +73,7 @@ export function TermsOfService() {
           <p className="mb-3">You represent and warrant that you have all necessary rights, licenses, and permissions to upload content to ReelBallers, including but not limited to:</p>
           <ul className="list-disc pl-5 space-y-1 mb-4">
             <li>The right to upload, edit, and redistribute video depicting any individuals shown</li>
-            <li>The right to create derivative works (clips, highlights, cropped versions) from the content you upload</li>
+            <li>The right to create derivative works (highlights, cropped versions) from the content you upload</li>
             <li>Compliance with any terms of service, license agreements, or usage restrictions imposed by the original source of the content (including but not limited to club camera systems, league recording platforms, or any third-party video service)</li>
             <li>Any required consents from individuals depicted in the content, including parental or guardian consent for minors</li>
           </ul>

@@ -12,7 +12,7 @@ const API_BASE_URL = `${API_BASE}/api`;
  * `{code:'sync_failed'}`, from T4320's `Depends(durable_sync)` on the clip routes).
  *
  * The backend reuses the shared `DURABLE_SYNC_FAILED_RESPONSE`, whose `detail` reads
- * "Your reel was not moved" — nonsensical for a clip save/update/delete. So we key the
+ * "Your highlight was not moved" — nonsensical for a clip save/update/delete. So we key the
  * user-facing copy on the GESTURE here instead of surfacing the backend `detail`. Same
  * title as the publish/move durable-fail UX (`useMoveReels`), clip-specific body.
  */

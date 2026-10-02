@@ -35,7 +35,7 @@ describe('FramingInstructions (T9610)', () => {
     // The preview prompt points at ordinary playback, before export.
     const prompt = screen.getByTestId('framing-preview-prompt').textContent;
     expect(prompt).toMatch(/press play to preview/i);
-    expect(prompt).toMatch(/before you export/i);
+    expect(prompt).toMatch(/before you generate/i);
   });
 
   it('uses the shared "Focus point" noun and never says "keyframe"', () => {

@@ -116,7 +116,7 @@ describe('SegmentedProgressStrip (T3540)', () => {
     );
     const segment = getSegmentByTitle(container, 'Highlight 1');
     expect(segment.className).toContain('ring-amber-400');
-    expect(segment.getAttribute('title')).toContain('- highlight edited since this highlight was made');
+    expect(segment.getAttribute('title')).toContain('- play edited since this highlight was made');
   });
 
   it('does not ring a non-stale clip segment', () => {
@@ -130,7 +130,7 @@ describe('SegmentedProgressStrip (T3540)', () => {
     );
     const segment = getSegmentByTitle(container, 'Highlight 1');
     expect(segment.className).not.toContain('ring-amber-400');
-    expect(segment.getAttribute('title')).not.toContain('highlight edited since this highlight was made');
+    expect(segment.getAttribute('title')).not.toContain('play edited since this highlight was made');
   });
 
   it('never rings the collapsed "Focus" segment once framing is complete (strip cannot carry the produced-state cue)', () => {
@@ -153,11 +153,11 @@ describe('SegmentedProgressStrip (T3540)', () => {
       />
     );
     const clipSeg = getSegmentByTitle(container, 'Highlight 1');
-    expect(clipSeg.getAttribute('title')).toContain('Started - export Framing to complete');
+    expect(clipSeg.getAttribute('title')).toContain('Started - generate Framing to complete');
     expect(clipSeg.getAttribute('title')).not.toContain('Editing');
 
     const overlaySeg = getSegmentByTitle(container, 'Spotlight');
-    expect(overlaySeg.getAttribute('title')).toContain('Started - export to complete');
+    expect(overlaySeg.getAttribute('title')).toContain('Started - generate to complete');
     expect(overlaySeg.getAttribute('title')).not.toContain('Editing');
   });
 });

@@ -169,13 +169,13 @@ test.describe('T5290 recap player mobile redesign @staging-gate @gate-c', () => 
     if (pos) expect(pos).not.toBe('absolute');
 
     // Immersive default: the clip list opens collapsed (pull-up shows "Show").
-    await expect(page.getByLabel('Show clip list')).toBeVisible();
+    await expect(page.getByLabel('Show highlights list')).toBeVisible();
 
     await saveEvidence(page, 'T5290-portrait-full-width-video');
 
     // Pull-up expands the clip list into its own scroll region; still no overflow.
-    await page.getByLabel('Show clip list').click();
-    await expect(page.getByLabel('Hide clip list')).toBeVisible();
+    await page.getByLabel('Show highlights list').click();
+    await expect(page.getByLabel('Hide highlights list')).toBeVisible();
     await assertNoHorizontalOverflow(page);
     await saveEvidence(page, 'T5290-portrait-cliplist-expanded');
 
@@ -197,7 +197,7 @@ test.describe('T5290 recap player mobile redesign @staging-gate @gate-c', () => 
     expect(m.videoArea.w).toBeLessThan(m.modal.w - 200);
     // The pull-up handle is a phones-only control (sm:hidden) — present in the
     // DOM but not visible at >= sm.
-    await expect(page.getByLabel(/clip list/)).toBeHidden();
+    await expect(page.getByLabel(/highlights list/)).toBeHidden();
     expect(m.overflowers, `overflowing elements: ${JSON.stringify(m.overflowers)}`).toEqual([]);
     await assertNoHorizontalOverflow(page);
     await saveEvidence(page, 'T5290-landscape-sidebyside');
@@ -220,7 +220,7 @@ test.describe('T5290 recap player mobile redesign @staging-gate @gate-c', () => 
 
     // Side-by-side card (sidebar ~256px), not the full-bleed phone stack.
     expect(m.videoArea.w).toBeLessThan(m.modal.w - 200);
-    await expect(page.getByLabel(/clip list/)).toBeHidden();
+    await expect(page.getByLabel(/highlights list/)).toBeHidden();
     // The pill renders the desktop absolute-clock layout at >= sm (byte-identical).
     const pos = await clockPosition(page);
     if (pos) expect(pos).toBe('absolute');
@@ -244,7 +244,7 @@ test.describe('T5290 recap player mobile redesign @staging-gate @gate-c', () => 
     // Desktop card: 256px sidebar + flex-1 video, modal capped at max-w-6xl.
     expect(m.videoArea.w).toBeLessThan(m.modal.w - 200);
     expect(m.modal.w).toBeLessThan(m.innerWidth); // mx-4 card, not full-bleed
-    await expect(page.getByLabel(/clip list/)).toBeHidden();
+    await expect(page.getByLabel(/highlights list/)).toBeHidden();
     expect(m.overflowers, `overflowing elements: ${JSON.stringify(m.overflowers)}`).toEqual([]);
     await assertNoHorizontalOverflow(page);
     await saveEvidence(page, 'T5290-desktop-sidebyside');

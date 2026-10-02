@@ -111,7 +111,7 @@ async function openRankingGame(context, page) {
   await page.getByRole('button', { name: /^Published/ }).first().click({ timeout: 15000 });
 
   // ConfidenceBanner shows "Rank reels" when kind === 'active' (eligible: true)
-  const rankLink = page.getByText('Rank reels').first();
+  const rankLink = page.getByText('Rank highlights').first();
   await rankLink.waitFor({ timeout: 15000 });
   await rankLink.click({ timeout: 10000 });
 }

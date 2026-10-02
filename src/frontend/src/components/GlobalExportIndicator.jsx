@@ -265,7 +265,7 @@ export function GlobalExportIndicator() {
         // ExportTooLargeModal (below), not a toast that scrolls away — skip the generic toast.
         if (exp.budgetRejection) return;
         toast.error("Couldn't generate highlight", {
-          message: `${projectLabel} - ${exp.error || 'An error occurred during export'}`,
+          message: `${projectLabel} - ${exp.error || 'An error occurred during generation'}`,
           duration: 8000,
         });
       }

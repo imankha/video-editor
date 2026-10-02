@@ -83,7 +83,7 @@ export default function FramingInstructions({ focusPointCount = 0, expanded, onT
             }`}
           >
             <Play size={14} className="shrink-0" aria-hidden="true" />
-            <span>Press play to preview how your highlight follows your athlete, before you export.</span>
+            <span>Press play to preview how your highlight follows your athlete, before you generate.</span>
           </p>
         </div>
       )}

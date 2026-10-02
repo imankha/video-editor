@@ -108,7 +108,7 @@ export const COMPARISONS: Comparison[] = [
     chooseUs: [
       'You have hours of footage and no realistic prospect of editing it.',
       'The hard part is finding your player in wide footage and keeping them in frame.',
-      'You will want several versions -- a recruiting cut, a season reel, something vertical for social.',
+      'You will want more than one version -- a wide cut for coaches, a vertical cut for social -- from the same highlight.',
       'You expect to do this repeatedly, every season, rather than once.',
     ],
     faqs: [
@@ -178,9 +178,9 @@ export const COMPARISONS: Comparison[] = [
         winner: 'us',
       },
       {
-        dimension: 'Reusing clips for several reels',
-        them: 'Each reel is a separate project.',
-        us: 'One tagged clip library feeds multiple reels.',
+        dimension: 'Reusing your tagging work',
+        them: 'Every highlight is a separate project.',
+        us: 'Your tagged plays stay in a library to generate from again.',
         winner: 'us',
       },
       {

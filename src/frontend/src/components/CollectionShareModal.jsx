@@ -170,7 +170,7 @@ export function CollectionShareModal({ definition, title, onClose }) {
 
         <div className="px-6 py-4 space-y-4">
           <p className="text-xs text-gray-500">
-            This link always shows the current reels for this collection.
+            This link always shows the current highlights for this collection.
           </p>
 
           <div>

@@ -62,7 +62,7 @@ export function PrivacyPolicy() {
           <h4 className="text-white font-medium mb-2">Information Derived from Your Content</h4>
           <ul className="list-disc pl-5 space-y-1 mb-4">
             <li><strong className="text-white">Video metadata:</strong> Duration, resolution, frame rate, file size, file hash</li>
-            <li><strong className="text-white">Editing data:</strong> Clip selections, crop keyframes, overlay settings, export job records</li>
+            <li><strong className="text-white">Editing data:</strong> Highlight selections, crop keyframes, overlay settings, export job records</li>
           </ul>
 
           <h4 className="text-white font-medium mb-2">Video Content</h4>
@@ -86,7 +86,7 @@ export function PrivacyPolicy() {
         <Section id="how-we-use" title="2. How We Use Your Information">
           <p className="mb-3">We use your personal information to:</p>
           <ul className="list-disc pl-5 space-y-1 mb-4">
-            <li><strong className="text-white">Provide the Service:</strong> Process, enhance, crop, overlay, and export your video clips as you direct</li>
+            <li><strong className="text-white">Provide the Service:</strong> Process, enhance, crop, overlay, and export your videos as you direct</li>
             <li><strong className="text-white">Authenticate you:</strong> Verify your identity and maintain your session</li>
             <li><strong className="text-white">Process payments:</strong> Complete purchases via Stripe</li>
             <li><strong className="text-white">Video content:</strong> We may analyze video metadata and content to identify games across multiple users&apos; uploads, enabling shared viewing experiences and collaborative features in the future. This analysis may include comparing video characteristics (timing, location, visual similarity) to determine whether separate uploads depict the same game.</li>

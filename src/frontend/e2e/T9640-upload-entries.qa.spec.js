@@ -72,7 +72,7 @@ test.describe('T9640 — keyboard-reachable upload entries with plain-language d
     await setupEmptyUser(page);
     await page.getByRole('button', { name: /^Clips/ }).first().click();
 
-    const uploadClip = page.getByRole('button', { name: 'Upload clip' }).first();
+    const uploadClip = page.getByRole('button', { name: 'Upload highlight' }).first();
     await expect(uploadClip).toBeVisible();
 
     await uploadClip.focus();

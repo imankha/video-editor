@@ -147,7 +147,7 @@ test('AC2: PRIMARY badge shows "1 outdated" on a produced multi-clip reel with o
   const badge = tile.getByText('1 outdated');
   await expect(badge).toBeVisible();
   await expect(badge).toHaveAttribute(
-    'title', '1 clip changed since this reel was made — re-export to update it'
+    'title', '1 play changed since this highlight was made - re-generate to update it'
   );
 
   // The badge is the ONLY cue reachable in this state -- the strip is suppressed

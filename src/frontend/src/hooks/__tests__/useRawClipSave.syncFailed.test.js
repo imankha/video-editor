@@ -4,7 +4,7 @@ import { useRawClipSave } from '../useRawClipSave';
 
 // T5350: clip-gesture 503 {code:'sync_failed'} (from T4320's durable_sync on the clip
 // routes) must surface a clip-appropriate not-saved state + a working Retry — never a
-// silent success, and never the reel/move copy ("your reel was not moved").
+// silent success, and never the reel/move copy ("your highlight was not moved").
 
 vi.mock('../../utils/apiFetch', () => ({ default: vi.fn() }));
 vi.mock('../../components/shared/Toast', () => ({
@@ -22,7 +22,7 @@ const syncFailed503 = () => ({
   status: 503,
   // Middleware returns the durable-fail payload at the TOP level.
   json: async () => ({
-    detail: 'Could not save to the cloud. Your reel was not moved. Please try again.',
+    detail: 'Could not save to the cloud. Your highlight was not moved. Please try again.',
     code: 'sync_failed',
     retryable: true,
   }),
@@ -79,13 +79,13 @@ describe('useRawClipSave — sync_failed durable-fail UX (T5350)', () => {
       expect(res).toBeNull();
       // Clip-appropriate copy, NOT the reel/move message.
       expect(result.current.error).toBe("Your highlight wasn't saved. Please try again.");
-      expect(result.current.error).not.toMatch(/reel was not moved/i);
+      expect(result.current.error).not.toMatch(/highlight was not moved/i);
 
       expect(toast.error).toHaveBeenCalledTimes(1);
       const [title, opts] = toast.error.mock.calls[0];
       expect(title).toBe('Could not save to the cloud');
       expect(opts.message).toBe("Your highlight wasn't saved. Please try again.");
-      expect(opts.message).not.toMatch(/reel was not moved/i);
+      expect(opts.message).not.toMatch(/highlight was not moved/i);
       expect(opts.duration).toBe(0); // persistent
       expect(opts.action.label).toBe('Retry');
       expect(typeof opts.action.onClick).toBe('function');
@@ -145,7 +145,7 @@ describe('useRawClipSave — sync_failed durable-fail UX (T5350)', () => {
 
       expect(res).toBeNull();
       expect(result.current.error).toBe("Your highlight changes weren't saved. Please try again.");
-      expect(result.current.error).not.toMatch(/reel was not moved/i);
+      expect(result.current.error).not.toMatch(/highlight was not moved/i);
       const [title, opts] = toast.error.mock.calls[0];
       expect(title).toBe('Could not save to the cloud');
       expect(opts.action.label).toBe('Retry');
@@ -180,7 +180,7 @@ describe('useRawClipSave — sync_failed durable-fail UX (T5350)', () => {
 
       expect(res).toBe(false);
       expect(result.current.error).toBe("Your highlight wasn't deleted. Please try again.");
-      expect(result.current.error).not.toMatch(/reel was not moved/i);
+      expect(result.current.error).not.toMatch(/highlight was not moved/i);
       const [title, opts] = toast.error.mock.calls[0];
       expect(title).toBe('Could not save to the cloud');
       expect(opts.action.label).toBe('Retry');

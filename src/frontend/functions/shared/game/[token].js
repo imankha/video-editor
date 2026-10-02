@@ -91,7 +91,7 @@ export function renderGamePage(share, token) {
   const clipRail = clips.length
     ? `<ol id="rail">${clips
         .map((c) => {
-          const name = escapeHtml(c.name || "Clip");
+          const name = escapeHtml(c.name || "Highlight");
           const tags = Array.isArray(c.player_tags) && c.player_tags.length
             ? `<span class="rt">${escapeHtml(c.player_tags.join(", "))}</span>`
             : "";

@@ -44,20 +44,20 @@ export function useReEditReel(navigateToProject) {
         const error = await response.json().catch(() => ({}));
         if (error.code === 'sync_failed') {
           console.warn(`[useReEditReel] sync_failed (503) for reel=${reel.id} - reel kept, ask user to retry`);
-          alert('Could not save to the cloud. Your reel was not moved. Please try again.');
+          alert('Could not save to the cloud. Your highlight was not moved. Please try again.');
           return;
         }
       }
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Failed to restore reel');
+        throw new Error(error.detail || 'Failed to restore highlight');
       }
       const result = await response.json();
       // project_id from the response (may differ from reel.project_id if restored).
       navigateToProject(result.project_id);
     } catch (error) {
       console.error('[useReEditReel] Restore project error:', error);
-      alert(`Failed to open reel as draft: ${error.message}`);
+      alert(`Failed to open highlight as draft: ${error.message}`);
     } finally {
       setRestoringId(null);
     }

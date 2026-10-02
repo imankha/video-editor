@@ -40,7 +40,7 @@ async function gotoDrafts(page) {
 // A ready tile = a project-card that contains the primary "Publish clip"/"Publish reel" button.
 const readyTile = (page) =>
   page.locator('[data-testid="project-card"]', {
-    has: page.getByRole('button', { name: /Publish (clip|reel)/i }),
+    has: page.getByRole('button', { name: /Publish (clip|reel|highlight)/i }),
   });
 
 // Guarantee a ready tile exists. Prefer a live one; otherwise flip the first real
@@ -87,7 +87,7 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
     await tile.getByRole('button', { name: /^private$/i }).count(),
     '"Private" is NOT a button anymore'
   ).toBe(0);
-  const primary = tile.getByRole('button', { name: /Publish (clip|reel)/i });
+  const primary = tile.getByRole('button', { name: /Publish (clip|reel|highlight)/i });
   await expect(primary, 'primary action names the verb').toBeVisible();
   await expect(primary).toBeEnabled();
   await saveEvidence(page, 'criterion-1-ready-badge-and-primary');
@@ -101,7 +101,7 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
   // other tiles' hover rails carry "Rename reel"/"Delete reel" buttons.
   const menu = page.getByTestId('draft-kebab-menu');
   await expect(menu).toBeVisible();
-  for (const label of ['Rename', 'Open in Framing', 'Open in Spotlight', 'Delete reel']) {
+  for (const label of ['Rename', 'Open in Framing', 'Open in Spotlight', 'Delete highlight']) {
     await expect(menu.getByRole('button', { name: label, exact: true }), `kebab item: ${label}`).toBeVisible();
   }
   await saveEvidence(page, 'criterion-2-kebab-open');
@@ -109,7 +109,7 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
   // ---- Criterion 4 (done while the menu is open): two-click delete stays open on the
   // first click. We ARM the confirm and verify it, then DISMISS — never confirming, so
   // the reel is not deleted.
-  await menu.getByRole('button', { name: 'Delete reel', exact: true }).click();
+  await menu.getByRole('button', { name: 'Delete highlight', exact: true }).click();
   await expect(menu.getByRole('button', { name: 'Click again to confirm', exact: true }), 'first delete click keeps the menu open + arms confirm').toBeVisible();
   await saveEvidence(page, 'criterion-4-delete-armed-not-confirmed');
   await page.keyboard.press('Escape').catch(() => {});

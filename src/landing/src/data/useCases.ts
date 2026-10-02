@@ -58,7 +58,7 @@ export const USE_CASES: UseCase[] = [
         heading: 'Building it from your own footage',
         body: [
           'The manual route is: scrub hours of game video, note timestamps, cut each play, crop and reframe each clip by hand, add a marker, then re-export the whole thing every time you want to change the order. That is the reason most recruiting reels never get made, and why the ones that do are usually a year out of date.',
-          'ReelBallers collapses that into marking plays while you watch, plus a few drags to frame each clip. Each tagged clip goes into a library you can filter, so a reel for one coach and a shorter cut for another come from the same work rather than a second edit. When your athlete has a better game in October, you add those clips and re-generate rather than starting over.',
+          'ReelBallers collapses that into marking plays while you watch, plus a few drags to frame each clip. Each tagged play goes into a library you can filter, so you can come back and generate another highlight from the same work rather than a second edit. When your athlete has a better game in October, you mark those plays and generate again rather than starting over.',
         ],
       },
     ],

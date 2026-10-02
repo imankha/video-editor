@@ -153,10 +153,10 @@ test.describe('T5710 per-layer recaps @staging-gate @gate-c', () => {
     // Create Clip still works from the Team Recap view (T4130 regression,
     // acceptance criterion "Create Clip from either recap view still works").
     await rail.getByText('Team clip 1').click();
-    const createBtn = modal.getByTitle('Create a draft reel from this clip');
+    const createBtn = modal.getByTitle('Create a draft highlight from this moment');
     await expect(createBtn).toBeEnabled({ timeout: 10000 });
     await createBtn.click();
-    await expect(modal.getByTitle('This clip is already a draft reel')).toBeVisible({ timeout: 10000 });
+    await expect(modal.getByTitle('This highlight is already a draft')).toBeVisible({ timeout: 10000 });
     await saveEvidence(page, 'T5710-criterion-6-create-clip-from-team-view');
 
     // Switch back to {Athlete} Recap -- rail + video swap correctly, offsets

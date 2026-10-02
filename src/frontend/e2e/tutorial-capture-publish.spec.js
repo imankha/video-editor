@@ -61,8 +61,8 @@ test('capture publish tutorial footage @tutorial-capture', async ({ browser }) =
   // target the staged 'Brilliant Pass' card specifically (other Done drafts may exist)
   const card = page.locator('[data-testid="project-card"]')
     .filter({ hasText: 'Brilliant Pass' })
-    .filter({ has: page.getByRole('button', { name: /Publish (clip|reel)/i }) }).first();
-  const moveBtn = card.getByRole('button', { name: /Publish (clip|reel)/i });
+    .filter({ has: page.getByRole('button', { name: /Publish (clip|reel|highlight)/i }) }).first();
+  const moveBtn = card.getByRole('button', { name: /Publish (clip|reel|highlight)/i });
   await moveBtn.waitFor({ timeout: 20000 });
   await card.scrollIntoViewIfNeeded();
   await card.hover();
@@ -166,7 +166,7 @@ test('capture publish tutorial footage @tutorial-capture', async ({ browser }) =
 
   // --- line 8: click the first entry (Ranking banner) --------------------------------------
   step('click Rank reels');
-  const rankCta = page.getByText('Rank reels').first();
+  const rankCta = page.getByText('Rank highlights').first();
   await rankCta.waitFor();
   await ring(rankCta, 10);
   await dwell(1.2);

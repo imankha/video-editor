@@ -24,7 +24,7 @@ export function HeroIntroModal({ onClose }) {
         </div>
 
         <p className="text-sm text-gray-300">
-          You're choosing the best reel between two &mdash; the one that plays first and
+          You're choosing the best highlight between two &mdash; the one that plays first and
           the one that plays next.
         </p>
 

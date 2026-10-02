@@ -322,7 +322,7 @@ describe('renderSharePage', () => {
     it('CTA has exact spec text and correct UTM href', () => {
       const html = renderSharePage(share);
       expect(html).toContain('id="end-card"');
-      expect(html).toContain('Make your own reel at www.reelballers.com');
+      expect(html).toContain('Make your own highlights at www.reelballers.com');
       expect(html).toContain('utm_source=share_endcard&amp;utm_medium=viral&amp;utm_campaign=reel_endcard');
     });
 

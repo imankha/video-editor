@@ -23,7 +23,7 @@ export function IntroCardGrid({ cards, profile, onNew, onEdit, onDuplicate, onDe
     <div>
       {cards.length === 0 ? (
         <div className="text-center py-10 text-gray-400">
-          <p className="mb-4 text-sm">No Athlete Intro Cards yet. Create one to open a reel with your player.</p>
+          <p className="mb-4 text-sm">No Athlete Intro Cards yet. Create one to open a highlight with your player.</p>
           <NewCardButton onClick={onNew} />
         </div>
       ) : (
