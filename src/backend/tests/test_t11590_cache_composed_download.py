@@ -16,6 +16,15 @@ stub, then assert the CONTROL FLOW: hit == no compose call, each dimension
 change == a fresh build, two concurrent requests for the same uncached key
 don't corrupt each other's output, and the metadata/cover stamp is still
 applied fresh on every request (including a cache hit).
+
+Section 5 exercises the SAME cache logic through the PRODUCTION `R2_ENABLED=True`
+source branch (`_stream_composed_r2`), not just the local-disk branch every test
+above runs through -- the two branches each do their own independent
+write-after-build call, so a bug isolated to one is invisible to tests that only
+ever exercise the other. These patch `get_download_file_url` (skips the real
+presign/HEAD-verify) and `httpx.AsyncClient` (a fake async context manager /
+streaming response standing in for the real R2 GET) so the cache HEAD/download/
+upload calls -- the thing actually under test -- still run for real.
 """
 
 import asyncio
@@ -177,6 +186,71 @@ def _install_cached_pipeline(stack, store, counters, *, barrier=None,
 
 def _get(client, download_id):
     return client.get(f"/api/downloads/{download_id}/file", headers=_auth_headers())
+
+
+# ===========================================================================
+# R2-source fakes: stand in for the real presigned-URL fetch + httpx stream
+# the PRODUCTION R2_ENABLED=True branch (`_stream_composed_r2`) uses, so that
+# branch's own independent write-after-build call runs for real under test.
+# ===========================================================================
+
+class _FakeR2Response:
+    def __init__(self, data: bytes, status_code: int = 200):
+        self.status_code = status_code
+        self._data = data
+
+    async def aiter_bytes(self, chunk_size=1024 * 1024):
+        yield self._data
+
+
+class _FakeR2StreamCtx:
+    def __init__(self, data: bytes, status_code: int = 200):
+        self._resp = _FakeR2Response(data, status_code)
+
+    async def __aenter__(self):
+        return self._resp
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakeR2AsyncClient:
+    """Stands in for `httpx.AsyncClient` -- `downloads.py` imports `httpx`
+    LOCALLY inside `download_file` (`import httpx`), so patching the real
+    `httpx.AsyncClient` class (not a downloads.py attribute) is what actually
+    intercepts the call."""
+
+    def __init__(self, reel_bytes: bytes, status_code: int = 200):
+        self._reel_bytes = reel_bytes
+        self._status_code = status_code
+
+    def __call__(self, *args, **kwargs):
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    def stream(self, method, url):
+        return _FakeR2StreamCtx(self._reel_bytes, self._status_code)
+
+
+def _install_r2_source_pipeline(stack, store, counters, *, reel_bytes=b"ORIGINAL-FROM-R2",
+                                 **kwargs):
+    """Layers the PRODUCTION R2-source branch on top of `_install_cached_pipeline`:
+    flips `R2_ENABLED` True, stubs `get_download_file_url` (skips the real
+    presign/HEAD-verify), and fakes `httpx.AsyncClient` so `_stream_composed_r2`
+    runs its real control flow -- including its OWN write-after-build call --
+    end to end."""
+    _install_cached_pipeline(stack, store, counters, **kwargs)
+    stack.enter_context(patch("app.routers.downloads.R2_ENABLED", True))
+    stack.enter_context(patch(
+        "app.routers.downloads.get_download_file_url",
+        lambda filename, verify_exists=False: "https://fake-r2.example/presigned",
+    ))
+    stack.enter_context(patch("httpx.AsyncClient", _FakeR2AsyncClient(reel_bytes)))
 
 
 # ===========================================================================
@@ -398,3 +472,52 @@ def test_concurrent_uncached_requests_dont_corrupt_output(client):
     assert body1 == body2 == b"COMPOSED", "both callers got a valid, byte-identical MP4"
     assert len(store) == 1, "both writes targeted the ONE shared key"
     assert next(iter(store.values())) == b"COMPOSED", "cached object is byte-complete, not partial"
+
+
+# ===========================================================================
+# 5. PRODUCTION R2-source branch (R2_ENABLED=True, `_stream_composed_r2`):
+#    the local-disk branch above never exercises this code path's OWN
+#    write-after-build call.
+# ===========================================================================
+
+def test_r2_source_identical_request_hits_cache_no_recompute(client):
+    """Mirrors `test_identical_request_hits_cache_no_recompute`, but through
+    the real `R2_ENABLED=True` / `_stream_composed_r2` branch: the reel is
+    fetched via a faked presigned URL + httpx stream (never local disk), and
+    the SECOND request for the same key must still skip fetch+compose
+    entirely."""
+    db = _db_path()
+    fv_id, _filename = _seed_final_video(db)
+    # Deliberately NOT written to local disk -- the R2 branch never reads it.
+
+    store, counters = {}, {"compose": 0}
+    with ExitStack() as stack:
+        _install_r2_source_pipeline(stack, store, counters)
+
+        r1 = _get(client, fv_id)
+        assert r1.status_code == 200
+        assert counters["compose"] == 1, "first request builds (fetches via the faked R2 stream)"
+        assert len(store) == 1, "the R2 branch's OWN write-after-build populated the cache"
+
+        r2 = _get(client, fv_id)
+        assert r2.status_code == 200
+        # THE assertion: compose did not run a second time on the R2 branch either.
+        assert counters["compose"] == 1, "second request must NOT recompute"
+        assert r2.content == r1.content == b"COMPOSED", "cache served the identical bytes"
+
+
+def test_r2_source_degraded_compose_is_not_cached(client):
+    """Mirrors `test_degraded_compose_is_not_cached` on the R2 branch: a
+    non-fatal degradation still streams (200) but the R2 branch's OWN
+    write-after-build must NOT populate the cache."""
+    db = _db_path()
+    fv_id, _filename = _seed_final_video(db)
+
+    store, counters = {}, {"compose": 0}
+    with ExitStack() as stack:
+        _install_r2_source_pipeline(stack, store, counters, compose_full_fidelity=False)
+        assert _get(client, fv_id).status_code == 200, "degraded compose still streams to this caller"
+        assert counters["compose"] == 1
+        assert store == {}, "a degraded (not full-fidelity) compose must NOT poison the cache"
+        assert _get(client, fv_id).status_code == 200
+        assert counters["compose"] == 2, "degraded output was not cached -> a fresh build"
