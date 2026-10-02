@@ -91,7 +91,7 @@ export function FocusTimeline({
           selectedLayer === 'playhead' ? 'bg-blue-900/50' : 'bg-gray-900 hover:bg-gray-800'
         }`}
         onClick={() => onLayerSelect && onLayerSelect('playhead')}
-        title="Video track — click anywhere to scrub through the clip. Use Space to play/pause."
+        title="Video track - click anywhere to scrub through the highlight. Use Space to play/pause."
       >
         <Film size={18} className={selectedLayer === 'playhead' ? 'text-blue-300' : 'text-blue-400'} />
       </div>
@@ -111,7 +111,7 @@ export function FocusTimeline({
       {segmentTrackVisible && (
         <div
           className="mt-0.5 lg:mt-1 h-14 lg:h-20 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 rounded-bl-lg"
-          title="Speed & trim — click segments to change playback speed. Drag edges to trim the clip."
+          title="Speed & trim - click segments to change playback speed. Drag edges to trim the highlight."
         >
           <Split size={18} className="text-purple-400" />
         </div>

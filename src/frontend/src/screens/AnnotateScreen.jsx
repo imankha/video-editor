@@ -234,7 +234,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         if (!selectedRegion?.autoProjectId) return;
         return selectProject(selectedRegion.autoProjectId).then((project) => {
           if (!project) {
-            toast.error("Couldn't open this reel", { message: 'Check your network and try again.' });
+            toast.error("Couldn't open this highlight", { message: 'Check your network and try again.' });
             return;
           }
           // Remember this handoff so Focus/Overlay's publish-exit can return
@@ -270,7 +270,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     persistAnnotateProgress();
     const project = await selectProject(autoProjectId);
     if (!project) {
-      toast.error("Couldn't open this reel", { message: 'Check your network and try again.' });
+      toast.error("Couldn't open this highlight", { message: 'Check your network and try again.' });
       return;
     }
     // Remember this handoff so Focus/Overlay's publish-exit can return here

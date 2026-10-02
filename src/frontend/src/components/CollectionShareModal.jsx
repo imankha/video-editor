@@ -182,7 +182,7 @@ export function CollectionShareModal({ definition, title, onClose }) {
               hasConsent={!!currentProfile?.introConsentAt}
               onSelect={handleIntroSelect}
               onRequestConsent={handleRequestIntroConsent}
-              frozenNote="Frozen when you share -- changing this reel's intro later won't change this link."
+              frozenNote="Frozen when you share -- changing this highlight's intro later won't change this link."
             />
           </div>
 

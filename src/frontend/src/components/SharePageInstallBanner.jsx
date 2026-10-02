@@ -11,7 +11,7 @@ export function SharePageInstallBanner() {
       <div className="flex items-center gap-2 min-w-0">
         <Download size={16} className="text-purple-400 shrink-0" />
         <p className="text-sm text-gray-300 truncate">
-          Get the app to make your own reels
+          Get the app to make your own highlights
         </p>
       </div>
       {platform === 'ios' ? (

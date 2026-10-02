@@ -90,7 +90,7 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
     const previewUrl = await resolvePreviewUrl(projectId);
     if (!previewUrl) {
       console.error('[ResumeFocus] no working-video preview URL for project', projectId);
-      toastError("Couldn't open the preview", { message: 'Open the clip from Clips to finish it.' });
+      toastError("Couldn't open the preview", { message: 'Open the highlight from Clips to finish it.' });
       return { opened: false, navigated: false };
     }
 
@@ -125,7 +125,7 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
     return { opened: true, navigated: true };
   } catch (err) {
     console.error('[ResumeFocus] failed to resume Focus completion for project', projectId, err);
-    toastError("Couldn't open the preview", { message: 'Open the clip from Clips to finish it.' });
+    toastError("Couldn't open the preview", { message: 'Open the highlight from Clips to finish it.' });
     return { opened: false, navigated: false };
   }
 }

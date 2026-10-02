@@ -18,7 +18,7 @@ export function StorageExpiryBanner({ atRiskGameCount, dependentDraftCount, onEx
 
   const gameWord = atRiskGameCount === 1 ? 'game' : 'games';
   const gamePronoun = atRiskGameCount === 1 ? 'it' : 'them';
-  const reelWord = dependentDraftCount === 1 ? 'draft reel' : 'draft reels';
+  const reelWord = dependentDraftCount === 1 ? 'draft highlight' : 'draft highlights';
   const dependVerb = dependentDraftCount === 1 ? 'depends' : 'depend';
 
   return (
@@ -30,7 +30,7 @@ export function StorageExpiryBanner({ atRiskGameCount, dependentDraftCount, onEx
       <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-yellow-400" />
       <div className="flex-1 min-w-0">
         <span>
-          {atRiskGameCount} {gameWord} expiring soon — {dependentDraftCount} {reelWord}{' '}
+          {atRiskGameCount} {gameWord} expiring soon - {dependentDraftCount} {reelWord}{' '}
           {dependVerb} on {gamePronoun}.
         </span>{' '}
         <button

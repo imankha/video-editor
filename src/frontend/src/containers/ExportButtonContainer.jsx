@@ -636,7 +636,7 @@ export function ExportButtonContainer({
           console.log('[ExportButtonContainer] Clip state saved, requesting render');
         } catch (saveErr) {
           console.error('[ExportButtonContainer] Failed to save clip state:', saveErr);
-          throw new Error('Failed to save clip edits before export. Please try again.');
+          throw new Error('Failed to save highlight edits before export. Please try again.');
         }
 
         endpoint = `${API_BASE}/api/export/render`;

@@ -258,7 +258,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
         // Clips tab. Point there (this modal has no Focus affordance to offer the
         // funnel's "click Focus" tap) instead of the old, location-blind
         // "Reel created!".
-        result.project_created ? 'Reel started - find it on the Clips tab' : 'This clip is already a draft reel',
+        result.project_created ? 'Highlight started - find it on the Clips tab' : 'This highlight is already a draft',
         { duration: 5000 },
       );
     }
@@ -490,7 +490,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                 <div className="order-2 sm:order-1 w-full sm:w-64 max-h-[38dvh] sm:max-h-none border-t sm:border-t-0 sm:border-r border-gray-700 flex-shrink-0 flex flex-col min-h-0">
                   <div className="p-2 border-b border-gray-700 flex items-center justify-between gap-2 flex-shrink-0">
                     <span className="text-xs text-gray-400 font-medium">
-                      {sidebarClips.length} clips
+                      {sidebarClips.length} highlights
                     </span>
                     <div className="flex items-center gap-1">
                       <Button
@@ -501,17 +501,17 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                         disabled={!createClipEnabled || isSaving}
                         title={
                           !canCreateClip ? 'Video source unavailable'
-                            : activeRecapClip?.in_drafts ? 'This clip is already a draft reel'
-                            : 'Create a draft reel from this clip'
+                            : activeRecapClip?.in_drafts ? 'This highlight is already a draft'
+                            : 'Create a draft highlight from this moment'
                         }
                       >
-                        Create clip
+                        Create highlight
                       </Button>
                       {/* Pull-up handle — phones only; toggles the immersive collapse. */}
                       <button
                         onClick={() => setClipsCollapsed(v => !v)}
                         className="sm:hidden flex items-center justify-center min-h-11 min-w-11 p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
-                        aria-label={clipsCollapsed ? 'Show clip list' : 'Hide clip list'}
+                        aria-label={clipsCollapsed ? 'Show highlights list' : 'Hide highlights list'}
                         aria-expanded={!clipsCollapsed}
                       >
                         {clipsCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -674,9 +674,9 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                         size="sm"
                         icon={Plus}
                         onClick={handleCreateClip}
-                        title="Create a clip in Annotate at this moment"
+                        title="Create a highlight in Annotate at this moment"
                       >
-                        Create clip
+                        Create highlight
                       </Button>
                     )}
                     {/* Pull-up handle — phones only; toggles the immersive collapse. */}

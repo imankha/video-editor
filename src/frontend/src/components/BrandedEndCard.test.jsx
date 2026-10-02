@@ -13,7 +13,7 @@ describe('BrandedEndCard', () => {
 
   it('renders the CTA, Made With text, and logo row when visible=true', () => {
     render(<BrandedEndCard visible={true} onReplay={() => {}} />);
-    expect(screen.getByText('Make your own reel at www.reelballers.com')).toBeTruthy();
+    expect(screen.getByText('Make your own highlights at www.reelballers.com')).toBeTruthy();
     expect(screen.getByText('Made With')).toBeTruthy();
     // T5675: wordmark is one single-line lockup, not split "Reel" / "Ballers" spans.
     expect(screen.getByText('ReelBallers')).toBeTruthy();
@@ -21,7 +21,7 @@ describe('BrandedEndCard', () => {
 
   it('CTA links to reelballers.com with UTM params, opens in new tab', () => {
     render(<BrandedEndCard visible={true} onReplay={() => {}} />);
-    const cta = screen.getByText('Make your own reel at www.reelballers.com').closest('a');
+    const cta = screen.getByText('Make your own highlights at www.reelballers.com').closest('a');
     expect(cta.href).toBe(CTA_URL);
     expect(cta.target).toBe('_blank');
     expect(cta.rel).toContain('noopener');
@@ -43,7 +43,7 @@ describe('BrandedEndCard', () => {
   it('clicking the CTA link does NOT call onReplay', () => {
     const onReplay = vi.fn();
     render(<BrandedEndCard visible={true} onReplay={onReplay} />);
-    fireEvent.click(screen.getByText('Make your own reel at www.reelballers.com'));
+    fireEvent.click(screen.getByText('Make your own highlights at www.reelballers.com'));
     expect(onReplay).not.toHaveBeenCalled();
   });
 
@@ -51,6 +51,6 @@ describe('BrandedEndCard', () => {
     const { rerender, container } = render(<BrandedEndCard visible={false} onReplay={() => {}} />);
     expect(container.firstChild).toBeNull();
     rerender(<BrandedEndCard visible={true} onReplay={() => {}} />);
-    expect(screen.getByText('Make your own reel at www.reelballers.com')).toBeTruthy();
+    expect(screen.getByText('Make your own highlights at www.reelballers.com')).toBeTruthy();
   });
 });

@@ -18,13 +18,13 @@ describe('StorageExpiryBanner (T8330)', () => {
   it('uses plural copy for multiple games and reels', () => {
     render(<StorageExpiryBanner atRiskGameCount={3} dependentDraftCount={5} />);
     expect(bannerText()).toContain('3 games expiring soon');
-    expect(bannerText()).toContain('5 draft reels depend on them');
+    expect(bannerText()).toContain('5 draft highlights depend on them');
   });
 
   it('uses singular copy for one game and one reel', () => {
     render(<StorageExpiryBanner atRiskGameCount={1} dependentDraftCount={1} />);
     expect(bannerText()).toContain('1 game expiring soon');
-    expect(bannerText()).toContain('1 draft reel depends on it');
+    expect(bannerText()).toContain('1 draft highlight depends on it');
   });
 
   it('T10130: shows the safe-to-expire reassurance line', () => {

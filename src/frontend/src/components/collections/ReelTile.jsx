@@ -267,8 +267,8 @@ export function ReelTile({
         <div className="absolute top-1.5 left-1.5 z-20 flex items-center gap-1">
           <div
             className="px-2 py-0.5 bg-cyan-500/90 text-black text-xs font-bold rounded-md"
-            title={`Ranked #${seasonRank} of your reels this season`}
-            aria-label={`Ranked #${seasonRank} of your reels this season`}
+            title={`Ranked #${seasonRank} of your highlights this season`}
+            aria-label={`Ranked #${seasonRank} of your highlights this season`}
           >
             #{seasonRank}
           </div>
@@ -276,7 +276,7 @@ export function ReelTile({
             <div
               data-testid="intro-badge"
               className="px-1 py-0.5 bg-black/60 backdrop-blur-sm rounded-md flex items-center justify-center"
-              title="An intro plays before this reel"
+              title="An intro plays before this highlight"
             >
               <IntroIcon size={14} fill="currentColor" aria-hidden="true" className={INTRO_BADGE.text} />
             </div>
@@ -287,7 +287,7 @@ export function ReelTile({
           <div
             data-testid="intro-badge"
             className="absolute top-1.5 left-1.5 z-20 px-1 py-0.5 bg-black/60 backdrop-blur-sm rounded-md flex items-center justify-center"
-            title="An intro plays before this reel"
+            title="An intro plays before this highlight"
           >
             <IntroIcon size={14} fill="currentColor" aria-hidden="true" className={INTRO_BADGE.text} />
           </div>
@@ -322,8 +322,8 @@ export function ReelTile({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); startRename(); }}
-              title="Rename reel"
-              aria-label="Rename reel"
+              title="Rename highlight"
+              aria-label="Rename highlight"
               className="flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[32px] min-w-[32px] coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"
             >
               <Pencil size={14} />

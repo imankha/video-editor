@@ -34,7 +34,7 @@ export function canReEditReel(reel) {
  * /render 400s generically). Names the affordances that DO still work.
  */
 export const LEGACY_MULTICLIP_REFRAME_MESSAGE =
-  'This reel was made from multiple clips and can no longer be re-edited in Focus. ' +
+  'This highlight was made from multiple clips and can no longer be re-edited in Focus. ' +
   'You can still add a Spotlight, publish, and download it.';
 
 /**

@@ -46,7 +46,7 @@ describe('announceReelCreated (T8480)', () => {
   it('falls back to a generic clip name when none is supplied', () => {
     announceReelCreated(42, { onOpenReelInFocus, fetchProjects });
     const toasts = useToastStore.getState().toasts;
-    expect(toasts[0].title).toBe('Your clip is now in Clips');
+    expect(toasts[0].title).toBe('Your highlight is now in Clips');
   });
 
   it('the toast action opens Focus for the new project via the select+navigate gesture', () => {

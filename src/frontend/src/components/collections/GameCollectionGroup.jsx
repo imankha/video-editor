@@ -132,7 +132,7 @@ export function GameCollectionGroup({
           {members
             ? (
                 <CardCarousel
-                  ariaLabel={`${cardTitle} ${ratio} reels`}
+                  ariaLabel={`${cardTitle} ${ratio} highlights`}
                   // T8990: partial guide on this group's first eligible-ratio row
                   // only (the tab's first row, passed only to the first group).
                   fillerSlot={ratioIdx === 0 ? fillerSlot : null}

@@ -9,7 +9,7 @@ import { ConfidenceGauge } from './ConfidenceGauge';
 
 // The first sentence always explains the purpose; the second is tailored to the
 // user's progress (per 20% band) to encourage the next step.
-const SORT_PURPOSE = 'Sort your clips head-to-head so the best ones show first.';
+const SORT_PURPOSE = 'Sort your highlights head-to-head so the best ones show first.';
 
 /** {tier, explain} for the banner, by sort-coverage % and whether ranking is
  *  still available (active). 100% / caught-up gets its own done-state copy. */
@@ -17,7 +17,7 @@ function progressMessage(pct, active) {
   if (!active) {
     return {
       tier: 'All Clips Ranked',
-      explain: 'Add more clips to keep comparing.',
+      explain: 'Add more highlights to keep comparing.',
     };
   }
   let tier, note;
@@ -148,7 +148,7 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
           <div className="text-xs text-gray-400 mt-1 leading-snug">{explain}</div>
           {active && (
             <div className={`flex items-center gap-1 mt-2 text-sm font-medium ${REEL.accent}`}>
-              Rank reels <ChevronRight size={16} />
+              Rank highlights <ChevronRight size={16} />
             </div>
           )}
         </div>

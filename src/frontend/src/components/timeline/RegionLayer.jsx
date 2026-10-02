@@ -559,7 +559,7 @@ export default function RegionLayer({
       <ConfirmationDialog
         isOpen={pendingDeleteRegionId != null}
         title="Delete this spotlight?"
-        message="This can't be undone. You can add a new one afterward with Add Spotlight, but any custom positioning for this part of the clip will be lost."
+        message="This can't be undone. You can add a new one afterward with Add Spotlight, but any custom positioning for this part of the highlight will be lost."
         onClose={() => setPendingDeleteRegionId(null)}
         buttons={[
           { label: 'Cancel', onClick: () => setPendingDeleteRegionId(null), variant: 'secondary' },

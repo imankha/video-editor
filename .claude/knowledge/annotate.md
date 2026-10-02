@@ -15,11 +15,13 @@ that modal — the T11210 test comment claiming the single-clip export flow used
 `DraftTile`'s `isReel` label branch. **Every `DraftTile` now names its actions as a CLIP**
 (Delete/Rename/Publish clip) regardless of `is_auto_created` — a legacy multi-clip draft in the
 Clips-tab Legacy reels group reads "clip" too; the full reel→highlight vocabulary sweep is T11280.
-KEPT (live KEEP surfaces, do NOT delete): `LIBRARY_ACTIONS.PUBLISH_REEL` (CollectionPlayer) and
-`SECTION_NAMES.REELS` = 'Reels' (LockedReasonModal "reopen Reels" collections copy — T11280 rewords).
-The Focus/Overlay "publish later" toast collapsed to the single `FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP`
-("Saved to Clips") for every draft. The Clips ungrouped-drafts section relabelled "Other reels" →
-"Other clips". Legacy multi-clip drafts stay reachable ONLY via the Clips-tab **Legacy reels** group
+KEPT (live KEEP surfaces, do NOT delete): `LIBRARY_ACTIONS.PUBLISH_REEL` (CollectionPlayer; T11280
+reworded its VALUE to 'Publish highlight', key unchanged) and `SECTION_NAMES.REELS` = 'Reels' (an
+out-of-scope internal identifier; T11280 repointed LockedReasonModal's collections copy to PUBLISHED,
+so this constant now renders nowhere). The Focus/Overlay "publish later" toast collapsed to the single
+`FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP` ("Added to Clips") for every draft. The Clips ungrouped-drafts
+section relabelled "Other reels" → "Other highlights" (T11280; "Other clips" was the T11230 interim).
+Legacy multi-clip drafts stay reachable ONLY via the Clips-tab **Legacy highlights** group
 (`data-testid="legacy-reel-drafts"`, T11220 below) + Published tab. Tab-IA test renamed
 `ProjectManager.fourTabIA.test.jsx` → `.threeTabIA.test.jsx`. NOTE: many entries BELOW that describe
 a four-tab bar / "Reels" tab / "Create reel" are pre-T11230 HISTORY — the live IA is three tabs.)

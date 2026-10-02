@@ -78,13 +78,13 @@ describe('useRawClipSave — sync_failed durable-fail UX (T5350)', () => {
       // Never a silent success.
       expect(res).toBeNull();
       // Clip-appropriate copy, NOT the reel/move message.
-      expect(result.current.error).toBe("Your clip wasn't saved. Please try again.");
+      expect(result.current.error).toBe("Your highlight wasn't saved. Please try again.");
       expect(result.current.error).not.toMatch(/reel was not moved/i);
 
       expect(toast.error).toHaveBeenCalledTimes(1);
       const [title, opts] = toast.error.mock.calls[0];
       expect(title).toBe('Could not save to the cloud');
-      expect(opts.message).toBe("Your clip wasn't saved. Please try again.");
+      expect(opts.message).toBe("Your highlight wasn't saved. Please try again.");
       expect(opts.message).not.toMatch(/reel was not moved/i);
       expect(opts.duration).toBe(0); // persistent
       expect(opts.action.label).toBe('Retry');
@@ -144,7 +144,7 @@ describe('useRawClipSave — sync_failed durable-fail UX (T5350)', () => {
       await act(async () => { res = await result.current.updateClip(3, { rating: 5 }); });
 
       expect(res).toBeNull();
-      expect(result.current.error).toBe("Your clip changes weren't saved. Please try again.");
+      expect(result.current.error).toBe("Your highlight changes weren't saved. Please try again.");
       expect(result.current.error).not.toMatch(/reel was not moved/i);
       const [title, opts] = toast.error.mock.calls[0];
       expect(title).toBe('Could not save to the cloud');
@@ -179,7 +179,7 @@ describe('useRawClipSave — sync_failed durable-fail UX (T5350)', () => {
       await act(async () => { res = await result.current.deleteClip(8); });
 
       expect(res).toBe(false);
-      expect(result.current.error).toBe("Your clip wasn't deleted. Please try again.");
+      expect(result.current.error).toBe("Your highlight wasn't deleted. Please try again.");
       expect(result.current.error).not.toMatch(/reel was not moved/i);
       const [title, opts] = toast.error.mock.calls[0];
       expect(title).toBe('Could not save to the cloud');

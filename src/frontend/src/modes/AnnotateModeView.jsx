@@ -1231,7 +1231,7 @@ export function AnnotateModeView({
                         data-testid="annotate-stage-cta"
                         title={
                           [CLIP_STAGE.SPOTLIGHT, CLIP_STAGE.FINAL, CLIP_STAGE.PUBLISHED].includes(selectedClipStage?.stage)
-                            ? `Open the clip: ${selectedClipStage.label}`
+                            ? `Open the highlight: ${selectedClipStage.label}`
                             : ANNOTATE.FRAME_THIS_CLIP_HINT
                         }
                         className="flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white shadow-cyan-900/40"

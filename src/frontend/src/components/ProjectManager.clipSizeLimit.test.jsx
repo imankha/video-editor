@@ -136,7 +136,7 @@ const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
 
 async function openPicker() {
   fireEvent.click(clipsTab());
-  fireEvent.click(await screen.findByRole('button', { name: 'Upload clip' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Upload highlight' }));
   fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
   return screen.getByTestId('clip-upload-input');
 }

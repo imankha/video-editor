@@ -155,7 +155,7 @@ describe('T6300 ReelTile persistent actions', () => {
 
     it('hides while renaming (matches Play)', () => {
       renderTile();
-      fireEvent.click(screen.getByRole('button', { name: 'Rename reel' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Rename highlight' }));
       expect(screen.queryByTestId('reel-card-share')).toBeNull();
     });
   });
@@ -176,7 +176,7 @@ describe('T6300 ReelTile persistent actions', () => {
   it('T6890: the rename pencil sits beside the name and starts an inline rename', () => {
     renderTile();
     // Discoverable at rest (no kebab open needed) — the pencil is next to the name.
-    const renameBtn = screen.getByRole('button', { name: 'Rename reel' });
+    const renameBtn = screen.getByRole('button', { name: 'Rename highlight' });
     expect(renameBtn).toBeTruthy();
     fireEvent.click(renameBtn);
     // Inline rename input appears, seeded with the current name.
@@ -186,7 +186,7 @@ describe('T6300 ReelTile persistent actions', () => {
   it('Play hides while renaming (matches DraftTile precedent)', () => {
     renderTile({ canOpenSource: () => false });
     // T6890: rename now starts from the pencil beside the name, not the kebab.
-    fireEvent.click(screen.getByRole('button', { name: 'Rename reel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rename highlight' }));
     expect(screen.queryByRole('button', { name: 'Watch marked plays' })).toBeNull();
   });
 

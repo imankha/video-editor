@@ -99,7 +99,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
           if (result.errors?.length > 0) {
             console.error('[SharedAnnotation] resolve-pending-shares returned errors:', result.errors);
             setState('error');
-            setErrorMessage('Failed to load shared clips. Please try again.');
+            setErrorMessage('Failed to load shared plays. Please try again.');
             return;
           }
           await useGamesDataStore.getState().fetchGames();
@@ -108,7 +108,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
           const body = await resp.text().catch(() => '');
           console.error(`[SharedAnnotation] resolve-pending-shares failed: ${resp.status} ${body}`);
           setState('error');
-          setErrorMessage('Failed to load shared clips. Please try again.');
+          setErrorMessage('Failed to load shared plays. Please try again.');
         }
       } catch (err) {
         console.error('[SharedAnnotation] resolve-pending-shares threw:', err);
@@ -169,7 +169,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
               {data.game_name}
             </h1>
             <p className="text-gray-400 text-sm text-center mb-5">
-              {clipCount} {clipCount === 1 ? 'clip' : 'clips'} from {data.sharer_email}
+              {clipCount} {clipCount === 1 ? 'play' : 'plays'} from {data.sharer_email}
             </p>
 
             {/* Clip list */}

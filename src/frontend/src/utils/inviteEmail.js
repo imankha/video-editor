@@ -9,12 +9,12 @@ import apiFetch from './apiFetch';
 
 export function buildInviteMailtoUrl({ athleteName, userEmail, inviteCode }) {
   const name = athleteName?.trim() || 'my kid';
-  const subject = `Check out how I make highlight reels for ${name}`;
+  const subject = `Check out how I make highlight videos for ${name}`;
 
   const lines = [
     'Hey!',
     '',
-    `I've been using ReelBallers to make highlight reels for ${name} and it's been amazing. You upload your game footage and within minutes you have professional-quality highlights ready for Instagram or TikTok.`,
+    `I've been using ReelBallers to make highlight videos for ${name} and it's been amazing. You upload your game footage and within minutes you have professional-quality highlights ready for Instagram or TikTok.`,
     '',
     'The video quality is incredible -- way better than what you get from Veo or Trace. And it takes minutes, not hours.',
     '',
@@ -37,7 +37,7 @@ export function buildInviteUrl(inviteCode) {
 
 export function buildInviteMessage(inviteCode) {
   const url = buildInviteUrl(inviteCode);
-  return `Hey,\nJust wanted to share a link to ReelBallers -- really cool app that lets you annotate your athlete's clips and turn them into highlight reels.\n\n${url}`;
+  return `Hey,\nJust wanted to share a link to ReelBallers -- really cool app that lets you annotate your athlete's plays and turn them into highlight videos.\n\n${url}`;
 }
 
 export async function shareInvite() {

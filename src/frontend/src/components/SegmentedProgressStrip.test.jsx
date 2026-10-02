@@ -32,7 +32,7 @@ describe('SegmentedProgressStrip (T3540)', () => {
     const { container } = render(
       <SegmentedProgressStrip project={makeProject({ clips_in_progress: 1 })} />
     );
-    const segment = getSegmentByTitle(container, 'Clip 1');
+    const segment = getSegmentByTitle(container, 'Highlight 1');
     expect(segment).toBeTruthy();
     expect(segment.className).not.toContain('bg-blue-500');
     expect(segment.className).toContain('bg-gray-600');
@@ -66,7 +66,7 @@ describe('SegmentedProgressStrip (T3540)', () => {
     const { container } = render(
       <SegmentedProgressStrip project={makeProject({ clip_count: 2, clips_in_progress: 1 })} />
     );
-    const pending = getSegmentByTitle(container, 'Clip 2');
+    const pending = getSegmentByTitle(container, 'Highlight 2');
     expect(pending.className).toContain('bg-gray-600');
     expect(getHalfFill(pending)).toBeNull();
   });
@@ -114,9 +114,9 @@ describe('SegmentedProgressStrip (T3540)', () => {
         })}
       />
     );
-    const segment = getSegmentByTitle(container, 'Clip 1');
+    const segment = getSegmentByTitle(container, 'Highlight 1');
     expect(segment.className).toContain('ring-amber-400');
-    expect(segment.getAttribute('title')).toContain('— clip edited since this reel was made');
+    expect(segment.getAttribute('title')).toContain('- highlight edited since this highlight was made');
   });
 
   it('does not ring a non-stale clip segment', () => {
@@ -128,9 +128,9 @@ describe('SegmentedProgressStrip (T3540)', () => {
         })}
       />
     );
-    const segment = getSegmentByTitle(container, 'Clip 1');
+    const segment = getSegmentByTitle(container, 'Highlight 1');
     expect(segment.className).not.toContain('ring-amber-400');
-    expect(segment.getAttribute('title')).not.toContain('clip edited since this reel was made');
+    expect(segment.getAttribute('title')).not.toContain('highlight edited since this highlight was made');
   });
 
   it('never rings the collapsed "Focus" segment once framing is complete (strip cannot carry the produced-state cue)', () => {
@@ -152,7 +152,7 @@ describe('SegmentedProgressStrip (T3540)', () => {
         project={makeProject({ clips_in_progress: 1, has_overlay_edits: true })}
       />
     );
-    const clipSeg = getSegmentByTitle(container, 'Clip 1');
+    const clipSeg = getSegmentByTitle(container, 'Highlight 1');
     expect(clipSeg.getAttribute('title')).toContain('Started - export Framing to complete');
     expect(clipSeg.getAttribute('title')).not.toContain('Editing');
 

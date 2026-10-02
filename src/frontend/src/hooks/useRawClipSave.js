@@ -19,21 +19,21 @@ const API_BASE_URL = `${API_BASE}/api`;
 export const CLIP_SYNC_FAILED_COPY = {
   save: {
     title: 'Could not save to the cloud',
-    message: "Your clip wasn't saved. Please try again.",
+    message: "Your highlight wasn't saved. Please try again.",
   },
   update: {
     title: 'Could not save to the cloud',
-    message: "Your clip changes weren't saved. Please try again.",
+    message: "Your highlight changes weren't saved. Please try again.",
   },
   delete: {
     title: 'Could not save to the cloud',
-    message: "Your clip wasn't deleted. Please try again.",
+    message: "Your highlight wasn't deleted. Please try again.",
   },
   // T10300: link/unlink an uploaded clip to a game (POST /clips/raw/{id}/link,
   // durable_sync-gated like the others).
   link: {
     title: 'Could not save to the cloud',
-    message: "Your clip's game wasn't updated. Please try again.",
+    message: "Your highlight's game wasn't updated. Please try again.",
   },
 };
 
@@ -180,7 +180,7 @@ export function useRawClipSave(activeGameIdRef = null) {
           console.warn('[useRawClipSave] saveClip: game no longer exists (404) — ghost session, clip not saved');
           return { notFound: true };
         }
-        throw new Error(errorData.detail || 'Failed to save clip');
+        throw new Error(errorData.detail || 'Failed to save highlight');
       }
 
       const result = await response.json();
@@ -234,7 +234,7 @@ export function useRawClipSave(activeGameIdRef = null) {
           surfaceClipSyncFailed('update', retry ?? (() => updateClip(clipId, updates)));
           return null;
         }
-        throw new Error(errorData.detail || 'Failed to update clip');
+        throw new Error(errorData.detail || 'Failed to update highlight');
       }
 
       const result = await response.json();
@@ -280,7 +280,7 @@ export function useRawClipSave(activeGameIdRef = null) {
           surfaceClipSyncFailed('delete', retry ?? (() => deleteClip(clipId)));
           return false;
         }
-        throw new Error(errorData.detail || 'Failed to delete clip');
+        throw new Error(errorData.detail || 'Failed to delete highlight');
       }
 
       console.log('[useRawClipSave] Deleted clip:', clipId);

@@ -127,7 +127,7 @@ describe('CollectionPlayer modality (T5860)', () => {
   });
 });
 
-const RE_EDIT = 'Re-edit this reel';
+const RE_EDIT = 'Re-edit this highlight';
 const reelWith = (project_id) => [{ id: 99, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null, project_id }];
 
 const renderPlayer = (props) =>
@@ -184,7 +184,7 @@ describe('CollectionPlayer Re-edit button gating (T3940)', () => {
   });
 });
 
-const RE_RANK = 'Re-rank this reel';
+const RE_RANK = 'Re-rank this highlight';
 const rankReel = ({ project_id = 7, clip_count = 1 } = {}) =>
   [{ id: 99, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null, project_id, clip_count }];
 
@@ -260,24 +260,24 @@ describe('CollectionPlayer draft-preview props (T8530)', () => {
 
   it('renders a Publish button (found by its full accessible name) when onPublish is set', () => {
     render(<CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} onPublish={vi.fn()} />);
-    expect(screen.getByTitle('Publish reel')).toBeTruthy();
+    expect(screen.getByTitle('Publish highlight')).toBeTruthy();
   });
 
   it('omits Publish when onPublish is not set', () => {
     render(<CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} />);
-    expect(screen.queryByTitle('Publish reel')).toBeNull();
+    expect(screen.queryByTitle('Publish highlight')).toBeNull();
   });
 
   it('invokes onPublish on click', () => {
     const onPublish = vi.fn();
     render(<CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} onPublish={onPublish} />);
-    fireEvent.click(screen.getByTitle('Publish reel'));
+    fireEvent.click(screen.getByTitle('Publish highlight'));
     expect(onPublish).toHaveBeenCalledTimes(1);
   });
 
   it('disables Publish while publishLoading', () => {
     render(<CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} onPublish={vi.fn()} publishLoading />);
-    expect(screen.getByTitle('Publish reel').disabled).toBe(true);
+    expect(screen.getByTitle('Publish highlight').disabled).toBe(true);
   });
 
   it('renders the statusBanner slot when provided', () => {

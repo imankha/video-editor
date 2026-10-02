@@ -637,8 +637,8 @@ export function PublishedReelsPanel({
       const filename = `${download.project_name || 'highlight'}-highlight.mp4`;
       const method = await webShare({
         downloadId: download.id,
-        title: download.project_name || 'Highlight Reel',
-        text: `Check out ${download.project_name || 'this highlight reel'}!`,
+        title: download.project_name || 'Highlight',
+        text: `Check out ${download.project_name || 'this highlight'}!`,
         filename,
       });
       track('share_initiated', { method, source: 'gallery' });
@@ -676,8 +676,8 @@ export function PublishedReelsPanel({
         const filename = `${reel.name || 'highlight'}-highlight.mp4`;
         const method = await webShare({
           downloadId: reel.id,
-          title: reel.name || 'Highlight Reel',
-          text: `Check out ${reel.name || 'this highlight reel'}!`,
+          title: reel.name || 'Highlight',
+          text: `Check out ${reel.name || 'this highlight'}!`,
           filename,
         });
         track('share_initiated', { method, source: 'player' });

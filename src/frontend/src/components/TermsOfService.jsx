@@ -124,7 +124,7 @@ export function TermsOfService() {
         {/* Section 6 */}
         <Section id="content-ownership" title="6. Content Ownership and License">
           <h4 className="text-white font-medium mb-2">Your Content</h4>
-          <p className="mb-4">You retain full ownership of all content you upload. We do not claim ownership of your videos, clips, or highlights.</p>
+          <p className="mb-4">You retain full ownership of all content you upload. We do not claim ownership of your videos or highlights.</p>
 
           <h4 className="text-white font-medium mb-2">License Grant</h4>
           <p className="mb-3">By uploading content, you grant ReelBallers a limited, non-exclusive, royalty-free license to:</p>

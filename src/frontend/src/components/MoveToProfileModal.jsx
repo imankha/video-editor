@@ -51,7 +51,7 @@ export function MoveToProfileModal({ videoIds, otherProfiles, moving, onMove, on
             <h2 className="text-base font-bold text-white">
               {pendingTarget
                 ? `Move to ${pendingTarget.name}?`
-                : `Move ${count > 1 ? `${count} reels` : 'reel'} to…`}
+                : `Move ${count > 1 ? `${count} highlights` : 'highlight'} to…`}
             </h2>
           </div>
           <button
@@ -67,7 +67,7 @@ export function MoveToProfileModal({ videoIds, otherProfiles, moving, onMove, on
         {pendingTarget ? (
           <div className="p-4">
             <p className="text-sm text-gray-300 pb-4">
-              This {count > 1 ? `${count} reels move` : 'reel moves'} to{' '}
+              This {count > 1 ? `${count} highlights move` : 'highlight moves'} to{' '}
               <span className="font-semibold text-white">{pendingTarget.name}</span> and
               {count > 1 ? ' leave' : ' leaves'} this profile. {count > 1 ? 'They stay' : 'It stays'}{' '}
               playable and shareable, but {count > 1 ? 'are' : 'is'} no longer editable here.
@@ -88,14 +88,14 @@ export function MoveToProfileModal({ videoIds, otherProfiles, moving, onMove, on
                            bg-cyan-600 hover:bg-cyan-500 transition-colors disabled:opacity-50"
               >
                 {moving && <Loader size={16} className="animate-spin" />}
-                Move {count > 1 ? 'reels' : 'reel'}
+                Move {count > 1 ? 'highlights' : 'highlight'}
               </button>
             </div>
           </div>
         ) : (
           <div className="p-3">
             <p className="text-xs text-gray-400 px-1 pb-2">
-              Choose which profile to move {count > 1 ? 'these reels' : 'this reel'} to.
+              Choose which profile to move {count > 1 ? 'these highlights' : 'this highlight'} to.
             </p>
             <div className="flex flex-col gap-1">
               {otherProfiles.map((p) => (

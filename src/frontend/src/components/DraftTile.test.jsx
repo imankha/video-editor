@@ -191,7 +191,7 @@ describe('DraftTile (T5672)', () => {
     expect(screen.getByText('Private')).toBeTruthy();
     // The primary action's accessible name names the object, but its visible label
     // is shortened to "Publish" (matches CollectionPlayer's button).
-    const primary = screen.getByRole('button', { name: 'Publish clip' });
+    const primary = screen.getByRole('button', { name: 'Publish highlight' });
     expect(primary).toBeTruthy();
     expect(primary.textContent).toMatch(/^publish$/i);
   });
@@ -206,7 +206,7 @@ describe('DraftTile (T5672)', () => {
     const { useQuestStore } = await import('../stores/questStore');
     renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Publish clip' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Publish highlight' }));
     });
     expect(apiFetch).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/downloads\/publish\/7$/),
@@ -217,7 +217,7 @@ describe('DraftTile (T5672)', () => {
 
   it('has no primary "Publish clip" action once the draft is published', () => {
     renderTile({ has_final_video: true, final_video_id: 99, is_published: true });
-    expect(screen.queryByRole('button', { name: /publish clip/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /publish highlight/i })).toBeNull();
   });
 
   // T6180 — the five secondary actions collapse behind a kebab in the ready state,
@@ -240,7 +240,7 @@ describe('DraftTile (T5672)', () => {
     expect(screen.getByRole('button', { name: /open in framing/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /open in spotlight/i })).toBeTruthy();
     // First delete click ARMS the confirm without deleting or closing the menu.
-    const del = screen.getByRole('button', { name: /delete clip/i });
+    const del = screen.getByRole('button', { name: /delete highlight/i });
     fireEvent.click(del);
     expect(onDelete).not.toHaveBeenCalled();
     const confirm = screen.getByRole('button', { name: /click again to confirm/i });
@@ -255,7 +255,7 @@ describe('DraftTile (T5672)', () => {
   // (no hover / no kebab open needed) and starts the existing inline rename.
   it('T6890: renders the rename pencil beside the name and starts inline rename', () => {
     const { container } = renderTile();
-    const renameBtn = screen.getByRole('button', { name: 'Rename clip' });
+    const renameBtn = screen.getByRole('button', { name: 'Rename highlight' });
     // It lives in the bottom scrim next to the name, NOT inside the hover action rail.
     const rail = container.querySelector('[data-testid="tile-actions"]');
     expect(rail.contains(renameBtn)).toBe(false);
@@ -267,7 +267,7 @@ describe('DraftTile (T5672)', () => {
   it('T6890: the hover action rail no longer carries a rename button', () => {
     const { container } = renderTile();
     const rail = container.querySelector('[data-testid="tile-actions"]');
-    const railRenameBtn = within(rail).queryByRole('button', { name: 'Rename clip' });
+    const railRenameBtn = within(rail).queryByRole('button', { name: 'Rename highlight' });
     expect(railRenameBtn).toBeNull();
   });
 
@@ -298,8 +298,8 @@ describe('DraftTile (T5672)', () => {
     renderTile({ clip_count: 3 });
     const chip = screen.getByText('3').closest('span');
     expect(chip).toBeTruthy();
-    expect(chip.getAttribute('title')).toBe('Contains 3 clips');
-    expect(chip.getAttribute('aria-label')).toBe('Contains 3 clips');
+    expect(chip.getAttribute('title')).toBe('Contains 3 highlights');
+    expect(chip.getAttribute('aria-label')).toBe('Contains 3 highlights');
     // Layers icon should be present (rendered via Lucide)
     expect(chip.querySelector('svg')).toBeTruthy();
   });
@@ -307,7 +307,7 @@ describe('DraftTile (T5672)', () => {
   it('does not show a clip-count chip for a single-clip draft', () => {
     renderTile({ clip_count: 1 });
     expect(screen.queryByText('1')).toBeNull();
-    expect(screen.queryByTitle(/Contains \d+ clips/)).toBeNull();
+    expect(screen.queryByTitle(/Contains \d+ highlights/)).toBeNull();
   });
 
   // T8350: multi-clip staleness badge (PRIMARY cue — visible in every tile
@@ -347,8 +347,8 @@ describe('DraftTile (T5672)', () => {
         clips: [stale({ start_time: 99 }), stale({ id: 2 })],
       });
       const badge = screen.getByText('1 outdated').closest('span');
-      expect(badge.getAttribute('title')).toBe('1 clip changed since this reel was made — re-export to update it');
-      expect(badge.getAttribute('aria-label')).toBe('1 clip changed since this reel was made');
+      expect(badge.getAttribute('title')).toBe('1 highlight changed since this highlight was made - re-export to update it');
+      expect(badge.getAttribute('aria-label')).toBe('1 highlight changed since this highlight was made');
     });
   });
 
@@ -741,25 +741,25 @@ describe('DraftTile names every draft action as a CLIP (T11230)', () => {
         onDelete={vi.fn()}
       />
     );
-    expect(screen.getByRole('button', { name: 'Rename clip' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Rename highlight' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Rename reel' })).toBeNull();
   });
 
   it('a single-clip auto-draft in the ready state deletes + publishes as a CLIP', () => {
     renderReady({ is_auto_created: true });
-    expect(screen.getByRole('button', { name: 'Publish clip' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Publish highlight' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Publish reel' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
-    expect(screen.getByRole('button', { name: /delete clip/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /delete highlight/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /delete reel/i })).toBeNull();
   });
 
   it('a legacy multi-clip draft (is_auto_created: false) ALSO uses clip wording, never reel', () => {
     renderReady({ is_auto_created: false });
-    expect(screen.getByRole('button', { name: 'Publish clip' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Publish highlight' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Publish reel' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
-    expect(screen.getByRole('button', { name: /delete clip/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /delete highlight/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /delete reel/i })).toBeNull();
   });
 });

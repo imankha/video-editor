@@ -76,7 +76,7 @@ describe('EmptyTabGuide - Clips tab (T9390: no cross-tab Add Game)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Go to Games' }));
     expect(onNavigate).toHaveBeenCalledWith('games');
 
-    const addVideo = screen.getByRole('button', { name: 'Upload clip' });
+    const addVideo = screen.getByRole('button', { name: 'Upload highlight' });
     expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
     fireEvent.click(addVideo);
     expect(onAddVideo).toHaveBeenCalledTimes(1);
@@ -93,7 +93,7 @@ describe('EmptyTabGuide - Clips tab (T9390: no cross-tab Add Game)', () => {
     expect(screen.getByText(EMPTY_TAB_GUIDE.clips.noGameCaption)).toBeTruthy();
 
     // Exactly one Add Video button, still carrying the unique tutorial anchor.
-    const addVideos = screen.getAllByRole('button', { name: 'Upload clip' });
+    const addVideos = screen.getAllByRole('button', { name: 'Upload highlight' });
     expect(addVideos).toHaveLength(1);
     expect(addVideos[0].getAttribute('data-tutorial-target')).toBe('clips-add-video');
     fireEvent.click(addVideos[0]);
@@ -213,7 +213,7 @@ describe('EmptyTabGuide - partial variant', () => {
 
   it('Clips partial renders NO Add Video button and NO tutorial target (T8380 invariant)', () => {
     const { container } = render(<EmptyTabGuide tab="clips" variant="partial" />);
-    expect(screen.queryByRole('button', { name: 'Upload clip' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Upload highlight' })).toBeNull();
     expect(container.querySelector('[data-tutorial-target="clips-add-video"]')).toBeNull();
     expect(container.querySelector('button')).toBeNull();
   });

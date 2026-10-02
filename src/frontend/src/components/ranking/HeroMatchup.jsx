@@ -13,7 +13,7 @@ const PICK_GATE_SEC = 3; // disable Pick this long after a clip appears (watch f
  *  - swipe left/right across the video, OR
  *  - tap the named thumbnail of the other clip (top-left), OR
  *  - tap the dots.
- * A single "Pick" picks the shown clip. No "A/B" -- clips are named.
+ * A single "Pick" picks the shown highlight. No "A/B" -- clips are named.
  *
  * Swap behavior: until the user takes control, the hero AUTO-SWAPS to the other
  * clip each time the current one finishes -- cycling A->B->A so both get seen.

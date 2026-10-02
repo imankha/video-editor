@@ -238,8 +238,8 @@ function DraftReelPreviewInner({ payload }) {
     try {
       const method = await webShare({
         downloadId: payload.finalVideoId,
-        title: payload.name || 'Highlight Reel',
-        text: `Check out ${payload.name || 'this highlight reel'}!`,
+        title: payload.name || 'Highlight',
+        text: `Check out ${payload.name || 'this highlight'}!`,
         filename: `${payload.name || 'highlight'}-highlight.mp4`,
       });
       if (method === 'clipboard') {

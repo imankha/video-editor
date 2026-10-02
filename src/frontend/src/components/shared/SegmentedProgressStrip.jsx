@@ -61,7 +61,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
     // Framing not done - show per-clip editing status
     for (let i = 0; i < clip_count; i++) {
       const clipInfo = clips[i];
-      const clipName = getClipDisplayName(clipInfo, `Clip ${i + 1}`);
+      const clipName = getClipDisplayName(clipInfo, `Highlight ${i + 1}`);
       const clipTags = clipInfo?.tags || [];
       // T8350: SECONDARY staleness cue -- only meaningful here, before framing
       // collapses per-clip segments into one "Framing" segment (see reelStaleness.js).
@@ -202,7 +202,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
                 // separate domain draftStage does not model, so they stay as-is.
                 segment.status === 'ready' ? DRAFT_STAGE_LABELS[DRAFT_STAGE.IN_OVERLAY] :
                 'Draft'
-              } (click to open)${segment.stale ? ' — clip edited since this reel was made' : ''}`}
+              } (click to open)${segment.stale ? ' - highlight edited since this highlight was made' : ''}`}
             >
               {isInProgress && (
                 <div className="absolute bottom-0 inset-x-0 h-1/2 bg-blue-500 pointer-events-none" />

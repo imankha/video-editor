@@ -459,7 +459,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
       <ConfirmationDialog
         isOpen={!!deleteConfirm}
         title={`Delete "${deleteConfirm?.name || 'Default'}"?`}
-        message={"All clips, projects, and exports for this profile will be permanently deleted. Game videos shared with other profiles will not be affected."}
+        message={"All highlights, projects, and exports for this profile will be permanently deleted. Game videos shared with other profiles will not be affected."}
         onClose={() => setDeleteConfirm(null)}
         buttons={[
           { label: 'Cancel', onClick: () => setDeleteConfirm(null), variant: 'secondary' },

@@ -214,7 +214,7 @@ export function CollectionsTab({
           Only shown when the server produced a derivable axis, so a profile with
           no tournament/date metadata keeps the plain flat list. */}
       {games.length > 0 && availableAxes.length > 1 && (
-        <div className="flex items-center gap-1 mb-3" role="group" aria-label="Group reels by">
+        <div className="flex items-center gap-1 mb-3" role="group" aria-label="Group highlights by">
           {availableAxes.map((axis) => (
             <button
               key={axis}

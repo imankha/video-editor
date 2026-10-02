@@ -51,7 +51,7 @@ function buildClipMetadata(clipsData) {
   const sourceClips = clipsData.map(clip => {
     const effectiveDuration = calculateEffectiveDuration(clip);
     const clipMeta = {
-      name: clip.filename || getClipDisplayName(clip, 'Clip'),
+      name: clip.filename || getClipDisplayName(clip, 'Highlight'),
       start_time: currentTime,
       end_time: currentTime + effectiveDuration,
       duration: effectiveDuration,

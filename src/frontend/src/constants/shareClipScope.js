@@ -15,16 +15,16 @@ export const SHARE_CLIP_SCOPE = {
 };
 
 export const SHARE_CLIP_SCOPE_LABEL = {
-  [SHARE_CLIP_SCOPE.ALL_TEAM]: 'All team clips',
-  [SHARE_CLIP_SCOPE.TAGGED_ONLY]: "Only clips they're tagged in",
-  [SHARE_CLIP_SCOPE.GAME_ONLY]: 'Game only (no clips)',
+  [SHARE_CLIP_SCOPE.ALL_TEAM]: 'All team highlights',
+  [SHARE_CLIP_SCOPE.TAGGED_ONLY]: "Only highlights they're tagged in",
+  [SHARE_CLIP_SCOPE.GAME_ONLY]: 'Game only (no highlights)',
 };
 
 // Sub-label shown under each option in the dropdown menu.
 export const SHARE_CLIP_SCOPE_SUBLABEL = {
   [SHARE_CLIP_SCOPE.ALL_TEAM]: 'Every team highlight from this game',
   [SHARE_CLIP_SCOPE.TAGGED_ONLY]: "Just this player's team moments",
-  [SHARE_CLIP_SCOPE.GAME_ONLY]: 'Recap only — no highlight clips',
+  [SHARE_CLIP_SCOPE.GAME_ONLY]: 'Recap only - no highlights',
 };
 
 // Default selection for a freshly added recipient (EPIC + user-confirmed).

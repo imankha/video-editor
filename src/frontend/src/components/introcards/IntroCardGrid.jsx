@@ -45,7 +45,7 @@ export function IntroCardGrid({ cards, profile, onNew, onEdit, onDuplicate, onDe
       <ConfirmationDialog
         isOpen={!!pendingDelete}
         title={`Delete "${pendingDelete?.name || ''}"?`}
-        message="Any reel set to use this card will fall back to no intro. This cannot be undone."
+        message="Any highlight set to use this card will fall back to no intro. This cannot be undone."
         onClose={() => setPendingDelete(null)}
         buttons={[
           { label: 'Cancel', onClick: () => setPendingDelete(null), variant: 'secondary' },

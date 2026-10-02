@@ -57,9 +57,9 @@ describe('getExportLabel — no internal ids, ever (T8510)', () => {
     expect(getExportLabel(makeExport({ projectName: 'Brilliant Goal' }))).toBe('Brilliant Goal');
   });
 
-  it('falls back to "Your reel" when the name is missing — never "Project #N"', () => {
+  it('falls back to "Your highlight" when the name is missing - never "Project #N"', () => {
     const label = getExportLabel(makeExport({ projectName: null, projectId: 1 }));
-    expect(label).toBe('Your reel');
+    expect(label).toBe('Your highlight');
     expect(label).not.toMatch(/Project #/);
   });
 
@@ -155,12 +155,12 @@ describe('GlobalExportIndicator — persistent stage + estimate stay readable (T
 });
 
 describe('GlobalExportIndicator — rendered labels and stale-ETA switch (T8510)', () => {
-  it('renders "Your reel" (never "Project #N") for a record with no project name', () => {
+  it('renders "Your highlight" (never "Project #N") for a record with no project name', () => {
     useExportStore.setState({
       activeExports: { export_1: makeExport({ projectName: null, projectId: 1 }) },
     });
     render(<GlobalExportIndicator />);
-    expect(screen.getAllByText(/Your reel/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Your highlight/).length).toBeGreaterThan(0);
     expect(document.body.textContent).not.toMatch(/Project #/);
   });
 

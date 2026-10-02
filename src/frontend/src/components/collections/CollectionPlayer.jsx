@@ -573,7 +573,7 @@ export function CollectionPlayer({
               icon={reEditLoadingId === activeReel.id ? Loader : Pencil}
               iconOnly
               disabled={reEditLoadingId === activeReel.id}
-              title="Re-edit this reel"
+              title="Re-edit this highlight"
               onClick={() => onReEdit(activeReel)}
               className={reEditLoadingId === activeReel.id ? '[&_svg]:animate-spin' : ''}
             />
@@ -589,7 +589,7 @@ export function CollectionPlayer({
               icon={reRankLoadingId === activeReel.id ? Loader : Scale}
               iconOnly
               disabled={reRankLoadingId === activeReel.id}
-              title="Re-rank this reel"
+              title="Re-rank this highlight"
               onClick={() => onReRank(activeReel)}
               className={reRankLoadingId === activeReel.id ? '[&_svg]:animate-spin' : ''}
             />

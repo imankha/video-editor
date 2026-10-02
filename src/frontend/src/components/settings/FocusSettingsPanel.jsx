@@ -12,7 +12,7 @@ import { EDITOR_PANELS } from '../../config/displayNames';
  * background dim) into the shared SettingRow / SettingsPanel anatomy, grouped
  * by WHAT EACH CONTROL CHANGES:
  *
- *   Reel               — applies to every clip (aspect ratio, include audio)
+ *   Highlight          - applies to every clip (aspect ratio, include audio)
  *   Advanced editing   — This clip (straighten) + View only (dim), T9950
  *                        Slice 1: grouped under one heading. Originally shared
  *                        its label with the timeline's disclosure below the
@@ -41,7 +41,7 @@ export default function FocusSettingsPanel({
 }) {
   return (
     <>
-      <SettingsPanel title="Reel">
+      <SettingsPanel title="Highlight">
         <SettingRow label="Aspect ratio" value={ratioWithName(globalAspectRatio)}>
           <AspectRatioSelector
             aspectRatio={globalAspectRatio}
@@ -59,7 +59,7 @@ export default function FocusSettingsPanel({
           <Toggle
             checked={includeAudio}
             onChange={onIncludeAudioChange}
-            title="Include the clip's original audio in the exported video"
+            title="Include the highlight's original audio in the exported video"
             className="coarse-pointer:min-h-11"
           />
         </SettingRow>
@@ -75,7 +75,7 @@ export default function FocusSettingsPanel({
             {EDITOR_PANELS.ADVANCED_EDITING}
           </h3>
           <div className="space-y-4">
-            <SettingsPanel title="This clip">
+            <SettingsPanel title="This highlight">
               <SettingRow
                 label="Straighten"
                 value="Level tilted footage by dragging along the horizon"

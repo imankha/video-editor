@@ -582,7 +582,7 @@ export function OverlayScreen({
               workingVideoId: project?.working_video_id,
             });
             setWorkingVideoMissing(true);
-            setWorkingVideoLoadError('This reel’s video is no longer available. Re-export to rebuild it.');
+            setWorkingVideoLoadError('This highlight’s video is no longer available. Re-export to rebuild it.');
             setIsLoadingWorkingVideo(false);
             return;
           }

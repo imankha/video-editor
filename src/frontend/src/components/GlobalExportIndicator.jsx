@@ -46,7 +46,7 @@ export function getExportLabel(exp) {
   if (exp.type === 'annotate') {
     return exp.gameName || 'Annotation';
   }
-  return exp.projectName || 'Your reel';
+  return exp.projectName || 'Your highlight';
 }
 
 /**
@@ -234,7 +234,7 @@ export function GlobalExportIndicator() {
                 const method = await share({
                   downloadId: exp.outputVideoId,
                   title: projectLabel,
-                  text: `Check out my ${projectLabel} highlight reel!`,
+                  text: `Check out my ${projectLabel} highlight!`,
                   filename,
                 });
                 track('share_initiated', { method, source: 'toast' });

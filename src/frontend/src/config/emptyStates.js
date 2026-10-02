@@ -42,18 +42,18 @@ export const EMPTY_TAB_GUIDE = {
     headline: 'Review game footage',
     body:
       'Mark plays from game video you want to review with your athlete. ' +
-      'Create clips you want to use in highlights.',
+      'Create highlights you want to use.',
     addGameCaption: null,
     // Footer kept ONLY on Games: it carries the "a game is not a hard
-    // prerequisite either" message -- have a clip already, skip ahead to Clips.
-    footerPrefix: 'Have a clip already? ',
+    // prerequisite either" message -- have a highlight already, skip ahead to Clips.
+    footerPrefix: 'Have a highlight already? ',
     footerLink: 'Skip ahead on Clips.',
   },
   clips: {
     headline: 'Focus the action on your athlete.',
     body:
-      `Clips you marked can be framed. ${MODE_NAMES.FRAMING} focuses the camera on your ` +
-      'player and lets you trim and add slo-mo to key moments. A short clip can also ' +
+      `Highlights you marked can be framed. ${MODE_NAMES.FRAMING} focuses the camera on your ` +
+      'player and lets you trim and add slo-mo to key moments. A short highlight can also ' +
       `skip straight to ${MODE_NAMES.FRAMING}, no game needed.`,
     openGameText: `Open a game and tap ${ANNOTATE.MARK_PLAY}.`, // games > 0 (the Go to Games path)
     uploadText: 'Already have a video?', // games > 0 (the Add Video path)
@@ -93,9 +93,9 @@ export const PARTIAL_TAB_GUIDE = {
     cta: 'Open game',
   },
   clips: {
-    headline: 'Give each clip a Framing pass',
+    headline: 'Give each highlight a Framing pass',
     // T11230: reworded off "publish it alone or into a reel" -- the Reels building
-    // surfaces (Create reel / assemble clips) are gone; a clip publishes on its own.
+    // surfaces (Create reel / assemble clips) are gone; a highlight publishes on its own.
     body: 'Add an optional Spotlight, then publish it whenever you are ready.',
   },
   published: {

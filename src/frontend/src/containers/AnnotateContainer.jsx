@@ -106,7 +106,7 @@ export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProject
   // (HIGHLIGHT_MOVED_TO_CLIPS) and drops the action button (`withAction: false`)
   // — the editor closes, so there is no "Open Framing" affordance to offer and
   // the toast IS the confirmation. Default callers keep the original toast.
-  const name = (clipName && clipName.trim()) ? clipName.trim() : 'Your clip';
+  const name = (clipName && clipName.trim()) ? clipName.trim() : 'Your highlight';
   const text = message || `${name} is now in ${SECTION_NAMES.CLIPS}`;
   toast.success(text, {
     duration: 6000,

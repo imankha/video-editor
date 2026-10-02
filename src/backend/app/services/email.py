@@ -634,7 +634,7 @@ async def send_collection_share_email(
     if is_first_touch:
         subject = f"{display_name} shared a highlight collection with you"
         heading = f"{display_name} shared {safe_title}"
-        preheader = f"Watch now -- always the latest reels from {display_name}."
+        preheader = f"Watch now -- always the latest highlights from {display_name}."
     else:
         subject = f"New shared collection: {safe_title}"
         heading = f"{display_name} shared {safe_title}"
@@ -705,15 +705,15 @@ async def send_game_ready_email(
         )
         return True
 
-    subject = f"{safe_name} is ready - start clipping"
+    subject = f"{safe_name} is ready - start making highlights"
     html_body = _build_share_email(
         heading="Your game is ready",
         game_name=safe_name,
         cta_url=game_url,
-        cta_text="Start Clipping",
+        cta_text="Start Making Highlights",
         footer_reason="You're receiving this because you uploaded a game to ReelBallers.",
         is_first_touch=False,
-        preheader="Your game finished processing - jump back in and start clipping.",
+        preheader="Your game finished processing - jump back in and start making highlights.",
     )
 
     try:
@@ -763,12 +763,12 @@ async def send_share_email(
     safe_video = video_name or "Untitled"
 
     if is_first_touch:
-        subject = f"{display_name} shared a highlight reel with you"
-        heading = f"{display_name} shared a highlight reel"
+        subject = f"{display_name} shared a highlight with you"
+        heading = f"{display_name} shared a highlight"
         preheader = f"Watch now -- {display_name} thought you'd want to see this."
     else:
-        subject = f"New shared reel: {safe_video}"
-        heading = f"{display_name} shared a highlight reel"
+        subject = f"New shared highlight: {safe_video}"
+        heading = f"{display_name} shared a highlight"
         preheader = safe_video
 
     from_address = f"{_sanitize_from_name(display_name)} via ReelBallers <noreply@reelballers.com>"
@@ -777,7 +777,7 @@ async def send_share_email(
         heading=heading,
         game_name=safe_video,
         cta_url=share_url,
-        cta_text="Watch Reel",
+        cta_text="Watch Highlight",
         footer_reason=f"{display_name} shared a video with you",
         is_first_touch=is_first_touch,
         preheader=preheader,
@@ -828,17 +828,17 @@ async def send_teammate_share_email(
         )
         return True
 
-    clip_text = f"{clip_count} clip{'' if clip_count == 1 else 's'}" if clip_count > 0 else "clips"
+    clip_text = f"{clip_count} highlight{'' if clip_count == 1 else 's'}" if clip_count > 0 else "highlights"
     share_url = _get_share_url(share_token, "game") if share_token else None
     display_name = sender_name or sharer_email
     safe_game = game_name or "Untitled Game"
 
     if is_first_touch:
         subject = f"{display_name} tagged {tag_name} in a highlight from {safe_game}"
-        heading = f"{display_name} clipped highlights from"
+        heading = f"{display_name} shared highlights from"
         preheader = f"Watch {tag_name}'s highlight -- {display_name} thought you'd want to see this."
     else:
-        subject = f"New clip: {tag_name} tagged in {safe_game}"
+        subject = f"New highlight: {tag_name} tagged in {safe_game}"
         heading = f"{display_name} tagged {tag_name} in {clip_text} from"
         preheader = f"{clip_text} from {safe_game}"
 
@@ -848,8 +848,8 @@ async def send_teammate_share_email(
         heading=heading,
         game_name=safe_game,
         cta_url=share_url,
-        cta_text="Watch Clips",
-        footer_reason=f"{display_name} shared game clips with you",
+        cta_text="Watch Highlights",
+        footer_reason=f"{display_name} shared game highlights with you",
         is_first_touch=is_first_touch,
         preheader=preheader,
     )
@@ -970,11 +970,11 @@ async def send_playback_share_email(
     if is_first_touch:
         subject = f"{display_name} shared game annotations with you"
         heading = f"{display_name} shared annotations from"
-        preheader = f"Watch annotated clips from {safe_game} -- no account needed."
+        preheader = f"Watch annotated plays from {safe_game} -- no account needed."
     else:
         subject = f"{display_name} shared annotations from {safe_game}"
         heading = f"{display_name} shared annotations from"
-        preheader = f"Annotated clips from {safe_game}"
+        preheader = f"Annotated plays from {safe_game}"
 
     from_address = f"{_sanitize_from_name(display_name)} via ReelBallers <noreply@reelballers.com>"
 

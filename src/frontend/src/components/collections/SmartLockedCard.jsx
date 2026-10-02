@@ -4,7 +4,7 @@ import { LockedReasonModal, LOCKED_KINDS } from './LockedReasonModal';
 
 // T7650: the four amber locked cards used to be indistinguishable. Each now
 // carries a subtitle that says WHY it's locked; this is the smart-collection one.
-const SMART_UNLOCK_CAPTION = 'Your top-rated reels, once you have enough';
+const SMART_UNLOCK_CAPTION = 'Your top-rated highlights, once you have enough';
 
 /**
  * SmartLockedCard - a sub-30s smart collection rendered as the shared amber
