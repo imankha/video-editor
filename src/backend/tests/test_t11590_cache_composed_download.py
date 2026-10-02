@@ -728,3 +728,44 @@ def test_copy_failure_during_background_write_does_not_break_response(client):
     after = set(glob.glob(leak_glob))
     leaked = after - before
     assert not leaked, f"a failed copy must not leak a cache-write tempdir: {leaked}"
+
+
+# ===========================================================================
+# 8. HEAD-hit / GET-miss fallback: a transient blip (or the object being
+#    evicted between the HEAD and the GET) must fall through to a fresh
+#    build, never a 5xx.
+# ===========================================================================
+
+def test_cache_head_hit_but_download_fails_rebuilds_instead_of_erroring(client):
+    """`r2_head_object_global` reports the key present, but the subsequent
+    `download_from_r2_global` fails (transient blip / just-evicted). The
+    HEAD-hit branch must tear down its temp dir and fall through to a fresh
+    build -- the SAME request still succeeds (200, correct bytes), it just
+    recomposes instead of serving a now-unreachable cached object."""
+    db = _db_path()
+    fv_id, filename = _seed_final_video(db)
+    _write_local_final_video(filename)
+
+    store, counters = {}, {"compose": 0}
+    with ExitStack() as stack:
+        _install_cached_pipeline(stack, store, counters)
+        r1 = _get(client, fv_id)
+        assert r1.status_code == 200
+        assert counters["compose"] == 1
+        assert len(store) == 1, "first request populated the cache"
+
+    # Second request: HEAD still reports the object present (store still has
+    # the key -- unchanged), but the GET transiently fails.
+    def _dl_global_always_fails(key, local_path, progress_callback=None):
+        return False
+
+    with ExitStack() as stack:
+        _install_cached_pipeline(stack, store, counters)
+        stack.enter_context(
+            patch("app.routers.downloads.download_from_r2_global", _dl_global_always_fails)
+        )
+
+        r2 = _get(client, fv_id)
+        assert r2.status_code == 200, "a HEAD-hit/GET-miss blip must rebuild, never error"
+        assert r2.content == b"COMPOSED", "the rebuilt bytes still stream correctly"
+        assert counters["compose"] == 2, "the GET failure must fall through to a fresh build"
