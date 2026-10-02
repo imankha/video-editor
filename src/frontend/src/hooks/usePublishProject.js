@@ -5,6 +5,7 @@ import { SECTION_NAMES } from '../config/displayNames';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useQuestStore } from '../stores/questStore';
 import { useProjectsStore } from '../stores/projectsStore';
+import { singleSourceGameId } from '../utils/finishedReelNav';
 import { toast } from '../components/shared/Toast';
 
 /**
@@ -20,6 +21,7 @@ import { toast } from '../components/shared/Toast';
  *   one-click Retry), NO refetch, NO optimistic removal
  * - success -> fetchCount(force) + notifyCollectionsChanged() + fetchProjects(force)
  *   (card removal reflects backend state, never optimistic) + recordAchievement
+ *   + galleryStore.setJustPublished (T11580 Published-tab spotlight card)
  * - the [Publish] console tracing that correlates a real attempt with the backend
  *   [Publish]/[SYNC] lines
  *
@@ -100,6 +102,25 @@ export function usePublishProject(project) {
       console.log(`[Publish] project=${targetId} 200 ok archived=${result.archived} final_video_id=${result.final_video_id}`);
       if (!result.archived) {
         console.warn(`[ProjectCard] Project ${targetId} published but archive failed - card stays in Drafts.`);
+      }
+      // T11580: spotlight the highlight that was JUST published (gesture-scoped,
+      // memory-only -- see galleryStore.setJustPublished). gameId/aspectRatio
+      // come from the project row itself (the publish response only carries
+      // final_video_id/archived), so this must read projectsStore BEFORE the
+      // refetch below replaces it (publish archives the project, dropping it
+      // from the next fetch). No publishedProject found (shouldn't happen --
+      // the project this gesture just published must still be in the
+      // pre-refetch list) -> skip the spotlight rather than guess its
+      // aspect ratio/game (no silent fallback for internal data).
+      const publishedProject = useProjectsStore.getState().projects.find((p) => p.id === targetId);
+      if (publishedProject) {
+        useGalleryStore.getState().setJustPublished({
+          finalVideoId: result.final_video_id,
+          gameId: singleSourceGameId(publishedProject),
+          aspectRatio: publishedProject.aspect_ratio,
+        });
+      } else {
+        console.warn(`[Publish] project=${targetId} not in projectsStore at publish success - skipping justPublished spotlight`);
       }
       // Model changed (a reel was published) -> update count badge + dispatch the
       // collections-changed event so the My Reels list refreshes itself.

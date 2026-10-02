@@ -2,6 +2,18 @@ import { useEditorStore } from '../stores/editorStore';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
 
 /**
+ * Single-source-game gating, shared by this module's gameId snapshot (T10190
+ * §3.2) and usePublishProject's justPublished.gameId (T11580): null for 0 or
+ * >1 source games, since a multi-game/no-game reel has no unambiguous single
+ * game to target.
+ * @param {Object} project - a project/draft with a `game_ids` array
+ * @returns {number|null}
+ */
+export function singleSourceGameId(project) {
+  return project.game_ids?.length === 1 ? project.game_ids[0] : null;
+}
+
+/**
  * finishedReelNav (T8530, co-owned with T8520) — the SINGLE way to open the draft
  * preview player after a reel is finished.
  *
@@ -46,7 +58,7 @@ export function openFinishedReel(project, { alreadyPublished = false } = {}) {
     // T10190 §3.2: gated to exactly one source game -- null for 0 or >1 games,
     // since a multi-game/no-game reel has no unambiguous backlink target. Feeds
     // DraftReelPreview's onBackToGame gating.
-    gameId: project.game_ids?.length === 1 ? project.game_ids[0] : null,
+    gameId: singleSourceGameId(project),
     alreadyPublished,
     openMode,
     // T10860: snapshot of a pre-existing share token whose snapshot is stale

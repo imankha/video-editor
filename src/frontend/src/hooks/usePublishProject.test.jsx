@@ -4,27 +4,40 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // apiFetch + store fns are referenced inside hoisted vi.mock factories.
 const {
   apiFetchMock, fetchProjectsMock, fetchCountMock, notifyMock, openMock,
-  recordAchievementMock, toastErrorMock,
-} = vi.hoisted(() => ({
-  apiFetchMock: vi.fn(),
-  fetchProjectsMock: vi.fn(),
-  fetchCountMock: vi.fn(),
-  notifyMock: vi.fn(),
-  openMock: vi.fn(),
-  recordAchievementMock: vi.fn(),
-  toastErrorMock: vi.fn(),
-}));
+  recordAchievementMock, toastErrorMock, setJustPublishedMock, projectsStoreState,
+} = vi.hoisted(() => {
+  const fetchProjects = vi.fn();
+  return {
+    apiFetchMock: vi.fn(),
+    fetchProjectsMock: fetchProjects,
+    fetchCountMock: vi.fn(),
+    notifyMock: vi.fn(),
+    openMock: vi.fn(),
+    recordAchievementMock: vi.fn(),
+    toastErrorMock: vi.fn(),
+    setJustPublishedMock: vi.fn(),
+    // T11580: the publish success path reads projectsStore.getState().projects
+    // (BEFORE the fetchProjects refetch below replaces it) to source
+    // justPublished's gameId/aspectRatio -- the publish response itself only
+    // carries final_video_id/archived. Mutated per-test via .projects.
+    projectsStoreState: { fetchProjects, projects: [] },
+  };
+});
 
 vi.mock('../utils/apiFetch', () => ({ default: (...a) => apiFetchMock(...a) }));
 
 vi.mock('../stores/projectsStore', () => {
-  const state = { fetchProjects: fetchProjectsMock };
-  const useProjectsStore = (sel) => sel(state);
-  useProjectsStore.getState = () => state;
+  const useProjectsStore = (sel) => sel(projectsStoreState);
+  useProjectsStore.getState = () => projectsStoreState;
   return { useProjectsStore };
 });
 vi.mock('../stores/galleryStore', () => {
-  const api = { fetchCount: fetchCountMock, notifyCollectionsChanged: notifyMock, open: openMock };
+  const api = {
+    fetchCount: fetchCountMock,
+    notifyCollectionsChanged: notifyMock,
+    open: openMock,
+    setJustPublished: setJustPublishedMock,
+  };
   const useGalleryStore = () => api;
   useGalleryStore.getState = () => api;
   return { useGalleryStore };
@@ -58,6 +71,8 @@ describe('usePublishProject (T8530 — T4050 contract carried through the extrac
     openMock.mockReset();
     recordAchievementMock.mockReset();
     toastErrorMock.mockReset();
+    setJustPublishedMock.mockReset();
+    projectsStoreState.projects = [project];
   });
 
   it('success: POSTs publish, fires fetchCount/notify/fetchProjects/recordAchievement, no optimistic removal', async () => {
@@ -128,5 +143,69 @@ describe('usePublishProject (T8530 — T4050 contract carried through the extrac
     // Generic failure does NOT stash publishRetry (matches the DraftTile original);
     // the surface drives its own retry off the false return.
     expect(result.current.publishRetry).toBeNull();
+  });
+});
+
+// T11580: justPublished spotlight wiring. gameId/aspectRatio come from the
+// PROJECT row in projectsStore (read before the post-publish refetch replaces
+// it), not from the publish response (which only carries final_video_id).
+describe('usePublishProject justPublished wiring (T11580)', () => {
+  beforeEach(() => {
+    apiFetchMock.mockReset();
+    fetchProjectsMock.mockReset();
+    fetchCountMock.mockReset();
+    notifyMock.mockReset();
+    openMock.mockReset();
+    recordAchievementMock.mockReset();
+    toastErrorMock.mockReset();
+    setJustPublishedMock.mockReset();
+  });
+
+  it('single-game project: setJustPublished with that one gameId', async () => {
+    projectsStoreState.projects = [{ id: 42, aspect_ratio: '9:16', game_ids: [7] }];
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 99 }));
+    const { result } = renderHook(() => usePublishProject(project));
+
+    await act(async () => { await result.current.publish({ openGallery: false }); });
+
+    expect(setJustPublishedMock).toHaveBeenCalledWith({
+      finalVideoId: 99,
+      gameId: 7,
+      aspectRatio: '9:16',
+    });
+  });
+
+  it('multi-game (Mix) project: gameId null, same gating as finishedReelNav', async () => {
+    projectsStoreState.projects = [{ id: 42, aspect_ratio: '16:9', game_ids: [7, 8] }];
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 100 }));
+    const { result } = renderHook(() => usePublishProject(project));
+
+    await act(async () => { await result.current.publish({ openGallery: false }); });
+
+    expect(setJustPublishedMock).toHaveBeenCalledWith({
+      finalVideoId: 100,
+      gameId: null,
+      aspectRatio: '16:9',
+    });
+  });
+
+  it('project not found in projectsStore at success time: skips the spotlight (no guessed data)', async () => {
+    projectsStoreState.projects = []; // targetId 42 not present
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 101 }));
+    const { result } = renderHook(() => usePublishProject(project));
+
+    await act(async () => { await result.current.publish({ openGallery: false }); });
+
+    expect(setJustPublishedMock).not.toHaveBeenCalled();
+  });
+
+  it('503 sync_failed: never sets justPublished (publish did not actually succeed)', async () => {
+    projectsStoreState.projects = [{ id: 42, aspect_ratio: '9:16', game_ids: [7] }];
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(503, { code: 'sync_failed' }));
+    const { result } = renderHook(() => usePublishProject(project));
+
+    await act(async () => { await result.current.publish({ openGallery: false }); });
+
+    expect(setJustPublishedMock).not.toHaveBeenCalled();
   });
 });
