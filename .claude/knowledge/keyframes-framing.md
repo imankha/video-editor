@@ -1,5 +1,26 @@
 ---
 domain: keyframes-framing
+updated: 2026-10-02 (T11570 review-response round 2 — a SECOND fresh-context Reviewer caught 1 new
+BLOCKING + 1 new MAJOR in the round-1 fixes above, both now fixed + negative-control-verified.
+BLOCKING: `SpotlightPickGuide`'s flip-to-bottom effect could infinite-loop ("Maximum update depth
+exceeded") — when the FULL-size pill didn't fit a band but the COMPACT pill did, the fit-check
+branches reactively called `setForcedCompact(false)` once compact happened to clear, which then
+didn't fit at full size, re-forcing compact, which fit again, forever. **Invariant: `forcedCompact`
+must only reset when the actual INPUTS change (`obstacleBoxes`/`phase`/`step`, tracked via a
+`measuredInputsKeyRef` signature), never reactively because a fit-check happened to succeed this
+pass** — once compact is forced for a given input set, it STAYS forced for that input set even if a
+later pass of the same inputs would now fit full-size. MAJOR: `useGuidedAthletePick.
+scheduleGuidedAdvance` was called by `OverlayContainer.handleHighlightComplete` on EVERY highlight
+drag-release landing in an enabled region, not just actual detection-marker picks — an ordinary
+manual reposition at a non-marker timestamp still confirmed ("Got it") and, 650ms later, silently
+seeked the playhead to the next unpicked marker; this also ran invisibly when `showPlayerBoxes` was
+false. Fixed with two no-op early-returns in `scheduleGuidedAdvance`, BEFORE any state write: (a)
+`pickedIndex === -1` (derived index not found — not a marker pick, so no warning, this is an
+expected case unlike the tap-handler's same check) and (b) `!showPlayerBoxes`. The existing
+cancel-on-scrub-away effect also now fires on `showPlayerBoxes` flipping false mid-confirm, so a
+PENDING advance scheduled while boxes were visible can't fire invisibly once they're hidden. See
+`OverlayContainer.test.jsx`'s "review round 2 MAJOR fix" describe block for the real-container-level
+proof (not just the isolated hook) per the reviewer's explicit ask.)
 updated: 2026-10-02 (T11570 review-response round — a fresh-context Reviewer caught 5 real bugs the
 134-test/10-viewport-passing first cut missed, all now fixed + regression-tested with negative
 controls (see the entry below for the original feature). **Landmine for future readers: diag-
