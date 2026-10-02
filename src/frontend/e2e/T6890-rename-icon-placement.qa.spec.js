@@ -74,7 +74,7 @@ test('DraftTile: rename pencil sits beside the reel name and starts inline renam
   const draftCount = await page.locator('[data-testid="project-card"]').count();
   test.skip(draftCount === 0, 'no draft reels on this account to exercise DraftTile');
 
-  const pencil = page.locator('button[aria-label="Rename reel"]').first();
+  const pencil = page.locator('button[aria-label="Rename highlight"]').first();
   await expect(pencil).toBeVisible();
   await assertPencilBesideName(page, await pencil.elementHandle());
 
@@ -107,7 +107,7 @@ test('ReelTile: rename pencil sits beside the reel name and starts inline rename
   test.skip((await group.count()) === 0, 'no reel collections on this account to exercise ReelTile');
   await group.click(); // reels (ReelTiles) load lazily on expand
 
-  const renameBtn = panel.locator('button[aria-label="Rename reel"]').first();
+  const renameBtn = panel.locator('button[aria-label="Rename highlight"]').first();
   await renameBtn.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   test.skip((await renameBtn.count()) === 0, 'expanded collection has no reels to exercise ReelTile');
 

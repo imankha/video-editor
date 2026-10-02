@@ -59,7 +59,7 @@ export const COMPARISONS: Comparison[] = [
       {
         dimension: 'Creative control',
         them: 'Total. Any transition, any effect, any structure.',
-        us: 'Constrained to what the tool does: clip selection, framing your player, spotlight, ordering, export format.',
+        us: 'Constrained to what the tool does: choosing a play, framing your player, spotlight, and export format.',
         winner: 'them',
       },
       {
@@ -69,9 +69,9 @@ export const COMPARISONS: Comparison[] = [
         winner: 'us',
       },
       {
-        dimension: 'Changing the reel later',
+        dimension: 'Changing a highlight later',
         them: 'Re-open the project, re-edit, re-export the whole thing.',
-        us: 'Clips live in a tagged library, so a new cut is a new selection rather than a new edit.',
+        us: 'Your tagged plays live in a library, so making another highlight is a new selection rather than a new edit.',
         winner: 'us',
       },
       {
@@ -137,14 +137,14 @@ export const COMPARISONS: Comparison[] = [
       'An honest comparison of CapCut and ReelBallers for making sports highlight reels: what each is built for, and which one fits youth sports footage.',
     h1: 'ReelBallers vs CapCut for sports highlights',
     answer:
-      'CapCut is a strong general-purpose video editor, better than ReelBallers at social-style editing, effects, captions, and templates. ReelBallers is narrower and sport-specific: it tags plays by position, lets you frame one chosen player through wide game footage with just a few drags per clip, and produces recruiting-length reels from full matches.',
+      'CapCut is a strong general-purpose video editor, better than ReelBallers at social-style editing, effects, captions, and templates. ReelBallers is narrower and sport-specific: it tags plays by position, lets you frame one chosen player through wide game footage with just a few drags per clip, and produces recruiting-ready highlights from full matches.',
     fairSummary:
       'CapCut is a capable and popular free editor, and for cutting a short clip for social it is genuinely excellent -- fast, template-driven, with good auto-captions and a large effects library. The gap is not quality, it is subject matter: CapCut has no concept of a sport, a position, a play type, or which of the twenty-two people on screen is your child.',
     rows: [
       {
         dimension: 'What it is built for',
         them: 'General-purpose video editing, weighted toward short-form social content.',
-        us: 'Turning full-length sports game footage into per-player highlight reels.',
+        us: 'Turning full-length sports game footage into per-player highlights.',
         winner: 'depends',
       },
       {
@@ -205,7 +205,7 @@ export const COMPARISONS: Comparison[] = [
     chooseUs: [
       'Your source is a full game and the work is finding the good parts.',
       'The viewer cannot tell which player is yours without help.',
-      'You want a recruiting-length reel, not a 20-second social clip.',
+      'You want recruiting-ready highlights, not a 20-second social clip.',
       'You want to build up a clip library across a season rather than a one-off edit.',
     ],
     faqs: [
@@ -219,7 +219,7 @@ export const COMPARISONS: Comparison[] = [
       },
       {
         q: 'Which is better for a college recruiting video?',
-        a: 'ReelBallers, for the structural reasons -- recruiting reels need the athlete identifiable in every clip, a three-to-five minute runtime built from a long match, and easy re-cuts as the season goes on. CapCut can produce a recruiting reel, but you are doing that work manually.',
+        a: 'ReelBallers, for the structural reasons -- a recruiting video needs the athlete identifiable in every play, and keeping one player framed across a long match is exactly the manual work this automates. CapCut can produce the same highlights, but you are doing that framing by hand.',
       },
       {
         q: 'Can I use both together?',

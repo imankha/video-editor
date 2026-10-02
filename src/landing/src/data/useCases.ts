@@ -28,10 +28,10 @@ export const USE_CASES: UseCase[] = [
     slug: 'recruiting-videos',
     title: 'How to Make a College Recruiting Video',
     description:
-      'What goes in a college recruiting video, how long it should be, and how to build one from your own game footage. A practical guide plus the tool to do it.',
+      'What goes in a college recruiting video, how long it should be, and how to make the highlights for one from your own game footage. A practical guide plus the tool to do it.',
     h1: 'How to make a college recruiting video',
     answer:
-      'A college recruiting video is a three-to-five minute highlight reel that opens with your strongest plays, makes you identifiable in every clip, and lists your name, position, graduation year, and contact details on screen. You can build one from ordinary game footage without hiring an editor.',
+      'A college recruiting video is a three-to-five minute highlight reel that opens with your strongest plays, makes you identifiable in every clip, and lists your name, position, graduation year, and contact details on screen. ReelBallers helps you make the highlights it is built from, straight from ordinary game footage, without hiring an editor.',
     sections: [
       {
         heading: 'What a recruiting video actually needs',
@@ -107,7 +107,7 @@ export const USE_CASES: UseCase[] = [
         a: 'Free to start with ReelBallers. Editing services typically charge per reel, and the cost recurs every time the footage needs updating -- which is the part families tend to underestimate.',
       },
     ],
-    ctaHeading: 'Build your recruiting reel',
+    ctaHeading: 'Make your recruiting highlights',
   },
   {
     slug: 'for-parents',
@@ -235,7 +235,7 @@ export const USE_CASES: UseCase[] = [
       'Give every family in your club highlight reels from match footage you already capture, without buying camera hardware or a per-team subscription.',
     h1: 'Highlight video for sports clubs',
     answer:
-      'ReelBallers lets a club turn match footage it already captures into per-player highlight reels, without buying camera hardware. It works with the video files your existing setup produces, including exports from systems like Veo, Trace, or Hudl.',
+      'ReelBallers lets a club turn match footage it already captures into per-player highlights, without buying camera hardware. It works with the video files your existing setup produces, including exports from systems like Veo, Trace, or Hudl.',
     sections: [
       {
         heading: 'The gap in club video',
@@ -254,14 +254,14 @@ export const USE_CASES: UseCase[] = [
       {
         heading: 'What families get',
         body: [
-          'Per-player reels that can be shared with a link, at full resolution, to anyone, including recruiters and relatives who will not install an app. For recruiting-age players this is the difference between having material to send and not.',
+          'Per-player highlights that can be shared with a link, at full resolution, to anyone, including recruiters and relatives who will not install an app. For recruiting-age players this is the difference between having material to send and not.',
         ],
       },
     ],
     faqs: [
       {
         q: 'Does this replace our Veo or Trace setup?',
-        a: 'No, it works alongside it. Those systems capture the match; ReelBallers turns the export into per-player reels. If your club already has capture solved, this addresses the editing half.',
+        a: 'No, it works alongside it. Those systems capture the match; ReelBallers turns the export into per-player highlights. If your club already has capture solved, this addresses the editing half.',
       },
       {
         q: 'Do all our teams need the same camera?',

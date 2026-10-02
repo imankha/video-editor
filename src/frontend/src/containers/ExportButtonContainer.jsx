@@ -1035,9 +1035,9 @@ export function ExportButtonContainer({
 
   // Button title/tooltip
   const buttonTitle = (!isFramingMode && hasUnsavedOverlayFailures)
-    ? "Some edits haven't saved — retry saving before exporting"
+    ? "Some edits haven't saved — retry saving before generating"
     : (isFramingMode && hasUnframedClips
-      ? 'Set at least one focus point to export'
+      ? 'Set at least one focus point to generate'
       : undefined);
 
   return {

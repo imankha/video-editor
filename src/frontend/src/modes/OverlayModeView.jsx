@@ -1189,12 +1189,12 @@ export function OverlayModeView({
         {showExportRequired && !isFullscreen && !mobileFs && (
           <div className="mt-6 bg-purple-900/30 border border-purple-500/50 rounded-lg p-6 text-center">
             <p className="text-purple-200 font-medium mb-2">
-              Export required for Spotlight mode
+              Generate required for Spotlight mode
             </p>
             <p className="text-purple-300/70 text-sm mb-4">
               {hasMultipleClips
-                ? 'You have multiple highlights loaded. Export first to combine them into a single video before adding overlays.'
-                : `You have made edits in ${MODE_NAMES.FRAMING} mode. Export first to apply them before adding overlays.`}
+                ? `You have multiple clips loaded. Generate in ${MODE_NAMES.FRAMING} first before adding overlays.`
+                : `You have made edits in ${MODE_NAMES.FRAMING} mode. Generate first to apply them before adding overlays.`}
             </p>
             <button
               onClick={onSwitchToFraming}

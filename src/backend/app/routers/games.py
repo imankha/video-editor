@@ -2022,7 +2022,7 @@ async def get_brilliant_clips(game_id: int):
     clips = [
         {
             "id": row["id"],
-            "name": row["name"] or f"Clip {row['id']}",
+            "name": row["name"] or f"Highlight {row['id']}",
             "duration": row["duration"],
             "my_athlete": row["my_athlete"] != 0,
         }
@@ -3138,7 +3138,7 @@ def _build_team_clip_rail(user_id: str, game_id: int, mapping_key: str) -> list[
         tags_by_id = {r["id"]: (decode_data(r["tagged_teammates"]) or []) for r in rows}
     return [
         {
-            "name": c.get("name") or "Clip",
+            "name": c.get("name") or "Highlight",
             "recap_start": c.get("recap_start"),
             "recap_end": c.get("recap_end"),
             "player_tags": tags_by_id.get(c.get("id"), []),

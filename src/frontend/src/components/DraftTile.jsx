@@ -387,7 +387,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // T11230: one project = one clip. The Reels-building surfaces are gone and every
   // DraftTile (including a legacy multi-clip draft in the Clips tab's Legacy reels
   // group) now names its actions as a CLIP. The old isReel branch that read
-  // "Delete reel"/"Rename reel"/"Publish reel" for is_auto_created === false drafts
+  // "Delete highlight"/"Rename highlight"/"Publish highlight" for is_auto_created === false drafts
   // was removed with the Reels tab; T11280's vocabulary sweep owns any further copy.
   const deleteLabel = LIBRARY_ACTIONS.DELETE_CLIP;
   const renameLabel = LIBRARY_ACTIONS.RENAME_CLIP;

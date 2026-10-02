@@ -153,7 +153,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           className="flex items-center gap-1.5 text-xs text-amber-400"
         >
           <AlertCircle size={12} className="shrink-0" />
-          <span>Set at least one focus point to export</span>
+          <span>Set at least one focus point to generate</span>
         </div>
       )}
 

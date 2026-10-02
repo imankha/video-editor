@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 /**
- * T9800: the "Export required for Spotlight mode" banner flashed during the
+ * T9800: the "Generate required for Spotlight mode" banner flashed during the
  * transient post-export window. showExportRequired could not tell "never
  * exported" (effectiveOverlayVideoUrl falsy because nothing was rendered) from
  * "export just completed, new working video still hydrating" (effectiveOverlay-
@@ -44,7 +44,7 @@ vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => false }));
 
 import { OverlayModeView } from './OverlayModeView';
 
-const BANNER = 'Export required for Spotlight mode';
+const BANNER = 'Generate required for Spotlight mode';
 
 function renderView(overrides = {}) {
   const props = {

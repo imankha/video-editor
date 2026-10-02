@@ -26,7 +26,7 @@ test.describe('Public collection viewer @staging-gate @gate-c', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           title: 'Vs Carlsbad - Portrait',
-          context_line: 'This link always shows the current reels for this game.',
+          context_line: 'This link always shows the current highlights for this game.',
           aspect_ratio: '9:16',
           members: [
             { id: 1, name: 'Goal', duration: 12.0, presigned_url: 'https://r2.example/a.mp4' },
@@ -51,7 +51,7 @@ test.describe('Public collection viewer @staging-gate @gate-c', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           title: 'Top Plays - Portrait',
-          context_line: 'This link always shows the current top reels.',
+          context_line: 'This link always shows the current top highlights.',
           aspect_ratio: '9:16',
           members: [],
         }),

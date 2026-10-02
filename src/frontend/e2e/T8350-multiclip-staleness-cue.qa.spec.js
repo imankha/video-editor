@@ -193,10 +193,10 @@ test('AC2: SECONDARY segment ring + tooltip on exactly the drifted clip, pre-pro
   await expect(stable).toHaveCount(1);
 
   await expect(drifted).toHaveClass(/ring-amber-400/);
-  await expect(drifted).toHaveAttribute('title', /clip edited since this reel was made/);
+  await expect(drifted).toHaveAttribute('title', /play edited since this highlight was made/);
   // The cue is scoped to EXACTLY the drifted clip, not the whole reel.
   await expect(stable).not.toHaveClass(/ring-amber-400/);
-  await expect(await stable.getAttribute('title')).not.toMatch(/clip edited since this reel was made/);
+  await expect(await stable.getAttribute('title')).not.toMatch(/play edited since this highlight was made/);
 
   await saveEvidence(page, 'T8350-AC2-secondary-segment-ring-pre-produce');
 });

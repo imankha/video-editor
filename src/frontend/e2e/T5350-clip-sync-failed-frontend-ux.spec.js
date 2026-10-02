@@ -28,9 +28,9 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  */
 
 const GESTURES = [
-  { key: 'save',   title: 'Could not save to the cloud', message: "Your clip wasn't saved. Please try again." },
-  { key: 'update', title: 'Could not save to the cloud', message: "Your clip changes weren't saved. Please try again." },
-  { key: 'delete', title: 'Could not save to the cloud', message: "Your clip wasn't deleted. Please try again." },
+  { key: 'save',   title: 'Could not save to the cloud', message: "Your highlight wasn't saved. Please try again." },
+  { key: 'update', title: 'Could not save to the cloud', message: "Your highlight changes weren't saved. Please try again." },
+  { key: 'delete', title: 'Could not save to the cloud', message: "Your highlight wasn't deleted. Please try again." },
 ];
 
 test('T5350: clip sync_failed surfaces a clip-appropriate not-saved toast + working Retry', async ({ page }) => {

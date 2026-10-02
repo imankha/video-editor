@@ -83,7 +83,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     const btn = screen.getByRole('button', { name: /Generate Highlight/ });
     expect(btn.disabled).toBe(true);
     const caption = screen.getByTestId('export-unframed-caption');
-    expect(caption.textContent).toContain('Set at least one focus point to export');
+    expect(caption.textContent).toContain('Set at least one focus point to generate');
     expect(caption.className).toContain('text-amber-400');
     // T9270: the disabled reason (LEFT status cell) and the credit estimate (RIGHT
     // cost cell) are now separate ActionBand cells — the reason no longer carries
@@ -117,7 +117,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     render(<ExportButtonView {...baseProps}
       hasUnframedClips={true} isButtonDisabled={true} estimatedCredits={null} />);
     const caption = screen.getByTestId('export-unframed-caption');
-    expect(caption.textContent).toContain('Set at least one focus point to export');
+    expect(caption.textContent).toContain('Set at least one focus point to generate');
     expect(caption.textContent).not.toContain('credit');
   });
 });

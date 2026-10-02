@@ -68,7 +68,7 @@ async function mockCollection(page) {
       contentType: 'application/json',
       body: JSON.stringify({
         title: 'Published',
-        context_line: 'This link always shows the current reels for this game.',
+        context_line: 'This link always shows the current highlights for this game.',
         aspect_ratio: '16:9',
         members: MEMBERS,
       }),
