@@ -1,6 +1,6 @@
 # T11570: Spotlight Guided Athlete Pick (auto-advance through every green marker)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-10-01

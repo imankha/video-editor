@@ -4,160 +4,39 @@
 
 ## Current Focus
 
-**TOP PRIORITY (user-flagged, 2026-10-01) — [T11570](tasks/T11570-spotlight-guided-athlete-pick.md):
-Spotlight should auto-advance through every green detection marker, asking the user to pick their
-athlete one marker at a time until all are done.** User-requested directly, then a mockup/spec was
-built and approved ("i like it") before filing: https://claude.ai/artifact/Qpji171nS2AK5xsCWfTou5.
-Today the "Tap your athlete" prompt disappears after the first pick even though the
-`select_players` quest only completes once every marker is assigned, leaving the user to hunt for
-the next 24px marker themselves. Fix: pick → brief "Got it" confirm → auto-park on the next
-unpicked marker, looping until all are done; "Not boxed? Drag the circle" always produces a pick
-so the walk always finishes. Reverses part of T9960's "add another only if you want to" copy
-(Spotlight as a whole stays optional; visiting every marker is now the default path). Impact 7 /
-Complexity 4, Tier M, frontend-only, no new persistence. Supersedes T10880 (pulsating-guidance
-audit) for this specific flow. **Status: TODO.**
+### Milestone: Live Queue (2026-10-01)
 
-**2026-10-01 addition (user-flagged) — [T11580](tasks/T11580-published-tab-spotlight-just-published-highlight.md):
-Published tab buries the highlight a user just published.** User's own words: "Place published
-highlight above the 'top plays' and 'game highlights'. The published highlight should already be
-expanded instead of requiring the user to hit the arrow to expand it." Today every game group on the
-Published tab starts collapsed (`CollectionsTab.jsx`), so the just-published highlight requires
-finding the right game, expanding it, then scanning its carousel — while Top Plays, something the
-user did not just create, occupies the top slot. Mockup/spec built and shared before filing:
-https://claude.ai/artifact/WBdHeo6vb3DLCtxSbFbCwT. Fix: a "Just published" spotlight card above Top
-Plays and every game group, already expanded (poster, play, Share/Copy link/Download, Share
-primary), shown only right after a publish (memory-only, never persisted); its game group
-auto-expands once with the tile ringed + NEW, consume-once so reopening the tab never re-forces a
-group the user collapsed (the T8990 landmine). Impact 6 / Complexity 3, Tier M, frontend-only, no
-new persistence. **Status: TODO.**
+**Filed across several recent commits as prose paragraphs instead of table rows, so the task
+board's parser (which only reads `| ID |` tables) skipped this whole section.** Moved into a table
+here 2026-10-01 so "top of board" matches actual priority. These aren't a single dependency-ordered
+epic — it's the live backlog of bugs/features filed outside the active milestones below. Full
+context for each still lives in its own task file (linked); descriptions here are one-line
+summaries per the task-management convention.
 
-**2026-10-01 addition, P0 (user-reported prod bug) — [T11560](tasks/T11560-share-storage-ref-wrong-profile.md):
-Direct game share wrote the recipient's storage ref into the SHARER's own SQLite instead of the
-recipient's, so the recipient sees a false "Source video expired."** Reported live: imankh@gmail.com
-shared a game with gsarah@gmail.com on 2026-09-02; gsarah got the expired error, but the R2 source
-was never touched. Root cause: `insert_game_storage_ref`'s SQLite half uses
-`get_db_connection()`'s ambient request context instead of the explicit `user_id`/`profile_id`
-it receives, and `materialize_game_share` runs inside the SHARER's own request context. Postgres
-side is correct; only the recipient's local SQLite ref row is missing. Depth-2 (sync/persistence)
-bug, hits the core sharing/growth loop directly — jumps the queue. Impact 8 / Complexity 3,
-Tier M, backend-only. **Status: STAGING — merged to master (`7b08ef806`), 2026-10-01.**
-After this deploys, re-share the game with gsarah to self-heal her existing broken share
-(no bespoke data-repair script needed).
-
-**HIGH PRIORITY (user-ordered 2026-10-01): [Social Cover Image epic](tasks/social-cover-image/EPIC.md)
-(T11510-T11550).** Instagram ignored the user's chosen cover image on both Share and Download.
-Start with T11510 (mobile Share always sends the file, never the link that carries our cover).
-See the milestone section below.
-
-**TOP PRIORITY (user-reported, 2026-10-01) — [T11590](tasks/T11590-cache-composed-download-serve.md):
-"Share took too long - massive lag."** No matching `bug_reports` row (table was empty when checked)
-and no timed trace - found by reading the code every Download and every mobile Share runs. Every
-single request to `GET /api/downloads/{id}/file` rebuilds the whole file from scratch: full R2
-fetch, live intro-card resolve, Modal/ffmpeg compose, metadata stamp - with no cache, ever. This is
-the exact same thing T4947 already fixed for collection downloads (shipped 2026-08-16 prod) after
-an identical user complaint; this task is the same disposable-R2-cache pattern applied to the
-single-highlight path, which never got it. Directly reduces the wait on T11510's new "Share video"
-action too (repeat shares of an already-shared highlight become cache hits), though it does not
-fix a cold-first-share miss - see the task file's residual-latency note. Impact 8 / Complexity 4,
-Tier M, backend-only, follows a shipped precedent (no new abstraction). **Status: TODO.**
-
-**TOP PRIORITY (user-flagged, 2026-09-25) — [Modal Export Safety & Capacity epic](tasks/modal-export-safety/EPIC.md)
-(T11320-T11350), plus standalone [T11360](tasks/T11360-admin-credits-spent-stat-not-net-of-refunds.md).**
-Filed from investigating Bug 58p (prod): a user's 16:9, full-frame (uncropped) 14-clip export hit
-Modal's hard 3600s timeout 4 times in a row with zero feedback on why or what to change — root
-cause is the full-1080p crop paying for a full 4x GAN enhance it doesn't need (the skip gate for
-this exact case, T10160, ships inert) on a single-GPU path with no chunking. Epic order:
-**T11320** (preflight guard — reject before dispatch instead of after an hour) → **T11330**
-(explanatory popup naming concrete levers: crop in, split into batches) — ship this pair first, it
-directly prevents a repeat. **T11340** (parallelize multi-clip export across GPUs, raises the real
-ceiling, L-tier/design-gated) and **T11350** (enable the GAN-skip gate for near-1:1 crops after the
-calibration run `modal-gpu.md` already calls for) are independent of each other, should land after
-the guard/popup pair. User was emailed + credited 50 bonus credits (already done); this section is
-the follow-up engineering work only. T11360 (admin `credits_spent` stat not net of refunds) is a
-minor, unrelated-domain ticket found incidentally during the same investigation.
-
-**2026-09-25 landing note — T11320:** shipped with a fresh-context Reviewer catching 3 MAJOR
-issues (trimmed-vs-raw duration bug, an unreachable "HTTP 413" contract whose real channel is a
-WS/`export_progress` payload, and an uncalibrated cost constant with 1.57x measured variance).
-The first two were sent back for fixes; the third is a user-accepted known risk (see T11320's
-Progress Log) with a follow-up [T11370](tasks/modal-export-safety/T11370-export-cost-guard-calibration.md)
-filed to calibrate it against real Modal staging data.
-
-**2026-09-25 addition, unplaced — [T11310](tasks/T11310-landing-gate-reviewer-verdict-vocabulary.md):
-The landing gate's reviewer captures sometimes return the wrong verdict word.** Found live while
-landing T11210/T11170: `REPORT_SCHEMA`'s `verdict` enum is shared across both independent-capture
-roles, so `capture --role reviewer` can return `VERIFIED` (the proof-verifier's word) instead of
-the schema-correct `APPROVED`, even on a clean review — happened 4 times in a row on one PR before
-a correctly-worded capture landed. Impact 5 / Complexity 2. Touches the trusted controller
-(`scripts/landing_gate.py`), so needs independent policy review before it can land, per CLAUDE.md's
-Landing Policy. Workaround documented in `docs/plans/landing-gate-usage.md` (recapture, never
-hand-edit a receipt) until this is fixed.
-
-**2026-09-28 addition, unplaced — [T11380](tasks/T11380-video-zoom-out-centering.md):
-Video remains panned off-center after returning to 100% zoom.** Reported live on production in
-Annotate. `useZoom` clamps zoom to 1 through `zoomOut`/wheel/direct-set without clearing the
-independent `panOffset`, while `VideoPlayer` continues applying that translation. Shared-hook fix
-must cover Annotate, Framing, and Spotlight. Impact 6 / Complexity 2, frontend-only. **Status:
-STAGING (merged PR #542, `55ef7b56`, 2026-09-30).**
-
-**2026-09-29 addition, unplaced — [T11430](tasks/T11430-multiple-highlights-per-play-aspect-status.md):
-Published play still says “Highlight Not Started”; support N vertical/horizontal highlights per
-play.** Reported on production for `imankh@gmail.com`, game `at Oceanside Breakers Aug 30`, play
-`Great Goal` near 24:01. Today one `raw_clips.auto_project_id` collapses the play to one project, so
-the UI cannot represent a published vertical version plus another orientation/version in progress.
-Requires a durable one-to-many play→highlight association, orientation-qualified status badges,
-stable per-orientation ordinals, **Make Another Highlight**, legacy backfill, and production-shaped
-staging verification. Impact 7 / Complexity 7; L-tier architecture/design gate before implementation.
-
-**TOP PRIORITY — 2026-09-28 production Annotate/Spotlight follow-ups:**
-[T11410](tasks/T11410-fullscreen-rating-picker-viewport-safe.md) (Impact 6 / Complexity 3 /
-Priority 2.0) fixes the normal rating picker rendering offscreen in desktop fullscreen.
-[T11420](tasks/T11420-spotlight-timeline-reset-left-on-entry.md) (7 / 4 / 1.8) makes Spotlight
-open at timeline scroll position 0 after a Framing export while preserving detection auto-zoom.
-[T11400](tasks/T11400-required-rating-gate-immediate-feedback.md) (7 / 5 / 1.4) removes the
-perceived post-pick stall without weakening the current await-before-navigation persistence
-guarantee. These three are TODO and intentionally carry reproduction/test detail rather than
-speculative fixes.
-
-**2026-09-24 addition, unplaced — [T11050](tasks/T11050-annotate-clip-lane-click-seek.md):
-Annotate's clips-lane click didn't move the playhead.** Reported live by imankh@gmail.com.
-The thin video scrub row seeks correctly; the clips lane background (My Athlete/Team tracks,
-or the single mobile lane) had no click handler at all -- a dead click target, unlike Focus/
-Overlay's crop/highlight lanes which already do something on background click. Impact 5 /
-Complexity 2, Tier M. Implemented same session; fresh-context Reviewer approved (MINOR-only
-findings, addressed before commit).
-
-**2026-09-22 addition, unplaced — [T11020](tasks/T11020-spotlight-custom-color-eyedropper.md):
-Spotlight color picker gets a full spectrum + eyedropper, so a parent can match their
-uniform.** User-requested directly in session. Frontend-only (backend already stores/renders
-`highlight_color` as an opaque hex string, confirmed by trace before implementation). Impact 5 /
-Complexity 3, Tier M. Implemented same session.
-
-**2026-09-21 addition, unplaced — [T10880](tasks/T10880-pulsating-guidance-audit.md):
-Pulsating next-action guidance, funnel playthrough audit.** Seed observation: in Spotlight (Focus
-mode), when the user hasn't clicked any player-detection tracking box yet, the next one to click
-should pulsate — no screen currently draws the eye to the recommended next action anywhere in the
-funnel. Impact 5 / Complexity 2 as scoped (audit + ranked candidate list only, no implementation);
-likely spawns higher-impact follow-up tasks once locations are prioritized. Left here for triage
-rather than self-inserted into a milestone.
-
-**2026-09-21 addition, unplaced — [T10950](tasks/T10950-spotlight-frame0-detection-boxes-missing.md):
-Spotlight can show zero player-tracking boxes at a clip's opening frame.** Reported live by
-imankh@gmail.com after a Framing export. Player detection samples only 4 points per highlight
-region (first 2s); if the literal first sample whiffs (frame 0 is a known weak frame for vision —
-same reason poster selection avoids it), no boxes render there even though later samples in the
-same region have real detections. Recommended fix is a frontend-only fallback to the nearest
-sample-with-boxes in `OverlayContainer.jsx`. Impact 4 / Complexity 2 — S/M-tier. **Status: STAGING
-(fallback implemented and merged in PR #543, `644ea6c1`, 2026-09-30).** Related but distinct
-from T10870 (that one messages around a *project-wide* zero-detection fallback; this is a
-*partial*, single-sample miss within an otherwise-successful region).
-
-**2026-09-20 addition, unplaced — [T10790](tasks/T10790-add-footage-attach-422-required-sequence.md):
-"Add footage to game" 422s on every real attempt (live on master since 2026-09-07, not
-dev-specific). Status: STAGING (merged PR #538, `373660fb`, 2026-09-30).** Found incidentally while doing live verification for T10770. Impact 9 / Complexity
-2 — a one-line Pydantic fix (`VideoReference.sequence` required → optional) plus a boundary-level
-test. Needs a placement decision (bugs-before-features policy suggests it jumps the queue given a
-core action is fully broken); left here for triage rather than self-inserted into a milestone.
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T11590 | [Cache composed download/share serve](tasks/T11590-cache-composed-download-serve.md) | 8 | 4 | 2.0 | WIP | [ ] | User-reported "Share took too long - massive lag." `GET /api/downloads/{id}/file` rebuilds the whole file from scratch every request (R2 fetch, intro-card resolve, Modal/ffmpeg compose) with no cache — the same disposable-R2-cache pattern T4947 already shipped for collection downloads, applied to the single-highlight path. |
+| T11570 | [Spotlight: auto-advance through every athlete-pick marker](tasks/T11570-spotlight-guided-athlete-pick.md) | 7 | 4 | 1.8 | WIP | [ ] | User-approved mockup. "Tap your athlete" disappears after the first pick even though `select_players` needs every marker assigned; fix is pick -> "Got it" confirm -> auto-park on the next unpicked marker, looping until all are done. |
+| T11580 | [Published tab: surface the just-published highlight](tasks/T11580-published-tab-spotlight-just-published-highlight.md) | 6 | 3 | 2.0 | WIP | [ ] | User-approved mockup. A "Just published" spotlight card (already expanded) above Top Plays and every game group, shown only right after a publish (memory-only); its game group auto-expands once, consume-once so it never re-forces a group the user collapsed. |
+| T11560 | [Fix direct share writing recipient's storage ref into wrong profile](tasks/T11560-share-storage-ref-wrong-profile.md) | 8 | 3 | 2.7 | STAGING | [ ] | P0 prod bug: `insert_game_storage_ref` used the ambient request context instead of the explicit recipient `user_id`/`profile_id`, so a shared game's storage ref landed in the sharer's own SQLite and the recipient saw a false "Source video expired." Merged `7b08ef806`; re-share to self-heal existing broken shares. |
+|  | **[Modal Export Safety & Capacity](tasks/modal-export-safety/EPIC.md)** | 7 | 5 | 1.4 | STAGING | [ ] | Filed from Bug 58p: a 16:9 full-frame 14-clip export hit Modal's 3600s timeout 4 times with no feedback. Core safety pair shipped; GPU-parallelism and GAN-skip-gate children deferred as backlog. |
+| T11320 | ↳ [Preflight guard — reject before dispatch](tasks/modal-export-safety/T11320-modal-export-preflight-guard.md) | 8 | 3 | 2.7 | STAGING | [ ] | Reject an export up front instead of after an hour-long timeout. Shipped after a Reviewer caught 3 MAJOR issues (trimmed-vs-raw duration, an unreachable HTTP 413 contract, an uncalibrated cost constant — see T11370). |
+| T11330 | ↳ [Explanatory rejection popup](tasks/modal-export-safety/T11330-modal-export-rejection-popup.md) | 6 | 2 | 3.0 | STAGING | [ ] | Names concrete levers (crop in, split into batches) when the preflight guard rejects. |
+| T11370 | ↳ [Export cost-guard calibration](tasks/modal-export-safety/T11370-export-cost-guard-calibration.md) | 5 | 3 | 1.7 | TODO | [ ] | Follow-up from T11320's review: the cost constant showed 1.57x measured variance against real Modal staging data; calibrate it. |
+| T11340 | ↳ [Parallelize multi-clip export across GPUs](tasks/modal-export-safety/T11340-modal-multiclip-parallel-chunking.md) | 7 | 8 | 0.9 | ICE | [ ] | Raises the real export-time ceiling. L-tier/design-gated; deferred as backlog 2026-09-26 (revised design recorded for when this is picked back up). |
+| T11350 | ↳ [Enable GAN-skip gate for near-1:1 crops](tasks/modal-export-safety/T11350-modal-gan-skip-gate-enable.md) | 6 | 5 | 1.2 | ICE | [ ] | Skips a full 4x GAN enhance a near-1:1 crop doesn't need. Deferred as backlog 2026-09-26 pending the calibration run `modal-gpu.md` calls for. |
+| T11360 | [Admin `credits_spent` stat not net of refunds](tasks/T11360-admin-credits-spent-stat-not-net-of-refunds.md) | 3 | 2 | 1.5 | STAGING | [ ] | Minor, unrelated-domain ticket found incidentally during the Bug 58p investigation. |
+| T11430 | [Multiple highlights per play + aspect-qualified status](tasks/T11430-multiple-highlights-per-play-aspect-status.md) | 7 | 7 | 1.0 | TODO | [x] | Prod report: published play still says "Highlight Not Started" because one `raw_clips.auto_project_id` collapses the play to one project. Needs a durable one-to-many play->highlight association, orientation-qualified status badges, Make Another Highlight, legacy backfill. L-tier, architecture/design gate before implementation. |
+| T11410 | [Fullscreen rating picker renders offscreen](tasks/T11410-fullscreen-rating-picker-viewport-safe.md) | 6 | 3 | 2.0 | TODO | [ ] | 2026-09-28 production Annotate/Spotlight follow-up: normal rating picker renders offscreen in desktop fullscreen. |
+| T11420 | [Spotlight timeline doesn't reset to 0 on entry](tasks/T11420-spotlight-timeline-reset-left-on-entry.md) | 7 | 4 | 1.8 | TODO | [ ] | Open at timeline scroll position 0 after a Framing export, while preserving detection auto-zoom. |
+| T11400 | [Remove perceived stall after required rating pick](tasks/T11400-required-rating-gate-immediate-feedback.md) | 7 | 5 | 1.4 | TODO | [ ] | Remove the perceived post-pick stall without weakening the current await-before-navigation persistence guarantee. |
+| T11310 | [Landing-gate reviewer verdict vocabulary](tasks/T11310-landing-gate-reviewer-verdict-vocabulary.md) | 5 | 2 | 2.5 | TODO | [ ] | `REPORT_SCHEMA`'s `verdict` enum is shared across both independent-capture roles, so `capture --role reviewer` can wrongly return `VERIFIED` instead of `APPROVED`. Touches the trusted landing controller, so needs independent policy review before landing; workaround is recapture, never hand-edit a receipt. |
+| T11380 | [Video stays off-center after returning to 100% zoom](tasks/T11380-video-zoom-out-centering.md) | 6 | 2 | 3.0 | STAGING | [ ] | `useZoom` clamps zoom without clearing the independent `panOffset`. Fix spans Annotate, Framing, and Spotlight. Merged PR #542, `55ef7b56`. |
+| T11050 | [Annotate clips-lane click didn't seek](tasks/T11050-annotate-clip-lane-click-seek.md) | 5 | 2 | 2.5 | STAGING | [ ] | The clips-lane background had no click handler, unlike Focus/Overlay's crop/highlight lanes. |
+| T11020 | [Spotlight color picker: full spectrum + eyedropper](tasks/T11020-spotlight-custom-color-eyedropper.md) | 5 | 3 | 1.7 | STAGING | [ ] | Frontend-only; backend already stores/renders `highlight_color` as an opaque hex string. |
+| T10950 | [Spotlight can show zero detection boxes at a clip's opening frame](tasks/T10950-spotlight-frame0-detection-boxes-missing.md) | 4 | 2 | 2.0 | STAGING | [ ] | Frame 0 is a known weak frame for vision; fallback to the nearest sample-with-boxes. Merged PR #543, `644ea6c1`. Distinct from T10870 (project-wide zero-detection fallback). |
+| T10790 | [Add footage to game 422s on every attempt](tasks/T10790-add-footage-attach-422-required-sequence.md) | 9 | 2 | 4.5 | STAGING | [ ] | `VideoReference.sequence` was required when it should be optional. Found incidentally during T10770 verification. Merged PR #538, `373660fb`. |
+| T10880 | [Pulsating next-action guidance: funnel playthrough audit](tasks/T10880-pulsating-guidance-audit.md) | 5 | 2 | 2.5 | TODO | [ ] | Scoped as audit + ranked candidate list only (no implementation); likely spawns higher-impact follow-ups once locations are prioritized. |
 
 **NEXT DEPLOY = [Milestone: Deploy Candidate](#milestone-deploy-candidate-user-ordered-2026-09-17-the-next-deploy) (user-ordered 2026-09-17).** Filed from the user's own staging
 run: three crash paths to re-verify (T10230), two clip-upload bugs (T10250/T10260), upload-failure
