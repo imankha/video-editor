@@ -625,7 +625,7 @@ export function ExportButtonContainer({
           throw new Error('Cannot generate: No project selected. Please save your project first.');
         }
         if (!saveCurrentClipState) {
-          throw new Error('Cannot generate: Clip state manager not available. Please reload the page and try again.');
+          throw new Error('Cannot generate: Highlight state manager not available. Please reload the page and try again.');
         }
 
         console.log('[ExportButtonContainer] Using backend-authoritative render');

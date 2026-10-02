@@ -187,7 +187,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             <>
               <div className="flex items-center gap-2">
                 <Loader size={14} className="animate-spin" />
-                <span>Connection lost — generation continues on server. Reconnecting...</span>
+                <span>Connection lost -- generation continues on server. Reconnecting...</span>
               </div>
               <button
                 onClick={onRetryConnection}
@@ -256,7 +256,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           {insufficientForEstimate && <AlertCircle size={12} />}
           <span>
             {`~${estimatedCredits} credit${estimatedCredits === 1 ? '' : 's'} · balance ${creditBalance}`}
-            {insufficientForEstimate ? ' — add credits to generate' : ''}
+            {insufficientForEstimate ? ' -- add credits to generate' : ''}
           </span>
         </div>
       )}
@@ -283,7 +283,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           className="flex items-center gap-1.5 text-xs text-gray-400"
         >
           <span>
-            {`Recorded at ${sourceFps}fps — generated at 30fps for a smaller, cheaper file.`}
+            {`Recorded at ${sourceFps}fps -- generated at 30fps for a smaller, cheaper file.`}
           </span>
         </div>
       )}
