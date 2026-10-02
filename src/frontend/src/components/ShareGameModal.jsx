@@ -46,7 +46,7 @@ function ClipPreviewList({ clips }) {
       {clips.map((c) => (
         <div key={c.id} className="flex items-center gap-2 py-1 text-sm">
           <span className="flex-1 min-w-0 truncate text-gray-300">
-            {c.name || `Clip @ ${fmtTimestamp(c.start_time)}`}
+            {c.name || `Highlight @ ${fmtTimestamp(c.start_time)}`}
           </span>
           {c.rating != null && (
             <span
@@ -91,7 +91,7 @@ function RecipientRow({
         {/* controls */}
         <div className="flex items-center gap-2 pl-4 sm:pl-0">
           <select
-            aria-label={`Clips for ${email}`}
+            aria-label={`Highlights for ${email}`}
             value={scope}
             onChange={(e) => onScopeChange(email, e.target.value)}
             className={`shrink-0 rounded-lg bg-gray-700 border text-sm text-gray-200 px-2.5 py-1.5
@@ -104,14 +104,14 @@ function RecipientRow({
           </select>
 
           <span className="shrink-0 text-xs text-gray-400 tabular-nums w-14 text-right">
-            {loading ? '…' : count == null ? '—' : `${count} clip${count === 1 ? '' : 's'}`}
+            {loading ? '…' : count == null ? '-' : `${count} highlight${count === 1 ? '' : 's'}`}
           </span>
 
           {canExpand ? (
             <button
               type="button"
               onClick={() => onToggleExpand(email)}
-              aria-label={expanded ? 'Hide clips' : 'Show clips'}
+              aria-label={expanded ? 'Hide highlights' : 'Show highlights'}
               className="shrink-0 p-1 text-gray-500 hover:text-white rounded coarse-pointer:min-h-11 coarse-pointer:min-w-11"
             >
               {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -136,8 +136,8 @@ function RecipientRow({
         <div className="mt-1 ml-4 flex items-start gap-1.5 text-xs text-amber-400">
           <AlertTriangle size={13} className="mt-0.5 shrink-0" />
           <span>
-            0 clips — <strong>{email}</strong> will receive the game only. Switch to
-            {' '}&ldquo;All team clips&rdquo; to include highlights.
+            0 highlights - <strong>{email}</strong> will receive the game only. Switch to
+            {' '}&ldquo;All team highlights&rdquo; to include them.
           </span>
         </div>
       )}
@@ -467,8 +467,8 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
             <AlertTriangle size={16} className="text-amber-400 mt-0.5 shrink-0" />
             <p className="text-xs text-amber-200">
               {untaggedCount === 1 ? '1 person' : `${untaggedCount} people`} set to
-              {' '}&ldquo;Only clips they&rsquo;re tagged in&rdquo; will receive
-              {' '}<strong>0 clips</strong> (no tag match). Send anyway?
+              {' '}&ldquo;Only highlights they&rsquo;re tagged in&rdquo; will receive
+              {' '}<strong>0 highlights</strong> (no tag match). Send anyway?
             </p>
           </div>
         )}

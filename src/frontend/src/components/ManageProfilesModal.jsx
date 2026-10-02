@@ -387,7 +387,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
               </Button>
               {profiles.length <= 1 && (
                 <p className="text-xs text-gray-400 mt-3 text-center leading-relaxed">
-                  Use profiles to keep your videos and reels organized by athlete, team, sport, or season.
+                  Use profiles to keep your videos and highlights organized by athlete, team, sport, or season.
                 </p>
               )}
             </div>
@@ -459,7 +459,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
       <ConfirmationDialog
         isOpen={!!deleteConfirm}
         title={`Delete "${deleteConfirm?.name || 'Default'}"?`}
-        message={"All clips, projects, and exports for this profile will be permanently deleted. Game videos shared with other profiles will not be affected."}
+        message={"All highlights, projects, and generated videos for this profile will be permanently deleted. Game videos shared with other profiles will not be affected."}
         onClose={() => setDeleteConfirm(null)}
         buttons={[
           { label: 'Cancel', onClick: () => setDeleteConfirm(null), variant: 'secondary' },

@@ -157,7 +157,7 @@ test.describe('T6300 ReelTile persistent actions (real account)', () => {
     expect(kebab.pointerEvents).not.toBe('none');
     // T6890 moved Rename OUT of the kebab/bottom-sheet to a standalone always-present
     // pencil beside the name — assert it on the tile (not inside the sheet below).
-    await expect(tile.getByRole('button', { name: 'Rename reel' })).toBeVisible();
+    await expect(tile.getByRole('button', { name: 'Rename highlight' })).toBeVisible();
 
     // Every kebab item reachable — no hover, no long-press. A native DOM click()
     // (not Playwright's .click()/.tap(), and definitely no screenshot beforehand)

@@ -60,7 +60,7 @@ export function InstallButton() {
               <span className="text-purple-400">&#x2713;</span> Full screen -- no browser bars
             </li>
             <li className="flex items-center gap-2">
-              <span className="text-purple-400">&#x2713;</span> Push alerts when your reel is ready
+              <span className="text-purple-400">&#x2713;</span> Push alerts when your highlight is ready
             </li>
             <li className="flex items-center gap-2">
               <span className="text-purple-400">&#x2713;</span> Uploads keep going if you switch apps

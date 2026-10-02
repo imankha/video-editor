@@ -654,7 +654,7 @@ function App() {
         // after the 5-min safety-net) and leave the user on Focus with the
         // preview still open — we never navigated away.
         if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
-        toast.error("Couldn't publish your reel", { message: 'Please try again.' });
+        toast.error("Couldn't publish your highlight", { message: 'Please try again.' });
       },
     });
   }, [handleExportComplete]);
@@ -1078,8 +1078,8 @@ function App() {
         isOpen={modeSwitchDialog.isOpen}
         title={modeSwitchDialog.sourceMode === 'overlay' ? 'Uncommitted Spotlight Changes' : `Uncommitted ${MODE_NAMES.FRAMING} Changes`}
         message={modeSwitchDialog.sourceMode === 'overlay'
-          ? 'You have Spotlight edits that haven\'t been exported yet.\n\n• Export: Create a new final video (GPU processing), then switch modes\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in Spotlight mode'
-          : `You have ${MODE_NAMES.FRAMING} edits that haven't been exported yet.\n\n• Export: Re-export clip (GPU processing), then switch modes. This will reset any Spotlight work.\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in ${MODE_NAMES.FRAMING} mode`
+          ? 'You have Spotlight edits that haven\'t been generated yet.\n\n• Generate: Create a new video (GPU processing), then switch modes\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in Spotlight mode'
+          : `You have ${MODE_NAMES.FRAMING} edits that haven't been generated yet.\n\n• Generate: Rebuild your highlight (GPU processing), then switch modes. This will reset any Spotlight work.\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in ${MODE_NAMES.FRAMING} mode`
         }
         onClose={handleModeSwitchCancel}
         buttons={[
@@ -1089,7 +1089,7 @@ function App() {
             variant: 'danger'
           },
           {
-            label: 'Export',
+            label: 'Generate',
             onClick: handleModeSwitchExport,
             variant: 'primary'
           }

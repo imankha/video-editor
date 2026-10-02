@@ -57,9 +57,9 @@ describe('getExportLabel — no internal ids, ever (T8510)', () => {
     expect(getExportLabel(makeExport({ projectName: 'Brilliant Goal' }))).toBe('Brilliant Goal');
   });
 
-  it('falls back to "Your reel" when the name is missing — never "Project #N"', () => {
+  it('falls back to "Your highlight" when the name is missing - never "Project #N"', () => {
     const label = getExportLabel(makeExport({ projectName: null, projectId: 1 }));
-    expect(label).toBe('Your reel');
+    expect(label).toBe('Your highlight');
     expect(label).not.toMatch(/Project #/);
   });
 
@@ -155,12 +155,12 @@ describe('GlobalExportIndicator — persistent stage + estimate stay readable (T
 });
 
 describe('GlobalExportIndicator — rendered labels and stale-ETA switch (T8510)', () => {
-  it('renders "Your reel" (never "Project #N") for a record with no project name', () => {
+  it('renders "Your highlight" (never "Project #N") for a record with no project name', () => {
     useExportStore.setState({
       activeExports: { export_1: makeExport({ projectName: null, projectId: 1 }) },
     });
     render(<GlobalExportIndicator />);
-    expect(screen.getAllByText(/Your reel/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Your highlight/).length).toBeGreaterThan(0);
     expect(document.body.textContent).not.toMatch(/Project #/);
   });
 
@@ -169,6 +169,21 @@ describe('GlobalExportIndicator — rendered labels and stale-ETA switch (T8510)
     render(<GlobalExportIndicator />);
     expect(screen.getAllByText(/Brilliant Goal/).length).toBeGreaterThan(0);
     expect(document.body.textContent).not.toMatch(/Project #/);
+  });
+
+  // T11280 (round 12, AC6): the pending-export card opens with exportStore's DEFAULT
+  // progress message, which carries no `phase` and so is rendered VERBATIM by
+  // exportProgressLabel's raw-message fallback. It must not leak the word "export" --
+  // AC6 renames the product's action to "generate". A proof verifier caught this live
+  // runtime gap by calling the real render path; seven prior static code reviews missed it
+  // because the leak only exists once startExport runs and the label passes the message
+  // through. This fails on the pre-fix head ("Starting export...") and passes after
+  // ("Starting generation..."), locking it permanently.
+  it('opens the pending export card without leaking the word "export" (T11280 AC6)', () => {
+    useExportStore.getState().startExport('export_pending', 7, 'framing', 'Brilliant Goal');
+    render(<GlobalExportIndicator />);
+    expect(document.body.textContent).toMatch(/Starting generation/i);
+    expect(document.body.textContent).not.toMatch(/export/i);
   });
 
   it('switches a busted "Less than a minute" to the stage message within the grace window', () => {

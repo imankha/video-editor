@@ -21,7 +21,7 @@ import { RESULT_PUBLISH } from '../config/displayNames';
 // specific-copy-per-code intent).
 const REPOINT_ERROR_MESSAGES = {
   video_not_current: 'This draft changed; reopen it and try Update shared version.',
-  target_missing: "The re-exported video isn't ready yet; try again shortly.",
+  target_missing: "The re-generated video isn't ready yet; try again shortly.",
   repoint_conflict: 'This share changed; refresh and retry.',
   share_project_mismatch: 'This share does not belong to this project.',
 };
@@ -238,8 +238,8 @@ function DraftReelPreviewInner({ payload }) {
     try {
       const method = await webShare({
         downloadId: payload.finalVideoId,
-        title: payload.name || 'Highlight Reel',
-        text: `Check out ${payload.name || 'this highlight reel'}!`,
+        title: payload.name || 'Highlight',
+        text: `Check out ${payload.name || 'this highlight'}!`,
         filename: `${payload.name || 'highlight'}-highlight.mp4`,
       });
       if (method === 'clipboard') {

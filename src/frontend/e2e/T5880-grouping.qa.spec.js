@@ -81,7 +81,7 @@ test.describe('T5880 tournament/month grouping', () => {
 
       // Flat default: all three games visible, toggle offers all three axes.
       await expect(page.getByRole('button', { name: 'Vs Alpha' })).toBeVisible();
-      const toggle = page.getByRole('group', { name: /group reels by/i });
+      const toggle = page.getByRole('group', { name: /group highlights by/i });
       await expect(toggle.getByRole('button', { name: 'By game' })).toBeVisible();
       await expect(toggle.getByRole('button', { name: 'By tournament' })).toBeVisible();
       await expect(toggle.getByRole('button', { name: 'By month' })).toBeVisible();

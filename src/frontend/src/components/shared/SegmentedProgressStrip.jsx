@@ -61,7 +61,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
     // Framing not done - show per-clip editing status
     for (let i = 0; i < clip_count; i++) {
       const clipInfo = clips[i];
-      const clipName = getClipDisplayName(clipInfo, `Clip ${i + 1}`);
+      const clipName = getClipDisplayName(clipInfo, `Play ${i + 1}`);
       const clipTags = clipInfo?.tags || [];
       // T8350: SECONDARY staleness cue -- only meaningful here, before framing
       // collapses per-clip segments into one "Framing" segment (see reelStaleness.js).
@@ -193,8 +193,8 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
               title={`${segment.label}${segment.tags?.length ? ` [${segment.tags.join(', ')}]` : ''}: ${
                 segment.status === 'done' ? 'Complete' :
                 segment.status === 'disconnected' ? 'Not Connected' :
-                segment.status === 'exporting' ? 'Exporting...' :
-                segment.status === 'in_progress' ? (isOverlay ? 'Started - export to complete' : `Started - export ${MODE_NAMES.FRAMING} to complete`) :
+                segment.status === 'exporting' ? 'Generating...' :
+                segment.status === 'in_progress' ? (isOverlay ? 'Started - generate to complete' : `Started - generate ${MODE_NAMES.FRAMING} to complete`) :
                 // T9600: the 'ready' spotlight segment is a working-video-only reel
                 // (draftStage IN_OVERLAY), not a shared one — route through the single
                 // source instead of the old "Ready to share" literal that read as
@@ -202,7 +202,7 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
                 // separate domain draftStage does not model, so they stay as-is.
                 segment.status === 'ready' ? DRAFT_STAGE_LABELS[DRAFT_STAGE.IN_OVERLAY] :
                 'Draft'
-              } (click to open)${segment.stale ? ' — clip edited since this reel was made' : ''}`}
+              } (click to open)${segment.stale ? ' - play edited since this highlight was made' : ''}`}
             >
               {isInProgress && (
                 <div className="absolute bottom-0 inset-x-0 h-1/2 bg-blue-500 pointer-events-none" />

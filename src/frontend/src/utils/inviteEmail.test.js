@@ -47,7 +47,7 @@ describe('buildInviteMailtoUrl', () => {
         userEmail: 'mike@example.com',
         inviteCode: 'a1b2c3d4',
       });
-      expect(url).toContain(encodeURIComponent('Check out how I make highlight reels for Jake'));
+      expect(url).toContain(encodeURIComponent('Check out how I make highlight videos for Jake'));
     });
 
     it('uses "my kid" in subject when name is null', () => {
@@ -56,7 +56,7 @@ describe('buildInviteMailtoUrl', () => {
         userEmail: 'test@test.com',
         inviteCode: 'abc123',
       });
-      expect(url).toContain(encodeURIComponent('highlight reels for my kid'));
+      expect(url).toContain(encodeURIComponent('highlight videos for my kid'));
     });
 
     it('uses "my kid" in subject when name is empty', () => {
@@ -65,7 +65,7 @@ describe('buildInviteMailtoUrl', () => {
         userEmail: 'test@test.com',
         inviteCode: 'abc123',
       });
-      expect(url).toContain(encodeURIComponent('highlight reels for my kid'));
+      expect(url).toContain(encodeURIComponent('highlight videos for my kid'));
     });
 
     it('uses "my kid" in subject when name is whitespace', () => {
@@ -74,7 +74,7 @@ describe('buildInviteMailtoUrl', () => {
         userEmail: 'test@test.com',
         inviteCode: 'abc123',
       });
-      expect(url).toContain(encodeURIComponent('highlight reels for my kid'));
+      expect(url).toContain(encodeURIComponent('highlight videos for my kid'));
     });
 
     it('uses "my kid" when name is undefined', () => {
@@ -83,7 +83,7 @@ describe('buildInviteMailtoUrl', () => {
         userEmail: 'test@test.com',
         inviteCode: 'abc123',
       });
-      expect(url).toContain(encodeURIComponent('highlight reels for my kid'));
+      expect(url).toContain(encodeURIComponent('highlight videos for my kid'));
     });
   });
 

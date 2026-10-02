@@ -170,7 +170,7 @@ export function CollectionShareModal({ definition, title, onClose }) {
 
         <div className="px-6 py-4 space-y-4">
           <p className="text-xs text-gray-500">
-            This link always shows the current reels for this collection.
+            This link always shows the current highlights for this collection.
           </p>
 
           <div>
@@ -182,7 +182,7 @@ export function CollectionShareModal({ definition, title, onClose }) {
               hasConsent={!!currentProfile?.introConsentAt}
               onSelect={handleIntroSelect}
               onRequestConsent={handleRequestIntroConsent}
-              frozenNote="Frozen when you share -- changing this reel's intro later won't change this link."
+              frozenNote="Frozen when you share -- changing this highlight's intro later won't change this link."
             />
           </div>
 

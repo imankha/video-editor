@@ -211,7 +211,7 @@ export function RankingGame({ onClose, onReEdit }) {
       <Trophy size={40} className={REEL.accent} />
       <p className="text-white font-semibold">You're caught up for now.</p>
       <p className="text-sm text-gray-400">
-        New clips will ask for a few matchups when you publish them.
+        New highlights will ask for a few matchups when you publish them.
       </p>
       <Button variant="primary" size="md" onClick={onClose} className="mt-2">Done</Button>
     </div>

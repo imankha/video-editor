@@ -43,7 +43,7 @@ test('T8970: Preview plays mode is fixed (items 1-4) @staging-gate @gate-b', asy
   await expect(page.getByTestId('playback-mode-badge')).toBeVisible();
 
   // --- Item 2: the mutating clip DETAILS EDITOR must NOT be present during playback ---
-  const deleteClip = page.getByText(/Delete clip/i);
+  const deleteClip = page.getByText(/Delete highlight/i);
   const createReel = page.getByRole('button', { name: /Create Reel|Reel Created/i });
   expect(await deleteClip.count() === 0 || !(await deleteClip.first().isVisible().catch(() => false)),
     'Delete-Clip must not be visible during playback').toBeTruthy();

@@ -63,9 +63,9 @@ describe('ShareWithTeammatesModal', () => {
   it('shows clip counts for each tag', async () => {
     render(<ShareWithTeammatesModal {...defaultProps} />);
     await waitFor(() => {
-      expect(screen.getByText('(3 clips)')).toBeTruthy();
-      expect(screen.getByText('(2 clips)')).toBeTruthy();
-      expect(screen.getByText('(1 clip)')).toBeTruthy();
+      expect(screen.getByText('(3 highlights)')).toBeTruthy();
+      expect(screen.getByText('(2 highlights)')).toBeTruthy();
+      expect(screen.getByText('(1 highlight)')).toBeTruthy();
     });
   });
 

@@ -1464,7 +1464,7 @@ test.describe('Full Coverage Tests @full', () => {
     await expect(page.getByRole('button', { name: /^Clips/ }).first()).toBeVisible({ timeout: 5000 });
 
     // Re-open the same project
-    const projectCard = page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ clip/i') }).first();
+    const projectCard = page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ highlight/i') }).first();
     await projectCard.click();
 
     // Wait for framing mode to reload

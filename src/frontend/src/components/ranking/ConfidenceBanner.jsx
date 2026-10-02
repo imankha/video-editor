@@ -9,15 +9,15 @@ import { ConfidenceGauge } from './ConfidenceGauge';
 
 // The first sentence always explains the purpose; the second is tailored to the
 // user's progress (per 20% band) to encourage the next step.
-const SORT_PURPOSE = 'Sort your clips head-to-head so the best ones show first.';
+const SORT_PURPOSE = 'Sort your highlights head-to-head so the best ones show first.';
 
 /** {tier, explain} for the banner, by sort-coverage % and whether ranking is
  *  still available (active). 100% / caught-up gets its own done-state copy. */
 function progressMessage(pct, active) {
   if (!active) {
     return {
-      tier: 'All Clips Ranked',
-      explain: 'Add more clips to keep comparing.',
+      tier: 'All Highlights Ranked',
+      explain: 'Add more highlights to keep comparing.',
     };
   }
   let tier, note;
@@ -99,7 +99,7 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
                 <Lock size={13} className="text-amber-400 shrink-0" />
               </div>
               <div className="text-xs text-gray-400 mt-1 leading-snug">
-                {SORT_PURPOSE} Locked until you have {formatLength(COLLECTION_MIN_DURATION_SEC, PRECISION.SECOND, { style: 'human' })} of clips.
+                {SORT_PURPOSE} Locked until you have {formatLength(COLLECTION_MIN_DURATION_SEC, PRECISION.SECOND, { style: 'human' })} of highlights.
               </div>
               <div className="mt-2 flex items-center gap-2">
                 <div className="h-1.5 flex-1 rounded-full bg-gray-700 overflow-hidden">
@@ -148,7 +148,7 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
           <div className="text-xs text-gray-400 mt-1 leading-snug">{explain}</div>
           {active && (
             <div className={`flex items-center gap-1 mt-2 text-sm font-medium ${REEL.accent}`}>
-              Rank reels <ChevronRight size={16} />
+              Rank highlights <ChevronRight size={16} />
             </div>
           )}
         </div>

@@ -70,7 +70,7 @@ function formatPrice(priceCents) {
   return `$${(priceCents / 100).toFixed(2)}`;
 }
 
-// 1 credit = 1 second of exported video — render an honest conversion.
+// 1 credit = 1 second of generated video — render an honest conversion.
 function secondsToClock(totalSeconds) {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
@@ -113,11 +113,11 @@ function CreditsExplainer() {
   return (
     <div className="mt-3 p-3 rounded-lg bg-gray-900/60 border border-white/10 text-xs text-gray-300 space-y-2">
       <p className="text-white font-medium">How credits work</p>
-      <p>Exported video costs <span className="text-yellow-400 font-medium">{CREDITS.PER_SECOND_RULE}</span>.</p>
+      <p>Generated video costs <span className="text-yellow-400 font-medium">{CREDITS.PER_SECOND_RULE}</span>.</p>
       <div>
         <p className="text-gray-400">Credits are spent on:</p>
         <ul className="list-disc list-inside text-gray-300">
-          <li>Exporting video ({CREDITS.PER_SECOND_RULE})</li>
+          <li>Generating video ({CREDITS.PER_SECOND_RULE})</li>
           <li>{CREDITS.MIN_CHARGE}</li>
           <li>Uploading a game (storage for 30 days)</li>
         </ul>
@@ -128,7 +128,7 @@ function CreditsExplainer() {
           <li>Spotlight &amp; highlight render</li>
           <li>Player detection</li>
           <li>Downloads &amp; sharing</li>
-          <li>Storing your exported reels</li>
+          <li>Storing your generated highlights</li>
         </ul>
       </div>
       <p className="text-gray-400">Credits never expire.</p>
@@ -251,7 +251,7 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
             {selectedPack.label} — {selectedPack.credits.toLocaleString()} credits
           </h3>
           <p className="text-gray-400 text-sm">
-            {selectedPack.price} · ≈ {selectedPack.exportedVideo} of exported video
+            {selectedPack.price} · ≈ {selectedPack.exportedVideo} of generated video
           </p>
         </div>
         <button
@@ -531,7 +531,7 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
                         <div className="text-white font-medium">
                           {pack.credits.toLocaleString()} credits
                         </div>
-                        <div className="text-gray-400 text-xs">≈ {pack.exportedVideo} of exported video</div>
+                        <div className="text-gray-400 text-xs">≈ {pack.exportedVideo} of generated video</div>
                       </div>
                     </div>
                     <div className="text-white font-semibold">{pack.price}</div>

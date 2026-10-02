@@ -101,29 +101,29 @@ describe('ShareGameModal — per-recipient clip scope', () => {
     render(<ShareGameModal {...props} />);
     await addRecipient('tagged@test.com');
 
-    const select = screen.getByLabelText('Clips for tagged@test.com');
+    const select = screen.getByLabelText('Highlights for tagged@test.com');
     const optionLabels = within(select).getAllByRole('option').map((o) => o.textContent);
     expect(optionLabels).toEqual([
-      'All team clips',
-      "Only clips they're tagged in",
-      'Game only (no clips)',
+      'All team highlights',
+      "Only highlights they're tagged in",
+      'Game only (no highlights)',
     ]);
-    // default selection is "All team clips"
+    // default selection is "All team highlights"
     expect(select.value).toBe('all_team');
   });
 
   it('shows the collapsed clip count for the default all-team scope', async () => {
     render(<ShareGameModal {...props} />);
     await addRecipient('tagged@test.com');
-    await waitFor(() => expect(screen.getByText('2 clips')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('2 highlights')).toBeTruthy());
   });
 
   it('expands to the clip preview list agreeing with the scope', async () => {
     render(<ShareGameModal {...props} />);
     await addRecipient('tagged@test.com');
-    await waitFor(() => expect(screen.getByText('2 clips')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('2 highlights')).toBeTruthy());
 
-    fireEvent.click(screen.getByLabelText('Show clips'));
+    fireEvent.click(screen.getByLabelText('Show highlights'));
     expect(screen.getByText('Fast break')).toBeTruthy();
     expect(screen.getByText('Steal')).toBeTruthy();
   });
@@ -131,9 +131,9 @@ describe('ShareGameModal — per-recipient clip scope', () => {
   it('shows the hours case for a clip past 1h (T9480 review fix, MINOR #11: "1:05:07", not the old uncapped "65:07")', async () => {
     render(<ShareGameModal {...props} />);
     await addRecipient('longgame@test.com');
-    await waitFor(() => expect(screen.getByText('1 clip')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('1 highlight')).toBeTruthy());
 
-    fireEvent.click(screen.getByLabelText('Show clips'));
+    fireEvent.click(screen.getByLabelText('Show highlights'));
     expect(screen.getByText('1:05:07')).toBeTruthy();
     expect(screen.queryByText('65:07')).toBeNull();
   });
@@ -141,9 +141,9 @@ describe('ShareGameModal — per-recipient clip scope', () => {
   it('warns inline AND in a send-time banner when a tagged-only recipient gets 0 clips', async () => {
     render(<ShareGameModal {...props} />);
     await addRecipient('untagged@test.com');
-    await waitFor(() => expect(screen.getByText('1 clip')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('1 highlight')).toBeTruthy());
 
-    const select = screen.getByLabelText('Clips for untagged@test.com');
+    const select = screen.getByLabelText('Highlights for untagged@test.com');
     fireEvent.change(select, { target: { value: 'tagged_only' } });
 
     // inline row warning (before send)
@@ -158,9 +158,9 @@ describe('ShareGameModal — per-recipient clip scope', () => {
   it('sends the {recipients:[{email,scope}]} shape with per-recipient scope', async () => {
     render(<ShareGameModal {...props} />);
     await addRecipient('tagged@test.com');
-    await waitFor(() => expect(screen.getByText('2 clips')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('2 highlights')).toBeTruthy());
 
-    const select = screen.getByLabelText('Clips for tagged@test.com');
+    const select = screen.getByLabelText('Highlights for tagged@test.com');
     fireEvent.change(select, { target: { value: 'tagged_only' } });
 
     fireEvent.click(screen.getByText('Share with 1'));

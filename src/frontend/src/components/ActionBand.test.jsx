@@ -14,7 +14,7 @@ describe('ActionBand (T10630)', () => {
   it('keeps data-testid and CTA node identity', () => {
     render(
       <ActionBand
-        status={<span>Set at least one focus point to export</span>}
+        status={<span>Set at least one focus point to generate</span>}
         cta={<button data-testid="the-cta">Generate Framing</button>}
         cost={<span>~8 credits</span>}
       />

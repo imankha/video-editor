@@ -31,60 +31,60 @@ function lockedCopy(kind, { name, ratio, thresholdText, remainingText, remaining
       return {
         intro: (
           <>
-            Ranking lets you sort your clips head-to-head so your best ones show first.
-            It unlocks once you have <span className="font-semibold text-amber-300">{thresholdText}</span> of clips to compare.
+            Ranking lets you sort your highlights head-to-head so your best ones show first.
+            It unlocks once you have <span className="font-semibold text-amber-300">{thresholdText}</span> of highlights to compare.
           </>
         ),
         footer: remaining > 0
-          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more, then you can rank your clips head-to-head to find your best.</>)
-          : (<>You have enough clips &mdash; reopen {SECTION_NAMES.REELS} to start ranking.</>),
+          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more, then you can rank your highlights head-to-head to find your best.</>)
+          : (<>You have enough highlights - reopen {SECTION_NAMES.PUBLISHED} to start ranking.</>),
       };
     case LOCKED_KINDS.SMART:
       return {
         intro: (
           <>
-            <span className="font-semibold text-white">{name}</span> automatically gathers your top-rated reels into one
-            highlight reel. It unlocks once you have <span className="font-semibold text-amber-300">{thresholdText}</span> of {rc} reels.
+            <span className="font-semibold text-white">{name}</span> automatically gathers your top-rated highlights into one
+            video. It unlocks once you have <span className="font-semibold text-amber-300">{thresholdText}</span> of {rc} highlights.
           </>
         ),
         footer: remaining > 0
-          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} content, then <span className="font-semibold text-white">{name}</span> plays as one highlight reel.</>)
-          : (<>This collection has enough content &mdash; reopen {SECTION_NAMES.REELS} to play it.</>),
+          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} content, then <span className="font-semibold text-white">{name}</span> plays as one video.</>)
+          : (<>This collection has enough content - reopen {SECTION_NAMES.PUBLISHED} to play it.</>),
       };
     case LOCKED_KINDS.GAME:
       return {
         intro: (
           <>
-            Game Highlights stitches all your {rc} reels from this game into one reel.
-            It unlocks once this game has <span className="font-semibold text-amber-300">{thresholdText}</span> of {rc} reels.
+            Game Highlights stitches all your {rc} highlights from this game into one video.
+            It unlocks once this game has <span className="font-semibold text-amber-300">{thresholdText}</span> of {rc} highlights.
           </>
         ),
         footer: remaining > 0
-          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} reels from this game, then its highlights play as one reel.</>)
-          : (<>This game has enough content &mdash; reopen {SECTION_NAMES.REELS} to play its highlights.</>),
+          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} highlights from this game, then its highlights play as one video.</>)
+          : (<>This game has enough content - reopen {SECTION_NAMES.PUBLISHED} to play its highlights.</>),
       };
     case LOCKED_KINDS.MIXES:
       return {
         intro: (
           <>
-            <span className="font-semibold text-white">{name}</span> combine {rc} reels from across your games into one reel.
-            They unlock once you have <span className="font-semibold text-amber-300">{thresholdText}</span> of {rc} reels.
+            <span className="font-semibold text-white">{name}</span> combine {rc} highlights from across your games into one video.
+            They unlock once you have <span className="font-semibold text-amber-300">{thresholdText}</span> of {rc} highlights.
           </>
         ),
         footer: remaining > 0
-          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} content, then your mixes play as one reel.</>)
-          : (<>You have enough content &mdash; reopen {SECTION_NAMES.REELS} to play your mixes.</>),
+          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} content, then your mixes play as one video.</>)
+          : (<>You have enough content - reopen {SECTION_NAMES.PUBLISHED} to play your mixes.</>),
       };
     default:
       return {
         intro: (
           <>
-            Collections unlock once a ratio has <span className="font-semibold text-amber-300">{thresholdText}</span> of reels.
+            Collections unlock once a ratio has <span className="font-semibold text-amber-300">{thresholdText}</span> of highlights.
           </>
         ),
         footer: remaining > 0
-          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} content, then you can play and share <span className="font-semibold text-white">{name}</span> as one highlight reel.</>)
-          : (<>This collection has enough content &mdash; reopen {SECTION_NAMES.REELS} to play it.</>),
+          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} content, then you can play and share <span className="font-semibold text-white">{name}</span> as one video.</>)
+          : (<>This collection has enough content - reopen {SECTION_NAMES.PUBLISHED} to play it.</>),
       };
   }
 }

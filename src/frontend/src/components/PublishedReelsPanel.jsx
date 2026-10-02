@@ -182,7 +182,7 @@ export function PublishedReelsPanel({
       });
       setRankRefreshKey((k) => k + 1); // banner refetches the dropped %
     } catch {
-      toast.error('Could not re-rank this reel');
+      toast.error('Could not re-rank this highlight');
     } finally {
       setReRankingId(null);
     }
@@ -482,7 +482,7 @@ export function PublishedReelsPanel({
       await downloadFile(download.id);
     } catch (err) {
       console.error('[PublishedReelsPanel] reel download failed:', err);
-      toast.error('Could not download reel');
+      toast.error('Could not download highlight');
     }
   };
 
@@ -637,8 +637,8 @@ export function PublishedReelsPanel({
       const filename = `${download.project_name || 'highlight'}-highlight.mp4`;
       const method = await webShare({
         downloadId: download.id,
-        title: download.project_name || 'Highlight Reel',
-        text: `Check out ${download.project_name || 'this highlight reel'}!`,
+        title: download.project_name || 'Highlight',
+        text: `Check out ${download.project_name || 'this highlight'}!`,
         filename,
       });
       track('share_initiated', { method, source: 'gallery' });
@@ -676,8 +676,8 @@ export function PublishedReelsPanel({
         const filename = `${reel.name || 'highlight'}-highlight.mp4`;
         const method = await webShare({
           downloadId: reel.id,
-          title: reel.name || 'Highlight Reel',
-          text: `Check out ${reel.name || 'this highlight reel'}!`,
+          title: reel.name || 'Highlight',
+          text: `Check out ${reel.name || 'this highlight'}!`,
           filename,
         });
         track('share_initiated', { method, source: 'player' });
@@ -869,7 +869,7 @@ export function PublishedReelsPanel({
           onShare={sharePlayerReel}
           onDownload={storyPlayer.downloadId ? () => downloadFile(storyPlayer.downloadId).catch((err) => {
             console.error('[PublishedReelsPanel] story-player download failed:', err);
-            toast.error('Could not download reel');
+            toast.error('Could not download highlight');
           }) : undefined}
           downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}
           onReEdit={onOpenProject ? openReelAsProject : undefined}

@@ -75,7 +75,7 @@ async function openCollectionShareModal(page) {
 // behind the overlay also has Copy-link buttons and readonly inputs on its reel
 // tiles, so page-level lookups hit those too.
 const shareModal = (page) =>
-  page.locator('div.bg-gray-800.rounded-lg').filter({ hasText: 'This link always shows the current reels' });
+  page.locator('div.bg-gray-800.rounded-lg').filter({ hasText: 'This link always shows the current highlights' });
 // The public/restricted toggle is a role="switch"; the intro carousel is a
 // role="listbox" name="Intro card". These are the on-screen anchors we assert on.
 const introListbox = (page) => shareModal(page).getByRole('listbox', { name: 'Intro card' });

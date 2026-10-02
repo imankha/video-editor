@@ -28,10 +28,10 @@ export const ANNOTATE = {
   // so a Team play never claims to be "your athlete's".
   RATE_ATHLETES_PLAY: "Rate your athlete's play",
   RATE_TEAMS_PLAY: "Rate your team's play",
-  DELETE_CLIP: 'Delete clip',              // N14 — delete a play that has a clip
-  DELETE_PLAY: 'Delete play',              // N14 — delete a bare play marker
-  RENAME_CLIP: 'Rename clip',              // N15 — rename action (library/DraftTile, T11280 scope)
-  CLIP_NAME: 'Clip name',                  // N15 — name field (library/DraftTile, T11280 scope)
+  DELETE_CLIP: 'Delete highlight',         // N14 - delete a highlight (library/DraftTile, T11280)
+  DELETE_PLAY: 'Delete play',              // N14 - delete a bare play marker
+  RENAME_CLIP: 'Rename highlight',         // N15 - rename action (library/DraftTile, T11280)
+  CLIP_NAME: 'Highlight name',             // N15 - name field (library/DraftTile, T11280)
   // T11150 (Play editor hierarchy): the Annotate editor's own name/rename/rate
   // vocabulary, split off CLIP_NAME/RENAME_CLIP/DELETE_CLIP above — those stay
   // frozen (LIBRARY_ACTIONS re-exports them for the library/DraftTile surface,
@@ -114,7 +114,7 @@ export const ANNOTATE = {
   // T9900: caption under the create-in-flight DISABLED "Frame this clip" button, so a
   // briefly-disabled onward action explains its temporary preparation state instead of
   // reading as broken (evidence E09). Clears itself when the project id lands.
-  PREPARING_CLIP: 'Preparing your clip...',
+  PREPARING_CLIP: 'Preparing your highlight...',
 };
 
 // T9560 (Shared Vocabulary epic, N34): the Annotate share controls, single source.
@@ -204,7 +204,7 @@ export const RESULT_PUBLISH = {
   // T10860: re-point an already-distributed share token to a moved final_video
   // after a private re-export. Shown only when payload.staleShare is non-null.
   UPDATE_SHARED: 'Update shared version',
-  UPDATE_SHARED_HINT: 'Your link still shows the old export. Update it to point at the latest.',
+  UPDATE_SHARED_HINT: 'Your link still shows the previously generated video. Update it to point at the latest.',
 };
 
 export const SECTION_NAMES = {
@@ -217,13 +217,12 @@ export const SECTION_NAMES = {
   CLIPS: 'Clips',
   CLIPS_LOWER: 'clips',
 
-  // T11230 removed the In Progress Reels TAB and its Create-reel builder, but this
-  // "Reels" noun survives here because the KEEP collections surface still uses it:
-  // LockedReasonModal's "reopen Reels to ..." copy. Rewording that collections
-  // vocabulary is T11280's Reel-vocabulary-sweep job (depends on R2), not this
-  // mechanical removal task. (Prior: T8360 multi-clip assemblies; T8555 top-level
-  // tab; T9530 N11 dropped the "In Progress" prefix; T9860 key renamed HIGHLIGHTS
-  // -> REELS to match its value.)
+  // T11230 removed the In Progress Reels TAB and its Create-reel builder. T11280
+  // (R2) then repointed LockedReasonModal's collections copy to PUBLISHED (where
+  // collections actually live now, inside PublishedReelsPanel) and swept the
+  // "reel" noun to "highlight", so this constant has NO remaining consumers. Key +
+  // value kept only as an out-of-scope internal identifier (T11280 is a UI copy
+  // sweep, not a rename pass); it renders nowhere.
   REELS: 'Reels',
 
   // Published reels tab (T8555) -- every published reel regardless of single-
@@ -244,14 +243,14 @@ export const LIBRARY_ACTIONS = {
   UPLOAD_GAME: 'Upload game',              // N01 — was "Add Game"/"Add New Game"
   UPLOADING_GAME: 'Uploading game...',     // N01 — submit busy state
   ADD_FOOTAGE: 'Add footage to game',      // N03 — was "Add footage"/"Add footage to this game"
-  DELETE_CLIP: ANNOTATE.DELETE_CLIP,       // N14 — 'Delete clip'
-  RENAME_CLIP: ANNOTATE.RENAME_CLIP,       // N15 — 'Rename clip'
-  PUBLISH_CLIP: 'Publish clip',            // N12
+  DELETE_CLIP: ANNOTATE.DELETE_CLIP,       // N14 — 'Delete highlight'
+  RENAME_CLIP: ANNOTATE.RENAME_CLIP,       // N15 — 'Rename highlight'
+  PUBLISH_CLIP: 'Publish highlight',       // N12
   // PUBLISH_REEL survives the T11230 Reels-building removal: it is still the
-  // publish label on the KEEP CollectionPlayer/published surface. The reel-DRAFT
-  // action labels (CREATE_REEL/CREATE_REEL_WITH_COUNT/DELETE_REEL/RENAME_REEL)
-  // were deleted with the Reels tab + Create-reel builder + DraftTile isReel branch.
-  PUBLISH_REEL: 'Publish reel',            // N12
+  // publish label on the KEEP CollectionPlayer/published surface. T11280 (R2)
+  // retires the "reel" noun in user-facing copy: "highlight" everywhere, "Reel"
+  // reserved for T11300. Key name kept (internal identifier, out of scope).
+  PUBLISH_REEL: 'Publish highlight',       // N12
 };
 
 // T8980: one-line short tab labels shown BELOW `sm`. T9530 (N10/N11) collapsed
@@ -286,20 +285,20 @@ export const SECTION_NAMES_SHORT = {
 // clicking their kid on AI-proposed per-frame boxes (PlayerDetectionOverlay),
 // not identity tracking. No em dashes (project-wide rule).
 export const DIVISION_OF_WORK =
-  'You mark the plays, frame your athlete, and pick them from the AI\'s player boxes. ReelBallers connects the dots for smooth motion, upscales your video, and builds a reel to share.';
+  'You mark the plays, frame your athlete, and pick them from the AI\'s player boxes. ReelBallers connects the dots for smooth motion, upscales your video, and builds a highlight to share.';
 
 export const CLIP_UPLOAD = {
-  UPLOAD_CLIP: 'Upload clip',
+  UPLOAD_CLIP: 'Upload highlight',
   // T10300: uploads no longer come with a permanent "not linkable" consequence —
   // a directly-uploaded clip STARTS unlinked but can be linked to a game later
   // from the Clips tab (POST /api/clips/raw/{id}/link). The notice now states the
   // starting state and the recovery path instead of the old "won't be part of a
   // game" absolute. "Framing" is MODE_NAMES.FRAMING (a noun, never a verb); curly
   // apostrophes match this file's existing convention; no em dashes.
-  NOTICE_TITLE: 'Heads up: these clips start out unlinked from a game',
+  NOTICE_TITLE: 'Heads up: these highlights start out unlinked from a game',
   NOTICE_BODY:
-    `Uploading here adds videos straight to your clips, ready for ${MODE_NAMES.FRAMING} and publish. `
-    + 'You can link a clip to a game at any time from the Clips tab so it shows up '
+    `Uploading here adds videos straight to your highlights, ready for ${MODE_NAMES.FRAMING} and publish. `
+    + 'You can link a highlight to a game at any time from the Clips tab so it shows up '
     + 'with that game’s highlights.',
   NOTICE_CONTINUE: 'Continue',
   NOTICE_CANCEL: 'Cancel',
@@ -307,9 +306,9 @@ export const CLIP_UPLOAD = {
   // server-provided cap (configStore.maxClipUploadBytes) — there is no `500`
   // literal here; this sentence mirrors the backend refusal in
   // games_upload.py so the two never drift.
-  SIZE_LIMIT_TITLE: 'This clip is too large to upload',
+  SIZE_LIMIT_TITLE: 'This highlight is too large to upload',
   sizeLimitBody: (mb) =>
-    `Clip uploads are limited to ${mb}MB. For longer footage, use Add Game instead.`,
+    `Highlight uploads are limited to ${mb}MB. For longer footage, use Add Game instead.`,
   SIZE_LIMIT_ADD_GAME: 'Add Game instead',
   SIZE_LIMIT_CANCEL: 'Cancel',
   // T10310 (2026-09-18 user request): the SAME over-cap refusal, but caught only
@@ -318,9 +317,9 @@ export const CLIP_UPLOAD = {
   // there is no File left in hand to auto-carry into Add Game. Surfaced as its own
   // popup (not just the inert rail row, which is easy to miss) with the concrete
   // click-path instead of an auto-action button.
-  POST_UPLOAD_TOO_LARGE_TITLE: 'This clip is too large for Clips',
+  POST_UPLOAD_TOO_LARGE_TITLE: 'This highlight is too large for Clips',
   postUploadTooLargeBody: (mb) =>
-    `Clip uploads are limited to ${mb}MB. Click Games, then click ${LIBRARY_ACTIONS.UPLOAD_GAME} to add this as a full game instead.`,
+    `Highlight uploads are limited to ${mb}MB. Click Games, then click ${LIBRARY_ACTIONS.UPLOAD_GAME} to add this as a full game instead.`,
   POST_UPLOAD_TOO_LARGE_DISMISS: 'Got it',
   // T10250: non-retryable server refusals surfaced verbatim on the rail (no
   // Retry). Keyed on the clip-batch error codes (clips.py upload_clips_batch);
@@ -330,16 +329,16 @@ export const CLIP_UPLOAD = {
     switch (code) {
       case 'duration_exceeds_cap':
         return durationMinutes
-          ? `This clip is longer than the ${durationMinutes}-minute limit. For longer footage, use Add Game instead.`
-          : 'This clip is longer than the allowed limit. For longer footage, use Add Game instead.';
+          ? `This highlight is longer than the ${durationMinutes}-minute limit. For longer footage, use Add Game instead.`
+          : 'This highlight is longer than the allowed limit. For longer footage, use Add Game instead.';
       case 'probe_failed':
         return "We couldn't read this video. Make sure it's a valid MP4, MOV, or WebM file.";
       case 'source_missing':
         return "We couldn't find the uploaded video. Please pick the file and add it again.";
       case 'insufficient_credits':
-        return "You don't have enough credits to add this clip.";
+        return "You don't have enough credits to add this highlight.";
       default:
-        return 'This clip could not be added.';
+        return 'This highlight could not be added.';
     }
   },
 };
@@ -350,22 +349,22 @@ export const CLIP_UPLOAD = {
 // the tile action labels + the game-picker modal copy. No em dashes; curly
 // apostrophes match this file's convention.
 export const CLIP_LINK = {
-  LINK_TO_GAME: 'Link to game',       // tile action + picker title, unlinked clip
+  LINK_TO_GAME: 'Link to game',       // tile action + picker title, unlinked highlight
   unlinkFrom: (name) => (name ? `Unlink from ${name}` : 'Unlink from game'),
-  PICKER_TITLE: 'Link this clip to a game',
-  PICKER_SUBTITLE: 'The clip shows up with that game’s highlights.',
+  PICKER_TITLE: 'Link this highlight to a game',
+  PICKER_SUBTITLE: 'It shows up with that game’s highlights.',
   PICKER_SEARCH_PLACEHOLDER: 'Search games',
-  PICKER_EMPTY: 'You don’t have any games yet. Upload a game first, then link this clip to it.',
+  PICKER_EMPTY: 'You don’t have any games yet. Upload a game first, then link this highlight to it.',
   PICKER_NO_MATCH: 'No games match your search.',
   CANCEL: 'Cancel',
   // Success toasts confirm the re-grouping the user just triggered.
-  linkedToast: (name) => (name ? `Clip linked to ${name}` : 'Clip linked to game'),
-  UNLINKED_TOAST: 'Clip unlinked from game',
-  // 409: a non-upload clip somehow reached the link endpoint. Should never happen
-  // (the affordance is upload-gated), but surface it instead of swallowing it.
-  ERROR_NOT_UPLOAD: 'Only uploaded clips can be linked to a game.',
-  ERROR_GENERIC: "Couldn't update this clip's game. Please try again.",
-  clipCount: (n) => `${n} clip${n === 1 ? '' : 's'}`,
+  linkedToast: (name) => (name ? `Highlight linked to ${name}` : 'Highlight linked to game'),
+  UNLINKED_TOAST: 'Highlight unlinked from game',
+  // 409: a non-upload highlight somehow reached the link endpoint. Should never
+  // happen (the affordance is upload-gated), but surface it instead of swallowing it.
+  ERROR_NOT_UPLOAD: 'Only uploaded highlights can be linked to a game.',
+  ERROR_GENERIC: "Couldn't update this highlight's game. Please try again.",
+  clipCount: (n) => `${n} highlight${n === 1 ? '' : 's'}`,
 };
 
 // T9430: honest upload-state vocabulary shown next to the local preview. The four
@@ -412,7 +411,7 @@ export const EXPORT_JOBS = {
     jobNoun: 'Highlight with Overlay',
     // Q1 (approved): the effects render charges ZERO credits (backend-confirmed: no
     // reserve_credits in overlay.py). Surface that honestly instead of staying silent.
-    costNote: 'No credits · effects are free',
+    costNote: 'Effects are free -- no credits needed',
   },
 };
 
@@ -441,24 +440,24 @@ export const EXPORT_PROGRESS = {
 // guard rejects inside the background task AFTER credits were reserved+confirmed at dispatch,
 // so the same handler refunds them — the net cost is zero, stated honestly as "refunded".
 export const EXPORT_TOO_LARGE = {
-  TITLE: 'This export is too big to finish in time',
+  TITLE: 'This highlight is too big to generate in time',
   WHY:
     'Every frame is upscaled on our video processor, and this batch needs more GPU time '
     + 'than one job can finish before it times out. Rather than run for the full limit and '
     + 'then fail, we stopped it now so you can trim it down.',
   WHAT_TO_DO_HEADING: 'To get it through, try one of these:',
-  SUGGESTION_CROP: 'Crop in tighter on the clip(s) below, a smaller crop is much faster to process.',
+  SUGGESTION_CROP: 'Crop in tighter on the highlight(s) below, a smaller crop is much faster to process.',
   // Shown only for a multi-clip rejection (>1 contributing clip); it isn't actionable for a
   // single clip (the /render path also hits this guard with a one-element list, T11330 minor 2).
-  SUGGESTION_SPLIT: 'Export fewer clips at once, or split this batch into two smaller exports.',
+  SUGGESTION_SPLIT: 'Generate fewer highlights at once, or split this batch into two smaller batches.',
   CONTRIBUTORS_HEADING: 'Biggest contributors',
-  // A single worst-offender row: "Clip 3, 1920x1080 crop, about 6 min".
+  // A single worst-offender row: "Highlight 3, 1920x1080 crop, about 6 min".
   contributorLine: (c) => {
-    const label = c.clip_name || `Clip ${(c.clip_index ?? 0) + 1}`;
+    const label = c.clip_name || `Highlight ${(c.clip_index ?? 0) + 1}`;
     const crop = c.crop_width && c.crop_height ? `${c.crop_width}x${c.crop_height} crop, ` : '';
     return `${label}, ${crop}${formatApproxMinutes(c.estimated_gpu_seconds)}`;
   },
-  CREDIT_NOTE: 'Credits reserved for this export have been refunded. This attempt cost you nothing.',
+  CREDIT_NOTE: 'Credits reserved for this generation have been refunded. This attempt cost you nothing.',
   DISMISS: 'Got it',
 };
 
@@ -503,7 +502,7 @@ export const FOCUS_PUBLISH = {
   PUBLISH_LABEL: 'Publish without spotlight',
   PUBLISH_CAPTION: `Goes to Published. ${STAGE_REASONS.PUBLISH}`,
   EDIT_FRAMING_LABEL: 'Edit framing',
-  EDIT_FRAMING_CAPTION: 'Reframe and export again. Uses credits.',
+  EDIT_FRAMING_CAPTION: 'Reframe and generate again. Uses credits.',
   SAVE_DRAFT_LABEL: 'Done for now',
 };
 
@@ -567,8 +566,8 @@ export const FOCUS_HINTS = {
 export const FOCUS_PUBLISH_LATER_TOAST = {
   SINGLE_CLIP: {
     title: 'Added to Clips',
-    message: 'Clips are single plays. A highlight reel joins several clips into one video. '
-      + 'Yours is still a draft, so add a spotlight or publish it from here whenever you want.',
+    message: 'Your highlight is still a draft, so add a spotlight or publish it from '
+      + 'here whenever you want.',
   },
 };
 
@@ -578,7 +577,7 @@ export const FOCUS_PUBLISH_LATER_TOAST = {
 // user isn't leaving the flow -- they land straight in Overlay right after.
 export const FOCUS_ADD_SPOTLIGHT_TOAST = {
   title: EXPORT_JOBS.framing.completed,
-  message: 'Now add a spotlight to your reel -- you can still publish it whenever you\'re ready.',
+  message: 'Now add a spotlight to your highlight -- you can still publish it whenever you\'re ready.',
 };
 
 // T9110 / re-hierarchized T9590 / T10670 celebration tiles: Overlay's post-export
@@ -605,7 +604,7 @@ export const OVERLAY_PUBLISH = {
   REAPPLY_OVERLAY_LABEL: 'Reapply spotlight',
   REAPPLY_OVERLAY_CAPTION: 'Go back and redo the spotlight.',
   REAPPLY_FOCUS_LABEL: `Reapply ${MODE_NAMES.FRAMING}`,
-  REAPPLY_FOCUS_CAPTION: 'Reframe and export again. Uses credits.',
+  REAPPLY_FOCUS_CAPTION: 'Reframe and generate again. Uses credits.',
   SAVE_DRAFT_LABEL: 'Done for now',
 };
 
@@ -633,7 +632,7 @@ export const RESULT_RETENTION = {
 // (highlight carry-forward, T4350/T4355) and that a fresh export follows.
 export const OVERLAY_REAPPLY_FOCUS_TOAST = {
   title: 'Spotlight saved',
-  message: `Reframe your clip in ${MODE_NAMES.FRAMING}, then export again, your spotlight carries over to the new reel.`,
+  message: `Reframe your highlight in ${MODE_NAMES.FRAMING}, then generate again, your spotlight carries over to the new highlight.`,
 };
 
 // T10870: auto-spotlight tried the clip's player detections but found no usable
@@ -645,7 +644,7 @@ export const OVERLAY_REAPPLY_FOCUS_TOAST = {
 // (possessive/singular = athlete); hyphen, never an em dash, per shipped-copy rule.
 export const SPOTLIGHT_DETECTION_FALLBACK_TOAST = {
   title: "Couldn't auto-detect your athlete",
-  message: 'Drag the highlight to reposition it in this clip.',
+  message: 'Drag the spotlight to reposition it.',
 };
 
 // T9550 (Shared Vocabulary epic, N16-N32): the editor-stage IN-PANEL vocabulary,
@@ -715,7 +714,7 @@ export const EDITOR_PANELS = {
   // disclosure's label matches what it actually reveals.
   TRIM_AND_SLOWMO: 'Trim and Slo-mo',
   // 2026-09-18 (user request: rollover hints on every Framing-screen button).
-  TRIM_AND_SLOWMO_HINT: 'Split this clip into segments, adjust playback speed, or trim the start and end.',
+  TRIM_AND_SLOWMO_HINT: 'Split this highlight into segments, adjust playback speed, or trim the start and end.',
   // The settings-rail heading (straighten/dim/zoom) keeps this word --
   // unrelated to trim/slo-mo, so it was NOT renamed alongside the disclosure.
   ADVANCED_EDITING: 'Advanced editing',
@@ -726,11 +725,11 @@ export const EDITOR_PANELS = {
   // sharpness claim in either direction.
   PREVIEW_HIGHLIGHT: 'Preview highlight',
   PREVIEW_BACK_TO_FRAMING: 'Back to framing',
-  PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced at export.',
+  PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced when you generate.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
   // same shape as TRIM_AND_SLOWMO above (user request 2026-09-21).
   TEXT_LANE: 'Text',
-  TEXT_LANE_HINT: 'Add a title, name, or caption over the clip.',
+  TEXT_LANE_HINT: 'Add a title, name, or caption over the highlight.',
   // T10980 -- the Focus clip rail's framing badge. Undone reuses ANNOTATE.FRAME_CLIP
   // as its name; these are the done label and the undone hover copy.
   CLIP_FRAMED: 'Framed',
@@ -757,8 +756,8 @@ export const CREDITS = {
 //   stays visible but becomes un-editable / un-exportable once its source is gone.
 export const RETENTION = {
   SOURCE: 'Your uploaded game is kept for 30 days, and you can extend it anytime.',
-  EXPORTED: 'Reels you export are kept for good and are free to store.',
-  DRAFT: 'An unexported draft stays viewable, but you need its source to re-edit or export it, so finish the ones you want to keep before the 30 days are up.',
+  EXPORTED: 'Highlights you generate are kept for good and are free to store.',
+  DRAFT: 'A draft you haven\'t generated stays viewable, but you need its source to re-edit or generate it, so finish the ones you want to keep before the 30 days are up.',
 };
 
 // T10190: the shared finished-result surface (CollectionPlayer + the card CTAs

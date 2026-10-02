@@ -1049,7 +1049,7 @@ async def call_modal_clips_ai(
                         if job_started:
                             return {
                                 "status": "connection_lost",
-                                "error": "Internet connection lost. Your export may still complete - check back in a few minutes.",
+                                "error": "Internet connection lost. Your highlight may still generate - check back in a few minutes.",
                                 "recoverable": True,
                                 "message": "Connection lost but job may still be running. Use 'Check Status' to see if it completed.",
                             }
@@ -1138,9 +1138,9 @@ async def call_modal_clips_ai(
     if _is_transient_network_error(last_error):
         return {
             "status": "connection_lost",
-            "error": "Internet connection lost. Your export may still complete - check back in a few minutes.",
+            "error": "Internet connection lost. Your highlight may still generate - check back in a few minutes.",
             "recoverable": True,
-            "message": "Connection lost. Use 'Check Status' to see if the export completed.",
+            "message": "Connection lost. Use 'Check Status' to see if the generation completed.",
         }
 
     return {"status": "error", "error": _translate_modal_error(last_error)}

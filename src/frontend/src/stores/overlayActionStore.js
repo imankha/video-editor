@@ -181,7 +181,7 @@ export const useOverlayActionStore = create((set, get) => ({
       set({ _toastId: null }); // it was dismissed — fall through and re-surface
     }
     const id = toast.error("Your edits aren't saving", {
-      message: 'Some highlight changes could not be saved. Retry before exporting.',
+      message: 'Some highlight changes could not be saved. Retry before generating.',
       duration: 0, // persistent until retried/resolved
       action: {
         label: 'Retry',

@@ -21,7 +21,7 @@ describe('LockedReasonModal per-kind copy (T7650)', () => {
 
   it('smart kind names the collection and says it auto-gathers top-rated reels', () => {
     setup({ kind: LOCKED_KINDS.SMART, name: 'Top Plays' });
-    expect(screen.getByText(/automatically gathers your top-rated reels/i)).toBeTruthy();
+    expect(screen.getByText(/automatically gathers your top-rated highlights/i)).toBeTruthy();
     // The collection name appears in the copy.
     expect(screen.getAllByText(/Top Plays/).length).toBeGreaterThan(0);
   });
@@ -53,7 +53,7 @@ describe('LockedReasonModal per-kind copy (T7650)', () => {
 describe('locked cards carry a distinct subtitle (T7650)', () => {
   it('SmartLockedCard shows the top-rated subtitle (no longer subtitle-less)', () => {
     render(<SmartLockedCard name="Top Plays" ratio="9:16" currentSec={4} />);
-    expect(screen.getByText(/top-rated reels/i)).toBeTruthy();
+    expect(screen.getByText(/top-rated highlights/i)).toBeTruthy();
   });
 
   it('RatioUnlockGroup game subtitle differs from its mixes subtitle', () => {

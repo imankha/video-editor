@@ -184,7 +184,7 @@ def _side(row, games_info: dict) -> MatchupSide:
     opponent_name, game_date = games_info.get(gid, (None, None)) if gid is not None else (None, None)
     return MatchupSide(
         id=row["id"],
-        name=row["name"] or f"Reel {row['id']}",
+        name=row["name"] or f"Highlight {row['id']}",
         aspect_ratio=row["aspect_ratio"],
         project_id=row["project_id"],
         opponent_line=_opponent_line(opponent_name, game_date),

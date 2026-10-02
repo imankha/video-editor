@@ -1362,7 +1362,7 @@ async def export_overlay_only(
     # Initialize progress
     export_progress[export_id] = {
         "progress": 5,
-        "message": "Starting overlay export...",
+        "message": "Starting overlay generation...",
         "status": "processing",
         "projectId": project_id,
         "projectName": project_name,
@@ -1572,7 +1572,7 @@ async def export_overlay_only(
         from app.websocket import make_progress_data
         error_data = make_progress_data(
             current=0, total=100, phase='error',
-            message=f"Export failed: {error_msg}",
+            message=f"Generation failed: {error_msg}",
             export_type='overlay',
             project_id=project_id, project_name=project_name,
         )
@@ -1602,7 +1602,7 @@ async def export_overlay_only(
         from app.websocket import make_progress_data
         error_data = make_progress_data(
             current=0, total=100, phase='error',
-            message=f"Export failed: {e!s}",
+            message=f"Generation failed: {e!s}",
             export_type='overlay',
             project_id=project_id, project_name=project_name,
         )
@@ -1616,7 +1616,7 @@ async def export_overlay_only(
                 shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception as cleanup_error:
             logger.warning(f"[Overlay Export] Cleanup failed: {cleanup_error}")
-        raise HTTPException(status_code=500, detail=f"Overlay export failed: {e!s}") from e
+        raise HTTPException(status_code=500, detail=f"Overlay generation failed: {e!s}") from e
 
 
 @router.post("/final")
@@ -2604,7 +2604,7 @@ async def _run_overlay_export_background(
         from app.websocket import make_progress_data
         error_data = make_progress_data(
             current=0, total=100, phase='error',
-            message=f"Export failed: {e}",
+            message=f"Generation failed: {e}",
             export_type='overlay',
             project_id=project_id, project_name=project_name,
         )
@@ -2965,7 +2965,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
         except Exception as e:
             logger.error(f"[Overlay Render] TEST MODE failed: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Test mode overlay export failed: {e}") from e
+            raise HTTPException(status_code=500, detail=f"Test mode overlay generation failed: {e}") from e
 
     # Always run in background so the per-user write lock is released immediately.
     # All progress is reported via WebSocket (export_progress/manager), not the

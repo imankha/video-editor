@@ -31,7 +31,7 @@ import { EDITOR_PANELS } from '../config/displayNames';
  * doesn't shout. Purely presentational — the value is derived upstream, never persisted.
  *
  * T9480 review fix (BLOCKING #2): this is a LENGTH on the exact billing-adjacent
- * surface (the tooltip literally says "what you export and are billed for"), so it
+ * surface (the tooltip literally says "what you generate and are billed for"), so it
  * ROUNDS half-up via formatLength, not formatInstant's floor -- identical by
  * construction to roundCreditsHalfUp (a 6.6s output now reads "0:07", matching the
  * 7 credits charged, not the floored "0:06" that reproduced the original complaint).
@@ -44,8 +44,8 @@ function OutputLengthChip({ seconds, emphasized, label = 'Output', className = '
         emphasized ? 'bg-blue-500/25 text-blue-200' : 'bg-white/10 text-gray-400'
       } ${className}`}
       title={emphasized
-        ? 'Output length after slow-motion / trim — what you export and are billed for'
-        : 'Output length (matches source — no speed or trim changes)'}
+        ? 'Output length after slow-motion / trim -- what you generate and are billed for'
+        : 'Output length (matches source -- no speed or trim changes)'}
     >
       {label}: {formatLength(seconds, PRECISION.SECOND, { style: 'clock' })}
     </span>
@@ -716,7 +716,7 @@ export function FocusModeView({
               isUrlExpiredError={isUrlExpiredError}
               onRetryVideo={onRetryVideo}
               loadingMessage={
-                loadingStage === 'clips' ? 'Loading clips...' :
+                loadingStage === 'clips' ? 'Loading highlights...' :
                 loadingStage === 'video' ? 'Loading video...' :
                 loadingStage === 'working-video' ? 'Loading working video...' :
                 isLoading ? 'Loading video...' : 'Loading...'

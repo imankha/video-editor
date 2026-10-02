@@ -78,8 +78,8 @@ describe('GameCollectionGroup — aspect-split rows (T5672)', () => {
     expect(chips.map((c) => c.textContent)).toEqual(['9:16', '16:9']);
 
     // Each ratio's own CardCarousel is present, correctly labeled.
-    expect(screen.getByRole('group', { name: 'Game Highlights 9:16 reels' })).toBeTruthy();
-    expect(screen.getByRole('group', { name: 'Game Highlights 16:9 reels' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Game Highlights 9:16 highlights' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Game Highlights 16:9 highlights' })).toBeTruthy();
   });
 
   it('shows the aspect chip on a sub-threshold (locked) ratio row too', () => {
@@ -119,8 +119,8 @@ describe('GameCollectionGroup — aspect-split rows (T5672)', () => {
       ],
     });
 
-    const portraitRow = screen.getByRole('group', { name: 'Game Highlights 9:16 reels' });
-    const landscapeRow = screen.getByRole('group', { name: 'Game Highlights 16:9 reels' });
+    const portraitRow = screen.getByRole('group', { name: 'Game Highlights 9:16 highlights' });
+    const landscapeRow = screen.getByRole('group', { name: 'Game Highlights 16:9 highlights' });
     expect(portraitRow.textContent).toBe('p1p2'); // sorted by game time within the bucket
     expect(landscapeRow.textContent).toBe('l2l1');
   });

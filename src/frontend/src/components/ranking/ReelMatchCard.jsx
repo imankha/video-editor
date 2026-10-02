@@ -3,10 +3,10 @@ import { REEL } from '../../config/themeColors';
 import { ClipVideo } from './ClipVideo';
 
 /**
- * ReelMatchCard - one side of a "both clips shown" matchup (stacked or
+ * ReelMatchCard - one side of a "both highlights shown" matchup (stacked or
  * side-by-side; T3630). Full-bleed clip with the name + info + a "Pick this one"
  * button overlaid on a bottom gradient (no separate rows). ONLY the Pick button
- * (or the keyboard shortcut) selects -- tapping the clip does not pick, it just
+ * (or the keyboard shortcut) selects -- tapping the highlight does not pick, it just
  * watches. The expand button opens the full-screen player. Clips are identified
  * by NAME, never "A/B".
  *
@@ -43,7 +43,7 @@ export function ReelMatchCard({ side, onPick, onReplay, won, hotkeyHint, classNa
       {/* Bottom overlay. T4760: the ENTIRE name+info+button block is the pick
           target (not just the 44px button), so taps that land near the button still
           register. The video above and the transparent gradient spacer stay
-          watch-only -- the "tapping the clip does not pick" rule is unchanged. */}
+          watch-only -- the "tapping the highlight does not pick" rule is unchanged. */}
       <div className="absolute inset-x-0 bottom-0 z-10 pt-9 bg-gradient-to-t from-black/90 via-black/55 to-transparent">
         <div
           role="button"

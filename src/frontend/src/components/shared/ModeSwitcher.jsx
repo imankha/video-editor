@@ -103,7 +103,7 @@ export function ModeSwitcher({
               ? 'Generate Highlight to unlock Spotlight.'
               : 'Make a highlight first. Spotlight comes after Framing.'
             : modeOption.showWarning
-              ? 'Previously exported video no longer matches your settings. Export to create latest video before overlaying.'
+              ? 'Previously generated video no longer matches your settings. Generate the latest video before overlaying.'
               : modeOption.description;
 
     return (

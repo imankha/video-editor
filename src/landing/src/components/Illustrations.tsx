@@ -300,7 +300,7 @@ export function ElevateIllustration({ className = '' }: IllustrationProps) {
         <path d="M563,368 l2,3 5,-5" stroke="#a78bfa" strokeWidth="1.5" fill="none" strokeLinecap="round" />
 
         {/* Result label */}
-        <text x="490" y="393" textAnchor="middle" fill="#94a3b8" fontSize="11" fontFamily="system-ui">Social-ready vertical reel</text>
+        <text x="490" y="393" textAnchor="middle" fill="#94a3b8" fontSize="11" fontFamily="system-ui">Social-ready vertical highlight</text>
       </svg>
     </div>
   );

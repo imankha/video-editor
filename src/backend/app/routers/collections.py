@@ -1330,8 +1330,8 @@ def get_collection_intro_batch(items: str):
 
 def _context_line(definition: dict) -> str:
     if definition["scope"]["type"] == "game":
-        return "This link always shows the current reels for this game."
-    return "This link always shows the current top reels."
+        return "This link always shows the current highlights for this game."
+    return "This link always shows the current top highlights."
 
 
 def _evaluated_share_members(share: dict) -> tuple[dict, list, Any]:

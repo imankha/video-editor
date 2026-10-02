@@ -5,7 +5,7 @@
 
 import { AlertTriangle } from 'lucide-react';
 
-export function IntroExposureNotice({ linkLabel = "reel's link" }) {
+export function IntroExposureNotice({ linkLabel = "highlight's link" }) {
   return (
     <p className="flex items-start gap-1.5 text-xs text-amber-400/90 leading-snug">
       <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />

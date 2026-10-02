@@ -177,7 +177,7 @@ describe('T9660 — direct clip upload stays visible (not gated behind a wizard)
 
   it('populated Clips tab keeps the direct clip-upload entry visible', async () => {
     renderOnClipsTab({ projects: [A_CLIP] });
-    const uploadClip = await screen.findByRole('button', { name: 'Upload clip' });
+    const uploadClip = await screen.findByRole('button', { name: 'Upload highlight' });
     expect(uploadClip.getAttribute('data-tutorial-target')).toBe('clips-add-video');
   });
 });

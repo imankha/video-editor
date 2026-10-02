@@ -169,7 +169,7 @@ test.describe('T5673 drawer polish QA', () => {
       const ariaLabel = await badge.getAttribute('aria-label');
       const title = await badge.getAttribute('title');
       expect(title, 'badge title matches aria-label').toBe(ariaLabel);
-      expect(ariaLabel).toMatch(/^Ranked #\d+ of your reels this season$/);
+      expect(ariaLabel).toMatch(/^Ranked #\d+ of your highlights this season$/);
     }
     // Cross-check: every reel whose server season_rank is null must show NO badge,
     // and every non-null one must show the exact number.

@@ -236,11 +236,11 @@ export function CollectionHeader({
         <span className={`${REEL.accent} text-sm leading-none`} title={ratioLabel(ratio)}>
           {ratioGlyph(ratio)}
         </span>
-        <span>{reelCount} {reelCount === 1 ? 'reel' : 'reels'}</span>
+        <span>{reelCount} {reelCount === 1 ? 'highlight' : 'highlights'}</span>
         {durationStr && (
           <>
             <span aria-hidden>·</span>
-            <span title={hasNullDurations ? 'Some reels have no recorded duration' : undefined}>
+            <span title={hasNullDurations ? 'Some highlights have no recorded duration' : undefined}>
               {hasNullDurations ? '~' : ''}{durationStr}
             </span>
           </>

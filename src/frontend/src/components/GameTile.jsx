@@ -197,7 +197,7 @@ export function GameTile({
         onClick: onExtend,
         // T10130: reassure that skipping the extension is fine once everything's
         // exported -- the only row in this menu with a second line.
-        caption: 'Exported everything already? Skipping is fine. Annotations stay playable.',
+        caption: 'Generated everything already? Skipping is fine. Annotations stay playable.',
       },
   ].filter(Boolean);
 
@@ -400,7 +400,7 @@ export function GameTile({
                 : 'flex-none bg-black/60 hover:bg-red-900/50 text-rose-300 ring-1 ring-rose-800/60 focus-visible:ring-red-400'
             }`}
             aria-label={showDiscardConfirm
-              ? `Confirm discard of ${game.name} — this permanently deletes it and its clips`
+              ? `Confirm discard of ${game.name} - this permanently deletes it and its highlights`
               : `Discard ${game.name}`}
           >
             <Trash2 size={14} className="flex-shrink-0" />

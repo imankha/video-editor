@@ -52,7 +52,7 @@ describe('CollectionsTab - derived tournament/month grouping (T5880)', () => {
     expect(screen.getAllByTestId('game-group').map((n) => n.textContent))
       .toEqual(['Vs Alpha', 'Vs Bravo', 'Vs Charlie']);
     // Toggle exposes exactly the axes the server produced groups for.
-    const toggle = screen.getByRole('group', { name: /group reels by/i });
+    const toggle = screen.getByRole('group', { name: /group highlights by/i });
     expect(within(toggle).getByRole('button', { name: 'By game' }).getAttribute('aria-pressed')).toBe('true');
     expect(within(toggle).getByRole('button', { name: 'By tournament' })).toBeTruthy();
     expect(within(toggle).getByRole('button', { name: 'By month' })).toBeTruthy();

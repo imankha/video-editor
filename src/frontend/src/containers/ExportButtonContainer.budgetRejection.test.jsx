@@ -111,7 +111,7 @@ const errorFrame = JSON.stringify({
 // auto-creates the store entry via updateExportProgress — exactly as in production, so the
 // later failExport is not a no-op.
 const progressFrame = JSON.stringify({
-  progress: 5, status: 'processing', message: 'Starting export...',
+  progress: 5, status: 'processing', message: 'Starting generation...',
   projectId: 123, projectName: 'My Reel', type: 'overlay',
 });
 

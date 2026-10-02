@@ -93,7 +93,7 @@ QUEST_DEFINITIONS = [
     },
     {
         "id": "quest_4",
-        "title": "Publish your clip",  # T9575: single-clip onboarding object is a clip, not a "reel"
+        "title": "Publish your highlight",  # T11280 (R2/H17): object noun is "highlight"
         "reward": 0,  # T8120: retired — credits granted upfront
         "step_ids": [
             "watch_publish_tutorial",
@@ -134,10 +134,10 @@ STEP_TITLES = {
     "annotate_brilliant": "Save your play",
     "playback_annotations": "Review plays",  # N40
     "return_home": "Head back home",
-    "open_framing": "Open your clip",
+    "open_framing": "Open your highlight",
     "position_crop": "Keep your athlete in frame",
     "add_slowmo": "Add a slow-mo moment",
-    "export_framing": "Export your highlight",
+    "export_framing": "Generate your highlight",
     "wait_for_export": "Enhance the video",
     "open_overlay": "Open in Spotlight",
     "select_players": "Pick your athlete",
@@ -152,6 +152,6 @@ STEP_TITLES = {
     # so a future rename of that constant would silently drift this backend error
     # copy. The FE/BE agreement is pinned by questDefinitions.test.jsx ("FE/BE
     # move_to_my_reels title sync") — update both together if the label changes.
-    "move_to_my_reels": "Publish clip",
-    "view_gallery_video": "Watch your clip",
+    "move_to_my_reels": "Publish highlight",
+    "view_gallery_video": "Watch your highlight",
 }

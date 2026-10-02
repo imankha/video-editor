@@ -161,7 +161,7 @@ test.describe('T7100 My Reel download feedback (real account) @staging-gate @gat
     await clickDownload(tile);
 
     // Downloads failed 100% silently before this task -- this is the whole point.
-    await expect(page.getByText('Could not download reel')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Could not download highlight')).toBeVisible({ timeout: 15000 });
     await saveEvidence(page, 'T7100-criterion4-failure-toast');
 
     // The tile un-sticks -- no permanently-stuck spinner after a failure.
@@ -210,7 +210,7 @@ test.describe('T7100 My Reel download feedback (real account) @staging-gate @gat
     test.skip(!hasDownloadBtn, 'story player download control not present in this build');
     await downloadBtn.click();
 
-    await expect(page.getByText('Could not download reel')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Could not download highlight')).toBeVisible({ timeout: 15000 });
     await page.waitForTimeout(500);
     expect(pageErrors, `no unhandled promise rejection / page error: ${pageErrors.join('; ')}`).toEqual([]);
     await saveEvidence(page, 'T7100-criterion5-story-player-no-unhandled-rejection');

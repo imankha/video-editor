@@ -37,8 +37,8 @@ const SHARE_TOKEN = 'abc123def456';
 
 // Each editor affordance the public viewer must NOT expose, by its getByTitle string.
 const AFFORDANCES = [
-  { name: 'Re-edit', title: 'Re-edit this reel' },
-  { name: 'Re-rank', title: 'Re-rank this reel' },
+  { name: 'Re-edit', title: 'Re-edit this highlight' },
+  { name: 'Re-rank', title: 'Re-rank this highlight' },
 ];
 
 test.describe('Editor affordances are absent in the public shared viewer @staging-gate @gate-c', () => {

@@ -55,7 +55,7 @@ describe('useMoveReels', () => {
     expect(JSON.parse(apiFetch.mock.calls[0][1].body)).toEqual({ video_ids: [7], target_profile_id: 'pB' });
     expect(onMoved).toHaveBeenCalledWith([7], 'pB');
     // Singular copy for the one-reel path.
-    expect(toast.success).toHaveBeenCalledWith('Reel moved', expect.anything());
+    expect(toast.success).toHaveBeenCalledWith('Highlight moved', expect.anything());
   });
 
   it('treats a 503 sync_failed as retryable and does NOT fire onMoved', async () => {
@@ -102,7 +102,7 @@ describe('useMoveReels', () => {
 
     // Sticky error toast with a "Finish removing" action.
     expect(toast.error).toHaveBeenCalledWith(
-      'Reels only partly moved',
+      'Highlights only partly moved',
       expect.objectContaining({
         duration: 0,
         action: expect.objectContaining({ label: 'Finish removing' }),

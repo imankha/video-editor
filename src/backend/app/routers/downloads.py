@@ -1579,7 +1579,7 @@ def _delete_moved_source_rows(cursor, video_ids: list[int]) -> int:
 def _source_cleanup_failed_payload(video_ids: list[int], target_profile_id: str) -> dict:
     return {
         "detail": (
-            "Your reels were copied to the other profile, but we could not finish "
+            "Your highlights were copied to the other profile, but we could not finish "
             "removing them from this one. They may still appear here until you retry."
         ),
         "code": "move_source_cleanup_failed",
@@ -1642,7 +1642,7 @@ async def move_reels_to_profile(
 
     video_ids = list(dict.fromkeys(body.video_ids))  # de-dupe, preserve order
     if not video_ids:
-        raise HTTPException(status_code=400, detail="No reels selected")
+        raise HTTPException(status_code=400, detail="No highlights selected")
 
     logger.info(
         f"[MoveReels] start ids={video_ids} {source_profile_id}->{target_profile_id} "
@@ -1676,7 +1676,7 @@ async def move_reels_to_profile(
             raise HTTPException(
                 status_code=400,
                 detail={
-                    "message": "Some reels cannot be moved.",
+                    "message": "Some highlights cannot be moved.",
                     "not_found": missing,
                     "not_published": unpublished,
                 },
@@ -1736,7 +1736,7 @@ async def move_reels_to_profile(
                 raise HTTPException(
                     status_code=502,
                     detail={
-                        "message": "Could not copy reel media to the target profile. Nothing was moved.",
+                        "message": "Could not copy highlight media to the target profile. Nothing was moved.",
                         "code": "media_copy_failed",
                         "retryable": True,
                     },
@@ -1911,7 +1911,7 @@ async def move_reels_to_profile(
     # T6350: the source rows are now locally committed and the target is fully
     # durable, so the move HAS half-applied. Only the source-side durable sync
     # (run by the middleware AFTER this handler returns) remains. If THAT fails,
-    # the generic "Your reel was not moved" body is a lie — override it with the
+    # the generic "Your highlight was not moved" body is a lie — override it with the
     # truthful cleanup-failed payload. Set it ONLY here (after the phase-2 commit)
     # so any earlier phase-0/1 abort keeps the honest generic "nothing moved".
     set_durable_sync_failure_response(
@@ -1982,7 +1982,7 @@ async def finish_move_reels_to_profile(
 
     video_ids = list(dict.fromkeys(body.video_ids))
     if not video_ids:
-        raise HTTPException(status_code=400, detail="No reels selected")
+        raise HTTPException(status_code=400, detail="No highlights selected")
 
     # --- Read the TARGET to prove the copies exist by filename BEFORE deleting the
     # source. require_fresh=True: this is a DESTRUCTIVE confirmation, so a stale
@@ -2048,7 +2048,7 @@ async def finish_move_reels_to_profile(
                 status_code=409,
                 detail={
                     "message": (
-                        "These reels are not present in the other profile yet, so "
+                        "These highlights are not present in the other profile yet, so "
                         "we did not remove them here."
                     ),
                     "code": "move_target_missing",
@@ -2304,7 +2304,7 @@ async def restore_project_from_archive(
             )
             raise HTTPException(
                 status_code=400,
-                detail="This reel was made from multiple clips and can no longer "
+                detail="This highlight was made from multiple plays and can no longer "
                        "be re-edited. You can still view, download, and share it.",
             )
 

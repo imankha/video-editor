@@ -395,8 +395,8 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
         onClose={onClose}
       />
     );
-    const createBtn = await screen.findByTitle('Create a clip in Annotate at this moment');
-    expect(createBtn.textContent).toContain('Create clip');
+    const createBtn = await screen.findByTitle('Create a highlight in Annotate at this moment');
+    expect(createBtn.textContent).toContain('Create highlight');
 
     fireEvent.click(createBtn);
 
@@ -419,7 +419,7 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
       />
     );
     await waitFor(() => screen.getByTestId('playback-controls'));
-    expect(screen.queryByTitle('Create a clip in Annotate at this moment')).toBeNull();
+    expect(screen.queryByTitle('Create a highlight in Annotate at this moment')).toBeNull();
   });
 
   it('opens on the {Athlete} Recap tab but still exposes the Highlights tab', async () => {
@@ -439,7 +439,7 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
     fireEvent.click(highlightsTab);
     // After switching, the Highlights-only "Create clip" action appears.
     await waitFor(() =>
-      expect(screen.getByTitle('Create a clip in Annotate at this moment')).toBeTruthy()
+      expect(screen.getByTitle('Create a highlight in Annotate at this moment')).toBeTruthy()
     );
   });
 });
@@ -508,14 +508,14 @@ describe('RecapPlayerModal - annotations overlay + create clip (T4130)', () => {
 
   it('enables "Create clip" when a clip is active, source exists, and it is not a draft', async () => {
     renderModal();
-    const btn = await screen.findByTitle('Create a draft reel from this clip');
+    const btn = await screen.findByTitle('Create a draft highlight from this moment');
     expect(btn.disabled).toBe(false);
   });
 
   it('disables "Create clip" when no clip is active', async () => {
     recapState.activeClipId = null;
     renderModal();
-    const btn = await screen.findByTitle('Create a draft reel from this clip');
+    const btn = await screen.findByTitle('Create a draft highlight from this moment');
     expect(btn.disabled).toBe(true);
   });
 
@@ -529,35 +529,35 @@ describe('RecapPlayerModal - annotations overlay + create clip (T4130)', () => {
   it('disables "Create clip" when the active clip is already a draft', async () => {
     recapState.activeClipId = 2; // in_drafts: true
     renderModal();
-    const btn = await screen.findByTitle('This clip is already a draft reel');
+    const btn = await screen.findByTitle('This highlight is already a draft');
     expect(btn.disabled).toBe(true);
   });
 
   it('creates a draft via updateClip and optimistically flips in_drafts', async () => {
     renderModal();
-    const btn = await screen.findByTitle('Create a draft reel from this clip');
+    const btn = await screen.findByTitle('Create a draft highlight from this moment');
     fireEvent.click(btn);
 
     await waitFor(() =>
       expect(mockUpdateClip).toHaveBeenCalledWith(1, { create_project: true })
     );
-    expect(mockToastSuccess).toHaveBeenCalledWith('Reel started - find it on the Clips tab', { duration: 5000 });
+    expect(mockToastSuccess).toHaveBeenCalledWith('Highlight started - find it on the Clips tab', { duration: 5000 });
     expect(mockFetchProjects).toHaveBeenCalledWith({ force: true });
 
     // Optimistic flip: the button now reflects the clip being a draft and is disabled.
     await waitFor(() =>
-      expect(screen.getByTitle('This clip is already a draft reel').disabled).toBe(true)
+      expect(screen.getByTitle('This highlight is already a draft').disabled).toBe(true)
     );
   });
 
   it('informs the user when the draft already existed (project_created false)', async () => {
     mockUpdateClip.mockResolvedValue({ project_id: 99, project_created: false });
     renderModal();
-    const btn = await screen.findByTitle('Create a draft reel from this clip');
+    const btn = await screen.findByTitle('Create a draft highlight from this moment');
     fireEvent.click(btn);
 
     await waitFor(() =>
-      expect(mockToastSuccess).toHaveBeenCalledWith('This clip is already a draft reel', { duration: 5000 })
+      expect(mockToastSuccess).toHaveBeenCalledWith('This highlight is already a draft', { duration: 5000 })
     );
   });
 });
@@ -601,12 +601,12 @@ describe('RecapPlayerModal - mobile clip-list pull-up (T5290)', () => {
     expect(listWrapper.className).not.toContain('hidden');
 
     // Tap the pull-up handle -> collapse (list wrapper hidden on phones).
-    fireEvent.click(screen.getByLabelText('Hide clip list'));
+    fireEvent.click(screen.getByLabelText('Hide highlights list'));
     expect(screen.getByTestId('clips-sidebar').parentElement.className).toContain('hidden');
-    expect(screen.getByLabelText('Show clip list')).toBeTruthy();
+    expect(screen.getByLabelText('Show highlights list')).toBeTruthy();
 
     // Tap again -> expand.
-    fireEvent.click(screen.getByLabelText('Show clip list'));
+    fireEvent.click(screen.getByLabelText('Show highlights list'));
     expect(screen.getByTestId('clips-sidebar').parentElement.className).not.toContain('hidden');
   });
 

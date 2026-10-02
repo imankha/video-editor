@@ -2008,13 +2008,13 @@ async def _export_clips(
             user_error = budget_detail["message"]
             is_recoverable = False
         elif isinstance(e, socket.gaierror) or "getaddrinfo failed" in error_str:
-            user_error = "Internet connection lost. Your export may still complete - check 'In Progress' exports to see if it finished."
+            user_error = "Internet connection lost. Your highlight may still generate - check 'In Progress' highlights to see if it finished."
             is_recoverable = True
         elif "connection" in error_str.lower() or "network" in error_str.lower():
-            user_error = "Network error during export. Please check your internet connection and try again."
+            user_error = "Network error during generation. Please check your internet connection and try again."
             is_recoverable = True
         else:
-            user_error = f"Export failed: {error_str}"
+            user_error = f"Generation failed: {error_str}"
             is_recoverable = False
 
         error_data = {
@@ -2081,7 +2081,7 @@ async def export_multi_clip(
     # Initialize progress
     export_progress[export_id] = {
         "progress": 5,
-        "message": "Starting multi-clip export...",
+        "message": "Starting multi-clip generation...",
         "status": "processing",
         "projectId": project_id,
         "projectName": project_name,
@@ -2107,7 +2107,7 @@ async def export_multi_clip(
         # Notify frontend that export job exists so quest progress can refresh
         await manager.send_progress(export_id, {
             "progress": 5,
-            "message": "Starting export...",
+            "message": "Starting generation...",
             "status": "processing"
         })
 
@@ -2466,7 +2466,7 @@ async def _run_multi_clip_background(
 
         if clips_missing_framing:
             raise RuntimeError(
-                f"Cannot export: {len(clips_missing_framing)} clip(s) missing framing data: {', '.join(clips_missing_framing)}. Please add crop keyframes to all clips before exporting."
+                f"Cannot generate: {len(clips_missing_framing)} highlight(s) missing framing data: {', '.join(clips_missing_framing)}. Please add crop keyframes to all highlights before generating."
             )
 
         # Build ClipExportData list for the shared pipeline
@@ -2544,8 +2544,8 @@ async def _run_multi_clip_background(
         if export_progress.get(export_id, {}).get('status') != 'error':
             error_data = {
                 "progress": 0,
-                "message": f"Export failed: {e}",
-                "error": f"Export failed: {e}",
+                "message": f"Generation failed: {e}",
+                "error": f"Generation failed: {e}",
                 "status": "error",
                 "projectId": project_id,
                 "projectName": project_name,

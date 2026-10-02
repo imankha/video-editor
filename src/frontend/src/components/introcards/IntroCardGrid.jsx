@@ -23,7 +23,7 @@ export function IntroCardGrid({ cards, profile, onNew, onEdit, onDuplicate, onDe
     <div>
       {cards.length === 0 ? (
         <div className="text-center py-10 text-gray-400">
-          <p className="mb-4 text-sm">No Athlete Intro Cards yet. Create one to open a reel with your player.</p>
+          <p className="mb-4 text-sm">No Athlete Intro Cards yet. Create one to open a highlight with your player.</p>
           <NewCardButton onClick={onNew} />
         </div>
       ) : (
@@ -45,7 +45,7 @@ export function IntroCardGrid({ cards, profile, onNew, onEdit, onDuplicate, onDe
       <ConfirmationDialog
         isOpen={!!pendingDelete}
         title={`Delete "${pendingDelete?.name || ''}"?`}
-        message="Any reel set to use this card will fall back to no intro. This cannot be undone."
+        message="Any highlight set to use this card will fall back to no intro. This cannot be undone."
         onClose={() => setPendingDelete(null)}
         buttons={[
           { label: 'Cancel', onClick: () => setPendingDelete(null), variant: 'secondary' },

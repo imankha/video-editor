@@ -26,7 +26,7 @@ import { formatLength, PRECISION } from '../utils/timeFormat';
  */
 export function InsufficientCreditsModal({ required, available, videoSeconds, description, onClose, onBuyCredits }) {
   const detail = description
-    || `This export requires ${required} credits for ${formatLength(videoSeconds, PRECISION.TENTH)} of video (${CREDITS.PER_SECOND_RULE}).`;
+    || `This generation requires ${required} credits for ${formatLength(videoSeconds, PRECISION.TENTH)} of video (${CREDITS.PER_SECOND_RULE}).`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">

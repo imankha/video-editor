@@ -6,8 +6,8 @@ import { LockedReasonModal, LOCKED_KINDS } from './LockedReasonModal';
 // T7650: distinct per-surface subtitle so a locked game group and a locked mixes
 // group don't read identically (the mixes card previously claimed "game
 // highlights", which is wrong — mixes span games).
-const GAME_UNLOCK_CAPTION = 'Build more reels to unlock game highlights';
-const MIXES_UNLOCK_CAPTION = 'Build more reels to unlock cross-game mixes';
+const GAME_UNLOCK_CAPTION = 'Add more highlights to unlock game highlights';
+const MIXES_UNLOCK_CAPTION = 'Add more highlights to unlock cross-game mixes';
 
 /**
  * RatioUnlockGroup - a sub-30s ratio sub-list for a game OR the mixes group
@@ -40,7 +40,7 @@ export function RatioUnlockGroup({ name, ratio, currentSec, reels, renderCard, k
         onClick={() => setShowReason(true)}
       />
       {reels.length > 0 && (
-        <CardCarousel ariaLabel={`${cardName} ${ratio} reels`}>
+        <CardCarousel ariaLabel={`${cardName} ${ratio} highlights`}>
           {reels.map((d) => renderCard(d))}
         </CardCarousel>
       )}

@@ -151,7 +151,7 @@ export function IntroCardCarousel({
       )}
 
       {showsExposureNotice && (
-        <IntroExposureNotice linkLabel={frozenNote ? 'link' : "reel's link"} />
+        <IntroExposureNotice linkLabel={frozenNote ? 'link' : "highlight's link"} />
       )}
 
       {frozenNote && (

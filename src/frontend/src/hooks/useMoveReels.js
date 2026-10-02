@@ -31,7 +31,7 @@ export function useMoveReels(onMoved, onPartial) {
   const finishMoveRef = useRef(null);
 
   const showCleanupFailedToast = useCallback((videoIds, targetProfileId) => {
-    toast.error('Reels only partly moved', {
+    toast.error('Highlights only partly moved', {
       message:
         'They were copied to the other profile but not removed from here. ' +
         'Finish removing them?',
@@ -71,7 +71,7 @@ export function useMoveReels(onMoved, onPartial) {
       }
 
       toast.success('Finished removing', {
-        message: 'The reels now live only in the other profile.',
+        message: 'The highlights now live only in the other profile.',
       });
       onMoved?.(videoIds, targetProfileId);
       return true;
@@ -105,7 +105,7 @@ export function useMoveReels(onMoved, onPartial) {
         }
         if (code === 'sync_failed') {
           toast.error('Could not save to the cloud', {
-            message: 'Your reels were not moved. Please try again.',
+            message: 'Your highlights were not moved. Please try again.',
           });
           return false;
         }
@@ -114,7 +114,7 @@ export function useMoveReels(onMoved, onPartial) {
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         const detail = err?.detail;
-        const msg = typeof detail === 'string' ? detail : (detail?.message || 'Could not move reels');
+        const msg = typeof detail === 'string' ? detail : (detail?.message || 'Could not move highlights');
         toast.error(msg);
         return false;
       }
@@ -122,14 +122,14 @@ export function useMoveReels(onMoved, onPartial) {
       const data = await res.json();
       track('reels_moved', { count: data.moved_ids?.length || videoIds.length });
       toast.success(
-        videoIds.length > 1 ? `Moved ${videoIds.length} reels` : 'Reel moved',
+        videoIds.length > 1 ? `Moved ${videoIds.length} highlights` : 'Highlight moved',
         { message: `Find them under the other profile’s ${SECTION_NAMES.PUBLISHED}.` },
       );
       onMoved?.(data.moved_ids || videoIds, targetProfileId);
       return true;
     } catch (err) {
       console.error('[useMoveReels] moveReels error:', err);
-      toast.error('Could not move reels');
+      toast.error('Could not move highlights');
       return false;
     } finally {
       setMoving(false);

@@ -28,9 +28,9 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  */
 
 const GESTURES = [
-  { key: 'save',   title: 'Could not save to the cloud', message: "Your clip wasn't saved. Please try again." },
-  { key: 'update', title: 'Could not save to the cloud', message: "Your clip changes weren't saved. Please try again." },
-  { key: 'delete', title: 'Could not save to the cloud', message: "Your clip wasn't deleted. Please try again." },
+  { key: 'save',   title: 'Could not save to the cloud', message: "Your highlight wasn't saved. Please try again." },
+  { key: 'update', title: 'Could not save to the cloud', message: "Your highlight changes weren't saved. Please try again." },
+  { key: 'delete', title: 'Could not save to the cloud', message: "Your highlight wasn't deleted. Please try again." },
 ];
 
 test('T5350: clip sync_failed surfaces a clip-appropriate not-saved toast + working Retry', async ({ page }) => {
@@ -49,7 +49,7 @@ test('T5350: clip sync_failed surfaces a clip-appropriate not-saved toast + work
   for (const g of GESTURES) {
     expect(copy[g.key].title).toBe(g.title);
     expect(copy[g.key].message).toBe(g.message);
-    expect(copy[g.key].message).not.toMatch(/reel was not moved/i);
+    expect(copy[g.key].message).not.toMatch(/highlight was not moved/i);
   }
 
   for (const g of GESTURES) {
@@ -65,7 +65,7 @@ test('T5350: clip sync_failed surfaces a clip-appropriate not-saved toast + work
     await expect(toast, `${g.key}: not-saved toast visible`).toBeVisible();
     await expect(toast).toContainText(g.title);
     // Clip copy, never the reel/move message.
-    await expect(toast).not.toContainText(/reel was not moved/i);
+    await expect(toast).not.toContainText(/highlight was not moved/i);
 
     const retryBtn = toast.getByRole('button', { name: 'Retry' });
     await expect(retryBtn, `${g.key}: Retry affordance present`).toBeVisible();

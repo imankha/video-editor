@@ -28,10 +28,10 @@ export const USE_CASES: UseCase[] = [
     slug: 'recruiting-videos',
     title: 'How to Make a College Recruiting Video',
     description:
-      'What goes in a college recruiting video, how long it should be, and how to build one from your own game footage. A practical guide plus the tool to do it.',
+      'What goes in a college recruiting video, how long it should be, and how to make the highlights for one from your own game footage. A practical guide plus the tool to do it.',
     h1: 'How to make a college recruiting video',
     answer:
-      'A college recruiting video is a three-to-five minute highlight reel that opens with your strongest plays, makes you identifiable in every clip, and lists your name, position, graduation year, and contact details on screen. You can build one from ordinary game footage without hiring an editor.',
+      'A college recruiting video is a three-to-five minute highlight reel that opens with your strongest plays, makes you identifiable in every clip, and lists your name, position, graduation year, and contact details on screen. ReelBallers helps you make the highlights it is built from, straight from ordinary game footage, without hiring an editor.',
     sections: [
       {
         heading: 'What a recruiting video actually needs',
@@ -58,7 +58,7 @@ export const USE_CASES: UseCase[] = [
         heading: 'Building it from your own footage',
         body: [
           'The manual route is: scrub hours of game video, note timestamps, cut each play, crop and reframe each clip by hand, add a marker, then re-export the whole thing every time you want to change the order. That is the reason most recruiting reels never get made, and why the ones that do are usually a year out of date.',
-          'ReelBallers collapses that into marking plays while you watch, plus a few drags to frame each clip. Each tagged clip goes into a library you can filter, so a reel for one coach and a shorter cut for another come from the same work rather than a second edit. When your athlete has a better game in October, you add those clips and re-generate rather than starting over.',
+          'ReelBallers collapses that into marking plays while you watch, plus a few drags to frame each clip. Each tagged play goes into a library you can filter, so you can come back and generate another highlight from the same work rather than a second edit. When your athlete has a better game in October, you mark those plays and generate again rather than starting over.',
         ],
       },
     ],
@@ -107,7 +107,7 @@ export const USE_CASES: UseCase[] = [
         a: 'Free to start with ReelBallers. Editing services typically charge per reel, and the cost recurs every time the footage needs updating -- which is the part families tend to underestimate.',
       },
     ],
-    ctaHeading: 'Build your recruiting reel',
+    ctaHeading: 'Make your recruiting highlights',
   },
   {
     slug: 'for-parents',
@@ -116,7 +116,7 @@ export const USE_CASES: UseCase[] = [
       'Turn the game footage on your phone into highlight reels your family actually watches. Built for parents, no editing experience and no new camera needed.',
     h1: 'Highlight reels for sports parents',
     answer:
-      'ReelBallers turns the game footage already on your phone into a highlight reel you can send with one link. You mark the plays worth keeping and frame your player while you watch; it handles the cutting and the export.',
+      'ReelBallers turns the game footage already on your phone into a highlight you can send with one link. You mark the plays worth keeping and frame your player while you watch; it handles the cutting and the generation.',
     sections: [
       {
         heading: 'The footage problem every sports parent has',
@@ -128,44 +128,44 @@ export const USE_CASES: UseCase[] = [
       {
         heading: 'What changes',
         body: [
-          'You watch the game once, the way you would anyway, tap to mark the moments worth keeping, and drag the crop over your player a few times per clip. ReelBallers connects the motion in between and builds the reel: your athlete stays in focus, zoomed in and sharp, and you get a link.',
+          'You watch the game once, the way you would anyway, tap to mark the moments worth keeping, and drag the crop over your player a few times per clip. ReelBallers connects the motion in between and produces your highlight: your athlete stays in focus, zoomed in and sharp, and you get a link.',
           'Because each clip is tagged, the library compounds. By mid-season you can pull every goal, or everything from one tournament, without touching the original footage again.',
         ],
       },
       {
         heading: 'Sharing with family who are not technical',
         body: [
-          'A shared reel is a link. Whoever opens it needs a web browser and nothing else: no app, no account, no sign-up wall. That matters more than it sounds when the audience is grandparents.',
+          'A shared highlight is a link. Whoever opens it needs a web browser and nothing else: no app, no account, no sign-up wall. That matters more than it sounds when the audience is grandparents.',
           'It plays at full resolution rather than the compressed version a messaging app would produce, which is usually the difference between being able to follow the play and not.',
         ],
       },
       {
         heading: 'And for your athlete',
         body: [
-          'You can leave notes on specific moments, so feedback happens on the sofa at their pace instead of in the car on the way home. Some families find that alone is worth more than the reel.',
+          'You can leave notes on specific moments, so feedback happens on the sofa at their pace instead of in the car on the way home. Some families find that alone is worth more than the highlight.',
         ],
       },
     ],
     faqs: [
       {
         q: 'Do I need any editing experience?',
-        a: 'No. You mark the plays worth keeping while you watch the game, then frame your athlete and pick them from the AI\'s player boxes. Cutting, connecting the motion between your marks, and exporting are automatic.',
+        a: 'No. You mark the plays worth keeping while you watch the game, then frame your athlete and pick them from the AI\'s player boxes. Cutting, connecting the motion between your marks, and generating are automatic.',
       },
       {
         q: 'Do I need to buy a camera?',
         a: 'No. The footage on your phone is fine. Film wide and steady, then frame your player yourself and let the crop do the zoom.',
       },
       {
-        q: 'How long does it take to make a reel?',
+        q: 'How long does it take to make a highlight?',
         a: 'The work is roughly the length of the game, since you mark plays while watching it. There is no separate editing session afterwards.',
       },
       {
         q: 'Can my family watch without signing up?',
-        a: 'Yes. A shared reel opens as a link in any web browser, at full resolution, with no account required.',
+        a: 'Yes. A shared highlight opens as a link in any web browser, at full resolution, with no account required.',
       },
       {
         q: 'Can I make a version for Instagram?',
-        a: 'Yes. The same clips export in more than one aspect ratio, so a wide version and a vertical version come from the same work.',
+        a: 'Yes. The same highlight is generated in more than one aspect ratio, so a wide version and a vertical version come from the same work.',
       },
       {
         q: 'What if I have footage from several different cameras?',
@@ -235,7 +235,7 @@ export const USE_CASES: UseCase[] = [
       'Give every family in your club highlight reels from match footage you already capture, without buying camera hardware or a per-team subscription.',
     h1: 'Highlight video for sports clubs',
     answer:
-      'ReelBallers lets a club turn match footage it already captures into per-player highlight reels, without buying camera hardware. It works with the video files your existing setup produces, including exports from systems like Veo, Trace, or Hudl.',
+      'ReelBallers lets a club turn match footage it already captures into per-player highlights, without buying camera hardware. It works with the video files your existing setup produces, including exports from systems like Veo, Trace, or Hudl.',
     sections: [
       {
         heading: 'The gap in club video',
@@ -254,14 +254,14 @@ export const USE_CASES: UseCase[] = [
       {
         heading: 'What families get',
         body: [
-          'Per-player reels that can be shared with a link, at full resolution, to anyone, including recruiters and relatives who will not install an app. For recruiting-age players this is the difference between having material to send and not.',
+          'Per-player highlights that can be shared with a link, at full resolution, to anyone, including recruiters and relatives who will not install an app. For recruiting-age players this is the difference between having material to send and not.',
         ],
       },
     ],
     faqs: [
       {
         q: 'Does this replace our Veo or Trace setup?',
-        a: 'No, it works alongside it. Those systems capture the match; ReelBallers turns the export into per-player reels. If your club already has capture solved, this addresses the editing half.',
+        a: 'No, it works alongside it. Those systems capture the match; ReelBallers turns the export into per-player highlights. If your club already has capture solved, this addresses the editing half.',
       },
       {
         q: 'Do all our teams need the same camera?',

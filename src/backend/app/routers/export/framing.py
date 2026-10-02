@@ -235,7 +235,7 @@ async def render_project(request: RenderRequest, http_request: Request):
             status_code=409,
             detail={"code": "export_in_flight", "message": "An export for this clip is already running."},
         )
-    await manager.send_progress(export_id, {"progress": 5, "message": "Starting export...", "status": "processing"})
+    await manager.send_progress(export_id, {"progress": 5, "message": "Starting generation...", "status": "processing"})
 
     # Query project + clips
     with get_db_connection() as conn:
@@ -598,7 +598,7 @@ async def _run_render_background(
             from app.websocket import make_progress_data
             error_data = make_progress_data(
                 current=0, total=100, phase='error',
-                message=f"Export failed: {failure_message}",
+                message=f"Generation failed: {failure_message}",
                 export_type='framing', project_id=project_id, project_name=project_name,
             )
             export_progress[export_id] = error_data

@@ -387,7 +387,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // T11230: one project = one clip. The Reels-building surfaces are gone and every
   // DraftTile (including a legacy multi-clip draft in the Clips tab's Legacy reels
   // group) now names its actions as a CLIP. The old isReel branch that read
-  // "Delete reel"/"Rename reel"/"Publish reel" for is_auto_created === false drafts
+  // "Delete highlight"/"Rename highlight"/"Publish highlight" for is_auto_created === false drafts
   // was removed with the Reels tab; T11280's vocabulary sweep owns any further copy.
   const deleteLabel = LIBRARY_ACTIONS.DELETE_CLIP;
   const renameLabel = LIBRARY_ACTIONS.RENAME_CLIP;
@@ -464,11 +464,11 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   if (isComplete) { statusLabel = getDraftStatus(project).label; statusTint = 'text-green-300'; }
   else if (isWaitingForUpload) { statusLabel = 'Uploading'; statusTint = 'text-amber-300'; }
   else if (isExporting && isOffline) { statusLabel = 'Offline'; statusTint = 'text-gray-300'; }
-  else if (isExporting) { statusLabel = 'Exporting'; statusTint = 'text-amber-300'; }
+  else if (isExporting) { statusLabel = 'Generating'; statusTint = 'text-amber-300'; }
   else if (failedExportType) { statusLabel = 'Failed'; statusTint = 'text-orange-300'; }
   else if (project.has_working_video) { statusLabel = 'In Spotlight'; statusTint = 'text-blue-300'; }
   else if (project.clips_in_progress > 0) { statusLabel = MODE_NAMES.FRAMING; statusTint = 'text-blue-300'; }
-  else if (project.clips_exported > 0) { statusLabel = 'Exported'; statusTint = 'text-gray-200'; }
+  else if (project.clips_exported > 0) { statusLabel = 'Generated'; statusTint = 'text-gray-200'; }
 
   // Fine pointer reveals actions on hover; coarse pointer reveals on long-press (actionsRevealed).
   const actionsVisibility = isCoarsePointer
@@ -626,8 +626,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           className={`absolute top-1.5 z-20 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gray-900/80 text-white shadow backdrop-blur-sm ${
             isReadyToPublish ? 'right-1.5' : 'left-1.5'
           }`}
-          title={`Contains ${project.clip_count} clips`}
-          aria-label={`Contains ${project.clip_count} clips`}
+          title={`Contains ${project.clip_count} highlights`}
+          aria-label={`Contains ${project.clip_count} highlights`}
         >
           <Layers size={12} />
           {project.clip_count}
@@ -671,9 +671,9 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         <span
           className="absolute top-9 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/90 text-gray-950 shadow backdrop-blur-sm"
           title={staleCount === 1
-            ? '1 clip changed since this reel was made — re-export to update it'
-            : `${staleCount} clips changed since this reel was made — re-export to update them`}
-          aria-label={`${staleCount} ${staleCount === 1 ? 'clip' : 'clips'} changed since this reel was made`}
+            ? '1 play changed since this highlight was made - re-generate to update it'
+            : `${staleCount} plays changed since this highlight was made - re-generate to update them`}
+          aria-label={`${staleCount} ${staleCount === 1 ? 'play' : 'plays'} changed since this highlight was made`}
         >
           <AlertTriangle size={11} />
           {staleCount} outdated

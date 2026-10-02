@@ -124,8 +124,8 @@ test('T4110 live repro: re-edit a game-6 reel, export, publish, reload', async (
 
   // --- open a game-6 reel into the player and hit Re-edit -------------------
   // Open the collection player via a "Play all" affordance, then Re-edit the
-  // active reel (the player carries the per-reel "Re-edit this reel" button).
-  const reEditBtn = page.getByTitle('Re-edit this reel');
+  // active reel (the player carries the per-reel "Re-edit this highlight" button).
+  const reEditBtn = page.getByTitle('Re-edit this highlight');
   let inEditor = false;
   // Try to open the shared player: click the first Game Highlights card's play.
   const playAll = page.getByRole('button', { name: /play all/i }).first();
@@ -163,7 +163,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, publish, reload', async (
       await exportBtn.click({ timeout: 10000 }).catch(() => note('export click failed'));
       note('clicked export; waiting up to 120s for completion / Publish');
       // Wait for either an export-complete signal or a publish button to appear.
-      const moveBtn = page.getByRole('button', { name: /Publish (clip|reel)/i }).first();
+      const moveBtn = page.getByRole('button', { name: /Publish highlight/i }).first();
       const completeMsg = page.getByText(/Reel ready/i).first();
       await Promise.race([
         moveBtn.waitFor({ timeout: 120000 }).catch(() => {}),

@@ -44,6 +44,6 @@ describe('FramingActionRow (T9950 Slice 2, T10310)', () => {
     rerender(
       <FramingActionRow previewing onTogglePreview={vi.fn()} />
     );
-    expect(screen.getByTestId('preview-disclosure').textContent).toMatch(/final image quality is produced at export/i);
+    expect(screen.getByTestId('preview-disclosure').textContent).toMatch(/final image quality is produced when you generate/i);
   });
 });

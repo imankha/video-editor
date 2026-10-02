@@ -147,7 +147,7 @@ test('AC2: PRIMARY badge shows "1 outdated" on a produced multi-clip reel with o
   const badge = tile.getByText('1 outdated');
   await expect(badge).toBeVisible();
   await expect(badge).toHaveAttribute(
-    'title', '1 clip changed since this reel was made — re-export to update it'
+    'title', '1 play changed since this highlight was made - re-generate to update it'
   );
 
   // The badge is the ONLY cue reachable in this state -- the strip is suppressed
@@ -193,10 +193,10 @@ test('AC2: SECONDARY segment ring + tooltip on exactly the drifted clip, pre-pro
   await expect(stable).toHaveCount(1);
 
   await expect(drifted).toHaveClass(/ring-amber-400/);
-  await expect(drifted).toHaveAttribute('title', /clip edited since this reel was made/);
+  await expect(drifted).toHaveAttribute('title', /play edited since this highlight was made/);
   // The cue is scoped to EXACTLY the drifted clip, not the whole reel.
   await expect(stable).not.toHaveClass(/ring-amber-400/);
-  await expect(await stable.getAttribute('title')).not.toMatch(/clip edited since this reel was made/);
+  await expect(await stable.getAttribute('title')).not.toMatch(/play edited since this highlight was made/);
 
   await saveEvidence(page, 'T8350-AC2-secondary-segment-ring-pre-produce');
 });

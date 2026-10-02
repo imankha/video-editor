@@ -42,11 +42,11 @@ const formatCredits = (credits: number) => credits.toLocaleString('en-US')
 const faqs: FaqItem[] = [
   {
     q: 'What is ReelBallers?',
-    a: 'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game footage into shareable highlight reels. You upload your video, mark the moments worth keeping and frame your player, and it handles the cutting and export.',
+    a: 'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game footage into shareable highlight reels. You upload your video, mark the moments worth keeping and frame your player, and it handles the cutting and generation.',
   },
   {
     q: 'How do I make a highlight reel from game footage?',
-    a: 'Three steps. Upload your video, watch it and mark the plays worth keeping (tagging each by position and play type), then frame your player with a few drags. ReelBallers stitches the clips into one reel you can share with a link.',
+    a: 'Three steps. Upload your video, watch it and mark the plays worth keeping (tagging each by position and play type), then frame your player with a few drags. ReelBallers smooths the motion, upscales it, and turns each play into a sharp highlight you can share with a link.',
   },
   {
     q: 'How does it keep the focus on my player?',
@@ -66,15 +66,15 @@ const faqs: FaqItem[] = [
   },
   {
     q: 'How much does ReelBallers cost?',
-    a: 'Free to start. You can upload a video and build a reel without paying up front.',
+    a: 'Free to start. You can upload a video and build a highlight without paying up front.',
   },
   {
-    q: 'What does the person I share the reel with need?',
-    a: `Just ${FACTS.viewerRequirement}. A shared reel opens as a link and plays at full resolution, so grandparents, coaches, and recruiters can watch without signing up for anything.`,
+    q: 'What does the person I share the highlight with need?',
+    a: `Just ${FACTS.viewerRequirement}. A shared highlight opens as a link and plays at full resolution, so grandparents, coaches, and recruiters can watch without signing up for anything.`,
   },
   {
     q: 'Can I make a vertical version for Instagram or TikTok?',
-    a: 'Yes. The same set of clips can be exported in more than one aspect ratio, so a wide recruiting cut and a vertical social version come from the same work rather than being edited twice.',
+    a: 'Yes. The same highlight can be generated in more than one aspect ratio, so a wide recruiting version and a vertical social version come from the same work rather than being edited twice.',
   },
 ]
 
@@ -102,8 +102,8 @@ const steps = [
   },
   {
     n: 3,
-    title: 'Export and share one link',
-    body: 'You put the focus on your athlete: a few drags of the crop box in the wide shot. ReelBallers smooths the motion, adds the spotlight, and stitches it into one sharp reel. Share it with a single link.',
+    title: 'Generate and share one link',
+    body: 'You put the focus on your athlete: a few drags of the crop box in the wide shot. ReelBallers smooths the motion, adds the spotlight, and produces one sharp highlight. Share it with a single link.',
   },
 ]
 ---
@@ -184,7 +184,7 @@ const steps = [
       How it works
     </h2>
     <p class="text-gray-400 text-center max-w-2xl mx-auto mb-12">
-      Three steps from a two-hour game file to a reel you can send to anyone.
+      Three steps from a two-hour game file to a highlight you can send to anyone.
     </p>
     <ol class="grid gap-8 md:grid-cols-3 max-w-5xl mx-auto">
       {
@@ -261,7 +261,7 @@ const steps = [
           Celebrate
         </h3>
         <p class="text-lg text-gray-300 leading-relaxed">
-          Share the finished reel with one link. Family watches in full resolution on a phone,
+          Share the finished highlight with one link. Family watches in full resolution on a phone,
           coaches get the highlights, and it is ready to post to Instagram or TikTok in a tap.
         </p>
       </div>
@@ -291,8 +291,8 @@ const steps = [
             <li>Upload your games once</li>
             <li>Mark key plays as you watch</li>
             <li>Build a searchable library of clips</li>
-            <li>Generate reels from simple queries</li>
-            <li>Reuse the same clips across formats</li>
+            <li>Turn any marked play into a highlight</li>
+            <li>Generate one highlight in multiple formats</li>
           </ul>
         </div>
       </div>
@@ -348,7 +348,7 @@ const steps = [
       <p class="text-gray-300 leading-relaxed">
         Try ReelBallers free, then buy credits only when you need more. No monthly fee, no
         auto-renewal, nothing to cancel. Just a balance that goes down when you upload or
-        export, and back up whenever you top it off.
+        generate, and back up whenever you top it off.
       </p>
     </div>
 
@@ -393,7 +393,7 @@ const steps = [
       <h3 class="text-white font-semibold mb-2">For example: a 90-minute game, three highlights</h3>
       <p class="text-gray-300 leading-relaxed">
         Upload the full 90-minute game (about {EXAMPLE_GAME_GB}&nbsp;GB) and store it for 30 days: {exampleUploadCredits} credits. Pull
-        three {EXAMPLE_HIGHLIGHT_SECONDS}-second highlights out of it and export them: {exampleExportCredits} credits, at 1 credit per second of
+        three {EXAMPLE_HIGHLIGHT_SECONDS}-second highlights out of it and generate them: {exampleExportCredits} credits, at 1 credit per second of
         finished video, rounded to the nearest second. <strong class="text-white">{exampleTotalCredits} credits total:
         about ${exampleTotalUsd}</strong> at the {BEST_VALUE_PACK.name} rate, well under a single pack.
       </p>
@@ -402,9 +402,9 @@ const steps = [
     <div class="max-w-3xl mx-auto mt-6 text-center">
       <h3 class="text-white font-semibold mb-2">How long we keep things</h3>
       <p class="text-gray-300 leading-relaxed">
-        Your uploaded game is kept for 30 days, and you can extend it anytime. Reels you export are
-        kept for good and are free to store. An unexported draft stays viewable, but you need its
-        source to re-edit or export it, so finish the ones you want to keep before the 30 days are up.
+        Your uploaded game is kept for 30 days, and you can extend it anytime. Highlights you generate are
+        kept for good and are free to store. A draft you haven't generated stays viewable, but you need its
+        source to re-edit or generate it, so finish the ones you want to keep before the 30 days are up.
       </p>
     </div>
   </section>

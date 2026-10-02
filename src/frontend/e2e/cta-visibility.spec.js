@@ -194,7 +194,7 @@ for (const vp of CTA_VIEWPORTS) {
       await reachHome(page);
       await openTab(page, /^Clips/); // T8980: sub-`sm` short tab label
       const publish = page.getByTestId('ready-actions')
-        .getByRole('button', { name: /Publish (clip|reel)/i }).first();
+        .getByRole('button', { name: /Publish highlight/i }).first();
       const hasReady = await publish.waitFor({ state: 'visible', timeout: 15000 })
         .then(() => true).catch(() => false);
       test.skip(!hasReady, 'no Ready-to-share draft tile on this account');

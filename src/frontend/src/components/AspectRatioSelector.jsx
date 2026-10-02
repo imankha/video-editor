@@ -16,7 +16,7 @@ export default function AspectRatioSelector({ aspectRatio, onAspectRatioChange }
     <div
       className="flex items-center gap-2"
       role="group"
-      aria-label={`Reel aspect ratio, currently ${aspectRatio}`}
+      aria-label={`Highlight aspect ratio, currently ${aspectRatio}`}
     >
       {RATIO_ORDER.map((value) => {
         const isSelected = aspectRatio === value;

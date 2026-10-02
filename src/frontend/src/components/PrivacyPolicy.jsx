@@ -62,14 +62,14 @@ export function PrivacyPolicy() {
           <h4 className="text-white font-medium mb-2">Information Derived from Your Content</h4>
           <ul className="list-disc pl-5 space-y-1 mb-4">
             <li><strong className="text-white">Video metadata:</strong> Duration, resolution, frame rate, file size, file hash</li>
-            <li><strong className="text-white">Editing data:</strong> Clip selections, crop keyframes, overlay settings, export job records</li>
+            <li><strong className="text-white">Editing data:</strong> Highlight selections, crop keyframes, overlay settings, export job records</li>
           </ul>
 
           <h4 className="text-white font-medium mb-2">Video Content</h4>
           <p className="mb-4">Video files you upload, along with derived metadata such as duration, resolution, frame rate, file hashes, and game identification signals. Video files contain visual depictions of individuals, including minors participating in sporting events. We do not extract biometric data from videos. Our framing feature uses manual crop controls, not facial recognition or detection.</p>
 
           <h4 className="text-white font-medium mb-2">Athlete Intro Cards</h4>
-          <p className="mb-4">You can build &ldquo;Athlete Intro Card&rdquo; graphics for a youth player from a photo you upload, the player&apos;s name, and a small fixed set of display facts you type (position, graduation year, team). Because a card depicts a minor, we record a parental-consent attestation before the first card is created and warn you that a card attached to a shared reel or collection is publicly visible to anyone with the link. We do not run facial recognition or biometric templating on player photos; optional background removal is image segmentation only.</p>
+          <p className="mb-4">You can build &ldquo;Athlete Intro Card&rdquo; graphics for a youth player from a photo you upload, the player&apos;s name, and a small fixed set of display facts you type (position, graduation year, team). Because a card depicts a minor, we record a parental-consent attestation before the first card is created and warn you that a card attached to a shared highlight or collection is publicly visible to anyone with the link. We do not run facial recognition or biometric templating on player photos; optional background removal is image segmentation only.</p>
 
           <h4 className="text-white font-medium mb-2">Information We Do NOT Collect</h4>
           <ul className="list-disc pl-5 space-y-1">
@@ -86,7 +86,7 @@ export function PrivacyPolicy() {
         <Section id="how-we-use" title="2. How We Use Your Information">
           <p className="mb-3">We use your personal information to:</p>
           <ul className="list-disc pl-5 space-y-1 mb-4">
-            <li><strong className="text-white">Provide the Service:</strong> Process, enhance, crop, overlay, and export your video clips as you direct</li>
+            <li><strong className="text-white">Provide the Service:</strong> Process, enhance, crop, overlay, and export your videos as you direct</li>
             <li><strong className="text-white">Authenticate you:</strong> Verify your identity and maintain your session</li>
             <li><strong className="text-white">Process payments:</strong> Complete purchases via Stripe</li>
             <li><strong className="text-white">Video content:</strong> We may analyze video metadata and content to identify games across multiple users&apos; uploads, enabling shared viewing experiences and collaborative features in the future. This analysis may include comparing video characteristics (timing, location, visual similarity) to determine whether separate uploads depict the same game.</li>
@@ -134,7 +134,7 @@ export function PrivacyPolicy() {
           <ul className="list-disc pl-5 space-y-1">
             <li>Game footage: 30 days after game expiry</li>
             <li>Account data: retained until you request deletion</li>
-            <li>Processing artifacts: deleted immediately after export</li>
+            <li>Processing artifacts: deleted immediately after generation</li>
             <li>Sessions: 30 days max, or until logout</li>
             <li>OTP codes: expire after 10 minutes</li>
           </ul>

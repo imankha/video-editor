@@ -90,7 +90,7 @@ test.describe('T7650 Top Plays locked-state clarity', () => {
     await expect(page.getByText('Ranking Progress').first()).toBeVisible();
     await expect(page.getByText('Top Plays').first()).toBeVisible();
     // The smart-collection card now carries an explanatory subtitle (was blank).
-    await expect(page.getByText(/top-rated reels/i).first()).toBeVisible();
+    await expect(page.getByText(/top-rated highlights/i).first()).toBeVisible();
     await saveEvidence(page, 'locked-surfaces-my-reels');
 
     // Ranking "why?" modal — ranking-specific copy (head-to-head, not collections).
@@ -101,7 +101,7 @@ test.describe('T7650 Top Plays locked-state clarity', () => {
 
     // Top Plays "why?" modal — smart-collection copy, distinct from ranking.
     await page.getByText('Top Plays').first().click();
-    await expect(page.getByText(/automatically gathers your top-rated reels/i)).toBeVisible();
+    await expect(page.getByText(/automatically gathers your top-rated highlights/i)).toBeVisible();
     await saveEvidence(page, 'top-plays-locked-reason');
     await page.getByRole('button', { name: /Got it/ }).click();
 

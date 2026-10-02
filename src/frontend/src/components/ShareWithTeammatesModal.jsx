@@ -221,8 +221,8 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
               <div className="flex items-start gap-2 rounded-md border border-gray-700 bg-gray-750/60 px-3 py-2 text-xs text-gray-400">
                 <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-gray-500" />
                 <span>
-                  Each teammate gets a link to claim these clips. The link can be
-                  forwarded &mdash; anyone who opens it can claim the clips, so it is not
+                  Each teammate gets a link to claim these highlights. The link can be
+                  forwarded - anyone who opens it can claim the highlights, so it is not
                   locked to the email address you enter.
                 </span>
               </div>
@@ -259,8 +259,8 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
                           <span className="text-white font-medium">{tag}</span>
                           <span className="text-gray-400 text-sm">
                             {isResend
-                              ? `(${nNew} new clip${nNew !== 1 ? 's' : ''} — ${clipCount} total)`
-                              : `(${clipCount} clip${clipCount !== 1 ? 's' : ''})`
+                              ? `(${nNew} new highlight${nNew !== 1 ? 's' : ''} - ${clipCount} total)`
+                              : `(${clipCount} highlight${clipCount !== 1 ? 's' : ''})`
                             }
                           </span>
                         </label>
@@ -296,7 +296,7 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
                           <Check size={16} className="text-green-500 flex-shrink-0" />
                           <span className="text-gray-300 font-medium">{tag}</span>
                           <span className="text-gray-500 text-sm">
-                            ({clipCount} clip{clipCount !== 1 ? 's' : ''})
+                            ({clipCount} highlight{clipCount !== 1 ? 's' : ''})
                           </span>
                         </div>
                         {emails.length > 0 && (
@@ -345,7 +345,7 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
             >
               {isSubmitting
                 ? 'Sharing...'
-                : `Share${totalClips > 0 ? ` (${totalClips} clip${totalClips !== 1 ? 's' : ''})` : ''}`
+                : `Share${totalClips > 0 ? ` (${totalClips} highlight${totalClips !== 1 ? 's' : ''})` : ''}`
               }
             </Button>
           )}

@@ -103,7 +103,7 @@ describe('BuyCreditsModal (T4940)', () => {
     render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
     await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
     for (const p of [FIRST_PACK, ...OTHER_PACKS]) {
-      expect(screen.getByText(new RegExp(`${clockText(p.credits)} of exported video`))).toBeTruthy();
+      expect(screen.getByText(new RegExp(`${clockText(p.credits)} of generated video`))).toBeTruthy();
     }
   });
 

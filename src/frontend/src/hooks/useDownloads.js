@@ -122,7 +122,7 @@ export function useDownloads(isOpen = false) {
         const err = await response.json().catch(() => ({}));
         if (err.code === 'sync_failed') {
           console.warn(`[useDownloads] deleteDownload sync_failed (503) for id=${downloadId} - card kept`);
-          setError('Could not save to the cloud. Your reel was not deleted. Please try again.');
+          setError('Could not save to the cloud. Your highlight was not deleted. Please try again.');
           return false;
         }
       }

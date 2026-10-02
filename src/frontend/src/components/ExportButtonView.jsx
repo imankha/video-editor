@@ -153,7 +153,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           className="flex items-center gap-1.5 text-xs text-amber-400"
         >
           <AlertCircle size={12} className="shrink-0" />
-          <span>Set at least one focus point to export</span>
+          <span>Set at least one focus point to generate</span>
         </div>
       )}
 
@@ -164,7 +164,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             <>
               <div className="flex items-center gap-2">
                 <Loader size={14} className="animate-spin" />
-                <span>Monitoring export via server polling...</span>
+                <span>Monitoring generation via server polling...</span>
               </div>
               <div className="flex gap-2 mt-2">
                 <button
@@ -187,7 +187,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             <>
               <div className="flex items-center gap-2">
                 <Loader size={14} className="animate-spin" />
-                <span>Connection lost — export continues on server. Reconnecting...</span>
+                <span>Connection lost -- generation continues on server. Reconnecting...</span>
               </div>
               <button
                 onClick={onRetryConnection}
@@ -212,7 +212,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
       {/* Persistent failed export from store (survives navigation) */}
       {!error && failedExport && (
         <div className="text-orange-400 text-xs bg-orange-900/20 border border-orange-800 rounded p-2 w-full">
-          Export failed: {failedExport.error || 'Unknown error'}
+          Generation failed: {failedExport.error || 'Unknown error'}
         </div>
       )}
 
@@ -256,7 +256,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           {insufficientForEstimate && <AlertCircle size={12} />}
           <span>
             {`~${estimatedCredits} credit${estimatedCredits === 1 ? '' : 's'} · balance ${creditBalance}`}
-            {insufficientForEstimate ? ' — add credits to export' : ''}
+            {insufficientForEstimate ? ' -- add credits to generate' : ''}
           </span>
         </div>
       )}
@@ -283,7 +283,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           className="flex items-center gap-1.5 text-xs text-gray-400"
         >
           <span>
-            {`Recorded at ${sourceFps}fps — exported at 30fps for a smaller, cheaper file.`}
+            {`Recorded at ${sourceFps}fps -- generated at 30fps for a smaller, cheaper file.`}
           </span>
         </div>
       )}

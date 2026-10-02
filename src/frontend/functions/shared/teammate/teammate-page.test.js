@@ -12,7 +12,7 @@ describe('buildTeammateMetaTags', () => {
       ORIGIN
     );
     expect(tags).toContain('og:title" content="vs Legends Mar 28 - shared highlights"');
-    expect(tags).toContain('5 highlight clips from vs Legends Mar 28');
+    expect(tags).toContain('5 highlights from vs Legends Mar 28');
     expect(tags).toContain(`og:image" content="${ORIGIN}/og-card.jpg"`);
     expect(tags).toContain('twitter:card" content="summary_large_image"');
   });
@@ -52,7 +52,7 @@ describe('buildTeammateMetaTags', () => {
 
   it('singular clip wording and HTML escaping', () => {
     const tags = buildTeammateMetaTags({ game_name: '<b>x</b>', clip_count: 1 }, ORIGIN);
-    expect(tags).toContain('1 highlight clip from');
+    expect(tags).toContain('1 highlight from');
     expect(tags).not.toContain('<b>');
   });
 });

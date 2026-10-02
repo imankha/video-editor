@@ -86,9 +86,9 @@ test('T3950: end card appears at end of a shared REEL with UTM CTA @staging-gate
     await v.play().catch(() => {});
     v.currentTime = Math.max(0, v.duration - 0.4);
   });
-  const cta = page.getByText('Make your own reel at www.reelballers.com');
+  const cta = page.getByText('Make your own highlights at www.reelballers.com');
   await expect(cta).toBeVisible({ timeout: 15000 });
-  const href = await page.locator('a', { hasText: 'Make your own reel' }).first().getAttribute('href');
+  const href = await page.locator('a', { hasText: 'Make your own highlights' }).first().getAttribute('href');
   expect(href).toContain('utm_source=share_endcard');
   await page.screenshot({ path: `${EVID}/endcard-reel.png` });
 });
@@ -126,7 +126,7 @@ test('T3950: end card appears ABOVE the player on a shared COLLECTION @staging-g
   // native 'ended' per reel — exactly the event the story player advances on. Bounded by
   // the discovered reel count (+ margin) so a broken advance can't loop forever.
   const reelCount = pick.game.ratio_counts?.[pick.ratio] || 1;
-  const cta = page.getByText('Make your own reel at www.reelballers.com');
+  const cta = page.getByText('Make your own highlights at www.reelballers.com');
   for (let i = 0; i < reelCount + 3; i++) {
     if (await cta.isVisible().catch(() => false)) break;
     await video.evaluate((v) => { v.muted = true; v.dispatchEvent(new Event('ended')); }).catch(() => {});
@@ -135,7 +135,7 @@ test('T3950: end card appears ABOVE the player on a shared COLLECTION @staging-g
   await expect(cta).toBeVisible({ timeout: 20000 });
   // z-order regression check: the card must actually be hit-able (not covered
   // by the fullscreen player) — trial click performs actionability checks only.
-  await page.locator('a', { hasText: 'Make your own reel' }).first()
+  await page.locator('a', { hasText: 'Make your own highlights' }).first()
     .click({ trial: true, timeout: 5000 });
   await page.screenshot({ path: `${EVID}/endcard-collection.png` });
 });

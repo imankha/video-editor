@@ -28,12 +28,12 @@ preparing college recruiting material. It is US-focused.
    Nothing is installed; the editor runs in a web browser.
 2. **Mark** the plays worth keeping while watching, tagging each by position and
    play type, with ratings and notes.
-3. **Export** a highlight reel. The user frames the chosen player and picks them
+3. **Generate** a highlight. The user frames the chosen player and picks them
    from AI-proposed player boxes; ${BRAND} connects the dots for smooth motion
    across the field, upscales the footage toward ${FACTS.upscaleTarget}, adds an
    optional spotlight marker, and produces a single shareable link. The same
-   clips can be exported in multiple aspect ratios, for example a wide
-   recruiting cut and a vertical version for social.
+   highlight can be generated in multiple aspect ratios, for example a wide
+   recruiting version and a vertical version for social.
 
 ## Key facts
 
@@ -43,7 +43,7 @@ preparing college recruiting material. It is US-focused.
   works with footage the user already has.
 - **Sports supported (${FACTS.sportCount}):** ${SPORTS.map((s) => s.name).join(', ')}.
 - **Tagging presets:** ${FACTS.positionCount} positions and ${FACTS.playTypeCount} play types across those sports.
-- **Viewing a shared reel requires:** ${FACTS.viewerRequirement}.
+- **Viewing a shared highlight requires:** ${FACTS.viewerRequirement}.
 
 ## Accepted footage sources
 
@@ -69,7 +69,7 @@ those platforms as a standard video file.
 
 - [Home](${SITE_URL}/): what ${BRAND} is and how it works.
 - [How it works](${SITE_URL}/how-it-works): the three-step process in detail.
-- [Recruiting videos](${SITE_URL}/recruiting-videos): building a college recruiting reel.
+- [Recruiting videos](${SITE_URL}/recruiting-videos): making a college recruiting video.
 - [For parents](${SITE_URL}/for-parents), [for coaches](${SITE_URL}/for-coaches), [for clubs](${SITE_URL}/for-clubs).
 - [About](${SITE_URL}/about): who makes ${BRAND} and why.
 

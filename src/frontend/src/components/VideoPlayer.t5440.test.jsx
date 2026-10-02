@@ -11,7 +11,7 @@ import { render, screen } from '@testing-library/react';
 import { createRef } from 'react';
 import { VideoPlayer } from './VideoPlayer';
 
-const MISSING_MSG = 'This reel’s video is no longer available. Re-export to rebuild it.';
+const MISSING_MSG = 'This highlight’s video is no longer available. Re-generate to rebuild it.';
 
 function renderPlayer(props) {
   return render(

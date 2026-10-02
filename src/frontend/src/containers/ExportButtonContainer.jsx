@@ -346,13 +346,13 @@ export function ExportButtonContainer({
       onDisconnect: () => {
         disconnectedRef.current = true;
         setDisconnected(true);
-        setProgressMessage('Connection lost — export continues on server...');
+        setProgressMessage('Connection lost -- generation continues on server...');
       },
       onReconnect: () => {
         disconnectedRef.current = false;
         setDisconnected(false);
         setReconnectionFailed(false);
-        setProgressMessage('Reconnected — resuming progress...');
+        setProgressMessage('Reconnected -- resuming progress...');
       },
       onReconnectExhausted: () => {
         setReconnectionFailed(true);
@@ -399,7 +399,7 @@ export function ExportButtonContainer({
         disconnectedRef.current = false;
         setDisconnected(false);
         setReconnectionFailed(false);
-        const errorMsg = response.data.error || 'Export failed on server';
+        const errorMsg = response.data.error || 'Generation failed on server';
         setError(errorMsg);
         if (exportId) {
           failExportInStore(exportId, errorMsg);
@@ -409,14 +409,14 @@ export function ExportButtonContainer({
       } else {
         // Still running — reset WS backoff and reconnect
         const progress = response.data.progress;
-        setProgressMessage(progress ? `Export at ${progress}% — still running` : 'Export still running — reconnecting...');
+        setProgressMessage(progress ? `Generating at ${progress}% -- still running` : 'Generation still running -- reconnecting...');
         setReconnectionFailed(false);
         exportWebSocketManager.resetReconnect(exportId);
         await connectWebSocket(exportId);
       }
     } catch (retryErr) {
       console.warn('[ExportButtonContainer] Retry connection failed:', retryErr.message);
-      setProgressMessage('Could not reach server — will keep trying...');
+      setProgressMessage('Could not reach server -- will keep trying...');
     } finally {
       setRetrying(false);
     }
@@ -463,7 +463,7 @@ export function ExportButtonContainer({
       }
     }
 
-    return { success: false, error: 'Export timed out' };
+    return { success: false, error: 'Generation timed out' };
   };
 
   /**
@@ -485,7 +485,7 @@ export function ExportButtonContainer({
     // Block, tell the user, and re-send the failed actions (gesture-initiated).
     if (editorMode === EDITOR_MODES.OVERLAY &&
         useOverlayActionStore.getState().failedActions.length > 0) {
-      setError("Some edits haven't saved. Retrying now — please export again once they save.");
+      setError("Some edits haven't saved. Retrying now -- please generate again once they save.");
       useOverlayActionStore.getState().retryFailedOverlayActions();
       inFlightRef.current = false;
       return;
@@ -622,10 +622,10 @@ export function ExportButtonContainer({
         // guards every entry). No defensive branch here: /api/export/render
         // refuses more than one clip loudly (fail-visible per coding standards).
         if (!projectId) {
-          throw new Error('Cannot export: No project selected. Please save your project first.');
+          throw new Error('Cannot generate: No project selected. Please save your project first.');
         }
         if (!saveCurrentClipState) {
-          throw new Error('Cannot export: Clip state manager not available. Please reload the page and try again.');
+          throw new Error('Cannot generate: Highlight state manager not available. Please reload the page and try again.');
         }
 
         console.log('[ExportButtonContainer] Using backend-authoritative render');
@@ -636,7 +636,7 @@ export function ExportButtonContainer({
           console.log('[ExportButtonContainer] Clip state saved, requesting render');
         } catch (saveErr) {
           console.error('[ExportButtonContainer] Failed to save clip state:', saveErr);
-          throw new Error('Failed to save clip edits before export. Please try again.');
+          throw new Error('Failed to save highlight edits before generating. Please try again.');
         }
 
         endpoint = `${API_BASE}/api/export/render`;
@@ -823,7 +823,7 @@ export function ExportButtonContainer({
       // Don't fail it — show a disconnected state and let WS reconnect handle it.
       if (renderRequestAccepted) {
         setDisconnected(true);
-        setProgressMessage('Connection lost — export continues on server...');
+        setProgressMessage('Connection lost -- generation continues on server...');
         // Don't call setIsExporting(false), failExportInStore, or disconnect WS.
         // The WS manager will reconnect and onComplete/onError callbacks will finish the flow.
         return;
@@ -874,7 +874,7 @@ export function ExportButtonContainer({
       }
 
       if (exportIdRef.current) {
-        failExportInStore(exportIdRef.current, err.message || 'Export failed');
+        failExportInStore(exportIdRef.current, err.message || 'Generation failed');
         exportWebSocketManager.disconnect(exportIdRef.current);
       }
 
@@ -898,10 +898,10 @@ export function ExportButtonContainer({
           // Don't show a terminal error; show the recoverable disconnected state.
           if (disconnectedRef.current) {
             setDisconnected(true);
-            setProgressMessage('Connection lost — export continues on server...');
+            setProgressMessage('Connection lost -- generation continues on server...');
             return;
           }
-          setError('Export failed due to a network error. Please check your connection and try again.');
+          setError('Generation failed due to a network error. Please check your connection and try again.');
           setProgressMessage('Network error');
         } else if (err.response) {
           const status = err.response.status;
@@ -938,7 +938,7 @@ export function ExportButtonContainer({
             // Detect transient processing failures (R2 download, GPU timeout, etc.)
             const detail = typeof data.detail === 'object' ? data.detail : data;
             if (detail.error === 'processing_failed') {
-              errorMessage = 'Export failed due to a temporary issue. Your credit has been refunded. Please try again.';
+              errorMessage = 'Generation failed due to a temporary issue. Your credit has been refunded. Please try again.';
               useCreditStore.getState().fetchCredits();
             } else {
               const extracted = data.message || data.detail || data.error;
@@ -954,7 +954,7 @@ export function ExportButtonContainer({
           setProgressMessage('');
         } else {
           console.error('[ExportButtonContainer] Unknown error:', err);
-          setError(err.message || 'Export failed. Please try again.');
+          setError(err.message || 'Generation failed. Please try again.');
           setProgressMessage('');
         }
       }
@@ -1035,9 +1035,9 @@ export function ExportButtonContainer({
 
   // Button title/tooltip
   const buttonTitle = (!isFramingMode && hasUnsavedOverlayFailures)
-    ? "Some edits haven't saved — retry saving before exporting"
+    ? "Some edits haven't saved -- retry saving before generating"
     : (isFramingMode && hasUnframedClips
-      ? 'Set at least one focus point to export'
+      ? 'Set at least one focus point to generate'
       : undefined);
 
   return {

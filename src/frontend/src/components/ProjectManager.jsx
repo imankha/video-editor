@@ -916,7 +916,7 @@ export function ProjectManager({
       key, label: key, projects: groupedProjects.groups[key].projects,
     }));
     if (groupedProjects.ungrouped.length > 0) {
-      orderedGameGroups.push({ key: '__ungrouped__', label: 'Other clips', projects: groupedProjects.ungrouped });
+      orderedGameGroups.push({ key: '__ungrouped__', label: 'Other highlights', projects: groupedProjects.ungrouped });
     }
     return phaseRowsFor(orderedGameGroups);
   }, [groupedProjects]);
@@ -1080,7 +1080,7 @@ export function ProjectManager({
 
     if (okCount > 0) {
       const creditSuffix = charged ? ` (${charged} credit${charged !== 1 ? 's' : ''})` : '';
-      const addedMsg = `Added ${okCount} clip${okCount !== 1 ? 's' : ''}${creditSuffix}`;
+      const addedMsg = `Added ${okCount} highlight${okCount !== 1 ? 's' : ''}${creditSuffix}`;
       const firstId = created[0]?.project_id ?? null;
       const stillOnClips = isMountedRef.current && activeTabRef.current === 'projects';
       if (stillOnClips && firstId != null && onSelectProjectWithMode) {
@@ -1471,7 +1471,7 @@ export function ProjectManager({
                     )}
                   </div>
                   <div className="hidden sm:block text-xs text-gray-500">
-                    {recentItems.recentProject.clip_count} clip{recentItems.recentProject.clip_count !== 1 ? 's' : ''}
+                    {recentItems.recentProject.clip_count} highlight{recentItems.recentProject.clip_count !== 1 ? 's' : ''}
                     {' · '}
                     {/* T9600: reel-level status is the SAME domain as draftStage, so
                         route it through the single source instead of hardcoding words
@@ -1616,7 +1616,7 @@ export function ProjectManager({
                     {/* T10250: refused rows show the server's reason (no Retry);
                         retryable rows keep the generic copy + Retry. */}
                     <span className="text-xs text-gray-500 flex-1">
-                      {retryable ? 'Upload didn’t finish.' : (message || 'This clip could not be added.')}
+                      {retryable ? 'Upload didn’t finish.' : (message || 'This highlight could not be added.')}
                     </span>
                     {retryable && (
                       <Button
@@ -1948,7 +1948,7 @@ export function ProjectManager({
                       // T66: 'complete' and 'uncompleted' removed - completed projects are archived
                       { value: 'overlay', label: 'In Overlay', color: 'blue' },
                       { value: 'editing', label: 'Focus Started', color: 'blue' },
-                      { value: 'exported', label: 'Exported', color: 'purple' },
+                      { value: 'exported', label: 'Generated', color: 'purple' },
                       { value: 'not_started', label: 'Draft', color: 'gray' }
                     ].map(opt => {
                       const count = opt.value === 'all' ? filterCounts.all : filterCounts[opt.value];
@@ -2100,14 +2100,14 @@ export function ProjectManager({
                   {groupedProjects.ungrouped.length > 0 && (
                     <div className="mb-4 rounded-lg border border-gray-700/50 bg-gray-900/20 pt-2 pb-3">
                       <div className="flex items-center gap-2 px-3 py-2 min-h-11">
-                        <span className="text-sm font-medium text-gray-200 flex-1">Other clips</span>
+                        <span className="text-sm font-medium text-gray-200 flex-1">Other highlights</span>
                         <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
                           {groupedProjects.ungrouped.length}
                         </span>
                       </div>
                       <DraftStageRows
                         byStage={groupedProjects.ungroupedByStage}
-                        ariaPrefix="Other clips"
+                        ariaPrefix="Other highlights"
                         onSelectProject={onSelectProject}
                         onSelectProjectWithMode={onSelectProjectWithMode}
                         onDeleteProject={onDeleteProject}
@@ -2174,17 +2174,17 @@ export function ProjectManager({
               >
                 <div className="px-3 py-2">
                   <div className="flex items-center gap-2 min-h-11">
-                    <span className="text-sm font-medium text-gray-200 flex-1">Legacy reels</span>
+                    <span className="text-sm font-medium text-gray-200 flex-1">Legacy highlights</span>
                     <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
                       {highlightDrafts.length}
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    Made with the old multi-clip reel builder. You can still publish,
+                    Made with the old multi-highlight builder. You can still publish,
                     download and share these, but they can no longer be re-edited in Focus.
                   </p>
                 </div>
-                <CardCarousel ariaLabel="Legacy reels">
+                <CardCarousel ariaLabel="Legacy highlights">
                   {highlightDrafts.map((project) => (
                     <DraftTile
                       key={project.id}

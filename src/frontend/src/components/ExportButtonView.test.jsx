@@ -54,7 +54,7 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
     render(<ExportButtonView {...baseProps} estimatedCredits={9} insufficientForEstimate={true} creditBalance={3} />);
     const line = screen.getByTestId('export-credit-estimate');
     expect(line.className).toContain('text-amber-400');
-    expect(line.textContent).toContain('add credits to export');
+    expect(line.textContent).toContain('add credits to generate');
   });
 
   it('hides the estimate when duration is unknown (estimatedCredits null — no fabricated number)', () => {
@@ -83,7 +83,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     const btn = screen.getByRole('button', { name: /Generate Highlight/ });
     expect(btn.disabled).toBe(true);
     const caption = screen.getByTestId('export-unframed-caption');
-    expect(caption.textContent).toContain('Set at least one focus point to export');
+    expect(caption.textContent).toContain('Set at least one focus point to generate');
     expect(caption.className).toContain('text-amber-400');
     // T9270: the disabled reason (LEFT status cell) and the credit estimate (RIGHT
     // cost cell) are now separate ActionBand cells — the reason no longer carries
@@ -117,7 +117,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     render(<ExportButtonView {...baseProps}
       hasUnframedClips={true} isButtonDisabled={true} estimatedCredits={null} />);
     const caption = screen.getByTestId('export-unframed-caption');
-    expect(caption.textContent).toContain('Set at least one focus point to export');
+    expect(caption.textContent).toContain('Set at least one focus point to generate');
     expect(caption.textContent).not.toContain('credit');
   });
 });
@@ -239,7 +239,7 @@ describe('ExportButtonView — T9540 render/job vocabulary (supersedes T7580)', 
 
   it('Overlay cost cell shows the backend-confirmed free caption (Q1), Focus does not', () => {
     const { rerender } = render(<ExportButtonView {...baseProps} isFramingMode={false} />);
-    expect(screen.getByTestId('export-free-cost-note').textContent).toContain('No credits · effects are free');
+    expect(screen.getByTestId('export-free-cost-note').textContent).toContain('Effects are free -- no credits needed');
     // Framing mode never shows the free caption (it is a paid stage).
     rerender(<ExportButtonView {...baseProps} isFramingMode={true} />);
     expect(screen.queryByTestId('export-free-cost-note')).toBeNull();

@@ -3122,7 +3122,7 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
             tag_clips = _filter_clips_for_tag(conn, request.game_id, recipient.tag_name)
             tag_clips.sort(key=lambda c: c.get("start_time") or 0)
             first_clip_start = tag_clips[0].get("start_time") if tag_clips else None
-            clip_names = [c.get("name") or "Untitled Clip" for c in tag_clips]
+            clip_names = [c.get("name") or "Untitled Highlight" for c in tag_clips]
 
             # Create share records first to get tokens for email links
             share_records = []
