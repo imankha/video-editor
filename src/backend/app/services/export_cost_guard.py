@@ -20,9 +20,16 @@ split; a false acceptance repeats Bug 58p):
 - ``per_frame_cost(crop_w, crop_h, target_w, target_h) = per_frame_overhead(target_w, target_h)
   + SLOPE_SECONDS_PER_CROP_PIXEL * crop_w * crop_h``. The crop-pixel SLOPE is a single constant
   (target-independent -- confirmed below); the OVERHEAD (fixed per-frame cost: decode, PNG
-  write, resize, concat -- everything that does NOT scale with crop size) depends on the
+  write, resize -- everything IN THE LOOP that does NOT scale with crop size) depends on the
   OUTPUT TARGET resolution, not the crop, which is why ``target_w``/``target_h`` are now
-  required arguments.
+  required arguments. Concat/upload/model-load are separate, ONE-TIME-per-job costs (not
+  per-frame) -- see ``PER_CLIP_OVERHEAD_SECONDS``/``PER_JOB_OVERHEAD_SECONDS`` below.
+- This per-frame formula alone is NOT the whole cost: a Reviewer catch (2026-10-02) found it only
+  models in-loop GAN cost, leaving out measured fixed per-clip (extract/encode) and per-job
+  (cold start/model load/concat/upload) costs that the OLD pre-T11370 formula's ~15-30%
+  systematic overestimate had accidentally been absorbing. ``PER_CLIP_OVERHEAD_SECONDS`` and
+  ``PER_JOB_OVERHEAD_SECONDS`` (added in ``estimate_export_cost``, not inside ``per_frame_cost``
+  itself) close that gap -- see their own docstrings for the measured data behind them.
 
 T11370 calibration (2026-10-02, real Modal staging dispatch, 3 jobs / 12 measured points,
 `src/backend/experiments/t11370_cost_calibration.py` +
@@ -31,8 +38,12 @@ T11370 calibration (2026-10-02, real Modal staging dispatch, 3 jobs / 12 measure
 - Per-clip in-loop GAN rate was isolated from fixed per-job overhead (cold start, model load,
   extract/seek, encode) by timestamping every Modal-streamed progress item and fitting
   wall-clock against emitted frame number -- NOT total wall-clock / frame-count (which is what
-  the original single-point E6 benchmark did, and why its 0.681s/frame figure ran ~30% high: it
-  folded ~2s of cold-start/extract/encode into a 180-frame average).
+  the original single-point E6 benchmark did). E6's 0.681 s/frame figure runs noticeably higher
+  than the isolated in-loop rate measured here (0.529-0.648 s/frame at the same 540x960 crop,
+  depending on target); the EXACT cause of that gap is not established (E6 predates T8270's
+  staging/prod app split and may have run a different code path or host) -- don't restate a
+  specific mechanism (e.g. "X seconds of cold start") without re-deriving it from E6's own raw
+  data, which this calibration did not do.
 - The crop-pixel SLOPE agreed within ~1% across two independently-tested target resolutions
   (job A at 810x1440: slope=0.8663e-6 s/frame/px, R2=0.9999; job B at 2560x1440:
   slope=0.8627e-6, R2=1.0000; job C, a same-target replicate in a fresh container:
@@ -40,14 +51,16 @@ T11370 calibration (2026-10-02, real Modal staging dispatch, 3 jobs / 12 measure
   and target-independent, not just an assumption.
 - The OVERHEAD differed by target resolution: 0.0817 s/frame pooled at 810x1440 (9:16 default)
   vs 0.2004 s/frame pooled at 2560x1440 (``VIDEO_MAX_WIDTH``x``VIDEO_MAX_HEIGHT`` -- the hard
-  ceiling ``calculate_multi_clip_resolution`` can ever produce, so this is the MEASURED max, not
-  an extrapolation). ``OVERHEAD_INTERCEPT``/``OVERHEAD_PER_TARGET_PIXEL`` fit a line through
-  these two real points; every possible ``target_w x target_h`` this system can produce (0 to
-  ``VIDEO_MAX_WIDTH * VIDEO_MAX_HEIGHT``) falls inside that measured range, so this is
-  interpolation across the full real domain, not extrapolation beyond it. This 2-point fit for
-  the TARGET-resolution dependence is weaker evidence than the crop-pixel slope (3 jobs, 12
-  points, R2>0.998 each) -- a 3rd target-resolution anchor would strengthen it; flagged in
-  ``.claude/knowledge/modal-gpu.md``.
+  ceiling ``calculate_multi_clip_resolution`` can ever produce, so that END of the range is a
+  MEASURED point, not extrapolation). ``OVERHEAD_INTERCEPT``/``OVERHEAD_PER_TARGET_PIXEL`` fit a
+  line through these two real points. The CEILING (2560x1440) is therefore interpolation-safe for
+  every real target; the FLOOR is not -- a target below the smaller anchor (1,166,400 px, which
+  happens whenever the export's smallest crop is narrower than ~202px at 9:16 or ~360px at 16:9)
+  extrapolates the line downward, a Reviewer-caught correction to an earlier, overly broad claim
+  here. The extrapolation's impact is small (at most ~0.055 s/frame of under-prediction at the
+  floor) and this 2-point fit for the TARGET-resolution dependence is overall weaker evidence than
+  the crop-pixel slope (3 jobs, 12 points, R2>0.998 each) -- a 3rd target-resolution anchor would
+  strengthen it; flagged in ``.claude/knowledge/modal-gpu.md``.
 - Frame count per clip = the TRIMMED source seconds * target_fps. Modal's ``process_clips_ai``
   runs the GAN only over the trim range (``video_processing.py`` ~:2984-2990, start/end frame
   from the trim range); slow-mo/speed segments are applied AFTER the GAN via ``setpts`` and add
@@ -81,8 +94,28 @@ SLOPE_SECONDS_PER_CROP_PIXEL = 0.863e-6
 #   810x1440  (1,166,400 px) -> 0.0817 s/frame  (9:16 default-scale target)
 #   2560x1440 (3,686,400 px) -> 0.2004 s/frame  (VIDEO_MAX_WIDTH x VIDEO_MAX_HEIGHT, the hard
 #                                                 ceiling -- every real target falls <= this)
-OVERHEAD_INTERCEPT = 0.0268  # s/frame at target_px -> 0 (extrapolated floor, never hit in prod)
+OVERHEAD_INTERCEPT = 0.0268  # s/frame at target_px -> 0 (extrapolated floor below the smaller
+                              # measured anchor, 1,166,400 px -- NOT interpolation there, unlike
+                              # the ceiling; a Reviewer-caught correction, see module docstring)
 OVERHEAD_PER_TARGET_PIXEL = 4.71e-8  # s/frame per output-target pixel
+
+# Fixed costs the in-loop per-frame formula above does NOT capture, because they happen once
+# (per clip, or once per whole export) rather than scaling with frame count: source extract/seek
+# before the GAN loop starts, ffmpeg encode/cleanup after it ends (PER-CLIP), and model load +
+# concat + result upload (PER-JOB, paid once regardless of clip count). A Reviewer catch
+# (2026-10-02): the pre-T11370 formula's systematic ~15-30% OVERESTIMATE at mid/large crops was
+# accidentally covering these costs; the T11370 recalibration removed that accidental buffer by
+# being more accurate, so these must now be modeled explicitly rather than left to the 20% budget
+# margin alone -- the guard's whole purpose is avoiding a false-acceptance (Bug 58p), so an
+# unmodeled fixed cost eating into that margin is exactly the risk this guard exists to close.
+# Values are measured maxima + a safety margin (T11370 data, `t11370_results/*.jsonl`): per-clip
+# extract+encode ranged 2.4-8.8s across all 12 measured clips (job B's c1280x720 was the max);
+# per-job model-load+concat+upload-to-complete ranged ~4.7-8.9s. Cold start (dispatch-to-first-
+# streamed-item) is a separate, much larger and more variable cost (5.5-31.8s measured) that is
+# folded into PER_JOB_OVERHEAD_SECONDS too, conservatively, since Modal's function `timeout`
+# bounds the whole invocation including any cold start the instance pays.
+PER_CLIP_OVERHEAD_SECONDS = 10.0
+PER_JOB_OVERHEAD_SECONDS = 40.0
 
 
 def _overhead_seconds_per_frame(target_width: int, target_height: int) -> float:
@@ -307,9 +340,12 @@ def estimate_export_cost(
             )
         effective_seconds = _trimmed_source_seconds(clip.get("segments"), raw_duration)
         frame_count = _clip_frame_count(effective_seconds, target_fps)
-        # Round each clip UP to whole GPU-seconds -- conservative, tidy reporting.
+        # Round each clip UP to whole GPU-seconds -- conservative, tidy reporting. Includes
+        # PER_CLIP_OVERHEAD_SECONDS (extract/seek + encode/cleanup, measured fixed costs the
+        # in-loop per-frame rate doesn't capture -- see module docstring).
         clip_seconds = math.ceil(
             frame_count * per_frame_cost(crop_w, crop_h, target_width, target_height)
+            + PER_CLIP_OVERHEAD_SECONDS
         )
         per_clip.append(
             ClipCostEstimate(
@@ -323,7 +359,12 @@ def estimate_export_cost(
         )
 
     per_clip.sort(key=lambda c: c.estimated_gpu_seconds, reverse=True)
+    # PER_JOB_OVERHEAD_SECONDS (cold start + model load + concat + upload) is paid ONCE per
+    # export, not per clip -- added to the total only, never folded into a per-clip figure (that
+    # would double-count it across clips and wrongly inflate the "biggest contributors" popup).
     total = sum(c.estimated_gpu_seconds for c in per_clip)
+    if per_clip:
+        total += PER_JOB_OVERHEAD_SECONDS
 
     return ExportCostEstimate(
         estimated_gpu_seconds=total,

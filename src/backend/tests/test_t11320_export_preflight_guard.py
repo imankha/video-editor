@@ -21,6 +21,8 @@ from app.services.export_cost_guard import (
     GPU_SECONDS_BUDGET,
     OVERHEAD_INTERCEPT,
     OVERHEAD_PER_TARGET_PIXEL,
+    PER_CLIP_OVERHEAD_SECONDS,
+    PER_JOB_OVERHEAD_SECONDS,
     SLOPE_SECONDS_PER_CROP_PIXEL,
     ExportBudgetExceeded,
     enforce_export_budget,
@@ -119,6 +121,39 @@ def test_estimate_total_gpu_seconds_is_sum():
         + 60 * per_frame_cost(410, 730, *TARGET_916)
     )
     assert estimate_total_gpu_seconds(specs, *TARGET_916) == pytest.approx(expected)
+
+
+def test_estimate_export_cost_includes_measured_fixed_overheads():
+    # Reviewer catch (2026-10-02): the in-loop per_frame_cost formula alone does NOT capture the
+    # measured per-clip (extract/encode) and per-job (cold start/model load/concat/upload) costs
+    # -- the pre-T11370 formula's systematic overestimate had accidentally been absorbing these.
+    # PER_CLIP_OVERHEAD_SECONDS must land on EVERY clip (ceil'd in with its per-frame cost);
+    # PER_JOB_OVERHEAD_SECONDS must land exactly ONCE on the export total, never per clip (that
+    # would double-count it and wrongly inflate the "biggest contributors" popup per clip).
+    clips = [_default_916_clip(i, duration=5.0) for i in range(3)]
+    est = estimate_export_cost(clips, target_fps=30, target_width=TARGET_916[0], target_height=TARGET_916[1])
+    bare_total = sum(
+        math.ceil(c.frame_count * per_frame_cost(c.crop_width, c.crop_height, *TARGET_916))
+        for c in est.per_clip
+    )
+    assert est.estimated_gpu_seconds == pytest.approx(
+        bare_total + 3 * PER_CLIP_OVERHEAD_SECONDS + PER_JOB_OVERHEAD_SECONDS, abs=3.0
+    )
+    # Each per-clip figure already carries its own PER_CLIP_OVERHEAD_SECONDS share (not the
+    # per-job share, which is export-total-only).
+    for c in est.per_clip:
+        bare_clip = math.ceil(c.frame_count * per_frame_cost(c.crop_width, c.crop_height, *TARGET_916))
+        assert c.estimated_gpu_seconds >= bare_clip + PER_CLIP_OVERHEAD_SECONDS - 1.0
+
+
+def test_estimate_export_cost_no_job_overhead_when_no_clips_counted():
+    # An export where every clip is excluded (all-empty-keyframes) must estimate exactly 0, not
+    # PER_JOB_OVERHEAD_SECONDS for a job that was never actually going to dispatch any GAN work.
+    est = estimate_export_cost(
+        [{"clipIndex": 0, "duration": 5.0, "cropKeyframes": []}],
+        target_fps=30, target_width=TARGET_916[0], target_height=TARGET_916[1],
+    )
+    assert est.estimated_gpu_seconds == 0
 
 
 def test_bug58p_estimate_is_over_budget():

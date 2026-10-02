@@ -193,21 +193,34 @@ graph LR
     0.0268`, `OVERHEAD_PER_TARGET_PIXEL = 4.71e-8`), from exactly two measured anchors: 810×1440
     (9:16 default-scale target) → 0.0817 s/frame pooled overhead, and 2560×1440
     (`VIDEO_MAX_WIDTH`×`VIDEO_MAX_HEIGHT`, `app/constants.py` — the HARD CEILING
-    `calculate_multi_clip_resolution` can ever produce) → 0.2004 s/frame pooled overhead. Because
-    2560×1440 is the system's actual maximum possible target, every real `target_w×target_h` this
-    guard will ever see falls inside the measured range — this is interpolation across the full
-    real domain, not extrapolation beyond it, but it is still only 2 anchors (not the 3+ job
-    diversity backing the crop-pixel slope). **A 3rd target-resolution anchor would strengthen
-    this specific term** if revisited.
-  - Total = `Σ frame_count * per_frame_cost(...)` (pure `estimate_total_gpu_seconds`, now also
-    takes `target_width`/`target_height`); **frame count per clip = the TRIMMED source seconds ×
-    target_fps** (`get_trim_range`, clamped to raw length) — NOT raw `duration` and NOT
-    `get_output_duration` (Modal upscales only the trim range, `video_processing.py:~2984-2990`;
-    slow-mo/speed segments apply AFTER the GAN via `setpts` and add no GAN frames). Uses the
-    **largest** crop box across a clip's keyframes and ceil'd frames — both conservative (a false
-    reject just says "crop in / split"; a false accept repeats Bug 58p). A zero/missing raw
-    duration fails loud (no 1-frame under-count). **GAP (unchanged by T11370):** a clip with NO
-    crop keyframes (Modal smart-center-crops it from source dims, `video_processing.py:~3034`) is
+    `calculate_multi_clip_resolution` can ever produce) → 0.2004 s/frame pooled overhead. The
+    CEILING end (2560×1440) is interpolation-safe (every real target falls at or below it); the
+    FLOOR is NOT — a target below the smaller anchor (1,166,400px, i.e. the export's smallest crop
+    narrower than ~202px at 9:16 / ~360px at 16:9) extrapolates the line downward (impact is small,
+    ≤~0.055s/frame under-prediction). Only 2 anchors total (not the 3+ job diversity backing the
+    crop-pixel slope). **A 3rd target-resolution anchor would strengthen this specific term** if
+    revisited.
+  - **Per-clip and per-job FIXED overheads, separate from the per-frame formula** (Reviewer catch,
+    2026-10-02): `per_frame_cost`'s in-loop formula alone does not capture measured fixed costs —
+    per-clip extract/seek + encode/cleanup (measured 2.4-8.8s across all 12 points) and per-job
+    cold-start + model-load + concat + upload (measured ~4.7-8.9s for model-load+concat+upload
+    alone; cold start separately measured 5.5-31.8s and conservatively folded in too, since
+    Modal's function `timeout` bounds the whole invocation). The PRE-T11370 formula's ~15-30%
+    systematic overestimate at mid/large crops had accidentally been absorbing these; T11370's more
+    accurate per-frame fit removed that accidental buffer, so `PER_CLIP_OVERHEAD_SECONDS = 10.0`
+    and `PER_JOB_OVERHEAD_SECONDS = 40.0` (added in `estimate_export_cost`, not inside
+    `per_frame_cost`) now model them explicitly — safety-conservative constants (above the measured
+    maxima), not the measured means.
+  - Total = `Σ (frame_count * per_frame_cost(...) + PER_CLIP_OVERHEAD_SECONDS)` per clip, PLUS
+    `PER_JOB_OVERHEAD_SECONDS` once for the whole export (never per clip — that would double-count
+    it and wrongly inflate the "biggest contributors" popup); **frame count per clip = the TRIMMED
+    source seconds × target_fps** (`get_trim_range`, clamped to raw length) — NOT raw `duration`
+    and NOT `get_output_duration` (Modal upscales only the trim range,
+    `video_processing.py:~2984-2990`; slow-mo/speed segments apply AFTER the GAN via `setpts` and
+    add no GAN frames). Uses the **largest** crop box across a clip's keyframes and ceil'd frames —
+    both conservative (a false reject just says "crop in / split"; a false accept repeats Bug 58p).
+    A zero/missing raw duration fails loud (no 1-frame under-count). **GAP (unchanged by T11370):**
+    a clip with NO crop keyframes (Modal smart-center-crops it from source dims, `video_processing.py:~3034`) is
     *skipped with a loud WARNING*, not bounded — sizing it needs a source-dims probe the guard
     deliberately doesn't add (keyframes-only scope). So a full-frame *no-crop* batch is NOT caught;
     Bug 58p itself had explicit full-1080p crop boxes, so it is. A present-but-broken keyframe
