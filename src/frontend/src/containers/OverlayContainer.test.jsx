@@ -223,6 +223,83 @@ describe('OverlayContainer guided-pick wiring (T11570 BLOCKING fix)', () => {
     expect(seek).toHaveBeenLastCalledWith(5.0);
   });
 
+  describe('handleHighlightComplete does not trigger an unwanted guided-pick advance (review round 2 MAJOR fix, through the real container)', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it('an ordinary drag-release at a time with NO marker does not confirm or seek anywhere -- no invisible playhead jump', () => {
+      const seek = vi.fn();
+      const region = makeRegion();
+      const ready = baseProps({
+        seek, duration: 10, currentTime: 0.5,
+        highlightRegions: [region],
+        overlaySyncState: 'ready',
+        overlayLoadedProjectId: 'proj-1',
+        isTimeInEnabledRegion: vi.fn(() => true),
+        getRegionAtTime: vi.fn(() => region),
+      });
+      const { result, rerender } = drive(ready);
+      rerender(ready); // settle entry-park (parked on marker 1 @ 0.5s)
+      expect(result.current.pickGuidePhase).toBe('parked');
+      expect(seek).toHaveBeenCalledTimes(1);
+
+      // The user scrubs away from the marker (far enough that OverlayContainer's
+      // own scrub-away-clear effect nulls clickedDetection) to an ORDINARY time
+      // with no detection marker (1.0s -- markers are at 0.5s/1.5s), then drags
+      // the highlight circle there and releases.
+      const scrubbed = baseProps({
+        seek, duration: 10, currentTime: 1.0,
+        highlightRegions: [region],
+        overlaySyncState: 'ready',
+        overlayLoadedProjectId: 'proj-1',
+        isTimeInEnabledRegion: vi.fn(() => true),
+        getRegionAtTime: vi.fn(() => region),
+      });
+      rerender(scrubbed);
+      expect(result.current.pickGuidePhase).toBe('away'); // clickedDetection cleared, nothing picked here
+
+      act(() => {
+        result.current.handleHighlightComplete({ x: 10, y: 10, radiusX: 5, radiusY: 5, opacity: 0.3, color: null });
+      });
+      // Never shows "Got it" for an edit that isn't a marker pick.
+      expect(result.current.pickGuidePhase).not.toBe('confirm');
+
+      act(() => { vi.advanceTimersByTime(700); });
+      // No second seek -- the playhead never got yanked to another marker.
+      expect(seek).toHaveBeenCalledTimes(1);
+    });
+
+    it('a real marker pick via handleHighlightComplete does not advance while showPlayerBoxes is false (tap-the-circle override with boxes hidden)', () => {
+      const seek = vi.fn();
+      const parkOnDetectionCallsBefore = () => seek.mock.calls.length;
+      const region = makeRegion();
+      const ready = baseProps({
+        seek, duration: 10, currentTime: 0.5,
+        highlightRegions: [region],
+        overlaySyncState: 'ready',
+        overlayLoadedProjectId: 'proj-1',
+        isTimeInEnabledRegion: vi.fn(() => true),
+        getRegionAtTime: vi.fn(() => region),
+      });
+      const { result, rerender } = drive(ready);
+      rerender(ready);
+      expect(result.current.pickGuidePhase).toBe('parked');
+
+      act(() => { result.current.togglePlayerBoxes(); }); // hide boxes
+      rerender({ ...ready, showPlayerBoxes: result.current.showPlayerBoxes });
+      expect(result.current.pickGuidePhase).toBeNull(); // suspended output
+
+      const callsBefore = parkOnDetectionCallsBefore();
+      act(() => {
+        // Picks the ACTUAL parked marker (0.5s) via the tap-the-circle
+        // override -- still must not advance while boxes are hidden.
+        result.current.handleHighlightComplete({ x: 1, y: 1, radiusX: 1, radiusY: 1, opacity: 0.3, color: null });
+      });
+      act(() => { vi.advanceTimersByTime(700); });
+      expect(seek.mock.calls.length).toBe(callsBefore); // no further seek fired
+    });
+  });
+
   describe('showPlayerBoxes toggle suspends the guide (MAJOR 4, through the real container)', () => {
     it('togglePlayerBoxes() hides the guide, toggling again resumes it where it left off', () => {
       const seek = vi.fn();

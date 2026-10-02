@@ -161,6 +161,7 @@ describe('SpotlightPickGuide (T11570)', () => {
     // the prototype default, which own-instance mocks (the stage) shadow.
     const STAGE_HEIGHT = 600;
     const PILL_HEIGHT = 100;
+    const COMPACT_PILL_HEIGHT = 50;
     let originalRect;
 
     function makeStageRef() {
@@ -180,6 +181,17 @@ describe('SpotlightPickGuide (T11570)', () => {
     beforeEach(() => {
       originalRect = HTMLElement.prototype.getBoundingClientRect;
       HTMLElement.prototype.getBoundingClientRect = function () {
+        // The pill's REAL height shrinks in compact mode (shorter copy, no
+        // sub-line) -- reflect that from the actual rendered step text so
+        // the in-between case (full doesn't fit, compact DOES) is
+        // measurable at all, the same way a real browser's layout differs
+        // between the two renders.
+        if (this.getAttribute?.('role') === 'status') {
+          const stepText = this.querySelector?.('[data-testid="pick-guide-step"]')?.textContent || '';
+          const isCompactRender = stepText !== '' && !stepText.startsWith('Step');
+          const height = isCompactRender ? COMPACT_PILL_HEIGHT : PILL_HEIGHT;
+          return { height, top: 0, bottom: height, left: 0, right: 0, width: 0 };
+        }
         return { height: PILL_HEIGHT, top: 0, bottom: PILL_HEIGHT, left: 0, right: 0, width: 0 };
       };
     });
@@ -247,6 +259,40 @@ describe('SpotlightPickGuide (T11570)', () => {
       // Gives up gracefully rather than looping -- still renders at 'top'.
       const el = container.querySelector('[data-testid="spotlight-pick-guide"]');
       expect(el.getAttribute('data-side')).toBe('top');
+    });
+
+    it('settles (does not infinite-loop) when the FULL pill does not fit but the COMPACT pill DOES -- BLOCKING fix regression', () => {
+      // The exact real-browser repro: stage 600px, pill ~100px full / ~50px
+      // compact, obstacles at stage-px [70,110] and [500,540] (here mapped
+      // 1:1 via videoHeight === STAGE_HEIGHT for simplicity).
+      //   - full pill:    top band [16,116] collides with [70,110];
+      //                   bottom band [484,584] collides with [500,540]
+      //                   -> NEITHER clear at full size.
+      //   - compact pill: top band [16,66] does NOT collide with [70,110]
+      //                   -> clear at compact size.
+      // Pre-fix, finding "clear at compact" reset forcedCompact to false,
+      // which re-measured at full (not clear), forced compact again
+      // (clear again), reset again... forever ("Maximum update depth
+      // exceeded" in a real browser). This must settle in one extra pass.
+      const stageRef = makeStageRef();
+      const obstacleBoxes = [{ y: 90, height: 40 }, { y: 520, height: 40 }];
+      let renderCount = 0;
+      function Probe(props) {
+        renderCount += 1;
+        if (renderCount > 50) throw new Error('render loop did not settle within 50 renders');
+        return <SpotlightPickGuide {...props} />;
+      }
+      const { container } = render(
+        <Probe
+          phase="parked" step={2} total={4} placement="overlay"
+          stageRef={stageRef} videoHeight={STAGE_HEIGHT} obstacleBoxes={obstacleBoxes}
+        />
+      );
+      const el = container.querySelector('[data-testid="spotlight-pick-guide"]');
+      expect(el.getAttribute('data-side')).toBe('top');
+      // Settled on the COMPACT form (that's what made 'top' clear) and
+      // STAYED compact -- never flipped back to full.
+      expect(screen.getByTestId('pick-guide-step').textContent).toBe('2 of 4');
     });
 
     it('re-measures when the obstacle list changes (e.g. the playhead moved to a new marker)', () => {

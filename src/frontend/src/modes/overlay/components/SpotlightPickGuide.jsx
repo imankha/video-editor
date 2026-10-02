@@ -60,6 +60,14 @@ export default function SpotlightPickGuide({
   const pillRef = useRef(null);
   const [side, setSide] = useState('top');
   const [forcedCompact, setForcedCompact] = useState(false);
+  // Tracks the inputs the LAST measurement pass decided against, so a
+  // forced-compact decision is only revisited when something REAL changed
+  // (a new obstacle set, phase, or step) -- never just because the compact
+  // form happens to fit on this pass (see the BLOCKING infinite-loop fix
+  // below: resetting forcedCompact reactively inside the "it fits" branch
+  // re-measures the FULL pill next, which doesn't fit, forcing compact
+  // again, which fits, resetting again... forever).
+  const measuredInputsKeyRef = useRef(null);
   // `stageRef` points at a DOM node owned by an ANCESTOR (OverlayModeView /
   // the diag harness), not this component's own tree -- on the very first
   // commit its ref callback is not yet guaranteed to have run by the time
@@ -97,6 +105,23 @@ export default function SpotlightPickGuide({
       // simply hadn't attached yet on this pass.
       return;
     }
+
+    // A genuinely NEW input (different obstacles/phase/step) gets a fresh
+    // shot at full size, even if we'd previously forced compact for the
+    // old inputs. Re-entering this branch mid-measurement-cycle (same
+    // inputs, just re-running because `effectiveCompact`/`forcedCompact`
+    // themselves changed) must NOT reset forcedCompact -- that's exactly
+    // the BLOCKING infinite loop (compact fits -> reset to full -> full
+    // doesn't fit -> force compact -> compact fits -> reset -> ... forever).
+    const inputsKey = JSON.stringify({ obstacleBoxes, phase, step });
+    if (measuredInputsKeyRef.current !== inputsKey) {
+      measuredInputsKeyRef.current = inputsKey;
+      if (forcedCompact) {
+        setForcedCompact(false);
+        return; // re-measure at full size on the next pass, fresh inputs
+      }
+    }
+
     const stageH = stageRef.current.getBoundingClientRect().height;
     const pillH = pillRef.current.getBoundingClientRect().height;
     if (!stageH || !pillH) return;
@@ -113,8 +138,11 @@ export default function SpotlightPickGuide({
     const topClear = bandClear(bands.top);
     const bottomClear = bandClear(bands.bottom);
 
-    if (topClear) { setSide('top'); setForcedCompact(false); return; }
-    if (bottomClear) { setSide('bottom'); setForcedCompact(false); return; }
+    // NOTE: neither branch below touches forcedCompact -- once compact was
+    // forced for these inputs, it STAYS forced for these inputs, even
+    // though it now fits. Only the inputsKey check above may un-force it.
+    if (topClear) { setSide('top'); return; }
+    if (bottomClear) { setSide('bottom'); return; }
     // Neither band is clear at the current size -- try the compact form
     // once (shorter pill may fit where the full one didn't); re-measures on
     // the next layout pass since `forcedCompact` is a dependency below.

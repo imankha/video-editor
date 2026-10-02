@@ -53,10 +53,15 @@ function getPickConfirmMs() {
  * @param {Array} params.highlightRegions - highlight regions (keyframes + detections)
  * @param {boolean} params.isPlaying - caller's video isPlaying
  * @param {boolean} params.showPlayerBoxes - caller's box-visibility toggle.
- *   false suspends the guide entirely (no phase), mirroring the pre-T11570
- *   contract (`awaitingPlayerSelection && showPlayerBoxes`) — the walk's
- *   internal state keeps advancing underneath so re-enabling resumes where
- *   it left off, only the OUTPUT phase is suppressed.
+ *   false suspends the guide entirely: the OUTPUT phase is hidden (mirroring
+ *   the pre-T11570 `awaitingPlayerSelection && showPlayerBoxes` contract) AND
+ *   `scheduleGuidedAdvance` becomes a no-op, so an ordinary highlight edit
+ *   made while boxes are hidden can never trigger an invisible auto-jump
+ *   (T11570 review round 2 MAJOR fix). Tracked state (trackedMarkerIndex)
+ *   is left untouched, so re-enabling boxes resumes exactly where the walk
+ *   left off rather than restarting it; direct marker taps and "Go to
+ *   step N" stay live regardless — those are explicit navigation, not an
+ *   automatic advance.
  * @param {Object|null} params.clickedDetection - caller's parked-detection
  *   state (OverlayContainer) — null once play/scrub clears it ("away")
  * @param {Function} params.parkOnDetection - (marker) => void; shows boxes +
@@ -134,12 +139,16 @@ export function useGuidedAthletePick({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, canPark, sessionKey]);
 
-  // The user is moving on themselves — playing, or scrubbed away (the
-  // caller nulls clickedDetection on both of those) — so stop the guide
-  // from yanking the playhead out from under them.
+  // The user is moving on themselves — playing, scrubbed away (the caller
+  // nulls clickedDetection on both of those), or just hid the detection
+  // boxes — so stop the guide from yanking the playhead out from under
+  // them. The boxes-hidden case matters even for an advance that was
+  // scheduled WHILE boxes were still visible: if the user hides them
+  // during the 650ms confirm window, the pending advance must not still
+  // fire into an invisible jump once they've gone.
   useEffect(() => {
-    if (isPlaying || !clickedDetection) cancelPendingAdvance();
-  }, [isPlaying, clickedDetection, cancelPendingAdvance]);
+    if (isPlaying || !clickedDetection || !showPlayerBoxes) cancelPendingAdvance();
+  }, [isPlaying, clickedDetection, showPlayerBoxes, cancelPendingAdvance]);
 
   // Cancel on unmount.
   useEffect(() => cancelPendingAdvance, [cancelPendingAdvance]);
@@ -156,21 +165,30 @@ export function useGuidedAthletePick({
    * number "Got it" displays during confirm — must be derived from the pick
    * itself, never trusted from stale tracked state. Shows "Got it" for
    * PICK_CONFIRM_MS (0ms under prefers-reduced-motion), then auto-advances.
+   *
+   * Two early-outs, both no-ops (never confirm, never schedule anything):
+   *  - `pickedIndex === -1` — the caller fires this on EVERY highlight
+   *    edit that lands in an enabled region (OverlayContainer.
+   *    handleHighlightComplete), not just detection-marker picks. An
+   *    ordinary manual reposition at a time with no marker is NOT an
+   *    internal bug (hence no warning — this is an expected, legitimate
+   *    case), it just has nothing for the guided walk to confirm or
+   *    advance from.
+   *  - `!showPlayerBoxes` — boxes hidden means the user is editing without
+   *    the guide's help; auto-jumping the playhead to the next marker
+   *    would be an invisible, unexplained seek with no guide shown to
+   *    justify it (T11570 review round 2 MAJOR fix).
    */
   const scheduleGuidedAdvance = useCallback((regionId, assignedTime) => {
-    cancelPendingAdvance();
+    if (!showPlayerBoxes) return;
     const pickedIndex = orderedMarkers.findIndex(
       (m) => m.regionId === regionId &&
         Math.abs(m.detection.timestamp - assignedTime) <= ASSIGN_TOLERANCE_S
     );
-    if (pickedIndex === -1) {
-      console.warn(
-        '[useGuidedAthletePick] Picked marker not found in orderedDetectionMarkers -- step display may be stale.',
-        { regionId, assignedTime }
-      );
-    } else {
-      setTrackedMarkerIndex(pickedIndex); // confirm must show the marker ACTUALLY picked
-    }
+    if (pickedIndex === -1) return;
+
+    cancelPendingAdvance();
+    setTrackedMarkerIndex(pickedIndex); // confirm must show the marker ACTUALLY picked
     setIsConfirmingPick(true);
     pendingAdvanceRef.current = setTimeout(() => {
       pendingAdvanceRef.current = null;
@@ -183,7 +201,7 @@ export function useGuidedAthletePick({
       if (next) parkOnEntry(next);
       else setTrackedMarkerIndex(null); // every marker picked — walk is done
     }, getPickConfirmMs());
-  }, [cancelPendingAdvance, highlightRegions, orderedMarkers, parkOnEntry]);
+  }, [showPlayerBoxes, cancelPendingAdvance, highlightRegions, orderedMarkers, parkOnEntry]);
 
   /**
    * A direct tap on ANY marker (assigned or not) cancels the pending

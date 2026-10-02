@@ -366,16 +366,39 @@ describe('useGuidedAthletePick', () => {
       expect(result.current.step).toBe(4);
     });
 
-    it('renders "Step null of N" never -- falls back to fromIndex -1 and warns when the picked marker is not found', () => {
+    it('an edit at a time with no marker is a silent no-op -- no warning, no confirm, step/phase untouched (review round 2 MAJOR fix)', () => {
+      // This is the ordinary "drag-release of a manual highlight edit"
+      // shape (OverlayContainer.handleHighlightComplete fires
+      // scheduleGuidedAdvance on EVERY drag release in an enabled region,
+      // not just marker picks) -- NOT an internal bug, so no warning, and
+      // nothing to confirm or advance from.
       const region = regionWith([boundary(0), boundary(90)]);
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const { result } = drive({
-        active: true, highlightRegions: [region], isPlaying: false, clickedDetection: null,
+        active: true, highlightRegions: [region], isPlaying: false,
+        clickedDetection: { regionId: 'r1', timestamp: 1.0 },
       });
-      act(() => { result.current.scheduleGuidedAdvance('does-not-exist', 999); });
-      expect(warnSpy).toHaveBeenCalled();
-      expect(result.current.step).not.toBeNull();
+      expect(result.current.phase).toBe('parked');
+      expect(result.current.step).toBe(1); // entry-parked on marker 1
+
+      act(() => { result.current.scheduleGuidedAdvance('r1', 999); }); // no marker at t=999
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(result.current.phase).toBe('parked'); // never entered 'confirm'
+      expect(result.current.step).toBe(1); // untouched
       warnSpy.mockRestore();
+    });
+
+    it('does not schedule or fire an advance while showPlayerBoxes is false, even for an ACTUAL marker pick (review round 2 MAJOR fix)', () => {
+      const region = regionWith([boundary(0), boundary(90)]);
+      const { parkOnDetection, result } = drive({
+        active: true, showPlayerBoxes: false, highlightRegions: [region], isPlaying: false,
+        clickedDetection: { regionId: 'r1', timestamp: 1.0 },
+      });
+      const callsBefore = parkOnDetection.mock.calls.length;
+      act(() => { result.current.scheduleGuidedAdvance('r1', 1.0); }); // a REAL marker, boxes just hidden
+      expect(result.current.phase).toBeNull(); // suspended output, never 'confirm'
+      act(() => { vi.advanceTimersByTime(PICK_CONFIRM_MS); });
+      expect(parkOnDetection.mock.calls.length).toBe(callsBefore); // no advance ever fired
     });
   });
 
@@ -461,6 +484,25 @@ describe('useGuidedAthletePick', () => {
         isPlaying: false, clickedDetection: null,
       });
       expect(parkOnDetection).toHaveBeenCalledTimes(1);
+    });
+
+    it('cancels an already-pending advance if the user hides boxes mid-confirm, so it never fires invisibly (review round 2 MAJOR fix)', () => {
+      const region = regionWith([boundary(0), boundary(90)]);
+      const { parkOnDetection, result, rerender } = drive({
+        active: true, showPlayerBoxes: true, highlightRegions: [region], isPlaying: false,
+        clickedDetection: { regionId: 'r1', timestamp: 1.0 },
+      });
+      act(() => { result.current.scheduleGuidedAdvance('r1', 1.0); }); // real pick, boxes still on
+      expect(result.current.phase).toBe('confirm');
+      const callsBefore = parkOnDetection.mock.calls.length;
+
+      // User hides boxes WHILE the "Got it" confirm is still pending.
+      rerender({
+        active: true, showPlayerBoxes: false, highlightRegions: [region], isPlaying: false,
+        clickedDetection: { regionId: 'r1', timestamp: 1.0 },
+      });
+      act(() => { vi.advanceTimersByTime(PICK_CONFIRM_MS); });
+      expect(parkOnDetection.mock.calls.length).toBe(callsBefore); // the advance never fired
     });
   });
 });
