@@ -27,19 +27,19 @@ const steps = [
     text: 'Choose the player each clip is about, then drag the crop over them a few times as the play develops -- ReelBallers connects the motion in between, so a wide sideline shot becomes a tight, watchable frame. Add a spotlight marker so a viewer knows immediately where to look.',
   },
   {
-    name: 'Export and share',
-    text: `ReelBallers upscales toward ${FACTS.upscaleTarget}, renders your highlight, and gives you one link to share. The same highlight can be exported in more than one aspect ratio, so a wide recruiting cut and a vertical social version come from the same work.`,
+    name: 'Generate and share',
+    text: `ReelBallers upscales toward ${FACTS.upscaleTarget}, renders your highlight, and gives you one link to share. The same highlight can be generated in more than one aspect ratio, so a wide recruiting version and a vertical social version come from the same work.`,
   },
 ]
 
 const faqs: FaqItem[] = [
   {
     q: 'How long does making a highlight reel take?',
-    a: 'The marking step takes roughly the length of the game, because you tag plays while watching it. Framing your player is a few drags per clip, not frame-by-frame work. Rendering and export happen after that without your involvement. There is no separate editing session.',
+    a: 'The marking step takes roughly the length of the game, because you tag plays while watching it. Framing your player is a few drags per clip, not frame-by-frame work. Rendering and generation happen after that without your involvement. There is no separate editing session.',
   },
   {
     q: 'Do I need any video editing experience?',
-    a: 'No. There is no timeline to learn. You mark plays, choose who each clip is about, and export.',
+    a: 'No. There is no timeline to learn. You mark plays, choose who each clip is about, and generate.',
   },
   {
     q: 'What do I need to install?',
@@ -65,7 +65,7 @@ const schemas = [
   breadcrumbs([{ name: 'How it works', path }]),
   howTo({
     name: 'How to turn game footage into a highlight reel',
-    description: 'Upload your video, mark the plays worth keeping, frame and spotlight your player, and export a shareable highlight.',
+    description: 'Upload your video, mark the plays worth keeping, frame and spotlight your player, and generate a shareable highlight.',
     path,
     steps,
   }),
@@ -75,7 +75,7 @@ const schemas = [
 
 <PageLayout
   title="How ReelBallers Works | From Game Footage to Highlight"
-  description="The four steps from a two-hour game file to a shareable highlight reel: upload, mark the plays, frame your player, export. No editing experience needed."
+  description="The four steps from a two-hour game file to a shareable highlight reel: upload, mark the plays, frame your player, generate. No editing experience needed."
   path={path}
   schemas={schemas}
   trail={[{ name: 'How it works', path }]}
@@ -86,7 +86,7 @@ const schemas = [
       <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">How ReelBallers works</h1>
       <p class="text-lg md:text-xl text-gray-300 leading-relaxed">
         Four steps. Upload your video, mark the plays worth keeping while you watch, frame and spotlight
-        the player each clip is about, and export a highlight you can share with one link. See the{' '}
+        the player each clip is about, and generate a highlight you can share with one link. See the{' '}
         <a href="/soccer" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">soccer walkthrough</a>{' '}
         for sport-specific detail, or{' '}
         <a href="/guides/filming-youth-sports-from-the-sideline" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">

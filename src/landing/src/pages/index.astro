@@ -42,7 +42,7 @@ const formatCredits = (credits: number) => credits.toLocaleString('en-US')
 const faqs: FaqItem[] = [
   {
     q: 'What is ReelBallers?',
-    a: 'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game footage into shareable highlight reels. You upload your video, mark the moments worth keeping and frame your player, and it handles the cutting and export.',
+    a: 'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game footage into shareable highlight reels. You upload your video, mark the moments worth keeping and frame your player, and it handles the cutting and generation.',
   },
   {
     q: 'How do I make a highlight reel from game footage?',
@@ -74,7 +74,7 @@ const faqs: FaqItem[] = [
   },
   {
     q: 'Can I make a vertical version for Instagram or TikTok?',
-    a: 'Yes. The same highlight can be exported in more than one aspect ratio, so a wide recruiting cut and a vertical social version come from the same work rather than being edited twice.',
+    a: 'Yes. The same highlight can be generated in more than one aspect ratio, so a wide recruiting version and a vertical social version come from the same work rather than being edited twice.',
   },
 ]
 
@@ -102,7 +102,7 @@ const steps = [
   },
   {
     n: 3,
-    title: 'Export and share one link',
+    title: 'Generate and share one link',
     body: 'You put the focus on your athlete: a few drags of the crop box in the wide shot. ReelBallers smooths the motion, adds the spotlight, and produces one sharp highlight. Share it with a single link.',
   },
 ]
@@ -292,7 +292,7 @@ const steps = [
             <li>Mark key plays as you watch</li>
             <li>Build a searchable library of clips</li>
             <li>Turn any marked play into a highlight</li>
-            <li>Export one highlight in multiple formats</li>
+            <li>Generate one highlight in multiple formats</li>
           </ul>
         </div>
       </div>
@@ -348,7 +348,7 @@ const steps = [
       <p class="text-gray-300 leading-relaxed">
         Try ReelBallers free, then buy credits only when you need more. No monthly fee, no
         auto-renewal, nothing to cancel. Just a balance that goes down when you upload or
-        export, and back up whenever you top it off.
+        generate, and back up whenever you top it off.
       </p>
     </div>
 
@@ -393,7 +393,7 @@ const steps = [
       <h3 class="text-white font-semibold mb-2">For example: a 90-minute game, three highlights</h3>
       <p class="text-gray-300 leading-relaxed">
         Upload the full 90-minute game (about {EXAMPLE_GAME_GB}&nbsp;GB) and store it for 30 days: {exampleUploadCredits} credits. Pull
-        three {EXAMPLE_HIGHLIGHT_SECONDS}-second highlights out of it and export them: {exampleExportCredits} credits, at 1 credit per second of
+        three {EXAMPLE_HIGHLIGHT_SECONDS}-second highlights out of it and generate them: {exampleExportCredits} credits, at 1 credit per second of
         finished video, rounded to the nearest second. <strong class="text-white">{exampleTotalCredits} credits total:
         about ${exampleTotalUsd}</strong> at the {BEST_VALUE_PACK.name} rate, well under a single pack.
       </p>

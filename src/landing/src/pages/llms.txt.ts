@@ -28,12 +28,12 @@ preparing college recruiting material. It is US-focused.
    Nothing is installed; the editor runs in a web browser.
 2. **Mark** the plays worth keeping while watching, tagging each by position and
    play type, with ratings and notes.
-3. **Export** a highlight. The user frames the chosen player and picks them
+3. **Generate** a highlight. The user frames the chosen player and picks them
    from AI-proposed player boxes; ${BRAND} connects the dots for smooth motion
    across the field, upscales the footage toward ${FACTS.upscaleTarget}, adds an
    optional spotlight marker, and produces a single shareable link. The same
-   highlight can be exported in multiple aspect ratios, for example a wide
-   recruiting cut and a vertical version for social.
+   highlight can be generated in multiple aspect ratios, for example a wide
+   recruiting version and a vertical version for social.
 
 ## Key facts
 

@@ -46,7 +46,7 @@ export const COMPARISONS: Comparison[] = [
       'An honest comparison of making a sports highlight reel manually versus with ReelBallers: time, cost, quality, and when doing it by hand is still better.',
     h1: 'ReelBallers vs editing highlight reels by hand',
     answer:
-      'Editing by hand gives you total creative control and costs nothing but time -- typically several hours per reel. ReelBallers trades some of that control for speed: you mark plays while watching the game and frame your player with a few drags, and the cutting, in-between motion, and export are automatic.',
+      'Editing by hand gives you total creative control and costs nothing but time -- typically several hours per reel. ReelBallers trades some of that control for speed: you mark plays while watching the game and frame your player with a few drags, and the cutting, in-between motion, and generation are automatic.',
     fairSummary:
       'Editing by hand in a general video editor is genuinely the more flexible option. Anything you can imagine, you can build, and you are not limited by what someone else automated. The cost is time, and the time is not one-off -- every change to a reel means going back into the timeline.',
     rows: [
@@ -59,7 +59,7 @@ export const COMPARISONS: Comparison[] = [
       {
         dimension: 'Creative control',
         them: 'Total. Any transition, any effect, any structure.',
-        us: 'Constrained to what the tool does: choosing a play, framing your player, spotlight, and export format.',
+        us: 'Constrained to what the tool does: choosing a play, framing your player, spotlight, and output format.',
         winner: 'them',
       },
       {
@@ -77,7 +77,7 @@ export const COMPARISONS: Comparison[] = [
       {
         dimension: 'One highlight, several formats',
         them: 'Usually a second edit for each aspect ratio.',
-        us: 'The same highlight exports in multiple aspect ratios.',
+        us: 'The same highlight is generated in multiple aspect ratios.',
         winner: 'us',
       },
       {
@@ -108,7 +108,7 @@ export const COMPARISONS: Comparison[] = [
     chooseUs: [
       'You have hours of footage and no realistic prospect of editing it.',
       'The hard part is finding your player in wide footage and keeping them in frame.',
-      'You will want more than one version -- a wide cut for coaches, a vertical cut for social -- from the same highlight.',
+      'You will want more than one version -- a wide version for coaches, a vertical version for social -- from the same highlight.',
       'You expect to do this repeatedly, every season, rather than once.',
     ],
     faqs: [

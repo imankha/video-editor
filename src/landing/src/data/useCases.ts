@@ -116,7 +116,7 @@ export const USE_CASES: UseCase[] = [
       'Turn the game footage on your phone into highlight reels your family actually watches. Built for parents, no editing experience and no new camera needed.',
     h1: 'Highlight reels for sports parents',
     answer:
-      'ReelBallers turns the game footage already on your phone into a highlight you can send with one link. You mark the plays worth keeping and frame your player while you watch; it handles the cutting and the export.',
+      'ReelBallers turns the game footage already on your phone into a highlight you can send with one link. You mark the plays worth keeping and frame your player while you watch; it handles the cutting and the generation.',
     sections: [
       {
         heading: 'The footage problem every sports parent has',
@@ -149,7 +149,7 @@ export const USE_CASES: UseCase[] = [
     faqs: [
       {
         q: 'Do I need any editing experience?',
-        a: 'No. You mark the plays worth keeping while you watch the game, then frame your athlete and pick them from the AI\'s player boxes. Cutting, connecting the motion between your marks, and exporting are automatic.',
+        a: 'No. You mark the plays worth keeping while you watch the game, then frame your athlete and pick them from the AI\'s player boxes. Cutting, connecting the motion between your marks, and generating are automatic.',
       },
       {
         q: 'Do I need to buy a camera?',
@@ -165,7 +165,7 @@ export const USE_CASES: UseCase[] = [
       },
       {
         q: 'Can I make a version for Instagram?',
-        a: 'Yes. The same highlight exports in more than one aspect ratio, so a wide version and a vertical version come from the same work.',
+        a: 'Yes. The same highlight is generated in more than one aspect ratio, so a wide version and a vertical version come from the same work.',
       },
       {
         q: 'What if I have footage from several different cameras?',
