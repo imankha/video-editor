@@ -39,10 +39,13 @@ export default function OverlaySpotlightPanel({
   // advanced styling controls; null hides the row (no region / unknown length).
   spotlightDurationSeconds = null,
   // T11570: the guided athlete-pick walk's step checklist, replacing the old
-  // single-pick "done" copy. `pickProgress` is one bool per detection marker in
-  // timeline order (questStore.detectionAssignProgress, threaded through
-  // OverlayModeView — no second store read here, stays presentational).
-  // `activeStep` is the 1-based marker the guide is currently on (or null).
+  // single-pick "done" copy. `pickProgress` is one bool per detection marker
+  // in timeline order (OverlayModeView's own `detectionAssignmentStates(
+  // highlightRegions)` memo — the SAME derivation questStore.
+  // detectionAssignProgress uses, recomputed here rather than read from that
+  // store, so this panel stays presentational/prop-driven with no store
+  // read of its own). `activeStep` is the 1-based marker the guide is
+  // currently on (or null).
   pickProgress = [],
   activeStep = null,
 }) {
@@ -107,9 +110,9 @@ export default function OverlaySpotlightPanel({
   return (
     <SettingsPanel title="This spotlight">
       {/* T11570: the guided walk's step checklist replaces the old single-pick
-          "done" copy — one row per detection marker (questStore.detectionAssignProgress,
-          threaded in as pickProgress), checked off as each is picked, with a
-          "now" marker on the one the guide is currently on. */}
+          "done" copy — one row per detection marker (threaded in as
+          pickProgress, see the prop doc above), checked off as each is
+          picked, with a "now" marker on the one the guide is currently on. */}
       {pickProgress.length > 0 && (
         <ul data-testid="pick-guide-checklist" className="flex flex-col gap-1">
           {pickProgress.map((picked, i) => {

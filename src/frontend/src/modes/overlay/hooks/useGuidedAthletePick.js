@@ -3,10 +3,27 @@ import {
   orderedDetectionMarkers,
   detectionAssignmentStates,
   nextUnpickedMarker,
+  ASSIGN_TOLERANCE_S,
 } from '../utils/detectionAssignment';
 
 /** Brief "Got it" confirm pause after a pick, before auto-advancing. */
 export const PICK_CONFIRM_MS = 650;
+
+/**
+ * 0ms under `prefers-reduced-motion` (task spec) — the confirm state still
+ * shows (the check mark + "Got it" render), it just doesn't linger. Read at
+ * call time rather than subscribed-to: the duration only matters at the
+ * instant a pick schedules the advance, same precedent as other one-shot
+ * media reads in this codebase (no live-updating React state needed for a
+ * value used once per call).
+ */
+function getPickConfirmMs() {
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return 0;
+  }
+  return PICK_CONFIRM_MS;
+}
 
 /**
  * useGuidedAthletePick - Auto-walk the user through every unpicked detection
@@ -26,8 +43,20 @@ export const PICK_CONFIRM_MS = 650;
  * @param {boolean} params.active - true only while the guided walk should be
  *   live (Overlay is the current editor mode). Flips to inactive -> clears
  *   tracked state and cancels any pending advance.
+ * @param {boolean} params.canPark - true once a park is actually capable of
+ *   landing: region/detection data has loaded AND the video's duration is
+ *   known (`seek()` silently refuses otherwise, T10750). Entry-park WAITS
+ *   for this rather than firing blind at mount with zero markers.
+ * @param {*} params.sessionKey - identity of the current clip/load session
+ *   (e.g. the loaded project id). Entry-park fires at most once per key —
+ *   changing it (a new clip loaded) allows exactly one more entry-park.
  * @param {Array} params.highlightRegions - highlight regions (keyframes + detections)
  * @param {boolean} params.isPlaying - caller's video isPlaying
+ * @param {boolean} params.showPlayerBoxes - caller's box-visibility toggle.
+ *   false suspends the guide entirely (no phase), mirroring the pre-T11570
+ *   contract (`awaitingPlayerSelection && showPlayerBoxes`) — the walk's
+ *   internal state keeps advancing underneath so re-enabling resumes where
+ *   it left off, only the OUTPUT phase is suppressed.
  * @param {Object|null} params.clickedDetection - caller's parked-detection
  *   state (OverlayContainer) — null once play/scrub clears it ("away")
  * @param {Function} params.parkOnDetection - (marker) => void; shows boxes +
@@ -35,8 +64,11 @@ export const PICK_CONFIRM_MS = 650;
  */
 export function useGuidedAthletePick({
   active,
+  canPark,
+  sessionKey,
   highlightRegions,
   isPlaying,
+  showPlayerBoxes = true,
   clickedDetection,
   parkOnDetection,
 }) {
@@ -77,18 +109,30 @@ export function useGuidedAthletePick({
   }, [parkOnDetection]);
 
   // Entry-park: becoming active with unpicked markers parks on the first
-  // one. Keyed ONLY on `active` — never on highlightRegions, which changes
-  // on every pick and must never re-trigger entry-park mid-walk.
+  // one. Fires AT MOST ONCE PER `sessionKey` (a ref-held one-shot latch, not
+  // a dependency), and only once `canPark` is true (regions have actually
+  // loaded AND the video's duration is known -- seek() silently no-ops
+  // without it, T10750). Deliberately NOT keyed on `highlightRegions` itself
+  // (which changes on every pick) -- the latch is what prevents re-parking
+  // mid-walk, not an omitted dependency.
+  const enteredForKeyRef = useRef(null);
   useEffect(() => {
     if (!active) {
       setTrackedMarkerIndex(null);
       cancelPendingAdvance();
+      enteredForKeyRef.current = null;
       return;
     }
+    if (!canPark || enteredForKeyRef.current === sessionKey) return;
+    enteredForKeyRef.current = sessionKey;
     const first = nextUnpickedMarker(highlightRegions, -1);
     if (first) parkOnEntry(first);
+    // highlightRegions/cancelPendingAdvance/parkOnEntry are deliberately NOT
+    // dependencies: highlightRegions is read fresh via closure every time this
+    // effect actually RUNS (gated by canPark/sessionKey above), and making it
+    // a dependency would re-fire entry-park on every pick (which changes it).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  }, [active, canPark, sessionKey]);
 
   // The user is moving on themselves — playing, or scrubbed away (the
   // caller nulls clickedDetection on both of those) — so stop the guide
@@ -102,24 +146,44 @@ export function useGuidedAthletePick({
 
   /**
    * Call synchronously from the pick gesture handler (handlePlayerSelect /
-   * handleHighlightComplete), right after the keyframe write. Shows "Got it"
-   * for PICK_CONFIRM_MS, then auto-advances to the next unpicked marker.
+   * handleHighlightComplete), right after the keyframe write, with the
+   * ACTUAL (regionId, assignedTime) that was just picked. The picked marker
+   * might not be `trackedMarkerIndex` — boxes can show, and be tapped,
+   * whenever the playhead happens to sit near a detection frame (see
+   * OverlayContainer.regionDetectionData), independent of what the guide is
+   * currently tracking (e.g. parked 'away' on marker 3, user pauses on
+   * marker 6 and picks it there). So the advance origin — and the step
+   * number "Got it" displays during confirm — must be derived from the pick
+   * itself, never trusted from stale tracked state. Shows "Got it" for
+   * PICK_CONFIRM_MS (0ms under prefers-reduced-motion), then auto-advances.
    */
   const scheduleGuidedAdvance = useCallback((regionId, assignedTime) => {
     cancelPendingAdvance();
+    const pickedIndex = orderedMarkers.findIndex(
+      (m) => m.regionId === regionId &&
+        Math.abs(m.detection.timestamp - assignedTime) <= ASSIGN_TOLERANCE_S
+    );
+    if (pickedIndex === -1) {
+      console.warn(
+        '[useGuidedAthletePick] Picked marker not found in orderedDetectionMarkers -- step display may be stale.',
+        { regionId, assignedTime }
+      );
+    } else {
+      setTrackedMarkerIndex(pickedIndex); // confirm must show the marker ACTUALLY picked
+    }
     setIsConfirmingPick(true);
     pendingAdvanceRef.current = setTimeout(() => {
       pendingAdvanceRef.current = null;
       setIsConfirmingPick(false);
       const next = nextUnpickedMarker(
         highlightRegions,
-        trackedMarkerIndex ?? -1,
+        pickedIndex,
         { regionId, time: assignedTime }
       );
       if (next) parkOnEntry(next);
       else setTrackedMarkerIndex(null); // every marker picked — walk is done
-    }, PICK_CONFIRM_MS);
-  }, [cancelPendingAdvance, highlightRegions, trackedMarkerIndex, parkOnEntry]);
+    }, getPickConfirmMs());
+  }, [cancelPendingAdvance, highlightRegions, orderedMarkers, parkOnEntry]);
 
   /**
    * A direct tap on ANY marker (assigned or not) cancels the pending
@@ -130,8 +194,14 @@ export function useGuidedAthletePick({
     parkOnDetection(marker);
     const idx = orderedMarkers.findIndex(
       (m) => m.regionId === marker.regionId &&
-        Math.abs(m.detection.timestamp - marker.timestamp) < 0.001
+        Math.abs(m.detection.timestamp - marker.timestamp) <= ASSIGN_TOLERANCE_S
     );
+    if (idx === -1) {
+      console.warn(
+        '[useGuidedAthletePick] Tapped marker not found in orderedDetectionMarkers -- step display cleared.',
+        marker
+      );
+    }
     setTrackedMarkerIndex(idx >= 0 ? idx : null);
   }, [cancelPendingAdvance, parkOnDetection, orderedMarkers]);
 
@@ -147,12 +217,18 @@ export function useGuidedAthletePick({
   // (Confirming on a re-pick) for that marker, then falls back to 'done' once
   // it's no longer actively tracked — never stuck re-showing 'away' for a walk
   // that has nothing left to pick.
-  const phase = total === 0 ? null
+  const internalPhase = total === 0 ? null
     : isConfirmingPick ? 'confirm'
     : (clickedDetection && trackedMarkerIndex != null) ? 'parked'
     : done ? 'done'
     : trackedMarkerIndex != null ? 'away'
     : null;
+
+  // Boxes hidden -> suspend the guide's OUTPUT entirely (pre-T11570 contract:
+  // `awaitingPlayerSelection && showPlayerBoxes`). The state machine above
+  // keeps running underneath so re-enabling boxes resumes exactly where the
+  // walk left off, rather than restarting it.
+  const phase = showPlayerBoxes ? internalPhase : null;
 
   return {
     phase, // null | 'parked' | 'confirm' | 'away' | 'done'

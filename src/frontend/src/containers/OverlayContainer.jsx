@@ -304,10 +304,26 @@ export function OverlayContainer({
   // forward-then-wrap auto-advance through every unpicked marker. See
   // useGuidedAthletePick for the full state machine; this container only
   // feeds it inputs and calls scheduleGuidedAdvance from the pick handlers.
+  //
+  // `canPark` gates entry-park on regions actually having loaded AND the
+  // video's duration being known -- `seek()` silently refuses otherwise
+  // (T10750), which would set clickedDetection with NOTHING actually seeked,
+  // then the scrub-away-clear effect wipes it on the next tick, landing the
+  // guide in 'away' with nothing real tracked. `overlaySyncState === 'ready'`
+  // (scoped to THIS project via overlayLoadedProjectId) is the SAME signal
+  // OverlayScreen's own `canSyncActions` already uses for "the data for this
+  // project has loaded" -- reused here, not a second readiness concept.
+  // `sessionKey` resets the hook's one-shot entry-park latch per loaded
+  // project (a fresh clip's data arriving gets its own entry-park).
+  const canPark = overlaySyncState === 'ready' &&
+    overlayLoadedProjectId === selectedProjectId && duration > 0;
   const guidedPick = useGuidedAthletePick({
     active: editorMode === EDITOR_MODES.OVERLAY,
+    canPark,
+    sessionKey: overlayLoadedProjectId,
     highlightRegions,
     isPlaying,
+    showPlayerBoxes,
     clickedDetection,
     parkOnDetection,
   });
