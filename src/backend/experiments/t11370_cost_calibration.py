@@ -29,7 +29,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -41,7 +41,17 @@ if os.environ.get("APP_ENV") != "staging":
     sys.exit("REFUSING: set APP_ENV=staging in the dispatching shell (never prod, never the .env dev value).")
 
 from app.services.modal_client import resolve_modal_app_name  # noqa: E402  single source of truth
-from app.services.export_cost_guard import per_frame_cost  # noqa: E402  current model, for comparison
+
+# The PRE-T11370 anchor this calibration superseded (now deleted from export_cost_guard.py --
+# that module has since been updated WITH this script's findings, so importing its live
+# per_frame_cost here would be circular). Hardcoded for historical comparison only.
+_OLD_ANCHOR_SECONDS_PER_FRAME = 0.681
+_OLD_ANCHOR_CROP_PIXELS = 540 * 960
+
+
+def _old_model_per_frame_cost(w: int, h: int) -> float:
+    return _OLD_ANCHOR_SECONDS_PER_FRAME * (w * h) / _OLD_ANCHOR_CROP_PIXELS
+
 
 MODAL_APP_NAME = resolve_modal_app_name("staging")
 assert MODAL_APP_NAME == "reel-ballers-video-v2-staging", MODAL_APP_NAME
@@ -132,7 +142,7 @@ def cmd_plan(_args):
         print(f"\nJob {job}: target {tw}x{th}")
         for label, w, h, trim in clips:
             n = _frames(trim)
-            est = n * per_frame_cost(w, h)
+            est = n * _old_model_per_frame_cost(w, h)
             tot += est
             print(f"  {label:<12} {w}x{h:<5} px={w*h:>8} frames={n:>4}  current-model GAN est={est:7.1f}s")
         print(f"  current-model GAN total ~{tot:.0f}s (+ model load / extract / encode overhead)")
@@ -195,7 +205,7 @@ def cmd_run(args):
     path = RESULTS_DIR / f"{job_id}.jsonl"
     meta = {"kind": "meta", "job": job, "job_id": job_id, "app": MODAL_APP_NAME, "fn": MODAL_FUNCTION,
             "target": [tw, th], "clips": [[lab, w, h, list(t)] for (lab, w, h, t) in clips],
-            "dispatch_utc": datetime.now(timezone.utc).isoformat()}
+            "dispatch_utc": datetime.now(UTC).isoformat()}
     final = None
     with open(path, "w", encoding="utf-8") as f:
         f.write(json.dumps(meta) + "\n")
@@ -213,7 +223,7 @@ def cmd_run(args):
             f.write(json.dumps({"kind": "exception", "t": time.perf_counter() - t0, "error": repr(e)}) + "\n")
             raise
         f.write(json.dumps({"kind": "end", "t": time.perf_counter() - t0,
-                            "end_utc": datetime.now(timezone.utc).isoformat()}) + "\n")
+                            "end_utc": datetime.now(UTC).isoformat()}) + "\n")
     print(f"\nFinal: {final}\nRecorded: {path}")
     if not final or final.get("status") != "success":
         sys.exit(1)
@@ -251,14 +261,14 @@ def _analyze_file(path):
         print(f"in-function wall (first item to success; what timeout=3600 bounds): {complete['t'] - first_t:.1f}s")
     rows = []
     for ci, (label, w, h, trim) in enumerate(clips, start=1):
-        start = _first_t(items, lambda i: i.get("phase") == "upscaling" and i.get("clip") == ci
+        start = _first_t(items, lambda i, ci=ci: i.get("phase") == "upscaling" and i.get("clip") == ci
                          and "current_frame" not in i)
         pts = [(i["current_frame"], i["t"]) for i in items
                if i.get("phase") == "upscaling" and i.get("clip") == ci and "current_frame" in i]
-        enc = _first_t(items, lambda i: i.get("phase") == "encoding" and i.get("clip") == ci)
+        enc = _first_t(items, lambda i, ci=ci: i.get("phase") == "encoding" and i.get("clip") == ci)
         nxt = None
         if enc is not None:
-            nxt = _first_t(items, lambda i: i["t"] > enc and (
+            nxt = _first_t(items, lambda i, ci=ci, enc=enc: i["t"] > enc and (
                 i.get("phase") == "concatenating"
                 or (i.get("phase") == "upscaling" and i.get("clip") == ci + 1)))
         if len(pts) < 3:
@@ -269,7 +279,7 @@ def _analyze_file(path):
         extract_overhead = (a_c - start) if start is not None else float("nan")
         encode_s = (nxt - enc) if (enc is not None and nxt is not None) else float("nan")
         n = _frames(trim)
-        model = per_frame_cost(w, h)
+        model = _old_model_per_frame_cost(w, h)
         rows.append(dict(label=label, w=w, h=h, px=w * h, slope=slope, fit_r2=r2, extract=extract_overhead,
                          encode=encode_s, encode_per_frame=encode_s / n, model=model))
         print(f"  {label:<12} px={w*h:>8} loop={slope:.4f}s/f (r2={r2:.4f}) model={model:.4f}s/f "
@@ -303,8 +313,8 @@ def cmd_analyze(_args):
 
 def cmd_billing(args):
     import modal.billing
-    start = datetime.fromisoformat(args.start).replace(tzinfo=timezone.utc)
-    end = datetime.fromisoformat(args.end).replace(tzinfo=timezone.utc)
+    start = datetime.fromisoformat(args.start).replace(tzinfo=UTC)
+    end = datetime.fromisoformat(args.end).replace(tzinfo=UTC)
     rows = modal.billing.workspace_billing_report(start=start, end=end, resolution="h")
     tot = 0.0
     for r in rows:
