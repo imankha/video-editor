@@ -1,6 +1,6 @@
 # T11370: Calibrate T11320's Export-Cost-Guard Per-Pixel Constant
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-25
