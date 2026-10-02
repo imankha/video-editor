@@ -1,20 +1,47 @@
-{
-  "methodology": "Real R2 (staging bucket), real functions from app.routers.downloads/app.services.serve_time_video (compose_serve_time_dispatched, _download_cache_key, r2_head_object_global, download_from_r2_global, upload_file_to_r2_global). No DB/FastAPI/auth -- isolates the exact cache mechanism's I/O+compose cost. Source fixture: synthetic 60s 810x1440@30fps h264 clip (2.4MB), uploaded to R2 scratch to make the MISS path's R2 fetch leg representative (an earlier run using a bare local file without the R2 fetch leg understated MISS -- superseded, not included below). MISS = real R2 fetch of source + compose_serve_time_dispatched + real R2 upload to cache key. HIT = real R2 HEAD + real R2 download of the cached composed file. Both paths share the per-request _stamp_download cost (not measured here since it runs unconditionally on both hit and miss, per the download_metadata.py NOTE ON CACHING contract -- it does not differentiate hit vs miss).",
-  "env": "APP_ENV=staging, real reel-ballers-users R2 bucket, run from host (not container -- containers lack real R2/Modal per T4180)",
-  "measured_2026-10-02": {
-    "miss": {"fetch_s": 0.866, "compose_s": 0.265, "upload_s": 2.731, "total_s": 3.863, "size_bytes": 2492056, "full_fidelity": true},
-    "hit_sample_1": {"head_s": 1.110, "download_s": 0.764, "total_s": 1.874, "size_bytes": 2492056},
-    "hit_sample_2": {"head_s": 0.909, "download_s": 0.914, "total_s": 1.823, "size_bytes": 2492056}
-  },
-  "summary": {
-    "miss_total_s": 3.863,
-    "hit_total_s_avg": 1.849,
-    "speedup_x": 2.1,
-    "saved_s": 2.01
-  },
-  "caveats": [
-    "Compose here ran LOCAL ffmpeg (0.265s), not a real Modal network round-trip -- modal_enabled() resolved to local in this invocation; a Modal-dispatched compose would widen the MISS/HIT gap further since it adds R2 scratch upload + dispatch + cold start + download-back on top of the local compose time this measurement captured.",
-    "Synthetic 2.4MB fixture is far smaller than a typical multi-minute highlight (tens of MB); both MISS's fetch+upload legs and HIT's head+download legs would scale up roughly proportionally with real file size, but MISS additionally pays compose+upload that HIT entirely skips -- so the absolute time saved (not just the ratio) should grow, not shrink, for real-sized reels.",
-    "This does not measure the FIRST-ever download/share of a highlight (the task's own documented residual-latency case) -- by definition a first request is always a MISS."
-  ]
-}
+[
+ {
+  "kind": "before",
+  "fetch_s": 2.2442182002123445,
+  "compose_s": 0.3640125000383705,
+  "total_s": 2.608230700250715,
+  "size_bytes": 2492056,
+  "full_fidelity": true,
+  "degraded_reason": null,
+  "via_modal": false
+ },
+ {
+  "kind": "before",
+  "fetch_s": 1.285043500130996,
+  "compose_s": 0.3278388998005539,
+  "total_s": 1.61288239993155,
+  "size_bytes": 2492056,
+  "full_fidelity": true,
+  "degraded_reason": null,
+  "via_modal": false
+ },
+ {
+  "kind": "miss",
+  "fetch_s": 0.6862665000371635,
+  "compose_s": 0.31442450010217726,
+  "upload_s": 2.389590999810025,
+  "total_s": 3.390281999949366,
+  "size_bytes": 2492056,
+  "full_fidelity": true,
+  "degraded_reason": null,
+  "via_modal": false
+ },
+ {
+  "kind": "hit",
+  "head_s": 1.5150296001229435,
+  "download_s": 0.7334229000844061,
+  "total_s": 2.2484525002073497,
+  "size_bytes": 2492056
+ },
+ {
+  "kind": "hit",
+  "head_s": 0.8105332998093218,
+  "download_s": 0.8667665999382734,
+  "total_s": 1.6772998997475952,
+  "size_bytes": 2492056
+ }
+]

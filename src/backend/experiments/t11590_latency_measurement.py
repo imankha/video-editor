@@ -10,13 +10,20 @@ No DB, no FastAPI, no auth -- this isolates the actual R2 I/O + compose cost
 the acceptance criterion cares about, using the identical code the endpoint
 calls, under a disposable scratch prefix.
 
-Run from src/backend, Git Bash, prefix each with: APP_ENV=staging PYTHONUTF8=1
+Run from src/backend, Git Bash, prefix each with: APP_ENV=staging MODAL_ENABLED=true PYTHONUTF8=1
   .venv/Scripts/python.exe experiments/t11590_latency_measurement.py prepare --yes
-  .venv/Scripts/python.exe experiments/t11590_latency_measurement.py miss --yes
-  .venv/Scripts/python.exe experiments/t11590_latency_measurement.py hit --yes
+  .venv/Scripts/python.exe experiments/t11590_latency_measurement.py before --yes   (the OLD, pre-T11590 path: fetch+compose, no HEAD, no cache write -- the true baseline)
+  .venv/Scripts/python.exe experiments/t11590_latency_measurement.py miss --yes     (the NEW miss path: HEAD + fetch+compose + cache write)
+  .venv/Scripts/python.exe experiments/t11590_latency_measurement.py hit --yes      (the NEW hit path: HEAD + cached download)
   .venv/Scripts/python.exe experiments/t11590_latency_measurement.py cleanup --yes
 
-Without --yes, miss/hit/cleanup only print what they would do.
+Without --yes, before/miss/hit/cleanup only print what they would do.
+
+IMPORTANT (proof-verifier catch, 2026-10-02): `miss` is NOT the correct "before" baseline for an
+AC7 speedup claim -- it's the NEW code's miss path, which pays a HEAD + a synchronous cache
+upload the OLD code never paid. Compare `hit` against `before`, not against `miss`. MODAL_ENABLED
+must be set to true (separate from APP_ENV) for `before`/`miss` to exercise real Modal compose,
+not the local ffmpeg fallback -- modal_client.py reads MODAL_ENABLED independently of APP_ENV.
 """
 from __future__ import annotations
 
@@ -37,6 +44,7 @@ if os.environ.get("APP_ENV") != "staging":
 
 from app.routers.downloads import _download_cache_key  # noqa: E402  reuse the REAL key builder
 from app.services.branded_outro import outro_enabled  # noqa: E402
+from app.services.modal_client import modal_enabled  # noqa: E402
 from app.services.serve_time_video import compose_serve_time_dispatched  # noqa: E402
 from app.storage import (  # noqa: E402
     download_from_r2_global,
@@ -87,6 +95,42 @@ def cmd_prepare(args):
     print(f"Uploaded source -> {SOURCE_KEY}")
 
 
+def cmd_before(args):
+    # The TRUE pre-T11590 baseline: fetch the source + compose, nothing else. No HEAD check, no
+    # cache write -- this is exactly what GET /api/downloads/{id}/file did before this task.
+    if not args.yes:
+        print("[dry-run] would download_from_r2_global(SOURCE_KEY) then compose_serve_time_dispatched(...) "
+              "-- OLD behavior, no HEAD, no cache write")
+        return
+    with tempfile.TemporaryDirectory() as td:
+        fetched_path = os.path.join(td, "fetched_source.mp4")
+        t_fetch0 = time.perf_counter()
+        fetched = download_from_r2_global(SOURCE_KEY, Path(fetched_path))
+        t_fetch = time.perf_counter() - t_fetch0
+        if not fetched or not os.path.exists(fetched_path):
+            sys.exit(f"download_from_r2_global(SOURCE_KEY) failed: fetched={fetched}")
+
+        out_path = os.path.join(td, "composed.mp4")
+        report: dict = {}
+        t0 = time.perf_counter()
+        ok = compose_serve_time_dispatched(
+            fetched_path, out_path, user_id=USER_ID, user_prefix=SCRATCH_PREFIX,
+            intro=None, outro=True, report=report,
+        )
+        t_compose = time.perf_counter() - t0
+        if not ok or not os.path.exists(out_path):
+            sys.exit(f"compose_serve_time_dispatched returned ok={ok}, report={report}")
+        size = os.path.getsize(out_path)
+        total = t_fetch + t_compose
+        print(f"fetch source: {t_fetch:.3f}s  compose: {t_compose:.3f}s  total BEFORE (old path): "
+              f"{total:.3f}s  size={size}  full_fidelity={report.get('full_fidelity')}  "
+              f"via_modal={modal_enabled()}")
+        _record("before", dict(fetch_s=t_fetch, compose_s=t_compose, total_s=total,
+                                size_bytes=size, full_fidelity=report.get("full_fidelity"),
+                                degraded_reason=report.get("degraded_reason"),
+                                via_modal=modal_enabled()))
+
+
 def cmd_miss(args):
     print(f"cache key: {CACHE_KEY}")
     existing = r2_head_object_global(CACHE_KEY)
@@ -124,10 +168,10 @@ def cmd_miss(args):
         total = t_fetch + t_compose + t_upload
         print(f"fetch source: {t_fetch:.3f}s  compose: {t_compose:.3f}s  upload: {t_upload:.3f}s  "
               f"total MISS: {total:.3f}s  size={size}  full_fidelity={report.get('full_fidelity')}  "
-              f"uploaded={uploaded}")
+              f"uploaded={uploaded}  via_modal={modal_enabled()}")
         _record("miss", dict(fetch_s=t_fetch, compose_s=t_compose, upload_s=t_upload, total_s=total,
                               size_bytes=size, full_fidelity=report.get("full_fidelity"),
-                              degraded_reason=report.get("degraded_reason")))
+                              degraded_reason=report.get("degraded_reason"), via_modal=modal_enabled()))
 
 
 def cmd_hit(args):
@@ -181,6 +225,8 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare")
     p.add_argument("--yes", action="store_true")
+    p = sub.add_parser("before")
+    p.add_argument("--yes", action="store_true")
     p = sub.add_parser("miss")
     p.add_argument("--yes", action="store_true")
     p = sub.add_parser("hit")
@@ -188,7 +234,8 @@ def main():
     p = sub.add_parser("cleanup")
     p.add_argument("--yes", action="store_true")
     a = ap.parse_args()
-    {"prepare": cmd_prepare, "miss": cmd_miss, "hit": cmd_hit, "cleanup": cmd_cleanup}[a.cmd](a)
+    {"prepare": cmd_prepare, "before": cmd_before, "miss": cmd_miss, "hit": cmd_hit,
+     "cleanup": cmd_cleanup}[a.cmd](a)
 
 
 if __name__ == "__main__":
