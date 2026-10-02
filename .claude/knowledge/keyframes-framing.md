@@ -1,5 +1,35 @@
 ---
 domain: keyframes-framing
+updated: 2026-10-02 (T11570 review-response round — a fresh-context Reviewer caught 5 real bugs the
+134-test/10-viewport-passing first cut missed, all now fixed + regression-tested with negative
+controls (see the entry below for the original feature). **Landmine for future readers: diag-
+harness tests proved nothing about the real app's wiring** — the walk harness seeded
+`highlightRegions` SYNCHRONOUSLY at mount and the placement harness hardcoded the flip decision,
+so both sailed past exactly the bugs that broke the real async-load/real-geometry paths. (1)
+BLOCKING: entry-park never fired in production — `highlightRegions` starts `[]` (useHighlightRegions'
+own `useState([])`) and only populates once `/overlay-data` resolves; the entry-park effect was
+keyed on `[active]` alone (true from first render, never changes), so it ran once with zero markers
+and never retried. Fixed with `canPark` (`overlaySyncState==='ready'` for this project AND
+`duration>0` — `seek()` silently no-ops without a known duration, T10750) + `sessionKey`
+(`overlayLoadedProjectId`, reset per newly-loaded clip) gating a ref-held one-shot latch in
+`useGuidedAthletePick`. (2) `scheduleGuidedAdvance` trusted stale `trackedMarkerIndex` instead of
+the marker ACTUALLY picked (boxes can show/be tapped wherever the playhead sits, independent of
+what's tracked) — now derives the picked index from `(regionId, assignedTime)` via
+`ASSIGN_TOLERANCE_S`, warns if not found. (3) "Got it" now reads `prefers-reduced-motion` at call
+time (0ms) instead of always 650ms. (4) `showPlayerBoxes===false` now suspends the guide's phase to
+`null` (restores the pre-T11570 `awaitingPlayerSelection && showPlayerBoxes` contract) while the
+state machine keeps advancing underneath. (5) The flip-to-bottom rule now measures the pill's REAL
+rendered height + REAL obstacle box rects (`stageRef` + `obstacleBoxes`/`videoHeight` props,
+replacing a static "top 20%" boolean blind to the pill's own size and to bottom-band obstacles) and
+tries its own compact form once before giving up; the pill BODY is `pointer-events-none` (only its
+buttons opt in), so a box it still ends up covering stays tappable. **Real-browser-only landmine
+inside that fix:** `stageRef` is owned by an ANCESTOR component, and observed in a real browser
+(NOT reproducible in jsdom) to sometimes not be attached yet when THIS component's own
+`useLayoutEffect` first runs — a `mountTick` (one `requestAnimationFrame`-scheduled retry after the
+first paint) covers the gap; pin this precedent if you EVER consume a ref owned by a different
+component inside a `useLayoutEffect` — jsdom will not catch the race, only a real browser (or
+Playwright) will. See `OverlayContainer.test.jsx` (new) for the BLOCKING-fix proof through the REAL
+container wiring, not just the isolated hook.)
 updated: 2026-10-02 (T11570 — Spotlight's "Pick your player" now auto-advances through every
 unpicked detection marker instead of leaving the user to hunt for the next one; supersedes T9620's
 single-pick banner entirely. `modes/overlay/utils/detectionAssignment.js` gained
