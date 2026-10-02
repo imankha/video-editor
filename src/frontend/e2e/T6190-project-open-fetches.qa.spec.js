@@ -226,9 +226,9 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
     await page.waitForURL(/\/annotate/, { timeout: 30000 }).catch(() => {});
     await page.locator('video, .clip-marker').first().waitFor({ timeout: 60000 });
     // `video` mounts before the clips sidebar finishes its own fetch (ClipsSidePanel
-    // shows a "Loading clips..." state) — wait that out so the clip-item lookup below
+    // shows a "Loading plays..." state) — wait that out so the clip-item lookup below
     // isn't racing the sidebar's own load.
-    await page.getByText('Loading clips...').waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {});
+    await page.getByText('Loading plays...').waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {});
 
     // Drive a REAL boundary edit: select the clip in the sidebar (ClipListItem —
     // proven selector from clip-selection-state-machine.spec.js / sidebar-scrub-debug.spec.js),

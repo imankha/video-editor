@@ -43,9 +43,9 @@ export const CAMERAS: Camera[] = [
       'Export Trace match video into a personal highlight reel: frame your player and get a spotlight on them. Works with the exported file. Free to start.',
     h1: 'How to edit Trace footage into a highlight reel',
     answer:
-      'Download your match video from Trace, upload the file to ReelBallers, and build a reel from it. There is no direct Trace integration -- ReelBallers works with the exported video file, so you can add per-player editing to footage your club already captures.',
+      'Download your match video from Trace, upload the file to ReelBallers, and turn each play into a highlight. There is no direct Trace integration -- ReelBallers works with the exported video file, so you can add per-player editing to footage your club already captures.',
     reality:
-      'Trace produces automated player clips using a wearable tracker, which is useful but limited: you get the clips its algorithm chose, in the format it chose. Editing the full match export yourself is how you get the plays it missed, the framing you want, and a reel of the length a specific coach asked for.',
+      'Trace produces automated player clips using a wearable tracker, which is useful but limited: you get the clips its algorithm chose, in the format it chose. Editing the full match export yourself is how you get the plays it missed and the framing you want on your own player.',
     tips: [
       'Export the full match rather than only the auto-generated personal clips -- the auto-cut typically misses off-ball work entirely.',
       'Trace footage is panoramic and wide, which is ideal input for framing in tight on your player.',
@@ -61,7 +61,7 @@ export const CAMERAS: Camera[] = [
       'Export your Veo match footage and turn it into a highlight reel: frame your player and get a spotlight on them. Works with the exported file. Free.',
     h1: 'How to edit Veo footage into a highlight reel',
     answer:
-      'Download the match video from your Veo account, upload the file to ReelBallers, and build a reel from it. ReelBallers does not connect to Veo directly -- it works with the exported video file, which means you keep your club Veo setup and add per-player editing on top.',
+      'Download the match video from your Veo account, upload the file to ReelBallers, and turn each play into a highlight. ReelBallers does not connect to Veo directly -- it works with the exported video file, which means you keep your club Veo setup and add per-player editing on top.',
     reality:
       'Veo is a club-level capture system: an expensive fixed camera that records the whole match and auto-follows play. What it does not do well is make one specific player the subject. Most parents on a Veo club still cannot get a personal highlight reel for their own child without editing the export themselves.',
     tips: [

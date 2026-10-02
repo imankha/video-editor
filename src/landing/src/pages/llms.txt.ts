@@ -43,7 +43,7 @@ preparing college recruiting material. It is US-focused.
   works with footage the user already has.
 - **Sports supported (${FACTS.sportCount}):** ${SPORTS.map((s) => s.name).join(', ')}.
 - **Tagging presets:** ${FACTS.positionCount} positions and ${FACTS.playTypeCount} play types across those sports.
-- **Viewing a shared reel requires:** ${FACTS.viewerRequirement}.
+- **Viewing a shared highlight requires:** ${FACTS.viewerRequirement}.
 
 ## Accepted footage sources
 

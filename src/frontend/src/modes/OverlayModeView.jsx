@@ -1193,7 +1193,7 @@ export function OverlayModeView({
             </p>
             <p className="text-purple-300/70 text-sm mb-4">
               {hasMultipleClips
-                ? `You have multiple clips loaded. Generate in ${MODE_NAMES.FRAMING} first before adding overlays.`
+                ? `You have multiple plays loaded. Generate in ${MODE_NAMES.FRAMING} first before adding overlays.`
                 : `You have made edits in ${MODE_NAMES.FRAMING} mode. Generate first to apply them before adding overlays.`}
             </p>
             <button

@@ -116,7 +116,7 @@ export const USE_CASES: UseCase[] = [
       'Turn the game footage on your phone into highlight reels your family actually watches. Built for parents, no editing experience and no new camera needed.',
     h1: 'Highlight reels for sports parents',
     answer:
-      'ReelBallers turns the game footage already on your phone into a highlight reel you can send with one link. You mark the plays worth keeping and frame your player while you watch; it handles the cutting and the export.',
+      'ReelBallers turns the game footage already on your phone into a highlight you can send with one link. You mark the plays worth keeping and frame your player while you watch; it handles the cutting and the export.',
     sections: [
       {
         heading: 'The footage problem every sports parent has',
@@ -135,14 +135,14 @@ export const USE_CASES: UseCase[] = [
       {
         heading: 'Sharing with family who are not technical',
         body: [
-          'A shared reel is a link. Whoever opens it needs a web browser and nothing else: no app, no account, no sign-up wall. That matters more than it sounds when the audience is grandparents.',
+          'A shared highlight is a link. Whoever opens it needs a web browser and nothing else: no app, no account, no sign-up wall. That matters more than it sounds when the audience is grandparents.',
           'It plays at full resolution rather than the compressed version a messaging app would produce, which is usually the difference between being able to follow the play and not.',
         ],
       },
       {
         heading: 'And for your athlete',
         body: [
-          'You can leave notes on specific moments, so feedback happens on the sofa at their pace instead of in the car on the way home. Some families find that alone is worth more than the reel.',
+          'You can leave notes on specific moments, so feedback happens on the sofa at their pace instead of in the car on the way home. Some families find that alone is worth more than the highlight.',
         ],
       },
     ],
@@ -156,16 +156,16 @@ export const USE_CASES: UseCase[] = [
         a: 'No. The footage on your phone is fine. Film wide and steady, then frame your player yourself and let the crop do the zoom.',
       },
       {
-        q: 'How long does it take to make a reel?',
+        q: 'How long does it take to make a highlight?',
         a: 'The work is roughly the length of the game, since you mark plays while watching it. There is no separate editing session afterwards.',
       },
       {
         q: 'Can my family watch without signing up?',
-        a: 'Yes. A shared reel opens as a link in any web browser, at full resolution, with no account required.',
+        a: 'Yes. A shared highlight opens as a link in any web browser, at full resolution, with no account required.',
       },
       {
         q: 'Can I make a version for Instagram?',
-        a: 'Yes. The same clips export in more than one aspect ratio, so a wide version and a vertical version come from the same work.',
+        a: 'Yes. The same highlight exports in more than one aspect ratio, so a wide version and a vertical version come from the same work.',
       },
       {
         q: 'What if I have footage from several different cameras?',

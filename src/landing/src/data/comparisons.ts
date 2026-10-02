@@ -75,9 +75,9 @@ export const COMPARISONS: Comparison[] = [
         winner: 'us',
       },
       {
-        dimension: 'Reusing clips across formats',
+        dimension: 'One highlight, several formats',
         them: 'Usually a second edit for each aspect ratio.',
-        us: 'The same clips export in multiple aspect ratios.',
+        us: 'The same highlight exports in multiple aspect ratios.',
         winner: 'us',
       },
       {

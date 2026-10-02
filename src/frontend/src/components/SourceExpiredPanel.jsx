@@ -37,13 +37,13 @@ export function SourceExpiredPanel({ canExtend = false, className = '' }) {
         <p className="text-yellow-400 font-semibold mb-2">Source video expired</p>
         <p className="text-gray-400 text-sm">
           This game&apos;s source video is no longer available (storage expired),
-          so this clip can&apos;t be edited.
+          so this highlight can&apos;t be edited.
           {canExtend
             ? ' Extend its storage to keep editing.'
             : ' Its storage window has passed and it can no longer be recovered.'}
         </p>
         <p className="text-gray-500 text-xs mt-2">
-          If you&apos;d already exported this clip before its source expired, that finished video
+          If you&apos;d already generated this highlight before its source expired, that finished video
           is unaffected. You just can&apos;t re-edit it from the original footage anymore.
         </p>
         {canExtend && (
