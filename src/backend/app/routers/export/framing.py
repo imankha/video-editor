@@ -235,7 +235,7 @@ async def render_project(request: RenderRequest, http_request: Request):
             status_code=409,
             detail={"code": "export_in_flight", "message": "An export for this clip is already running."},
         )
-    await manager.send_progress(export_id, {"progress": 5, "message": "Starting export...", "status": "processing"})
+    await manager.send_progress(export_id, {"progress": 5, "message": "Starting generation...", "status": "processing"})
 
     # Query project + clips
     with get_db_connection() as conn:

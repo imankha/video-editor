@@ -1362,7 +1362,7 @@ async def export_overlay_only(
     # Initialize progress
     export_progress[export_id] = {
         "progress": 5,
-        "message": "Starting overlay export...",
+        "message": "Starting overlay generation...",
         "status": "processing",
         "projectId": project_id,
         "projectName": project_name,

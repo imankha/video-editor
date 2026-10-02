@@ -2081,7 +2081,7 @@ async def export_multi_clip(
     # Initialize progress
     export_progress[export_id] = {
         "progress": 5,
-        "message": "Starting multi-clip export...",
+        "message": "Starting multi-clip generation...",
         "status": "processing",
         "projectId": project_id,
         "projectName": project_name,
@@ -2107,7 +2107,7 @@ async def export_multi_clip(
         # Notify frontend that export job exists so quest progress can refresh
         await manager.send_progress(export_id, {
             "progress": 5,
-            "message": "Starting export...",
+            "message": "Starting generation...",
             "status": "processing"
         })
 

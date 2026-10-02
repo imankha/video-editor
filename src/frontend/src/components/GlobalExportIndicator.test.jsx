@@ -171,6 +171,21 @@ describe('GlobalExportIndicator — rendered labels and stale-ETA switch (T8510)
     expect(document.body.textContent).not.toMatch(/Project #/);
   });
 
+  // T11280 (round 12, AC6): the pending-export card opens with exportStore's DEFAULT
+  // progress message, which carries no `phase` and so is rendered VERBATIM by
+  // exportProgressLabel's raw-message fallback. It must not leak the word "export" --
+  // AC6 renames the product's action to "generate". A proof verifier caught this live
+  // runtime gap by calling the real render path; seven prior static code reviews missed it
+  // because the leak only exists once startExport runs and the label passes the message
+  // through. This fails on the pre-fix head ("Starting export...") and passes after
+  // ("Starting generation..."), locking it permanently.
+  it('opens the pending export card without leaking the word "export" (T11280 AC6)', () => {
+    useExportStore.getState().startExport('export_pending', 7, 'framing', 'Brilliant Goal');
+    render(<GlobalExportIndicator />);
+    expect(document.body.textContent).toMatch(/Starting generation/i);
+    expect(document.body.textContent).not.toMatch(/export/i);
+  });
+
   it('switches a busted "Less than a minute" to the stage message within the grace window', () => {
     // percent 95 after 60s -> promised ~3s remaining; the export then stalls.
     useExportStore.setState({

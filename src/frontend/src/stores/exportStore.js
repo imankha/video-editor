@@ -142,7 +142,7 @@ export const useExportStore = create((set, get) => ({
             projectName: projectName || null,
             type,
             status: 'pending',
-            progress: { current: 0, total: 100, percent: 0, message: 'Starting export...' },
+            progress: { current: 0, total: 100, percent: 0, message: 'Starting generation...' },
             startedAt: new Date().toISOString(),
             completedAt: null,
             error: null,
