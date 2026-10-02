@@ -208,4 +208,50 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
 
     expect(setJustPublishedMock).not.toHaveBeenCalled();
   });
+
+  // Regression (Branch CI run 37040668288): a mock that doesn't populate
+  // projectsStore.getState().projects (several PRE-EXISTING test files for
+  // DraftTile/ProjectManager/DraftReelPreview don't, since they predate
+  // T11580 and have no reason to) made `.projects.find(...)` throw a
+  // TypeError. That throw shared the SAME try/catch as the rest of the
+  // publish-success path, so it silently swallowed fetchCount/
+  // notifyCollectionsChanged/fetchProjects/recordAchievement too -- a
+  // secondary spotlight-card nicety took down the actual quest-completion
+  // path. The spotlight lookup must be isolated so a failure there can
+  // NEVER prevent the critical post-publish effects from running.
+  it('a missing/undefined projects array must not prevent fetchCount/notify/fetchProjects/recordAchievement from running', async () => {
+    projectsStoreState.projects = undefined;
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 99 }));
+    const { result } = renderHook(() => usePublishProject(project));
+
+    let ret;
+    await act(async () => { ret = await result.current.publish({ openGallery: false }); });
+
+    expect(ret).toBe(true);
+    expect(setJustPublishedMock).not.toHaveBeenCalled();
+    // The critical effects must still fire unconditionally.
+    expect(fetchCountMock).toHaveBeenCalledWith({ force: true });
+    expect(notifyMock).toHaveBeenCalledTimes(1);
+    expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
+    expect(recordAchievementMock).toHaveBeenCalledWith('moved_to_my_reels');
+  });
+
+  it('a throwing projects lookup must not prevent the critical post-publish effects from running', async () => {
+    // Simulate .find() itself throwing (e.g. a non-array projects shape),
+    // not just a missing array -- the isolation must be throw-proof, not
+    // just undefined-proof.
+    projectsStoreState.projects = { find: () => { throw new Error('boom'); } };
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 99 }));
+    const { result } = renderHook(() => usePublishProject(project));
+
+    let ret;
+    await act(async () => { ret = await result.current.publish({ openGallery: false }); });
+
+    expect(ret).toBe(true);
+    expect(setJustPublishedMock).not.toHaveBeenCalled();
+    expect(fetchCountMock).toHaveBeenCalledWith({ force: true });
+    expect(notifyMock).toHaveBeenCalledTimes(1);
+    expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
+    expect(recordAchievementMock).toHaveBeenCalledWith('moved_to_my_reels');
+  });
 });

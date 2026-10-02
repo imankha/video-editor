@@ -108,19 +108,26 @@ export function usePublishProject(project) {
       // come from the project row itself (the publish response only carries
       // final_video_id/archived), so this must read projectsStore BEFORE the
       // refetch below replaces it (publish archives the project, dropping it
-      // from the next fetch). No publishedProject found (shouldn't happen --
-      // the project this gesture just published must still be in the
-      // pre-refetch list) -> skip the spotlight rather than guess its
-      // aspect ratio/game (no silent fallback for internal data).
-      const publishedProject = useProjectsStore.getState().projects.find((p) => p.id === targetId);
-      if (publishedProject) {
-        useGalleryStore.getState().setJustPublished({
-          finalVideoId: result.final_video_id,
-          gameId: singleSourceGameId(publishedProject),
-          aspectRatio: publishedProject.aspect_ratio,
-        });
-      } else {
-        console.warn(`[Publish] project=${targetId} not in projectsStore at publish success - skipping justPublished spotlight`);
+      // from the next fetch). This is a secondary UI nicety riding on top of
+      // an already-successful publish -- isolated in its OWN try/catch so a
+      // failure here (e.g. a lookup throwing) can never swallow the critical
+      // effects below (fetchCount/notifyCollectionsChanged/fetchProjects/
+      // recordAchievement), which must run unconditionally on every successful
+      // publish. Found live in Branch CI (run 37040668288): sharing the outer
+      // catch let this block's throw silently skip the quest-completion path.
+      try {
+        const publishedProject = useProjectsStore.getState().projects?.find((p) => p.id === targetId);
+        if (publishedProject) {
+          useGalleryStore.getState().setJustPublished({
+            finalVideoId: result.final_video_id,
+            gameId: singleSourceGameId(publishedProject),
+            aspectRatio: publishedProject.aspect_ratio,
+          });
+        } else {
+          console.warn(`[Publish] project=${targetId} not in projectsStore at publish success - skipping justPublished spotlight`);
+        }
+      } catch (spotlightError) {
+        console.error('[Publish] justPublished spotlight failed (non-fatal, publish still succeeded):', spotlightError);
       }
       // Model changed (a reel was published) -> update count badge + dispatch the
       // collections-changed event so the My Reels list refreshes itself.
