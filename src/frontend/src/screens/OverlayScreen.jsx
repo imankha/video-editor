@@ -1460,7 +1460,7 @@ export function OverlayScreen({
     handlePlayerSelect,
     handleHighlightChange,
     handleHighlightComplete,
-    handleDetectionMarkerClick,
+    onDetectionMarkerTap,
     // Spotlight loop playback (T5370)
     spotlightSpan,
     spotlightPlayMode,
@@ -1817,7 +1817,7 @@ export function OverlayScreen({
       onPlayerSelect={handlePlayerSelect}
       showPlayerBoxes={showPlayerBoxes}
       onTogglePlayerBoxes={togglePlayerBoxes}
-      onDetectionMarkerClick={handleDetectionMarkerClick}
+      onDetectionMarkerClick={onDetectionMarkerTap}
       // Zoom
       zoom={zoom}
       panOffset={panOffset}

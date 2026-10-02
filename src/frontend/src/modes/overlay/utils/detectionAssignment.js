@@ -50,9 +50,31 @@ export function isDetectionAssigned(region, detection, extraTime = null) {
 }
 
 /**
- * Ordered assignment state for every detection frame, sorted by timeline
- * position (region start, then detection time). The Nth entry corresponds to
- * the Nth marker left-to-right on the timeline, so a `false` in the middle
+ * Single ordering source for every detection marker, sorted by timeline
+ * position (region start, then detection time within the region). The Nth
+ * entry IS the Nth marker left-to-right on the timeline — every consumer
+ * that needs "marker order" (assignment states, guided-pick step numbers,
+ * forward/wrap navigation) derives from this ONE list so they can never
+ * disagree on what "marker N" means.
+ *
+ * @param {Array} regions - highlight regions (with keyframes + detections)
+ * @returns {Array<{regionId: string, region: Object, detection: Object}>}
+ */
+export function orderedDetectionMarkers(regions) {
+  const ordered = [...(regions || [])].sort((a, b) => (a.startTime ?? 0) - (b.startTime ?? 0));
+  const markers = [];
+  for (const region of ordered) {
+    const dets = [...detectableDetections(region)].sort((a, b) => a.timestamp - b.timestamp);
+    for (const detection of dets) {
+      markers.push({ regionId: region.id, region, detection });
+    }
+  }
+  return markers;
+}
+
+/**
+ * Ordered assignment state for every detection frame — see
+ * `orderedDetectionMarkers` for the ordering rule. A `false` in the middle
  * reveals exactly which marker the user skipped.
  *
  * @param {Array} regions - highlight regions (with keyframes + detections)
@@ -61,17 +83,43 @@ export function isDetectionAssigned(region, detection, extraTime = null) {
  * @returns {boolean[]} assigned flags in timeline order
  */
 export function detectionAssignmentStates(regions, justAssigned = null) {
-  const ordered = [...(regions || [])].sort((a, b) => (a.startTime ?? 0) - (b.startTime ?? 0));
-  const states = [];
-  for (const region of ordered) {
-    const dets = [...detectableDetections(region)].sort((a, b) => a.timestamp - b.timestamp);
-    for (const detection of dets) {
-      const extraTime =
-        justAssigned && region.id === justAssigned.regionId ? justAssigned.time : null;
-      states.push(isDetectionAssigned(region, detection, extraTime));
+  return orderedDetectionMarkers(regions).map(({ region, detection }) => {
+    const extraTime =
+      justAssigned && region.id === justAssigned.regionId ? justAssigned.time : null;
+    return isDetectionAssigned(region, detection, extraTime);
+  });
+}
+
+/**
+ * The next UNPICKED marker after `fromIndex` in `orderedDetectionMarkers`
+ * order, wrapping to the start — the guided-pick walk's single navigation
+ * primitive (entry-park uses `fromIndex = -1` to start at marker 0).
+ *
+ * @param {Array} regions - highlight regions (with keyframes + detections)
+ * @param {number} fromIndex - index of the marker just picked, or -1 to find
+ *   the first unpicked marker from the start
+ * @param {{regionId: string, time: number}|null} justAssigned - an assignment
+ *   made in the current gesture, not yet reflected in `regions` — lets the
+ *   marker just picked count as assigned immediately so the walk advances
+ *   past it instead of re-parking on it.
+ * @returns {{index: number, regionId: string, region: Object, detection: Object}|null}
+ *   the next unpicked marker (region included so a caller can park on it —
+ *   e.g. its fps/videoWidth/videoHeight), or null once every marker is
+ *   assigned (or there are none at all) — the walk is done.
+ */
+export function nextUnpickedMarker(regions, fromIndex = -1, justAssigned = null) {
+  const markers = orderedDetectionMarkers(regions);
+  if (!markers.length) return null;
+  for (let step = 1; step <= markers.length; step++) {
+    const idx = (fromIndex + step) % markers.length;
+    const { region, detection } = markers[idx];
+    const extraTime =
+      justAssigned && region.id === justAssigned.regionId ? justAssigned.time : null;
+    if (!isDetectionAssigned(region, detection, extraTime)) {
+      return { index: idx, regionId: region.id, region, detection };
     }
   }
-  return states;
+  return null;
 }
 
 /**

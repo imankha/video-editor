@@ -4,6 +4,8 @@ import { useSpotlightLoop } from '../modes/overlay/hooks/useSpotlightLoop';
 import { EDITOR_MODES } from '../stores';
 import { useQuestStore } from '../stores/questStore';
 import { countDetectionAssignments, detectionAssignmentStates } from '../modes/overlay/utils/detectionAssignment';
+import { useGuidedAthletePick } from '../modes/overlay/hooks/useGuidedAthletePick';
+import { frameToTime } from '../utils/videoUtils';
 
 export const selectRegionDetection = (detections, currentFrame, fps) => {
   let closestDetection = null;
@@ -274,12 +276,41 @@ export function OverlayContainer({
   const playerDetectionEnabled = editorMode === EDITOR_MODES.OVERLAY &&
     (clickedDetection != null || isTimeInEnabledRegion(currentTime));
 
-  // Handler for when a detection marker is clicked
-  const handleDetectionMarkerClick = useCallback((detection) => {
-    // detection = { regionId, frame, boxes, videoWidth, videoHeight }
-    console.log(`[DetectionSeek] SET clickedDetection frame=${detection.frame} boxes=${detection.boxes?.length} regionId=${detection.regionId}`);
-    setClickedDetection(detection);
-  }, []);
+  /**
+   * Park the player on a detection marker: show its boxes AND seek the
+   * playhead to its exact frame. The single entry point for "land on marker
+   * X" — a direct timeline tap (DetectionMarkerLayer), the guided walk's
+   * entry-park, and its auto-advance all route through this one function so
+   * the seek logic lives in exactly one place.
+   *
+   * @param {{regionId, frame, fps, timestamp, boxes, videoWidth, videoHeight}} marker
+   */
+  const parkOnDetection = useCallback((marker) => {
+    console.log(`[DetectionSeek] SET clickedDetection frame=${marker.frame} boxes=${marker.boxes?.length} regionId=${marker.regionId}`);
+    setClickedDetection(marker);
+    // Seek to the exact frame time (no offset) — the backend already uses
+    // math.ceil() for first-frame detection to avoid clip-boundary ambiguity.
+    if (marker.frame !== undefined && marker.fps) {
+      const seekTarget = frameToTime(marker.frame, marker.fps);
+      console.log(`[DetectionSeek] PARK frame=${marker.frame} fps=${marker.fps} seekTarget=${seekTarget.toFixed(6)}s`);
+      seek(seekTarget);
+    } else {
+      console.warn(`[OverlayContainer] Missing frame/fps data for marker at ${marker.timestamp}s - using timestamp. Re-export framing to fix.`);
+      seek(marker.timestamp);
+    }
+  }, [seek]);
+
+  // Guided athlete-pick walk (T11570) — entry-park, "Got it" confirm,
+  // forward-then-wrap auto-advance through every unpicked marker. See
+  // useGuidedAthletePick for the full state machine; this container only
+  // feeds it inputs and calls scheduleGuidedAdvance from the pick handlers.
+  const guidedPick = useGuidedAthletePick({
+    active: editorMode === EDITOR_MODES.OVERLAY,
+    highlightRegions,
+    isPlaying,
+    clickedDetection,
+    parkOnDetection,
+  });
 
   // Clear clicked detection when user starts playing (they're moving away from the marker)
   useEffect(() => {
@@ -503,7 +534,10 @@ export function OverlayContainer({
 
     addHighlightRegionKeyframe(assignTime, highlight, duration);
     maybeEmitPlayersAssigned(region.id, assignTime);
-  }, [currentTime, clickedDetection, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime, highlightColor, maybeEmitPlayersAssigned]);
+    // Guided walk: brief "Got it" confirm, then auto-advance to the next
+    // unpicked marker. Scheduled synchronously in this gesture handler.
+    guidedPick.scheduleGuidedAdvance(region.id, assignTime);
+  }, [currentTime, clickedDetection, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime, highlightColor, maybeEmitPlayersAssigned, guidedPick]);
 
   /**
    * Handle highlight changes during drag/resize
@@ -534,8 +568,12 @@ export function OverlayContainer({
     addHighlightRegionKeyframe(assignTime, { ...highlightData, fromDetection: true });
     setDragHighlight(null);
     const region = getRegionAtTime(assignTime);
-    if (region) maybeEmitPlayersAssigned(region.id, assignTime);
-  }, [currentTime, clickedDetection, highlightRegionsFramerate, isTimeInEnabledRegion, addHighlightRegionKeyframe, getRegionAtTime, maybeEmitPlayersAssigned]);
+    if (region) {
+      maybeEmitPlayersAssigned(region.id, assignTime);
+      // Guided walk: same "Got it" confirm + auto-advance as handlePlayerSelect.
+      guidedPick.scheduleGuidedAdvance(region.id, assignTime);
+    }
+  }, [currentTime, clickedDetection, highlightRegionsFramerate, isTimeInEnabledRegion, addHighlightRegionKeyframe, getRegionAtTime, maybeEmitPlayersAssigned, guidedPick]);
 
   // NOTE: Effects for highlight region initialization and persistence are in OverlayScreen.jsx
   // OverlayContainer only provides derived state and handlers to avoid duplicate effects
@@ -589,7 +627,11 @@ export function OverlayContainer({
     showPlayerBoxes,
     togglePlayerBoxes,
     enablePlayerBoxes,
-    handleDetectionMarkerClick,  // Guarantees boxes show when clicking green markers
+    onDetectionMarkerTap: guidedPick.handleDetectionMarkerTap,  // Direct timeline tap: cancels pending auto-advance, re-parks, tracks step
+    pickGuidePhase: guidedPick.phase,    // null | 'parked' | 'confirm' | 'away' | 'done'
+    pickGuideStep: guidedPick.step,      // 1-based active marker number, or null
+    pickGuideTotal: guidedPick.total,    // total detection markers across all regions
+    onResumePickGuideStep: guidedPick.resumeTrackedMarker,  // "Go to step N" (away state)
 
     // Derived state
     hasFramingEdits,

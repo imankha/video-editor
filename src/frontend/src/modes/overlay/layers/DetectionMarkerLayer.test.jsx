@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
 import DetectionMarkerLayer from './DetectionMarkerLayer';
 
 /**
@@ -23,7 +23,7 @@ describe('DetectionMarkerLayer count badge (T9620)', () => {
 
   it('pairs the count with a Users glyph while unassigned', () => {
     const { container } = render(
-      <DetectionMarkerLayer regions={[region()]} duration={2} onSeek={() => {}} />
+      <DetectionMarkerLayer regions={[region()]} duration={2} />
     );
     // The count is rendered...
     expect(screen.getByText('3')).toBeTruthy();
@@ -36,10 +36,41 @@ describe('DetectionMarkerLayer count badge (T9620)', () => {
       { frame: 15, origin: 'user', fromDetection: true, x: 0, y: 0, radiusX: 1, radiusY: 1 },
     ]);
     const { container } = render(
-      <DetectionMarkerLayer regions={[assigned]} duration={2} onSeek={() => {}} />
+      <DetectionMarkerLayer regions={[assigned]} duration={2} />
     );
     expect(screen.queryByText('3')).toBeNull();
     expect(container.querySelector('svg.lucide-users')).toBeNull();
     expect(container.querySelector('svg.lucide-check')).toBeTruthy();
+  });
+});
+
+describe('DetectionMarkerLayer marker click (T11570 parkOnDetection)', () => {
+  const region = () => ({
+    id: 'r1',
+    startTime: 0,
+    endTime: 2,
+    fps: 30,
+    videoWidth: 1920,
+    videoHeight: 1080,
+    keyframes: [],
+    detections: [{ timestamp: 0.5, frame: 15, boxes: [{ x: 1 }] }],
+  });
+
+  it('calls onDetectionMarkerClick once with the full marker (incl. fps) -- no separate onSeek', () => {
+    const onDetectionMarkerClick = vi.fn();
+    render(
+      <DetectionMarkerLayer regions={[region()]} duration={2} onDetectionMarkerClick={onDetectionMarkerClick} />
+    );
+    fireEvent.click(screen.getByRole('button'));
+    expect(onDetectionMarkerClick).toHaveBeenCalledTimes(1);
+    expect(onDetectionMarkerClick).toHaveBeenCalledWith({
+      regionId: 'r1',
+      frame: 15,
+      fps: 30,
+      timestamp: 0.5,
+      boxes: [{ x: 1 }],
+      videoWidth: 1920,
+      videoHeight: 1080,
+    });
   });
 });

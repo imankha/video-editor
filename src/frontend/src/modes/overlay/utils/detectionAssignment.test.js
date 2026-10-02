@@ -4,6 +4,8 @@ import {
   countDetectionAssignments,
   detectionAssignmentStates,
   detectableDetections,
+  orderedDetectionMarkers,
+  nextUnpickedMarker,
 } from './detectionAssignment';
 
 // Keyframes are authored in 30fps space; helpers compare in time-space.
@@ -91,6 +93,60 @@ describe('detectionAssignmentStates', () => {
     const earlier = { ...regionWith([boundary(0), boundary(90)]), id: 'r1', startTime: 0 };
     // earlier region first (both its detections unassigned), then later region (1.0s assigned, 2.0s not)
     expect(detectionAssignmentStates([later, earlier])).toEqual([false, false, true, false]);
+  });
+});
+
+describe('orderedDetectionMarkers', () => {
+  it('matches detectionAssignmentStates ordering (region start, then detection time)', () => {
+    const later = { ...regionWith([boundary(0), boundary(90)]), id: 'r2', startTime: 10 };
+    const earlier = { ...regionWith([boundary(0), boundary(90)]), id: 'r1', startTime: 0 };
+    const markers = orderedDetectionMarkers([later, earlier]);
+    expect(markers.map((m) => [m.regionId, m.detection.timestamp])).toEqual([
+      ['r1', 1.0], ['r1', 2.0], ['r2', 1.0], ['r2', 2.0],
+    ]);
+  });
+});
+
+describe('nextUnpickedMarker', () => {
+  it('starts at the first marker on entry (fromIndex -1) when nothing is picked', () => {
+    const region = regionWith([boundary(0), boundary(90)]);
+    expect(nextUnpickedMarker([region], -1)).toEqual({ index: 0, regionId: 'r1', region, detection: region.detections[0] });
+  });
+
+  it('advances forward to the next unpicked marker after the one just picked', () => {
+    // marker 0 (1.0s) assigned, marker 1 (2.0s) not -> advancing from 0 lands on 1.
+    const region = regionWith([boundary(0), userKf(30), boundary(90)]);
+    expect(nextUnpickedMarker([region], 0)).toEqual({ index: 1, regionId: 'r1', region, detection: region.detections[1] });
+  });
+
+  it('wraps to the start once the last marker is picked', () => {
+    // 4 markers across 2 regions, only marker 3 (last) unpicked after picking it via extraTime
+    // is counted — picking marker N wraps to marker 1 (index 0) when earlier ones are unpicked.
+    const r1 = { ...regionWith([boundary(0), boundary(90)]), id: 'r1', startTime: 0 }; // both unpicked
+    const r2 = { ...regionWith([boundary(0), userKf(30), boundary(90)]), id: 'r2', startTime: 10 }; // 1.0s picked, 2.0s not
+    // Order: r1@1.0(idx0,unpicked) r1@2.0(idx1,unpicked) r2@1.0(idx2,picked) r2@2.0(idx3,unpicked)
+    // Picked marker index 2 (r2@1.0) -> forward search wraps past idx3(unpicked) -- but idx3 IS unpicked,
+    // so it lands there first.
+    expect(nextUnpickedMarker([r1, r2], 2)).toEqual({ index: 3, regionId: 'r2', region: r2, detection: r2.detections[1] });
+    // Picking from the actual LAST index (3) wraps all the way to the first unpicked marker, index 0.
+    expect(nextUnpickedMarker([r1, r2], 3)).toEqual({ index: 0, regionId: 'r1', region: r1, detection: r1.detections[0] });
+  });
+
+  it('counts an in-gesture pick via justAssigned so the walk advances past it immediately', () => {
+    // Both markers unpicked in stored state; picking marker 0 this gesture (justAssigned)
+    // must advance to marker 1, not re-park on marker 0.
+    const region = regionWith([boundary(0), boundary(90)]);
+    const result = nextUnpickedMarker([region], 0, { regionId: 'r1', time: 1.0 });
+    expect(result).toEqual({ index: 1, regionId: 'r1', region, detection: region.detections[1] });
+  });
+
+  it('returns null once every marker is assigned — the walk is done', () => {
+    const region = regionWith([boundary(0), userKf(30), userKf(60), boundary(90)]);
+    expect(nextUnpickedMarker([region], 0)).toBeNull();
+  });
+
+  it('returns null when there are no markers at all', () => {
+    expect(nextUnpickedMarker([], -1)).toBeNull();
   });
 });
 

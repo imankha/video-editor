@@ -1,6 +1,5 @@
 import React from 'react';
 import { Crosshair, Check, Users } from 'lucide-react';
-import { frameToTime } from '../../../utils/videoUtils';
 import { isDetectionAssigned } from '../utils/detectionAssignment';
 
 // Module-level Set to track warned regions - persists across React StrictMode remounts
@@ -20,8 +19,7 @@ export default function DetectionMarkerLayer({
   regions = [],
   duration,
   visualDuration,
-  onSeek,
-  onDetectionMarkerClick,  // (regionId, frame, detection) => void - called when marker is clicked
+  onDetectionMarkerClick,  // parkOnDetection(marker) - shows boxes + seeks there; called on marker tap
   sourceTimeToVisualTime = (t) => t,
   edgePadding = 20,
   isDisabled = false,
@@ -96,31 +94,17 @@ export default function DetectionMarkerLayer({
               e.stopPropagation();
               if (isDisabled) return;
 
-              // Tell OverlayContainer which detection to display (guarantees boxes show)
-              if (onDetectionMarkerClick) {
-                onDetectionMarkerClick({
-                  regionId: marker.regionId,
-                  frame: marker.frame,
-                  timestamp: marker.timestamp,  // exact detection time — used to snap the assignment keyframe (immune to seek imprecision)
-                  boxes: marker.boxes,
-                  videoWidth: marker.videoWidth,
-                  videoHeight: marker.videoHeight,
-                });
-              }
-
-              // Seek to the exact frame time (no offset)
-              // The backend already uses math.ceil() for first-frame detection
-              // to avoid clip-boundary ambiguity, so no offset is needed here.
-              if (onSeek) {
-                if (marker.frame !== undefined && marker.fps) {
-                  const seekTarget = frameToTime(marker.frame, marker.fps);
-                  console.log(`[DetectionSeek] CLICK marker frame=${marker.frame} fps=${marker.fps} seekTarget=${seekTarget.toFixed(6)}s boxes=${marker.boxCount}`);
-                  onSeek(seekTarget);
-                } else {
-                  console.warn(`[DetectionMarkerLayer] Missing frame/fps data for marker at ${marker.timestamp}s - using timestamp. Re-export framing to fix.`);
-                  onSeek(marker.timestamp);
-                }
-              }
+              // parkOnDetection (OverlayContainer) shows this marker's boxes AND
+              // seeks there — single path, no seek logic duplicated here.
+              onDetectionMarkerClick?.({
+                regionId: marker.regionId,
+                frame: marker.frame,
+                fps: marker.fps,
+                timestamp: marker.timestamp,  // exact detection time — used to snap the assignment keyframe (immune to seek imprecision)
+                boxes: marker.boxes,
+                videoWidth: marker.videoWidth,
+                videoHeight: marker.videoHeight,
+              });
             }}
             title={isDisabled
               ? 'Player tracking disabled'
