@@ -4,6 +4,19 @@
 
 ## Current Focus
 
+**TOP PRIORITY (user-flagged, 2026-10-01) — [T11570](tasks/T11570-spotlight-guided-athlete-pick.md):
+Spotlight should auto-advance through every green detection marker, asking the user to pick their
+athlete one marker at a time until all are done.** User-requested directly, then a mockup/spec was
+built and approved ("i like it") before filing: https://claude.ai/artifact/Qpji171nS2AK5xsCWfTou5.
+Today the "Tap your athlete" prompt disappears after the first pick even though the
+`select_players` quest only completes once every marker is assigned, leaving the user to hunt for
+the next 24px marker themselves. Fix: pick → brief "Got it" confirm → auto-park on the next
+unpicked marker, looping until all are done; "Not boxed? Drag the circle" always produces a pick
+so the walk always finishes. Reverses part of T9960's "add another only if you want to" copy
+(Spotlight as a whole stays optional; visiting every marker is now the default path). Impact 7 /
+Complexity 4, Tier M, frontend-only, no new persistence. Supersedes T10880 (pulsating-guidance
+audit) for this specific flow. **Status: TODO.**
+
 **2026-10-01 addition, P0 (user-reported prod bug) — [T11560](tasks/T11560-share-storage-ref-wrong-profile.md):
 Direct game share wrote the recipient's storage ref into the SHARER's own SQLite instead of the
 recipient's, so the recipient sees a false "Source video expired."** Reported live: imankh@gmail.com
