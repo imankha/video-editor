@@ -54,11 +54,11 @@ describe('ExportTooLargeModal (T11330)', () => {
     expect(contributors).toContain('about 10 min');
   });
 
-  it('falls back to "Clip N" when a contributor has no name', () => {
+  it('falls back to "Highlight N" when a contributor has no name', () => {
     const noName = { ...rejection, biggest_contributors: [{ clip_index: 4, crop_width: 810, crop_height: 1440, estimated_gpu_seconds: 90 }] };
     render(<ExportTooLargeModal isOpen rejection={noName} onDismiss={() => {}} />);
-    // clip_index 4 -> "Clip 5" (1-based for humans).
-    expect(screen.getByTestId('export-too-large-contributors').textContent).toContain('Clip 5');
+    // clip_index 4 -> "Highlight 5" (1-based for humans).
+    expect(screen.getByTestId('export-too-large-contributors').textContent).toContain('Highlight 5');
   });
 
   it('hides the "split the batch" suggestion for a single-clip rejection (not actionable)', () => {
