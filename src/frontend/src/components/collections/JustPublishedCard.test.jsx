@@ -98,4 +98,41 @@ describe('JustPublishedCard (T11580)', () => {
     fireEvent.click(screen.getByLabelText('Play'));
     expect(onPlay.mock.calls[0][1]).toEqual(highlight);
   });
+
+  // BUG regression (live-verified 2026-10-02 at 390px): `w-full max-h-[300px]
+  // aspect-[9/16]` let the CONTAINER WIDTH drive the box -- the browser
+  // computes height from that width (height = width / 9 * 16), then max-h
+  // clamps the HEIGHT down to 300px WITHOUT narrowing the width to match,
+  // producing a squashed ~1.54:1 landscape-ish box instead of a 9:16
+  // portrait one. jsdom doesn't do real layout, so this asserts the class
+  // TOKENS that drive the computation instead of pixel output: a portrait
+  // card must be HEIGHT-driven (fixed h-[300px] + w-auto), never
+  // width-driven-then-height-clamped (w-full + max-h together).
+  describe('media box sizing (BUG regression)', () => {
+    it('9:16: height-driven (h-[300px] + w-auto), never width-driven-then-clamped', () => {
+      const collections = makeCollections({ members: { 'game:7': [highlight] }, memberStates: { 'game:7': 'ready' } });
+      render(<JustPublishedCard {...baseProps} collections={collections} />);
+      const media = screen.getByTestId('just-published-media');
+      expect(media.className).toContain('h-[300px]');
+      expect(media.className).toContain('w-auto');
+      expect(media.className).toContain('aspect-[9/16]');
+      expect(media.className).not.toContain('w-full');
+      expect(media.className).not.toContain('max-h-[300px]');
+    });
+
+    it('16:9: width-driven (w-full, aspect-video), unaffected by the 9:16 fix', () => {
+      const landscapeHighlight = { ...highlight, aspect_ratio: '16:9' };
+      const collections = makeCollections({ members: { 'game:7': [landscapeHighlight] }, memberStates: { 'game:7': 'ready' } });
+      render(
+        <JustPublishedCard
+          {...baseProps}
+          justPublished={{ finalVideoId: 501, gameId: 7, aspectRatio: '16:9' }}
+          collections={collections}
+        />,
+      );
+      const media = screen.getByTestId('just-published-media');
+      expect(media.className).toContain('w-full');
+      expect(media.className).toContain('aspect-video');
+    });
+  });
 });

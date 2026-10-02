@@ -82,10 +82,17 @@ export function JustPublishedCard({
       </button>
 
       <div
+        data-testid="just-published-media"
         className={
           isLandscape
             ? 'relative w-full sm:w-64 shrink-0 aspect-video bg-black'
-            : 'relative w-full max-h-[300px] aspect-[9/16] mx-auto bg-black'
+            // BUG (live-verified 2026-10-02): `w-full max-h-[300px] aspect-[9/16]`
+            // let the CONTAINER WIDTH drive the box, computed a ~613px-tall box
+            // from that width, then max-h clamped the HEIGHT to 300px without
+            // narrowing the width to match -- a squashed ~1.54:1 box, not 9:16.
+            // A portrait card must be HEIGHT-driven: fix the height at the 300px
+            // cap and let width:auto + aspect-ratio compute the (narrow) width.
+            : 'relative h-[300px] w-auto aspect-[9/16] mx-auto bg-black'
         }
       >
         {posterState !== 'error' && (

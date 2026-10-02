@@ -105,26 +105,28 @@ export function usePublishProject(project) {
       }
       // T11580: spotlight the highlight that was JUST published (gesture-scoped,
       // memory-only -- see galleryStore.setJustPublished). gameId/aspectRatio
-      // come from the project row itself (the publish response only carries
-      // final_video_id/archived), so this must read projectsStore BEFORE the
-      // refetch below replaces it (publish archives the project, dropping it
-      // from the next fetch). This is a secondary UI nicety riding on top of
-      // an already-successful publish -- isolated in its OWN try/catch so a
-      // failure here (e.g. a lookup throwing) can never swallow the critical
-      // effects below (fetchCount/notifyCollectionsChanged/fetchProjects/
-      // recordAchievement), which must run unconditionally on every successful
-      // publish. Found live in Branch CI (run 37040668288): sharing the outer
-      // catch let this block's throw silently skip the quest-completion path.
+      // come from the PUBLISH RESPONSE itself (server-computed, at the exact
+      // moment of publish), NOT a client-side projectsStore snapshot -- a real
+      // live-verification bug (2026-10-02) found the client cache's game_ids
+      // stale relative to server truth (a single-game highlight resolved to
+      // gameId: null and auto-expanded Mixes instead of its real game group).
+      // `result.game_ids` is undefined on an older backend during a rolling
+      // deploy (response shape predates T11580) -- guarded so a skew window
+      // degrades to "skip the spotlight", never a guessed/wrong game. Still
+      // isolated in its own try/catch (defense in depth, unrelated failure
+      // modes) so it can never take down the critical effects below
+      // (fetchCount/notifyCollectionsChanged/fetchProjects/recordAchievement),
+      // which must run unconditionally on every successful publish (Branch CI
+      // run 37040668288 caught a prior version of this sharing the outer catch).
       try {
-        const publishedProject = useProjectsStore.getState().projects?.find((p) => p.id === targetId);
-        if (publishedProject) {
+        if (Array.isArray(result.game_ids) && result.aspect_ratio) {
           useGalleryStore.getState().setJustPublished({
             finalVideoId: result.final_video_id,
-            gameId: singleSourceGameId(publishedProject),
-            aspectRatio: publishedProject.aspect_ratio,
+            gameId: singleSourceGameId(result),
+            aspectRatio: result.aspect_ratio,
           });
         } else {
-          console.warn(`[Publish] project=${targetId} not in projectsStore at publish success - skipping justPublished spotlight`);
+          console.warn(`[Publish] project=${targetId} publish response missing game_ids/aspect_ratio (older backend?) - skipping justPublished spotlight`);
         }
       } catch (spotlightError) {
         console.error('[Publish] justPublished spotlight failed (non-fatal, publish still succeeded):', spotlightError);

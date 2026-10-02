@@ -16,11 +16,10 @@ const {
     recordAchievementMock: vi.fn(),
     toastErrorMock: vi.fn(),
     setJustPublishedMock: vi.fn(),
-    // T11580: the publish success path reads projectsStore.getState().projects
-    // (BEFORE the fetchProjects refetch below replaces it) to source
-    // justPublished's gameId/aspectRatio -- the publish response itself only
-    // carries final_video_id/archived. Mutated per-test via .projects.
-    projectsStoreState: { fetchProjects, projects: [] },
+    // T11580: gameId/aspectRatio come from the PUBLISH RESPONSE itself now
+    // (server-computed at the exact moment of publish) -- projectsStore is
+    // only still used for the post-publish fetchProjects() refetch.
+    projectsStoreState: { fetchProjects },
   };
 });
 
@@ -72,12 +71,11 @@ describe('usePublishProject (T8530 — T4050 contract carried through the extrac
     recordAchievementMock.mockReset();
     toastErrorMock.mockReset();
     setJustPublishedMock.mockReset();
-    projectsStoreState.projects = [project];
   });
 
   it('success: POSTs publish, fires fetchCount/notify/fetchProjects/recordAchievement, no optimistic removal', async () => {
     apiFetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { success: true, archived: true, final_video_id: 99 })
+      jsonResponse(200, { success: true, archived: true, final_video_id: 99, game_ids: [], aspect_ratio: '9:16' })
     );
     const { result } = renderHook(() => usePublishProject(project));
 
@@ -147,8 +145,15 @@ describe('usePublishProject (T8530 — T4050 contract carried through the extrac
 });
 
 // T11580: justPublished spotlight wiring. gameId/aspectRatio come from the
-// PROJECT row in projectsStore (read before the post-publish refetch replaces
-// it), not from the publish response (which only carries final_video_id).
+// PUBLISH RESPONSE itself (server-computed, at the exact moment of publish),
+// NOT a client-side projectsStore snapshot. A live-verification bug
+// (2026-10-02, dev fixture account) found the client cache's game_ids could
+// be stale relative to server truth: a real single-game highlight (server's
+// own GET /api/downloads later showed game_ids:[11]) resolved to gameId: null
+// client-side and auto-expanded "Mixes & compilations" instead of its real
+// game group. Moving the source of truth to the publish response itself
+// eliminates the whole staleness class -- see
+// test_t11580_publish_game_ids_response.py for the backend half.
 describe('usePublishProject justPublished wiring (T11580)', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
@@ -161,9 +166,10 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
     setJustPublishedMock.mockReset();
   });
 
-  it('single-game project: setJustPublished with that one gameId', async () => {
-    projectsStoreState.projects = [{ id: 42, aspect_ratio: '9:16', game_ids: [7] }];
-    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 99 }));
+  it('single-game publish response: setJustPublished with that one gameId', async () => {
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, {
+      archived: true, final_video_id: 99, game_ids: [7], aspect_ratio: '9:16',
+    }));
     const { result } = renderHook(() => usePublishProject(project));
 
     await act(async () => { await result.current.publish({ openGallery: false }); });
@@ -175,9 +181,10 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
     });
   });
 
-  it('multi-game (Mix) project: gameId null, same gating as finishedReelNav', async () => {
-    projectsStoreState.projects = [{ id: 42, aspect_ratio: '16:9', game_ids: [7, 8] }];
-    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 100 }));
+  it('multi-game (Mix) publish response: gameId null, same gating as finishedReelNav', async () => {
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, {
+      archived: true, final_video_id: 100, game_ids: [7, 8], aspect_ratio: '16:9',
+    }));
     const { result } = renderHook(() => usePublishProject(project));
 
     await act(async () => { await result.current.publish({ openGallery: false }); });
@@ -189,18 +196,36 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
     });
   });
 
-  it('project not found in projectsStore at success time: skips the spotlight (no guessed data)', async () => {
-    projectsStoreState.projects = []; // targetId 42 not present
-    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 101 }));
+  it('no-source-game (directly uploaded) publish response: gameId null, still spotlights', async () => {
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, {
+      archived: true, final_video_id: 101, game_ids: [], aspect_ratio: '9:16',
+    }));
     const { result } = renderHook(() => usePublishProject(project));
 
     await act(async () => { await result.current.publish({ openGallery: false }); });
 
+    expect(setJustPublishedMock).toHaveBeenCalledWith({
+      finalVideoId: 101,
+      gameId: null,
+      aspectRatio: '9:16',
+    });
+  });
+
+  // Rolling-deploy skew: an older backend instance's response predates T11580
+  // and carries no game_ids/aspect_ratio at all. Must degrade to "skip the
+  // spotlight" (no guessed data), never crash and never guess a game.
+  it('publish response missing game_ids/aspect_ratio (older backend): skips the spotlight, no crash', async () => {
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 102 }));
+    const { result } = renderHook(() => usePublishProject(project));
+
+    let ret;
+    await act(async () => { ret = await result.current.publish({ openGallery: false }); });
+
+    expect(ret).toBe(true);
     expect(setJustPublishedMock).not.toHaveBeenCalled();
   });
 
   it('503 sync_failed: never sets justPublished (publish did not actually succeed)', async () => {
-    projectsStoreState.projects = [{ id: 42, aspect_ratio: '9:16', game_ids: [7] }];
     apiFetchMock.mockResolvedValueOnce(jsonResponse(503, { code: 'sync_failed' }));
     const { result } = renderHook(() => usePublishProject(project));
 
@@ -209,46 +234,25 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
     expect(setJustPublishedMock).not.toHaveBeenCalled();
   });
 
-  // Regression (Branch CI run 37040668288): a mock that doesn't populate
-  // projectsStore.getState().projects (several PRE-EXISTING test files for
-  // DraftTile/ProjectManager/DraftReelPreview don't, since they predate
-  // T11580 and have no reason to) made `.projects.find(...)` throw a
-  // TypeError. That throw shared the SAME try/catch as the rest of the
-  // publish-success path, so it silently swallowed fetchCount/
-  // notifyCollectionsChanged/fetchProjects/recordAchievement too -- a
-  // secondary spotlight-card nicety took down the actual quest-completion
-  // path. The spotlight lookup must be isolated so a failure there can
-  // NEVER prevent the critical post-publish effects from running.
-  it('a missing/undefined projects array must not prevent fetchCount/notify/fetchProjects/recordAchievement from running', async () => {
-    projectsStoreState.projects = undefined;
-    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 99 }));
+  // Regression (Branch CI run 37040668288): an earlier version of this block
+  // shared the SAME try/catch as the critical post-publish effects, so a
+  // throw from the (then client-cache-based) lookup silently swallowed
+  // fetchCount/notifyCollectionsChanged/fetchProjects/recordAchievement too.
+  // The spotlight block is isolated in its own try/catch -- still true now
+  // the data source is the publish response, since setJustPublished itself
+  // (a store action) could still throw for unrelated reasons, and it must
+  // never prevent the critical effects from running.
+  it('a throwing setJustPublished must not prevent the critical post-publish effects from running', async () => {
+    setJustPublishedMock.mockImplementationOnce(() => { throw new Error('boom'); });
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, {
+      archived: true, final_video_id: 99, game_ids: [7], aspect_ratio: '9:16',
+    }));
     const { result } = renderHook(() => usePublishProject(project));
 
     let ret;
     await act(async () => { ret = await result.current.publish({ openGallery: false }); });
 
     expect(ret).toBe(true);
-    expect(setJustPublishedMock).not.toHaveBeenCalled();
-    // The critical effects must still fire unconditionally.
-    expect(fetchCountMock).toHaveBeenCalledWith({ force: true });
-    expect(notifyMock).toHaveBeenCalledTimes(1);
-    expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
-    expect(recordAchievementMock).toHaveBeenCalledWith('moved_to_my_reels');
-  });
-
-  it('a throwing projects lookup must not prevent the critical post-publish effects from running', async () => {
-    // Simulate .find() itself throwing (e.g. a non-array projects shape),
-    // not just a missing array -- the isolation must be throw-proof, not
-    // just undefined-proof.
-    projectsStoreState.projects = { find: () => { throw new Error('boom'); } };
-    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 99 }));
-    const { result } = renderHook(() => usePublishProject(project));
-
-    let ret;
-    await act(async () => { ret = await result.current.publish({ openGallery: false }); });
-
-    expect(ret).toBe(true);
-    expect(setJustPublishedMock).not.toHaveBeenCalled();
     expect(fetchCountMock).toHaveBeenCalledWith({ force: true });
     expect(notifyMock).toHaveBeenCalledTimes(1);
     expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });

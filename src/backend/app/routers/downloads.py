@@ -2130,7 +2130,7 @@ async def publish_to_my_reels(
         # capture now runs at export, not here). Plain SELECT, no column guard
         # needed.
         cursor.execute("""
-            SELECT id, filename
+            SELECT id, filename, aspect_ratio
             FROM final_videos
             WHERE project_id = ?
             ORDER BY version DESC
@@ -2144,6 +2144,24 @@ async def publish_to_my_reels(
                 f"req_id={req_id} - returning 404, nothing persisted"
             )
             raise HTTPException(status_code=404, detail="No final video found for this project")
+
+        # T11580: the Published-tab "just published" spotlight needs this
+        # project's game attribution at the EXACT moment of publish, computed
+        # from THIS connection (not a client-side cache, which was found live
+        # to diverge from server truth -- the frontend's projectsStore snapshot
+        # can be stale relative to a game_id attached after the last list
+        # fetch). Same join shape as the GET /api/projects list computation
+        # (projects.py _read_projects_list), scoped to one project and
+        # game_id-only (no display-name generation needed here). working_clips
+        # is NOT filtered to latest-version-only: game attribution lives on the
+        # raw_clip, identical across every working_clip version of it.
+        cursor.execute("""
+            SELECT DISTINCT rc.game_id
+            FROM working_clips wc
+            JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+            WHERE wc.project_id = ? AND rc.game_id IS NOT NULL
+        """, (project_id,))
+        game_ids = [r['game_id'] for r in cursor.fetchall()]
 
         # T5260: the name is frozen once at render time (overlay.py INSERT), but the
         # draft stays renameable in Reel Drafts right up until this gesture. Publish
@@ -2225,7 +2243,17 @@ async def publish_to_my_reels(
         f"archived={archived} user={user_id} req_id={req_id} - watch for the "
         f"matching [SYNC] ... R2 sync OK/FAILED line to confirm durability"
     )
-    return {"success": True, "final_video_id": row['id'], "archived": archived}
+    # T11580: game_ids/aspect_ratio ride this response so the frontend's
+    # Published-tab spotlight never needs a client-side project-list cache
+    # lookup for them (see game_ids query above) -- additive fields, existing
+    # consumers reading only success/final_video_id/archived are unaffected.
+    return {
+        "success": True,
+        "final_video_id": row['id'],
+        "archived": archived,
+        "game_ids": game_ids,
+        "aspect_ratio": row['aspect_ratio'],
+    }
 
 
 @router.get("/count")
