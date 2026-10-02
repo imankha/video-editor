@@ -49,6 +49,18 @@ After this deploys, re-share the game with gsarah to self-heal her existing brok
 Start with T11510 (mobile Share always sends the file, never the link that carries our cover).
 See the milestone section below.
 
+**TOP PRIORITY (user-reported, 2026-10-01) — [T11590](tasks/T11590-cache-composed-download-serve.md):
+"Share took too long - massive lag."** No matching `bug_reports` row (table was empty when checked)
+and no timed trace - found by reading the code every Download and every mobile Share runs. Every
+single request to `GET /api/downloads/{id}/file` rebuilds the whole file from scratch: full R2
+fetch, live intro-card resolve, Modal/ffmpeg compose, metadata stamp - with no cache, ever. This is
+the exact same thing T4947 already fixed for collection downloads (shipped 2026-08-16 prod) after
+an identical user complaint; this task is the same disposable-R2-cache pattern applied to the
+single-highlight path, which never got it. Directly reduces the wait on T11510's new "Share video"
+action too (repeat shares of an already-shared highlight become cache hits), though it does not
+fix a cold-first-share miss - see the task file's residual-latency note. Impact 8 / Complexity 4,
+Tier M, backend-only, follows a shipped precedent (no new abstraction). **Status: TODO.**
+
 **TOP PRIORITY (user-flagged, 2026-09-25) — [Modal Export Safety & Capacity epic](tasks/modal-export-safety/EPIC.md)
 (T11320-T11350), plus standalone [T11360](tasks/T11360-admin-credits-spent-stat-not-net-of-refunds.md).**
 Filed from investigating Bug 58p (prod): a user's 16:9, full-frame (uncropped) 14-clip export hit

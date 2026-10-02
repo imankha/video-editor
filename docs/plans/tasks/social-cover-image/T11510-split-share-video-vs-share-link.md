@@ -63,6 +63,11 @@ Desktop behaviour (ShareModal / Copy link) is unchanged.
 ### Related Tasks
 - Blocks: T11530 (adds a third, cover-image action to the same surfaces).
 - Builds on: T10180 (publish -> visibility-review -> link-ready flow), T7350 (pointer gate).
+- Related, no dependency either direction: [T11590](../T11590-cache-composed-download-serve.md)
+  caches the server-side compose this task's "Share video" action waits on. T11590 does not
+  eliminate the wait on a cache miss - if live testing after both ship still shows "Share video"
+  failing silently (iOS dropping the share-sheet user-activation on a long first-ever compose),
+  apply the same second-tap pattern this task already uses for link-minting (D3).
 
 ### Technical Notes
 - **Visibility landmine (EPIC decision 6):** `createShareUrl` POSTs `is_public: true`, which makes
