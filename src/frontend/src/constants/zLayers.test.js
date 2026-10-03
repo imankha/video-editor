@@ -21,6 +21,7 @@ const LADDER = [
   'INTRO',
   'ALERT',
   'TOAST',
+  'POPOVER',
   'SHARE',
   'SYSTEM',
 ];

@@ -57,6 +57,11 @@
  *                             LockedReasonModal over the player, hero intros.
  *   TOAST             z-[100] toasts, quest popovers, editor-mode chrome, the recap
  *                             player.
+ *   POPOVER           z-[110] an anchored popover portaled to document.body that
+ *                             must clear editor-mode chrome — the Annotate rating
+ *                             picker (T11410) opens from the fullscreen editor
+ *                             overlay (TOAST), so its body portal has to sit above
+ *                             that rung. Just above TOAST, below SHARE.
  *   SHARE             z-[200] the share-playback dialog (SharePlaybackDialog) —
  *                             opened as a nested overlay from within the recap
  *                             player (TOAST) as well as standalone from
@@ -87,6 +92,7 @@ export const Z = {
   INTRO: 'z-[85]',
   ALERT: 'z-[90]',
   TOAST: 'z-[100]',
+  POPOVER: 'z-[110]',
   SHARE: 'z-[200]',
   SYSTEM: 'z-[9999]',
 };
