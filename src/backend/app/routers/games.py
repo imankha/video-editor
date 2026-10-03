@@ -27,6 +27,7 @@ from app.constants import GameCreateStatus, GameStatus, GameType, ShareClipScope
 from app.database import column_exists, ensure_directories, get_db_connection
 from app.middleware.db_sync import durable_sync
 from app.profile_context import get_current_profile_id
+
 # T11430: router-to-router import of the highlight-instances read helper. Left
 # here (not lifted to a shared query module) deliberately: it is a read-only
 # query tightly coupled to the clips/projects schema, has exactly ONE external
