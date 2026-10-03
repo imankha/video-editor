@@ -15,8 +15,6 @@ from pathlib import Path
 
 import cv2
 
-from ..database import get_highlights_path
-
 logger = logging.getLogger(__name__)
 
 
@@ -112,7 +110,10 @@ def extract_player_image(
                 logger.warning("Extracted image is empty")
                 return None
 
-            # Ensure highlights directory exists
+            # Ensure highlights directory exists (lazy import: avoid pulling the
+            # full app.database -> app.migrations tree into every app.services.*
+            # consumer, including Modal's compose_image which never needs it)
+            from ..database import get_highlights_path
             highlights_dir = get_highlights_path()
             highlights_dir.mkdir(parents=True, exist_ok=True)
 
@@ -213,6 +214,7 @@ def list_highlight_images(raw_clip_id: int | None = None) -> list:
     Returns:
         List of image info dicts: {filename, path, url, raw_clip_id, frame, keyframe_index}
     """
+    from ..database import get_highlights_path
     highlights_dir = get_highlights_path()
 
     if not highlights_dir.exists():

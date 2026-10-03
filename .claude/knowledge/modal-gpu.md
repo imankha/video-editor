@@ -153,6 +153,20 @@ graph LR
   - `dni_weight` denoise blend (`realesr-general-wdn-x4v3` companion) is unused while far crops carry block noise the GAN sharpens.
 - **Local torch import is optional/guarded** (`ai_upscaler/__init__.py:16-19`) so CPU containers can still import the torch-free `KeyframeInterpolator` needed by the overlay renderer (T4120).
 - Containers (/dotask) run Modal OFF by default (T4180); `MODAL_ENABLED=false` local-render verify mode is the sanctioned in-container way to exercise exports (T4120).
+- **T11660 (fixed):** `app/services/__init__.py` eagerly imports `image_extractor`, which had a
+  module-level `from ..database import get_highlights_path` — so importing ANY `app.services.*`
+  submodule (e.g. `branded_outro`, needed by `compose_serve_time_modal`) silently dragged in the
+  WHOLE `app.database` -> `app.migrations` tree (all 3 tracks), which hits `v004_overlay_tuning`'s
+  module-level `import msgpack`. `compose_image` deliberately never installs `msgpack`/FastAPI/DB
+  deps, so a real Modal dispatch raised `ModuleNotFoundError`, silently absorbed by
+  `compose_serve_time_dispatched`'s any-error-falls-back-to-local design — so download/share
+  composes were running local-only on staging with no visible symptom. Fixed by making
+  `image_extractor.py`'s DB import lazy/function-local (matching `clip_cache.get_clip_cache()`'s
+  existing pattern), same as `local_gpu_processor.py` already does for its own heavy optional
+  import. Regression guard: `test_t7090_modal_compose_dispatch.py::test_compose_modal_entrypoint_imports_do_not_pull_in_database`
+  (subprocess-isolated import-surface check — any `app.services.*` submodule someone adds to that
+  package's eager `__init__` re-exports with its own heavy/undeclared transitive import could
+  reintroduce this failure mode for `compose_image` or any other minimal-image Modal function).
 
 ## Testing seams
 - `call_modal_framing_ai(test_mode=True)` → `local_processors.local_framing_mock` (`modal_client.py:541`, `local_processors.py:737`) — no GPU, no Modal, no render.

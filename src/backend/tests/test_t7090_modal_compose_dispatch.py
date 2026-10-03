@@ -1,6 +1,6 @@
 """T7090 Phase 3 -- move download-time compose to Modal (dispatch seam).
 
-Covers the FOUR in-container-verifiable contracts of the Modal move (the live
+Covers the FIVE in-container-verifiable contracts of the Modal move (the live
 Modal function body/image/redeploy is a staging-only verification GAP, same
 posture as T6360):
 
@@ -16,6 +16,15 @@ posture as T6360):
   4. Cache preservation: a collection-download-style flow caches ONLY when
      full_fidelity and streams its own bytes (the T4947 invariants, exercised
      through the dispatched seam).
+  5. `compose_image`'s import surface (T11660): `compose_serve_time_modal` runs
+     in a Modal image that deliberately does NOT install `msgpack`/FastAPI/DB
+     deps (see the comment above `compose_image` in video_processing.py). The
+     actual Modal container failure this guards against can't be reproduced
+     in-container (no real Modal image to import against) -- this instead pins
+     the IN-PROCESS invariant that makes it safe: importing the three app
+     modules the function needs must not transitively import `app.database`
+     (which drags in the full migrations tree, including a module that does
+     `import msgpack` at module level).
 """
 
 import os
@@ -398,3 +407,47 @@ def test_modal_intro_render_drop_is_not_full_fidelity(tmp_path, monkeypatch):
     assert ok is True
     assert report["full_fidelity"] is False, (
         "an expected intro dropped app-side must NOT cache as full fidelity")
+
+
+# =============================================================================
+# 5. compose_image's import surface must not pull in app.database (T11660)
+# =============================================================================
+def test_compose_modal_entrypoint_imports_do_not_pull_in_database():
+    """Regression for T11660: a real `compose_serve_time_modal` dispatch on
+    staging raised `ModuleNotFoundError: No module named 'msgpack'` because
+    importing `app.services.branded_outro` (one of the three modules
+    `compose_serve_time_modal` imports) transitively ran `app.services`'s
+    package `__init__` -> `image_extractor` -> a module-level
+    `from ..database import get_highlights_path` -> the full
+    `app.migrations` tree -> `v004_overlay_tuning`'s module-level
+    `import msgpack`. `compose_image` never installs `msgpack` (by design --
+    see the comment above `compose_image`'s definition), so this import chain
+    is fatal inside the real Modal container; `compose_serve_time_dispatched`'s
+    "any Modal error -> fall back to local" design swallowed it silently.
+
+    Runs the import in a FRESH subprocess (not in-process) because this
+    pytest session's conftest/fixtures already import `app.database` for
+    unrelated DB-backed tests, which would mask the exact bug this guards.
+    """
+    script = (
+        "import sys; "
+        "import app.services.branded_outro; "
+        "import app.services.card_compose_plan; "
+        "import app.services.ffmpeg_concat; "
+        "bad = [m for m in ('app.database', 'app.migrations', 'msgpack') "
+        "if m in sys.modules]; "
+        "print(','.join(bad))"
+    )
+    backend_root = str(Path(__file__).resolve().parent.parent)
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True, text=True, cwd=backend_root,
+    )
+    assert result.returncode == 0, (
+        f"import failed:\nstdout={result.stdout}\nstderr={result.stderr}")
+    leaked = result.stdout.strip()
+    assert leaked == "", (
+        f"compose Modal entry-point imports pulled in {leaked!r} -- this is "
+        "exactly the T11660 failure mode (compose_image doesn't install these; "
+        "a real Modal dispatch would raise ModuleNotFoundError and silently "
+        "fall back to local compose)")
