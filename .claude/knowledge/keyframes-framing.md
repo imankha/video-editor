@@ -1,6 +1,29 @@
 ---
 domain: keyframes-framing
-updated: 2026-10-02 (T11570 review-response round 3 — a THIRD fresh-context Reviewer caught 1 new
+updated: 2026-10-03 (T11570 review-response round 4 — a FOURTH fresh-context Reviewer found the
+round-3 fix below only closed the FIRST-MOVE half of the gap, not pointerdown. `HighlightOverlay`
+only calls `onHighlightChange` from its pointer-MOVE handler — `beginDrag`/`beginResize` (the actual
+pointerdown entry points) called no parent callback at all. So: release at marker N schedules the
+650ms confirm/advance -> user re-grabs the circle and HOLDS STILL for a beat (ordinary mouse
+behavior, deciding where to drag) -> the timer fires while the pointer is already captured but
+hasn't moved yet -> `handleHighlightChange`'s cancel (round 3's fix) never runs because no move
+event has fired -> parks/seeks onto marker N+1 mid-hold -> the eventual move+release still writes
+marker N+1's keyframe. **Corrected invariant (supersedes the round-3 wording below): the pending
+guided-pick advance must be cancelled at POINTERDOWN, not on first move** — first move is too late,
+since pointer capture already holds the gesture open through any seek the timer triggers before
+that. Fix: new `onDragStart` prop on `HighlightOverlay`, called from all three pointerdown entry
+points (`beginDrag`, `beginResize`, and `beginEnterTap` — the tap-to-enter-edit-mode target, cheap
+and idempotent to cover too) BEFORE any drag/resize state is set. Wired end to end: `HighlightOverlay
+onDragStart` -> `OverlayModeView onHighlightDragStart` -> `OverlayScreen` -> `OverlayContainer.
+handleHighlightDragStart` (new) -> `guidedPick.cancelPendingAdvance()`. The round-3 cancel call
+inside `handleHighlightChange` is now REMOVED (redundant once pointerdown always cancels first, and
+it fired on every move event of every drag, not just the first). See `OverlayContainer.test.jsx`'s
+"a drag re-grab cancels a pending guided-pick advance at POINTERDOWN, not first move" describe
+block — it renders the REAL `HighlightOverlay` (not just `OverlayContainer` in isolation) and drives
+actual Pointer Events (pointerdown -> advance timers -> pointermove -> pointerup), because calling
+`handleHighlightChange` directly (the round-3 test's approach) cannot distinguish "cancels on move"
+from "cancels on pointerdown".)
+updated: 2026-10-02 (T11570 review-response round 3 — a THIRD fresh-context Reviewer caught 1
 MAJOR: a drag already in progress could have its final release land on the WRONG marker. Repro:
 user drags+releases the highlight circle at marker N (`handleHighlightComplete` schedules
 `scheduleGuidedAdvance`'s 650ms confirm/advance timer), then re-grabs the circle to nudge it before
@@ -9,14 +32,14 @@ Pointer capture keeps the drag alive through the seek the timer triggers, so the
 mid-drag, `parkOnEntry` parks/seeks onto marker N+1, and the eventual release reads
 `clickedDetection.timestamp` (now N+1) as the keyframe's assign time — the geometry tuned on marker
 N's box gets written as marker N+1's keyframe, silently marking N+1 "assigned" despite the user
-never looking at it. **Invariant: ANY new drag-start must cancel a pending guided-pick advance from
-a prior release, not just play/scrub-away/hide-boxes** — `cancelPendingAdvance` (already existed
-internally in `useGuidedAthletePick`) is now also exported from its return value and called at the
-TOP of `OverlayContainer.handleHighlightChange`, before `setDragHighlight`. The eventual release
-then (re)schedules fresh from whichever marker is actually parked at that point — never a stale
-one. See `OverlayContainer.test.jsx`'s "a drag re-grab cancels a pending guided-pick advance"
-describe block for the real-container-level proof (release → re-grab mid-confirm → advance timers
-→ second release still writes marker N).)
+never looking at it. Fixed (at the time) by exporting `cancelPendingAdvance` from
+`useGuidedAthletePick` and calling it at the top of `OverlayContainer.handleHighlightChange`.
+**CORRECTION (round 4 above supersedes this): that only cancels on the gesture's FIRST MOVE, not at
+pointerdown** — `handleHighlightChange` is driven by `HighlightOverlay`'s pointer-MOVE handler, so a
+press-and-hold before moving still let the timer fire mid-hold. The round-3 test asserted the fix by
+calling `handleHighlightChange` directly, which cannot tell "cancels on move" apart from "cancels on
+pointerdown" — see round 4's entry above for why that test was rewritten against the REAL
+`HighlightOverlay` instead.)
 updated: 2026-10-02 (T11570 review-response round 2 — a SECOND fresh-context Reviewer caught 1 new
 BLOCKING + 1 new MAJOR in the round-1 fixes above, both now fixed + negative-control-verified.
 BLOCKING: `SpotlightPickGuide`'s flip-to-bottom effect could infinite-loop ("Maximum update depth

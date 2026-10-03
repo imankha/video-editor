@@ -559,14 +559,24 @@ export function OverlayContainer({
    * Handle highlight changes during drag/resize
    */
   const handleHighlightChange = useCallback((newHighlight) => {
-    // A drag already in progress must cancel any pending guided-pick advance
-    // from a PRIOR release -- otherwise its confirm timer can fire mid-drag,
-    // parking/seeking onto the next marker while the user is still tuning
-    // THIS marker's geometry, so the eventual release writes the wrong
-    // marker's keyframe (T11570 review round 3 MAJOR). The release that
-    // follows reschedules from whichever marker is actually parked then.
-    guidedPick.cancelPendingAdvance();
     setDragHighlight(newHighlight);
+  }, []);
+
+  /**
+   * Fires at POINTERDOWN -- before the first move -- on any grab of the highlight
+   * circle (body drag, a resize handle, or the display-only tap-to-enter target).
+   * Must cancel a pending guided-pick advance from a PRIOR release here, not on
+   * first move: the user can press-and-hold before moving (ordinary deciding-
+   * where-to-drag behavior), and pointer capture keeps THIS gesture alive through
+   * any seek the timer below would trigger -- so a cancel on first move alone
+   * leaves a window where the timer fires while the pointer is already captured,
+   * parking/seeking onto the next marker before the user has moved at all. The
+   * eventual release then reschedules fresh from whichever marker is actually
+   * parked at that point (T11570 review round 4 MAJOR; round 3 fixed the
+   * first-move case, this covers the pointerdown-to-first-move gap it left open).
+   */
+  const handleHighlightDragStart = useCallback(() => {
+    guidedPick.cancelPendingAdvance();
   }, [guidedPick]);
 
   /**
@@ -672,6 +682,7 @@ export function OverlayContainer({
     handlePlayerSelect,
     handleHighlightChange,
     handleHighlightComplete,
+    handleHighlightDragStart,
 
     // Persistence
     overlaySyncState,

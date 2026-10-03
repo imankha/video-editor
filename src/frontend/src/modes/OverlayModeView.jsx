@@ -154,6 +154,7 @@ export function OverlayModeView({
   // Highlight handlers
   onHighlightChange,
   onHighlightComplete,
+  onHighlightDragStart,
   onAddHighlightRegion,
   onDeleteHighlightRegion,
   onMoveHighlightRegionStart,
@@ -613,6 +614,7 @@ export function OverlayModeView({
               currentHighlight={currentHighlightState}
               onHighlightChange={onHighlightChange}
               onHighlightComplete={onHighlightComplete}
+              onDragStart={onHighlightDragStart}
               isEnabled={isTimeInEnabledRegion(currentTime)}
               effectType={highlightEffectType}
               highlightShape={highlightShape}

@@ -1460,6 +1460,7 @@ export function OverlayScreen({
     handlePlayerSelect,
     handleHighlightChange,
     handleHighlightComplete,
+    handleHighlightDragStart,
     onDetectionMarkerTap,
     pickGuidePhase,
     pickGuideStep,
@@ -1783,6 +1784,7 @@ export function OverlayScreen({
       // Highlight handlers (wrapped for action-based sync)
       onHighlightChange={handleHighlightChange}
       onHighlightComplete={handleHighlightComplete}
+      onHighlightDragStart={handleHighlightDragStart}
       onAddHighlightRegion={wrappedAddHighlightRegion}
       onDeleteHighlightRegion={wrappedDeleteHighlightRegion}
       onMoveHighlightRegionStart={wrappedMoveHighlightRegionStart}

@@ -1,7 +1,28 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { useRef } from 'react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { renderHook, render, fireEvent, screen, cleanup, act } from '@testing-library/react';
 import { OverlayContainer } from './OverlayContainer';
+import HighlightOverlay from '../modes/overlay/overlays/HighlightOverlay';
 import { EDITOR_MODES } from '../stores';
+
+// Unit-scale video->screen transform (video coords == screen coords) so the
+// real HighlightOverlay's drag/resize math in the round-4 regression test
+// below is deterministic -- same mock as HighlightOverlay.touch.test.jsx.
+vi.mock('../hooks/useVideoDisplayRect', () => {
+  const round3 = (v) => Math.round(v * 1000) / 1000;
+  return {
+    __esModule: true,
+    round3,
+    default: () => ({
+      rect: {
+        offsetX: 0, offsetY: 0, width: 1920, height: 1080,
+        scaleX: 1, scaleY: 1, zoom: 1, panOffset: { x: 0, y: 0 },
+      },
+      videoToScreen: (x, y, w, h) => ({ x, y, width: w, height: h }),
+      screenToVideo: (x, y, w, h) => ({ x, y, width: w, height: h }),
+    }),
+  };
+});
 
 /**
  * T11570 BLOCKING-fix regression: entry-park must actually fire through the
@@ -328,14 +349,56 @@ describe('OverlayContainer guided-pick wiring (T11570 BLOCKING fix)', () => {
     });
   });
 
-  describe('a drag re-grab cancels a pending guided-pick advance (review round 3 MAJOR fix, through the real container)', () => {
+  describe('a drag re-grab cancels a pending guided-pick advance at POINTERDOWN, not first move (review round 4 MAJOR, through the real container + REAL HighlightOverlay)', () => {
+    // Round 3 fixed this bug's FIRST-MOVE case (cancel inside
+    // handleHighlightChange, which HighlightOverlay only calls from its
+    // pointer-MOVE handler). That left a gap: HighlightOverlay's pointerdown
+    // handlers (beginDrag/beginResize) call no parent callback at all, so a
+    // press-and-hold (ordinary "deciding where to drag" behavior, no move
+    // yet) does not cancel anything -- the pending timer can still fire while
+    // the pointer is already captured. Calling handleHighlightChange directly
+    // (as the round-3 test did) cannot distinguish "cancels on move" from
+    // "cancels on pointerdown", so this test drives the REAL HighlightOverlay
+    // through real Pointer Events instead.
     beforeEach(() => vi.useFakeTimers());
-    afterEach(() => vi.useRealTimers());
+    afterEach(() => { vi.useRealTimers(); cleanup(); });
 
-    it('re-grabbing the circle mid-confirm cancels the pending advance, so the eventual release still writes marker N not N+1', () => {
+    const VIDEO_METADATA = { width: 1920, height: 1080 };
+
+    // Mirrors OverlayModeView's live wiring: OverlayContainer's state/handlers
+    // feed a REAL HighlightOverlay. `stateBoxRef` smuggles the container's
+    // latest return value out to the test body (it's written on every
+    // render, which React runs synchronously inside the act() each
+    // fireEvent/act call below is already wrapped in).
+    function DriveWithHighlightOverlay({ containerProps, stateBoxRef }) {
+      const videoRef = useRef(null);
+      const overlay = OverlayContainer(containerProps);
+      stateBoxRef.current = overlay;
+      return (
+        <div>
+          <video ref={videoRef} />
+          {overlay.currentHighlightState && (
+            <HighlightOverlay
+              videoRef={videoRef}
+              videoMetadata={VIDEO_METADATA}
+              currentHighlight={overlay.currentHighlightState}
+              onHighlightChange={overlay.handleHighlightChange}
+              onHighlightComplete={overlay.handleHighlightComplete}
+              onDragStart={overlay.handleHighlightDragStart}
+              isEnabled
+              editable
+            />
+          )}
+        </div>
+      );
+    }
+
+    it('pressing the circle again (no move yet) before the confirm timer fires still cancels it -- the eventual release writes marker N not N+1', () => {
       const seek = vi.fn();
       const addHighlightRegionKeyframe = vi.fn();
       const region = makeRegion();
+      const stateBoxRef = { current: null };
+      const liveHighlight = { x: 960, y: 540, radiusX: 40, radiusY: 60, opacity: 0.3, color: null };
       const ready = baseProps({
         seek, duration: 10, currentTime: 0.5,
         highlightRegions: [region],
@@ -343,48 +406,45 @@ describe('OverlayContainer guided-pick wiring (T11570 BLOCKING fix)', () => {
         overlayLoadedProjectId: 'proj-1',
         isTimeInEnabledRegion: vi.fn(() => true),
         getRegionAtTime: vi.fn(() => region),
+        getRegionHighlightAtTime: vi.fn(() => liveHighlight),
         addHighlightRegionKeyframe,
       });
-      const { result, rerender } = drive(ready);
-      rerender(ready); // settle entry-park (parked on marker 1 @ 0.5s)
-      expect(result.current.pickGuidePhase).toBe('parked');
-      expect(result.current.pickGuideStep).toBe(1);
+      const { rerender } = render(<DriveWithHighlightOverlay containerProps={ready} stateBoxRef={stateBoxRef} />);
+      rerender(<DriveWithHighlightOverlay containerProps={ready} stateBoxRef={stateBoxRef} />); // settle entry-park
+      expect(stateBoxRef.current.pickGuidePhase).toBe('parked');
+      expect(stateBoxRef.current.pickGuideStep).toBe(1);
       expect(seek).toHaveBeenCalledTimes(1);
 
-      // Release 1: the user taps the circle, drags, and releases at marker 1
-      // (clickedDetection is still 0.5s) -- this is the gesture that schedules
-      // the 650ms confirm/advance to marker 2.
+      // Release 1: the user drags and releases at marker 1 (clickedDetection
+      // is still 0.5s) -- schedules the 650ms confirm/advance to marker 2.
       act(() => {
-        result.current.handleHighlightComplete({ x: 10, y: 10, radiusX: 5, radiusY: 5, opacity: 0.3, color: null });
+        stateBoxRef.current.handleHighlightComplete({ x: 10, y: 10, radiusX: 5, radiusY: 5, opacity: 0.3, color: null });
       });
-      expect(result.current.pickGuidePhase).toBe('confirm');
+      expect(stateBoxRef.current.pickGuidePhase).toBe('confirm');
       expect(addHighlightRegionKeyframe).toHaveBeenCalledTimes(1);
       expect(addHighlightRegionKeyframe.mock.calls[0][0]).toBe(0.5);
 
-      // Before the confirm timer fires, the user grabs the circle again to
-      // nudge it. Pointer capture keeps this drag alive through a would-be
-      // seek, so the pending advance MUST be cancelled here -- otherwise the
-      // timer below fires mid-drag and parks/seeks onto marker 2 while the
-      // user is still tuning marker 1's geometry.
-      act(() => {
-        result.current.handleHighlightChange({ x: 12, y: 12, radiusX: 5, radiusY: 5, opacity: 0.3, color: null });
-      });
-      expect(result.current.pickGuidePhase).not.toBe('confirm');
+      // The user presses the circle body again -- POINTERDOWN ONLY, no move
+      // yet (ordinary mouse behavior: deciding where to drag before moving).
+      const body = screen.getByTestId('highlight-body');
+      fireEvent.pointerDown(body, { pointerId: 9, pointerType: 'mouse', clientX: 960, clientY: 540 });
 
-      // Advance well past the old 650ms confirm window. Simulates seek()'s
-      // real synchronous currentTime update (same batching note as the
-      // entry-park test above) -- a no-op rerender if the advance was
-      // correctly cancelled (seek still only ever called once, for the
-      // original entry-park).
+      // The confirm timer fires WHILE the pointer is captured but hasn't
+      // moved. Must already be cancelled by the pointerdown above -- no
+      // second seek, no advance onto marker 2.
       act(() => { vi.advanceTimersByTime(700); });
-      rerender({ ...ready, currentTime: seek.mock.calls[seek.mock.calls.length - 1][0] });
+      rerender(<DriveWithHighlightOverlay
+        containerProps={{ ...ready, currentTime: seek.mock.calls[seek.mock.calls.length - 1][0] }}
+        stateBoxRef={stateBoxRef}
+      />);
       expect(seek).toHaveBeenCalledTimes(1); // no second seek onto marker 2
-      expect(result.current.pickGuideStep).toBe(1); // still tracking marker 1, not 2
+      expect(stateBoxRef.current.pickGuideStep).toBe(1); // still tracking marker 1, not 2
 
-      // Release 2: the actual end of the nudge -- still parked on marker 1.
-      act(() => {
-        result.current.handleHighlightComplete({ x: 12, y: 12, radiusX: 6, radiusY: 6, opacity: 0.3, color: null });
-      });
+      // Now the user actually moves and releases -- the real drag this press
+      // was for.
+      fireEvent.pointerMove(body, { pointerId: 9, pointerType: 'mouse', clientX: 965, clientY: 545 });
+      fireEvent.pointerUp(body, { pointerId: 9, pointerType: 'mouse', clientX: 965, clientY: 545 });
+
       expect(addHighlightRegionKeyframe).toHaveBeenCalledTimes(2);
       // The second edit's recorded time must still be marker 1 (0.5s), never
       // marker 2 (1.5s) -- the bug this guards against writes the dragged
