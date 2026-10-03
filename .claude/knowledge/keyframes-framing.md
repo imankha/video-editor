@@ -1,5 +1,27 @@
 ---
 domain: keyframes-framing
+updated: 2026-10-03 (T11420 — Spotlight (Overlay) now opens with its timeline at the LEFT EDGE
+(scroll 0) after a Framing export. INVARIANT + landmine: `OverlayScreen` is mounted only under
+`{editorMode === EDITOR_MODES.OVERLAY && ...}` (App.jsx), so it REMOUNTS on every
+Framing<->Spotlight switch and `useTimelineZoom.scrollPosition` (local `useState(0)`) always starts
+at 0 — there is no cross-mount scroll persistence. Detection auto-zoom (OverlayScreen.jsx) only
+changes `timelineZoom`/scale, never the scroll position, and growing scrollWidth with scrollLeft=0
+fires no scroll event. The ONLY non-zero scroll writer on entry was `PosterMarkerLayer.revealMarker`
+(mount + a 900ms retry): the default cover-frame is mid-clip (`selectPosterFrame` = slow-mo.start+2s,
+posterWindow.js), so once auto-zoom widens the content that frame is off-screen and the reveal
+scrolled the container to it — and that programmatic `scrollTo` wrote BACK through
+`TimelineBase.handleScroll -> onTimelineScrollPositionChange -> updateTimelineScrollPosition`, so
+BOTH the DOM scroller and the mode-owned `scrollPosition` went non-zero while the playhead sat at 0.
+Fix: the first-load poster auto-reveal (immediate + 900ms retry) is now gated on `revealOnActive`
+(the Cover-image/Thumbnail tab being active) for the pre-interaction path too — SUPERSEDES the
+T6630-round-7 "reveal on first load regardless of tab" decision (and its PosterMarkerLayer.test.jsx
+cases), which was mutually exclusive with opening at the left edge whenever the default marker is
+mid-clip. Spotlight's entry tab is 'overlay' ("Pick your player"), so nothing reveals and the
+timeline opens at 0; opening the Cover tab later flips `revealOnActive` true and reveals as before.
+NOTE the pre-existing TimelineBase.jsx:119-132 layout effect (keeps the DOM scroller aligned to the
+owned `timelineScrollPosition`) is a PRIOR half-fix of this same bug — leave it, don't extend it: it
+is downstream of the write and faithfully re-applies whatever the owned position already became, so
+it cannot prevent the reveal's write-back. Cut the write at its source (the reveal gating) instead.)
 updated: 2026-10-03 (T11570 review-response round 4 — a FOURTH fresh-context Reviewer found the
 round-3 fix below only closed the FIRST-MOVE half of the gap, not pointerdown. `HighlightOverlay`
 only calls `onHighlightChange` from its pointer-MOVE handler — `beginDrag`/`beginResize` (the actual
