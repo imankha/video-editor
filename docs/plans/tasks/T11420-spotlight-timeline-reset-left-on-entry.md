@@ -1,10 +1,10 @@
 # T11420: Spotlight timeline should open at the left edge
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-28
-**Updated:** 2026-09-28
+**Updated:** 2026-10-03
 **Reported environment:** Production build 5870, Framing export to Spotlight
 
 ## Problem
@@ -51,14 +51,28 @@ leaving the automatic zoom level and later user/playback scrolling intact.
 
 ### Steps
 
-1. [ ] Reproduce Framing export -> Spotlight with dense detections and capture state/DOM ordering.
-2. [ ] Add a red integration test that begins with a previously scrolled timeline.
-3. [ ] Implement one entry-boundary reset for both owned state and DOM position.
-4. [ ] Verify first entry, re-entry, auto-zoom hydration, manual scroll, and playback follow.
+1. [x] Reproduce Framing export -> Spotlight with dense detections and capture state/DOM ordering.
+2. [x] Add a red integration test that begins with a previously scrolled timeline.
+3. [x] Implement one entry-boundary reset for both owned state and DOM position.
+4. [x] Verify first entry, re-entry, auto-zoom hydration, manual scroll, and playback follow.
+
+### Progress Log
+
+**2026-10-03**: Root cause was `PosterMarkerLayer`'s mount-reveal (cover-marker auto-scroll)
+firing unconditionally on Spotlight entry regardless of active tab, writing back through
+`TimelineBase`'s scroll handler into the owned scroll-position state. Fix scopes the reveal to
+only fire when the Cover-image tab is active. This necessarily narrows T6630 round 7's
+"reveal regardless of active tab" behavior -- the two are mutually exclusive given this task's
+constraint not to touch auto-zoom. Flagged by both the independent Reviewer and Proof Verifier;
+user explicitly chose to accept the narrower reveal and ship (2026-10-03). Reviewer: APPROVED,
+0 blocking/0 major. Proof Verifier: VERIFIED, red-to-green reproduced in an isolated copy, full
+suite 40/40, CI green. Merged PR #555 (`8ae5b1cb9`). Live-browser staging pass still owed
+(container had no dev stack/GPU) -- verify via Framing export -> Spotlight with dense
+detections, confirm left-edge open + re-entry + Cover-image-tab reveal + manual scroll/playback.
 
 ## Acceptance Criteria
 
-- [ ] Spotlight opens with the timeline at horizontal position 0 after a Framing export.
-- [ ] Reopening Spotlight also starts at 0 regardless of the prior session's scroll.
-- [ ] Detection auto-zoom still chooses its required zoom level.
-- [ ] Manual scrolling and playback follow work normally after entry.
+- [x] Spotlight opens with the timeline at horizontal position 0 after a Framing export.
+- [x] Reopening Spotlight also starts at 0 regardless of the prior session's scroll.
+- [x] Detection auto-zoom still chooses its required zoom level.
+- [x] Manual scrolling and playback follow work normally after entry.
