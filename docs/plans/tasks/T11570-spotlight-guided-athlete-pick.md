@@ -1,6 +1,6 @@
 # T11570: Spotlight Guided Athlete Pick (auto-advance through every green marker)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-10-01
@@ -102,6 +102,19 @@ specifically — T10880 can stay open for any other funnel screens it finds.
 
 **2026-10-01**: Task filed from a direct user request; design mocked up and approved ("i like it")
 before implementation. Not yet started.
+
+**2026-10-03**: Landed (PR #554, squash `d1b52fbd`) after 5 full review rounds — the first 4 each
+found a real BLOCKING or MAJOR issue (entry-park never firing in the real app; a `forcedCompact`
+infinite-loop crash; an auto-advance misattributing an in-progress drag's keyframe to the wrong
+marker; that fix cancelling only on first drag-move instead of pointerdown). Round 5 found the
+fix had structurally converged at the gesture's source (pointerdown, across all three entry
+points in `HighlightOverlay.jsx`). Proof Verifier: VERIFIED, with one non-blocking suggestion —
+the `OverlayScreen`/`OverlayModeView` prop-forwarding hops (`onHighlightDragStart`/`onDragStart`)
+are correct at this head but verified only by reading the code, not a dedicated test; the same
+bug class as round 1's BLOCKING finding (a wiring gap invisible to jsdom-only coverage). Fast-
+follow suggestion for a future task: add an `OverlayModeView`-level test with a spy
+`onHighlightDragStart`, firing `pointerDown` on `highlight-body`/`highlight-enter-hit`, asserting
+the spy fires, plus a check that `OverlayScreen` forwards the container handler.
 
 ## Acceptance Criteria
 
