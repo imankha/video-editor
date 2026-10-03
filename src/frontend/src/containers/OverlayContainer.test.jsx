@@ -327,4 +327,69 @@ describe('OverlayContainer guided-pick wiring (T11570 BLOCKING fix)', () => {
       expect(result.current.pickGuideStep).toBe(1); // same marker, walk not restarted
     });
   });
+
+  describe('a drag re-grab cancels a pending guided-pick advance (review round 3 MAJOR fix, through the real container)', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it('re-grabbing the circle mid-confirm cancels the pending advance, so the eventual release still writes marker N not N+1', () => {
+      const seek = vi.fn();
+      const addHighlightRegionKeyframe = vi.fn();
+      const region = makeRegion();
+      const ready = baseProps({
+        seek, duration: 10, currentTime: 0.5,
+        highlightRegions: [region],
+        overlaySyncState: 'ready',
+        overlayLoadedProjectId: 'proj-1',
+        isTimeInEnabledRegion: vi.fn(() => true),
+        getRegionAtTime: vi.fn(() => region),
+        addHighlightRegionKeyframe,
+      });
+      const { result, rerender } = drive(ready);
+      rerender(ready); // settle entry-park (parked on marker 1 @ 0.5s)
+      expect(result.current.pickGuidePhase).toBe('parked');
+      expect(result.current.pickGuideStep).toBe(1);
+      expect(seek).toHaveBeenCalledTimes(1);
+
+      // Release 1: the user taps the circle, drags, and releases at marker 1
+      // (clickedDetection is still 0.5s) -- this is the gesture that schedules
+      // the 650ms confirm/advance to marker 2.
+      act(() => {
+        result.current.handleHighlightComplete({ x: 10, y: 10, radiusX: 5, radiusY: 5, opacity: 0.3, color: null });
+      });
+      expect(result.current.pickGuidePhase).toBe('confirm');
+      expect(addHighlightRegionKeyframe).toHaveBeenCalledTimes(1);
+      expect(addHighlightRegionKeyframe.mock.calls[0][0]).toBe(0.5);
+
+      // Before the confirm timer fires, the user grabs the circle again to
+      // nudge it. Pointer capture keeps this drag alive through a would-be
+      // seek, so the pending advance MUST be cancelled here -- otherwise the
+      // timer below fires mid-drag and parks/seeks onto marker 2 while the
+      // user is still tuning marker 1's geometry.
+      act(() => {
+        result.current.handleHighlightChange({ x: 12, y: 12, radiusX: 5, radiusY: 5, opacity: 0.3, color: null });
+      });
+      expect(result.current.pickGuidePhase).not.toBe('confirm');
+
+      // Advance well past the old 650ms confirm window. Simulates seek()'s
+      // real synchronous currentTime update (same batching note as the
+      // entry-park test above) -- a no-op rerender if the advance was
+      // correctly cancelled (seek still only ever called once, for the
+      // original entry-park).
+      act(() => { vi.advanceTimersByTime(700); });
+      rerender({ ...ready, currentTime: seek.mock.calls[seek.mock.calls.length - 1][0] });
+      expect(seek).toHaveBeenCalledTimes(1); // no second seek onto marker 2
+      expect(result.current.pickGuideStep).toBe(1); // still tracking marker 1, not 2
+
+      // Release 2: the actual end of the nudge -- still parked on marker 1.
+      act(() => {
+        result.current.handleHighlightComplete({ x: 12, y: 12, radiusX: 6, radiusY: 6, opacity: 0.3, color: null });
+      });
+      expect(addHighlightRegionKeyframe).toHaveBeenCalledTimes(2);
+      // The second edit's recorded time must still be marker 1 (0.5s), never
+      // marker 2 (1.5s) -- the bug this guards against writes the dragged
+      // geometry onto the WRONG (next) marker's keyframe.
+      expect(addHighlightRegionKeyframe.mock.calls[1][0]).toBe(0.5);
+    });
+  });
 });

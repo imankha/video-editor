@@ -1,5 +1,22 @@
 ---
 domain: keyframes-framing
+updated: 2026-10-02 (T11570 review-response round 3 — a THIRD fresh-context Reviewer caught 1 new
+MAJOR: a drag already in progress could have its final release land on the WRONG marker. Repro:
+user drags+releases the highlight circle at marker N (`handleHighlightComplete` schedules
+`scheduleGuidedAdvance`'s 650ms confirm/advance timer), then re-grabs the circle to nudge it before
+that timer fires (`handleHighlightChange` — previously just `setDragHighlight`, no cancellation).
+Pointer capture keeps the drag alive through the seek the timer triggers, so the timer fires
+mid-drag, `parkOnEntry` parks/seeks onto marker N+1, and the eventual release reads
+`clickedDetection.timestamp` (now N+1) as the keyframe's assign time — the geometry tuned on marker
+N's box gets written as marker N+1's keyframe, silently marking N+1 "assigned" despite the user
+never looking at it. **Invariant: ANY new drag-start must cancel a pending guided-pick advance from
+a prior release, not just play/scrub-away/hide-boxes** — `cancelPendingAdvance` (already existed
+internally in `useGuidedAthletePick`) is now also exported from its return value and called at the
+TOP of `OverlayContainer.handleHighlightChange`, before `setDragHighlight`. The eventual release
+then (re)schedules fresh from whichever marker is actually parked at that point — never a stale
+one. See `OverlayContainer.test.jsx`'s "a drag re-grab cancels a pending guided-pick advance"
+describe block for the real-container-level proof (release → re-grab mid-confirm → advance timers
+→ second release still writes marker N).)
 updated: 2026-10-02 (T11570 review-response round 2 — a SECOND fresh-context Reviewer caught 1 new
 BLOCKING + 1 new MAJOR in the round-1 fixes above, both now fixed + negative-control-verified.
 BLOCKING: `SpotlightPickGuide`'s flip-to-bottom effect could infinite-loop ("Maximum update depth

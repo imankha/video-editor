@@ -92,6 +92,10 @@ export function useGuidedAthletePick({
   );
   const done = total > 0 && assignedCount >= total;
 
+  // Exposed in the return value too: the caller must cancel this the moment
+  // a NEW drag starts (before its own release reschedules), so a confirm
+  // timer from a PRIOR release can't fire mid-drag and park/seek out from
+  // under geometry the user is actively tuning (T11570 review round 3 MAJOR).
   const cancelPendingAdvance = useCallback(() => {
     if (pendingAdvanceRef.current) {
       clearTimeout(pendingAdvanceRef.current);
@@ -253,6 +257,7 @@ export function useGuidedAthletePick({
     step: trackedMarkerIndex != null ? trackedMarkerIndex + 1 : null,
     total,
     scheduleGuidedAdvance,
+    cancelPendingAdvance,
     handleDetectionMarkerTap,
     resumeTrackedMarker,
   };

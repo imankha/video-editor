@@ -559,8 +559,15 @@ export function OverlayContainer({
    * Handle highlight changes during drag/resize
    */
   const handleHighlightChange = useCallback((newHighlight) => {
+    // A drag already in progress must cancel any pending guided-pick advance
+    // from a PRIOR release -- otherwise its confirm timer can fire mid-drag,
+    // parking/seeking onto the next marker while the user is still tuning
+    // THIS marker's geometry, so the eventual release writes the wrong
+    // marker's keyframe (T11570 review round 3 MAJOR). The release that
+    // follows reschedules from whichever marker is actually parked then.
+    guidedPick.cancelPendingAdvance();
     setDragHighlight(newHighlight);
-  }, []);
+  }, [guidedPick]);
 
   /**
    * Handle highlight complete (create/update keyframe in enabled region)
