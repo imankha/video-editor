@@ -1957,8 +1957,30 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   rootRef, so without the cardRef check a row mousedown would close the picker
   before the click landed (the ReelTile portal-menu pattern). **Mobile is unchanged**
   — its viewport-fixed bottom sheet stays INSIDE rootRef (no portal) so a backdrop
-  tap reads as "inside" and does not close (no-backdrop-close rule). Escape still
-  `stopPropagation`s (T10590). Tests: `RatingPill.test.jsx`.
+  tap reads as "inside" and does not close (no-backdrop-close rule).
+  - **M1 — measure NATURAL height with `scrollHeight`, never `getBoundingClientRect().height`.**
+    The card carries `max-height` + `overflow-y-auto`, so its bounding-rect height is
+    ALREADY capped. Measuring the capped height when correcting the flip created a
+    one-way ratchet (once placed-and-capped below, the "correction" re-read the cap,
+    decided it fit, and never flipped above even when flipping would show the whole
+    card). `scrollHeight` is the uncapped content height, so the flip sees the real
+    size. (`offsetWidth`/bounding width is fine — nothing caps width.)
+  - **B1 LANDMINE — Escape must be a CAPTURE-phase `document` listener with
+    `stopImmediatePropagation()`** (NOT the old bubble-phase plain `stopPropagation`).
+    `AnnotateContainer` keeps its OWN `document` keydown listener (fullscreen-exit,
+    `~AnnotateContainer.jsx:2271`, calls `handleToggleFullscreen()`); it is a SIBLING
+    on the SAME target, which a bubble-phase `stopPropagation()` cannot stop (and if
+    the container's listener mounted first it would even run before the picker's). So
+    the picker mirrors `RateThisPlayModal`: capture phase + `stopImmediatePropagation`
+    makes Escape close ONLY the picker, order-independently — never also exit
+    fullscreen (desktop) or open the rate gate / close the overlay (mobile).
+  - **M2 — focus semantics across the portal.** On desktop open, focus moves INTO the
+    card (checked row, else first) because the card is portaled to the end of `<body>`
+    and is no longer DOM-adjacent to the pill (Tab would otherwise jump to an
+    unrelated editor control); Escape returns focus to the `triggerRef`. Mobile keeps
+    its native sheet focus.
+  - Tests: `RatingPill.test.jsx` (viewport clamp/flip incl. the M1 capped-vs-scroll
+    case, B1 sibling-Escape guard, M2 focus in/out), `zLayers.test.js` (POPOVER rung).
 - **Unrated-exit "Rate this play" gate (T11120, 2026-09-28, epic Highlight-First; gate, NEVER a write).**
   Trying to LEAVE the editor on a play whose `rating == null` opens the **`RateThisPlayModal`** instead
   of leaving; a rated play leaves normally. Picking a row is the ONE gesture that persists `{rating}`

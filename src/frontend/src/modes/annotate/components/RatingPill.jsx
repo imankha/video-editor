@@ -61,10 +61,18 @@ function computePickerPos(anchorRect, cardWidth, cardHeight) {
  * the SAME list the "Rate this play" gate modal renders (owner ruling: one
  * component). NO chess RATING_NOTATION anywhere (dropped per the H12A=A2
  * ruling). Mobile renders a bottom sheet (explicit X, no
- * backdrop-close — the standing project rule); desktop an anchored dropdown.
- * The Escape handler lives on `document` with `stopPropagation()` so it
- * doesn't also trip the editor's own window-level Escape handler on the same
- * keypress (T10590 landmine, preserved here).
+ * backdrop-close — the standing project rule); desktop an anchored dropdown
+ * portaled to document.body (viewport-safe, T11410).
+ *
+ * ESCAPE LANDMINE (B1): the Escape handler is on `document` in the CAPTURE phase
+ * and calls stopImmediatePropagation() + stopPropagation(). It must, because two
+ * OTHER document-level Escape listeners race the same keypress — the editor's
+ * window-level handler (T10590) and, critically, AnnotateContainer's own
+ * fullscreen-exit `document` listener (handleToggleFullscreen). A plain
+ * bubble-phase stopPropagation() does NOT stop a sibling listener on the same
+ * `document` target, so Escape used to also exit fullscreen / open the rate gate.
+ * Capture + stopImmediate wins order-independently (same pattern as
+ * RateThisPlayModal). On Escape, focus returns to the trigger (M2).
  */
 export function RatingPill({ rating, onRatingChange, myAthlete, isMobile }) {
   const [open, setOpen] = useState(false);
@@ -76,6 +84,8 @@ export function RatingPill({ rating, onRatingChange, myAthlete, isMobile }) {
   // from the pill's anchor rect. null until computed, so the portal mounts only
   // once it has a viewport-safe position.
   const [pos, setPos] = useState(null);
+  // M2: focus the card once per open (not on every resize/scroll reposition).
+  const didFocusRef = useRef(false);
   const headingId = useId();
 
   useEffect(() => {
@@ -89,18 +99,27 @@ export function RatingPill({ rating, onRatingChange, myAthlete, isMobile }) {
     };
     const onKeyDown = (e) => {
       if (e.key !== 'Escape') return;
-      // T10590 (preserved): stopPropagation so this Escape doesn't also reach
-      // AnnotateFullscreenOverlay's window-level Escape handler, which would
-      // otherwise close the whole editor on the same keypress that just
-      // closed this picker.
+      // LANDMINE (B1): AnnotateContainer registers its OWN document-level Escape
+      // listener (the fullscreen-exit handler, ~AnnotateContainer.jsx:2271) that
+      // calls handleToggleFullscreen() on the same keypress. Both listeners sit on
+      // `document`, so a plain stopPropagation() here does NOT stop that sibling —
+      // only capture phase + stopImmediatePropagation does (same reasoning and
+      // pattern as RateThisPlayModal.jsx). Without this, Escape to dismiss the
+      // picker ALSO exited fullscreen (desktop) / opened the rate gate (mobile).
+      // Registered with `true` below so this fires in the capture phase, before
+      // any bubble-phase document listener regardless of mount order.
+      e.stopImmediatePropagation();
       e.stopPropagation();
       setOpen(false);
+      // M2: return focus to the trigger — the portaled card unmounts, so focus
+      // would otherwise be orphaned on <body>.
+      triggerRef.current?.focus();
     };
     document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown, true);
     return () => {
       document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keydown', onKeyDown, true);
     };
   }, [open]);
 
@@ -113,9 +132,12 @@ export function RatingPill({ rating, onRatingChange, myAthlete, isMobile }) {
     const update = () => {
       const anchor = triggerRef.current?.getBoundingClientRect();
       if (!anchor) return;
-      const measured = cardRef.current?.getBoundingClientRect();
-      const cardWidth = measured?.width || PICKER_MAX_WIDTH;
-      const cardHeight = measured?.height || PICKER_EST_HEIGHT;
+      const card = cardRef.current;
+      const cardWidth = card?.getBoundingClientRect().width || PICKER_MAX_WIDTH;
+      // M1: scrollHeight is the NATURAL content height; getBoundingClientRect().height
+      // would return the already-capped height (maxHeight style) and ratchet the card
+      // into staying placed+capped below even when flipping above would show it in full.
+      const cardHeight = card?.scrollHeight || PICKER_EST_HEIGHT;
       setPos(computePickerPos(anchor, cardWidth, cardHeight));
     };
     update();
@@ -127,17 +149,38 @@ export function RatingPill({ rating, onRatingChange, myAthlete, isMobile }) {
     };
   }, [open, isMobile]);
 
-  // T11410: once the portal is mounted, measure its REAL size and correct the
+  // T11410: once the portal is mounted, measure its NATURAL size and correct the
   // flip/clamp before paint (the first pass positioned from an estimate, before
   // the card existed to measure). Converges in one correction via the guard.
   useLayoutEffect(() => {
     if (!open || isMobile || !pos || !cardRef.current || !triggerRef.current) return;
     const anchor = triggerRef.current.getBoundingClientRect();
-    const measured = cardRef.current.getBoundingClientRect();
-    const next = computePickerPos(anchor, measured.width, measured.height);
+    // M1: scrollHeight (natural content height), NOT getBoundingClientRect().height
+    // (which is already capped by the maxHeight style and would never reveal that the
+    // card is clipped — a one-way ratchet keeping it capped below). Width stays on the
+    // bounding rect (it isn't capped).
+    const width = cardRef.current.getBoundingClientRect().width;
+    const height = cardRef.current.scrollHeight;
+    const next = computePickerPos(anchor, width, height);
     if (next.top !== pos.top || next.left !== pos.left || next.maxHeight !== pos.maxHeight) {
       setPos(next);
     }
+  }, [open, isMobile, pos]);
+
+  // M2: Tab from the pill used to land on the rating rows because they were
+  // DOM-adjacent; portaling the card to document.body broke that (the card is
+  // appended at the end of body, so Tab jumped to the next unrelated editor
+  // control). On desktop open, move focus into the card — the checked row if any,
+  // else the first — so keyboard users land on the choices. Guarded so it fires
+  // once per open, not on every reposition. (Mobile keeps native sheet focus.)
+  useEffect(() => {
+    if (!open || isMobile) { didFocusRef.current = false; return; }
+    if (didFocusRef.current || !cardRef.current) return;
+    const rows = cardRef.current.querySelectorAll('[role="radio"]');
+    if (!rows.length) return;
+    const checked = cardRef.current.querySelector('[role="radio"][aria-checked="true"]');
+    (checked || rows[0]).focus();
+    didFocusRef.current = true;
   }, [open, isMobile, pos]);
 
   const pickerTitle = myAthlete ? ANNOTATE.RATE_ATHLETES_PLAY : ANNOTATE.RATE_TEAMS_PLAY;

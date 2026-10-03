@@ -14,15 +14,30 @@ import { RatingPill } from './RatingPill';
 const MARGIN = 8;
 
 // getBoundingClientRect is identity-based so the component's positioning math has
-// real rects to work with in jsdom (which otherwise returns all-zero rects).
-function mockRects({ trigger, card }) {
-  const orig = HTMLElement.prototype.getBoundingClientRect;
+// real rects to work with in jsdom (which otherwise returns all-zero rects). The
+// card's NATURAL height is read via scrollHeight (M1), so that is mocked too —
+// defaulting to the card rect's height, but overridable (cardScrollHeight) to model
+// a card whose bounding rect is already capped below its natural content height.
+function mockRects({ trigger, card, cardScrollHeight }) {
+  const origGBCR = HTMLElement.prototype.getBoundingClientRect;
+  const origSH = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollHeight');
   HTMLElement.prototype.getBoundingClientRect = function mocked() {
     if (this.dataset?.testid === 'rating-pill') return trigger;
     if (this.dataset?.testid === 'rating-picker') return card;
-    return orig.call(this);
+    return origGBCR.call(this);
   };
-  return () => { HTMLElement.prototype.getBoundingClientRect = orig; };
+  Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+    configurable: true,
+    get() {
+      if (this.dataset?.testid === 'rating-picker') return cardScrollHeight ?? card.height;
+      return origSH?.get ? origSH.get.call(this) : 0;
+    },
+  });
+  return () => {
+    HTMLElement.prototype.getBoundingClientRect = origGBCR;
+    if (origSH) Object.defineProperty(HTMLElement.prototype, 'scrollHeight', origSH);
+    else delete HTMLElement.prototype.scrollHeight;
+  };
 }
 
 function rect(left, top, width, height) {
@@ -82,19 +97,66 @@ describe('RatingPill desktop picker — viewport safety (T11410)', () => {
     expect(parseFloat(picker.style.left)).toBe(100);
   });
 
-  it('closes on Escape without propagating to the fullscreen editor handler', () => {
+  it('Escape closes the picker without reaching a sibling document-level Escape listener (B1)', () => {
     restoreRects = mockRects({ trigger: rect(100, 100, 60, 20), card: rect(0, 0, 300, 360) });
+    // Model AnnotateContainer's real fullscreen-exit listener: a plain BUBBLE-phase
+    // keydown on `document`, registered BEFORE the picker opens (the container mounts
+    // first). The picker's capture-phase stopImmediatePropagation must prevent this
+    // from firing — a bubble-phase stopPropagation on the same target would not.
+    const containerEscape = vi.fn();
+    document.addEventListener('keydown', containerEscape);
+    try {
+      render(<RatingPill rating={null} onRatingChange={() => {}} isMobile={false} />);
+      act(() => { fireEvent.click(screen.getByTestId('rating-pill')); });
+      expect(screen.getByTestId('rating-picker')).toBeTruthy();
+
+      // Dispatch on a descendant of document (the real keypress targets the focused
+      // element), so the picker's capture-phase listener on `document` fires before
+      // this bubble-phase sibling — the whole point of the fix.
+      act(() => { fireEvent.keyDown(document.body, { key: 'Escape' }); });
+
+      expect(screen.queryByTestId('rating-picker')).toBeNull();        // picker closed
+      expect(containerEscape).not.toHaveBeenCalled();                  // did NOT exit fullscreen
+    } finally {
+      document.removeEventListener('keydown', containerEscape);
+    }
+  });
+
+  it('flips above when the card is capped below but its natural (scroll) height needs more room (M1)', () => {
+    // Pill mid-viewport: below has slightly LESS room than above, and the card's
+    // natural content (scrollHeight 360) exceeds the room below. The bounding rect
+    // is already capped (264) — measuring that would ratchet it into staying below;
+    // measuring scrollHeight reveals it must flip above to show in full.
+    restoreRects = mockRects({
+      trigger: rect(100, 300, 60, 20),
+      card: rect(0, 0, 300, 264),   // capped bounding-rect height
+      cardScrollHeight: 360,        // larger natural height
+    });
     render(<RatingPill rating={null} onRatingChange={() => {}} isMobile={false} />);
     act(() => { fireEvent.click(screen.getByTestId('rating-pill')); });
-    expect(screen.getByTestId('rating-picker')).toBeTruthy();
 
-    const editorEscape = vi.fn();
-    window.addEventListener('keydown', editorEscape);
-    act(() => { fireEvent.keyDown(document, { key: 'Escape' }); });
-    window.removeEventListener('keydown', editorEscape);
+    const picker = screen.getByTestId('rating-picker');
+    const top = parseFloat(picker.style.top);
+    // Above the pill (top 300), not the below position (would be 328).
+    expect(top).toBeLessThan(300);
+    // A maxHeight cap is set so the (taller-than-available) card scrolls into reach.
+    expect(picker.style.maxHeight).not.toBe('');
+  });
 
+  it('moves focus into the card on open and back to the trigger on Escape (M2)', () => {
+    restoreRects = mockRects({ trigger: rect(100, 100, 60, 20), card: rect(0, 0, 300, 360) });
+    render(<RatingPill rating={3} onRatingChange={() => {}} isMobile={false} />);
+    const trigger = screen.getByTestId('rating-pill');
+    act(() => { fireEvent.click(trigger); });
+
+    // Open focuses the checked row (rating 3) inside the portaled card.
+    const checkedRow = screen.getByRole('radio', { name: /3 stars/i });
+    expect(document.activeElement).toBe(checkedRow);
+
+    // Escape returns focus to the trigger (the card unmounts).
+    act(() => { fireEvent.keyDown(checkedRow, { key: 'Escape' }); });
     expect(screen.queryByTestId('rating-picker')).toBeNull();
-    expect(editorEscape).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(trigger);
   });
 
   it('closes on an outside pointer-down but not when clicking a rating row in the portal', () => {
