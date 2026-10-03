@@ -1,6 +1,6 @@
 # T11400: Required-rating gate should respond immediately after a rating is picked
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-28

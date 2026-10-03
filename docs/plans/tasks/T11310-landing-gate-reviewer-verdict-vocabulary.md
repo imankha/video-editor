@@ -1,6 +1,6 @@
 # T11310: Landing gate reviewer captures sometimes return the wrong verdict word
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-25

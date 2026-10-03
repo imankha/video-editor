@@ -1,6 +1,6 @@
 # T11410: Keep the Annotate rating picker visible in fullscreen
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-28

@@ -1,6 +1,6 @@
 # T11420: Spotlight timeline should open at the left edge
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-28

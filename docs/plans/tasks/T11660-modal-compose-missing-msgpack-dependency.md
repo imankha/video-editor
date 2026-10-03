@@ -1,6 +1,6 @@
 # T11660: Modal download-compose silently falls back to local (missing `msgpack` dependency)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-10-02

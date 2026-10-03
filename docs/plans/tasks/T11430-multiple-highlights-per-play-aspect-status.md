@@ -1,6 +1,6 @@
 # T11430: Published play still says Highlight Not Started; support N highlights per play by aspect
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 7
 **Created:** 2026-09-29
