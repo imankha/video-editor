@@ -1,10 +1,10 @@
 # T11400: Required-rating gate should respond immediately after a rating is picked
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-28
-**Updated:** 2026-09-28
+**Updated:** 2026-10-03
 **Reported environment:** Production build 5870, Annotate
 
 ## Problem
@@ -51,15 +51,26 @@ an actionable rating/retry surface, and the stored continuation must still run a
 
 ### Steps
 
-1. [ ] Measure the delay and map success/failure/navigation continuations.
-2. [ ] Add red tests for immediate visual acknowledgement and one-shot continuation behavior.
-3. [ ] Implement a recoverable pending state without changing the persistence guarantee.
-4. [ ] Verify slow success, write failure/retry, double-click, and 5-star Highlight-choice flows.
+1. [x] Measure the delay and map success/failure/navigation continuations.
+2. [x] Add red tests for immediate visual acknowledgement and one-shot continuation behavior.
+3. [x] Implement a recoverable pending state without changing the persistence guarantee.
+4. [x] Verify slow success, write failure/retry, double-click, and 5-star Highlight-choice flows.
+
+### Progress Log
+
+**2026-10-03**: Round 1 review found 1 MAJOR: after a failed write, re-tapping the SAME rating
+was a silent no-op (local state already matched, judged "clean", no retry sent) -- stranded
+mobile users with no Escape-key workaround. Fixed via `regionWriteQueue.hasFailedKey` tracking
+so a previously-failed key always re-sends on the next pick. Round 2: APPROVED, 0 blocking/0
+major, confirmed clean interaction with T11410 (already merged) via `git merge-tree`. Proof
+Verifier: VERIFIED, independently reproduced red-to-green plus 5 additional spy-based tests for
+the exit-continuation-runs-once guarantee across fail/retry/double-pick sequences, full suite
+38/38 + 53/53 merged-tree check, CI green. Merged PR #558 (`f3bf68212`).
 
 ## Acceptance Criteria
 
-- [ ] A rating pick receives visible acknowledgement in the same render frame.
-- [ ] Users cannot submit a second rating while the first write is pending.
-- [ ] The requested exit still waits for a confirmed rating write and runs exactly once.
-- [ ] A failed write leaves or restores an actionable rating/retry surface.
-- [ ] Picking Brilliant still proceeds to the Make Highlight choice after persistence.
+- [x] A rating pick receives visible acknowledgement in the same render frame.
+- [x] Users cannot submit a second rating while the first write is pending.
+- [x] The requested exit still waits for a confirmed rating write and runs exactly once.
+- [x] A failed write leaves or restores an actionable rating/retry surface.
+- [x] Picking Brilliant still proceeds to the Make Highlight choice after persistence.
