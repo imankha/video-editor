@@ -111,41 +111,41 @@ reduces but cannot eliminate a simultaneous base-update race. Strict protected-b
 checks or a merge queue are needed for that stronger guarantee; both remain explicit
 later rollout decisions. Direct UI/CLI merges can still bypass this local command.
 
-## Known issue: reviewer captures sometimes use the wrong verdict word
+## Resolved: reviewer captures using the wrong verdict word (T11310)
 
-`REPORT_SCHEMA`'s `verdict` enum lists both roles' vocabularies together
-(`VERIFIED, MORE_PROOF_REQUIRED, HUMAN_VERIFICATION_REQUIRED, APPROVED, NEEDS_REVISION`),
-and the `capture()` prompt does not spell out which words belong to which role. A
-`capture --role reviewer` session has been observed to return `verdict: "VERIFIED"`
-(the proof-verifier's word) instead of the schema-correct `APPROVED`/`NEEDS_REVISION`,
-even when the review content itself is clean (0 blocking, 0 major) — `check` then
-refuses with `Code review has not approved` on a vocabulary technicality, not a real
-finding. Observed 2026-09-25 landing T11210 and T11170: 4 consecutive mis-worded
-reviewer captures on one PR before a correctly-worded one landed.
+**History.** `REPORT_SCHEMA` originally listed both roles' vocabularies in one shared
+`verdict` enum (`VERIFIED, MORE_PROOF_REQUIRED, HUMAN_VERIFICATION_REQUIRED, APPROVED,
+NEEDS_REVISION`) and the `capture()` prompt did not spell out which words belonged to
+which role. A `capture --role reviewer` session was repeatedly observed returning
+`verdict: "VERIFIED"` (the proof-verifier's word) instead of the correct
+`APPROVED`/`NEEDS_REVISION`, even with clean review content (0 blocking, 0 major) —
+`check` then refused with `Code review has not approved` on a vocabulary technicality.
+Observed 2026-09-25 landing T11210/T11170 (4 consecutive mis-worded captures on one
+PR) and again 5+ times landing T11320, where a narrow interim mitigation was authorized
+mid-landing: `evaluate()` temporarily accepted `verdict in ('APPROVED', 'VERIFIED')`
+for the reviewer role. That widened the reviewer's accepted vocabulary rather than
+constraining it, so it was never the real fix.
 
-**Do not hand-edit a receipt to fix this.** Recapture — a fresh session, same
-evidence — until the verdict word matches the role; each attempt is independent, so
-retrying costs a session but never compromises the gate. If the evidence file's
-content changes for any reason (for example fixing a criteria-coverage gap), every
-prior capture for it is void regardless of its verdict word: the receipt store keys
-by the evidence file's content hash, so a changed evidence file needs fresh captures
-under both roles, not just the one that changed. See T11310 for the real fix
-(split the schema per role or state the literal required word in the prompt) — this
-touches the trusted controller, so route it through independent policy review rather
-than hotfixing mid-landing.
+**Structural fix (T11310, pending-landing as of 2026-10-03).** `REPORT_SCHEMA` is
+replaced by a per-role `report_schema(role)`: the `reviewer` role's verdict enum is
+`APPROVED`/`NEEDS_REVISION` and the `proof-verifier` role's is
+`VERIFIED`/`MORE_PROOF_REQUIRED`, so the model literally cannot emit the other role's
+word at generation time. `HUMAN_VERIFICATION_REQUIRED` is intentionally valid for both
+roles (T10860). The `capture()` prompt now also names each role's required verdict
+words (defense in depth), and `evaluate()`'s interim `('APPROVED', 'VERIFIED')`
+tolerance for the reviewer role is reverted to strict `APPROVED` (plus the T10860
+`HUMAN_VERIFICATION_REQUIRED` allowance when a human decision is recorded). This note
+will read "resolved" outright once the supervisor confirms the merge; until then treat
+it as landed-pending-merge.
 
-**2026-09-26 interim mitigation (landing T11320):** the bug recurred 5+ times in one
-landing on top of the earlier T11210/T11170 occurrences, and the user explicitly
-authorized a narrow direct fix mid-landing rather than more retries: `evaluate()`
-now accepts `verdict in ('APPROVED', 'VERIFIED')` for the reviewer role. Recapturing
-is no longer strictly necessary purely for the wrong word — `check()` accepts either
-spelling now. **This is explicitly not T11310's real fix** — it widens the reviewer's
-accepted vocabulary rather than constraining it, so a reviewer session that drifts
-into the proof-verifier's whole mental model (not just its one word) would now also
-pass. T11310 stays open for the structural fix (schema split per role). Recapturing
-is still the right move if a review comes back with a genuinely wrong verdict
-(`NEEDS_REVISION`, `MORE_PROOF_REQUIRED`, etc., or nonzero blocking/major) — this
-mitigation only affects the specific `APPROVED` vs `VERIFIED` spelling ambiguity.
+**If a review still comes back wrong,** recapture — a fresh session, same evidence —
+rather than hand-editing a receipt; each attempt is independent, so retrying costs a
+session but never compromises the gate. If the evidence file's content changes for any
+reason (for example fixing a criteria-coverage gap), every prior capture for it is void
+regardless of its verdict word: the receipt store keys by the evidence file's content
+hash, so a changed evidence file needs fresh captures under both roles. Recapture is
+the right move for a genuinely wrong verdict (`NEEDS_REVISION`, `MORE_PROOF_REQUIRED`,
+or nonzero blocking/major) — the schema fix only removes the cross-role spelling slip.
 
 ## Proof for Postgres-backed tests
 
