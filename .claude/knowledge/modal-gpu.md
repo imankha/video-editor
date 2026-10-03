@@ -160,7 +160,9 @@ graph LR
   module-level `import msgpack`. `compose_image` deliberately never installs `msgpack`/FastAPI/DB
   deps, so a real Modal dispatch raised `ModuleNotFoundError`, silently absorbed by
   `compose_serve_time_dispatched`'s any-error-falls-back-to-local design — so download/share
-  composes were running local-only on staging with no visible symptom. Fixed by making
+  composes were running local-only on both staging AND production (confirmed on production via a
+  live diagnostic dispatch against the deployed app, not just inferred) with no visible symptom.
+  Fixed by making
   `image_extractor.py`'s DB import lazy/function-local (matching `clip_cache.get_clip_cache()`'s
   existing pattern), same as `local_gpu_processor.py` already does for its own heavy optional
   import. Regression guard: `test_t7090_modal_compose_dispatch.py::test_compose_modal_entrypoint_imports_do_not_pull_in_database`
