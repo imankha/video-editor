@@ -201,16 +201,19 @@ T11660 still unresolved so a real Modal-dispatch number remains unmeasured):
   wash" conclusion - that conclusion was itself an artifact of comparing numbers polluted by the
   per-process cold-start bug. A real, methodologically-sound single-process comparison shows a
   genuine win even on this cheap/local-compose test file, not just a hypothetical one.
-- **Regression (`new_miss_s` median - `before_s` median): +0.134s.** This is the REAL, now-correctly-measured
-  cost of the cache-key HEAD check on a miss - roughly one HEAD round-trip (consistent with
-  `miss_head_alone_s`'s own 0.143s), nowhere near Round 1's apparent ~0.8-1.5s. `new_miss_s` in this
-  bench models only the cache-key HEAD (it does not call `get_download_file_url`/presign at all,
-  so it does not directly exercise the two-HEAD-concurrency fix above) - that fix's own proof is the
-  dedicated unit test, not this number. If the two concurrent HEADs cost about the same in
-  production (plausible: same R2 endpoint, same network path), the concurrency fix roughly HALVES
-  the sequential-HEAD overhead on a miss (from ~2x a HEAD round trip down to ~1x), not eliminates it
-  - a miss still pays for one cache-key HEAD it didn't pay before this task, which this bench
-    correctly attributes at ~0.134-0.143s, not zero.
+- **Regression (`new_miss_s` median - `before_s` median): +0.134s - a bench-model artifact, NOT the
+  shipped miss-path cost.** `new_miss_s` runs the cache-key HEAD sequentially before fetch+compose,
+  and `before_s` has no HEAD at all - so by construction this arm reproduces the OLD sequential
+  design (one extra HEAD, ~matching `miss_head_alone_s`'s 0.143s), not the shipped `asyncio.gather`
+  code path, which runs the cache-key HEAD CONCURRENTLY with the pre-existing source-verify HEAD
+  (proof: the dedicated `test_cache_head_and_source_verify_head_run_concurrently_not_sequentially`
+  unit test, independently reproduced by the 2nd proof-verifier pass). Since production already paid
+  the source-verify HEAD before this task, the shipped miss-path overhead should be close to zero -
+  just HEAD-timing jitter plus the local `shutil.copyfile` in the background-write path and any
+  `_load_field_values` cost for an attached intro card - none of which this bench measures end to end.
+  Neither this number nor the dedicated concurrency test substitutes for a real measurement of the
+  shipped miss path; that remains a gap, consistent with the bench docstring's own "should be close
+  to zero or negative" expectation.
 - **Caveats, still true:** (1) `via_modal=false` - T11660 (Modal's `compose_serve_time_modal` broken
   on staging) means this still measures the LOCAL ffmpeg compose fallback; a real end-to-end
   production number (where compose is genuinely expensive, the case this cache is actually FOR)
