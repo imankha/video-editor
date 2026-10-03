@@ -322,16 +322,23 @@ export default function PosterMarkerLayer({
     }
   }, [timelineDuration, visualTime, edgePadding]);
 
-  // T6630 round 6 item 4 + round 7 item 6: bring the marker into view (a)
-  // on first load, BEFORE the user has interacted with the marker itself,
-  // and (b) whenever the user actively opens the tab this marker belongs to
-  // -- see the revealOnActive prop doc above for the root-cause this closes.
-  // Round 7's report ("the marker isn't visible on the initial screen") is
-  // the SAME class of bug as round 6's tab-open case: the DEFAULT position
-  // can land past the timeline's pre-existing auto-zoom-widened scroll
-  // viewport before the user has touched anything. The default TIME is
-  // correct and untouched here -- only its initial SCROLL VISIBILITY needed
-  // fixing.
+  // T6630 round 6 item 4 + round 7 item 6: bring the marker into view whenever
+  // the user is actually looking at the tab this marker belongs to -- the DEFAULT
+  // position can land past the timeline's pre-existing auto-zoom-widened scroll
+  // viewport. The default TIME is correct and untouched here -- only its SCROLL
+  // VISIBILITY on the cover tab needed fixing.
+  //
+  // T11420 (supersedes round 7's "reveal on first load regardless of tab"): the
+  // reveal is now gated on `revealOnActive` (the Cover-image tab being active)
+  // for the pre-interaction path too. Round 7 revealed on EVERY mount, so
+  // entering Add Spotlight (entry tab = "Pick your player", not the cover tab)
+  // scrolled the whole timeline to the mid-clip default poster frame while the
+  // playhead stayed at 0 -- and that scroll wrote back into the mode-owned
+  // scrollPosition. Revealing a marker the user has not asked about is exactly
+  // the "yank away from where the user is looking" harm the revealOnActive prop
+  // doc above was written to avoid; round 7 applied the reveal to the wrong
+  // default. Spotlight now opens at the left edge; the reveal still fires the
+  // moment the user opens the Cover-image tab.
   //
   // TRACKS `visualTime` too (live-debugged, not guessed): the round 7 item 6
   // correction changed the no-marker default from the window's MIDPOINT to
@@ -362,6 +369,21 @@ export default function PosterMarkerLayer({
       if (revealOnActive) revealMarker();
       return;
     }
+    // T11420: the first-load auto-reveal only fires when the Cover-image tab is
+    // actually active. The default poster frame is mid-clip (slow-mo.start + 2s,
+    // posterWindow.js), so once the timeline's detection auto-zoom widens the
+    // content that frame is off-screen -- an unconditional reveal here scrolled
+    // the container to it, and that programmatic scrollTo wrote back through
+    // TimelineBase.handleScroll -> onTimelineScrollPositionChange, leaving BOTH
+    // the DOM scroller and the mode-owned scrollPosition non-zero while the
+    // playhead sat at 0. Spotlight's entry tab is "Pick your player", not the
+    // cover tab, so there is no reason to yank the timeline to a marker the user
+    // has not asked about: Spotlight now opens at the left edge. Opening the
+    // Cover-image tab later flips revealOnActive true, re-runs this effect, and
+    // reveals as before (this SUPERSEDES the T6630-round-7 "reveal on first load
+    // regardless of tab" behavior, which was mutually exclusive with opening at
+    // the left edge whenever the default marker is mid-clip).
+    if (!revealOnActive) return;
     revealMarker();
     const retryTimer = setTimeout(() => {
       if (!hasInteractedRef.current) revealMarker();
