@@ -1,6 +1,6 @@
 # T11590: Cache the composed download/share file so repeat requests skip the compose pipeline
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-10-01
