@@ -1943,6 +1943,22 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `RATE_PLAY`/`HIGHLIGHT_MADE`. Tests: `AnnotateFullscreenOverlay.progressBadges.test.jsx` (rewritten
   to the new contract), `RatingPill`-driven picker tests, `clipConstants.test.js`,
   `e2e/T11150-play-editor-hierarchy.qa.spec.js`.
+- **`RatingPill` desktop picker is viewport-safe (T11410, 2026-10-03).** The desktop
+  popup was `absolute top-full left-0` with no portal/collision handling, so in the
+  fullscreen editor a pill near the bottom/right edge rendered the card off-screen.
+  It now **portals to `document.body`** with flip-aware, viewport-clamped `fixed`
+  positioning (`computePickerPos` in `RatingPill.jsx`: left-align + clamp, prefer
+  below / flip above only when below can't fit and above has more room, `maxHeight`
+  + `overflow-y-auto` so rows stay reachable at extreme anchors), recomputed on
+  resize/scroll. New z-rung **`Z.POPOVER` (`z-[110]`)** so the body portal clears
+  the fullscreen overlay (`z-[100]` TOAST). The anchor is a dedicated `triggerRef`
+  on the pill button (not the wrapper). **Outside-click must exclude BOTH `rootRef`
+  (trigger) AND `cardRef` (the portaled card)** — a portaled card is "outside"
+  rootRef, so without the cardRef check a row mousedown would close the picker
+  before the click landed (the ReelTile portal-menu pattern). **Mobile is unchanged**
+  — its viewport-fixed bottom sheet stays INSIDE rootRef (no portal) so a backdrop
+  tap reads as "inside" and does not close (no-backdrop-close rule). Escape still
+  `stopPropagation`s (T10590). Tests: `RatingPill.test.jsx`.
 - **Unrated-exit "Rate this play" gate (T11120, 2026-09-28, epic Highlight-First; gate, NEVER a write).**
   Trying to LEAVE the editor on a play whose `rating == null` opens the **`RateThisPlayModal`** instead
   of leaving; a rated play leaves normally. Picking a row is the ONE gesture that persists `{rating}`
