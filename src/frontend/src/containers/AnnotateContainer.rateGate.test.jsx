@@ -644,6 +644,11 @@ describe('AnnotateContainer — rate-gate pick immediate feedback (T11400)', () 
     expect(result.current.showAnnotateOverlay).toBe(true);
   });
 
+  // NOTE (minor 4): on current master this case already passes EXCEPT for the
+  // `pendingRatingId` assertion (that state doesn't exist pre-T11400) — so it is a
+  // regression guard that the Brilliant -> Make-Highlight flow still works WITH the
+  // immediate-feedback state, not independent proof of the downstream flow itself
+  // (that belongs to the T11130 block above).
   it('(e) Brilliant (5) still flows into the Make Highlight card after the write confirms', async () => {
     const { result } = renderHook(() => AnnotateContainer(baseProps()));
     const id = await markUnratedPlay(result);
@@ -656,5 +661,56 @@ describe('AnnotateContainer — rate-gate pick immediate feedback (T11400)', () 
     expect(result.current.rateGate).toBeNull();
     expect(result.current.highlightChoice?.regionId).toBe(id); // downstream flow intact
     expect(result.current.showAnnotateOverlay).toBe(true);
+  });
+
+  // ---- MAJOR fix-round: re-picking the SAME rating after a failed write must retry ----
+  // updateClipRegionWithSync applies the local state update BEFORE the write, so after
+  // a failure the local state already equals the attempted rating. Without the
+  // failed-key check, re-picking that same value is judged "clean", no retry is sent,
+  // and settle() keeps reporting failure — the gate stays stuck (mobile has no Escape).
+  it('(f) re-picking the SAME rating after a failed write sends exactly one retry, then the exit runs once', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    await markUnratedPlay(result);
+    act(() => { result.current.handleOverlayClose(); }); // gate; proceed = closeOverlay
+
+    // First pick FAILS.
+    apiFetch.mockReset();
+    apiFetch.mockResolvedValue({ ok: false, status: 500, json: async () => ({ success: false }) });
+    await act(async () => { await result.current.handleRateGatePick(3); await flush(); });
+    expect(putCallsWith((b) => b.rating === 3).length).toBe(1); // the failed attempt went out
+    expect(result.current.rateGate).toBeTruthy();               // gate still open (stuck without the fix)
+    expect(result.current.pendingRatingId).toBeNull();
+
+    // Re-pick the SAME rating; now the write succeeds. Local state is already rating 3,
+    // but the failed key forces the retry (the MAJOR fix).
+    apiFetch.mockClear();
+    apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, success: true }) });
+    await act(async () => { await result.current.handleRateGatePick(3); await flush(); });
+
+    expect(putCallsWith((b) => b.rating === 3).length).toBe(1); // exactly ONE retry PUT
+    expect(result.current.rateGate).toBeNull();                 // gate cleared
+    expect(result.current.showAnnotateOverlay).toBe(false);     // continuation ran (once)
+    expect(result.current.pendingRatingId).toBeNull();
+  });
+
+  it('(g) after a failed write, picking a DIFFERENT rating still sends and completes (no regression)', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    await markUnratedPlay(result);
+    act(() => { result.current.handleOverlayClose(); });
+
+    apiFetch.mockReset();
+    apiFetch.mockResolvedValue({ ok: false, status: 500, json: async () => ({ success: false }) });
+    await act(async () => { await result.current.handleRateGatePick(3); await flush(); });
+    expect(result.current.rateGate).toBeTruthy();
+
+    // A different value is never "clean" against local state, so it already retried
+    // pre-fix — guard that the failed-key change didn't break it.
+    apiFetch.mockClear();
+    apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, success: true }) });
+    await act(async () => { await result.current.handleRateGatePick(4); await flush(); });
+
+    expect(putCallsWith((b) => b.rating === 4).length).toBe(1);
+    expect(result.current.rateGate).toBeNull();
+    expect(result.current.showAnnotateOverlay).toBe(false);
   });
 });

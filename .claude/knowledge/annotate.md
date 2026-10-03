@@ -1983,9 +1983,12 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   driven headless** in `AnnotateContainer.rateGate.test.jsx` (jsdom, matchMedia forced mobile for route 3);
   the only path still verified by staging alone is the mobile LIVE-drive of the modal chrome.
   **`handleRateGatePick` carries a SYNCHRONOUS in-flight ref guard (`rateGatePickInFlightRef`, T9830/T10450
-  convention like `markPlayInFlightRef`)**: rating rows aren't disabled mid-write and `setRateGate(null)` is
-  batched (`rateGateRef` only refreshes on render), so without it two quick picks both pass the
-  `rateGateRef.current !== gate` check and fire `proceed()` twice (dup `finishAnnotation` POST / dup nav).
+  convention like `markPlayInFlightRef`)**: T11400 now DISABLES the rating rows during the pending state, but
+  the ref is still required because the disable only paints on the NEXT render and `setRateGate(null)` /
+  `setPendingRatingId` are batched (`rateGateRef` only refreshes on render), so two picks in the SAME frame
+  (before the disable paints) could both pass the `rateGateRef.current !== gate` check and fire `proceed()`
+  twice (dup `finishAnnotation` POST / dup nav). The ref makes any same-frame re-pick a no-op regardless of
+  render timing.
   - **Immediate-feedback pending state (T11400, 2026-10-03).** The pick AWAITS the confirmed write before
     navigating (correct persistence) but used to leave the modal visually inert for that whole window, so it
     felt unresponsive and invited repeat clicks. `handleRateGatePick` now sets **`pendingRatingId`
@@ -1993,12 +1996,21 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
     `AnnotateModeView` -> `RateThisPlayModal` as **`pendingRating`** -> **`RatingMeaningsList`**'s new
     `pendingRating` prop: that row renders selected + `aria-busy` with a `Loader2` spinner and ALL rows go
     `disabled` (so a second pick can't fire — belt-and-suspenders with the in-flight ref). `pendingRatingId`
-    is cleared on success (BEFORE `gate.proceed` runs, else a stale value would leak into a re-opened gate),
-    on an abandoned gate (`rateGateRef.current !== gate`), on a FAILED write (`!ok` -> re-arms the rows for
-    retry, gate stays open), and in `handleRateGateDismiss`. **This is pure UI feedback — it does NOT relax
-    the await-the-confirmed-write-before-navigating or run-exactly-once contracts.** `RatingMeaningsList`'s
-    `pendingRating` defaults to `null`, so the editor's `RatingPill` is unchanged. Tests:
-    `AnnotateContainer.rateGate.test.jsx` (T11400 block), `RatingMeaningsList.pending.test.jsx`.
+    is cleared in `handleRateGatePick`'s **`finally`** on EVERY exit (success, failure, abandon, or an
+    unexpected throw from the write/settle), so the rows always re-arm and can never stay disabled; those
+    setState calls batch with `setRateGate(null)`/`proceed` in the same microtask, so a re-opened gate never
+    observes a stale pending id. Also cleared in `handleRateGateDismiss`. **This is pure UI feedback — it does
+    NOT relax the await-the-confirmed-write-before-navigating or run-exactly-once contracts.**
+    `RatingMeaningsList`'s `pendingRating` defaults to `null`, so the editor's `RatingPill` is unchanged.
+  - **FAILED-KEY RETRY LANDMINE (T11400 fix-round).** `updateClipRegionWithSync` applies the local state
+    update BEFORE attempting the write, so after a write FAILS the local state already matches the attempted
+    value. Re-picking the SAME rating would then be judged clean by `isCleanAgainst` and NO retry would be
+    sent — `settle()` still reports failure (key in the failed set), so the gate stayed stuck for anyone with
+    no Escape/backdrop escape hatch (mobile). Fix: `regionWriteQueue.hasFailedKey(regionId, keys)` — the clean
+    short-circuit in `updateClipRegionWithSync` only fires when the payload is clean AND none of its keys are
+    currently failed, so a failed key always re-sends on the next pick of that same value. Tests:
+    `AnnotateContainer.rateGate.test.jsx` (T11400 block + fix-round retry test), `RatingMeaningsList.pending.test.jsx`,
+    `regionWriteQueue.test.js`.
 - **Done -> "Make this a highlight now?" choice card (T11130, 2026-09-28, epic Highlight-First).**
   Done on a play rated **Highlight (5)** that is **not yet a highlight** (`autoProjectId` empty) mode-swaps
   the editor's edit strip / portrait strip IN PLACE for a gold `HighlightChoiceCard`

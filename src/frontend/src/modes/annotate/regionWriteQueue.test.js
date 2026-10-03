@@ -129,4 +129,18 @@ describe('regionWriteQueue (T10610 § C.1)', () => {
     await queue.enqueue('r1', ['__create'], fn);
     expect(await queue.settle('r1')).toBe(true);
   });
+
+  it('hasFailedKey reports a currently-failed key and clears after a successful re-send (T11400)', async () => {
+    const queue = createRegionWriteQueue();
+    expect(queue.hasFailedKey('r1', ['rating'])).toBe(false); // nothing queued yet
+
+    await queue.enqueue('r1', ['rating'], async () => ({ saveOk: false }));
+    expect(queue.hasFailedKey('r1', ['rating'])).toBe(true);        // the failed key
+    expect(queue.hasFailedKey('r1', ['name'])).toBe(false);         // unrelated key
+    expect(queue.hasFailedKey('r1', ['name', 'rating'])).toBe(true); // any-of semantics
+    expect(queue.hasFailedKey('other', ['rating'])).toBe(false);    // other region
+
+    await queue.enqueue('r1', ['rating'], async () => ({ saveOk: true }));
+    expect(queue.hasFailedKey('r1', ['rating'])).toBe(false);       // cleared after success
+  });
 });
