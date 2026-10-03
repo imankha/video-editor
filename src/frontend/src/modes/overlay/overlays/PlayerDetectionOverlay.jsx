@@ -19,6 +19,7 @@ export default function PlayerDetectionOverlay({
   panOffset = { x: 0, y: 0 },
   isFullscreen = false,
   isDisabled = false,
+  hideCountBadge = false,
 }) {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const lastLoggedDetections = useRef(null);
@@ -202,16 +203,18 @@ export default function PlayerDetectionOverlay({
       </svg>
 
       {/* Detection count badge */}
-      <div className="absolute top-4 right-4 bg-black/60 text-white px-3 py-1.5 rounded text-sm pointer-events-none">
-        {isLoading ? (
-          <span className="flex items-center gap-2">
-            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            Updating...
-          </span>
-        ) : (
-          <span>{detections.length} player{detections.length !== 1 ? 's' : ''} detected</span>
-        )}
-      </div>
+      {!hideCountBadge && (
+        <div className="absolute top-4 right-4 bg-black/60 text-white px-3 py-1.5 rounded text-sm pointer-events-none">
+          {isLoading ? (
+            <span className="flex items-center gap-2">
+              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Updating...
+            </span>
+          ) : (
+            <span>{detections.length} player{detections.length !== 1 ? 's' : ''} detected</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

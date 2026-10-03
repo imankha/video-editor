@@ -2,8 +2,9 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 /**
- * T9620 (UX-10): the spotlight editor leads with PICKING A PLAYER.
- * - "Click your athlete" (T9860 D3) is stated on screen (not a hover tooltip) while unpicked.
+ * T9620 (UX-10) + T11570: the spotlight editor leads with PICKING A PLAYER.
+ * - The guided-pick walk's own guide (SpotlightPickGuide) states the step on
+ *   screen (not a hover tooltip) while unpicked markers remain.
  * - The spotlight scaffolding ellipse is suppressed until a player is assigned
  *   (HighlightOverlay does not render), so nothing floats on unassigned ground.
  * - Both are lifted once a detection frame carries an assignment keyframe.
@@ -40,7 +41,12 @@ vi.mock('../hooks/useFullscreenControls', () => ({
     handleLongPressTouchEnd: () => {},
   }),
 }));
-vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => false }));
+vi.mock('../hooks/useIsMobile', () => ({
+  useIsMobile: () => false,
+  useIsLandscape: () => false,
+  useIsPhonePortrait: () => false,
+  useIsSmallPhoneViewport: () => false,
+}));
 
 import { OverlayModeView } from './OverlayModeView';
 import { EDITOR_PANELS } from '../config/displayNames';
@@ -93,11 +99,20 @@ function renderView(overrides = {}) {
   return render(<OverlayModeView {...props} />);
 }
 
-describe('OverlayModeView player-selection-first (T9620)', () => {
-  it('states "Click your athlete" and suppresses the spotlight before selection', () => {
-    renderView({ highlightRegions: [regionUnassigned()] });
-    const prompt = screen.getByTestId('select-player-prompt');
-    expect(prompt.textContent).toBe(EDITOR_PANELS.SELECT_PLAYER_CLICK);
+describe('OverlayModeView player-selection-first (T9620 + T11570 guided walk)', () => {
+  it('shows the guide\'s "Click your athlete" step and suppresses the spotlight before selection', () => {
+    renderView({
+      highlightRegions: [regionUnassigned()],
+      pickGuidePhase: 'parked',
+      pickGuideStep: 1,
+      pickGuideTotal: 1,
+    });
+    const guide = screen.getByTestId('spotlight-pick-guide');
+    expect(guide.getAttribute('data-phase')).toBe('parked');
+    expect(screen.getByTestId('pick-guide-text').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_CLICK);
+    expect(screen.getByTestId('pick-guide-step').textContent).toBe(
+      EDITOR_PANELS.PICK_GUIDE_STEP(1, 1, false)
+    );
     // No ellipse on unassigned ground: HighlightOverlay must not mount.
     expect(screen.queryByTestId('highlight-overlay')).toBeNull();
     // Styling controls hidden; the panel shows the pick-your-athlete guidance.
@@ -105,22 +120,26 @@ describe('OverlayModeView player-selection-first (T9620)', () => {
     expect(screen.queryByText(EDITOR_PANELS.OUTLINE_THICKNESS)).toBeNull();
   });
 
-  it('routes the user to a marker when no boxes are visible yet', () => {
-    renderView({ highlightRegions: [regionUnassigned()], playerDetections: [] });
-    expect(screen.getByTestId('select-player-prompt').textContent).toBe(
-      EDITOR_PANELS.SELECT_PLAYER_FIND
-    );
+  it('renders nothing when the guided walk reports no active phase', () => {
+    renderView({ highlightRegions: [regionUnassigned()], pickGuidePhase: null });
+    expect(screen.queryByTestId('spotlight-pick-guide')).toBeNull();
   });
 
   it('reveals the spotlight and styling once a player is assigned', () => {
-    renderView({ highlightRegions: [regionAssigned()] });
-    expect(screen.queryByTestId('select-player-prompt')).toBeNull();
+    renderView({
+      highlightRegions: [regionAssigned()],
+      pickGuidePhase: 'done',
+      pickGuideStep: null,
+      pickGuideTotal: 1,
+    });
     expect(screen.getByTestId('highlight-overlay')).toBeTruthy();
     expect(screen.getByText(EDITOR_PANELS.OUTLINE_THICKNESS)).toBeTruthy();
+    // Done state: "All 1 done" + a "Play spotlight" button, no "Step" copy.
+    expect(screen.getByTestId('pick-guide-text').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_DONE(1, false));
   });
 
-  it('does not push player selection when tracking is hidden', () => {
-    renderView({ highlightRegions: [regionUnassigned()], showPlayerBoxes: false });
-    expect(screen.queryByTestId('select-player-prompt')).toBeNull();
+  it('does not render the guide when tracking is hidden and no guide phase is supplied', () => {
+    renderView({ highlightRegions: [regionUnassigned()], showPlayerBoxes: false, pickGuidePhase: null });
+    expect(screen.queryByTestId('spotlight-pick-guide')).toBeNull();
   });
 });

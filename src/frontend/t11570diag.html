@@ -1,0 +1,22 @@
+<!doctype html>
+<!--
+  T11570 DEV-ONLY diagnostic harness for the guided athlete-pick guide's
+  responsive placement. NOT a production page: not listed in vite build
+  rollupOptions.input (only index.html is), so it never ships in the built
+  app. Served by the dev server only, for the Playwright real-browser QA
+  10-viewport sweep.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>T11570 pick-guide placement diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #0b1220; }
+    </style>
+  </head>
+  <body>
+    <div id="t11570diag-root"></div>
+    <script type="module" src="/src/t11570diag/main.jsx"></script>
+  </body>
+</html>

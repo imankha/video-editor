@@ -46,6 +46,7 @@ export default function HighlightOverlay({
   currentHighlight,
   onHighlightChange,
   onHighlightComplete,
+  onDragStart,
   isEnabled = false,
   effectType = HighlightEffect.DARK_OVERLAY,
   highlightShape = 'body',
@@ -149,12 +150,19 @@ export default function HighlightOverlay({
    * Begin a body drag. Captures the pointer so the move stays glued to the circle
    * even if the finger/cursor leaves it, and snapshots the start geometry. Shared by
    * the ellipse body and the center move grip.
+   *
+   * `onDragStart` fires FIRST, at pointerdown — not on the first move. A caller
+   * holding a pending timer tied to the PREVIOUS gesture (T11570's guided-pick
+   * auto-advance) must cancel it here: the user can press-and-hold before moving,
+   * so a cancel on first move alone leaves a window where that timer fires while
+   * pointer capture is already held (T11570 review round 4 MAJOR).
    */
   const beginDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
     e.currentTarget.setPointerCapture?.(e.pointerId);
     window.addEventListener('touchmove', preventDefaultTouch, { passive: false });
+    onDragStart?.();
     activePointerIdRef.current = e.pointerId;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     highlightStartRef.current = currentHighlight;
@@ -165,13 +173,14 @@ export default function HighlightOverlay({
   };
 
   /**
-   * Begin a handle resize.
+   * Begin a handle resize. See `beginDrag` for why `onDragStart` fires here too.
    */
   const beginResize = (e, handle) => {
     e.preventDefault();
     e.stopPropagation();
     e.currentTarget.setPointerCapture?.(e.pointerId);
     window.addEventListener('touchmove', preventDefaultTouch, { passive: false });
+    onDragStart?.();
     activePointerIdRef.current = e.pointerId;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     highlightStartRef.current = currentHighlight;
@@ -185,12 +194,14 @@ export default function HighlightOverlay({
    * T5610: pointer down on the display-only ENTER target (a transparent hit ellipse shown
    * only when tap-to-toggle is wired and the circle is not yet editable). Captures the
    * pointer to detect a tap, but sets NO drag/resize flags — a display-only circle has no
-   * geometry to change until the tap enters edit mode.
+   * geometry to change until the tap enters edit mode. Still fires `onDragStart` (cheap and
+   * idempotent) so a pending guided-pick advance cannot fire mid-gesture here either.
    */
   const beginEnterTap = (e) => {
     e.preventDefault();
     e.stopPropagation();
     e.currentTarget.setPointerCapture?.(e.pointerId);
+    onDragStart?.();
     activePointerIdRef.current = e.pointerId;
     tapRef.current = { x: e.clientX, y: e.clientY, moved: false };
     draggingRef.current = false;

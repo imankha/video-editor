@@ -1,5 +1,143 @@
 ---
 domain: keyframes-framing
+updated: 2026-10-03 (T11570 review-response round 4 — a FOURTH fresh-context Reviewer found the
+round-3 fix below only closed the FIRST-MOVE half of the gap, not pointerdown. `HighlightOverlay`
+only calls `onHighlightChange` from its pointer-MOVE handler — `beginDrag`/`beginResize` (the actual
+pointerdown entry points) called no parent callback at all. So: release at marker N schedules the
+650ms confirm/advance -> user re-grabs the circle and HOLDS STILL for a beat (ordinary mouse
+behavior, deciding where to drag) -> the timer fires while the pointer is already captured but
+hasn't moved yet -> `handleHighlightChange`'s cancel (round 3's fix) never runs because no move
+event has fired -> parks/seeks onto marker N+1 mid-hold -> the eventual move+release still writes
+marker N+1's keyframe. **Corrected invariant (supersedes the round-3 wording below): the pending
+guided-pick advance must be cancelled at POINTERDOWN, not on first move** — first move is too late,
+since pointer capture already holds the gesture open through any seek the timer triggers before
+that. Fix: new `onDragStart` prop on `HighlightOverlay`, called from all three pointerdown entry
+points (`beginDrag`, `beginResize`, and `beginEnterTap` — the tap-to-enter-edit-mode target, cheap
+and idempotent to cover too) BEFORE any drag/resize state is set. Wired end to end: `HighlightOverlay
+onDragStart` -> `OverlayModeView onHighlightDragStart` -> `OverlayScreen` -> `OverlayContainer.
+handleHighlightDragStart` (new) -> `guidedPick.cancelPendingAdvance()`. The round-3 cancel call
+inside `handleHighlightChange` is now REMOVED (redundant once pointerdown always cancels first, and
+it fired on every move event of every drag, not just the first). See `OverlayContainer.test.jsx`'s
+"a drag re-grab cancels a pending guided-pick advance at POINTERDOWN, not first move" describe
+block — it renders the REAL `HighlightOverlay` (not just `OverlayContainer` in isolation) and drives
+actual Pointer Events (pointerdown -> advance timers -> pointermove -> pointerup), because calling
+`handleHighlightChange` directly (the round-3 test's approach) cannot distinguish "cancels on move"
+from "cancels on pointerdown".)
+updated: 2026-10-02 (T11570 review-response round 3 — a THIRD fresh-context Reviewer caught 1
+MAJOR: a drag already in progress could have its final release land on the WRONG marker. Repro:
+user drags+releases the highlight circle at marker N (`handleHighlightComplete` schedules
+`scheduleGuidedAdvance`'s 650ms confirm/advance timer), then re-grabs the circle to nudge it before
+that timer fires (`handleHighlightChange` — previously just `setDragHighlight`, no cancellation).
+Pointer capture keeps the drag alive through the seek the timer triggers, so the timer fires
+mid-drag, `parkOnEntry` parks/seeks onto marker N+1, and the eventual release reads
+`clickedDetection.timestamp` (now N+1) as the keyframe's assign time — the geometry tuned on marker
+N's box gets written as marker N+1's keyframe, silently marking N+1 "assigned" despite the user
+never looking at it. Fixed (at the time) by exporting `cancelPendingAdvance` from
+`useGuidedAthletePick` and calling it at the top of `OverlayContainer.handleHighlightChange`.
+**CORRECTION (round 4 above supersedes this): that only cancels on the gesture's FIRST MOVE, not at
+pointerdown** — `handleHighlightChange` is driven by `HighlightOverlay`'s pointer-MOVE handler, so a
+press-and-hold before moving still let the timer fire mid-hold. The round-3 test asserted the fix by
+calling `handleHighlightChange` directly, which cannot tell "cancels on move" apart from "cancels on
+pointerdown" — see round 4's entry above for why that test was rewritten against the REAL
+`HighlightOverlay` instead.)
+updated: 2026-10-02 (T11570 review-response round 2 — a SECOND fresh-context Reviewer caught 1 new
+BLOCKING + 1 new MAJOR in the round-1 fixes above, both now fixed + negative-control-verified.
+BLOCKING: `SpotlightPickGuide`'s flip-to-bottom effect could infinite-loop ("Maximum update depth
+exceeded") — when the FULL-size pill didn't fit a band but the COMPACT pill did, the fit-check
+branches reactively called `setForcedCompact(false)` once compact happened to clear, which then
+didn't fit at full size, re-forcing compact, which fit again, forever. **Invariant: `forcedCompact`
+must only reset when the actual INPUTS change (`obstacleBoxes`/`phase`/`step`, tracked via a
+`measuredInputsKeyRef` signature), never reactively because a fit-check happened to succeed this
+pass** — once compact is forced for a given input set, it STAYS forced for that input set even if a
+later pass of the same inputs would now fit full-size. MAJOR: `useGuidedAthletePick.
+scheduleGuidedAdvance` was called by `OverlayContainer.handleHighlightComplete` on EVERY highlight
+drag-release landing in an enabled region, not just actual detection-marker picks — an ordinary
+manual reposition at a non-marker timestamp still confirmed ("Got it") and, 650ms later, silently
+seeked the playhead to the next unpicked marker; this also ran invisibly when `showPlayerBoxes` was
+false. Fixed with two no-op early-returns in `scheduleGuidedAdvance`, BEFORE any state write: (a)
+`pickedIndex === -1` (derived index not found — not a marker pick, so no warning, this is an
+expected case unlike the tap-handler's same check) and (b) `!showPlayerBoxes`. The existing
+cancel-on-scrub-away effect also now fires on `showPlayerBoxes` flipping false mid-confirm, so a
+PENDING advance scheduled while boxes were visible can't fire invisibly once they're hidden. See
+`OverlayContainer.test.jsx`'s "review round 2 MAJOR fix" describe block for the real-container-level
+proof (not just the isolated hook) per the reviewer's explicit ask.)
+updated: 2026-10-02 (T11570 review-response round — a fresh-context Reviewer caught 5 real bugs the
+134-test/10-viewport-passing first cut missed, all now fixed + regression-tested with negative
+controls (see the entry below for the original feature). **Landmine for future readers: diag-
+harness tests proved nothing about the real app's wiring** — the walk harness seeded
+`highlightRegions` SYNCHRONOUSLY at mount and the placement harness hardcoded the flip decision,
+so both sailed past exactly the bugs that broke the real async-load/real-geometry paths. (1)
+BLOCKING: entry-park never fired in production — `highlightRegions` starts `[]` (useHighlightRegions'
+own `useState([])`) and only populates once `/overlay-data` resolves; the entry-park effect was
+keyed on `[active]` alone (true from first render, never changes), so it ran once with zero markers
+and never retried. Fixed with `canPark` (`overlaySyncState==='ready'` for this project AND
+`duration>0` — `seek()` silently no-ops without a known duration, T10750) + `sessionKey`
+(`overlayLoadedProjectId`, reset per newly-loaded clip) gating a ref-held one-shot latch in
+`useGuidedAthletePick`. (2) `scheduleGuidedAdvance` trusted stale `trackedMarkerIndex` instead of
+the marker ACTUALLY picked (boxes can show/be tapped wherever the playhead sits, independent of
+what's tracked) — now derives the picked index from `(regionId, assignedTime)` via
+`ASSIGN_TOLERANCE_S`, warns if not found. (3) "Got it" now reads `prefers-reduced-motion` at call
+time (0ms) instead of always 650ms. (4) `showPlayerBoxes===false` now suspends the guide's phase to
+`null` (restores the pre-T11570 `awaitingPlayerSelection && showPlayerBoxes` contract) while the
+state machine keeps advancing underneath. (5) The flip-to-bottom rule now measures the pill's REAL
+rendered height + REAL obstacle box rects (`stageRef` + `obstacleBoxes`/`videoHeight` props,
+replacing a static "top 20%" boolean blind to the pill's own size and to bottom-band obstacles) and
+tries its own compact form once before giving up; the pill BODY is `pointer-events-none` (only its
+buttons opt in), so a box it still ends up covering stays tappable. **Real-browser-only landmine
+inside that fix:** `stageRef` is owned by an ANCESTOR component, and observed in a real browser
+(NOT reproducible in jsdom) to sometimes not be attached yet when THIS component's own
+`useLayoutEffect` first runs — a `mountTick` (one `requestAnimationFrame`-scheduled retry after the
+first paint) covers the gap; pin this precedent if you EVER consume a ref owned by a different
+component inside a `useLayoutEffect` — jsdom will not catch the race, only a real browser (or
+Playwright) will. See `OverlayContainer.test.jsx` (new) for the BLOCKING-fix proof through the REAL
+container wiring, not just the isolated hook.)
+updated: 2026-10-02 (T11570 — Spotlight's "Pick your player" now auto-advances through every
+unpicked detection marker instead of leaving the user to hunt for the next one; supersedes T9620's
+single-pick banner entirely. `modes/overlay/utils/detectionAssignment.js` gained
+`orderedDetectionMarkers(regions)`: the ONE ordering source (region start, then detection time
+within it) that `detectionAssignmentStates` derives from, and that every "marker N" consumer
+(guide step numbers, forward/wrap navigation) derives from too — do not re-sort regions/detections
+a second way. `nextUnpickedMarker(regions, fromIndex, justAssigned)` is the forward-then-wrap
+navigation primitive (fromIndex=-1 finds the first unpicked marker for entry-park).
+`OverlayContainer.parkOnDetection(marker)` is the SINGLE "land on marker X" path (sets
+clickedDetection + seeks via frameToTime) — `DetectionMarkerLayer` no longer computes its own seek
+target, it just forwards the full marker (incl. `fps`) to the handler (renamed from
+`handleDetectionMarkerClick`). New hook `modes/overlay/hooks/useGuidedAthletePick.js` holds the
+auto-advance state machine: phases `null|'parked'|'confirm'|'away'|'done'`, entry-park on mount,
+650ms "Got it" confirm (`scheduleGuidedAdvance`, called SYNCHRONOUSLY inside
+`handlePlayerSelect`/`handleHighlightComplete` — gesture-based, never a reactive `useEffect`),
+cancel-on-play/scrub-away/direct-tap/mode-switch/unmount, and a `resumeTrackedMarker` for the away
+state's "Go to step N". **Phase-priority landmine (fixed before ship): check 'confirm'/'parked'
+BEFORE 'done'** — otherwise revisiting an already-picked marker after the whole walk is done gets
+stuck showing 'done' (or 'away') instead of briefly showing 'Picking' for that one marker before
+falling back to 'done'. Ephemeral view state only — zero new persistence; the only DB write stays
+the existing per-pick `addHighlightRegionKeyframe` call. New presentational
+`modes/overlay/components/SpotlightPickGuide.jsx`: 2 placements (`overlay` floating pill with a
+flip-to-bottom rule when a box's top edge is in the top 20% of frame, computed in
+`OverlayModeView` from `playerDetections`/`detectionVideoHeight`; `strip` sits between the video
+and timeline on phone-portrait, never over the video), `compact` copy for the smallest viewports,
+progress dots (reads `detectionAssignmentStates` fresh, not the quest store), a "Not boxed?"
+disclosure, and a Done-state auto-hide (next play or 4s). Placement bucket is resolved in
+`OverlayModeView` via two NEW hooks in `hooks/useIsMobile.js` (`useIsPhonePortrait`,
+`useIsSmallPhoneViewport`, same matchMedia pattern as the existing `useIsLandscape`) plus the
+existing `mobileFs` flag — landscape-phone OR mobileFs wins first (pill+safe-area), independent of
+raw viewport width. `OverlaySpotlightPanel`'s old single-pick "done" copy
+(`SELECT_PLAYER_DONE`/`SELECT_PLAYER_ADD_MORE`, retired) is replaced by a step checklist driven by
+the SAME progress array the guide renders (threaded in as `pickProgress`/`activeStep` props — the
+panel stays presentational, no store read). Copy: new `EDITOR_PANELS.PICK_GUIDE_*` keys;
+`SELECT_PLAYER_TAP`/`SELECT_PLAYER_FIND` also retired (zero callers once the guide replaced the
+banner — the guide auto-navigates, so there's no "find a marker yourself" state anymore).
+Dev-only diag harnesses (never ship — not in vite's `rollupOptions.input`, same T9620 precedent):
+`t11570diag.html` (responsive placement, real hooks reacting to the real viewport) and
+`t11570walkdiag.html` (live-drives the real hook+view against an in-memory fixture — there is no
+dedicated `OverlayContainer` test harness in this codebase, so this is the closest real-browser
+proof of the container-level wiring). Coverage: `detectionAssignment.test.js`,
+`useGuidedAthletePick.test.js` (12, incl. the phase-priority landmine), `SpotlightPickGuide.test.jsx`
+(16), `OverlaySpotlightPanel.test.jsx` checklist block, `OverlayModeView.playerSelection.test.jsx` +
+7 sibling OverlayModeView suites (needed the 2 new `useIsMobile` hook exports added to their
+mocks), `e2e/T11570-spotlight-pick-guide-responsive.qa.spec.js` (10-viewport no-overlap sweep,
+negative-control-verified), `e2e/T11570-spotlight-guided-pick-walk.qa.spec.js` (all 7 acceptance
+criteria live-driven end to end).)
 updated: 2026-09-27 (T11240 — Removed Framing's multi-clip editor UI: a project is now exactly one
 clip. Deleted `ClipSelectorSidebar`/`ClipLibraryModal`/`UploadClipModal`/`FocusClipsPanel`, the
 cockpit Clips sheet + rail button, the project Total output chip, `isMultiClip`/`isMultiClipMode`,

@@ -45,7 +45,7 @@ vi.mock('../hooks/useFullscreenControls', () => ({
 }));
 
 const isMobileMock = vi.fn(() => false);
-vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => isMobileMock() }));
+vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => isMobileMock(), useIsLandscape: () => false, useIsPhonePortrait: () => false, useIsSmallPhoneViewport: () => false }));
 
 import { OverlayModeView } from './OverlayModeView';
 

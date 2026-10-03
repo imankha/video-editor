@@ -1,0 +1,23 @@
+<!doctype html>
+<!--
+  T11570 DEV-ONLY diagnostic harness that live-drives the guided athlete-pick
+  walk's behavior (entry-park, pick/confirm/advance, forward-then-wrap, drag-
+  the-circle, cancel-on-play/scrub). NOT a production page: not listed in
+  vite build rollupOptions.input, so it never ships in the built app. Served
+  by the dev server only, for the Playwright real-browser QA walkthrough.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>T11570 guided-pick walk diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #0b1220; }
+      button { cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div id="t11570walkdiag-root"></div>
+    <script type="module" src="/src/t11570walkdiag/main.jsx"></script>
+  </body>
+</html>

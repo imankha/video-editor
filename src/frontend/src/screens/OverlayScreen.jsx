@@ -1460,7 +1460,12 @@ export function OverlayScreen({
     handlePlayerSelect,
     handleHighlightChange,
     handleHighlightComplete,
-    handleDetectionMarkerClick,
+    handleHighlightDragStart,
+    onDetectionMarkerTap,
+    pickGuidePhase,
+    pickGuideStep,
+    pickGuideTotal,
+    onResumePickGuideStep,
     // Spotlight loop playback (T5370)
     spotlightSpan,
     spotlightPlayMode,
@@ -1779,6 +1784,7 @@ export function OverlayScreen({
       // Highlight handlers (wrapped for action-based sync)
       onHighlightChange={handleHighlightChange}
       onHighlightComplete={handleHighlightComplete}
+      onHighlightDragStart={handleHighlightDragStart}
       onAddHighlightRegion={wrappedAddHighlightRegion}
       onDeleteHighlightRegion={wrappedDeleteHighlightRegion}
       onMoveHighlightRegionStart={wrappedMoveHighlightRegionStart}
@@ -1817,7 +1823,12 @@ export function OverlayScreen({
       onPlayerSelect={handlePlayerSelect}
       showPlayerBoxes={showPlayerBoxes}
       onTogglePlayerBoxes={togglePlayerBoxes}
-      onDetectionMarkerClick={handleDetectionMarkerClick}
+      onDetectionMarkerClick={onDetectionMarkerTap}
+      // Guided athlete-pick walk (T11570)
+      pickGuidePhase={pickGuidePhase}
+      pickGuideStep={pickGuideStep}
+      pickGuideTotal={pickGuideTotal}
+      onResumePickGuideStep={onResumePickGuideStep}
       // Zoom
       zoom={zoom}
       panOffset={panOffset}

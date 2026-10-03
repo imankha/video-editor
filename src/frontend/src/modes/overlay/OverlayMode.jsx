@@ -316,7 +316,6 @@ export function OverlayMode({
                   regions={highlightRegions}
                   duration={duration}
                   visualDuration={visualDuration || duration}
-                  onSeek={onSeek}
                   onDetectionMarkerClick={onDetectionMarkerClick}
                   sourceTimeToVisualTime={sourceTimeToVisualTime}
                   edgePadding={EDGE_PADDING}
