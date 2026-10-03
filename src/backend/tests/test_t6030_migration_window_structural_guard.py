@@ -55,7 +55,7 @@ POST_V023_COLUMNS = {
     "working_videos": ["detections_data", "framing_snapshot", "highlight_carry_note"],  # v027, v046
     "export_jobs": ["stage", "output_key"],                                             # v028
     "working_clips": ["rotation", "framing_version"],                                     # v029, v044
-    "projects": ["poster_marker_time"],                                                  # v032
+    "projects": ["poster_marker_time", "source_raw_clip_id", "highlight_ordinal"],  # v032, v056
     "intro_cards": ["subtitle_text"],                                                    # v035
     "raw_clips": ["reel_source_start_time", "reel_source_end_time", "source"],        # v049, v053
     "pending_uploads": ["kind"],                                                       # v050
@@ -202,7 +202,21 @@ POST_V023_COLUMNS = {
     #   (migrations/__init__.py run_profile_seam) runs pending migrations to head
     #   SYNCHRONOUSLY before any query touches the profile DB, so no request ever
     #   observes rating as still NOT NULL post-deploy.
-HEAD_VERSION_AUDITED = 55  # v055 (T11110): port "Brilliant ..."->"Highlight ..." names, DATA-ONLY, no column added
+    # v056 (T11430): projects.source_raw_clip_id + highlight_ordinal, durable
+    # one-to-many play->highlight link (one project = one highlight instance of
+    # one play), surviving archive on publish (unlike working_clips.raw_clip_id,
+    # deleted on archive). Every hot read/write that names either column is
+    # column_exists-guarded: the create path (_create_auto_project_for_clip,
+    # clips.py) falls back to the pre-T11430 3-column INSERT when absent; the
+    # new highlight-instances read helper (_get_highlight_instances_by_clip,
+    # clips.py, driven by games.py's load_annotations_from_db) returns {} for
+    # every clip id when absent; the aspect-ratio-change ordinal recompute
+    # (set_project_aspect_ratio, clips.py) is skipped entirely when absent (the
+    # UPDATE aspect_ratio itself is unconditional and pre-existing). No LIST
+    # read in this file's below-head fixture set names either column directly
+    # (list_projects/list_project_clips project neither), so no new
+    # test_* driver needed beyond the explicit column-drop coverage above.
+HEAD_VERSION_AUDITED = 56  # v056 (T11430): projects.source_raw_clip_id + highlight_ordinal, durable one-to-many play->highlight link
 
 
 def _cleanup(user_id: str) -> None:
@@ -221,6 +235,11 @@ def _build_below_head_db(user_id: str) -> None:
     import sqlite3
 
     conn = sqlite3.connect(str(get_database_path()))
+    # T11430: projects.source_raw_clip_id (v056) is indexed
+    # (idx_projects_source_raw_clip) -- SQLite refuses ALTER TABLE ... DROP
+    # COLUMN when an index still names the column, so drop the index first to
+    # faithfully synthesize the below-head (pre-index-too) shape.
+    conn.execute("DROP INDEX IF EXISTS idx_projects_source_raw_clip")
     for table, cols in POST_V023_COLUMNS.items():
         for col in cols:
             conn.execute(f"ALTER TABLE {table} DROP COLUMN {col}")

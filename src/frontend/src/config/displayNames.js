@@ -80,6 +80,9 @@ export const ANNOTATE = {
   // the timeline strip's Edit play/Frame pairing already frames it as an
   // action on the currently-selected clip; no need to repeat "this clip".
   FRAME_THIS_CLIP: 'Make Highlight',       // FOCUS-stage primary CTA
+  // T11430: the primary CTA once at least one highlight instance exists for
+  // the play (any instance, published or in-progress — design §4.5 decision B).
+  MAKE_ANOTHER_HIGHLIGHT: 'Make Another Highlight',
   // 2026-09-18 (user request): rollover on the Frame this clip button, using
   // ALREADY-APPROVED copy -- the Clips-tab guidance body (T10280, the user's
   // own words, 2026-09-17) is the one place the app explains what Framing

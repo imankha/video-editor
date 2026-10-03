@@ -1,5 +1,20 @@
 ---
 domain: persistence-sync
+updated: 2026-10-03 (T11430: new profile_db migration v056 (`projects.source_raw_clip_id` +
+`projects.highlight_ordinal`, plain additive `ALTER TABLE ADD COLUMN`, no inline `REFERENCES` on
+the ALTER — matching the T5800/v030 convention that an FK-like column added via ALTER stays
+unconstrained on existing DBs while the fresh-install `database.py` DDL declares the real
+table-level FK; JIT-seam migrated, idempotent 3-chain backfill). Every new/changed hot read or
+write naming these columns (`clips.py::_create_auto_project_for_clip`,
+`_get_highlight_instances_by_clip`, `update_raw_clip`'s `force_new` branch,
+`set_project_aspect_ratio`'s ordinal recompute, `games.py::load_annotations_from_db`) is
+`column_exists`-guarded for rolling-deploy skew (T5085 "permanent, not a window" posture) — see
+annotate.md's T11430 entry for the full mechanism and bug this fixes. All new writes trace to a
+named gesture ("Make Highlight"/"Make Another Highlight" click → `_create_auto_project_for_clip`;
+aspect-ratio picker → `set_project_aspect_ratio`'s ordinal recompute) or are the authorized v056
+JIT-seam backfill — no reactive persistence introduced. `highlight_instances` reads are read-only,
+no write-back. Structural guard (`test_t6030_migration_window_structural_guard.py`)
+`POST_V023_COLUMNS`/`HEAD_VERSION_AUDITED` updated to 56 in the same commit as the migration.)
 updated: 2026-09-26 (T10860 follow-up #2, same day, independent reviewer finding — MAJOR, fixed:
 **a "mark seen on first row" scan over a project's MULTIPLE active shares can mask a real signal
 behind an irrelevant one.** The T10860 staleness scan (`projects.py`, ordered by `shared_at DESC`)

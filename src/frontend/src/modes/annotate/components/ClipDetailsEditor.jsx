@@ -124,7 +124,8 @@ export function ClipDetailsEditor({
     setNotesDraft(region.notes || '');
   }, [region.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const hasReel = !!region.autoProjectId;
+  // T11430: same "any highlight instance" widening as AnnotateFullscreenOverlay.
+  const hasReel = !!region.autoProjectId || (region.highlightInstances?.length ?? 0) > 0;
   const notesLength = notesDraft.length;
 
   // T5725: teammate tagging is a Team-layer-only affordance. Legacy-NULL rule

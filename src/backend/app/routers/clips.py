@@ -180,6 +180,12 @@ class RawClipUpdate(BaseModel):
     create_project: bool | None = None
     tagged_teammates: list[str] | None = None
     my_athlete: bool | None = None
+    # T11430: "Make Another Highlight" -- when True, always mint a brand-new
+    # project, skipping the stale-pointer check/clear entirely, and never
+    # mutating/detaching/archiving any prior highlight (design req #2). Falsy
+    # (None/False) leaves the original "Make Highlight" stale-pointer-dedup
+    # behavior completely unchanged.
+    force_new: bool | None = None
 
 
 class RawClipSaveResponse(BaseModel):
@@ -826,6 +832,34 @@ async def set_project_aspect_ratio(project_id: int, body: AspectRatioChange):
             (body.aspect_ratio, project_id),
         )
 
+        # T11430: changing orientation moves this project into a different
+        # per-orientation ordinal bucket (design doc §4.4) -- recompute ITS OWN
+        # highlight_ordinal as the next slot in the new bucket. Never touch any
+        # other project's ordinal; gaps left in the old bucket are fine.
+        # Skip entirely when the ratio is unchanged (re-picking the current
+        # aspect ratio) -- otherwise this would needlessly move the project to
+        # the back of its OWN bucket for a no-op selection.
+        if body.aspect_ratio != project['aspect_ratio'] and column_exists(cursor, "projects", "source_raw_clip_id"):
+            cursor.execute(
+                "SELECT source_raw_clip_id FROM projects WHERE id = ?", (project_id,)
+            )
+            source_row = cursor.fetchone()
+            if source_row and source_row['source_raw_clip_id'] is not None:
+                cursor.execute(
+                    """
+                    UPDATE projects
+                    SET highlight_ordinal = (
+                        SELECT COALESCE(MAX(highlight_ordinal), 0) + 1
+                        FROM projects
+                        WHERE source_raw_clip_id = ?
+                          AND aspect_ratio = ?
+                          AND id != ?
+                    )
+                    WHERE id = ?
+                    """,
+                    (source_row['source_raw_clip_id'], body.aspect_ratio, project_id, project_id),
+                )
+
         # Re-fit every latest-version clip that has crop keyframes.
         cursor.execute(f"""
             SELECT id, raw_clip_id, crop_data, width, height
@@ -1102,10 +1136,23 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
 
     logger.info(f"[CreateReel] Using project name: {project_name!r} for clip {raw_clip_id}")
 
-    cursor.execute("""
-        INSERT INTO projects (name, aspect_ratio, is_auto_created)
-        VALUES (?, '9:16', 1)
-    """, (project_name,))
+    # T11430: carry the durable one-to-many link (source_raw_clip_id) and assign
+    # this highlight's one-based ordinal within its (raw_clip, orientation) bucket
+    # in the SAME INSERT statement (atomic read+write, not two round trips).
+    # Column-guarded for the deploy->migrate window (v056 not yet applied): fall
+    # back to the pre-T11430 3-column INSERT so a not-yet-migrated profile never
+    # 500s the "Make Highlight" gesture.
+    if column_exists(cursor, "projects", "source_raw_clip_id"):
+        cursor.execute("""
+            INSERT INTO projects (name, aspect_ratio, is_auto_created, source_raw_clip_id, highlight_ordinal)
+            VALUES (?, '9:16', 1, ?,
+              (SELECT COALESCE(MAX(highlight_ordinal), 0) + 1 FROM projects WHERE source_raw_clip_id = ? AND aspect_ratio = '9:16'))
+        """, (project_name, raw_clip_id, raw_clip_id))
+    else:
+        cursor.execute("""
+            INSERT INTO projects (name, aspect_ratio, is_auto_created)
+            VALUES (?, '9:16', 1)
+        """, (project_name,))
     project_id = cursor.lastrowid
 
     # Add the raw clip as a working clip in this project (T1500: copies dims from game_video)
@@ -1132,6 +1179,74 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
 
     logger.info(f"Created auto-project {project_id} for clip {raw_clip_id}")
     return project_id
+
+
+def _get_highlight_instances_by_clip(cursor, raw_clip_ids: list[int]) -> dict[int, list[dict]]:
+    """T11430: for every raw_clip id, return the list of highlight instances (one
+    entry per project linked via projects.source_raw_clip_id) -- ARCHIVED-INCLUSIVE,
+    since publish archives the project but the whole point of this read is that
+    archived no longer means hidden (design doc §5.2).
+
+    One query for all ids (no N+1). Column-guarded for the deploy->migrate window
+    (v056 not yet applied): returns {} for every id when the column is absent.
+    Legacy multi-clip reels (final_videos.clip_count > 1) are excluded -- they are
+    not single-play, not re-editable (T11220), and must never surface here.
+    """
+    if not raw_clip_ids:
+        return {}
+    if not column_exists(cursor, "projects", "source_raw_clip_id"):
+        return {}
+
+    placeholders = ",".join("?" for _ in raw_clip_ids)
+    cursor.execute(f"""
+        SELECT
+          p.id AS project_id, p.source_raw_clip_id, p.aspect_ratio AS project_aspect_ratio,
+          p.highlight_ordinal, p.archived_at, p.created_at, p.is_auto_created,
+          CASE WHEN wv.id IS NOT NULL THEN 1 ELSE 0 END AS has_working_video,
+          CASE WHEN EXISTS (SELECT 1 FROM final_videos WHERE project_id = p.id) THEN 1 ELSE 0 END AS has_final_video,
+          CASE WHEN EXISTS (SELECT 1 FROM final_videos WHERE project_id = p.id AND published_at IS NOT NULL) THEN 1 ELSE 0 END AS is_published,
+          (SELECT fv2.aspect_ratio FROM final_videos fv2 WHERE fv2.project_id = p.id AND fv2.published_at IS NOT NULL ORDER BY fv2.id DESC LIMIT 1) AS published_aspect_ratio,
+          (SELECT MAX(fv3.clip_count) FROM final_videos fv3 WHERE fv3.project_id = p.id) AS max_clip_count
+        FROM projects p
+        LEFT JOIN working_videos wv ON p.working_video_id = wv.id
+        WHERE p.source_raw_clip_id IN ({placeholders})
+    """, raw_clip_ids)
+    rows = cursor.fetchall()
+
+    instances_by_clip: dict[int, list[dict]] = {}
+    for row in rows:
+        max_clip_count = row['max_clip_count']
+        if max_clip_count is not None and max_clip_count > 1:
+            # Legacy multi-clip reel: not a single-play highlight, excluded.
+            continue
+        if not row['is_auto_created']:
+            # A user-created (non-auto) project: not a highlight instance of
+            # this play's auto-highlight history, excluded (design §5.2/§8).
+            continue
+        source_raw_clip_id = row['source_raw_clip_id']
+        instances_by_clip.setdefault(source_raw_clip_id, []).append({
+            "project_id": row["project_id"],
+            "aspect_ratio": row["published_aspect_ratio"] or row["project_aspect_ratio"],
+            "highlight_ordinal": row["highlight_ordinal"],
+            "has_working_video": bool(row["has_working_video"]),
+            "has_final_video": bool(row["has_final_video"]),
+            "is_published": bool(row["is_published"]),
+            "archived_at": row["archived_at"],
+            "created_at": row["created_at"],
+        })
+
+    # Design §4.6: published first, then by orientation + ordinal, so the
+    # badge list order is deterministic across reloads/surfaces.
+    def _sort_key(instance):
+        return (
+            0 if instance["is_published"] else 1,
+            instance["aspect_ratio"] or "",
+            instance["highlight_ordinal"] if instance["highlight_ordinal"] is not None else 0,
+        )
+    for instances in instances_by_clip.values():
+        instances.sort(key=_sort_key)
+
+    return instances_by_clip
 
 
 def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
@@ -1478,21 +1593,30 @@ async def update_raw_clip(
         # Handle explicit project creation toggle
         project_created = False
         if update.create_project:
-            if auto_project_id:
-                cursor.execute(
-                    "SELECT id FROM projects WHERE id = ? AND archived_at IS NULL",
-                    (auto_project_id,),
-                )
-                if cursor.fetchone():
-                    logger.info(f"[CreateReel] Clip {clip_id} already has auto_project_id={auto_project_id}, skipping")
-                else:
-                    logger.info(f"[CreateReel] Clip {clip_id} had stale auto_project_id={auto_project_id}, clearing")
-                    auto_project_id = None
-            if not auto_project_id:
+            if update.force_new:
+                # T11430 "Make Another Highlight": always mint a new project.
+                # Skip the stale-pointer check/clear entirely -- this path must
+                # never touch/detach/archive any prior highlight, only INSERT.
                 clip_name = update.name if update.name is not None else clip['name']
-                logger.info(f"[CreateReel] Creating reel for clip {clip_id}, name={clip_name!r}")
+                logger.info(f"[CreateReel] force_new: creating another highlight for clip {clip_id}, name={clip_name!r}")
                 auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name)
                 project_created = True
+            else:
+                if auto_project_id:
+                    cursor.execute(
+                        "SELECT id FROM projects WHERE id = ? AND archived_at IS NULL",
+                        (auto_project_id,),
+                    )
+                    if cursor.fetchone():
+                        logger.info(f"[CreateReel] Clip {clip_id} already has auto_project_id={auto_project_id}, skipping")
+                    else:
+                        logger.info(f"[CreateReel] Clip {clip_id} had stale auto_project_id={auto_project_id}, clearing")
+                        auto_project_id = None
+                if not auto_project_id:
+                    clip_name = update.name if update.name is not None else clip['name']
+                    logger.info(f"[CreateReel] Creating reel for clip {clip_id}, name={clip_name!r}")
+                    auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name)
+                    project_created = True
 
         # Build update query
         updates = []

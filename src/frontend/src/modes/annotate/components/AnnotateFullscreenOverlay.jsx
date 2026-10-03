@@ -400,7 +400,10 @@ export function AnnotateFullscreenOverlay({
   const hasTagsOrNotes = (selectedTags?.length ?? 0) > 0 || Boolean(notes?.trim());
   const detailsLabel = hasTagsOrNotes ? 'View Tags and Notes' : 'Add Tags and Notes';
 
-  const highlightMade = !!existingClip.autoProjectId;
+  // T11430: a play counts as "highlight made" with any highlight instance
+  // (archived-inclusive collection), not just the legacy single autoProjectId
+  // pointer — the pointer still covers the no-instances legacy case.
+  const highlightMade = !!existingClip.autoProjectId || (existingClip.highlightInstances?.length ?? 0) > 0;
 
   const formBody = (
     <>
