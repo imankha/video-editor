@@ -6,11 +6,15 @@ Users can list, download, and delete their final videos.
 """
 
 import asyncio
+import hashlib
+import json
 import logging
 import os
 import re
+import shutil
 import tempfile
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -47,11 +51,15 @@ from app.storage import (
     VideoServeOutcome,
     copy_profile_object,
     delete_profile_object,
+    download_from_r2_global,
     file_exists_in_r2,
     generate_presigned_url,
     log_video_resolution,
     profile_object_exists,
+    r2_head_object_global,
     r2_key,
+    r2_user_prefix,
+    upload_file_to_r2_global,
     video_outcome_for_status,
 )
 from app.user_context import get_current_req_id, get_current_user_id
@@ -666,6 +674,201 @@ def generate_download_filename(project_name: str) -> str:
     return f"{safe_name}_final.mp4"
 
 
+# ---- disposable composed-download cache (T11590, mirrors T4947) -----------
+# A repeat download/share of an UNCHANGED reel serves a pre-composed MP4
+# straight from R2 instead of re-fetching + recomposing. No DB row, no
+# migration: the cache is fully derivable from its R2 key, which fingerprints
+# everything that changes the composed bytes, so any input change is a
+# natural miss. Lives under the caller's own R2 prefix, disposable and torn
+# down with the account. Deliberately NOT a shared helper with
+# routers/collections.py's identical T4947 cache (Refactoring Rule 1: abstract
+# on the 3rd duplication, not the 1st) -- this is only the 2nd occurrence.
+
+_CACHE_KEY_PREFIX = "reel_downloads"
+
+# Same content-defining columns as T4947's collection cache (same intro_cards
+# table, same burn-affecting fields).
+_CARD_CONTENT_COLUMNS = (
+    "id", "name", "shown_fields", "treatment", "subtitle_text",
+    "image_key", "image_cutout_key", "focal_x", "focal_y", "zoom",
+    "duration", "updated_at",
+)
+
+
+def _card_content_hash(card_row) -> str:
+    """Stable 16-hex digest of the resolved intro card's burn-affecting content
+    (or a fixed sentinel when there is no intro), so EDITING the card without
+    changing its id still invalidates the download cache. `card_row` is a
+    `SELECT *` sqlite row from `resolve_intro_card`."""
+    if card_row is None:
+        return "no-card"
+    parts = []
+    for col in _CARD_CONTENT_COLUMNS:
+        try:
+            parts.append(f"{col}={card_row[col]}")
+        except (KeyError, IndexError):
+            parts.append(f"{col}=?")  # column absent below-head; still stable
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def _download_cache_key(
+    r2_prefix: str, filename: str, resolved_card_id: int | None,
+    card_content_hash: str, field_values_fp: str, outro_on: bool,
+) -> str:
+    """Full R2 key for the composed-download cache: sha256 over the stored
+    final_video filename (immutable per row; a re-export is a NEW row/filename
+    -> a natural miss) + the resolved intro card id + its content hash + the
+    burned intro FACTS (profile full_name / shown fields, which live in
+    user.sqlite, not the card row -- see `_load_field_values`) + the
+    branded-outro flag. Any single input change yields a different key."""
+    fingerprint = "\n".join([
+        f"filename={filename}",
+        f"card={resolved_card_id}",
+        f"cardhash={card_content_hash}",
+        f"facts={field_values_fp}",
+        f"outro={int(outro_on)}",
+    ])
+    digest = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
+    return f"{r2_prefix}/{_CACHE_KEY_PREFIX}/{digest}.mp4"
+
+
+def _stream_cache_hit_and_cleanup(path: str, cleanup_dir: str):
+    """Stream a cache-hit MP4 in 1 MiB chunks, then `rmtree` `cleanup_dir` in a
+    `finally`. A failure here is genuinely post-headers (the 200 is already
+    committed) -- logged loudly with context rather than silently swallowed."""
+    import shutil as _shutil
+
+    def _gen():
+        try:
+            with open(path, "rb") as fin:
+                while True:
+                    chunk = fin.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+        except Exception:
+            logger.exception(f"[Download] streaming cached file failed mid-stream: {path}")
+            raise
+        finally:
+            _shutil.rmtree(cleanup_dir, ignore_errors=True)
+    return _gen()
+
+
+# ---- write-after-build runs in the BACKGROUND (T11590 gap 3) ---------------
+# A live-measured regression: the ORIGINAL write-after-build awaited
+# `upload_file_to_r2_global` synchronously, before `_stamp_download` and
+# before the first streamed byte -- so every MISS (including a first-ever
+# share/download, the exact case the "Share took too long" complaint was
+# about) paid for an extra R2 PUT on top of compose, making the uncached path
+# STRICTLY SLOWER than before this cache existed.
+#
+# The real contract (corrected after an Opus root-cause pass found the
+# original wording above overclaimed a blanket guarantee that was never
+# actually measured): a MISS adds NO sequential R2 round-trip on the
+# R2_ENABLED path, because the cache-key HEAD now runs CONCURRENTLY with the
+# pre-existing source-verify HEAD (`asyncio.gather`, see the HEAD-before-build
+# block above) instead of one after the other -- and a MISS never pays the
+# cache PUT before the first streamed byte, because that write runs in the
+# background (this section). It is NOT a blanket "never slower" guarantee for
+# every possible case (e.g. compose cost itself is unchanged by this cache).
+#
+# Fix: the upload runs as a detached `asyncio.Task`, created but never
+# awaited by the request handler, so it cannot block the response. The ONE
+# subtlety: the file being uploaded (`serve_path`) lives inside the request's
+# own `tmp_dir`, which the generator's `finally` tears down as soon as
+# stamping+streaming finishes -- a finish that can easily race a slower
+# network upload. Rather than make that teardown conditional (fragile -- two
+# code paths would now need to agree on who owns cleanup), this SYNCHRONOUSLY
+# copies the file into its OWN independent tempdir FIRST (fast local
+# disk-to-disk I/O, not the slow network PUT) before scheduling the
+# background task, so the task's lifetime is fully decoupled from the
+# request's `tmp_dir` and can never race its teardown. The request handler
+# awaits only the cheap copy, never the upload.
+_BACKGROUND_CACHE_WRITE_TASKS: set[asyncio.Task] = set()
+
+
+async def _copy_for_background_cache_write(serve_path: str) -> tuple[str, str]:
+    """Synchronously (but off-loop, via `asyncio.to_thread`) copies
+    `serve_path` into a fresh independent tempdir, returning
+    `(copy_path, copy_dir)`. Awaited by the request handler BEFORE scheduling
+    the background upload task, so the copy is guaranteed complete while
+    `serve_path`'s own `tmp_dir` is still guaranteed alive -- the background
+    task then only ever touches its OWN `copy_dir`, never the caller's.
+
+    Raises on failure (most plausibly `OSError(ENOSPC)` -- a MISS briefly
+    holds two copies of the reel on disk, doubling peak temp usage) OR on
+    cancellation (client disconnect mid-copy). Either way this function
+    cleans up its OWN partially-created `copy_dir` before re-raising -- the
+    caller never learns about `copy_dir` on a failed copy, so nothing else
+    needs to (or could) clean it up."""
+    copy_dir = tempfile.mkdtemp(prefix="rb_dl_cache_write_")
+    copy_path = os.path.join(copy_dir, "cache_write.mp4")
+    try:
+        await asyncio.to_thread(shutil.copyfile, serve_path, copy_path)
+    except BaseException:
+        shutil.rmtree(copy_dir, ignore_errors=True)
+        raise
+    return copy_path, copy_dir
+
+
+async def _background_cache_write(cache_key: str, copy_path: str, copy_dir: str) -> None:
+    """Uploads the ALREADY-COPIED file (see `_copy_for_background_cache_write`)
+    to the disposable cache key in the background. Fired via
+    `asyncio.create_task` and never awaited by the request handler, so the R2
+    PUT never blocks the first byte. Best-effort: a failure is logged (with
+    the actual exception, or a plain warning when the upload swallowed its
+    own error and just returned False) and otherwise swallowed, same contract
+    as the original synchronous write -- it must never surface to a client
+    that already received its bytes. Owns + cleans up `copy_dir` --
+    independent of the request's own `tmp_dir`."""
+    try:
+        ok = await asyncio.to_thread(
+            upload_file_to_r2_global, cache_key, Path(copy_path), content_type="video/mp4",
+        )
+        if not ok:
+            logger.warning(f"[Download] cache write failed (non-fatal): {cache_key}")
+    except Exception:
+        logger.warning(f"[Download] cache write failed (non-fatal): {cache_key}", exc_info=True)
+    finally:
+        shutil.rmtree(copy_dir, ignore_errors=True)
+
+
+async def _spawn_background_cache_write(cache_key: str, serve_path: str) -> None:
+    """Call site for both the R2-source and local-source branches: copy then
+    schedule (never await the upload itself).
+
+    The copy step runs HERE, in the request path (it must complete before
+    `serve_path`'s own `tmp_dir` can be torn down -- see
+    `_copy_for_background_cache_write`'s docstring), so it must behave like
+    every other best-effort cache-write step in this file: a failure is
+    logged and swallowed, NEVER allowed to escape into the StreamingResponse
+    generator and cut off an already-200'd response with zero bytes. Only
+    cancellation (client disconnect) propagates -- there is no cache write
+    left to finish in that case anyway, and `_copy_for_background_cache_write`
+    has already cleaned up its own partial copy before re-raising it.
+
+    Keeps a reference to the created upload `Task` in a module-level set (and
+    detaches on completion) -- without this, nothing else references the
+    task and it can be garbage collected mid-flight (a documented asyncio
+    footgun for fire-and-forget tasks; the identical pattern already exists
+    twice in this codebase -- `poster_warmer.fire_and_forget` and
+    `auth.py`'s `_background_tasks` -- a 3rd-occurrence candidate for
+    extraction, noted in the knowledge doc rather than done here)."""
+    try:
+        copy_path, copy_dir = await _copy_for_background_cache_write(serve_path)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.warning(
+            f"[Download] cache write copy failed (non-fatal, skipping cache write): {cache_key}",
+            exc_info=True,
+        )
+        return
+    task = asyncio.create_task(_background_cache_write(cache_key, copy_path, copy_dir))
+    _BACKGROUND_CACHE_WRITE_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_CACHE_WRITE_TASKS.discard)
+
+
 def _stamp_download(
     serve_path: str, tmp_dir: str, meta: dict,
     user_id: str, profile_id: str,
@@ -741,6 +944,14 @@ async def download_file(download_id: int):
         intro_card_id = row['intro_card_id']
         reel_duration = row['duration']
 
+        # Resolve the intro card ROW here (connection alive) -- its RESOLVED id
+        # + content hash feed the cache key below, using the SAME
+        # source_my_athlete==0 gate `_resolve_download_intro` uses, so the
+        # cache key and the actual compose call never resolve different cards.
+        card_row = None
+        if row['source_my_athlete'] != 0:
+            card_row = resolve_intro_card(intro_card_id, reel_duration, conn, reel_id=download_id)
+
         def _resolve_download_intro():
             # Resolves its OWN read-only profile connection (never the ambient
             # `conn` above -- that closes when this `with` block exits, well
@@ -759,11 +970,76 @@ async def download_file(download_id: int):
         from app.services.download_metadata import build_download_metadata
         dl_meta = build_download_metadata(conn, download_id, user_id, profile_id)
 
+        # ---- HEAD-before-build: serve a repeat download/share from the
+        # disposable R2 cache without re-fetching/recomposing (T11590, mirrors
+        # T4947's collection-download cache). The key fingerprints every input
+        # that changes the composed bytes; `outro_enabled()` (the
+        # BRANDED_OUTRO_ENABLED flag) is what the compose pass ACTUALLY honors
+        # even though we always pass outro=True, so it -- not the literal
+        # True -- belongs in the key. ----
+        from app.services.branded_outro import outro_enabled
+
+        # The BURNED intro facts (profile full_name + the card's shown fields)
+        # live in user.sqlite, NOT the intro-card row, so editing a fact never
+        # bumps the card's `updated_at` -- they must be in the key on their
+        # own, or a profile rename would keep serving the stale burned name
+        # from cache. Only relevant when a card is actually attached (the only
+        # case they get burned).
+        field_values_fp = ""
+        if card_row is not None:
+            from app.services.intro_egress import _load_field_values
+            field_values = await asyncio.to_thread(_load_field_values, user_id, profile_id)
+            field_values_fp = json.dumps(field_values, sort_keys=True, default=str)
+        cache_key = _download_cache_key(
+            r2_user_prefix(user_id), row['filename'],
+            card_row["id"] if card_row is not None else None,
+            _card_content_hash(card_row), field_values_fp, outro_enabled(),
+        )
+        # On the R2_ENABLED branch, run the cache-key HEAD (T11590) and the
+        # PRE-EXISTING source-verify HEAD (inside get_download_file_url,
+        # verify_exists=True -- a blocking boto3 call that otherwise ran
+        # directly on the event loop) CONCURRENTLY via asyncio.gather. Before
+        # this fix they ran sequentially -- two round trips where there used
+        # to be one before this cache existed. A cache HIT below ignores the
+        # presign result (it was speculative, fetched in parallel for free);
+        # a MISS falls through and uses it exactly as before. The local-disk
+        # branch (R2_ENABLED=false) has no source HEAD to overlap with, so it
+        # stays a single HEAD, unchanged.
+        if R2_ENABLED:
+            cache_head_result, presigned_url = await asyncio.gather(
+                asyncio.to_thread(r2_head_object_global, cache_key),
+                asyncio.to_thread(get_download_file_url, row['filename'], verify_exists=True),
+            )
+        else:
+            cache_head_result = await asyncio.to_thread(r2_head_object_global, cache_key)
+            presigned_url = None  # unused on the local-disk branch
+
+        if cache_head_result is not None:
+            cache_tmp = tempfile.mkdtemp(prefix="rb_dl_cache_")
+            cached_path = os.path.join(cache_tmp, "cached.mp4")
+            if await asyncio.to_thread(download_from_r2_global, cache_key, Path(cached_path)):
+                logger.info(f"[Download] cache HIT {cache_key}")
+                # _stamp_download stays PER-REQUEST, never cached (download_metadata.py
+                # NOTE ON CACHING) -- `artist` is the live profile name and must
+                # never go stale in a cached file.
+                stamped_path = await asyncio.to_thread(
+                    _stamp_download, cached_path, cache_tmp, dl_meta, user_id, profile_id,
+                )
+                return StreamingResponse(
+                    _stream_cache_hit_and_cleanup(stamped_path, cache_tmp),
+                    media_type="video/mp4", headers=dl_headers,
+                )
+            # HEAD said present but the GET failed (transient blip / just-evicted)
+            # -- tear down and fall through to a fresh build rather than 5xx.
+            _shutil.rmtree(cache_tmp, ignore_errors=True)
+            logger.warning(
+                f"[Download] cache HEAD hit but download failed; rebuilding {cache_key}"
+            )
+
         # ---- R2 path: download to temp, append outro, stream result ----
         if R2_ENABLED:
             import httpx
 
-            presigned_url = get_download_file_url(row['filename'], verify_exists=True)
             if not presigned_url:
                 logger.error(
                     f"[Download] R2 presigned URL failed for: {row['filename']}"
@@ -809,13 +1085,14 @@ async def download_file(download_id: int):
 
                     serve_path = original_path
                     intro = await asyncio.to_thread(_resolve_download_intro)
+                    compose_report: dict = {}
                     try:
                         # T7090 Phase 3: dispatch the compose (Modal when enabled,
                         # local otherwise). `user_id` owns the reel/intro R2 scratch.
                         from app.services.serve_time_video import compose_serve_time_dispatched
                         if await asyncio.to_thread(
                             compose_serve_time_dispatched, original_path, out_path,
-                            user_id=user_id, intro=intro, outro=True,
+                            user_id=user_id, intro=intro, outro=True, report=compose_report,
                         ):
                             serve_path = out_path
                     except Exception as exc:
@@ -825,6 +1102,26 @@ async def download_file(download_id: int):
                     finally:
                         if intro is not None:
                             intro.cleanup()
+
+                    # ---- write-after-build: populate the disposable cache
+                    # IN THE BACKGROUND (best-effort, T11590; backgrounded per
+                    # gap 3 -- see `_spawn_background_cache_write`'s docstring,
+                    # a MISS must never pay for the R2 PUT before its first
+                    # byte). Only a FULL-FIDELITY compose is cached -- a
+                    # transient intro/outro/concat degradation streams to THIS
+                    # caller but must not freeze degraded bytes into the cache
+                    # (no self-heal otherwise). An R2 object PUT is atomic and
+                    # each concurrent request streams its OWN freshly-built
+                    # `serve_path`, so two concurrent uncached requests for the
+                    # same key can race the write but never corrupt either
+                    # caller's bytes.
+                    if compose_report.get("full_fidelity"):
+                        await _spawn_background_cache_write(cache_key, serve_path)
+                    else:
+                        logger.info(
+                            f"[Download] compose degraded (not full fidelity); "
+                            f"skipping cache write {cache_key}"
+                        )
 
                     serve_path = await asyncio.to_thread(
                         _stamp_download, serve_path, tmp_dir, dl_meta,
@@ -860,13 +1157,14 @@ async def download_file(download_id: int):
                 out_path = os.path.join(tmp_dir, "composed.mp4")
                 serve_path = str(file_path)
                 intro = await asyncio.to_thread(_resolve_download_intro)
+                compose_report: dict = {}
                 try:
                     # T7090 Phase 3: dispatch the compose (Modal when enabled, local
                     # otherwise). `user_id` owns the reel/intro R2 scratch.
                     from app.services.serve_time_video import compose_serve_time_dispatched
                     if await asyncio.to_thread(
                         compose_serve_time_dispatched, str(file_path), out_path,
-                        user_id=user_id, intro=intro, outro=True,
+                        user_id=user_id, intro=intro, outro=True, report=compose_report,
                     ):
                         serve_path = out_path
                 except Exception as exc:
@@ -876,6 +1174,18 @@ async def download_file(download_id: int):
                 finally:
                     if intro is not None:
                         intro.cleanup()
+
+                # ---- write-after-build: populate the disposable cache IN THE
+                # BACKGROUND (best-effort, T11590) -- same full-fidelity-only
+                # gate, concurrency reasoning, and background-write rationale
+                # as the R2 branch above.
+                if compose_report.get("full_fidelity"):
+                    await _spawn_background_cache_write(cache_key, serve_path)
+                else:
+                    logger.info(
+                        f"[Download] compose degraded (not full fidelity); "
+                        f"skipping cache write {cache_key}"
+                    )
 
                 serve_path = await asyncio.to_thread(
                     _stamp_download, serve_path, tmp_dir, dl_meta,

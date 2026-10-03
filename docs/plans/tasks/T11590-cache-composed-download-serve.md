@@ -113,17 +113,129 @@ cold cache, the fix is the same second-tap shape, not more caching.
 
 ## Acceptance Criteria
 
-- [ ] Repeat download/share of an unchanged highlight serves from cache - no R2-fetch, no Modal
+- [x] Repeat download/share of an unchanged highlight serves from cache - no R2-fetch, no Modal
       dispatch, no ffmpeg compose pass (measure and log the skip).
-- [ ] Changing the attached intro card produces a cache miss and a fresh build on the next request.
-- [ ] Changing the outro flag (if ever made configurable) produces a cache miss.
-- [ ] A re-export (new final_video row/filename) never serves a stale cached file from the old row.
-- [ ] Two concurrent requests for the same uncached key don't corrupt each other's output.
-- [ ] The metadata/cover stamp (artist, title, etc.) is still applied fresh on every request, even
+- [x] Changing the attached intro card produces a cache miss and a fresh build on the next request.
+- [x] Changing the outro flag (if ever made configurable) produces a cache miss.
+- [x] A re-export (new final_video row/filename) never serves a stale cached file from the old row.
+- [x] Two concurrent requests for the same uncached key don't corrupt each other's output.
+- [x] The metadata/cover stamp (artist, title, etc.) is still applied fresh on every request, even
       on a cache hit - a profile rename shows up on the very next download with no stale-artist
       cache poisoning (this is the existing contract in `download_metadata.py`; verify it still
       holds once this cache ships).
-- [ ] Live-measured before/after latency for a cache-hit request, reported in the PR (not just
+- [x] Live-measured before/after latency for a cache-hit request, reported in the PR (not just
       "tests pass") - this is a perceived-performance fix, so the proof must show the perceived
-      performance changed.
-- [ ] Tests pass (relevant set: downloads router tests + serve_time_video tests).
+      performance changed. **See "Evidence" below (Round 2, 2026-10-03): a methodologically-corrected
+      single-process bench shows a real 2.29x speedup (before vs hit) even on a cheap/local-compose
+      test file, superseding an earlier "measured wash" conclusion that was itself a multi-process
+      measurement artifact. Do not cite 2.29x as a production SLA - it still measures local ffmpeg
+      compose, not real Modal dispatch (T11660 unresolved); re-measure once that's fixed before
+      quoting an end-to-end production number.**
+- [x] Tests pass (relevant set: downloads router tests + serve_time_video tests).
+
+## Evidence (2026-10-02)
+
+**AC1-AC6 (control-flow correctness):** proven by `tests/test_t11590_cache_composed_download.py`
+(11 tests covering hit-no-recompute, one miss test per key dimension - card attach, card content
+edit, outro flag, burned profile fact, re-export/new filename -, degraded-compose-not-cached,
+metadata-stamp-fresh-on-hit, and an `asyncio.gather` + `threading.Barrier` concurrency race) plus
+2 R2-source-branch tests added after a proof-verifier pass found the first round only exercised the
+local-disk branch. All red-to-green proven against pre-change `downloads.py` and a verifier-applied
+mutation (disabled the R2 branch's cache-write guard; the R2-branch hit test failed for the right
+reason). Full relevant-set regression (T4947, serve_time, intro attachment, share download,
+download metadata, Modal dispatch, R2 client) green throughout.
+
+**AC7 (live-measured latency) - HONEST RESULT, read before quoting a number. This section was
+corrected TWICE after the numbers below it were superseded - read to the end, not just the first
+table.**
+
+### Round 1 (2026-10-02, superseded): multi-process before/miss/hit
+
+A real-R2 measurement (`experiments/t11590_latency_measurement.py`'s `before`/`miss`/`hit`
+subcommands, each a SEPARATE process) on a 2.4MB test reel, with LOCAL ffmpeg compose (Modal's
+`compose_serve_time_modal` is independently broken on staging - T11660, unrelated to this task)
+found:
+
+| Path | Measured | What it includes |
+|---|---|---|
+| BEFORE (pre-T11590, no cache) | ~1.6-2.6s | fetch + compose only |
+| HIT (post-T11590 cache) | ~1.7-2.2s | HEAD + download |
+| MISS, before the gap-3 background-write fix | ~3.4s | HEAD + fetch + compose + **synchronous upload** |
+
+This read as "HIT roughly equals BEFORE - a measured wash, not a clear win," and separately
+surfaced gap 3 (the synchronous cache-PUT making a MISS slower than before this cache existed -
+fixed by backgrounding the write, see below).
+
+### Round 2 (2026-10-03): an Opus root-cause pass found Round 1's HEAD-check cost was a measurement
+artifact, not a real finding
+
+Root cause: `before`/`miss`/`hit` each ran as a SEPARATE process, so whichever R2 call happened to
+run first in THAT process paid a ONE-TIME client-construction + TLS-handshake cost (`get_r2_client()`
+is a process-wide `lru_cache(maxsize=1)` singleton with a warm `urllib3` keep-alive pool in every
+REAL request, since uvicorn workers are long-lived - but cold at the start of each single-shot CLI
+run), and that cost got misattributed as the HEAD call's own ~0.8-1.5s cost. The ACTUAL regression
+this uncovered was real but much smaller: on the R2 branch, the new cache-key HEAD ran sequentially
+before the pre-existing source-verify HEAD (`get_download_file_url(verify_exists=True)`) - two R2
+round trips where there used to be one. **Fixed:** both HEAD checks now run CONCURRENTLY via
+`asyncio.gather` (`downloads.py`, the HEAD-before-build block) instead of sequentially; the
+local-disk branch (no source HEAD to overlap with) is unchanged. Proven by
+`test_cache_head_and_source_verify_head_run_concurrently_not_sequentially`: stubs both HEAD calls
+with a 0.3s delay each, confirmed RED against the pre-fix sequential code (observed ~0.71s, i.e.
+~2x0.3s + overhead), then GREEN after the fix (<0.45s, i.e. ~1x0.3s + overhead - proving concurrent,
+not summed).
+
+A new single-process `bench` subcommand (added to the same script) fixes the measurement
+methodology: ONE process, ONE untimed warm-up HEAD first (pays the client/TLS cold-start exactly
+once, excluded from every later timed sample), then N=10 iterations each of four independently-timed
+things. **Run for real against staging R2** (2026-10-03, local ffmpeg compose - `via_modal=false`,
+T11660 still unresolved so a real Modal-dispatch number remains unmeasured):
+
+| Metric | Median | p90 | What it includes |
+|---|---|---|---|
+| `before_s` | 1.444s | 1.669s | fetch + compose only (the TRUE pre-T11590 baseline) |
+| `miss_head_alone_s` | 0.143s | 0.158s | ONE cache-key HEAD, timed alone, against a permanently-absent key |
+| `new_miss_s` | 1.578s | 1.774s | HEAD-miss + fetch + compose (NO synchronous upload - that runs in the background per gap 3) |
+| `hit_s` | 0.631s | 0.699s | HEAD + download, against one cache object prepared once before the loop |
+
+- **Speedup (`before_s` median / `hit_s` median): 2.29x.** This SUPERSEDES Round 1's "measured
+  wash" conclusion - that conclusion was itself an artifact of comparing numbers polluted by the
+  per-process cold-start bug. A real, methodologically-sound single-process comparison shows a
+  genuine win even on this cheap/local-compose test file, not just a hypothetical one.
+- **Regression (`new_miss_s` median - `before_s` median): +0.134s - a bench-model artifact, NOT the
+  shipped miss-path cost.** `new_miss_s` runs the cache-key HEAD sequentially before fetch+compose,
+  and `before_s` has no HEAD at all - so by construction this arm reproduces the OLD sequential
+  design (one extra HEAD, ~matching `miss_head_alone_s`'s 0.143s), not the shipped `asyncio.gather`
+  code path, which runs the cache-key HEAD CONCURRENTLY with the pre-existing source-verify HEAD
+  (proof: the dedicated `test_cache_head_and_source_verify_head_run_concurrently_not_sequentially`
+  unit test, independently reproduced by the 2nd proof-verifier pass). Since production already paid
+  the source-verify HEAD before this task, the shipped miss-path overhead should be close to zero -
+  just HEAD-timing jitter plus the local `shutil.copyfile` in the background-write path and any
+  `_load_field_values` cost for an attached intro card - none of which this bench measures end to end.
+  Neither this number nor the dedicated concurrency test substitutes for a real measurement of the
+  shipped miss path; that remains a gap, consistent with the bench docstring's own "should be close
+  to zero or negative" expectation.
+- **Caveats, still true:** (1) `via_modal=false` - T11660 (Modal's `compose_serve_time_modal` broken
+  on staging) means this still measures the LOCAL ffmpeg compose fallback; a real end-to-end
+  production number (where compose is genuinely expensive, the case this cache is actually FOR)
+  needs T11660 fixed first - **do not cite the 2.29x as a production SLA number.** (2) measured from
+  wherever this process actually ran (a sandboxed dev container with real internet egress to
+  Cloudflare R2, not a Fly production server and not literally "a home machine" despite what an
+  earlier draft of the bench script's own comments said) - the R2 round-trip time here is of
+  UNVERIFIED direction vs the real Fly-to-R2 path; treat absolute numbers as order-of-magnitude /
+  relative comparisons. (3) N=10 is a small sample from one run at one point in time, not a
+  longitudinal SLO measurement. Raw samples + full methodology: `experiments/t11590_results/latency.json`
+  (`"kind": "bench"` row) and the `bench` subcommand's docstring in
+  `experiments/t11590_latency_measurement.py`.
+
+### Gap 3 (background write-after-build) - unaffected by the Round 2 correction above
+
+Round 1's real-R2 measurement is ALSO what originally surfaced gap 3: the MISS path (first-ever
+download/share, or any cache-busting change) got slower than the pre-T11590 baseline because
+`upload_file_to_r2_global` was awaited synchronously before the first byte streamed - i.e. the
+original fix made the uncached case strictly worse while fixing the cached case. This finding was
+NOT a measurement artifact (it reflects a real code path that was genuinely synchronous) and stays
+fixed: the write-after-build runs in the background (`asyncio.create_task`, fired after compose but
+not awaited before streaming begins; `new_miss_s` above already reflects this - it does not include
+any upload time). See `tests/test_t11590_cache_composed_download.py`'s background-write tests for
+the proof (streamed response completes without waiting on an artificially slow mocked upload; the
+cache object still lands moments later for the next request).
