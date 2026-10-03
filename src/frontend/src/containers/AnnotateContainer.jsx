@@ -655,6 +655,15 @@ export function AnnotateContainer({
   // navigation). A ref set synchronously the instant the first pick starts and
   // cleared only after it fully settles makes any pick during that window a no-op.
   const rateGatePickInFlightRef = useRef(false);
+  // T11400: the rating whose persisted write is currently in flight, set
+  // SYNCHRONOUSLY with the pick (before the await) so RateThisPlayModal can
+  // acknowledge the choice in the SAME render pass — the gate otherwise sat
+  // visually inert through the whole await-before-navigate window and felt
+  // unresponsive. Cleared on success (before the continuation runs), on an
+  // abandoned gate, and on a failed write (so the gate's rows become actionable
+  // again for a retry). This is pure UI feedback — it does NOT relax the
+  // await-the-confirmed-write-before-navigating contract below.
+  const [pendingRatingId, setPendingRatingId] = useState(null);
 
   // T11130: the Done -> "Make this a highlight now?" choice card. Distinct from
   // (and sequential with) the T11120 rate gate: the rate gate fires when Done
@@ -1912,14 +1921,19 @@ export function AnnotateContainer({
     // is a no-op, so proceed() can never run twice (see rateGatePickInFlightRef).
     if (rateGatePickInFlightRef.current) return;
     rateGatePickInFlightRef.current = true;
+    // T11400: acknowledge the pick immediately (synchronous, before the await) so
+    // the modal renders the picked row selected/busy and disables further picks
+    // in the same render pass — the write still has to confirm before we navigate.
+    setPendingRatingId(rating);
     try {
       await updateClipRegionWithSync(gate.regionId, { rating });
       const ok = await awaitRegionWrites(gate.regionId);
-      if (!ok) return; // write still in flight or failed — keep the gate open
+      if (!ok) { setPendingRatingId(null); return; } // write failed — re-arm the gate's rows for retry
       // A dismiss during the await abandoned THIS gate (a re-pick can't — it's
       // blocked by the in-flight guard above) — its continuation must not fire
       // late (the rating still persisted; only the exit is cancelled).
-      if (rateGateRef.current !== gate) return;
+      if (rateGateRef.current !== gate) { setPendingRatingId(null); return; }
+      setPendingRatingId(null);
       setRateGate(null);
       // T11130: pass the just-picked rating to the continuation. handleOverlayClose's
       // continuation (maybeOpenHighlightChoice) needs it to open the Highlight card
@@ -1933,7 +1947,14 @@ export function AnnotateContainer({
 
   // T11120: Escape returns to the editor; the inert backdrop does nothing.
   // with NOTHING written. The gate is a gate, never a write.
-  const handleRateGateDismiss = useCallback(() => setRateGate(null), []);
+  // T11400: also clear any in-flight pending state — a dismiss abandons the gate,
+  // so a later re-open must not show a stale selected/busy row. (The in-flight
+  // pick's own branch detects the abandonment via rateGateRef and will not run
+  // the stashed continuation.)
+  const handleRateGateDismiss = useCallback(() => {
+    setPendingRatingId(null);
+    setRateGate(null);
+  }, []);
 
   // T11130: "Make Highlight Now" — reuses the Frame Now path exactly
   // (updateClipRegionWithSync createProject + silent, await the region's write
@@ -2481,6 +2502,7 @@ export function AnnotateContainer({
     // T11120: "Rate this play" gate — state + the pick/dismiss handlers the
     // modal wires to, plus guardRateThenExit for the screen's mode-bar/Home exit.
     rateGate,
+    pendingRatingId, // T11400: the picked rating whose write is in flight (busy state)
     guardRateThenExit,
     handleRateGatePick,
     handleRateGateDismiss,

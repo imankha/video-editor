@@ -511,3 +511,150 @@ describe('AnnotateContainer — Done -> Highlight choice card (T11130)', () => {
     expect(putCallsWith((b) => b.create_project === true).length).toBe(1);
   });
 });
+
+// T11400: picking a rating in the gate persists it + awaits the confirmed write
+// before navigating (unchanged contract) — but the pick must get IMMEDIATE visual
+// acknowledgement so it never feels unresponsive. `pendingRatingId` is set
+// SYNCHRONOUSLY with the pick (before the await), drives the busy/selected state
+// on RateThisPlayModal/RatingMeaningsList, and is cleared on success, abandon, or
+// failure. The await-before-navigate + run-exactly-once guarantees are preserved.
+describe('AnnotateContainer — rate-gate pick immediate feedback (T11400)', () => {
+  beforeEach(() => {
+    apiFetch.mockReset();
+    apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: false, success: true }) });
+    useAuthStore.setState({ isAuthenticated: true });
+    useQuestStore.setState({ recordAchievement: vi.fn(), fetchProgress: vi.fn().mockResolvedValue(undefined) });
+    window.matchMedia = (query) => ({
+      matches: false, media: query, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {},
+      addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+    });
+    useToastStore.setState({ toasts: [] });
+  });
+  afterEach(() => {
+    useAuthStore.setState(authOriginal, true);
+    useQuestStore.setState(questOriginal, true);
+    useToastStore.setState({ toasts: [] });
+  });
+
+  it('(a) sets pendingRatingId synchronously on the pick — before the write resolves — and clears it after a confirmed write', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    await markUnratedPlay(result);
+    act(() => { result.current.handleOverlayClose(); }); // gate; proceed = closeOverlay
+    expect(result.current.pendingRatingId).toBeNull();
+
+    // Suspend the write so the pick hangs on the await — the pending state must
+    // already be visible at this point (same render pass as the pick).
+    let releaseWrite;
+    apiFetch.mockReset();
+    apiFetch.mockImplementation(() => new Promise((res) => {
+      releaseWrite = () => res({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, success: true }) });
+    }));
+
+    let pickPromise;
+    await act(async () => {
+      pickPromise = result.current.handleRateGatePick(3);
+      await flush(); // dispatch the (now hanging) write
+    });
+    // Immediate acknowledgement: the picked rating is pending while the write is
+    // still in flight, and the gate is still mounted (nothing navigated yet).
+    expect(result.current.pendingRatingId).toBe(3);
+    expect(result.current.rateGate).toBeTruthy();
+    expect(result.current.showAnnotateOverlay).toBe(true);
+
+    // Write confirms -> pending clears and the stashed exit runs exactly once.
+    await act(async () => { releaseWrite(); await pickPromise; await flush(); });
+    expect(result.current.pendingRatingId).toBeNull();
+    expect(result.current.rateGate).toBeNull();
+    expect(result.current.showAnnotateOverlay).toBe(false);
+  });
+
+  it('(b) a second pick while the first write is in-flight does not change the pending rating (no-op)', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    await markUnratedPlay(result);
+    act(() => { result.current.handleOverlayClose(); });
+
+    const resolvers = [];
+    apiFetch.mockReset();
+    apiFetch.mockImplementation(() => new Promise((res) => {
+      resolvers.push(() => res({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, success: true }) }));
+    }));
+
+    let pick1, pick2;
+    await act(async () => {
+      pick1 = result.current.handleRateGatePick(4);
+      await flush();
+      pick2 = result.current.handleRateGatePick(2); // blocked by the in-flight guard
+      await flush();
+    });
+    // The pending rating stays the FIRST pick's value; the second pick is a no-op.
+    expect(result.current.pendingRatingId).toBe(4);
+
+    await act(async () => {
+      for (let i = 0; i < 6 && resolvers.length; i++) { resolvers.splice(0).forEach((r) => r()); await flush(); }
+      await pick1; await pick2; await flush();
+    });
+    // Exactly one rating write landed (the first), carrying rating 4.
+    expect(putCallsWith((b) => b.rating === 4).length).toBe(1);
+    expect(putCallsWith((b) => b.rating === 2).length).toBe(0);
+    expect(result.current.pendingRatingId).toBeNull();
+  });
+
+  it('(c) a failed write clears the pending state and leaves the gate open for retry', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    await markUnratedPlay(result);
+    act(() => { result.current.handleOverlayClose(); });
+
+    apiFetch.mockReset();
+    apiFetch.mockResolvedValue({ ok: false, status: 500, json: async () => ({ success: false }) });
+
+    await act(async () => { await result.current.handleRateGatePick(3); await flush(); });
+
+    // Failure restores an actionable surface: pending cleared, gate still open,
+    // editor not navigated away.
+    expect(result.current.pendingRatingId).toBeNull();
+    expect(result.current.rateGate).toBeTruthy();
+    expect(result.current.showAnnotateOverlay).toBe(true);
+  });
+
+  it('(d) dismissing while a pick write is in-flight clears the pending state', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    await markUnratedPlay(result);
+    act(() => { result.current.handleOverlayClose(); });
+
+    let releaseWrite;
+    apiFetch.mockReset();
+    apiFetch.mockImplementation(() => new Promise((res) => {
+      releaseWrite = () => res({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, success: true }) });
+    }));
+
+    let pickPromise;
+    await act(async () => {
+      pickPromise = result.current.handleRateGatePick(3);
+      await flush();
+    });
+    expect(result.current.pendingRatingId).toBe(3);
+
+    act(() => { result.current.handleRateGateDismiss(); });
+    expect(result.current.pendingRatingId).toBeNull();
+    expect(result.current.rateGate).toBeNull();
+
+    // The abandoned write resolving must not run the stale continuation.
+    await act(async () => { releaseWrite(); await pickPromise; await flush(); });
+    expect(result.current.showAnnotateOverlay).toBe(true);
+  });
+
+  it('(e) Brilliant (5) still flows into the Make Highlight card after the write confirms', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    const id = await markUnratedPlay(result);
+    act(() => { result.current.handleOverlayClose(); });
+    expect(result.current.rateGate?.regionId).toBe(id);
+
+    await act(async () => { await result.current.handleRateGatePick(5); await flush(); });
+
+    expect(result.current.pendingRatingId).toBeNull();
+    expect(result.current.rateGate).toBeNull();
+    expect(result.current.highlightChoice?.regionId).toBe(id); // downstream flow intact
+    expect(result.current.showAnnotateOverlay).toBe(true);
+  });
+});

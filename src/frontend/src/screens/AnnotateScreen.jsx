@@ -867,6 +867,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         onOverlayClose={handleOverlayClose}
         // T11120: "Rate this play" gate (owned by AnnotateContainer)
         rateGate={annotate.rateGate}
+        pendingRatingId={annotate.pendingRatingId}
         onRateGatePick={annotate.handleRateGatePick}
         onRateGateDismiss={annotate.handleRateGateDismiss}
         // T11130: Done -> "Make this a highlight now?" choice card (owned by AnnotateContainer)
