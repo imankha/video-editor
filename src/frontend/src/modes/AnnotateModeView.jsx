@@ -107,6 +107,7 @@ export function AnnotateModeView({
   onOverlayClose,
   // T11120: "Rate this play" gate — state + handlers owned by AnnotateContainer.
   rateGate,
+  pendingRatingId, // T11400: picked rating whose write is in flight (busy state)
   onRateGatePick,
   onRateGateDismiss,
   // T11130: Done -> "Make this a highlight now?" choice card — state + handlers
@@ -673,6 +674,7 @@ export function AnnotateModeView({
         <RateThisPlayModal
           isMobile={isMobile}
           rating={existingClip?.rating ?? null}
+          pendingRating={pendingRatingId}
           onPick={onRateGatePick}
           onDismiss={onRateGateDismiss}
         />

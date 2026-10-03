@@ -56,5 +56,17 @@ export function createRegionWriteQueue() {
     failedKeys.delete(regionId);
   }
 
-  return { enqueue, settle, forget };
+  // T11400: does this region currently have a FAILED last attempt for any of
+  // `keys`? The caller's clean-check short-circuits a write when local state
+  // already matches the payload — but a failed key's local state ALSO already
+  // matches (the local update is applied before the write is attempted), so
+  // without this, re-picking the same value that just failed would be judged
+  // clean and no retry would be sent. A failed key must always re-send.
+  function hasFailedKey(regionId, keys) {
+    const set = failedKeys.get(regionId);
+    if (!set) return false;
+    return keys.some((k) => set.has(k));
+  }
+
+  return { enqueue, settle, forget, hasFailedKey };
 }

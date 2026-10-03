@@ -22,8 +22,12 @@ import { RatingMeaningsList } from './RatingMeaningsList';
  * @param {boolean} isMobile  bottom-sheet vs centered card
  * @param {number|null} rating  current rating (always null in practice — the
  *        gate only opens for unrated plays — but drives aria-checked correctly)
+ * @param {number|null} pendingRating  T11400: the just-picked rating whose
+ *        persisted write is in flight. Forwarded to RatingMeaningsList so the
+ *        pick is acknowledged immediately (selected + busy row, other rows
+ *        disabled) during the await-before-navigate window.
  */
-export function RateThisPlayModal({ onPick, onDismiss, isMobile, rating = null }) {
+export function RateThisPlayModal({ onPick, onDismiss, isMobile, rating = null, pendingRating = null }) {
   const headingId = useId();
 
   useEffect(() => {
@@ -71,7 +75,7 @@ export function RateThisPlayModal({ onPick, onDismiss, isMobile, rating = null }
         )}
         <h2 id={headingId} className="text-lg font-bold text-white">{ANNOTATE.RATE_PLAY}</h2>
         <p className="mt-0.5 mb-3 text-sm text-gray-400">{ANNOTATE.RATE_GATE_SUBTITLE}</p>
-        <RatingMeaningsList rating={rating} headingId={headingId} onPick={onPick} />
+        <RatingMeaningsList rating={rating} headingId={headingId} onPick={onPick} pendingRating={pendingRating} />
       </div>
     </div>,
     document.body,

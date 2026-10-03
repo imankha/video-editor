@@ -648,13 +648,24 @@ export function AnnotateContainer({
   const rateGateRef = useRef(null);
   rateGateRef.current = rateGate;
   // T11120: synchronous in-flight guard for the pick (T9830/T10450 convention,
-  // same as markPlayInFlightRef). The rating rows aren't disabled while the write
-  // is in flight, and setRateGate(null) is batched (rateGateRef only refreshes on
-  // render), so two quick picks could BOTH pass the `rateGateRef.current !== gate`
-  // check and fire gate.proceed() twice (duplicate finishAnnotation POST / dup
-  // navigation). A ref set synchronously the instant the first pick starts and
-  // cleared only after it fully settles makes any pick during that window a no-op.
+  // same as markPlayInFlightRef). T11400 now DISABLES the rating rows during the
+  // pending state, but this ref is still required: the disable only takes effect on
+  // the NEXT render, and setRateGate(null)/setPendingRatingId are batched (rateGateRef
+  // only refreshes on render), so two picks fired in the SAME frame (before the
+  // disable paints) could both pass the `rateGateRef.current !== gate` check and fire
+  // gate.proceed() twice (duplicate finishAnnotation POST / dup navigation). A ref
+  // set synchronously the instant the first pick starts and cleared only after it
+  // fully settles makes any same-frame re-pick a no-op regardless of render timing.
   const rateGatePickInFlightRef = useRef(false);
+  // T11400: the rating whose persisted write is currently in flight, set
+  // SYNCHRONOUSLY with the pick (before the await) so RateThisPlayModal can
+  // acknowledge the choice in the SAME render pass — the gate otherwise sat
+  // visually inert through the whole await-before-navigate window and felt
+  // unresponsive. Cleared in handleRateGatePick's finally on EVERY exit (success,
+  // failure, abandon, or an unexpected throw) so the rows re-arm for a retry and
+  // can never stay disabled. This is pure UI feedback — it does NOT relax the
+  // await-the-confirmed-write-before-navigating contract below.
+  const [pendingRatingId, setPendingRatingId] = useState(null);
 
   // T11130: the Done -> "Make this a highlight now?" choice card. Distinct from
   // (and sequential with) the T11120 rate gate: the rate gate fires when Done
@@ -1854,7 +1865,15 @@ export function AnnotateContainer({
       }
     }
 
-    if (isCleanAgainst(region, actualUpdates)) {
+    // T11400: a key whose LAST write FAILED must always re-send, even though the
+    // local state already matches it (the local update was applied before that
+    // failed write). Otherwise re-picking the same value that just failed is judged
+    // clean here, no retry goes out, and settle() keeps reporting failure — the
+    // rate gate stays stuck for anyone without an Escape/backdrop escape hatch
+    // (mobile). So only short-circuit a clean payload when NONE of its keys are
+    // currently in the write queue's failed set.
+    const updateKeys = Object.keys(actualUpdates);
+    if (isCleanAgainst(region, actualUpdates) && !writeQueueRef.current.hasFailedKey(regionId, updateKeys)) {
       return Promise.resolve({ saveOk: true, projectId: region.autoProjectId ?? null });
     }
 
@@ -1912,10 +1931,14 @@ export function AnnotateContainer({
     // is a no-op, so proceed() can never run twice (see rateGatePickInFlightRef).
     if (rateGatePickInFlightRef.current) return;
     rateGatePickInFlightRef.current = true;
+    // T11400: acknowledge the pick immediately (synchronous, before the await) so
+    // the modal renders the picked row selected/busy and disables further picks
+    // in the same render pass — the write still has to confirm before we navigate.
+    setPendingRatingId(rating);
     try {
       await updateClipRegionWithSync(gate.regionId, { rating });
       const ok = await awaitRegionWrites(gate.regionId);
-      if (!ok) return; // write still in flight or failed — keep the gate open
+      if (!ok) return; // write failed/in-flight — keep the gate open; finally re-arms the rows
       // A dismiss during the await abandoned THIS gate (a re-pick can't — it's
       // blocked by the in-flight guard above) — its continuation must not fire
       // late (the rating still persisted; only the exit is cancelled).
@@ -1927,13 +1950,26 @@ export function AnnotateContainer({
       // to the new rating yet. Other exit continuations ignore the extra argument.
       gate.proceed(rating);
     } finally {
+      // T11400 (minor 2): clear pending on EVERY exit — success, failure, abandon,
+      // AND an unexpected throw from the write/settle — so the rows can never stay
+      // disabled indefinitely. These setState calls run in the same microtask as the
+      // setRateGate(null)/proceed above, so React batches them into one render: a
+      // re-opened gate never observes a stale pending id.
+      setPendingRatingId(null);
       rateGatePickInFlightRef.current = false;
     }
   }, [rateGate, updateClipRegionWithSync, awaitRegionWrites]);
 
   // T11120: Escape returns to the editor; the inert backdrop does nothing.
   // with NOTHING written. The gate is a gate, never a write.
-  const handleRateGateDismiss = useCallback(() => setRateGate(null), []);
+  // T11400: also clear any in-flight pending state — a dismiss abandons the gate,
+  // so a later re-open must not show a stale selected/busy row. (The in-flight
+  // pick's own branch detects the abandonment via rateGateRef and will not run
+  // the stashed continuation.)
+  const handleRateGateDismiss = useCallback(() => {
+    setPendingRatingId(null);
+    setRateGate(null);
+  }, []);
 
   // T11130: "Make Highlight Now" — reuses the Frame Now path exactly
   // (updateClipRegionWithSync createProject + silent, await the region's write
@@ -2481,6 +2517,7 @@ export function AnnotateContainer({
     // T11120: "Rate this play" gate — state + the pick/dismiss handlers the
     // modal wires to, plus guardRateThenExit for the screen's mode-bar/Home exit.
     rateGate,
+    pendingRatingId, // T11400: the picked rating whose write is in flight (busy state)
     guardRateThenExit,
     handleRateGatePick,
     handleRateGateDismiss,
