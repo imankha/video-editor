@@ -178,14 +178,15 @@ class RawClipUpdate(BaseModel):
     end_time: float | None = None
     video_sequence: int | None = None
     create_project: bool | None = None
+    # T11430: "Make Another Highlight" -- always mint a NEW project (never reuse
+    # the existing auto_project_id pointer), so a play can carry N highlights.
+    force_new: bool | None = None
+    # T11430 fixround1 MAJOR 2: the orientation to create ('9:16' | '16:9'),
+    # used when the synthesized counterpart CTA ("Horizontal Video Not Started")
+    # is clicked so the new project is actually horizontal, not another vertical.
+    aspect_ratio: str | None = None
     tagged_teammates: list[str] | None = None
     my_athlete: bool | None = None
-    # T11430: "Make Another Highlight" -- when True, always mint a brand-new
-    # project, skipping the stale-pointer check/clear entirely, and never
-    # mutating/detaching/archiving any prior highlight (design req #2). Falsy
-    # (None/False) leaves the original "Make Highlight" stale-pointer-dedup
-    # behavior completely unchanged.
-    force_new: bool | None = None
 
 
 class RawClipSaveResponse(BaseModel):
@@ -845,19 +846,16 @@ async def set_project_aspect_ratio(project_id: int, body: AspectRatioChange):
             )
             source_row = cursor.fetchone()
             if source_row and source_row['source_raw_clip_id'] is not None:
+                # Bucket by the SAME resolved-orientation rule as creation + the
+                # v056 backfill (not raw aspect_ratio) -- excludes self, which
+                # already carries the new ratio from the UPDATE above.
+                new_ordinal = _next_highlight_ordinal(
+                    cursor, source_row['source_raw_clip_id'], body.aspect_ratio,
+                    exclude_project_id=project_id,
+                )
                 cursor.execute(
-                    """
-                    UPDATE projects
-                    SET highlight_ordinal = (
-                        SELECT COALESCE(MAX(highlight_ordinal), 0) + 1
-                        FROM projects
-                        WHERE source_raw_clip_id = ?
-                          AND aspect_ratio = ?
-                          AND id != ?
-                    )
-                    WHERE id = ?
-                    """,
-                    (source_row['source_raw_clip_id'], body.aspect_ratio, project_id, project_id),
+                    "UPDATE projects SET highlight_ordinal = ? WHERE id = ?",
+                    (new_ordinal, project_id),
                 )
 
         # Re-fit every latest-version clip that has crop keyframes.
@@ -1104,9 +1102,54 @@ def _insert_working_clip_with_dims(
     return cursor.lastrowid
 
 
-def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> int:
-    """Create a 9:16 editable-clip project (on explicit create_project) and return the project ID."""
-    logger.info(f"[CreateReel] Creating auto-project for clip {raw_clip_id}, clip_name={clip_name!r}")
+# T11430: the single canonical "resolved orientation" rule, used EVERYWHERE an
+# ordinal bucket is computed (creation, aspect-ratio-change recompute, and the
+# v056 backfill) and for display (_get_highlight_instances_by_clip). Orientation
+# is the latest PUBLISHED final_videos.aspect_ratio if the project has one (a
+# published instance's orientation is frozen at its exported aspect), else the
+# project's own aspect_ratio. Keep this identical to v056's orientation_expr and
+# the read-path COALESCE below -- a divergence re-opens the bucketing-mismatch
+# bug fixround1 closed.
+_RESOLVED_ORIENTATION_SQL = """
+    COALESCE(
+        (SELECT fv.aspect_ratio FROM final_videos fv
+         WHERE fv.project_id = p.id AND fv.published_at IS NOT NULL
+         ORDER BY fv.id DESC LIMIT 1),
+        p.aspect_ratio
+    )
+"""
+
+
+def _next_highlight_ordinal(cursor, source_raw_clip_id: int, orientation: str,
+                            exclude_project_id: int | None = None) -> int:
+    """T11430: the next one-based highlight_ordinal for a (source_raw_clip_id,
+    resolved-orientation) bucket. Buckets by the SAME resolved-orientation rule
+    everywhere (see _RESOLVED_ORIENTATION_SQL) so creation, aspect-change, and
+    the v056 backfill never disagree. `exclude_project_id` omits a project from
+    the MAX (used by the aspect-change recompute, which has already written the
+    project's new aspect_ratio and must not count itself)."""
+    sql = f"""
+        SELECT COALESCE(MAX(p.highlight_ordinal), 0) + 1
+        FROM projects p
+        WHERE p.source_raw_clip_id = ?
+          AND {_RESOLVED_ORIENTATION_SQL} = ?
+    """
+    params = [source_raw_clip_id, orientation]
+    if exclude_project_id is not None:
+        sql += " AND p.id != ?"
+        params.append(exclude_project_id)
+    cursor.execute(sql, params)
+    return cursor.fetchone()[0]
+
+
+def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str,
+                                  aspect_ratio: str = "9:16") -> int:
+    """Create an editable-clip project (on explicit create_project) and return the
+    project ID. `aspect_ratio` defaults to '9:16' (vertical) but is set explicitly
+    when a specific orientation is requested -- e.g. the synthesized
+    "Horizontal Video Not Started" counterpart CTA passes '16:9' (T11430
+    fixround1 MAJOR 2), so "Make a horizontal highlight" actually makes one."""
+    logger.info(f"[CreateReel] Creating auto-project for clip {raw_clip_id}, clip_name={clip_name!r}, aspect_ratio={aspect_ratio!r}")
 
     # Fetch tags and rating from the raw clip to generate a name if needed.
     # T8070: also read the current start/end so we can seed the reel-source window.
@@ -1136,23 +1179,30 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
 
     logger.info(f"[CreateReel] Using project name: {project_name!r} for clip {raw_clip_id}")
 
-    # T11430: carry the durable one-to-many link (source_raw_clip_id) and assign
-    # this highlight's one-based ordinal within its (raw_clip, orientation) bucket
-    # in the SAME INSERT statement (atomic read+write, not two round trips).
+    # T11430: carry the durable one-to-many link (source_raw_clip_id), freeze this
+    # project's OWN producing-window snapshot (reel_source_*, fixround1 MAJOR 1 --
+    # per-project, not the shared per-play raw_clips snapshot), and assign this
+    # highlight's one-based ordinal within its (raw_clip, resolved-orientation)
+    # bucket. A brand-new project has no published final, so its resolved
+    # orientation == the aspect_ratio being inserted; the ordinal counts existing
+    # siblings in that same bucket.
     # Column-guarded for the deploy->migrate window (v056 not yet applied): fall
     # back to the pre-T11430 3-column INSERT so a not-yet-migrated profile never
     # 500s the "Make Highlight" gesture.
     if column_exists(cursor, "projects", "source_raw_clip_id"):
+        ordinal = _next_highlight_ordinal(cursor, raw_clip_id, aspect_ratio)
         cursor.execute("""
-            INSERT INTO projects (name, aspect_ratio, is_auto_created, source_raw_clip_id, highlight_ordinal)
-            VALUES (?, '9:16', 1, ?,
-              (SELECT COALESCE(MAX(highlight_ordinal), 0) + 1 FROM projects WHERE source_raw_clip_id = ? AND aspect_ratio = '9:16'))
-        """, (project_name, raw_clip_id, raw_clip_id))
+            INSERT INTO projects
+              (name, aspect_ratio, is_auto_created, source_raw_clip_id, highlight_ordinal,
+               reel_source_start_time, reel_source_end_time)
+            VALUES (?, ?, 1, ?, ?, ?, ?)
+        """, (project_name, aspect_ratio, raw_clip_id, ordinal,
+              clip_data['start_time'], clip_data['end_time']))
     else:
         cursor.execute("""
             INSERT INTO projects (name, aspect_ratio, is_auto_created)
-            VALUES (?, '9:16', 1)
-        """, (project_name,))
+            VALUES (?, ?, 1)
+        """, (project_name, aspect_ratio))
     project_id = cursor.lastrowid
 
     # Add the raw clip as a working clip in this project (T1500: copies dims from game_video)
@@ -1202,6 +1252,7 @@ def _get_highlight_instances_by_clip(cursor, raw_clip_ids: list[int]) -> dict[in
         SELECT
           p.id AS project_id, p.source_raw_clip_id, p.aspect_ratio AS project_aspect_ratio,
           p.highlight_ordinal, p.archived_at, p.created_at, p.is_auto_created,
+          p.reel_source_start_time, p.reel_source_end_time,
           CASE WHEN wv.id IS NOT NULL THEN 1 ELSE 0 END AS has_working_video,
           CASE WHEN EXISTS (SELECT 1 FROM final_videos WHERE project_id = p.id) THEN 1 ELSE 0 END AS has_final_video,
           CASE WHEN EXISTS (SELECT 1 FROM final_videos WHERE project_id = p.id AND published_at IS NOT NULL) THEN 1 ELSE 0 END AS is_published,
@@ -1233,6 +1284,11 @@ def _get_highlight_instances_by_clip(cursor, raw_clip_ids: list[int]) -> dict[in
             "is_published": bool(row["is_published"]),
             "archived_at": row["archived_at"],
             "created_at": row["created_at"],
+            # fixround1 MAJOR 1: PER-PROJECT producing-window snapshot, so each
+            # instance's T8070 staleness is judged against its OWN window (not the
+            # shared per-play raw_clips snapshot).
+            "reel_source_start_time": row["reel_source_start_time"],
+            "reel_source_end_time": row["reel_source_end_time"],
         })
 
     # Design §4.6: published first, then by orientation + ordinal, so the
@@ -1308,6 +1364,33 @@ def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
 
     logger.info(f"Deleted dead auto-project draft {project_id} (last source clip removed)")
     return True
+
+
+def _delete_orphan_highlight_projects(cursor, raw_clip_id: int) -> int:
+    """T11430 fixround1 MAJOR 3: a play can now have MANY highlight projects
+    (projects.source_raw_clip_id), but delete_raw_clip's legacy _delete_auto_project
+    only cleaned the ONE project in raw_clips.auto_project_id. Every OTHER
+    unpublished draft made via "Make Another Highlight" would survive as a dead
+    0-clip orphan once the play is deleted (its working_clips cascade away, leaving
+    a project row with no source). Apply the SAME keep/delete rule (_delete_auto_project
+    -- preserves published + multi-clip projects, deletes dead drafts) to EVERY
+    project linked to this play. Column-guarded for the deploy->migrate window
+    (v056 not yet applied): a below-v056 DB has only the single auto_project_id
+    pointer, already handled by the caller."""
+    if not column_exists(cursor, "projects", "source_raw_clip_id"):
+        return 0
+    cursor.execute(
+        "SELECT id FROM projects WHERE source_raw_clip_id = ?", (raw_clip_id,)
+    )
+    project_ids = [row["id"] for row in cursor.fetchall()]
+    deleted = 0
+    for pid in project_ids:
+        # _delete_auto_project re-selects the project and returns False if it is
+        # already gone (the caller may have deleted the auto_project_id one first)
+        # or must be preserved -- safe to call per project.
+        if _delete_auto_project(cursor, pid, raw_clip_id):
+            deleted += 1
+    return deleted
 
 
 def _sync_clip_teammates(cursor, clip_id: int, tagged_teammates: list[str] | None):
@@ -1597,9 +1680,13 @@ async def update_raw_clip(
                 # T11430 "Make Another Highlight": always mint a new project.
                 # Skip the stale-pointer check/clear entirely -- this path must
                 # never touch/detach/archive any prior highlight, only INSERT.
+                # fixround1 MAJOR 2: honor an explicit aspect_ratio ('16:9' from
+                # the synthesized horizontal-counterpart CTA) so the right
+                # orientation is created; default 9:16 otherwise.
                 clip_name = update.name if update.name is not None else clip['name']
-                logger.info(f"[CreateReel] force_new: creating another highlight for clip {clip_id}, name={clip_name!r}")
-                auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name)
+                new_aspect = update.aspect_ratio if update.aspect_ratio in ("9:16", "16:9") else "9:16"
+                logger.info(f"[CreateReel] force_new: creating another highlight for clip {clip_id}, name={clip_name!r}, aspect={new_aspect}")
+                auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name, aspect_ratio=new_aspect)
                 project_created = True
             else:
                 if auto_project_id:
@@ -1740,9 +1827,16 @@ async def delete_raw_clip(
         if not clip:
             raise HTTPException(status_code=404, detail="Raw clip not found")
 
-        # Delete auto-project if exists and unmodified
+        # Delete auto-project if exists and unmodified (legacy single-pointer
+        # path; covers below-v056 DBs where source_raw_clip_id isn't populated).
         if clip['auto_project_id']:
             _delete_auto_project(cursor, clip['auto_project_id'], clip_id)
+
+        # T11430 fixround1 MAJOR 3: sweep every highlight project linked to this
+        # play (source_raw_clip_id), so "Make Another Highlight" drafts don't
+        # survive as 0-clip orphans. Same keep/delete rule; safe to re-run
+        # against the auto_project_id project already handled above.
+        _delete_orphan_highlight_projects(cursor, clip_id)
 
         # Delete the raw clip record — cascades to working_clips (via raw_clip_id CASCADE)
         cursor.execute("DELETE FROM raw_clips WHERE id = ?", (clip_id,))

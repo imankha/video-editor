@@ -27,6 +27,13 @@ from app.constants import GameCreateStatus, GameStatus, GameType, ShareClipScope
 from app.database import column_exists, ensure_directories, get_db_connection
 from app.middleware.db_sync import durable_sync
 from app.profile_context import get_current_profile_id
+# T11430: router-to-router import of the highlight-instances read helper. Left
+# here (not lifted to a shared query module) deliberately: it is a read-only
+# query tightly coupled to the clips/projects schema, has exactly ONE external
+# caller (this file), and clips.py imports nothing from games.py, so there is no
+# import cycle. Lifting it would add a module for a single consumer -- revisit if
+# a second caller appears. (games.py already imports several clips/projects
+# helpers this way; this follows the established pattern.)
 from app.routers.clips import _get_highlight_instances_by_clip
 from app.services.auth_db import (
     delete_ref,
@@ -2499,14 +2506,17 @@ def load_annotations_from_db(game_id: int) -> list:
             _reel_src_select = "rc.reel_source_start_time, rc.reel_source_end_time"
         else:
             _reel_src_select = "NULL AS reel_source_start_time, NULL AS reel_source_end_time"
-        # Query raw_clips as the single source of truth for clip annotations
+        # Query raw_clips as the single source of truth for clip annotations.
+        # T11430: the LEFT JOIN projects (used only by the removed archived-NULLing
+        # CASE) is gone -- nothing selects from it now, and auto_project_id is read
+        # straight off raw_clips (demoted to an "active draft" hint; the real
+        # status source is the highlight_instances collection below).
         cursor.execute(f"""
             SELECT rc.id, rc.start_time, rc.end_time, rc.name, rc.rating, rc.tags, rc.notes, rc.video_sequence,
                    rc.tagged_teammates, rc.my_athlete, rc.shared_by,
                    {_reel_src_select},
                    rc.auto_project_id AS auto_project_id
             FROM raw_clips rc
-            LEFT JOIN projects p ON p.id = rc.auto_project_id
             WHERE rc.game_id = ?
             ORDER BY rc.video_sequence, rc.end_time
         """, (game_id,))

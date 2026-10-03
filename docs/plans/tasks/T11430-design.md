@@ -1,6 +1,6 @@
 # T11430 Design: Multiple highlights per play + aspect-qualified status
 
-**Status:** DRAFT (awaiting user approval — design gate)
+**Status:** APPROVED (2026-10-03 — user approved all three open questions; implemented + fixround1 landed)
 **Author:** Architect (design phase dispatch)
 **Tier:** L (cross-layer + data-model change, design-gated)
 **Task file:** `docs/plans/tasks/T11430-multiple-highlights-per-play-aspect-status.md`
@@ -421,18 +421,19 @@ CAS/sync unchanged.
 
 ---
 
-## 10. Open Questions (require user decision before/at implementation)
+## 10. Open Questions — RESOLVED (user decision, 2026-10-03)
 
-- **A. Ordinal stability model:** Option 1 persisted `highlight_ordinal` (strict stability under
-  deletion, recommended, adds a column) vs Option 2 display-time dense rank by id (simpler, but
-  same-orientation deletion renumbers survivors — violates the literal AC). **Recommend Option 1.**
-- **B. Primary/active-work CTA semantics:** (i) Does "Make Another Highlight" appear after *any*
-  instance exists (recommended) or strictly after a *published* one (task wording)? (ii) Do you
-  want a single generic "resume" affordance when multiple unfinished instances exist, and if so
-  what is its tie-break (`last_opened_at`? lowest ordinal?) — current recommendation is no generic
-  resume (every instance is individually clickable).
-- **C. Sequencing vs single-clip epic:** land T11430 now on the transitional state (recommended) or
-  after T11250/T11260 remove multi-clip backend?
+- **A. Ordinal stability model — RESOLVED: Option 1 (persisted `highlight_ordinal`).** Column
+  added in v056; assigned at creation, recomputed on aspect change, backfilled per
+  (source_raw_clip_id, resolved-orientation) bucket. fixround1 made the bucketing rule a single
+  canonical `_RESOLVED_ORIENTATION_SQL` used by creation, aspect-change, AND the backfill.
+- **B. Primary/active-work CTA semantics — RESOLVED:** (i) "Make Another Highlight" appears once
+  *ANY* instance exists (published or in-progress), not strictly after a published one. (ii) No
+  generic "resume" affordance — every instance is individually clickable, so there is nothing to
+  tie-break.
+- **C. Sequencing vs single-clip epic — RESOLVED: build now** on the current transitional state
+  (T11250/T11260 still TODO). The read excludes `clip_count > 1` legacy reels and non-auto-created
+  projects, so it does not need T11250/T11260 to land first and needs no rework when they do.
 
 ---
 

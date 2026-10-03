@@ -285,7 +285,11 @@ export function AnnotateModeView({
   // opens an existing instance (each existing instance has its own per-row
   // CTA). Reuses the SAME frameCreateInFlightRef double-fire guard as
   // handleFrameNow so a double-click can't create two highlights.
-  const handleMakeAnotherHighlight = useCallback(async () => {
+  // fixround1 MAJOR 2: an optional `aspectRatio` targets the orientation to
+  // create. The synthesized "Horizontal Video Not Started" counterpart CTA
+  // passes '16:9' so it actually makes a horizontal highlight; the bare primary
+  // CTA passes nothing and the backend defaults to 9:16.
+  const handleMakeAnotherHighlight = useCallback(async (aspectRatio) => {
     if (!selectedRegion || frameCreateInFlightRef.current) return;
     frameCreateInFlightRef.current = true;
     setFrameClipPending(true);
@@ -294,6 +298,7 @@ export function AnnotateModeView({
         createProject: true,
         forceNew: true,
         silent: true,
+        ...(aspectRatio ? { aspectRatio } : {}),
       });
       if (result?.saveOk && result.projectId) onOpenClipInFocus?.(result.projectId);
     } finally {
@@ -1317,7 +1322,14 @@ export function AnnotateModeView({
                           data-testid="annotate-highlight-instance-cta"
                           onClick={async () => {
                             if (instance.projectId == null) {
-                              await handleMakeAnotherHighlight();
+                              // Synthesized counterpart (e.g. "Horizontal Video Not
+                              // Started"): create the MISSING orientation, not a
+                              // default-vertical duplicate (fixround1 MAJOR 2).
+                              const aspect =
+                                instance.synthesizedOrientation === 'horizontal' ? '16:9'
+                                : instance.synthesizedOrientation === 'vertical' ? '9:16'
+                                : undefined;
+                              await handleMakeAnotherHighlight(aspect);
                               return;
                             }
                             const ok = onAwaitRegionWrites ? await onAwaitRegionWrites(selectedRegion.id) : true;
@@ -1344,7 +1356,7 @@ export function AnnotateModeView({
                         </button>
                       ))}
                       <button
-                        onClick={handleMakeAnotherHighlight}
+                        onClick={() => handleMakeAnotherHighlight()}
                         disabled={frameClipPending}
                         data-testid="annotate-make-another-highlight-cta"
                         className="w-full min-h-[40px] py-2 px-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors bg-cyan-700 hover:bg-cyan-600 disabled:opacity-60 text-white"

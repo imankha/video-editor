@@ -355,6 +355,56 @@ describe('getClipStages (T11430)', () => {
     expect(synthesized.synthesizedOrientation).toBe('horizontal');
     expect(synthesized.projectId).toBeNull();
   });
+
+  // MAJOR 4(e): the mirror direction -- a horizontal publish synthesizes a
+  // VERTICAL not-started counterpart (only the vertical-published direction was
+  // tested before).
+  it('synthesizes a VERTICAL counterpart when a horizontal instance is published', () => {
+    const instances = [
+      {
+        projectId: 55, aspectRatio: '16:9', highlightOrdinal: 1,
+        hasWorkingVideo: true, hasFinalVideo: true, isPublished: true,
+        archivedAt: '2026-09-01T00:00:00Z',
+      },
+    ];
+    const result = getClipStages(region, instances);
+    expect(result.instances).toHaveLength(2);
+    const synthesized = result.instances.find((i) => i.orientation === 'vertical');
+    expect(synthesized).toBeDefined();
+    expect(synthesized.status).toBe('Vertical Video Not Started');
+    expect(synthesized.synthesizedOrientation).toBe('vertical');
+    expect(synthesized.projectId).toBeNull();
+  });
+
+  // MAJOR 4(f): mixed in-progress states across BOTH orientations simultaneously
+  // (no publish, so no synthesized counterpart -- both real instances stand).
+  it('renders mixed in-progress instances across both orientations with correct status strings', () => {
+    const matchingRegion = { id: 'c1', startTime: 2, endTime: 8 };
+    const instances = [
+      // vertical, framed (working video, snapshot matches play, no final) -> Framed.
+      {
+        projectId: 10, aspectRatio: '9:16', highlightOrdinal: 1,
+        hasWorkingVideo: true, hasFinalVideo: false, isPublished: false, archivedAt: null,
+        reelSourceStartTime: 2, reelSourceEndTime: 8,
+      },
+      // horizontal, fresh draft -> Clipped.
+      {
+        projectId: 11, aspectRatio: '16:9', highlightOrdinal: 1,
+        hasWorkingVideo: false, hasFinalVideo: false, isPublished: false, archivedAt: null,
+        reelSourceStartTime: null, reelSourceEndTime: null,
+      },
+    ];
+    const result = getClipStages(matchingRegion, instances);
+    // No published instance -> no synthesized counterpart; exactly the two reals.
+    expect(result.instances).toHaveLength(2);
+    expect(result.hasAnyPublished).toBe(false);
+    const vertical = result.instances.find((i) => i.projectId === 10);
+    const horizontal = result.instances.find((i) => i.projectId === 11);
+    expect(vertical.status).toBe('Vertical Video Framed');
+    expect(vertical.action).toBe('overlay');
+    expect(horizontal.status).toBe('Horizontal Video Clipped');
+    expect(horizontal.action).toBe('focus');
+  });
 });
 
 describe('isFramingExportInProgress', () => {

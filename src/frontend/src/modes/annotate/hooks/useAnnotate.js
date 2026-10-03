@@ -763,6 +763,10 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
           hasFinalVideo: i.hasFinalVideo ?? i.has_final_video,
           isPublished: i.isPublished ?? i.is_published,
           archivedAt: i.archivedAt ?? i.archived_at,
+          // fixround1 MAJOR 1: per-project producing-window snapshot, so each
+          // instance's staleness is judged against its OWN window.
+          reelSourceStartTime: i.reelSourceStartTime ?? i.reel_source_start_time ?? null,
+          reelSourceEndTime: i.reelSourceEndTime ?? i.reel_source_end_time ?? null,
         })),
         tagged_teammates: annotation.tagged_teammates ?? annotation.taggedTeammates ?? null,
         my_athlete: annotation.my_athlete ?? annotation.myAthlete ?? true,

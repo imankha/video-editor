@@ -1751,6 +1751,10 @@ export function AnnotateContainer({
       // gesture (AnnotateModeView.handleMakeAnotherHighlight), never from the
       // original first-highlight gestures (Frame Now/Later, Done -> Highlight).
       if (actualUpdates.forceNew != null) backendUpdates.force_new = actualUpdates.forceNew;
+      // fixround1 MAJOR 2: the orientation to create ('16:9' from the synthesized
+      // horizontal-counterpart CTA), so Make Another Highlight makes the right
+      // orientation instead of always defaulting to vertical.
+      if (actualUpdates.aspectRatio != null) backendUpdates.aspect_ratio = actualUpdates.aspectRatio;
       if (actualUpdates.tagged_teammates !== undefined) backendUpdates.tagged_teammates = actualUpdates.tagged_teammates;
       if (actualUpdates.my_athlete !== undefined) backendUpdates.my_athlete = actualUpdates.my_athlete;
 

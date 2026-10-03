@@ -191,16 +191,17 @@ export function getClipStages(region, instances, { activeExports } = {}) {
   const resultInstances = list.map((instance) => {
     const orientation = deriveOrientation(instance.aspectRatio);
 
-    // Per-instance region: fall back to the play's own reelSource snapshot
-    // unless the instance carries its own (each instance has its own T8070
-    // staleness snapshot against its own project — design §4.7).
+    // Per-instance region: each instance carries its OWN T8070 producing-window
+    // snapshot (projects.reel_source_*, fixround1 MAJOR 1). Use it directly — NOT
+    // the shared per-play region.reelSource* — so making a 2nd highlight never
+    // un-stales a 1st the user drifted off its window. The play's CURRENT
+    // boundaries (region.startTime/endTime) are still the thing compared against
+    // this per-instance snapshot.
     const instanceRegion = {
       ...region,
       autoProjectId: instance.projectId,
-      reelSourceStartTime:
-        instance.reelSourceStartTime !== undefined ? instance.reelSourceStartTime : region?.reelSourceStartTime,
-      reelSourceEndTime:
-        instance.reelSourceEndTime !== undefined ? instance.reelSourceEndTime : region?.reelSourceEndTime,
+      reelSourceStartTime: instance.reelSourceStartTime ?? null,
+      reelSourceEndTime: instance.reelSourceEndTime ?? null,
     };
 
     const linkedProjectShape = {
@@ -221,6 +222,16 @@ export function getClipStages(region, instances, { activeExports } = {}) {
     const ordinal = instance.highlightOrdinal;
     const ordinalSuffix = ordinal != null && ordinal >= 2 ? ` ${ordinal}` : '';
     const orientationLabel = orientation ? ORIENTATION_LABEL[orientation] : null;
+    if (!orientationLabel) {
+      // design §4.3: an unexpected aspect ratio must be surfaced loudly, never
+      // silently defaulted to vertical/horizontal. We still render the bare
+      // (un-oriented) status rather than crash, but warn so the bad value is
+      // visible instead of silently swallowed.
+      console.warn(
+        `[clipStage] highlight instance ${instance.projectId} has unmapped aspect_ratio ` +
+        `"${instance.aspectRatio}" — status rendered without an orientation prefix`
+      );
+    }
     const status = orientationLabel
       ? `${orientationLabel} Video${ordinalSuffix} ${bareStatusWord(core.status)}`
       : core.status;

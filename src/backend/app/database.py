@@ -1242,6 +1242,14 @@ def ensure_database():
                 -- orientation bucket), assigned at creation time. Gaps from deletion
                 -- are fine; see design doc T11430 §4.4.
                 highlight_ordinal INTEGER,
+                -- T11430 fixround1: PER-PROJECT producing-window snapshot (frozen at
+                -- creation from the raw_clip's current boundaries). Each highlight
+                -- instance tracks its OWN T8070 staleness against THIS snapshot, not
+                -- the shared per-play raw_clips.reel_source_* (which every new
+                -- highlight re-seeds). Without this, making a 2nd highlight silently
+                -- un-stales a 1st that the user had drifted off its producing window.
+                reel_source_start_time REAL DEFAULT NULL,
+                reel_source_end_time REAL DEFAULT NULL,
                 FOREIGN KEY (working_video_id) REFERENCES working_videos(id) ON DELETE SET NULL,
                 FOREIGN KEY (final_video_id) REFERENCES final_videos(id) ON DELETE SET NULL
             )

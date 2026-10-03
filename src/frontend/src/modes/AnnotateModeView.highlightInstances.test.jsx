@@ -168,4 +168,91 @@ describe('T11430 highlight-instances collection (review-fix regression)', () => 
     expect(screen.getByTestId('annotate-stage-cta')).toBeTruthy();
     expect(screen.queryByTestId('annotate-highlight-instances')).toBeNull();
   });
+
+  // MAJOR 4(a): Make Another Highlight threads forceNew (-> force_new PUT field).
+  it('the primary "Make Another Highlight" CTA calls onFullscreenUpdateClip with createProject + forceNew', async () => {
+    const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 999 });
+    renderView({ clipRegions: [publishedRegion], onFullscreenUpdateClip });
+
+    fireEvent.click(screen.getByTestId('annotate-make-another-highlight-cta'));
+
+    await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
+    const [, payload] = onFullscreenUpdateClip.mock.calls[0];
+    expect(payload).toMatchObject({ createProject: true, forceNew: true, silent: true });
+    // The bare primary CTA does NOT force an orientation (backend defaults 9:16).
+    expect(payload.aspectRatio).toBeUndefined();
+  });
+
+  // MAJOR 4(d) + MAJOR 2: the synthesized horizontal counterpart creates 16:9.
+  it('clicking the synthesized "Horizontal Video Not Started" counterpart sends aspectRatio 16:9', async () => {
+    const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 1000 });
+    // One published vertical -> synthesizes a horizontal not-started counterpart.
+    renderView({ clipRegions: [publishedRegion], onFullscreenUpdateClip });
+
+    fireEvent.click(screen.getByText('Horizontal Video Not Started'));
+
+    await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
+    const [, payload] = onFullscreenUpdateClip.mock.calls[0];
+    expect(payload).toMatchObject({ createProject: true, forceNew: true, aspectRatio: '16:9' });
+  });
+
+  // MAJOR 4(e): the horizontal-published direction synthesizes a VERTICAL
+  // not-started counterpart that creates 9:16 (the only tested direction before
+  // was vertical-published).
+  it('a horizontal-published play synthesizes a vertical counterpart that sends aspectRatio 9:16', async () => {
+    const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 1001 });
+    const horizontalPublished = {
+      id: 'c3', startTime: 2, endTime: 8, autoProjectId: 55,
+      highlightInstances: [{
+        projectId: 55, aspectRatio: '16:9', highlightOrdinal: 1,
+        hasWorkingVideo: true, hasFinalVideo: true, isPublished: true, archivedAt: '2026-09-01T00:00:00Z',
+      }],
+    };
+    renderView({ clipRegions: [horizontalPublished], annotateSelectedRegionId: 'c3', onFullscreenUpdateClip });
+
+    expect(screen.getByText('Horizontal Video Published')).toBeTruthy();
+    fireEvent.click(screen.getByText('Vertical Video Not Started'));
+
+    await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
+    const [, payload] = onFullscreenUpdateClip.mock.calls[0];
+    expect(payload).toMatchObject({ createProject: true, forceNew: true, aspectRatio: '9:16' });
+  });
+
+  // MAJOR 4(c): per-instance focus/overlay navigation opens the correct DISTINCT
+  // project (two in-progress vertical instances, different stages/projects).
+  it('per-instance focus and overlay CTAs open their own distinct projects', async () => {
+    const onOpenClipInFocus = vi.fn();
+    const onOpenClipInOverlay = vi.fn();
+    const twoInProgress = {
+      id: 'c4', startTime: 2, endTime: 8, autoProjectId: 201,
+      highlightInstances: [
+        // FRAMED -> 'overlay' action (working video, snapshot matches play, no final).
+        {
+          projectId: 201, aspectRatio: '9:16', highlightOrdinal: 1,
+          hasWorkingVideo: true, hasFinalVideo: false, isPublished: false, archivedAt: null,
+          reelSourceStartTime: 2, reelSourceEndTime: 8,
+        },
+        // Fresh draft -> 'focus' action.
+        {
+          projectId: 202, aspectRatio: '9:16', highlightOrdinal: 2,
+          hasWorkingVideo: false, hasFinalVideo: false, isPublished: false, archivedAt: null,
+          reelSourceStartTime: null, reelSourceEndTime: null,
+        },
+      ],
+    };
+    renderView({
+      clipRegions: [twoInProgress], annotateSelectedRegionId: 'c4',
+      onOpenClipInFocus, onOpenClipInOverlay,
+    });
+
+    fireEvent.click(screen.getByText('Add Overlay to Highlight'));
+    await waitFor(() => expect(onOpenClipInOverlay).toHaveBeenCalledWith(201));
+
+    // The fresh-draft (ordinal 2) instance opens Focus on project 202.
+    fireEvent.click(screen.getByText('Vertical Video 2 Clipped'));
+    await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(202));
+
+    expect(onOpenClipInOverlay).not.toHaveBeenCalledWith(202);
+    expect(onOpenClipInFocus).not.toHaveBeenCalledWith(201);
+  });
 });

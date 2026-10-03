@@ -374,6 +374,10 @@ class TestProfileDbEquivalence:
             # DB_B: head DDL, drop the post-floor columns, stamp to floor, migrate.
             path_b = _fresh_profile_db(uid_b)
             conn_b = sqlite3.connect(str(path_b))
+            # T11430: drop the index on projects.source_raw_clip_id first -- SQLite
+            # refuses ALTER TABLE ... DROP COLUMN while an index still names the
+            # column (same guard test_t6030 uses before its column drops).
+            conn_b.execute("DROP INDEX IF EXISTS idx_projects_source_raw_clip")
             for table, cols in POST_V023_COLUMNS.items():
                 for col in cols:
                     conn_b.execute(f"ALTER TABLE {table} DROP COLUMN {col}")

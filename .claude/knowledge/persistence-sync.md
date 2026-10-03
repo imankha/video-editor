@@ -1,11 +1,30 @@
 ---
 domain: persistence-sync
-updated: 2026-10-03 (T11430: new profile_db migration v056 (`projects.source_raw_clip_id` +
-`projects.highlight_ordinal`, plain additive `ALTER TABLE ADD COLUMN`, no inline `REFERENCES` on
-the ALTER — matching the T5800/v030 convention that an FK-like column added via ALTER stays
-unconstrained on existing DBs while the fresh-install `database.py` DDL declares the real
-table-level FK; JIT-seam migrated, idempotent 3-chain backfill). Every new/changed hot read or
-write naming these columns (`clips.py::_create_auto_project_for_clip`,
+updated: 2026-10-03 (T11430 + fixround1: profile_db migration v056 adds FOUR projects columns —
+`source_raw_clip_id`, `highlight_ordinal`, and (fixround1) the PER-PROJECT producing-window
+snapshot `reel_source_start_time`/`reel_source_end_time` — all via plain additive `ALTER TABLE
+ADD COLUMN`, no inline `REFERENCES` on the ALTER (matching the T5800/v030 convention that an
+FK-like column added via ALTER stays unconstrained on existing DBs). The FK itself exists ONLY on
+the fresh-install `database.py` DDL, declared as an **inline column-level `REFERENCES raw_clips(id)
+ON DELETE SET NULL`** (NOT a table-level `FOREIGN KEY(...)` clause) — chosen deliberately so SQLite
+`ALTER TABLE ... DROP COLUMN` still works later (SQLite refuses DROP COLUMN when a column is named
+in a table-level FK clause; the T6030/T5089 below-head-synthesis tests actually drop this column).
+`idx_projects_source_raw_clip` indexes it; any test that drops the column must `DROP INDEX IF
+EXISTS idx_projects_source_raw_clip` first (fixround1 fixed test_t5089 + test_t11110 this way).
+**fixround1 per-project staleness (MAJOR 1):** the T8070 producing-window snapshot used to live
+ONLY on `raw_clips` (one per PLAY), and every create — including "Make Another Highlight" —
+re-seeded it, so making a 2nd highlight silently un-staled a 1st the user had drifted off its
+window. Each project now freezes its OWN snapshot at creation; the read path returns it per
+instance and `clipStage.js` judges each instance's staleness against its own, never the shared
+per-play value. **fixround1 ordinal bucketing (minor):** creation, aspect-change recompute, AND
+the v056 backfill now all bucket ordinals by ONE canonical resolved-orientation rule
+(`clips.py::_RESOLVED_ORIENTATION_SQL`: latest published `final_videos.aspect_ratio` else
+`projects.aspect_ratio`); the backfill counter also seeds from the existing per-bucket MAX so a
+re-run never collides. v056's backfill is robust to PARTIAL/synthetic schemas: each chain is
+guarded on the SPECIFIC columns it references (`final_videos.project_id/source_clip_id/
+published_at/aspect_ratio`, `working_clips.project_id/raw_clip_id`, `projects.aspect_ratio`), not
+just the table existing — fixing crashes in three unrelated migration tests. Every new/changed hot
+read or write naming these columns (`clips.py::_create_auto_project_for_clip`,
 `_get_highlight_instances_by_clip`, `update_raw_clip`'s `force_new` branch,
 `set_project_aspect_ratio`'s ordinal recompute, `games.py::load_annotations_from_db`) is
 `column_exists`-guarded for rolling-deploy skew (T5085 "permanent, not a window" posture) — see
@@ -14,7 +33,8 @@ named gesture ("Make Highlight"/"Make Another Highlight" click → `_create_auto
 aspect-ratio picker → `set_project_aspect_ratio`'s ordinal recompute) or are the authorized v056
 JIT-seam backfill — no reactive persistence introduced. `highlight_instances` reads are read-only,
 no write-back. Structural guard (`test_t6030_migration_window_structural_guard.py`)
-`POST_V023_COLUMNS`/`HEAD_VERSION_AUDITED` updated to 56 in the same commit as the migration.)
+`POST_V023_COLUMNS`/`HEAD_VERSION_AUDITED` updated to 56; `test_fk_cascades` projects SET-NULL count
+2→3. Export DB-delta goldens reblessed (the 4 new null projects columns only).)
 updated: 2026-09-26 (T10860 follow-up #2, same day, independent reviewer finding — MAJOR, fixed:
 **a "mark seen on first row" scan over a project's MULTIPLE active shares can mask a real signal
 behind an irrelevant one.** The T10860 staleness scan (`projects.py`, ordered by `shared_at DESC`)

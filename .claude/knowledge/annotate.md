@@ -1,5 +1,30 @@
 ---
 domain: annotate
+updated: 2026-10-03 (T11430 fixround1 — two-reviewer + CI follow-up on the T11430 entry below.
+**(MAJOR 1) Per-instance staleness:** the T8070 producing-window snapshot used to live ONLY on
+`raw_clips` (one per PLAY), so every create — including "Make Another Highlight" — re-seeded it,
+silently un-staling an older highlight the user had drifted off its window. v056 now also adds
+`projects.reel_source_start_time`/`reel_source_end_time`, FROZEN per project at creation (from the
+raw_clip's current boundaries); `_get_highlight_instances_by_clip` returns them per instance;
+`clipStage.js::getClipStages` judges each instance's staleness against its OWN snapshot (no
+region-level fallback). Backfill for existing produced projects inherits the play's current
+snapshot (documented best-effort approximation — the true historical per-project window isn't
+recoverable). **(MAJOR 2) Synthesized counterpart creates the right orientation:** the synthesized
+"Horizontal Video Not Started" CTA now threads `synthesizedOrientation` → `aspectRatio` →
+`update_raw_clip`'s new `aspect_ratio` field → `_create_auto_project_for_clip(aspect_ratio=...)`,
+so it actually makes a 16:9 project (was always defaulting to 9:16). **(MAJOR 3) Delete sweep:**
+`delete_raw_clip` now runs the dead-draft cleanup over EVERY project with `source_raw_clip_id ==
+the clip` (`_delete_orphan_highlight_projects`), not just the one in `auto_project_id`, so
+"Make Another Highlight" drafts don't survive as 0-clip orphans; published + multi-clip projects
+are still preserved. **(cross-layer) Mode-switch guard:** `AnnotateScreen`'s Framing/Overlay
+mode-switch handler now bails when `auto_project_id` points at a PUBLISHED instance (the fix below
+stopped force-NULLing it, which could otherwise open a frozen archived project's broken editor).
+**(minor) One canonical ordinal bucketing rule** (`clips.py::_RESOLVED_ORIENTATION_SQL`) used by
+creation, aspect-change, AND the v056 backfill; backfill counter seeds from existing MAX;
+unknown aspect ratios now `console.warn` instead of silently rendering un-prefixed. CI: fk_cascades
+SET-NULL count 2→3, export DB-delta goldens reblessed (4 new null projects columns only), v056
+backfill hardened with per-column guards so three unrelated migration-snapshot tests stop crashing.
+See persistence-sync.md's T11430 fixround1 entry for the schema/FK/column-guard detail.)
 updated: 2026-10-03 (T11430 — **a raw play now has a durable ONE-TO-MANY link to every
 highlight project/version ever made from it, not a single mutable pointer.** Root cause of the
 reported bug (a published highlight still showing "Highlight Not Started"): publish archives the

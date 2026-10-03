@@ -200,3 +200,116 @@ def test_aspect_ratio_change_recomputes_own_ordinal_without_touching_others(raw_
         assert row1["highlight_ordinal"] == 1, (
             "the untouched vertical project's own ordinal must not change"
         )
+
+
+def test_force_new_aspect_override_creates_horizontal_in_its_own_bucket(raw_clip_id):
+    """fixround1 MAJOR 2: _create_auto_project_for_clip honors an explicit
+    aspect_ratio so the synthesized-counterpart "Make a horizontal highlight"
+    actually makes a 16:9 project, ordinal 1 in the (independent) horizontal
+    bucket -- not another vertical."""
+    from app.database import get_db_connection
+    from app.routers.clips import _create_auto_project_for_clip
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        v = _create_auto_project_for_clip(cursor, raw_clip_id, "Vert")  # default 9:16
+        h = _create_auto_project_for_clip(cursor, raw_clip_id, "Horiz", aspect_ratio="16:9")
+        conn.commit()
+
+        cursor.execute("SELECT aspect_ratio, highlight_ordinal FROM projects WHERE id = ?", (v,))
+        vr = cursor.fetchone()
+        cursor.execute("SELECT aspect_ratio, highlight_ordinal FROM projects WHERE id = ?", (h,))
+        hr = cursor.fetchone()
+
+    assert vr["aspect_ratio"] == "9:16" and vr["highlight_ordinal"] == 1
+    assert hr["aspect_ratio"] == "16:9", "explicit aspect_ratio must be honored, not defaulted to 9:16"
+    assert hr["highlight_ordinal"] == 1, "first horizontal is ordinal 1 in its own independent bucket"
+
+
+def test_per_project_reel_source_snapshot_is_independent(raw_clip_id):
+    """fixround1 MAJOR 1: each highlight instance tracks staleness against its
+    OWN creation-time producing-window snapshot (projects.reel_source_*), not the
+    shared per-play raw_clips snapshot. Create V1, then edit the play's boundaries
+    (as a real trim does, also re-seeding the SHARED raw_clips snapshot), then
+    create V2. V1's frozen snapshot must still reflect its original boundaries;
+    V2's must reflect the new ones. Both must come back distinctly from the read
+    path."""
+    from app.database import get_db_connection
+    from app.routers.clips import _create_auto_project_for_clip, _get_highlight_instances_by_clip
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # raw_clip starts at 0.0-5.0 (fixture). Create V1 -> freezes 0.0-5.0.
+        v1 = _create_auto_project_for_clip(cursor, raw_clip_id, "V1")
+        conn.commit()
+
+        # Simulate a trim: move the play boundaries AND re-seed the shared
+        # per-play snapshot (what every create path does to raw_clips today).
+        cursor.execute(
+            "UPDATE raw_clips SET start_time = 10.0, end_time = 15.0, "
+            "reel_source_start_time = 10.0, reel_source_end_time = 15.0 WHERE id = ?",
+            (raw_clip_id,),
+        )
+        conn.commit()
+
+        # Create V2 -> freezes 10.0-15.0.
+        v2 = _create_auto_project_for_clip(cursor, raw_clip_id, "V2")
+        conn.commit()
+
+        cursor.execute(
+            "SELECT reel_source_start_time, reel_source_end_time FROM projects WHERE id = ?", (v1,)
+        )
+        v1_snap = cursor.fetchone()
+        cursor.execute(
+            "SELECT reel_source_start_time, reel_source_end_time FROM projects WHERE id = ?", (v2,)
+        )
+        v2_snap = cursor.fetchone()
+
+        instances = _get_highlight_instances_by_clip(cursor, [raw_clip_id])[raw_clip_id]
+
+    # V1 keeps its original producing window even though the play (and the shared
+    # per-play snapshot) moved to 10-15 when V2 was created.
+    assert (v1_snap["reel_source_start_time"], v1_snap["reel_source_end_time"]) == (0.0, 5.0), (
+        f"V1's frozen snapshot must stay at its creation-time window, got {dict(v1_snap)!r}"
+    )
+    assert (v2_snap["reel_source_start_time"], v2_snap["reel_source_end_time"]) == (10.0, 15.0), (
+        f"V2's frozen snapshot must reflect the boundaries at ITS creation, got {dict(v2_snap)!r}"
+    )
+
+    by_project = {i["project_id"]: i for i in instances}
+    assert by_project[v1]["reel_source_start_time"] == 0.0
+    assert by_project[v2]["reel_source_start_time"] == 10.0
+
+
+def test_force_new_over_http_creates_second_project_with_optional_aspect(client, raw_clip_id):
+    """fixround1 minor + MAJOR 2: PUT /api/clips/raw/{id} with force_new mints a
+    second project for the same play (never reusing auto_project_id), and an
+    explicit aspect_ratio creates the requested orientation."""
+    from app.database import get_db_connection
+
+    # First highlight (ordinary create).
+    r1 = client.put(f"/api/clips/raw/{raw_clip_id}", json={"create_project": True})
+    assert r1.status_code == 200, r1.text
+    p1 = r1.json()["project_id"]
+
+    # Make Another Highlight, horizontal, over HTTP.
+    r2 = client.put(
+        f"/api/clips/raw/{raw_clip_id}",
+        json={"create_project": True, "force_new": True, "aspect_ratio": "16:9"},
+    )
+    assert r2.status_code == 200, r2.text
+    p2 = r2.json()["project_id"]
+    assert p2 != p1, "force_new must mint a NEW project, not reuse the pointer"
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, aspect_ratio, source_raw_clip_id FROM projects WHERE source_raw_clip_id = ? ORDER BY id",
+            (raw_clip_id,),
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+
+    ids = {r["id"] for r in rows}
+    assert {p1, p2}.issubset(ids), f"both projects must link to the play, got {rows!r}"
+    by_id = {r["id"]: r for r in rows}
+    assert by_id[p2]["aspect_ratio"] == "16:9", "force_new honored the explicit horizontal aspect over HTTP"

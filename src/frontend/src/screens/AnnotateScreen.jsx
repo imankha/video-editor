@@ -232,6 +232,17 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         const selectedRegionId = annotateRef.current?.annotateSelectedRegionId;
         const selectedRegion = regions.find(r => r.id === selectedRegionId);
         if (!selectedRegion?.autoProjectId) return;
+        // T11430 fixround1 (cross-layer): games.py no longer force-NULLs
+        // auto_project_id for an archived (published) project, so this "active
+        // draft" hint can now point at a FROZEN published project whose
+        // working_clips were deleted at publish -- opening it in Framing/Overlay
+        // would be a broken editor. Bail if the hint points at a published
+        // instance; the per-instance collection CTAs (onOpenClipInFocus/Overlay)
+        // are the way to open a specific highlight now. Legacy plays with no
+        // highlight_instances payload keep the original behavior.
+        const pointedInstance = (selectedRegion.highlightInstances || [])
+          .find(i => i.projectId === selectedRegion.autoProjectId);
+        if (pointedInstance?.isPublished) return;
         return selectProject(selectedRegion.autoProjectId).then((project) => {
           if (!project) {
             toast.error("Couldn't open this highlight", { message: 'Check your network and try again.' });
