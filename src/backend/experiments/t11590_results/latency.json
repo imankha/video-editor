@@ -43,5 +43,81 @@
   "download_s": 0.8667665999382734,
   "total_s": 1.6772998997475952,
   "size_bytes": 2492056
+ },
+ {
+  "kind": "bench",
+  "n": 10,
+  "via_modal": false,
+  "note": "Measured from wherever this process actually ran (not a Fly production server) -- R2 round-trip time here is of unverified direction vs the real Fly-to-R2 path. Treat absolute numbers as order-of-magnitude / relative comparisons, not a production SLA. Single-process run: the untimed warm-up HEAD above excludes client-construction/TLS-handshake cold-start from every timed sample (the original before/miss/hit numbers each ran in a SEPARATE process and paid that cold-start once, misattributed to whichever R2 call happened to run first).",
+  "before_s": {
+   "median_s": 1.4439560015161987,
+   "p90_s": 1.6686163579579443,
+   "n": 10,
+   "samples_s": [
+    1.3562878740485758,
+    1.5959954270510934,
+    1.395282670040615,
+    1.8183724239934236,
+    1.6686163579579443,
+    1.3370398550177924,
+    1.4926293329917826,
+    1.3921865239972249,
+    1.4977258490398526,
+    1.3619510100106709
+   ]
+  },
+  "miss_head_alone_s": {
+   "median_s": 0.1434215525223408,
+   "p90_s": 0.15834767400519922,
+   "n": 10,
+   "samples_s": [
+    0.1564443060196936,
+    0.14193063002312556,
+    0.14491247502155602,
+    0.14582015498308465,
+    0.13788705598562956,
+    0.15834767400519922,
+    0.13634255900979042,
+    0.13501215702854097,
+    0.1328498920192942,
+    0.17825837602140382
+   ]
+  },
+  "new_miss_s": {
+   "median_s": 1.5777595990221016,
+   "p90_s": 1.7735482580028474,
+   "n": 10,
+   "samples_s": [
+    1.577518129022792,
+    1.5295295600080863,
+    1.5581419420195743,
+    1.5980120549793355,
+    1.8169523729593493,
+    1.5780010690214112,
+    1.6135595309897326,
+    1.7735482580028474,
+    1.5686643790104426,
+    1.5685942890122533
+   ]
+  },
+  "hit_s": {
+   "median_s": 0.6312520055216737,
+   "p90_s": 0.6994987979996949,
+   "n": 10,
+   "samples_s": [
+    0.6616085970308632,
+    0.6942880129790865,
+    0.6994987979996949,
+    0.7610228509875014,
+    0.6360827400349081,
+    0.6264212710084394,
+    0.5801179420086555,
+    0.5931383559945971,
+    0.5776895050075836,
+    0.6202163530397229
+   ]
+  },
+  "speedup_before_vs_hit_x": 2.2874477845387555,
+  "regression_new_miss_minus_before_s": 0.13380359750590287
  }
 ]

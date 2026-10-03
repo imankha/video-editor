@@ -760,8 +760,17 @@ def _stream_cache_hit_and_cleanup(path: str, cleanup_dir: str):
 # before the first streamed byte -- so every MISS (including a first-ever
 # share/download, the exact case the "Share took too long" complaint was
 # about) paid for an extra R2 PUT on top of compose, making the uncached path
-# STRICTLY SLOWER than before this cache existed. A cache MISS must never be
-# slower than the pre-T11590 behavior.
+# STRICTLY SLOWER than before this cache existed.
+#
+# The real contract (corrected after an Opus root-cause pass found the
+# original wording above overclaimed a blanket guarantee that was never
+# actually measured): a MISS adds NO sequential R2 round-trip on the
+# R2_ENABLED path, because the cache-key HEAD now runs CONCURRENTLY with the
+# pre-existing source-verify HEAD (`asyncio.gather`, see the HEAD-before-build
+# block above) instead of one after the other -- and a MISS never pays the
+# cache PUT before the first streamed byte, because that write runs in the
+# background (this section). It is NOT a blanket "never slower" guarantee for
+# every possible case (e.g. compose cost itself is unchanged by this cache).
 #
 # Fix: the upload runs as a detached `asyncio.Task`, created but never
 # awaited by the request handler, so it cannot block the response. The ONE
@@ -986,7 +995,26 @@ async def download_file(download_id: int):
             card_row["id"] if card_row is not None else None,
             _card_content_hash(card_row), field_values_fp, outro_enabled(),
         )
-        if await asyncio.to_thread(r2_head_object_global, cache_key) is not None:
+        # On the R2_ENABLED branch, run the cache-key HEAD (T11590) and the
+        # PRE-EXISTING source-verify HEAD (inside get_download_file_url,
+        # verify_exists=True -- a blocking boto3 call that otherwise ran
+        # directly on the event loop) CONCURRENTLY via asyncio.gather. Before
+        # this fix they ran sequentially -- two round trips where there used
+        # to be one before this cache existed. A cache HIT below ignores the
+        # presign result (it was speculative, fetched in parallel for free);
+        # a MISS falls through and uses it exactly as before. The local-disk
+        # branch (R2_ENABLED=false) has no source HEAD to overlap with, so it
+        # stays a single HEAD, unchanged.
+        if R2_ENABLED:
+            cache_head_result, presigned_url = await asyncio.gather(
+                asyncio.to_thread(r2_head_object_global, cache_key),
+                asyncio.to_thread(get_download_file_url, row['filename'], verify_exists=True),
+            )
+        else:
+            cache_head_result = await asyncio.to_thread(r2_head_object_global, cache_key)
+            presigned_url = None  # unused on the local-disk branch
+
+        if cache_head_result is not None:
             cache_tmp = tempfile.mkdtemp(prefix="rb_dl_cache_")
             cached_path = os.path.join(cache_tmp, "cached.mp4")
             if await asyncio.to_thread(download_from_r2_global, cache_key, Path(cached_path)):
@@ -1012,7 +1040,6 @@ async def download_file(download_id: int):
         if R2_ENABLED:
             import httpx
 
-            presigned_url = get_download_file_url(row['filename'], verify_exists=True)
             if not presigned_url:
                 logger.error(
                     f"[Download] R2 presigned URL failed for: {row['filename']}"

@@ -28,8 +28,11 @@ upload calls -- the thing actually under test -- still run for real.
 
 Section 6 proves the T11590 gap-3 fix: the write-after-build runs as a
 DETACHED `asyncio.Task` (never awaited by the request handler), so an R2 PUT
-can never block the first byte -- a cache MISS must never be slower than the
-pre-T11590 behavior. Since the background task may still be running on
+can never block the first byte -- a cache MISS never pays the cache write
+before its first streamed byte (not a blanket "never slower than before"
+claim; see the correcting note on Section 9 below, which closes the other
+real-but-smaller sequential-HEAD regression this same write-after-build fix
+left in place). Since the background task may still be running on
 TestClient's own portal thread/event loop after `client.get()` returns, `_get()`
 below drains pending background tasks (polls `_BACKGROUND_CACHE_WRITE_TASKS`)
 after every call so the rest of the suite observes a SETTLED cache state
@@ -576,7 +579,11 @@ def test_r2_source_degraded_compose_is_not_cached(client):
 #    (simulating an artificially slow R2 PUT, which blocks a thread-pool
 #    thread via `asyncio.to_thread`, never the event loop) and asserting the
 #    full streamed response completes WITHOUT waiting for it, then that the
-#    cache object still lands once the upload is allowed to proceed.
+#    cache object still lands once the upload is allowed to proceed. (This
+#    section is specifically about the WRITE -- the background PUT. Section 9
+#    below is a separate, smaller regression this fix did NOT address: the
+#    two HEAD checks on the R2 branch running sequentially instead of
+#    concurrently. Root-caused by a real-R2 benchmark; see Section 9.)
 # ===========================================================================
 
 def test_background_cache_write_does_not_block_streaming_local_branch(client):
@@ -769,3 +776,61 @@ def test_cache_head_hit_but_download_fails_rebuilds_instead_of_erroring(client):
         assert r2.status_code == 200, "a HEAD-hit/GET-miss blip must rebuild, never error"
         assert r2.content == b"COMPOSED", "the rebuilt bytes still stream correctly"
         assert counters["compose"] == 2, "the GET failure must fall through to a fresh build"
+
+
+# ===========================================================================
+# 9. AC7 follow-up (root-caused by a real-R2 benchmark): on the R2_ENABLED
+#    branch, the NEW cache-key HEAD check and the PRE-EXISTING source-verify
+#    HEAD (inside get_download_file_url(verify_exists=True)) must run
+#    CONCURRENTLY, not sequentially -- two round trips where there used to be
+#    one before this cache existed. Proven by stubbing both HEAD calls with a
+#    0.3s delay each and asserting the combined cost is ~0.3s, not ~0.6s.
+# ===========================================================================
+
+def test_cache_head_and_source_verify_head_run_concurrently_not_sequentially(client):
+    """Before the fix: `r2_head_object_global` is awaited via `asyncio.to_thread`
+    (0.3s off-loop), then `get_download_file_url` runs SYNCHRONOUSLY, blocking
+    the event loop directly for another 0.3s -- ~0.6s total, sequential. After
+    the fix: both run via `asyncio.to_thread` + `asyncio.gather` -- ~0.3s
+    total, concurrent. A cache MISS (the HEAD returns None) is used so the
+    request falls all the way through to the presign check, exercising both
+    calls on the same request."""
+    from app.profile_context import set_current_profile_id
+    from app.routers.downloads import download_file
+    from app.user_context import set_current_user_id
+
+    db = _db_path()
+    fv_id, _filename = _seed_final_video(db)
+
+    store, counters = {}, {"compose": 0}
+
+    def _slow_head(key):
+        time.sleep(0.3)
+        return None  # cache MISS -- falls through to the presign check
+
+    def _slow_presign(filename, verify_exists=False):
+        time.sleep(0.3)
+        return "https://fake-r2.example/presigned"
+
+    async def _run():
+        set_current_user_id(USER_ID)
+        set_current_profile_id(PROFILE_ID)
+        t0 = time.monotonic()
+        resp = await download_file(fv_id)
+        body = b"".join([c async for c in resp.body_iterator])
+        elapsed = time.monotonic() - t0
+        return elapsed, body
+
+    with ExitStack() as stack:
+        _install_r2_source_pipeline(stack, store, counters)
+        stack.enter_context(patch("app.routers.downloads.r2_head_object_global", _slow_head))
+        stack.enter_context(patch("app.routers.downloads.get_download_file_url", _slow_presign))
+        elapsed, body = asyncio.run(_run())
+
+    assert elapsed < 0.45, (
+        f"the cache-key HEAD and the source-verify HEAD must run CONCURRENTLY, "
+        f"not sequentially (took {elapsed:.2f}s; two 0.3s sequential calls "
+        f"would take ~0.6s)"
+    )
+    assert body == b"COMPOSED", "the miss path still composes and streams correctly"
+    assert counters["compose"] == 1
