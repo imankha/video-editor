@@ -204,7 +204,7 @@ def test_upsert_working_video_refreshes_only_exported_projects_snapshot(db):
     from app.utils.encoding import encode_data
 
     # Play created at [10,20] (both snapshots frozen there), then trimmed to [12,20].
-    raw_clip_id, p1, p2 = _seed_sibling_projects(db, 12.0, 20.0)
+    _raw_clip_id, p1, p2 = _seed_sibling_projects(db, 12.0, 20.0)
     assert _project_reel_source(db, p1)["reel_source_start_time"] == 10.0
     assert _project_reel_source(db, p2)["reel_source_start_time"] == 10.0
 
@@ -227,7 +227,7 @@ def test_publish_finalize_refreshes_only_exported_projects_snapshot(db):
     from app.routers.export import overlay
     from app.services import publish_final_video
 
-    raw_clip_id, p1, p2 = _seed_sibling_projects(db, 3.0, 9.0)  # play trimmed to [3,9]
+    _raw_clip_id, p1, p2 = _seed_sibling_projects(db, 3.0, 9.0)  # play trimmed to [3,9]
     # give P1 a working video for the metadata freeze.
     conn = _connect(db)
     conn.execute("INSERT INTO working_videos (project_id, filename, version, duration) VALUES (?, 'wv.mp4', 1, 6.0)", (p1,))
