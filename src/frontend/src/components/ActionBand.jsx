@@ -1,3 +1,6 @@
+import { AlertCircle } from 'lucide-react';
+import { FOCUS_HINTS } from '../config/displayNames';
+
 /**
  * ActionBand (T9270) — the full-width page-level action band that anchors the
  * primary CTA on Focus and Overlay.
@@ -24,8 +27,16 @@
  *
  * Presentational only. `status`, `cta`, and `cost` are nodes supplied by the host.
  * `data-testid="action-band"` is the stable hook the e2e/unit specs assert against.
+ *
+ * T11720: `compactLocked` collapses the band to ONE ~52px row BELOW `sm` only
+ * (an unlock caption + a disabled Generate pill) so the timeline and Trim
+ * controls above the sticky band stay on screen while Generate is still locked.
+ * The full band keeps rendering at `sm`+ (so the REAL CTA stays in the DOM for
+ * desktop/tablet and the T4880 reachability spec). Desktop/tablet are byte-
+ * identical to before; the compact row is a sanctioned exception to T9270's
+ * never-resize rule (that rule governs the settings rail — see ui-style-guide).
  */
-export default function ActionBand({ status = null, cta = null, cost = null, className = '' }) {
+export default function ActionBand({ status = null, cta = null, cost = null, compactLocked = false, className = '' }) {
   return (
     <div
       data-testid="action-band"
@@ -36,7 +47,26 @@ export default function ActionBand({ status = null, cta = null, cost = null, cla
         boxShadow: '0 -8px 24px rgba(0,0,0,0.35)',
       }}
     >
-      <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:min-h-[76px]">
+      {/* Phone-only compact locked row (T11720). Hidden at sm+ via sm:hidden. */}
+      {compactLocked && (
+        <div
+          data-testid="action-band-compact"
+          className="sm:hidden flex items-center gap-2 px-3 py-2"
+        >
+          <span className="flex flex-1 min-w-0 items-center gap-1.5 text-xs text-amber-400">
+            <AlertCircle size={14} className="shrink-0" aria-hidden="true" />
+            <span className="truncate">{FOCUS_HINTS.GENERATE_LOCKED_SHORT}</span>
+          </span>
+          <span
+            data-testid="generate-locked-pill"
+            aria-disabled="true"
+            className="flex h-9 shrink-0 items-center rounded-lg px-3 text-sm font-medium bg-blue-900/50 text-blue-300/60"
+          >
+            {FOCUS_HINTS.GENERATE_LOCKED_CTA}
+          </span>
+        </div>
+      )}
+      <div className={`${compactLocked ? 'hidden sm:flex' : 'flex'} flex-col sm:flex-row items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:min-h-[76px]`}>
         {/* Status cell — progress, failed/retry, disabled reason (T8510). */}
         <div className="order-2 sm:order-1 flex-1 min-w-0 w-full sm:w-auto flex flex-col justify-center gap-1 text-center sm:text-left">
           {status}

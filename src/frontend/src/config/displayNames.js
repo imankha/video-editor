@@ -593,6 +593,11 @@ export const FOCUS_HINTS = {
   GENERATE_LOCKED: 'Move the box onto your player, then tap Set focus point',
   COACH_DRAG: 'Drag the box onto your player',
   TIMELINE_EMPTY: 'No focus points yet. Drag the box on the video to add one.',
+  // T11720: the phone-only compact locked band (one ~52px row while Generate is
+  // still locked). GENERATE_LOCKED_SHORT is the amber left-side copy; the right
+  // pill echoes the Generate verb in its disabled state.
+  GENERATE_LOCKED_SHORT: 'Set a focus point to unlock Generate',
+  GENERATE_LOCKED_CTA: 'Generate',
   // Landscape first-entry card — shown once, over the stage, on the first
   // cockpit entry. Dismissed by "Got it" or the first touch on the stage.
   COCKPIT_INTRO_TITLE: 'More room in landscape',

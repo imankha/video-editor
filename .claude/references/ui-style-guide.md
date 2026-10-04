@@ -403,6 +403,12 @@ The governing rule: **one saturated element per screen, and it is the primary CT
 The video is second; the settings rail is third and carries NO accent color. The CTA
 never lives inside the settings container, never resizes, never moves.
 
+- **T11720 exception:** below `sm`, while Focus is LOCKED (clip unframed), the band
+  collapses to one ~52px compact row (unlock caption + a disabled Generate pill). This
+  is an allowed exception to the never-resize rule, which governs the settings rail —
+  not this locked-state collapse; the full band (real CTA in the DOM) still renders at
+  `sm`+.
+
 - **`ActionBand`** (`components/ActionBand.jsx`): `flex-none w-full`, `min-h-[76px]`,
   `background:#0b1220`, `border-top:1px solid rgba(255,255,255,.14)`,
   `box-shadow:0 -8px 24px rgba(0,0,0,.35)`. Three cells: `flex-1` status (left:

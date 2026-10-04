@@ -113,6 +113,22 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
   });
 
+  it('T11720: Focus + unframed drives the compact locked band (phone-only row)', () => {
+    render(<ExportButtonView {...baseProps} hasUnframedClips={true} isButtonDisabled={true} />);
+    expect(screen.getByTestId('action-band-compact').textContent)
+      .toMatch(/Set a focus point to unlock Generate/);
+  });
+
+  it('T11720: framed Focus clip does NOT get the compact locked band', () => {
+    render(<ExportButtonView {...baseProps} hasUnframedClips={false} isButtonDisabled={false} />);
+    expect(screen.queryByTestId('action-band-compact')).toBeNull();
+  });
+
+  it('T11720: Overlay mode never gets the compact locked band', () => {
+    render(<ExportButtonView {...baseProps} isFramingMode={false} hasUnframedClips={true} />);
+    expect(screen.queryByTestId('action-band-compact')).toBeNull();
+  });
+
   it('caption omits the credit suffix when the estimate is unknown (no fabricated number)', () => {
     render(<ExportButtonView {...baseProps}
       hasUnframedClips={true} isButtonDisabled={true} estimatedCredits={null} />);

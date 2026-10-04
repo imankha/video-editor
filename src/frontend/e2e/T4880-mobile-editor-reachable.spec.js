@@ -45,9 +45,13 @@ test.describe('T4880 mobile editor reachability', () => {
 
     await openFramingDraft(page);
 
-    // Primary framing export/proceed button ("Export" or "Export (n/m)"), NOT the
-    // mode-switcher "Export from Framing first…" tooltip button.
-    const exportBtn = page.getByRole('button', { name: /^Export( \(\d+\/\d+\))?$/ });
+    // T11720: the framing CTA is "Generate Highlight" (EXPORT_JOBS.framing.action);
+    // the old /^Export.../ locator was stale (T10640) and never matched. This spec
+    // opens a FRAMED draft (it asserts the button is ENABLED — an unframed clip's
+    // CTA is disabled by the T8510 gate), so the full band renders at 390 and the
+    // real CTA is reachable; the T11720 compact locked row only replaces it while
+    // the clip is unframed.
+    const exportBtn = page.getByRole('button', { name: /^Generate Highlight$/ });
 
     // --- Portrait ---
     await page.setViewportSize(PORTRAIT);

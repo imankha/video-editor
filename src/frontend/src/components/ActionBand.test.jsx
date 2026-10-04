@@ -71,3 +71,52 @@ describe('ActionBand (T10630)', () => {
     expect(screen.getByTestId('action-band')).toBeTruthy();
   });
 });
+
+/**
+ * T11720: on phones (below sm), while Generate is locked (clip unframed), the
+ * band collapses to one ~52px row so the timeline + Trim controls above it stay
+ * on screen. The full band (with the REAL CTA in the DOM) still renders at sm+.
+ */
+describe('ActionBand compact locked band (T11720)', () => {
+  it('renders a sm:hidden compact row with the unlock copy and a disabled Generate pill when compactLocked', () => {
+    render(
+      <ActionBand
+        compactLocked
+        status={<span>status</span>}
+        cta={<button>Generate Highlight</button>}
+        cost={<span>~8 credits</span>}
+      />
+    );
+    const compact = screen.getByTestId('action-band-compact');
+    expect(compact.className).toContain('sm:hidden');
+    expect(compact.textContent).toMatch(/Set a focus point to unlock Generate/);
+    const pill = screen.getByTestId('generate-locked-pill');
+    expect(pill.getAttribute('aria-disabled')).toBe('true');
+    expect(pill.textContent).toMatch(/^Generate$/);
+  });
+
+  it('keeps the full band (real CTA) in the DOM but hidden below sm when compactLocked', () => {
+    render(
+      <ActionBand
+        compactLocked
+        status={<span>status</span>}
+        cta={<button data-testid="real-cta">Generate Highlight</button>}
+        cost={<span>~8 credits</span>}
+      />
+    );
+    const realCta = screen.getByTestId('real-cta');
+    expect(realCta).toBeTruthy(); // still in the DOM for sm+ specs
+    const fullBand = realCta.parentElement.parentElement;
+    expect(fullBand.className).toContain('hidden');
+    expect(fullBand.className).toContain('sm:flex');
+  });
+
+  it('does not render the compact row when not locked (byte-identical to before)', () => {
+    render(<ActionBand status={<span>s</span>} cta={<button>c</button>} cost={<span>k</span>} />);
+    expect(screen.queryByTestId('action-band-compact')).toBeNull();
+    // Full band is the only child and renders at all widths (flex, not hidden).
+    const row = screen.getByTestId('action-band').firstElementChild;
+    expect(row.className).toContain('flex-col');
+    expect(row.className).not.toContain('hidden');
+  });
+});

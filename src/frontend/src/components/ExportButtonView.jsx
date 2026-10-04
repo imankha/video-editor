@@ -290,9 +290,15 @@ const ExportButtonView = forwardRef(function ExportButtonView({
     </>
   );
 
+  // T11720: while Focus is locked (clip unframed, not mid-export) the band
+  // collapses to one compact row below sm. Derived from the same hasUnframedClips
+  // signal the disabled gate uses (ultimately clipIsFramed) — no stored flag.
+  const compactLocked = isFramingMode && hasUnframedClips && !isCurrentlyExporting;
+
   return (
     <>
       <ActionBand
+        compactLocked={compactLocked}
         status={statusCell}
         cta={
           isPreviewCta ? (
