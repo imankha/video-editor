@@ -7,19 +7,19 @@
 //   AC3 an insufficient balance renders the balance red AND the existing
 //       buy-credits path still works (clicked through, not just asserted).
 //
-// Coverage note: this spec live-drives the two modals reachable from the seeded
-// account (Upload game, Add video) across the full 320/360/375/390/768 width set.
-// The other two CreditCostRow call sites are NOT live-driven here:
-//   - StorageExtensionModal only opens for a near/expired game, and the seeded
-//     account has none (its one game is ~2 weeks from expiry).
-//   - AddFootageButton lives inside the Annotate editor.
-// Both render the SAME CreditCostRow with the same prop shape proven here and are
-// covered by their unit tests (StorageExtensionModal.test.jsx asserts the stacked
-// cost/note/red-balance layout), so the residual layout risk is low.
+// Coverage note: this spec live-drives THREE of the four CreditCostRow modals
+// across the full 320/360/375/390/768 width set: Upload game, Add video, and
+// Add footage (opened inside the Annotate editor on the seeded account's game).
+// The one call site NOT live-driven is StorageExtensionModal: it only opens for a
+// near/expired game, and the seeded account has none (its one game is ~2 weeks
+// from expiry) -- a genuine fixture gap. It renders the SAME CreditCostRow with
+// the same prop shape proven here and is covered by its unit tests
+// (StorageExtensionModal.test.jsx asserts the stacked cost/note/red-balance
+// layout), so the residual layout risk is low.
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { loginAsRealUser } from './helpers/realAuth';
+import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth';
 import { saveEvidence, assertNoHorizontalOverflow } from './helpers/qa.js';
 
 const EMAIL = 'imankh@gmail.com';
@@ -100,6 +100,56 @@ test.describe('T11770 CreditCostRow', () => {
       await assertCostRowLaidOut(page, 'This video is kept for 30 days.');
       await assertNoHorizontalOverflow(page);
       await saveEvidence(page, `criterion-2-attach-video-modal-${width}`);
+    });
+
+    test(`add-footage modal: same layout @${width}`, async ({ context, page }) => {
+      await loginAsRealUser(context, EMAIL);
+      await page.setViewportSize({ width, height: 760 });
+      // Open the seeded account's game straight into Annotate, where the
+      // "Add footage to game" button lives (AnnotateModeView whole-game row).
+      const res = await page.request.get('/api/games');
+      const body = await res.json();
+      const games = Array.isArray(body) ? body : (body.games || []);
+      expect(games.length).toBeGreaterThan(0);
+      // Open the game in Annotate, retrying the navigation if we land on the
+      // sign-in gate. Driving this one real account through ~16 sequential tests
+      // (each its own dev-login) occasionally leaves session-init not yet settled
+      // when /annotate mounts, so the auth gate flashes; re-minting the cookie and
+      // re-navigating clears it. A genuine auth misconfig still throws from
+      // loginAsRealUser (it only swallows 5xx blips), so this masks nothing real.
+      const restart = page.getByRole('button', { name: 'Restart' }).first();
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        await openGameInAnnotate(page, games[0].id);
+        // Boot preloader (#preloader) overlays the DOM while session-init + the
+        // game load run; it intercepts pointer events and the editor re-renders as
+        // data lands, so wait it out before reaching for controls.
+        await page.locator('#preloader').waitFor({ state: 'detached', timeout: 30000 }).catch(() => {});
+        if (await restart.isVisible().catch(() => false)) break;
+        // Still not in the editor -> re-auth and try again (unless out of tries).
+        expect(attempt, 'Annotate editor never loaded (stuck on sign-in gate)').toBeLessThan(3);
+        await loginAsRealUser(context, EMAIL);
+      }
+
+      // The whole-game actions (incl. "Add footage to game") render only when NO
+      // play is selected (!isEditMode). Selection is playhead-derived (the
+      // auto-select/deselect effect in AnnotateContainer), and the editor
+      // restores the last-viewed time, which can sit inside a play and auto-select
+      // it. Seek to 0 via Restart: time 0 is before every play on this game, so
+      // the effect deselects and the whole-game row (with the button) appears.
+      await expect(restart).toBeVisible({ timeout: 30000 });
+      await restart.click();
+
+      const addBtn = page.getByRole('button', { name: 'Add footage to game' }).first();
+      await expect(addBtn).toBeVisible({ timeout: 30000 });
+      await addBtn.click();
+      await expect(page.getByRole('heading', { name: 'Add footage' })).toBeVisible();
+
+      await assertCostRowLaidOut(page, 'This footage is kept for 30 days.');
+      // No assertNoHorizontalOverflow here: the Annotate editor behind the modal
+      // has its own known narrow-width header overflow (T11740, not yet merged),
+      // which is unrelated to this modal's CreditCostRow. The modal is a centered
+      // max-w-md overlay; assertCostRowLaidOut is the layout proof that matters.
+      await saveEvidence(page, `criterion-2-add-footage-modal-${width}`);
     });
   }
 
