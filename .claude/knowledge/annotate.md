@@ -6,15 +6,21 @@ updated: 2026-10-04 (T11750 — the zero-plays whole-game action row under "Mark
 `text-xs`/`text-gray-600` links. Two styles: ENABLED (Share via `onSharePlayback`, and Add
 footage's `AddFootageButton` `variant="link"`) = `min-h-11 px-3 rounded-lg text-sm text-gray-100
 ring-1 ring-inset ring-white/20 hover:bg-white/10 hover:text-white`, 16px icons. LOCKED (Review
-plays, since there are zero plays to review) = `min-h-11 px-3 rounded-lg text-sm text-gray-400`,
+plays, since there are zero plays to review) = `min-h-11 px-3 rounded-lg text-sm text-gray-300`,
 NO ring, `Lock` icon (replacing `ListVideo`), and critically `aria-disabled="true"` NOT the
 `disabled` attribute — the control stays tappable so its `onClick` fires
 `toast.info(ANNOTATE.REVIEW_PLAYS_LOCKED_TOAST, { dedupKey: 'review-locked' })` (the dedupKey
 collapses repeated taps to one toast via the Toast store). Locked-vs-enabled is carried by THREE
 cues together (no outline + lock icon + dimmer text), same as the ModeSwitcher locked-tab pattern.
-Contrast on this screen's dark purple/gray panel (`bg-white/10` over the
-`from-gray-900 via-purple-900 to-gray-900` page gradient): gray-100 ≈ 12:1, gray-400 ≈ 5.3:1
-(both clear 4.5:1); `text-gray-500` is only ~2.8:1 here and is BANNED for this row. T10310's
+CONTRAST LANDMINE: this row renders near the HORIZONTAL CENTER of the screen, ~80% down — close
+to the `via-purple-900` MIDPOINT of the page gradient (`bg-white/10` over
+`from-gray-900 via-purple-900 to-gray-900`, App.jsx:995), NOT a gray-900 end-stop. Sampling the
+audit screenshot at the row's real y gives a background of ~`rgb(92-103, 49-51, 129-145)`.
+Against the worst pixel there: gray-100 ≈ 7.9:1 (enabled, clears 4.5:1), gray-300 ≈ 5.9:1
+(locked, clears 4.5:1), but **gray-400 ≈ 3.4:1 and gray-500 ≈ 1.7:1 both FAIL** — so locked text
+MUST be `text-gray-300`, not gray-400/gray-500. (The task spec's own "gray-500 ≈ 2.8:1" / its
+gray-400 pick were measured at the wrong gradient point, the gray-900 end-stop; do not reuse
+those numbers.) T10310's
 "row disappears once a play is selected" condition (`!isEditMode`) is untouched. Tests:
 `AnnotateModeView.cta.test.jsx` (locked aria-disabled + deduped toast + enabled styling),
 `AnnotateModeView.addFootageRow.test.jsx` (link-variant wiring).)

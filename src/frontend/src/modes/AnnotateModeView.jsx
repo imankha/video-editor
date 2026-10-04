@@ -1472,13 +1472,17 @@ export function AnnotateModeView({
                       disabled — it keeps a 44px tap target that explains itself with
                       a deduped toast. Three cues carry locked-vs-enabled together:
                       no outline, the Lock icon, and dimmer text (same pattern as the
-                      ModeSwitcher's locked tabs, T8480). */}
+                      ModeSwitcher's locked tabs, T8480).
+                      text-gray-300 (NOT gray-400): this row renders near the purple
+                      MIDPOINT of the page gradient (~80% down, horizontal center),
+                      where gray-400 is only ~3.4:1 — below AC3's 4.5:1 bar. gray-300
+                      measures ~5.9:1 against the worst sampled pixel there. */}
                   <button
                     onClick={() =>
                       toast.info(ANNOTATE.REVIEW_PLAYS_LOCKED_TOAST, { dedupKey: 'review-locked' })
                     }
                     aria-disabled="true"
-                    className="min-h-11 px-3 rounded-lg text-sm text-gray-400 flex items-center gap-1.5"
+                    className="min-h-11 px-3 rounded-lg text-sm text-gray-300 flex items-center gap-1.5"
                   >
                     <Lock size={16} />
                     <span>{ANNOTATE.PREVIEW_PLAYS}</span>

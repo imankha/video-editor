@@ -134,6 +134,11 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     expect(playback.disabled).toBe(false);
     // The row stays below the hero: no fill padding.
     expect(playback.className).not.toMatch(/py-3/);
+    // AC3 contrast: this row renders near the gradient's purple midpoint, where
+    // gray-400 (~3.4:1) and gray-500 (~1.7:1) fall below 4.5:1. gray-300 (~5.9:1)
+    // is the locked-text color that clears the bar. Pin it so it can't regress.
+    expect(playback.className).toMatch(/text-gray-300/);
+    expect(playback.className).not.toMatch(/text-gray-[45]00/);
   });
 
   it('shows the locked toast once (deduped) when Review plays is tapped with zero plays, and never enters playback', () => {
