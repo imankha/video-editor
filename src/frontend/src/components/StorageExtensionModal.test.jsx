@@ -132,7 +132,7 @@ describe('StorageExtensionModal', () => {
     // T11770: the cost/duration line is now the stacked CreditCostRow — cost on one
     // line, the "for N days" note below — so the two facts live in separate nodes.
     expect(screen.getByText('Cost: 3 credits')).toBeTruthy();
-    expect(screen.getByText(`for ${days} days`)).toBeTruthy();
+    expect(screen.getByText(`Adds ${days} days of storage.`)).toBeTruthy();
   });
 
   it('shows credit balance', () => {

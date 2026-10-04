@@ -1,4 +1,5 @@
 import { formatLength, PRECISION } from '../utils/timeFormat';
+import { STORAGE_DURATION_DAYS } from '../utils/storageCost';
 
 // T9520 (Shared Vocabulary epic — naming groups N04-N35): the canonical
 // Annotate-surface vocabulary, single source. One object model across every
@@ -777,11 +778,17 @@ export const CREDIT_COST_ROW = {
   BALANCE: (n) => `Balance: ${n} credit${n === 1 ? '' : 's'}`,
 };
 
-// T11770: the retention note shown under the cost row on the Upload game modal.
-// "30 days" stays a literal here, matching RETENTION.SOURCE and every other copy
-// of this fact in the app — there is no numeric retention-days constant to read.
+// T11770: the retention notes shown under the cost row in the four credit modals.
+// Built from STORAGE_DURATION_DAYS (the same constant calculateUploadCost prices
+// against) so the storage window and the charge can never drift. Each is a full
+// standalone sentence because CreditCostRow renders the note on its own line.
+// EXTENSION_NOTE's duration is the user-chosen extension span, not the 30-day
+// default, so it takes the value as an argument.
 export const UPLOAD = {
-  GAME_RETENTION_NOTE: 'Your game video is kept for 30 days.',
+  GAME_RETENTION_NOTE: `Your game video is kept for ${STORAGE_DURATION_DAYS} days.`,
+  ATTACH_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
+  FOOTAGE_RETENTION_NOTE: `This footage is kept for ${STORAGE_DURATION_DAYS} days.`,
+  EXTENSION_NOTE: (days) => `Adds ${days} days of storage.`,
 };
 
 // Retention, stated as the three distinct outcomes confirmed in the T9680
@@ -792,9 +799,9 @@ export const UPLOAD = {
 // - DRAFT: an un-exported draft has no independent source copy (T4130), so it
 //   stays visible but becomes un-editable / un-exportable once its source is gone.
 export const RETENTION = {
-  SOURCE: 'Your uploaded game is kept for 30 days, and you can extend it anytime.',
+  SOURCE: `Your uploaded game is kept for ${STORAGE_DURATION_DAYS} days, and you can extend it anytime.`,
   EXPORTED: 'Highlights you generate are kept for good and are free to store.',
-  DRAFT: 'A draft you haven\'t generated stays viewable, but you need its source to re-edit or generate it, so finish the ones you want to keep before the 30 days are up.',
+  DRAFT: `A draft you haven't generated stays viewable, but you need its source to re-edit or generate it, so finish the ones you want to keep before the ${STORAGE_DURATION_DAYS} days are up.`,
 };
 
 // T10190: the shared finished-result surface (CollectionPlayer + the card CTAs

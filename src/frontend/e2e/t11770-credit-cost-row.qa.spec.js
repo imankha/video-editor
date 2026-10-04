@@ -1,11 +1,21 @@
 // T11770 live QA: the shared CreditCostRow across its four modals. Drives the
-// real app as a real user at 320 and 390, proving the acceptance criteria:
+// real app as a real user across the milestone width set, proving:
 //   AC1 cost / balance / retention never interleave; each readable on its own
 //       line or unit (the original bug: "2 credits - keeps your video for 30
 //       Balance: days 54").
 //   AC2 all modals show the same CreditCostRow layout.
 //   AC3 an insufficient balance renders the balance red AND the existing
 //       buy-credits path still works (clicked through, not just asserted).
+//
+// Coverage note: this spec live-drives the two modals reachable from the seeded
+// account (Upload game, Add video) across the full 320/360/375/390/768 width set.
+// The other two CreditCostRow call sites are NOT live-driven here:
+//   - StorageExtensionModal only opens for a near/expired game, and the seeded
+//     account has none (its one game is ~2 weeks from expiry).
+//   - AddFootageButton lives inside the Annotate editor.
+// Both render the SAME CreditCostRow with the same prop shape proven here and are
+// covered by their unit tests (StorageExtensionModal.test.jsx asserts the stacked
+// cost/note/red-balance layout), so the residual layout risk is low.
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -13,7 +23,7 @@ import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence, assertNoHorizontalOverflow } from './helpers/qa.js';
 
 const EMAIL = 'imankh@gmail.com';
-const WIDTHS = [320, 390];
+const WIDTHS = [320, 360, 375, 390, 768];
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEST_VIDEO = path.resolve(__dirname, '../../../formal annotations/test.short/game2-test.mp4');
 
@@ -87,7 +97,7 @@ test.describe('T11770 CreditCostRow', () => {
       await page.locator('[data-game-menu]').getByRole('button', { name: 'Add video', exact: true }).click({ timeout: 15000 });
       await expect(page.getByRole('heading', { name: 'Add a video' })).toBeVisible();
 
-      await assertCostRowLaidOut(page, 'keeps this video for 30 days');
+      await assertCostRowLaidOut(page, 'This video is kept for 30 days.');
       await assertNoHorizontalOverflow(page);
       await saveEvidence(page, `criterion-2-attach-video-modal-${width}`);
     });

@@ -7,6 +7,7 @@ const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ defa
 import { toast } from './shared';
 import { useCreditStore } from '../stores/creditStore';
 import { daysPerCredit, calculateExtensionCost } from '../utils/storageCost';
+import { UPLOAD } from '../config/displayNames';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 
@@ -177,7 +178,7 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
           <CreditCostRow
             cost={credits}
             balance={creditBalance}
-            note={`for ${extensionDays} days`}
+            note={UPLOAD.EXTENSION_NOTE(extensionDays)}
           />
 
           {/* Extend button */}

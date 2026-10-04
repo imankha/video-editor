@@ -5,6 +5,7 @@ import { toast } from './shared';
 import { CreditCostRow } from './shared/CreditCostRow';
 import { useCreditStore } from '../stores/creditStore';
 import { calculateUploadCost } from '../utils/storageCost';
+import { UPLOAD } from '../config/displayNames';
 import { attachVideoToExistingGame, UPLOAD_PHASE } from '../services/uploadManager';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
@@ -143,7 +144,7 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
           <CreditCostRow
             cost={displayCost}
             balance={creditsLoaded ? creditBalance : '…'}
-            note="keeps this video for 30 days"
+            note={UPLOAD.ATTACH_RETENTION_NOTE}
           />
 
           {/* Dropzone */}

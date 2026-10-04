@@ -7,6 +7,7 @@ import { CreditCostRow } from '../../components/shared/CreditCostRow';
 import { GameFootagePicker } from '../../components/GameFootagePicker';
 import { useCreditStore } from '../../stores/creditStore';
 import { calculateUploadCost } from '../../utils/storageCost';
+import { UPLOAD } from '../../config/displayNames';
 import { attachVideoToExistingGame, UPLOAD_PHASE } from '../../services/uploadManager';
 import {
   entriesFromDataTransfer,
@@ -260,7 +261,7 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
                 <CreditCostRow
                   cost={displayCost}
                   balance={creditsLoaded ? creditBalance : '…'}
-                  note="keeps this footage for 30 days"
+                  note={UPLOAD.FOOTAGE_RETENTION_NOTE}
                 />
 
                 {/* Picker + strip only (attachMode hides game-metadata concerns). */}
