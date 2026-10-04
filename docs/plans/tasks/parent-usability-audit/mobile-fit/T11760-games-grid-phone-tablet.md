@@ -1,6 +1,6 @@
 # T11760: Games grid uses phone and tablet width, 2-line titles
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Tier:** M (frontend only, ~4 files, ~90 LOC including tests)
