@@ -955,6 +955,7 @@ Outreach to our network once alpha milestone is complete. Ordered: create source
 | T3440 | [Cache CORS Preflight Responses](tasks/for-launch/T3440-cors-preflight-caching.md) | 5 | 1 | 5.0 | TODO | [ ] | No Access-Control-Max-Age header -- browser fires OPTIONS preflight on every cross-origin request. 826ms overhead (17.8% of page time). One-line fix: add max_age=7200 to CORSMiddleware. |
 | T1730 | [Performance Optimization Pass](tasks/for-launch/T1730-performance-optimization-pass.md) | 7 | 5 | 1.4 | TODO | [ ] | Pre-launch audit: slow endpoints, UI jank, bundle size, slow queries, unnecessary R2 round-trips |
 | T2650 | [Move Sweep Auto-Export to Modal](tasks/T2650-sweep-to-modal.md) | 7 | 4 | 1.8 | TODO | [ ] | Sweep runs FFmpeg/recap on Fly.io via asyncio.to_thread — violates fast-server principle. Move auto-export compute to Modal; server becomes lightweight orchestrator (DB queries + Modal RPC). |
+| T11905 | [overlayDraft.js e2e helper permanently skips in every environment](tasks/T11905-overlay-draft-helper-stale-regex.md) | 5 | 2 | 2.5 | TODO | [ ] | Found by T11740's reviewer: stale "In Spotlight" regex vs the real "In Overlay" chip label (since T9320, 2026-09-10) silently skips 9+ specs across the codebase, not just a missing-fixture issue. |
 
 ### Epic: Video Load Reliability (IN_PROGRESS) -- BUG FIX
 [tasks/video-load-reliability/EPIC.md](tasks/video-load-reliability/EPIC.md)
