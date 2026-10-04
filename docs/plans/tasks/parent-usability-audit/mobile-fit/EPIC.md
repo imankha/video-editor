@@ -48,6 +48,7 @@ Full proposal: [responsive.md](../../../ux/2026-10-04-parent-usability-audit/des
 | T11750 | [Readable action row under Mark play](T11750-readable-action-row-under-mark-play.md) | TODO |
 | T11760 | [Games grid uses phone and tablet width, 2-line titles](T11760-games-grid-phone-tablet.md) | TODO |
 | T11770 | [Shared cost row that never scrambles](T11770-shared-credit-cost-row.md) | TODO |
+| T11780 | [Annotate video/controls card overflows at 320px](T11780-annotate-video-card-overflow-320.md) | TODO |
 
 T11740, T11760 and T11770 are file-disjoint and can run in parallel. T11750 touches
 `AnnotateModeView.jsx`, which T11840 and T11860 also touch, so it goes first in that chain.
