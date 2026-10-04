@@ -1175,7 +1175,13 @@ export function FocusContainer({
 }
 
 /**
- * FocusVideoOverlay - Crop overlay component for Framing mode
+ * FocusVideoOverlay - Crop overlay component for Framing mode.
+ *
+ * NOTE: currently has no JSX caller (barrel-exported only); the live overlays are
+ * FocusModeView's portrait path and FocusCockpit's landscape path. `focusPointCount`
+ * and `isPlaying` are REQUIRED (no defaults) so that if this wrapper is ever wired
+ * up it cannot silently pin CropOverlay's `showCoach` cues on — the exact bug that
+ * hit the cockpit when those props were omitted (no-silent-fallback).
  */
 export function FocusVideoOverlay({
   videoRef,
@@ -1187,6 +1193,8 @@ export function FocusVideoOverlay({
   zoom,
   panOffset,
   dragCrop,
+  focusPointCount,
+  isPlaying,
 }) {
   if (!metadata || !currentCropState) return null;
 
@@ -1200,6 +1208,8 @@ export function FocusVideoOverlay({
       aspectRatio={aspectRatio}
       zoom={zoom}
       panOffset={panOffset}
+      focusPointCount={focusPointCount}
+      isPlaying={isPlaying}
     />
   );
 }

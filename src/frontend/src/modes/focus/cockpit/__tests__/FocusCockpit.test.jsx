@@ -4,10 +4,20 @@ import FocusCockpit from '../FocusCockpit';
 
 // The heavy stage/export dependencies are mocked so the test focuses on the
 // cockpit's own structure (the four zones, safe-area padding, absolute sheets).
+// Render the `overlays` the cockpit passes in (the real VideoPlayer does) so the
+// CropOverlay stub below actually mounts and can capture its props.
 vi.mock('../../../../components/VideoPlayer', () => ({
-  VideoPlayer: () => <div data-testid="mock-videoplayer" />,
+  VideoPlayer: ({ overlays }) => <div data-testid="mock-videoplayer">{overlays}</div>,
 }));
-vi.mock('../../overlays/CropOverlay', () => ({ default: () => <div data-testid="mock-cropoverlay" /> }));
+// Capture the props the cockpit passes into CropOverlay so we can assert the
+// coach-cue inputs (focusPointCount / isPlaying) are actually wired through.
+const cropOverlayCapture = vi.hoisted(() => ({ last: null }));
+vi.mock('../../overlays/CropOverlay', () => ({
+  default: (props) => {
+    cropOverlayCapture.last = props;
+    return <div data-testid="mock-cropoverlay" />;
+  },
+}));
 vi.mock('../../../../components/settings/FocusSettingsPanel', () => ({ default: () => <div data-testid="mock-settings" /> }));
 vi.mock('../../../../hooks/useVideoDisplayRect', () => ({ default: () => ({ rect: null }) }));
 vi.mock('../../../../containers/ExportButtonContainer', () => ({
@@ -123,5 +133,31 @@ describe('FocusCockpit (T10840 shell)', () => {
   it('renders no Clips rail button', () => {
     renderCockpit();
     expect(screen.queryByTestId('cockpit-clips-btn')).toBeNull();
+  });
+
+  // T11710/T11700 reviewer BLOCKING: the cockpit must pass the REAL focusPointCount
+  // and isPlaying into CropOverlay — those drive showCoach (ring + coach chip).
+  // Omitting them made CropOverlay fall back to focusPointCount=0 / isPlaying=false,
+  // so the cues showed PERMANENTLY in landscape even with a keyframe set or during
+  // playback. These assert the wiring, not CropOverlay's internal showCoach (proven
+  // in CropOverlay.test.jsx).
+  it('passes the real focusPointCount (user keyframes, trim-excluded) into CropOverlay', () => {
+    cropOverlayCapture.last = null;
+    renderCockpit({
+      keyframes: [
+        { frame: 30, origin: 'user' },
+        { frame: 0, origin: 'trim' },   // trim keyframes are NOT focus points
+        { frame: 90, origin: 'user' },
+      ],
+    });
+    expect(cropOverlayCapture.last).toBeTruthy();
+    expect(cropOverlayCapture.last.focusPointCount).toBe(2);
+  });
+
+  it('forwards isPlaying into CropOverlay (so coach cues hide during playback)', () => {
+    cropOverlayCapture.last = null;
+    renderCockpit({ isPlaying: true, keyframes: [] });
+    expect(cropOverlayCapture.last).toBeTruthy();
+    expect(cropOverlayCapture.last.isPlaying).toBe(true);
   });
 });

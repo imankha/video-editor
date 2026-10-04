@@ -137,19 +137,33 @@ export async function createClipViaUI(page, layerName, opts = {}) {
  * @returns {Promise<{rawClipId: number, projectId: number|null, name: string}>}
  */
 export async function createUnframedDraft(context, { profileId = PROFILE_ID, gameId = 11, nameHint = 'QA unframed draft' } = {}) {
-  const name = `${nameHint} ${Date.now()}`;
-  const res = await context.request.post(`${apiBase}/clips/raw/save`, {
-    headers: { 'X-Profile-ID': profileId, 'X-Test-Mode': 'true' },
-    data: { game_id: gameId, start_time: 2.0, end_time: 5.0, name, create_project: true },
-  });
-  if (!res.ok()) {
-    throw new Error(`[annotateClips] createUnframedDraft FAILED (${res.status()}): ${await res.text()}`);
+  // Each attempt uses a UNIQUE name/end_time so a retry can never collide with a
+  // partially-committed prior attempt (which would idempotent-update instead of
+  // create). The save does an R2 compare-and-swap; back-to-back create/delete
+  // cycles across a test run can momentarily race the version cache and return a
+  // retryable 503 {code:"sync_failed"} — bounded-retry ONLY that (the app marks it
+  // retryable), never a non-retryable failure.
+  let lastErr = '';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const name = `${nameHint} ${Date.now()}-${attempt}`;
+    const res = await context.request.post(`${apiBase}/clips/raw/save`, {
+      headers: { 'X-Profile-ID': profileId, 'X-Test-Mode': 'true' },
+      data: { game_id: gameId, start_time: 2.0, end_time: 5.0 + attempt * 0.5, name, create_project: true },
+    });
+    if (res.ok()) {
+      const body = await res.json();
+      if (!body.project_created) {
+        throw new Error(`[annotateClips] createUnframedDraft did not create a new auto-project (idempotent hit a stray clip?): ${JSON.stringify(body)}`);
+      }
+      return { rawClipId: body.raw_clip_id, projectId: body.project_id, name };
+    }
+    lastErr = `(${res.status()}) ${await res.text()}`;
+    let retryable = false;
+    try { retryable = JSON.parse(lastErr.slice(lastErr.indexOf('{'))).retryable === true; } catch { /* non-JSON body -> not retryable */ }
+    if (!retryable) break;
+    await new Promise((r) => setTimeout(r, 800));
   }
-  const body = await res.json();
-  if (!body.project_created) {
-    throw new Error(`[annotateClips] createUnframedDraft did not create a new auto-project (idempotent hit a stray clip?): ${JSON.stringify(body)}`);
-  }
-  return { rawClipId: body.raw_clip_id, projectId: body.project_id, name };
+  throw new Error(`[annotateClips] createUnframedDraft FAILED after retries: ${lastErr}`);
 }
 
 /**

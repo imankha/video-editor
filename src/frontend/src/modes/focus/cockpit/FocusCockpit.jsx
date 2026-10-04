@@ -59,6 +59,12 @@ export default function FocusCockpit({
   hasClips, clipsWithCurrentState, onProceedToOverlay,
   onExportComplete, saveCurrentClipState, exportButtonRef,
 }) {
+  // Real focus-point count, mirroring FocusModeView's portrait derivation. The
+  // cockpit MUST pass this (and isPlaying) into CropOverlay: those props drive
+  // `showCoach` (the T11710 ring + coach chip), which defaults to the 0-point /
+  // not-playing state. Omitting them silently pins the coach cues ON forever in
+  // landscape even with keyframes set or during playback (no-silent-fallback).
+  const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
   const [activeSheet, setActiveSheet] = useState(null); // 'setup' | 'trim' | null
   const [previewing, setPreviewing] = useState(false);
   const [straightenVisible, setStraightenVisible] = useState(false);
@@ -210,6 +216,8 @@ export default function FocusCockpit({
                   dimOpacity={dimOpacity}
                   interactive
                   chromeHidden={previewing}
+                  focusPointCount={focusPointCount}
+                  isPlaying={isPlaying}
                 />
               ),
             ].filter(Boolean)}

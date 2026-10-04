@@ -199,6 +199,36 @@ describe('useKeyframeController hook', () => {
       expect(result.current.keyframes[0].x).toBe(175);
     });
 
+    // T11700 AC6: the "Set focus point" button reuses onCropComplete -> this exact
+    // addOrUpdateKeyframe write path. A second commit within FRAME_TOLERANCE (10)
+    // of an existing keyframe must UPDATE it (snap), never create a second one; a
+    // commit beyond tolerance must create a distinct focus point. (The prior test
+    // only covered an exact-frame re-commit; these cover a DIFFERENT frame within
+    // and beyond the 10-frame window.)
+    it('snap-updates an existing keyframe when committed within 10 frames (T11700 AC6)', () => {
+      const { result } = renderHook(() =>
+        useKeyframeController({ interpolateFn: mockInterpolateFn, framerate: 30, getEndFrame: (total) => total })
+      );
+      act(() => { result.current.initializeKeyframes({ x: 100, y: 100 }, 90); });
+      act(() => { result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150 }, 90, 'user'); }); // frame 30
+      expect(result.current.keyframes.length).toBe(1);
+      // t=1.2s -> frame 36, 6 frames from 30 (within tolerance) -> snaps onto it.
+      act(() => { result.current.addOrUpdateKeyframe(1.2, { x: 200, y: 200 }, 90, 'user'); });
+      expect(result.current.keyframes.length, 'within 10 frames: one keyframe, not two').toBe(1);
+      expect(result.current.keyframes[0].x, 'the existing keyframe took the new crop').toBe(200);
+    });
+
+    it('creates a second keyframe when committed beyond 10 frames (T11700 AC6 negative)', () => {
+      const { result } = renderHook(() =>
+        useKeyframeController({ interpolateFn: mockInterpolateFn, framerate: 30, getEndFrame: (total) => total })
+      );
+      act(() => { result.current.initializeKeyframes({ x: 100, y: 100 }, 90); });
+      act(() => { result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150 }, 90, 'user'); }); // frame 30
+      // t=1.5s -> frame 45, 15 frames from 30 (beyond tolerance) -> a new focus point.
+      act(() => { result.current.addOrUpdateKeyframe(1.5, { x: 200, y: 200 }, 90, 'user'); });
+      expect(result.current.keyframes.length, 'beyond 10 frames: a distinct keyframe').toBe(2);
+    });
+
     it('removes an added keyframe', () => {
       const { result } = renderHook(() =>
         useKeyframeController({

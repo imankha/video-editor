@@ -52,6 +52,25 @@ async function overflowOffenders(page) {
   });
 }
 
+/**
+ * T11720 AC4 at 320/360/375/390: assert NO Epic-A element (the compact band, the
+ * locked pill, the Set focus point button, the coach chip) overflows the viewport;
+ * the pre-existing mode-tab row (T11740) may and is only logged. Run in BOTH the
+ * LOCKED state (compact band + pill present) and the UNLOCKED state, since the
+ * elements that exist differ between them.
+ */
+async function auditEpicAOverflow(page, stateLabel) {
+  for (const w of [320, 360, 375, 390]) {
+    await page.setViewportSize({ width: w, height: 844 });
+    await page.waitForTimeout(250);
+    const offenders = await overflowOffenders(page);
+    const mine = offenders.filter((o) => MINE.includes(o.tid));
+    expect(mine, `no Epic-A element overflows @${w} (${stateLabel}): ${JSON.stringify(mine)}`).toHaveLength(0);
+    const others = offenders.filter((o) => !MINE.includes(o.tid));
+    if (others.length) console.log(`OVERFLOW @${w} (${stateLabel}, pre-existing / T11740): ${JSON.stringify(others)}`);
+  }
+}
+
 let createdClipId = null;
 
 test.afterEach(async ({ context }) => {
@@ -119,6 +138,10 @@ test('fresh unframed draft: locked compact band, coach cues, and one-tap unlock 
   await page.getByTestId('drawer-close').click();
   await expect(page.getByTestId('settings-drawer'), 'drawer closed').toBeHidden();
 
+  // T11720 AC4 in the LOCKED state: the compact band + locked pill are present
+  // here (they are gone after unlock), so audit overflow with them on screen.
+  await auditEpicAOverflow(page, 'locked');
+
   // ================= 768 + 1440: LOCKED state (full band, no compact) =================
   for (const w of [768, 1440]) {
     await page.setViewportSize({ width: w, height: 900 });
@@ -149,15 +172,8 @@ test('fresh unframed draft: locked compact band, coach cues, and one-tap unlock 
   await expect(page.getByText(/No focus points yet/), 'empty hint gone after first point').toHaveCount(0);
   await saveEvidence(page, 'T11700-live-390-unlocked');
 
-  // ================= T11720 AC4: overflow audit at 320/360/375/390 =================
-  // My elements must never overflow; the pre-existing mode-tab row (T11740) may.
-  for (const w of [320, 360, 375, 390]) {
-    await page.setViewportSize({ width: w, height: 844 });
-    await page.waitForTimeout(250);
-    const offenders = await overflowOffenders(page);
-    const mine = offenders.filter((o) => MINE.includes(o.tid));
-    expect(mine, `no Epic-A element overflows @${w}: ${JSON.stringify(mine)}`).toHaveLength(0);
-    const others = offenders.filter((o) => !MINE.includes(o.tid));
-    if (others.length) console.log(`OVERFLOW @${w} (pre-existing, out of scope / T11740): ${JSON.stringify(others)}`);
-  }
+  // ================= T11720 AC4: overflow audit at 320/360/375/390 (UNLOCKED) =====
+  // After the first point the compact band/pill are gone; the Set focus point
+  // button + (now-enabled) CTA are on screen. Same guarantee: no Epic-A overflow.
+  await auditEpicAOverflow(page, 'unlocked');
 });
