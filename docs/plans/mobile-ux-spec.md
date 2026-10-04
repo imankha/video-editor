@@ -328,19 +328,35 @@ Visible states:
 - No new breakpoints needed -- the existing `sm:` threshold is correct for this work
 - Test on: 360px (small Android), 390px (iPhone 14), 428px (iPhone 14 Pro Max)
 
-### 6.5 Header Simplification (Mobile)
+### 6.5 Header Layout (Compact / below `md`) — T11740
 
-The `UnifiedHeader` on mobile should collapse to:
+Below `md` (768px) the `UnifiedHeader` is **two rows**; at `md`+ it stays one row
+exactly as on desktop. The split is pure Tailwind `md:` (NOT `useIsMobile`, which
+misclassifies 768-1023 tablets that still fit one row).
 
 ```
-[<] Game/Clip Name ...truncated    [mode indicator]
+390px Annotate                          390px Focus
+[<] at Oceanside Breakers      [chips]  [<] Play 1                      [chips]
+    Aug 30                                  at Oceanside Breakers
+[ Annotate ][Frame High.][Add Spotl.]   [ Annotate ][Frame High.][Add Spotl.]
 ```
 
-- Back arrow: always visible, 44px touch target
-- Title: truncated with ellipsis, flex-1
-- Mode indicator: small icon showing current mode (scissors/crop/sparkle), tappable to switch modes
-- No breadcrumb trail on mobile
-- No CreditBalance, InstallButton, or SignInButton (moved to Home)
+- **Row 1** (`flex items-start gap-2 min-h-11`): Back + title block + chips
+  - Back arrow: `w-11 h-11` (44px touch target), always visible
+  - Title block (`flex-1 min-w-0`): primary line wraps to 2 lines via
+    `line-clamp-2 break-words` (never collapses to 0px). On Focus/Spotlight a
+    second `text-xs text-gray-400 truncate` line carries `breadcrumbGameName`;
+    on Annotate the title already IS the game name, so no second line.
+  - Chips (`flex-shrink-0`): framing CreditBalance + any `extraControls` (plays
+    count, framing-status). These stay on mobile — they are NOT moved to Home.
+- **Row 2** (`grid grid-cols-3 gap-1 bg-white/5 rounded-lg p-1 md:flex md:bg-transparent md:p-0`,
+  `role="group" aria-label="Editor steps"`): the three ModeSwitcher tabs in equal
+  cells, each `flex-col` icon-over-label, `h-12` (>=44px). All three are LABELED
+  (no icon-only collapse). Locked tabs keep `aria-disabled`, the lock icon, and the
+  T8480 toast; only layout classes differ by breakpoint.
+- The compact header grows from ~40px to ~100px on phones. Accepted — Epic A's
+  compact band offsets it on Focus.
+- No breadcrumb trail on mobile (the title block replaces it).
 
 ---
 

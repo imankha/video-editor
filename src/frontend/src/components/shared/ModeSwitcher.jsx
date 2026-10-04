@@ -130,7 +130,12 @@ export function ModeSwitcher({
         disabled={disabled}
         aria-disabled={disabled || !isAvailable}
         className={`
-          flex h-11 items-center gap-2 px-2 sm:px-4 py-2 rounded-md transition-all duration-200 relative
+          ${inline
+            // T11740: stacked icon-over-label, equal 3-col cells below `md`; today's
+            // single-row tab at `md`+ (where the compact header is one row again).
+            ? 'flex flex-col items-center justify-center gap-0.5 h-12 px-1 min-w-0 md:flex-row md:h-11 md:gap-2 md:px-4 md:py-2'
+            : 'flex h-11 items-center gap-2 px-2 sm:px-4 py-2'
+          } rounded-md transition-all duration-200 relative
           ${isActive
             ? modeOption.color === 'reel'
               ? `${activeColor} text-gray-950 shadow-lg`
@@ -148,7 +153,15 @@ export function ModeSwitcher({
         ) : (
           isAvailable ? <Icon size={16} /> : <Lock size={16} />
         )}
-        <span className="font-medium text-sm whitespace-nowrap">{modeOption.label}</span>
+        <span
+          className={
+            inline
+              ? 'font-medium leading-tight text-center text-[11px] md:text-sm md:whitespace-nowrap'
+              : 'font-medium text-sm whitespace-nowrap'
+          }
+        >
+          {modeOption.label}
+        </span>
         {modeOption.showWarning && isAvailable && (
           <span className="text-yellow-400 font-bold text-xs">*</span>
         )}

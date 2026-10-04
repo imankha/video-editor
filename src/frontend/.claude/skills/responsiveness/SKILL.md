@@ -241,7 +241,8 @@ For every responsive change, verify:
 
 | Component | Mobile | Desktop |
 |-----------|--------|---------|
-| Nav buttons (ModeSwitcher, GalleryButton) | Icon only | Icon + text label |
+| ModeSwitcher tabs (editor header, inline variant) | Labeled, icon-over-label stacked, 3 equal `grid-cols-3` cells, `h-12` (T11740) | Single-row `flex-row` tab, icon + label, `h-11` |
+| GalleryButton / other nav buttons | Icon only | Icon + text label |
 | Breadcrumb project name | Truncated (120px max) | Full text |
 | Metadata card (FramingModeView) | Stacked (title above resolution) | Side-by-side |
 | Editor area padding | `p-3` | `p-6` |
