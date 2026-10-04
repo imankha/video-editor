@@ -5,7 +5,7 @@
 **Complexity:** 2
 **Tier:** M (frontend only, 1 new component + 4 call sites + tests, ~90 LOC)
 **Created:** 2026-10-04
-**Decision gate:** none (recommendation only)
+**Decision gate:** none (recommendation only) **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

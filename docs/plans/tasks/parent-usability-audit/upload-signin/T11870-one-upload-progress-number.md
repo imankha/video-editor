@@ -5,7 +5,7 @@
 **Complexity:** 3
 **Tier:** M (frontend only, ~5 files + tests, ~120 LOC)
 **Created:** 2026-10-04
-**Decision gate:** none (recommendation only); "Saved" -> "Uploaded" follows S5.
+**Decision gate:** none (recommendation only); "Saved" -> "Uploaded" follows S5. **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

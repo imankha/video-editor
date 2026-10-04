@@ -5,7 +5,7 @@
 **Complexity:** 1
 **Tier:** S/M (copy in `displayNames.js` + 1 test; landing alignment check)
 **Created:** 2026-10-04
-**Decision gate:** U1 (recommended I-1). Depends on T11770 (shared cost row).
+**Decision gate:** U1 (recommended I-1). Depends on T11770 (shared cost row). **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

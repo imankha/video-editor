@@ -5,7 +5,7 @@
 **Complexity:** 3
 **Tier:** M (frontend only, ~5 files, ~130 LOC including tests)
 **Created:** 2026-10-04
-**Decision gate:** F1 (recommended option D; this task is the "A" half). Depends on T11700.
+**Decision gate:** F1 (recommended option D; this task is the "A" half). Depends on T11700. **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

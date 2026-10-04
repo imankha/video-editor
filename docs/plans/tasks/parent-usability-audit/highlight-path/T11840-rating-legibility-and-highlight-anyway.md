@@ -5,7 +5,7 @@
 **Complexity:** 4
 **Tier:** M (frontend only, ~6 files + tests, ~200 LOC). No backend or schema change.
 **Created:** 2026-10-04
-**Decision gate:** H1 (recommended: hybrid, option 3) and H2 (recommended: X close on the rate modal)
+**Decision gate:** H1 (recommended: hybrid, option 3) and H2 (recommended: X close on the rate modal) **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

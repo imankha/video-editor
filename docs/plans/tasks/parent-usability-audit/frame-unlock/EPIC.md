@@ -1,6 +1,6 @@
 # Epic A: Frame Highlight unlock
 
-**Status:** TODO (gated on decisions F1 and F2)
+**Status:** TODO (decisions ruled 2026-10-04, see README decision register)
 **Milestone:** [Parent Usability Audit](../README.md)
 **Impact:** 10 | **Complexity:** 5
 **Knowledge docs:** `.claude/knowledge/keyframes-framing.md`, `.claude/knowledge/persistence-sync.md`

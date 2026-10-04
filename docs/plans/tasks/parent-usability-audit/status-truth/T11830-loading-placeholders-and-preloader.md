@@ -5,7 +5,7 @@
 **Complexity:** 3
 **Tier:** M (frontend only, ~5 files + tests, ~100 LOC)
 **Created:** 2026-10-04
-**Decision gate:** none (recommendation only). Runs after T11740 (same header files).
+**Decision gate:** none (recommendation only). Runs after T11740 (same header files). **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

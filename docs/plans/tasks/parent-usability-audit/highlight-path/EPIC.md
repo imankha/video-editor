@@ -1,6 +1,6 @@
 # Epic D: Make a highlight without guessing
 
-**Status:** TODO (gated on decisions H1-H4)
+**Status:** TODO (decisions ruled 2026-10-04, see README decision register)
 **Milestone:** [Parent Usability Audit](../README.md)
 **Impact:** 8 | **Complexity:** 5
 **Knowledge docs:** `.claude/knowledge/annotate.md`, `.claude/knowledge/persistence-sync.md`

@@ -1,6 +1,6 @@
 # Epic C: Status you can trust after Generate
 
-**Status:** TODO (gated on decisions S1-S5)
+**Status:** TODO (decisions ruled 2026-10-04, see README decision register)
 **Milestone:** [Parent Usability Audit](../README.md)
 **Impact:** 9 | **Complexity:** 5
 **Knowledge docs:** `.claude/knowledge/export-pipeline.md`, `.claude/knowledge/annotate.md`
@@ -44,8 +44,8 @@ now" leaves them looking at their work, not an empty-looking editor.
   single source. **Kept** under the recommended options.
 - T9600: no surface invents its own status word. **Kept and finished** by T11790.
 - T9860 (2026-09): chose "Draft, in Spotlight". **Reversed** by S1.
-- T8555 / T9530 N12 (2026-09-10) / T10180 / T9860 D5: "Publish" and the Published tab. **Reversed**
-  only if S2 = "Finish".
+- T8555 / T9530 N12 (2026-09-10) / T10180 / T9860 D5: "Publish" and the Published tab. **Reversed** (S2 ruled "Finish" 2026-10-04).
+
 - T8390: "Done for now" returns to Annotate. **Kept** under S3 option C2.
 - T10670 (2026-09-19): ready-screen copy and the "Saved" chip. Copy changed by S4, chip removed by S5.
 
@@ -60,7 +60,7 @@ Full proposal: [after-generate.md](../../../ux/2026-10-04-parent-usability-audit
 | T11790 | [One status ladder for a clip's progress](T11790-one-status-ladder.md) | TODO |
 | T11800 | ["Done for now" re-selects the play and confirms](T11800-done-for-now-reselect-and-confirm.md) | TODO |
 | T11810 | [Ready-screen copy and no "Saved" chip](T11810-ready-screen-copy-and-saved-chip.md) | TODO |
-| T11820 | [Rename Publish to Finish across the app (only if S2 = Finish)](T11820-publish-to-finish-sweep.md) | TODO |
+| T11820 | [Rename Publish to Finish across the app ](T11820-publish-to-finish-sweep.md) | TODO |
 | T11830 | [No fake zeros or "Ready" while loading](T11830-loading-placeholders-and-preloader.md) | TODO |
 
 T11790 first (critical, independent). T11800 and T11830 can run in parallel with it. T11810 then

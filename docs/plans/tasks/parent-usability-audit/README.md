@@ -1,6 +1,6 @@
 # Milestone: Parent Usability Audit (filed 2026-10-04)
 
-**Status:** TODO. Decisions pending. See the decision register below.
+**Status:** TODO. All 15 decisions ruled 2026-10-04 (14 as recommended; U2 replaced by an investigation).
 **Source:** an external parent usability test of **staging**, run 2026-10-04 at desktop
 (1440x900), tablet (768x1024) and iPhone (390x844). The desktop tester completed the full journey:
 upload, mark a play, frame it, generate, and save an 8-second portrait draft. Getting there meant
@@ -85,21 +85,21 @@ Each decision is in the decision report with mockups, pros and cons. Tasks are w
 
 | ID | Decision | Recommended | Conflicts with | Tasks | User ruling |
 |----|----------|-------------|----------------|-------|-------------|
-| F1 | How a parent unlocks Generate | D: "Set focus point" button + coach chip, keep the T8510 gate | T8510 (2026-09-03) only if option C | T11700, T11710 | PENDING |
-| F2 | Locked Generate band on phones | Compact one-line row while locked | T9270 "CTA never resizes" (needs an exception) | T11720 | PENDING |
-| M1 | Mobile editor header | Two rows below `md`, one row at `md`+ | mobile-ux-spec 6.5; T11140 D kept | T11740 | PENDING |
-| M2 | Games grid on phone and tablet | 1 column on phone, pack small month groups at `sm`+, 2-line titles | T7330 "floored at 2" | T11760 | PENDING |
-| S1 | Status words for a framed clip | Ladder: "Draft, framed" etc. (no mode names in statuses) | T9860 (2026-09) chose "Draft, in Spotlight" | T11790 | PENDING |
-| S2 | The word "Publish" | Rename to "Finish", tab "Finished" | T8555, T9530 N12 (2026-09-10), T10180, T9860 D5 | T11810, T11820 | PENDING |
-| S3 | Where "Done for now" lands | Stay on Annotate, re-select the play, confirmation banner | none (keeps T8390) | T11800 | PENDING |
-| S4 | Ready-screen tile copy | Outcome labels in house vocabulary | T10670 copy (2026-09-19) | T11810 | PENDING |
-| S5 | The "Saved" chips | Remove them | T10670 (2026-09-19) | T11810, T11870 | PENDING |
-| H1 | The 5-star highlight gate | Hybrid: one labeled star row + "Make a highlight anyway" | Highlight-First H3 (2026-09-24) | T11840 | PENDING |
-| H2 | No visible exit from the rate modal on touch | Add an X close button | T11390 (2026-09-28), objection avoided | T11840 | PENDING |
-| H3 | Rename "Annotate" / "annotations" | Tab "Mark Plays", cards "N plays" | Round 2 ruling 6 (2026-09-24) | T11850 | PENDING |
-| H4 | Annotate first-run density | Hide advanced controls until the first play; phone zoom 100% until then | T10780 (2026-09-20), T10930 | T11860 | PENDING |
-| U1 | Upload modal intro copy | One honest sentence + stacked cost facts | none | T11880 | PENDING |
-| U2 | Sign-in when Google cannot open | Always-visible email fallback + failure notice | none | T11890 | PENDING |
+| F1 | How a parent unlocks Generate | D: "Set focus point" button + coach chip, keep the T8510 gate | T8510 (2026-09-03) only if option C | T11700, T11710 | Recommended, 2026-10-04 |
+| F2 | Locked Generate band on phones | Compact one-line row while locked | T9270 "CTA never resizes" (needs an exception) | T11720 | Recommended, 2026-10-04 |
+| M1 | Mobile editor header | Two rows below `md`, one row at `md`+ | mobile-ux-spec 6.5; T11140 D kept | T11740 | Recommended, 2026-10-04 |
+| M2 | Games grid on phone and tablet | 1 column on phone, pack small month groups at `sm`+, 2-line titles | T7330 "floored at 2" | T11760 | Recommended, 2026-10-04 |
+| S1 | Status words for a framed clip | Ladder: "Draft, framed" etc. (no mode names in statuses) | T9860 (2026-09) chose "Draft, in Spotlight" | T11790 | Recommended, 2026-10-04 |
+| S2 | The word "Publish" | Rename to "Finish", tab "Finished" | T8555, T9530 N12 (2026-09-10), T10180, T9860 D5 | T11810, T11820 | Recommended, 2026-10-04 |
+| S3 | Where "Done for now" lands | Stay on Annotate, re-select the play, confirmation banner | none (keeps T8390) | T11800 | Recommended, 2026-10-04 |
+| S4 | Ready-screen tile copy | Outcome labels in house vocabulary | T10670 copy (2026-09-19) | T11810 | Recommended, 2026-10-04 |
+| S5 | The "Saved" chips | Remove them | T10670 (2026-09-19) | T11810, T11870 | Recommended, 2026-10-04 |
+| H1 | The 5-star highlight gate | Hybrid: one labeled star row + "Make a highlight anyway" | Highlight-First H3 (2026-09-24) | T11840 | Recommended, 2026-10-04 |
+| H2 | No visible exit from the rate modal on touch | Add an X close button | T11390 (2026-09-28), objection avoided | T11840 | Recommended, 2026-10-04 |
+| H3 | Rename "Annotate" / "annotations" | Tab "Mark Plays", cards "N plays" | Round 2 ruling 6 (2026-09-24) | T11850 | Recommended, 2026-10-04 |
+| H4 | Annotate first-run density | Hide advanced controls until the first play; phone zoom 100% until then | T10780 (2026-09-20), T10930 | T11860 | Recommended, 2026-10-04 |
+| U1 | Upload modal intro copy | One honest sentence + stacked cost facts | none | T11880 | Recommended, 2026-10-04 |
+| U2 | Sign-in when Google cannot open | (designer: email fallback + failure notice) | none | T11890 | **None of the options, 2026-10-04.** May be a staging/test-harness artifact; a generic "use email instead" path risks Google users creating a second, empty account. Handle failures only once the cause is diagnosed. T11890 is now an investigation. |
 
 Recommendation-only items (no real alternative; proceed unless the user objects): one upload
 progress number (T11870), shared cost row component (T11770), readable action row under Mark play
@@ -107,11 +107,14 @@ progress number (T11870), shared cost row component (T11770), readable action ro
 
 ## Findings deliberately NOT turned into tasks
 
-- **Tablet T-01, Google sign-in did nothing.** The tester used an in-app browser where Google
-  refuses popups. This is a known platform limit, not a bug we can fix by retrying. T11890 adds the
-  fallback the parent needed.
+- **Tablet T-01, Google sign-in did nothing: no fallback UI (user ruling U2, 2026-10-04).** The
+  tester was an AI agent in a non-Chrome in-app browser, so this may be a test artifact. A generic
+  "sign in with email instead" path is rejected: Google and email-code sign-in both resolve the
+  account **by email** (`backend/app/routers/auth.py` `_find_or_create_user`), so a Google user who
+  types a different address silently gets a new, empty account and reports lost data. T11890 now
+  investigates the cause; any handling must be specific to a diagnosed failure.
 - **"Turn a game video into your child's highlight reel"** (tablet headline suggestion): breaks the
-  "reel" vocabulary rule. T11890 adds an accurate subline instead.
+  "reel" vocabulary rule. Sign-in headline changes are out of scope after U2.
 - **Audit D1/D6/iPhone #11 "We'll keep your child centered" copy:** overclaims automatic framing.
 - **Sharing straight from the ready screen (after-generate D4):** deferred. It would make skipping
   the spotlight the shortest path to an audience, and the publish-from-working-video path is

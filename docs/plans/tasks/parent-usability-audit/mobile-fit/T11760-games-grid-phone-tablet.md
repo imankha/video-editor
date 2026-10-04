@@ -5,7 +5,7 @@
 **Complexity:** 4
 **Tier:** M (frontend only, ~4 files, ~90 LOC including tests)
 **Created:** 2026-10-04
-**Decision gate:** M2 (recommended: 1 column on phone, packed month groups at `sm`+, 2-line titles)
+**Decision gate:** M2 (recommended: 1 column on phone, packed month groups at `sm`+, 2-line titles) **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

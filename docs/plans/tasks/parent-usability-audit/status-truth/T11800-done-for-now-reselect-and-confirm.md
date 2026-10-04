@@ -5,7 +5,7 @@
 **Complexity:** 4
 **Tier:** M (frontend only, ~5 files + tests, ~140 LOC). Bug part needs a red-first reproduction.
 **Created:** 2026-10-04
-**Decision gate:** S3 (recommended C2: stay on Annotate, fall back to C1 when the edit did not start on Annotate)
+**Decision gate:** S3 (recommended C2: stay on Annotate, fall back to C1 when the edit did not start on Annotate) **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

@@ -5,7 +5,7 @@
 **Complexity:** 3
 **Tier:** M (frontend only, ~3 files, ~90 LOC including tests)
 **Created:** 2026-10-04
-**Decision gate:** F2 (recommended option 1). Depends on T11700 and T11710 (same file).
+**Decision gate:** F2 (recommended option 1). Depends on T11700 and T11710 (same file). **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

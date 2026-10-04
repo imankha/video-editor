@@ -1,6 +1,6 @@
 # Epic E: Upload and sign-in confidence
 
-**Status:** TODO (gated on decisions U1 and U2)
+**Status:** TODO (U1 ruled as recommended; U2 rejected all options 2026-10-04, T11890 is an investigation)
 **Milestone:** [Parent Usability Audit](../README.md)
 **Impact:** 7 | **Complexity:** 4
 **Knowledge docs:** `.claude/knowledge/annotate.md` (upload section), `.claude/knowledge/backend-services.md` (auth)
@@ -40,7 +40,7 @@ Full proposal: [annotate-rating-upload-signin.md](../../../ux/2026-10-04-parent-
 |----|------|--------|
 | T11870 | [One upload progress number and one sentence](T11870-one-upload-progress-number.md) | TODO |
 | T11880 | [Honest upload modal copy](T11880-honest-upload-modal-copy.md) | TODO |
-| T11890 | [Sign-in fallback when Google cannot open](T11890-sign-in-fallback.md) | TODO |
+| T11890 | [Investigate the silent Google sign-in failure before handling it](T11890-sign-in-fallback.md) | TODO |
 
 T11880 depends on T11770 (shared cost row).
 
@@ -48,4 +48,4 @@ T11880 depends on T11770 (shared cost row).
 
 - [ ] An upload shows exactly one percentage at every moment.
 - [ ] The upload modal makes no tracking or framing claim and its facts never interleave.
-- [ ] A blocked Google popup leads the parent to the email code within a few seconds, with no guessing.
+- [ ] T11890 findings delivered: the sign-in failure is either shown to be a test artifact or traced to a specific cause, with a failure-specific fix proposed to the user. No generic "use email instead" path ships.

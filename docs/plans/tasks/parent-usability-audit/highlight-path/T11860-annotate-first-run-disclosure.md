@@ -5,7 +5,7 @@
 **Complexity:** 3
 **Tier:** M (frontend only, ~4 files + tests, ~120 LOC)
 **Created:** 2026-10-04
-**Decision gate:** H4 (recommended option B + conditional phone zoom)
+**Decision gate:** H4 (recommended option B + conditional phone zoom) **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

@@ -5,7 +5,7 @@
 **Complexity:** 3
 **Tier:** M (frontend only, ~4 files + 1 new e2e spec, ~80 LOC)
 **Created:** 2026-10-04
-**Decision gate:** M1 (recommended option A)
+**Decision gate:** M1 (recommended option A) **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

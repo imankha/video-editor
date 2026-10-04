@@ -1,11 +1,11 @@
-# T11820: Rename Publish to Finish across the app (only if S2 = Finish)
+# T11820: Rename Publish to Finish across the app 
 
-**Status:** TODO (OBSOLETE if decision S2 keeps "Publish")
+**Status:** TODO (S2 ruled "Finish", 2026-10-04)
 **Impact:** 6
 **Complexity:** 5
 **Tier:** M by logic, wide by surface (copy sweep across many files; no behavior change)
 **Created:** 2026-10-04
-**Decision gate:** S2 (recommended B2: "Finish", tab "Finished"). Depends on T11810 and T11790.
+**Decision gate:** S2 (recommended B2: "Finish", tab "Finished"). Depends on T11810 and T11790. **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

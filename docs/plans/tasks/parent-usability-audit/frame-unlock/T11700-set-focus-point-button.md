@@ -5,7 +5,7 @@
 **Complexity:** 3
 **Tier:** M (frontend only, ~5 files, ~170 LOC including tests)
 **Created:** 2026-10-04
-**Decision gate:** F1 (recommended option D; this task is the "B" half)
+**Decision gate:** F1 (recommended option D; this task is the "B" half) **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

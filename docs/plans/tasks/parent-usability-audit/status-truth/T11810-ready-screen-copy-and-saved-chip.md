@@ -6,7 +6,7 @@
 **Tier:** M (frontend copy, `displayNames.js` + 2 action bars + tests, ~60 LOC)
 **Created:** 2026-10-04
 **Decision gate:** S4 (recommended D2), S5 (recommended: remove the chip). Wording of the
-secondary tile depends on S2.
+secondary tile depends on S2. **Ruled 2026-10-04: D2, remove the chip, S2 = Finish.**
 
 ## Epic Context
 

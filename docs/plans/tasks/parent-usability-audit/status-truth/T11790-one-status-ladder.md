@@ -5,7 +5,7 @@
 **Complexity:** 4
 **Tier:** M (frontend only, ~7 files + tests, ~150 LOC)
 **Created:** 2026-10-04
-**Decision gate:** S1 (recommended A1). If S2 = Finish, the last rung's word comes from T11820.
+**Decision gate:** S1 (recommended A1). If S2 = Finish, the last rung's word comes from T11820. **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

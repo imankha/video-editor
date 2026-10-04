@@ -1,11 +1,11 @@
 # T11850: Rename "Annotate" to "Mark Plays" in the UI
 
-**Status:** TODO (OBSOLETE if decision H3 keeps "Annotate")
+**Status:** TODO (H3 ruled "Mark Plays", 2026-10-04)
 **Impact:** 5
 **Complexity:** 2
 **Tier:** M (copy sweep; frontend only, ~8 files + tests)
 **Created:** 2026-10-04
-**Decision gate:** H3 (recommended option C: tab "Mark Plays", cards "N plays")
+**Decision gate:** H3 (recommended option C: tab "Mark Plays", cards "N plays") **Ruled 2026-10-04: recommended option taken.**
 
 ## Epic Context
 

@@ -1,6 +1,6 @@
 # Epic B: Fits on phones and tablets
 
-**Status:** TODO (gated on decisions M1 and M2)
+**Status:** TODO (decisions ruled 2026-10-04, see README decision register)
 **Milestone:** [Parent Usability Audit](../README.md)
 **Impact:** 8 | **Complexity:** 4
 **Knowledge docs:** `.claude/knowledge/annotate.md`; also read `docs/plans/mobile-ux-spec.md`,
