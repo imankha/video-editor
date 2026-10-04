@@ -545,6 +545,20 @@ export const FOCUS_COCKPIT = {
   OPEN_TRIM: 'Trim and slo-mo',
 };
 
+// T11700: the "Set focus point" button shown under the stage on every layout
+// (desktop/tablet FramingActionRow + portrait phone). It commits a focus point
+// using the crop box exactly where it is now (the same write path a drag uses),
+// so a parent who already sees the box on their player does not have to drag.
+// Parent-facing vocabulary — "focus point", never "keyframe"; no em dashes; the
+// confirmation says "set", never "saved". ADD_FOCUS_POINT reuses the cockpit
+// value so the literal lives in one place (T9550 single-source rule).
+export const FOCUS_EDITOR = {
+  SET_FOCUS_POINT: 'Set focus point',
+  ADD_FOCUS_POINT: FOCUS_COCKPIT.ADD_FOCUS_POINT,
+  SET_FOCUS_POINT_TOOLTIP: 'Sets a focus point using the box where it is now',
+  FOCUS_POINT_SET_AT: (time) => `Focus point set at ${time}`,
+};
+
 // T10850 (design D14): the two discovery hints that bracket the landscape flip.
 // Copy lives here (T9550 single-source rule), parent-facing vocabulary — "focus
 // point", never "keyframe". The icons are Lucide, inline, aria-hidden.

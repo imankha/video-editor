@@ -53,7 +53,12 @@ export default function CropOverlay({
   // prop — CropOverlay must stay MOUNTED during preview, or its unmount
   // cleanup clears video.style.transform and silently un-straightens the
   // preview (design doc §4 landmine 1).
-  chromeHidden = false
+  chromeHidden = false,
+  // T11700: reports crop drag/resize start (true) and end (false) so the parent
+  // can disable the "Set focus point" button while the live crop box is still
+  // moving. Fired once per gesture at pointer down/up/cancel — never per move
+  // (the move path stays ref-based, no re-render). Memory-only view signal.
+  onDragStateChange
 }) {
   // Transient drag/resize state lives in refs (not useState) so the window
   // move/up listeners can be attached synchronously in the pointer-down handler
@@ -215,6 +220,8 @@ export default function CropOverlay({
   constrainCropRef.current = constrainCrop;
   const applyAspectRatioRef = useRef(applyAspectRatio);
   applyAspectRatioRef.current = applyAspectRatio;
+  const onDragStateChangeRef = useRef(onDragStateChange);
+  onDragStateChangeRef.current = onDragStateChange;
 
   /**
    * Handle pointer/touch move (drag or resize). Reads all transient state from
@@ -299,6 +306,7 @@ export default function CropOverlay({
     resizingRef.current = false;
     resizeHandleRef.current = null;
     cropStartRef.current = null;
+    if (wasActive) onDragStateChangeRef.current?.(false);
 
     e?.currentTarget?.releasePointerCapture?.(e.pointerId);
 
@@ -329,10 +337,12 @@ export default function CropOverlay({
    * commits the drag. Reads nothing transient — it only clears the drag refs.
    */
   const handlePointerCancel = useCallback((e) => {
+    const wasActive = draggingRef.current || resizingRef.current;
     draggingRef.current = false;
     resizingRef.current = false;
     resizeHandleRef.current = null;
     cropStartRef.current = null;
+    if (wasActive) onDragStateChangeRef.current?.(false);
     e?.currentTarget?.releasePointerCapture?.(e.pointerId);
   }, []);
 
@@ -350,6 +360,7 @@ export default function CropOverlay({
     resizingRef.current = false;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     cropStartRef.current = currentCrop;
+    onDragStateChangeRef.current?.(true);
   };
 
   /**
@@ -365,6 +376,7 @@ export default function CropOverlay({
     resizeHandleRef.current = handle;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     cropStartRef.current = currentCrop;
+    onDragStateChangeRef.current?.(true);
   };
 
   // ==========================================================================

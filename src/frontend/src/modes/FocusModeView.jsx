@@ -1,5 +1,5 @@
-import { forwardRef, useState, useMemo, useCallback } from 'react';
-import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { forwardRef, useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronRight, ChevronDown, Plus, Check } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -19,7 +19,7 @@ import FramingInstructions from './focus/FramingInstructions';
 import FramingActionRow from './focus/FramingActionRow';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { ratioWithName } from '../constants/aspectRatios';
-import { EDITOR_PANELS } from '../config/displayNames';
+import { EDITOR_PANELS, FOCUS_EDITOR } from '../config/displayNames';
 
 /**
  * OutputLengthChip - live post-trim/post-speed output duration (T5780).
@@ -336,6 +336,37 @@ export function FocusModeView({
   const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
   const [guideOverride, setGuideOverride] = useState(null);
   const guideExpanded = guideOverride ?? focusPointCount < 2;
+
+  // T11700: the "Set focus point" button commits the crop box exactly where it is
+  // now, through the SAME onCropComplete write path a drag uses (mirrors the
+  // landscape cockpit's addFocusPointAtPlayhead — no second write path). Nothing
+  // is written on mount; this fires only from the button click gesture.
+  //
+  // `isCropDragging` is reported by CropOverlay via onDragStateChange (memory-only
+  // view state, never persisted) so the button is disabled while the live crop box
+  // is still moving — `currentCropState` would otherwise be a mid-drag value.
+  const [isCropDragging, setIsCropDragging] = useState(false);
+  // `justSetAt` holds the formatted playhead time for the transient confirmation
+  // line; cleared by a 2500ms timeout. Ephemeral, memory-only — set in the click
+  // handler, never a useEffect (copy says "set", never "saved").
+  const [justSetAt, setJustSetAt] = useState(null);
+  const justSetTimerRef = useRef(null);
+  const handleSetFocusPointHere = useCallback(() => {
+    if (!currentCropState) return;
+    onCropComplete?.({
+      x: currentCropState.x,
+      y: currentCropState.y,
+      width: currentCropState.width,
+      height: currentCropState.height,
+    });
+    setJustSetAt(formatLength(currentTime || 0, PRECISION.SECOND, { style: 'clock' }));
+    if (justSetTimerRef.current) clearTimeout(justSetTimerRef.current);
+    justSetTimerRef.current = setTimeout(() => setJustSetAt(null), 2500);
+  }, [currentCropState, onCropComplete, currentTime]);
+  useEffect(() => () => {
+    if (justSetTimerRef.current) clearTimeout(justSetTimerRef.current);
+  }, []);
+  const justSetLabel = justSetAt != null ? FOCUS_EDITOR.FOCUS_POINT_SET_AT(justSetAt) : null;
 
   // T9950 Slice 1: the segment/speed/trim track collapses behind an "Advanced
   // editing" disclosure (design doc §5 Slice 1). EPHEMERAL view state, same
@@ -698,6 +729,7 @@ export function FocusModeView({
                     dimOpacity={dimOpacity}
                     interactive={!mobileFs || touchMode === 'crop'}
                     chromeHidden={previewActive}
+                    onDragStateChange={setIsCropDragging}
                   />
                 ),
               ].filter(Boolean)}
@@ -793,6 +825,40 @@ export function FocusModeView({
               RotateNudge's D14 condition (isMobile && !isLandscape) exact without a
               second useIsLandscape() call that would break the FocusModeView tests'
               useIsMobile mock. */}
+          {/* T11700: portrait-phone "Set focus point" — the desktop/tablet copy
+              lives in FramingActionRow (hidden below sm); this full-width
+              placement sits directly under the stage, above the rotate nudge, so
+              the control is visible on every layout. Hidden while previewing;
+              disabled mid-drag. */}
+          {!isFullscreen && !mobileFs && videoUrl && !previewActive && (
+            <div className="sm:hidden mt-2">
+              <button
+                type="button"
+                data-testid="set-focus-point-button"
+                onClick={handleSetFocusPointHere}
+                disabled={isCropDragging}
+                title={FOCUS_EDITOR.SET_FOCUS_POINT_TOOLTIP}
+                className={`flex w-full min-h-11 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  focusPointCount > 0
+                    ? 'border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    : 'border-amber-500/60 bg-amber-500/15 text-amber-100 hover:bg-amber-500/25'
+                }`}
+              >
+                <Plus size={16} aria-hidden="true" />
+                {focusPointCount > 0 ? FOCUS_EDITOR.ADD_FOCUS_POINT : FOCUS_EDITOR.SET_FOCUS_POINT}
+              </button>
+              {justSetLabel && (
+                <div
+                  data-testid="focus-point-set-confirm"
+                  className="mt-1 flex items-center justify-center gap-1 text-xs text-green-400"
+                >
+                  <Check size={14} aria-hidden="true" />
+                  {justSetLabel}
+                </div>
+              )}
+            </div>
+          )}
+
           {!isFullscreen && !mobileFs && videoUrl && (
             <RotateNudge
               isMobile={isMobile}
@@ -854,6 +920,11 @@ export function FocusModeView({
           <FramingActionRow
             previewing={previewing}
             onTogglePreview={handleTogglePreview}
+            // T11700: hidden while previewing (previewActive); disabled mid-drag.
+            onSetFocusPoint={previewActive ? undefined : handleSetFocusPointHere}
+            focusPointCount={focusPointCount}
+            setFocusPointDisabled={isCropDragging}
+            justSetLabel={justSetLabel}
           />
         )}
 
