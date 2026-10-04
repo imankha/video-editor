@@ -497,6 +497,20 @@ export default function CropOverlay({
   // Clear any pending hold timer on unmount (no leaked timers).
   useEffect(() => clearHold, [clearHold]);
 
+  // T11700 follow-up (reviewer MAJOR): if this overlay (or just the crop box
+  // subtree, e.g. a chromeHidden flip or a clip switch that nulls currentCrop)
+  // unmounts WHILE a drag/resize is live, pointerup/cancel never fires, so the
+  // parent's drag flag would stick true and permanently disable the "Set focus
+  // point" button. Emit the drag-end on unmount as a backstop. `onLostPointerCapture`
+  // (wired on the crop box + handles below) covers the in-place capture-loss case.
+  useEffect(() => () => {
+    if (draggingRef.current || resizingRef.current) {
+      draggingRef.current = false;
+      resizingRef.current = false;
+      onDragStateChangeRef.current?.(false);
+    }
+  }, []);
+
   if (!currentCrop || !videoDisplayRect) {
     return null;
   }
@@ -655,6 +669,7 @@ export default function CropOverlay({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
+        onLostPointerCapture={handlePointerCancel}
         title="Drag to move the crop box. Drag corners or edges to resize. This sets the visible area of your highlight."
       >
         {/* Grid lines */}
@@ -711,6 +726,7 @@ export default function CropOverlay({
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerCancel}
+            onLostPointerCapture={handlePointerCancel}
           />
         ))}
       </div>

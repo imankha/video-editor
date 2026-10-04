@@ -566,6 +566,7 @@ export const FOCUS_EDITOR = {
 // em dashes.
 export const FRAMING_INSTRUCTIONS = {
   HEADER: 'Frame your player',
+  COLLAPSED_HEADER: 'Instructions',
   STEPS: 'Drag the box onto your player. Letting go sets a focus point at that moment in the video. If your player is already inside the box, tap Set focus point.',
   SECOND: 'Play the video and drag the box again whenever your player moves out of it. Your highlight moves smoothly between the focus points you set.',
   THIRD: 'Use Trim and slo-mo to slow down the key moment.',
@@ -580,9 +581,6 @@ export const FOCUS_HINTS = {
   // still has no focus points. Dismissed by its 44px X (a named gesture).
   // T11700/T11710: rephrased so rotating reads as optional, not required.
   ROTATE_TITLE: 'Optional: rotate your phone for a larger video',
-  // T11710 merge order: the new subtitle "Everything here also works upright"
-  // is only honest once T11740 removes the portrait horizontal overflow. Until
-  // T11740 is confirmed merged this keeps the prior subtitle (see PR notes).
   ROTATE_SUBTITLE: 'Twice the crop area, and nothing scrolls',
   ROTATE_DISMISS: 'Dismiss',
   // T11710: coaching copy for the 0-focus-point state. GENERATE_LOCKED is the

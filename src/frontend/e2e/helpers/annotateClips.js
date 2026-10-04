@@ -118,6 +118,41 @@ export async function createClipViaUI(page, layerName, opts = {}) {
 }
 
 /**
+ * Create a genuinely UNFRAMED Focus draft via the clip-save write path
+ * (POST /clips/raw/save with create_project) — the backend of the Annotate
+ * "Save clip" gesture, which runs `_create_auto_project_for_clip` to mint a Focus
+ * draft with ZERO crop keyframes (the 0-focus-point state the frame-unlock epic
+ * targets). Used instead of the gap-scan UI (openAddClipForm) when a spec just
+ * needs the unframed DRAFT to exist: that UI is non-deterministic in-container
+ * (the seeded game's large MP4 buffers slowly, so timeline seeks clamp to ~0 and
+ * the Add-Clip gap never opens). This is an acceptable dev write — callers delete
+ * `rawClipId` via deleteClip in afterEach.
+ *
+ * The draft's home tile reads the bare label "Draft" (T8470 renamed the old
+ * "Not Started" wording; getDraftStage -> NOT_STARTED while it has no keyframes
+ * or videos). Locate it by the unique `name` this returns, never by status text.
+ *
+ * @param {import('@playwright/test').BrowserContext} context
+ * @param {{profileId?: string, gameId?: number, nameHint?: string}} [opts]
+ * @returns {Promise<{rawClipId: number, projectId: number|null, name: string}>}
+ */
+export async function createUnframedDraft(context, { profileId = PROFILE_ID, gameId = 11, nameHint = 'QA unframed draft' } = {}) {
+  const name = `${nameHint} ${Date.now()}`;
+  const res = await context.request.post(`${apiBase}/clips/raw/save`, {
+    headers: { 'X-Profile-ID': profileId, 'X-Test-Mode': 'true' },
+    data: { game_id: gameId, start_time: 2.0, end_time: 5.0, name, create_project: true },
+  });
+  if (!res.ok()) {
+    throw new Error(`[annotateClips] createUnframedDraft FAILED (${res.status()}): ${await res.text()}`);
+  }
+  const body = await res.json();
+  if (!body.project_created) {
+    throw new Error(`[annotateClips] createUnframedDraft did not create a new auto-project (idempotent hit a stray clip?): ${JSON.stringify(body)}`);
+  }
+  return { rawClipId: body.raw_clip_id, projectId: body.project_id, name };
+}
+
+/**
  * Delete a test clip via context.request — the SAME cookie jar as loginAsRealUser,
  * never the bare `request` fixture (which is a separate, unauthenticated context
  * and silently 401s on cleanup, leaving stray clips in the real account). A failed

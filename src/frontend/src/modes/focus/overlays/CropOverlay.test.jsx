@@ -271,3 +271,43 @@ describe('T11710 CropOverlay coach cues (ring + chip)', () => {
     expect(cls).toContain('motion-reduce:animate-none');
   });
 });
+
+describe('T11700 CropOverlay drag-state wiring (onDragStateChange via real pointer events)', () => {
+  it('emits true on pointerdown and false on pointerup', () => {
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+    const onDragStateChange = vi.fn();
+    const { container } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} onDragStateChange={onDragStateChange} />
+    );
+    const cropBox = getCropBox(container);
+    fireEvent.pointerDown(cropBox, { pointerId: 1, clientX: 200, clientY: 175 });
+    expect(onDragStateChange).toHaveBeenLastCalledWith(true);
+    fireEvent.pointerUp(cropBox, { pointerId: 1 });
+    expect(onDragStateChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('emits false on pointercancel (abandoned drag)', () => {
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+    const onDragStateChange = vi.fn();
+    const { container } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} onDragStateChange={onDragStateChange} />
+    );
+    const cropBox = getCropBox(container);
+    fireEvent.pointerDown(cropBox, { pointerId: 1, clientX: 200, clientY: 175 });
+    fireEvent.pointerCancel(cropBox, { pointerId: 1 });
+    expect(onDragStateChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('emits false if the overlay unmounts mid-drag (reviewer MAJOR: flag must not stick true)', () => {
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+    const onDragStateChange = vi.fn();
+    const { container, unmount } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} onDragStateChange={onDragStateChange} />
+    );
+    const cropBox = getCropBox(container);
+    fireEvent.pointerDown(cropBox, { pointerId: 1, clientX: 200, clientY: 175 });
+    onDragStateChange.mockClear();
+    act(() => { unmount(); });
+    expect(onDragStateChange).toHaveBeenCalledWith(false);
+  });
+});

@@ -289,6 +289,13 @@ the extracted `FocusTimelineBlock` (Trim) verbatim. New surgical handler
 NOT a new persistence path). `CropOverlay` now treats `pointercancel` as ABANDON (D12): a rotate
 mid-drag fires pointercancel → drag refs cleared, NO `onCropComplete`, no partial keyframe written
 (distinct `handlePointerCancel`, wired on the crop rect + resize handles; straighten tool unchanged).
+T11700 follow-up (reviewer): the drag refs also feed `onDragStateChange` → `FocusModeView.isCropDragging`,
+which DISABLES the "Set focus point" button mid-drag. If CropOverlay unmounts WHILE a drag is live (a
+chromeHidden flip, a clip switch that nulls `currentCrop`), pointerup/cancel never fires, so that flag
+would stick true and permanently disable the button — an unmount-cleanup effect emits `onDragStateChange(false)`
+if `dragging||resizing`, and `onLostPointerCapture` (wired alongside pointercancel) covers in-place
+capture loss. `onCropComplete` carries ONLY the crop geometry `{x,y,width,height}` — no analytics/path tag —
+so a Set-focus-point tap is indistinguishable from a drag completion in analytics (single write path, by design).
 `FocusScreen` threads `cockpit`, `clipSidebarProps` (its own `sidebarProps`) and `onExitToHome`
 (App's `handleModeChange(PROJECT_MANAGER)`, so the rail Back chevron keeps the framing-changed safety
 dialog — the cockpit shell covers the UnifiedHeader). The D14 rotation HINTS (RotateNudge +

@@ -44,7 +44,7 @@ export default function FramingInstructions({ focusPointCount = 0, expanded, onT
         className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"
       >
         <span className="truncate text-sm font-semibold text-white">
-          {expanded ? FRAMING_INSTRUCTIONS.HEADER : 'Instructions'}
+          {expanded ? FRAMING_INSTRUCTIONS.HEADER : FRAMING_INSTRUCTIONS.COLLAPSED_HEADER}
         </span>
         {expanded
           ? <ChevronUp size={16} className="shrink-0 text-gray-400" aria-hidden="true" />
