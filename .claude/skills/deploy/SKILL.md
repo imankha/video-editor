@@ -142,9 +142,14 @@ Anything that recurs belongs in the numbered Procedure instead.
 
 | Added | Item | Why it cannot wait | Verify | Delete row when |
 |-------|------|--------------------|--------|-----------------|
+| 2026-10-04 | **Redeploy Modal to PRODUCTION** (T11660): `cd src/backend && python app/modal_functions/deploy.py --prod`. `compose_serve_time_modal` currently crashes on the deployed production Modal app (`reel-ballers-video-v2`) with `ModuleNotFoundError: No module named 'msgpack'` — confirmed live via a diagnostic dispatch before the fix. The code fix is merged to master, but Modal functions deploy via this separate script, never via `deploy_production.sh` — a regular `/deploy` will NOT touch Modal. Already fixed + redeployed + verified on staging. | Production is silently falling back to local ffmpeg compose on every download/share — a real, ongoing perf regression with no visible error, not a new risk introduced by waiting. | Re-run the same safe diagnostic used on staging: call `compose_serve_time_modal` with a deliberately nonexistent `reel_key` (fails fast, no real write). Expect R2 `ClientError: 404 Not Found` (success signal — import worked), NOT `ModuleNotFoundError: No module named 'msgpack'` (still broken). | Diagnostic dispatch against `reel-ballers-video-v2` confirms the 404 signal. |
+| 2026-10-04 | **T11430 live-verify on staging, before this deploy ships it to prod**: the reported play ("Great Goal", game "at Oceanside Breakers Aug 30") — confirm the published badge shows the correct orientation-qualified text, the counterpart orientation shows "…Not Started", the primary CTA reads "Make Another Highlight", clicking the counterpart creates the OPPOSITE orientation, and the published highlight still opens — on desktop, portrait mobile, and landscape phone. | T11430 is a schema/persistence change that went through 3 full review rounds, each of which found and fixed a real bug — the one check that can't be automated (real production-shaped data on the actual reported record) is this task's own last acceptance criterion and hasn't run yet. Shipping to prod before this check defeats the purpose of asking for it. | User confirms the 5-point check above passes on staging. | User confirms the staging check passed (or explicitly waives it). |
 
-*No pending one-time steps. T8660's live-purchase verification was explicitly waived by the
-owner on 2026-09-29; the code path remains test-covered, but real receipt delivery was not observed.*
+*Both rows above were added 2026-10-04 from the `/dotask T11660 T11430 T11410 T11420 T11400
+T11310` wave — the other four tasks in that wave (T11420, T11410, T11400, T11310) are
+frontend-only or tooling-only and need no deploy-adjacent action; T11430's backend migration
+(profile_db v056) is JIT per-user and needs no manual trigger (unlike Postgres migrations,
+step 6a above).*
 
 ## Post-Deploy: Plan Reconciliation
 
