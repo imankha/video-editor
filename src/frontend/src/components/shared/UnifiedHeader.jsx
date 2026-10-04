@@ -73,8 +73,9 @@ export function UnifiedHeader({
               <div className="text-xs text-gray-400 truncate">{breadcrumbGameName}</div>
             )}
           </div>
-          {/* gap-0 below md: the chips (CreditBalance, FramingHeaderStatus) carry their
-              own `ml-2`, so the container gap would double it. At md+ gap-2 returns. */}
+          {/* gap-0 below md: FramingHeaderStatus brings its own `ml-2` (CreditBalance's
+              root is just `relative`, no margin), so a container gap would double the
+              spacing before the badge. At md+ gap-2 returns. */}
           <div className="flex items-center gap-0 md:gap-2 flex-shrink-0 self-center ml-auto md:ml-0">
             {editorMode === 'framing' && <CreditBalance />}
             {extraControls}

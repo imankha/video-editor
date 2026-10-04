@@ -68,4 +68,12 @@ describe('T11740: compact UnifiedHeader class contract', () => {
     expect(back.className).toContain('w-11');
     expect(back.className).toContain('h-11');
   });
+
+  it('lays row 2 (the editor-step tabs) out as a labeled 3-col grid that becomes a flex row at md+', () => {
+    render(<UnifiedHeader breadcrumbType="Games" breadcrumbItemName="Game" editorMode="annotate" />);
+    // role="group" + aria-label is the a11y contract the three tabs live under.
+    const group = screen.getByRole('group', { name: 'Editor steps' });
+    expect(group.className).toContain('grid-cols-3'); // equal cells below md
+    expect(group.className).toContain('md:flex'); // collapses to one row at md+
+  });
 });

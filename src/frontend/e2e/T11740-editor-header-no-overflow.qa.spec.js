@@ -21,6 +21,7 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth.js';
 import { openFramingDraft } from './helpers/framingDraft.js';
+import { openLoadableOverlayDraft } from './helpers/overlayDraft.js';
 import { saveEvidence, assertNoHorizontalOverflow } from './helpers/qa.js';
 
 const AUDIT_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
@@ -101,13 +102,13 @@ test.describe('T11740 Annotate editor header fits phones', () => {
       await assertTitleVisibleWithWidth(page, `Annotate @ ${width}px`);
 
       // Page-level no-overflow holds at every width EXCEPT 320, where a SEPARATE,
-      // pre-existing overflow lives in AnnotateModeView.jsx:733 (the video/controls
-      // card: a `flex gap-2` row is ~339px wide in a ~278px box). Proven pre-existing:
-      // the identical scrollWidth 360 shows on master with this branch's source
-      // reverted. That card is owned by T11750's AnnotateModeView chain and is
-      // deliberately file-disjoint from T11740 — fixing it here would break the
-      // epic's parallel-run contract. The header-fits assertion above still proves
-      // T11740's own fix at 320.
+      // pre-existing overflow lives in the video/controls card at AnnotateModeView.jsx:~733
+      // (a `flex gap-2` row ~339px wide in a ~278px box). Proven pre-existing: the identical
+      // scrollWidth 360 shows on master with this branch's source reverted. That card is
+      // owned by T11780 (annotate video-card overflow @320, filed separately) — NOT T11750,
+      // whose scope is only the zero-plays action row at AnnotateModeView.jsx:1470-1499. It
+      // is file-disjoint from T11740; fixing it here would cross task boundaries. The
+      // header-fits assertion above still proves T11740's own fix at 320.
       if (width !== 320) {
         await assertNoHorizontalOverflow(page);
       }
@@ -135,6 +136,32 @@ test.describe('T11740 Focus editor header fits phones', () => {
       // so the whole page must be clean at every width.
       await assertNoHorizontalOverflow(page);
       await saveEvidence(page, `t11740-focus-${width}`);
+    });
+  }
+});
+
+test.describe('T11740 Overlay editor header fits phones', () => {
+  test.beforeEach(async ({ context }) => {
+    test.setTimeout(180_000);
+    await loginAsRealUser(context, AUDIT_EMAIL, AUDIT_PROFILE);
+    // Auth warm-up before any navigation (avoids the cold sign-in race).
+    await findActiveGameWithClips(context);
+  });
+
+  for (const width of WIDTHS) {
+    test(`@ ${width}px: Overlay header has no horizontal overflow and the play + game name stays visible`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      // Overlay uses the SAME App.jsx UnifiedHeader as Focus (AC1 names /overlay).
+      // Opening it needs an In-Overlay draft whose working video actually streams;
+      // if none does in this env, skip loudly rather than fail (helper's contract).
+      // minReadyState:2 — a pure geometry/no-overflow read, no seeking.
+      const opened = await openLoadableOverlayDraft(page, { minReadyState: 2 });
+      test.skip(!opened.ok, `[T11740] no openable In-Overlay draft: ${opened.reason}`);
+
+      await assertHeaderFits(page, `Overlay @ ${width}px`);
+      await assertTitleVisibleWithWidth(page, `Overlay @ ${width}px`);
+      await assertNoHorizontalOverflow(page);
+      await saveEvidence(page, `t11740-overlay-${width}`);
     });
   }
 });

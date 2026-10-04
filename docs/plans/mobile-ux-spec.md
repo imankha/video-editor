@@ -343,12 +343,19 @@ misclassifies 768-1023 tablets that still fit one row).
 
 - **Row 1** (`flex items-start gap-2 min-h-11`): Back + title block + chips
   - Back arrow: `w-11 h-11` (44px touch target), always visible
-  - Title block (`flex-1 min-w-0`): primary line wraps to 2 lines via
+  - Title block (`min-w-0 py-1 md:flex-1`): primary line wraps to 2 lines via
     `line-clamp-2 break-words` (never collapses to 0px). On Focus/Spotlight a
     second `text-xs text-gray-400 truncate` line carries `breadcrumbGameName`;
     on Annotate the title already IS the game name, so no second line.
-  - Chips (`flex-shrink-0`): framing CreditBalance + any `extraControls` (plays
-    count, framing-status). These stay on mobile — they are NOT moved to Home.
+    It does NOT `flex-grow` below md (only `md:flex-1`): a growing title rounds
+    up and steals ~3px from the `flex-shrink-0` chips, overflowing the row.
+  - Chips (`flex-shrink-0 ml-auto md:ml-0`, `gap-0 md:gap-2`): framing
+    CreditBalance + any `extraControls` (plays count, framing-status). These stay
+    on mobile — they are NOT moved to Home. `ml-auto` pins them right below md;
+    `gap-0` avoids doubling FramingHeaderStatus's own `ml-2`.
+  - Wrapper gets `pr-1 md:pr-0`: the framed-clip badge (`FramingHeaderStatus` ->
+    `Disc` DONE) renders a check that overhangs its corner ~4px (`absolute
+    -right-1`); the right pad keeps that decorative overhang inside the header.
 - **Row 2** (`grid grid-cols-3 gap-1 bg-white/5 rounded-lg p-1 md:flex md:bg-transparent md:p-0`,
   `role="group" aria-label="Editor steps"`): the three ModeSwitcher tabs in equal
   cells, each `flex-col` icon-over-label, `h-12` (>=44px). All three are LABELED

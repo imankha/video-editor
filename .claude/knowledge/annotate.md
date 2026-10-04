@@ -3,8 +3,9 @@ domain: annotate
 updated: 2026-10-04 (T11740 — **the editor `UnifiedHeader` is TWO ROWS below `md` (768px), one row
 at `md`+**, fixing phone horizontal overflow (556px row in a 390px viewport) where the title
 collapsed to 0px and "Frame Highlight"/"Add Spotlight" were clipped. Row 1 = 44px Back
-(`w-11 h-11`) + title block (`flex-1 min-w-0`, primary line `line-clamp-2 break-words` so it
-wraps to 2 lines instead of truncating to nothing; Focus/Spotlight add a second `text-xs
+(`w-11 h-11`) + title block (`min-w-0 py-1 md:flex-1` — grows ONLY at md+, see landmine below;
+primary line `line-clamp-2 break-words` so it wraps to 2 lines instead of truncating to nothing;
+Focus/Spotlight add a second `text-xs
 text-gray-400 truncate` line from `breadcrumbGameName`, Annotate's title already IS the game
 name) + chips (`flex-shrink-0`: framing CreditBalance + `extraControls`). Row 2 = the three
 ModeSwitcher tabs in a `grid grid-cols-3` (`md:flex`), each `flex-col` icon-over-label `h-12`,
