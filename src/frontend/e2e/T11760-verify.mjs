@@ -43,8 +43,23 @@ function measure() {
     const lh = parseFloat(getComputedStyle(el).lineHeight);
     return Math.round(el.getBoundingClientRect().height / lh);
   };
+  // T11760 review round: the date + counts meta row must stay ONE line on phones too (it was
+  // `flex-col sm:flex-row`, wrapping to two lines on the new wide 1-up phone tile). Height of the
+  // flex row / its text-xs line-height = line count; 1 = single row, 2 = the old wrap.
+  const metaLines = (gameId) => {
+    const root = document.querySelector(`[data-qa-game="${gameId}"]`);
+    if (!root) return 0;
+    const el = [...root.querySelectorAll('div')].find(
+      (d) => d.className.includes('justify-between') && d.className.includes('text-xs'),
+    );
+    if (!el) return 0;
+    const lh = parseFloat(getComputedStyle(el).lineHeight);
+    return Math.round(el.getBoundingClientRect().height / lh);
+  };
   const sepH3 = document.querySelector('[data-qa-game="2"] h3');
   return {
+    meta1Lines: metaLines(1), // short date + "3 annotations"
+    meta2Lines: metaLines(2), // busier counts (5 annotations, 1 reel)
     overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     loadedCols: topRowCount('[data-qa-state="loaded"]', '[data-qa-game]'),
     skeletonCols: topRowCount('[data-qa-state="skeleton"]', '.aspect-video'),
@@ -92,6 +107,9 @@ async function run() {
       record(!m.sepClipped, `[${width}] long name fully visible (no ellipsis clip)`, `clipped=${m.sepClipped}`);
       record(m.sepClamp === '2', `[${width}] title uses line-clamp-2 (wraps, not single-line truncate)`, `clamp=${m.sepClamp}`);
       record(m.octLines === 1, `[${width}] short name stays one line`, `lines=${m.octLines}`);
+      // review round: meta row (date + counts) stays one line on phones (not the old flex-col wrap)
+      record(m.meta1Lines === 1, `[${width}] meta row stays one line (short date + counts)`, `lines=${m.meta1Lines}`);
+      record(m.meta2Lines === 1, `[${width}] meta row stays one line (busier counts)`, `lines=${m.meta2Lines}`);
     }
 
     if (width === 768) {

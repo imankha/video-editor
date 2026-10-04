@@ -340,7 +340,7 @@ export function GameTile({
               : "Upload didn't finish. Retry to resume, or discard."}
           </p>
         ) : (
-          <div className="mt-0.5 flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-2 text-xs">
+          <div className="mt-0.5 flex flex-row items-center justify-between gap-2 text-xs">
             <span className="text-gray-300 truncate">{formatMatchDateLabel(game.game_date)}</span>
             <span className="flex-shrink-0 whitespace-nowrap text-gray-400">{countsLabel}</span>
           </div>
