@@ -1227,6 +1227,29 @@ def ensure_database():
                 restored_at TIMESTAMP DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 poster_marker_time REAL DEFAULT NULL,
+                -- T11430: durable one-to-many link from a play (raw_clip) to every
+                -- highlight project made from it (one project = one highlight
+                -- instance). Survives archive (publish archives the project but
+                -- never deletes it), unlike working_clips.raw_clip_id. See v056.
+                -- NOTE: the FK is declared inline (column-level REFERENCES, not a
+                -- table-level FOREIGN KEY(...) clause) so this column can still be
+                -- DROP COLUMN'd (SQLite refuses ALTER TABLE ... DROP COLUMN when the
+                -- column is named in a table-level FOREIGN KEY clause -- verified
+                -- against the T6030 structural guard's below-head synthesis, which
+                -- drops this exact column).
+                source_raw_clip_id INTEGER REFERENCES raw_clips(id) ON DELETE SET NULL,
+                -- T11430: one-based ordinal within (source_raw_clip_id, aspect_ratio
+                -- orientation bucket), assigned at creation time. Gaps from deletion
+                -- are fine; see design doc T11430 §4.4.
+                highlight_ordinal INTEGER,
+                -- T11430 fixround1: PER-PROJECT producing-window snapshot (frozen at
+                -- creation from the raw_clip's current boundaries). Each highlight
+                -- instance tracks its OWN T8070 staleness against THIS snapshot, not
+                -- the shared per-play raw_clips.reel_source_* (which every new
+                -- highlight re-seeds). Without this, making a 2nd highlight silently
+                -- un-stales a 1st that the user had drifted off its producing window.
+                reel_source_start_time REAL DEFAULT NULL,
+                reel_source_end_time REAL DEFAULT NULL,
                 FOREIGN KEY (working_video_id) REFERENCES working_videos(id) ON DELETE SET NULL,
                 FOREIGN KEY (final_video_id) REFERENCES final_videos(id) ON DELETE SET NULL
             )
@@ -1486,6 +1509,10 @@ def ensure_database():
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_final_videos_project_version
             ON final_videos(project_id, version DESC)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_projects_source_raw_clip
+            ON projects(source_raw_clip_id)
         """)
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_raw_clips_game_id

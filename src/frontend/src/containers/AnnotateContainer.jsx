@@ -1757,6 +1757,15 @@ export function AnnotateContainer({
       if (actualUpdates.startTime !== undefined) backendUpdates.start_time = actualUpdates.startTime;
       if (actualUpdates.endTime !== undefined) backendUpdates.end_time = actualUpdates.endTime;
       if (actualUpdates.createProject != null) backendUpdates.create_project = actualUpdates.createProject;
+      // T11430: "Make Another Highlight" always mints a NEW project even
+      // though this play already has one — threaded only from that specific
+      // gesture (AnnotateModeView.handleMakeAnotherHighlight), never from the
+      // original first-highlight gestures (Frame Now/Later, Done -> Highlight).
+      if (actualUpdates.forceNew != null) backendUpdates.force_new = actualUpdates.forceNew;
+      // fixround1 MAJOR 2: the orientation to create ('16:9' from the synthesized
+      // horizontal-counterpart CTA), so Make Another Highlight makes the right
+      // orientation instead of always defaulting to vertical.
+      if (actualUpdates.aspectRatio != null) backendUpdates.aspect_ratio = actualUpdates.aspectRatio;
       if (actualUpdates.tagged_teammates !== undefined) backendUpdates.tagged_teammates = actualUpdates.tagged_teammates;
       if (actualUpdates.my_athlete !== undefined) backendUpdates.my_athlete = actualUpdates.my_athlete;
 
@@ -1802,6 +1811,7 @@ export function AnnotateContainer({
    */
   const isCleanAgainst = useCallback((region, actualUpdates) => {
     if (actualUpdates.createProject != null) return false;
+    if (actualUpdates.forceNew != null) return false;
     const keys = Object.keys(actualUpdates);
     if (keys.length === 0) return true;
     return keys.every((key) => {

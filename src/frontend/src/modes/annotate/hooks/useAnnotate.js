@@ -750,6 +750,24 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         // decide whether the Reel control still reflects the current footage.
         reelSourceStartTime: annotation.reelSourceStartTime ?? annotation.reel_source_start_time ?? null,
         reelSourceEndTime: annotation.reelSourceEndTime ?? annotation.reel_source_end_time ?? null,
+        // T11430: the archived-inclusive collection of highlight instances for
+        // this play (one per highlight project, N>=0), consumed by
+        // clipStage.getClipStages. Mapped camelCase for internal consumers;
+        // tolerates already-camelCase input via the same `??` double-read
+        // pattern used above.
+        highlightInstances: (annotation.highlightInstances ?? annotation.highlight_instances ?? []).map((i) => ({
+          projectId: i.projectId ?? i.project_id,
+          aspectRatio: i.aspectRatio ?? i.aspect_ratio,
+          highlightOrdinal: i.highlightOrdinal ?? i.highlight_ordinal,
+          hasWorkingVideo: i.hasWorkingVideo ?? i.has_working_video,
+          hasFinalVideo: i.hasFinalVideo ?? i.has_final_video,
+          isPublished: i.isPublished ?? i.is_published,
+          archivedAt: i.archivedAt ?? i.archived_at,
+          // fixround1 MAJOR 1: per-project producing-window snapshot, so each
+          // instance's staleness is judged against its OWN window.
+          reelSourceStartTime: i.reelSourceStartTime ?? i.reel_source_start_time ?? null,
+          reelSourceEndTime: i.reelSourceEndTime ?? i.reel_source_end_time ?? null,
+        })),
         tagged_teammates: annotation.tagged_teammates ?? annotation.taggedTeammates ?? null,
         my_athlete: annotation.my_athlete ?? annotation.myAthlete ?? true,
         shared_by: annotation.shared_by ?? null,

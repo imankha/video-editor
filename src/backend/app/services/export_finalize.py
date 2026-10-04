@@ -313,6 +313,29 @@ def upsert_working_video(
                 (project_id, project_id),
             )
 
+        # T11430 fixround2 (BLOCKING): also refresh THIS project's OWN per-instance
+        # snapshot (projects.reel_source_*, added in fixround1). The frontend now
+        # reads staleness EXCLUSIVELY from the per-project snapshot, so an export
+        # that only refreshed the shared raw_clips snapshot above would leave the
+        # exported project permanently reading "Clipped" (T8070 invariant: "every
+        # real export re-freezes it"). Scoped to id = ? so SIBLING highlights of
+        # the same play keep their own independent snapshots. Column-guarded for
+        # the deploy->migrate window (v056).
+        if column_exists(cursor, "projects", "reel_source_start_time"):
+            cursor.execute(
+                """
+                UPDATE projects
+                SET reel_source_start_time = (
+                        SELECT start_time FROM raw_clips WHERE id = projects.source_raw_clip_id
+                    ),
+                    reel_source_end_time = (
+                        SELECT end_time FROM raw_clips WHERE id = projects.source_raw_clip_id
+                    )
+                WHERE id = ? AND source_raw_clip_id IS NOT NULL
+                """,
+                (project_id,),
+            )
+
         conn.commit()
 
     logger.info(f"[Finalize] upsert_working_video: job={job_id} project={project_id} working_video_id={wv_id}")

@@ -1,5 +1,81 @@
 ---
 domain: annotate
+updated: 2026-10-03 (T11430 fixround1 — two-reviewer + CI follow-up on the T11430 entry below.
+**(MAJOR 1) Per-instance staleness:** the T8070 producing-window snapshot used to live ONLY on
+`raw_clips` (one per PLAY), so every create — including "Make Another Highlight" — re-seeded it,
+silently un-staling an older highlight the user had drifted off its window. v056 now also adds
+`projects.reel_source_start_time`/`reel_source_end_time`, FROZEN per project at creation (from the
+raw_clip's current boundaries); `_get_highlight_instances_by_clip` returns them per instance;
+`clipStage.js::getClipStages` judges each instance's staleness against its OWN snapshot (no
+region-level fallback). Backfill for existing produced projects inherits the play's current
+snapshot (documented best-effort approximation — the true historical per-project window isn't
+recoverable). **(MAJOR 2) Synthesized counterpart creates the right orientation:** the synthesized
+"Horizontal Video Not Started" CTA now threads `synthesizedOrientation` → `aspectRatio` →
+`update_raw_clip`'s new `aspect_ratio` field → `_create_auto_project_for_clip(aspect_ratio=...)`,
+so it actually makes a 16:9 project (was always defaulting to 9:16). **(MAJOR 3) Delete sweep:**
+`delete_raw_clip` now runs the dead-draft cleanup over EVERY project with `source_raw_clip_id ==
+the clip` (`_delete_orphan_highlight_projects`), not just the one in `auto_project_id`, so
+"Make Another Highlight" drafts don't survive as 0-clip orphans; published + multi-clip projects
+are still preserved. **(cross-layer) Mode-switch guard:** `AnnotateScreen`'s Framing/Overlay
+mode-switch handler now bails when `auto_project_id` points at a PUBLISHED instance (the fix below
+stopped force-NULLing it, which could otherwise open a frozen archived project's broken editor).
+**(minor) One canonical ordinal bucketing rule** (`clips.py::_RESOLVED_ORIENTATION_SQL`) used by
+creation, aspect-change, AND the v056 backfill; backfill counter seeds from existing MAX;
+unknown aspect ratios now `console.warn` instead of silently rendering un-prefixed. CI: fk_cascades
+SET-NULL count 2→3, export DB-delta goldens reblessed (4 new null projects columns only), v056
+backfill hardened with per-column guards so three unrelated migration-snapshot tests stop crashing.
+See persistence-sync.md's T11430 fixround1 entry for the schema/FK/column-guard detail.)
+updated: 2026-10-03 (T11430 — **a raw play now has a durable ONE-TO-MANY link to every
+highlight project/version ever made from it, not a single mutable pointer.** Root cause of the
+reported bug (a published highlight still showing "Highlight Not Started"): publish archives the
+project (`project_archive.archive_project`), and BOTH `games.py::load_annotations_from_db`
+(the CASE WHEN ... archived_at IS NULL ... ELSE NULL END) and `projects.py::list_projects`
+(`WHERE p.archived_at IS NULL`) treated archived as invisible — so the moment any highlight
+publishes, the play's `autoProjectId` reads NULL on next load. **Fix is NOT "unarchive on
+publish"** — archiving is still how a published project is pulled out of the active
+Clips/Framing lists; the fix is a SEPARATE durable link that is archived-INCLUSIVE by design.
+New columns `projects.source_raw_clip_id` (FK → raw_clips, `ON DELETE SET NULL`) +
+`projects.highlight_ordinal` (one-based, independent per `(source_raw_clip_id, orientation)`
+bucket, orientation resolved from `COALESCE(latest published final_videos.aspect_ratio,
+projects.aspect_ratio)`), profile_db migration v056 (3-chain backfill: legacy
+`raw_clips.auto_project_id`, `working_clips.raw_clip_id`, and — the actual mechanism behind the
+production bug — `final_videos.source_clip_id` for a published project whose `working_clips`
+were already deleted by archive). `raw_clips.auto_project_id` is RETAINED but DEMOTED to an
+"active draft" hint only — never again the display source of truth. New
+`clips.py::_get_highlight_instances_by_clip` (one query, no N+1, `column_exists`-guarded for
+rolling-deploy skew) returns the archived-inclusive instance collection per raw_clip id, EXCLUDING
+legacy multi-clip reels (`final_videos.clip_count > 1`) and non-auto-created projects
+(`is_auto_created` false) — single-clip-editor-epic compatible by construction (builds only on
+`_create_auto_project_for_clip`, touches none of T11250/T11260's doomed multi-clip endpoints).
+Sorted published-first, then orientation + ordinal. `load_annotations_from_db` stopped
+force-NULLing `auto_project_id` and attaches `highlight_instances` per annotation.
+**`clipStage.js` gained a collection wrapper, `getClipStages(region, instances, {activeExports})`**,
+composing orientation-qualified status strings ("Vertical Video Published", "Horizontal Video Not
+Started", "Vertical Video 2 Framing" — ordinal suffix only shown when ≥2 of that orientation
+exist) over the EXISTING per-instance `getClipStage` core, which also got a real bug fix: a
+published instance now checks `is_published` BEFORE the T8070 staleness gate, so a published
+highlight is frozen and never demotes back to FOCUS/CLIPPED from boundary drift (design req #8;
+one pre-existing T8070 test that pinned the OLD demote-on-drift-even-if-published behavior was
+corrected, not preserved — it was pinning this exact bug). "Make Another Highlight" (shown once
+ANY instance exists, published or not) threads a new `force_new` bool through
+`update_raw_clip`/`RawClipUpdate` → `AnnotateContainer`'s `forceNew` → the PUT body; when set, the
+stale-pointer-clear-and-recreate branch is skipped entirely and a new project is unconditionally
+minted (INSERT-only, never mutates/archives/detaches an older instance — verified by
+`test_make_another_highlight_creates_second_project_without_mutating_first`). Per-instance
+"Preview"/"View Highlight" CTAs fetch the FULL project via `useProjectsStore.fetchProject(id)`
+before navigating (an archived/published project is not in `projectsList`, so a store lookup
+cannot substitute — a bare `{id}` 404s inside `openClipPreview`'s `final_video_id` guard; this was
+a real bug caught by review, not a hypothetical). The ORIGINAL single-stage CTA
+(`annotate-stage-cta`) and the new per-instance collection are MUTUALLY EXCLUSIVE, gated on
+`regionStages.instances.length` — rendering both for the same play was a real review-caught
+defect (the legacy CTA can't see an archived project via `projectsList`, so it kept showing the
+original "Make Highlight" bug right next to the new "Vertical Video Published" badge). Structural
+guard (`test_t6030_migration_window_structural_guard.py`): `POST_V023_COLUMNS["projects"]` and
+`HEAD_VERSION_AUDITED` (now 56) updated — any FUTURE profile_db `ADD COLUMN` must do the same.
+Design: `docs/plans/tasks/T11430-design.md`. Tests: `test_t11430_migration_v056.py`,
+`test_t11430_highlight_creation.py`, `test_t11430_published_status_regression.py` (reproduces the
+reported bug through the REAL `load_annotations_from_db` path, not a mock),
+`clipStage.test.js`'s `getClipStages` block, `AnnotateModeView.highlightInstances.test.jsx`.)
 updated: 2026-09-27 (T11230 — the **In Progress Reels tab is GONE** (`inProgressReels` /
 `/home/reels-in-progress`), with all the Reels-BUILDING surfaces. Home is now THREE tabs:
 Games / Clips / Published (`ProjectManager.jsx` `TAB_PATHS`; `editorStore.js` `HOME_TAB_PATHS`

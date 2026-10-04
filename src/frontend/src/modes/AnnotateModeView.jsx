@@ -9,8 +9,8 @@ import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { ANNOTATE, SHARING } from '../config/displayNames';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
-import { getClipStage, isFramingExportInProgress, CLIP_STAGE } from './annotate/clipStage';
-import { useCurrentProfile, useProfileStore, useProjectsList } from '../stores';
+import { getClipStage, getClipStages, isFramingExportInProgress, CLIP_STAGE } from './annotate/clipStage';
+import { useCurrentProfile, useProfileStore, useProjectsList, useProjectsStore } from '../stores';
 import { useExportStore } from '../stores/exportStore';
 import PlaybackControls from './annotate/components/PlaybackControls';
 import { generateClipName } from '../utils/clipDisplayName';
@@ -224,6 +224,15 @@ export function AnnotateModeView({
   const selectedClipStage = selectedRegion
     ? getClipStage(selectedRegion, selectedRegionProject, { framingInProgress: selectedRegionFraming })
     : null;
+  // T11430: the collection of highlight instances for the selected play
+  // (orientation-qualified statuses + per-instance CTAs + the primary
+  // "create" CTA label). Additive alongside selectedClipStage above — empty
+  // `highlightInstances` (legacy single-pointer regions) yields zero
+  // instances and a primaryCta identical to the pre-T11430 "Make Highlight"
+  // behavior, so this does not change existing single-instance callers.
+  const regionStages = selectedRegion
+    ? getClipStages(selectedRegion, selectedRegion.highlightInstances || [], { activeExports })
+    : null;
   const [frameClipPending, setFrameClipPending] = useState(false);
   // T9830/T10240 convention: a synchronously-set REF (not state) guards
   // against a double-fire from the two buttons sharing one create seam —
@@ -272,6 +281,32 @@ export function AnnotateModeView({
       setFrameClipPending(false);
     }
   }, [selectedRegion, openExistingProjectStage, onFullscreenUpdateClip, onOpenClipInFocus]);
+  // T11430: the primary CTA once >=1 highlight instance already exists for
+  // this play ("Make Another Highlight") always creates a NEW project — never
+  // opens an existing instance (each existing instance has its own per-row
+  // CTA). Reuses the SAME frameCreateInFlightRef double-fire guard as
+  // handleFrameNow so a double-click can't create two highlights.
+  // fixround1 MAJOR 2: an optional `aspectRatio` targets the orientation to
+  // create. The synthesized "Horizontal Video Not Started" counterpart CTA
+  // passes '16:9' so it actually makes a horizontal highlight; the bare primary
+  // CTA passes nothing and the backend defaults to 9:16.
+  const handleMakeAnotherHighlight = useCallback(async (aspectRatio) => {
+    if (!selectedRegion || frameCreateInFlightRef.current) return;
+    frameCreateInFlightRef.current = true;
+    setFrameClipPending(true);
+    try {
+      const result = await onFullscreenUpdateClip(selectedRegion.id, {
+        createProject: true,
+        forceNew: true,
+        silent: true,
+        ...(aspectRatio ? { aspectRatio } : {}),
+      });
+      if (result?.saveOk && result.projectId) onOpenClipInFocus?.(result.projectId);
+    } finally {
+      frameCreateInFlightRef.current = false;
+      setFrameClipPending(false);
+    }
+  }, [selectedRegion, onFullscreenUpdateClip, onOpenClipInFocus]);
   // T11130: "Frame Later" removed with the T10450 main-screen Frame Now / Frame
   // Later create row — a project-less play becomes a highlight through the rating
   // + Done -> Highlight popup gesture now, not a create button here. handleFrameNow
@@ -444,12 +479,22 @@ export function AnnotateModeView({
   // T10920: same getClipStage + useProjectsList lookup as the selected-region
   // CTA above, so the banner's published/clipped mark can never disagree with
   // the strip's stage CTA.
+  // T11430: when the active clip has a highlight-instances collection,
+  // prefer its primary/most-advanced instance's stage (published first) for
+  // the on-video mark, so a published highlight's banner mark can never
+  // disagree with the fact that it's published — falls back to the legacy
+  // single-autoProjectId lookup when there is no instances collection.
   const activePlaybackClipStage = activePlaybackClip
-    ? getClipStage(
-      activePlaybackClip,
-      activePlaybackClip.autoProjectId ? projectsList.find(p => p.id === activePlaybackClip.autoProjectId) : null,
-      { framingInProgress: isFramingExportInProgress(activeExports, activePlaybackClip.autoProjectId) },
-    ).stage
+    ? (activePlaybackClip.highlightInstances?.length
+      ? getClipStages(activePlaybackClip, activePlaybackClip.highlightInstances, { activeExports })
+          .instances.find((i) => i.stage === CLIP_STAGE.PUBLISHED)?.stage
+        ?? getClipStages(activePlaybackClip, activePlaybackClip.highlightInstances, { activeExports }).instances[0]?.stage
+        ?? null
+      : getClipStage(
+        activePlaybackClip,
+        activePlaybackClip.autoProjectId ? projectsList.find(p => p.id === activePlaybackClip.autoProjectId) : null,
+        { framingInProgress: isFramingExportInProgress(activeExports, activePlaybackClip.autoProjectId) },
+      ).stage)
     : null;
 
   // --- PLAYBACK MODE ---
@@ -1226,7 +1271,18 @@ export function AnnotateModeView({
                       <Pencil size={22} />
                       {ANNOTATE.EDIT_PLAY}
                     </button>
-                    {selectedRegion && (
+                    {/* T11430: mutually exclusive with the instances collection
+                        below. selectedRegionProject is looked up from
+                        projectsList, which excludes archived (published)
+                        projects, so this single-stage CTA cannot represent a
+                        play with any real highlight instance without
+                        re-showing the original "Highlight Not Started" bug
+                        alongside the new collection. Once regionStages has
+                        ANY instance, the collection below is the single
+                        source of status/CTA for this play; this button is
+                        reserved for the true zero-instance (never made a
+                        highlight yet) case. */}
+                    {selectedRegion && (!regionStages || regionStages.instances.length === 0) && (
                       <button
                         onClick={handleFrameNow}
                         disabled={frameClipPending}
@@ -1252,6 +1308,65 @@ export function AnnotateModeView({
                       the rating + Done -> Highlight popup gesture, not a create
                       button here. The single stage CTA above remains for a play
                       that already IS a highlight (autoProjectId set, H8). */}
+                  {/* T11430: once the play has ANY highlight instance, render
+                      one badge per instance (orientation-qualified status,
+                      individually clickable) plus a primary "Make
+                      Highlight"/"Make Another Highlight" CTA that always
+                      creates a NEW project. This REPLACES the single stage
+                      CTA above (mutually exclusive — see that button's own
+                      gate) since `projectsList`/`selectedRegionProject`
+                      cannot represent an archived/published instance. */}
+                  {selectedRegion && regionStages && regionStages.instances.length > 0 && (
+                    <div className="space-y-2" data-testid="annotate-highlight-instances">
+                      {regionStages.instances.map((instance, idx) => (
+                        <button
+                          key={instance.projectId ?? `synthesized-${instance.orientation}-${idx}`}
+                          data-testid="annotate-highlight-instance-cta"
+                          onClick={async () => {
+                            if (instance.projectId == null) {
+                              // Synthesized counterpart (e.g. "Horizontal Video Not
+                              // Started"): create the MISSING orientation, not a
+                              // default-vertical duplicate (fixround1 MAJOR 2).
+                              const aspect =
+                                instance.synthesizedOrientation === 'horizontal' ? '16:9'
+                                : instance.synthesizedOrientation === 'vertical' ? '9:16'
+                                : undefined;
+                              await handleMakeAnotherHighlight(aspect);
+                              return;
+                            }
+                            const ok = onAwaitRegionWrites ? await onAwaitRegionWrites(selectedRegion.id) : true;
+                            if (!ok) return;
+                            if (instance.action === 'overlay') onOpenClipInOverlay?.(instance.projectId);
+                            else if (instance.action === 'preview' || instance.action === 'published') {
+                              // T11430 review fix: preview/published need the FULL
+                              // project shape (final_video_id, aspect_ratio, name,
+                              // clip_count, stale_share, ...) openFinishedReel reads
+                              // — a bare {id} 404s inside openClipPreview's
+                              // final_video_id guard. The instance is archived, so
+                              // it is NOT in projectsList; fetch it directly by id
+                              // (same detail endpoint, no archived_at filter).
+                              const project = await useProjectsStore.getState().fetchProject(instance.projectId);
+                              if (!project) return;
+                              onOpenClipPreview?.(project, instance.action === 'published');
+                            }
+                            else onOpenClipInFocus?.(instance.projectId);
+                          }}
+                          className="w-full min-h-[40px] py-2 px-3 rounded-lg text-sm font-semibold flex items-center justify-between gap-2 transition-colors bg-gray-700 hover:bg-gray-600 text-white"
+                        >
+                          <span>{instance.status}</span>
+                          <span className="text-cyan-300">{instance.label}</span>
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => handleMakeAnotherHighlight()}
+                        disabled={frameClipPending}
+                        data-testid="annotate-make-another-highlight-cta"
+                        className="w-full min-h-[40px] py-2 px-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors bg-cyan-700 hover:bg-cyan-600 disabled:opacity-60 text-white"
+                      >
+                        {regionStages.primaryCta.label}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <button

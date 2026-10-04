@@ -54,12 +54,16 @@
       "created_at": "<MASKED>",
       "current_mode": "framing",
       "final_video_id": null,
+      "highlight_ordinal": null,
       "id": 1,
       "is_auto_created": 0,
       "last_opened_at": null,
       "name": "T4370 Golden Fixture",
       "poster_marker_time": null,
+      "reel_source_end_time": null,
+      "reel_source_start_time": null,
       "restored_at": null,
+      "source_raw_clip_id": null,
       "working_video_id": 1
     }
   ],

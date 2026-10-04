@@ -96,14 +96,15 @@ def test_working_videos_schema_has_cascade():
 
 
 def test_projects_schema_has_set_null():
-    """projects table should have ON DELETE SET NULL on working_video_id and final_video_id."""
+    """projects table should have ON DELETE SET NULL on working_video_id,
+    final_video_id, and (T11430) source_raw_clip_id."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='projects'")
         row = cursor.fetchone()
         schema = row['sql']
-        assert schema.count('ON DELETE SET NULL') == 2, (
-            f"Expected 2 SET NULL constraints in projects, got: {schema}"
+        assert schema.count('ON DELETE SET NULL') == 3, (
+            f"Expected 3 SET NULL constraints in projects, got: {schema}"
         )
 
 
