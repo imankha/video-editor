@@ -2,6 +2,7 @@ import React from 'react';
 import { useCropContext } from '../contexts/CropContext';
 import { frameToTime } from '../../../utils/videoUtils';
 import { KeyframeMarker } from '../../../components/timeline/KeyframeMarker';
+import { FOCUS_HINTS } from '../../../config/displayNames';
 
 /**
  * CropLayer component - displays crop keyframes on the timeline
@@ -116,10 +117,13 @@ export default function CropLayer({
         {/* Background track */}
         <div className="absolute inset-0 bg-blue-900 bg-opacity-10 rounded-r-lg" />
 
-        {/* Placeholder text when no explicit keyframes (only auto-created start/end) */}
-        {visibleKeyframes.length === 2 && !isEndKeyframeExplicit && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-gray-400 text-sm">Keep your athlete in frame</span>
+        {/* T11710: empty-timeline hint. The old rule keyed on `length === 2 &&
+            !isEndKeyframeExplicit` (the retired permanent-boundary model), so with
+            the flat-list model's 0-keyframe start state nothing rendered. Show the
+            drag-naming hint when there are no focus points on the timeline. */}
+        {visibleKeyframes.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-2">
+            <span className="text-gray-400 text-sm text-center">{FOCUS_HINTS.TIMELINE_EMPTY}</span>
           </div>
         )}
 

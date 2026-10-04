@@ -78,12 +78,15 @@ describe('CropLayer trim range rendering', () => {
 
 // T3780: the empty-timeline placeholder used jargon ("Set Crop Keyframes to animate
 // crop window"). Replaced with outcome-first copy a soccer parent understands.
-describe('CropLayer placeholder copy (T3780)', () => {
-  function renderEmpty() {
+// T11710: the hint now shows at ZERO focus points (the flat-list start state) and
+// names the drag gesture — the old rule keyed on `length === 2` so nothing rendered
+// with no keyframes.
+describe('CropLayer placeholder copy (T3780, T11710)', () => {
+  function renderWith(keyframes) {
     return render(
       <CropProvider value={{ isEndKeyframeExplicit: false }}>
         <CropLayer
-          keyframes={[{ frame: 0, origin: 'permanent' }, { frame: 90, origin: 'permanent' }]}
+          keyframes={keyframes}
           duration={3}
           visualDuration={3}
           currentTime={0}
@@ -95,13 +98,18 @@ describe('CropLayer placeholder copy (T3780)', () => {
     );
   }
 
-  it('uses outcome-first copy', () => {
-    const { container } = renderEmpty();
-    expect(container.textContent).toContain('Keep your athlete in frame');
+  it('shows the drag-naming hint at zero focus points', () => {
+    const { container } = renderWith([]);
+    expect(container.textContent).toContain('No focus points yet. Drag the box on the video to add one.');
+  });
+
+  it('shows nothing once a focus point exists', () => {
+    const { container } = renderWith([{ frame: 30, origin: 'user' }]);
+    expect(container.textContent).not.toMatch(/No focus points yet/i);
   });
 
   it('drops the "Set Crop Keyframes" jargon', () => {
-    const { container } = renderEmpty();
+    const { container } = renderWith([]);
     expect(container.textContent).not.toMatch(/Set Crop Keyframes/i);
   });
 });

@@ -4,7 +4,7 @@ import ActionBand from './ActionBand';
 import PrimaryCta from './PrimaryCta';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
-import { SECTION_NAMES, EXPORT_JOBS, CREDITS, FOCUS_PREVIEW } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_JOBS, CREDITS, FOCUS_PREVIEW, FOCUS_HINTS } from '../config/displayNames';
 import { HIGH_FPS_THRESHOLD } from '../constants/exportFps';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 
@@ -153,7 +153,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           className="flex items-center gap-1.5 text-xs text-amber-400"
         >
           <AlertCircle size={12} className="shrink-0" />
-          <span>Set at least one focus point to generate</span>
+          <span>{FOCUS_HINTS.GENERATE_LOCKED}</span>
         </div>
       )}
 

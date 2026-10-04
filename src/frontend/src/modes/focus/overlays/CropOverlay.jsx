@@ -1,5 +1,6 @@
 import { useRef, useEffect, useLayoutEffect, useState, useCallback } from 'react';
-import { RotateCcw, Minus, Plus } from 'lucide-react';
+import { RotateCcw, Minus, Plus, Move } from 'lucide-react';
+import { FOCUS_HINTS } from '../../../config/displayNames';
 import versionInfo from '../../../version.json';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
 import { MAX_ROT, rotatedFrameCorners } from '../../../utils/rotationSafeArea';
@@ -58,7 +59,15 @@ export default function CropOverlay({
   // can disable the "Set focus point" button while the live crop box is still
   // moving. Fired once per gesture at pointer down/up/cancel — never per move
   // (the move path stays ref-based, no re-render). Memory-only view signal.
-  onDragStateChange
+  onDragStateChange,
+  // T11710: the 0-focus-point coaching cues (amber ring on the box + "Drag the
+  // box onto your player" chip). Shown ONLY while the clip has no focus points
+  // and the user is neither dragging nor playing. Purely derived from these
+  // props — no state, nothing persisted; both disappear the moment the first
+  // focus point exists.
+  focusPointCount = 0,
+  isDragging = false,
+  isPlaying = false
 }) {
   // Transient drag/resize state lives in refs (not useState) so the window
   // move/up listeners can be attached synchronously in the pointer-down handler
@@ -553,6 +562,10 @@ export default function CropOverlay({
 
   const cropTooSmall = isCropTooSmall();
 
+  // T11710: the 0-focus-point coaching cues. Not during preview (chromeHidden),
+  // a drag, or playback — derived, never stored.
+  const showCoach = focusPointCount === 0 && !isDragging && !isPlaying && !chromeHidden;
+
   const handles = [
     { name: 'nw', cursor: 'nw-resize', x: 0, y: 0 },
     { name: 'n', cursor: 'n-resize', x: 0.5, y: 0 },
@@ -629,7 +642,7 @@ export default function CropOverlay({
 
       {/* Crop rectangle */}
       <div
-        className={`absolute border-2 ${interactive ? 'cursor-move pointer-events-auto' : 'pointer-events-none'} ${cropTooSmall ? 'border-red-500' : 'border-white'}`}
+        className={`absolute border-2 ${interactive ? 'cursor-move pointer-events-auto' : 'pointer-events-none'} ${cropTooSmall ? 'border-red-500' : 'border-white'} ${showCoach ? 'ring-2 ring-amber-400/70 animate-pulse motion-reduce:animate-none rounded-sm' : ''}`}
         style={{
           left: `${screenCrop.x}px`,
           top: `${screenCrop.y}px`,
@@ -805,6 +818,20 @@ export default function CropOverlay({
           >
             <RotateCcw size={14} />
           </button>
+        </div>
+      )}
+
+      {/* T11710: coach chip — pinned to the TOP CENTER of the video (not to the
+          box, which can be ~70px wide at 390px). pointer-events-none so it never
+          blocks a drag on the box. Hidden while dragging / playing / once a focus
+          point exists (all folded into showCoach). */}
+      {showCoach && (
+        <div
+          data-testid="focus-coach-chip"
+          className="absolute top-2 left-1/2 -translate-x-1/2 pointer-events-none flex items-center gap-1.5 whitespace-nowrap rounded-full border border-amber-400/60 bg-gray-900/90 px-3 py-1 text-xs font-medium text-amber-100 shadow-lg"
+        >
+          <Move size={14} aria-hidden="true" />
+          {FOCUS_HINTS.COACH_DRAG}
         </div>
       )}
     </div>

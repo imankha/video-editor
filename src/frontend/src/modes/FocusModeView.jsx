@@ -730,6 +730,9 @@ export function FocusModeView({
                     interactive={!mobileFs || touchMode === 'crop'}
                     chromeHidden={previewActive}
                     onDragStateChange={setIsCropDragging}
+                    focusPointCount={focusPointCount}
+                    isDragging={isCropDragging}
+                    isPlaying={isPlaying}
                   />
                 ),
               ].filter(Boolean)}

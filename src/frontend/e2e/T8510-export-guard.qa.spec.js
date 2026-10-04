@@ -20,7 +20,10 @@ import { loginAsRealUser } from './helpers/realAuth.js';
 import { saveEvidence } from './helpers/qa.js';
 
 const CAPTION = '[data-testid="export-unframed-caption"]';
-const EXPORT_BUTTON = 'button:has-text("Generate Framing")';
+// T11700/T11720: the framing CTA label is "Generate Highlight" (EXPORT_JOBS.framing
+// .action) — the old "Generate Framing" locator was stale and never matched.
+const EXPORT_BUTTON = 'button:has-text("Generate Highlight")';
+const SET_FOCUS_POINT = '[data-testid="set-focus-point-button"]';
 
 test('T8510: unframed clip disables export with an in-viewport reason at 390x844', async ({ context, page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -52,8 +55,48 @@ test('T8510: unframed clip disables export with an in-viewport reason at 390x844
   await expect(caption, 'caption in-viewport at 390x844 alongside the button').toBeInViewport();
   await expect(exportBtn, 'button itself still in-viewport with the caption').toBeInViewport();
   const captionText = (await caption.textContent()) || '';
+  // T11710: the caption now NAMES the fix (drag the box, then tap Set focus point),
+  // not just the block.
   expect(captionText, 'caption explains the fix, not just the block')
-    .toMatch(/Set at least one focus point/);
+    .toMatch(/Move the box onto your player/);
 
   await saveEvidence(page, 'T8510-guard-disabled-caption-390x844');
 });
+
+// T11700: one tap on "Set focus point" (no drag) creates a focus point and enables
+// Generate. Proven at the phone and desktop viewports the audit used.
+for (const vp of [{ w: 390, h: 844 }, { w: 1440, h: 900 }]) {
+  test(`T11700: tap Set focus point enables Generate at ${vp.w}x${vp.h}`, async ({ context, page }) => {
+    await page.setViewportSize({ width: vp.w, height: vp.h });
+
+    await loginAsRealUser(context, 'imankh@gmail.com', '9fa7378c');
+    await page.goto('/');
+    await page.waitForTimeout(1500);
+
+    const notStarted = page.locator('[data-testid="project-card"]', { hasText: 'Not started' });
+    await notStarted.first().waitFor({ timeout: 8000 }).catch(() => {});
+    test.skip(
+      (await notStarted.count()) === 0,
+      '[T11700] no "Not started" framing draft on this account (FIXTURE-CONTRACT gap: needs an un-started draft)',
+    );
+    await notStarted.first().click();
+
+    const exportBtn = page.locator(EXPORT_BUTTON).first();
+    await exportBtn.waitFor({ timeout: 30000 });
+    await expect(exportBtn, 'Generate disabled on a fresh unframed clip').toBeDisabled();
+
+    // The visible "Set focus point" button (desktop row at sm+, portrait row below).
+    const setBtn = page.locator(`${SET_FOCUS_POINT}:visible`).first();
+    await setBtn.waitFor({ timeout: 10000 });
+    await setBtn.scrollIntoViewIfNeeded();
+    await expect(setBtn, 'amber Set focus point shown at 0 focus points').toContainText(/Set focus point/i);
+
+    await setBtn.click();
+
+    // One tap, no drag -> Generate enables immediately.
+    await expect(exportBtn, 'Generate enabled after one Set focus point tap').toBeEnabled();
+    await expect(page.locator(CAPTION), 'unframed caption gone once framed').toHaveCount(0);
+
+    await saveEvidence(page, `T11700-set-focus-point-enables-generate-${vp.w}x${vp.h}`);
+  });
+}

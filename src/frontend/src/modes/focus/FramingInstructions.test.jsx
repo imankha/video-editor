@@ -18,10 +18,11 @@ describe('FramingInstructions (T9610)', () => {
 
     // No numbered list anymore -- plain instructional paragraph, no "keyframe".
     expect(screen.getByTestId('framing-instructions').querySelector('ol')).toBeNull();
+    // T11710: the steps now NAME the drag gesture and the Set focus point button.
     const steps = screen.getByTestId('framing-instructions-steps').textContent;
-    expect(steps).toMatch(/move the box so it captures your athlete and the play/i);
-    expect(steps).toMatch(/re-adjust the box as needed so it stays focused on your player/i);
-    expect(steps).toMatch(/slow-mo to capture key athlete movements/i);
+    expect(steps).toMatch(/drag the box onto your player/i);
+    expect(steps).toMatch(/letting go sets a focus point/i);
+    expect(steps).toMatch(/tap set focus point/i);
 
     // T9860 3.5: the stage reason is stated above the instructional copy, and reads
     // as the headline -- font-medium/gray-200 vs the steps' plain gray-300. Both are
@@ -43,6 +44,15 @@ describe('FramingInstructions (T9610)', () => {
     const el = screen.getByTestId('framing-instructions');
     expect(el.textContent.toLowerCase()).toContain('focus point');
     expect(el.textContent.toLowerCase()).not.toContain('keyframe');
+  });
+
+  it('T11710: makes the only motion claim the allowed one, and never says track/follow/center/automatic', () => {
+    render(<FramingInstructions focusPointCount={0} expanded onToggle={vi.fn()} />);
+    const text = screen.getByTestId('framing-instructions').textContent;
+    expect(text).toMatch(/moves smoothly between the focus points you set/i);
+    expect(text).not.toMatch(/\b(track|follow|follows|automatic|center|centers)\b/i);
+    expect(text).not.toMatch(/—/); // no em dash
+    expect(text.toLowerCase()).toContain('frame your player');
   });
 
   it('collapses to a plain "Instructions" header, no play icon or step list', () => {
