@@ -98,6 +98,37 @@ class DecisionTests(unittest.TestCase):
         self.review['blocking'] = 1
         self.assertTrue(self.check())
 
+    def test_reviewer_role_cannot_use_proof_verifier_verdict_word(self):
+        # T11310: a reviewer-role capture that returns the proof-verifier's 'VERIFIED'
+        # word must be rejected even when the review content is otherwise clean and no
+        # human-only gap is recorded. The interim mitigation accepted 'VERIFIED' for the
+        # reviewer role; the structural fix narrows it back to the reviewer's own vocab.
+        self.review['verdict'] = 'VERIFIED'
+        self.assertIn('Code review has not approved', self.check())
+        self.review['verdict'] = 'NEEDS_REVISION'
+        self.assertIn('Code review has not approved', self.check())
+        # The proof-verifier role likewise cannot borrow the reviewer's 'APPROVED' word.
+        self.proof['verdict'] = 'APPROVED'
+        self.assertTrue(self.check())
+
+    def test_role_schemas_do_not_share_cross_role_verdict_words(self):
+        # T11310 structural fix: the schema handed to each capture role lists only that
+        # role's verdict words (plus the intentionally-shared HUMAN_VERIFICATION_REQUIRED),
+        # so the model cannot emit the other role's vocabulary at generation time.
+        reviewer = gate.report_schema('reviewer')['properties']['verdict']['enum']
+        proof = gate.report_schema('proof-verifier')['properties']['verdict']['enum']
+        self.assertIn('APPROVED', reviewer)
+        self.assertIn('NEEDS_REVISION', reviewer)
+        self.assertNotIn('VERIFIED', reviewer)
+        self.assertNotIn('MORE_PROOF_REQUIRED', reviewer)
+        self.assertIn('VERIFIED', proof)
+        self.assertIn('MORE_PROOF_REQUIRED', proof)
+        self.assertNotIn('APPROVED', proof)
+        self.assertNotIn('NEEDS_REVISION', proof)
+        # HUMAN_VERIFICATION_REQUIRED is intentionally valid for both roles (T10860).
+        self.assertIn('HUMAN_VERIFICATION_REQUIRED', reviewer)
+        self.assertIn('HUMAN_VERIFICATION_REQUIRED', proof)
+
     def test_wrong_repository_and_draft_block(self):
         self.pr['head']['repo']['full_name'] = 'someone/else'
         self.assertTrue(self.check())

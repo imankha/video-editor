@@ -83,11 +83,34 @@ failure mode. Note for whoever picks this up: yes, this interim fix was hotfixed
 an active landing, which is exactly what this task's own Solution section said not to do -
 logged here for transparency, not as a precedent.
 
+**2026-10-03 (structural fix implemented, branch `feature/T11310-...`, not yet merged)**:
+Implemented both options. (1) Replaced the shared `REPORT_SCHEMA` with a per-role
+`report_schema(role)` builder (`landing_gate.py`): reviewer enum is
+`APPROVED`/`NEEDS_REVISION`, proof-verifier enum is `VERIFIED`/`MORE_PROOF_REQUIRED`;
+`HUMAN_VERIFICATION_REQUIRED` stays valid for both roles because T10860 relies on either
+role being able to flag a disclosed human-only gap it cannot authenticate itself — removing
+it from the reviewer enum would silently regress that capability at capture time even though
+the `evaluate()`-level T10860 test still passes. `capture()` now builds the schema from
+`args.role`, so the model cannot generate the other role's verdict word. `REPORT_SCHEMA['required']`
+became a `REPORT_REQUIRED` constant (the required-key set is role-independent); grepped `src/`,
+`e2e/`, `scripts/`, `.claude/` — no other `REPORT_SCHEMA` callers. (2) Added the role's literal
+required words to the `capture()` prompt as cheap insurance. (3) **Reverted** `evaluate()`'s
+interim `verdict in ('APPROVED', 'VERIFIED')` back to strict `('APPROVED',)` for the reviewer
+role (kept the T10860 `HUMAN_VERIFICATION_REQUIRED`-when-human-recorded allowance). Kept a
+`evaluate()`-level check rather than relying on schema alone: it is cheap defense in depth and
+is what the acceptance-criteria red-green test exercises directly (schema validation happens in
+the live CLI, not in-process). Red-then-green proven: `test_reviewer_role_cannot_use_proof_verifier_verdict_word`
+failed against the interim-mitigation revision (`AssertionError: 'Code review has not approved'
+not found in []`) and passes after. `test_landing_gate.py` 20/20 and `test_ci_policy.py` 14/14
+green; no regressions. No change to the bootstrap/policy-review gate (`check()`'s
+`policy_changes_approved` requirement untouched). Trusted-controller landing is the supervisor's
+job, not self-certified by this branch.
+
 ## Acceptance Criteria
 
-- [ ] Red-then-green: a test asserting a reviewer-role capture with `verdict: "VERIFIED"`
+- [x] Red-then-green: a test asserting a reviewer-role capture with `verdict: "VERIFIED"`
       is rejected (either at schema-validation time, if role-split, or by `evaluate()`)
       fails on current `landing_gate.py`, passes after
-- [ ] `python scripts/test_ci_policy.py` and `python scripts/test_landing_gate.py` pass
-- [ ] No change to the trusted-controller bootstrap/policy-review requirement itself
-- [ ] `docs/plans/landing-gate-usage.md`'s "Known issue" note updated to reflect the fix
+- [x] `python scripts/test_ci_policy.py` and `python scripts/test_landing_gate.py` pass
+- [x] No change to the trusted-controller bootstrap/policy-review requirement itself
+- [x] `docs/plans/landing-gate-usage.md`'s "Known issue" note updated to reflect the fix
