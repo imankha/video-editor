@@ -60,13 +60,13 @@ calibration dispatches hit no such error on the same staging app).
 ## Implementation
 
 ### Steps
-1. [ ] Check whether PRODUCTION's `compose_image` has the same gap (urgent to know regardless of
+1. [x] Check whether PRODUCTION's `compose_image` has the same gap (urgent to know regardless of
    fix timing)
-2. [ ] Confirm root cause: reproduce the exact import chain failure locally/in a scratch Modal
+2. [x] Confirm root cause: reproduce the exact import chain failure locally/in a scratch Modal
    dispatch
-3. [ ] Fix `compose_image`'s dependency list (or narrow the import surface) so
+3. [x] Fix `compose_image`'s dependency list (or narrow the import surface) so
    `compose_serve_time_modal` actually runs on Modal
-4. [ ] Redeploy to staging, verify with a real dispatch (confirm no fallback-to-local log line)
+4. [x] Redeploy to staging, verify with a real dispatch (confirm no fallback-to-local log line)
 5. [ ] Redeploy to production after staging verification (ask before deploying, per CLAUDE.md
    Modal deploy rules)
 
@@ -75,10 +75,34 @@ calibration dispatches hit no such error on the same staging app).
 **2026-10-02**: Filed from a real Modal dispatch failure observed while measuring T11590's AC7
 latency claim. Not started.
 
+**2026-10-03/04**: Root cause confirmed (import chain `app.services.branded_outro` ->
+`app/services/__init__.py`'s eager import of `image_extractor.py` -> module-level
+`from ..database import get_highlights_path` -> full `app.database`/`app.migrations` tree ->
+`v004_overlay_tuning.py`'s module-level `import msgpack`). Confirmed live on PRODUCTION too via
+a diagnostic dispatch against the deployed `reel-ballers-video-v2` app before any fix (same
+`ModuleNotFoundError: No module named 'msgpack'`). Fixed by making `image_extractor.py`'s DB
+import lazy (`src/backend/app/services/image_extractor.py`), matching the existing pattern in
+`clip_cache.py`. Reviewer APPROVED + Proof Verifier VERIFIED (independent red-to-green
+reproduction via isolated worktree, confirmed no other eagerly-imported `app.services.*`
+submodule has the same gap). Merged PR #556 (`c5644a0a`).
+
+**2026-10-04 (staging deployed + verified, user-approved)**: `python app/modal_functions/deploy.py`
+(staging target) succeeded -- `compose_serve_time_modal` listed among the created functions
+(`deploy_result.staging.txt`). Verification dispatch against the deployed staging app
+(`reel-ballers-video-v2-staging`) with a deliberately nonexistent `reel_key`: the error changed
+from the original `ModuleNotFoundError: No module named 'msgpack'` (failing at import time,
+before the function body even runs) to `ClientError: 404 Not Found` from R2's `HeadObject` (the
+function imported cleanly and executed, failing only on the deliberately-bad input) -- this IS
+the Modal container's own execution result, not the backend's fallback log, confirming the fix
+works on staging. Production redeploy still needs explicit ask (step 5) before proceeding.
+
 ## Acceptance Criteria
 
-- [ ] A real `compose_serve_time_modal` dispatch on staging succeeds without falling back to local
+- [x] A real `compose_serve_time_modal` dispatch on staging succeeds without falling back to local
       (confirmed via the Modal container's own logs, not just the backend's non-fatal fallback log)
-- [ ] Production checked for the same gap; fixed there too if present
-- [ ] `.claude/knowledge/modal-gpu.md`'s `compose_serve_time_modal` entry updated if the fix
+- [ ] Production checked for the same gap; fixed there too if present (confirmed AFFECTED via a
+      live pre-fix diagnostic dispatch; the code fix is merged to master but production's
+      deployed Modal image still runs the OLD code until step 5's redeploy happens -- not fixed
+      on production yet)
+- [x] `.claude/knowledge/modal-gpu.md`'s `compose_serve_time_modal` entry updated if the fix
       changes anything about the image/import shape
