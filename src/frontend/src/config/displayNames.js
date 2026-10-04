@@ -768,6 +768,22 @@ export const CREDITS = {
     `${formatLength(exactSeconds, PRECISION.TENTH)} of video · ${credits} credit${credits === 1 ? '' : 's'} · ${CREDITS.PER_SECOND_RULE}.`,
 };
 
+// T11770: the shared cost/balance row (CreditCostRow) used by the four credit
+// modals. Labels are formatters (not bare strings) so the "credits" noun and its
+// singular/plural stay with the number in one source — the row renders
+// "Cost: 2 credits" / "Balance: 54 credits".
+export const CREDIT_COST_ROW = {
+  COST: (n) => `Cost: ${n} credit${n === 1 ? '' : 's'}`,
+  BALANCE: (n) => `Balance: ${n} credit${n === 1 ? '' : 's'}`,
+};
+
+// T11770: the retention note shown under the cost row on the Upload game modal.
+// "30 days" stays a literal here, matching RETENTION.SOURCE and every other copy
+// of this fact in the app — there is no numeric retention-days constant to read.
+export const UPLOAD = {
+  GAME_RETENTION_NOTE: 'Your game video is kept for 30 days.',
+};
+
 // Retention, stated as the three distinct outcomes confirmed in the T9680
 // decision record (never "everything survives" or "everything is lost"). The
 // public landing site states the same three facts. No em dashes.

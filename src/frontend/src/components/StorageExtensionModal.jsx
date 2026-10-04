@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, lazy, Suspense } from 'react';
 import { X, Coins, HardDrive, Calendar } from 'lucide-react';
 import { Button } from './shared/Button';
+import { CreditCostRow } from './shared/CreditCostRow';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 import { toast } from './shared';
@@ -173,13 +174,11 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
           </div>
 
           {/* Balance */}
-          <div className="flex items-center justify-between px-3 py-2 rounded-lg text-sm bg-gray-700/50 text-gray-300">
-            <div className="flex items-center gap-2">
-              <Coins size={14} className="text-yellow-400" />
-              <span>{credits} credit{credits !== 1 ? 's' : ''} for {extensionDays} days</span>
-            </div>
-            <span className="font-medium text-white">Balance: {creditBalance}</span>
-          </div>
+          <CreditCostRow
+            cost={credits}
+            balance={creditBalance}
+            note={`for ${extensionDays} days`}
+          />
 
           {/* Extend button */}
           <Button
