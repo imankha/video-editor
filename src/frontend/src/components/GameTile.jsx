@@ -294,10 +294,12 @@ export function GameTile({
           (secondary line; T8260 relabeled "clips" -> "annotations" and added reels).
           One structure for BOTH the poster and the fallback -- this div is always
           rendered (not gated on posterState), so it overlays whichever variant is
-          showing beneath it. Name is a single truncated line (tiles run as small
-          as ~90px tall at the 2-up 390px breakpoint, so no 2-line clamp here). The
-          gradient is opaque enough at the base to stay legible over a bright
-          poster frame. */}
+          showing beneath it. T11760: the name now wraps to at most two lines
+          (`line-clamp-2`) instead of truncating to one -- phones are one column so a
+          tile is ~358x200 with room for a 2-line opponent name. The scrim auto-sizes
+          to its content (bottom-anchored with padding), so it still fully covers a
+          2-line name on the shortest tile. The gradient is opaque enough at the base
+          to stay legible over a bright poster frame. */}
       <div className={`absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 ${isUploadFailed ? 'pb-9' : 'pb-1.5'}`}>
         {/* T6890: the edit (rename) pencil sits beside the game name it edits,
             instead of only inside the top-right kebab. Same "icon touches the name"
@@ -306,7 +308,7 @@ export function GameTile({
             T7490: hidden for a failed upload — you can't meaningfully rename a dead
             upload, and its hit target would compete with the action bar. */}
         <div className="flex items-center gap-1">
-          <h3 className="flex-1 min-w-0 text-white text-xs sm:text-sm font-medium truncate drop-shadow" title={game.name}>
+          <h3 className="flex-1 min-w-0 text-white text-xs sm:text-sm font-medium line-clamp-2 break-words leading-tight drop-shadow" title={game.name}>
             {game.name}
           </h3>
           {!isUploadFailed && (

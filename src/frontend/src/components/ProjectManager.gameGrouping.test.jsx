@@ -21,7 +21,14 @@ vi.mock('../hooks/useIsMobile', () => ({
   useIsLandscape: () => false,
 }));
 
-import { groupGamesForTab, gamesGridColumns, GAMES_TILE_GRID_BY_COLUMNS } from './ProjectManager';
+import {
+  groupGamesForTab,
+  gamesGridColumns,
+  gamesGroupSpan,
+  GRID_COLS,
+  COL_SPAN,
+  GAMES_TILE_GRID_BY_COLUMNS,
+} from './ProjectManager';
 
 // T7330 replaced the {groups, order} pair with ONE ordered array (two kinds of group make a
 // string-keyed map inexpressive). Every T7290 case below keeps its fixtures and assertions
@@ -383,18 +390,21 @@ describe('groupGamesForTab — tournament grouping (T7330)', () => {
   });
 });
 
-describe('gamesGridColumns — desktop density follows the data (T7330)', () => {
+describe('gamesGridColumns — tablet/desktop density follows the data (T7330, T11760)', () => {
   const groupsOf = (...sizes) => sizes.map(n => ({ games: Array.from({ length: n }) }));
 
+  // T11760: this is the column count at sm and up ONLY. Phones are always one column
+  // (the container's grid-cols-1 base), so two 1-game months still need N >= 2 here to
+  // sit side by side once past the sm breakpoint.
   it('uses the largest group, so rows fill completely', () => {
     expect(gamesGridColumns(groupsOf(2, 2, 2, 1))).toBe(2);   // the reporting account
     expect(gamesGridColumns(groupsOf(3, 1))).toBe(3);
     expect(gamesGridColumns(groupsOf(4, 2))).toBe(4);
   });
 
-  it('clamps to [2, 4] — never a lone giant tile, never a 30-column row', () => {
+  it('clamps to [2, 4] at sm+ — never a lone giant tile, never a 30-column row', () => {
     expect(gamesGridColumns([])).toBe(2);
-    expect(gamesGridColumns(groupsOf(1))).toBe(2);
+    expect(gamesGridColumns(groupsOf(1))).toBe(2);   // one 1-game month still packs 2-up at sm+
     expect(gamesGridColumns(groupsOf(8))).toBe(4);
     expect(gamesGridColumns(groupsOf(30))).toBe(4);
   });
@@ -404,7 +414,35 @@ describe('gamesGridColumns — desktop density follows the data (T7330)', () => 
       const columns = gamesGridColumns(groupsOf(n));
       const cls = GAMES_TILE_GRID_BY_COLUMNS[columns];
       expect(cls, `no grid class for ${columns} columns`).toBeTruthy();
-      expect(cls).toContain('grid-cols-2');   // the mobile floor is always present
+      // T11760: phones get ONE column now (was two); the grid widens from sm up.
+      expect(cls).toContain('grid-cols-1');
+      expect(cls).toMatch(/sm:grid-cols-[234]/);
+    }
+  });
+});
+
+describe('gamesGroupSpan — a group packs to its own width at sm+ (T11760)', () => {
+  it('spans min(cells, columns): small months pack side by side, full months fill the row', () => {
+    expect(gamesGroupSpan(1, 2)).toBe(1);   // a 1-game month -> half of a 2-col row
+    expect(gamesGroupSpan(2, 2)).toBe(2);   // a 2-game month -> the whole 2-col row
+    expect(gamesGroupSpan(1, 4)).toBe(1);
+    expect(gamesGroupSpan(3, 4)).toBe(3);
+    expect(gamesGroupSpan(9, 4)).toBe(4);   // never wider than the row
+  });
+
+  it('never returns less than 1, even for an empty cell count', () => {
+    expect(gamesGroupSpan(0, 2)).toBe(1);
+  });
+
+  it('every reachable density and span has a LITERAL class (Tailwind purge safety)', () => {
+    // Densities come from gamesGridColumns (2-4); spans from gamesGroupSpan (1..density).
+    for (const n of [2, 3, 4]) {
+      expect(GRID_COLS[n], `no outer grid class for ${n}`).toBeTruthy();
+      expect(GRID_COLS[n]).toContain(`sm:grid-cols-${n}`);
+    }
+    for (const s of [1, 2, 3, 4]) {
+      expect(COL_SPAN[s], `no col-span class for ${s}`).toBeTruthy();
+      expect(COL_SPAN[s]).toContain(`sm:col-span-${s}`);
     }
   });
 });

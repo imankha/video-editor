@@ -36,7 +36,9 @@ describe('GamesListSkeleton (T6310)', () => {
     // Uses the SHARED map rather than a private copy -- a class string spelled out here
     // would be exactly the drift T6310 was filed for.
     expect(shellGrid.className).toBe(GAMES_TILE_GRID_BY_COLUMNS[2]);
-    expect(hasClasses(shellGrid, 'grid-cols-2', 'gap-2', 'sm:gap-3', 'lg:gap-4')).toBe(true);
+    // T11760: one column on phones (matching the loaded grid so there is no jump on load),
+    // widening to 2-up from the sm breakpoint.
+    expect(hasClasses(shellGrid, 'grid-cols-1', 'sm:grid-cols-2', 'gap-2', 'sm:gap-3', 'lg:gap-4')).toBe(true);
     // No vertical list stack.
     expect(getByTestId('games-skeleton').querySelector('.space-y-2')).toBeNull();
   });
@@ -58,11 +60,11 @@ describe('GamesListSkeleton (T6310)', () => {
     });
   });
 
-  it('defaults count to 4: two full 2-up rows at every breakpoint', () => {
+  it('defaults count to 4 shells (one column on phones, two full rows from sm up)', () => {
     const { getByTestId } = render(<GamesListSkeleton />);
     const shells = getByTestId('games-skeleton').querySelectorAll('.aspect-video');
-    // The 2-column grid holds at all widths, so 4 shells = exactly two full rows
-    // everywhere -- no ragged partial row at any breakpoint.
+    // T11760: phones stack all 4 shells in one column; from sm the 2-column grid makes
+    // exactly two full rows -- no ragged partial row at sm or above.
     expect(shells.length).toBe(4);
   });
 
