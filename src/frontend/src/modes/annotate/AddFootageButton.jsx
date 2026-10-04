@@ -209,14 +209,16 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
           // T10393 (user request): the compact timeline-cell trigger (T10390)
           // wasn't prominent enough to get clicked, so this now lives as a
           // third button in the whole-game CTA row, alongside Preview/Share
-          // plays -- same size/shape as its siblings there. `link` matches
-          // that row's own de-emphasized zero-clips state (tiny text links).
+          // plays -- same size/shape as its siblings there.
+          // T11750: the `link` variant is the zero-plays row's visibly tappable
+          // outlined secondary control -- same enabled styling as the Share
+          // button beside it (44px tap target, inset ring, light text).
           variant === 'link'
-            ? 'text-xs text-gray-400 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1'
+            ? 'min-h-11 px-3 rounded-lg text-sm text-gray-100 ring-1 ring-inset ring-white/20 hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5'
             : 'flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 disabled:cursor-not-allowed text-white'
         }
       >
-        <FilePlus size={variant === 'link' ? 12 : 18} className="shrink-0" />
+        <FilePlus size={variant === 'link' ? 16 : 18} className="shrink-0" />
         {variant === 'link' ? (
           <span>Add footage</span>
         ) : (

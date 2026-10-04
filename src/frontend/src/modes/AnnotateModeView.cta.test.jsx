@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * T8130 — Annotate primary CTA hierarchy.
@@ -26,8 +26,10 @@ vi.mock('./annotate', () => ({
   AnnotateFullscreenOverlay: () => <div />,
 }));
 vi.mock('./annotate/components/PlaybackControls', () => ({ default: () => <div /> }));
+const { toastInfo } = vi.hoisted(() => ({ toastInfo: vi.fn() }));
 vi.mock('../components/shared', () => ({
   Button: ({ children }) => <button>{children}</button>,
+  toast: { info: toastInfo },
 }));
 vi.mock('../hooks/useIsMobile', () => ({
   useIsMobile: () => false,
@@ -90,6 +92,8 @@ function renderView(overrides = {}) {
 }
 
 describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
+  beforeEach(() => toastInfo.mockClear());
+
   it('renders "Add Play" as a full-width, >=44pt primary button — the loudest element', () => {
     renderView({ hasAnnotateClips: false });
     const cta = screen.getByRole('button', { name: /mark play/i });
@@ -122,13 +126,41 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     expect(screen.queryByText(/automatically saved to your library/i)).toBeNull();
   });
 
-  it('demotes Playback Annotations to text-level (not a prominent button) until a clip exists', () => {
+  it('locks Review plays until a clip exists: aria-disabled (still tappable), not the disabled attribute, no prominence padding', () => {
     renderView({ hasAnnotateClips: false });
     const playback = screen.getByRole('button', { name: /review plays/i });
-    // Text-level demotion: small text, no full prominence padding/background.
-    expect(playback.className).toMatch(/text-xs/);
+    // T11750: locked (not disabled) — a tap still lands to show the toast.
+    expect(playback.getAttribute('aria-disabled')).toBe('true');
+    expect(playback.disabled).toBe(false);
+    // The row stays below the hero: no fill padding.
     expect(playback.className).not.toMatch(/py-3/);
-    expect(playback.disabled).toBe(true);
+  });
+
+  it('shows the locked toast once (deduped) when Review plays is tapped with zero plays, and never enters playback', () => {
+    const enterPlaybackMode = vi.fn();
+    renderView({ hasAnnotateClips: false, playback: { isPlaybackMode: false, enterPlaybackMode } });
+    const playback = screen.getByRole('button', { name: /review plays/i });
+    playback.click();
+    playback.click();
+    expect(enterPlaybackMode).not.toHaveBeenCalled();
+    expect(toastInfo).toHaveBeenCalledWith('Mark your first play to review it.', {
+      dedupKey: 'review-locked',
+    });
+    // Dedupe is the toast store's job (same dedupKey replaces), so the view may
+    // call info() per tap — the key is what collapses them to one visible toast.
+    expect(toastInfo.mock.calls.every(([, opts]) => opts?.dedupKey === 'review-locked')).toBe(true);
+  });
+
+  it('renders Share and Add footage as visibly tappable outlined controls in the zero-plays row (>=44px, outline, light text)', () => {
+    renderView({ hasAnnotateClips: false, onSharePlayback: vi.fn(), addFootage: { gameId: 'g1', disabled: false, onFootageAttached: vi.fn() } });
+    const share = screen.getByRole('button', { name: /share/i });
+    const addFootage = screen.getByRole('button', { name: /add footage/i });
+    for (const btn of [share, addFootage]) {
+      expect(btn.className).toMatch(/min-h-11/); // 44px tap target
+      expect(btn.className).toMatch(/ring-1/); // visible outline
+      expect(btn.className).toMatch(/text-gray-100/); // light (not dimmed) text
+      expect(btn.className).not.toMatch(/text-xs/); // no longer tiny
+    }
   });
 
   it('promotes Playback Annotations to a full button once clips exist, and hides the first-use hint', () => {
