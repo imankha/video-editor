@@ -169,6 +169,25 @@ postgres track runs on an admin trigger anyway.
 6. [ ] Backfill script, dry-run first
 7. [ ] Tests, then run the backfill against staging before prod
 
+### Progress Log
+
+**2026-10-04 (confirmed NOT yet run on production)**: Auditing everything merged since the
+last prod deploy (`deploy/frontend/2026-09-29`) found this backfill step, documented in this
+task's own Status line since 2026-09-24, was never actually executed against production. The
+`payments` ledger is confirmed empty on prod while 4 real accounts carry $42.96 of historical
+Stripe purchases ($12.99 x3 + $3.99 x1) that exist only in the legacy per-user cache
+(`tests/test_t8657_paying_filter_ledger.py`'s fixture comment, "Production shape after
+backfill", documents the exact production state as observed). This was a silent gap (admin
+revenue views just showed a number that quietly disagreed with the cache) until newer commits
+in this same unreleased range added `_assert_payments_ledger_ready` (`admin.py:196`), which now
+hard-503s `GET /api/admin/users` and `GET /api/admin/analytics/pulse` with
+`payments_ledger_backfill_required` whenever this condition holds — so the NEXT production
+deploy turns this from a silent discrepancy into a visible outage on those two endpoints unless
+the backfill runs immediately after. Added as a Pending One-Time Step in
+`.claude/skills/deploy/SKILL.md` so it can't be missed again: `cd src/backend &&
+.venv/Scripts/python.exe ../../scripts/backfill_payments_ledger.py --env prod --write
+--i-am-the-operator`.
+
 ## Acceptance Criteria
 
 - [ ] A live purchase writes exactly one `payments` row; a webhook redelivery of the same
