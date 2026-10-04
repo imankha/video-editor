@@ -14,7 +14,8 @@ misclassifies 768-1023 tablets). ModeSwitcher's `inline` variant carries the res
 its click/lock logic, `aria-disabled`, lock icon, and T8480 toast are UNTOUCHED. Dead
 `MODE_ICONS`/`ModeIcon` removed from UnifiedHeader.jsx. Header grows ~40px->~100px on phones —
 accepted. Do NOT use `overflow-x-hidden` (clips Add Spotlight). A separate pre-existing 320px
-overflow lives in AnnotateModeView.jsx (T11750's chain), out of scope here. **LANDMINE (compact
+overflow lives in AnnotateModeView.jsx (owned by T11780; T11750 covers only the zero-plays action
+row), out of scope here. **LANDMINE (compact
 header right edge):** on Focus the rightmost chip is `FramingHeaderStatus`->`Disc` whose DONE
 (framed) state renders a check badge `absolute -right-1 -bottom-1` that overhangs its corner ~4px;
 with the chips right-pinned (`ml-auto`), that decorative overhang poked 3px past the 390px header
