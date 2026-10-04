@@ -3,12 +3,15 @@
 // a 2-line opponent-name wrap, two 1-game months packing side by side at sm, and a skeleton
 // whose columns match the loaded grid) can be proven at each target width.
 //
-// FIDELITY: the loaded grid is composed from the SAME exported functions and class maps the
-// real ProjectManager renders (groupGamesForTab / gamesGridColumns / gamesGroupSpan + GRID_COLS
-// / COL_SPAN / GAMES_TILE_COLS_SM / GAMES_TILE_COLS_LG / GAMES_GROUP_SECTION_CLASS), and uses the
-// real GameTile and the real exported GamesListSkeleton. The jsdom galleryGuard test pins that
-// the live ProjectManager emits these exact classes, so this harness cannot drift from what
-// ships. No backend: poster fetches 404 -> GameTile's branded fallback, which is fine here.
+// FIDELITY: this LoadedGrid is a CLOSE reimplementation of ProjectManager's games-grid block,
+// built from the SAME exported functions and class maps it renders (groupGamesForTab /
+// gamesGridColumns / gamesPackColumns / gamesGroupSpan + GRID_COLS / COL_SPAN / GAMES_TILE_COLS_SM
+// / GAMES_TILE_COLS_LG / GAMES_GROUP_SECTION_CLASS) and the real GameTile + the real exported
+// GamesListSkeleton -- so the class strings match what ships. It is not the literal component
+// (it omits the kebab-menu/upload/guide branches), so treat it as representative, not identical;
+// the jsdom galleryGuard test is what pins that the LIVE ProjectManager emits these same classes.
+// No backend: poster fetches 404 -> GameTile's branded fallback, which is fine here. Output
+// (screenshots + result.json) is written only inside the container, under /workspace/qa/T11760.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '../../src/index.css';
@@ -17,6 +20,7 @@ import {
   GamesListSkeleton,
   groupGamesForTab,
   gamesGridColumns,
+  gamesPackColumns,
   gamesGroupSpan,
   GAMES_GRID_CONTAINER_CLASS,
   GAMES_GROUP_SECTION_CLASS,
@@ -43,15 +47,29 @@ const GAMES = [
   { id: 4, name: 'at Harbor FC', game_date: '2026-08-16', created_at: '2026-08-16 18:00:00', clip_count: 4, reel_count: 0 },
 ];
 
+// A busy month (4 games) -> density N = 4. This is the case the reviewer flagged: at the sm
+// band (640-767) a naive sm:grid-cols-4 shrinks a tile to ~143x80px, smaller than its own
+// scrim, and the title-row pencil overlaps the top-right kebab. One June 1-game month rides
+// along so the N=4 packing (a full July row + a half-width June) is exercised too. Games
+// carry a ~40-char opponent name so the 2-line scrim height is realistic.
+const GAMES_N4 = [
+  { id: 41, name: 'vs Thunderbolts Academy Showcase A', game_date: '2026-07-26', created_at: '2026-07-26 18:00:00', clip_count: 4, reel_count: 0 },
+  { id: 42, name: 'at Coastal Rangers Invitational B', game_date: '2026-07-19', created_at: '2026-07-19 18:00:00', clip_count: 6, reel_count: 1 },
+  { id: 43, name: 'vs Harbor United Weekend Cup C', game_date: '2026-07-12', created_at: '2026-07-12 18:00:00', clip_count: 3, reel_count: 0 },
+  { id: 44, name: 'at Summit FC Regional Qualifier D', game_date: '2026-07-05', created_at: '2026-07-05 18:00:00', clip_count: 2, reel_count: 0 },
+  { id: 45, name: 'vs Lakeside Galaxy June Friendly', game_date: '2026-06-14', created_at: '2026-06-14 18:00:00', clip_count: 5, reel_count: 0 },
+];
+
 function LoadedGrid({ games }) {
   const gameGroups = groupGamesForTab(games);
   const columns = gamesGridColumns(gameGroups);
+  const packColumns = gamesPackColumns(columns);
   return (
     <div className={GAMES_GRID_CONTAINER_CLASS}>
       <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Your Games</h2>
-      <div className={`grid grid-cols-1 gap-y-6 sm:gap-x-3 ${GRID_COLS[columns]} lg:block lg:space-y-8`}>
+      <div className={`grid grid-cols-1 gap-y-6 sm:gap-x-3 ${GRID_COLS[packColumns]} lg:block lg:space-y-8`}>
         {gameGroups.map((group) => {
-          const span = gamesGroupSpan(group.games.length, columns);
+          const span = gamesGroupSpan(group.games.length, packColumns);
           return (
             <section key={group.key} data-group-kind={group.kind} className={`${COL_SPAN[span]} ${GAMES_GROUP_SECTION_CLASS}`}>
               <header className={GAMES_GROUP_HEADER_CLASS}>
@@ -93,6 +111,11 @@ function App() {
         <section data-qa-state="loaded">
           <p className="text-xs text-gray-500 mb-2">LOADED</p>
           <LoadedGrid games={GAMES} />
+        </section>
+        <div className="h-10" />
+        <section data-qa-state="loaded-n4">
+          <p className="text-xs text-gray-500 mb-2">LOADED (busy month, N=4)</p>
+          <LoadedGrid games={GAMES_N4} />
         </section>
         <div className="h-10" />
         <section data-qa-state="skeleton">

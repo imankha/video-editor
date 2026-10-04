@@ -114,6 +114,46 @@ async function run() {
     }
   }
 
+  // N=4 busy-month geometry (reviewer round): the sm..md packing grid caps at 3 columns so a
+  // 4-game month never shrinks to the overlapping ~80-98px tablet tiles measured at 640-768px
+  // before the fix. Each tile must stay taller than its scrim, the title pencil must not collide
+  // with the top-right kebab, and the busy-month top row must be 3-up (not 4). 4-up only returns
+  // at lg where the side-rail tiles are wide enough.
+  const measureN4 = () => {
+    const sec = document.querySelector('[data-qa-state="loaded-n4"]');
+    const wrap = sec.querySelector('[data-qa-game="41"]');
+    const tile = wrap.firstElementChild;
+    const tr = tile.getBoundingClientRect();
+    const scrim = [...tile.querySelectorAll('div')].find((d) => {
+      const c = getComputedStyle(d);
+      return c.position === 'absolute' && c.bottom === '0px' && d.querySelector('h3');
+    });
+    const sr = scrim ? scrim.getBoundingClientRect() : null;
+    const pencil = wrap.querySelector('[data-game-edit]')?.getBoundingClientRect();
+    const kebab = wrap.querySelector('[data-game-kebab]')?.getBoundingClientRect();
+    const hit = (a, c) => a && c && !(a.right <= c.left || c.right <= a.left || a.bottom <= c.top || c.bottom <= a.top);
+    const july = [...sec.querySelectorAll('[data-qa-game]')].filter((e) => +e.getAttribute('data-qa-game') < 45);
+    const tops = july.map((e) => e.getBoundingClientRect().top);
+    const minT = Math.min(...tops);
+    return {
+      tileH: Math.round(tr.height),
+      scrimExceedsTile: sr ? sr.height > tr.height + 1 : true,
+      pencilKebabOverlap: hit(pencil, kebab),
+      topRowCols: tops.filter((t) => Math.abs(t - minT) <= 2).length,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  };
+  for (const width of [640, 667, 700, 735, 768]) {
+    await page.setViewportSize({ width, height: 1200 });
+    await page.waitForTimeout(250);
+    const n = await page.evaluate(measureN4);
+    await page.screenshot({ path: `${OUT}/n4-${width}.png`, fullPage: true });
+    record(n.topRowCols === 3, `[${width}] busy month packs 3-up (capped, not 4)`, `cols=${n.topRowCols}`);
+    record(!n.scrimExceedsTile, `[${width}] tile taller than its scrim`, `tileH=${n.tileH}`);
+    record(!n.pencilKebabOverlap, `[${width}] title pencil clears the kebab`, `overlap=${n.pencilKebabOverlap}`);
+    record(n.overflow <= 1, `[${width}] no horizontal overflow (N=4)`, `overflow=${n.overflow}px`);
+  }
+
   await browser.close();
   const failed = checks.filter((c) => !c.ok);
   fs.writeFileSync(`${OUT}/result.json`, JSON.stringify({ checks, failed: failed.length }, null, 2));

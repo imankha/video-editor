@@ -64,9 +64,9 @@ test.describe('T6310 games skeleton mirrors the poster grid', () => {
     // Shells are landscape 16:9, matching a GameTile's aspect-video tile.
     expect(skelGeom.shellH).toBeGreaterThan(0);
     expect(Math.abs(skelGeom.shellW / skelGeom.shellH - 16 / 9)).toBeLessThan(0.06);
-    // T7330: the skeleton is 2-up at every breakpoint (the loaded grid's column count is
-    // data-derived, so the skeleton picks the small-library shape blind); default count 4
-    // fills exactly two rows.
+    // T7330/T11760: the skeleton picks the small-library shape blind (the loaded grid's column
+    // count is data-derived) -- one column on phones, 2-up from sm. At this desktop viewport it
+    // is 2-up; default count 4 fills exactly two rows.
     expect(skelGeom.shellCount).toBe(4);
     // A skeleton shell is the same width as a real tile ON THIS ACCOUNT: the e2e account's
     // largest group is <= 2 games, so the loaded grid is also 2-up and the geometries
@@ -75,7 +75,7 @@ test.describe('T6310 games skeleton mirrors the poster grid', () => {
     expect(Math.abs(skelGeom.shellW - loadedContainer.tileW)).toBeLessThanOrEqual(2);
   });
 
-  test('skeleton is 2-up with no ragged row at 375px', async ({ context, page }) => {
+  test('skeleton is one column on phones at 375px', async ({ context, page }) => {
     await loginAsRealUser(context, 'imankh@gmail.com', '9fa7378c');
     await page.setViewportSize({ width: 375, height: 800 });
     await gotoGames(page);
@@ -85,10 +85,12 @@ test.describe('T6310 games skeleton mirrors the poster grid', () => {
     const cols = await skel.evaluate((root) => {
       const shells = [...root.querySelectorAll('.aspect-video')];
       const topRowY = shells[0].getBoundingClientRect().top;
-      // count shells sharing the first row's Y (2-up mobile)
+      // count shells sharing the first row's Y
       return shells.filter((s) => Math.abs(s.getBoundingClientRect().top - topRowY) < 2).length;
     });
-    expect(cols).toBe(2); // 6 shells / 2 columns = 3 full rows, no ragged partial row
+    // T11760: phones are one column now (was 2-up), matching the loaded grid's phone layout so
+    // there is no column jump when data arrives. The default 4 shells stack into 4 rows.
+    expect(cols).toBe(1);
     await saveEvidence(page, 'T6310-criterion2-skeleton-375');
     await forceLoading(page, false);
   });

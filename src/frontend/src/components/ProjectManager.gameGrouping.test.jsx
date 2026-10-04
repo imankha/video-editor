@@ -24,9 +24,12 @@ vi.mock('../hooks/useIsMobile', () => ({
 import {
   groupGamesForTab,
   gamesGridColumns,
+  gamesPackColumns,
   gamesGroupSpan,
   GRID_COLS,
   COL_SPAN,
+  GAMES_TILE_COLS_SM,
+  GAMES_TILE_COLS_LG,
   GAMES_TILE_GRID_BY_COLUMNS,
 } from './ProjectManager';
 
@@ -435,14 +438,34 @@ describe('gamesGroupSpan — a group packs to its own width at sm+ (T11760)', ()
   });
 
   it('every reachable density and span has a LITERAL class (Tailwind purge safety)', () => {
-    // Densities come from gamesGridColumns (2-4); spans from gamesGroupSpan (1..density).
+    // For every density N gamesGridColumns can return (2-4), the packing column count
+    // gamesPackColumns(N) must key GRID_COLS, every span 1..packColumns must key COL_SPAN and
+    // GAMES_TILE_COLS_SM, and N itself must key GAMES_TILE_COLS_LG (the lg rail density). A
+    // missing key would render an `undefined` class string -> broken grid.
     for (const n of [2, 3, 4]) {
-      expect(GRID_COLS[n], `no outer grid class for ${n}`).toBeTruthy();
-      expect(GRID_COLS[n]).toContain(`sm:grid-cols-${n}`);
+      const pc = gamesPackColumns(n);
+      expect(GRID_COLS[pc], `no outer grid class for packColumns ${pc}`).toBeTruthy();
+      expect(GRID_COLS[pc]).toContain(`sm:grid-cols-${pc}`);
+      for (let s = 1; s <= pc; s++) {
+        expect(COL_SPAN[s], `no col-span class for ${s}`).toBeTruthy();
+        expect(COL_SPAN[s]).toContain(`sm:col-span-${s}`);
+        expect(GAMES_TILE_COLS_SM[s], `no sm tile-cols class for ${s}`).toBeTruthy();
+        expect(GAMES_TILE_COLS_SM[s]).toContain(`sm:grid-cols-${s}`);
+      }
+      expect(GAMES_TILE_COLS_LG[n], `no lg tile-cols class for ${n}`).toBeTruthy();
+      expect(GAMES_TILE_COLS_LG[n]).toContain(`lg:grid-cols-${n}`);
     }
-    for (const s of [1, 2, 3, 4]) {
-      expect(COL_SPAN[s], `no col-span class for ${s}`).toBeTruthy();
-      expect(COL_SPAN[s]).toContain(`sm:col-span-${s}`);
-    }
+    // The packing grid never offers a 4th column (the N=4 overlap fix): sm:grid-cols-4 and
+    // sm:col-span-4 must NOT be reachable packing classes.
+    expect(Object.values(GRID_COLS).some((c) => c.includes('sm:grid-cols-4'))).toBe(false);
+    expect(Object.values(COL_SPAN).some((c) => c.includes('sm:col-span-4'))).toBe(false);
+  });
+});
+
+describe('gamesPackColumns — sm..md packing grid caps at 3 columns (T11760 N=4 fix)', () => {
+  it('passes 2 and 3 through, but caps a density of 4 at 3', () => {
+    expect(gamesPackColumns(2)).toBe(2);
+    expect(gamesPackColumns(3)).toBe(3);
+    expect(gamesPackColumns(4)).toBe(3);   // a busy month packs 3-up until lg, never 4-up tablet tiles
   });
 });

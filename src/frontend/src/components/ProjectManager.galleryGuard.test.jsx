@@ -266,4 +266,26 @@ describe('T11760 — month groups pack side by side at sm+ (packed spans)', () =
     expect(may.className).toContain('sm:col-span-2');
     expect(april.className).toContain('sm:col-span-1');
   });
+
+  it('caps a busy (N=4) month at a 3-column packing grid, 4-up only at lg (no tiny tablet tiles)', () => {
+    // 4 games in one month -> density 4, but the sm..md packing grid caps at 3 so tablet tiles
+    // never shrink below ~195px and the title pencil cannot collide with the kebab (the overlap
+    // the reviewer flagged, browser-measured up to 768px). The 4th column only returns at lg.
+    const { container } = renderGames([
+      g(1, '2026-07-26'), g(2, '2026-07-19'), g(3, '2026-07-12'), g(4, '2026-07-05'),
+    ]);
+    const sections = [...container.querySelectorAll('section[data-group-kind]')];
+    expect(sections).toHaveLength(1);
+    const outer = sections[0].parentElement;
+    // Packing grid is 3 columns at sm (NOT 4), and must never emit a 4th-column class.
+    expect(outer.className).toContain('sm:grid-cols-3');
+    expect(outer.className).not.toContain('sm:grid-cols-4');
+    // The busy month spans the full 3-col packing row at sm, never col-span-4.
+    expect(sections[0].className).toContain('sm:col-span-3');
+    expect(sections[0].className).not.toContain('sm:col-span-4');
+    // Inner tile grid: 3-up at sm, but the full density 4 at lg (rail is wide enough there).
+    const tileGrid = sections[0].querySelector('[data-testid="game-tile"]').closest('.grid');
+    expect(tileGrid.className).toContain('sm:grid-cols-3');
+    expect(tileGrid.className).toContain('lg:grid-cols-4');
+  });
 });

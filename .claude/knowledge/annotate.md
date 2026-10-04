@@ -3105,8 +3105,13 @@ The full checklist for an 11th→Nth sport:
   Layout (T7330, reworked T11760 for phones/tablets): the grid is **one column on phones**
   (`grid-cols-1` on the container base). At `sm`+ it becomes a **packing grid** of
   `gamesGridColumns(groups)` columns (`clamp(biggest group, 2, 4)` — this is now the sm+ density,
-  NOT the phone count), and each month/tournament group occupies `gamesGroupSpan(cells, N) =
-  min(cells, N)` columns (`COL_SPAN` map) with an inner tile grid of that span (`GAMES_TILE_COLS_SM`),
+  NOT the phone count), but the **packing grid is capped at 3** (`gamesPackColumns = min(N, 3)`):
+  an N=4 month at 4-up shrinks tablet tiles to ~80-98px at 640-768px, shorter than their 2-line
+  scrim, and the title pencil collides with the top-right kebab (browser-measured, T11760 reviewer
+  round). So an N=4 month packs 3-up through sm..md and reaches 4-up only at `lg` (rail tiles are
+  wide enough there) -- matching pre-T11760's `sm:grid-cols-3 lg:grid-cols-4` and the Uploading rail.
+  Each month/tournament group occupies `gamesGroupSpan(cells, packColumns) = min(cells, packColumns)`
+  columns (`COL_SPAN` map) with an inner tile grid of that span (`GAMES_TILE_COLS_SM`),
   so two consecutive 1-game months pack side by side in one row (no `grid-flow-dense` — chronological
   order is preserved; a bigger month between two small ones breaks the pairing, by design). At `lg`+
   the container reverts to `lg:block` stacked rows and each group regains the sticky left-rail layout

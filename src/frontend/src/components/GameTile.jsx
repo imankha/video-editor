@@ -326,10 +326,11 @@ export function GameTile({
         </div>
         {/* T7330: the MATCH date, with its weekday ("Sat, Mar 21"). T7290 removed the date
             entirely on the reasoning that it was already the title suffix -- wrong in
-            practice: the name above is `truncate`d in ~120px (it shares its row with the
-            pencil), so the suffix is structurally the FIRST thing clipped, and a game with
-            no opponent recorded gets no suffix at all. The weekday earns the second copy
-            its place (youth sport is weekend-shaped) and keeps it from reading as an echo.
+            practice: the name above is clamped to two lines (T11760 `line-clamp-2`; it shares
+            its row with the pencil), so a long opponent/date suffix is still the FIRST thing
+            dropped past two lines, and a game with no opponent recorded gets no suffix at all.
+            The weekday earns the second copy its place (youth sport is weekend-shaped) and
+            keeps it from reading as an echo.
             Empty when there is no match date -- NEVER the upload date, which would
             contradict the match-date header this tile sits under. */}
         {isUploadFailed ? (
