@@ -1,9 +1,10 @@
 # T11430: Published play still says Highlight Not Started; support N highlights per play by aspect
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 7
 **Created:** 2026-09-29
+**Updated:** 2026-10-04
 **Reported environment:** Production, `imankh@gmail.com`, game `at Oceanside Breakers Aug 30`
 
 ## Problem
@@ -81,25 +82,47 @@ implementation and explicitly document compatibility with the planned single-cli
 
 ## Acceptance criteria
 
-- [ ] The reported production play no longer shows only **Highlight Not Started** after a published
+- [x] The reported production play no longer shows only **Highlight Not Started** after a published
       highlight exists.
-- [ ] Its published artifact is shown with the correct orientation-qualified **Video Published**
+- [x] Its published artifact is shown with the correct orientation-qualified **Video Published**
       badge.
-- [ ] The primary CTA is **Make Another Highlight** once at least one output has been published.
-- [ ] Creating another highlight from the same play preserves and can still open every prior
+- [x] The primary CTA is **Make Another Highlight** once at least one output has been published.
+      (User-approved deviation, 2026-10-03: triggers once ANY instance exists, published or
+      in-progress — not strictly after a publish — so an in-progress first highlight isn't
+      offered a confusing duplicate "Make Highlight".)
+- [x] Creating another highlight from the same play preserves and can still open every prior
       published output.
-- [ ] A play can have arbitrary N vertical and N horizontal highlight projects; no two-output cap.
-- [ ] Status and CTA navigation target the correct project at every stage: Not Started, Clipped,
+- [x] A play can have arbitrary N vertical and N horizontal highlight projects; no two-output cap.
+- [x] Status and CTA navigation target the correct project at every stage: Not Started, Clipped,
       Framing, Framed, Overlaid, Published.
-- [ ] Same-orientation instances receive stable one-based ordinals when more than one exists.
-- [ ] Orientation comes from `projects.aspect_ratio`, including after reload and publish/archive.
-- [ ] Migration/backfill tests cover a legacy single `auto_project_id`, a published orphaned/stale
+- [x] Same-orientation instances receive stable one-based ordinals when more than one exists.
+- [x] Orientation comes from `projects.aspect_ratio`, including after reload and publish/archive.
+- [x] Migration/backfill tests cover a legacy single `auto_project_id`, a published orphaned/stale
       pointer, and mixed vertical/horizontal history.
-- [ ] Regression tests cover one published vertical + horizontal not started, one published
+- [x] Regression tests cover one published vertical + horizontal not started, one published
       horizontal + vertical not started, two vertical versions, mixed in-progress states, and
       correct CTA navigation.
-- [ ] Live verification is performed on staging with a production-shaped copy of the reported play
-      before production deployment.
+- [ ] **Live verification is performed on staging with a production-shaped copy of the reported play
+      before production deployment.** Human-only, still owed — see Progress Log.
+
+## Progress Log
+
+**2026-10-04**: Merged PR #559 (`18558126e`) after 3 independent review rounds (each found and
+fixed real blocking/major issues — see WAVE.md for full history) plus final proof verification
+(VERIFIED on both backend and frontend, independently reproduced end-to-end over real HTTP/real
+functions, including mutation testing on every fix). Design doc `T11430-design.md` approved with
+3 user decisions: persisted `highlight_ordinal` column, "Make Another Highlight" on any instance,
+no generic resume affordance, build now without blocking on the single-clip-editor cleanup
+(T11250/T11260, still TODO).
+
+**Remaining human-only step** (the task's own last AC): live-verify on staging against a
+production-shaped copy of the reported `Great Goal` play (game "at Oceanside Breakers Aug 30",
+~24:01) before production deployment. Confirm: (1) the published highlight shows the correct
+orientation-qualified "…Video Published" badge instead of "Highlight Not Started"; (2) the
+counterpart orientation shows "…Video Not Started"; (3) the primary CTA reads "Make Another
+Highlight"; (4) clicking the counterpart creates a highlight of the OPPOSITE orientation; (5) the
+published highlight still opens correctly; (6) 1-5 hold on desktop, portrait mobile, and landscape
+phone.
 
 ## Evidence
 
