@@ -4,6 +4,48 @@
 
 ## Current Focus
 
+### Milestone: Parent Usability Audit (user-ordered 2026-10-04, NEXT)
+
+**Filed 2026-10-04 from an external parent usability test of staging** at desktop, tablet and
+iPhone sizes. The tester finished the whole journey, but only after learning hidden rules: the crop
+box must be *dragged* before Generate unlocks, a play must be rated 5 stars to become a highlight,
+and the clip is labeled "In Spotlight" after Spotlight was skipped. On iPhone the editor scrolls
+sideways and hides the game name. Every finding was mapped to code by code-expert agents and
+designed by four ui-designer agents. Milestone overview, standing rules and the **decision
+register (15 decisions, all PENDING)**: [README.md](tasks/parent-usability-audit/README.md).
+Audit and screenshots: [docs/plans/ux/2026-10-04-parent-usability-audit/](ux/2026-10-04-parent-usability-audit/reelballers-ux-audit.md).
+Decision report with mockups: https://claude.ai/artifact/Kt8eRfZB27Tj2DJGQ5zgn9. Tasks are written for the
+recommended option and say what changes for the others. **Epic D reverses recent Highlight-First
+rulings (H3, 2026-09-24) if the recommended option is taken.** Epic order is the recommended
+sequence; up to four epics can run in parallel (shared-file order is in the README).
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+|  | **[A. Frame Highlight unlock](tasks/parent-usability-audit/frame-unlock/EPIC.md)** | 10 | 5 | 2.0 |  |  | CRITICAL on every screen: Generate stays disabled until the crop box is dragged, and nothing says so. Keep the T8510 credit gate; add a visible control. Decisions F1, F2. |
+| T11700 | ↳ [Set focus point button on every layout](tasks/parent-usability-audit/frame-unlock/T11700-set-focus-point-button.md) | 10 | 3 | 3.3 | TODO | [ ] | One tap sets a focus point from the visible box via the cockpit's existing `onCropComplete` write path; amber at 0 points, gray "Add focus point" after. |
+| T11710 | ↳ [Teach the drag: coach chip, ring and gesture-naming copy](tasks/parent-usability-audit/frame-unlock/T11710-teach-the-drag-coach-and-copy.md) | 8 | 3 | 2.7 | TODO | [ ] | Coach chip + pulsing ring at 0 points, instructions that name the gesture, fix the stale empty-timeline hint (`length === 2`), honest rotate nudge. |
+| T11720 | ↳ [Compact locked Generate band on phones](tasks/parent-usability-audit/frame-unlock/T11720-compact-locked-band-on-phones.md) | 8 | 3 | 2.7 | TODO | [ ] | Below `sm`, while locked, the ~150px sticky band becomes one ~52px row so the timeline and Trim are reachable. |
+|  | **[B. Fits on phones and tablets](tasks/parent-usability-audit/mobile-fit/EPIC.md)** | 8 | 4 | 2.0 |  |  | iPhone editor scrolls sideways and hides the game name (root cause T11140 D); faint enabled actions; half-empty tablet grid; scrambled cost row. Decisions M1, M2. |
+| T11740 | ↳ [Editor header fits phones, game name always visible](tasks/parent-usability-audit/mobile-fit/T11740-editor-header-fits-phones.md) | 9 | 3 | 3.0 | TODO | [ ] | Two header rows below `md` (title on 2 lines, full-width 3-step bar), one row at `md`+. New no-overflow e2e at 320-768. |
+| T11750 | ↳ [Readable action row under Mark play](tasks/parent-usability-audit/mobile-fit/T11750-readable-action-row-under-mark-play.md) | 6 | 2 | 3.0 | TODO | [ ] | Outlined 44px secondary buttons; locked Review plays gets a lock icon, `aria-disabled` and a toast. |
+| T11760 | ↳ [Games grid uses phone and tablet width, 2-line titles](tasks/parent-usability-audit/mobile-fit/T11760-games-grid-phone-tablet.md) | 6 | 4 | 1.5 | TODO | [ ] | 1 column on phones, small month groups packed side by side at `sm`+, `line-clamp-2` titles; skeleton changed in the same commit. |
+| T11770 | ↳ [Shared cost row that never scrambles](tasks/parent-usability-audit/mobile-fit/T11770-shared-credit-cost-row.md) | 5 | 2 | 2.5 | TODO | [ ] | New `CreditCostRow` replaces 4 copies; cost and balance wrap as units, retention note on its own line. |
+|  | **[C. Status you can trust after Generate](tasks/parent-usability-audit/status-truth/EPIC.md)** | 9 | 5 | 1.8 |  |  | CRITICAL: a framed clip is labeled "In Spotlight" / "In Overlay"; "Done for now" lands on an empty-looking editor; "Publish" creates no audience. Decisions S1-S5. |
+| T11790 | ↳ [One status ladder for a clip's progress](tasks/parent-usability-audit/status-truth/T11790-one-status-ladder.md) | 9 | 4 | 2.3 | TODO | [ ] | "Draft, framed" / "Framed" everywhere from one map in `draftStage.js`, `has_overlay_edits` splits "spotlight started"; delete ProjectManager's inline buckets. Reverses T9860's "Draft, in Spotlight". |
+| T11800 | ↳ ["Done for now" re-selects the play and confirms](tasks/parent-usability-audit/status-truth/T11800-done-for-now-reselect-and-confirm.md) | 8 | 4 | 2.0 | TODO | [ ] | Fix the dropped selection breadcrumb (red-first repro), consume-once "Play 1 is framed" banner, Clips-ring fallback when not started from Annotate. |
+| T11810 | ↳ [Ready-screen copy and no "Saved" chip](tasks/parent-usability-audit/status-truth/T11810-ready-screen-copy-and-saved-chip.md) | 6 | 2 | 3.0 | TODO | [ ] | Outcome labels with audience/cost captions on Focus and Overlay ready screens; remove the T10670 "Saved" chip. |
+| T11820 | ↳ [Rename Publish to Finish across the app (only if S2 = Finish)](tasks/parent-usability-audit/status-truth/T11820-publish-to-finish-sweep.md) | 6 | 5 | 1.2 | TODO | [ ] | Display-only sweep: tab "Finished", "Get share link"; internal ids unchanged. OBSOLETE if the user keeps "Publish". |
+| T11830 | ↳ [No fake zeros or "Ready" while loading](tasks/parent-usability-audit/status-truth/T11830-loading-placeholders-and-preloader.md) | 5 | 3 | 1.7 | TODO | [ ] | Pulse placeholder instead of "0 plays" and spinner instead of lock during `/load`; preloader never says "Ready". |
+|  | **[D. Make a highlight without guessing](tasks/parent-usability-audit/highlight-path/EPIC.md)** | 8 | 5 | 1.6 |  |  | The 5-star "Brilliant" gate is invisible and the rate modal traps touch users; "Annotate" jargon; dense first view. Reverses Highlight-First H3 (2026-09-24) if recommended options are taken. Decisions H1-H4. |
+| T11840 | ↳ [Legible rating and a way to make any play a highlight](tasks/parent-usability-audit/highlight-path/T11840-rating-legibility-and-highlight-anyway.md) | 9 | 4 | 2.3 | TODO | [ ] | One labeled star row, "5 stars (Brilliant) offers to make it a highlight", "Make a highlight anyway" link to the existing choice card, X close on the rate modal. Frontend-only. |
+| T11850 | ↳ [Rename "Annotate" to "Mark Plays" in the UI](tasks/parent-usability-audit/highlight-path/T11850-rename-annotate-to-mark-plays.md) | 5 | 2 | 2.5 | TODO | [ ] | Tab "Mark Plays", game cards "N plays"; routes and ids unchanged. OBSOLETE if the user keeps "Annotate". |
+| T11860 | ↳ [First-run Annotate shows one obvious action](tasks/parent-usability-audit/highlight-path/T11860-annotate-first-run-disclosure.md) | 6 | 3 | 2.0 | TODO | [ ] | Hide frame-step, timeline zoom and layer filters until the first play ("More controls" reveals); phone zoom 100% until the first play, then 300%. |
+|  | **[E. Upload and sign-in confidence](tasks/parent-usability-audit/upload-signin/EPIC.md)** | 7 | 4 | 1.8 |  |  | Two upload percentages at once, mechanism-first upload copy, silent Google sign-in failure. Decisions U1, U2. |
+| T11870 | ↳ [One upload progress number and one sentence](tasks/parent-usability-audit/upload-signin/T11870-one-upload-progress-number.md) | 7 | 3 | 2.3 | TODO | [ ] | Weighted % shown once, one sentence per phase, stale "Connecting to server" overlay suppressed over a local preview, "Saved" -> "Uploaded". |
+| T11880 | ↳ [Honest upload modal copy](tasks/parent-usability-audit/upload-signin/T11880-honest-upload-modal-copy.md) | 5 | 1 | 5.0 | TODO | [ ] | "You mark the best plays and frame your player. We smooth the motion, sharpen the picture, and build a highlight you can share." Landing alignment check (T10170). |
+| T11890 | ↳ [Sign-in fallback when Google cannot open](tasks/parent-usability-audit/upload-signin/T11890-sign-in-fallback.md) | 7 | 3 | 2.3 | TODO | [ ] | Always-visible "Get a sign-in code by email", "Signing you in..." during the exchange, popup-failure notice (no UA sniffing), labeled email field. Real-browser check required. |
+| T11900 | [Re-run the parent journey on staging (milestone close)](tasks/parent-usability-audit/T11900-re-audit-parent-journey.md) | 7 | 2 | 3.5 | TODO | [ ] | After all epics: repeat the audit at 3 viewports, screenshot each CRITICAL/HIGH fixed, file follow-ups for anything not fixed. |
+
 ### Milestone: Live Queue (2026-10-01)
 
 **Filed across several recent commits as prose paragraphs instead of table rows, so the task
