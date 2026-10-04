@@ -1,6 +1,6 @@
 # T11700: Set focus point button on every layout
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 10
 **Complexity:** 3
 **Tier:** M (frontend only, ~5 files, ~170 LOC including tests)
