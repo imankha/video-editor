@@ -294,10 +294,12 @@ export function GameTile({
           (secondary line; T8260 relabeled "clips" -> "annotations" and added reels).
           One structure for BOTH the poster and the fallback -- this div is always
           rendered (not gated on posterState), so it overlays whichever variant is
-          showing beneath it. Name is a single truncated line (tiles run as small
-          as ~90px tall at the 2-up 390px breakpoint, so no 2-line clamp here). The
-          gradient is opaque enough at the base to stay legible over a bright
-          poster frame. */}
+          showing beneath it. T11760: the name now wraps to at most two lines
+          (`line-clamp-2`) instead of truncating to one -- phones are one column so a
+          tile is ~358x200 with room for a 2-line opponent name. The scrim auto-sizes
+          to its content (bottom-anchored with padding), so it still fully covers a
+          2-line name on the shortest tile. The gradient is opaque enough at the base
+          to stay legible over a bright poster frame. */}
       <div className={`absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 ${isUploadFailed ? 'pb-9' : 'pb-1.5'}`}>
         {/* T6890: the edit (rename) pencil sits beside the game name it edits,
             instead of only inside the top-right kebab. Same "icon touches the name"
@@ -306,7 +308,7 @@ export function GameTile({
             T7490: hidden for a failed upload — you can't meaningfully rename a dead
             upload, and its hit target would compete with the action bar. */}
         <div className="flex items-center gap-1">
-          <h3 className="flex-1 min-w-0 text-white text-xs sm:text-sm font-medium truncate drop-shadow" title={game.name}>
+          <h3 className="flex-1 min-w-0 text-white text-xs sm:text-sm font-medium line-clamp-2 break-words leading-tight drop-shadow" title={game.name}>
             {game.name}
           </h3>
           {!isUploadFailed && (
@@ -324,10 +326,11 @@ export function GameTile({
         </div>
         {/* T7330: the MATCH date, with its weekday ("Sat, Mar 21"). T7290 removed the date
             entirely on the reasoning that it was already the title suffix -- wrong in
-            practice: the name above is `truncate`d in ~120px (it shares its row with the
-            pencil), so the suffix is structurally the FIRST thing clipped, and a game with
-            no opponent recorded gets no suffix at all. The weekday earns the second copy
-            its place (youth sport is weekend-shaped) and keeps it from reading as an echo.
+            practice: the name above is clamped to two lines (T11760 `line-clamp-2`; it shares
+            its row with the pencil), so a long opponent/date suffix is still the FIRST thing
+            dropped past two lines, and a game with no opponent recorded gets no suffix at all.
+            The weekday earns the second copy its place (youth sport is weekend-shaped) and
+            keeps it from reading as an echo.
             Empty when there is no match date -- NEVER the upload date, which would
             contradict the match-date header this tile sits under. */}
         {isUploadFailed ? (
@@ -337,7 +340,7 @@ export function GameTile({
               : "Upload didn't finish. Retry to resume, or discard."}
           </p>
         ) : (
-          <div className="mt-0.5 flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-2 text-xs">
+          <div className="mt-0.5 flex flex-row items-center justify-between gap-2 text-xs">
             <span className="text-gray-300 truncate">{formatMatchDateLabel(game.game_date)}</span>
             <span className="flex-shrink-0 whitespace-nowrap text-gray-400">{countsLabel}</span>
           </div>

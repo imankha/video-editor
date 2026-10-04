@@ -67,23 +67,50 @@ import { StorageExpiryBanner } from './StorageExpiryBanner';
 // gallery" Andrew praised) render inside this one class, so they move together.
 export const GAMES_GRID_CONTAINER_CLASS = 'w-full max-w-6xl 2xl:max-w-7xl';
 
-// T7330: the desktop column count now follows the data (see gamesGridColumns), so the grid
-// class is SELECTED from this map, never built by interpolation -- Tailwind's purge only
-// keeps class names that appear as literals in the source. Mobile stays 2-up and tablet 3-up,
-// each clamped by the same derived count so a 2-column layout doesn't jump to 3 on a tablet.
-// The loading skeleton consumes this map too, so the two can never drift (the T6310 bug).
+// T7330/T11760: the tablet+desktop column count follows the data (see gamesGridColumns), so
+// the grid class is SELECTED from this map, never built by interpolation -- Tailwind's purge
+// only keeps class names that appear as literals in the source (greppability rule 6).
+// T11760: phones now get ONE full-width column (room for a 2-line game title); the grid widens
+// to 2/3/4 from the sm breakpoint up. This FLAT map drives the blind loading skeleton and the
+// Uploading rail (both ungrouped single grids); the grouped Games grid packs its month groups
+// with per-group spans instead (GRID_COLS / COL_SPAN below). The skeleton consumes this map too,
+// so the two can never drift (the T6310 bug).
 export const GAMES_TILE_GRID_BY_COLUMNS = {
-  2: 'grid grid-cols-2 gap-2 sm:gap-3 lg:gap-4',
-  3: 'grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 lg:gap-4',
-  4: 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4',
+  2: 'grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 lg:gap-4',
+  3: 'grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 lg:gap-4',
+  4: 'grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4',
 };
 
 // The group header sits in a sticky left rail at lg+ (removing ~64px of vertical chrome per
 // group) and stacks above the tiles below lg, exactly as it always has. minmax(0,1fr) is
 // mandatory: without it the tile grid's min-content can blow the track out.
-const GAMES_GROUP_SECTION_CLASS = 'lg:grid lg:grid-cols-[8rem_minmax(0,1fr)] lg:gap-x-4';
-const GAMES_GROUP_HEADER_CLASS = 'mb-2 lg:mb-0 lg:sticky lg:top-2 lg:self-start '
+// Exported (with the maps below) so the T11760 verification harness composes the grid from
+// the SAME literals the component renders -- no drift between what is QA'd and what ships.
+export const GAMES_GROUP_SECTION_CLASS = 'lg:grid lg:grid-cols-[8rem_minmax(0,1fr)] lg:gap-x-4';
+export const GAMES_GROUP_HEADER_CLASS = 'mb-2 lg:mb-0 lg:sticky lg:top-2 lg:self-start '
   + 'flex flex-wrap items-baseline gap-x-2 gap-y-0.5 lg:block';
+
+// T11760: at sm and up the month/tournament groups PACK into one grid so small months sit
+// side by side (two 1-game months share a row) instead of each taking a near-empty row.
+// GRID_COLS sets the packing grid's column count; COL_SPAN sets how many of those columns one
+// group occupies = min(its cells, packing columns). Both are explicit Tailwind literals, never
+// interpolated (purge safety + greppability rule 6). Phones stay one column (the container's
+// grid-cols-1 base) and lg+ reverts to the per-group rail row (GAMES_GROUP_SECTION_CLASS), so
+// the packing applies only in the sm..md band.
+//
+// The packing grid is CAPPED at 3 columns (gamesPackColumns) even when the density N is 4:
+// browser-measured at 640-768px (T11760 reviewer round), a 4-up tablet tile is only ~143-175px
+// wide / ~80-98px tall -- shorter than its own 2-line scrim, and the title-row pencil collides
+// with the top-right kebab up to 768px. 3-up keeps the tightest tile (640px) at ~195x110px, clear
+// of both. A busy month's 4th tile wraps to a second row in the sm..md band and only lines up
+// 4-up again at lg, where the side-rail tiles are wide enough (GAMES_TILE_COLS_LG keeps the true
+// N). This matches the pre-T11760 schedule (sm:grid-cols-3 lg:grid-cols-4) and the Uploading rail.
+export const GRID_COLS = { 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3' };
+export const COL_SPAN = { 1: 'sm:col-span-1', 2: 'sm:col-span-2', 3: 'sm:col-span-3' };
+// A group's inner tile grid: one column on phones, its packed span (<=3) at sm, and the full
+// density N inside the rail at lg (so desktop keeps its pre-T11760 shape -- acceptance #3).
+export const GAMES_TILE_COLS_SM = { 1: 'sm:grid-cols-1', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3' };
+export const GAMES_TILE_COLS_LG = { 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4' };
 
 // T8990: the partial-guide fillers for the Clips and Reels carousels. Both are
 // copy-only (no CTA): each tab already carries its action above the row (Add Video
@@ -380,13 +407,20 @@ export function groupGamesForTab(games) {
 }
 
 /**
- * Desktop column count, derived from the data rather than fixed (T7330, user's choice).
+ * Column count for the games grid at the sm breakpoint and up, derived from the data rather
+ * than fixed (T7330, user's choice).
  *
  * A six-up grid was sized for a library several times bigger than a typical account: with
  * one or two games per month, rows filled two of six columns and the right two-thirds of
  * every row sat empty. Tracking the largest group fills rows completely at small libraries
  * and converges on a normal 4-up as they grow. Capped at 4 so tiles never get so large that
- * a full month becomes a scroll marathon; floored at 2 to match mobile.
+ * a full month becomes a scroll marathon; floored at 2 so two 1-game months can still pack
+ * side by side once past sm.
+ *
+ * T11760: this is NOT the mobile count any more -- phones are always ONE column (set on the
+ * grid container), so the old "floored at 2 to match mobile" reasoning no longer holds; the
+ * floor of 2 now exists purely so the sm+ packing grid has room to place two small months
+ * in one row.
  *
  * This is a pure function of the rendered data -- not a user setting, so nothing is
  * persisted and the no-persisted-view-state rule is untouched.
@@ -394,6 +428,29 @@ export function groupGamesForTab(games) {
 export function gamesGridColumns(groups) {
   const biggest = groups.reduce((n, group) => Math.max(n, group.games.length), 0);
   return Math.min(4, Math.max(2, biggest));
+}
+
+/**
+ * Columns the sm..md packing grid actually uses, CAPPED at 3 even when the density N is 4
+ * (T11760 reviewer round). A 4-up tablet tile in the 640-768px band is ~143-175px wide /
+ * ~80-98px tall -- shorter than its 2-line scrim, and its title-row pencil collides with the
+ * top-right kebab (browser-measured). 3-up keeps the tightest tile (640px) at ~195x110px, clear
+ * of both; the 4th column only returns at lg, in the wide side-rail layout. This restores the
+ * pre-T11760 schedule (sm:grid-cols-3 lg:grid-cols-4) and keeps the Uploading rail matching.
+ */
+export function gamesPackColumns(columns) {
+  return Math.min(3, columns);
+}
+
+/**
+ * How many of the packing grid's `columns` a single group occupies at sm+ (T11760):
+ * min(its cell count, columns), never below 1. A 1-game month spans one column so a
+ * neighbouring small month packs beside it; a month with as many games as the density fills
+ * the whole row. `cells` includes the lone-game coaching card (T8990) when it is present.
+ * Call with gamesPackColumns(N), not N, so an N=4 month spans at most 3 in the sm..md band.
+ */
+export function gamesGroupSpan(cells, columns) {
+  return Math.min(columns, Math.max(1, cells));
 }
 
 // The active tab is URL state, never persisted. One map drives both directions
@@ -1773,7 +1830,12 @@ export function ProjectManager({
             {/* Your Games Section - Chronological Poster Grid (T5681, regrouped T7330) */}
             {games.length > 0 && (() => {
               const gameGroups = groupGamesForTab(games);
-              const tileGridClass = GAMES_TILE_GRID_BY_COLUMNS[gamesGridColumns(gameGroups)];
+              // T11760: `columns` is the density at sm+ (phones stay one column); `packColumns`
+              // is the sm..md packing-grid width, capped at 3 so an N=4 month does not shrink to
+              // overlapping ~80px tablet tiles (it reaches 4-up only at lg, in the rail). Each
+              // group spans min(its cells, packColumns) so small months sit side by side.
+              const columns = gamesGridColumns(gameGroups);
+              const packColumns = gamesPackColumns(columns);
               // T8990: with exactly one game and nothing uploading, the first row
               // has one empty grid cell. Fill it with the partial guide coaching
               // "now cut your first play". The cell is NOT a game: it never feeds
@@ -1800,9 +1862,22 @@ export function ProjectManager({
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">
                     Your Games
                   </h2>
-                  <div ref={gamesContainerRef} className="space-y-6 lg:space-y-8">
-                    {gameGroups.map(group => (
-                      <section key={group.key} data-group-kind={group.kind} className={GAMES_GROUP_SECTION_CLASS}>
+                  {/* T11760: one column on phones (grid-cols-1 base); a packing grid of
+                      `columns` from sm so small month groups sit side by side; back to stacked
+                      full-width rail rows at lg (GAMES_GROUP_SECTION_CLASS), unchanged desktop. */}
+                  <div
+                    ref={gamesContainerRef}
+                    className={`grid grid-cols-1 gap-y-6 sm:gap-x-3 ${GRID_COLS[packColumns]} lg:block lg:space-y-8`}
+                  >
+                    {gameGroups.map((group, groupIndex) => {
+                      // T8990's lone-game coaching card is an extra cell in its group, so it packs
+                      // beside the tile as before; it is still NOT counted in the density math
+                      // above (it is not a game). With the guide present there is exactly one
+                      // group, so it always lands in the first (only) one.
+                      const hostsGuide = showGamesPartialGuide && groupIndex === 0;
+                      const span = gamesGroupSpan(group.games.length + (hostsGuide ? 1 : 0), packColumns);
+                      return (
+                      <section key={group.key} data-group-kind={group.kind} className={`${COL_SPAN[span]} ${GAMES_GROUP_SECTION_CLASS}`}>
                         {/* Group header. A tournament must never read as an oddly-named
                             month, so it differs on THREE axes -- icon, colour, and a date
                             range no month header ever has. Colour alone would fail WCAG
@@ -1827,8 +1902,9 @@ export function ProjectManager({
                             {group.games.length} game{group.games.length !== 1 ? 's' : ''}
                           </span>
                         </header>
-                        {/* Landscape tile grid: column count derived from the data (T7330) */}
-                        <div className={tileGridClass}>
+                        {/* Landscape tile grid (T7330/T11760): one column on phones, the group's
+                            packed span at sm, the full density inside the rail at lg. */}
+                        <div className={`grid grid-cols-1 gap-2 sm:gap-3 lg:gap-4 ${GAMES_TILE_COLS_SM[span]} ${GAMES_TILE_COLS_LG[columns]}`}>
                           {group.games.map(game => (
                             <div
                               key={game.id}
@@ -1871,7 +1947,7 @@ export function ProjectManager({
                               onAction opens that game (lands in Annotate, where Add
                               Play lives). Not a game -> excluded from the grid math
                               above. games.length === 1 means one group, one tile. */}
-                          {showGamesPartialGuide && (
+                          {hostsGuide && (
                             <EmptyTabGuide
                               tab="games"
                               variant="partial"
@@ -1881,7 +1957,8 @@ export function ProjectManager({
                           )}
                         </div>
                       </section>
-                    ))}
+                      );
+                    })}
                   </div>
                 </>
               );
@@ -2319,14 +2396,15 @@ export function ProjectManager({
  * Pure render — no fetching, no subscribing.
  *
  * The real grid's column count is derived from the loaded groups, which do not exist yet
- * here, so the skeleton must pick one blind. It uses the 2-COLUMN entry: `grid-cols-2` at
- * every breakpoint, so the default 4 shells make exactly two full rows on mobile, tablet
- * and desktop alike (no ragged partial row anywhere), and the geometry matches the loaded
- * layout EXACTLY for any library whose largest group is <= 2 games — the small-library
- * shape this layout was redesigned for. For a bigger library the loaded grid arrives at
- * 3-4 columns and tiles shrink at that moment; a blind skeleton cannot match every
- * outcome, and matching the small library keeps the no-snap case where the tab is
- * busiest. (Reviewer-accepted trade, T7330 — no unconditional "never snaps" claim.)
+ * here, so the skeleton must pick one blind. It uses the 2-COLUMN entry: one column on
+ * phones and `grid-cols-2` from sm up (T11760), so the default 4 shells stack on a phone
+ * and make exactly two full rows from the sm breakpoint -- and the geometry matches the
+ * loaded layout for any library whose largest group is <= 2 games (the small-library shape
+ * this layout was redesigned for): phones are one column either way, and at sm two 1-game
+ * months pack into the same 2-up row the shells occupy. For a bigger library the loaded grid
+ * arrives at 3-4 columns and tiles shrink at that moment; a blind skeleton cannot match
+ * every outcome, and matching the small library keeps the no-snap case where the tab is
+ * busiest. (Reviewer-accepted trade, T7330/T11760 — no unconditional "never snaps" claim.)
  */
 export function GamesListSkeleton({ count = 4 }) {
   return (
