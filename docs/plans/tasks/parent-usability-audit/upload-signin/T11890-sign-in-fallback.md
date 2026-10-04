@@ -80,10 +80,10 @@ A short findings section appended to this file:
 
 Status goes to `WAITING ON USER` with the findings link when done.
 
-## Kept from the original proposal (not failure handling)
+## Small improvements to ship in this task (user-approved 2026-10-04)
 
-These two small changes are unrelated to the fallback and may ship in this task if the user agrees
-in review; otherwise drop them:
+These two changes are unrelated to the fallback. The user approved them ("all for small changes that
+are definitely improvements"), so implement them here alongside the investigation:
 - "Signing you in..." spinner from the moment a Google credential arrives until the app loads
   (only observable interval; no new path).
 - A visible `<label>` "Email address" on the existing email field (`components/auth/OtpAuthForm.jsx:211`),
