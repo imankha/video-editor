@@ -21,6 +21,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth';
 import { saveEvidence, assertNoHorizontalOverflow } from './helpers/qa.js';
+import { GAME_RETENTION_NOTE, ATTACH_RETENTION_NOTE, FOOTAGE_RETENTION_NOTE } from './helpers/retentionCopy.js';
 
 const EMAIL = 'imankh@gmail.com';
 const WIDTHS = [320, 360, 375, 390, 768];
@@ -78,7 +79,7 @@ test.describe('T11770 CreditCostRow', () => {
       await page.getByRole('button', { name: 'Upload game' }).first().click();
       await expect(page.getByRole('heading', { name: 'Upload game' })).toBeVisible();
 
-      await assertCostRowLaidOut(page, 'Your game video is kept for 30 days.');
+      await assertCostRowLaidOut(page, GAME_RETENTION_NOTE);
       await assertNoHorizontalOverflow(page);
       await saveEvidence(page, `criterion-1-upload-modal-${width}`);
     });
@@ -97,7 +98,7 @@ test.describe('T11770 CreditCostRow', () => {
       await page.locator('[data-game-menu]').getByRole('button', { name: 'Add video', exact: true }).click({ timeout: 15000 });
       await expect(page.getByRole('heading', { name: 'Add a video' })).toBeVisible();
 
-      await assertCostRowLaidOut(page, 'This video is kept for 30 days.');
+      await assertCostRowLaidOut(page, ATTACH_RETENTION_NOTE);
       await assertNoHorizontalOverflow(page);
       await saveEvidence(page, `criterion-2-attach-video-modal-${width}`);
     });
@@ -115,8 +116,12 @@ test.describe('T11770 CreditCostRow', () => {
       // sign-in gate. Driving this one real account through ~16 sequential tests
       // (each its own dev-login) occasionally leaves session-init not yet settled
       // when /annotate mounts, so the auth gate flashes; re-minting the cookie and
-      // re-navigating clears it. A genuine auth misconfig still throws from
-      // loginAsRealUser (it only swallows 5xx blips), so this masks nothing real.
+      // re-navigating clears it. Caveat: a hard dev-login failure (4xx) still
+      // throws from loginAsRealUser, but this retry CANNOT distinguish a benign
+      // not-yet-settled flash from a real frontend regression that surfaces the
+      // sign-in gate (e.g. a 503/500 during session-init the gate renders instead
+      // of surfacing) -- it would paper over such a bug if it cleared within 3
+      // tries. Bounded to 3 so a persistent gate still fails the test loudly.
       const restart = page.getByRole('button', { name: 'Restart' }).first();
       for (let attempt = 1; attempt <= 3; attempt++) {
         await openGameInAnnotate(page, games[0].id);
@@ -144,7 +149,7 @@ test.describe('T11770 CreditCostRow', () => {
       await addBtn.click();
       await expect(page.getByRole('heading', { name: 'Add footage' })).toBeVisible();
 
-      await assertCostRowLaidOut(page, 'This footage is kept for 30 days.');
+      await assertCostRowLaidOut(page, FOOTAGE_RETENTION_NOTE);
       // No assertNoHorizontalOverflow here: the Annotate editor behind the modal
       // has its own known narrow-width header overflow (T11740, not yet merged),
       // which is unrelated to this modal's CreditCostRow. The modal is a centered
