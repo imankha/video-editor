@@ -55,7 +55,8 @@ POST_V023_COLUMNS = {
     "working_videos": ["detections_data", "framing_snapshot", "highlight_carry_note"],  # v027, v046
     "export_jobs": ["stage", "output_key"],                                             # v028
     "working_clips": ["rotation", "framing_version"],                                     # v029, v044
-    "projects": ["poster_marker_time", "source_raw_clip_id", "highlight_ordinal"],  # v032, v056
+    "projects": ["poster_marker_time", "source_raw_clip_id", "highlight_ordinal",
+                 "reel_source_start_time", "reel_source_end_time"],  # v032, v056 (all 4 v056 cols move together)
     "intro_cards": ["subtitle_text"],                                                    # v035
     "raw_clips": ["reel_source_start_time", "reel_source_end_time", "source"],        # v049, v053
     "pending_uploads": ["kind"],                                                       # v050

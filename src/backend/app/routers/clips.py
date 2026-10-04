@@ -845,7 +845,19 @@ async def set_project_aspect_ratio(project_id: int, body: AspectRatioChange):
                 "SELECT source_raw_clip_id FROM projects WHERE id = ?", (project_id,)
             )
             source_row = cursor.fetchone()
-            if source_row and source_row['source_raw_clip_id'] is not None:
+            # fixround2 minor 3: skip the recompute for a project with a PUBLISHED
+            # final. Its resolved orientation (the display + ordinal bucketing rule)
+            # is frozen to the PUBLISHED final_videos.aspect_ratio, not projects.
+            # aspect_ratio, so recomputing the ordinal into the request's new
+            # aspect bucket would assign it from the wrong bucket and could collide
+            # with a real sibling ordinal there. A published instance's orientation
+            # is frozen, so its ordinal must not move on an aspect-ratio edit.
+            cursor.execute(
+                "SELECT 1 FROM final_videos WHERE project_id = ? AND published_at IS NOT NULL LIMIT 1",
+                (project_id,),
+            )
+            has_published_final = cursor.fetchone() is not None
+            if source_row and source_row['source_raw_clip_id'] is not None and not has_published_final:
                 # Bucket by the SAME resolved-orientation rule as creation + the
                 # v056 backfill (not raw aspect_ratio) -- excludes self, which
                 # already carries the new ratio from the UPDATE above.
@@ -1379,8 +1391,15 @@ def _delete_orphan_highlight_projects(cursor, raw_clip_id: int) -> int:
     pointer, already handled by the caller."""
     if not column_exists(cursor, "projects", "source_raw_clip_id"):
         return 0
+    # fixround2 minor 1: ONLY auto-created highlight projects, matching
+    # _get_highlight_instances_by_clip's own `is_auto_created` exclusion. The v056
+    # backfill links LEGACY manually-created projects (is_auto_created = 0) too via
+    # the working_clips/final_videos chains; without this filter, deleting a play
+    # would also delete an unpublished manually-created project (and its unpublished
+    # final_videos) that this auto-highlight machinery was never meant to touch.
     cursor.execute(
-        "SELECT id FROM projects WHERE source_raw_clip_id = ?", (raw_clip_id,)
+        "SELECT id FROM projects WHERE source_raw_clip_id = ? AND is_auto_created = 1",
+        (raw_clip_id,),
     )
     project_ids = [row["id"] for row in cursor.fetchall()]
     deleted = 0
@@ -1682,9 +1701,18 @@ async def update_raw_clip(
                 # never touch/detach/archive any prior highlight, only INSERT.
                 # fixround1 MAJOR 2: honor an explicit aspect_ratio ('16:9' from
                 # the synthesized horizontal-counterpart CTA) so the right
-                # orientation is created; default 9:16 otherwise.
+                # orientation is created; default 9:16 when omitted.
+                # fixround2 minor 4: an explicit but UNRECOGNIZED value is rejected
+                # (422), never silently coerced to 9:16 -- CLAUDE.md "no silent
+                # fallbacks for internal data" (the client only ever sends the two
+                # valid literals, so a third value is a real client bug).
+                if update.aspect_ratio is not None and update.aspect_ratio not in ("9:16", "16:9"):
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Invalid aspect_ratio {update.aspect_ratio!r} (expected '9:16' or '16:9')",
+                    )
                 clip_name = update.name if update.name is not None else clip['name']
-                new_aspect = update.aspect_ratio if update.aspect_ratio in ("9:16", "16:9") else "9:16"
+                new_aspect = update.aspect_ratio or "9:16"
                 logger.info(f"[CreateReel] force_new: creating another highlight for clip {clip_id}, name={clip_name!r}, aspect={new_aspect}")
                 auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name, aspect_ratio=new_aspect)
                 project_created = True

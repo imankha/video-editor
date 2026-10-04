@@ -32,13 +32,19 @@ orientation) running counter) since a portable single-statement SQLite UPDATE
 can't express a window function; this is a one-time backfill, not a hot path,
 matching v019/v033's heal-style migrations.
 
-reel_source_* backfill (fixround1): for a project with a produced video
-(working_video or final_video), freeze the snapshot from the owning
-raw_clip's CURRENT reel_source_* (joined via source_raw_clip_id). This is a
-best-available APPROXIMATION -- the true historical producing window of each
-individual project is not recoverable from stored state (pre-v056 there was
-only one shared per-play snapshot), so existing rows inherit the play's
-current snapshot. New projects (post-v056) freeze their own at creation.
+reel_source_* backfill (fixround1 + fixround2): EVERY linked project inherits a
+per-instance snapshot = COALESCE(the owning raw_clip's shared producing snapshot
+reel_source_*, its CURRENT start/end), joined via source_raw_clip_id. fixround2
+dropped the earlier "produced video only" filter: an UNPRODUCED draft present at
+deploy time must NOT be left NULL, or after its first export it falls into the
+frontend's below-migration branch and reads permanently Clipped. A produced
+project's play still carries reel_source_* frozen at its last export (T8070:
+boundary edits don't touch it) = that project's true producing window, so the
+COALESCE prefers it; an unproduced draft's play has NULL reel_source_* and falls
+back to current boundaries, matching what the create path freezes. Best-available
+APPROXIMATION -- the true historical per-project window is not recoverable for
+pre-v056 rows. New projects (post-v056) freeze their own at creation, and every
+real export now re-freezes the exported project's own snapshot (fixround2).
 
 Column-existence robustness (fixround1): the backfill chains reference
 specific columns on OTHER tables (final_videos.project_id/source_clip_id/
@@ -188,37 +194,48 @@ class V056ProjectSourceRawClip(BaseMigration):
             f"{cur_b_rowcount} via working_clips, {cur_c_rowcount} via final_videos"
         )
 
-        # reel_source_* per-project snapshot backfill (fixround1): for a project
-        # with a produced video, inherit the owning raw_clip's CURRENT snapshot.
-        # Best-available approximation (see module docstring). Only fills rows
-        # still NULL, and only when the raw_clips snapshot columns exist.
+        # reel_source_* per-project snapshot backfill (fixround1 + fixround2):
+        # EVERY linked project (not only produced ones) inherits a snapshot, so an
+        # unproduced draft that exists at deploy time does NOT end up with a NULL
+        # snapshot + (after its first export) a working video, which the frontend's
+        # "below-migration" branch reads as permanently Clipped (fixround2 BLOCKING
+        # second consequence). Source = COALESCE(the owning raw_clip's shared
+        # producing snapshot, its CURRENT boundaries):
+        #   - a PRODUCED project's play carries reel_source_* frozen at its last
+        #     export (T8070: boundary edits don't touch it), which IS that project's
+        #     true producing window even if the play has since drifted -> use it.
+        #   - an UNPRODUCED draft's play has NULL reel_source_* -> fall back to the
+        #     play's current start/end, matching what the create path freezes at
+        #     creation (best-available approximation; the true historical per-project
+        #     window isn't recoverable for pre-v056 rows).
+        # Requires raw_clips.start_time/end_time (always present) + reel_source_*.
         if (
-            {"reel_source_start_time", "reel_source_end_time"}.issubset(raw_cols)
+            {"reel_source_start_time", "reel_source_end_time", "start_time", "end_time"}.issubset(raw_cols)
             and {"reel_source_start_time", "reel_source_end_time"}.issubset(_columns(conn, "projects"))
         ):
             cur_rs = conn.execute(
                 """
                 UPDATE projects
                 SET reel_source_start_time = (
-                        SELECT rc.reel_source_start_time FROM raw_clips rc
+                        SELECT COALESCE(rc.reel_source_start_time, rc.start_time) FROM raw_clips rc
                         WHERE rc.id = projects.source_raw_clip_id
                     ),
                     reel_source_end_time = (
-                        SELECT rc.reel_source_end_time FROM raw_clips rc
+                        SELECT COALESCE(rc.reel_source_end_time, rc.end_time) FROM raw_clips rc
                         WHERE rc.id = projects.source_raw_clip_id
                     )
                 WHERE source_raw_clip_id IS NOT NULL
                   AND reel_source_start_time IS NULL
                   AND reel_source_end_time IS NULL
-                  AND (working_video_id IS NOT NULL OR final_video_id IS NOT NULL)
                   AND EXISTS (
                     SELECT 1 FROM raw_clips rc
                     WHERE rc.id = projects.source_raw_clip_id
-                      AND rc.reel_source_start_time IS NOT NULL
+                      AND rc.start_time IS NOT NULL
+                      AND rc.end_time IS NOT NULL
                   )
                 """
             )
-            logger.info(f"[v056] backfilled per-project reel_source_* for {cur_rs.rowcount} produced projects")
+            logger.info(f"[v056] backfilled per-project reel_source_* for {cur_rs.rowcount} linked projects")
         else:
             logger.info("[v056] raw_clips/projects reel_source_* columns absent, skipping per-project snapshot backfill")
 

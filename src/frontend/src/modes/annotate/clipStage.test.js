@@ -304,6 +304,30 @@ describe('getClipStages (T11430)', () => {
     expect(result.instances[0].status).toBe('Vertical Video Clipped');
   });
 
+  // fixround2 MAJOR: pins the fixround1 removal of the `?? region.reelSource*`
+  // fallback. The REGION carries a snapshot (2,8) matching its boundaries, but
+  // the INSTANCE's own snapshot is null (+ a working video). It must read Clipped
+  // (its own null snapshot -> below-migration/drifted branch), NOT Framed. The OLD
+  // buggy behavior fell back to the region snapshot, which (matching the region's
+  // boundaries) would wrongly resolve to Framed -- restoring that fallback makes
+  // this test fail.
+  it('uses the INSTANCE snapshot only, never the region fallback (null instance snapshot -> Clipped even when region snapshot matches)', () => {
+    const regionWithSnapshot = {
+      id: 'c1', startTime: 2, endTime: 8,
+      reelSourceStartTime: 2, reelSourceEndTime: 8,
+    };
+    const instances = [
+      {
+        projectId: 30, aspectRatio: '9:16', highlightOrdinal: 1,
+        hasWorkingVideo: true, hasFinalVideo: false, isPublished: false, archivedAt: null,
+        reelSourceStartTime: null, reelSourceEndTime: null, // instance's OWN snapshot is null
+      },
+    ];
+    const result = getClipStages(regionWithSnapshot, instances);
+    expect(result.instances[0].status).toBe('Vertical Video Clipped');
+    expect(result.instances[0].status).not.toBe('Vertical Video Framed');
+  });
+
   it('published-instance frozen staleness applies inside the collection path too (drifted boundaries, isPublished -> still Published)', () => {
     const driftedRegion = {
       id: 'c1',

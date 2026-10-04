@@ -28,13 +28,13 @@ from app.database import column_exists, ensure_directories, get_db_connection
 from app.middleware.db_sync import durable_sync
 from app.profile_context import get_current_profile_id
 
-# T11430: router-to-router import of the highlight-instances read helper. Left
-# here (not lifted to a shared query module) deliberately: it is a read-only
-# query tightly coupled to the clips/projects schema, has exactly ONE external
-# caller (this file), and clips.py imports nothing from games.py, so there is no
-# import cycle. Lifting it would add a module for a single consumer -- revisit if
-# a second caller appears. (games.py already imports several clips/projects
-# helpers this way; this follows the established pattern.)
+# T11430: router-to-router import of the highlight-instances read helper (the
+# only `from app.routers` import in this module). Left here (not lifted to a
+# shared query module) deliberately: it is a read-only query tightly coupled to
+# the clips/projects schema, has exactly ONE external caller (this file), and
+# clips.py imports nothing from games.py, so there is no import cycle. Lifting it
+# into a shared module would add a file for a single consumer -- revisit if a
+# second caller ever appears.
 from app.routers.clips import _get_highlight_instances_by_clip
 from app.services.auth_db import (
     delete_ref,

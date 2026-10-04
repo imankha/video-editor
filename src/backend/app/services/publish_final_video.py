@@ -329,6 +329,24 @@ def publish_final_video(
             )
         """, (project_id,))
 
+    # T11430 fixround2 (BLOCKING): also refresh THIS project's OWN per-instance
+    # snapshot (projects.reel_source_*). The frontend reads staleness exclusively
+    # from the per-project snapshot now, so a publish that refreshed only the
+    # shared raw_clips snapshot above would leave this project permanently reading
+    # "Clipped" (T8070: "every real export re-freezes it"). Scoped to id = ? so
+    # sibling highlights keep their independent snapshots. Column-guarded (v056).
+    if column_exists(cursor, "projects", "reel_source_start_time"):
+        cursor.execute("""
+            UPDATE projects
+            SET reel_source_start_time = (
+                    SELECT start_time FROM raw_clips WHERE id = projects.source_raw_clip_id
+                ),
+                reel_source_end_time = (
+                    SELECT end_time FROM raw_clips WHERE id = projects.source_raw_clip_id
+                )
+            WHERE id = ? AND source_raw_clip_id IS NOT NULL
+        """, (project_id,))
+
     return {
         "final_video_id": final_video_id,
         "filename": output_filename,

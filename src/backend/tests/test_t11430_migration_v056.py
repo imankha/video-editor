@@ -260,3 +260,92 @@ def test_fresh_ensure_database_already_has_the_columns(tmp_path):
         path = USER_DATA_BASE / user_id
         if path.exists():
             shutil.rmtree(path, ignore_errors=True)
+
+
+def _make_pre_v056_db_with_reel_source(tmp_path):
+    """Like _make_pre_v056_db but raw_clips + projects carry the reel_source_*
+    columns a real pre-v056 DB has (v049 shipped them on raw_clips), so the
+    per-project reel_source backfill chain is exercised. projects here lacks the
+    reel_source columns (v056 adds them)."""
+    db = tmp_path / "profile.sqlite"
+    conn = sqlite3.connect(str(db))  # no row_factory -> tuples
+    conn.execute("""
+        CREATE TABLE raw_clips (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            start_time REAL,
+            end_time REAL,
+            auto_project_id INTEGER,
+            reel_source_start_time REAL,
+            reel_source_end_time REAL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            aspect_ratio TEXT NOT NULL DEFAULT '9:16',
+            working_video_id INTEGER,
+            final_video_id INTEGER,
+            archived_at TIMESTAMP DEFAULT NULL
+        )
+    """)
+    conn.execute("CREATE TABLE working_clips (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, raw_clip_id INTEGER)")
+    conn.execute("""
+        CREATE TABLE final_videos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, source_clip_id INTEGER,
+            aspect_ratio TEXT, published_at TIMESTAMP, clip_count INTEGER
+        )
+    """)
+    conn.commit()
+    return conn
+
+
+def test_backfill_unproduced_draft_gets_reel_source_snapshot(tmp_path):
+    """fixround2 BLOCKING second-consequence: an UNPRODUCED linked draft (no
+    working_video_id, no final_video_id, and its play's shared reel_source is
+    NULL) still gets a per-project snapshot at backfill -- from the play's
+    CURRENT boundaries -- so it never lands NULL and later reads permanently
+    Clipped after its first export."""
+    conn = _make_pre_v056_db_with_reel_source(tmp_path)
+    # Play at [10,20], NEVER produced -> raw_clips.reel_source_* NULL.
+    conn.execute(
+        "INSERT INTO raw_clips (id, start_time, end_time, auto_project_id, "
+        "reel_source_start_time, reel_source_end_time) VALUES (1, 10.0, 20.0, 1, NULL, NULL)"
+    )
+    # Unproduced draft project linked via auto_project_id, no videos.
+    conn.execute("INSERT INTO projects (id, aspect_ratio) VALUES (1, '9:16')")
+    conn.commit()
+
+    V056ProjectSourceRawClip().up(conn)
+
+    row = conn.execute(
+        "SELECT source_raw_clip_id, reel_source_start_time, reel_source_end_time FROM projects WHERE id = 1"
+    ).fetchone()
+    conn.close()
+    assert row[0] == 1, "source_raw_clip_id must be linked via auto_project_id"
+    # Falls back to the play's CURRENT boundaries (shared snapshot was NULL).
+    assert row[1] == 10.0, f"unproduced draft must inherit current boundaries, got {row[1]!r}"
+    assert row[2] == 20.0
+
+
+def test_backfill_produced_project_keeps_export_time_window(tmp_path):
+    """A produced project whose play DRIFTED after export keeps its export-time
+    window (raw_clips.reel_source_*), NOT the drifted current boundaries -- the
+    COALESCE prefers the shared snapshot when present."""
+    conn = _make_pre_v056_db_with_reel_source(tmp_path)
+    # Play produced at [10,15] (reel_source frozen there), then drifted to [30,40].
+    conn.execute(
+        "INSERT INTO raw_clips (id, start_time, end_time, auto_project_id, "
+        "reel_source_start_time, reel_source_end_time) VALUES (1, 30.0, 40.0, 1, 10.0, 15.0)"
+    )
+    conn.execute("INSERT INTO projects (id, aspect_ratio, working_video_id) VALUES (1, '9:16', 99)")
+    conn.commit()
+
+    V056ProjectSourceRawClip().up(conn)
+
+    row = conn.execute(
+        "SELECT reel_source_start_time, reel_source_end_time FROM projects WHERE id = 1"
+    ).fetchone()
+    conn.close()
+    assert (row[0], row[1]) == (10.0, 15.0), (
+        f"produced project must keep its export-time window, not the drifted current, got {row!r}"
+    )

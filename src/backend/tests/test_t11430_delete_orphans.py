@@ -141,3 +141,42 @@ def test_delete_preserves_published_sibling_but_removes_dead_draft(client):
 
     assert pub_row is not None, "a published highlight must survive deletion of its source play"
     assert draft_row is None, "the dead unpublished draft must be cleaned up"
+
+
+def test_delete_preserves_manually_created_project_linked_via_backfill(client):
+    """fixround2 minor 1: a LEGACY manually-created project (is_auto_created = 0)
+    linked to the play only via the v056 working_clips/final_videos backfill must
+    NOT be swept by the auto-highlight delete machinery -- matching
+    _get_highlight_instances_by_clip's own is_auto_created exclusion."""
+    from app.database import get_db_connection
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        clip_id = _new_clip(cursor)
+        conn.commit()
+        # Manually-created, unpublished, single-clip project linked via
+        # source_raw_clip_id + a working_clip (the v056 chain-(b) shape).
+        cursor.execute(
+            "INSERT INTO projects (name, aspect_ratio, is_auto_created, source_raw_clip_id) "
+            "VALUES ('Manual Project', '9:16', 0, ?)",
+            (clip_id,),
+        )
+        manual = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO working_clips (project_id, raw_clip_id, version, sort_order) VALUES (?, ?, 1, 0)",
+            (manual, clip_id),
+        )
+        conn.commit()
+
+    resp = client.delete(f"/api/clips/raw/{clip_id}")
+    assert resp.status_code == 200, resp.text
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM projects WHERE id = ?", (manual,))
+        manual_row = cursor.fetchone()
+
+    assert manual_row is not None, (
+        "a manually-created (is_auto_created=0) project must NOT be deleted by the "
+        "auto-highlight orphan sweep, even though the v056 backfill linked it"
+    )

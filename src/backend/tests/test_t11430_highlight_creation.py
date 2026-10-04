@@ -313,3 +313,23 @@ def test_force_new_over_http_creates_second_project_with_optional_aspect(client,
     assert {p1, p2}.issubset(ids), f"both projects must link to the play, got {rows!r}"
     by_id = {r["id"]: r for r in rows}
     assert by_id[p2]["aspect_ratio"] == "16:9", "force_new honored the explicit horizontal aspect over HTTP"
+
+
+def test_force_new_rejects_invalid_aspect_ratio(client, raw_clip_id):
+    """fixround2 minor 4: an explicit but unrecognized aspect_ratio is rejected
+    (422), never silently coerced to 9:16 (CLAUDE.md no-silent-fallbacks)."""
+    from app.database import get_db_connection
+
+    r = client.put(
+        f"/api/clips/raw/{raw_clip_id}",
+        json={"create_project": True, "force_new": True, "aspect_ratio": "1:1"},
+    )
+    assert r.status_code == 422, f"invalid aspect_ratio must 422, got {r.status_code}: {r.text}"
+
+    # And no project was created by the rejected request.
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) AS n FROM projects WHERE source_raw_clip_id = ?", (raw_clip_id,)
+        )
+        assert cursor.fetchone()["n"] == 0, "a rejected invalid-aspect request must not create a project"
