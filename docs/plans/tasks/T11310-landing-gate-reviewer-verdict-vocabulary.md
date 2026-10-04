@@ -1,10 +1,10 @@
 # T11310: Landing gate reviewer captures sometimes return the wrong verdict word
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-25
-**Updated:** 2026-09-25
+**Updated:** 2026-10-04
 
 ## Problem
 
@@ -105,6 +105,12 @@ not found in []`) and passes after. `test_landing_gate.py` 20/20 and `test_ci_po
 green; no regressions. No change to the bootstrap/policy-review gate (`check()`'s
 `policy_changes_approved` requirement untouched). Trusted-controller landing is the supervisor's
 job, not self-certified by this branch.
+
+**2026-10-04 (merged)**: Reviewer APPROVED (0 blocking/0 major, 4 minor) + Proof Verifier
+VERIFIED, both independently reproducing red-then-green. Per CLAUDE.md's Landing Policy this
+is a trusted-controller change, so it could not be self-landed on agent scrutiny alone -- the
+user gave explicit sign-off after a plain-language explanation of the diff. Merged PR #560
+(`f89c239ab`).
 
 ## Acceptance Criteria
 
