@@ -1,5 +1,55 @@
 ---
 domain: keyframes-framing
+updated: 2026-10-04 (Epic A "Frame Highlight unlock", T11700/T11710/T11720 — the Focus screen now
+TEACHES how to unlock Generate on every layout. **T11700 — "Set focus point" button on every layout:**
+a button under the stage (desktop/tablet in `FramingActionRow`, `hidden sm:flex`; portrait phone
+rendered directly in `FocusModeView` under the stage, `sm:hidden`, above `RotateNudge`) commits the
+crop box WHERE IT IS NOW via `FocusModeView.handleSetFocusPointHere` → the SAME `onCropComplete`
+prop the drag path uses (→ `FocusContainer.handleCropComplete` → surgical `add_crop_keyframe`). NOT
+a second write path — it mirrors the landscape cockpit's `addFocusPointAtPlayhead`. Amber at 0 focus
+points ("Set focus point"), gray secondary at 1+ ("Add focus point", label reused from
+`FOCUS_COCKPIT.ADD_FOCUS_POINT`). Transient confirmation "Focus point set at m:ss" via a local
+`justSetAt` useState cleared by a 2500ms timeout (set in the click handler, NEVER a useEffect; copy
+says "set", never "saved"). Hidden while `previewActive`. Disabled while a crop drag is in progress:
+`CropOverlay` gained an `onDragStateChange(bool)` callback fired ONCE per gesture at pointer
+down(true)/up/cancel(false) — never per move (move path stays ref-based, no re-render) — which
+`FocusModeView` stores as `isCropDragging` (memory-only). Strings in `FOCUS_EDITOR`
+(`config/displayNames.js`). Coverage: `FocusModeView.setFocusPoint.test.jsx`,
+`FramingActionRow.test.jsx` T11700 block, `CropOverlay.test.jsx` (unchanged drag tests still green).
+**T11710 — teach the drag:** `CropOverlay` renders the 0-focus-point coaching cues, derived from a
+single `showCoach = focusPointCount === 0 && !isDragging && !isPlaying && !chromeHidden` (no state,
+nothing persisted): an amber ring on the crop box (`ring-2 ring-amber-400/70 animate-pulse
+motion-reduce:animate-none`) + a top-center `pointer-events-none` chip ("Drag the box onto your
+player", `FOCUS_HINTS.COACH_DRAG`). `FocusModeView` passes `focusPointCount`/`isDragging`
+(=isCropDragging)/`isPlaying` down. **CropLayer empty-timeline hint fixed:** the old rule keyed on
+`visibleKeyframes.length === 2 && !isEndKeyframeExplicit` (retired permanent-boundary model) so the
+flat-list 0-keyframe start state showed nothing; now shows `FOCUS_HINTS.TIMELINE_EMPTY` at
+`length === 0`, nothing at 1+. Framing instructions copy moved from inline JSX into
+`FRAMING_INSTRUCTIONS` (displayNames), naming the drag gesture + the Set focus point button; the
+ONLY allowed motion claim is "moves smoothly between the focus points you set" (no track/follow/
+center). Disabled-Generate caption → `FOCUS_HINTS.GENERATE_LOCKED` ("Move the box onto your player,
+then tap Set focus point") in BOTH `ExportButtonView` (visible `export-unframed-caption`) and
+`ExportButtonContainer.buttonTitle`. Rotate-nudge title → `FOCUS_HINTS.ROTATE_TITLE` ("Optional:
+rotate your phone for a larger video"); **its SUBTITLE deliberately kept at the old value pending
+T11740** (which removes the portrait horizontal overflow — the mode-tab row `mode-framing`/
+`mode-overlay` is the real offender, ~556px at 390; confirmed NOT caused by Epic A). Coverage:
+`CropOverlay.test.jsx` T11710 block, `CropLayer.test.jsx`, `FramingInstructions.test.jsx`,
+`RotateNudge.test.jsx`, `ExportButtonView.test.jsx`. **T11720 — compact locked band on phones:**
+`ActionBand` gained `compactLocked` — below `sm` only (`sm:hidden` compact ~52px row: amber
+`FOCUS_HINTS.GENERATE_LOCKED_SHORT` caption + a disabled "Generate" pill `generate-locked-pill`),
+with the full band kept `hidden sm:flex` at sm+ so the REAL `primary-cta` stays in the DOM. Derived
+in `ExportButtonView` as `isFramingMode && hasUnframedClips && !isCurrentlyExporting` (ultimately
+`clipIsFramed`), never stored. The sticky band wrapper stays `sticky`/`relative` (SettingsRail
+anchors inside it, `absolute bottom-full` — T10820); only the band's inner height changes. Style
+note in `ui-style-guide.md`. Coverage: `ActionBand.test.jsx` compact block, `ExportButtonView.test
+.jsx` T11720 block. **e2e (live-driven in-container, honest caveat):** `T8510-export-guard.qa.spec.js`
+caption regex + stale "Generate Framing"→"Generate Highlight" locator updated and a "tap Set focus
+point → Generate enables" case added at 390/1440; `T4880` Framing locator fixed to "Generate
+Highlight". Both HONEST-SKIP/can't-go-green in the /dotask container: this account has no "Not
+started"/unframed draft (T8510 fixture gap) and its first openable framing draft is already RENDERED
+(CTA = "Back to Preview", not "Generate Highlight") — same fixture-limited class as T5790/T8510.
+The 0-focus-point coach cues + compact band are proven by the Vitest suite (140 curated tests green)
+rather than live here.)
 updated: 2026-10-03 (T11420 — Spotlight (Overlay) now opens with its timeline at the LEFT EDGE
 (scroll 0) after a Framing export. INVARIANT + landmine: `OverlayScreen` is mounted only under
 `{editorMode === EDITOR_MODES.OVERLAY && ...}` (App.jsx), so it REMOUNTS on every
