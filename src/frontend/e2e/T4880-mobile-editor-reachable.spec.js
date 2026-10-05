@@ -82,7 +82,14 @@ test.describe('T4880 mobile editor reachability', () => {
       // focus point button — its reachable primary control is the cockpit CTA
       // (`primary-cta`), disabled while unframed, so we frame first.
       await setBtn.click();
-      await expect(page.locator('[data-testid="primary-cta"]:visible').first(), 'primary CTA enabled after first point').toBeEnabled();
+      // After unlock the real primary CTA (Generate Highlight) takes over the band
+      // in PORTRAIT. Restore the original T4880 guarantee for it: not just enabled,
+      // but REACHABLE + clickable + in the viewport (the sticky band keeps it
+      // on-screen) — the whole point of the regression was a takeover hiding it.
+      const portraitCta = page.locator('[data-testid="primary-cta"]:visible').first();
+      await assertReachableAndClickable(page, portraitCta, 'primary CTA after unlock (portrait)');
+      await expect(portraitCta, 'unlocked CTA sits in the viewport at 390').toBeInViewport();
+      await saveEvidence(page, 'T4880-framing-cta-portrait-unlocked');
 
       // --- Landscape (cockpit layout): the primary CTA must be reachable +
       // clickable (the regression was a takeover hiding it). Re-resolve after the
