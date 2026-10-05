@@ -101,17 +101,8 @@ test.describe('T11740 Annotate editor header fits phones', () => {
       await assertHeaderFits(page, `Annotate @ ${width}px`);
       await assertTitleVisibleWithWidth(page, `Annotate @ ${width}px`);
 
-      // Page-level no-overflow holds at every width EXCEPT 320, where a SEPARATE,
-      // pre-existing overflow lives in the video/controls card at AnnotateModeView.jsx:~733
-      // (a `flex gap-2` row ~339px wide in a ~278px box). Proven pre-existing: the identical
-      // scrollWidth 360 shows on master with this branch's source reverted. That card is
-      // owned by T11780 (annotate video-card overflow @320, filed separately) — NOT T11750,
-      // whose scope is only the zero-plays action row at AnnotateModeView.jsx:1470-1499. It
-      // is file-disjoint from T11740; fixing it here would cross task boundaries. The
-      // header-fits assertion above still proves T11740's own fix at 320.
-      if (width !== 320) {
-        await assertNoHorizontalOverflow(page);
-      }
+      // Page-level no-overflow at every width, 320 included (T11780 fixed the video/controls card).
+      await assertNoHorizontalOverflow(page);
       await saveEvidence(page, `t11740-annotate-${width}`);
     });
   }
