@@ -1,6 +1,6 @@
 # T11740: Editor header fits phones, game name always visible
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 3
 **Tier:** M (frontend only, ~4 files + 1 new e2e spec, ~80 LOC)
