@@ -67,6 +67,10 @@ export const ANNOTATE = {
   // then closes. Nothing is ever discarded.
   DONE: 'Done',
   PREVIEW_PLAYS: 'Review plays',           // N26 — playback-all button (was "Playback Annotations"/"Preview plays")
+  // T11750: the zero-plays "Review plays" control is locked (no plays to review
+  // yet). It stays tappable (aria-disabled, not disabled) and this toast explains
+  // why, deduped so repeated taps show one toast.
+  REVIEW_PLAYS_LOCKED_TOAST: 'Mark your first play to review it.',
   PREVIEW_CLIP: 'Preview clip',            // N26 — per-clip preview (unchanged)
   LAYER_LABEL: 'Play category',            // N28 — the control formerly "Clip layer"/"Layer"
   LAYER_MINE: 'My athlete',                // N28, reversed by T9860 (2026-09-14)

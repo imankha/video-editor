@@ -282,13 +282,15 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
     expect(heading.textContent).toBe(baseGame.name);
   });
 
-  it('truncates a long name (single line, no wrap) and carries a full-text title tooltip', () => {
+  it('clamps a long name to two lines (T11760, no single-line ellipsis) and carries a full-text title tooltip', () => {
     const longName = 'A Very Long Tournament Game Name That Should Not Wrap Or Overflow The Tile';
     render(<GameTile game={{ ...baseGame, name: longName }} {...handlers()} />);
     const heading = screen.getByRole('heading', { level: 3 });
     expect(heading.textContent).toBe(longName);
-    expect(heading.className).toContain('truncate');
-    // Full name still reachable (hover tooltip) even though it's visually clipped.
+    // T11760: names up to ~40 chars now wrap onto two lines instead of truncating to one.
+    expect(heading.className).toContain('line-clamp-2');
+    expect(heading.className).not.toContain('truncate');
+    // Full name still reachable (hover tooltip) even though it's clipped past two lines.
     expect(heading.getAttribute('title')).toBe(longName);
   });
 
