@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { createRef } from 'react';
 import FocusCockpit from '../FocusCockpit';
 
@@ -159,5 +159,20 @@ describe('FocusCockpit (T10840 shell)', () => {
     renderCockpit({ isPlaying: true, keyframes: [] });
     expect(cropOverlayCapture.last).toBeTruthy();
     expect(cropOverlayCapture.last.isPlaying).toBe(true);
+  });
+
+  // Reviewer MAJOR: the cockpit must also wire the DRAG pair (isDragging +
+  // onDragStateChange) into CropOverlay, held in local view state exactly as the
+  // portrait path does — without it the coach ring/chip stay up for the whole
+  // first drag in landscape. Before the fix both were absent (undefined).
+  it('wires isDragging + onDragStateChange, and a drag flips isDragging (coach cues hide while dragging)', () => {
+    cropOverlayCapture.last = null;
+    renderCockpit({ keyframes: [] });
+    expect(cropOverlayCapture.last).toBeTruthy();
+    expect(typeof cropOverlayCapture.last.onDragStateChange, 'cockpit passes a drag-state setter').toBe('function');
+    expect(cropOverlayCapture.last.isDragging, 'isDragging starts false, not undefined').toBe(false);
+    // The setter must drive the SAME state CropOverlay reads: a drag-start flips it.
+    act(() => { cropOverlayCapture.last.onDragStateChange(true); });
+    expect(cropOverlayCapture.last.isDragging, 'drag-start flips isDragging true').toBe(true);
   });
 });

@@ -137,18 +137,21 @@ export async function createClipViaUI(page, layerName, opts = {}) {
  * @returns {Promise<{rawClipId: number, projectId: number|null, name: string}>}
  */
 export async function createUnframedDraft(context, { profileId = PROFILE_ID, gameId = 11, nameHint = 'QA unframed draft' } = {}) {
-  // Each attempt uses a UNIQUE name/end_time so a retry can never collide with a
-  // partially-committed prior attempt (which would idempotent-update instead of
-  // create). The save does an R2 compare-and-swap; back-to-back create/delete
-  // cycles across a test run can momentarily race the version cache and return a
-  // retryable 503 {code:"sync_failed"} — bounded-retry ONLY that (the app marks it
-  // retryable), never a non-retryable failure.
+  // Every call uses a UNIQUE (name, start/end_time) derived from the clock, so the
+  // save's idempotency key (game_id + end_time + video_sequence) can NEVER collide
+  // with a clip left behind by an earlier test whose cleanup failed — otherwise one
+  // stray clip cascades into "did not create a new auto-project" on every later
+  // test. end_time stays comfortably inside the (minutes-long) seeded game video.
+  // The save does an R2 compare-and-swap; back-to-back create/delete cycles can
+  // momentarily race the version cache and return a retryable 503
+  // {code:"sync_failed"} — bounded-retry ONLY that (the app marks it retryable).
+  const base = 2 + (Date.now() % 600) / 10; // 2.0 .. 62.0 s, unique per call
   let lastErr = '';
   for (let attempt = 0; attempt < 3; attempt++) {
     const name = `${nameHint} ${Date.now()}-${attempt}`;
     const res = await context.request.post(`${apiBase}/clips/raw/save`, {
       headers: { 'X-Profile-ID': profileId, 'X-Test-Mode': 'true' },
-      data: { game_id: gameId, start_time: 2.0, end_time: 5.0 + attempt * 0.5, name, create_project: true },
+      data: { game_id: gameId, start_time: base, end_time: base + 3 + attempt * 0.5, name, create_project: true },
     });
     if (res.ok()) {
       const body = await res.json();
@@ -177,8 +180,17 @@ export async function createUnframedDraft(context, { profileId = PROFILE_ID, gam
  */
 export async function deleteClip(context, rawClipId) {
   if (!rawClipId) return;
-  const res = await context.request.delete(`${apiBase}/clips/raw/${rawClipId}`, { headers: { 'X-Profile-ID': PROFILE_ID } });
-  if (!res.ok()) {
-    throw new Error(`[annotateClips cleanup] FAILED to delete test clip ${rawClipId} (${res.status()}) — a stray clip may remain in the real account. Delete it manually: DELETE /api/clips/raw/${rawClipId}`);
+  // Retry a few times: under a busy shared stack the delete can transiently 401
+  // (session cache race) or 5xx (R2 CAS race). A 404 means it is already gone
+  // (treat as success). Only a persistent non-2xx/404 throws loudly.
+  let last = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await context.request.delete(`${apiBase}/clips/raw/${rawClipId}`, {
+      headers: { 'X-Profile-ID': PROFILE_ID, 'X-Test-Mode': 'true' },
+    });
+    if (res.ok() || res.status() === 404) return;
+    last = res.status();
+    await new Promise((r) => setTimeout(r, 700));
   }
+  throw new Error(`[annotateClips cleanup] FAILED to delete test clip ${rawClipId} (last ${last}) — a stray clip may remain in the real account. Delete it manually: DELETE /api/clips/raw/${rawClipId}`);
 }

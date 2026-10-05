@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useMemo, useRef } from 'react';
-import { FocusMode, CropOverlay } from '../modes/focus';
+import { FocusMode } from '../modes/focus';
 import { API_BASE } from '../config';
 import * as focusActions from '../api/focusActions';
 import { clipCropKeyframes, clipSourceDuration } from '../utils/clipSelectors';
@@ -1174,45 +1174,6 @@ export function FocusContainer({
   };
 }
 
-/**
- * FocusVideoOverlay - Crop overlay component for Framing mode.
- *
- * NOTE: currently has no JSX caller (barrel-exported only); the live overlays are
- * FocusModeView's portrait path and FocusCockpit's landscape path. `focusPointCount`
- * and `isPlaying` are REQUIRED (no defaults) so that if this wrapper is ever wired
- * up it cannot silently pin CropOverlay's `showCoach` cues on — the exact bug that
- * hit the cockpit when those props were omitted (no-silent-fallback).
- */
-export function FocusVideoOverlay({
-  videoRef,
-  metadata,
-  currentCropState,
-  onCropChange,
-  onCropComplete,
-  aspectRatio,
-  zoom,
-  panOffset,
-  dragCrop,
-  focusPointCount,
-  isPlaying,
-}) {
-  if (!metadata || !currentCropState) return null;
-
-  return (
-    <CropOverlay
-      videoRef={videoRef}
-      videoMetadata={metadata}
-      currentCrop={dragCrop || currentCropState}
-      onCropChange={onCropChange}
-      onCropComplete={onCropComplete}
-      aspectRatio={aspectRatio}
-      zoom={zoom}
-      panOffset={panOffset}
-      focusPointCount={focusPointCount}
-      isPlaying={isPlaying}
-    />
-  );
-}
 
 /**
  * FocusTimeline - Timeline component for Framing mode

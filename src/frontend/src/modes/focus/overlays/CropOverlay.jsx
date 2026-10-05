@@ -65,9 +65,16 @@ export default function CropOverlay({
   // and the user is neither dragging nor playing. Purely derived from these
   // props — no state, nothing persisted; both disappear the moment the first
   // focus point exists.
-  focusPointCount = 0,
-  isDragging = false,
-  isPlaying = false
+  //
+  // These three have NO defaults ON PURPOSE (no-silent-fallback for internal
+  // data): a caller that forgets to wire them gets `undefined`, which makes
+  // `showCoach` degrade VISIBLY (the coach cues never appear) rather than
+  // silently pinning them ON forever — the exact landmine that let the cockpit
+  // ship the cues always-on (BLOCKING) and ignore drags (MAJOR). Every render
+  // site must pass the real values.
+  focusPointCount,
+  isDragging,
+  isPlaying,
 }) {
   // Transient drag/resize state lives in refs (not useState) so the window
   // move/up listeners can be attached synchronously in the pointer-down handler
