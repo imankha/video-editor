@@ -3,7 +3,7 @@
  *
  * Verifies (per acceptance criteria) against the running dev app with a real account:
  *  - Buy-credits modal renders the credit packs single-sourced from backend.
- *  - "1 credit = 1 second of exported video" rule is visible; free actions listed.
+ *  - "1 credit per second" rule is visible; free actions listed.
  *  - Usage history surface renders from /credits/transactions.
  *  - Game upload preview shows credit cost + 30-day window before activation.
  * Captures screenshot evidence at desktop (1280) and mobile (375).
@@ -37,17 +37,17 @@ async function openBuyCredits(page) {
   const pill = page.getByTitle(/click to buy more/);
   await pill.waitFor({ timeout: 25000 });
   await pill.click();
-  await expect(page.getByText(/1 credit = 1 second/).first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText(/1 credit per second/).first()).toBeVisible({ timeout: 10000 });
 }
 
 /**
  * Read the rendered pack ladder STRUCTURALLY: each pack is a <button> that shows
- * "... of exported video" and a "$" price. Returns the price of each pack in cents
+ * "... of generated video" and a "$" price. Returns the price of each pack in cents
  * (regex-extracted from the button's own text, so it survives class refactors AND
  * a repricing). No literal price is baked into the assertions.
  */
 async function readPackPricesCents(page) {
-  const packs = page.locator('button:has-text("of exported video")');
+  const packs = page.locator('button:has-text("of generated video")');
   await expect(packs).toHaveCount(3);
   const cents = [];
   for (let i = 0; i < 3; i++) {
