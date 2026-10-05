@@ -3102,10 +3102,30 @@ The full checklist for an 11th→Nth sport:
   unify only if a user reports the mismatch.
   Date parsing for ALL of this lives in `src/frontend/src/utils/matchDate.js` — one parser, on
   purpose, because the UTC-midnight landmine must not get a second implementation.
-  Layout: desktop column count is derived (`gamesGridColumns`, clamp 2-4) and group headers sit
-  in a sticky left rail at `lg`+; see `.claude/references/ui-style-guide.md` § Grouped grid with
-  rail header. `GamesListSkeleton` consumes the same exported grid map — a private copy is the
-  T6310 drift bug.
+  Layout (T7330, reworked T11760 for phones/tablets): the grid is **one column on phones**
+  (`grid-cols-1` on the container base). At `sm`+ it becomes a **packing grid** of
+  `gamesGridColumns(groups)` columns (`clamp(biggest group, 2, 4)` — this is now the sm+ density,
+  NOT the phone count), but the **packing grid is capped at 3** (`gamesPackColumns = min(N, 3)`):
+  an N=4 month at 4-up shrinks tablet tiles to ~80-98px at 640-768px, shorter than their 2-line
+  scrim, and the title pencil collides with the top-right kebab (browser-measured, T11760 reviewer
+  round). So an N=4 month packs 3-up through sm..md and reaches 4-up only at `lg` (rail tiles are
+  wide enough there) -- matching pre-T11760's `sm:grid-cols-3 lg:grid-cols-4` and the Uploading rail.
+  Each month/tournament group occupies `gamesGroupSpan(cells, packColumns) = min(cells, packColumns)`
+  columns (`COL_SPAN` map) with an inner tile grid of that span (`GAMES_TILE_COLS_SM`),
+  so two consecutive 1-game months pack side by side in one row (no `grid-flow-dense` — chronological
+  order is preserved; a bigger month between two small ones breaks the pairing, by design). At `lg`+
+  the container reverts to `lg:block` stacked rows and each group regains the sticky left-rail layout
+  (`GAMES_GROUP_SECTION_CLASS`) with inner tiles at the full density `N` (`GAMES_TILE_COLS_LG`) —
+  desktop is unchanged from pre-T11760. Class maps are explicit Tailwind literals (purge + greppability):
+  `GRID_COLS` / `COL_SPAN` / `GAMES_TILE_COLS_SM` / `GAMES_TILE_COLS_LG`, all in `ProjectManager.jsx`.
+  `GameTile`'s title is `line-clamp-2 break-words leading-tight` (was single-line `truncate`): long
+  opponent names wrap to 2 lines, fully visible, and the bottom scrim auto-sizes to cover them.
+  `GamesListSkeleton` and the Uploading rail consume the FLAT `GAMES_TILE_GRID_BY_COLUMNS` map (phone
+  1-up, `sm:grid-cols-N`) — a private copy is the T6310 drift bug; the skeleton matching the loaded
+  grid's column count at every width (no jump on load) is the invariant. See
+  `.claude/references/ui-style-guide.md` § Grouped grid with rail header. Browser-verified at
+  320/360/375/390/768/1440 by `src/frontend/e2e/T11760-harness/` + `e2e/T11760-verify.mjs` (standalone,
+  not CI — needs the Vite dev server; no backend/R2).
 
 - **Two game-navigation breadcrumbs, different destinations (T5820).** `setPendingGame(gameId, ...)`
   (`utils/pendingNavigation.js`) deep-links into the ANNOTATE editor (consumed by AnnotateScreen).

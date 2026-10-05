@@ -143,14 +143,16 @@ describe('T9660 — full-width gallery width class (no narrow fixed column)', ()
     expect(GAMES_GRID_CONTAINER_CLASS).not.toMatch(/\bw-\[\d/);
   });
 
-  it('reflows responsively on mobile — cards wrap, they do not shrink into a fixed column', () => {
-    // Mobile 2-up, tablet 3-up, desktop 4-up: the grid REFLOWS by breakpoint rather
-    // than clamping the whole gallery to one narrow column.
-    expect(GAMES_TILE_GRID_BY_COLUMNS[2]).toContain('grid-cols-2');
+  it('reflows responsively — one column on phones, widening by breakpoint (T11760)', () => {
+    // T11760: phones get ONE full-width column (room for a 2-line title); the grid widens
+    // to 2/3/4 from sm up. The guard's intent is unchanged -- the gallery REFLOWS by
+    // breakpoint, it never clamps the whole thing to one narrow fixed reading column.
+    expect(GAMES_TILE_GRID_BY_COLUMNS[2]).toContain('sm:grid-cols-2');
     expect(GAMES_TILE_GRID_BY_COLUMNS[3]).toContain('sm:grid-cols-3');
     expect(GAMES_TILE_GRID_BY_COLUMNS[4]).toContain('lg:grid-cols-4');
     for (const cls of Object.values(GAMES_TILE_GRID_BY_COLUMNS)) {
-      expect(cls).toContain('grid-cols-2'); // mobile floor is always a wrapping grid
+      expect(cls).toContain('grid-cols-1');   // phone floor is a single full-width column...
+      expect(cls).toContain('sm:grid-cols-'); // ...that widens past the sm breakpoint
     }
   });
 
@@ -207,5 +209,83 @@ describe('T9660 — empty account is guided inline, never gated by a modal wizar
     expect(screen.queryByRole('alertdialog')).toBeNull();
     // The inline guide's direct-upload path is still present.
     expect(document.querySelector('[data-tutorial-target="clips-add-video"]')).toBeTruthy();
+  });
+});
+
+// T11760 — month groups PACK into one grid at sm+ so small months sit side by side
+// (two 1-game months share a row) instead of each taking a near-empty row. jsdom can't
+// measure the resulting geometry, so pin the class contract that produces it (the live
+// geometry is asserted in the mandatory QA sweep). GameTile is stubbed above, so each
+// tile is a data-testid="game-tile" node and group sizes are countable.
+describe('T11760 — month groups pack side by side at sm+ (packed spans)', () => {
+  const g = (id, date) => ({
+    id, name: `g${id}`, game_date: date, created_at: '2026-06-01 10:00:00',
+    clip_count: 2, is_reference: false,
+  });
+
+  function renderGames(games) {
+    window.history.replaceState(null, '', '/home/games');
+    return render(
+      <AppStateProvider value={APP_STATE}>
+        <ProjectManager
+          projects={[]}
+          loading={false}
+          games={games}
+          gamesLoading={false}
+          onSelectProject={vi.fn()}
+          onSelectProjectWithMode={vi.fn()}
+          onRefreshProjects={vi.fn()}
+          onDeleteProject={vi.fn()}
+          onAnnotateWithFile={vi.fn()}
+          onLoadGame={vi.fn()}
+          onDeleteGame={vi.fn()}
+          onFetchGames={vi.fn()}
+        />
+      </AppStateProvider>
+    );
+  }
+
+  it('gives each 1-game month a single-column span so two share a row', () => {
+    const { container } = renderGames([g(1, '2026-05-10'), g(2, '2026-04-10')]);
+    const sections = [...container.querySelectorAll('section[data-group-kind]')];
+    expect(sections).toHaveLength(2);
+    sections.forEach((s) => expect(s.className).toContain('sm:col-span-1'));
+    // The packing grid is 2 columns at sm (clamp(biggest=1, 2, 4)) and one column on phones.
+    const outer = sections[0].parentElement;
+    expect(outer.className).toContain('sm:grid-cols-2');
+    expect(outer.className).toContain('grid-cols-1');
+    expect(outer.className).toContain('lg:block'); // lg reverts to stacked rail rows
+  });
+
+  it('lets a full month span the whole row while a 1-game month stays one column', () => {
+    const { container } = renderGames([g(1, '2026-05-10'), g(2, '2026-05-20'), g(3, '2026-04-10')]);
+    const sections = [...container.querySelectorAll('section[data-group-kind]')];
+    const may = sections.find((s) => s.querySelectorAll('[data-testid="game-tile"]').length === 2);
+    const april = sections.find((s) => s.querySelectorAll('[data-testid="game-tile"]').length === 1);
+    // biggest group = 2 -> density 2; May (2 games) spans the whole 2-col row, April (1) half.
+    expect(may.className).toContain('sm:col-span-2');
+    expect(april.className).toContain('sm:col-span-1');
+  });
+
+  it('caps a busy (N=4) month at a 3-column packing grid, 4-up only at lg (no tiny tablet tiles)', () => {
+    // 4 games in one month -> density 4, but the sm..md packing grid caps at 3 so tablet tiles
+    // never shrink below ~195px and the title pencil cannot collide with the kebab (the overlap
+    // the reviewer flagged, browser-measured up to 768px). The 4th column only returns at lg.
+    const { container } = renderGames([
+      g(1, '2026-07-26'), g(2, '2026-07-19'), g(3, '2026-07-12'), g(4, '2026-07-05'),
+    ]);
+    const sections = [...container.querySelectorAll('section[data-group-kind]')];
+    expect(sections).toHaveLength(1);
+    const outer = sections[0].parentElement;
+    // Packing grid is 3 columns at sm (NOT 4), and must never emit a 4th-column class.
+    expect(outer.className).toContain('sm:grid-cols-3');
+    expect(outer.className).not.toContain('sm:grid-cols-4');
+    // The busy month spans the full 3-col packing row at sm, never col-span-4.
+    expect(sections[0].className).toContain('sm:col-span-3');
+    expect(sections[0].className).not.toContain('sm:col-span-4');
+    // Inner tile grid: 3-up at sm, but the full density 4 at lg (rail is wide enough there).
+    const tileGrid = sections[0].querySelector('[data-testid="game-tile"]').closest('.grid');
+    expect(tileGrid.className).toContain('sm:grid-cols-3');
+    expect(tileGrid.className).toContain('lg:grid-cols-4');
   });
 });
