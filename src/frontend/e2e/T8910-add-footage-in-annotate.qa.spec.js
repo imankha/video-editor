@@ -51,7 +51,10 @@ test.describe('T8910 — Add footage entry points in Annotate', () => {
     for (const g of candidates) {
       await openGameInAnnotate(page, g.id);
       await expect(btn).toBeVisible({ timeout: 30000 });
-      if (await btn.isEnabled()) { opened = g; break; }
+      // The button stays disabled until annotateGameId wires up after /load, so
+      // wait for enablement instead of snapshotting isEnabled() right at visibility.
+      const enabled = await expect(btn).toBeEnabled({ timeout: 15000 }).then(() => true, () => false);
+      if (enabled) { opened = g; break; }
       console.log(`[T8910] game id=${g.id} (${g.opponent_name}) source expired -> add-footage disabled; trying next`);
     }
     if (!opened) console.log('[T8910][SKIP] no active game with a loadable source (all expired)');
@@ -75,7 +78,7 @@ test.describe('T8910 — Add footage entry points in Annotate', () => {
     await saveEvidence(page, 'T8910-2-attach-modal-open');
 
     // Close cleanly.
-    await page.getByRole('button', { name: 'Close' }).click();
+    await page.getByRole('button', { name: 'Close' }).last().click();
     await expect(page.getByTestId('footage-picker-empty')).toHaveCount(0);
   });
 
