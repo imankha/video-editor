@@ -1400,7 +1400,9 @@ export function AnnotateModeView({
                   apply. They come back once nothing is selected. */}
               {!isEditMode && (hasAnnotateClips ? (
                 <>
-                  <div className="flex gap-2">
+                  {/* T11780: wrap so the three flex-1 buttons (min-content ~339px)
+                      drop to a second row at 320px instead of overflowing the card. */}
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => playback?.enterPlaybackMode()}
                       disabled={isSourceExpired}
