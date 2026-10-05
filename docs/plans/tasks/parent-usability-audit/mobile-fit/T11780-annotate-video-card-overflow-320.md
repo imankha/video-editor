@@ -1,6 +1,6 @@
 # T11780: Annotate video/controls card overflows at 320px
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-10-04
