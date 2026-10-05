@@ -103,6 +103,38 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
   });
 });
 
+// T11740: the inline variant (compact header, row 2) stacks the icon over the
+// label in equal cells below `md`, then collapses to today's single-row tab at
+// `md`+. Layout classes only — the lock/toast/data-testid contract above is
+// untouched.
+describe('T11740: inline variant responsive layout', () => {
+  it('stacks each tab (flex-col) below md and returns to a row at md+', () => {
+    renderSwitcher({ hasProject: true, hasWorkingVideo: true, inline: true });
+
+    const tab = screen.getByTestId('mode-framing');
+    expect(tab.className).toContain('flex-col');
+    expect(tab.className).toContain('md:flex-row');
+    expect(tab.className).toContain('h-12');
+    expect(tab.className).toContain('md:h-11');
+  });
+
+  it('shrinks the label to text-[11px] below md and restores text-sm at md+', () => {
+    renderSwitcher({ hasProject: true, hasWorkingVideo: true, inline: true });
+
+    const label = screen.getByText('Frame Highlight');
+    expect(label.className).toContain('text-[11px]');
+    expect(label.className).toContain('md:text-sm');
+  });
+
+  it('keeps the non-inline (desktop) tab on a single row (no flex-col)', () => {
+    renderSwitcher({ hasProject: true, hasWorkingVideo: true });
+
+    const tab = screen.getByTestId('mode-framing');
+    expect(tab.className).not.toContain('flex-col');
+    expect(tab.className).toContain('h-11');
+  });
+});
+
 // T11220: the header Focus tab is an AVAILABLE (unlocked) tab for any open
 // project, so without a guard it would switch a legacy multi-clip project into
 // Focus/Framing — which the single-clip editor can't do (it 400s on re-export and
