@@ -1,5 +1,29 @@
 ---
 domain: annotate
+updated: 2026-10-04 (T11740 — **the editor `UnifiedHeader` is TWO ROWS below `md` (768px), one row
+at `md`+**, fixing phone horizontal overflow (556px row in a 390px viewport) where the title
+collapsed to 0px and "Frame Highlight"/"Add Spotlight" were clipped. Row 1 = 44px Back
+(`w-11 h-11`) + title block (`min-w-0 py-1 md:flex-1` — grows ONLY at md+, see landmine below;
+primary line `line-clamp-2 break-words` so it wraps to 2 lines instead of truncating to nothing;
+Focus/Spotlight add a second `text-xs
+text-gray-400 truncate` line from `breadcrumbGameName`, Annotate's title already IS the game
+name) + chips (`flex-shrink-0`: framing CreditBalance + `extraControls`). Row 2 = the three
+ModeSwitcher tabs in a `grid grid-cols-3` (`md:flex`), each `flex-col` icon-over-label `h-12`,
+label `text-[11px] md:text-sm`. The split is pure Tailwind `md:` NOT `useIsMobile` (which
+misclassifies 768-1023 tablets). ModeSwitcher's `inline` variant carries the responsive classes;
+its click/lock logic, `aria-disabled`, lock icon, and T8480 toast are UNTOUCHED. Dead
+`MODE_ICONS`/`ModeIcon` removed from UnifiedHeader.jsx. Header grows ~40px->~100px on phones —
+accepted. Do NOT use `overflow-x-hidden` (clips Add Spotlight). A separate pre-existing 320px
+overflow lives in AnnotateModeView.jsx (owned by T11780; T11750 covers only the zero-plays action
+row), out of scope here. **LANDMINE (compact
+header right edge):** on Focus the rightmost chip is `FramingHeaderStatus`->`Disc` whose DONE
+(framed) state renders a check badge `absolute -right-1 -bottom-1` that overhangs its corner ~4px;
+with the chips right-pinned (`ml-auto`), that decorative overhang poked 3px past the 390px header
+until `pr-1 md:pr-0` on the wrapper reserved room for it. Also: the title must NOT `flex-grow`
+below md (`min-w-0 py-1 md:flex-1`) — a growing title rounds up and steals ~3px from the
+`flex-shrink-0` chips, re-introducing the overflow. **DEV NOTE:** the WSL2/Docker verify stack's
+Vite file-watcher misses cross-session edits (serves a stale transform); restart the stack with
+`CHOKIDAR_USEPOLLING=true` after editing, or e2e runs test stale code.)
 updated: 2026-10-04 (T11750 — the zero-plays whole-game action row under "Mark play"
 (`AnnotateModeView.jsx`, the `!isEditMode && !hasAnnotateClips` branch) is now a readable
 `flex flex-wrap justify-center gap-2` row of secondary controls, not the old faint
