@@ -586,7 +586,10 @@ export const FOCUS_HINTS = {
   // still has no focus points. Dismissed by its 44px X (a named gesture).
   // T11700/T11710: rephrased so rotating reads as optional, not required.
   ROTATE_TITLE: 'Optional: rotate your phone for a larger video',
-  ROTATE_SUBTITLE: 'Twice the crop area, and nothing scrolls',
+  // T11710 merge-order note (now resolved): held at the old value until T11740
+  // (which removes the portrait horizontal overflow) merged -- it has, so
+  // "nothing scrolls" is honest and the subtitle switches here.
+  ROTATE_SUBTITLE: 'Everything here also works upright',
   ROTATE_DISMISS: 'Dismiss',
   // T11710: coaching copy for the 0-focus-point state. GENERATE_LOCKED is the
   // visible disabled-Generate caption; COACH_DRAG is the chip pinned over the

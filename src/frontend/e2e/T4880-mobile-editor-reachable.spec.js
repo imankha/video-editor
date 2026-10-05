@@ -74,6 +74,14 @@ test.describe('T4880 mobile editor reachability', () => {
       const setBtn = page.locator('[data-testid="set-focus-point-button"]:visible').first();
       await setBtn.waitFor({ timeout: 10000 });
       await assertReachableAndClickable(page, setBtn, 'Set focus point (portrait)');
+      // T11740 (merged) fixed the editor header overflow that previously made this
+      // check fail at 390 (the two-row compact header replaced the one-row
+      // non-wrapping header whose mode tabs ran to ~548px); T11740's own spec
+      // (T11740-editor-header-no-overflow.qa.spec.js) proves zero overflow for the
+      // Focus editor at 320/360/375/390/768 live. Restored to parity with this
+      // spec's original (pre-Epic-A) assertion, which checked overflow after every
+      // reachability step.
+      await assertNoHorizontalOverflow(page);
       await saveEvidence(page, 'T4880-framing-setfocus-portrait');
 
       // Actually frame the clip (one tap) so the primary CTA enables. This also
@@ -89,6 +97,7 @@ test.describe('T4880 mobile editor reachability', () => {
       const portraitCta = page.locator('[data-testid="primary-cta"]:visible').first();
       await assertReachableAndClickable(page, portraitCta, 'primary CTA after unlock (portrait)');
       await expect(portraitCta, 'unlocked CTA sits in the viewport at 390').toBeInViewport();
+      await assertNoHorizontalOverflow(page);
       await saveEvidence(page, 'T4880-framing-cta-portrait-unlocked');
 
       // --- Landscape (cockpit layout): the primary CTA must be reachable +
@@ -114,20 +123,12 @@ test.describe('T4880 mobile editor reachability', () => {
       await assertNoHorizontalOverflow(page);
       await saveEvidence(page, 'T4880-framing-cta-landscape');
 
-      // 699/tablet/desktop widths are all clear of the mode-tab overflow (~548px),
-      // so restore the strict overflow + evidence sweep there. ONLY the narrow
-      // PORTRAIT widths (320-390) are deferred: the mode-tab row (Annotate / Focus /
-      // Overlay) in the `flex-1 overflow-auto` pane extends to ~548px and overflows
-      // them, which is T11740's scope, not this epic's — folding it in here would
-      // fail a reachability spec on an unrelated, out-of-scope defect. The scoped
-      // Epic-A overflow audit at 320-390 (our own elements, logged mode-tab offender)
-      // lives in T11700-frame-unlock.qa.spec.js.
-      for (const w of [699, 768, 1024, 1440]) {
-        await page.setViewportSize({ width: w, height: 900 });
-        await page.waitForTimeout(300);
-        await assertNoHorizontalOverflow(page);
-        await saveEvidence(page, `T4880-framing-desktop-${w}`);
-      }
+      // Full responsive sweep (360/390/699/768/1024/1440), restored to parity with
+      // this spec's pre-Epic-A original: T11740 (merged) fixed the mode-tab-row
+      // overflow at the narrow widths (previously deferred here as "T11740's scope,
+      // not yet merged" — it is merged now and live-proven clean by T11740's own
+      // spec, see the note above).
+      await responsiveSweep(page);
     } finally {
       if (rawClipId) await deleteClip(context, rawClipId);
       await context.close();

@@ -33,6 +33,18 @@ describe('RotateNudge (T10850) — shown/hidden truth table', () => {
     expect(el.textContent).not.toMatch(/—/); // no em dash
   });
 
+  // T11710 step 4 (merge-order note, now resolved): the subtitle was held at the
+  // old "nothing scrolls" claim pending T11740 (which removes the portrait
+  // horizontal overflow). T11740 has merged, so the subtitle must now read the
+  // honest "works upright" copy, not the old placeholder.
+  it('T11710/T11740: subtitle reads "Everything here also works upright" now that T11740 has merged', () => {
+    render(<RotateNudge {...SHOWN} />);
+    const el = screen.getByTestId('rotate-nudge');
+    expect(FOCUS_HINTS.ROTATE_SUBTITLE).toBe('Everything here also works upright');
+    expect(el.textContent).toContain(FOCUS_HINTS.ROTATE_SUBTITLE);
+    expect(el.textContent).not.toContain('Twice the crop area');
+  });
+
   it('is hidden when not mobile', () => {
     render(<RotateNudge {...SHOWN} isMobile={false} />);
     expect(screen.queryByTestId('rotate-nudge')).toBeNull();
