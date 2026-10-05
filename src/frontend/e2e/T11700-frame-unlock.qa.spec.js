@@ -71,6 +71,43 @@ async function auditEpicAOverflow(page, stateLabel) {
   }
 }
 
+/**
+ * T11720 AC1 (the core promise): with the LOCKED compact band present at 390, the
+ * control at `sel` must be REACHABLE above the sticky band — scrollable into the
+ * viewport AND not covered/intercepted by the band. Proven two ways:
+ *   (1) a DOM hit-test at a point inside the element (clamped to the viewport):
+ *       document.elementFromPoint there must resolve to the element (or a
+ *       descendant), NOT the compact band — so the band is not painted over it;
+ *   (2) a real trial click (all Playwright actionability checks, including
+ *       "receives pointer events") — fails if the band intercepts the pointer.
+ * If the sticky wrapper were made `position: fixed` (the T10820 landmine) it would
+ * float over this bottom content and BOTH checks fail — see the mutation note in
+ * the task's STATUS file.
+ */
+async function assertReachableAboveLockedBand(page, sel, label) {
+  const el = page.locator(sel).first();
+  await el.scrollIntoViewIfNeeded();
+  await expect(el, `${label} scrolled into the viewport`).toBeInViewport();
+  const probe = await page.evaluate(({ sel, bandSel }) => {
+    const el = document.querySelector(sel);
+    const band = document.querySelector(bandSel);
+    const r = el.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    // A point inside the element AND inside the viewport (near its top edge, which
+    // is the part that stays clear of a bottom-anchored band).
+    const x = Math.min(Math.max(r.left + r.width / 2, 1), vw - 1);
+    const y = Math.min(Math.max(r.top + 6, 1), vh - 1);
+    const hit = document.elementFromPoint(x, y);
+    const bandCovers = !!band && (hit === band || band.contains(hit));
+    const reachesEl = !!hit && (hit === el || el.contains(hit) || hit.contains(el));
+    return { x: Math.round(x), y: Math.round(y), hitTid: hit?.getAttribute?.('data-testid') || '', hitTag: hit?.tagName || '', bandCovers, reachesEl };
+  }, { sel, bandSel: COMPACT });
+  expect(probe.bandCovers, `${label}: compact band must NOT cover it at (${probe.x},${probe.y}) [hit=${probe.hitTid || probe.hitTag}]`).toBe(false);
+  expect(probe.reachesEl, `${label}: its own point is topmost at (${probe.x},${probe.y}) [hit=${probe.hitTid || probe.hitTag}]`).toBe(true);
+  // Belt-and-suspenders: a real actionability pass (not intercepted by the band).
+  await el.click({ trial: true, timeout: 5000 });
+}
+
 let createdClipId = null;
 
 test.afterEach(async ({ context }) => {
@@ -123,6 +160,14 @@ test('fresh unframed draft: locked compact band, coach cues, and one-tap unlock 
   await expect(page.locator(CHIP), 'coach chip @390 at 0 points').toBeVisible();
   await expect(page.getByText(/No focus points yet/), 'empty timeline hint @390').toBeVisible();
   await saveEvidence(page, 'T11700-live-390-locked');
+
+  // T11720 AC1 (the whole point of the compact band): with the locked band on
+  // screen, the timeline and the "Trim and slo-mo" control must stay REACHABLE
+  // above it (the full-height band used to bury them). Scroll to each and prove it
+  // is in the viewport and NOT covered/intercepted by the sticky compact band.
+  await assertReachableAboveLockedBand(page, '[data-testid="focus-timeline-block"]', 'timeline (locked @390)');
+  await assertReachableAboveLockedBand(page, '[data-testid="advanced-editing-disclosure"]', 'Trim and slo-mo (locked @390)');
+  await saveEvidence(page, 'T11700-live-390-locked-timeline-reachable');
 
   // T11720 AC3: the mobile settings panel still opens ABOVE the band in the LOCKED
   // state. On mobile the panel is the drawer (settings-rail is the desktop-only

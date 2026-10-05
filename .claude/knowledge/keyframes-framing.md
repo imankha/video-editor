@@ -42,14 +42,24 @@ in `ExportButtonView` as `isFramingMode && hasUnframedClips && !isCurrentlyExpor
 `clipIsFramed`), never stored. The sticky band wrapper stays `sticky`/`relative` (SettingsRail
 anchors inside it, `absolute bottom-full` — T10820); only the band's inner height changes. Style
 note in `ui-style-guide.md`. Coverage: `ActionBand.test.jsx` compact block, `ExportButtonView.test
-.jsx` T11720 block. **e2e (live-driven in-container, honest caveat):** `T8510-export-guard.qa.spec.js`
-caption regex + stale "Generate Framing"→"Generate Highlight" locator updated and a "tap Set focus
-point → Generate enables" case added at 390/1440; `T4880` Framing locator fixed to "Generate
-Highlight". Both HONEST-SKIP/can't-go-green in the /dotask container: this account has no "Not
-started"/unframed draft (T8510 fixture gap) and its first openable framing draft is already RENDERED
-(CTA = "Back to Preview", not "Generate Highlight") — same fixture-limited class as T5790/T8510.
-The 0-focus-point coach cues + compact band are proven by the Vitest suite (140 curated tests green)
-rather than live here.)
+.jsx` T11720 block. **e2e (live-driven in-container, run and PASS against the dev stack, not
+honest-skip):** the original fixture-gap (this account's first openable framing draft was already
+RENDERED, no "Not started"/unframed draft) was closed by creating the unframed draft deterministically
+via the clip-save write path (`POST /clips/raw/save` with `create_project`, `e2e/helpers/
+annotateClips.js:createUnframedDraft` — the backend of the Annotate "Save clip" gesture, same
+`_create_auto_project_for_clip` mechanism that mints a 0-keyframe auto-project; the draft is deleted
+in `afterEach`, never left behind). `T8510-export-guard.qa.spec.js` (4 tests: compact band @390,
+disabled-caption @1440, tap-unlock @390/1440) and `e2e/T11700-frame-unlock.qa.spec.js` (locked +
+unlocked states across 390/768/1440, settings-drawer-over-band, T11720 AC1 timeline/Trim-reachability
+hit-test, scoped overflow audit) both create+open their own fresh unframed draft and run GREEN.
+`T4880-mobile-editor-reachable.spec.js` proves the portrait Set-focus-point control and the landscape
+cockpit CTA are reachable+clickable (also green). Run: `bash scripts/dev-verify.sh e2e/<spec>.spec.js`.
+The account used is `imankh+devfixture@gmail.com` (`reference_dev_fixture_account`, house standard
+for seeded-fixture specs, T10780/T10810/T10820) — NOT `imankh@gmail.com`, whose dev profile has no
+seeded games. T11720 AC1's actual promise (timeline/Trim stay reachable above the locked band, not
+just "band itself ≤56px") is asserted via a real DOM hit-test (`document.elementFromPoint` at a
+point inside each target, checked against the compact band) PLUS a trial click — proven to fail when
+the band is mutated to visually overlap the content above it (T11720's own STATUS record).)
 updated: 2026-10-03 (T11420 — Spotlight (Overlay) now opens with its timeline at the LEFT EDGE
 (scroll 0) after a Framing export. INVARIANT + landmine: `OverlayScreen` is mounted only under
 `{editorMode === EDITOR_MODES.OVERLAY && ...}` (App.jsx), so it REMOUNTS on every
