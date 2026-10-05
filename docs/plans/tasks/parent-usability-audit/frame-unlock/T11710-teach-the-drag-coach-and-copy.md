@@ -1,6 +1,6 @@
 # T11710: Teach the drag: coach chip, ring and gesture-naming copy
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M (frontend only, ~5 files, ~130 LOC including tests)

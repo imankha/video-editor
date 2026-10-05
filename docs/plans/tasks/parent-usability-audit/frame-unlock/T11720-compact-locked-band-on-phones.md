@@ -1,6 +1,6 @@
 # T11720: Compact locked Generate band on phones
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M (frontend only, ~3 files, ~90 LOC including tests)
